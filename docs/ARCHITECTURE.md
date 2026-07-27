@@ -202,6 +202,11 @@ token replacement. No network, no degit.
 
 ## Roadmap
 
+Exit criteria are written as individually checkable statements on purpose.
+`/whats-next` reads this section to place the work and to fill in `HANDOFF.md`'s
+next steps, so a criterion that cannot be verified against the tree by inspection
+is a criterion that gets reported wrong. Keep them mechanical.
+
 ### Phase 1 — DI proven end to end
 
 Ship `@dunx/core` and a single `examples/playground` app that boots a fully
@@ -250,7 +255,9 @@ JSON Schema export, so this needs a per-library adapter (Zod 4's
 ## Spikes to resolve before Phase 2
 
 Both are roughly an hour and both change the public API shape, so they belong
-before the code they gate — not after.
+before the code they gate — not after. Run them through `/spike`: measure on real
+Bun, record the result under **Verified constraints** above, then delete the item
+from this list.
 
 1. **Route input inference.** Does `@Post(path, { body: Schema })` cleanly
    constrain the method signature through the method decorator's generic? The

@@ -44,15 +44,11 @@ Package scope: `@dunx/<name>`. Every package is **ESM only** and emits a single
 bun run build         # all packages: bun run --filter '*' build
 ```
 
-Within a package, `build` is `bun ../../scripts/build-package.ts`. That script:
-
-- derives entrypoints from the manifest's `exports` and `bin` fields, so a new
-  public subpath cannot be added without also being built
-- emits JS with `Bun.build` (`target: bun`, `format: esm`,
-  `packages: 'external'`, linked source maps)
-- emits `.d.ts` with `tsc --emitDeclarationOnly` — Bun has no `--dts`
-- prunes `*.test.d.ts` / `*.spec.d.ts` from `dist/`, since one tsconfig serves
-  both typecheck and build
+Within a package, `build` is `bun ../../scripts/build-package.ts` — one
+implementation for every package. It derives entrypoints from the manifest's
+`exports` and `bin` fields, so a new public subpath cannot be added without also
+being built. `Bun.build` emits the JS, `tsc --emitDeclarationOnly` the `.d.ts`
+(Bun has no `--dts`). Use `/new-package` when adding a package or an export.
 
 Relative imports **must** carry a `.js` extension. `tsc` copies the specifier
 verbatim into the emitted `.d.ts`, and an extensionless one fails to resolve for
@@ -70,13 +66,8 @@ Every package manifest needs `"type": "module"`. Without it,
   do not and are what CI runs.
 - Pre-commit hook runs lint-staged: lints then formats staged `.ts` files.
 - There is no ESLint or Biome — do not add them.
-
-### Key lint rules (from `.oxlintrc.json`)
-
-- `typescript/no-explicit-any`: **error** — never use `any`
-- `no-unused-vars` / `typescript` variants: **error**
-- `prefer-const`: **error**
-- Correctness rules: **warn** by default, specific rules promoted to **error**
+- Correctness rules are **warn** by default; `.oxlintrc.json` promotes
+  `typescript/no-explicit-any`, `no-unused-vars`, and `prefer-const` to **error**.
 
 ## TypeScript
 
@@ -94,22 +85,7 @@ Every package manifest needs `"type": "module"`. Without it,
 - `bun run test` — run tests with bail on first failure (per package, via `--filter '*'`)
 - `bun run test:cov` — runs `bun test --coverage` **once from the root** so every package
   lands in a single `coverage/lcov.info`, then `bun run gen:cov`
-- `bun run gen:cov` — `scripts/coverage-report.ts` turns that lcov into
-  `coverage/index.html` (per-package breakdown, uncovered line ranges, packages with no
-  tests), `coverage/coverage.svg`, and a `coverage-<package>.svg` per package. Zero deps
-  — bun emits no branch records, so the report covers lines and functions only.
-- The per-package badges live in the root README's generated `Packages` table (the
-  `Coverage` column added by `scripts/update-readme.ts`), not in the individual package
-  READMEs. A package with no test files gets a grey `no tests` badge rather than a
-  misleading 0%. New packages pick up a badge automatically on the next `gen:cov` +
-  `gen:readme`.
-- Pages must be set to the **GitHub Actions** source in repo settings. On the default
-  "Deploy from a branch" source, GitHub serves a Jekyll render of the README instead and
-  every badge URL 404s.
-- `ci.yml` publishes `coverage/` to GitHub Pages from a separate `pages` job on main:
-  <https://petarzarkov.github.io/dunx>
-- `bunfig.toml` ignores `**/dist/**` for coverage: a package importing a sibling resolves
-  to that sibling's `dist/`, which would otherwise be counted alongside its `src/`.
+- Coverage report, badges, and the GitHub Pages site: `/coverage-report`
 
 ## Typecheck
 
@@ -122,29 +98,12 @@ so `bunx tsc --noEmit` at the repo root typechecks the repo scripts.
 
 ## Versioning & Publishing
 
-- Automated via `bun run version` (runs `scripts/version.ts`)
-- Uses conventional commits: `feat:` → minor bump, `fix:` → patch, `BREAKING CHANGE` → major
-- CI publishes to npm on push to `main` (if version changed)
-- Dry-run: `bun run version:dry-run`
-- Force publish all: include `[force-publish]` in commit message
-- Publishing uses **npm trusted publishing (OIDC)** — no `NPM_TOKEN`. `ci.yml` is the
-  only workflow allowed to publish, because each package's trusted publisher on
-  npmjs.com is pinned to that one workflow filename. Renaming `ci.yml` breaks publishing.
-- The npm CLI is the single sanctioned non-bun tool here, and only in
-  `scripts/version.ts`: `bun publish` cannot authenticate via OIDC
-  (oven-sh/bun#15601). It runs as `bunx npm@<pinned>` (the `NPM` constant) — bun
-  executes npm on its own runtime, so CI needs no `setup-node`. Bump that pin to
-  upgrade npm; it must stay >= 11.5.1, and `ubuntu-latest` still ships npm 10.x, so
-  the pin is doing real work.
-- `npm publish` does not expand `workspace:` ranges, so `version.ts` rewrites them to
-  concrete versions around the publish and restores `package.json` afterwards.
-- `--provenance` is passed only when `GITHUB_ACTIONS` is set — it errors out anywhere
-  else, which would break a local/manual publish.
-- Commands other than `npm publish` (`dist-tag`, `deprecate`, …) cannot use the OIDC
-  credential and have to be run locally with a personal npm login.
-- A package with no versions on npm has no trusted-publisher settings page yet, so its
-  **first** publish must be done manually (`npm login && npm publish`) before CI can take
-  over.
+CI runs `bun run version` on every push to `main` and publishes any package whose
+version changed, via npm trusted publishing (OIDC). Conventional commits drive the
+bump. Nothing to run by hand.
+
+Everything else — the OIDC constraints, the `ci.yml` filename pin, the npm version
+pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 ## Packages Overview
 
@@ -160,6 +119,37 @@ Standard Schema, `@dunx/testing`, `@dunx/create-app`, `@dunx/openapi`.
 - `bun run gen:readme` — regenerates the README Packages table and Project Structure block (`scripts/update-readme.ts`)
 - `bun run gen:cov` — rebuilds the coverage report and badges (`scripts/coverage-report.ts`)
 - `bun run version:dry-run` — previews version bumps without writing
+
+## Skills
+
+Multi-step workflows live in `.claude/skills/`, not here. Only their names and
+descriptions are in context until one is invoked, so this file stays cheap.
+
+| Skill              | Invoke when                                                          |
+| ------------------ | -------------------------------------------------------------------- |
+| `/whats-next`      | Ending a task block, crossing ~50% context, handing off, resuming    |
+| `/ci-check`        | Verifying build + lint + typecheck + test before a commit            |
+| `/spike`           | An open question needs measuring on real Bun before an API is fixed  |
+| `/new-package`     | Adding a package, an example, or a public subpath export             |
+| `/release`         | Cutting a release, or a publish failed                               |
+| `/coverage-report` | Coverage numbers or badges are wrong                                 |
+
+New repeatable workflow → new skill. Do not grow this file instead.
+
+## Context Discipline
+
+- Check load with `/context`. Past ~50% both reasoning and retrieval degrade —
+  treat it as the line to act on, not a budget to spend.
+- `/whats-next` before `/compact` or `/clear`, so state survives in `HANDOFF.md`
+  rather than in a summary you did not control. `/compact` with explicit
+  preservation instructions; `/clear` when switching subtask outright. Resume with
+  `continue from HANDOFF.md`.
+- **Delegate wide reads.** Exploratory sweeps across packages, full test or CI log
+  analysis, and probe iteration go to a subagent (`Explore` for locating code,
+  `general-purpose` for multi-step work). Ask for a verdict plus `file:line`, not
+  file contents — the raw data stays in their window.
+- Keep `mcp.json` minimal. Every configured server's full tool schema loads at
+  startup whether or not it is used.
 
 ## Do Not
 
@@ -177,6 +167,8 @@ Standard Schema, `@dunx/testing`, `@dunx/create-app`, `@dunx/openapi`.
 - Do not add docstrings/comments unless logic is non-obvious
 - Do not add error handling for impossible scenarios
 - Do not add speculative abstractions or future-proofing
+- Do not document a multi-step workflow in this file — add a skill under
+  `.claude/skills/` so it costs nothing until it is invoked
 - Do not use section-divider comments (e.g. `// ─── Section ───`, `// --- Section ---`, `// === Section ===`) — if a file needs sections, split it into separate files instead
 
 ## Do

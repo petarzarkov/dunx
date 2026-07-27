@@ -140,3 +140,7 @@ vite.config.ts.timestamp-*
 
 # Temporary folders
 tmp
+
+# Session resume point written by /whats-next — regenerated per session, not a
+# repo artifact
+HANDOFF.md
