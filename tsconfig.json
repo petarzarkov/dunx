@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "strictPropertyInitialization": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "module": "ESNext",
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "sourceMap": false,
+    "declaration": false,
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "forceConsistentCasingInFileNames": true,
+    "strictNullChecks": true,
+    "alwaysStrict": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowJs": false,
+    "checkJs": false,
+    "noUnusedParameters": true,
+    "noUnusedLocals": true,
+    "incremental": false,
+    "types": ["node", "bun"]
+  }
+}

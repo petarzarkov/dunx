@@ -1,0 +1,56 @@
+{
+  "name": "dunx",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The dunx monorepo",
+  "homepage": "https://github.com/petarzarkov/dunx#readme",
+  "license": "MIT",
+  "author": {
+    "name": "Petar Zarkov",
+    "email": "pzarko1@gmail.com",
+    "url": "https://github.com/petarzarkov"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/petarzarkov/dunx"
+  },
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "prepare": "husky || true",
+    "install:clean": "find . -name node_modules -type d -prune -exec rm -rf {} + && rm -f bun.lock && bun install",
+    "build": "bun run --filter '*' build",
+    "test": "bun run --filter '*' test",
+    "test:cov": "bun test --coverage && bun run gen:cov",
+    "lint": "oxlint --fix .",
+    "format": "oxfmt --write .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "gen:cov": "bun ./scripts/coverage-report.ts",
+    "gen:env:docs": "bun ./scripts/gen-env-docs.ts",
+    "gen:readme": "bun ./scripts/update-readme.ts",
+    "version": "bun ./scripts/version.ts",
+    "version:dry-run": "DRY_RUN=true bun ./scripts/version.ts"
+  },
+  "dependencies": {
+    "drizzle-seed": "0.3.1"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "@types/node": "26.1.1",
+    "glob": "13.0.6",
+    "husky": "9.1.7",
+    "lint-staged": "17.2.0",
+    "oxfmt": "0.60.0",
+    "oxlint": "1.75.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "typescript": "7.0.2"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "bun run lint",
+      "bun run format"
+    ]
+  }
+}

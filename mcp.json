@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "bun": {
+      "type": "http",
+      "url": "https://bun.com/docs/mcp"
+    }
+  }
+}

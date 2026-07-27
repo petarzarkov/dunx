@@ -1,0 +1,19 @@
+{
+  "printWidth": 80,
+  "singleQuote": true,
+  "sortPackageJson": true,
+  "ignorePatterns": [
+    "build",
+    "dist",
+    "node_modules",
+    "coverage",
+    ".vscode",
+    ".idea",
+    ".env*",
+    "README.md",
+    "TIMEZONES.md",
+    "timezones.ts",
+    "timezones.json",
+    "previous.json"
+  ]
+}
