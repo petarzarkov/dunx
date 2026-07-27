@@ -42,6 +42,49 @@ class — Nest's worst ergonomic wart, inherited on day one.
 metadata collection and a full singleton graph both run under TC39 decorators
 with no polyfill and no `experimentalDecorators`.
 
+**Member decorators are applied before the class decorator.** Source order within
+a class, then the class itself — so a class decorator can drain what its own
+members pushed:
+
+```
+member list   member one   class Users
+```
+
+**`ctx.metadata` is write-only in Bun, and leaks in both directions.** Bun 1.3.14
+hands a `ctx.metadata` object to decorators but leaves `Symbol.metadata`
+undefined, so nothing can read it back off the class without a polyfill — the
+exact "must be the first import" fragility being escaped. Polyfill it and each
+class's metadata object gets its parent's as its **prototype**, so `routes ??= []`
+in a subclass resolves through the chain and mutates the _parent's_ array:
+
+```
+Symbol.metadata: undefined        ctx.metadata in decorator: present
+# after polyfill; Base(@Get list) <- Users(@Get one), Base <- Posts(no members)
+Base[Symbol.metadata]  : { routes: [ "list", "one" ] }   # "one" belongs to Users
+Posts[Symbol.metadata] : { routes: [ "list", "one" ] }   # Posts has neither method
+```
+
+`Object.hasOwn(Posts, Symbol.metadata)` is `true`, so ownership cannot filter it —
+the class owns its metadata object; the array inside is shared.
+
+**A global pending array drained by the class decorator loses and leaks routes.**
+The ordering above makes the drain deterministic, but the array is not keyed by
+class:
+
+```
+Base(@Get list) <- Users(@Get one), Base <- Posts(no members):
+  Users -> [ "list", "one" ]     Posts -> []      # first subclass takes the base's
+Orphan(@Get leaked, undecorated), then @Controller Unrelated(@Get mine):
+  Unrelated -> [ "leaked", "mine" ]               # leaks, and across files
+```
+
+`name in Klass.prototype` separates the two exactly — `list` is in `Users`'s
+chain, `leaked` is not in `Unrelated`'s — which turns both into boot errors.
+
+**Overriding a decorated base method without re-decorating dispatches to the
+override.** A closure over `instance[name]` resolves through the prototype chain
+(measured: `override.impl`), so inherited routes need no re-declaration.
+
 ## The decorator dialect decision
 
 `tsyringe` and Nest-style constructor injection are locked to legacy
@@ -154,19 +197,33 @@ Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in
 `Response.json()`, and map thrown errors. No lookup, no DI, no metadata read.
 
-## Metadata storage — open risk
+## Metadata storage
 
-`ctx.metadata` requires `Symbol.metadata` to be defined, which reintroduces the
-exact "must be the first import" fragility we are escaping from
-`reflect-metadata`. It also inherits through the prototype chain, so a
-subclassed controller silently absorbs its parent's routes.
+Measured, and **both** original candidates fail as described — see **Verified
+constraints**. `ctx.metadata` is unreadable without polyfilling `Symbol.metadata`
+and shares mutable state up the prototype chain, so it is not a fallback; it is
+unusable. A single global pending array drained by the class decorator silently
+hands a base class's routes to whichever subclass is defined first and leaks
+decorated methods from an undecorated class into the next decorated one, across
+file boundaries.
 
-Preferred alternative: method decorators push into a module-level pending array
-that the class decorator drains into a `WeakMap` keyed by the class. Decorator
-evaluation is synchronous and lexically ordered per class, so this is safe,
-needs no polyfill, and has no inheritance leak.
+What holds is **drain per class, validate the drain, merge the chain at boot**:
 
-Treat `ctx.metadata` as the fallback, not the default.
+1. Method decorators push into the module-level pending array. Member decorators
+   are applied before the class decorator, so the drain is deterministic.
+2. Every class carrying decorated methods carries a class decorator — `@Controller`
+   for a concrete one, `@Routes()` for an abstract base. It drains into a `WeakMap`
+   keyed by itself.
+3. The drain **throws** on any name where `!(name in target.prototype)`. That name
+   is a decorated method on an undecorated class, i.e. the leak.
+4. At boot, a controller's routes are collected by walking
+   `Object.getPrototypeOf` and merging each ancestor's `WeakMap` entry, most-derived
+   winning on a repeated method name.
+5. A controller resolving to **zero** routes throws. Route loss is otherwise
+   silent, which is how `Posts -> []` hides.
+
+No `Symbol.metadata`, no polyfill, no import-order dependence, and inheritance is
+explicit at step 4 rather than implicit in a prototype chain.
 
 ## Build & packaging
 
@@ -252,17 +309,16 @@ Separate package, peer dependencies. Deferred because Standard Schema v1 has no
 JSON Schema export, so this needs a per-library adapter (Zod 4's
 `z.toJSONSchema`, etc.).
 
-## Spikes to resolve before Phase 2
+## Spikes to resolve
 
-Both are roughly an hour and both change the public API shape, so they belong
-before the code they gate — not after. Run them through `/spike`: measure on real
-Bun, record the result under **Verified constraints** above, then delete the item
-from this list.
+Run through `/spike`: measure on real Bun, record the result under **Verified
+constraints** above, then delete the item from here. A spike that changes the
+public API shape belongs before the code it gates.
 
-1. **Route input inference.** Does `@Post(path, { body: Schema })` cleanly
-   constrain the method signature through the method decorator's generic? The
-   fallback is an explicit `InferInput<typeof opts>` annotation, which works but
-   is uglier. Gates Phase 3.
-2. **Metadata storage.** Confirm the `WeakMap` pending-drain approach against
-   `Symbol.metadata` availability in Bun, including subclassed controllers.
-   Gates Phase 2.
+1. **Route input inference.** Does `@Post(opts)` cleanly constrain the method
+   signature through the method decorator's generic? A standard method decorator
+   is `(value: V, ctx: ClassMethodDecoratorContext<T, V>) => V | void`, so it can
+   _reject_ a mismatched `V` but cannot contextually type an unannotated
+   parameter — expect checking, not inference, with an explicit
+   `Ctx<typeof opts>` annotation as the shape. Gates Phase 3. This is a
+   type-level claim, so `bun` alone cannot measure it — the probe needs `tsc`.
