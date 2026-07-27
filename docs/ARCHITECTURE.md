@@ -116,21 +116,88 @@ dunx uses **standard decorators only**. The root `tsconfig.json` must not set
 
 ## Core primitives (`@dunx/core`)
 
-Four exports. There is no `@Injectable()` — with `inject()` every class is
-injectable by default.
+There is no `@Injectable()` — with `inject()` every class is injectable by default.
 
 | Primitive                                              | Purpose                                                 |
 | ------------------------------------------------------ | ------------------------------------------------------- |
 | `inject<T>(token): T`                                  | Resolve in a field initializer. Always synchronous.     |
 | `token<T>(name)`                                       | Opaque token for interfaces, config objects, primitives |
 | `provide(token, {useClass \| useValue \| useFactory})` | Binding, including async factories                      |
-| `defineModule({controllers, providers, middleware})`   | Plain object — **not** a decorator                      |
+| `@Module({imports, providers})`                        | Class decorator. Registration only — see below          |
+| `DunxFactory.create(RootModule)`                       | Builds, resolves, runs `onInit`. Returns a live `App`   |
+
+`DunxFactory.create()` is async and there is no separate `init()`: resolution is
+eager, so an app that exists is an app that booted. `app.enableShutdownHooks()`
+registers `SIGTERM`/`SIGINT` handlers and `app.closed` resolves once shutdown has
+finished, whoever triggered it.
+
+### `token()` is the escape hatch, not the default
+
+Anything that is a **runtime value** can be its own token, so most code needs no
+`token()` call at all. In order of preference:
+
+1. **A concrete class** — `inject(Config)`. Nothing to declare; an unbound class
+   self-binds.
+2. **An abstract class** for a contract whose implementation is built elsewhere.
+   It is a runtime value, so it works as a token, and it cannot be constructed, so
+   the container will not self-bind it by accident:
+
+   ```ts
+   export abstract class Database {
+     abstract query(sql: string): readonly string[];
+   }
+   provide(Database, { useFactory: connect, inject: [Config] });
+   ```
+
+3. **`token<T>(name)`** only for what has no runtime value to name: a primitive
+   (`token<string>('Dsn')`), or a value whose type you do not own and cannot
+   subclass.
+
+An `interface` is erased at compile time, so `inject(SomeInterface)` cannot exist —
+that is the same erasure the `emitDecoratorMetadata` measurement above shows
+degrading to `Object`. Replacing the interface with an abstract class is what makes
+the token disappear. `examples/playground` uses zero `token()` calls for this
+reason.
+
+`token<T>()` returns a **unique object**; the name is only a label for error
+messages. Two `token<Config>('config')` calls are two distinct tokens, so nominal
+collision is impossible and no prefixing convention is needed. Class tokens key on
+the constructor reference, so two same-named classes never collide either.
+
+One erasure cost to know: `abstract` does not exist at runtime, so an abstract
+class that is injected but never bound gets self-bound and constructed into a
+useless object rather than erroring. TypeScript blocks it in the `providers` array
+(a bare entry must be constructible), but not at the `inject()` call site.
+
+`@Module` is a marker, not a container. It writes its options onto the class as a
+`Symbol.for('dunx.module')` property — the same technique as route discovery, no
+accumulator — and the class is **never instantiated**. Reading it uses
+`Object.hasOwn`, so subclassing a module does not inherit its bindings; that
+throws instead. The class name is where the duplicate-binding error gets "bound by
+module X and module Y". `controllers` and `middleware` arrive with Phase 2, since
+there is nothing to put in them until there is HTTP.
+
+A bare class in `providers` is shorthand for binding it to itself, so the ordinary
+case carries no function calls at all:
+
+```ts
+@Module({ providers: [UsersService, UsersRepository] })
+export class UsersModule {}
+```
+
+`provide()` is only needed where a token is genuinely being bound — an interface, a
+config object, an async factory — which is exactly where Nest needs its object form
+too. It stays a **call** rather than a `{ provide, useValue }` literal because
+per-element type inference across a heterogeneous array requires one: that is
+precisely why Nest's `useValue` is untyped, and dunx's is checked against the
+token's type.
 
 ```ts
 @Controller('users')
 export class UsersController {
-  private users = inject(UsersService); // inferred, no token
-  private cfg = inject(ConfigToken); // interfaces work fine
+  private users = inject(UsersService); // a class is its own token
+  private cfg = inject(Config); // so is a config class
+  private db = inject(Database); // abstract class, bound by a factory
 }
 ```
 
@@ -143,10 +210,31 @@ with a clear message.
 
 ### Eager-only, no lazy resolution
 
-`app.init()` topologically instantiates every provider and awaits async
-factories before the server binds. Wiring errors surface at boot, not at first
-request. This is what lets `inject()` stay synchronous: by the time any
-constructor runs, every async provider is already resolved.
+`DunxFactory.create()` instantiates every provider and awaits async factories
+before the server binds. Wiring errors surface at boot, not at first request. This
+is what lets `inject()` stay synchronous: by the time any constructor runs, every
+async provider is already resolved.
+
+There is no static graph to topologically sort — `inject()` calls are only
+discovered by running the field initializers. So construction is recursive and
+synchronous, and an async factory reached from inside a constructor parks its
+promise, throws a private signal to unwind, and the async caller awaits the token
+and **retries the construction**. Each retry resolves at least one more async
+binding, so it terminates in at most one pass per async dependency, and a factory
+is never invoked twice because the promise is parked before the signal is thrown.
+The cost is that a constructor aborted this way runs its already-evaluated field
+initializers again, which is why field initializers must stay pure wiring.
+
+For the same reason a factory cannot use `inject()`: after its first `await` the
+module-level current injector is no longer its own. Factory dependencies are
+declared instead, and inferred into the factory's parameters:
+
+```ts
+provide(Database, {
+  useFactory: connect, // (config: Config) => Promise<Database>, inferred
+  inject: [Config],
+});
+```
 
 ### Singleton lifetime only
 
@@ -161,11 +249,27 @@ A `building` set tracks in-flight construction and throws with the full cycle
 path. Without it, a field-initializer cycle is an unbounded recursion with an
 unreadable stack.
 
-## Modules are data, not decorators
+## Modules group registrations; they do not encapsulate
 
-`defineModule()` returns a plain object. No per-module DI subgraph, no
-`imports`/`exports`/`providers` visibility rules, no circular-module errors. The
-container is flat; modules only group registrations.
+The syntax is Nest's. The semantics are not, and that distinction is the whole
+point — an earlier draft of this document argued for plain-object modules, but the
+argument was always about semantics and the object literal was never load-bearing.
+
+The container is flat. `imports` exists, but it is **traversal only** — it pulls a
+module's registrations into the same flat container. There is no `exports` list, no
+visibility boundary, and therefore no "provider is not exported from module X"
+error. `DunxFactory.create(RootModule)` walks the import graph, imports before
+importers so dependencies register first, and visits each module once — which makes
+a diamond import register once rather than tripping the duplicate-binding check,
+and makes a circular import terminate instead of erroring. A module is a named list
+of registrations and a list of other modules to include.
+
+So the encapsulation Nest gives you is absent by design. It is also largely
+recoverable elsewhere: `inject(BillingService)` needs a value import of
+`BillingService`, so cross-domain coupling is already visible in the import graph
+and enforceable with a lint boundary rule at zero runtime cost. What is genuinely
+lost is per-module _rebinding_ — a `LOGGER` token bound differently in two
+features. Use two tokens. That is the price of the flat container.
 
 This is the largest deliberate divergence from Nest and the first thing users
 will notice. It should be loud in the README.
@@ -263,7 +367,7 @@ Consequences, all measured:
 - **No class decorator is required at all** — and so no `@Routes()`. Inheriting
   from an undecorated abstract base works for any number of subclasses.
   `@Controller` is reduced to supplying a prefix and may be omitted;
-  `defineModule({ controllers })` is what registers a controller.
+  `@Module({ controllers })` is what registers a controller.
 - **Overriding a decorated base method without re-decorating works.** The own
   undecorated member does not shadow discovery, and dispatch resolves through the
   prototype chain to the override.
@@ -325,7 +429,7 @@ Exit criteria:
 
 - `inject()` resolves classes and tokens, with inference and no manual generics
 - `provide()` covers `useClass`, `useValue`, and async `useFactory`
-- `defineModule()` composes across at least two feature modules
+- `@Module()` composes across at least two feature modules
 - A circular dependency throws a readable error naming the full cycle
 - `onInit` / `onShutdown` run in dependency order; `SIGTERM` closes cleanly
 - Resolving a provider twice returns the same instance

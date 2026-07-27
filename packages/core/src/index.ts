@@ -1,1 +1,1 @@
-export * from './array/index.js';
+export * from './di/index.js';

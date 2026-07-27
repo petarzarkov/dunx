@@ -15,6 +15,13 @@
         "typescript": "7.0.2",
       },
     },
+    "examples/playground": {
+      "name": "@dunx/playground",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@dunx/core",
       "version": "0.0.0",
@@ -22,6 +29,8 @@
   },
   "packages": {
     "@dunx/core": ["@dunx/core@workspace:packages/core"],
+
+    "@dunx/playground": ["@dunx/playground@workspace:examples/playground"],
 
     "@oxfmt/binding-android-arm-eabi": ["@oxfmt/binding-android-arm-eabi@0.60.0", "", { "os": "android", "cpu": "arm" }, "sha512-1q4q4Jc8FlOMVojEisyFAVyl8h1yawNv6phjgmhGVEDeyeOdsSnSr9x0+D4mOnEKvpO5L4mxKZ/DP9X6U3A/Mw=="],
 

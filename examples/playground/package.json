@@ -1,0 +1,15 @@
+{
+  "name": "@dunx/playground",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Phase 1 example — a fully dependency-injected application graph with no HTTP",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/core": "workspace:*"
+  }
+}

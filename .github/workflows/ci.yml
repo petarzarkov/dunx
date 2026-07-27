@@ -38,6 +38,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Build first: examples/ consume packages through their published `exports`,
+      # so nothing under examples/ can typecheck until dist/*.d.ts exists.
+      - name: Build
+        run: bun run build
+
       # `bun run lint`/`format` auto-fix in place, which would let a violation
       # pass CI silently and never reach the repo. CI uses the check variants.
       - name: Lint
@@ -49,11 +54,12 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Build
-        run: bun run build
-
       - name: Test
         run: bun run test:cov
+
+      # Test that the example boots the whole DI graph and exits 0.
+      - name: Boot the example
+        run: bun run --filter '@dunx/playground' start
 
       - name: Upload coverage report
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
