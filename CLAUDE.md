@@ -125,14 +125,14 @@ Standard Schema, `@dunx/testing`, `@dunx/create-app`, `@dunx/openapi`.
 Multi-step workflows live in `.claude/skills/`, not here. Only their names and
 descriptions are in context until one is invoked, so this file stays cheap.
 
-| Skill              | Invoke when                                                          |
-| ------------------ | -------------------------------------------------------------------- |
-| `/whats-next`      | Ending a task block, crossing ~50% context, handing off, resuming    |
-| `/ci-check`        | Verifying build + lint + typecheck + test before a commit            |
-| `/spike`           | An open question needs measuring on real Bun before an API is fixed  |
-| `/new-package`     | Adding a package, an example, or a public subpath export             |
-| `/release`         | Cutting a release, or a publish failed                               |
-| `/coverage-report` | Coverage numbers or badges are wrong                                 |
+| Skill              | Invoke when                                                         |
+| ------------------ | ------------------------------------------------------------------- |
+| `/whats-next`      | Ending a task block, crossing ~50% context, handing off, resuming   |
+| `/ci-check`        | Verifying build + lint + typecheck + test before a commit           |
+| `/spike`           | An open question needs measuring on real Bun before an API is fixed |
+| `/new-package`     | Adding a package, an example, or a public subpath export            |
+| `/release`         | Cutting a release, or a publish failed                              |
+| `/coverage-report` | Coverage numbers or badges are wrong                                |
 
 New repeatable workflow → new skill. Do not grow this file instead.
 

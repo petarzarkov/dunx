@@ -85,6 +85,24 @@ chain, `leaked` is not in `Unrelated`'s — which turns both into boot errors.
 override.** A closure over `instance[name]` resolves through the prototype chain
 (measured: `override.impl`), so inherited routes need no re-declaration.
 
+**Marking the method function and scanning the prototype chain needs no
+accumulator and no class decorator.** A method decorator may set a symbol property
+on the function it receives and return it. At boot, walking
+`Object.getOwnPropertyDescriptors` up the chain finds every marked method, and
+`Object.entries(instance)` finds field-initialized route builders in the same
+pass. Measured with **no class decorator anywhere**:
+
+```
+Users:  GET /:id <- proto Users.one   GET / <- proto BaseCrud.list   POST / <- field create
+Posts:  GET / <- proto BaseCrud.list
+Ov:     GET / <- proto BaseCrud.list        # own undecorated override does not shadow
+Orphan: GET /leaked <- proto Orphan.leaked  # found, but in no other class's chain
+```
+
+Two subclasses of one undecorated abstract base both resolve the base's route. A
+field handler's arrow captures `this` (`users.one`), and a field declared before
+the field it reads still works, because handlers run per request (`late-value`).
+
 ## The decorator dialect decision
 
 `tsyringe` and Nest-style constructor injection are locked to legacy
@@ -152,6 +170,19 @@ container is flat; modules only group registrations.
 This is the largest deliberate divergence from Nest and the first thing users
 will notice. It should be loud in the README.
 
+Two modules binding the same token is therefore a real hazard, and last-wins would
+be silent. `app.init()` collects every module's registrations into one flat list
+and **throws on a duplicate token**, naming both modules — the same rule as route
+collisions.
+
+That leaves no room for overrides to be an extra module that wins, so
+`createTestApp({ modules, overrides })` does not append. It assembles the same flat
+list and **replaces in place**, keyed by token; an override naming a token nobody
+binds is itself an error. The count per token never changes, so the duplicate check
+still runs unmodified and there is no bypass. Replacement also means a discarded
+provider's factory never runs — which matters when it is the async `useFactory`
+that opens the real database.
+
 ## One extension point, not five
 
 Nest has middleware, guards, interceptors, pipes, and filters. dunx has:
@@ -183,47 +214,63 @@ Zod 4, Valibot, and ArkType all work with zero dependencies in `@dunx/*`.
 
 ## HTTP adapter (`@dunx/http`)
 
-Boot sequence:
+Boot sequence, run after `app.init()` has constructed every provider:
 
 1. Collect controllers from modules
-2. Read route metadata
+2. Discover routes per controller — prototype-chain scan **plus** instance fields,
+   as one merged set (see **Route discovery**). Zero routes throws
 3. Join controller prefix + method path, normalize
 4. **Detect collisions and throw** — Bun silently lets one route win
 5. Build the `routes` object; each handler is a closure over the
    already-constructed instance and its bound method
 6. Hand to `Bun.serve`
 
+Step 2 needs the instance, not just the class: a field route does not exist until
+the field initializer has run. That ordering is already guaranteed — `app.init()`
+is eager and completes before the server binds.
+
 Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in
 `Response.json()`, and map thrown errors. No lookup, no DI, no metadata read.
 
-## Metadata storage
+## Route discovery
 
-Measured, and **both** original candidates fail as described — see **Verified
+Both original candidates were measured and both fail — see **Verified
 constraints**. `ctx.metadata` is unreadable without polyfilling `Symbol.metadata`
-and shares mutable state up the prototype chain, so it is not a fallback; it is
-unusable. A single global pending array drained by the class decorator silently
-hands a base class's routes to whichever subclass is defined first and leaks
-decorated methods from an undecorated class into the next decorated one, across
-file boundaries.
+and shares mutable state up the prototype chain. A global pending array drained by
+the class decorator hands a base class's routes to whichever subclass is defined
+first, and leaks decorated methods across files.
 
-What holds is **drain per class, validate the drain, merge the chain at boot**:
+Both were **accumulators**: they recorded routes at class-definition time and
+needed a class decorator to close the record. Every failure above traces to that.
+So stop accumulating.
 
-1. Method decorators push into the module-level pending array. Member decorators
-   are applied before the class decorator, so the drain is deterministic.
-2. Every class carrying decorated methods carries a class decorator — `@Controller`
-   for a concrete one, `@Routes()` for an abstract base. It drains into a `WeakMap`
-   keyed by itself.
-3. The drain **throws** on any name where `!(name in target.prototype)`. That name
-   is a decorated method on an undecorated class, i.e. the leak.
-4. At boot, a controller's routes are collected by walking
-   `Object.getPrototypeOf` and merging each ancestor's `WeakMap` entry, most-derived
-   winning on a repeated method name.
-5. A controller resolving to **zero** routes throws. Route loss is otherwise
-   silent, which is how `Posts -> []` hides.
+A method decorator sets a symbol property on the function it receives and returns
+it. Nothing is recorded anywhere else. At boot the adapter _discovers_ routes by
+inspection:
 
-No `Symbol.metadata`, no polyfill, no import-order dependence, and inheritance is
-explicit at step 4 rather than implicit in a prototype chain.
+1. Walk `Object.getPrototypeOf` from the controller's prototype, reading
+   `Object.getOwnPropertyDescriptors` at each level. A marked `descriptor.value`
+   is a route; most-derived wins on a repeated name.
+2. Read `Object.entries(instance)` for field-initialized `route.*` builders, which
+   carry the same marker.
+
+Consequences, all measured:
+
+- **No accumulator, so no ordering dependence and no cross-file leak.** An
+  undecorated class's marked methods are never reached, because its prototype is in
+  no other class's chain.
+- **No class decorator is required at all** — and so no `@Routes()`. Inheriting
+  from an undecorated abstract base works for any number of subclasses.
+  `@Controller` is reduced to supplying a prefix and may be omitted;
+  `defineModule({ controllers })` is what registers a controller.
+- **Overriding a decorated base method without re-decorating works.** The own
+  undecorated member does not shadow discovery, and dispatch resolves through the
+  prototype chain to the override.
+- **Decorated methods and field routes are one merged set**, so collision
+  detection covers both and a controller resolving to zero routes can throw.
+
+No `Symbol.metadata`, no polyfill, no import-order dependence.
 
 ## Build & packaging
 
