@@ -100,7 +100,7 @@ const formatRanges = (lines: number[]): string => {
   let previous = start;
 
   for (const line of sorted.slice(1)) {
-    if (line === previous + 1) {
+    if (previous && line === previous + 1) {
       previous = line;
       continue;
     }
@@ -237,7 +237,7 @@ const page = (
 ): string => {
   const lines = pct(totals.linesHit, totals.linesFound);
   const funcs = pct(totals.funcsHit, totals.funcsFound);
-  const sha = process.env.GITHUB_SHA;
+  const sha = process.env['GITHUB_SHA'];
   const stamp = new Date().toUTCString();
 
   return `<!doctype html>

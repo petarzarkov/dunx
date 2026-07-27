@@ -10,10 +10,6 @@
     ".vscode",
     ".idea",
     ".env*",
-    "README.md",
-    "TIMEZONES.md",
-    "timezones.ts",
-    "timezones.json",
-    "previous.json"
+    "README.md"
   ]
 }

@@ -103,6 +103,8 @@ function buildProjectStructure(entries: PackageEntry[]): string {
 
   const topDefs: [string, string, string][] = [
     ['├── ', 'packages/', 'Published packages'],
+    ['├── ', 'examples/', 'Private apps that consume the packages'],
+    ['├── ', 'docs/', 'Architecture and design docs'],
     ['├── ', 'scripts/', 'Monorepo-level scripts'],
     ['├── ', '.github/workflows/', 'CI/CD pipeline'],
     ['└── ', '.husky/', 'Git hooks'],
@@ -126,6 +128,9 @@ function buildProjectStructure(entries: PackageEntry[]): string {
   };
 
   const [pkgsNode, ...restTop] = topNodes;
+  if (!pkgsNode) {
+    throw new Error('No top-level nodes found');
+  }
   const lines = [fmt(pkgsNode), ...pkgNodes.map(fmt), ...restTop.map(fmt)];
 
   return ['```', 'dunx/', ...lines, '```'].join('\n');

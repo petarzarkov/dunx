@@ -27,8 +27,7 @@
     "tests",
     "**/*.md",
     "**/*.json",
-    "dist",
-    "timezones.ts"
+    "dist"
   ],
   "rules": {
     "constructor-super": "error",

@@ -1,5 +1,9 @@
 # dunx — Claude Code Instructions
 
+dunx is a Bun-native dependency injection framework. Read
+[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) before making design decisions —
+it records what was measured, what was rejected, and why.
+
 ## Runtime & Package Manager
 
 - **Bun** is the only runtime and package manager. Never use `npm`, `npx`, `yarn`, or `pnpm`.
@@ -7,7 +11,6 @@
 - Run scripts with `bun run <script>`.
 - Execute TypeScript files directly with `bun <file.ts>`.
 - Install dependencies with `bun install` (use `--frozen-lockfile` in CI).
-- Refer to [./bun-apis.md](./bun-apis.md)for Bun APIs usage
 
 ## Monorepo Structure
 
@@ -16,22 +19,55 @@ packages/<name>/        # Each published package
   src/                  # Source TypeScript
   dist/                 # Build output (gitignored)
   package.json
-  tsconfig.json         # Extends ../../tsconfig.json
-  tsconfig.build.esm.json
-  tsconfig.build.cjs.json
-  tsconfig.build.types.json
+  tsconfig.json         # Extends ../../tsconfig.json — one per package, no build variants
+examples/<name>/        # Private example apps that consume the packages
+docs/                   # Architecture and design docs
 scripts/                # Repo-level scripts (bun-native TS)
 .github/workflows/      # CI (ci.yml)
 ```
 
-Package scope: `@dunx/<name>`. Each package produces three outputs: ESM (`dist/esm/`), CJS (`dist/cjs/`), and Types (`dist/types/`).
+Package scope: `@dunx/<name>`. Every package is **ESM only** and emits a single
+`dist/` containing JS plus `.d.ts`.
+
+## Decorators — standard only
+
+- The root tsconfig deliberately does **not** set `experimentalDecorators` or
+  `emitDecoratorMetadata`. Do not add them.
+- Use TC39 standard decorators. There are no parameter decorators in that
+  proposal, so constructor-parameter injection is not available by design.
+- Do not add `reflect-metadata` or `tsyringe`. DI is `inject()` in field
+  initializers; see docs/ARCHITECTURE.md.
+
+## Building
+
+```bash
+bun run build         # all packages: bun run --filter '*' build
+```
+
+Within a package, `build` is `bun ../../scripts/build-package.ts`. That script:
+
+- derives entrypoints from the manifest's `exports` and `bin` fields, so a new
+  public subpath cannot be added without also being built
+- emits JS with `Bun.build` (`target: bun`, `format: esm`,
+  `packages: 'external'`, linked source maps)
+- emits `.d.ts` with `tsc --emitDeclarationOnly` — Bun has no `--dts`
+- prunes `*.test.d.ts` / `*.spec.d.ts` from `dist/`, since one tsconfig serves
+  both typecheck and build
+
+Relative imports **must** carry a `.js` extension. `tsc` copies the specifier
+verbatim into the emitted `.d.ts`, and an extensionless one fails to resolve for
+consumers on `node16`/`nodenext`. `moduleResolution: nodenext` in the root
+tsconfig makes this a compile error rather than a consumer's problem.
+
+Every package manifest needs `"type": "module"`. Without it,
+`verbatimModuleSyntax` raises `TS1287` against ESM syntax.
 
 ## Linting & Formatting
 
 - **Linter**: `oxlint` (config: `.oxlintrc.json` at repo root)
-- **Formatter**: `oxfmt` (no config file — uses defaults)
-- Run lint: `bun run lint` → `oxlint --fix .`
-- Run format: `bun run format` → `oxfmt --write .`
+- **Formatter**: `oxfmt` (config: `.oxfmtrc.json`)
+- `bun run lint` / `bun run format` fix in place; `lint:check` / `format:check`
+  do not and are what CI runs.
 - Pre-commit hook runs lint-staged: lints then formats staged `.ts` files.
 - There is no ESLint or Biome — do not add them.
 
@@ -44,31 +80,13 @@ Package scope: `@dunx/<name>`. Each package produces three outputs: ESM (`dist/e
 
 ## TypeScript
 
-- Version: `6.x` (see `devDependencies`)
-- Root config: `tsconfig.json` — `strict: true`, `noImplicitAny`, `noUnusedLocals`, `noUnusedParameters`
-- `moduleResolution: "bundler"`, `module: "ESNext"`, `target: "ESNext"`
-- `emitDecoratorMetadata` and `experimentalDecorators` are enabled (NestJS support)
+- Version: `7.x` (see `devDependencies`)
+- Root config: `tsconfig.json` — `strict: true` plus `noUncheckedIndexedAccess`,
+  `exactOptionalPropertyTypes`, `noImplicitOverride`, `noPropertyAccessFromIndexSignature`
+- `module`/`moduleResolution`: `nodenext`; `target`: `ESNext`
+- `verbatimModuleSyntax: true` — use `import type` for type-only imports
+- `noEmit: true` at the root; the build script overrides it via CLI flags
 - No `any` — use proper types or generics
-- Prefer `type` imports where possible (especially in `nestjs-context-logger`)
-
-## Building
-
-Each package build is triggered via:
-
-```bash
-bun run build         # all packages: bun run --filter '*' build
-```
-
-Within a package:
-
-```bash
-bun run build:esm     # tsc -p tsconfig.build.esm.json
-bun run build:cjs     # tsc -p tsconfig.build.cjs.json
-bun run build:types   # tsc -p tsconfig.build.types.json
-# All three run in parallel via bun run --parallel
-```
-
-`prebuild` removes `dist/`, `postbuild` writes `{"type":"commonjs"}` into `dist/cjs/package.json` and `{"type":"module"}` into `dist/esm/package.json`.
 
 ## Testing
 
@@ -99,7 +117,8 @@ bun run build:types   # tsc -p tsconfig.build.types.json
 bun run typecheck     # all packages: bun run --filter '*' typecheck
 ```
 
-Within a package: `tsc --noEmit`
+Within a package: `tsc --noEmit`. The root `tsconfig.json` includes `scripts/`,
+so `bunx tsc --noEmit` at the repo root typechecks the repo scripts.
 
 ## Versioning & Publishing
 
@@ -129,42 +148,17 @@ Within a package: `tsc --noEmit`
 
 ## Packages Overview
 
-| Package                       | Description                                         |
-| ----------------------------- | --------------------------------------------------- |
-| `@dunx/colors`                | Zero-dep ANSI color utilities                       |
-| `@dunx/shared`                | Array, async, number, object, string, url utilities |
-| `@dunx/logger`                | Structured logger (depends on colors + shared)      |
-| `@dunx/rng`                   | RNG with Rust/WASM (`bun run build:wasm` step)      |
-| `@dunx/timezones`             | Generated IANA tzdb data + lookup helpers           |
-| `@dunx/nestjs-context-logger` | NestJS DI wrapper around `@dunx/logger`             |
+| Package      | Status  | Description                                  |
+| ------------ | ------- | -------------------------------------------- |
+| `@dunx/core` | Phase 1 | DI container, decorators, modules, lifecycle |
 
-### @dunx/rng notes
-
-- First-time setup requires Rust toolchain + wasm-pack: run `packages/rng/setup.sh`
-- Build order: `build:wasm` (Rust→WASM) runs first, then TS compilation (`build:ts`)
-- `bun run build` at package level handles this sequence automatically
-
-### @dunx/timezones notes
-
-- `src/timezones.ts` is **generated** — never hand-edit. It is excluded from oxlint and
-  oxfmt (`timezones.ts` in both ignore lists) because it is one ~150KB line.
-- Regenerate with `bun run --filter '@dunx/timezones' generate`; `FORCE_REVALIDATE=true`
-  skips the `If-Modified-Since` check against `previous.json`.
-- `scripts/` holds the generator (build-time only, excluded from the tsc build outputs);
-  `src/` holds only what ships. Generator-only types live in `scripts/types.ts`.
-- `.github/workflows/tzdb.yml` refreshes the data weekly, commits it, then dispatches
-  `ci.yml` — a `GITHUB_TOKEN` push cannot trigger a workflow on its own.
-- Zone `utc`/`label` are snapshots from generation time, not live offsets.
-
-### @dunx/nestjs-context-logger notes
-
-- `// oxlint-disable-next-line <rule>` syntax for inline disable (no Biome)
-- `useImportType` lint rule is off for this package (configured in `.oxlintrc.json`)
+Planned, in roadmap order: `@dunx/http` (Bun.serve adapter), validation via
+Standard Schema, `@dunx/testing`, `@dunx/create-app`, `@dunx/openapi`.
 
 ## Repo Scripts
 
-- `bun run gen:readme` — regenerates root README from package metadata (`scripts/update-readme.ts`)
-- `bun run gen:env:docs` — regenerates env variable docs (`scripts/gen-env-docs.ts`)
+- `bun run gen:readme` — regenerates the README Packages table and Project Structure block (`scripts/update-readme.ts`)
+- `bun run gen:cov` — rebuilds the coverage report and badges (`scripts/coverage-report.ts`)
 - `bun run version:dry-run` — previews version bumps without writing
 
 ## Do Not
@@ -172,8 +166,11 @@ Within a package: `tsc --noEmit`
 - Do not use `npx`, `npm`, `yarn`, or `pnpm` — use `bun`/`bunx`. The one exception is the
   publish path in `scripts/version.ts`, which needs the npm CLI for OIDC trusted
   publishing — and even there it goes through `bunx npm@<pinned>`
-- Do not exceed 500 lines per source file — except the generated
-  `packages/timezones/src/timezones.ts`
+- Do not add `experimentalDecorators`, `emitDecoratorMetadata`, `reflect-metadata`, or `tsyringe`
+- Do not add CommonJS output or a second/third tsconfig per package
+- Do not write a JavaScript router — `Bun.serve({ routes })` handles params, per-method
+  dispatch, and method-miss 404s natively
+- Do not exceed 500 lines per source file
 - Do not add Biome or ESLint
 - Do not use `any` — TypeScript strict mode is enforced
 - Do not create files unless necessary — prefer editing existing ones

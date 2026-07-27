@@ -138,12 +138,5 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# @dunx/rng Wasm build artifacts (auto-generated)
-wasm-pkg/
-packages/rng/src/wasm/
-
-# Rust build cache
-target
-
 # Temporary folders
 tmp

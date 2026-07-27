@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { semver } from 'bun';
 
-const isDryRun = process.env.DRY_RUN === 'true';
+const isDryRun = process.env['DRY_RUN'] === 'true';
 
 const ROOT_DIR = resolve(import.meta.dir, '..');
 const PACKAGES_DIR = join(ROOT_DIR, 'packages');
@@ -29,7 +29,7 @@ const getForcePublishTarget = (): {
   force: boolean;
   packages: string[] | null;
 } => {
-  const envForce = process.env.FORCE_PUBLISH;
+  const envForce = process.env['FORCE_PUBLISH'];
   if (envForce === 'true') return { force: true, packages: null };
   if (envForce && envForce !== 'false')
     return { force: true, packages: parseScopes(envForce) };
@@ -42,7 +42,7 @@ const getForcePublishTarget = (): {
       .trim();
 
     const scopedMatch = commitMessage.match(/\[force-publish:([^\]]+)\]/);
-    if (scopedMatch)
+    if (scopedMatch && scopedMatch[1])
       return { force: true, packages: parseScopes(scopedMatch[1]) };
     if (commitMessage.includes('[force-publish]'))
       return { force: true, packages: null };
@@ -63,10 +63,13 @@ const bumpVersion = (
 
   switch (type) {
     case 'major':
+      if (!major) throw new Error(`Invalid version: ${version}`);
       return `${major + 1}.0.0`;
     case 'minor':
+      if (!minor) throw new Error(`Invalid version: ${version}`);
       return `${major}.${minor + 1}.0`;
     case 'patch':
+      if (!patch) throw new Error(`Invalid version: ${version}`);
       return `${major}.${minor}.${patch + 1}`;
     default:
       throw new Error(`Invalid bump type: ${String(type)}`);
@@ -80,7 +83,7 @@ const extractCommitType = (message: string): string | null => {
     /(?:Merge.*?\n\n?)?(?:^|\n)(feat|fix|chore|docs|test|style|refactor|perf|build|ci|revert|security|sync)(?:\([^)]+\))?(!)?: /m,
   );
 
-  if (mergeMatch) {
+  if (mergeMatch && mergeMatch[1]) {
     return mergeMatch[1];
   }
 
@@ -133,7 +136,7 @@ const getChangedSrcPackages = (): Set<string> | null => {
       const match = file.match(
         /^packages\/([^/]+)\/(src\/|frontend\/src\/|package\.json|README\.md)/,
       );
-      if (match) dirs.add(match[1]);
+      if (match && match[1]) dirs.add(match[1]);
     }
     return dirs;
   } catch {
@@ -284,12 +287,16 @@ const withResolvedWorkspaceDeps = (pkgDir: string, publish: () => void) => {
 const pushVersionCommit = (bumpedFiles: string[]): void => {
   execSync(`git add ${bumpedFiles.join(' ')}`);
 
-  const pkg = JSON.parse(readFileSync(bumpedFiles[0], 'utf-8'));
+  const path = bumpedFiles[0];
+  if (!path) {
+    throw new Error(`No path in bumpedFiles: ${bumpedFiles.join(', ')}`);
+  }
+  const pkg = JSON.parse(readFileSync(path, 'utf-8'));
   const commitMessage = `chore(release): bump version to ${pkg.version} [skip ci]`;
   execSync(`git commit -m "${commitMessage}" --no-verify`);
 
   const branch =
-    process.env.GITHUB_REF_NAME ??
+    process.env['GITHUB_REF_NAME'] ??
     execSync('git branch --show-current').toString().trim();
 
   if (!branch) {
@@ -297,9 +304,9 @@ const pushVersionCommit = (bumpedFiles: string[]): void => {
   }
 
   console.log(`Pushing to branch: ${branch}`);
-  const token = process.env.GITHUB_TOKEN;
+  const token = process.env['GITHUB_TOKEN'];
   if (token) {
-    const repo = process.env.GITHUB_REPOSITORY ?? 'petarzarkov/dunx';
+    const repo = process.env['GITHUB_REPOSITORY'] ?? 'petarzarkov/dunx';
     execSync(
       `git push https://x-access-token:${token}@github.com/${repo}.git HEAD:refs/heads/${branch}`,
     );
@@ -317,7 +324,7 @@ const pushVersionCommit = (bumpedFiles: string[]): void => {
  * `--provenance` only works on a supported CI, so it is left off local runs.
  */
 const publishPackage = (pkgDir: string): void => {
-  const provenance = process.env.GITHUB_ACTIONS ? ' --provenance' : '';
+  const provenance = process.env['GITHUB_ACTIONS'] ? ' --provenance' : '';
 
   withResolvedWorkspaceDeps(pkgDir, () => {
     try {
@@ -333,7 +340,7 @@ const publishPackage = (pkgDir: string): void => {
       console.error(
         `\nPublish failed for ${basename(pkgDir)}. If this is a 404/E404, check the ` +
           `npm trusted publisher for this package: it must point at ` +
-          `${process.env.GITHUB_REPOSITORY ?? 'petarzarkov/dunx'} and the workflow ` +
+          `${process.env['GITHUB_REPOSITORY'] ?? 'petarzarkov/dunx'} and the workflow ` +
           `file that runs this script. A package that has never been published ` +
           `needs one manual publish before a trusted publisher can be attached.\n`,
       );
