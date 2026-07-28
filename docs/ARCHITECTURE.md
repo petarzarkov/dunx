@@ -27,6 +27,31 @@ param route: 200 { id: "42" }   static route: 200 ok   unmatched method: 404
 There is no reason to build a radix tree in JavaScript. dunx's job is to _emit_
 the `routes` object at boot and hand it to Bun.
 
+**A native method miss is a 404, so CORS preflight cannot be inferred.** With
+`routes` and no `fetch` handler, `OPTIONS` against a GET-only route returns 404.
+Add a `fetch` handler and it falls through to that instead:
+
+```
+OPTIONS, no fetch handler   -> 404
+OPTIONS, with fetch handler -> 418 fell through
+```
+
+So `enableCors()` has to mount an explicit `OPTIONS` handler per path, built at
+boot from the verbs that path actually declares. It cannot collide with a user
+route, because `HttpMethod` has no `OPTIONS` verb.
+
+**`server.requestIP(req)` is how the socket address is read**, and it returns an
+object rather than a string:
+
+```
+server.requestIP(req) -> {"address":"::ffff:127.0.0.1","family":"IPv6","port":41458}
+```
+
+That is what `'trust proxy'` chooses between: the first `X-Forwarded-For` entry
+when trusted, this address otherwise. `Response` headers are also mutable after
+construction, which is what lets CORS headers be applied outside the error mapper
+so a mapped 500 still carries them.
+
 **`emitDecoratorMetadata` is lossy.** With `experimentalDecorators` +
 `emitDecoratorMetadata`, `constructor(db: Db, cache: Cache, n: number)` yields:
 
@@ -426,6 +451,68 @@ still runs unmodified and there is no bypass. Replacement also means a discarded
 provider's factory never runs — which matters when it is the async `useFactory`
 that opens the real database.
 
+## Configured modules, and why there is no `forRootAsync`
+
+A module that needs options exposes a static factory returning a `DynamicModule` —
+its own identity plus the registrations that configuration implies:
+
+```ts
+export class RedisModule {
+  static forRoot(options: RedisOptions): DynamicModule {
+    return {
+      module: RedisModule,
+      providers: [
+        provide(RedisOptions, { useValue: options }),
+        RedisConnection,
+      ],
+    };
+  }
+}
+
+@Module({ imports: [RedisModule.forRoot({ url: 'redis://localhost' })] })
+export class AppModule {}
+```
+
+The `module` field is the identity, so error messages still name a module and the
+traversal can tell two configurations of one module apart. Registrations from a
+configured module are **merged** with whatever the class's own `@Module` decorator
+declares, which lets a module have a static core plus configured extras. A class
+used only through its factory needs no decorator at all.
+
+**Nest's `forRootAsync` has no counterpart, because it needs none.** Its whole
+purpose is to build options from other injected providers, asynchronously. dunx
+resolves eagerly and awaits every async factory before any constructor runs, so
+that is already just a provider:
+
+```ts
+static forRootAsync(load: () => Promise<RedisOptions>): DynamicModule {
+  return {
+    module: RedisModule,
+    providers: [provide(RedisOptions, { useFactory: load }), RedisConnection],
+  };
+}
+```
+
+One mechanism, not two. The eager-resolution decision paid for itself here.
+
+### Deduplication is per-reference, not per-module
+
+A bare class is visited once however many modules import it — that is what makes a
+diamond import register once rather than tripping the duplicate-binding check. The
+same `DynamicModule` **object** imported twice is likewise visited once.
+
+Two _different_ configurations of one module are deliberately **not** deduped. They
+both register, and the existing duplicate-token check reports them by name:
+
+```
+Duplicate binding for Options: bound by module "StoreModule" and module "StoreModule".
+```
+
+Last-wins would have been silent, and "first wins" would depend on traversal order.
+Neither is something a reader could predict, so both configurations register and the
+conflict surfaces. This reuses the flat container's existing rule instead of adding
+a second one.
+
 ## One extension point, not five
 
 Nest has middleware, guards, interceptors, pipes, and filters. dunx has:
@@ -596,7 +683,12 @@ Exit criteria:
 - The example runs via `bun start`, exits 0, and CI asserts that
 
 The playground is one app that grows through the phases, not a new example per
-phase.
+phase. It is the _integration_ example.
+
+Separately, every published package gets an `examples/<package>` app demonstrating
+that package alone, which CI boots and asserts exits 0. One where a service is
+absent (Redis, Postgres, S3) must report that it is skipping and still exit 0 —
+otherwise CI teaches everyone to ignore it.
 
 ### Phase 2 — HTTP
 

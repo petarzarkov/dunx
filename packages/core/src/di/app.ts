@@ -1,6 +1,6 @@
 import { Injector } from './injector.js';
 import { hasOnInit, hasOnShutdown } from './lifecycle.js';
-import { collectModules, readModule, type ModuleClass } from './module.js';
+import { collectModules, readModule, type ModuleRef } from './module.js';
 import type { InjectionToken } from './token.js';
 
 // Declared here rather than reusing NodeJS.Signals so the published .d.ts does
@@ -61,7 +61,7 @@ export class AppFactory {
    * provider, and runs `onInit` in dependency order. The returned app is live —
    * there is no separate init step, because dunx resolves eagerly.
    */
-  static async create(root: ModuleClass): Promise<App> {
+  static async create(root: ModuleRef): Promise<App> {
     const injector = new Injector();
 
     for (const module of collectModules(root)) {

@@ -1,0 +1,17 @@
+{
+  "name": "@dunx/example-images",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example — Image transformation usage on Bun.Image",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/compiler": "workspace:*",
+    "@dunx/core": "workspace:*",
+    "@dunx/images": "workspace:*"
+  }
+}

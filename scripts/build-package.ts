@@ -1,5 +1,8 @@
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+// Imported from source, not dist: this script is what builds @dunx/compiler, so
+// depending on its output would not bootstrap.
+import { depsPlugin } from '../packages/compiler/src/plugin.js';
 
 /**
  * Bun-native package build. Run from a package root: `bun ../../scripts/build-package.ts`.
@@ -74,6 +77,10 @@ const started = performance.now();
 // staying tree-shakeable for consumers.
 const result = await Bun.build({
   entrypoints: [...entrypoints],
+  // A package that exports a DI-managed class has to ship its constructor
+  // dependency records. A consuming app's plugin skips node_modules, so if the
+  // metadata is not baked in here the container cannot construct the class.
+  plugins: [depsPlugin],
   outdir: join(CWD, 'dist'),
   root: join(CWD, 'src'),
   target: 'bun',

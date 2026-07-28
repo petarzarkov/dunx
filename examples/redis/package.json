@@ -1,0 +1,16 @@
+{
+  "name": "@dunx/example-redis",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example — Redis/Valkey usage on Bun.RedisClient",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/compiler": "workspace:*",
+    "@dunx/core": "workspace:*",
+    "@dunx/redis": "workspace:*"
+  }
+}

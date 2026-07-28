@@ -14,11 +14,35 @@ export type ModuleClass = abstract new (...args: never[]) => object;
 export interface ModuleOptions {
   // Traversal only. Importing a module registers its providers into the same flat
   // container — it does not create a visibility boundary.
-  readonly imports?: readonly ModuleClass[];
+  readonly imports?: readonly ModuleRef[];
   // Registered exactly like providers. Kept separate so an HTTP adapter can find
   // which instances to scan for routes; core itself only constructs them.
   readonly controllers?: readonly Ctor<unknown>[];
   readonly providers?: readonly ProviderEntry[];
+}
+
+/**
+ * A configured module — what a `static forRoot(options)` returns. The
+ * registrations it carries are merged with whatever the class's own `@Module`
+ * decorator declares, so a module can have a static core plus configured extras.
+ *
+ * There is no separate `forRootAsync`: because dunx resolves eagerly and awaits
+ * async factories before any constructor runs, an asynchronously configured
+ * module is just one whose options token is bound with `useFactory`.
+ */
+export interface DynamicModule extends ModuleOptions {
+  readonly module: ModuleClass;
+}
+
+/** Either a decorated class or a configured module. */
+export type ModuleRef = ModuleClass | DynamicModule;
+
+/** A module reference flattened to the registrations it contributes. */
+export interface ResolvedModule {
+  readonly module: ModuleClass;
+  /** Where the duplicate-binding error gets "bound by module X and module Y". */
+  readonly name: string;
+  readonly options: ModuleOptions;
 }
 
 interface Marked {
@@ -32,45 +56,85 @@ export const Module =
     return target;
   };
 
-const optionsOf = (module: ModuleClass): ModuleOptions => {
-  // hasOwn, so a subclass of a module does not silently inherit its bindings.
-  const options = Object.hasOwn(module, MODULE)
+// A class is a function; a configured module is a plain object.
+const isDynamic = (ref: ModuleRef): ref is DynamicModule =>
+  typeof ref === 'object';
+
+// hasOwn, so a subclass of a module does not silently inherit its bindings.
+const declaredOptions = (module: ModuleClass): ModuleOptions | undefined =>
+  Object.hasOwn(module, MODULE)
     ? (module as ModuleClass & Marked)[MODULE]
     : undefined;
 
+const concat = <T>(
+  left: readonly T[] | undefined,
+  right: readonly T[] | undefined,
+): readonly T[] => [...(left ?? []), ...(right ?? [])];
+
+const resolveRef = (ref: ModuleRef): ResolvedModule => {
+  if (isDynamic(ref)) {
+    const declared = declaredOptions(ref.module);
+    return {
+      module: ref.module,
+      name: ref.module.name,
+      options: {
+        imports: concat(declared?.imports, ref.imports),
+        controllers: concat(declared?.controllers, ref.controllers),
+        providers: concat(declared?.providers, ref.providers),
+      },
+    };
+  }
+
+  const options = declaredOptions(ref);
   if (!options) {
     throw new AppError(
-      `${module.name} is not a dunx module. Decorate it with @Module({ providers: [...] }).`,
+      `${ref.name} is not a dunx module. Decorate it with ` +
+        '@Module({ providers: [...] }), or import a configured one from a static ' +
+        `factory such as ${ref.name}.forRoot().`,
     );
   }
-  return options;
+  return { module: ref, name: ref.name, options };
 };
 
 /**
  * Flattens the import graph, imports before importers so a module's dependencies
- * register first. Visiting each module once makes a diamond import register once
- * and a cycle terminate.
+ * register first.
+ *
+ * A bare class is visited once however many modules import it, which is what makes
+ * a diamond import register once and a cycle terminate. Two *different*
+ * configurations of the same module are deliberately not deduped — both register,
+ * so the duplicate-token check reports them by name instead of silently keeping
+ * whichever was reached first.
  */
-export const collectModules = (root: ModuleClass): readonly ModuleClass[] => {
-  const seen = new Set<ModuleClass>();
-  const ordered: ModuleClass[] = [];
+export const collectModules = (root: ModuleRef): readonly ResolvedModule[] => {
+  const seen = new Set<ModuleRef>();
+  const seenClasses = new Set<ModuleClass>();
+  const ordered: ResolvedModule[] = [];
 
-  const visit = (module: ModuleClass): void => {
-    if (seen.has(module)) return;
-    seen.add(module);
-    for (const imported of optionsOf(module).imports ?? []) visit(imported);
-    ordered.push(module);
+  const visit = (ref: ModuleRef): void => {
+    if (seen.has(ref)) return;
+    seen.add(ref);
+
+    if (!isDynamic(ref)) {
+      if (seenClasses.has(ref)) return;
+      seenClasses.add(ref);
+    }
+
+    const resolved = resolveRef(ref);
+    for (const imported of resolved.options.imports ?? []) visit(imported);
+    ordered.push(resolved);
   };
 
   visit(root);
   return ordered;
 };
 
-export const readModule = (module: ModuleClass): readonly Registration[] => {
-  const options = optionsOf(module);
+export const readModule = (
+  resolved: ResolvedModule,
+): readonly Registration[] => {
   const entries: readonly ProviderEntry[] = [
-    ...(options.controllers ?? []),
-    ...(options.providers ?? []),
+    ...(resolved.options.controllers ?? []),
+    ...(resolved.options.providers ?? []),
   ];
 
   return entries.map((entry) =>
@@ -81,5 +145,5 @@ export const readModule = (module: ModuleClass): readonly Registration[] => {
 };
 
 export const readControllers = (
-  module: ModuleClass,
-): readonly Ctor<unknown>[] => optionsOf(module).controllers ?? [];
+  resolved: ResolvedModule,
+): readonly Ctor<unknown>[] => resolved.options.controllers ?? [];

@@ -4,6 +4,37 @@ dunx is a Bun-native dependency injection framework. Read
 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) before making design decisions —
 it records what was measured, what was rejected, and why.
 
+## Rule 1 — native implementations only
+
+**This rule outranks every other consideration in this file.** If satisfying it
+and satisfying something else below are in conflict, this one wins, and the
+conflict is worth raising rather than resolving quietly.
+
+Every capability dunx ships must be built on a **Bun-native API** or, failing
+that, a **native low-level implementation** — compiled, not JavaScript
+reimplementations of things the platform already does. `oxc-parser` in
+`@dunx/compiler` is the reference precedent: a Rust parser via N-API, chosen over
+a JavaScript AST library.
+
+In order of preference:
+
+1. **A `Bun.*` API or `bun:*` module.** `Bun.serve`, `Bun.SQL`, `bun:sqlite`,
+   `Bun.RedisClient`, `Bun.file`, `Bun.Image`, `Bun.Glob`, `Bun.password`,
+   `Bun.CryptoHasher`, `Bun.zstdCompress`. See [docs/bun-apis.md](./docs/bun-apis.md).
+2. **A Web standard Bun implements natively** — `Request`, `Response`, `Blob`,
+   `URL`, `WebSocket`, `ReadableStream`, `crypto.subtle`.
+3. **A native module via N-API**, like `oxc-parser`. Requires a note in
+   ARCHITECTURE.md saying what Bun API was missing.
+4. Nothing else.
+
+Concretely banned: `express`, `ws`, `ioredis`, `pg`, `mysql2`, `better-sqlite3`,
+`sharp`, `jimp`, `axios`, `node-fetch`, `glob`, `chokidar`, `bcrypt`, `dotenv`,
+`lodash`, and any JavaScript reimplementation of a `Bun.*` API.
+
+`docs/bun-apis.md` is not exhaustive — Bun ships undocumented APIs. **Probe the
+runtime before concluding something is unavailable**, and extend that file with
+what you verify.
+
 ## Runtime & Package Manager
 
 - **Bun** is the only runtime and package manager. Never use `npm`, `npx`, `yarn`, or `pnpm`.
@@ -107,7 +138,7 @@ Every package manifest needs `"type": "module"`. Without it,
 - **Formatter**: `oxfmt` (config: `.oxfmtrc.json`)
 - Repo-local rules live in `scripts/oxlint-plugin.ts`, wired via `jsPlugins`. oxlint
   has no `no-restricted-syntax`, so anything syntax-shaped goes there. Currently:
-  `dunx/no-enum`.
+  `dunx/no-enum` and `dunx/no-brand-prefix`.
 - `bun run lint` / `bun run format` fix in place; `lint:check` / `format:check`
   do not and are what CI runs.
 - Pre-commit hook runs lint-staged: lints then formats staged `.ts` files.
@@ -129,8 +160,11 @@ Every package manifest needs `"type": "module"`. Without it,
 
 - Runner: `bun test`
 - `bun run test` — run tests with bail on first failure (per package, via `--filter '*'`)
-- `bun run test:cov` — runs `bun test --coverage` **once from the root** so every package
-  lands in a single `coverage/lcov.info`, then `bun run gen:cov`
+- `bun run test:cov` — one root run over `./packages ./scripts` so everything lands in
+  a single `coverage/lcov.info`, then `bun run gen:cov`. It deliberately excludes
+  `examples/`: the root has no compiler preload, because core's missing-transform
+  test asserts that un-transformed state. Example tests run per workspace, where the
+  per-example `bunfig.toml` supplies the preload.
 - Coverage report, badges, and the GitHub Pages site: `/coverage-report`
 
 ## Typecheck
@@ -156,11 +190,19 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 | Package          | Status  | Description                                        |
 | ---------------- | ------- | -------------------------------------------------- |
 | `@dunx/core`     | Phase 1 | DI container, decorators, modules, lifecycle       |
-| `@dunx/http`     | Phase 2 | Bun.serve adapter, controllers, middleware, mapper |
 | `@dunx/compiler` | Phase 2 | Load-time constructor-dependency transform         |
+| `@dunx/http`     | Phase 2 | Bun.serve adapter, controllers, middleware, mapper |
+| `@dunx/ws`       | Phase 2 | WebSocket gateways on Bun.serve, native pub/sub    |
+| `@dunx/db`       | Phase 2 | Bun.SQL + bun:sqlite behind one Database contract  |
+| `@dunx/redis`    | Phase 2 | Bun.RedisClient behind a RedisConnection contract  |
+| `@dunx/files`    | Phase 2 | Bun.file/Glob + Bun.S3Client behind one Storage    |
+| `@dunx/images`   | Phase 2 | Bun.Image decoding and an immutable pipeline       |
 
 Planned, in roadmap order: validation via Standard Schema, `@dunx/testing`,
 `@dunx/create-app`, `@dunx/openapi`.
+
+Every package has a matching `examples/<name>` app that CI boots. One needing an
+absent service (Redis, Postgres, S3) prints that it is skipping and still exits 0.
 
 ## Repo Scripts
 

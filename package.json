@@ -24,7 +24,7 @@
     "install:clean": "find . -name node_modules -type d -prune -exec rm -rf {} + && rm -f bun.lock && bun install",
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test",
-    "test:cov": "bun test --coverage && bun run gen:cov",
+    "test:cov": "bun test ./packages ./scripts --coverage && bun run gen:cov",
     "lint": "oxlint --fix .",
     "lint:check": "oxlint .",
     "format": "oxfmt --write .",

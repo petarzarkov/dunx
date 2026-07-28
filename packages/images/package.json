@@ -1,0 +1,55 @@
+{
+  "name": "@dunx/images",
+  "version": "0.0.0",
+  "description": "Image decoding and transformation built on Bun.Image",
+  "keywords": [
+    "avif",
+    "bun",
+    "dunx",
+    "image",
+    "resize",
+    "thumbnail",
+    "webp"
+  ],
+  "homepage": "https://github.com/petarzarkov/dunx/tree/main/packages/images#readme",
+  "license": "MIT",
+  "author": {
+    "name": "Petar Zarkov",
+    "email": "pzarko1@gmail.com",
+    "url": "https://github.com/petarzarkov"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/petarzarkov/dunx",
+    "directory": "packages/images"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun ../../scripts/build-package.ts",
+    "test": "bun test --bail",
+    "test:cov": "bun test --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/core": "workspace:*"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

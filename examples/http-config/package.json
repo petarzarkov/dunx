@@ -1,0 +1,16 @@
+{
+  "name": "@dunx/example-http-config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example — App-level HTTP configuration: prefix, middleware, CORS, trust proxy",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/compiler": "workspace:*",
+    "@dunx/core": "workspace:*",
+    "@dunx/http": "workspace:*"
+  }
+}

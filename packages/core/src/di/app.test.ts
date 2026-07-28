@@ -7,6 +7,7 @@ import {
   Module,
   readControllers,
   type ModuleClass,
+  type ResolvedModule,
 } from './module.js';
 import { provide } from './provider.js';
 import { token } from './token.js';
@@ -23,7 +24,7 @@ const rejectionMessage = async (promise: Promise<unknown>): Promise<string> => {
   return error.message;
 };
 
-const names = (modules: readonly ModuleClass[]): string[] =>
+const names = (modules: readonly ResolvedModule[]): string[] =>
   modules.map((module) => module.name);
 
 class Database implements OnInit, OnShutdown {
@@ -144,7 +145,8 @@ describe('@Module imports', () => {
 
     expect(app.get(HealthController).ok).toBe(true);
     // Kept separate so an HTTP adapter knows which instances to scan.
-    expect(readControllers(HealthModule)).toEqual([HealthController]);
+    const [resolved] = collectModules(HealthModule);
+    expect(readControllers(resolved!)).toEqual([HealthController]);
   });
 
   it('rejects an undecorated class anywhere in the graph', async () => {
@@ -154,7 +156,9 @@ describe('@Module imports', () => {
     class RootModule {}
 
     expect(await rejectionMessage(AppFactory.create(RootModule))).toBe(
-      'NotAModule is not a dunx module. Decorate it with @Module({ providers: [...] }).',
+      'NotAModule is not a dunx module. Decorate it with ' +
+        '@Module({ providers: [...] }), or import a configured one from a static ' +
+        'factory such as NotAModule.forRoot().',
     );
   });
 

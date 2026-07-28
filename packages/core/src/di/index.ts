@@ -10,9 +10,12 @@ export {
   collectModules,
   Module,
   readControllers,
+  type DynamicModule,
   type ModuleClass,
   type ModuleOptions,
+  type ModuleRef,
   type ProviderEntry,
+  type ResolvedModule,
 } from './module.js';
 export {
   provide,

@@ -44,9 +44,16 @@ Same skeleton, minus publishing: `"private": true`, no `files`, no `exports`, no
 `publishConfig`. Depend on packages with `"@dunx/core": "workspace:*"`. Give it a
 `start` script — CI asserts examples boot and exit 0.
 
-Per [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) there is **one** growing example,
-`examples/playground`, not a new example per phase. Grow that one unless the doc
-says otherwise.
+Two kinds of example, and they are not interchangeable:
+
+- **`examples/playground`** is the _integration_ example. It grows through the
+  phases and proves the pieces work together. Do not fork it per phase.
+- **`examples/<package>`** demonstrates exactly one package. Every published
+  package gets one, named after it, and CI asserts it boots and exits 0.
+
+An example that needs a service CI does not have (Redis, Postgres, S3, network)
+must detect that, print a clear "skipping" line, and **still exit 0**. An example
+that cannot run is an example nobody notices has rotted.
 
 ## Invariants
 

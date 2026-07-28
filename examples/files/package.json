@@ -1,0 +1,17 @@
+{
+  "name": "@dunx/example-files",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example — Local and S3 storage usage on Bun.file and Bun.S3Client",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/compiler": "workspace:*",
+    "@dunx/core": "workspace:*",
+    "@dunx/files": "workspace:*"
+  }
+}

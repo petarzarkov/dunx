@@ -15,6 +15,42 @@
         "typescript": "7.0.2",
       },
     },
+    "examples/db": {
+      "name": "@dunx/example-db",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/db": "workspace:*",
+      },
+    },
+    "examples/files": {
+      "name": "@dunx/example-files",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/files": "workspace:*",
+      },
+    },
+    "examples/http-config": {
+      "name": "@dunx/example-http-config",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/http": "workspace:*",
+      },
+    },
+    "examples/images": {
+      "name": "@dunx/example-images",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/images": "workspace:*",
+      },
+    },
     "examples/playground": {
       "name": "@dunx/playground",
       "version": "0.0.0",
@@ -22,6 +58,25 @@
         "@dunx/compiler": "workspace:*",
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
+      },
+    },
+    "examples/redis": {
+      "name": "@dunx/example-redis",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/redis": "workspace:*",
+      },
+    },
+    "examples/ws": {
+      "name": "@dunx/example-ws",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/http": "workspace:*",
+        "@dunx/ws": "workspace:*",
       },
     },
     "packages/compiler": {
@@ -35,6 +90,20 @@
       "name": "@dunx/core",
       "version": "0.0.0",
     },
+    "packages/db": {
+      "name": "@dunx/db",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+      },
+    },
+    "packages/files": {
+      "name": "@dunx/files",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+      },
+    },
     "packages/http": {
       "name": "@dunx/http",
       "version": "0.0.0",
@@ -45,15 +114,58 @@
         "@types/bun": ">=1.3.0",
       },
     },
+    "packages/images": {
+      "name": "@dunx/images",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+      },
+    },
+    "packages/redis": {
+      "name": "@dunx/redis",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+      },
+    },
+    "packages/ws": {
+      "name": "@dunx/ws",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+      },
+    },
   },
   "packages": {
     "@dunx/compiler": ["@dunx/compiler@workspace:packages/compiler"],
 
     "@dunx/core": ["@dunx/core@workspace:packages/core"],
 
+    "@dunx/db": ["@dunx/db@workspace:packages/db"],
+
+    "@dunx/example-db": ["@dunx/example-db@workspace:examples/db"],
+
+    "@dunx/example-files": ["@dunx/example-files@workspace:examples/files"],
+
+    "@dunx/example-http-config": ["@dunx/example-http-config@workspace:examples/http-config"],
+
+    "@dunx/example-images": ["@dunx/example-images@workspace:examples/images"],
+
+    "@dunx/example-redis": ["@dunx/example-redis@workspace:examples/redis"],
+
+    "@dunx/example-ws": ["@dunx/example-ws@workspace:examples/ws"],
+
+    "@dunx/files": ["@dunx/files@workspace:packages/files"],
+
     "@dunx/http": ["@dunx/http@workspace:packages/http"],
 
+    "@dunx/images": ["@dunx/images@workspace:packages/images"],
+
     "@dunx/playground": ["@dunx/playground@workspace:examples/playground"],
+
+    "@dunx/redis": ["@dunx/redis@workspace:packages/redis"],
+
+    "@dunx/ws": ["@dunx/ws@workspace:packages/ws"],
 
     "@emnapi/core": ["@emnapi/core@1.11.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA=="],
 

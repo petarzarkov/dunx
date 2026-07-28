@@ -1,0 +1,16 @@
+{
+  "name": "@dunx/example-db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example — SQL and SQLite usage on Bun.SQL and bun:sqlite",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/compiler": "workspace:*",
+    "@dunx/core": "workspace:*",
+    "@dunx/db": "workspace:*"
+  }
+}
