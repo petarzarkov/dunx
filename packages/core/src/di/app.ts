@@ -15,7 +15,7 @@ export interface App {
   enableShutdownHooks(signals?: readonly ShutdownSignal[]): this;
 }
 
-class DunxApp implements App {
+class Application implements App {
   readonly closed: Promise<void>;
   readonly #injector: Injector;
   #resolveClosed: (() => void) | undefined;
@@ -55,7 +55,7 @@ class DunxApp implements App {
   }
 }
 
-export class DunxFactory {
+export class AppFactory {
   /**
    * Builds the container from the root module's import graph, resolves every
    * provider, and runs `onInit` in dependency order. The returned app is live —
@@ -76,6 +76,6 @@ export class DunxFactory {
       if (hasOnInit(instance)) await instance.onInit();
     }
 
-    return new DunxApp(injector);
+    return new Application(injector);
   }
 }

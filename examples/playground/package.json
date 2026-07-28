@@ -2,7 +2,7 @@
   "name": "@dunx/playground",
   "version": "0.0.0",
   "private": true,
-  "description": "Phase 1 example — a fully dependency-injected application graph with no HTTP",
+  "description": "Full example of dunx dependency-injected application",
   "type": "module",
   "scripts": {
     "start": "bun src/main.ts",
@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dunx/core": "workspace:*"
+    "@dunx/compiler": "workspace:*",
+    "@dunx/core": "workspace:*",
+    "@dunx/http": "workspace:*"
   }
 }

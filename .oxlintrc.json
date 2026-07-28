@@ -118,7 +118,9 @@
     "typescript/no-confusing-non-null-assertion": "error",
     "typescript/no-inferrable-types": "error",
     "typescript/prefer-for-of": "error",
-    "typescript/prefer-function-type": "error"
+    "typescript/prefer-function-type": "error",
+    "dunx/no-brand-prefix": "error",
+    "dunx/no-enum": "error"
   },
   "overrides": [
     {
@@ -131,5 +133,6 @@
         "prefer-spread": "error"
       }
     }
-  ]
+  ],
+  "jsPlugins": ["./scripts/oxlint-plugin.ts"]
 }

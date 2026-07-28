@@ -1,7 +1,13 @@
-import { CircularDependencyError, DunxError } from './errors.js';
+import { isUnresolved, readDeps, type Constructible } from './deps.js';
+import { CircularDependencyError, AppError } from './errors.js';
 import { swapInjector } from './inject.js';
 import type { ErasedProvider, Registration } from './provider.js';
-import { describeToken, isCtor, type InjectionToken } from './token.js';
+import {
+  describeToken,
+  isCtor,
+  type Ctor,
+  type InjectionToken,
+} from './token.js';
 
 // Thrown out of the synchronous path when a factory turns out to be async. The
 // async caller awaits the token and retries; the factory itself is never called
@@ -25,7 +31,7 @@ export class Injector {
   register(registration: Registration, module: string): void {
     const existing = this.#bindings.get(registration.token);
     if (existing) {
-      throw new DunxError(
+      throw new AppError(
         `Duplicate binding for ${describeToken(registration.token)}: bound by module ` +
           `"${existing.module}" and module "${module}". The container is flat — one ` +
           'binding per token.',
@@ -62,7 +68,7 @@ export class Injector {
       (isCtor(token) ? ({ kind: 'class', ctor: token } as const) : undefined);
 
     if (!provider) {
-      throw new DunxError(
+      throw new AppError(
         `No provider for ${describeToken(token)}. Bind it with provide() in a module.`,
       );
     }
@@ -104,9 +110,12 @@ export class Injector {
     if (provider.kind === 'value') return this.#settle(key, provider.value);
 
     if (provider.kind === 'class') {
+      // Resolved before the swap: argument resolution recurses through get(),
+      // which must not see this class's injector scope as its own.
+      const args = this.#constructorArgs(provider.ctor);
       const previous = swapInjector(this);
       try {
-        return this.#settle(key, new provider.ctor());
+        return this.#settle(key, new (provider.ctor as Constructible)(...args));
       } finally {
         swapInjector(previous);
       }
@@ -119,6 +128,36 @@ export class Injector {
       throw new PendingSignal(key);
     }
     return this.#settle(key, result);
+  }
+
+  #constructorArgs(ctor: Ctor<unknown>): readonly unknown[] {
+    const deps = readDeps(ctor);
+
+    // A declared parameter with nothing recorded for it means the transform never
+    // saw this file. Constructing it anyway would pass `undefined` and fail later
+    // somewhere unrelated, so the missing setup is reported here instead.
+    if (deps.length === 0 && ctor.length > 0) {
+      throw new AppError(
+        `${ctor.name} declares ${ctor.length} constructor parameter(s) but no ` +
+          'dependencies were recorded for it, so @dunx/compiler did not transform ' +
+          `${ctor.name}. Register the plugin, then retry:\n\n` +
+          '  # bunfig.toml\n' +
+          '  preload = ["@dunx/compiler/preload"]\n\n' +
+          '  [test]\n' +
+          '  preload = ["@dunx/compiler/preload"]\n',
+      );
+    }
+
+    return deps.map((dep, index) => {
+      if (!isUnresolved(dep)) return this.get(dep);
+
+      throw new AppError(
+        `${ctor.name} cannot be constructed: parameter ${index + 1} ` +
+          `(${dep.unresolved}) names nothing that exists at runtime, so there is ` +
+          'no token to resolve. Replace the type with an abstract class, or bind ' +
+          'it with token() and declare the parameter as that token.',
+      );
+    });
   }
 
   #settle(key: InjectionToken<unknown>, value: unknown): unknown {

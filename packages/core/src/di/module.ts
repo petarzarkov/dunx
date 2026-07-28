@@ -1,4 +1,4 @@
-import { DunxError } from './errors.js';
+import { AppError } from './errors.js';
 import type { Registration } from './provider.js';
 import type { Ctor } from './token.js';
 
@@ -15,6 +15,9 @@ export interface ModuleOptions {
   // Traversal only. Importing a module registers its providers into the same flat
   // container — it does not create a visibility boundary.
   readonly imports?: readonly ModuleClass[];
+  // Registered exactly like providers. Kept separate so an HTTP adapter can find
+  // which instances to scan for routes; core itself only constructs them.
+  readonly controllers?: readonly Ctor<unknown>[];
   readonly providers?: readonly ProviderEntry[];
 }
 
@@ -36,7 +39,7 @@ const optionsOf = (module: ModuleClass): ModuleOptions => {
     : undefined;
 
   if (!options) {
-    throw new DunxError(
+    throw new AppError(
       `${module.name} is not a dunx module. Decorate it with @Module({ providers: [...] }).`,
     );
   }
@@ -63,9 +66,20 @@ export const collectModules = (root: ModuleClass): readonly ModuleClass[] => {
   return ordered;
 };
 
-export const readModule = (module: ModuleClass): readonly Registration[] =>
-  (optionsOf(module).providers ?? []).map((entry) =>
+export const readModule = (module: ModuleClass): readonly Registration[] => {
+  const options = optionsOf(module);
+  const entries: readonly ProviderEntry[] = [
+    ...(options.controllers ?? []),
+    ...(options.providers ?? []),
+  ];
+
+  return entries.map((entry) =>
     typeof entry === 'function'
       ? { token: entry, provider: { kind: 'class', ctor: entry } }
       : entry,
   );
+};
+
+export const readControllers = (
+  module: ModuleClass,
+): readonly Ctor<unknown>[] => optionsOf(module).controllers ?? [];

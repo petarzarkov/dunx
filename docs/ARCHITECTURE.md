@@ -105,7 +105,7 @@ the field it reads still works, because handlers run per request (`late-value`).
 
 ## The decorator dialect decision
 
-`tsyringe` and Nest-style constructor injection are locked to legacy
+`tsyringe` and `@Inject()`-style constructor injection are locked to legacy
 `experimentalDecorators` **permanently**: TC39 standard decorators have no
 parameter decorators, so `constructor(@inject(X) x: X)` has no migration path.
 Building a new framework on the dialect TypeScript is walking away from, in
@@ -114,19 +114,151 @@ order to buy a lossy metadata table you then work around, is a bad trade.
 dunx uses **standard decorators only**. The root `tsconfig.json` must not set
 `experimentalDecorators` or `emitDecoratorMetadata`.
 
+That rules out the _decorator_ route to constructor injection. It does not rule
+out constructor injection — see below.
+
+## Constructor injection without decorator metadata
+
+An earlier draft of this document concluded that constructor injection was
+unavailable and that `inject()` in field initializers was the only option. That
+conclusion was wrong: it assumed the parameter types had to be recovered at
+runtime, which is the only thing decorators could have done. They can be read at
+**load time** instead, from the source that still has them.
+
+`@dunx/compiler` is a Bun plugin. On load it parses each file with `oxc-parser`,
+reads every class's constructor parameter types, and appends one statement per
+class:
+
+```ts
+export class UsersService {
+  constructor(private readonly repo: UsersRepository) {}
+}
+Object.defineProperty(UsersService, Symbol.for('dunx.deps'), {
+  value: () => [UsersRepository],
+});
+```
+
+The container reads that record and resolves the arguments before calling `new`.
+So the user-facing syntax carries **no annotation at all** — no `@Injectable`, no
+`@Inject`, no `inject()`, no `reflect-metadata`, no `experimentalDecorators`.
+
+### Registering the transform
+
+Three ways, same plugin object:
+
+```toml
+# bunfig.toml — for `bun run` and `bun test`
+preload = ["@dunx/compiler/preload"]
+
+[test]
+preload = ["@dunx/compiler/preload"]
+```
+
+```bash
+bun --preload @dunx/compiler/preload src/main.ts   # no config file at all
+```
+
+```ts
+await Bun.build({ entrypoints: ['src/main.ts'], plugins: [depsPlugin] });
+```
+
+`@dunx/create-app` scaffolds the first of these, so a generated app needs no setup.
+
+### Why `@dunx/core` does not register it itself
+
+The obvious "built in" move is for `@dunx/core` to call `Bun.plugin()` when it is
+imported. It was rejected twice over.
+
+It would make DI **import-order dependent**. Bun's `onLoad` only affects modules
+loaded after registration, and static imports are evaluated depth-first in source
+order. `import { AppFactory } from '@dunx/core'` before
+`import { AppModule } from './app.module.js'` would work; the reverse order would
+silently skip the transform. That is precisely the "`reflect-metadata` must be the
+first import" fragility this framework exists to avoid, and no amount of
+documentation fixes an ordering rule.
+
+It would also cost `@dunx/core` its empty dependency list. The transform needs
+`oxc-parser`, a native binary, which every production deployment would then carry
+in order to run code that was already transformed at build time.
+
+So registration stays explicit, and the failure mode is closed off instead:
+
+### The missing-transform guard
+
+`Function.prototype.length` still reports the declared parameter count after
+TypeScript's parameter properties are compiled away (measured: a constructor with
+two parameter properties has `length === 2`). So the container can tell the
+difference between "this class needs nothing" and "nobody told me what this class
+needs". No recorded dependencies plus a non-zero arity means the plugin never saw
+the file, and that is a boot error carrying the fix:
+
+```
+UsersController declares 1 constructor parameter(s) but no dependencies were
+recorded for it, so @dunx/compiler did not transform UsersController.
+Register the plugin, then retry:
+
+  # bunfig.toml
+  preload = ["@dunx/compiler/preload"]
+```
+
+The check cannot produce a false positive. A constructor whose parameters all have
+defaults has `length === 0` and is genuinely callable with no arguments; a class
+bound with `useValue` is never constructed; and the transform only ever writes a
+record whose length equals the parameter count, so a present record is never empty.
+
+Three properties follow, and each is strictly better than the
+`emitDecoratorMetadata` equivalent measured above:
+
+**Erased types are named, not degraded.** `emitDecoratorMetadata` turns an
+interface into `Object` and a primitive into `Number`, which is why Nest needs
+`@Inject(TOKEN)` for both. The transform can see the difference in the source, so
+it records the parameter as `unresolved` along with its original text, and the
+container throws at boot naming it:
+
+```
+UsersService cannot be constructed: parameter 2 (private readonly cfg: AppConfig)
+names nothing that exists at runtime, so there is no token to resolve.
+```
+
+A type-only import, an inline `type` specifier, a local `interface` or type alias,
+a class type parameter, a primitive, and a union are all detected this way.
+
+**The record is a thunk, so there is no temporal dead zone.** An eagerly
+evaluated array would crash on a dependency declared later in the file or reached
+through a circular import. Deferring the body to resolution time is what removes
+the need for `forwardRef`.
+
+**Inheritance falls out of the prototype chain.** `readDeps` does a plain lookup
+rather than `Object.hasOwn`, so a subclass that declares no constructor inherits
+its base's constructor _and_ its base's dependencies. A subclass that does declare
+one gets its own record, which shadows the base's.
+
+Two limits worth recording. The transform only rewrites **class declarations**: a
+`ClassExpression`'s own name is bound inside the class body, so a statement
+appended after `const X = class Inner {}` could not reference `Inner`. And because
+a plugin sees one file at a time, it cannot tell a DI provider from a plain data
+class — `new HttpError(404, 'x')` also has constructor parameters. So it records
+metadata for every annotated class and lets the container raise the error only if
+something is actually resolved as a provider. That is why the error is a boot
+error and not a build error.
+
+`inject()` remains available for a value with no constructor parameter to hang
+off, and both mechanisms may be used in the same class.
+
 ## Core primitives (`@dunx/core`)
 
-There is no `@Injectable()` — with `inject()` every class is injectable by default.
+There is no `@Injectable()` — every class is injectable by default.
 
-| Primitive                                              | Purpose                                                 |
-| ------------------------------------------------------ | ------------------------------------------------------- |
-| `inject<T>(token): T`                                  | Resolve in a field initializer. Always synchronous.     |
-| `token<T>(name)`                                       | Opaque token for interfaces, config objects, primitives |
-| `provide(token, {useClass \| useValue \| useFactory})` | Binding, including async factories                      |
-| `@Module({imports, providers})`                        | Class decorator. Registration only — see below          |
-| `DunxFactory.create(RootModule)`                       | Builds, resolves, runs `onInit`. Returns a live `App`   |
+| Primitive                                              | Purpose                                                  |
+| ------------------------------------------------------ | -------------------------------------------------------- |
+| `constructor(private readonly x: X)`                   | The default. Resolved from the parameter's type          |
+| `inject<T>(token): T`                                  | Escape hatch, in a field initializer. Always synchronous |
+| `token<T>(name)`                                       | Opaque token for interfaces, config objects, primitives  |
+| `provide(token, {useClass \| useValue \| useFactory})` | Binding, including async factories                       |
+| `@Module({imports, providers})`                        | Class decorator. Registration only — see below           |
+| `AppFactory.create(RootModule)`                        | Builds, resolves, runs `onInit`. Returns a live `App`    |
 
-`DunxFactory.create()` is async and there is no separate `init()`: resolution is
+`AppFactory.create()` is async and there is no separate `init()`: resolution is
 eager, so an app that exists is an app that booted. `app.enableShutdownHooks()`
 registers `SIGTERM`/`SIGINT` handlers and `app.closed` resolves once shutdown has
 finished, whoever triggered it.
@@ -203,14 +335,21 @@ export class UsersController {
 
 ### Resolution mechanism
 
-A module-level `currentInjector` is set around each `new Klass()`. Field
-initializers run synchronously inside the constructor, so there is no async gap
-and no `AsyncLocalStorage` cost. Calling `inject()` outside construction throws
-with a clear message.
+Constructor arguments are resolved **before** the injector swap, because argument
+resolution recurses back through `get()` and must not see the class being built as
+its own scope. Then a module-level `currentInjector` is set around the `new
+Klass()` call itself, so any `inject()` in a field initializer resolves against
+it. Field initializers run synchronously inside the constructor, so there is no
+async gap and no `AsyncLocalStorage` cost. Calling `inject()` outside construction
+throws with a clear message.
+
+Both paths go through the same `get()`, so cycle detection, duplicate-binding
+rejection, and the async-factory retry below apply identically whether a
+dependency arrived as a constructor parameter or an `inject()` call.
 
 ### Eager-only, no lazy resolution
 
-`DunxFactory.create()` instantiates every provider and awaits async factories
+`AppFactory.create()` instantiates every provider and awaits async factories
 before the server binds. Wiring errors surface at boot, not at first request. This
 is what lets `inject()` stay synchronous: by the time any constructor runs, every
 async provider is already resolved.
@@ -258,7 +397,7 @@ argument was always about semantics and the object literal was never load-bearin
 The container is flat. `imports` exists, but it is **traversal only** — it pulls a
 module's registrations into the same flat container. There is no `exports` list, no
 visibility boundary, and therefore no "provider is not exported from module X"
-error. `DunxFactory.create(RootModule)` walks the import graph, imports before
+error. `AppFactory.create(RootModule)` walks the import graph, imports before
 importers so dependencies register first, and visits each module once — which makes
 a diamond import register once rather than tripping the duplicate-binding check,
 and makes a circular import terminate instead of erroring. A module is a named list
@@ -318,20 +457,33 @@ Zod 4, Valibot, and ArkType all work with zero dependencies in `@dunx/*`.
 
 ## HTTP adapter (`@dunx/http`)
 
-Boot sequence, run after `app.init()` has constructed every provider:
+`HttpFactory.create(RootModule, options?)` boots the container via
+`AppFactory.create`, then:
 
-1. Collect controllers from modules
-2. Discover routes per controller — prototype-chain scan **plus** instance fields,
-   as one merged set (see **Route discovery**). Zero routes throws
+1. Collect controllers from `@Module({ controllers })` across the import graph
+2. Discover routes per controller by walking the constructed instance's prototype
+   chain (see **Route discovery**). Zero routes throws
 3. Join controller prefix + method path, normalize
 4. **Detect collisions and throw** — Bun silently lets one route win
 5. Build the `routes` object; each handler is a closure over the
-   already-constructed instance and its bound method
+   already-constructed instance and its bound method, with the middleware chain
+   already folded in
 6. Hand to `Bun.serve`
 
-Step 2 needs the instance, not just the class: a field route does not exist until
-the field initializer has run. That ordering is already guaranteed — `app.init()`
-is eager and completes before the server binds.
+Step 2 needs the instance, not just the class, so that the handler can be bound off
+it — which is what makes an undecorated override in a subclass dispatch correctly.
+That ordering is guaranteed: container resolution is eager and completes first.
+
+Field-initialized routes are part of **Route discovery** but not yet implemented:
+the thing that produces them is the `route.*` builder, which exists to sidestep the
+decorator inference limit, so it lands with Phase 3 rather than as a scan with no
+producer.
+
+Middleware is a **class** with `handle(req, next)`, resolved from the container so
+it can `inject()`. It is passed to `HttpFactory.create`, not to `@Module` — in a
+flat container with no module boundary, "module middleware" could only ever mean
+global middleware, so hanging it off a module would imply a scope that does not
+exist.
 
 Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in
@@ -367,7 +519,10 @@ Consequences, all measured:
 - **No class decorator is required at all** — and so no `@Routes()`. Inheriting
   from an undecorated abstract base works for any number of subclasses.
   `@Controller` is reduced to supplying a prefix and may be omitted;
-  `@Module({ controllers })` is what registers a controller.
+  `@Module({ controllers })` is what registers a controller. The prefix is read
+  through the prototype chain rather than with `Object.hasOwn`, so a subclass
+  inherits its base's prefix and two subclasses of one decorated base collide
+  loudly at boot instead of silently mounting at the root.
 - **Overriding a decorated base method without re-decorating works.** The own
   undecorated member does not shadow discovery, and dispatch resolves through the
   prototype chain to the override.
@@ -415,6 +570,11 @@ Exit criteria are written as individually checkable statements on purpose.
 next steps, so a criterion that cannot be verified against the tree by inspection
 is a criterion that gets reported wrong. Keep them mechanical.
 
+The phases below are written from the framework's point of view.
+[MIGRATION-FROM-NEST.md](./MIGRATION-FROM-NEST.md) is the same roadmap seen from
+a migrating NestJS application, and it argues for two reorderings: route metadata
+moves into Phase 2, and OpenAPI ahead of Phase 4. Read it before planning a phase.
+
 ### Phase 1 — DI proven end to end
 
 Ship `@dunx/core` and a single `examples/playground` app that boots a fully
@@ -443,6 +603,18 @@ phase.
 `@dunx/http`, the `Bun.serve` adapter, the middleware chain, the error mapper,
 and route-collision detection. The playground grows a controller; its Phase 1
 assertions keep passing unchanged.
+
+Also `@dunx/compiler`, the load-time transform that makes constructor injection
+work. It landed here rather than in Phase 1 because the need only became clear
+once real application code was being written against `inject()`.
+
+Exit criteria:
+
+- A class with constructor parameters resolves without any annotation
+- A parameter whose type is erased fails at boot naming that parameter
+- A subclass with no constructor of its own inherits its base's dependencies
+- `inject()` still works, and both mechanisms work in one class
+- The playground uses constructor injection throughout and `bun start` exits 0
 
 ### Phase 3 — Validation
 

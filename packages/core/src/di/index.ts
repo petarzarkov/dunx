@@ -1,17 +1,15 @@
-export { DunxFactory, type App, type ShutdownSignal } from './app.js';
-export { CircularDependencyError, DunxError } from './errors.js';
+export { AppFactory, type App, type ShutdownSignal } from './app.js';
+export { CircularDependencyError, AppError } from './errors.js';
 export { inject } from './inject.js';
-export { Injector } from './injector.js';
-export {
-  hasOnInit,
-  hasOnShutdown,
-  type OnInit,
-  type OnShutdown,
-} from './lifecycle.js';
+export type { OnInit, OnShutdown } from './lifecycle.js';
+// collectModules + readControllers are the adapter seam: an HTTP package needs to
+// walk the import graph and find which instances to scan. Injector, readModule and
+// the lifecycle type guards stay internal — nothing outside core consumes them, and
+// exporting Injector would freeze the container's shape as public API.
 export {
   collectModules,
   Module,
-  readModule,
+  readControllers,
   type ModuleClass,
   type ModuleOptions,
   type ProviderEntry,

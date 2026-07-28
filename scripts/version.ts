@@ -55,21 +55,32 @@ const getForcePublishTarget = (): {
 
 const forcePublish = getForcePublishTarget();
 
-const bumpVersion = (
+export const bumpVersion = (
   version: string,
   type: 'major' | 'minor' | 'patch',
 ): string => {
-  const [major, minor, patch] = version.split('.').map(Number);
+  const parts = version.split('.').map(Number);
+  const [major, minor, patch] = parts;
+
+  // Validated once, on integer-ness. The previous per-case `!major` / `!minor` /
+  // `!patch` guards were meant to catch NaN, but 0 is falsy too, so every bump of
+  // a version with a zero component threw — including 1.2.0 -> 1.2.1.
+  if (
+    parts.length !== 3 ||
+    major === undefined ||
+    minor === undefined ||
+    patch === undefined ||
+    !parts.every((part) => Number.isInteger(part) && part >= 0)
+  ) {
+    throw new Error(`Invalid version: ${version}`);
+  }
 
   switch (type) {
     case 'major':
-      if (!major) throw new Error(`Invalid version: ${version}`);
       return `${major + 1}.0.0`;
     case 'minor':
-      if (!minor) throw new Error(`Invalid version: ${version}`);
       return `${major}.${minor + 1}.0`;
     case 'patch':
-      if (!patch) throw new Error(`Invalid version: ${version}`);
       return `${major}.${minor}.${patch + 1}`;
     default:
       throw new Error(`Invalid bump type: ${String(type)}`);
@@ -501,7 +512,10 @@ const runVersionBump = (allPackages: PublishablePackage[]): void => {
   pushVersionCommit(bumpedPackages.map((p) => p.packageJsonPath));
 };
 
+// Guarded so the pure helpers above can be imported by a test without the script
+// running its whole publish flow.
 void (async () => {
+  if (!import.meta.main) return;
   if (isDryRun) {
     console.log('\n--- DRY RUN MODE ENABLED ---\n');
   }

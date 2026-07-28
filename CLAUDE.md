@@ -34,9 +34,52 @@ Package scope: `@dunx/<name>`. Every package is **ESM only** and emits a single
 - The root tsconfig deliberately does **not** set `experimentalDecorators` or
   `emitDecoratorMetadata`. Do not add them.
 - Use TC39 standard decorators. There are no parameter decorators in that
-  proposal, so constructor-parameter injection is not available by design.
-- Do not add `reflect-metadata` or `tsyringe`. DI is `inject()` in field
-  initializers; see docs/ARCHITECTURE.md.
+  proposal, so `@Inject()` does not exist and never will.
+- Do not add `reflect-metadata` or `tsyringe`.
+
+## Dependency injection
+
+Constructor injection is the default and needs no annotation of any kind:
+
+```ts
+export class UsersService {
+  constructor(private readonly repo: UsersRepository) {}
+}
+```
+
+`@dunx/compiler` reads each class's constructor parameter types at load time and
+records them on the class as a thunk under `Symbol.for('dunx.deps')`; the
+container resolves them before calling `new`. Apps opt in with one line:
+
+```toml
+preload = ["@dunx/compiler/preload"]
+```
+
+Consequences to keep in mind when changing this area:
+
+- A parameter whose type is erased — an interface, a primitive, a union, a
+  type-only import, a class type parameter — is recorded as `unresolved` and
+  becomes a **boot error naming that parameter**, not a silent `undefined`. This
+  is the wart `emitDecoratorMetadata` has and dunx does not.
+- A class with constructor parameters but **no** record means the plugin never ran.
+  The container detects that via `ctor.length` and fails at boot with the preload
+  snippet. Do not "fix" that by making core register the plugin on import — it
+  would make DI import-order dependent and pull a native parser into core. The
+  reasoning is in docs/ARCHITECTURE.md, "Why `@dunx/core` does not register it
+  itself".
+- The record is a **thunk**, evaluated at resolution rather than class-definition
+  time. That is what makes a dependency declared later in the file, or across a
+  circular import, work without `forwardRef`.
+- `readDeps` uses prototype-chain lookup on purpose: a subclass with no
+  constructor of its own inherits the base's constructor and must inherit its
+  dependencies with it.
+- `inject()` in a field initializer still works and is still the escape hatch for
+  a value with no constructor parameter to hang off. Both may be used in one class.
+- The transform only touches **class declarations**. A class expression's own name
+  is not in scope outside it, so appending a statement there would be a
+  `ReferenceError`.
+
+See docs/ARCHITECTURE.md for the measurements behind all of this.
 
 ## Building
 
@@ -62,6 +105,9 @@ Every package manifest needs `"type": "module"`. Without it,
 
 - **Linter**: `oxlint` (config: `.oxlintrc.json` at repo root)
 - **Formatter**: `oxfmt` (config: `.oxfmtrc.json`)
+- Repo-local rules live in `scripts/oxlint-plugin.ts`, wired via `jsPlugins`. oxlint
+  has no `no-restricted-syntax`, so anything syntax-shaped goes there. Currently:
+  `dunx/no-enum`.
 - `bun run lint` / `bun run format` fix in place; `lint:check` / `format:check`
   do not and are what CI runs.
 - Pre-commit hook runs lint-staged: lints then formats staged `.ts` files.
@@ -107,12 +153,14 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 ## Packages Overview
 
-| Package      | Status  | Description                                  |
-| ------------ | ------- | -------------------------------------------- |
-| `@dunx/core` | Phase 1 | DI container, decorators, modules, lifecycle |
+| Package          | Status  | Description                                        |
+| ---------------- | ------- | -------------------------------------------------- |
+| `@dunx/core`     | Phase 1 | DI container, decorators, modules, lifecycle       |
+| `@dunx/http`     | Phase 2 | Bun.serve adapter, controllers, middleware, mapper |
+| `@dunx/compiler` | Phase 2 | Load-time constructor-dependency transform         |
 
-Planned, in roadmap order: `@dunx/http` (Bun.serve adapter), validation via
-Standard Schema, `@dunx/testing`, `@dunx/create-app`, `@dunx/openapi`.
+Planned, in roadmap order: validation via Standard Schema, `@dunx/testing`,
+`@dunx/create-app`, `@dunx/openapi`.
 
 ## Repo Scripts
 
@@ -162,7 +210,28 @@ New repeatable workflow → new skill. Do not grow this file instead.
   dispatch, and method-miss 404s natively
 - Do not exceed 500 lines per source file
 - Do not add Biome or ESLint
+- Do not prefix identifiers with `Dunx` — the brand belongs in the package name,
+  not in every symbol. Use `App`: `AppFactory`, `AppError`, `AppModule`. Enforced
+  by `dunx/no-brand-prefix` in `scripts/oxlint-plugin.ts`
 - Do not use `any` — TypeScript strict mode is enforced
+- Do not write `enum` (or `const enum`) — `dunx/no-enum` rejects it. An enum is the
+  one TS construct that cannot be erased: it emits a runtime object with reverse
+  mappings. Use a frozen object plus an indexed-access union, exporting one name for
+  both the value and the type:
+
+  ```ts
+  export const HttpStatusCode = Object.freeze({
+    OK: 200,
+    NOT_FOUND: 404,
+  } as const);
+  export type HttpStatusCode =
+    (typeof HttpStatusCode)[keyof typeof HttpStatusCode];
+  ```
+
+  `as const` gives the literal types, `Object.freeze` gives the runtime
+  immutability an `as const` object alone does not have. Add
+  `keyof typeof X` as a second type when the names are needed too.
+
 - Do not create files unless necessary — prefer editing existing ones
 - Do not add docstrings/comments unless logic is non-obvious
 - Do not add error handling for impossible scenarios

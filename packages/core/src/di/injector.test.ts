@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { DunxFactory } from './app.js';
-import { CircularDependencyError, DunxError } from './errors.js';
+import { AppFactory } from './app.js';
+import { CircularDependencyError, AppError } from './errors.js';
 import { inject } from './inject.js';
 import { Module } from './module.js';
 import { provide } from './provider.js';
@@ -47,7 +47,7 @@ describe('inject()', () => {
     @Module({ providers: [UsersService, Config] })
     class UsersModule {}
 
-    const app = await DunxFactory.create(UsersModule);
+    const app = await AppFactory.create(UsersModule);
 
     // Annotated on the left on purpose: if get() returned unknown this would not compile.
     const users: UsersService = app.get(UsersService);
@@ -61,7 +61,7 @@ describe('inject()', () => {
     @Module({ providers: [UsersService] })
     class UsersModule {}
 
-    const app = await DunxFactory.create(UsersModule);
+    const app = await AppFactory.create(UsersModule);
 
     app.get(UsersService).list();
     // Neither Logger nor Config appears in any providers array.
@@ -85,13 +85,13 @@ describe('inject()', () => {
     })
     class TimeModule {}
 
-    const app = await DunxFactory.create(TimeModule);
+    const app = await AppFactory.create(TimeModule);
 
     expect(app.get(Stamper).clock.now()).toBe('noon');
   });
 
   it('throws when called outside construction', () => {
-    expect(() => inject(Logger)).toThrow(DunxError);
+    expect(() => inject(Logger)).toThrow(AppError);
     expect(() => inject(Logger)).toThrow(/outside of construction/);
   });
 
@@ -101,7 +101,7 @@ describe('inject()', () => {
     })
     class BadModule {}
 
-    expect(await rejectionMessage(DunxFactory.create(BadModule))).toMatch(
+    expect(await rejectionMessage(AppFactory.create(BadModule))).toMatch(
       /outside of construction/,
     );
   });
@@ -125,7 +125,7 @@ describe('provide()', () => {
     })
     class InfraModule {}
 
-    const app = await DunxFactory.create(InfraModule);
+    const app = await AppFactory.create(InfraModule);
 
     expect(app.get(DsnToken)).toBe('db://async/pool');
     expect(app.get(Logger)).toBeInstanceOf(Logger);
@@ -152,7 +152,7 @@ describe('provide()', () => {
     })
     class DataModule {}
 
-    const app = await DunxFactory.create(DataModule);
+    const app = await AppFactory.create(DataModule);
 
     expect(app.get(Repository).dsn).toBe('db://one/pool');
   });
@@ -181,7 +181,7 @@ describe('provide()', () => {
     })
     class DataModule {}
 
-    const app = await DunxFactory.create(DataModule);
+    const app = await AppFactory.create(DataModule);
 
     expect(calls).toBe(1);
     expect(app.get(Left).dsn).toBe('db://once');
@@ -198,7 +198,7 @@ describe('provide()', () => {
     @Module({ imports: [AlphaModule, BetaModule] })
     class RootModule {}
 
-    expect(await rejectionMessage(DunxFactory.create(RootModule))).toMatch(
+    expect(await rejectionMessage(AppFactory.create(RootModule))).toMatch(
       /"AlphaModule" and module "BetaModule"/,
     );
   });
@@ -211,7 +211,7 @@ describe('provide()', () => {
     @Module({ providers: [NeedsDsn] })
     class DataModule {}
 
-    expect(await rejectionMessage(DunxFactory.create(DataModule))).toMatch(
+    expect(await rejectionMessage(AppFactory.create(DataModule))).toMatch(
       /No provider for Dsn/,
     );
   });
@@ -230,7 +230,7 @@ describe('singleton lifetime', () => {
     @Module({ providers: [Shared, First, Second] })
     class SharedModule {}
 
-    const app = await DunxFactory.create(SharedModule);
+    const app = await AppFactory.create(SharedModule);
 
     expect(app.get(Shared)).toBe(app.get(Shared));
     expect(app.get(First).shared).toBe(app.get(Second).shared);
@@ -249,7 +249,7 @@ describe('cycle detection', () => {
     @Module({ providers: [Alpha, Beta] })
     class CyclicModule {}
 
-    const error = await rejection(DunxFactory.create(CyclicModule));
+    const error = await rejection(AppFactory.create(CyclicModule));
 
     expect(error).toBeInstanceOf(CircularDependencyError);
     expect((error as CircularDependencyError).cycle).toEqual([

@@ -36,12 +36,24 @@ it('boots the whole graph and exits 0', async () => {
   const code = await app.finish();
 
   expect(code).toBe(0);
+  // Phase 1 assertions, unchanged by the arrival of HTTP.
   expect(app.output.text).toContain('playground: users ready');
   expect(app.output.text).toContain(
     'row from memory://playground | via select * from users',
   );
   expect(app.output.text).toContain('users draining');
   expect(app.output.text).toContain('database closed');
+});
+
+it('serves the controller it grew in Phase 2', async () => {
+  const app = start();
+  const code = await app.finish();
+
+  expect(code).toBe(0);
+  expect(app.output.text).toMatch(/listening on http:\/\/[^\s]+/);
+  expect(app.output.text).toContain(
+    'GET /users -> ["row from memory://playground","via select * from users"]',
+  );
 });
 
 it('closes cleanly on SIGTERM', async () => {

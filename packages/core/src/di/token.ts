@@ -5,10 +5,10 @@ export interface Token<T> {
   readonly resolves?: T;
 }
 
-// DI happens in field initializers, so a constructor the container can call
-// takes no arguments. A class requiring constructor arguments fails to assign
-// here, which is the intended error.
-export type Ctor<T> = new () => T;
+// Any constructor is callable: `@dunx/compiler` records each class's parameter
+// types, and the container resolves them before calling `new`. `never[]` is what
+// makes an arbitrary signature assignable here — parameters are contravariant.
+export type Ctor<T> = new (...args: never[]) => T;
 
 // An abstract class cannot be constructed, so it is usable as a token but not as
 // a `useClass` target or a bare `providers` entry. This is how a contract gets

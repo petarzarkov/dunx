@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'bun:test';
-import { DunxFactory } from './app.js';
+import { AppFactory } from './app.js';
 import { inject } from './inject.js';
 import type { OnInit, OnShutdown } from './lifecycle.js';
-import { collectModules, Module, type ModuleClass } from './module.js';
+import {
+  collectModules,
+  Module,
+  readControllers,
+  type ModuleClass,
+} from './module.js';
 import { provide } from './provider.js';
 import { token } from './token.js';
 
@@ -57,7 +62,7 @@ const buildApp = (events: string[]) => {
   @Module({ imports: [InfraModule, UsersModule] })
   class AppModule {}
 
-  return DunxFactory.create(AppModule);
+  return AppFactory.create(AppModule);
 };
 
 describe('@Module imports', () => {
@@ -104,7 +109,7 @@ describe('@Module imports', () => {
       'RootModule',
     ]);
     // Registering SharedModule twice would trip the duplicate-binding check.
-    const app = await DunxFactory.create(RootModule);
+    const app = await AppFactory.create(RootModule);
     expect(app.get(EventsToken)).toEqual(['shared']);
   });
 
@@ -127,13 +132,28 @@ describe('@Module imports', () => {
     ]);
   });
 
+  it('registers controllers like providers, and lists them separately', async () => {
+    class HealthController {
+      readonly ok = true;
+    }
+
+    @Module({ controllers: [HealthController] })
+    class HealthModule {}
+
+    const app = await AppFactory.create(HealthModule);
+
+    expect(app.get(HealthController).ok).toBe(true);
+    // Kept separate so an HTTP adapter knows which instances to scan.
+    expect(readControllers(HealthModule)).toEqual([HealthController]);
+  });
+
   it('rejects an undecorated class anywhere in the graph', async () => {
     class NotAModule {}
 
     @Module({ imports: [NotAModule] })
     class RootModule {}
 
-    expect(await rejectionMessage(DunxFactory.create(RootModule))).toBe(
+    expect(await rejectionMessage(AppFactory.create(RootModule))).toBe(
       'NotAModule is not a dunx module. Decorate it with @Module({ providers: [...] }).',
     );
   });
@@ -144,7 +164,7 @@ describe('@Module imports', () => {
 
     class ChildModule extends ParentModule {}
 
-    expect(await rejectionMessage(DunxFactory.create(ChildModule))).toMatch(
+    expect(await rejectionMessage(AppFactory.create(ChildModule))).toMatch(
       /ChildModule is not a dunx module/,
     );
   });
