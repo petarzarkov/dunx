@@ -159,6 +159,13 @@ describe('use()', () => {
   });
 });
 
+/**
+ * Every textual form of loopback Bun may report for a local socket: IPv4, IPv6, and
+ * the IPv4-mapped-IPv6 form. Asserting one literal passed locally (`::ffff:127.0.0.1`)
+ * and failed in CI, where the loopback resolves to `::1`.
+ */
+const LOOPBACK = /^(::1|(::ffff:)?127\.\d+\.\d+\.\d+)$/;
+
 describe("set('trust proxy')", () => {
   it('reads X-Forwarded-For only when the setting is on', async () => {
     await withApp(
@@ -187,7 +194,7 @@ describe("set('trust proxy')", () => {
         ).json()) as { ip: string };
         // The socket address, not the header.
         expect(body.ip).not.toBe('203.0.113.7');
-        expect(body.ip).toContain('127.0.0.1');
+        expect(body.ip).toMatch(LOOPBACK);
       },
     );
   });
@@ -205,7 +212,7 @@ describe("set('trust proxy')", () => {
         const body = (await (
           await fetch(new URL('users/whoami', url))
         ).json()) as { ip: string };
-        expect(body.ip).toContain('127.0.0.1');
+        expect(body.ip).toMatch(LOOPBACK);
       },
     );
   });

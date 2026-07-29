@@ -176,14 +176,37 @@ it('runs @dunx/infra/db on bun:sqlite at :memory:', () => {
   expect(app.text).toContain(
     'backend=sqlite dialect=sqlite, table "ledger" created',
   );
-  expect(app.text).toContain('insert -> changes=1 lastInsertRowid=1');
+  // DbConnection is the escape hatch: `.raw` is the bun:sqlite handle itself.
+  expect(app.text).toContain('raw driver -> bun:sqlite :memory:');
+  // `.returning()` gives back the row the database wrote, id included.
+  expect(app.text).toContain(
+    'insert -> {"id":1,"memo":"opening balance","amount":100}',
+  );
   expect(app.text).toContain(
     'select -> [{"memo":"opening balance","amount":100},{"memo":"coffee","amount":-3}]',
   );
+  // drizzle's `.get()` reports a missing row as undefined, not null.
+  expect(app.text).toContain('get() with no match -> undefined');
   expect(app.text).toContain('committed transaction -> 3 rows, balance 109');
+  // Both transactions await inside the callback, which is what drizzle's own
+  // bun-sqlite transaction() cannot survive — hence @dunx/infra/db's.
   expect(app.text).toContain('transaction threw: rolled back on purpose');
   expect(app.text).toContain(
     'rolled back transaction -> still 3 rows, "discarded" never landed',
+  );
+  // runSeeds applied the numbered file and refused the one whose when() names a
+  // different environment.
+  expect(app.text).toContain(
+    'first runSeeds -> applied ["0001_ledger.seeder.ts"], journaled [], ' +
+      'skipped ["0002_production_audit.seeder.ts"]',
+  );
+  // The point of a journal: the second run reports it rather than applying it.
+  expect(app.text).toContain(
+    'second runSeeds -> applied [], journaled ["0001_ledger.seeder.ts"], ' +
+      'skipped ["0002_production_audit.seeder.ts"]',
+  );
+  expect(app.text).toContain(
+    'seeded ledger -> 4 rows, applied once despite two runs',
   );
 });
 

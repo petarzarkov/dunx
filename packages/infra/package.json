@@ -7,6 +7,8 @@
     "bun",
     "cache",
     "database",
+    "drizzle",
+    "drizzle-orm",
     "dunx",
     "files",
     "glob",
@@ -63,6 +65,10 @@
     "./images": {
       "types": "./dist/images/index.d.ts",
       "import": "./dist/images/index.js"
+    },
+    "./logger": {
+      "types": "./dist/logger/index.d.ts",
+      "import": "./dist/logger/index.js"
     }
   },
   "publishConfig": {
@@ -76,6 +82,17 @@
   },
   "dependencies": {
     "@dunx/core": "workspace:*"
+  },
+  "devDependencies": {
+    "drizzle-orm": "^0.45.2"
+  },
+  "peerDependencies": {
+    "drizzle-orm": "^0.45.2"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "engines": {
     "bun": ">=1.3.0"

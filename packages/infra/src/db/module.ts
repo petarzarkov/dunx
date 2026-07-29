@@ -1,61 +1,83 @@
 import {
   provide,
+  type AbstractCtor,
   type Deps,
   type DynamicModule,
   type FactoryProvider,
 } from '@dunx/core';
-import { Database, DbOptions } from './contract.js';
-import type { SqlOptions } from './sql/options.js';
-import type { SqliteOptions } from './sqlite/options.js';
+import { DbConnection, DbOptions } from './connection.js';
 
 /**
- * A union rather than the abstract base, so `forRoot` accepts only a real
- * configuration and the backend is decided by which class you constructed.
- */
-export type DbOptionsInput = SqliteOptions | SqlOptions;
-
-/**
- * Binds two tokens: `DbOptions`, so anything can read the resolved dialect, and
- * `Database`, the contract repositories inject.
+ * Binds three tokens:
  *
- * `Database` is always bound through a factory. dunx resolves eagerly and awaits
- * every async factory before it constructs anything, so the connection is open
- * and handshaken before the first repository's constructor runs — no lazy
- * connect, no half-initialised client, no `await db.ready()`.
+ * - `DbOptions` — the resolved configuration, so anything can read the dialect.
+ * - `DbConnection` — the lifecycle and the raw driver handle.
+ * - drizzle's own database class — `BunSQLiteDatabase` or `BunSQLDatabase` — which
+ *   is what a repository injects. There is no wrapper: drizzle is the interface.
+ *
+ * The drizzle handle is bound through a factory that depends on `DbConnection`,
+ * which is what fixes the shutdown order. dunx tears down in reverse construction
+ * order, so the connection — constructed first, because everything else needs it —
+ * closes last, after every repository has drained.
+ *
+ * Every factory settles before the first constructor runs, so the connection is
+ * open and handshaked before any repository is built. No lazy connect, no
+ * `await db.ready()`.
  */
 export class DbModule {
-  static forRoot(options: DbOptionsInput): DynamicModule {
+  static forRoot<TDb>(options: DbOptions<TDb>): DynamicModule {
+    // Instantiated to this configuration's handle type. The runtime value is the
+    // same abstract class either way; the type argument is what lets the drizzle
+    // factory below stay typed without a cast.
+    const connection: AbstractCtor<DbConnection<TDb>> = DbConnection;
+
     return {
       module: DbModule,
       providers: [
         provide(DbOptions, { useValue: options }),
-        provide(Database, { useFactory: () => options.open() }),
+        provide(connection, { useFactory: () => options.open() }),
+        provide(options.token, {
+          useFactory: (opened) => opened.db,
+          inject: [connection],
+        }),
       ],
     };
   }
 
   /**
-   * Not a second mechanism — the same `forRoot`, with the options themselves
-   * produced by a factory that may await and may inject. Useful when the URL
-   * comes from a secret store or a `Config` provider:
+   * The same `forRoot`, with the options produced by a factory that may await and
+   * may inject — for when the URL comes from a secret store or a `Config`.
+   *
+   * `token` has to be passed, unlike in `forRoot`. drizzle's database class is the
+   * injection token, and which class that is only becomes known once the factory
+   * has produced the options — too late to register a provider under it:
    *
    * ```ts
-   * DbModule.forRootAsync({
-   *   useFactory: (config: Config) => new SqlOptions({ url: config.databaseUrl }),
+   * DbModule.forRootAsync(BunSQLiteDatabase, {
+   *   useFactory: (config: Config) =>
+   *     new SqliteOptions({ schema, filename: config.databaseFile }),
    *   inject: [Config],
-   * })
+   * });
    * ```
    */
-  static forRootAsync<const D extends Deps>(
-    provider: FactoryProvider<DbOptionsInput, D>,
+  static forRootAsync<TDb, const D extends Deps>(
+    token: AbstractCtor<TDb>,
+    provider: FactoryProvider<DbOptions<TDb>, D>,
   ): DynamicModule {
+    const connection: AbstractCtor<DbConnection<TDb>> = DbConnection;
+    const configured: AbstractCtor<DbOptions<TDb>> = DbOptions;
+
     return {
       module: DbModule,
       providers: [
-        provide(DbOptions, provider),
-        provide(Database, {
-          useFactory: (options: DbOptions) => options.open(),
-          inject: [DbOptions],
+        provide(configured, provider),
+        provide(connection, {
+          useFactory: (options) => options.open(),
+          inject: [configured],
+        }),
+        provide(token, {
+          useFactory: (opened) => opened.db,
+          inject: [connection],
         }),
       ],
     };

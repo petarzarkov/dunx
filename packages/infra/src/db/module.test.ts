@@ -1,148 +1,197 @@
-import { AppFactory, Module, type OnShutdown } from '@dunx/core';
+import {
+  AppFactory,
+  Module,
+  type AbstractCtor,
+  type OnShutdown,
+} from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
-import { Backend, Database, DbOptions } from './contract.js';
+import { sql } from 'drizzle-orm';
+import { BunSQLDatabase } from 'drizzle-orm/bun-sql';
+import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { DbConnection, DbOptions } from './connection.js';
+import { Backend, Dialect } from './dialect.js';
 import { DbModule } from './module.js';
-import { Repository } from './repository.js';
-import { SqlDatabase } from './sql/database.js';
+import { SqlConnection } from './sql/connection.js';
 import { SqlOptions } from './sql/options.js';
-import { SqliteDatabase } from './sqlite/database.js';
+import { SqliteConnection } from './sqlite/connection.js';
 import { SqliteOptions } from './sqlite/options.js';
 
-/**
- * The repo's rejection idiom: await the promise, keep the reason. `expect().rejects`
- * is typed as non-thenable by bun:test, which makes the assertion a lint warning.
- */
-const rejection = async (promise: Promise<unknown>): Promise<Error> => {
-  const error = await promise.then(
-    () => undefined,
-    (reason: unknown) => reason,
-  );
-  if (!(error instanceof Error))
-    throw new Error('expected the promise to reject with an Error');
-  return error;
-};
+const widgets = sqliteTable('widgets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+});
+
+const schema = { widgets };
+type Schema = typeof schema;
 
 /**
- * Stands in for `@dunx/compiler`. This package cannot depend on it — the plugin
- * is what builds `@dunx/infra` — so the tests write the record it would append.
+ * The token, instantiated to this schema. The runtime value is drizzle's class
+ * either way — writing the type argument once here is what a repository does with
+ * its constructor annotation, and it is what keeps `app.get` typed.
+ */
+const handle: AbstractCtor<BunSQLiteDatabase<Schema>> = BunSQLiteDatabase;
+
+/**
+ * Stands in for `@dunx/compiler`. This package cannot depend on it — the plugin is
+ * what builds `@dunx/infra` — so the tests write the record it would append.
  */
 const records = (ctor: object, deps: () => readonly unknown[]): void => {
   Object.defineProperty(ctor, Symbol.for('dunx.deps'), { value: deps });
 };
 
-class UsersRepository {
-  constructor(readonly db: Database) {}
+const shutdowns: string[] = [];
 
-  count(): Promise<{ n: number } | null> {
-    return this.db.get<{ n: number }>('SELECT count(*) AS n FROM users');
+/**
+ * The point of the whole arrangement: the annotation is drizzle's own class with
+ * the schema as its type argument. `@dunx/compiler` records the bare name — a real
+ * runtime class, so a usable token — and ignores the type argument, so the schema
+ * types survive into every query below.
+ */
+class WidgetsRepository {
+  constructor(private readonly db: BunSQLiteDatabase<Schema>) {}
+
+  handle(): BunSQLiteDatabase<Schema> {
+    return this.db;
+  }
+
+  create(name: string): void {
+    this.db.insert(widgets).values({ name }).run();
+  }
+
+  names(): readonly string[] {
+    return this.db
+      .select({ name: widgets.name })
+      .from(widgets)
+      .all()
+      .map((row) => row.name);
   }
 }
-records(UsersRepository, () => [Database]);
+records(WidgetsRepository, () => [BunSQLiteDatabase]);
 
-/** No constructor of its own — dependencies come off the base. */
-class PostsRepository extends Repository {
-  posts(): Promise<readonly object[]> {
-    return this.db.all('SELECT * FROM posts');
+/** Drains before the connection closes, because it was constructed after it. */
+class Draining implements OnShutdown {
+  constructor(private readonly db: BunSQLiteDatabase<Schema>) {}
+
+  onShutdown(): void {
+    const rows = this.db.select().from(widgets).all();
+    shutdowns.push(`drained with ${rows.length} widgets still readable`);
   }
 }
-records(Repository, () => [Database]);
+records(Draining, () => [BunSQLiteDatabase]);
 
 class Config {
-  readonly url = 'sqlite://:memory:';
+  readonly filename = ':memory:';
 }
 
+const options = (): SqliteOptions<Schema> => new SqliteOptions({ schema });
+
 describe('DbModule.forRoot', () => {
-  it('binds Database and injects it into a repository', async () => {
+  it('binds drizzle’s own class as the token', async () => {
+    @Module({ imports: [DbModule.forRoot(options())] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(handle)).toBeInstanceOf(BunSQLiteDatabase);
+    await app.shutdown();
+  });
+
+  it('injects that handle into a repository', async () => {
     @Module({
-      imports: [DbModule.forRoot(new SqliteOptions())],
-      providers: [UsersRepository],
+      imports: [DbModule.forRoot(options())],
+      providers: [WidgetsRepository],
     })
     class Root {}
 
     const app = await AppFactory.create(Root);
-    const db = app.get(Database);
-    expect(db).toBeInstanceOf(SqliteDatabase);
-    expect(app.get(UsersRepository).db).toBe(db);
-
-    await db.exec('CREATE TABLE users (id INT)');
-    expect(await app.get(UsersRepository).count()).toEqual({ n: 0 });
+    expect(app.get(WidgetsRepository).handle()).toBe(app.get(handle));
     await app.shutdown();
   });
 
-  it('injects the base class dependency into a subclass with no constructor', async () => {
-    @Module({
-      imports: [DbModule.forRoot(new SqliteOptions())],
-      providers: [PostsRepository],
-    })
+  it('binds the options, so the dialect is readable', async () => {
+    const configured = options();
+
+    @Module({ imports: [DbModule.forRoot(configured)] })
     class Root {}
 
     const app = await AppFactory.create(Root);
-    await app.get(Database).exec('CREATE TABLE posts (id INT)');
-    expect(await app.get(PostsRepository).posts()).toEqual([]);
-    await app.shutdown();
-  });
-
-  it('binds the options too, so the dialect is readable', async () => {
-    const options = new SqliteOptions({ filename: ':memory:' });
-
-    const app = await AppFactory.create(DbModule.forRoot(options));
-    expect(app.get(DbOptions)).toBe(options);
+    expect(app.get(DbOptions)).toBe(configured);
+    expect(app.get(DbOptions).dialect).toBe(Dialect.SQLITE);
     expect(app.get(DbOptions).backend).toBe(Backend.SQLITE);
     await app.shutdown();
   });
 
-  it('selects the Bun.SQL backend from SqlOptions', async () => {
-    const app = await AppFactory.create(
-      DbModule.forRoot(new SqlOptions({ url: 'sqlite://:memory:' })),
-    );
-    expect(app.get(Database)).toBeInstanceOf(SqlDatabase);
-    expect(app.get(Database).backend).toBe(Backend.SQL);
+  it('binds the connection, which is the escape hatch to the driver', async () => {
+    @Module({ imports: [DbModule.forRoot(options())] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const connection = app.get(DbConnection);
+    expect(connection).toBeInstanceOf(SqliteConnection);
+    // Narrowing restores the concrete handle type.
+    if (!(connection instanceof SqliteConnection)) throw new Error('narrowing');
+    expect(connection.raw.filename).toBe(':memory:');
     await app.shutdown();
   });
 
-  it('accepts a configured module as the root', async () => {
-    const app = await AppFactory.create(DbModule.forRoot(new SqliteOptions()));
-    expect(await app.get(Database).get('SELECT 1 AS one')).toEqual({ one: 1 });
+  it('hands the connection and the drizzle handle the same driver', async () => {
+    @Module({ imports: [DbModule.forRoot(options())] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(DbConnection).db).toBe(app.get(handle));
+    await app.shutdown();
+  });
+
+  it('has the connection open before the first constructor runs', async () => {
+    class Eager {
+      readonly rows: number;
+
+      constructor(db: BunSQLiteDatabase<Schema>) {
+        // No await, no `db.ready()` — the async factory has already settled.
+        db.run(sql`CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT)`);
+        this.rows = db.select().from(widgets).all().length;
+      }
+    }
+    records(Eager, () => [BunSQLiteDatabase]);
+
+    @Module({ imports: [DbModule.forRoot(options())], providers: [Eager] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(Eager).rows).toBe(0);
+    await app.shutdown();
+  });
+
+  it('actually queries, end to end', async () => {
+    @Module({
+      imports: [DbModule.forRoot(options())],
+      providers: [WidgetsRepository],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    app
+      .get(handle)
+      .run(
+        sql`CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT NOT NULL)`,
+      );
+
+    const repository = app.get(WidgetsRepository);
+    repository.create('cog');
+    repository.create('sprocket');
+    expect(repository.names()).toEqual(['cog', 'sprocket']);
     await app.shutdown();
   });
 });
 
 describe('DbModule.forRootAsync', () => {
-  it('settles the connection before any constructor runs', async () => {
-    let connectedBeforeConstruct = false;
-
-    class Probe {
-      constructor(readonly db: Database) {
-        // The factory has already awaited, so this handle is live — synchronously.
-        connectedBeforeConstruct = db instanceof SqliteDatabase;
-      }
-    }
-    records(Probe, () => [Database]);
-
+  it('takes the options from a factory that may inject', async () => {
     @Module({
       imports: [
-        DbModule.forRootAsync({
-          useFactory: async () => {
-            await Bun.sleep(2);
-            return new SqliteOptions();
-          },
-        }),
-      ],
-      providers: [Probe],
-    })
-    class Root {}
-
-    const app = await AppFactory.create(Root);
-    expect(connectedBeforeConstruct).toBe(true);
-    expect(await app.get(Probe).db.get('SELECT 1 AS one')).toEqual({ one: 1 });
-    await app.shutdown();
-  });
-
-  it('injects other providers into the options factory', async () => {
-    @Module({
-      imports: [
-        DbModule.forRootAsync({
-          useFactory: (config: Config) => new SqlOptions({ url: config.url }),
+        DbModule.forRootAsync(BunSQLiteDatabase, {
+          useFactory: (config: Config) =>
+            new SqliteOptions({ schema, filename: config.filename }),
           inject: [Config],
         }),
       ],
@@ -151,68 +200,122 @@ describe('DbModule.forRootAsync', () => {
     class Root {}
 
     const app = await AppFactory.create(Root);
-    expect(app.get(Database)).toBeInstanceOf(SqlDatabase);
+    expect(app.get(handle)).toBeInstanceOf(BunSQLiteDatabase);
+    expect(app.get(DbOptions)).toBeInstanceOf(SqliteOptions);
     await app.shutdown();
   });
 
-  it('propagates a failure from the options factory out of create()', async () => {
+  it('awaits an async factory before anything is constructed', async () => {
     @Module({
       imports: [
-        DbModule.forRootAsync({
-          useFactory: () => new SqlOptions({ url: 'pg://localhost/app' }),
+        DbModule.forRootAsync(BunSQLiteDatabase, {
+          useFactory: async () => {
+            await Bun.sleep(1);
+            return new SqliteOptions({ schema });
+          },
+        }),
+      ],
+      providers: [WidgetsRepository],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(WidgetsRepository).handle()).toBe(app.get(handle));
+    await app.shutdown();
+  });
+
+  it('binds the connection as well', async () => {
+    @Module({
+      imports: [
+        DbModule.forRootAsync(BunSQLiteDatabase, {
+          useFactory: () => new SqliteOptions({ schema }),
         }),
       ],
     })
     class Root {}
 
-    expect((await rejection(AppFactory.create(Root))).message).toMatch(
-      /pg:\/\//,
-    );
+    const app = await AppFactory.create(Root);
+    expect(app.get(DbConnection)).toBeInstanceOf(SqliteConnection);
+    await app.shutdown();
   });
 });
 
 describe('shutdown', () => {
-  it('drains a dependent before the connection it depends on', async () => {
-    const order: string[] = [];
+  it('closes the connection', async () => {
+    @Module({ imports: [DbModule.forRoot(options())] })
+    class Root {}
 
-    class Drainer implements OnShutdown {
-      constructor(readonly db: Database) {}
+    const app = await AppFactory.create(Root);
+    const connection = app.get(DbConnection);
+    await app.shutdown();
 
-      async onShutdown(): Promise<void> {
-        // Still usable — this is the ordering guarantee the hook relies on.
-        expect(await this.db.get('SELECT 1 AS one')).toEqual({ one: 1 });
-        order.push('drainer');
-      }
-    }
-    records(Drainer, () => [Database]);
+    expect(connection).toBeInstanceOf(SqliteConnection);
+    if (!(connection instanceof SqliteConnection)) throw new Error('narrowing');
+    expect(connection.closed).toBe(true);
+  });
+
+  /**
+   * The reason the drizzle handle is bound through a factory that *depends* on the
+   * connection: it forces the connection to be constructed first, and core tears
+   * down in reverse, so it closes last.
+   */
+  it('drains dependents while the connection is still usable', async () => {
+    shutdowns.length = 0;
 
     @Module({
-      imports: [DbModule.forRoot(new SqliteOptions())],
-      providers: [Drainer],
+      imports: [DbModule.forRoot(options())],
+      providers: [WidgetsRepository, Draining],
     })
     class Root {}
 
     const app = await AppFactory.create(Root);
-    const db = app.get(Database);
-    await app.shutdown();
+    app
+      .get(handle)
+      .run(
+        sql`CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT NOT NULL)`,
+      );
+    app.get(WidgetsRepository).create('cog');
 
-    expect(order).toEqual(['drainer']);
-    expect((await rejection(db.get('SELECT 1'))).message).toMatch(/closed/);
+    await app.shutdown();
+    // A query inside onShutdown succeeded, so the connection outlived it.
+    expect(shutdowns).toEqual(['drained with 1 widgets still readable']);
   });
 
-  it('closes the connection once however many times shutdown is called', async () => {
-    const app = await AppFactory.create(DbModule.forRoot(new SqliteOptions()));
-    const db = app.get(Database);
+  it('is idempotent', async () => {
+    @Module({ imports: [DbModule.forRoot(options())] })
+    class Root {}
 
-    let closes = 0;
-    const close = db.close.bind(db);
-    db.close = async () => {
-      closes += 1;
-      await close();
-    };
-
+    const app = await AppFactory.create(Root);
     await app.shutdown();
     await app.shutdown();
-    expect(closes).toBe(1);
+    expect(app.get(DbConnection)).toBeInstanceOf(SqliteConnection);
+  });
+});
+
+describe('the Bun.SQL backend', () => {
+  const url = process.env['DUNX_DB_TEST_URL'];
+
+  it('binds drizzle’s Postgres class as its token', () => {
+    expect(
+      new SqlOptions({ schema, url: 'postgres://localhost/x' }).token,
+    ).toBe(BunSQLDatabase);
+  });
+
+  it('is a different token from the SQLite backend', () => {
+    expect(BunSQLDatabase).not.toBe(BunSQLiteDatabase);
+  });
+
+  it.skipIf(url === undefined)('binds a live Postgres connection', async () => {
+    @Module({
+      imports: [
+        DbModule.forRoot(new SqlOptions({ schema: {}, url: url ?? '' })),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(BunSQLDatabase)).toBeInstanceOf(BunSQLDatabase);
+    expect(app.get(DbConnection)).toBeInstanceOf(SqlConnection);
+    await app.shutdown();
   });
 });

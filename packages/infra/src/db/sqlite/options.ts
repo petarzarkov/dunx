@@ -1,25 +1,39 @@
 import { Database as BunSqlite, type DatabaseOptions } from 'bun:sqlite';
+import type { AbstractCtor } from '@dunx/core';
+import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import { DbOptions } from '../connection.js';
 import {
   Backend,
-  DbOptions,
+  Dialect,
   type BackendName,
-  type Database,
-} from '../contract.js';
+  type DialectName,
+} from '../dialect.js';
 import { DatabaseError } from '../errors.js';
-import { SqliteDatabase } from './database.js';
+import { SqliteConnection } from './connection.js';
 
-export interface SqliteInit {
+export interface SqliteInit<TSchema extends Record<string, unknown>> {
+  /**
+   * The drizzle schema — `import * as schema from './schema.js'`. Required, and
+   * the reason it is: it is the type argument that flows all the way to
+   * `BunSQLiteDatabase<typeof schema>` at the injection site. Pass `{}` if you
+   * only run `sql` templates.
+   */
+  readonly schema: TSchema;
   /** `':memory:'`, a path, or a `sqlite:`/`file:` URL. Defaults to `':memory:'`. */
   readonly filename?: string | URL;
   /** Opens `SQLITE_OPEN_READONLY`. Suppresses `create`. */
   readonly readOnly?: boolean;
-  /** Create the file if it is missing. Default `true`. */
+  /**
+   * Create the file if it is missing. Default `true` — and `false` does not
+   * currently stop it: `new Database(path, { create: false })` still creates a
+   * missing file on Bun 1.3.14. Use `readOnly` if the file must already exist.
+   */
   readonly create?: boolean;
   /**
-   * Default `true`, unlike the driver. Strict mode makes a missing binding an
-   * error instead of a silent `NULL`, and lets named parameters be written
-   * without the `$` prefix. Only observable through `raw` — the contract binds
-   * positionally.
+   * Default `true`, unlike the driver — and unlike what drizzle opens for you.
+   * Strict mode turns an unsupported binding into a `TypeError` instead of a
+   * silent `NULL`, which is what a raw `Date` in a `sql` template would otherwise
+   * become.
    */
   readonly strict?: boolean;
   /** Return integers as `bigint` rather than truncating to 53 bits. */
@@ -50,9 +64,23 @@ const toPath = (filename: string | URL): string => {
 };
 
 /** Configuration for the `bun:sqlite` backend. A class, so it is injectable. */
-export class SqliteOptions extends DbOptions {
+export class SqliteOptions<
+  TSchema extends Record<string, unknown>,
+> extends DbOptions<BunSQLiteDatabase<TSchema>> {
   override readonly backend: BackendName = Backend.SQLITE;
+  override readonly dialect: DialectName = Dialect.SQLITE;
 
+  /**
+   * drizzle's database classes are real runtime classes, not interfaces, so the
+   * class *is* the token. That is the whole trick behind injecting a
+   * schema-generic handle: `@dunx/compiler` records the bare type name from
+   * `db: BunSQLiteDatabase<typeof schema>` and ignores the type argument, so the
+   * token is the erased class while the schema types stay on the annotation.
+   */
+  override readonly token: AbstractCtor<BunSQLiteDatabase<TSchema>> =
+    BunSQLiteDatabase;
+
+  readonly schema: TSchema;
   readonly filename: string;
   readonly readOnly: boolean;
   readonly create: boolean;
@@ -60,8 +88,9 @@ export class SqliteOptions extends DbOptions {
   readonly safeIntegers: boolean;
   readonly pragmas: readonly string[];
 
-  constructor(init: SqliteInit = {}) {
+  constructor(init: SqliteInit<TSchema>) {
     super();
+    this.schema = init.schema;
     this.filename = toPath(init.filename ?? ':memory:');
     this.readOnly = init.readOnly ?? false;
     this.create = init.create ?? true;
@@ -86,9 +115,9 @@ export class SqliteOptions extends DbOptions {
    * `async` only to satisfy the contract; opening a SQLite file does not block.
    * The pragmas run before the returned handle is visible to anything.
    */
-  override async open(): Promise<Database> {
+  override async open(): Promise<SqliteConnection<TSchema>> {
     const driver = new BunSqlite(this.filename, this.toDriverOptions());
     for (const pragma of this.pragmas) driver.exec(`PRAGMA ${pragma}`);
-    return new SqliteDatabase(driver);
+    return new SqliteConnection(driver, this.schema);
   }
 }

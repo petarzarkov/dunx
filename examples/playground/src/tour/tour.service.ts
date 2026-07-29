@@ -28,7 +28,7 @@ export class Tour {
   ) {}
 
   async run(app: HttpApp, url: string): Promise<void> {
-    this.logger.group('@dunx/infra/db — bun:sqlite at :memory:');
+    this.logger.group('@dunx/infra/db — drizzle over bun:sqlite at :memory:');
     await this.ledger.demonstrate();
 
     this.logger.group('@dunx/infra/files — LocalStorage under an OS temp dir');

@@ -253,3 +253,23 @@ Fully typed in `bun-types` (`bun.d.ts` ~8180–8408), just undocumented on the s
   `Statement.prototype`.
 - **`Date` bindings are rejected** by both `bun:sqlite` and `Bun.SQL`'s SQLite
   adapter. Convert to ISO 8601 for SQLite; Postgres takes a native binding.
+
+### `Bun.color` — `'ansi'` is not a fixed encoding, and can emit a raw newline
+
+`Bun.color(hex, 'ansi')` returns whatever the _current terminal_ is judged to
+support, not a stable format. Under `FORCE_COLOR=1` it degrades to `ansi-16`, which
+writes the colour **index as a raw byte** rather than decimal digits. Index 10 is
+`\n`:
+
+```
+FORCE_COLOR=1  Bun.color('#00ff00', 'ansi')      -> "\u001b[38;5;\nm"   contains LF: true
+               Bun.color('#00ff00', 'ansi-256')  -> "\u001b[38;5;46m"   contains LF: false
+NO_COLOR=1     Bun.color('#00ff00', 'ansi')      -> ""   (Bun.enableANSIColors === false)
+```
+
+So a coloured structured-log line built with `'ansi'` silently becomes **two**
+records. Ask for **`'ansi-256'`** explicitly, which is well-formed everywhere.
+
+`Bun.enableANSIColors` is the honest capability check — it is `false` under
+`NO_COLOR` and for a non-TTY, and it cannot be faked in-process, so testing
+degradation needs a real subprocess with stdout piped.

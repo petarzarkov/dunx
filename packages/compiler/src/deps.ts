@@ -2,8 +2,6 @@ import { parseSync } from 'oxc-parser';
 import {
   isClassDeclaration,
   isIdentifier,
-  isImportDeclaration,
-  isImportSpecifier,
   isMethodDefinition,
   isParameterProperty,
   isTypeReference,
@@ -13,6 +11,8 @@ import {
   type Node,
 } from './ast.js';
 import { applyEdits, type Edit } from './edits.js';
+import { collectTypeOnlyNames, erasedNames } from './erased.js';
+import { fieldRecordFor } from './fields.js';
 
 /**
  * `Symbol.for`, not `Symbol`: two copies of `@dunx/core` in one dependency tree
@@ -25,56 +25,12 @@ export interface TransformResult {
   readonly changed: boolean;
   /** Classes that received dependency metadata, in source order. */
   readonly annotated: readonly string[];
+  /** Classes that received field metadata, in source order. */
+  readonly fielded: readonly string[];
 }
 
 const slice = (source: string, node: Node): string =>
   source.slice(node.start, node.end);
-
-/**
- * Names that exist only in the type system, so emitting them in a value position
- * would be a `ReferenceError` at runtime. Collected per file: type-only imports,
- * inline `type` specifiers, local interfaces and type aliases.
- */
-const collectTypeOnlyNames = (program: Node): ReadonlySet<string> => {
-  const names = new Set<string>();
-
-  walk(program, (node) => {
-    if (isImportDeclaration(node)) {
-      for (const specifier of node.specifiers) {
-        if (!isImportSpecifier(specifier)) continue;
-        if (node.importKind === 'type' || specifier.importKind === 'type') {
-          names.add(specifier.local.name);
-        }
-      }
-      return;
-    }
-
-    if (
-      node.type === 'TSInterfaceDeclaration' ||
-      node.type === 'TSTypeAliasDeclaration'
-    ) {
-      const declared = (node as { id?: Node }).id;
-      const name = nameOf(declared);
-      if (name !== undefined) names.add(name);
-    }
-  });
-
-  return names;
-};
-
-/** A class's own type parameters are erased, so `T` is never a usable token. */
-const collectTypeParameters = (klass: ClassNode): ReadonlySet<string> => {
-  const names = new Set<string>();
-  if (klass.typeParameters === null) return names;
-
-  walk(klass.typeParameters, (node) => {
-    if (node.type !== 'TSTypeParameter') return;
-    const name = nameOf((node as { name?: Node }).name);
-    if (name !== undefined) names.add(name);
-  });
-
-  return names;
-};
 
 const constructorParams = (klass: ClassNode): readonly Node[] => {
   const found = klass.body.body.find(
@@ -115,12 +71,15 @@ const entryFor = (
 };
 
 /**
- * Records each class's constructor dependencies as a thunk on the class itself.
+ * Records each class's constructor dependencies, and each decorated field's
+ * declared type, as thunks on the class itself.
  *
- * A thunk, not an array: the body is evaluated when the container resolves the
- * class rather than when the module is defined, so a dependency declared later in
- * the file — or in a circular import — is not a temporal-dead-zone crash. That is
- * what removes the need for Nest's `forwardRef`.
+ * A thunk, not a literal: the body is evaluated when the record is read rather
+ * than when the module is defined, so a dependency declared later in the file —
+ * or in a circular import — is not a temporal-dead-zone crash. That is what
+ * removes the need for Nest's `forwardRef`, and it is also why a class decorator
+ * cannot read the field record while it runs: the statement is appended after the
+ * class, which is after decoration.
  */
 export const transform = (
   source: string,
@@ -140,6 +99,7 @@ export const transform = (
   const typeOnly = collectTypeOnlyNames(program);
   const edits: Edit[] = [];
   const annotated: string[] = [];
+  const fielded: string[] = [];
 
   walk(program, (node) => {
     if (!isClassDeclaration(node)) return;
@@ -147,22 +107,28 @@ export const transform = (
     const name = node.id?.name;
     if (name === undefined) return;
 
+    const erased = erasedNames(typeOnly, node);
     const params = constructorParams(node);
-    if (params.length === 0) return;
 
-    const erased = new Set([...typeOnly, ...collectTypeParameters(node)]);
-    const entries = params.map((param) => entryFor(source, param, erased));
+    if (params.length > 0) {
+      const entries = params.map((param) => entryFor(source, param, erased));
+      annotated.push(name);
+      edits.push({
+        start: node.end,
+        end: node.end,
+        text:
+          `\nObject.defineProperty(${name}, ${DEPS_KEY}, {\n` +
+          `  value: () => [${entries.join(', ')}],\n});`,
+      });
+    }
 
-    annotated.push(name);
-    edits.push({
-      start: node.end,
-      end: node.end,
-      text:
-        `\nObject.defineProperty(${name}, ${DEPS_KEY}, {\n` +
-        `  value: () => [${entries.join(', ')}],\n});`,
-    });
+    const record = fieldRecordFor(source, node, erased);
+    if (record !== undefined) {
+      fielded.push(name);
+      edits.push({ start: node.end, end: node.end, text: record });
+    }
   });
 
   const code = applyEdits(source, edits);
-  return { code, changed: code !== source, annotated };
+  return { code, changed: code !== source, annotated, fielded };
 };

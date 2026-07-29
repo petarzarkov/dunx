@@ -1,57 +1,57 @@
-import { Repository } from '@dunx/infra/db';
+import { eq, like, sql } from 'drizzle-orm';
+import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import * as schema from '../database/schema.js';
+import { users, type User } from '../database/schema.js';
 
-export interface User {
-  readonly id: number;
-  readonly name: string;
-}
+// The row type comes from the table, so the controller and the service import one
+// definition rather than a hand-written copy of the columns.
+export type { User };
 
-/**
- * No constructor of its own. `Repository` declares `Database`, and dunx reads
- * constructor dependencies along the prototype chain — so this class has the
- * connection injected while declaring nothing.
- *
- * Note `all`/`get`/`run` rather than the tagged template for the table name: a
- * `${}` in the template becomes a bound *value*, and an identifier cannot be one.
- * `this.table()` is `quoteIdentifier` bound to the connected dialect.
- */
-export class UsersRepository extends Repository {
+export class UsersRepository {
+  /**
+   * The annotation is drizzle's own class with the schema as its type argument.
+   * `@dunx/compiler` records the bare type name — a real runtime class, so a usable
+   * token — and ignores the type argument, so the schema types survive injection.
+   *
+   * Every method below is `async` although bun-sqlite executes synchronously: the
+   * HTTP layer awaits them, and moving this table to the pooled backend then costs
+   * no signature change.
+   */
+  constructor(private readonly db: BunSQLiteDatabase<typeof schema>) {}
+
   async migrate(): Promise<void> {
-    await this.db.exec(
-      `CREATE TABLE IF NOT EXISTS ${this.table('users')} (` +
-        'id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)',
-    );
+    this.db.run(sql`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE
+    )`);
   }
 
+  /** One statement for every name; `name` is UNIQUE, so a repeat boot is a no-op. */
   async seed(names: readonly string[]): Promise<void> {
-    for (const name of names) {
-      await this.db.run(
-        `INSERT OR IGNORE INTO ${this.table('users')} (name) VALUES (?)`,
-        [name],
-      );
-    }
+    this.db
+      .insert(users)
+      .values(names.map((name) => ({ name })))
+      .onConflictDoNothing()
+      .run();
   }
 
-  findAll(limit: number, q?: string): Promise<readonly User[]> {
-    return this.db.all<User>(
-      `SELECT id, name FROM ${this.table('users')} ` +
-        'WHERE name LIKE ? ORDER BY id LIMIT ?',
-      [q === undefined ? '%' : `%${q}%`, limit],
-    );
+  async findAll(limit: number, q?: string): Promise<readonly User[]> {
+    return this.db
+      .select()
+      .from(users)
+      .where(like(users.name, q === undefined ? '%' : `%${q}%`))
+      .orderBy(users.id)
+      .limit(limit)
+      .all();
   }
 
-  /** `null` rather than `undefined` when there is no row. */
-  find(id: number): Promise<User | null> {
-    return this.db.get<User>(
-      `SELECT id, name FROM ${this.table('users')} WHERE id = ?`,
-      [id],
-    );
+  /** `.get()` is `undefined` for no row; the controller's 404 turns on `null`. */
+  async find(id: number): Promise<User | null> {
+    return this.db.select().from(users).where(eq(users.id, id)).get() ?? null;
   }
 
+  /** `.returning()`, so the id is the one the database wrote. */
   async create(name: string): Promise<User> {
-    const { lastInsertRowid } = await this.db.run(
-      `INSERT INTO ${this.table('users')} (name) VALUES (?)`,
-      [name],
-    );
-    return { id: Number(lastInsertRowid), name };
+    return this.db.insert(users).values({ name }).returning().get();
   }
 }
