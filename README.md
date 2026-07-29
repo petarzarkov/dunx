@@ -27,6 +27,7 @@ roadmap.
 | [`@dunx/core`](./packages/core) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fcore)](https://www.npmjs.com/package/%40dunx%2Fcore) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fcore?label=dls)](https://www.npmjs.com/package/%40dunx%2Fcore) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fcore?label=size)](https://www.npmjs.com/package/%40dunx%2Fcore) | [![cov](https://petarzarkov.github.io/dunx/coverage-core.svg)](https://petarzarkov.github.io/dunx#core) | Core for the dunx framework |
 | [`@dunx/http`](./packages/http) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fhttp)](https://www.npmjs.com/package/%40dunx%2Fhttp) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fhttp?label=dls)](https://www.npmjs.com/package/%40dunx%2Fhttp) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fhttp?label=size)](https://www.npmjs.com/package/%40dunx%2Fhttp) | [![cov](https://petarzarkov.github.io/dunx/coverage-http.svg)](https://petarzarkov.github.io/dunx#http) | Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways |
 | [`@dunx/infra`](./packages/infra) | [![npm](https://img.shields.io/npm/v/%40dunx%2Finfra)](https://www.npmjs.com/package/%40dunx%2Finfra) [![dls](https://img.shields.io/npm/dt/%40dunx%2Finfra?label=dls)](https://www.npmjs.com/package/%40dunx%2Finfra) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Finfra?label=size)](https://www.npmjs.com/package/%40dunx%2Finfra) | [![cov](https://petarzarkov.github.io/dunx/coverage-infra.svg)](https://petarzarkov.github.io/dunx#infra) | Database, Redis, storage and image infrastructure built on Bun.SQL, bun:sqlite, Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client and Bun.Image |
+| [`@dunx/openapi`](./packages/openapi) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fopenapi)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fopenapi?label=dls)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fopenapi?label=size)](https://www.npmjs.com/package/%40dunx%2Fopenapi) | [![cov](https://petarzarkov.github.io/dunx/coverage-openapi.svg)](https://petarzarkov.github.io/dunx#openapi) | OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate |
 
 ## Project Structure
 
@@ -36,7 +37,8 @@ dunx/
 │   ├── compiler        # Load-time transform that records constructor dependencies for the dunx container
 │   ├── core            # Core for the dunx framework
 │   ├── http            # Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways
-│   └── infra           # Database, Redis, storage and image infrastructure built on Bun.SQL, bun:sqlite, Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client and Bun.Image
+│   ├── infra           # Database, Redis, storage and image infrastructure built on Bun.SQL, bun:sqlite, Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client and Bun.Image
+│   └── openapi         # OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate
 ├── examples/           # Private apps that consume the packages
 ├── docs/               # Architecture and design docs
 ├── scripts/            # Monorepo-level scripts

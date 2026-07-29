@@ -2,6 +2,7 @@ import type { HttpApp } from '@dunx/http';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
 import { Ledger } from '../database/ledger.service.js';
+import { DocsDemo } from '../docs/docs.demo.js';
 import { HttpDemo } from '../http/http.demo.js';
 import { Logger } from '../logger.js';
 import { Thumbnails } from '../pictures/thumbnails.service.js';
@@ -23,6 +24,7 @@ export class Tour {
     private readonly users: UsersDemo,
     private readonly http: HttpDemo,
     private readonly chat: ChatDemo,
+    private readonly docs: DocsDemo,
   ) {}
 
   async run(app: HttpApp, url: string): Promise<void> {
@@ -48,5 +50,10 @@ export class Tour {
       '@dunx/http — @Gateway("/chat"), same Bun.serve as the routes',
     );
     await this.chat.demonstrate(app, url);
+
+    this.logger.group(
+      '@dunx/openapi — the document, from the schemas the routes validate',
+    );
+    await this.docs.demonstrate(app, url);
   }
 }

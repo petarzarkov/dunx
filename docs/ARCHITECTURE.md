@@ -562,11 +562,20 @@ a second one.
 Nest has middleware, guards, interceptors, pipes, and filters. dunx has:
 
 ```ts
-type Middleware = (
-  req: BunRequest,
-  next: () => Promise<Response>,
-) => Promise<Response>;
+interface Middleware {
+  handle(
+    req: BunRequest,
+    ctx: RouteContext,
+    next: () => Promise<Response>,
+  ): Promise<Response>;
+}
 ```
+
+A guard is still middleware that throws — there is no `CanActivate`. What
+`@UseGuards`, `@Roles` and `@Public` added is not a sixth extension point but a
+**scope** and a **metadata channel** for the one that already existed. `ctx.get(key)`
+reads metadata merged handler-first-then-class at discovery, so a method-level
+`@Public()` overrides a class-level `@Roles()`.
 
 Guards are middleware that throw. Interceptors wrap `next()`. Pipes become
 schema validation in the route options. Filters become one error mapper. Chains
@@ -610,15 +619,23 @@ the thing that produces them is the `route.*` builder, which exists to sidestep 
 decorator inference limit, so it lands with Phase 3 rather than as a scan with no
 producer.
 
-Middleware is a **class** with `handle(req, next)`, resolved from the container so
-it can `inject()`. It is passed to `HttpFactory.create`, not to `@Module` — in a
-flat container with no module boundary, "module middleware" could only ever mean
-global middleware, so hanging it off a module would imply a scope that does not
-exist.
+Middleware is a **class** with `handle(req, ctx, next)`, resolved from the container
+so it gets constructor injection. Global middleware is passed to
+`HttpFactory.create` or `app.use()`, not to `@Module` — in a flat container with no
+module boundary, "module middleware" could only ever mean global middleware, so
+hanging it off a module would imply a scope that does not exist.
+
+`@UseGuards(...)` is different, and the distinction is worth keeping straight: it
+hangs off a **class or a method**, which are real scopes that do exist. Ordering is
+global outermost, then class-level, then method-level, then the handler.
 
 Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in
-`Response.json()`, and map thrown errors. No lookup, no DI, no metadata read.
+`Response.json()`, and map thrown errors. No lookup, no DI, no metadata read —
+route metadata and the `RouteContext` join the **boot-time** set, not the
+per-request one. The context is frozen and shared by every request to its route, and
+`ctx.get` is a `Map` lookup over an already-merged record rather than a prototype
+walk.
 
 ## Route discovery
 

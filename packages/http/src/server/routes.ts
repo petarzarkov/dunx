@@ -1,12 +1,19 @@
-import { AppError } from '@dunx/core';
+import { AppError, type Ctor } from '@dunx/core';
 import type { DiscoveredRoute } from '../route/discover.js';
 import type { HttpMethod } from '../route/marker.js';
 import type { UpgradeHandler } from '../ws/adapter.js';
+import { buildContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
 import { defaultErrorMapper, type ErrorMapper } from './errors.js';
 import { buildInputReader } from './input.js';
 import { compose, type Middleware, type RouteHandler } from './middleware.js';
 import { HttpStatusCode } from './status.js';
+
+/** How a `@UseGuards` class becomes an instance. `listen()` passes `app.get`. */
+export type GuardResolver = (guard: Ctor<Middleware>) => Middleware;
+
+const construct: GuardResolver = (guard) =>
+  new (guard as new () => Middleware)();
 
 /** `OPTIONS` is never a `@Get`-style route — only CORS mounts one. */
 export type RouteMethod = HttpMethod | 'OPTIONS';
@@ -107,16 +114,29 @@ export const buildRoutes = (
   middleware: readonly Middleware[] = [],
   onError: ErrorMapper = defaultErrorMapper,
   cors?: CorsOptions,
+  resolve: GuardResolver = construct,
 ): BunRoutes => {
   assertNoCollisions(discovered);
   const routes: BunRoutes = {};
+  // One instance per guard class for the whole table — what the container returns,
+  // and what the default resolver has to match to be interchangeable with it.
+  const instances = new Map<Ctor<Middleware>, Middleware>();
+  const guardOf = (guard: Ctor<Middleware>): Middleware => {
+    const existing = instances.get(guard);
+    if (existing) return existing;
+    const created = resolve(guard);
+    instances.set(guard, created);
+    return created;
+  };
 
   for (const route of discovered) {
-    // Schemas, parsers and the status resolve here, once. What survives into the
-    // request path is one closure that reads no metadata.
+    // Schemas, parsers, the status and the route context resolve here, once. What
+    // survives into the request path is one closure that reads no metadata.
     const read = buildInputReader(route.options);
     const status = statusFor(route);
-    const chained = compose(middleware, async (req) =>
+    // Global outermost, then the controller's guards, then the method's.
+    const chain = [...middleware, ...(route.guards ?? []).map(guardOf)];
+    const chained = compose(chain, buildContext(route), async (req) =>
       toResponse(await route.handler(await read(req)), status),
     );
     const guarded: RouteHandler = async (req) => {

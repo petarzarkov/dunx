@@ -1,7 +1,12 @@
 import type { ModuleRef } from '@dunx/core';
 import { HttpFactory, type HttpApp } from '@dunx/http';
+import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
 import { Config } from './config.js';
+import { DocsDemo } from './docs/docs.demo.js';
+import { AuthGuard } from './guards/auth.guard.js';
+import { GuardsDemo } from './guards/guards.demo.js';
+import { GuardsModule } from './guards/guards.module.js';
 import { HttpDemo } from './http/http.demo.js';
 import { RequestLoggerMiddleware } from './http/request-log.js';
 import { Logger } from './logger.js';
@@ -43,8 +48,45 @@ const withoutTrustedProxy = async (logger: Logger): Promise<void> => {
   await app.shutdown();
 };
 
+/**
+ * A third app, because a *global* auth guard would challenge every route of the
+ * tour above. `HttpOptions.middleware` is the outermost layer; the controller's
+ * `@UseGuards` sit inside it, and its methods' inside those.
+ */
+const withGuards = async (logger: Logger): Promise<void> => {
+  logger.group('@dunx/http — @Public, @Roles and @UseGuards');
+  // Documented too, so the same metadata can be seen enforced at runtime and
+  // described in the document. The docs routes are @Public(), which is the only
+  // reason a global AuthGuard lets them through.
+  const app = await HttpFactory.create(
+    OpenApiModule.forRoot({
+      title: 'dunx playground — guarded',
+      version: '0.1.0',
+      root: GuardsModule,
+    }),
+    { port: 0, middleware: [AuthGuard] },
+  );
+  app.setGlobalPrefix('api');
+  const url = await app.listen();
+  await app.get(GuardsDemo).demonstrate(url);
+  logger.group('@dunx/openapi — security, from the guards’ own metadata');
+  await app.get(DocsDemo).guarded(url);
+  await app.shutdown();
+};
+
 async function bootstrap(): Promise<void> {
-  const app = await configure(AppModule, true);
+  // OpenApiModule wraps the root it documents, so `create()` is handed one module
+  // ref as always and the document's own routes are discovered with the rest.
+  const app = await configure(
+    OpenApiModule.forRoot({
+      title: 'dunx playground',
+      version: '0.1.0',
+      description:
+        'Generated from the same zod schemas the routes validate against.',
+      root: AppModule,
+    }),
+    true,
+  );
   app.enableShutdownHooks();
 
   const url = await app.listen();
@@ -61,6 +103,7 @@ async function bootstrap(): Promise<void> {
 
   await app.shutdown();
   await withoutTrustedProxy(logger);
+  await withGuards(logger);
 }
 
 bootstrap().catch((error: unknown) => {

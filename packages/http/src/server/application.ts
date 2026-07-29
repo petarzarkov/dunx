@@ -138,7 +138,15 @@ export class HttpApplication implements HttpApp {
 
     const middleware = this.#middleware.map((entry) => this.#app.get(entry));
     const prefixed = this.#prefixed();
-    const routes = buildRoutes(prefixed, middleware, this.#onError, this.#cors);
+    // A `@UseGuards` class comes from the container too, so a guard injects exactly
+    // like global middleware does.
+    const routes = buildRoutes(
+      prefixed,
+      middleware,
+      this.#onError,
+      this.#cors,
+      (guard) => this.#app.get(guard),
+    );
 
     const ws = this.#websocket;
     if (ws) assertNoGatewayCollisions(prefixed, ws.paths);

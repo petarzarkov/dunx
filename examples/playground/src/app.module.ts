@@ -3,6 +3,7 @@ import { CacheModule } from './cache/cache.module.js';
 import { ChatModule } from './chat/chat.module.js';
 import { Config } from './config.js';
 import { DatabaseModule } from './database/database.module.js';
+import { DocsModule } from './docs/docs.module.js';
 import { HttpModule } from './http/http.module.js';
 import { NotesModule } from './notes/notes.module.js';
 import { PicturesModule } from './pictures/pictures.module.js';
@@ -24,6 +25,7 @@ import { UsersModule } from './users/users.module.js';
     UsersModule,
     NotesModule,
     ChatModule,
+    DocsModule,
   ],
   providers: [Config, Tour],
 })

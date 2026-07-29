@@ -201,14 +201,15 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 ## Packages Overview
 
-| Package          | Contains                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------ |
-| `@dunx/core`     | DI container, modules, lifecycle                                                     |
-| `@dunx/compiler` | Load-time constructor-dependency transform (only native dep)                         |
-| `@dunx/http`     | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation |
-| `@dunx/infra`    | Subpaths `/db` `/redis` `/files` `/images` over Bun built-ins                        |
+| Package          | Contains                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| `@dunx/core`     | DI container, modules, lifecycle                                                              |
+| `@dunx/compiler` | Load-time constructor-dependency transform (only native dep)                                  |
+| `@dunx/http`     | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation          |
+| `@dunx/infra`    | Subpaths `/db` `/redis` `/files` `/images` over Bun built-ins                                 |
+| `@dunx/openapi`  | OpenAPI 3.1 from the routes' own zod schemas, self-contained HTML (zod is a `peerDependency`) |
 
-Four packages, deliberately. Merging is nearly free because every one of these has
+Five packages, deliberately few. Merging is nearly free because every one of these has
 **zero dependencies** except `@dunx/core` — there is no transitive weight to inherit
 and ESM tree-shaking drops what is not imported. `@dunx/compiler` stays separate
 because it is the only package with a native dependency (`oxc-parser`) and is

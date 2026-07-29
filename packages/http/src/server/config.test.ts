@@ -5,6 +5,7 @@ import { Controller, Get, Post } from '../route/decorators.js';
 import { joinPath, type DiscoveredRoute } from '../route/discover.js';
 import type { Input, RouteSchemas } from '../route/schema.js';
 import { ClientAddress } from './client-address.js';
+import type { RouteContext } from './context.js';
 import { HttpFactory, type HttpApp } from './factory.js';
 import type { Middleware, Next } from './middleware.js';
 import { buildRoutes } from './routes.js';
@@ -17,7 +18,11 @@ class Tagging implements Middleware {
   readonly #trail = inject(Trail);
   protected readonly tag: string = 'tagging';
 
-  async handle(_req: BunRequest, next: Next): Promise<Response> {
+  async handle(
+    _req: BunRequest,
+    _ctx: RouteContext,
+    next: Next,
+  ): Promise<Response> {
     this.#trail.seen.push(this.tag);
     const response = await next();
     response.headers.append('x-trail', this.tag);

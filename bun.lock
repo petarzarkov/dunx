@@ -23,6 +23,7 @@
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
         "@dunx/infra": "workspace:*",
+        "@dunx/openapi": "workspace:*",
         "zod": "^4.4.3",
       },
     },
@@ -54,6 +55,25 @@
         "@dunx/core": "workspace:*",
       },
     },
+    "packages/openapi": {
+      "name": "@dunx/openapi",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+        "@dunx/http": "workspace:*",
+      },
+      "devDependencies": {
+        "zod": "^4.4.3",
+      },
+      "peerDependencies": {
+        "@types/bun": ">=1.3.0",
+        "zod": "^4",
+      },
+      "optionalPeers": [
+        "@types/bun",
+        "zod",
+      ],
+    },
   },
   "packages": {
     "@dunx/compiler": ["@dunx/compiler@workspace:packages/compiler"],
@@ -63,6 +83,8 @@
     "@dunx/http": ["@dunx/http@workspace:packages/http"],
 
     "@dunx/infra": ["@dunx/infra@workspace:packages/infra"],
+
+    "@dunx/openapi": ["@dunx/openapi@workspace:packages/openapi"],
 
     "@dunx/playground": ["@dunx/playground@workspace:examples/playground"],
 

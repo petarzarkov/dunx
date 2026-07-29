@@ -130,6 +130,126 @@ render as `a.0`):
 }
 ```
 
+## Route metadata and scoped middleware
+
+A decorator annotates a route; a guard reads the annotation back. Metadata on its
+own enforces nothing — which is why `@Roles` needs a guard that looks at it, and
+why one global guard plus `@Public()` is the combination worth learning.
+
+```ts
+import {
+  Controller,
+  Get,
+  HttpError,
+  HttpStatusCode,
+  Patch,
+  Post,
+  Public,
+  PUBLIC,
+  Roles,
+  ROLES,
+  UseGuards,
+  type Middleware,
+  type Next,
+  type RouteContext,
+} from '@dunx/http';
+
+// Global. `ctx.get(PUBLIC)` is the only thing that can tell an opted-out route
+// apart from one that needs credentials.
+export class AuthGuard implements Middleware {
+  handle(req: BunRequest, ctx: RouteContext, next: Next) {
+    if (ctx.get(PUBLIC)) return next();
+    if (!req.headers.get('authorization')) {
+      throw new HttpError(HttpStatusCode.UNAUTHORIZED, 'No credentials');
+    }
+    return next();
+  }
+}
+
+// A guard is middleware that throws. There is no `CanActivate`.
+export class RolesGuard implements Middleware {
+  handle(req: BunRequest, ctx: RouteContext, next: Next) {
+    const required = ctx.get(ROLES);
+    if (!required) return next();
+    if (!required.includes(roleOf(req))) {
+      throw new HttpError(HttpStatusCode.FORBIDDEN, 'Forbidden');
+    }
+    return next();
+  }
+}
+
+@Roles('admin') // a class-level default
+@Controller('reports')
+export class ReportsController {
+  @Public() // overrides the class-level @Roles for this route
+  @Get('/health')
+  health() {
+    return { ok: true };
+  }
+
+  @UseGuards(RolesGuard) // reads the class-level @Roles('admin')
+  @Post('/')
+  create(input: Input<typeof createReport>) {}
+
+  @Roles('editor') // the method wins over the class
+  @UseGuards(RolesGuard)
+  @Patch('/:id')
+  rename(input: Input<typeof renameReport>) {}
+}
+
+const app = await HttpFactory.create(AppModule, { middleware: [AuthGuard] });
+```
+
+### `RouteContext`
+
+The second argument to `handle`. Built **once per route at boot** and closed over
+by the chain, so `get` is a `Map` lookup over an already-merged record — not a
+prototype walk, and nothing is resolved per request.
+
+| Member         | Is                                                        |
+| -------------- | --------------------------------------------------------- |
+| `controller`   | The controller class's name                               |
+| `handler`      | The method's name                                         |
+| `method`       | `'GET' \| 'POST' \| ...`                                  |
+| `path`         | The mounted path, prefixes applied                        |
+| `get(key)`     | The metadata value, or `undefined`                        |
+
+`get` resolves the **handler's** metadata first and the **controller class's**
+second — the same override direction as Nest's `Reflector.getAllAndOverride`.
+
+### Your own keys
+
+`@Roles` and `@Public` are three lines each over the generic setter, and a key of
+your own costs the same:
+
+```ts
+import { meta, metaKey } from '@dunx/http';
+
+const TENANT = metaKey<string>('tenant');
+export const Tenant = (name: string) => meta(TENANT, name);
+
+// …and in a guard: ctx.get(TENANT)
+```
+
+`metaKey` mints a fresh symbol per call, so two libraries that both name a key
+`roles` never read each other's value. `meta` is valid on a **method or a class**;
+there are no parameter decorators in the standard proposal, so there is nothing
+else it could attach to.
+
+### Ordering and inheritance
+
+- **Chain order**: global (`HttpOptions.middleware`, then `use()`), then the
+  controller's `@UseGuards`, then the method's. Outermost first.
+- Guards are resolved **from the container**, exactly like global middleware, so a
+  guard gets constructor injection and one instance is shared by every route that
+  declares it.
+- A subclass inherits its base's class-level metadata and guards, and its own
+  additions never reach the base or a sibling: every write copies the record and
+  defines an **own** property. Nothing accumulates at class-definition time, so
+  there is no ordering dependence and no cross-file leak.
+- Two `@UseGuards` on one target read top to bottom. Two of one metadata key read
+  bottom-up, so the topmost decorator wins.
+
 ## App-level configuration
 
 `create()` boots the container and discovers routes; `listen()` is what builds the
@@ -161,8 +281,8 @@ could only ever be a silent no-op — the failure mode worth trading for an erro
 ### Precedence
 
 - **Middleware order**: `HttpOptions.middleware` first (outermost), then each
-  `use()` call in the order it was made. Outermost sees the request first and the
-  response last.
+  `use()` call in the order it was made, then a controller's `@UseGuards`, then a
+  method's — innermost. Outermost sees the request first and the response last.
 - **Port**: the `listen(port)` argument, else `HttpOptions.port`, else `3000`.
 - **Error mapper**: `HttpOptions.onError`; there is no imperative equivalent.
 - **Repeated calls**: `setGlobalPrefix`, `set` and `enableCors` all replace, so the
@@ -192,7 +312,7 @@ hands the resolved singleton the live server:
 export class AuditMiddleware implements Middleware {
   constructor(private readonly address: ClientAddress) {}
 
-  async handle(req: BunRequest, next: Next) {
+  async handle(req: BunRequest, ctx: RouteContext, next: Next) {
     console.log(this.address.of(req));
     return next();
   }
@@ -420,8 +540,9 @@ still works.
   abstract base controller's `@Get` methods are inherited by every subclass.
 - A duplicate method + path **throws at boot** naming both handlers. Bun would
   otherwise silently keep one.
-- Middleware is a class with `handle(req, next)`, resolved from the container so it
-  can `inject()`. Chains are folded into one closure per route at boot.
+- Middleware is a class with `handle(req, ctx, next)`, resolved from the container so
+  it can `inject()`. Chains are folded into one closure per route at boot, and `ctx`
+  is the route that closure belongs to.
 - Handlers may return a `Response`, any JSON-serialisable value, or `undefined`
   for `204`.
 - Schemas, parsers and the status are resolved in `buildRoutes` at boot, into the

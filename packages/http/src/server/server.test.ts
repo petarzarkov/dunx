@@ -4,6 +4,7 @@ import { inject, Module, type OnShutdown } from '@dunx/core';
 import { Controller, Get, Post } from '../route/decorators.js';
 import type { DiscoveredRoute } from '../route/discover.js';
 import type { Input, RouteSchemas } from '../route/schema.js';
+import type { RouteContext } from './context.js';
 import { defaultErrorMapper, HttpError } from './errors.js';
 import { HttpFactory, type HttpApp } from './factory.js';
 import type { Middleware, Next } from './middleware.js';
@@ -88,7 +89,11 @@ describe('middleware', () => {
     const order: string[] = [];
 
     class Outer implements Middleware {
-      async handle(_req: BunRequest, next: Next): Promise<Response> {
+      async handle(
+        _req: BunRequest,
+        _ctx: RouteContext,
+        next: Next,
+      ): Promise<Response> {
         order.push('outer:before');
         const response = await next();
         order.push('outer:after');
@@ -98,7 +103,11 @@ describe('middleware', () => {
       }
     }
     class Inner implements Middleware {
-      async handle(_req: BunRequest, next: Next): Promise<Response> {
+      async handle(
+        _req: BunRequest,
+        _ctx: RouteContext,
+        next: Next,
+      ): Promise<Response> {
         order.push('inner');
         return next();
       }
@@ -308,7 +317,11 @@ describe('HttpFactory', () => {
     class CountingMiddleware implements Middleware {
       readonly #counter = inject(Counter);
 
-      handle(_req: BunRequest, next: Next): Promise<Response> {
+      handle(
+        _req: BunRequest,
+        _ctx: RouteContext,
+        next: Next,
+      ): Promise<Response> {
         this.#counter.count += 1;
         return next();
       }
@@ -335,7 +348,11 @@ describe('HttpFactory', () => {
     class CountingMiddleware implements Middleware {
       constructor(private readonly counter: Counter) {}
 
-      handle(_req: BunRequest, next: Next): Promise<Response> {
+      handle(
+        _req: BunRequest,
+        _ctx: RouteContext,
+        next: Next,
+      ): Promise<Response> {
         this.counter.count += 1;
         return next();
       }

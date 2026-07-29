@@ -107,6 +107,71 @@ it('generates a JSON Schema from the same zod schema', () => {
   expect(app.text).toContain('"title":"Create a user"');
 });
 
+it('generates an OpenAPI 3.1 document for the routes it serves', () => {
+  // Served by a controller in the same graph, so the global middleware saw it.
+  expect(app.text).toContain(
+    'middleware saw GET /api/openapi.json -> 200 (OpenApiController.document)',
+  );
+  expect(app.text).toContain(
+    'GET /api/openapi.json -> 200 openapi 3.1.0, 6 paths',
+  );
+  // setGlobalPrefix("api") moved the document's own route too, and the paths it
+  // describes moved with it. `:id` is templated as `{id}`.
+  expect(app.text).toContain(
+    'paths: ["/api/docs","/api/notes","/api/notes/whoami","/api/openapi.json",' +
+      '"/api/users","/api/users/{id}"]',
+  );
+  // `.meta({ id })` named these: CreateUser refs Tag, which zod emitted under $defs.
+  expect(app.text).toContain(
+    'components/schemas: ["CreateNote","CreateUser","Tag","ValidationError"]',
+  );
+  expect(app.text).toContain(
+    'POST /api/users requestBody -> {"$ref":"#/components/schemas/CreateUser"}',
+  );
+  // The framework's own 400 shape, documented rather than discovered.
+  expect(app.text).toContain(
+    'POST /api/users 400 -> {"schema":{"$ref":"#/components/schemas/ValidationError"}}',
+  );
+  // The query schema became parameters, with input-side requiredness: `limit` has a
+  // default, so it is optional going in.
+  expect(app.text).toContain(
+    'GET /api/users query -> [{"name":"q","in":"query","required":false,' +
+      '"schema":{"type":"string","minLength":1}},{"name":"limit","in":"query",' +
+      '"required":false,"schema":{"default":10,"type":"integer","minimum":1,' +
+      '"maximum":50}}]',
+  );
+  // Every $ref resolves, and nothing degraded.
+  expect(app.text).toContain('unresolved $refs: 0, warnings: []');
+});
+
+it('serves a docs page that fetches nothing', () => {
+  expect(app.text).toMatch(
+    /GET \/api\/docs -> 200 text\/html; charset=utf-8, \d+ bytes, external requests: none/,
+  );
+});
+
+it('documents security from the same metadata the guards read', () => {
+  // The document route is @Public(), which is why the global AuthGuard let it past.
+  expect(app.text).toContain(
+    'AuthGuard: GET /api/openapi.json is @Public() — skipping',
+  );
+  expect(app.text).toContain(
+    '@Roles("editor") PATCH /api/reports/{id} -> security [{"bearer":[]}], roles ["editor"]',
+  );
+  // An explicitly empty requirement, not a missing one.
+  expect(app.text).toContain(
+    '@Public() GET /api/reports/health -> security []',
+  );
+  // Class-level metadata is merged into every route of the class, so it is
+  // documented on this one too — whichever guard does or does not enforce it.
+  expect(app.text).toContain(
+    'class-level @Roles("admin") GET /api/reports -> security [{"bearer":[]}], roles ["admin"]',
+  );
+  expect(app.text).toContain(
+    'securitySchemes: {"bearer":{"type":"http","scheme":"bearer"',
+  );
+});
+
 it('runs @dunx/infra/db on bun:sqlite at :memory:', () => {
   expect(app.text).toContain(
     'backend=sqlite dialect=sqlite, table "ledger" created',
@@ -213,6 +278,49 @@ it('honours trust proxy both ways and refuses a hook after listen()', () => {
   );
   expect(app.text).toContain(
     'setGlobalPrefix() after listen() threw: setGlobalPrefix() must be called before listen().',
+  );
+});
+
+it('tells middleware which route it was folded into', () => {
+  expect(app.text).toContain(
+    'middleware saw GET /api/notes -> 200 (NotesController.list)',
+  );
+});
+
+it('enforces @Public, @Roles and a method-scoped @UseGuards', () => {
+  // The global guard runs, reads ctx.get(PUBLIC), and lets it through.
+  expect(app.text).toContain(
+    'AuthGuard: GET /api/reports/health is @Public() — skipping',
+  );
+  expect(app.text).toContain(
+    '@Public() GET /api/reports/health, no credentials -> 200 {"ok":true}',
+  );
+  // The same guard, the same app, a route that did not opt out.
+  expect(app.text).toContain(
+    'GET /api/reports, no credentials -> 401 {"error":"No credentials","status":401}',
+  );
+  expect(app.text).toContain(
+    'GET /api/reports as "viewer" -> 200 ["q1 revenue"]',
+  );
+
+  // @UseGuards(RolesGuard) at method scope, reading the class-level @Roles('admin').
+  expect(app.text).toContain(
+    '@UseGuards(RolesGuard) POST /api/reports as "viewer" -> 403 ' +
+      '{"error":"Requires one of: admin","status":403}',
+  );
+  expect(app.text).toContain(
+    'POST /api/reports as "admin" (class-level @Roles) -> 201 ' +
+      '["q1 revenue","q2 revenue"]',
+  );
+
+  // A method-level @Roles overrides the class-level one, both directions proven.
+  expect(app.text).toContain(
+    'PATCH /api/reports/1 as "admin" (method-level @Roles("editor") won) -> 403 ' +
+      '{"error":"Requires one of: editor","status":403}',
+  );
+  expect(app.text).toContain(
+    'PATCH /api/reports/1 as "editor" -> 200 ' +
+      '["q1 revenue, restated","q2 revenue"]',
   );
 });
 

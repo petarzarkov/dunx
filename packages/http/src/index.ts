@@ -12,6 +12,23 @@ export {
   type DiscoveredRoute,
 } from './route/discover.js';
 export type { HttpMethod, RouteMeta } from './route/marker.js';
+// Route metadata and scoped middleware. `meta`/`metaKey` are the whole mechanism;
+// `@Roles` and `@Public` are wrappers over it, and ROLES/PUBLIC are exported so a
+// user's own guard can read what they set.
+export {
+  guardsOf,
+  meta,
+  metaKey,
+  metaOf,
+  mergeMeta,
+  Public,
+  PUBLIC,
+  Roles,
+  ROLES,
+  UseGuards,
+  type MetaKey,
+  type MetaRecord,
+} from './route/metadata.js';
 // The route input types. `Input<typeof opts>` is the handler annotation;
 // StandardSchemaV1 is the validation contract, restated so Zod 4 / Valibot /
 // ArkType all work with zero dependencies here.
@@ -25,6 +42,7 @@ export type {
   StandardSchemaV1,
 } from './route/schema.js';
 export { ClientAddress } from './server/client-address.js';
+export { buildContext, type RouteContext } from './server/context.js';
 export {
   preflight,
   withCors,
@@ -56,6 +74,7 @@ export {
   buildRoutes,
   withUpgradeRoutes,
   type BunRoutes,
+  type GuardResolver,
   type RouteMethod,
   type ServeRoutes,
 } from './server/routes.js';
