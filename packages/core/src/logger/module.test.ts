@@ -1,4 +1,4 @@
-import { AppFactory, Module } from '@dunx/core';
+import { AppFactory, Module } from '../di/index.js';
 import { describe, expect, it } from 'bun:test';
 import { ConsoleLogger } from './console.js';
 import { ContextStore } from './context.js';

@@ -65,10 +65,6 @@
     "./images": {
       "types": "./dist/images/index.d.ts",
       "import": "./dist/images/index.js"
-    },
-    "./logger": {
-      "types": "./dist/logger/index.d.ts",
-      "import": "./dist/logger/index.js"
     }
   },
   "publishConfig": {

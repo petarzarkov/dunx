@@ -1,4 +1,4 @@
-import { provide, type DynamicModule } from '@dunx/core';
+import { provide, type DynamicModule } from '../di/index.js';
 import { ConsoleLogger } from './console.js';
 import { ContextStore } from './context.js';
 import { Logger } from './logger.js';
