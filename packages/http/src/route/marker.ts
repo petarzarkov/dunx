@@ -2,6 +2,8 @@
 // marker goes on the method function itself — nothing accumulates at class
 // definition time, so there is no ordering dependence and no cross-file leak.
 // See docs/ARCHITECTURE.md, "Route discovery".
+import type { RouteSchemas } from './schema.js';
+
 const ROUTE = Symbol.for('dunx.route');
 const CONTROLLER = Symbol.for('dunx.controller');
 
@@ -10,6 +12,8 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export interface RouteMeta {
   readonly method: HttpMethod;
   readonly path: string;
+  /** The decorator's second argument. `buildRoutes` resolves it once, at boot. */
+  readonly options?: RouteSchemas | undefined;
 }
 
 interface RouteMarked {

@@ -1,8 +1,12 @@
 # @dunx/http
 
 `Bun.serve` adapter for [dunx](https://github.com/petarzarkov/dunx). Class-based
-controllers, standard decorators, and no JavaScript router — Bun's native `routes`
-does path params and per-method dispatch in Zig.
+controllers **and WebSocket gateways**, standard decorators, and no JavaScript
+router — Bun's native `routes` does path params and per-method dispatch in Zig.
+
+`Bun.serve` takes `routes` and `websocket` in one call, so both live here: one
+`listen()`, one server, one port. Zero dependencies beyond `@dunx/core` — no
+`express`, no `ws`, no `socket.io`.
 
 ## Install
 
@@ -14,8 +18,11 @@ bun add @dunx/http @dunx/core
 
 ```ts
 import { inject, Module } from '@dunx/core';
-import { Controller, Get, HttpFactory, Post } from '@dunx/http';
-import type { BunRequest } from 'bun';
+import { Controller, Get, HttpFactory, Post, type Input } from '@dunx/http';
+import { z } from 'zod'; // or Valibot, or ArkType, or none at all
+
+const createUser = { body: z.object({ name: z.string() }) } as const;
+const oneUser = { params: z.object({ id: z.coerce.number() }) } as const;
 
 @Controller('users')
 export class UsersController {
@@ -26,14 +33,14 @@ export class UsersController {
     return this.#users.findAll(); // plain values become Response.json()
   }
 
-  @Get('/:id')
-  one(req: BunRequest<'/users/:id'>) {
-    return this.#users.find(req.params.id);
+  @Get('/:id', oneUser)
+  one(input: Input<typeof oneUser>) {
+    return this.#users.find(input.params.id); // a number, already validated
   }
 
-  @Post('/')
-  async create(req: BunRequest) {
-    return this.#users.create(await req.json());
+  @Post('/', createUser)
+  create(input: Input<typeof createUser>) {
+    return this.#users.create(input.body.name); // 201, no Response.json()
   }
 }
 
@@ -43,6 +50,84 @@ export class UsersModule {}
 const app = await HttpFactory.create(AppModule, { port: 3000 });
 app.enableShutdownHooks();
 await app.listen();
+```
+
+## Typed input
+
+The second argument to any verb declares what the route accepts. Declaring a
+schema is what makes the matching `input` field exist, get parsed and get
+validated; omitting one means the framework never touches it.
+
+```ts
+const createNote = { body: CreateNote, status: HttpStatusCode.CREATED } as const;
+
+@Post('/', createNote)
+create(input: Input<typeof createNote>): Note {
+  return this.notes.add(input.body.text); // typed, already validated
+}
+```
+
+`Input<typeof opts>` has to be written out. A standard method decorator can
+**check** a handler's parameter type but cannot contextually type an unannotated
+one, so the annotation is required — and it is a type-level function over the
+options object, so each type is still declared exactly once. A wrong annotation is
+a compile error naming the mismatched property; an unannotated parameter is
+`TS7006`.
+
+| Field          | Source                                | Declared by |
+| -------------- | ------------------------------------- | ----------- |
+| `input.req`    | the `BunRequest` — always present     | always      |
+| `input.body`   | parsed by `content-type`, then validated | `body`   |
+| `input.query`  | `new URL(req.url).searchParams`        | `query`     |
+| `input.params` | `req.params`                           | `params`    |
+
+With no options at all, annotate `Input<RouteSchemas>` for the request, or take no
+parameter. Path params without a `params` schema stay on `input.req.params`.
+
+Validation is the **Standard Schema** spec (`~standard.validate`, sync or async),
+restated in this package's own types — so Zod 4, Valibot and ArkType all work and
+`@dunx/http` still has zero dependencies. Anything with a `~standard` property
+qualifies, including a hand-written object; see `examples/playground`.
+
+### Body parsing
+
+Parsed only when `body` is declared, by media type:
+
+| `content-type`                      | `input.body` before validation           |
+| ----------------------------------- | ---------------------------------------- |
+| `application/json`, `*+json`, none  | `req.json()`                             |
+| `application/x-www-form-urlencoded` | fields; a repeated key becomes an array  |
+| `multipart/form-data`               | fields and `File`s, same repeat rule     |
+| `text/*`                            | `req.text()` — a string                  |
+| anything else                       | **415**, nothing read                    |
+
+A body the caller mangled is a **400** (`Malformed application/json body`), never a
+500. A missing `content-type` reads as JSON, because a 415 there would only hide
+the schema error that is about to be more useful.
+
+### Response wrapping
+
+| Handler returns   | Response                                     |
+| ----------------- | -------------------------------------------- |
+| a `Response`      | passed through untouched — the escape hatch  |
+| `undefined`/`null`| `204`, no body                               |
+| anything else     | `Response.json(value)` at the status below   |
+
+Status precedence: `options.status`, else **201 for POST**, else **200** — Nest's
+rule. A thrown `HttpError` still goes through the error mapper.
+
+### Validation failures
+
+A rejected schema is a `ValidationError` — a `400` whose body carries every issue,
+with the path flattened to dots (both `['a', 0]` and `[{ key: 'a' }, { key: 0 }]`
+render as `a.0`):
+
+```json
+{
+  "error": "Invalid body",
+  "status": 400,
+  "issues": [{ "message": "name must be a non-empty string", "path": "name" }]
+}
 ```
 
 ## App-level configuration
@@ -119,6 +204,199 @@ the header is present, otherwise `server.requestIP(req)?.address`. Leave the
 setting off unless a proxy you control rewrites the header: a direct client can
 send whatever it likes.
 
+## WebSocket gateways
+
+A gateway is a normal injectable class declared in `@Module({ providers })` — there
+is no second list and no module to configure. `HttpFactory` finds it by its
+`@Gateway` marker, and `listen()` mounts it on the same server as the routes:
+
+```ts
+import { Module } from '@dunx/core';
+import {
+  Gateway,
+  HttpFactory,
+  OnClose,
+  OnMessage,
+  OnOpen,
+  PubSub,
+  type Socket,
+} from '@dunx/http';
+
+@Gateway('/chat')
+export class ChatGateway {
+  constructor(private readonly pubsub: PubSub) {}
+
+  @OnOpen()
+  opened(socket: Socket) {
+    socket.send('welcome');
+  }
+
+  @OnMessage('chat.join')
+  join(room: string, socket: Socket) {
+    socket.subscribe(room); // Bun's own pub/sub
+    return { joined: room }; // returned values are replied to the sender
+  }
+
+  @OnMessage('chat.say')
+  say(payload: { room: string; text: string }) {
+    this.pubsub.publishEvent(payload.room, 'chat.said', payload.text);
+  }
+
+  @OnClose()
+  closed(socket: Socket, code: number) {
+    console.log(`${socket.data.path} closed with ${code}`);
+  }
+}
+
+@Module({ controllers: [NotesController], providers: [ChatGateway] })
+export class AppModule {}
+
+const app = await HttpFactory.create(AppModule, {
+  websocket: { idleTimeout: 120 },
+});
+await app.listen(3000); // /notes over HTTP and /chat over WebSocket
+```
+
+Constructor injection, `inject()`, `OnInit` and `OnShutdown` all work in a gateway,
+because the container builds it like anything else. `app.gatewayPaths` is every
+path that upgrades.
+
+### Handlers
+
+| Decorator           | Signature                             | Notes                                                          |
+| ------------------- | ------------------------------------- | -------------------------------------------------------------- |
+| `@Gateway(path)`    | class                                 | Required — it is what marks the provider as a gateway          |
+| `@OnUpgrade()`      | `(req: BunRequest)`                   | Return a `Response` to refuse; anything else becomes `context` |
+| `@OnOpen()`         | `(socket)`                            |                                                                |
+| `@OnMessage(event)` | `(data, socket)`                      | Routed by envelope event name                                  |
+| `@OnMessage()`      | `(message: string \| Buffer, socket)` | The raw catch-all                                              |
+| `@OnClose()`        | `(socket, code, reason)`              |                                                                |
+| `@OnDrain()`        | `(socket)`                            | Backpressure relieved                                          |
+| `@OnPing()`         | `(data, socket)`                      | Bun still answers with a pong                                  |
+| `@OnPong()`         | `(data, socket)`                      |                                                                |
+
+Handlers may be `async`. A returned value is sent to the sender — under the same
+event name for `@OnMessage(event)`, verbatim (or JSON) for the raw handler, and
+never for a lifecycle handler. Return `undefined` to send nothing.
+
+`socket` is Bun's `ServerWebSocket`, unwrapped: `send`, `subscribe`, `unsubscribe`,
+`isSubscribed`, `subscriptions`, `publish`, `cork`, `ping`, `close`,
+`getBufferedAmount` are its own methods. `socket.data.path` is the gateway path;
+`socket.data.context` is whatever `@OnUpgrade` returned.
+
+### The upgrade is a route
+
+`server.upgrade()` is called from inside a native route handler, so the gateway's
+path is matched by Bun's router like any other path, and **no `fetch` handler is
+needed** for a socket to connect. Consequences, all measured:
+
+- A gateway path may be a **pattern**: `@Gateway('/room/:room')` works, and
+  `@OnUpgrade()` is handed the `BunRequest`, so `req.params.room` is readable there
+  and can be returned as the connection's `context`.
+- A plain `GET` on a gateway path is **426**; any other method is Bun's native
+  **404**, because the upgrade is mounted as a `GET`. A path no gateway and no
+  controller serves is the same native 404 — there is nothing to fall through to.
+- A path claimed by both a gateway and a controller route is a **boot error**
+  naming both, since one of the two would otherwise be dropped from the table.
+- `setGlobalPrefix()` moves routes, **not** gateways. A gateway path is the exact
+  pathname a client dials.
+
+### Discovery, and what is a boot error
+
+Handlers are discovered at boot by walking each gateway instance's prototype chain,
+so an abstract base gateway's handlers are inherited by every subclass and an
+undecorated override still dispatches to the override. Nothing is read per message:
+the handler table, the `websocket` object, and one upgrade closure per gateway are
+built once.
+
+These throw at boot rather than picking a winner:
+
+- two handlers claiming one event or one lifecycle slot, named individually
+- two gateways on one path, named individually
+- a `@Gateway` class with no handlers at all
+- a handler-declaring provider that is **not** a `@Gateway` — it could never
+  receive a frame, so it is an error instead of a silent no-op
+
+### The envelope
+
+Named events need a way to say which event a frame is, so `@dunx/http` defines the
+smallest one that works:
+
+```json
+{ "event": "chat.say", "data": { "room": "general", "text": "hi" } }
+```
+
+It is **opt-in**: a frame is only parsed for a gateway that declares at least one
+`@OnMessage(event)` handler. A gateway with only a raw `@OnMessage()` never sees
+JSON it did not ask for. Binary frames, invalid JSON, a non-object, a missing
+`event`, and an event no handler claims all fall through to the raw handler — and
+are ignored if there is none. Nothing is ever replied to the sender that a handler
+did not return.
+
+`encode(event, data)` and `decode(frame)` are exported, so a client can share them.
+A handler's payload parameter type is what you expect to receive, not a runtime
+guarantee: the frame's `data` is handed over as it arrived.
+
+### Pub/sub
+
+Topics live in Bun, not in a JavaScript map. A socket joins one with
+`socket.subscribe(topic)` and leaves with `socket.unsubscribe(topic)`; both are
+native methods on the socket you already hold.
+
+`PubSub` is the injectable side, for publishing without a socket. `HttpFactory`
+binds it around your root module, so nothing has to be imported or registered —
+listing it in `providers` as well is the container's duplicate-binding error:
+
+```ts
+class Notifier {
+  constructor(private readonly pubsub: PubSub) {}
+
+  ship(version: string) {
+    this.pubsub.publishEvent('releases', 'shipped', { version }); // envelope
+    this.pubsub.publish('releases', 'raw frame'); // string or BufferSource
+    return this.pubsub.subscriberCount('releases');
+  }
+}
+```
+
+`publish` returns the bytes sent, `0` if the message was dropped, `-1` under
+backpressure — Bun's own status. It goes through `server.publish`, which reaches
+**every** subscriber including the socket whose handler triggered it (unlike
+`socket.publish`, which honours `publishToSelf`). Publishing before the server is
+listening throws saying so.
+
+### Socket options
+
+```ts
+await HttpFactory.create(AppModule, {
+  websocket: {
+    idleTimeout: 120, // seconds; Bun rejects anything above 960
+    maxPayloadLength: 16 * 1024 * 1024,
+    backpressureLimit: 1024 * 1024,
+    closeOnBackpressureLimit: false,
+    perMessageDeflate: true,
+    publishToSelf: false,
+    sendPings: true,
+    onError: (error, socket) => console.error(socket.data.path, error),
+  },
+});
+```
+
+Everything but `onError` is Bun's `websocket` option of the same name, and the type
+is `Pick`ed from Bun's own so the two cannot drift. They are server-wide, which is
+why they sit beside `middleware` and `onError` on the factory rather than on a
+module. `onError` catches a throwing or rejecting handler and the socket stays open;
+the default logs.
+
+### Shutdown with a live socket
+
+Measured: a graceful `server.stop()` waits for open connections, and a WebSocket
+does not close on its own — so it **never resolves** while a socket is open. An app
+with at least one gateway therefore force-stops (`stop(true)`) in `shutdown()`, and
+those clients see a `1006` close. An app with no gateways still stops gracefully.
+Bun also delivers an empty close `reason` to `@OnClose` once a socket has exchanged
+frames, whatever the client passed; the `code` is reliable.
+
 ## Status codes
 
 `HttpStatusCode` is a frozen object, not an `enum` — one name serving as both the
@@ -146,6 +424,13 @@ still works.
   can `inject()`. Chains are folded into one closure per route at boot.
 - Handlers may return a `Response`, any JSON-serialisable value, or `undefined`
   for `204`.
+- Schemas, parsers and the status are resolved in `buildRoutes` at boot, into the
+  same closure the middleware chain folds into. Per request the framework parses
+  and validates what was declared, calls the method, wraps the return, and maps a
+  throw — no metadata read, no lookup, no DI.
+- Gateways use the same marker-plus-prototype-scan discovery as routes, and go into
+  the same route table. `withUpgradeRoutes` and `buildWebSocket` are exported for
+  anyone assembling `Bun.serve` themselves.
 
 ## License
 

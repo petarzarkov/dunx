@@ -1,12 +1,14 @@
-import type { BunRequest } from 'bun';
 import { prefixOf, routeMetaOf, type HttpMethod } from './marker.js';
+import type { RouteInput, RouteSchemas } from './schema.js';
 
 export interface DiscoveredRoute {
   readonly method: HttpMethod;
   readonly path: string;
   readonly controller: string;
   readonly handlerName: string;
-  readonly handler: (req: BunRequest) => unknown;
+  readonly handler: (input: RouteInput) => unknown;
+  /** Schemas and status from the decorator, carried through to `buildRoutes`. */
+  readonly options?: RouteSchemas | undefined;
 }
 
 export const joinPath = (prefix: string, path: string): string => {
@@ -25,7 +27,7 @@ export const discoverRoutes = (
 ): readonly DiscoveredRoute[] => {
   const klass = instance.constructor;
   const prefix = prefixOf(klass);
-  const members = instance as Record<string, (req: BunRequest) => unknown>;
+  const members = instance as Record<string, (input: RouteInput) => unknown>;
   const routes: DiscoveredRoute[] = [];
   const seen = new Set<string>();
 
@@ -49,6 +51,7 @@ export const discoverRoutes = (
         controller: klass.name,
         handlerName: name,
         handler: members[name]!.bind(instance),
+        options: meta.options,
       });
     }
   }

@@ -35,6 +35,20 @@ Concretely banned: `express`, `ws`, `ioredis`, `pg`, `mysql2`, `better-sqlite3`,
 runtime before concluding something is unavailable**, and extend that file with
 what you verify.
 
+### The one sanctioned exception: validation
+
+Bun ships no schema API, so validation cannot satisfy the ladder above. The
+resolution is that **dunx never depends on a validator**:
+
+- The framework's contract is **Standard Schema** — an _interface_, restated in
+  `packages/http/src/route/schema.ts` at zero dependency cost. Zod 4, Valibot and
+  ArkType all satisfy it, so any of them works.
+- Where a **zod-specific** API is genuinely needed — `z.toJSONSchema` and `.meta()`
+  for OpenAPI generation — zod is a **`peerDependency`**, never a `dependency`. The
+  consumer installs it; dunx does not bundle it.
+
+Adding a validator to any package's `dependencies` is a Rule 1 violation.
+
 ## Runtime & Package Manager
 
 - **Bun** is the only runtime and package manager. Never use `npm`, `npx`, `yarn`, or `pnpm`.
@@ -187,16 +201,18 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 ## Packages Overview
 
-| Package          | Status  | Description                                        |
-| ---------------- | ------- | -------------------------------------------------- |
-| `@dunx/core`     | Phase 1 | DI container, decorators, modules, lifecycle       |
-| `@dunx/compiler` | Phase 2 | Load-time constructor-dependency transform         |
-| `@dunx/http`     | Phase 2 | Bun.serve adapter, controllers, middleware, mapper |
-| `@dunx/ws`       | Phase 2 | WebSocket gateways on Bun.serve, native pub/sub    |
-| `@dunx/db`       | Phase 2 | Bun.SQL + bun:sqlite behind one Database contract  |
-| `@dunx/redis`    | Phase 2 | Bun.RedisClient behind a RedisConnection contract  |
-| `@dunx/files`    | Phase 2 | Bun.file/Glob + Bun.S3Client behind one Storage    |
-| `@dunx/images`   | Phase 2 | Bun.Image decoding and an immutable pipeline       |
+| Package          | Contains                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `@dunx/core`     | DI container, modules, lifecycle                                                     |
+| `@dunx/compiler` | Load-time constructor-dependency transform (only native dep)                         |
+| `@dunx/http`     | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation |
+| `@dunx/infra`    | Subpaths `/db` `/redis` `/files` `/images` over Bun built-ins                        |
+
+Four packages, deliberately. Merging is nearly free because every one of these has
+**zero dependencies** except `@dunx/core` — there is no transitive weight to inherit
+and ESM tree-shaking drops what is not imported. `@dunx/compiler` stays separate
+because it is the only package with a native dependency (`oxc-parser`) and is
+build-time only; merging it would put a Rust parser in every production deploy.
 
 Planned, in roadmap order: validation via Standard Schema, `@dunx/testing`,
 `@dunx/create-app`, `@dunx/openapi`.

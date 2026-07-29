@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import { inject, Module, type OnShutdown } from '@dunx/core';
 import { Controller, Get, Post } from '../route/decorators.js';
 import type { DiscoveredRoute } from '../route/discover.js';
+import type { Input, RouteSchemas } from '../route/schema.js';
 import { defaultErrorMapper, HttpError } from './errors.js';
 import { HttpFactory, type HttpApp } from './factory.js';
 import type { Middleware, Next } from './middleware.js';
@@ -165,13 +166,15 @@ class UsersController {
   }
 
   @Get('/:id')
-  one(req: BunRequest<'/users/:id'>): { id: string } {
-    return { id: req.params.id };
+  one(input: Input<RouteSchemas>): { id: string | undefined } {
+    return { id: input.req.params['id'] };
   }
 
+  // No body schema, so the raw request is still there — and the 201 now comes
+  // from the verb rather than from a hand-built Response.
   @Post('/')
-  async create(req: BunRequest): Promise<Response> {
-    return Response.json(await req.json(), { status: 201 });
+  create(input: Input<RouteSchemas>): Promise<unknown> {
+    return input.req.json();
   }
 
   @Get('/boom')

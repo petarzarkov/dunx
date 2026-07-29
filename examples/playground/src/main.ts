@@ -1,23 +1,69 @@
-import { HttpFactory } from '@dunx/http';
+import type { ModuleRef } from '@dunx/core';
+import { HttpFactory, type HttpApp } from '@dunx/http';
 import { AppModule } from './app.module.js';
-import { UsersService } from './users/users.service.js';
+import { Config } from './config.js';
+import { HttpDemo } from './http/http.demo.js';
+import { RequestLoggerMiddleware } from './http/request-log.js';
+import { Logger } from './logger.js';
+import { NotesModule } from './notes/notes.module.js';
+import { Tour } from './tour/tour.service.js';
 
-// Port 0 by default so concurrent runs never collide.
-const app = await HttpFactory.create(AppModule, {
-  port: Number(process.env['PORT'] ?? 0),
-});
-app.enableShutdownHooks();
+/**
+ * `create()` boots the container and discovers routes and gateways; `listen()` is
+ * what builds the `Bun.serve` route table — so everything between the two still
+ * gets to shape it, and after `listen()` every one of these throws.
+ */
+const configure = async (
+  root: ModuleRef,
+  trustProxy: boolean,
+): Promise<HttpApp> => {
+  const app = await HttpFactory.create(root, {
+    // Port 0 by default so concurrent runs never collide.
+    port: Number(process.env['PORT'] ?? 0),
+    websocket: { idleTimeout: 30 },
+  });
+  app.setGlobalPrefix('api');
+  app.use(RequestLoggerMiddleware);
+  app.set('trust proxy', trustProxy);
+  app.enableCors({
+    origin: app.get(Config).corsOrigin,
+    credentials: true,
+    exposedHeaders: ['x-handled-by'],
+    maxAge: 600,
+  });
+  return app;
+};
 
-const url = await app.listen();
-console.log(`[dunx] listening on ${url}`);
-console.log(`[dunx] ${app.get(UsersService).summary()}`);
-
-const listed = await (await fetch(new URL('users', url))).json();
-console.log(`[dunx] GET /users -> ${JSON.stringify(listed)}`);
-
-if (process.env['DUNX_HOLD']) {
-  console.log('[dunx] holding — send SIGTERM to close');
-  await app.closed;
-} else {
+/** `set('trust proxy')` cannot be changed after listen(), so the off case is its own app. */
+const withoutTrustedProxy = async (logger: Logger): Promise<void> => {
+  logger.group('@dunx/http — a second app, trust proxy off');
+  const app = await configure(NotesModule, false);
+  const url = await app.listen();
+  await app.get(HttpDemo).proxyOff(url);
   await app.shutdown();
+};
+
+async function bootstrap(): Promise<void> {
+  const app = await configure(AppModule, true);
+  app.enableShutdownHooks();
+
+  const url = await app.listen();
+  const logger = app.get(Logger);
+  logger.info(`listening on ${url}`);
+
+  await app.get(Tour).run(app, url);
+
+  if (process.env['DUNX_HOLD']) {
+    logger.info('holding — send SIGTERM to close');
+    await app.closed;
+    return;
+  }
+
+  await app.shutdown();
+  await withoutTrustedProxy(logger);
 }
+
+bootstrap().catch((error: unknown) => {
+  console.error('[dunx] failed to start', error);
+  process.exit(1);
+});

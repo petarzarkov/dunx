@@ -27,6 +27,22 @@ param route: 200 { id: "42" }   static route: 200 ok   unmatched method: 404
 There is no reason to build a radix tree in JavaScript. dunx's job is to _emit_
 the `routes` object at boot and hand it to Bun.
 
+**`server.upgrade(req)` works from inside a `routes` handler.** Bun's own types
+bless it — `Serve.RoutesWithUpgrade` allows `Response | undefined | void` when
+`websocket` is present. So a WebSocket gateway is mounted as a native `GET` route
+rather than needing a hand-written `fetch` fallback, which means **Bun's router does
+run on the upgrade path** and a gateway path may be a pattern (`/room/:room`, with
+`req.params.room` readable in `@OnUpgrade`). An earlier note claiming the opposite
+was wrong and is retired. With no `fetch` handler anywhere, an unclaimed path is
+Bun's native 404 and a plain `GET` on a gateway path is a 426.
+
+**Graceful `server.stop()` never resolves while a WebSocket is open.** `stop(true)`
+is required, and clients then observe close code 1006. An app with gateways must
+therefore force-stop on shutdown or it hangs forever.
+
+**`server.publish` reaches the sender; `socket.publish` does not** (absent
+`publishToSelf`). The two are not interchangeable.
+
 **A native method miss is a 404, so CORS preflight cannot be inferred.** With
 `routes` and no `fetch` handler, `OPTIONS` against a GET-only route returns 404.
 Add a `fetch` handler and it falls through to that instead:
@@ -127,6 +143,34 @@ Orphan: GET /leaked <- proto Orphan.leaked  # found, but in no other class's cha
 Two subclasses of one undecorated abstract base both resolve the base's route. A
 field handler's arrow captures `this` (`users.one`), and a field declared before
 the field it reads still works, because handlers run per request (`late-value`).
+
+**A route decorator can _check_ a handler's input type but cannot _infer_ it.**
+Measured with `tsc`, because this is a type-level claim `bun` cannot answer. Given
+`@Post(path, opts)` generic over the options and constraining the method it
+decorates:
+
+```
+annotated correctly            -> compiles
+unannotated parameter          -> TS7006: Parameter 'input' implicitly has an 'any' type
+annotated with the wrong type  -> TS1241 + TS1270, naming the mismatched property
+```
+
+A standard method decorator is `(value: V, ctx: ClassMethodDecoratorContext) => V | void`,
+so it can reject a mismatched `V` but has no way to contextually type an
+unannotated parameter. Input must therefore be annotated — and the annotation is a
+type-level function over the options object, so each type is still written once:
+
+```ts
+const createNote = { body: CreateNote, status: HttpStatusCode.CREATED } as const;
+
+@Post('/', createNote)
+create(input: Input<typeof createNote>): Note {
+  return this.notes.add(input.body.text);   // input.body.text is string
+}
+```
+
+Verified that the wrong return type on that exact shape fails with
+`Type 'string' is not assignable to type 'number'`.
 
 ## The decorator dialect decision
 
@@ -683,12 +727,13 @@ Exit criteria:
 - The example runs via `bun start`, exits 0, and CI asserts that
 
 The playground is one app that grows through the phases, not a new example per
-phase. It is the _integration_ example.
+phase, and not one per package. Per-package examples were tried and reverted: seven
+apps meant seven bootstraps to keep alive and nowhere that showed the packages
+composing, which is the thing actually worth demonstrating.
 
-Separately, every published package gets an `examples/<package>` app demonstrating
-that package alone, which CI boots and asserts exits 0. One where a service is
-absent (Redis, Postgres, S3) must report that it is skipping and still exit 0 —
-otherwise CI teaches everyone to ignore it.
+Where a part needs a service CI does not have (Redis, Postgres, S3), it reports that
+it is skipping and the app still exits 0 — otherwise CI teaches everyone to ignore
+it.
 
 ### Phase 2 — HTTP
 
@@ -730,10 +775,5 @@ Run through `/spike`: measure on real Bun, record the result under **Verified
 constraints** above, then delete the item from here. A spike that changes the
 public API shape belongs before the code it gates.
 
-1. **Route input inference.** Does `@Post(opts)` cleanly constrain the method
-   signature through the method decorator's generic? A standard method decorator
-   is `(value: V, ctx: ClassMethodDecoratorContext<T, V>) => V | void`, so it can
-   _reject_ a mismatched `V` but cannot contextually type an unannotated
-   parameter — expect checking, not inference, with an explicit
-   `Ctx<typeof opts>` annotation as the shape. Gates Phase 3. This is a
-   type-level claim, so `bun` alone cannot measure it — the probe needs `tsc`.
+None open. Route input inference was the last one; its result is recorded under
+**Verified constraints** above.

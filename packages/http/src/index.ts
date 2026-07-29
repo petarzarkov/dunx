@@ -12,6 +12,18 @@ export {
   type DiscoveredRoute,
 } from './route/discover.js';
 export type { HttpMethod, RouteMeta } from './route/marker.js';
+// The route input types. `Input<typeof opts>` is the handler annotation;
+// StandardSchemaV1 is the validation contract, restated so Zod 4 / Valibot /
+// ArkType all work with zero dependencies here.
+export type {
+  InferOutput,
+  Input,
+  RouteInput,
+  RouteSchemas,
+  StandardSchemaIssue,
+  StandardSchemaResult,
+  StandardSchemaV1,
+} from './route/schema.js';
 export { ClientAddress } from './server/client-address.js';
 export {
   preflight,
@@ -22,7 +34,10 @@ export {
 export {
   defaultErrorMapper,
   HttpError,
+  ValidationError,
   type ErrorMapper,
+  type InputSource,
+  type ValidationIssue,
 } from './server/errors.js';
 export {
   HttpFactory,
@@ -37,11 +52,53 @@ export {
 } from './server/middleware.js';
 export {
   assertNoCollisions,
+  assertNoGatewayCollisions,
   buildRoutes,
+  withUpgradeRoutes,
   type BunRoutes,
   type RouteMethod,
+  type ServeRoutes,
 } from './server/routes.js';
 export type { AppSettings } from './server/settings.js';
 // One name, both meanings — the value for `HttpStatusCode.NOT_FOUND`, the type for
 // annotations. Exactly what an enum gives, without the enum.
 export { HttpStatusCode, type HttpStatusName } from './server/status.js';
+// The websocket half: gateways are declared in @Module({ providers }) and served by
+// the same Bun.serve call as the routes above.
+export {
+  buildWebSocket,
+  type UpgradeHandler,
+  type WebSocketRuntime,
+} from './ws/adapter.js';
+export {
+  Gateway,
+  OnClose,
+  OnDrain,
+  OnMessage,
+  OnOpen,
+  OnPing,
+  OnPong,
+  OnUpgrade,
+} from './ws/decorators.js';
+export {
+  discoverGateway,
+  discoverGateways,
+  normalizePath,
+  type DiscoveredGateway,
+  type DiscoveredHandler,
+  type Invoke,
+} from './ws/discover.js';
+export { decode, encode, type Envelope } from './ws/envelope.js';
+export { HandlerKind, type HandlerMeta } from './ws/marker.js';
+export { PubSub } from './ws/pubsub.js';
+export {
+  buildGateways,
+  buildRuntime,
+  type GatewayRuntime,
+} from './ws/runtime.js';
+export type {
+  Socket,
+  SocketData,
+  SocketErrorHandler,
+  SocketOptions,
+} from './ws/socket.js';

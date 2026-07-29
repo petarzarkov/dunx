@@ -2,7 +2,7 @@
   "name": "@dunx/playground",
   "version": "0.0.0",
   "private": true,
-  "description": "Full example of dunx dependency-injected application",
+  "description": "The dunx example app — DI, HTTP routes, websocket gateways, db, redis, files and images",
   "type": "module",
   "scripts": {
     "start": "bun src/main.ts",
@@ -12,6 +12,8 @@
   "dependencies": {
     "@dunx/compiler": "workspace:*",
     "@dunx/core": "workspace:*",
-    "@dunx/http": "workspace:*"
+    "@dunx/http": "workspace:*",
+    "@dunx/infra": "workspace:*",
+    "zod": "^4.4.3"
   }
 }

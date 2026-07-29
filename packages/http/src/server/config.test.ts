@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test';
 import { inject, Module } from '@dunx/core';
 import { Controller, Get, Post } from '../route/decorators.js';
 import { joinPath, type DiscoveredRoute } from '../route/discover.js';
+import type { Input, RouteSchemas } from '../route/schema.js';
 import { ClientAddress } from './client-address.js';
 import { HttpFactory, type HttpApp } from './factory.js';
 import type { Middleware, Next } from './middleware.js';
@@ -41,8 +42,8 @@ class UsersController {
   }
 
   @Get('/whoami')
-  whoami(req: BunRequest): { ip: string | undefined } {
-    return { ip: this.#address.of(req) };
+  whoami(input: Input<RouteSchemas>): { ip: string | undefined } {
+    return { ip: this.#address.of(input.req) };
   }
 
   @Post('/')
