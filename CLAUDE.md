@@ -2,7 +2,10 @@
 
 dunx is a Bun-native dependency injection framework. Read
 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) before making design decisions —
-it records what was measured, what was rejected, and why.
+it records what was measured, what was rejected, and why. Read
+[docs/ROADMAP.md](./docs/ROADMAP.md) for what is next, what is still open, and the
+reference implementations in `nestjs-template` to work from instead of designing
+from scratch.
 
 ## Rule 1 — native implementations only
 
@@ -16,38 +19,103 @@ reimplementations of things the platform already does. `oxc-parser` in
 `@dunx/compiler` is the reference precedent: a Rust parser via N-API, chosen over
 a JavaScript AST library.
 
-In order of preference:
+There are two halves to this, and they pull in opposite directions on purpose.
 
-1. **A `Bun.*` API or `bun:*` module.** `Bun.serve`, `Bun.SQL`, `bun:sqlite`,
+### Never reimplement what Bun already does
+
+If Bun ships it, use Bun. A JavaScript reimplementation of a platform primitive is
+slower, larger, and a maintenance liability. In order of preference:
+
+1. **A `Bun.*` API or `bun:*` module** — `Bun.serve`, `Bun.SQL`, `bun:sqlite`,
    `Bun.RedisClient`, `Bun.file`, `Bun.Image`, `Bun.Glob`, `Bun.password`,
-   `Bun.CryptoHasher`, `Bun.zstdCompress`. See [docs/bun-apis.md](./docs/bun-apis.md).
+   `Bun.CryptoHasher`, `Bun.color`, `Bun.enableANSIColors`, `Bun.S3Client`.
+   See [docs/bun-apis.md](./docs/bun-apis.md).
 2. **A Web standard Bun implements natively** — `Request`, `Response`, `Blob`,
-   `URL`, `WebSocket`, `ReadableStream`, `crypto.subtle`.
-3. **A native module via N-API**, like `oxc-parser`. Requires a note in
-   ARCHITECTURE.md saying what Bun API was missing.
-4. Nothing else.
+   `URL`, `WebSocket`, `ReadableStream`, `crypto.subtle`, `AsyncLocalStorage`.
+3. **A native module via N-API**, like `oxc-parser`. Needs a note in
+   ARCHITECTURE.md saying which Bun API was missing.
 
-Concretely banned: `express`, `ws`, `ioredis`, `pg`, `mysql2`, `better-sqlite3`,
-`sharp`, `jimp`, `axios`, `node-fetch`, `glob`, `chokidar`, `bcrypt`, `dotenv`,
-`lodash`, and any JavaScript reimplementation of a `Bun.*` API.
+Banned because Bun already does the job: `express`, `ws`, `socket.io`, `ioredis`,
+`pg`, `mysql2`, `better-sqlite3`, `postgres.js`, `sharp`, `jimp`, `image-size`,
+`glob`, `chokidar`, `axios`, `node-fetch`, `bcrypt`, `dotenv`, `@aws-sdk/*`,
+`lodash`.
 
-`docs/bun-apis.md` is not exhaustive — Bun ships undocumented APIs. **Probe the
-runtime before concluding something is unavailable**, and extend that file with
-what you verify.
+### Never invent what a mature library already solves
 
-### The one sanctioned exception: validation
+The other failure mode is worse: hand-rolling an ORM, a validator, an auth system
+or a job queue. Those are years of edge cases, and a half-built one is a liability
+dressed as a feature. Where Bun ships **no** primitive for a hard problem, dunx
+**integrates the best-in-class library** rather than competing with it.
 
-Bun ships no schema API, so validation cannot satisfy the ladder above. The
-resolution is that **dunx never depends on a validator**:
+The rule for those:
 
-- The framework's contract is **Standard Schema** — an _interface_, restated in
-  `packages/http/src/route/schema.ts` at zero dependency cost. Zod 4, Valibot and
-  ArkType all satisfy it, so any of them works.
-- Where a **zod-specific** API is genuinely needed — `z.toJSONSchema` and `.meta()`
-  for OpenAPI generation — zod is a **`peerDependency`**, never a `dependency`. The
-  consumer installs it; dunx does not bundle it.
+- They go in **`peerDependencies`** (with `peerDependenciesMeta.optional` where the
+  feature is opt-in), **never `dependencies`**. The consumer installs and owns the
+  version; dunx does not bundle it.
+- Where the library offers a **Bun-native driver, that driver is mandatory** —
+  `drizzle-orm/bun-sqlite` and `drizzle-orm/bun-sql`, not `pg` or `better-sqlite3`.
+  This is how both halves hold at once: the library owns the abstraction, Bun owns
+  the I/O.
+- dunx's own contract stays **library-agnostic where a standard exists** — route
+  validation targets Standard Schema (an interface, zero cost), so Zod, Valibot and
+  ArkType all work; zod-specific APIs (`z.toJSONSchema`) sit behind a vendor check.
+- Sanctioned integrations: **zod** (validation), **drizzle-orm** (ORM, migrations —
+  the default database driver), **better-auth** (authentication), **bullmq**
+  (queues). Adding another is a design decision worth recording here.
 
-Adding a validator to any package's `dependencies` is a Rule 1 violation.
+Do not write a dunx ORM, a dunx validator, a dunx auth flow, or a dunx job queue.
+
+### Reuse the `@arkv` workspace — and extend it upstream
+
+The repo owner maintains `@arkv/*` at `/home/petarzarkov/repos/arkv`, all published
+to npm. **Do not reimplement what they already do**, and do not fork them into dunx:
+
+| Need                                         | Use                                      | Never                                                      |
+| -------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
+| Timezones, any date/zone handling            | **`@arkv/timezones`**                    | a hand-rolled zone table, `moment-timezone`, `date-fns-tz` |
+| Structured logging, async context, redaction | **`@arkv/logger`** (with `@arkv/colors`) | a second logger in dunx, `pino`, `winston`                 |
+| Random numbers, ids, sampling                | **`@arkv/rng`**                          | `Math.random` for anything that matters, `nanoid`, `uuid`  |
+
+`@arkv` is **not Bun-only** — it targets Node.js and the web, and ships ESM + CJS +
+types. So a fix that travels upstream must use no `Bun.*` API and must survive the
+CommonJS build: no top-level `await`, no `import.meta`. A Bun-specific improvement
+(say, one built on `Bun.color`) stays on the dunx side of the boundary and is not an
+upstream candidate. arkv also permits TS `enum`, which dunx bans — do not "fix" that
+upstream, it is a breaking type change for every arkv consumer.
+
+**Improvements go into the `@arkv` repo, not into dunx.** If dunx needs the logger to
+do something it does not do, add it at
+`/home/petarzarkov/repos/arkv/packages/logger`, publish, and bump the dependency
+here. A local patch, wrapper-with-extra-behaviour, or vendored copy is the wrong
+answer — it forks a package the owner maintains and the fix stops reaching his other
+projects.
+
+These are `dependencies` (not peer): they are first-party, published, and each has
+zero or near-zero transitive weight.
+
+### Where the two halves collide: a library's own engine
+
+`bullmq` depends on **`ioredis`**, which the first half bans because
+`Bun.RedisClient` exists. It is not swappable — bullmq uses ioredis-specific Lua
+scripting and cluster support.
+
+The ban is on **dunx** reimplementing a Bun primitive, not on a sanctioned
+integration's internal engine. `ioredis` arrives transitively as bullmq's engine, a
+choice bullmq made; it is not a client dunx picked over Bun's. So:
+
+- **dunx code never imports `ioredis`.** `@dunx/infra/redis` is `Bun.RedisClient`
+  and stays that way. An app gets both — Bun's client for its own Redis work,
+  bullmq's for the queue internals.
+- The alternative was writing a distributed queue with retries, backoff, priorities,
+  rate limiting and cron on top of `Bun.RedisClient`. That is the "invent what a
+  mature library already solves" failure, and it is the worse one.
+
+If a future integration's engine duplicates a Bun API that dunx _does_ expose
+directly, weigh it the same way and record the answer here.
+
+`docs/bun-apis.md` is not exhaustive — Bun ships undocumented APIs, and several
+documented ones misbehave. **Probe the runtime before concluding anything**, and
+record what you verify there.
 
 ## Runtime & Package Manager
 
@@ -65,7 +133,8 @@ packages/<name>/        # Each published package
   dist/                 # Build output (gitignored)
   package.json
   tsconfig.json         # Extends ../../tsconfig.json — one per package, no build variants
-examples/<name>/        # Private example apps that consume the packages
+examples/playground/    # The one example app. Not one per package — see ARCHITECTURE.md
+tools/<name>/           # Private workspace tooling, never published
 docs/                   # Architecture and design docs
 scripts/                # Repo-level scripts (bun-native TS)
 .github/workflows/      # CI (ci.yml)
@@ -73,6 +142,10 @@ scripts/                # Repo-level scripts (bun-native TS)
 
 Package scope: `@dunx/<name>`. Every package is **ESM only** and emits a single
 `dist/` containing JS plus `.d.ts`.
+
+`tools/*` are workspaces but **`"private": true` and never published** — the docs
+site and, later, the benchmark harness. They may depend on anything they like; Rule 1
+governs what dunx _ships_, not what builds its website.
 
 ## Decorators — standard only
 

@@ -49,32 +49,6 @@ export interface TSTypeAnnotation extends Node {
 export interface TSTypeReference extends Node {
   readonly type: 'TSTypeReference';
   readonly typeName: Node;
-  /**
-   * `Repository<User>`'s `<User>`. A dependency token is the bare name, so the
-   * parameter reader ignores this; a column type is not, so the field reader
-   * refuses a reference that has any.
-   */
-  readonly typeArguments?: Node | null;
-}
-
-export interface TSUnionType extends Node {
-  readonly type: 'TSUnionType';
-  readonly types: readonly Node[];
-}
-
-/**
- * A class field. `optional` is the `?`, `definite` the `!` — neither reaches
- * runtime, which is the whole reason the transform has to read them here.
- */
-export interface PropertyDefinition extends Node {
-  readonly type: 'PropertyDefinition';
-  readonly key: Node;
-  readonly computed: boolean;
-  readonly static: boolean;
-  readonly optional: boolean;
-  readonly declare: boolean;
-  readonly decorators: readonly Node[];
-  readonly typeAnnotation?: TSTypeAnnotation | null;
 }
 
 export interface ImportDeclaration extends Node {
@@ -97,9 +71,6 @@ const guard =
 export const isIdentifier = guard<Identifier>('Identifier');
 export const isMethodDefinition = guard<MethodDefinition>('MethodDefinition');
 export const isTypeReference = guard<TSTypeReference>('TSTypeReference');
-export const isUnionType = guard<TSUnionType>('TSUnionType');
-export const isPropertyDefinition =
-  guard<PropertyDefinition>('PropertyDefinition');
 export const isImportDeclaration =
   guard<ImportDeclaration>('ImportDeclaration');
 export const isImportSpecifier = guard<ImportSpecifier>('ImportSpecifier');

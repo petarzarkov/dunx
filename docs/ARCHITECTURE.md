@@ -172,6 +172,32 @@ create(input: Input<typeof createNote>): Note {
 Verified that the wrong return type on that exact shape fails with
 `Type 'string' is not assignable to type 'number'`.
 
+**A decorator cannot publish a type back onto the class it decorates.** Measured on
+TypeScript 7.0.2 — both routes fail with `TS2339: Property 'table' does not exist`:
+
+```
+@Entity('users') class UserA {}   UserA.table   // decorator defineProperty'd a static
+@Entity('users') class UserB {}   UserB.table   // decorator's return type is C & { table }
+```
+
+TC39 decorators are **type-transparent** in TypeScript: the decorator's return type
+does not become the declaration's type. So a decorator can attach a runtime value but
+cannot tell the type system it is there.
+
+This is why **entity decorators were rejected**. drizzle's whole value is the table
+object's _type_ carrying column types into every query; a decorator could build a
+working table at runtime while every query degraded to `unknown`. Recovering the
+types would mean hand-writing a mapped type mirroring drizzle's `BuildColumns` — a
+second source of truth that drifts from the first, which is exactly the duplication
+decorators were meant to remove. drizzle's native `sqliteTable` object schema is the
+supported path.
+
+The same limit explains why `@Post('/', opts)` can _check_ a handler's input
+annotation but not _infer_ it. Decorators observe; they do not type. Note the
+contrast with `@Controller`, `@Get`, `@Module`, `@Gateway` and `@Roles`, which all
+work fine — they only _record_ metadata read back at boot, and publish nothing to
+the type system.
+
 ## The decorator dialect decision
 
 `tsyringe` and `@Inject()`-style constructor injection are locked to legacy

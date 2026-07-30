@@ -196,25 +196,39 @@ export const sanitizeLogEntry = (
  * `seen` is never cleared here, unlike in the sanitizer: this is a search, and a
  * subtree already searched cannot start containing an error.
  */
+/** Matches LoggerOptions.maxDepth's default, for callers that pass no options. */
+const DEFAULT_MAX_DEPTH = 32;
+
+/**
+ * Bounded as well as cycle-safe. The `WeakSet` stops a cycle, but this walk runs on
+ * the caller's object *before* sanitization, so the sanitizer's own depth cap never
+ * applied to it — a deep acyclic chain overflowed the stack from inside a log call.
+ * Node's stack is smaller than Bun's, so `bun test` alone does not catch it.
+ */
 export const findNestedError = (
   value: unknown,
+  maxDepth: number = DEFAULT_MAX_DEPTH,
   seen: WeakSet<object> = new WeakSet<object>(),
+  depth = 0,
 ): Error | null => {
   if (value instanceof Error) return value;
   if (typeof value !== 'object' || value === null) return null;
+  if (depth > maxDepth) return null;
   if (seen.has(value)) return null;
   seen.add(value);
 
+  const next = depth + 1;
+
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findNestedError(item, seen);
+      const found = findNestedError(item, maxDepth, seen, next);
       if (found) return found;
     }
     return null;
   }
 
   for (const [, entry] of safeEntries(value as Record<string, unknown>)) {
-    const found = findNestedError(entry, seen);
+    const found = findNestedError(entry, maxDepth, seen, next);
     if (found) return found;
   }
   return null;

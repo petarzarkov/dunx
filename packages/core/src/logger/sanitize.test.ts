@@ -494,3 +494,30 @@ describe('findNestedError', () => {
     expect(findNestedError(value)).toBeNull();
   });
 });
+
+describe('findNestedError depth bound', () => {
+  it('does not overflow the stack on a deep acyclic chain', () => {
+    // This walk runs on the caller's object before sanitization, so the
+    // sanitizer's own depth cap does not protect it. Unbounded, 30k overflows.
+    let deep: Record<string, unknown> = { err: new Error('bottom') };
+    for (let index = 0; index < 30_000; index += 1) deep = { next: deep };
+
+    expect(() => findNestedError(deep)).not.toThrow();
+  });
+
+  it('gives up past maxDepth rather than searching forever', () => {
+    let deep: Record<string, unknown> = { err: new Error('bottom') };
+    for (let index = 0; index < 100; index += 1) deep = { next: deep };
+
+    expect(findNestedError(deep, 200)?.message).toBe('bottom');
+    expect(findNestedError(deep, 10)).toBeNull();
+  });
+
+  it('still finds a shallow error and still terminates on a cycle', () => {
+    const cyclic: Record<string, unknown> = { label: 'top' };
+    cyclic['self'] = cyclic;
+    cyclic['boom'] = new Error('reachable');
+
+    expect(findNestedError(cyclic)?.message).toBe('reachable');
+  });
+});

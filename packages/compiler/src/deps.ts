@@ -12,7 +12,6 @@ import {
 } from './ast.js';
 import { applyEdits, type Edit } from './edits.js';
 import { collectTypeOnlyNames, erasedNames } from './erased.js';
-import { fieldRecordFor } from './fields.js';
 
 /**
  * `Symbol.for`, not `Symbol`: two copies of `@dunx/core` in one dependency tree
@@ -25,8 +24,6 @@ export interface TransformResult {
   readonly changed: boolean;
   /** Classes that received dependency metadata, in source order. */
   readonly annotated: readonly string[];
-  /** Classes that received field metadata, in source order. */
-  readonly fielded: readonly string[];
 }
 
 const slice = (source: string, node: Node): string =>
@@ -99,7 +96,6 @@ export const transform = (
   const typeOnly = collectTypeOnlyNames(program);
   const edits: Edit[] = [];
   const annotated: string[] = [];
-  const fielded: string[] = [];
 
   walk(program, (node) => {
     if (!isClassDeclaration(node)) return;
@@ -121,14 +117,8 @@ export const transform = (
           `  value: () => [${entries.join(', ')}],\n});`,
       });
     }
-
-    const record = fieldRecordFor(source, node, erased);
-    if (record !== undefined) {
-      fielded.push(name);
-      edits.push({ start: node.end, end: node.end, text: record });
-    }
   });
 
   const code = applyEdits(source, edits);
-  return { code, changed: code !== source, annotated, fielded };
+  return { code, changed: code !== source, annotated };
 };

@@ -20,14 +20,14 @@ interface Prepared {
   readonly invalid?: LogEntry;
 }
 
-const prepareMessage = (message: unknown): Prepared => {
+const prepareMessage = (message: unknown, maxDepth: number): Prepared => {
   if (typeof message === 'string') return { message };
   if (message instanceof Error) {
     return { message: message.message, error: message };
   }
 
   if (isPlainObject(message)) {
-    const found = findNestedError(message);
+    const found = findNestedError(message, maxDepth);
     return found
       ? { message: found.message, error: found, extra: message }
       : { message: 'Object logged', extra: message };
@@ -70,6 +70,7 @@ const errorKeyOf = (
 const extractErrorAndExtra = (
   params: readonly unknown[],
   level: LogLevel,
+  maxDepth: number,
 ): { error: Error | null; extra: LogEntry } => {
   let error: Error | null = null;
   const extra: LogEntry = {};
@@ -90,7 +91,7 @@ const extractErrorAndExtra = (
 
     const key = errorKeyOf(param, level);
     if (key === undefined) {
-      error = findNestedError(param) ?? error;
+      error = findNestedError(param, maxDepth) ?? error;
       Object.assign(extra, param);
       continue;
     }
@@ -162,8 +163,12 @@ export class ConsoleLogger extends Logger {
     const context = this.#context.getContext();
     if (!this.#shouldLog(level, context)) return;
 
-    const prepared = prepareMessage(message);
-    const extracted = extractErrorAndExtra(optionalParams, level);
+    const prepared = prepareMessage(message, this.#options.maxDepth);
+    const extracted = extractErrorAndExtra(
+      optionalParams,
+      level,
+      this.#options.maxDepth,
+    );
     const error = prepared.error ?? extracted.error;
 
     const entry: LogEntry = {
