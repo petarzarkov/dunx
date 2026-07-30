@@ -53,11 +53,18 @@
       "name": "@dunx/infra",
       "version": "0.0.0",
       "dependencies": {
+        "@arkv/logger": "^0.8.0",
         "@dunx/core": "workspace:*",
       },
       "devDependencies": {
         "drizzle-orm": "^0.45.2",
       },
+      "peerDependencies": {
+        "drizzle-orm": "^0.45.2",
+      },
+      "optionalPeers": [
+        "drizzle-orm",
+      ],
     },
     "packages/openapi": {
       "name": "@dunx/openapi",
@@ -80,6 +87,12 @@
     },
   },
   "packages": {
+    "@arkv/colors": ["@arkv/colors@0.7.4", "", {}, "sha512-y3oF+vDuHy6wzIDq6gNJkyGmxcBpqiG85ebV53lMzoeIbV5WRg8VQ4QbVMtTAd+81u0RR8xg+uCbhdtS6QCF4A=="],
+
+    "@arkv/logger": ["@arkv/logger@0.8.0", "", { "dependencies": { "@arkv/colors": "^0.7.4", "@arkv/shared": "^0.8.0" } }, "sha512-XKLthdFMN7jN4MNLHSvYLEoHbE0YAkLcBXnzeMDbKKscPGF6h6UOF9yjl8heCK8cnSQ0QENjMN+0nES6MQxuyQ=="],
+
+    "@arkv/shared": ["@arkv/shared@0.8.0", "", {}, "sha512-c9YTix/b35KTEmIl+qlyjm74SzqWEXXcvwr4rqhYPWr7ihirdSaydOFFNFQSyQYgefVOc4JEKdpb4gOhSsKcrA=="],
+
     "@dunx/compiler": ["@dunx/compiler@workspace:packages/compiler"],
 
     "@dunx/core": ["@dunx/core@workspace:packages/core"],

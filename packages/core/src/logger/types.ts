@@ -34,73 +34,14 @@ const ERROR_LEVELS: readonly LogLevel[] = [
 export const isErrorLevel = (level: LogLevel): boolean =>
   ERROR_LEVELS.includes(level);
 
-/**
- * The per-async-flow fields merged into every entry. Held in an
- * `AsyncLocalStorage` by `ContextStore`, never in the container.
- */
-export interface AsyncContext {
-  requestId?: string;
-  userId?: string;
-  orgId?: string;
-  method?: string;
-  event?: string;
-  context?: string;
-  flow?: string;
-  [key: string]: unknown;
-}
-
-export interface LoggerConfig {
-  name?: string;
-  version?: string;
-  env?: string;
-  /** @default LogLevel.DEBUG */
-  level?: LogLevel;
-  /** Defaults to `process.env.NODE_ENV !== 'production'` */
-  isDevelopment?: boolean;
-  /**
-   * Force coloured output on or off. Defaults to `isDevelopment` **and**
-   * `Bun.enableANSIColors`, so a pipe, a non-TTY or `NO_COLOR` yields plain JSON
-   * without any escape sequences.
-   */
-  colors?: boolean;
-  /** Merged with DEFAULT_MASK_FIELDS */
-  maskFields?: string[];
-  /** Events to skip logging for */
-  filterEvents?: string[];
-  /**
-   * Truncate arrays beyond this length.
-   *
-   * @default 100
-   */
-  maxArrayLength?: number;
-  /**
-   * Stop descending past this nesting depth. A cycle is already caught by
-   * reference, but an acyclic structure thousands of levels deep would still
-   * overflow the stack inside a log call.
-   *
-   * @default 32
-   */
-  maxDepth?: number;
-}
-
-/** An `Error` flattened to something `JSON.stringify` keeps. */
+/** A serialized `Error`, as the backing logger writes it. */
 export interface SerializedError {
-  name: string;
-  message: string;
-  stack?: string;
+  readonly name: string;
+  readonly message: string;
+  readonly stack?: string;
 }
 
+/** One structured entry. Extra fields are whatever the caller merged in. */
 export type LogEntry = Record<string, unknown> & {
   error?: Error | SerializedError;
 };
-
-export const DEFAULT_MASK_FIELDS = Object.freeze([
-  'password',
-  'secret',
-  'token',
-  'authorization',
-  'cookie',
-  'apiKey',
-  'apiSecret',
-  'apiPass',
-] as const);
