@@ -172,6 +172,51 @@ create(input: Input<typeof createNote>): Note {
 Verified that the wrong return type on that exact shape fails with
 `Type 'string' is not assignable to type 'number'`.
 
+**`drizzle-orm/bun-sql` is Postgres, not `Bun.SQL`.** `Bun.SQL` speaks four
+dialects — `postgres`, `mysql`, `mariadb`, `sqlite`, quoted from its own rejection
+message. Its drizzle adapter speaks one. Read from `bun-sql/driver.js` in
+drizzle-orm 0.45.2:
+
+```js
+const dialect = new PgDialect({ casing: config.casing });
+```
+
+Unconditional, with no branch on `client.options.adapter` anywhere in the module.
+Pointed at a `sqlite://` client it does not error — it compiles `$1` placeholders
+and Postgres identifier quoting against SQLite, and the trivial cases pass, which
+is worse than failing.
+
+Two consequences. `SqlOptions` rejects a non-Postgres URL at construction rather
+than at connect time; and **MySQL/MariaDB have no drizzle path on Bun at all**,
+since drizzle's own MySQL adapters need `mysql2`, a client Bun already replaces.
+This also retired a trick the `@dunx/infra` test suite used to rely on — running
+the `Bun.SQL` suite over that driver's SQLite adapter so the whole code path was
+covered with no server installed. A green suite compiling Postgres SQL against
+SQLite proves nothing, so the wire-protocol tests skip unless `DUNX_DB_TEST_URL`
+names a reachable server.
+
+**drizzle's `transaction()` on bun-sqlite inherits `bun:sqlite`'s
+synchronous-commit behaviour.** `bun:sqlite`'s own `db.transaction()` commits when
+its callback **returns its promise**, so awaited work is already committed and a
+later throw rolls back nothing (recorded in [bun-apis.md](./bun-apis.md)). drizzle
+does not work around it — `bun-sqlite/session.js` delegates straight to it:
+
+```js
+const nativeTx = this.client.transaction(() => {
+  result = transaction(tx);
+});
+nativeTx[config.behavior ?? 'deferred']();
+```
+
+Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch — the row is
+still there. So `drizzle` being a mature library does not make this one safe, and
+`@dunx/infra/db` exports a standalone `transaction(db, fn)` that issues
+`BEGIN`/`COMMIT`/`ROLLBACK` itself. There is one connection, so overlapping
+top-level transactions queue rather than nest a second `BEGIN`; a nested call is
+already inside the holder's turn and takes a savepoint instead. On Postgres the
+same function delegates to drizzle's own `transaction()`, which is genuinely async
+because `Bun.SQL`'s `begin()` reserves a connection for the duration.
+
 **A decorator cannot publish a type back onto the class it decorates.** Measured on
 TypeScript 7.0.2 — both routes fail with `TS2339: Property 'table' does not exist`:
 
@@ -705,6 +750,56 @@ Consequences, all measured:
 
 No `Symbol.metadata`, no polyfill, no import-order dependence.
 
+## Database layer (`@dunx/infra/db`)
+
+**drizzle is the database driver, not an option.** An earlier version of this
+package shipped a hand-rolled `Database` abstract class with a `sql` tagged
+template, `all`/`get`/`run`/`exec`, a `Repository` base and a `quoteIdentifier`
+helper, and two implementations satisfying it. All of that is retired.
+
+This is Rule 1's second half — _never invent what a mature library already
+solves_ — applied to the one place it was being violated. The hand-rolled contract
+was an ORM's front half: it had a query surface, so it would have grown result
+mapping, relations, and a migration story, each one a worse version of something
+drizzle already ships. The rule's own resolution of the tension is what the layer
+now looks like: **the library owns the abstraction, Bun owns the I/O**, via
+`drizzle-orm/bun-sqlite` over `bun:sqlite` and `drizzle-orm/bun-sql` over
+`Bun.SQL`. No `pg`, no `better-sqlite3`. `drizzle-orm` is an optional
+`peerDependency`, so the consumer owns the version and an app that never touches a
+database never installs it.
+
+What remains is only what a drizzle handle genuinely lacks:
+
+- **A lifecycle.** `DbConnection` is an abstract class — so it is an injection
+  token — holding `close()`, `onShutdown()`, `backend`, `dialect`, and the raw
+  driver handle. drizzle has none of these; it does not even know whether its
+  driver is open.
+- **Module wiring.** `DbModule` binds three tokens: `DbOptions`, `DbConnection`,
+  and **drizzle's own database class**. That last one is the whole trick — drizzle's
+  `BunSQLiteDatabase` and `BunSQLDatabase` are real runtime classes, so a class is
+  usable as a token directly, and `@dunx/compiler` records the bare type name from
+  `db: BunSQLiteDatabase<typeof schema>` while ignoring the type argument. One
+  erased class is the token; the schema types stay on the annotation. No wrapper
+  object, and no `token()` call.
+- **An async-safe transaction**, for the bun-sqlite quirk measured above.
+- **Data seeding.** `drizzle-kit` owns schema migrations and their journal; it has
+  no concept of data. `runSeeds` is numbered files, one transaction per seed
+  covering the seed and its journal row, and a separate `dunx_seeds` table so the
+  two journals never contend.
+
+Two costs are accepted rather than papered over. `DbModule.forRootAsync` has to
+take the token as its first argument, because which drizzle class the token is only
+becomes knowable after the options factory has run — too late to register a
+provider under it. And because schema modules are dialect-specific (`sqliteTable`
+vs `pgTable`), the two backends are a build-time choice; "one `DATABASE_URL` naming
+either" is no longer a supported shape, and the old contract only ever supported it
+by hiding the differences.
+
+Entity decorators were the alternative considered for the schema and were
+**measured and rejected** — see **Verified constraints**, "A decorator cannot
+publish a type back onto the class it decorates". drizzle's native object schema is
+the supported path.
+
 ## Build & packaging
 
 Bun-only, so the ESM/CJS/types triple build is wasted work.
@@ -806,11 +901,12 @@ below.
 `@dunx/testing` (`createTestApp({ modules, overrides })`, real server on port 0)
 and `@dunx/create-app`.
 
-### Phase 5 — OpenAPI
+### Phase 5 — OpenAPI — **built**
 
-Separate package, peer dependencies. Deferred because Standard Schema v1 has no
-JSON Schema export, so this needs a per-library adapter (Zod 4's
-`z.toJSONSchema`, etc.).
+`@dunx/openapi` generates an OpenAPI 3.1 document from the zod schemas already on the
+route decorators and serves self-contained HTML. Security requirements come from the
+guards' own `@Public()` / `@Roles()` metadata. Zod is a `peerDependency`; the per-vendor
+adapter this section anticipated is a vendor check around `z.toJSONSchema`.
 
 ## Spikes to resolve
 

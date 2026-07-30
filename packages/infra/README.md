@@ -1,231 +1,461 @@
 # @dunx/infra
 
-Infrastructure for dunx: databases, Redis/Valkey, file storage and images. Four
-areas, one package, zero dependencies beyond `@dunx/core`.
+Infrastructure for dunx: databases, Redis/Valkey, file storage, images and
+logging. Five areas, one package.
 
-Every backend is a `Bun.*` API — `Bun.SQL`, `bun:sqlite`, `Bun.RedisClient`,
-`Bun.file`, `Bun.write`, `Bun.Glob`, `Bun.S3Client`, `Bun.Image`. No `pg`, no
-`better-sqlite3`, no `ioredis`, no `@aws-sdk`, no `glob`, no `sharp`.
+Where Bun ships the primitive, the primitive is what runs: `Bun.SQL`,
+`bun:sqlite`, `Bun.RedisClient`, `Bun.file`, `Bun.write`, `Bun.Glob`,
+`Bun.S3Client`, `Bun.Image`. No `pg`, no `better-sqlite3`, no `ioredis`, no
+`@aws-sdk`, no `glob`, no `sharp`.
+
+Two areas do not hand-roll an abstraction, because a mature library already owns
+one — and each of those libraries drives a Bun API underneath:
+
+- **`/db` is drizzle.** `drizzle-orm/bun-sqlite` over `bun:sqlite`, or
+  `drizzle-orm/bun-sql` over `Bun.SQL`. `drizzle-orm` is an **optional peer
+  dependency**, so an app using only `/files` never installs it.
+- **`/logger` is `@arkv/logger`**, bound to the `Logger` contract that lives in
+  `@dunx/core`. The contract and the wiring are dunx's; the configuration, the
+  sanitizer and the async context store are upstream's.
 
 Import from the barrel or from an area subpath — the subpaths exist so it is
 obvious what a file uses, and so tree-shaking is not something you have to reason
 about:
 
 ```ts
-import { Database, SqliteOptions } from '@dunx/infra/db';
+import { DbModule, SqliteOptions } from '@dunx/infra/db';
 import { RedisConnection } from '@dunx/infra/redis';
 import { Storage, LocalStorageOptions } from '@dunx/infra/files';
 import { Images } from '@dunx/infra/images';
+import { LoggerModule } from '@dunx/infra/logger';
 
 // or, everything, from one place
-import { Database, Images, RedisConnection, Storage } from '@dunx/infra';
+import { DbModule, Images, LoggerModule, RedisConnection, Storage } from '@dunx/infra';
 ```
 
-Each area follows the same two conventions. Its contract is an **abstract class**,
-so it is both the injectable token and the interface — an `interface` erases and
-leaves nothing for `@dunx/compiler` to record as a constructor parameter type. And
-its `forRootAsync` is not a second mechanism: dunx resolves eagerly and settles
+Anything injectable by a **constructor parameter** is a runtime class here, never
+an interface: an `interface` erases and leaves nothing for `@dunx/compiler` to
+record as a parameter type. It is an abstract class where dunx owns the contract —
+`Storage`, `DbConnection`, `DbOptions`, `ImagesOptions`, `Logger` — and the
+library's own class where it does not (`BunSQLiteDatabase`, `ContextStore`). The
+`token()` calls in the package are the exceptions that prove the rule:
+`redisConnection('jobs')` names a *second* connection, which no class can, and
+`LoggerSettings` names a config type owned upstream. Neither is nameable as a
+constructor parameter, so both are reached with `inject()` or a factory's `inject`
+list.
+
+And a `forRootAsync` is never a second mechanism: dunx resolves eagerly and settles
 every async factory before any constructor runs, so it is `forRoot` with a factory
 in front of it.
 
 ## db — `@dunx/infra/db`
 
-Database access on `Bun.SQL` and `bun:sqlite`. No query builder.
+**drizzle is the database layer**, not one option among several. What a repository
+injects is drizzle's own database class, and every query is drizzle's query
+builder. This package adds no query abstraction over it — there is no `Database`
+contract, no `db.sql` template, no `Repository` base class.
+
+What it does add is the four things a drizzle handle has none of:
+
+| Export                  | Why it exists                                                        |
+| ----------------------- | -------------------------------------------------------------------- |
+| `DbModule.forRoot(…)`   | Opens the driver at boot, before any constructor, and binds 3 tokens  |
+| `DbConnection`          | `close()`, `onShutdown()`, `backend`, `dialect`, and `raw`            |
+| `transaction(db, fn)`   | drizzle's own cannot roll back an async callback on `bun:sqlite`      |
+| `runSeeds(db, options)` | Seeding _data_, which `drizzle-kit` has no concept of                 |
+
+### Setup
 
 ```ts
 import { Module } from '@dunx/core';
 import { DbModule, SqliteOptions } from '@dunx/infra/db';
+import * as schema from './schema.js';
 
 @Module({
-  imports: [DbModule.forRoot(new SqliteOptions({ filename: './dev.db' }))],
+  imports: [
+    DbModule.forRoot(new SqliteOptions({ schema, filename: './dev.db' })),
+  ],
   providers: [UsersRepository],
 })
 export class AppModule {}
 ```
 
+`schema` is **required**, and the reason it is: it is the type argument that
+reaches `BunSQLiteDatabase<typeof schema>` at every injection site, so a table
+added to the schema module is visible in every repository without being registered
+anywhere. Pass `{}` if you only ever run `sql` templates.
+
 ```ts
-import { Database } from '@dunx/infra/db';
+import { eq } from 'drizzle-orm';
+import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import * as schema from './schema.js';
+import { users, type User } from './schema.js';
 
 export class UsersRepository {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: BunSQLiteDatabase<typeof schema>) {}
 
-  findByEmail(email: string) {
-    return this.db.sql<User>`SELECT * FROM users WHERE email = ${email}`.get();
+  findByEmail(email: string): User | undefined {
+    return this.db.select().from(users).where(eq(users.email, email)).get();
   }
 }
 ```
 
-### Two backends, one contract
+Two things about that annotation. The import is a **value** import, not
+`import type`: `@dunx/compiler` records the constructor parameter's type name and
+the container resolves it as a token, so a type-only import would be recorded as
+`unresolved` and fail at boot. And the token is the **erased** class — the
+compiler records `BunSQLiteDatabase` and ignores the type argument, which is what
+lets one runtime class be the token while the schema types survive on the
+annotation.
 
-`Database` is an abstract class, so it is both the injectable token and the
-contract. Two implementations satisfy it and nothing else in your code changes
-when you swap them.
+### Two backends, and they are not interchangeable
 
-|            | `SqliteOptions`         | `SqlOptions`                                  |
-| ---------- | ----------------------- | --------------------------------------------- |
-| Driver     | `bun:sqlite`            | `Bun.SQL`                                     |
-| Dialects   | SQLite                  | Postgres, MySQL, MariaDB, **and SQLite**      |
-| Connection | one embedded handle     | pooled, over a socket                         |
-| Server     | none                    | one has to be running                         |
+An earlier version of this package had a hand-rolled `Database` abstract class that
+both backends satisfied, and this section claimed "two backends, one contract". It
+no longer holds. drizzle already _is_ that abstraction, and its two adapters are
+not source-compatible with each other, so a contract spanning them could only hide
+the differences:
 
-#### `Bun.SQL` also speaks SQLite — so which do you use?
+|                 | `SqliteOptions`                              | `SqlOptions`                       |
+| --------------- | -------------------------------------------- | ---------------------------------- |
+| drizzle adapter | `drizzle-orm/bun-sqlite`                     | `drizzle-orm/bun-sql`              |
+| Driver          | `bun:sqlite`                                 | `Bun.SQL`                          |
+| Dialect         | SQLite                                       | **Postgres only**                  |
+| Injected as     | `BunSQLiteDatabase<typeof schema>`           | `BunSQLDatabase<typeof schema>`    |
+| Builders        | synchronous — `.run()` / `.all()` / `.get()` | asynchronous — `await` the builder |
+| Raw SQL         | `db.run` / `db.all` / `db.get`               | `db.execute`                       |
+| Schema tables   | `sqliteTable`                                | `pgTable`                          |
+| Connection      | one embedded handle                          | pooled, over a socket              |
+| Server          | none                                         | one has to be running              |
 
-It does, and this is not documented prominently: `new Bun.SQL('sqlite://:memory:')`
-reports `adapter: 'sqlite'` and works. Bun's supported set is exactly
-`postgres`, `sqlite`, `mysql`, `mariadb` — that list is quoted from its own
-rejection message, and `pg://` is **not** in it.
+Schema modules are per dialect too — a `sqliteTable` is a compile error where a
+`PgTable` is expected. So which backend an app uses is a build-time decision, and
+"one `DATABASE_URL` naming either SQLite or Postgres" is not a shape this package
+supports any more.
 
-Prefer `bun:sqlite` (`SqliteOptions`) for SQLite anyway:
+#### `SqlOptions` is Postgres only
 
-- It is synchronous underneath, so there is no pool, no socket and no round trip.
-- It exposes the things SQLite users actually want — `serialize()`, `deserialize()`,
-  `loadExtension()`, `iterate()`, `PRAGMA` at open time, `safeIntegers`.
-- `Bun.SQL`'s SQLite adapter is a thin layer over the same driver, so you pay for
-  the abstraction without gaining a capability. It does not even support
-  `reserve()` — "This adapter doesn't support connection reservation".
+`Bun.SQL` speaks four dialects: `postgres`, `mysql`, `mariadb`, `sqlite` — that
+list is quoted from Bun's own rejection message. `drizzle-orm/bun-sql` speaks
+**one**. Its `driver.js` builds `new PgDialect({ casing: config.casing })`
+unconditionally; there is no branch on `client.options.adapter` anywhere in it.
 
-Use `SqlOptions` with a SQLite URL when a single `DATABASE_URL` has to be able to
-name either SQLite or Postgres without the app knowing which.
+So a non-Postgres URL is refused at construction rather than at connect time:
+
+```ts
+new SqlOptions({ schema, url: 'mysql://localhost/app' });
+// DatabaseError: "mysql://localhost/app" names mysql, and drizzle-orm/bun-sql is
+// Postgres only — it builds a PgDialect unconditionally, so a non-Postgres URL
+// would compile $1 placeholders and Postgres quoting against a server that does
+// not speak them. Use SqliteOptions for SQLite; MySQL and MariaDB have no
+// drizzle driver on Bun.SQL.
+```
+
+Pointed at a `sqlite://` client it would not error at all — it would compile `$1`
+placeholders and `"quoted"` identifiers against SQLite, and the trivial cases
+would appear to work. That is worse than failing, and it is why the check exists.
+
+**MySQL and MariaDB therefore have no drizzle path on Bun.** `Bun.SQL` reaches
+them, but nothing in drizzle drives `Bun.SQL` as anything other than Postgres, and
+drizzle's own MySQL adapters need `mysql2` — a client Bun already replaces, so this
+package does not ship one.
+
+`dialectFromUrl` is what decides, and it is deliberately stricter than Bun: Bun
+reads a _schemeless_ string as a Postgres host, so `{ url: './dev.db' }` reports
+`adapter: 'postgres'` and then fails much later with a socket error. `pg://` is not
+a scheme Bun accepts; `postgres://`, `postgresql://`, `sqlite:` and `file:` are.
 
 ### Querying
 
-Four shapes, all async on both backends:
+drizzle's builder, unchanged. On `bun:sqlite` it is **synchronous**, so a statement
+ends in `.run()`, `.all()` or `.get()`; on Postgres, awaiting the builder is what
+executes it.
 
 ```ts
-// Tagged template — portable. Placeholders are compiled per dialect.
-const rows = await db.sql<User>`SELECT * FROM users WHERE age > ${18}`;
-const one = await db.sql<User>`SELECT * FROM users WHERE id = ${id}`.get();
-const { changes, lastInsertRowid } = await db.sql`DELETE FROM users`.run();
-
-// Raw text with positional parameters — the placeholder syntax is the dialect's.
-await db.all<User>('SELECT * FROM users WHERE id = ?', [id]);
-await db.get<User>('SELECT * FROM users WHERE id = ?', [id]);
-await db.run('UPDATE users SET name = ? WHERE id = ?', [name, id]);
-
-// Several statements, no parameters. For DDL and migrations.
-await db.exec('CREATE TABLE a (x INT); CREATE TABLE b (y INT)');
+db.insert(users).values({ email }).run();
+const rows = db.select().from(users).orderBy(users.id).limit(10).all();
+const one = db.select().from(users).where(eq(users.id, id)).get();
+const total = db.select({ n: count() }).from(users).get()?.n ?? 0;
 ```
 
-`db.sql\`…\`` is lazy — nothing is sent until `all()`, `get()` or `run()`. Awaiting
-the query itself is `all()`. `get()` returns `null` rather than `undefined` when
-there is no row, and does not edit a `LIMIT` into your SQL.
+`.get()` returns **`undefined`** when there is no row — drizzle's choice, and worth
+knowing if you are coming from a wrapper that returned `null`. `.returning()` hands
+back the row the database actually wrote.
 
-Every method is a promise even on SQLite, where the driver is synchronous.
-Nothing is gained locally; what it buys is that the call site above moves to
-Postgres unedited.
+Repository methods are still worth declaring `async` on `bun:sqlite`: callers await
+them anyway, and moving that table to Postgres later then costs no signature
+change.
 
-#### `Date` is normalised for you
-
-`bun:sqlite` rejects a `Date` binding outright — _"Binding expected string,
-TypedArray, boolean, number, bigint or null"_ — and so does `Bun.SQL`'s SQLite
-adapter, because it is the same driver. Both implementations convert a `Date` to
-an ISO 8601 string when the dialect is SQLite, and leave it alone everywhere else
-so Postgres still gets a native `timestamptz`.
-
-### Transactions
+Raw SQL is where the two adapters share nothing at all. bun-sqlite has
+`run`/`all`/`get`/`values` and no `execute`; bun-sql has `execute` and none of the
+others:
 
 ```ts
-const id = await db.transaction(async (tx) => {
-  const { lastInsertRowid } = await tx.sql`INSERT INTO users (name) VALUES (${name})`.run();
-  await tx.sql`INSERT INTO audit (user_id) VALUES (${lastInsertRowid})`.run();
-  return lastInsertRowid;
+import { sql } from 'drizzle-orm';
+
+// bun-sqlite
+db.run(sql`PRAGMA foreign_keys = ON`);
+const counted = db.all<{ n: number }>(sql`SELECT count(*) AS n FROM users`);
+const first = db.get<{ n: number }>(sql`SELECT count(*) AS n FROM users`);
+
+// bun-sql
+await pg.execute(sql`CREATE TABLE IF NOT EXISTS notes (id SERIAL PRIMARY KEY)`);
+```
+
+Anything meant to work on both has to branch on the handle, which is exactly what
+`runSeeds` does internally.
+
+#### `Date` is **not** normalised for you
+
+An earlier version of this file said it was. It is not, and on a non-strict handle
+the failure is **silent**, so this is the paragraph to read twice.
+
+A `Date` interpolated into a `sql` template reaches the driver untouched, and
+SQLite has no date type to receive it. Measured on Bun 1.3.14 with drizzle-orm
+0.45.2:
+
+```ts
+db.run(sql`INSERT INTO audit (at) VALUES (${new Date()})`);
+// strict: true  (this package's default) -> DrizzleError, cause: Missing parameter "1"
+// strict: false                          -> no error at all, and the column holds NULL
+```
+
+`bun:sqlite` reads a single object binding as a named-parameter map, which is why a
+strict handle reports a _missing_ parameter rather than a bad one, and why an
+unstrict one writes `NULL` for a binding it cannot use. Called with a positional
+array instead, the same driver states it plainly:
+`TypeError: Binding expected string, TypedArray, boolean, number, bigint or null`.
+
+That is why `strict: true` is this package's default, unlike the driver's — it
+turns the silent `NULL` into a throw. It is also why `SqliteOptions` opens the
+`bun:sqlite` handle itself instead of letting `drizzle('./dev.db')` do it: drizzle's
+own path forwards only `readonly`/`create`/`readwrite` and hands back a
+**non-strict** handle.
+
+Two ways to write a timestamp, both verified. Pick one per column — they store
+different things:
+
+```ts
+// 1. A TEXT column and a raw template: convert it yourself.
+db.run(sql`INSERT INTO logins (at) VALUES (${new Date().toISOString()})`);
+
+// 2. A column that declares its mode, and the builder. drizzle maps both ways.
+export const audit = sqliteTable('audit', {
+  at: integer('at', { mode: 'timestamp' }).notNull(), // stored as epoch seconds
+});
+
+db.insert(audit).values({ at: new Date() }).run();
+db.select().from(audit).get()?.at; // a Date back out
+```
+
+The mapping belongs to the **column**, so it applies to the builder and never to a
+`sql` template — which is also the trap: a raw `INSERT` of an ISO string into a
+`{ mode: 'timestamp' }` column stores text where the reader expects epoch seconds,
+and SQLite will not stop you. `runSeeds` sidesteps it by declaring `applied_at` as
+`TEXT` and writing an ISO string, since it only ever uses raw SQL.
+
+Postgres is the exception, not the rule here: it parses a `timestamptz` from the
+string and, per [docs/bun-apis.md](../../docs/bun-apis.md), takes a native `Date`
+binding as well. So a `sql` template written against SQLite is the one that breaks,
+and the one this package's `strict: true` default is aimed at. Worth knowing if you
+reach for `Bun.SQL` directly: its **SQLite** adapter has no strict switch and
+silently writes `NULL` for a `Date`, with no error at all — which is a second reason
+`SqlOptions` refuses a `sqlite://` URL.
+
+### Transactions — `transaction(db, fn)`
+
+A standalone function rather than a method, because on one of the two backends it
+replaces drizzle's own:
+
+```ts
+import { transaction } from '@dunx/infra/db';
+
+const id = await transaction(db, async (tx) => {
+  const row = tx.insert(users).values({ email }).returning().get();
+  await Bun.sleep(1); // still inside the transaction
+  tx.insert(audit).values({ userId: row.id, at: new Date() }).run();
+  return row.id;
 });
 ```
 
-Commit on return, roll back on throw, and the throw propagates. Use the `tx`
-handle for everything inside — on the pooled backend the outer `Database` would
-take a different connection and sit outside the transaction.
-
-Nesting opens a savepoint, so an inner failure unwinds only the inner work:
+Commit on return, roll back on throw, and the throw propagates. Nesting takes a
+savepoint, so an inner failure unwinds only the inner work:
 
 ```ts
-await db.transaction(async (tx) => {
-  await tx.sql`INSERT INTO users (name) VALUES (${'kept'})`.run();
-  await tx
-    .transaction(async (sp) => {
-      await sp.sql`INSERT INTO users (name) VALUES (${'discarded'})`.run();
-      throw new Error('rolled back to the savepoint');
-    })
-    .catch(() => {});
+await transaction(db, async (tx) => {
+  tx.insert(users).values({ email: 'kept@example.com' }).run();
+  await transaction(tx, async (sp) => {
+    sp.insert(users).values({ email: 'dropped@example.com' }).run();
+    throw new Error('unwinds to the savepoint only');
+  }).catch(() => {});
 });
 ```
 
-#### Why this is not `bun:sqlite`'s own `db.transaction()`
+#### Why this is not `db.transaction()`
 
-Because that wrapper is synchronous. Handed an `async` callback it commits as soon
-as the function **returns its promise**, so anything awaited inside is already
-committed and a later rejection rolls back nothing:
+On `bun:sqlite`, because drizzle's is synchronous. `drizzle-orm/bun-sqlite`'s
+session hands the callback straight to `bun:sqlite`'s own wrapper:
 
-```ts
-// bun:sqlite directly — the insert survives.
-const tx = db.transaction(async () => {
-  db.run('INSERT INTO t (name) VALUES (?)', ['ada']);
-  await Bun.sleep(1);
-  throw new Error('should roll back');
+```js
+const nativeTx = this.client.transaction(() => {
+  result = transaction(tx);
 });
-await tx().catch(() => {});
-db.query('SELECT * FROM t').all().length; // 1
+nativeTx[config.behavior ?? 'deferred']();
 ```
 
-`SqliteDatabase` issues `BEGIN`/`COMMIT`/`ROLLBACK` itself instead. Measured on
-Bun 1.3.14.
+That wrapper commits as soon as the callback **returns its promise**, so
+`client.inTransaction` is already `false` before the first `await` resumes, every
+statement after it runs in autocommit, and a later throw rolls back nothing.
+Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch — the row is
+still there. drizzle inherits the behaviour rather than fixing it, which is why
+`transaction()` issues `BEGIN`/`COMMIT`/`ROLLBACK` itself.
 
-There is also only one connection, so two overlapping top-level transactions
-would issue a nested `BEGIN`. They are queued rather than allowed to collide. A
-nested call is already inside the holder's turn and takes a savepoint, so it does
-not queue behind itself.
+There is only one connection, so two overlapping top-level transactions would issue
+a nested `BEGIN`. They queue instead. A nested call is already inside the holder's
+turn and takes a savepoint, so it must not queue behind itself.
+
+On **Postgres** this delegates to drizzle's `db.transaction()`, which is genuinely
+async — it goes through `Bun.SQL`'s `begin()`, and that reserves a connection for
+the duration. The handle the callback gets there is drizzle's `PgTransaction`
+(exported as `SqlTransaction<TSchema>`), not the database, because the pooled outer
+handle would take a different connection and sit outside the transaction. Nesting
+on Postgres is therefore `tx.transaction(...)` — drizzle's own savepoint — since
+this function's Postgres overload takes the database:
+
+```ts
+await transaction(pg, async (tx) => {
+  await tx.execute(sql`INSERT INTO audit (user_id) VALUES (1)`);
+  await tx.transaction(async (sp) => {
+    await sp.execute(sql`INSERT INTO audit (user_id) VALUES (2)`);
+  });
+});
+```
+
+### Seeding — `runSeeds`
+
+Data, not schema. Schema changes are `drizzle-kit generate` plus
+`drizzle-orm/bun-sqlite/migrator` (sync) or `drizzle-orm/bun-sql/migrator`
+(async); drizzle-kit owns the SQL, its own journal, and the snapshot folder. What
+it has no concept of is _data_, which is what this is for — and why its journal
+table is separate from drizzle's.
+
+```ts
+import { runSeeds } from '@dunx/infra/db';
+
+const report = await runSeeds(db, { dir: `${import.meta.dir}/seeds` });
+report.applied; // journaled by this run, in the order they ran
+report.journaled; // already recorded, so not run again
+report.skipped; // refused by their own when(env)
+```
+
+A seed file exports `seed`, and optionally `when`:
+
+```ts
+// seeds/0001_users.seeder.ts
+export const when = (env: string): boolean => env !== 'production';
+
+export function seed(db: BunSQLiteDatabase<typeof schema>): void {
+  db.insert(users).values({ email: 'ada@example.com' }).run();
+}
+```
+
+- **Order is the numeric prefix**, not the filename, so `0010_x` runs after
+  `0009_x`. A file without one is an error, and so are two files sharing a number:
+  the whole value of a journal is that the order is identical everywhere, and a tie
+  would be settled by whatever order `Bun.Glob` happened to scan in.
+- **One transaction per seed**, covering the seed _and_ its journal row. A seed that
+  throws leaves neither the data nor the record, so it is retried on the next boot
+  instead of being half-applied and marked done. On `bun:sqlite` that transaction is
+  this package's, for the reason above.
+- **A `when(env)` refusal is not journaled.** It lands in `skipped` and writes no
+  row, so the same file still runs the first time it reaches an environment it does
+  belong in. `env` defaults to `NODE_ENV`, then `'development'`.
+- The journal table defaults to `dunx_seeds` and is created `IF NOT EXISTS` on
+  every call, so it is safe on every boot. `applied_at` is `TEXT` on SQLite and
+  `TIMESTAMPTZ` on Postgres, written as an ISO 8601 **string** either way — because
+  of the `Date` refusal above, and because Postgres parses the string anyway.
+- The default pattern is `*.seeder.{ts,js}`: Bun runs TypeScript directly, and a
+  build emits JS.
+
+The handle a seed receives is the transaction's, which on `bun:sqlite` _is_ the
+database (one connection) and on Postgres is a `PgTransaction`. `SeedHandle<TSchema>`
+is the union; a seed file annotates the one it was written for, since a body that
+names tables is dialect-specific regardless.
 
 ### Options are classes
 
 So they are injectable — `constructor(private readonly options: DbOptions)` works,
-and reading `options.dialect` is how a repository stays dialect-aware.
+and `options.dialect` is how something stays dialect-aware without knowing which
+module configured it.
 
 ```ts
 new SqliteOptions({
-  filename: './dev.db',            // ':memory:', a path, or a sqlite:/file: URL
+  schema, // required
+  filename: './dev.db', // ':memory:', a path, or a sqlite:/file: URL
   pragmas: ['journal_mode = WAL'], // run once, at open, before the first query
-  strict: true,                    // default here, unlike the driver
+  strict: true, // default here, unlike the driver
   safeIntegers: false,
   readOnly: false,
 });
 
 new SqlOptions({
-  url: process.env.DATABASE_URL!, // scheme decides the dialect
+  schema,
+  url: Bun.env['DATABASE_URL'] ?? 'postgres://localhost:5432/app',
   max: 10,
   idleTimeout: 30,
 });
 ```
 
-`SqlInit` extends `Bun.SQL`'s own option type, so pooling, TLS and auth stay in
-sync with whatever Bun supports rather than being restated here.
+`SqlInit` extends `Bun.SQL.PostgresOrMySQLOptions`, so pooling, TLS and auth stay
+in sync with whatever Bun supports rather than being restated here. `url` becomes
+required and `adapter` is dropped, since the scheme already decides it. Neither
+`schema` nor `url` rides along into the driver options — a schema object is every
+table and column in the app.
 
-`SqlOptions` resolves the dialect from the URL **at construction**, so a bad URL
-throws before any I/O. It is deliberately stricter than Bun: Bun reads a
-schemeless string as a Postgres _host_, so `{ url: './dev.db' }` reports
-`adapter: 'postgres'` and then fails much later with a socket error.
-`dialectFromUrl` rejects it with a message about the URL.
+One `SqliteInit` option does not do what it says, recorded rather than papered
+over. `create: false` does **not** stop a missing file being created — verified
+through `SqliteOptions` on Bun 1.3.14, where `{ strict: true, create: false }`
+opens and creates. (`{ create: false }` on its own throws `SQLITE_MISUSE` even for a
+file that exists, which is why `strict` is always sent.) Use `readOnly` when the
+file has to already exist: that one refuses correctly, with
+`unable to open database file`.
 
 ### `forRoot` and `forRootAsync`
 
 ```ts
-DbModule.forRoot(new SqliteOptions({ filename: ':memory:' }));
+DbModule.forRoot(new SqliteOptions({ schema, filename: ':memory:' }));
 
-DbModule.forRootAsync({
-  useFactory: (config: Config) => new SqlOptions({ url: config.databaseUrl }),
+DbModule.forRootAsync(BunSQLiteDatabase, {
+  useFactory: (config: Config) =>
+    new SqliteOptions({ schema, filename: config.databaseFile }),
   inject: [Config],
 });
 ```
 
-Both bind two tokens: `Database`, and `DbOptions` so anything can read the
-resolved configuration. Because factories settle before any constructor runs, the
-connection is open and handshaked by the time the first repository is built. No
-lazy connect, no `await db.ready()`, no half-initialised client.
+`forRootAsync` takes **the token first**, unlike every other `forRootAsync` in this
+package. drizzle's database class is the injection token, and which class that is
+only becomes known once the factory has produced the options — too late to register
+a provider under it. So it has to be named up front.
+
+Both bind **three** tokens:
+
+| Token                                  | Is                                          |
+| -------------------------------------- | ------------------------------------------- |
+| `DbOptions`                            | the resolved configuration                  |
+| `DbConnection`                         | the lifecycle and the raw driver handle      |
+| `BunSQLiteDatabase` / `BunSQLDatabase` | drizzle's handle — what a repository injects |
+
+The drizzle handle is bound through a factory that depends on `DbConnection`, and
+that is what fixes the shutdown order: dunx tears down in reverse construction
+order, so the connection — constructed first, because everything else needs it —
+closes last. Because every factory settles before the first constructor runs, the
+connection is open, handshaked and pragma'd by the time the first repository is
+built. No lazy connect, no `await db.ready()`.
 
 ### Shutdown
 
-`Database` implements `OnShutdown`, and `close()` is idempotent. `@dunx/core`
-runs shutdown in reverse construction order, so anything that depends on the
-connection drains while it is still usable:
+`DbConnection` implements `OnShutdown` and `close()` is idempotent, so
+`enableShutdownHooks()` is the whole of it:
 
 ```ts
 const app = await AppFactory.create(AppModule);
@@ -233,60 +463,69 @@ app.enableShutdownHooks();
 await app.closed;
 ```
 
-Using a `Database` after it is closed raises a `DatabaseError` that says so,
-rather than a driver crash.
+Shutdown runs in reverse construction order, so every repository has drained while
+the connection was still usable.
 
-### Repositories
+One thing this deliberately does not do: guard queries after `close()`. drizzle
+holds no state and cannot be asked whether its driver is open, and wrapping every
+method to find out would be the query abstraction this package exists without. A
+query issued after shutdown therefore surfaces as the driver's own error —
+`DrizzleError`, `cause: Cannot use a closed database` — not a `DatabaseError`
+explaining itself. `SqliteConnection.closed` / `SqlConnection.closed` is where that
+fact lives if you need to branch on it.
 
-Injecting `Database` directly is fine. `Repository` exists because a subclass
-that declares no constructor of its own inherits the base's — and `@dunx/core`
-reads constructor dependencies along the prototype chain, so this class gets
-`Database` injected while declaring nothing:
+### The raw handle — `connection.raw`
+
+Anything backend-specific is one narrowing away. `raw` is `unknown` on
+`DbConnection` because the base cannot promise either driver:
 
 ```ts
-import { Repository } from '@dunx/infra/db';
+import { DbConnection, SqlConnection, SqliteConnection } from '@dunx/infra/db';
 
-export class UsersRepository extends Repository {
-  findAll() {
-    return this.db.all<User>(`SELECT * FROM ${this.table('users')}`);
+export class Snapshots {
+  constructor(private readonly connection: DbConnection) {}
+
+  async take(): Promise<Uint8Array | undefined> {
+    if (this.connection instanceof SqliteConnection) {
+      return this.connection.raw.serialize(); // bun:sqlite Database
+    }
+    if (this.connection instanceof SqlConnection) {
+      await this.connection.raw.begin('read write', async () => {
+        /* the Bun.SQL client itself */
+      });
+    }
+    return undefined;
   }
 }
 ```
 
-#### An identifier cannot be a bound parameter
+`serialize()`, `deserialize()`, `loadExtension()` and `iterate()` are `bun:sqlite`
+capabilities drizzle does not surface, and this is the door to them (`strict`,
+`safeIntegers` and `PRAGMA` are already `SqliteInit` options, because they have to be
+set at open time). The `Bun.SQL` client is itself a function — it _is_ the tagged
+template — so
+`typeof raw === 'function'`. Note that its SQLite adapter does not support
+`reserve()`: _"This adapter doesn't support connection reservation"_.
 
-`db.sql\`SELECT * FROM ${table}\`` does not do what it looks like — `${table}`
-becomes a _value_, and the statement is a syntax error. A table or column name has
-to go into the SQL text, which means it has to be quoted:
+### No entity decorators
 
-```ts
-quoteIdentifier(Dialect.MYSQL, 'users'); // `users`
-quoteIdentifier(Dialect.POSTGRES, 'users'); // "users"
-```
+`@Entity('users')` with `@Column()` fields was measured and rejected. TC39
+decorators are **type-transparent** in TypeScript: a decorator's return type does
+not become the declaration's type, so it can attach a runtime value but cannot tell
+the type system the value is there. On TypeScript 7.0.2 both a `defineProperty`'d
+static and a `C & { table }` return type fail with
+`TS2339: Property 'table' does not exist`.
 
-`Repository#table` is that, bound to the connected dialect. Embedded quotes are
-doubled, and an empty or NUL-bearing name is rejected.
+drizzle's whole value is that the table object's _type_ carries column types into
+every query. A decorator could have built a working table at runtime while every
+query degraded to `unknown`, and recovering the types would mean hand-writing a
+mapped type mirroring drizzle's `BuildColumns` — a second source of truth that
+drifts from the first, which is the duplication decorators were meant to remove.
+drizzle's native `sqliteTable` / `pgTable` object schema is the supported path.
 
-### The raw handle
-
-Anything backend-specific is still reachable. `raw` is `unknown` on the contract —
-narrow to get it typed:
-
-```ts
-import { SqlDatabase, SqliteDatabase } from '@dunx/infra/db';
-
-if (db instanceof SqliteDatabase) {
-  const snapshot = db.raw.serialize(); // bun:sqlite Database
-}
-if (db instanceof SqlDatabase) {
-  await db.raw.begin('read write', async (tx) => {
-    /* Bun.SQL client */
-  });
-}
-```
-
-The `Bun.SQL` client is itself a function — it _is_ the tagged template — so
-`typeof db.raw === 'function'`.
+The measurement is in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md), under
+**Verified constraints** — "A decorator cannot publish a type back onto the class
+it decorates".
 
 ### Testing
 
@@ -295,14 +534,18 @@ against a real database:
 
 ```ts
 const app = await AppFactory.create(
-  DbModule.forRoot(new SqliteOptions({ filename: ':memory:' })),
+  DbModule.forRoot(new SqliteOptions({ schema, filename: ':memory:' })),
 );
+const db = app.get(BunSQLiteDatabase);
 ```
 
-This package's own `Bun.SQL` suite runs over that driver's SQLite adapter for the
-same reason — the whole code path is covered with nothing installed. Set
-`DUNX_DB_TEST_URL` to a reachable server to also run the wire-protocol tests;
-without it they skip.
+The Postgres backend has no equivalent trick, and an earlier version of this
+package claimed one: it ran its `Bun.SQL` suite over that driver's SQLite adapter.
+That is invalid now. `drizzle-orm/bun-sql` would compile `$1` placeholders and
+Postgres quoting against SQLite, the trivial cases would pass, and a green suite
+would be proving nothing — worse than a red one. So the offline `SqlOptions` tests
+cover URL handling, driver options and token identity only, and everything that
+needs the wire skips unless `DUNX_DB_TEST_URL` names a reachable Postgres.
 
 ## redis — `@dunx/infra/redis`
 
@@ -872,12 +1115,113 @@ AVIF encoding is unavailable under the `bun` backend, and setting
 `linear` works as a resize filter (an alias for `bilinear`) even though it is
 missing from the error message listing the valid names.
 
+## logger — `@dunx/infra/logger`
+
+`@arkv/logger`, bound to the `Logger` contract that lives in `@dunx/core`. dunx
+supplies the contract and the wiring and **restates none of the configuration**.
+
+```ts
+import { Logger, LogLevel, Module } from '@dunx/core';
+import { LoggerModule } from '@dunx/infra/logger';
+
+export class Users {
+  constructor(private readonly logger: Logger) {}
+
+  create(email: string): void {
+    this.logger.log('user created', { email, password: 'hunter2' });
+    // {"level":"log","timestamp":"…","pid":…,"message":"user created",
+    //  "email":"…","password":"[MASKED]"}
+  }
+}
+
+@Module({
+  imports: [
+    LoggerModule.forRoot({ level: LogLevel.DEBUG, maskFields: ['ssn'] }),
+  ],
+  providers: [Users],
+})
+class AppModule {}
+```
+
+One structured JSON line either way; `isDevelopment` (default
+`NODE_ENV !== 'production'`) only decides whether it is ANSI-coloured. Masking is
+upstream's sanitizer, not a dunx reimplementation of one.
+
+### The split, and why
+
+- The **contract** — `abstract class Logger`, plus `LogLevel`, `LOG_LEVELS`,
+  `isErrorLevel`, `LogEntry` and `SerializedError` — lives in **`@dunx/core`**,
+  which has zero dependencies. That is what lets `@dunx/http` middleware inject
+  `Logger` without pulling a logger implementation in behind it.
+- The **implementation** lives here, where dependencies are normal. `@arkv/logger`
+  is a plain `dependency`, not a peer: it is first-party, published, and has
+  near-zero transitive weight.
+- Both are re-exported from `@dunx/infra/logger`, so a consumer needs one import.
+
+There is **no adapter class between them**. `@arkv/logger`'s `Logger` already
+declares `logLevel` and all six levels with the same overloads, so it satisfies the
+abstract class structurally and the entire binding is a `provide(Logger, {
+useFactory })`. A wrapper would be a second surface to keep in sync, and per
+CLAUDE.md a fix the logger needs belongs upstream in `@arkv` rather than in a dunx
+subclass.
+
+`@dunx/core` previously held a full **port** of `@arkv/logger`. It is gone; the ten
+sanitizer fixes it carried were published upstream as `@arkv/logger@0.8.0` instead,
+which is why `dependencies` pins `^0.8.0`.
+
+### What `forRoot` binds
+
+| Token            | Is                                                                  |
+| ---------------- | ------------------------------------------------------------------- |
+| `Logger`         | `@dunx/core`'s contract, backed by `@arkv/logger`'s implementation   |
+| `LoggerSettings` | the `LoggerConfig` it was configured with, so a factory can read it |
+| `ContextStore`   | `@arkv/logger`'s async-context store, shared by every logger        |
+
+`LoggerSettings` is a `token<LoggerConfig>` rather than a class, because the config
+type is upstream's — an interface, with no runtime value to name.
+
+Configuration is `@arkv/logger`'s own `LoggerConfig`, verbatim: `name`, `version`,
+`env`, `level`, `isDevelopment`, `maskFields`, `filterEvents`, `maxArrayLength`,
+`maxDepth`. Read its README for what each does — a parallel table here is exactly
+the duplication the "reuse `@arkv`" rule exists to prevent. `DEFAULT_MASK_FIELDS` is
+re-exported so you can see what is already redacted before adding to it.
+
+There is no `forRootAsync`. Pass a function, sync or async, and eager resolution
+settles it before any constructor runs:
+
+```ts
+LoggerModule.forRoot(async () => ({ level: await settings.logLevel() }));
+```
+
+### Request context
+
+`ContextStore` is one shared `AsyncLocalStorage`, so a correlation id set once is
+merged into every entry logged inside that flow — and nothing per-request goes near
+the container:
+
+```ts
+import { ContextStore } from '@dunx/infra/logger';
+
+export class RequestScope {
+  constructor(private readonly context: ContextStore) {}
+
+  run<T>(requestId: string, fn: () => Promise<T>): Promise<T> {
+    return this.context.runWithContext({ requestId }, fn);
+  }
+}
+```
+
+Entries logged inside `run()` carry `"requestId":"…"`; entries logged outside it do
+not.
+
 ## Verified against
 
-Bun 1.3.14. Bun's documentation is incomplete across all four areas, so the
-behaviour described above was measured rather than read: the four `Bun.SQL`
-adapters, the `affectedRows`/`count` split on result metadata, the
-synchronous-commit behaviour of `bun:sqlite`'s `transaction()`, the `Date`
-binding refusal, the missing `reserve()` on the SQLite adapter, the unusable
-`psubscribe`, the synchronous throws from `Bun.RedisClient` in subscriber mode,
-the two `Bun.write` stream failures, and the whole `Bun.Image` section.
+Bun 1.3.14 and drizzle-orm 0.45.2. Bun's documentation is incomplete across every
+area here, so the behaviour described above was measured rather than read: the four
+`Bun.SQL` adapters, the `affectedRows`/`count` split on result metadata, the
+hardcoded `PgDialect` in `drizzle-orm/bun-sql`, the synchronous-commit behaviour of
+`bun:sqlite`'s `transaction()` and drizzle's inheritance of it, the `Date` binding
+refusal and the silent `NULL` a non-strict handle writes in its place, the missing
+`reserve()` on the SQLite adapter, the unusable `psubscribe`, the synchronous throws
+from `Bun.RedisClient` in subscriber mode, the two `Bun.write` stream failures, and
+the whole `Bun.Image` section.

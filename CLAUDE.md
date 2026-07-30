@@ -276,23 +276,31 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 | Package          | Contains                                                                                      |
 | ---------------- | --------------------------------------------------------------------------------------------- |
-| `@dunx/core`     | DI container, modules, lifecycle                                                              |
+| `@dunx/core`     | DI container, modules, lifecycle, the `Logger` contract                                       |
 | `@dunx/compiler` | Load-time constructor-dependency transform (only native dep)                                  |
 | `@dunx/http`     | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation          |
-| `@dunx/infra`    | Subpaths `/db` `/redis` `/files` `/images` over Bun built-ins                                 |
+| `@dunx/infra`    | Subpaths `/db` `/redis` `/files` `/images` `/logger`                                          |
 | `@dunx/openapi`  | OpenAPI 3.1 from the routes' own zod schemas, self-contained HTML (zod is a `peerDependency`) |
 
-Five packages, deliberately few. Merging is nearly free because every one of these has
-**zero dependencies** except `@dunx/core` — there is no transitive weight to inherit
-and ESM tree-shaking drops what is not imported. `@dunx/compiler` stays separate
-because it is the only package with a native dependency (`oxc-parser`) and is
-build-time only; merging it would put a Rust parser in every production deploy.
+Five packages, deliberately few. Merging is nearly free because the runtime weight is
+almost nil — `@dunx/core` has **zero dependencies**, and ESM tree-shaking drops what
+is not imported. `@dunx/compiler` stays separate because it is the only package with a
+native dependency (`oxc-parser`) and is build-time only; merging it would put a Rust
+parser in every production deploy.
+
+Two areas of `@dunx/infra` are integrations rather than dunx code, per Rule 1's second
+half: `/db` is **drizzle** over `drizzle-orm/bun-sqlite` and `drizzle-orm/bun-sql`
+(`drizzle-orm` is an optional `peerDependency`), and `/logger` binds **`@arkv/logger`**
+to core's `Logger` contract (a `dependency`, since `@arkv` is first-party). Neither
+restates the library's own surface — see `packages/infra/README.md`.
 
 Planned, in roadmap order: validation via Standard Schema, `@dunx/testing`,
 `@dunx/create-app`, `@dunx/openapi`.
 
-Every package has a matching `examples/<name>` app that CI boots. One needing an
-absent service (Redis, Postgres, S3) prints that it is skipping and still exits 0.
+There is **one** example app, `examples/playground`, which CI boots and which grows
+through the phases. Per-package examples were tried and reverted — see
+docs/ARCHITECTURE.md, Phase 1. A part needing an absent service (Redis, Postgres, S3)
+prints that it is skipping and the app still exits 0.
 
 ## Repo Scripts
 

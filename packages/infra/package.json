@@ -1,7 +1,7 @@
 {
   "name": "@dunx/infra",
   "version": "0.0.0",
-  "description": "Database, Redis, storage and image infrastructure built on Bun.SQL, bun:sqlite, Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client and Bun.Image",
+  "description": "Database, Redis, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, plus Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger",
   "keywords": [
     "avif",
     "bun",
@@ -13,6 +13,7 @@
     "files",
     "glob",
     "image",
+    "logger",
     "postgres",
     "pubsub",
     "redis",

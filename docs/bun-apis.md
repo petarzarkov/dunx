@@ -251,8 +251,18 @@ Fully typed in `bun-types` (`bun.d.ts` ~8180–8408), just undocumented on the s
   yourself for async work.
 - `Statement.all/get/run/values/iterate` are own properties of the instance, not on
   `Statement.prototype`.
-- **`Date` bindings are rejected** by both `bun:sqlite` and `Bun.SQL`'s SQLite
-  adapter. Convert to ISO 8601 for SQLite; Postgres takes a native binding.
+- **A raw `Date` binding fails, but the two adapters fail _differently_.** `bun:sqlite`
+  throws `Binding expected string, TypedArray, boolean, number, bigint or null`.
+  `Bun.SQL`'s SQLite adapter **accepts it silently and stores `NULL`** — no error, no
+  strict switch. Measured:
+
+  ```
+  Bun.SQL sqlite ->  ACCEPTED, stored: null
+  bun:sqlite     ->  REJECTED: Binding expected string, TypedArray, boolean, ...
+  ```
+
+  The silent one is the dangerous one: a timestamp column quietly loses every row.
+  Convert to ISO 8601 for SQLite; Postgres takes a native binding.
 
 ### `Bun.color` — `'ansi'` is not a fixed encoding, and can emit a raw newline
 

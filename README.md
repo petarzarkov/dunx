@@ -16,17 +16,25 @@ Standard (TC39) decorators, no `reflect-metadata`, no `tsyringe`, and no
 per-request container work. Routing is delegated to Bun's native router rather
 than reimplemented in JavaScript.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and the phased
-roadmap.
+The same principle decides everything else: what Bun ships is never reimplemented,
+and what a mature library already solves is never invented. So the DI container,
+the HTTP adapter and the OpenAPI generator are dunx's, while the database layer is
+**drizzle** over `bun:sqlite`/`Bun.SQL` and the logger is **`@arkv/logger`** bound
+to a `Logger` contract that `@dunx/core` declares and nothing else in core depends
+on.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and the
+measurements behind it, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is built
+and what is next.
 
 ## Packages
 
 | Package | Npm | Coverage | Description |
 |---------|---------|----------|-------------|
 | [`@dunx/compiler`](./packages/compiler) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fcompiler)](https://www.npmjs.com/package/%40dunx%2Fcompiler) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fcompiler?label=dls)](https://www.npmjs.com/package/%40dunx%2Fcompiler) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fcompiler?label=size)](https://www.npmjs.com/package/%40dunx%2Fcompiler) | [![cov](https://petarzarkov.github.io/dunx/coverage-compiler.svg)](https://petarzarkov.github.io/dunx#compiler) | Load-time transform that records constructor dependencies for the dunx container |
-| [`@dunx/core`](./packages/core) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fcore)](https://www.npmjs.com/package/%40dunx%2Fcore) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fcore?label=dls)](https://www.npmjs.com/package/%40dunx%2Fcore) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fcore?label=size)](https://www.npmjs.com/package/%40dunx%2Fcore) | [![cov](https://petarzarkov.github.io/dunx/coverage-core.svg)](https://petarzarkov.github.io/dunx#core) | Core for the dunx framework |
+| [`@dunx/core`](./packages/core) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fcore)](https://www.npmjs.com/package/%40dunx%2Fcore) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fcore?label=dls)](https://www.npmjs.com/package/%40dunx%2Fcore) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fcore?label=size)](https://www.npmjs.com/package/%40dunx%2Fcore) | [![cov](https://petarzarkov.github.io/dunx/coverage-core.svg)](https://petarzarkov.github.io/dunx#core) | DI container, modules, lifecycle and the injectable Logger contract for the dunx framework |
 | [`@dunx/http`](./packages/http) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fhttp)](https://www.npmjs.com/package/%40dunx%2Fhttp) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fhttp?label=dls)](https://www.npmjs.com/package/%40dunx%2Fhttp) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fhttp?label=size)](https://www.npmjs.com/package/%40dunx%2Fhttp) | [![cov](https://petarzarkov.github.io/dunx/coverage-http.svg)](https://petarzarkov.github.io/dunx#http) | Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways |
-| [`@dunx/infra`](./packages/infra) | [![npm](https://img.shields.io/npm/v/%40dunx%2Finfra)](https://www.npmjs.com/package/%40dunx%2Finfra) [![dls](https://img.shields.io/npm/dt/%40dunx%2Finfra?label=dls)](https://www.npmjs.com/package/%40dunx%2Finfra) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Finfra?label=size)](https://www.npmjs.com/package/%40dunx%2Finfra) | [![cov](https://petarzarkov.github.io/dunx/coverage-infra.svg)](https://petarzarkov.github.io/dunx#infra) | Database, Redis, storage and image infrastructure built on Bun.SQL, bun:sqlite, Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client and Bun.Image |
+| [`@dunx/infra`](./packages/infra) | [![npm](https://img.shields.io/npm/v/%40dunx%2Finfra)](https://www.npmjs.com/package/%40dunx%2Finfra) [![dls](https://img.shields.io/npm/dt/%40dunx%2Finfra?label=dls)](https://www.npmjs.com/package/%40dunx%2Finfra) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Finfra?label=size)](https://www.npmjs.com/package/%40dunx%2Finfra) | [![cov](https://petarzarkov.github.io/dunx/coverage-infra.svg)](https://petarzarkov.github.io/dunx#infra) | Database, Redis, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, plus Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger |
 | [`@dunx/openapi`](./packages/openapi) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fopenapi)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fopenapi?label=dls)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fopenapi?label=size)](https://www.npmjs.com/package/%40dunx%2Fopenapi) | [![cov](https://petarzarkov.github.io/dunx/coverage-openapi.svg)](https://petarzarkov.github.io/dunx#openapi) | OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate |
 
 ## Project Structure
@@ -35,9 +43,9 @@ roadmap.
 dunx/
 ├── packages/           # Published packages
 │   ├── compiler        # Load-time transform that records constructor dependencies for the dunx container
-│   ├── core            # Core for the dunx framework
+│   ├── core            # DI container, modules, lifecycle and the injectable Logger contract for the dunx framework
 │   ├── http            # Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways
-│   ├── infra           # Database, Redis, storage and image infrastructure built on Bun.SQL, bun:sqlite, Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client and Bun.Image
+│   ├── infra           # Database, Redis, storage, image and logging infrastructure for dunx
 │   └── openapi         # OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate
 ├── examples/           # Private apps that consume the packages
 ├── docs/               # Architecture and design docs
