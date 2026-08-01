@@ -14,6 +14,7 @@
  */
 import { median, stddev } from './stats.js';
 import type { Report } from './types.js';
+import { validationSection } from './validation-tables.js';
 
 const BASELINE = 'bun-serve';
 const FOCUS = 'dunx';
@@ -168,31 +169,50 @@ the two land within each other's standard deviation — which they now do on
 \`plaintext\` — the honest reading is "no measurable overhead", not "faster than
 \`Bun.serve\`". Differences under about 3% on this setup are noise.
 
-**\`dunx-logging\` is the same app with \`requestLogging\` left at its default**, and
-it is 40-45% of the baseline where \`dunx\` is 81-100%. That gap is one structured
-line per request: \`JSON.stringify\` plus a \`write\`, inside an \`AsyncLocalStorage\`
-scope. Nothing else in this table logs anything, which is why the two rows exist
-separately — see "Why dunx appears twice".
+**\`dunx-logging\` is the same app with \`requestLogging\` left at its default**, and it
+lands at roughly 40-50% of the baseline where \`dunx\` is 90-100%. That gap is one
+structured line per request: \`JSON.stringify\` plus a \`write\`, inside an
+\`AsyncLocalStorage\` scope. Nothing else in this table logs anything, which is why the
+two rows exist separately — see "Why dunx appears twice".
 
-**Validation is still the largest real overhead**, and it is where both Bun-native
-frameworks pay: dunx and Elysia land within a percentage point of each other, both
-around 82% of the baseline. That is \`req.json()\`, a Standard Schema \`validate\`
-call and the error-mapping path. The raw subject hand-wires the same zod schema, so
-the delta is plumbing, not the validator.
+**Validation is still the largest absolute cost**, but most of it is not the
+framework's and not the validator's. Splitting it took a second harness — see
+"Validation cost" below — and the answer is that \`req.json()\` costs about 3 µs while
+zod costs about 1 µs. dunx's own share of the \`validate\` row was 3.7 µs per request
+and is now ~1.4 µs, which moved it from 84% of the baseline to over 90% and past
+Elysia on this scenario. What remains is dispatch, not validation.
 
 **Cold start is dunx's clearest loss**: roughly twice raw \`Bun.serve\`, from the
 \`oxc-parser\` preload and eager DI resolution. It does beat Elysia, and every Node
 subject by a wide margin, but it is the number to watch if boot time matters.
 `;
 
-const readme = await Bun.file(readmePath).text();
-const start = readme.indexOf('## Results');
-if (start === -1) throw new Error('README has no "## Results" heading');
-const after = readme.indexOf('\n## ', start + 1);
-if (after === -1) throw new Error('README has no section after "## Results"');
+/** Replaces one `## ` section in place, leaving everything around it untouched. */
+const replaceSection = (
+  readme: string,
+  heading: string,
+  body: string,
+): string => {
+  const start = readme.indexOf(heading);
+  if (start === -1) throw new Error(`README has no "${heading}" heading`);
+  const after = readme.indexOf('\n## ', start + 1);
+  if (after === -1) throw new Error(`README has no section after "${heading}"`);
+  return readme.slice(0, start) + body + readme.slice(after);
+};
 
-await Bun.write(
-  readmePath,
-  readme.slice(0, start) + section + readme.slice(after),
+let readme = replaceSection(
+  await Bun.file(readmePath).text(),
+  '## Results',
+  section,
 );
 console.log(`README results section regenerated from ${report.generatedAt}`);
+
+const validation = await validationSection();
+if (validation === null) {
+  console.log('No results/validation.json — validation section left as it is.');
+} else {
+  readme = replaceSection(readme, '## Validation cost', validation);
+  console.log('README validation section regenerated.');
+}
+
+await Bun.write(readmePath, readme);

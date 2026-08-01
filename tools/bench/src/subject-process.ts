@@ -39,6 +39,7 @@ export const startSubject = async (
   subject: Subject,
   nodeBinary: string,
   nodeEntry: string | undefined,
+  extraEnv: Readonly<Record<string, string>> = {},
 ): Promise<SubjectProcess> => {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -47,7 +48,12 @@ export const startSubject = async (
     command(subject, nodeBinary, nodeEntry),
     {
       cwd: root,
-      env: { ...process.env, PORT: String(port), NODE_ENV: 'production' },
+      env: {
+        ...process.env,
+        ...extraEnv,
+        PORT: String(port),
+        NODE_ENV: 'production',
+      },
       stdin: 'ignore',
       stdout: 'pipe',
       stderr: 'pipe',

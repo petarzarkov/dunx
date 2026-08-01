@@ -1,11 +1,13 @@
 import { AppError, type Ctor } from '@dunx/core';
+import type { BunRequest } from 'bun';
 import type { DiscoveredRoute } from '../route/discover.js';
 import type { HttpMethod } from '../route/marker.js';
+import type { RouteInput } from '../route/schema.js';
 import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
 import { defaultErrorMapper, HttpError, type ErrorMapper } from './errors.js';
-import { buildInputReader, readsNothing } from './input.js';
+import { buildInputReader, type InputReader } from './input.js';
 import {
   compose,
   type Middleware,
@@ -163,37 +165,73 @@ export const buildFallback = (
 };
 
 /**
- * The synchronous path, taken when a route has no middleware, no CORS and no
- * declared schemas.
+ * The direct path, taken when a route has no middleware and no CORS. Nothing here
+ * is `async`: every step looks at what it got and only allocates a promise when
+ * there is genuinely something to wait for.
  *
- * Bun accepts a plain `Response` from a route handler, so such a route needs no
- * promise at all: the two `await`s in the general path are on values that were
- * never going to be thenable, and each one still costs an async frame and a
- * microtask tick. Worth ~6 points of throughput against raw `Bun.serve` on the
- * `params` scenario in `tools/bench` — which is most of what separated dunx from
+ * The general path is `async (req) => toResponse(await handler(await read(req)))`
+ * inside an `async` try/catch — four `await`s across two async frames, on values
+ * that are usually not thenable at all. A route with no declared schemas awaits
+ * nothing; a route with only `query` or `params` awaits nothing either, because
+ * every Standard Schema validator worth using is synchronous. Even a `body` route,
+ * which really does have to wait for `req.json()`, pays one promise link instead of
+ * six frames.
+ *
+ * Worth ~6 points of throughput against raw `Bun.serve` on the `params` scenario
+ * when it covered only schema-less routes, and a further ~5 on `validate` when it
+ * was extended to cover reading ones — which is most of what separated dunx from
  * Elysia, whose whole trick is compiling this shape ahead of time.
  *
- * A handler that *does* return a promise still works: it is adopted here rather
- * than awaited by a wrapper.
+ * A handler or a validator that *does* return a promise still works: it is adopted
+ * here rather than awaited by a wrapper.
  */
 const directOr = (
   guarded: RouteHandler,
   route: DiscoveredRoute,
+  read: InputReader,
   status: number,
   onError: ErrorMapper,
   noMiddleware: boolean,
 ): ServedHandler => {
-  if (!noMiddleware || !readsNothing(route.options)) return guarded;
+  if (!noMiddleware) return guarded;
+
+  // `toResponse` throws on a value `JSON.stringify` cannot take, so it is inside
+  // the mapper's reach on every branch — including the `then` callbacks, where a
+  // throw would otherwise escape as an unhandled rejection instead of a 500.
+  const settle = (value: unknown, req: BunRequest): Response => {
+    try {
+      return toResponse(value, status);
+    } catch (error) {
+      return onError(error, req);
+    }
+  };
+
+  const invoke = (
+    input: RouteInput,
+    req: BunRequest,
+  ): Response | Promise<Response> => {
+    try {
+      const value = route.handler(input);
+      return value instanceof Promise
+        ? value.then(
+            (resolved) => settle(resolved, req),
+            (error: unknown) => onError(error, req),
+          )
+        : settle(value, req);
+    } catch (error) {
+      return onError(error, req);
+    }
+  };
 
   return (req) => {
     try {
-      const value = route.handler({ req });
-      return value instanceof Promise
-        ? value.then(
-            (resolved) => toResponse(resolved, status),
+      const input = read(req);
+      return input instanceof Promise
+        ? input.then(
+            (resolved) => invoke(resolved, req),
             (error: unknown) => onError(error, req),
           )
-        : toResponse(value, status);
+        : invoke(input, req);
     } catch (error) {
       return onError(error, req);
     }
@@ -243,7 +281,7 @@ export const buildRoutes = (
     // browser needs in order to show it.
     byMethod[route.method] = cors
       ? withCors(cors, guarded)
-      : directOr(guarded, route, status, onError, chain.length === 0);
+      : directOr(guarded, route, read, status, onError, chain.length === 0);
   }
 
   if (cors) {

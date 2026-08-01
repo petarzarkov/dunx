@@ -105,6 +105,35 @@ export interface BenchConfig {
   readonly startupSamples: number;
 }
 
+/** One cell of the validation harness: a server variant, a path, a validator. */
+export interface ValidationUnit {
+  readonly id: string;
+  readonly group: 'decompose' | 'validator';
+  readonly label: string;
+  readonly subject: string;
+  readonly validator: string;
+  readonly path: string;
+  readonly rps: Spread;
+  readonly latencyP50Ms: Spread;
+  readonly latencyP99Ms: Spread;
+  readonly bad: number;
+}
+
+/** What `bun run validation` writes. Rendered by `src/validation-tables.ts`. */
+export interface ValidationReport {
+  readonly schemaVersion: 1;
+  readonly generatedAt: string;
+  readonly machine: MachineInfo;
+  readonly loadGenerator: { readonly id: string; readonly version: string };
+  readonly config: {
+    readonly connections: number;
+    readonly durationSeconds: number;
+    readonly warmupSeconds: number;
+    readonly runs: number;
+  };
+  readonly units: readonly ValidationUnit[];
+}
+
 export interface Report {
   readonly schemaVersion: 1;
   readonly generatedAt: string;

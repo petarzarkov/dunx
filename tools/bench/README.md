@@ -10,10 +10,17 @@ Everything below is written so that number, and the places dunx loses, are as ha
 to hide as the places it wins.
 
 ```bash
-bun run setup     # downloads oha into .bin/ (optional, but read "Load generator")
-bun run start     # full suite: 8 subjects x 4 scenarios
+bun run setup       # downloads oha into .bin/ (optional, but read "Load generator")
+bun run start       # full suite: 9 subjects x 4 scenarios
+bun run validation  # the validation-cost harness — see "Validation cost"
 bun run start --help
 ```
+
+Two harnesses, and they answer different questions. `start` compares frameworks with
+the validator held constant. `validation` does the opposite: one framework at a time,
+one step of work at a time, and every validator swapped through the same Standard
+Schema seam — which is how the `validate` scenario's cost gets split into parsing,
+the validator, and dunx.
 
 ## What is measured
 
@@ -222,71 +229,71 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 138,112 | 750 | 0.437 | 0.883 | 100.0% |
-| Elysia | 135,304 | 1,347 | 0.448 | 0.902 | 98.0% |
-| **@dunx/http** | **134,259** | 3,446 | 0.450 | 0.907 | **97.2%** |
-| Hono (Bun) | 108,707 | 5,829 | 0.560 | 1.121 | 78.7% |
-| node:http (raw) | 54,080 | 1,737 | 1.133 | 2.245 | 39.2% |
-| @dunx/http (+ request logging) | 53,374 | 1,560 | 1.112 | 2.170 | 38.6% |
-| Fastify (Node) | 49,892 | 701 | 1.248 | 2.454 | 36.1% |
-| Hono (Node) | 48,101 | 639 | 1.299 | 2.558 | 34.8% |
-| Express (Node) | 27,724 | 1,101 | 2.292 | 2.766 | 20.1% |
+| Bun.serve (raw) | 116,941 | 1,494 | 0.518 | 1.043 | 100.0% |
+| Elysia | 115,435 | 497 | 0.525 | 1.057 | 98.7% |
+| **@dunx/http** | **114,133** | 1,459 | 0.527 | 1.061 | **97.6%** |
+| Hono (Bun) | 91,829 | 2,355 | 0.663 | 1.318 | 78.5% |
+| @dunx/http (+ request logging) | 48,756 | 1,512 | 1.217 | 2.383 | 41.7% |
+| node:http (raw) | 48,175 | 871 | 1.283 | 2.547 | 41.2% |
+| Fastify (Node) | 44,248 | 1,855 | 1.418 | 2.706 | 37.8% |
+| Hono (Node) | 42,644 | 2,174 | 1.440 | 2.800 | 36.5% |
+| Express (Node) | 27,244 | 934 | 2.271 | 2.973 | 23.3% |
 
 **JSON** — `GET /json`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 130,858 | 3,741 | 0.461 | 0.931 | 100.0% |
-| Elysia | 126,771 | 1,172 | 0.481 | 0.966 | 96.9% |
-| **@dunx/http** | **124,749** | 2,581 | 0.485 | 0.976 | **95.3%** |
-| Hono (Bun) | 94,094 | 735 | 0.646 | 1.293 | 71.9% |
-| node:http (raw) | 52,227 | 407 | 1.187 | 2.349 | 39.9% |
-| @dunx/http (+ request logging) | 50,628 | 2,046 | 1.200 | 2.321 | 38.7% |
-| Fastify (Node) | 47,745 | 2,366 | 1.312 | 2.506 | 36.5% |
-| Hono (Node) | 37,755 | 638 | 1.680 | 2.052 | 28.9% |
-| Express (Node) | 27,802 | 1,194 | 2.229 | 3.691 | 21.2% |
+| Bun.serve (raw) | 115,031 | 1,263 | 0.526 | 1.057 | 100.0% |
+| **@dunx/http** | **109,169** | 806 | 0.557 | 1.117 | **94.9%** |
+| Elysia | 107,917 | 945 | 0.564 | 1.130 | 93.8% |
+| Hono (Bun) | 75,941 | 4,303 | 0.815 | 1.628 | 66.0% |
+| node:http (raw) | 46,552 | 108 | 1.339 | 2.664 | 40.5% |
+| @dunx/http (+ request logging) | 46,157 | 1,834 | 1.291 | 2.526 | 40.1% |
+| Fastify (Node) | 42,727 | 1,320 | 1.466 | 2.828 | 37.1% |
+| Hono (Node) | 37,747 | 1,133 | 1.650 | 3.252 | 32.8% |
+| Express (Node) | 26,462 | 659 | 2.365 | 4.646 | 23.0% |
 
 **Path parameter** — `GET /params/42`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 127,350 | 3,991 | 0.465 | 0.963 | 100.0% |
-| Elysia | 121,456 | 2,642 | 0.504 | 1.014 | 95.4% |
-| **@dunx/http** | **120,543** | 1,589 | 0.500 | 1.014 | **94.7%** |
-| Hono (Bun) | 85,592 | 1,395 | 0.702 | 1.398 | 67.2% |
-| node:http (raw) | 51,170 | 2,104 | 1.245 | 2.361 | 40.2% |
-| @dunx/http (+ request logging) | 50,956 | 607 | 1.176 | 2.330 | 40.0% |
-| Fastify (Node) | 44,485 | 1,325 | 1.406 | 2.784 | 34.9% |
-| Hono (Node) | 38,762 | 263 | 1.624 | 2.049 | 30.4% |
-| Express (Node) | 27,033 | 242 | 2.329 | 2.617 | 21.2% |
+| Bun.serve (raw) | 112,362 | 2,475 | 0.540 | 1.083 | 100.0% |
+| Elysia | 110,129 | 1,609 | 0.548 | 1.101 | 98.0% |
+| **@dunx/http** | **104,456** | 2,398 | 0.577 | 1.159 | **93.0%** |
+| Hono (Bun) | 76,382 | 273 | 0.799 | 1.588 | 68.0% |
+| node:http (raw) | 47,642 | 988 | 1.312 | 2.611 | 42.4% |
+| @dunx/http (+ request logging) | 44,374 | 2,380 | 1.339 | 2.634 | 39.5% |
+| Fastify (Node) | 43,044 | 2,698 | 1.446 | 2.837 | 38.3% |
+| Hono (Node) | 34,949 | 1,624 | 1.751 | 3.470 | 31.1% |
+| Express (Node) | 25,073 | 579 | 2.506 | 3.992 | 22.3% |
 
 **Body validation** — `POST /validate`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 83,758 | 920 | 0.737 | 1.475 | 100.0% |
-| **@dunx/http** | **70,365** | 169 | 0.870 | 1.732 | **84.0%** |
-| Elysia | 69,978 | 4,673 | 0.876 | 1.751 | 83.5% |
-| Hono (Bun) | 48,231 | 1,461 | 1.245 | 2.407 | 57.6% |
-| @dunx/http (+ request logging) | 37,675 | 765 | 1.605 | 3.176 | 45.0% |
-| node:http (raw) | 31,948 | 956 | 1.957 | 3.773 | 38.1% |
-| Fastify (Node) | 22,801 | 368 | 2.559 | 9.485 | 27.2% |
-| Hono (Node) | 22,548 | 608 | 2.749 | 5.411 | 26.9% |
-| Express (Node) | 17,667 | 671 | 3.557 | 6.803 | 21.1% |
+| Bun.serve (raw) | 76,593 | 2,564 | 0.787 | 1.568 | 100.0% |
+| **@dunx/http** | **69,081** | 1,360 | 0.884 | 1.756 | **90.2%** |
+| Elysia | 64,154 | 1,220 | 0.940 | 1.858 | 83.8% |
+| Hono (Bun) | 47,110 | 416 | 1.305 | 2.577 | 61.5% |
+| @dunx/http (+ request logging) | 36,833 | 145 | 1.651 | 3.195 | 48.1% |
+| node:http (raw) | 32,426 | 1,100 | 1.925 | 3.831 | 42.3% |
+| Fastify (Node) | 22,156 | 109 | 2.682 | 9.109 | 28.9% |
+| Hono (Node) | 19,821 | 818 | 3.173 | 6.169 | 25.9% |
+| Express (Node) | 17,447 | 258 | 3.602 | 6.903 | 22.8% |
 
 **Startup** — cold process to first served request, 5 samples
 
 | Subject | median ms | min ms | max ms |
 | ------- | --------: | -----: | -----: |
-| Bun.serve (raw) | 27.9 | 25.3 | 28.4 |
-| Hono (Bun) | 34.0 | 32.5 | 36.8 |
-| **@dunx/http** | **53.1** | 50.8 | 53.7 |
-| @dunx/http (+ request logging) | 54.9 | 54.0 | 56.4 |
-| Elysia | 58.2 | 56.2 | 61.1 |
-| node:http (raw) | 72.2 | 68.6 | 73.3 |
-| Hono (Node) | 88.3 | 87.3 | 91.1 |
-| Express (Node) | 106.0 | 105.2 | 108.7 |
-| Fastify (Node) | 133.6 | 132.2 | 137.5 |
+| Bun.serve (raw) | 28.0 | 27.0 | 28.6 |
+| Hono (Bun) | 32.8 | 32.5 | 33.6 |
+| **@dunx/http** | **52.6** | 51.6 | 58.0 |
+| @dunx/http (+ request logging) | 54.1 | 52.9 | 55.4 |
+| Elysia | 59.9 | 57.8 | 60.1 |
+| node:http (raw) | 70.2 | 67.0 | 73.5 |
+| Hono (Node) | 88.3 | 86.2 | 89.7 |
+| Express (Node) | 105.4 | 102.1 | 107.6 |
+| Fastify (Node) | 136.0 | 129.5 | 137.6 |
 
 ### What these say, including where dunx loses
 
@@ -294,10 +301,10 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Scenario | Bun.serve | @dunx/http | dunx costs |
 | -------- | --------: | ---------: | ---------: |
-| `plaintext` | 138,112 | 134,259 | −2.8% |
-| `json` | 130,858 | 124,749 | −4.7% |
-| `params` | 127,350 | 120,543 | −5.3% |
-| `validate` | 83,758 | 70,365 | −16.0% |
+| `plaintext` | 116,941 | 114,133 | −2.4% |
+| `json` | 115,031 | 109,169 | −5.1% |
+| `params` | 112,362 | 104,456 | −7.0% |
+| `validate` | 76,593 | 69,081 | −9.8% |
 
 **A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
 *through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
@@ -305,17 +312,18 @@ the two land within each other's standard deviation — which they now do on
 `plaintext` — the honest reading is "no measurable overhead", not "faster than
 `Bun.serve`". Differences under about 3% on this setup are noise.
 
-**`dunx-logging` is the same app with `requestLogging` left at its default**, and
-it is 40-45% of the baseline where `dunx` is 81-100%. That gap is one structured
-line per request: `JSON.stringify` plus a `write`, inside an `AsyncLocalStorage`
-scope. Nothing else in this table logs anything, which is why the two rows exist
-separately — see "Why dunx appears twice".
+**`dunx-logging` is the same app with `requestLogging` left at its default**, and it
+lands at roughly 40-50% of the baseline where `dunx` is 90-100%. That gap is one
+structured line per request: `JSON.stringify` plus a `write`, inside an
+`AsyncLocalStorage` scope. Nothing else in this table logs anything, which is why the
+two rows exist separately — see "Why dunx appears twice".
 
-**Validation is still the largest real overhead**, and it is where both Bun-native
-frameworks pay: dunx and Elysia land within a percentage point of each other, both
-around 82% of the baseline. That is `req.json()`, a Standard Schema `validate`
-call and the error-mapping path. The raw subject hand-wires the same zod schema, so
-the delta is plumbing, not the validator.
+**Validation is still the largest absolute cost**, but most of it is not the
+framework's and not the validator's. Splitting it took a second harness — see
+"Validation cost" below — and the answer is that `req.json()` costs about 3 µs while
+zod costs about 1 µs. dunx's own share of the `validate` row was 3.7 µs per request
+and is now ~1.4 µs, which moved it from 84% of the baseline to over 90% and past
+Elysia on this scenario. What remains is dispatch, not validation.
 
 **Cold start is dunx's clearest loss**: roughly twice raw `Bun.serve`, from the
 `oxc-parser` preload and eager DI resolution. It does beat Elysia, and every Node
@@ -336,15 +344,153 @@ subject by a wide margin, but it is the number to watch if boot time matters.
   median, the machine was busy and the run should be repeated.
 - **`bad`** counts non-2xx responses plus transport errors across all measured runs.
   Anything other than 0 invalidates that row.
-- Differences under about 3% are noise on this setup.
+- **Differences under about 3 points are noise on this setup, and that was measured
+  rather than assumed.** Two full runs on the same idle machine, same code, moved
+  `@dunx/http`'s `vs bun-serve` figure by up to **3.2 points** (`params` 96.2% ->
+  93.0%) while the baseline's own absolute throughput moved by up to **7.7%**
+  (`json` 106,817 -> 115,031 req/s). So: read a gap of 5+ points as signal, read 2 as
+  nothing, and do not quote an absolute as capacity. Nothing external was competing —
+  `oha` and the subject were the only things on the CPU — so this is the machine's own
+  frequency behaviour, not contention.
+
+## Validation cost
+
+Generated from `results/validation.json` by `bun src/readme-tables.ts` — never
+transcribed by hand. Reproduce with `bun run validation`.
+
+The main suite above holds the validator constant at zod on purpose, which folds two
+costs into one number: what parsing and validating cost *at all*, and what
+`@dunx/http` adds on top. This section separates them.
+
+```
+AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.3.14 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 4s measured | 2026-08-01
+```
+
+**Every row is one fresh process, and the measured rounds are interleaved across all
+of them** rather than run to completion one row at a time — the differences here are
+2-4% and the machine drifts by more than that over a run. Read anything under about
+**±0.3 µs** as unresolvable: that is what the run-to-run standard deviations work out
+to at this throughput.
+
+### Parsing costs more than validating
+
+Four raw `Bun.serve` routes, each doing exactly one thing more than the one above
+it, all answering the same bytes:
+
+| Step | req/s | µs/req | this step adds |
+| ---- | ----: | -----: | -------------: |
+| `GET /json` — no request body at all | 113,881 | 8.78 | — |
+| `POST`, body on the wire, never read | 110,537 | 9.05 | +0.27 µs |
+| `POST` + `await req.json()` | 82,341 | 12.14 | +3.10 µs |
+| `POST` + `req.json()` + zod | 76,412 | 13.09 | +0.94 µs |
+
+**`req.json()` is the expensive step by a wide margin**, and putting the body on the
+wire is near-free — the difference between *sending* it and *reading* it is what
+costs. No framework can remove that, and no choice of validator affects it. The
+primitive that would is a validating parser Bun does not ship; see
+[`docs/bun-apis.md`](../../docs/bun-apis.md).
+
+### Validators through the same Standard Schema seam
+
+The same dunx app and the same schema shape, with only the library behind
+`~standard` changed. **costs** is that validator's own time — the raw `Bun.serve`
+row's µs/req above the `req.json()`-only row.
+
+| Validator | costs | raw `Bun.serve` req/s | `@dunx/http` req/s | dunx vs raw |
+| --------- | ----: | --------------------: | -----------------: | ----------: |
+| typebox | -0.01 µs | 82,376 | 71,640 | 87.0% |
+| ajv | 0.34 µs | 80,098 | 71,996 | 89.9% |
+| arktype | 0.42 µs | 79,568 | 72,600 | 91.2% |
+| valibot | 0.89 µs | 76,735 | 67,663 | 88.2% |
+| zod | 0.94 µs | 76,412 | 68,843 | 90.1% |
+| noop | 0.04 µs | 82,056 | 71,239 | 86.8% |
+| noop-async | 0.72 µs | 77,719 | 69,725 | 89.7% |
+
+**zod, Valibot and ArkType are within noise of each other**, and the two compiled
+options are at or below what this harness can resolve at this payload size. Every one
+of them is cheaper than `req.json()`, so **there is no throughput argument for
+choosing between them** — pick on API, error quality and ecosystem. If a profile
+genuinely points at validation, the compiled route is there.
+
+`noop` and `noop-async` are the last two rows and are not validators: `noop` is a
+hand-written pass-through, which is dunx's plumbing with the validator's cost taken
+out, and `noop-async` is the same thing behind a resolved promise — so the gap
+between them is what a validator that answers asynchronously costs.
+
+Neither TypeBox 0.34 nor ajv 8 ships `~standard`. Both were bridged in about ten
+lines each in `servers/validation/schemas.ts`: a boolean `Check` plus the library's
+error iterator, behind a `~standard.validate`. That a compiled JSON Schema checker
+drops into a dunx route with no change to `@dunx/http` is the point of targeting an
+interface rather than a library.
+
+### Where dunx's own cost goes
+
+| Subject | req/s | µs/req |
+| ------- | ----: | -----: |
+| raw `Bun.serve`, parse in the handler | 82,341 | 12.14 |
+| `@dunx/http`, no schemas, parse in the handler | 76,813 | 13.02 |
+| `@dunx/http`, no schemas, validate in the handler | 67,932 | 14.72 |
+| `@dunx/http`, `body` declared — the framework does it | 68,843 | 14.53 |
+
+The two `manual` rows declare no schemas and do the work inside the handler, which
+keeps them on the synchronous dispatch path — so they separate dunx's **dispatch**
+cost from its **input reader** cost. Dispatch is the second row minus the first.
+
+The reader is the fourth row minus the third, and it is now at or below zero: the
+framework's reader costs no more than writing `validate(await req.json())` in the
+handler yourself. It used to cost **2.05 µs more**, which was twice what zod itself
+cost — the reason is in
+[`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md), "The cost of request
+validation".
+
+## How the validation harness works
+
+`bun run validation` spawns one process per row, exactly like `start`, and verifies
+each one answers the same bytes before measuring it. There are two subject files:
+
+- **`servers/validation/raw.ts`** — raw `Bun.serve`, four routes each doing one thing
+  more than the last: `GET /json` (no body), `POST /discard` (body on the wire, never
+  read), `POST /parse` (`await req.json()`), `POST /validate` (parse + validate). The
+  differences between consecutive rows are the decomposition.
+- **`servers/validation/dunx.ts`** — a dunx app with `POST /validate` (a declared
+  `body` schema, so the framework parses and validates) plus `POST /manual-parse` and
+  `POST /manual-validate`, which declare nothing and do the same work inside the
+  handler. Those two separate dunx's dispatch cost from its input-reader cost.
+
+`servers/validation/schemas.ts` holds the one schema shape in every library, loaded by
+**dynamic import** so a process measuring Valibot does not pay ArkType's
+module-evaluation cost. `--validators zod,valibot` narrows the run.
+
+Caveats specific to this harness, in the same spirit as the handicaps above:
+
+- **The email check is not literally identical across libraries.** zod, Valibot and
+  ArkType each bring their own regex; TypeBox and ajv validate `format` only against a
+  registered checker, so both are given the *same* regex rather than a library one.
+  This is the one place the five schemas are not the same work.
+- **Unknown-key handling differs.** zod and Valibot strip; ArkType and the JSON Schema
+  subjects are configured without `additionalProperties: false`. The benchmark body has
+  no extra keys, so it does not show up here — it would on a wider payload.
+- **`noop` and `noop-async` are not validators.** They are hand-written pass-through
+  Standard Schemas, present to measure dunx's plumbing with the validator's cost
+  removed, and to confirm that an async validator still works and what it costs.
+- One payload, 69 bytes, three fields. Nothing here predicts a deeply nested schema,
+  where the engines diverge much more than they do at this size.
 
 ## Output
 
 The stdout table is for humans. `results/latest.json` (or `--out <path>`) is for
 machines — `tools/docs` reads it at build time and renders it as the site's
-leading page, so it is the one file under `results/` that is committed rather
-than gitignored. A checkout without it still builds; the page says there is no
-run. Shape:
+leading page, so it is committed rather than gitignored. A checkout without it still
+builds; the page says there is no run.
+
+`results/validation.json` is the second committed artifact, written by
+`bun run validation` and read by `src/validation-tables.ts` to render the
+"Validation cost" section. Its shape is `ValidationReport` in `src/types.ts`. Nothing
+outside this workspace reads it, and a checkout without it still regenerates the
+rest of the README.
+
+`latest.json`'s shape:
 
 ```jsonc
 {
@@ -405,8 +551,13 @@ pair missing from it was not run.
 tools/bench/
   servers/            one file per subject, each readable end to end
     shared.ts         the payloads and the one zod schema every subject validates with
+    validation/       the validation harness's two subjects
+      raw.ts          raw Bun.serve, one route per step of the decomposition
+      dunx.ts         the dunx app, declared and hand-written variants
+      schemas.ts      the one schema shape in every library, dynamically imported
   src/
-    index.ts          entrypoint
+    index.ts          entrypoint for the framework suite
+    validation.ts     entrypoint for the validation harness
     cli.ts            flags
     run.ts            orchestration: startup, warmup, measured runs
     subject-process.ts  spawn, readiness, contract verification, stop
@@ -415,6 +566,8 @@ tools/bench/
     subjects.ts       the subject registry, including each one's handicaps
     loadgen/          oha adapter, Bun fetch driver, worker, histogram
     report.ts         the stdout table
+    readme-tables.ts  regenerates both README results sections
+    validation-tables.ts  the "Validation cost" section
     machine.ts        CPU/RAM/OS/runtime/package versions
     stats.ts          median, stddev, spread
 ```

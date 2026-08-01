@@ -130,6 +130,54 @@ render as `a.0`):
 }
 ```
 
+### Which validator to use
+
+Any of them. This is measured rather than asserted — `bun run validation` in
+`tools/bench` runs the same dunx app and the same schema shape with only the library
+behind `~standard` changed, and reports what each one costs per request:
+
+| Validator                   | costs    | `~standard`             |
+| --------------------------- | -------: | ----------------------- |
+| TypeBox, `TypeCompiler` AOT | ~0.00 µs | needs a ~10-line bridge |
+| ajv, compiled JSON Schema   |  0.34 µs | needs a ~10-line bridge |
+| ArkType                     |  0.42 µs | built in                |
+| Valibot                     |  0.89 µs | built in                |
+| zod                         |  0.94 µs | built in                |
+
+**`await req.json()` on the same request costs 3.10 µs**, which is more than all of
+them put together. So validation is not where a slow endpoint's time goes, and
+swapping zod for a compiled validator buys about 7% of a small request — worth having
+if a profile points at it, not worth restructuring for. zod is what `@dunx/openapi`
+reads schemas from (via `z.toJSONSchema`), and it is the default for that reason
+rather than a performance one. Three fields, though: a deeply nested schema would very
+likely separate these engines much further.
+
+Two of the five ship no `~standard` property. Bridging one is small enough to inline —
+this is the whole of it:
+
+```ts
+const compiled = TypeCompiler.Compile(Person);
+
+const PersonSchema: StandardSchemaV1<unknown, Static<typeof Person>> = {
+  '~standard': {
+    version: 1,
+    vendor: 'typebox',
+    validate: (value) =>
+      compiled.Check(value)
+        ? { value }
+        : {
+            issues: [...compiled.Errors(value)].map((error) => ({
+              message: error.message,
+              path: error.path.slice(1).split('/'),
+            })),
+          },
+  },
+};
+```
+
+Full numbers, methodology and the ajv version:
+[`tools/bench/README.md`](../../tools/bench/README.md), "Validation cost".
+
 ## Route metadata and scoped middleware
 
 A decorator annotates a route; a guard reads the annotation back. Metadata on its
@@ -331,15 +379,24 @@ fallback runs only after it has decided nothing matched.
 
 ### The zero-overhead path
 
-A route with **no middleware, no CORS and no declared schemas** is dispatched by a
-synchronous handler that returns a `Response` rather than a `Promise<Response>` —
-Bun accepts either. The general path awaits the input reader and the handler, and
-for that shape both awaits are on values that were never thenable, each costing an
-async frame and a microtask tick for nothing.
+A route with **no middleware and no CORS** is dispatched by a handler in which
+nothing is `async`. It returns a `Response` rather than a `Promise<Response>`
+wherever it has nothing to wait for — Bun accepts either. The general path awaits the
+input reader, the handler and the response coercion, and for most shapes those awaits
+are on values that were never thenable, each costing an async frame and a microtask
+tick for nothing.
 
-Measured on `plaintext` in `tools/bench`: 89.5% -> 97.2% of raw `Bun.serve`. A handler that does return a promise is
-adopted rather than wrapped, so nothing about this is conditional on writing sync
-handlers.
+| Route shape                              | What it costs                             |
+| ---------------------------------------- | ----------------------------------------- |
+| no schemas                               | no promise at all                         |
+| `query` and/or `params`, sync validator   | no promise at all — read and validated inline |
+| `body` declared                          | one promise link, for `req.json()`        |
+
+Measured in `tools/bench`: `plaintext` 89.5% -> 97.2% of raw `Bun.serve` when this
+covered only schema-less routes, and `validate` 84.0% -> 92.3% once it was extended
+to routes that read input. A handler that *does* return a promise, or a validator
+that does, is adopted rather than wrapped — nothing about this is conditional on
+writing sync code.
 
 Adding middleware — including `requestLogging` — opts a route back into the async
 path, because middleware is `async` by contract.

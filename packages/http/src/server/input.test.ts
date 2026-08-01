@@ -8,7 +8,7 @@ import type {
   StandardSchemaResult,
   StandardSchemaV1,
 } from '../route/schema.js';
-import { HttpError } from './errors.js';
+import { HttpError, ValidationError } from './errors.js';
 import { HttpFactory, type HttpApp } from './factory.js';
 import { buildInputReader } from './input.js';
 import { HttpStatusCode } from './status.js';
@@ -461,6 +461,70 @@ describe('buildInputReader()', () => {
     // No promise, so a schema-less route pays nothing for the feature existing.
     expect(read(request)).toEqual({ req: request });
     expect(read({} as BunRequest)).not.toBeInstanceOf(Promise);
+  });
+
+  it('stays synchronous for params and query against a sync validator', () => {
+    // Standard Schema *permits* a promise; awaiting one that never comes cost an
+    // async frame and a tick per schema. Neither of these allocates one now.
+    const params = buildInputReader({
+      params: schema<number>((v) => ({ value: Number(v) })),
+    });
+    const query = buildInputReader({
+      query: schema<number>(() => ({ value: 1 })),
+    });
+
+    expect(params(request)).not.toBeInstanceOf(Promise);
+    expect(query(request)).not.toBeInstanceOf(Promise);
+    expect(params(request)).toEqual({ req: request, params: NaN });
+  });
+
+  it('slices the query string exactly as `new URL().searchParams` did', () => {
+    // The reader stopped parsing the whole URL to reach `searchParams`, which was
+    // ~1000 of the ~1500 ns a query route cost. These are the cases where a slice
+    // could differ from a parse.
+    const seen = schema<unknown>((value) => ({ value }));
+    const read = buildInputReader({ query: seen });
+    const queryOf = (url: string): unknown =>
+      (read(new Request(url) as BunRequest) as { query: unknown }).query;
+
+    for (const url of [
+      'http://test/x',
+      'http://test/x?',
+      'http://test/x?a=1',
+      'http://test/x?tag=a&tag=b&tag=c',
+      'http://test/x?a=one+two&b=%2Ffoo%3D',
+      'http://test/x?flag&a=',
+      'http://test/x?a=1#frag',
+      'http://test/x?a=1&b=2#a=nope',
+      'http://test/x#only-a-fragment',
+      'http://test/x?a=%3F%23',
+    ]) {
+      const grouped: Record<string, unknown> = {};
+      for (const [key, value] of new URL(url).searchParams) {
+        const existing = grouped[key];
+        if (existing === undefined) grouped[key] = value;
+        else if (Array.isArray(existing)) existing.push(value);
+        else grouped[key] = [existing, value];
+      }
+      expect(queryOf(url)).toEqual(grouped);
+    }
+  });
+
+  it('adopts an async validator, and reports its issues the same way', async () => {
+    const read = buildInputReader({ params: Slow });
+    const pending = read(request);
+    expect(pending).toBeInstanceOf(Promise);
+
+    let caught: unknown;
+    try {
+      await pending;
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    expect((caught as ValidationError).issues).toEqual([
+      { message: 'text must be a string' },
+    ]);
   });
 
   it('resolves the declared schemas once, at build time', async () => {

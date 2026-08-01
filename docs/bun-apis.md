@@ -171,6 +171,38 @@ Real but missing from `bun-types`: `psubscribe`, `punsubscribe`, `pubsub`, `scri
 `select`, `connected`, `bufferedAmount`, `onclose`, `onconnect`. Of these `pubsub`,
 `script` and `select` work and are reachable through `send()`.
 
+### `req.json()` is the cost of a validated request, and there is no native alternative
+
+Measured on `tools/bench`'s validation harness (`bun run validation`), four raw
+`Bun.serve` routes answering identical bytes, one adding one step to the last:
+
+| Step                                     | µs/req | adds     |
+| ---------------------------------------- | -----: | -------- |
+| `GET`, no request body                   |   8.78 | —        |
+| `POST`, body on the wire, **never read** |   9.05 | +0.27 µs |
+| `POST` + `await req.json()`              |  12.14 | +3.10 µs |
+| `POST` + `req.json()` + zod              |  13.09 | +0.94 µs |
+
+**Putting a body on the wire is near-free; reading it is not, and reading it costs
+~3.3x what validating it costs.** So the framework-level advice — "pick a faster
+validator" — is aimed at the smaller half. Every validator measured (zod, Valibot,
+ArkType, TypeBox's compiled checker, ajv) lands between 0.0 µs and 0.94 µs, all of
+them under the parse.
+
+**The primitive Bun is missing is a validating parser.** `req.json()` allocates a
+full JavaScript object graph which the validator then walks a second time, and
+Bun ships nothing that fuses the two: no `Bun.JSON` with a schema, no JSON Schema
+validator, no way to validate the body bytes without materialising them first.
+`Bun.TOML` and `Bun.markdown` exist; a `Bun.json(bytes, schema)` that answered from
+one pass over the buffer would remove most of what a validated POST costs today, and
+it is the kind of thing only the runtime can do — a userland library cannot avoid
+the intermediate object.
+
+Until then this is a floor, not a dunx cost, and **dunx must not try to fill it**:
+Rule 1's second half rules out writing a validator, and a hand-rolled JSON parser
+would be a JavaScript reimplementation of a JSC primitive, which the first half
+rules out. Recorded here so the ceiling is known rather than rediscovered.
+
 ### `Bun.serve({ websocket })` and `ServerWebSocket`
 
 - **`ServerWebSocket`**: `send`, `sendText`, `sendBinary`, `publish`, `publishText`,
