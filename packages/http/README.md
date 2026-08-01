@@ -263,9 +263,8 @@ Every request produces **one** structured entry, request and response together:
   "event": "/api/users",
   "flow": "http",
   "context": "UsersController.create",
-  "request": { "body": { "name": "ada" }, "userAgent": "curl/8.5.0" },
+  "request": { "userAgent": "curl/8.5.0" },
   "statusCode": 201,
-  "responseBody": { "id": 3, "name": "ada" },
   "elapsedMs": 5
 }
 ```
@@ -287,12 +286,38 @@ Everything the **handler** logs in between carries the same `requestId`, `method
 inbound `x-request-id` is honoured so a trace survives across services; otherwise
 one is minted and returned on the response.
 
+### Bodies are off by default, and what that costs
+
+`requestBody` and `responseBody` default to **`false`**. Turning either on means a
+`clone().text()` — a second copy of every payload, buffered and parsed, on the hot
+path. Measured in `tools/bench`, both on cost roughly two thirds of the throughput
+on the `validate` scenario. The response body is also the field most likely to
+carry a secret, so this is the right default twice over.
+
+Turn them on in development, where seeing the payload is the point:
+
 ```ts
-HttpFactory.create(AppModule, { requestLogging: false }); // off
+// Off entirely — what the benchmark's primary `dunx` subject uses, since no other
+// framework in that suite logs anything.
+HttpFactory.create(AppModule, { requestLogging: false });
+
+// Development: show me everything.
 HttpFactory.create(AppModule, {
-  requestLogging: { ignore: ['/health'], responseBody: false, maxBodyLength: 512 },
+  requestLogging: { requestBody: true, responseBody: true },
+});
+
+// Production: skip the health check the load balancer polls every second.
+HttpFactory.create(AppModule, {
+  requestLogging: { ignore: ['/health'], maxBodyLength: 512 },
 });
 ```
+
+**Even at its cheapest, a log line is not free.** `tools/bench` carries `dunx` and
+`dunx-logging` as separate subjects for exactly this reason: with logging off dunx
+runs at 81–100% of raw `Bun.serve` depending on the scenario, and with it on, 40–45%.
+The remainder is `JSON.stringify` plus a `write` per request inside an
+`AsyncLocalStorage` scope. If you need the last of the throughput, turn it off and
+sample at the edge instead — but know what you gave up.
 
 ### Unmatched paths are logged too
 
@@ -303,6 +328,22 @@ installs one `fetch` fallback that runs the global middleware and returns
 
 This is not a JavaScript router. Bun still does every bit of the matching; the
 fallback runs only after it has decided nothing matched.
+
+### The zero-overhead path
+
+A route with **no middleware, no CORS and no declared schemas** is dispatched by a
+synchronous handler that returns a `Response` rather than a `Promise<Response>` —
+Bun accepts either. The general path awaits the input reader and the handler, and
+for that shape both awaits are on values that were never thenable, each costing an
+async frame and a microtask tick for nothing.
+
+Measured on `plaintext` in `tools/bench`: 89.5% -> ~100% of raw `Bun.serve`, which
+is to say no measurable overhead at all. A handler that does return a promise is
+adopted rather than wrapped, so nothing about this is conditional on writing sync
+handlers.
+
+Adding middleware — including `requestLogging` — opts a route back into the async
+path, because middleware is `async` by contract.
 
 ## App-level configuration
 
