@@ -229,6 +229,16 @@ it('exits 0 with no redis at all', async () => {
   );
   // Everything after the cache still ran.
   expect(run.text).toContain('2 users: ada, grace');
+  // The websocket relay points at the same dead url, so the app boots, warns,
+  // and fans out locally — and the process still exits, which is what `code`
+  // being 0 proves.
+  expect(run.text).toContain(
+    'skipping the relay demo: no Redis to relay through',
+  );
+  expect(run.text).toContain(
+    'the app booted anyway and fan-out stayed local — that is the degraded path',
+  );
+  expect(run.text).toMatch(/the websocket relay could not (subscribe|publish)/);
 });
 
 it('serves HTTP and WebSocket from one Bun.serve', () => {
@@ -242,6 +252,15 @@ it('serves HTTP and WebSocket from one Bun.serve', () => {
     'the same server still answers GET /api/notes -> 200',
   );
   expect(tour.text).toContain('/chat closed with 1000');
+});
+
+it('fans a publish out to a second node exactly once, or says it is skipping', () => {
+  // Exactly one delivery per client is the assertion that matters: Redis echoes a
+  // publish back to the node that made it, and fanning that out again would
+  // deliver twice to every client on the publishing node.
+  expect(tour.text).toMatch(
+    /(deliveries of "across nodes": A 1, B 1|skipping the relay demo: no Redis to relay through)/,
+  );
 });
 
 it('answers a preflight and denies an unknown origin', () => {

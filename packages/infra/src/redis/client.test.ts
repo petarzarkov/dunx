@@ -336,4 +336,36 @@ describe.if(live)('shutdown', () => {
     expect(error).toBeInstanceOf(RedisError);
     expect(received).toEqual([]);
   });
+
+  /**
+   * A subprocess, because `bun test` exits the runner itself and would therefore
+   * never notice: measured on Bun 1.3.14, a `Bun.RedisClient` left in subscriber
+   * mode keeps the event loop alive after `close()`, so a service that shut down
+   * cleanly still hung forever. `onShutdown` leaves subscriber mode first, and
+   * this is what proves it — without the `unsubscribe()` the spawn times out.
+   */
+  it('lets the process exit after a subscription was opened', async () => {
+    const source = new URL('./', import.meta.url).pathname;
+    const script =
+      `const { Redis } = await import(${JSON.stringify(`${source}client.ts`)});\n` +
+      `const { RedisOptions } = await import(${JSON.stringify(`${source}options.ts`)});\n` +
+      `const redis = new Redis(new RedisOptions({ url: ${JSON.stringify(url)}, maxRetries: 0 }));\n` +
+      `await redis.subscribe(${JSON.stringify(key('exit'))}, () => {});\n` +
+      'await redis.onShutdown();\n' +
+      "console.log('shut down');\n";
+
+    const proc = Bun.spawn(['bun', '-e', script], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const timer = setTimeout(() => proc.kill(), 8000);
+    const [out, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      proc.exited,
+    ]);
+    clearTimeout(timer);
+
+    expect(out).toContain('shut down');
+    expect(code).toBe(0);
+  }, 15_000);
 });

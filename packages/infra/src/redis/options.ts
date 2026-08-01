@@ -50,7 +50,12 @@ export interface RedisOptionsInit {
   readonly eager?: boolean;
 }
 
-const assertUrl = (url: string): string => {
+/**
+ * Shared with `@dunx/infra/queue`, which points bullmq at the same kind of URL and
+ * must reject a bad one with the same message rather than a second implementation
+ * of the same check.
+ */
+export const assertRedisUrl = (url: string): string => {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -92,7 +97,7 @@ export class RedisOptions {
   readonly eager: boolean;
 
   constructor(init: RedisOptionsInit = {}) {
-    this.url = assertUrl(init.url ?? defaultRedisUrl());
+    this.url = assertRedisUrl(init.url ?? defaultRedisUrl());
     this.name = init.name;
     this.connectionTimeout = init.connectionTimeout;
     this.idleTimeout = init.idleTimeout;

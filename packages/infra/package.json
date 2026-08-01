@@ -1,9 +1,10 @@
 {
   "name": "@dunx/infra",
   "version": "0.0.0",
-  "description": "Database, Redis, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, plus Bun.RedisClient, Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger",
+  "description": "Database, Redis, queue, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, bullmq over Bun.RedisClient, plus Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger",
   "keywords": [
     "avif",
+    "bullmq",
     "bun",
     "cache",
     "database",
@@ -13,9 +14,11 @@
     "files",
     "glob",
     "image",
+    "jobs",
     "logger",
     "postgres",
     "pubsub",
+    "queue",
     "redis",
     "resize",
     "s3",
@@ -67,6 +70,10 @@
       "types": "./dist/images/index.d.ts",
       "import": "./dist/images/index.js"
     },
+    "./queue": {
+      "types": "./dist/queue/index.d.ts",
+      "import": "./dist/queue/index.js"
+    },
     "./logger": {
       "types": "./dist/logger/index.d.ts",
       "import": "./dist/logger/index.js"
@@ -86,13 +93,23 @@
     "@dunx/core": "workspace:*"
   },
   "devDependencies": {
-    "drizzle-orm": "^0.45.2"
+    "bullmq": "^6.0.5",
+    "drizzle-orm": "^0.45.2",
+    "ioredis": "^6.0.0"
   },
   "peerDependencies": {
-    "drizzle-orm": "^0.45.2"
+    "bullmq": "^6.0.5",
+    "drizzle-orm": "^0.45.2",
+    "ioredis": ">=5.0.0"
   },
   "peerDependenciesMeta": {
+    "bullmq": {
+      "optional": true
+    },
     "drizzle-orm": {
+      "optional": true
+    },
+    "ioredis": {
       "optional": true
     }
   },

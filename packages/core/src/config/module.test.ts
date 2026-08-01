@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { AppFactory } from '../di/app.js';
 import { Module } from '../di/module.js';
+import { provide } from '../di/provider.js';
 import { ConfigInput, ConfigModule } from './module.js';
 import { ConfigError, ConfigService, type ConfigSource } from './service.js';
 
@@ -133,5 +134,57 @@ describe('ConfigModule', () => {
       'Config key "sentryDsn" is not set',
     );
     expect(config.getOrThrow('port')).toBe(3000);
+  });
+});
+
+describe('a subclass binding', () => {
+  class AppConfigService extends ConfigService<AppConfig> {}
+
+  it('binds under the subclass and keeps ConfigService resolving too', async () => {
+    @Module({
+      imports: [
+        ConfigModule.forRoot({ validate, source, as: AppConfigService }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+
+    const typed = app.get(AppConfigService);
+    expect(typed).toBeInstanceOf(AppConfigService);
+    // The type argument survives, which is the whole reason `as` exists: a
+    // factory's `inject: [...]` carries no type parameter to recover.
+    expect(typed.get('port')).toBe(3000);
+    expect(typed.values.db.host).toBe('localhost');
+
+    // An alias, not a second instance — library code knowing only the base
+    // contract must reach the same object.
+    const base: unknown = app.get(ConfigService);
+    expect(base).toBe(typed);
+  });
+
+  it('lets a factory inject the subclass and keep the type', async () => {
+    class Server {
+      constructor(readonly port: number) {}
+    }
+
+    @Module({
+      imports: [
+        ConfigModule.forRoot({ validate, source, as: AppConfigService }),
+      ],
+      providers: [
+        provide(Server, {
+          // The point: `config` is AppConfigService, so `get('port')` is a number
+          // rather than `unknown`.
+          useFactory: (config: AppConfigService) =>
+            new Server(config.get('port')),
+          inject: [AppConfigService] as const,
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(Server).port).toBe(3000);
   });
 });

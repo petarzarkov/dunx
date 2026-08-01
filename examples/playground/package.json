@@ -6,17 +6,25 @@
   "type": "module",
   "scripts": {
     "start": "bun src/main.ts",
-    "tour": "bun src/tour.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "tour": "bun src/tour.ts",
+    "typecheck": "tsc --noEmit",
+    "worker": "bun src/worker.ts"
   },
   "dependencies": {
+    "@dunx/auth": "workspace:*",
     "@dunx/compiler": "workspace:*",
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/infra": "workspace:*",
     "@dunx/openapi": "workspace:*",
+    "better-auth": "^1.6.25",
+    "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",
+    "ioredis": "^6.0.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@dunx/testing": "workspace:*"
   }
 }

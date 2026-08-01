@@ -1,19 +1,23 @@
 # @dunx/infra
 
-Infrastructure for dunx: databases, Redis/Valkey, file storage, images and
-logging. Five areas, one package.
+Infrastructure for dunx: databases, Redis/Valkey, queues, file storage, images and
+logging. Six areas, one package.
 
 Where Bun ships the primitive, the primitive is what runs: `Bun.SQL`,
 `bun:sqlite`, `Bun.RedisClient`, `Bun.file`, `Bun.write`, `Bun.Glob`,
 `Bun.S3Client`, `Bun.Image`. No `pg`, no `better-sqlite3`, no `ioredis`, no
 `@aws-sdk`, no `glob`, no `sharp`.
 
-Two areas do not hand-roll an abstraction, because a mature library already owns
+Three areas do not hand-roll an abstraction, because a mature library already owns
 one — and each of those libraries drives a Bun API underneath:
 
 - **`/db` is drizzle.** `drizzle-orm/bun-sqlite` over `bun:sqlite`, or
   `drizzle-orm/bun-sql` over `Bun.SQL`. `drizzle-orm` is an **optional peer
   dependency**, so an app using only `/files` never installs it.
+- **`/queue` is bullmq**, running on `Bun.RedisClient` through bullmq's own
+  `createBunRedisClient`. dunx contributes handler discovery, injection and
+  shutdown ordering — not retries, backoff, rate limiting or scheduling.
+  `bullmq` is an **optional peer dependency** too.
 - **`/logger` is `@arkv/logger`**, bound to the `Logger` contract that lives in
   `@dunx/core`. The contract and the wiring are dunx's; the configuration, the
   sanitizer and the async context store are upstream's.
@@ -25,6 +29,7 @@ about:
 ```ts
 import { DbModule, SqliteOptions } from '@dunx/infra/db';
 import { RedisConnection } from '@dunx/infra/redis';
+import { JobHandler, QueueModule } from '@dunx/infra/queue';
 import { Storage, LocalStorageOptions } from '@dunx/infra/files';
 import { Images } from '@dunx/infra/images';
 import { LoggerModule } from '@dunx/infra/logger';
@@ -32,6 +37,11 @@ import { LoggerModule } from '@dunx/infra/logger';
 // or, everything, from one place
 import { DbModule, Images, LoggerModule, RedisConnection, Storage } from '@dunx/infra';
 ```
+
+`/queue` is the one area the barrel deliberately does **not** re-export. bullmq's
+own entry point statically imports `ioredis`, so exporting it from the root would
+make both a hard requirement of `import '@dunx/infra'` — including for an app that
+has no queue. Reach it at `@dunx/infra/queue`.
 
 Anything injectable by a **constructor parameter** is a runtime class here, never
 an interface: an `interface` erases and leaves nothing for `@dunx/compiler` to
@@ -743,6 +753,223 @@ handling, module wiring, error mapping, and lifecycle needs no server at all —
 `Bun.RedisClient` connects lazily, so a container can be built and torn down
 against an address that is never dialled.
 
+## queue — `@dunx/infra/queue`
+
+**bullmq is the queue.** dunx adds no retry policy, no backoff, no rate limiter, no
+scheduler — those are bullmq's, and a second implementation of them would be a
+worse one. What this area adds is the four things bullmq has no opinion about:
+where a handler lives, how it is found, how it is injected, and when it stops.
+
+```ts
+import type { Job } from 'bullmq';
+import { JobHandler } from '@dunx/infra/queue';
+
+export class Emails {
+  constructor(private readonly mailer: Mailer) {}
+
+  // The whole registration. No class decorator, no registry, no queue token.
+  @JobHandler({ queue: 'emails', name: 'welcome' })
+  async welcome(job: Job<{ to: string }>): Promise<{ sent: string }> {
+    await this.mailer.send(job.data.to, 'Welcome');
+    return { sent: job.data.to };
+  }
+}
+```
+
+```bash
+bun add bullmq ioredis
+```
+
+### Two things to know before you deploy this
+
+**Connections are bounded by default** — `{ connectionTimeout: 5000, maxRetries: 0 }`,
+overridable through `connection`. Bun's own defaults retry without bound, which turns
+an unreachable Redis into a route that never answers instead of one that fails. With
+the default, `publish()` rejects in single-digit milliseconds and a controller can map
+it to a 503.
+
+**A process that attempted a queue operation while Redis was unreachable will not
+exit on `SIGTERM`.** bullmq creates its connection on first use and holds a handle
+whose retry timer outlives `close()`; `maxRetries: 0` does not clear it, because the
+handle is bullmq's rather than Bun's and nothing in userland can reach it.
+
+Measured, and the trigger is narrow — importing the module is not enough:
+
+| Redis | Published? | `SIGTERM` |
+| ----- | ---------- | --------- |
+| unreachable | no  | exits in ~1 s |
+| unreachable | yes | **never exits** |
+| reachable   | yes | exits in ~2 s |
+
+So a healthy deployment is unaffected, and an app that imports `QueueModule` without
+publishing is unaffected. What hangs is a process that served a queue route while
+Redis was down. It serves correctly throughout — 503 in single-digit milliseconds —
+so this is a shutdown defect, not an availability one. Evidence in
+[docs/bun-apis.md](../../docs/bun-apis.md).
+
+Both are **optional peer dependencies**, so an app using only `/files` installs
+neither. `ioredis` is there for bullmq's sake, not dunx's — see
+[The ioredis boundary](#the-ioredis-boundary).
+
+### Setup
+
+One module, imported by every process that touches a queue:
+
+```ts
+import { AppFactory, Module } from '@dunx/core';
+import { QueueModule } from '@dunx/infra/queue';
+
+@Module({
+  imports: [QueueModule.forRoot({ url: 'valkey://localhost:6379' })],
+  providers: [Emails, Mailer],
+})
+export class AppModule {}
+```
+
+`forRoot()` binds `QueueOptions`, `QueueConnection` and `JobPublisher` — the
+**publish** side, which is all a web process needs. Importing it opens no worker and
+consumes nothing. With no `url` it follows the same chain `/redis` does: `$VALKEY_URL`,
+then `$REDIS_URL`, then `valkey://localhost:6379`. `forRootAsync({ useFactory, inject })`
+is the same thing with the options behind a factory that may await and may inject.
+
+#### Options
+
+| Option              | Default                                                  | Notes                                                    |
+| ------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| `url`               | `$VALKEY_URL` → `$REDIS_URL` → `valkey://localhost:6379` | Validated when the module is configured                  |
+| `prefix`            | `'bull'`                                                 | bullmq's key prefix                                      |
+| `worker`            | `{}`                                                     | Forwarded verbatim to every `Worker`                     |
+| `defaultJobOptions` | —                                                        | Forwarded verbatim as every `Queue`'s `defaultJobOptions` |
+| `jobTimeoutMs`      | —                                                        | Not a bullmq feature. See below                          |
+
+`worker` and `defaultJobOptions` are **passthroughs on purpose**. `concurrency`,
+`limiter`, `lockDuration`, `stalledInterval`, `attempts`, `backoff`,
+`removeOnComplete` and the rest are bullmq's own options, documented by bullmq;
+restating them here would only produce a staler copy.
+
+### Publishing
+
+```ts
+export class Signups {
+  constructor(private readonly jobs: JobPublisher) {}
+
+  async register(email: string): Promise<void> {
+    await this.jobs.publish('emails', 'welcome', { to: email });
+  }
+}
+```
+
+`publish(queue, name, data, options?)` returns bullmq's own `Job`, and
+`publisher.queue(name)` returns bullmq's own `Queue` — with `addBulk`,
+`upsertJobScheduler`, `getJobCounts`, `drain` and everything else already on it.
+There is no wrapper to outgrow.
+
+A queue is opened on first use, not declared up front: a queue is a key prefix, not
+a resource to reserve, so there is nothing a registration step could validate.
+`onShutdown` closes every queue that was opened.
+
+### Consuming — the worker process
+
+A worker is a separate process running `WorkerFactory`:
+
+```ts
+// worker.ts
+import { WorkerFactory } from '@dunx/infra/queue';
+import { AppModule } from './app.module.js';
+
+const worker = await WorkerFactory.create(AppModule);
+await worker.start();
+worker.enableShutdownHooks();
+await worker.closed;
+```
+
+```json
+{ "scripts": { "worker": "bun run src/worker.ts" } }
+```
+
+The root module it is handed may be the app's own or a narrower one that leaves the
+controllers out — it is a normal dunx container either way, so a handler gets the
+same constructor injection a controller does.
+
+`create` discovers and validates; `start` is what opens connections. So a wiring
+mistake — no `QueueModule`, no handlers, a misspelled name in `queues` — fails
+before anything consumes, and `worker.jobs` can be inspected in a test without a
+server running.
+
+`WorkerFactory.create(AppModule, { queues: ['emails'] })` consumes a subset, which
+is how one queue gets its own process and its own concurrency. A name in that list
+that no handler claims is a boot error rather than a process that quietly serves
+only the queues that were spelled right.
+
+### How a handler is found
+
+The same **marker-plus-prototype-scan** routes and websocket gateways use. `@JobHandler`
+sets a symbol property on the method function it receives and returns it; nothing is
+recorded anywhere else. At boot `WorkerFactory` walks the prototype chain of the
+classes the modules already declare, and a marked method is a job. See
+[ARCHITECTURE.md](../../docs/ARCHITECTURE.md), "Route discovery", for why it is not
+an accumulator.
+
+What follows from that:
+
+- **No second registration.** A handler's class is declared in
+  `@Module({ providers })` — or `controllers` — like any other injectable. There is
+  no `registerQueue`, no `@Processor` class decorator and no queue token to inject.
+- **A handler may be inherited.** An abstract base's marked method is found on every
+  subclass, and overriding it *without* re-decorating still works — the marker is on
+  the base's function, and dispatch is bound off the instance, so it lands on the
+  override.
+- **Two handlers for one `(queue, name)` is a boot error** naming both, because it
+  would otherwise silently split the traffic between them.
+- **A factory- or value-provided instance is not scanned.** There is no class to read
+  a prototype chain from until it has been built. Put handlers on a class provider.
+
+An arriving job whose name no handler claims fails with a message saying what that
+worker *does* serve — the shape of the bug is usually a worker deployed ahead of the
+handler that serves it, and bullmq retries it under the job's own `attempts`.
+
+### `jobTimeoutMs`
+
+bullmq has `lockDuration` and stall detection, which answer *did the worker die*, not
+*is this handler stuck*. A handler hung on an external call holds its lock, renews it,
+and never finishes. `jobTimeoutMs` rejects it so the job fails and retries. Off by
+default; it is the one behaviour here that bullmq does not already own.
+
+### Shutdown
+
+`worker.shutdown()` closes every bullmq `Worker` **before** the container tears down.
+That order is the point: `close()` without `force` stops fetching and waits for what
+is already running, so an in-flight job finishes while the database connection it is
+using is still open. The container's own reverse-construction-order teardown then
+closes the publisher's queues, and last of all the sockets — `QueueConnection` is
+constructed first, because everything else needs it, so it goes last.
+
+`enableShutdownHooks()` wires SIGTERM and SIGINT to that sequence.
+
+### The ioredis boundary
+
+Rule 1 bans `ioredis` for dunx's own code, because `Bun.RedisClient` exists. bullmq
+needs *a* Redis client. The resolution is not a compromise:
+
+**Every byte of queue traffic goes through `Bun.RedisClient`.** bullmq accepts either
+a connection description it builds a client from, or an already-built client
+implementing its `IRedisClient` interface — and bullmq 6 ships
+`createBunRedisClient`, an adapter over Bun's client. `QueueConnection` uses it. dunx
+neither imports nor constructs ioredis, and `@dunx/infra/redis` is untouched: a
+queue's sockets are its own, one per bullmq object.
+
+ioredis must still be **installed**, because bullmq 6.0.5's barrel statically imports
+it from `redis-connection` even when nothing in that path runs. That is bullmq's
+packaging, measured rather than assumed, and it is why `ioredis` is listed as an
+optional peer here at all. Nothing in dunx reaches for it.
+
+### Testing with no Redis running
+
+The integration suite probes the server first and skips itself when nothing answers,
+so `bun test` passes on a machine with no Redis. Discovery, dispatch, options and
+module wiring need no server at all: `create` opens no socket, so a container can be
+built, inspected and torn down against an address that is never dialled.
+
 ## files — `@dunx/infra/files`
 
 One storage contract, two backends, on `Bun.file`, `Bun.write`, `Bun.Glob` and
@@ -1316,12 +1543,17 @@ const logger = app.get(BackingLogger).child({ module: 'users' });
 
 ## Verified against
 
-Bun 1.3.14 and drizzle-orm 0.45.2. Bun's documentation is incomplete across every
-area here, so the behaviour described above was measured rather than read: the four
+Bun 1.3.14, drizzle-orm 0.45.2 and bullmq 6.0.5. Bun's documentation is incomplete
+across every area here, so the behaviour described above was measured rather than
+read: the four
 `Bun.SQL` adapters, the `affectedRows`/`count` split on result metadata, the
 hardcoded `PgDialect` in `drizzle-orm/bun-sql`, the synchronous-commit behaviour of
 `bun:sqlite`'s `transaction()` and drizzle's inheritance of it, the `Date` binding
 refusal and the silent `NULL` a non-strict handle writes in its place, the missing
 `reserve()` on the SQLite adapter, the unusable `psubscribe`, the synchronous throws
 from `Bun.RedisClient` in subscriber mode, the two `Bun.write` stream failures, and
-the whole `Bun.Image` section.
+the whole `Bun.Image` section. On the bullmq side: that `createBunRedisClient` really
+does carry concurrency, retries with backoff, delayed jobs and a draining `close()`;
+that bullmq never closes a connection it was handed; that closing one afterwards
+emits `error` on an emitter bullmq has already stopped listening to; and that
+`ioredis` is a load-time requirement of the barrel despite being an optional peer.

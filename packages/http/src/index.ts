@@ -115,6 +115,23 @@ export {
 export { decode, encode, type Envelope } from './ws/envelope.js';
 export { HandlerKind, type HandlerMeta } from './ws/marker.js';
 export { PubSub } from './ws/pubsub.js';
+// Multi-node fan-out. `PubSubRelay` is two methods, so `@dunx/infra`'s
+// RedisConnection satisfies it structurally; `RedisRelay` is Bun.RedisClient
+// directly and therefore costs this package no dependency.
+export {
+  defaultRelayUrl,
+  RedisRelay,
+  type RedisRelayOptions,
+} from './ws/redis-relay.js';
+export {
+  decodeRelay,
+  DEFAULT_RELAY_CHANNEL,
+  encodeRelay,
+  type PubSubRelay,
+  type RelayFrame,
+  type RelayOptions,
+  type RelayPhase,
+} from './ws/relay.js';
 export {
   buildGateways,
   buildRuntime,

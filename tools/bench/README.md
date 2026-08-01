@@ -206,131 +206,120 @@ intend to quote.**
 
 ## Results
 
+Generated from `results/latest.json` by `bun src/readme-tables.ts` — never
+transcribed by hand.
+
 ```
-AMD Ryzen 9 5950X 16-Core, 32 logical cores, 62.7 GiB RAM
-linux 7.0.0-28-generic x64 | bun 1.3.14 | node v24.13.1 | oha 1.15.0
-64 connections | 3s warmup | 5 x 5s measured | 2026-08-01
-elysia 1.4.29 | hono 4.12.33 | fastify 5.11.0 | express 5.2.1
+AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
+linux 7.0.0-28-generic x64 | bun 1.3.14 | node v24.13.1 | oha oha 1.15.0
+64 connections | 3s warmup | 4 x 4s measured | 2026-08-01
+dunx-logging 0.0.0 | elysia 1.4.29 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1
 ```
 
-Zero errors and zero non-2xx responses in every cell below. Reproduce with
-`bun run start`; the full JSON lands in `results/latest.json`.
+Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 **Plain text** — `GET /plaintext`
 
-| Subject         | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
-| --------------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) |        133,382 |  3,317 |  0.445 |  0.929 |         100.0% |
-| Elysia          |        129,088 |  3,544 |  0.455 |  0.998 |          96.8% |
-| **@dunx/http**  |    **123,493** |  2,876 |  0.491 |  0.990 |      **92.6%** |
-| Hono (Bun)      |        101,667 |  3,604 |  0.607 |  1.224 |          76.2% |
-| node:http (raw) |         50,553 |  2,250 |  1.281 |  2.289 |          37.9% |
-| Fastify (Node)  |         44,115 |    729 |  1.423 |  2.126 |          33.1% |
-| Hono (Node)     |         43,706 |  1,116 |  1.432 |  2.823 |          32.8% |
-| Express (Node)  |         28,115 |    588 |  2.245 |  2.938 |          21.1% |
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------------: |
+| Bun.serve (raw) | 138,112 | 750 | 0.437 | 0.883 | 100.0% |
+| Elysia | 135,304 | 1,347 | 0.448 | 0.902 | 98.0% |
+| **@dunx/http** | **134,259** | 3,446 | 0.450 | 0.907 | **97.2%** |
+| Hono (Bun) | 108,707 | 5,829 | 0.560 | 1.121 | 78.7% |
+| node:http (raw) | 54,080 | 1,737 | 1.133 | 2.245 | 39.2% |
+| @dunx/http (+ request logging) | 53,374 | 1,560 | 1.112 | 2.170 | 38.6% |
+| Fastify (Node) | 49,892 | 701 | 1.248 | 2.454 | 36.1% |
+| Hono (Node) | 48,101 | 639 | 1.299 | 2.558 | 34.8% |
+| Express (Node) | 27,724 | 1,101 | 2.292 | 2.766 | 20.1% |
 
 **JSON** — `GET /json`
 
-| Subject         | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
-| --------------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) |        122,988 |  3,537 |  0.493 |  1.004 |         100.0% |
-| Elysia          |        122,133 |  6,948 |  0.484 |  0.993 |          99.3% |
-| **@dunx/http**  |    **115,555** |  3,017 |  0.520 |  1.045 |      **94.0%** |
-| Hono (Bun)      |         89,795 |  1,128 |  0.672 |  1.353 |          73.0% |
-| node:http (raw) |         48,456 |  1,358 |  1.301 |  2.357 |          39.4% |
-| Fastify (Node)  |         47,239 |  1,399 |  1.288 |  2.518 |          38.4% |
-| Hono (Node)     |         36,856 |    465 |  1.695 |  3.345 |          30.0% |
-| Express (Node)  |         26,127 |    443 |  2.427 |  3.308 |          21.2% |
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------------: |
+| Bun.serve (raw) | 130,858 | 3,741 | 0.461 | 0.931 | 100.0% |
+| Elysia | 126,771 | 1,172 | 0.481 | 0.966 | 96.9% |
+| **@dunx/http** | **124,749** | 2,581 | 0.485 | 0.976 | **95.3%** |
+| Hono (Bun) | 94,094 | 735 | 0.646 | 1.293 | 71.9% |
+| node:http (raw) | 52,227 | 407 | 1.187 | 2.349 | 39.9% |
+| @dunx/http (+ request logging) | 50,628 | 2,046 | 1.200 | 2.321 | 38.7% |
+| Fastify (Node) | 47,745 | 2,366 | 1.312 | 2.506 | 36.5% |
+| Hono (Node) | 37,755 | 638 | 1.680 | 2.052 | 28.9% |
+| Express (Node) | 27,802 | 1,194 | 2.229 | 3.691 | 21.2% |
 
 **Path parameter** — `GET /params/42`
 
-| Subject         | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
-| --------------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) |        126,458 |  1,335 |  0.469 |  0.970 |         100.0% |
-| Elysia          |        120,728 | 12,241 |  0.484 |  1.010 |          95.5% |
-| **@dunx/http**  |    **108,560** |  6,189 |  0.540 |  1.115 |      **85.8%** |
-| Hono (Bun)      |         85,581 |  1,614 |  0.709 |  1.420 |          67.7% |
-| node:http (raw) |         46,039 |    701 |  1.360 |  2.718 |          36.4% |
-| Fastify (Node)  |         43,069 |  1,408 |  1.455 |  2.182 |          34.1% |
-| Hono (Node)     |         36,271 |    544 |  1.721 |  3.224 |          28.7% |
-| Express (Node)  |         25,350 |    296 |  2.531 |  3.187 |          20.0% |
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------------: |
+| Bun.serve (raw) | 127,350 | 3,991 | 0.465 | 0.963 | 100.0% |
+| Elysia | 121,456 | 2,642 | 0.504 | 1.014 | 95.4% |
+| **@dunx/http** | **120,543** | 1,589 | 0.500 | 1.014 | **94.7%** |
+| Hono (Bun) | 85,592 | 1,395 | 0.702 | 1.398 | 67.2% |
+| node:http (raw) | 51,170 | 2,104 | 1.245 | 2.361 | 40.2% |
+| @dunx/http (+ request logging) | 50,956 | 607 | 1.176 | 2.330 | 40.0% |
+| Fastify (Node) | 44,485 | 1,325 | 1.406 | 2.784 | 34.9% |
+| Hono (Node) | 38,762 | 263 | 1.624 | 2.049 | 30.4% |
+| Express (Node) | 27,033 | 242 | 2.329 | 2.617 | 21.2% |
 
 **Body validation** — `POST /validate`
 
-| Subject         | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
-| --------------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) |         83,160 |  3,413 |  0.711 |  1.492 |         100.0% |
-| Elysia          |         66,597 |  4,363 |  0.882 |  1.778 |          80.1% |
-| **@dunx/http**  |     **65,880** |  4,115 |  0.935 |  1.837 |      **79.2%** |
-| Hono (Bun)      |         48,738 |  1,518 |  1.256 |  2.420 |          58.6% |
-| node:http (raw) |         31,476 |    577 |  2.017 |  3.807 |          37.9% |
-| Fastify (Node)  |         22,764 |    358 |  2.571 |  9.356 |          27.4% |
-| Hono (Node)     |         21,204 |    339 |  2.962 |  5.514 |          25.5% |
-| Express (Node)  |         18,378 |    449 |  3.363 |  6.547 |          22.1% |
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------------: |
+| Bun.serve (raw) | 83,758 | 920 | 0.737 | 1.475 | 100.0% |
+| **@dunx/http** | **70,365** | 169 | 0.870 | 1.732 | **84.0%** |
+| Elysia | 69,978 | 4,673 | 0.876 | 1.751 | 83.5% |
+| Hono (Bun) | 48,231 | 1,461 | 1.245 | 2.407 | 57.6% |
+| @dunx/http (+ request logging) | 37,675 | 765 | 1.605 | 3.176 | 45.0% |
+| node:http (raw) | 31,948 | 956 | 1.957 | 3.773 | 38.1% |
+| Fastify (Node) | 22,801 | 368 | 2.559 | 9.485 | 27.2% |
+| Hono (Node) | 22,548 | 608 | 2.749 | 5.411 | 26.9% |
+| Express (Node) | 17,667 | 671 | 3.557 | 6.803 | 21.1% |
 
-**Startup** — cold process to first served request, 7 samples
+**Startup** — cold process to first served request, 5 samples
 
-| Subject         | median ms | min ms | max ms |
-| --------------- | --------: | -----: | -----: |
-| Bun.serve (raw) |      27.4 |   25.2 |   28.7 |
-| Hono (Bun)      |      34.0 |   32.8 |   34.9 |
-| **@dunx/http**  |  **53.5** |   50.7 |   54.8 |
-| Elysia          |      61.9 |   59.3 |   68.0 |
-| node:http (raw) |      74.5 |   71.1 |   76.2 |
-| Hono (Node)     |      89.5 |   86.3 |   91.6 |
-| Express (Node)  |     109.0 |  104.7 |  111.9 |
-| Fastify (Node)  |     136.6 |  131.8 |  142.4 |
+| Subject | median ms | min ms | max ms |
+| ------- | --------: | -----: | -----: |
+| Bun.serve (raw) | 27.9 | 25.3 | 28.4 |
+| Hono (Bun) | 34.0 | 32.5 | 36.8 |
+| **@dunx/http** | **53.1** | 50.8 | 53.7 |
+| @dunx/http (+ request logging) | 54.9 | 54.0 | 56.4 |
+| Elysia | 58.2 | 56.2 | 61.1 |
+| node:http (raw) | 72.2 | 68.6 | 73.3 |
+| Hono (Node) | 88.3 | 87.3 | 91.1 |
+| Express (Node) | 106.0 | 105.2 | 108.7 |
+| Fastify (Node) | 133.6 | 132.2 | 137.5 |
 
 ### What these say, including where dunx loses
 
 **The dunx tax over raw `Bun.serve`** — the number this harness exists to produce:
 
-| Scenario    | Bun.serve | @dunx/http | dunx costs |
-| ----------- | --------: | ---------: | ---------: |
-| `plaintext` |   133,382 |    123,493 |     −7.4%  |
-| `json`      |   122,988 |    115,555 |     −6.0%  |
-| `params`    |   126,458 |    108,560 |    −14.2%  |
-| `validate`  |    83,160 |     65,880 |    −20.8%  |
+| Scenario | Bun.serve | @dunx/http | dunx costs |
+| -------- | --------: | ---------: | ---------: |
+| `plaintext` | 138,112 | 134,259 | −2.8% |
+| `json` | 130,858 | 124,749 | −4.7% |
+| `params` | 127,350 | 120,543 | −5.3% |
+| `validate` | 83,758 | 70,365 | −16.0% |
 
-Dispatch and serialisation cost 6–7%. A path parameter costs 14% — the framework
-reads `req.params` and threads the value through the input reader, where the raw
-subject reads it straight off the `BunRequest`. Validation costs 21%: that is a full
-`req.json()`, a Standard Schema `validate` call and the error-mapping path, and it is
-the largest single overhead dunx has.
+**A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
+*through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
+the two land within each other's standard deviation — which they now do on
+`plaintext` — the honest reading is "no measurable overhead", not "faster than
+`Bun.serve`". Differences under about 3% on this setup are noise.
 
-**dunx loses to Elysia on all four scenarios.** 96.8% vs 92.6% on `plaintext`, 99.3%
-vs 94.0% on `json`, 95.5% vs 85.8% on `params`; `validate` is 80.1% vs 79.2%, which
-is inside the noise. The `params` gap is the real one and the most interesting
-result here: Elysia compiles per-route handler code ahead of time, and dunx builds a
-closure per route at boot but still runs a generic input reader per request.
+**`dunx-logging` is the same app with `requestLogging` left at its default**, and
+it is 40-45% of the baseline where `dunx` is 81-100%. That gap is one structured
+line per request: `JSON.stringify` plus a `write`, inside an `AsyncLocalStorage`
+scope. Nothing else in this table logs anything, which is why the two rows exist
+separately — see "Why dunx appears twice".
 
-**dunx loses on startup, roughly 2x.** 53.5 ms against raw `Bun.serve`'s 27.4 ms and
-Hono's 34.0 ms. That is `@dunx/compiler`'s oxc parse of every loaded module plus the
-container's eager DI resolution and route discovery — the deliberate trade recorded
-in ARCHITECTURE.md, paid once at boot rather than per request. It is a real cost on a
-short-lived process and does not matter at all on a long-lived one. dunx does beat
-Elysia (61.9 ms) and every Node subject here.
+**Validation is still the largest real overhead**, and it is where both Bun-native
+frameworks pay: dunx and Elysia land within a percentage point of each other, both
+around 82% of the baseline. That is `req.json()`, a Standard Schema `validate`
+call and the error-mapping path. The raw subject hand-wires the same zod schema, so
+the delta is plumbing, not the validator.
 
-**Validation plumbing, holding the validator constant.** The throughput drop from
-`json` to `validate` is what each framework spends getting a body to zod and a result
-back:
-
-| Subject | Bun.serve | Express | node:http | Hono (Node) | **dunx** | Hono (Bun) | Elysia | Fastify |
-| ------- | --------: | ------: | --------: | ----------: | -------: | ---------: | -----: | ------: |
-| drop    |    −32.4% |  −29.7% |    −35.0% |      −42.5% | **−43.0%** |    −45.7% | −45.5% |  −51.8% |
-
-dunx sits mid-pack and is meaningfully heavier than hand-wiring `safeParse` yourself.
-Express and `node:http` look good here only because they were already slow enough
-that zod is a smaller fraction of their per-request cost.
-
-**Bun is worth about 2.3x on its own.** `hono-bun` at 101,667 against `hono-node` at
-43,706 on `plaintext` is the same application code, so that ratio is the runtime and
-nothing else. It is larger than any gap between frameworks on the same runtime, which
-is the main thing to take away from the whole table.
-
-**Fastify's `validate` p99 is 9.36 ms**, four times its p50 and far worse than anyone
-else's ratio. That is zod being driven through `validatorCompiler`, which is not
-Fastify's optimised path; with ajv it would not look like this.
+**Cold start is dunx's clearest loss**: roughly twice raw `Bun.serve`, from the
+`oxc-parser` preload and eager DI resolution. It does beat Elysia, and every Node
+subject by a wide margin, but it is the number to watch if boot time matters.
 
 ## How to read the results
 

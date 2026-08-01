@@ -79,10 +79,25 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
     await this.ping();
   }
 
+  /**
+   * `UNSUBSCRIBE` before `close()`, and that order is load-bearing: measured on
+   * Bun 1.3.14, a `Bun.RedisClient` left in subscriber mode keeps the event loop
+   * alive after `close()`, so a process that shut down cleanly would still never
+   * exit. Leaving subscriber mode first fixes it. Recorded in docs/bun-apis.md.
+   */
   async onShutdown(): Promise<void> {
+    const subscriber = this.#subscriber;
     this.#listeners.clear();
-    this.#subscriber?.close();
     this.#subscriber = undefined;
+    if (subscriber) {
+      try {
+        await subscriber.unsubscribe();
+      } catch {
+        // A socket that is already gone is not in subscriber mode either, and
+        // throwing here would leave both connections below unclosed.
+      }
+      subscriber.close();
+    }
     this.#client.close();
   }
 
@@ -354,11 +369,28 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
     return this.#run('PUBLISH', () => this.#client.publish(channel, message));
   }
 
+  /**
+   * `connect()` before the first `subscribe()`, and only on a socket this call
+   * opened: measured on Bun 1.3.14, a `subscribe()` that cannot reach the server
+   * leaves the client holding the event loop open even after `close()` and even
+   * with `maxRetries: 0`, so the process never exits. Failing at `connect()`
+   * instead releases cleanly. Recorded in docs/bun-apis.md.
+   */
   async subscribe(channel: string, listener: MessageListener): Promise<void> {
-    const client = (this.#subscriber ??= new Bun.RedisClient(
-      this.#options.url,
-      this.#options.toClientOptions(),
-    ));
+    let client = this.#subscriber;
+    if (!client) {
+      client = new Bun.RedisClient(
+        this.#options.url,
+        this.#options.toClientOptions(),
+      );
+      try {
+        await client.connect();
+      } catch (cause) {
+        client.close();
+        throw toRedisError('CONNECT', cause);
+      }
+      this.#subscriber = client;
+    }
 
     const existing = this.#listeners.get(channel);
     if (existing) {

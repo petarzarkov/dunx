@@ -1,7 +1,9 @@
 import type { BunRequest, Server } from 'bun';
 import {
   AppError,
+  Logger,
   type App,
+  type AppOptions,
   type Ctor,
   type InjectionToken,
   type ShutdownSignal,
@@ -9,6 +11,7 @@ import {
 import { joinPath, type DiscoveredRoute } from '../route/discover.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import { PubSub } from '../ws/pubsub.js';
+import type { PubSubRelay, RelayPhase } from '../ws/relay.js';
 import type { SocketData, SocketOptions } from '../ws/socket.js';
 import { attachAddressSource, ClientAddress } from './client-address.js';
 import type { CorsOptions } from './cors.js';
@@ -26,7 +29,7 @@ import {
 } from './routes.js';
 import { defaultSettings, type AppSettings } from './settings.js';
 
-export interface HttpOptions {
+export interface HttpOptions extends AppOptions {
   readonly port?: number;
   /** Resolved from the container, so middleware can inject(). */
   readonly middleware?: readonly Ctor<Middleware>[];
@@ -45,6 +48,18 @@ export interface HttpOptions {
    * themselves are declared in `@Module({ providers })`.
    */
   readonly websocket?: SocketOptions;
+  /**
+   * Multi-node websocket fan-out. Absent — the default — means `PubSub` publishes
+   * to this process only, which is exactly Bun's native pub/sub and costs nothing.
+   *
+   * `new RedisRelay({ url })` is the batteries-included one. Anything with a
+   * `publish` and a `subscribe` fits, including `@dunx/infra`'s `RedisConnection`,
+   * which has to come out of the container and so goes through
+   * `app.get(PubSub).relayThrough(...)` instead of this option.
+   */
+  readonly relay?: PubSubRelay;
+  /** The broker channel the relay carries frames on. @default 'dunx:ws' */
+  readonly relayChannel?: string;
 }
 
 /**
@@ -78,6 +93,8 @@ export class HttpApplication implements HttpApp {
   readonly #onError: ErrorMapper;
   readonly #port: number;
   readonly #websocket: WebSocketRuntime | undefined;
+  readonly #relay: PubSubRelay | undefined;
+  readonly #relayChannel: string | undefined;
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -101,6 +118,8 @@ export class HttpApplication implements HttpApp {
     this.#onError = options.onError ?? defaultErrorMapper;
     this.#port = options.port ?? 3000;
     this.#websocket = websocket;
+    this.#relay = options.relay;
+    this.#relayChannel = options.relayChannel;
     this.gatewayPaths = websocket?.paths ?? [];
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
@@ -190,7 +209,26 @@ export class HttpApplication implements HttpApp {
       server: this.#server,
       trustProxy: this.#settings['trust proxy'],
     });
-    this.#app.get(PubSub).attach(this.#server);
+    const pubsub = this.#app.get(PubSub);
+    pubsub.attach(this.#server);
+    // After attach, so a frame that arrives during the subscribe already has a
+    // server to fan out on. Awaited so a two-node deployment is subscribed by the
+    // time listen() resolves; an unreachable broker fails fast and degrades.
+    if (this.#relay) {
+      const logger = this.#app.get(Logger);
+      await pubsub.relayThrough(this.#relay, {
+        ...(this.#relayChannel !== undefined && {
+          channel: this.#relayChannel,
+        }),
+        onError: (error: unknown, phase: RelayPhase) => {
+          logger.warn(
+            `the websocket relay could not ${phase}. Fan-out is local to this ` +
+              'process until it recovers.',
+            { error },
+          );
+        },
+      });
+    }
     return this.#server.url.href;
   }
 
@@ -202,6 +240,9 @@ export class HttpApplication implements HttpApp {
     this.#shuttingDown ??= (async () => {
       await this.#server?.stop(this.#websocket !== undefined);
       this.#server = undefined;
+      // Before the container: a relay this app owns holds two Redis sockets, and
+      // `maxRetries: 0` means nothing else will ever close them.
+      await this.#app.get(PubSub).close();
       await this.#app.shutdown();
       this.#resolveClosed?.();
     })();

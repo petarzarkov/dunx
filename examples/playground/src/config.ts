@@ -21,7 +21,19 @@ const envSchema = z.object({
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
+  /** better-auth signs session cookies with this. 32 characters is its own minimum. */
+  AUTH_SECRET: z
+    .string()
+    .min(32)
+    .default('playground-development-secret-not-for-production'),
 });
+
+/**
+ * The one broker channel the websocket relay carries every topic on. Two apps
+ * sharing a Redis need two of these; the second node in the chat demo needs this
+ * exact one.
+ */
+export const RELAY_CHANNEL = 'playground:ws';
 
 export interface AppConfig {
   readonly appName: string;
@@ -35,6 +47,7 @@ export interface AppConfig {
   readonly database: { readonly file: string };
   readonly redis: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
+  readonly auth: { readonly secret: string };
 }
 
 /**
@@ -69,5 +82,6 @@ export const validate = (env: ConfigSource): AppConfig => {
     database: { file: value.DATABASE_FILE },
     redis: { url: value.REDIS_URL },
     images: { quality: value.IMAGE_QUALITY },
+    auth: { secret: value.AUTH_SECRET },
   };
 };

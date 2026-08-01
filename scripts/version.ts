@@ -198,6 +198,20 @@ const applyVersionBumps = (
     dir: string;
   }[] = [];
 
+  // One target for all of them: the highest version present, bumped once. Taking
+  // the highest rather than each package's own is what keeps them in lockstep when
+  // a previous run published some and failed on others.
+  const highest = packages
+    .map(({ packageJsonPath }) => {
+      const { version } = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+      return typeof version === 'string' ? version : '0.0.0';
+    })
+    .reduce(
+      (max, version) => (semver.order(version, max) === 1 ? version : max),
+      '0.0.0',
+    );
+  const shared = bumpVersion(highest, bumpType);
+
   for (const { name, dir, packageJsonPath } of packages) {
     const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
     const oldVersion = pkg.version;
@@ -207,7 +221,7 @@ const applyVersionBumps = (
       continue;
     }
 
-    const newVersion = bumpVersion(oldVersion, bumpType);
+    const newVersion = shared;
 
     if (semver.order(newVersion, oldVersion) !== 1) {
       console.warn(
@@ -478,17 +492,35 @@ const runVersionBump = (allPackages: PublishablePackage[]): void => {
   const bumpType = determineBumpType();
   console.log(`Determined version bump type: ${bumpType}`);
 
-  const publishablePackages =
-    changedSrcPackages === null
-      ? allPackages
-      : allPackages.filter((pkg) => changedSrcPackages.has(basename(pkg.dir)));
-
-  if (publishablePackages.length === 0) {
-    console.log('No publishable packages found.');
-    process.exit(0);
+  // **Lockstep: every @dunx package shares one version and ships together**, even
+  // the ones this commit did not touch. Change detection above decides *whether*
+  // to release, never *what* to release.
+  //
+  // This is a correctness requirement, not tidiness. `version.ts` rewrites a
+  // `workspace:*` range to the dependency's exact version at publish time, so with
+  // independent versions `@dunx/http@0.2.0` would pin `@dunx/core@0.1.0` while a
+  // later `@dunx/infra@0.3.0` pinned `@dunx/core@0.2.0` — and an app using both
+  // would install **two copies of @dunx/core**. In this container a token *is* a
+  // class object, so two copies means two distinct `Logger` classes and
+  // `app.get(Logger)` silently missing the binding another package registered.
+  // `Symbol.for('dunx.deps')` already survives duplicate copies on purpose; class
+  // identity cannot.
+  //
+  // Caret ranges do not save it: pre-1.0, `^0.1.0` excludes `0.2.0`, so a minor
+  // bump of core would still fragment the graph. Peer dependencies would, but
+  // `bun run --filter '*' build` orders builds by `dependencies` alone — measured:
+  // moving core to a peer races `tsc` against core's own `.d.ts` emit.
+  //
+  // Cost: an untouched package still gets a version. For a pre-1.0 framework whose
+  // packages move together that is a feature — one number answers "which versions
+  // work together".
+  if (changedSrcPackages !== null) {
+    console.log(
+      `Releasing all ${allPackages.length} packages in lockstep (changed: ${[...changedSrcPackages].join(', ')})`,
+    );
   }
 
-  const bumpedPackages = applyVersionBumps(publishablePackages, bumpType);
+  const bumpedPackages = applyVersionBumps(allPackages, bumpType);
 
   if (isDryRun || bumpedPackages.length === 0) return;
 

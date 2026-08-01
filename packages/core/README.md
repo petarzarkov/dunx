@@ -64,6 +64,13 @@ does have one (`LoggerModule`, `ImagesModule`, `RedisModule`, `FilesModule`,
 `onInit` runs in dependency order, `onShutdown` in reverse — so a service drains
 before the database it holds.
 
+`AppFactory.create(root, { overrides })` takes registrations that **replace** a
+module's binding for the same token, in place, as the flat list is assembled — so
+the duplicate check still runs, an override for a token nobody binds is an error,
+and the discarded provider is never instantiated (its `useFactory` never runs).
+`@dunx/testing` is what consumes it; there is no reason to reach for it directly in
+application code.
+
 ## Configuration
 
 One validation function. Not a schema DSL, and not a second place to declare

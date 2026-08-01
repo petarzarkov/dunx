@@ -1,25 +1,36 @@
 import { ConsoleLogger } from '../logger/console.js';
 import { AsyncRequestContext, RequestContext } from '../logger/context.js';
 import { Logger } from '../logger/logger.js';
+import { AppError } from './errors.js';
 import { Injector } from './injector.js';
 import { hasOnInit, hasOnShutdown } from './lifecycle.js';
 import { collectModules, readModule, type ModuleRef } from './module.js';
-import { provide } from './provider.js';
-import type { InjectionToken } from './token.js';
+import { provide, type Registration } from './provider.js';
+import { describeToken, type InjectionToken } from './token.js';
 
 /**
  * The two contracts core guarantees are resolvable. Both are last-resort: a
  * module binding either one replaces it, and `@dunx/infra/logger` binds both.
  */
-const registerDefaults = (injector: Injector): void => {
-  injector.registerDefault(
-    provide(RequestContext, { useClass: AsyncRequestContext }),
-  );
-  injector.registerDefault(
-    provide(Logger, {
-      useFactory: (context: RequestContext) => new ConsoleLogger(context),
-      inject: [RequestContext] as const,
-    }),
+const defaults = (): readonly Registration[] => [
+  provide(RequestContext, { useClass: AsyncRequestContext }),
+  provide(Logger, {
+    useFactory: (context: RequestContext) => new ConsoleLogger(context),
+    inject: [RequestContext] as const,
+  }),
+];
+
+const assertEveryOverrideReplaced = (
+  overrides: ReadonlyMap<InjectionToken<unknown>, Registration>,
+  replaced: ReadonlySet<InjectionToken<unknown>>,
+): void => {
+  const missing = [...overrides.keys()].filter((token) => !replaced.has(token));
+  if (missing.length === 0) return;
+
+  throw new AppError(
+    `Nothing to override for ${missing.map(describeToken).join(', ')}: no module ` +
+      'in the graph binds it. An override replaces a binding — it cannot add one, ' +
+      'because a token nobody bound is a token nothing under test resolves.',
   );
 };
 
@@ -75,24 +86,59 @@ class Application implements App {
   }
 }
 
+export interface AppOptions {
+  /**
+   * Replaces a binding **in place**, keyed by token, as the flat list is
+   * assembled. Not an extra module appended at the end: the container is flat and
+   * one token has exactly one binding, so a late binding would be a duplicate
+   * rather than a winner. The count per token never changes, which is why the
+   * duplicate-binding check still runs unmodified.
+   *
+   * An override naming a token nobody binds is an error — a silent no-op there is
+   * a test that asserts against the real provider it thought it had swapped.
+   *
+   * Because the replacement happens before anything resolves, the discarded
+   * provider is never instantiated: its `useFactory` never runs and its `onInit`
+   * never fires. That is what makes overriding a database safe.
+   *
+   * `@dunx/testing`'s `createTestApp({ modules, overrides })` is the intended
+   * caller.
+   */
+  readonly overrides?: readonly Registration[];
+}
+
 export class AppFactory {
   /**
    * Builds the container from the root module's import graph, resolves every
    * provider, and runs `onInit` in dependency order. The returned app is live —
    * there is no separate init step, because dunx resolves eagerly.
    */
-  static async create(root: ModuleRef): Promise<App> {
+  static async create(root: ModuleRef, options: AppOptions = {}): Promise<App> {
     const injector = new Injector();
+    const overrides = new Map<InjectionToken<unknown>, Registration>(
+      (options.overrides ?? []).map((entry) => [entry.token, entry]),
+    );
+    const replaced = new Set<InjectionToken<unknown>>();
+    const substitute = (registration: Registration): Registration => {
+      const override = overrides.get(registration.token);
+      if (!override) return registration;
+      replaced.add(registration.token);
+      return override;
+    };
 
     for (const module of collectModules(root)) {
       for (const registration of readModule(module)) {
-        injector.register(registration, module.name);
+        injector.register(substitute(registration), module.name);
       }
     }
     // After every module, so an app that binds either of these wins. Offered at
     // all so `Logger` and `RequestContext` are injectable with no logging module
     // imported — which is what lets @dunx/http log requests out of the box.
-    registerDefaults(injector);
+    // Substituted too, so overriding `Logger` works in an app that binds none.
+    for (const registration of defaults()) {
+      injector.registerDefault(substitute(registration));
+    }
+    assertEveryOverrideReplaced(overrides, replaced);
 
     for (const token of injector.tokens) {
       await injector.resolve(token);

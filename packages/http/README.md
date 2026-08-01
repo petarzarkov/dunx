@@ -337,8 +337,7 @@ Bun accepts either. The general path awaits the input reader and the handler, an
 for that shape both awaits are on values that were never thenable, each costing an
 async frame and a microtask tick for nothing.
 
-Measured on `plaintext` in `tools/bench`: 89.5% -> ~100% of raw `Bun.serve`, which
-is to say no measurable overhead at all. A handler that does return a promise is
+Measured on `plaintext` in `tools/bench`: 89.5% -> 97.2% of raw `Bun.serve`. A handler that does return a promise is
 adopted rather than wrapped, so nothing about this is conditional on writing sync
 handlers.
 
@@ -380,6 +379,9 @@ could only ever be a silent no-op — the failure mode worth trading for an erro
   method's — innermost. Outermost sees the request first and the response last.
 - **Port**: the `listen(port)` argument, else `HttpOptions.port`, else `3000`.
 - **Error mapper**: `HttpOptions.onError`; there is no imperative equivalent.
+- **Overrides**: `HttpOptions.overrides` is core's `AppOptions.overrides`, passed
+  straight through — bindings replaced in place, which is what `@dunx/testing`'s
+  `createTestServer` uses.
 - **Repeated calls**: `setGlobalPrefix`, `set` and `enableCors` all replace, so the
   last call wins. `use()` appends.
 - **Collisions**: rejected at `create()`, and re-checked at `listen()` against the
@@ -611,6 +613,73 @@ with at least one gateway therefore force-stops (`stop(true)`) in `shutdown()`, 
 those clients see a `1006` close. An app with no gateways still stops gracefully.
 Bun also delivers an empty close `reason` to `@OnClose` once a socket has exchanged
 frames, whatever the client passed; the `code` is reliable.
+
+### Multi-node fan-out
+
+Bun's pub/sub is per-process, so two nodes behind a load balancer each reach only
+their own sockets. A **relay** fixes that: `PubSub.publish` fans out locally as
+always and also hands the message to the other nodes, which fan out locally too.
+
+```ts
+import { HttpFactory, RedisRelay } from '@dunx/http';
+
+const app = await HttpFactory.create(AppModule, {
+  relay: new RedisRelay({ url: 'redis://localhost:6379' }),
+  relayChannel: 'my-app:ws', // default 'dunx:ws'
+});
+```
+
+That is the whole opt-in. `RedisRelay` is `Bun.RedisClient` — a Bun global — so this
+adds **no dependency**, and with no `relay` configured nothing here runs at all.
+
+Nothing else changes. `socket.subscribe(topic)` is still Bun's, and a topic no
+socket on this node joined simply costs a `server.publish` that reaches nobody.
+
+**Exactly once.** Redis delivers a publish back to the application that made it, so
+a frame carries the publishing process's id and the receiving side drops its own.
+Without that, every client on the publishing node would get the message twice. A
+node that receives a relayed frame publishes it **locally only** and never re-relays.
+
+**Absence is tolerated.** With Redis unreachable the app still boots, still fans out
+locally, and logs one warning rather than one per publish. A malformed URL throws at
+construction instead, because that is a config bug and degrading silently would hide
+it.
+
+#### Bringing your own connection
+
+`PubSubRelay` is two methods, so anything that already talks to a broker fits:
+
+```ts
+interface PubSubRelay {
+  publish(channel: string, message: string): unknown;
+  subscribe(channel: string, listener: (message: string) => void): unknown;
+  close?(): unknown; // only if the relay owns the connection
+}
+```
+
+`@dunx/infra`'s `RedisConnection` satisfies it **structurally**, with no adapter and
+no dependency between the two packages. It has to come out of the container, so it
+goes through `relayThrough` rather than the factory option:
+
+```ts
+const app = await HttpFactory.create(AppModule);
+await app.get(PubSub).relayThrough(app.get(RedisConnection), {
+  channel: 'my-app:ws',
+});
+await app.listen(3000);
+```
+
+Only one relay per `PubSub` — a second `relayThrough` throws, because two
+subscriptions on one channel is the other way to deliver everything twice.
+
+`socket.publish(topic, data)` is Bun's own method and stays local; anything that must
+cross nodes goes through `PubSub`. `subscriberCount` is local too — Bun cannot count
+another node's sockets.
+
+`maxRetries` on `RedisRelay` defaults to `0`, and that is deliberate: a
+`Bun.RedisClient` that never connects keeps a retry timer alive past `close()` and
+the process then never exits. Raise it when Redis is a hard requirement and you want
+Bun's reconnection.
 
 ## Status codes
 

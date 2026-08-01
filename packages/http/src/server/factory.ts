@@ -60,7 +60,12 @@ export class HttpFactory {
       providers:
         options.requestLogging === false ? [PubSub] : [PubSub, logging],
     };
-    const app = await AppFactory.create(scope);
+    // Spread rather than passed through, because `exactOptionalPropertyTypes`
+    // separates an absent `overrides` from one explicitly set to undefined.
+    const app = await AppFactory.create(
+      scope,
+      options.overrides ? { overrides: options.overrides } : {},
+    );
     const modules = collectModules(scope);
 
     const discovered: DiscoveredRoute[] = [];

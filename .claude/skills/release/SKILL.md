@@ -5,7 +5,17 @@ description: Version and publish @dunx/* packages to npm. Use when cutting a rel
 
 # /release
 
-Releases are automated: CI runs `bun run version` on every push to `main` and
+Releases are **lockstep**: every `@dunx/*` package shares one version and ships
+together, even the ones a release did not touch. Change detection decides _whether_
+to release, never _what_. The reason is a correctness one — `version.ts` rewrites
+`workspace:*` to an **exact** version at publish time, so independent versions would
+let an app end up with two copies of `@dunx/core`, and in this container a token _is_
+a class object. Full reasoning: ARCHITECTURE.md, "Versioning is lockstep".
+
+**Do not make versions independent again** without also solving the duplicate-core
+problem — see that section for the two alternatives and why each was rejected.
+
+CI runs `bun run version` on every push to `main` and
 publishes any package whose version changed. There is normally nothing to run by
 hand. This skill is for cutting a release deliberately, and for the failure modes.
 
@@ -36,7 +46,9 @@ Force every package to publish regardless of computed bumps by putting
 - **`workspace:` ranges.** `npm publish` does not expand them, so `version.ts`
   rewrites them to concrete versions around the publish and restores
   `package.json` afterwards. If a publish dies mid-run, check `git diff` for a
-  package manifest left with concrete versions where `workspace:*` belongs.
+  package manifest left with concrete versions where `workspace:*` belongs. Under
+  lockstep an exact pin is the _desired_ result, so `workspace:*` is correct and
+  `workspace:^` is not — a caret cannot span a pre-1.0 minor bump anyway.
 - **`--provenance` only under `GITHUB_ACTIONS`.** It errors anywhere else, which
   would break a manual publish.
 

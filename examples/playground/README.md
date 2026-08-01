@@ -26,6 +26,7 @@ services first, then the database and the temp directory they were using.
 | Command         | Does                                                                |
 | --------------- | -------------------------------------------------------------------- |
 | `bun start`     | serves on `PORT` (default 3000) and holds                            |
+| `bun run worker`| consumes queued jobs — **a second process, on purpose**              |
 | `bun run tour`  | boots the same app, narrates every package, shuts down, exits 0      |
 
 The tour is what CI runs. It is the end-to-end check that the whole DI graph builds
@@ -44,6 +45,8 @@ that check, because a service never exits.
 | `/api/cache`      | `@dunx/infra/redis` — `Bun.RedisClient`, degrading when nothing is up    |
 | `/api/reports`    | `@Public`, `@Roles` and `@UseGuards`                                    |
 | `/api/health`     | which of the above are actually working                                 |
+| `/api/jobs`       | `@dunx/infra/queue` — bullmq; publishes here, consumed by `bun run worker` |
+| `/api/auth/*`     | `@dunx/auth` — better-auth mounted, with `Bun.password` hashing          |
 | `/chat`           | a websocket gateway on the **same** `Bun.serve` as the routes            |
 
 ### Things worth trying
@@ -65,6 +68,44 @@ curl -s 'localhost:3000/api/images/render?width=128&format=webp' -o thumb.webp
 curl -s localhost:3000/api/reports                                  # 401
 curl -s localhost:3000/api/reports -H 'authorization: Bearer viewer'  # 200
 ```
+
+`bun run tour` also boots a **second node** for `/chat` — a second `Bun.serve` and a
+second container in the same process — and relays a publish between the two through
+Redis, asserting one delivery per client. Node A relays with `@dunx/http`'s
+`RedisRelay`; node B relays through the app's own `@dunx/infra/redis` connection,
+which satisfies `PubSubRelay` structurally. With no Redis running it says it is
+skipping and the app still exits 0.
+
+### The queue needs two processes
+
+A worker is its own container — its own connections, no HTTP server — so this is the
+one area the service cannot demonstrate alone. Run both:
+
+```bash
+bun start          # publishes
+bun run worker     # consumes, in another terminal
+```
+
+```bash
+# Returns immediately with a job id and state "waiting".
+curl -sX POST localhost:3000/api/jobs/thumbnails \
+  -H 'content-type: application/json' -d '{"width":128,"format":"webp"}'
+
+# Poll it. `result` is whatever the handler returned, computed in the worker.
+curl -s localhost:3000/api/jobs/thumbnails/1
+```
+
+The handler in [src/jobs/thumbnail.jobs.ts](./src/jobs/thumbnail.jobs.ts) injects the
+same `Thumbnails` service the HTTP image routes use — one wiring, two entry points.
+`@JobHandler` is the whole registration; the worker finds it by walking prototypes,
+the same discovery routes and gateways use.
+
+**With no Redis the queue routes answer 503 in single-digit milliseconds** rather than
+hanging. One caveat before deploying anything shaped like this: a process that
+*attempted* a queue operation while Redis was down will not exit on `SIGTERM`, because
+bullmq holds a connection whose retry timer outlives `close()`. Importing the module is
+not enough to trigger it, and a healthy Redis is unaffected. Measured, with the table
+in [docs/bun-apis.md](../../docs/bun-apis.md).
 
 ## Configuration
 

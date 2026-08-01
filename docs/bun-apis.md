@@ -121,14 +121,51 @@ options — read the runtime, not the signature.
 `Bun.RedisClient.prototype` carries ~250 methods. Most work. These do not behave as
 documented, and each cost real debugging time:
 
-| Behaviour                                              | Detail                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `psubscribe` is unusable                               | Present on the prototype, absent from `bun-types`. With a listener it throws `ERR_INVALID_ARG_TYPE`; with patterns alone the promise **never settles** (hung a probe for 120s). `send()` cannot rescue it — the reply has nowhere to go.                                                                                                                                                  |
-| `exists()` is lossy                                    | Bun coerces Redis's integer reply to `boolean`, so `exists('a', 'missing')` returns `true`. Use `send('EXISTS', keys)` when you need the count.                                                                                                                                                                                                                                           |
-| Bad URLs are accepted                                  | `new Bun.RedisClient('not-a-url')` succeeds, then fails at connect as an opaque `Connection closed`. Validate URLs yourself.                                                                                                                                                                                                                                                              |
-| `enableOfflineQueue: false` breaks lazy connect        | The first command is rejected with "offline queue is disabled" even against a healthy server unless you `connect()` first.                                                                                                                                                                                                                                                                |
-| A failed connection leaks a retry timer past `close()` | With `maxRetries > 0`, a client that never connects keeps an internal timer alive after `close()` and **the process never exits**. Measured: `maxRetries=1` hung until killed at 6s; `maxRetries=0` exited 0. Reproduced in plain Bun with no framework involved, so nothing in userland can clear it. Use `maxRetries: 0` or `autoReconnect: false` for a connection that may be absent. |
-| Subscriber mode throws **synchronously**               | A client in subscriber mode rejects data commands with `ERR_REDIS_INVALID_STATE`, thrown synchronously — `.then(ok, err)` does not catch it. Subscriptions need their own connection.                                                                                                                                                                                                     |
+| Behaviour                                              | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `psubscribe` is unusable                               | Present on the prototype, absent from `bun-types`. With a listener it throws `ERR_INVALID_ARG_TYPE`; with patterns alone the promise **never settles** (hung a probe for 120s). `send()` cannot rescue it — the reply has nowhere to go.                                                                                                                                                                                                                                                                                                                                                                        |
+| `exists()` is lossy                                    | Bun coerces Redis's integer reply to `boolean`, so `exists('a', 'missing')` returns `true`. Use `send('EXISTS', keys)` when you need the count.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Bad URLs are accepted                                  | `new Bun.RedisClient('not-a-url')` succeeds, then fails at connect as an opaque `Connection closed`. Validate URLs yourself.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `enableOfflineQueue: false` breaks lazy connect        | The first command is rejected with "offline queue is disabled" even against a healthy server unless you `connect()` first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| A failed connection leaks a retry timer past `close()` | With `maxRetries > 0`, a client that never connects keeps an internal timer alive after `close()` and **the process never exits**. Measured: `maxRetries=1` hung until killed at 6s; `maxRetries=0` exited 0. Reproduced in plain Bun with no framework involved, so nothing in userland can clear it. Use `maxRetries: 0` or `autoReconnect: false` for a connection that may be absent.                                                                                                                                                                                                                       |
+| Subscriber mode throws **synchronously**               | A client in subscriber mode rejects data commands with `ERR_REDIS_INVALID_STATE`, thrown synchronously — `.then(ok, err)` does not catch it. Subscriptions need their own connection.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Subscriber mode also leaks past `close()`              | Separate from the retry-timer leak above, and it happens with `maxRetries: 0` against a **healthy** server. A client that ever entered subscriber mode keeps the event loop alive after `close()`, so the process never exits. Measured: subscribe then `close()` hung until killed at 10s; publish-only on the same client exited 0. `await client.unsubscribe()` before `close()` fixes it — with a channel or with no arguments, both work. Any long-lived subscriber must leave subscriber mode on shutdown; `bun test` hides this, because the runner exits the process itself.                            |
+| A **failed** `subscribe()` leaks past `close()` too    | The same hazard from the other end, and `maxRetries: 0` does not save you. `subscribe()` against a server that cannot be reached rejects with `Max reconnection attempts reached` and then holds the event loop open after `close()`; `unsubscribe()` cannot rescue it, because the client is not in subscriber mode and rejects with `can only be called while in subscriber mode`. A failed `publish()` on the same url releases cleanly, so it is specific to `subscribe()`. Fix: `await client.connect()` **before** `subscribe()`. Connect fails first, releases cleanly, and reports `Connection closed`. |
+
+#### bullmq holds a handle Bun's `close()` cannot reach — but only once you use it
+
+Measured while wiring `@dunx/infra/queue`, and **the trigger is narrower than it first
+looked**. The first isolation was confounded: removing `QueueModule` made the process
+exit, but that run also never called the queue, so it proved nothing about the module.
+Re-run properly:
+
+| Scenario                                                             | `SIGTERM`       |
+| -------------------------------------------------------------------- | --------------- |
+| `QueueModule` imported, Redis unreachable, **never published**       | exits in ~1 s   |
+| `QueueModule` imported, Redis unreachable, **one publish attempted** | **never exits** |
+| `QueueModule` imported, Redis reachable, published                   | exits in ~2 s   |
+
+So the handle is created lazily by the first queue operation, and only leaks when that
+operation could not reach Redis. `maxRetries: 0` does not help — verified — because the
+connection is bullmq's, held over an `IRedisClient` it was handed, and nothing in
+userland can reach it. `Bun.RedisClient` alone is clean in the same scenario: it
+rejects with `Max reconnection attempts reached` and the process exits 0.
+
+Consequence: a container that serves a queue route while Redis is down will not exit on
+`SIGTERM` and will be `SIGKILL`ed. It serves correctly throughout — the route answers
+503 in single-digit milliseconds — so this is a shutdown defect, not an availability
+one.
+
+Two neighbouring leaks in `Bun.RedisClient` itself, both fixed in
+`@dunx/infra/redis`: a client that entered subscriber mode needs `unsubscribe()`
+before `close()`, and a `subscribe()` that failed to connect needs `connect()` first.
+`bun test` cannot observe either, because the runner exits the process itself — they
+need a spawned process to catch, which is what `@dunx/infra/redis` now has.
+
+**bullmq 6.0.5's CJS build imports `ioredis/built/utils`, which ioredis 6 removed.**
+Its ESM build does not, which is why the suite passes on ioredis 6 while a script that
+resolves the CJS entry fails with `Cannot find module 'ioredis/built/utils'`. Pin
+ioredis 5 if anything might load the CJS path.
 
 Real but missing from `bun-types`: `psubscribe`, `punsubscribe`, `pubsub`, `script`,
 `select`, `connected`, `bufferedAmount`, `onclose`, `onconnect`. Of these `pubsub`,
@@ -251,6 +288,11 @@ Fully typed in `bun-types` (`bun.d.ts` ~8180–8408), just undocumented on the s
   yourself for async work.
 - `Statement.all/get/run/values/iterate` are own properties of the instance, not on
   `Statement.prototype`.
+- **`prepare()` compiles one statement and silently drops the rest.** A multi-statement
+  string — four `CREATE TABLE`s separated by semicolons — creates the first table only,
+  with no error. That reaches through drizzle: `db.run(sql\`…\`)`goes via`prepare`, so
+a DDL block has to be one statement per call. `db.exec()`/ the raw handle's`exec()`
+  is the one that takes several.
 - **A raw `Date` binding fails, but the two adapters fail _differently_.** `bun:sqlite`
   throws `Binding expected string, TypedArray, boolean, number, bigint or null`.
   `Bun.SQL`'s SQLite adapter **accepts it silently and stores `NULL`** — no error, no

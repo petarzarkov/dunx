@@ -30,11 +30,13 @@ afterEach(() => {
 describe('the generated model', () => {
   test('covers every published package', () => {
     expect(site.packages.map((pkg) => pkg.name).sort()).toEqual([
+      '@dunx/auth',
       '@dunx/compiler',
       '@dunx/core',
       '@dunx/http',
       '@dunx/infra',
       '@dunx/openapi',
+      '@dunx/testing',
     ]);
   });
 

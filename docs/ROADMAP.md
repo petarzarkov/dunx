@@ -17,6 +17,7 @@ other.
 | `@dunx/http`     | Routes, websocket gateways, middleware, guards, CORS, validation       |
 | `@dunx/infra`    | `/db` (drizzle) `/redis` `/files` `/images` `/logger` (`@arkv/logger`) |
 | `@dunx/openapi`  | OpenAPI 3.1 from route zod schemas, self-contained HTML                |
+| `@dunx/testing`  | Bindings replaced in place, a real `Bun.serve` on port 0               |
 
 The two integrations are deliberate, per Rule 1's second half: `drizzle-orm` is an
 optional `peerDependency` and drives `bun:sqlite`/`Bun.SQL` through its own Bun
@@ -74,6 +75,32 @@ the level names rather than re-exporting them, and the backing logger filters by
 throwing. The guard is a test in `packages/infra/src/logger/module.test.ts` asserting
 the two `LOG_LEVELS` arrays are equal. Any future upstream level change must run it.
 
+**`@dunx/testing`.** Built to the specification in
+[ARCHITECTURE.md](./ARCHITECTURE.md) — overrides are substituted into the same flat
+list, keyed by token, so the duplicate-binding check still runs and a discarded
+provider's factory never executes. The substitution itself is core's
+(`AppFactory.create(root, { overrides })`), because `Injector` and `readModule` stay
+unexported; the decisions that went beyond the spec are recorded under "Test
+harness". The example app is written against it: `service.test.ts` drives the real
+bootstrap through the client, and `overrides.test.ts` boots the users slice with
+`Logger` replaced.
+
+Two things it surfaced. First, `bun run --filter '*'` orders builds by
+`dependencies` only, so **a published package's tests cannot import a workspace
+package that is not one of its runtime dependencies** — converting
+`packages/openapi/src/module.test.ts` made openapi's build race the harness's and was
+reverted. Second, `workspace:*` publishes as an **exact** version, which would give a
+consumer a nested second `@dunx/core` and therefore tokens that match nothing;
+`@dunx/testing` uses `workspace:^`, and the other packages should be looked at. While
+core is pre-1.0 that still needs `@dunx/testing` republished whenever core or http
+takes a **minor** bump, since `^0.4.0` does not admit `0.5.0`.
+
+What remains: **`@dunx/create-app`**, the other half of Phase 4. Nothing in the
+harness blocks it. Two smaller omissions, both deliberate and recorded in
+`packages/testing/README.md` so they are not re-litigated by accident — no websocket
+helper (Bun's native `WebSocket` against `server.url` is already the whole test) and
+no `providers` key on the options (a fixture class goes in a two-line `@Module`).
+
 **Drizzle as the database layer.** Built, tested, and now documented as _the_
 driver rather than an option. The hand-rolled `Database` contract, `Repository` and
 `quoteIdentifier` are retired; the reasoning is in
@@ -88,30 +115,132 @@ the hardcoded-`PgDialect` and drizzle-`transaction()` measurements and the datab
 design section. Manifest descriptions, `CLAUDE.md`'s package table and the root
 README now name the `Logger` contract and `/logger`.
 
+**Queues on bullmq.** Built: `QueueModule.forRoot`/`forRootAsync`, `@JobHandler`
+discovery by marker-plus-prototype-scan, `JobPublisher`, `JobDispatcher`, and
+`WorkerFactory` as the worker process's entrypoint. Publish and consume are
+deliberately different objects — `forRoot` binds the publish side only, so a web
+process opens no worker. Documented in `packages/infra/README.md`, "queue", with the
+design in [ARCHITECTURE.md](./ARCHITECTURE.md), "Queues".
+
+**The ioredis collision resolved better than expected, and CLAUDE.md is now stale
+on it.** CLAUDE.md's "Where the two halves collide" section says `ioredis` arrives
+transitively as bullmq's engine and that an app therefore gets both clients. Measured
+on bullmq 6.0.5: `ioredis` is an _optional_ peer of bullmq 6, which ships
+`createBunRedisClient` — an adapter over **`Bun.RedisClient`** — and dunx uses it, so
+every byte of queue traffic goes through Bun's client and no ioredis client is ever
+constructed. `ioredis` must still be _installed_, because bullmq's barrel statically
+imports it, so it is an optional peer of `@dunx/infra` too. That section of CLAUDE.md,
+and its `@dunx/infra` subpath row, want an owner's edit; the full measurement is in
+[ARCHITECTURE.md](./ARCHITECTURE.md), "Queues".
+
+**Documentation debt.** `packages/infra/README.md`'s `## db` section was rewritten
+against the drizzle API, and its `## logger` section added. `ARCHITECTURE.md` gained
+the hardcoded-`PgDialect` and drizzle-`transaction()` measurements and the database
+design section. Manifest descriptions, `CLAUDE.md`'s package table and the root
+README now name the `Logger` contract and `/logger`.
+
+**Better Auth is `@dunx/auth`, a sixth package.** Not `@dunx/infra/auth`: the guard is
+`@dunx/http` middleware reading `@dunx/http`'s `PUBLIC`/`ROLES` keys, and `@dunx/infra`
+must not depend on the web layer — the coupling refused earlier for a request logger in
+`/logger`, for the same reason (a seeder or a queue worker imports `@dunx/infra` and has
+no HTTP server). The dependency runs the other way, and `@dunx/auth` depends on
+`@dunx/infra` **not at all**: `DrizzleSource` and `RedisStore` restate structurally
+what `DbConnection` and `RedisConnection` provide, the way `@dunx/http` restates
+Standard Schema. That also removed a real `bun run --filter '*'` build-order race,
+since a cross-package `devDependency` is not an edge it orders on.
+
+What dunx contributes and what it refuses is the whole design. Contributed: the
+`forRoot`/`forRootAsync` pair, five wildcard routes mounting better-auth's own
+`(req) => Response` handler, `SessionGuard` composing with `@Public()`/`@Roles()`,
+`AuthContext` carrying the principal in its own `AsyncLocalStorage`, `Bun.password`
+bcrypt replacing better-auth's JavaScript scrypt, `drizzleDatabase` over the connection
+`@dunx/infra/db` already opened, and `redisStorage` implementing all five
+`secondaryStorage` methods — including the two better-auth marks optional because most
+clients cannot do them atomically and `Bun.RedisClient` can. Refused: a schema for
+better-auth's tables (its CLI generates them and they follow the plugins), and any part
+of the auth flow itself.
+
+The measurements and the two-strings-for-one-URL `basePath`/`mountAt` problem are in
+[ARCHITECTURE.md](./ARCHITECTURE.md), "Authentication".
+
+**Redis as the WebSocket adapter — built.** Multi-node gateway fan-out, and the
+dependency question that blocked it is settled: **both the contract and the Redis
+implementation live in `@dunx/http`**. `PubSubRelay` is two methods (publish,
+subscribe); the default is no relay and exactly today's per-process behaviour;
+`RedisRelay` is `Bun.RedisClient` directly, so `@dunx/http` still depends only on
+`@dunx/core`. Putting it in `@dunx/infra/redis` was rejected on the dependency
+direction — that would be the fourth time `@dunx/infra` was asked to depend on the
+web layer. The cost accepted is a little relay-specific connection glue instead of
+reusing `@dunx/infra/redis`'s general-purpose client.
+
+An app that would rather reuse its own connections satisfies the two methods itself,
+and `@dunx/infra`'s `RedisConnection` **already does, structurally** — the playground
+runs its second node on exactly that. Reasoning, the one-channel constraint that
+`psubscribe` forces, and the duplicate-delivery defence:
+[ARCHITECTURE.md](./ARCHITECTURE.md), "Multi-node websocket fan-out".
+
+It also turned up two Bun findings worth remembering as one **class** of bug, both
+now in [bun-apis.md](./bun-apis.md): a `Bun.RedisClient` holds the event loop open
+after `close()` both when it **entered** subscriber mode and when a `subscribe()`
+**failed to connect** — so a cleanly shut-down service never exits, `maxRetries: 0`
+does not help, and `bun test` cannot see any of it because the runner exits the
+process itself. The fixes are `unsubscribe()` before `close()`, and `connect()`
+before `subscribe()`. Both were already latent in `@dunx/infra/redis`, which now
+does each and has a spawn-based test — the only kind that can observe a held-open
+event loop — guarding it.
+
+**Documentation debt.** `packages/infra/README.md`'s `## db` section was rewritten
+against the drizzle API, and its `## logger` section added. `ARCHITECTURE.md` gained
+the hardcoded-`PgDialect` and drizzle-`transaction()` measurements and the database
+design section. Manifest descriptions, `CLAUDE.md`'s package table and the root
+README now name the `Logger` contract and `/logger`.
+
 ## Next, in order
 
-Each item makes the following one smaller. That ordering is deliberate.
+**Every item that was on this list is built.** Better Auth, queues and the websocket
+relay all landed, along with `@dunx/testing` — which means the ordering argument that
+used to live here has been spent, and what follows is a fresh list rather than a
+renumbered one.
 
-### 1. Better Auth
+### 1. `@dunx/core` as a `peerDependency`, which needs a topological build first
 
-Framework-agnostic, so it fits `@dunx/http` middleware. Reference:
-`nestjs-template/src/auth/auth.config.ts`. Should compose with the guards already
-built — `@Public()` and `@Roles()` exist and OpenAPI already reads them for security
-schemes.
+Versioning is currently **lockstep** because `version.ts` rewrites `workspace:*` to an
+exact version, and independent versions would let an app install two copies of
+`@dunx/core` — fatal here, because a DI token _is_ a class object. See
+[ARCHITECTURE.md](./ARCHITECTURE.md), "Versioning is lockstep".
 
-### 2. Queues — `@dunx/infra/queue` on BullMQ
+Peer dependencies are the better end state: they guarantee one copy without forcing
+every package to re-publish on every release. The only thing blocking them is that
+`bun run --filter '*' build` orders builds by `dependencies` alone — moving core to a
+peer was tried and the build failed with `TS7016`, because `tsc` in `@dunx/http` raced
+core's own `.d.ts` emit. **Replace the filter-based build with a topological one and
+peers become available.** That is the whole task.
 
-The largest remaining item. Needs job discovery (the marker-plus-prototype-scan
-technique from routes and gateways is the precedent — see ARCHITECTURE.md "Route
-discovery"), a dispatcher, a publisher, and a worker entrypoint. Note that
-**`bullmq` depends on `ioredis`**, which Rule 1 bans for dunx's own code; the
-boundary is recorded in CLAUDE.md under "Where the two halves collide".
+### 2. `@dunx/create-app`
 
-### 3. Redis as the WebSocket adapter
+The last unbuilt item from the original phase list: a scaffolder. Everything it would
+generate now exists, which is the reason it was left until last.
 
-Multi-node gateway fan-out. `@dunx/http`'s gateways currently use Bun's native
-pub/sub, which is per-process. Reference:
-`nestjs-template/src/notifications/events/socket.adapter.ts`.
+### 3. The loose ends the built work left behind
+
+Small, independent, each recorded where it belongs:
+
+- **A relay whose boot subscribe failed is retried by nothing.** Raising `maxRetries`
+  is the only recovery today. `@dunx/http`, `ws/relay.ts`.
+- **A process that attempted a queue operation while Redis was down does not exit on
+  `SIGTERM`** — bullmq holds a connection whose retry timer outlives `close()`, and
+  nothing in userland can reach it. Importing the module is not enough to trigger it;
+  a healthy Redis is unaffected. Measured, with the table in
+  [bun-apis.md](./bun-apis.md). Serving is unaffected, so this is a shutdown defect
+  only.
+- **bullmq 6.0.5's CJS build imports `ioredis/built/utils`, which ioredis 6 removed.**
+  The ESM build does not, which is why the suite passes. Pin ioredis 5 if anything
+  might load the CJS entry.
+- **No in-process HTTP + worker composition.** `WorkerFactory` builds its own
+  container, so a single process cannot both serve and consume. Deliberate, but it is
+  why the playground needs `bun run worker`.
+- **`@dunx/testing` cannot be used by another published package's tests**, only by
+  `examples/*`, for the same build-ordering reason as item 1. Fixing item 1 fixes this.
 
 ## `tools/` — private workspaces, never published
 

@@ -5,6 +5,7 @@ import {
   LoggerModule,
   type Transport,
 } from '@dunx/infra/logger';
+import { AccountsModule } from './auth/auth.module.js';
 import { CacheModule } from './cache/cache.module.js';
 import { ChatModule } from './chat/chat.module.js';
 import { AppConfigService, validate } from './config.js';
@@ -13,6 +14,7 @@ import { DocsModule } from './docs/docs.module.js';
 import { GuardsModule } from './guards/guards.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HttpModule } from './http/http.module.js';
+import { JobsModule } from './jobs/jobs.module.js';
 import { NotesModule } from './notes/notes.module.js';
 import { PicturesModule } from './pictures/pictures.module.js';
 import { StorageModule } from './storage/storage.module.js';
@@ -70,7 +72,11 @@ const fileAndConsole = (path: string): Transport[] => [
     UsersModule,
     NotesModule,
     ChatModule,
+    JobsModule,
     GuardsModule,
+    // After DatabaseModule, so better-auth reuses the connection it opened — and so
+    // the auth tables are created after the ledger's, both at onInit.
+    AccountsModule,
     HealthModule,
     DocsModule,
   ],

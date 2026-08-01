@@ -157,7 +157,7 @@ ARCHITECTURE.md, unbuilt · **undesigned** = no decision recorded anywhere.
 | Nest package                           | dunx                                    | Status       |
 | -------------------------------------- | --------------------------------------- | ------------ |
 | `nestjs-zod` / `ValidationPipe`        | Standard Schema on route decorators     | planned (P3) |
-| `@nestjs/testing` (`overrideProvider`) | `createTestApp({ modules, overrides })` | planned (P4) |
+| `@nestjs/testing` (`overrideProvider`) | `createTestApp({ modules, overrides })` | done         |
 | `@nestjs/swagger`                      | `@dunx/openapi`                         | planned (P5) |
 | `@nestjs/schedule` (`@Cron`)           | —                                       | undesigned   |
 | `@nestjs/throttler`                    | middleware                              | undesigned   |

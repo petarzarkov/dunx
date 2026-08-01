@@ -1,0 +1,78 @@
+{
+  "name": "@dunx/auth",
+  "version": "0.0.0",
+  "description": "Better Auth for dunx: its handler mounted on Bun.serve, a session guard reading @Public() and @Roles(), the caller in async context, and Bun.password hashing",
+  "keywords": [
+    "auth",
+    "authentication",
+    "better-auth",
+    "bun",
+    "dunx",
+    "guard",
+    "oauth",
+    "session"
+  ],
+  "homepage": "https://github.com/petarzarkov/dunx/tree/main/packages/auth#readme",
+  "license": "MIT",
+  "author": {
+    "name": "Petar Zarkov",
+    "email": "pzarko1@gmail.com",
+    "url": "https://github.com/petarzarkov"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/petarzarkov/dunx",
+    "directory": "packages/auth"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./drizzle": {
+      "types": "./dist/drizzle.d.ts",
+      "import": "./dist/drizzle.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun ../../scripts/build-package.ts",
+    "test": "bun test --bail",
+    "test:cov": "bun test --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/core": "workspace:*",
+    "@dunx/http": "workspace:*"
+  },
+  "devDependencies": {
+    "better-auth": "^1.6.25",
+    "drizzle-orm": "^0.45.2"
+  },
+  "peerDependencies": {
+    "@types/bun": ">=1.3.0",
+    "better-auth": "^1.6.25",
+    "drizzle-orm": "^0.45.2"
+  },
+  "peerDependenciesMeta": {
+    "@types/bun": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

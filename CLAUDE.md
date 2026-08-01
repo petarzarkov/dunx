@@ -96,22 +96,30 @@ zero or near-zero transitive weight.
 ### Where the two halves collide: a library's own engine
 
 `bullmq` depends on **`ioredis`**, which the first half bans because
-`Bun.RedisClient` exists. It is not swappable — bullmq uses ioredis-specific Lua
-scripting and cluster support.
+`Bun.RedisClient` exists.
 
-The ban is on **dunx** reimplementing a Bun primitive, not on a sanctioned
-integration's internal engine. `ioredis` arrives transitively as bullmq's engine, a
-choice bullmq made; it is not a client dunx picked over Bun's. So:
+**This resolved better than the paragraph that used to sit here predicted, and it
+was resolved by measuring.** bullmq 6 ships `createBunRedisClient`, an
+`IRedisClient` adapter over `Bun.RedisClient`, and `@dunx/infra/queue` uses it — so
+every byte of queue traffic goes through Bun's client and `dist/` contains no
+reference to ioredis. `ioredis` must still be _installed_, because bullmq 6.0.5's
+barrel imports it statically despite documenting it as optional (measured, recorded
+in ARCHITECTURE.md "Queues"), so it is an optional peer.
+
+The general rule stands, and is what let the better answer be found:
 
 - **dunx code never imports `ioredis`.** `@dunx/infra/redis` is `Bun.RedisClient`
-  and stays that way. An app gets both — Bun's client for its own Redis work,
-  bullmq's for the queue internals.
-- The alternative was writing a distributed queue with retries, backoff, priorities,
-  rate limiting and cron on top of `Bun.RedisClient`. That is the "invent what a
-  mature library already solves" failure, and it is the worse one.
+  and stays that way.
+- The ban is on **dunx** reimplementing a Bun primitive, not on a sanctioned
+  integration's internal engine. Had bullmq offered no Bun adapter, its own engine
+  would have been acceptable — because the alternative was writing a distributed
+  queue with retries, backoff, priorities, rate limiting and cron on top of
+  `Bun.RedisClient`, which is the "invent what a mature library already solves"
+  failure and the worse one.
 
 If a future integration's engine duplicates a Bun API that dunx _does_ expose
-directly, weigh it the same way and record the answer here.
+directly, weigh it the same way — and **check whether the library already has a Bun
+adapter before assuming it does not.**
 
 `docs/bun-apis.md` is not exhaustive — Bun ships undocumented APIs, and several
 documented ones misbehave. **Probe the runtime before concluding anything**, and
@@ -352,26 +360,37 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 | Package          | Contains                                                                                      |
 | ---------------- | --------------------------------------------------------------------------------------------- |
-| `@dunx/core`     | DI container, modules, lifecycle, the `Logger` contract                                       |
+| `@dunx/core`     | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts             |
 | `@dunx/compiler` | Load-time constructor-dependency transform (only native dep)                                  |
 | `@dunx/http`     | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation          |
-| `@dunx/infra`    | Subpaths `/db` `/redis` `/files` `/images` `/logger`                                          |
+| `@dunx/infra`    | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger`                                 |
 | `@dunx/openapi`  | OpenAPI 3.1 from the routes' own zod schemas, self-contained HTML (zod is a `peerDependency`) |
+| `@dunx/auth`     | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                |
+| `@dunx/testing`  | `createTestApp` / `createTestServer` — overrides replaced in place, real server on port 0     |
 
-Five packages, deliberately few. Merging is nearly free because the runtime weight is
+Seven packages, deliberately few. Merging is nearly free because the runtime weight is
 almost nil — `@dunx/core` has **zero dependencies**, and ESM tree-shaking drops what
 is not imported. `@dunx/compiler` stays separate because it is the only package with a
 native dependency (`oxc-parser`) and is build-time only; merging it would put a Rust
 parser in every production deploy.
 
-Two areas of `@dunx/infra` are integrations rather than dunx code, per Rule 1's second
-half: `/db` is **drizzle** over `drizzle-orm/bun-sqlite` and `drizzle-orm/bun-sql`
-(`drizzle-orm` is an optional `peerDependency`), and `/logger` binds **`@arkv/logger`**
-to core's `Logger` contract (a `dependency`, since `@arkv` is first-party). Neither
-restates the library's own surface — see `packages/infra/README.md`.
+Three areas are integrations rather than dunx code, per Rule 1's second half:
+`@dunx/infra/db` is **drizzle** over `drizzle-orm/bun-sqlite` and `drizzle-orm/bun-sql`
+(`drizzle-orm` is an optional `peerDependency`), `@dunx/infra/logger` binds
+**`@arkv/logger`** to core's `Logger` contract (a `dependency`, since `@arkv` is
+first-party), and `@dunx/auth` is **better-auth** (a required `peerDependency`) — the
+module, the mount, the guard and two Bun-native adapters, and nothing of the auth flow
+itself. None of them restates the library's own surface — see
+`packages/infra/README.md` and `packages/auth/README.md`.
 
-Planned, in roadmap order: validation via Standard Schema, `@dunx/testing`,
-`@dunx/create-app`, `@dunx/openapi`.
+`@dunx/auth` is its own package, not `@dunx/infra/auth`: it needs `@dunx/http`'s
+middleware and metadata types, and `@dunx/infra` must not depend on the web layer. It
+depends on `@dunx/infra` **not at all** — `DrizzleSource` and `RedisStore` restate
+structurally what `DbConnection` and `RedisConnection` provide, which also removes a
+`bun run --filter '*'` build-order race. Reasoning in docs/ARCHITECTURE.md,
+"Authentication".
+
+Planned, in roadmap order: `@dunx/create-app`.
 
 There is **one** example app, `examples/playground`, which CI boots and which grows
 through the phases. Per-package examples were tried and reverted — see

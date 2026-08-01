@@ -1,7 +1,7 @@
-import { HttpFactory, type HttpApp } from '@dunx/http';
+import { HttpFactory, RedisRelay, type HttpApp } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
-import { AppConfigService } from './config.js';
+import { AppConfigService, RELAY_CHANNEL } from './config.js';
 import { RequestLoggerMiddleware } from './http/request-log.js';
 
 /**
@@ -24,7 +24,19 @@ export const createApp = async (): Promise<HttpApp> => {
         'Every part of dunx in one service. Generated from the same zod schemas the routes validate against.',
       root: AppModule,
     }),
-    { websocket: { idleTimeout: 30 } },
+    {
+      websocket: { idleTimeout: 30 },
+      // Multi-node websocket fan-out, on `Bun.RedisClient` and therefore on no
+      // dependency at all. No url, so it resolves the same chain `RedisModule`
+      // does — $VALKEY_URL, $REDIS_URL, then localhost. The relay cannot read the
+      // validated config for the same reason the port cannot: the container does
+      // not exist yet when these options are read.
+      //
+      // With no Redis running this degrades to exactly the single-process
+      // behaviour, logs one warning, and the app still boots.
+      relay: new RedisRelay({ connectionTimeout: 500 }),
+      relayChannel: RELAY_CHANNEL,
+    },
   );
 
   // The port is not passed to `create()`: the container does not exist yet when

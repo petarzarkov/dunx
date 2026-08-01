@@ -1,4 +1,9 @@
-export { AppFactory, type App, type ShutdownSignal } from './app.js';
+export {
+  AppFactory,
+  type App,
+  type AppOptions,
+  type ShutdownSignal,
+} from './app.js';
 export { CircularDependencyError, AppError } from './errors.js';
 export { inject } from './inject.js';
 export type { OnInit, OnShutdown } from './lifecycle.js';

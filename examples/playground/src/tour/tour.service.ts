@@ -1,5 +1,6 @@
 import { Logger } from '@dunx/core';
 import type { HttpApp } from '@dunx/http';
+import { AuthDemo } from '../auth/auth.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
 import { Ledger } from '../database/ledger.service.js';
@@ -26,6 +27,7 @@ export class Tour {
     private readonly http: HttpDemo,
     private readonly chat: ChatDemo,
     private readonly guards: GuardsDemo,
+    private readonly auth: AuthDemo,
     private readonly docs: DocsDemo,
   ) {}
 
@@ -51,8 +53,14 @@ export class Tour {
     this.group('@dunx/http — @Gateway("/chat"), same Bun.serve as the routes');
     await this.chat.demonstrate(app, url);
 
+    this.group('@dunx/http — the websocket relay, two nodes, one topic');
+    await this.chat.relayed(url);
+
     this.group('@dunx/http — @Public, @Roles and @UseGuards');
     await this.guards.demonstrate(url);
+
+    this.group('@dunx/auth — better-auth mounted, SessionGuard, AuthContext');
+    await this.auth.demonstrate(url);
 
     this.group('@dunx/openapi — the document, from the routes own zod schemas');
     await this.docs.demonstrate(app, url);

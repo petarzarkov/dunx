@@ -1,11 +1,16 @@
-import { Logger } from '@dunx/core';
-import { PubSub, type HttpApp } from '@dunx/http';
+import { Logger, Module } from '@dunx/core';
+import { HttpFactory, PubSub, type HttpApp } from '@dunx/http';
+import { isConnectionError, RedisConnection } from '@dunx/infra/redis';
+import { RELAY_CHANNEL } from '../config.js';
+import { ChatGateway } from './chat.gateway.js';
 import { Lobby } from './lobby.service.js';
 
 interface Client {
   next(): Promise<string>;
   send(event: string, data: unknown): void;
   close(): void;
+  /** Every frame this socket ever received, so a *second* delivery is visible. */
+  readonly received: readonly string[];
 }
 
 /** A real `new WebSocket()`, with a deadline so a stall fails instead of hanging. */
@@ -14,10 +19,12 @@ const connect = async (base: string): Promise<Client> => {
     new URL('chat', base).href.replace('http', 'ws'),
   );
   const frames: string[] = [];
+  const received: string[] = [];
   const waiting: ((frame: string) => void)[] = [];
 
   socket.addEventListener('message', (event: MessageEvent) => {
     const frame = String(event.data);
+    received.push(frame);
     const waiter = waiting.shift();
     if (waiter) waiter(frame);
     else frames.push(frame);
@@ -46,13 +53,26 @@ const connect = async (base: string): Promise<Client> => {
       }),
     send: (event, data) => socket.send(JSON.stringify({ event, data })),
     close: () => socket.close(),
+    received,
   };
 };
+
+/**
+ * A second node, in-process. Two `Bun.serve` instances, two containers, two
+ * `PubSub`s with two different origin ids — everything a second deployment has
+ * except a second pid, which the relay logic cannot tell apart anyway.
+ *
+ * It reuses the very same `ChatGateway`, and takes only what that gateway needs:
+ * `ChatDemo` itself is not in here, so this module cannot recurse.
+ */
+@Module({ providers: [ChatGateway, Lobby] })
+class PeerNode {}
 
 export class ChatDemo {
   constructor(
     private readonly pubsub: PubSub,
     private readonly logger: Logger,
+    private readonly redis: RedisConnection,
   ) {}
 
   async demonstrate(app: HttpApp, url: string): Promise<void> {
@@ -89,5 +109,76 @@ export class ChatDemo {
     grace.close();
     // Long enough for @OnClose to run before the tour moves on.
     await Bun.sleep(20);
+  }
+
+  /**
+   * The relay: a publish on this node reaching a client connected to a *different*
+   * node, exactly once. Both nodes run in this process — two `Bun.serve`
+   * instances, two containers — which is every part of a two-machine deployment
+   * that the fan-out logic can distinguish.
+   *
+   * Node A relays through `RedisRelay`, which `createApp` handed to
+   * `HttpFactory`. Node B relays through the application's **own**
+   * `RedisConnection`, which satisfies `PubSubRelay` structurally — two methods,
+   * no adapter, and `@dunx/http` depending on `@dunx/infra` not at all.
+   */
+  async relayed(url: string): Promise<void> {
+    const { logger } = this;
+    if (!(await this.#redisUp())) {
+      logger.warn('skipping the relay demo: no Redis to relay through');
+      logger.info(
+        'the app booted anyway and fan-out stayed local — that is the degraded path',
+      );
+      return;
+    }
+
+    const peer = await HttpFactory.create(PeerNode, { requestLogging: false });
+    const peerUrl = await peer.listen(0);
+    const peerPubsub = peer.get(PubSub);
+    await peerPubsub.relayThrough(this.redis, { channel: RELAY_CHANNEL });
+
+    try {
+      logger.info(`node A on ${url}, node B on ${peerUrl}`);
+      // The last chars, not the first: a v7 uuid starts with a timestamp, so two
+      // ids minted in the same second share their leading digits.
+      logger.info(
+        `origins: A …${this.pubsub.origin.slice(-6)} / B …${peerPubsub.origin.slice(-6)} ` +
+          '— what tells a node its own echoed frame',
+      );
+
+      const [onA, onB] = await Promise.all([connect(url), connect(peerUrl)]);
+      await Promise.all([onA.next(), onB.next()]);
+
+      const said = 'across nodes';
+      this.pubsub.publishEvent(Lobby.TOPIC, 'said', said);
+      logger.info(`node B's client <- ${await onB.next()} (relayed via Redis)`);
+      // Redis echoes a publish back to its publisher. Fanning that out again would
+      // deliver twice on node A, so the origin check drops it — and these counts
+      // are what would show it if it did not.
+      await Bun.sleep(200);
+      const delivered = (client: Client): number =>
+        client.received.filter((frame) => frame.includes(said)).length;
+      logger.info(
+        `deliveries of "${said}": A ${delivered(onA)}, B ${delivered(onB)} ` +
+          '(one each — the echo was dropped, not fanned out again)',
+      );
+
+      onA.close();
+      onB.close();
+      await Bun.sleep(20);
+    } finally {
+      await peer.shutdown();
+    }
+  }
+
+  /** A relay demo needs a broker; an absent one is a skip, not a failure. */
+  async #redisUp(): Promise<boolean> {
+    try {
+      await this.redis.ping();
+      return true;
+    } catch (error) {
+      if (!isConnectionError(error)) throw error;
+      return false;
+    }
   }
 }

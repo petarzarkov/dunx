@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { ConsoleLogger } from '../logger/console.js';
+import { Logger } from '../logger/logger.js';
 import { AppFactory } from './app.js';
 import { inject } from './inject.js';
 import type { OnInit, OnShutdown } from './lifecycle.js';
@@ -171,6 +173,90 @@ describe('@Module imports', () => {
     expect(await rejectionMessage(AppFactory.create(ChildModule))).toMatch(
       /ChildModule is not a dunx module/,
     );
+  });
+});
+
+describe('overrides', () => {
+  // The mechanism lives here; @dunx/testing's createTestApp is a wrapper over it.
+  it('replaces a module binding in place, keyed by token', async () => {
+    @Module({ providers: [provide(EventsToken, { useValue: ['real'] })] })
+    class RealModule {}
+
+    const app = await AppFactory.create(RealModule, {
+      overrides: [provide(EventsToken, { useValue: ['fake'] })],
+    });
+
+    expect(app.get(EventsToken)).toEqual(['fake']);
+  });
+
+  it('never calls the factory it replaced', async () => {
+    let opened = 0;
+
+    @Module({
+      providers: [
+        provide(EventsToken, {
+          useFactory: async (): Promise<string[]> => {
+            opened += 1;
+            await Promise.resolve();
+            throw new Error('opened the real resource');
+          },
+        }),
+      ],
+    })
+    class RealModule {}
+
+    const app = await AppFactory.create(RealModule, {
+      overrides: [provide(EventsToken, { useValue: ['fake'] })],
+    });
+
+    expect(opened).toBe(0);
+    expect(app.get(EventsToken)).toEqual(['fake']);
+  });
+
+  it('replaces a contract core binds by default', async () => {
+    @Module({})
+    class EmptyModule {}
+
+    const logger = new ConsoleLogger(undefined, 'fatal');
+    const app = await AppFactory.create(EmptyModule, {
+      overrides: [provide(Logger, { useValue: logger })],
+    });
+
+    expect(app.get(Logger)).toBe(logger);
+  });
+
+  it('rejects an override for a token nobody binds', async () => {
+    @Module({})
+    class EmptyModule {}
+
+    expect(
+      await rejectionMessage(
+        AppFactory.create(EmptyModule, {
+          overrides: [provide(EventsToken, { useValue: [] })],
+        }),
+      ),
+    ).toMatch(
+      /^Nothing to override for Events: no module in the graph binds it/,
+    );
+  });
+
+  it('leaves the duplicate-binding check to fire, so there is no bypass', async () => {
+    @Module({ providers: [provide(EventsToken, { useValue: ['one'] })] })
+    class OneModule {}
+
+    @Module({ providers: [provide(EventsToken, { useValue: ['two'] })] })
+    class TwoModule {}
+
+    @Module({ imports: [OneModule, TwoModule] })
+    class RootModule {}
+
+    expect(
+      await rejectionMessage(
+        AppFactory.create(RootModule, {
+          overrides: [provide(EventsToken, { useValue: ['fake'] })],
+        }),
+      ),
+    ).toMatch(/^Duplicate binding for Events: bound by module "OneModule"/);
   });
 });
 

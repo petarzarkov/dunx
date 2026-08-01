@@ -1,5 +1,10 @@
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+// better-auth's `user`/`session`/`account`/`verification`, re-exported so they are
+// part of the one schema object. That is what lets `drizzleDatabase(connection)` in
+// auth.module.ts pass no schema of its own — the adapter reads `db._.fullSchema`.
+export * from './auth.schema.js';
+
 /**
  * One schema module, because there is one connection and one drizzle handle.
  * `typeof schema` is what flows into `BunSQLiteDatabase<typeof schema>` at every
