@@ -2,9 +2,9 @@ import { AppError, type Ctor } from '@dunx/core';
 import type { DiscoveredRoute } from '../route/discover.js';
 import type { HttpMethod } from '../route/marker.js';
 import type { UpgradeHandler } from '../ws/adapter.js';
-import { buildContext } from './context.js';
+import { buildContext, type RouteContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
-import { defaultErrorMapper, type ErrorMapper } from './errors.js';
+import { defaultErrorMapper, HttpError, type ErrorMapper } from './errors.js';
 import { buildInputReader } from './input.js';
 import { compose, type Middleware, type RouteHandler } from './middleware.js';
 import { HttpStatusCode } from './status.js';
@@ -107,6 +107,54 @@ export const withUpgradeRoutes = (
   const merged: ServeRoutes = { ...routes };
   for (const [path, upgrade] of gateways) merged[path] = { GET: upgrade };
   return merged;
+};
+
+/**
+ * The context an unmatched request gets. There is no controller and no handler,
+ * and saying so is more useful to a log line than an empty string.
+ */
+const unmatchedContext = (req: Request): RouteContext =>
+  Object.freeze({
+    controller: '(unmatched)',
+    handler: '(none)',
+    method: req.method as HttpMethod,
+    path: new URL(req.url).pathname,
+    get: () => undefined,
+  });
+
+/**
+ * Bun answers an unmatched path itself, so nothing in the middleware chain ever
+ * sees it — which makes a 404 invisible to request logging, metrics and tracing.
+ *
+ * This is the only `fetch` handler dunx installs, and it is not a router: Bun
+ * still does all the matching, and this runs only once Bun has decided nothing
+ * matched. It puts the global middleware in front of a 404 in the framework's
+ * own error shape.
+ *
+ * Composed per request rather than at boot, because the context names the path
+ * that missed. That allocation is on the 404 path only.
+ */
+export const buildFallback = (
+  middleware: readonly Middleware[] = [],
+  onError: ErrorMapper = defaultErrorMapper,
+  cors?: CorsOptions,
+): RouteHandler => {
+  // The canonical status name, not a sentence naming the path back at the
+  // caller: an unmatched path is the one place where echoing the request would
+  // tell a prober something about the surface it just failed to find.
+  const miss: RouteHandler = () => {
+    throw new HttpError(HttpStatusCode.NOT_FOUND, 'NOT_FOUND');
+  };
+
+  const run: RouteHandler = async (req) => {
+    try {
+      return await compose(middleware, unmatchedContext(req), miss)(req);
+    } catch (error) {
+      return onError(error, req);
+    }
+  };
+
+  return cors ? withCors(cors, run) : run;
 };
 
 export const buildRoutes = (

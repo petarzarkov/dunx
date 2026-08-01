@@ -1,18 +1,18 @@
-import type { OnShutdown } from '@dunx/core';
+import { Logger } from '@dunx/core';
+import type { OnInit, OnShutdown } from '@dunx/core';
 import {
   DbConnection,
-  SqliteConnection,
   runSeeds,
+  SqliteConnection,
   transaction,
   type SeedReport,
 } from '@dunx/infra/db';
-import { count, eq, sql, sum } from 'drizzle-orm';
+import { count, desc, eq, sql, sum } from 'drizzle-orm';
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
-import { Logger } from '../logger.js';
 import * as schema from './schema.js';
 import { ledger, type Entry } from './schema.js';
 
-export class Ledger implements OnShutdown {
+export class Ledger implements OnInit, OnShutdown {
   /**
    * The annotation is drizzle's own class with the schema as its type argument.
    * `@dunx/compiler` records the bare type name — a real runtime class, so a usable
@@ -25,21 +25,94 @@ export class Ledger implements OnShutdown {
     private readonly logger: Logger,
   ) {}
 
-  async demonstrate(): Promise<void> {
-    const { db, logger } = this;
-
-    // Standing in for a migration rather than replacing one: schema changes are
-    // `drizzle-kit generate` plus drizzle-orm/bun-sqlite/migrator, which own the
-    // SQL, the journal and the snapshot folder. A `:memory:` database has nowhere
-    // to keep any of that, so the table is created here.
-    db.run(sql`CREATE TABLE ledger (
+  /**
+   * Standing in for a migration rather than replacing one: schema changes are
+   * `drizzle-kit generate` plus drizzle-orm/bun-sqlite/migrator, which own the
+   * SQL, the journal and the snapshot folder. A `:memory:` database has nowhere
+   * to keep any of that, so the table is created here — and at `onInit`, so the
+   * routes below have somewhere to write before the first request arrives.
+   */
+  async onInit(): Promise<void> {
+    this.db.run(sql`CREATE TABLE IF NOT EXISTS ledger (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       memo TEXT NOT NULL,
       amount INTEGER NOT NULL
     )`);
+    await runSeeds(this.db, { dir: `${import.meta.dir}/seeds` });
+  }
+
+  list(limit: number): readonly Entry[] {
+    return this.db
+      .select()
+      .from(ledger)
+      .orderBy(desc(ledger.id))
+      .limit(limit)
+      .all();
+  }
+
+  find(id: number): Entry | undefined {
+    return this.db.select().from(ledger).where(eq(ledger.id, id)).get();
+  }
+
+  /** `.returning()` hands back the row the database actually wrote. */
+  add(memo: string, amount: number): Entry {
+    return this.db.insert(ledger).values({ memo, amount }).returning().get();
+  }
+
+  remove(id: number): boolean {
+    const gone = this.db
+      .delete(ledger)
+      .where(eq(ledger.id, id))
+      .returning()
+      .all();
+    return gone.length > 0;
+  }
+
+  balance(): number {
+    return (
+      this.db
+        .select({ total: sum(ledger.amount).mapWith(Number) })
+        .from(ledger)
+        .get()?.total ?? 0
+    );
+  }
+
+  rows(): number {
+    return this.db.select({ n: count() }).from(ledger).get()?.n ?? 0;
+  }
+
+  /**
+   * Both legs or neither. `transaction()` from `@dunx/infra/db`, not
+   * `db.transaction()`: drizzle's own on bun-sqlite delegates to `bun:sqlite`'s
+   * synchronous `transaction()`, which commits as soon as the callback returns its
+   * promise — so everything after the first `await` would run in autocommit. That
+   * is what makes the rollback below possible at all.
+   */
+  transfer(
+    from: string,
+    to: string,
+    amount: number,
+    fail = false,
+  ): Promise<number> {
+    return transaction(this.db, async (tx) => {
+      tx.insert(ledger).values({ memo: from, amount: -amount }).run();
+      await Bun.sleep(1);
+      if (fail) throw new Error('transfer failed after the first leg');
+      tx.insert(ledger).values({ memo: to, amount }).run();
+      return (
+        tx
+          .select({ total: sum(ledger.amount).mapWith(Number) })
+          .from(ledger)
+          .get()?.total ?? 0
+      );
+    });
+  }
+
+  async demonstrate(): Promise<void> {
+    const { db, logger } = this;
     logger.info(
       `backend=${this.connection.backend} dialect=${this.connection.dialect}, ` +
-        'table "ledger" created',
+        'table "ledger" created at onInit',
     );
 
     // The escape hatch. `raw` is `unknown` on the base — the abstract class cannot
@@ -48,16 +121,10 @@ export class Ledger implements OnShutdown {
       logger.info(`raw driver -> bun:sqlite ${this.connection.raw.filename}`);
     }
 
-    // The builders are synchronous on bun-sqlite, so a statement ends in `.run()`,
-    // `.all()` or `.get()`. `.returning()` hands back the row the database wrote.
-    const opened: Entry = db
-      .insert(ledger)
-      .values({ memo: 'opening balance', amount: 100 })
-      .returning()
-      .get();
-    logger.info(`insert -> ${JSON.stringify(opened)}`);
-
-    db.insert(ledger).values({ memo: 'coffee', amount: -3 }).run();
+    logger.info(
+      `insert -> ${JSON.stringify(this.add('opening balance', 100))}`,
+    );
+    this.add('coffee', -3);
 
     const rows = db
       .select({ memo: ledger.memo, amount: ledger.amount })
@@ -81,13 +148,7 @@ export class Ledger implements OnShutdown {
     await this.seeds();
   }
 
-  /**
-   * `transaction()` from `@dunx/infra/db`, not `db.transaction()`: drizzle's own on
-   * bun-sqlite delegates to `bun:sqlite`'s synchronous `transaction()`, which
-   * commits as soon as the callback returns its promise. Everything after the first
-   * `await` would run in autocommit — which is exactly what the `await` below
-   * proves, and what makes the rollback in `rollsBack()` possible at all.
-   */
+  /** The `await` inside is what proves the transaction is not autocommitting. */
   private async commits(): Promise<void> {
     const balance = await transaction(this.db, async (tx) => {
       tx.insert(ledger).values({ memo: 'refund', amount: 12 }).run();
@@ -104,6 +165,7 @@ export class Ledger implements OnShutdown {
 
   /** Rolls back on throw, and the throw propagates rather than being swallowed. */
   private async rollsBack(): Promise<void> {
+    const before = this.rows();
     await transaction(this.db, async (tx) => {
       tx.insert(ledger).values({ memo: 'discarded', amount: 999 }).run();
       await Bun.sleep(1);
@@ -112,21 +174,19 @@ export class Ledger implements OnShutdown {
       this.logger.info(`transaction threw: ${(error as Error).message}`),
     );
     this.logger.info(
-      `rolled back transaction -> still ${this.rows()} rows, ` +
+      `rolled back transaction -> still ${before} rows, ` +
         '"discarded" never landed',
     );
   }
 
   /**
    * Seed *data*, which is the half `drizzle-kit` has no concept of. Numbered files
-   * in `seeds/`, each applied once and recorded in `dunx_seeds` — so the second
-   * call reports the same file as journaled instead of inserting its row twice.
+   * in `seeds/`, each applied once and recorded in `dunx_seeds` — so this reports
+   * them journaled rather than applied, `onInit` having already run them.
    */
   private async seeds(): Promise<void> {
     const dir = `${import.meta.dir}/seeds`;
-
-    this.report('first runSeeds', await runSeeds(this.db, { dir }));
-    this.report('second runSeeds', await runSeeds(this.db, { dir }));
+    this.report('runSeeds after onInit', await runSeeds(this.db, { dir }));
     this.logger.info(
       `seeded ledger -> ${this.rows()} rows, applied once despite two runs`,
     );
@@ -138,10 +198,6 @@ export class Ledger implements OnShutdown {
         `journaled ${JSON.stringify(report.journaled)}, ` +
         `skipped ${JSON.stringify(report.skipped)}`,
     );
-  }
-
-  private rows(): number {
-    return this.db.select({ n: count() }).from(ledger).get()?.n ?? 0;
   }
 
   /**

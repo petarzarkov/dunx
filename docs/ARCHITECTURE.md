@@ -818,6 +818,52 @@ Bun-only, so the ESM/CJS/types triple build is wasted work.
 Both halves run from the shared `scripts/build-package.ts`, so there is one
 implementation for every package.
 
+`tools/*` is outside all of this. Those workspaces are `"private": true`, never
+published, and build with whatever suits them — `tools/docs` is a React bundle,
+not a `Bun.build` package. Rule 1 constrains what dunx ships; it does not
+constrain what builds its website.
+
+## Documentation site (`tools/docs`)
+
+React + Mantine over `Bun.build`, static output, deployed to GitHub Pages. It replaced the
+coverage report as the Pages root; coverage is now a page inside it.
+
+**The API reference is extracted, not written.** `tools/docs/scripts/extract/`
+parses every `packages/*/src/**/*.ts` with **`oxc-parser`** — the parser
+`@dunx/compiler` already depends on — and reads three things off each exported
+declaration:
+
+- the **signature**, sliced from the source text between AST offsets (from the
+  declaration's start to its body's start). The signature is therefore the one
+  that was _written_, which for annotated source is better documentation than a
+  checker-normalised expansion.
+- the **doc comment**, bound by adjacency: a `/** */` block with nothing but
+  whitespace between it and the declaration.
+- the **public surface**, by resolving each manifest `exports` entry to its
+  source entrypoint and following `export * from` / `export { x } from` through
+  the module graph. A symbol no entrypoint reaches is marked internal.
+
+TypeScript's own API was the alternative and was rejected: the only thing it
+adds is _inferred_ types for un-annotated declarations, which this codebase
+barely has, in exchange for running a full type checker over five packages at
+build time. What that costs is recorded in `tools/docs/README.md` along with the
+gaps it leaves — no cross-package type links, no namespace re-export expansion,
+one entry per overload set.
+
+Two details worth not re-deriving:
+
+- **Routing is hash-based** (`#/api/core`). GitHub Pages serves static files
+  with no SPA fallback, so a path router 404s on every deep link.
+- **The frozen-object-plus-union `enum` replacement declares one name twice**, as
+  a value and as a type. The extractor merges both declarations into one entry;
+  keying by name alone would document half the construct.
+
+`scripts/coverage-report.ts` writes into the site rather than publishing
+standalone: the model to `tools/docs/src/generated/coverage.json`, the badges to
+`tools/docs/public/badges/`, which the build copies to `/badges/`. CI therefore
+rebuilds the site after `test:cov`, because the first build (inside
+`bun run build`) predates the coverage data.
+
 ## Scaffolder (`create-app`)
 
 `@dunx/create-app` gets all three invocations from one package name:
@@ -916,3 +962,61 @@ public API shape belongs before the code it gates.
 
 None open. Route input inference was the last one; its result is recorded under
 **Verified constraints** above.
+
+## Benchmark harness (`tools/bench`)
+
+Full methodology, subject list and results table:
+[`tools/bench/README.md`](../tools/bench/README.md). Recorded here are the decisions
+and the measurements behind them.
+
+**The load generator is native, and that was measured rather than assumed.** The
+harness supports two: [oha](https://github.com/hatoo/oha) (Rust, via `bun run
+setup`) and a fallback driver written on Bun's `fetch` across worker threads. Against
+the same raw `Bun.serve` process at 64 connections, oha extracts **135k req/s** and
+the JavaScript driver plateaus at **80k**, collapsing to **23k** at 256 connections
+as thirty worker threads contend on Bun's connection pool. The JS driver would have
+understated every Bun subject by roughly 40% and compressed the whole ranking. This
+is Rule 1's "native, not a JavaScript reimplementation" holding in a place where it
+is easy to check: `oxc-parser` over a JS AST library is the same call.
+
+**oha has headroom over the fastest subject, and that was checked too.** One
+`Bun.serve` process driven by one oha gives ~130k req/s; four `Bun.serve` processes
+driven by four oha instances give **~385k req/s in total**. A generator with 3x
+headroom is not what the numbers are measuring. Without this check the whole table
+would be unfalsifiable.
+
+**`bombardier` and `wrk` are deliberately unsupported.** Each is one adapter next to
+`src/loadgen/oha.ts`, but an untested output parser producing plausible-looking wrong
+numbers is worse than an honest "not supported".
+
+**The `Bun.serve` baseline uses route handlers, not static `Response` objects.**
+`Bun.serve({ routes })` accepts a `Response` instance and serves it from a
+precomputed buffer, which beats any framework for reasons unrelated to frameworks.
+Using it would have inflated the ceiling `@dunx/http` is measured against.
+
+**Every subject validates with the same zod schema**, including Fastify and Elysia,
+which ship faster compiled validators. Holding the validator constant is what makes
+`validate` minus `json` readable as one framework's validation plumbing. It
+understates Fastify and Elysia, and the JSON report records each subject's validator
+so the handicap is visible rather than implied.
+
+**Latency histograms, not reservoir sampling.** The fallback driver buckets latencies
+at 1 µs up to 100 ms and merges `Uint32Array`s across workers. The alternative —
+sampling a subset — needs an RNG, and a sampled p99 is a p99 with an error bar nobody
+reads. It also keeps `Math.random` out of a number that matters, per the `@arkv/rng`
+rule.
+
+What the harness found, in one line each:
+
+- `@dunx/http` costs **6–7%** against raw `Bun.serve` on plain dispatch and JSON,
+  **14%** with a path parameter, **21%** with body validation.
+- It **loses to Elysia on all four scenarios**; the `params` gap (85.8% vs 95.5% of
+  baseline) is the largest and is the clearest optimisation target. Elysia compiles
+  per-route handler code ahead of time.
+- It **boots in ~53 ms against raw `Bun.serve`'s ~27 ms** — the compiler's oxc parse
+  plus eager DI resolution and route discovery. That is the trade this architecture
+  makes on purpose: paid once at boot, never per request. It is a real cost on a
+  short-lived process.
+- **Bun is worth ~2.3x on its own.** The same Hono app scores 101,667 req/s on
+  `Bun.serve` and 43,706 on `node:http`, a larger gap than any two frameworks on the
+  same runtime.

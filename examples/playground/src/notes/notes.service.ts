@@ -1,5 +1,5 @@
+import { Logger } from '@dunx/core';
 import type { OnInit } from '@dunx/core';
-import { Logger } from '../logger.js';
 
 export class NotesService implements OnInit {
   readonly #rows = ['read the architecture doc', 'measure before deciding'];

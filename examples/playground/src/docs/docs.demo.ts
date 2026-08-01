@@ -1,10 +1,10 @@
+import { Logger } from '@dunx/core';
 import type { HttpApp } from '@dunx/http';
 import {
   danglingRefs,
   OpenApiExplorer,
   type OpenApiDocument,
 } from '@dunx/openapi';
-import { Logger } from '../logger.js';
 
 const documentAt = async (
   url: string,
@@ -60,10 +60,18 @@ export class DocsDemo {
 
     const page = await fetch(new URL('api/docs', url));
     const html = await page.text();
+    // The page carries one inline <script> so a route can be sent from it. What
+    // still has to hold is that nothing is *fetched*: no src, no stylesheet
+    // link, no CSS url(), no CDN.
+    const external =
+      html.includes('src=') ||
+      html.includes('<link') ||
+      html.includes('url(') ||
+      html.includes('//cdn');
     logger.info(
       `GET /api/docs -> ${page.status} ${page.headers.get('content-type')}, ` +
-        `${html.length} bytes, external requests: ` +
-        `${html.includes('<script') || html.includes('//cdn') ? 'some' : 'none'}`,
+        `${html.length} bytes, ${(html.match(/<script/g) ?? []).length} inline script, ` +
+        `external requests: ${external ? 'some' : 'none'}`,
     );
   }
 

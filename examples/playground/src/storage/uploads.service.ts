@@ -1,5 +1,5 @@
+import { Logger } from '@dunx/core';
 import { LocalStorage, Storage } from '@dunx/infra/files';
-import { Logger } from '../logger.js';
 
 const REPORT = 'reports/q1.csv';
 const ARCHIVE = 'reports/q2.csv';

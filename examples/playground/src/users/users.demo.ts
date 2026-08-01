@@ -1,5 +1,5 @@
+import { Logger } from '@dunx/core';
 import { z } from 'zod';
-import { Logger } from '../logger.js';
 import { CreateUser } from './users.schemas.js';
 import { UsersService } from './users.service.js';
 

@@ -58,6 +58,22 @@ keeps its empty dependency list and `@dunx/http` middleware can inject it), the
 `@arkv/logger`-backed `LoggerModule` in **`@dunx/infra/logger`**, and no adapter
 class between them — upstream's `Logger` satisfies the contract structurally.
 
+**Tracking `@arkv/logger@0.8.1`.** Upstream made the logger Node-only and grew a
+transport layer. Applied here: `LogLevel.LOG` became `LogLevel.INFO` and the
+contract gained `info()` with `log()` kept as a deprecated alias (upstream keeps it
+for NestJS's `LoggerService`); `Transport`, `ConsoleTransport`, `FileTransport`,
+the formatters and `captureGlobalErrors` are re-exported; `forRoot` gained a second
+dunx-side argument for `captureGlobalErrors`, and a lifecycle-only provider that
+flushes and closes transports on shutdown. `BackingLogger` is a new token resolving
+to the same instance typed as the implementation, so `child()`, `flush()` and
+`close()` are reachable without widening the contract.
+
+The rename is worth remembering as a **class** of bug, not an incident: core copies
+the level names rather than re-exporting them, and the backing logger filters by
+`indexOf`, so an unknown name yields `-1` and silently disables filtering instead of
+throwing. The guard is a test in `packages/infra/src/logger/module.test.ts` asserting
+the two `LOG_LEVELS` arrays are equal. Any future upstream level change must run it.
+
 **Drizzle as the database layer.** Built, tested, and now documented as _the_
 driver rather than an option. The hand-rolled `Database` contract, `Repository` and
 `quoteIdentifier` are retired; the reasoning is in
@@ -99,29 +115,56 @@ pub/sub, which is per-process. Reference:
 
 ## `tools/` — private workspaces, never published
 
-### `tools/docs` — the documentation site
+### `tools/docs` — the documentation site — **built**
 
-A frontend package built to static output and published to **GitHub Pages**,
-replacing the coverage report as the Pages root. Coverage becomes **a page inside
-it** rather than the whole site.
+React + Mantine bundled by `Bun.build`, static output, deployed to **GitHub Pages** as the Pages
+root. Coverage is a page inside it. Design and the parser decision:
+[ARCHITECTURE.md](./ARCHITECTURE.md), "Documentation site"; the extractor's own
+limits: `tools/docs/README.md`.
 
-Consequences to handle:
+Nothing on the site is hand-written prose. The landing page is the root README,
+the guides are `docs/*.md` through `Bun.markdown.html`, each package page is its
+README plus an **API reference extracted from the doc comments** by
+`oxc-parser`, and the coverage page reads the model `gen:cov` emits.
 
-- `scripts/coverage-report.ts` currently owns the Pages output and the badges. It
-  needs to emit into the docs site instead of publishing standalone.
-- The `ci.yml` Pages job changes target.
-- The README's coverage badges point at the current layout and will break.
+The three displacement consequences are handled:
 
-Content should be generated from what already exists rather than hand-maintained:
-`docs/*.md` (Bun's `Bun.markdown` can render it), each package's README, and the
-OpenAPI document `@dunx/openapi` already produces.
+- `scripts/coverage-report.ts` no longer writes standalone HTML. It writes
+  `tools/docs/src/generated/coverage.json` and the badges into
+  `tools/docs/public/badges/`.
+- `ci.yml`'s Pages job uploads `./tools/docs/dist`, and a `Build the
+documentation site` step runs after `test:cov` so the artifact has the
+  coverage data the earlier `bun run build` could not have had.
+- The README badges point at `/badges/coverage-<pkg>.svg` and link to
+  `/#/coverage`; `scripts/update-readme.ts` generates them.
 
-### `tools/bench` — later
+Still open: syntax highlighting in code blocks, the OpenAPI document
+`@dunx/openapi` produces as a page here, and per-package code splitting.
 
-A benchmark harness against other backend frameworks and runtimes. Worth doing only
-once the HTTP surface is stable, and worth doing honestly: publish the methodology,
-the machine, and the losses as well as the wins. A benchmark that only ever shows
-dunx winning is marketing, not measurement.
+### `tools/bench` — the benchmark harness — **built**
+
+Eight subjects (raw `Bun.serve`, `@dunx/http`, Elysia, Hono on both Bun and Node, raw
+`node:http`, Fastify, Express) across four identical workloads, plus cold-start.
+Methodology, machine and every deliberate handicap are in
+[`tools/bench/README.md`](../tools/bench/README.md); the measured findings are in
+[ARCHITECTURE.md](./ARCHITECTURE.md), "Benchmark harness".
+
+It publishes the losses. dunx costs 6–21% against raw `Bun.serve` depending on the
+scenario, loses to Elysia on all four, and boots in roughly twice raw `Bun.serve`'s
+time. Those numbers are in the README table, not a footnote.
+
+Open follow-ups, none blocking:
+
+- Pin the generator and the subject to disjoint CPU sets. Not needed on 32 cores;
+  needed on a smaller machine.
+- Open-loop latency via oha's `-q` plus `--latency-correction`, which would remove
+  the coordinated-omission caveat the closed-loop numbers currently carry.
+- The `params` gap against Elysia (85.8% vs 95.5% of the `Bun.serve` baseline) is the
+  clearest optimisation target the harness has surfaced. Elysia compiles per-route
+  handler code ahead of time; dunx builds a closure at boot but still runs a generic
+  input reader per request.
+- `tools/docs` should read `results/latest.json`. The shape is documented and
+  versioned by `schemaVersion` in the bench README; do not re-derive it.
 
 ## Rejected — do not reopen without reading why
 

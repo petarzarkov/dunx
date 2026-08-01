@@ -9,7 +9,7 @@ import {
   type Input,
 } from '@dunx/http';
 import { z } from 'zod';
-import { RolesGuard } from './auth.guard.js';
+import { AuthGuard, RolesGuard } from './auth.guard.js';
 import { ReportsService } from './reports.service.js';
 
 const renameReport = {
@@ -19,14 +19,18 @@ const renameReport = {
 
 const createReport = { body: z.object({ title: z.string().min(1) }) } as const;
 
-// A class-level default, overridden per method below. Nothing is enforced here —
-// metadata decides nothing until a guard reads it.
+// `@UseGuards(AuthGuard)` at class scope rather than as global middleware: every
+// other route in this app is meant to be reachable without credentials, and a
+// global guard would challenge all of them. `@Roles('admin')` is a class-level
+// default overridden per method below — metadata decides nothing until a guard
+// reads it.
 @Roles('admin')
+@UseGuards(AuthGuard)
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
-  // The global AuthGuard reads this and skips: no credentials needed.
+  // The class-level AuthGuard reads this and skips: no credentials needed.
   @Public()
   @Get('/health')
   health(): { ok: true } {

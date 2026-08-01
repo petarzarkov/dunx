@@ -199,17 +199,40 @@ one(input: Input<typeof oneUser>) {}
 ## The page
 
 `GET /docs` is one self-contained HTML document: a `<style>` block, `<details>`
-for the folding, and nothing to fetch — no CDN, no `<script>`, no bundled copy of
-somebody else's viewer. It renders operations grouped by tag with their
-parameters, request bodies, responses and security, then the schemas.
+for the folding, one inline `<script>`, and **nothing to fetch** — no CDN, no
+`src=`, no bundled copy of somebody else's viewer. It renders operations grouped
+by tag with their parameters, request bodies, responses and security, then the
+schemas.
 
 Two Bun APIs do the work a dependency usually would: `Bun.escapeHTML` escapes
 every interpolation, and `Bun.markdown.html` renders descriptions — with
 `noHtmlBlocks`, `noHtmlSpans` and `tagFilter` on, so raw HTML in a schema's
 description is escaped rather than trusted.
 
-If you want Swagger UI or Scalar instead, point them at `/openapi.json`. Serving
-your own page is one route:
+### Sending a route
+
+Every operation gets a form, so a route can be executed from the page — the one
+thing a static rendering cannot do, and the usual reason to reach for swagger-ui.
+
+- **Path parameters** are substituted into the template. Every `{name}` gets an
+  input whether or not the document declares it, so a request can never go out
+  with a literal `{id}` in it.
+- **Query parameters** are appended only when filled in.
+- **The body** arrives pre-filled from the schema — refs resolved, `minimum` and
+  `format` honoured — so sending is a click rather than a typing exercise.
+- **Headers** are one `Name: value` per line, which is why there is no special
+  `Authorization` field. Operations that declare a security scheme start with
+  `Authorization: Bearer ` already in the box.
+- The response shows the status, the elapsed time, the headers and the body,
+  pretty-printed when it is JSON.
+
+That is ~90 lines of inlined JavaScript. `swagger-ui-dist` unpacks to 11.7 MB and
+`@scalar/api-reference` to 11 MB to do the same job; neither is a dependency this
+package is willing to take, and both would end the no-external-requests guarantee
+that `html.test.ts` asserts.
+
+If you want one of them anyway, point it at `/openapi.json`. Serving your own page
+is one route:
 
 ```ts
 import { renderPage } from '@dunx/openapi';

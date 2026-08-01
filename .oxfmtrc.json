@@ -10,6 +10,7 @@
     ".vscode",
     ".idea",
     ".env*",
-    "README.md"
+    "README.md",
+    ".claude/worktrees"
   ]
 }

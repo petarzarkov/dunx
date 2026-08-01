@@ -1,20 +1,22 @@
+import { Logger } from '@dunx/core';
 import type { OnInit, OnShutdown } from '@dunx/core';
-import { Config } from '../config.js';
-import { Logger } from '../logger.js';
+import { AppConfigService } from '../config.js';
 import { UsersRepository, type User } from './users.repository.js';
 
 export class UsersService implements OnInit, OnShutdown {
+  // `ConfigService<AppConfig>` injects because the transform records the bare
+  // name of a generic annotation — the type argument costs nothing at runtime.
   constructor(
     private readonly repository: UsersRepository,
     private readonly logger: Logger,
-    private readonly config: Config,
+    private readonly config: AppConfigService,
   ) {}
 
   /** `onInit` is awaited, so the schema exists before the first request arrives. */
   async onInit(): Promise<void> {
     await this.repository.migrate();
-    await this.repository.seed(this.config.seedUsers);
-    this.logger.info(`${this.config.appName}: users ready`);
+    await this.repository.seed(this.config.get('seedUsers'));
+    this.logger.info(`${this.config.get('appName')}: users ready`);
   }
 
   onShutdown(): void {
@@ -31,7 +33,9 @@ export class UsersService implements OnInit, OnShutdown {
 
   create(name: string, tags: readonly string[]): Promise<User> {
     const labels = tags.length === 0 ? '' : ` [${tags.join(', ')}]`;
-    this.logger.info(`${this.config.appName}: creating ${name}${labels}`);
+    this.logger.info(
+      `${this.config.get('appName')}: creating ${name}${labels}`,
+    );
     return this.repository.create(name);
   }
 

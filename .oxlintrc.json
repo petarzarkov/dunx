@@ -27,7 +27,8 @@
     "tests",
     "**/*.md",
     "**/*.json",
-    "dist"
+    "dist",
+    ".claude/worktrees"
   ],
   "rules": {
     "constructor-super": "error",
@@ -134,5 +135,5 @@
       }
     }
   ],
-  "jsPlugins": ["./scripts/oxlint-plugin.ts"]
+  "jsPlugins": ["./scripts/oxlint-plugin.js"]
 }

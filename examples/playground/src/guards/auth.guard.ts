@@ -1,3 +1,4 @@
+import { Logger } from '@dunx/core';
 import type { BunRequest } from 'bun';
 import {
   HttpError,
@@ -8,7 +9,6 @@ import {
   type Next,
   type RouteContext,
 } from '@dunx/http';
-import { Logger } from '../logger.js';
 
 /** `Authorization: Bearer <role>` — enough to demonstrate, short of a real token. */
 const roleOf = (req: BunRequest): string | undefined =>

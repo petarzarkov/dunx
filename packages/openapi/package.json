@@ -49,6 +49,7 @@
     "@dunx/http": "workspace:*"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.11.1",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

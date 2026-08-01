@@ -1,5 +1,6 @@
 import { Module } from '@dunx/core';
 import { FilesModule, LocalStorageOptions } from '@dunx/infra/files';
+import { FilesController } from './files.controller.js';
 import { Uploads } from './uploads.service.js';
 import { Workspace } from './workspace.js';
 
@@ -14,6 +15,7 @@ import { Workspace } from './workspace.js';
       inject: [Workspace],
     }),
   ],
+  controllers: [FilesController],
   providers: [Workspace, Uploads],
 })
 export class StorageModule {}

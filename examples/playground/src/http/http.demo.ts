@@ -1,6 +1,6 @@
+import { Logger } from '@dunx/core';
 import type { HttpApp } from '@dunx/http';
-import { Config } from '../config.js';
-import { Logger } from '../logger.js';
+import { AppConfigService } from '../config.js';
 import { RequestLog } from './request-log.js';
 
 const CORS_HEADERS = [
@@ -45,13 +45,13 @@ const whoami = async (url: string, forwarded: boolean): Promise<string> => {
 export class HttpDemo {
   constructor(
     private readonly log: RequestLog,
-    private readonly config: Config,
+    private readonly config: AppConfigService,
     private readonly logger: Logger,
   ) {}
 
   async demonstrate(app: HttpApp, url: string): Promise<void> {
     const { logger } = this;
-    const origin = this.config.corsOrigin;
+    const origin = this.config.get('corsOrigin');
 
     const prefixed = await fetch(new URL('api/notes', url));
     logger.info(

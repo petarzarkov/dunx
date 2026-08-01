@@ -64,7 +64,14 @@ const document: OpenApiDocument = {
   },
   components: {
     schemas: {
-      CreateUser: { type: 'object' },
+      CreateUser: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          age: { type: 'integer', minimum: 18 },
+          tags: { type: 'array', items: { type: 'string' } },
+        },
+      },
       ValidationError: { type: 'object' },
     },
     securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
@@ -83,11 +90,16 @@ describe('the docs page', () => {
     expect(page).toContain('<style>');
   });
 
-  it('fetches nothing: no CDN, no script, no external URL at all', () => {
-    expect(page).not.toContain('<script');
+  it('fetches nothing: no CDN, no external URL at all', () => {
+    // One inline <script> now, so operations can be sent. It is the enhancement,
+    // not the content — what still must hold is that nothing is *fetched*.
     expect(page).not.toContain('src=');
     expect(page).not.toContain('<link');
     expect(page).not.toContain('url(');
+    expect(page).not.toContain('//cdn');
+    expect(page).not.toContain('https://unpkg');
+    // The only script is the one written into the page.
+    expect([...page.matchAll(/<script/g)]).toHaveLength(1);
     // Every href is either the document this page describes or a fragment of the
     // page itself. Nothing leaves the origin.
     const hrefs = [...page.matchAll(/href="([^"]*)"/g)].map(
@@ -135,5 +147,57 @@ describe('the docs page', () => {
     expect(page).toContain('<h2>Schemas</h2>');
     expect(page).toContain('CreateUser');
     expect(page).toContain('one schema degraded');
+  });
+});
+
+describe('sending a route from the page', () => {
+  it('emits a form per operation, carrying the method and path template', () => {
+    expect(page).toContain(
+      '<form class="try" data-method="get" data-path="/users/{id}">',
+    );
+    expect(page).toContain(
+      '<form class="try" data-method="post" data-path="/users">',
+    );
+  });
+
+  it('gives every parameter an input tagged with where it goes', () => {
+    expect(page).toContain('data-in="query" data-name="limit"');
+    // `/users/{id}` declares no `parameters` at all. Without an input derived
+    // from the template the request would go out with a literal "{id}" in it.
+    expect(page).toContain('data-in="path" data-name="id"');
+  });
+
+  it('pre-fills the body from the schema, so sending is one click', () => {
+    // Derived from CreateUser, refs resolved against components/schemas.
+    expect(page).toContain('<textarea data-body');
+    expect(page).toContain('&quot;name&quot;: &quot;string&quot;');
+  });
+
+  it('seeds an Authorization line only where a scheme is required', () => {
+    const forms = page.split('<form class="try"');
+    // POST /users declares `security: [{ bearer: [] }]`; GET /users/{id} is
+    // explicitly public, so it gets an empty box.
+    // The placeholder is on every box; what differs is the pre-filled *value*.
+    const value = (form: string | undefined): string =>
+      /<textarea data-headers[^>]*>([^<]*)<\/textarea>/.exec(form ?? '')?.[1] ??
+      '';
+
+    const guarded = forms.find((form) =>
+      form.includes('data-method="post" data-path="/users"'),
+    );
+    expect(value(guarded)).toBe('Authorization: Bearer ');
+
+    const open = forms.find((form) => form.includes('data-path="/users/{id}"'));
+    expect(value(open)).toBe('');
+  });
+
+  it('carries the client inline, and it is the whole of the JavaScript', () => {
+    expect(page).toContain("form.matches('form.try')");
+    expect(page).toContain('performance.now()');
+    // The literal closing tag inside the script would end it early.
+    const script = page.slice(page.indexOf('<script>') + 8);
+    expect(script.slice(0, script.indexOf('</script>'))).not.toContain(
+      '</script',
+    );
   });
 });

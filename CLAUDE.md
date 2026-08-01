@@ -144,8 +144,15 @@ Package scope: `@dunx/<name>`. Every package is **ESM only** and emits a single
 `dist/` containing JS plus `.d.ts`.
 
 `tools/*` are workspaces but **`"private": true` and never published** — the docs
-site and, later, the benchmark harness. They may depend on anything they like; Rule 1
-governs what dunx _ships_, not what builds its website.
+site and the benchmark harness, both built. They may depend on anything they like;
+Rule 1 governs what dunx _ships_, not what builds its website or measures it. That
+is why `tools/bench` may devDepend on express and fastify, which Rule 1 bans
+everywhere else.
+
+`tools/docs` deliberately does **not** use Vite: `bun build ./index.html` does the
+same job in 41 ms against Vite's 1.7 s, and `bun ./index.html` is the dev server
+with HMR. The cost is ~25% more gzipped JS, which is the right trade for a docs
+site — measured, and recorded in ARCHITECTURE.md.
 
 ## Decorators — standard only
 
@@ -199,6 +206,69 @@ Consequences to keep in mind when changing this area:
 
 See docs/ARCHITECTURE.md for the measurements behind all of this.
 
+## Always-bound contracts
+
+`AppFactory.create` offers a default binding for two tokens **after** every
+module's, so a module that binds either one wins:
+
+| Token            | Default               | Replaced by                            |
+| ---------------- | --------------------- | -------------------------------------- |
+| `Logger`         | `ConsoleLogger`       | `LoggerModule` → `@arkv/logger`        |
+| `RequestContext` | `AsyncRequestContext` | `LoggerModule` → arkv's `ContextStore` |
+
+They exist so `@dunx/http` can log every request in an app that imported no
+logging module at all. Neither default reaches for a dependency: `ConsoleLogger`
+writes one JSON line per entry and `AsyncRequestContext` is `AsyncLocalStorage`,
+a Node built-in Bun implements natively. `ConsoleLogger` does **not** sanitize,
+mask or rotate — that is what makes swapping in `@dunx/infra/logger` worth it.
+
+`RequestContext` is the same trick as `Logger`: an abstract class in core that
+`@arkv/logger`'s `ContextStore` satisfies structurally, so the binding is a
+`provide` with no adapter between them.
+
+## Configuration
+
+`ConfigModule.forRoot({ validate })` in `@dunx/core`. **One validation function**,
+not a schema DSL — it takes the raw env and returns the shaped, typed object, and
+whatever it throws is what boot fails with. zod is `validate: (env) => schema.parse(env)`;
+a hand-written function works identically and costs no dependency.
+
+Bun already loads `.env` and `.env.local`, so there is no loader and no `dotenv`.
+The source defaults to `Bun.env`; pass `source` in a test rather than mutating the
+process environment.
+
+Declare a subclass and hand it to `as`, which is what keeps the type through a
+factory's `inject: [...]`:
+
+```ts
+export class AppConfigService extends ConfigService<AppConfig> {}
+ConfigModule.forRoot({ validate, as: AppConfigService });
+```
+
+Without it, `inject: [ConfigService]` resolves to `ConfigService<Record<string, unknown>>`
+and a factory annotating `ConfigService<AppConfig>` is rejected — parameters are
+contravariant and the token carries no type argument to recover.
+
+`forRootAsync({ useFactory, inject })` exists on `LoggerModule`, `ImagesModule`,
+`RedisModule`, `FilesModule` and `DbModule` for the same reason: reading options
+off `ConfigService` is the one thing a zero-argument `forRoot` function cannot do.
+
+## Request logging
+
+`@dunx/http` installs `RequestLoggingMiddleware` **by default**, outermost in the
+chain. `HttpFactory.create(root, { requestLogging: false })` removes it; an options
+object tunes it.
+
+**One entry per request**, carrying the request and the response together — Nest
+needs a middleware plus an interceptor because they are different classes, and dunx
+does not, because middleware wraps `next()`. A 4xx logs at `warn`, a 5xx at `error`.
+Do not add a second "received request" line; the pair is the thing being avoided.
+
+An unmatched path is logged too. `Bun.serve({ routes })` answers a miss itself, so
+`listen()` installs one `fetch` fallback that puts the global middleware in front of
+a `{"error":"NOT_FOUND","status":404}`. That is **not** a JavaScript router — Bun
+still does all the matching, and the fallback runs only once it has matched nothing.
+
 ## Building
 
 ```bash
@@ -223,9 +293,15 @@ Every package manifest needs `"type": "module"`. Without it,
 
 - **Linter**: `oxlint` (config: `.oxlintrc.json` at repo root)
 - **Formatter**: `oxfmt` (config: `.oxfmtrc.json`)
-- Repo-local rules live in `scripts/oxlint-plugin.ts`, wired via `jsPlugins`. oxlint
+- Repo-local rules live in `scripts/oxlint-plugin.js`, wired via `jsPlugins`. oxlint
   has no `no-restricted-syntax`, so anything syntax-shaped goes there. Currently:
   `dunx/no-enum` and `dunx/no-brand-prefix`.
+- **That plugin is `.js`, and must stay `.js`.** oxlint loads a JS plugin by
+  spawning **Node**, not Bun, so a `.ts` file there dies with
+  `ERR_UNKNOWN_FILE_EXTENSION` on any Node below 22.18 — which broke the
+  pre-commit hook and left CI depending on the runner image's Node. It is the one
+  file in the repo that is deliberately not TypeScript; `@ts-check` plus JSDoc
+  keeps it typed.
 - `bun run lint` / `bun run format` fix in place; `lint:check` / `format:check`
   do not and are what CI runs.
 - Pre-commit hook runs lint-staged: lints then formats staged `.ts` files.
@@ -305,7 +381,8 @@ prints that it is skipping and the app still exits 0.
 ## Repo Scripts
 
 - `bun run gen:readme` — regenerates the README Packages table and Project Structure block (`scripts/update-readme.ts`)
-- `bun run gen:cov` — rebuilds the coverage report and badges (`scripts/coverage-report.ts`)
+- `bun run gen:cov` — rebuilds the coverage model and badges **into `tools/docs`** (`scripts/coverage-report.ts`)
+- `bun run docs:dev` / `bun run docs:build` — the documentation site in `tools/docs`. Its API reference is extracted from the packages' doc comments by `oxc-parser`; see `tools/docs/README.md`
 - `bun run version:dry-run` — previews version bumps without writing
 
 ## Skills
@@ -352,7 +429,7 @@ New repeatable workflow → new skill. Do not grow this file instead.
 - Do not add Biome or ESLint
 - Do not prefix identifiers with `Dunx` — the brand belongs in the package name,
   not in every symbol. Use `App`: `AppFactory`, `AppError`, `AppModule`. Enforced
-  by `dunx/no-brand-prefix` in `scripts/oxlint-plugin.ts`
+  by `dunx/no-brand-prefix` in `scripts/oxlint-plugin.js`
 - Do not use `any` — TypeScript strict mode is enforced
 - Do not write `enum` (or `const enum`) — `dunx/no-enum` rejects it. An enum is the
   one TS construct that cannot be erased: it emits a runtime object with reverse

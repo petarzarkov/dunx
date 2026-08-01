@@ -16,13 +16,13 @@ import type { LogLevel } from './types.js';
  *
  * Every level takes the same three shapes:
  *
- * - `logger.log('message', extra, err)` — a message plus any number of extras.
+ * - `logger.info('message', extra, err)` — a message plus any number of extras.
  *   An `Error` among them becomes the entry's `error`; at `warn` and above so does
  *   a bare string or an `{ err }` / `{ error }` property.
- * - `logger.log({ orderId, total })` — the object's fields are merged into the
+ * - `logger.info({ orderId, total })` — the object's fields are merged into the
  *   entry. An `Error` nested anywhere inside it is found and its message becomes
  *   the entry's message.
- * - `logger.log(err)` — the error's message becomes the entry's message.
+ * - `logger.info(err)` — the error's message becomes the entry's message.
  */
 export abstract class Logger {
   /** The configured threshold. Entries below it are dropped. */
@@ -36,8 +36,19 @@ export abstract class Logger {
   abstract debug(message: Record<string, unknown>): void;
   abstract debug(message: Error): void;
 
+  abstract info(message: string, ...optionalParams: unknown[]): void;
+  abstract info(message: Record<string, unknown>): void;
+  abstract info(message: Error): void;
+
+  /**
+   * @deprecated Use {@link Logger.info}. Only a method name — the emitted `level`
+   * is `'info'` either way. Kept because the backing `@arkv/logger` keeps it for
+   * NestJS's `LoggerService`, and dropping it here would reject that class.
+   */
   abstract log(message: string, ...optionalParams: unknown[]): void;
+  /** @deprecated Use {@link Logger.info}. */
   abstract log(message: Record<string, unknown>): void;
+  /** @deprecated Use {@link Logger.info}. */
   abstract log(message: Error): void;
 
   abstract warn(message: string, ...optionalParams: unknown[]): void;

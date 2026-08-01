@@ -2,10 +2,11 @@
   "name": "@dunx/playground",
   "version": "0.0.0",
   "private": true,
-  "description": "The dunx example app — DI, HTTP routes, websocket gateways, db, redis, files and images",
+  "description": "The dunx example app — one long-running service exercising DI, config, logging, HTTP routes, websocket gateways, guards, db, redis, files, images and OpenAPI",
   "type": "module",
   "scripts": {
     "start": "bun src/main.ts",
+    "tour": "bun src/tour.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

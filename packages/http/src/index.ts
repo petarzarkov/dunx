@@ -63,6 +63,11 @@ export {
   type HttpOptions,
 } from './server/factory.js';
 export {
+  REQUEST_ID_HEADER,
+  RequestLoggingMiddleware,
+  type RequestLoggingOptions,
+} from './server/request-logging.js';
+export {
   compose,
   type Middleware,
   type Next,

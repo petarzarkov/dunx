@@ -7,18 +7,24 @@
 export const LogLevel = Object.freeze({
   VERBOSE: 'verbose',
   DEBUG: 'debug',
-  LOG: 'log',
+  INFO: 'info',
   WARN: 'warn',
   ERROR: 'error',
   FATAL: 'fatal',
 } as const);
 export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 
-/** Ascending severity. Position in this array is what `level` filtering compares. */
+/**
+ * Ascending severity. Position in this array is what `level` filtering compares,
+ * and the backing logger compares against its **own** copy — so these names must
+ * stay identical to `@arkv/logger`'s. A name it does not know indexes to `-1`,
+ * which sits below every real level, so drift disables filtering rather than
+ * raising. `@dunx/infra`'s logger tests assert the two arrays are equal.
+ */
 export const LOG_LEVELS = Object.freeze([
   LogLevel.VERBOSE,
   LogLevel.DEBUG,
-  LogLevel.LOG,
+  LogLevel.INFO,
   LogLevel.WARN,
   LogLevel.ERROR,
   LogLevel.FATAL,

@@ -201,7 +201,7 @@ class AppModule {}
 const withApp = async (
   run: (app: HttpApp, url: string) => Promise<void>,
 ): Promise<void> => {
-  const app = await HttpFactory.create(AppModule);
+  const app = await HttpFactory.create(AppModule, { requestLogging: false });
   const url = await app.listen(0);
   try {
     await run(app, url);
@@ -403,5 +403,55 @@ describe('HttpFactory', () => {
     await app.shutdown();
 
     expect(body).toBe('hello');
+  });
+});
+
+describe('unmatched requests', () => {
+  class Seen implements Middleware {
+    readonly paths: string[] = [];
+    handle(_req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
+      this.paths.push(`${ctx.method} ${ctx.path} (${ctx.controller})`);
+      return next();
+    }
+  }
+
+  const withSeen = async (
+    run: (seen: Seen, url: string) => Promise<void>,
+  ): Promise<void> => {
+    @Module({ imports: [UsersModule], providers: [Seen] })
+    class WatchedModule {}
+
+    const app = await HttpFactory.create(WatchedModule, {
+      requestLogging: false,
+    });
+    app.use(Seen);
+    const url = await app.listen(0);
+    try {
+      await run(app.get(Seen), url);
+    } finally {
+      await app.shutdown();
+    }
+  };
+
+  it('runs the global middleware and answers in the framework error shape', async () => {
+    await withSeen(async (seen, url) => {
+      const response = await fetch(new URL('nope', url));
+
+      // Bun's own 404 never reaches the chain, which would make every miss
+      // invisible to request logging.
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: 'NOT_FOUND',
+        status: 404,
+      });
+      expect(seen.paths).toContain('GET /nope ((unmatched))');
+    });
+  });
+
+  it('still lets a matched route through untouched', async () => {
+    await withSeen(async (seen, url) => {
+      expect((await fetch(new URL('users', url))).status).toBe(200);
+      expect(seen.paths).toEqual(['GET /users (UsersController)']);
+    });
   });
 });

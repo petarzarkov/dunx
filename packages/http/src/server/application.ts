@@ -15,7 +15,12 @@ import type { CorsOptions } from './cors.js';
 import { defaultErrorMapper, type ErrorMapper } from './errors.js';
 import type { Middleware } from './middleware.js';
 import {
+  RequestLoggingMiddleware,
+  type RequestLoggingOptions,
+} from './request-logging.js';
+import {
   assertNoGatewayCollisions,
+  buildFallback,
   buildRoutes,
   withUpgradeRoutes,
 } from './routes.js';
@@ -26,6 +31,14 @@ export interface HttpOptions {
   /** Resolved from the container, so middleware can inject(). */
   readonly middleware?: readonly Ctor<Middleware>[];
   readonly onError?: ErrorMapper;
+  /**
+   * One structured entry per request, on by default. `false` removes it; an
+   * options object tunes what it records. See {@link RequestLoggingMiddleware}.
+   *
+   * It is the **outermost** middleware, ahead of anything `middleware` declares,
+   * so a request rejected by a guard is still logged with the status it got.
+   */
+  readonly requestLogging?: boolean | RequestLoggingOptions;
   /**
    * Bun's `websocket` options, plus where a throwing handler goes. Server-wide, so
    * they live here next to `middleware` rather than on a module: gateways
@@ -81,7 +94,10 @@ export class HttpApplication implements HttpApp {
   ) {
     this.#app = app;
     this.#discovered = discovered;
-    this.#middleware = [...(options.middleware ?? [])];
+    this.#middleware = [
+      ...(options.requestLogging === false ? [] : [RequestLoggingMiddleware]),
+      ...(options.middleware ?? []),
+    ];
     this.#onError = options.onError ?? defaultErrorMapper;
     this.#port = options.port ?? 3000;
     this.#websocket = websocket;
@@ -151,16 +167,23 @@ export class HttpApplication implements HttpApp {
     const ws = this.#websocket;
     if (ws) assertNoGatewayCollisions(prefixed, ws.paths);
 
+    // Bun's own 404 never reaches the middleware chain, so an unmatched path is
+    // invisible to request logging. This runs only after Bun has matched nothing,
+    // so Bun is still the router — it just puts the global middleware in front of
+    // the 404 and returns it in the framework's error shape.
+    const fetch = buildFallback(middleware, this.#onError, this.#cors);
+
     // Two literals, one call: a route that may answer `undefined` because it
     // upgraded is only a valid route table when `websocket` is there to receive it,
     // and Bun's own types say so.
     const options: Bun.Serve.Options<SocketData> = ws
       ? {
           port,
+          fetch,
           routes: withUpgradeRoutes(routes, ws.routes),
           websocket: ws.websocket,
         }
-      : { port, routes };
+      : { port, fetch, routes };
     this.#server = Bun.serve(options);
 
     attachAddressSource(this.#app.get(ClientAddress), {

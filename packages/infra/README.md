@@ -1128,8 +1128,8 @@ export class Users {
   constructor(private readonly logger: Logger) {}
 
   create(email: string): void {
-    this.logger.log('user created', { email, password: 'hunter2' });
-    // {"level":"log","timestamp":"…","pid":…,"message":"user created",
+    this.logger.info('user created', { email, password: 'hunter2' });
+    // {"level":"info","timestamp":"…","pid":…,"message":"user created",
     //  "email":"…","password":"[MASKED]"}
   }
 }
@@ -1146,6 +1146,11 @@ class AppModule {}
 One structured JSON line either way; `isDevelopment` (default
 `NODE_ENV !== 'production'`) only decides whether it is ANSI-coloured. Masking is
 upstream's sanitizer, not a dunx reimplementation of one.
+
+The level is `info`, and the method is `info`. `log` survives as a deprecated alias
+that emits the same `"level":"info"` — upstream keeps it because NestJS's
+`LoggerService` mandates the name, and the contract keeps it so that class still
+satisfies it.
 
 ### The split, and why
 
@@ -1165,26 +1170,42 @@ useFactory })`. A wrapper would be a second surface to keep in sync, and per
 CLAUDE.md a fix the logger needs belongs upstream in `@arkv` rather than in a dunx
 subclass.
 
+Because the contract is a **copy** of the level names rather than a re-export, the
+two can drift — and the failure is silent, not loud. The backing logger filters by
+`LOG_LEVELS.indexOf(level)`; a name it does not know yields `-1`, which sorts below
+every real level, so a stale name turns level filtering into "emit everything"
+instead of raising. `module.test.ts` asserts the two arrays are equal for exactly
+that reason. That is the price of core staying dependency-free, and it is a test
+rather than a runtime check because it can only change at build time.
+
 `@dunx/core` previously held a full **port** of `@arkv/logger`. It is gone; the ten
-sanitizer fixes it carried were published upstream as `@arkv/logger@0.8.0` instead,
-which is why `dependencies` pins `^0.8.0`.
+sanitizer fixes it carried were published upstream as `@arkv/logger@0.8.0` instead.
+`dependencies` pins `^0.8.1`, which is the release that renamed `log` to `info` and
+added transports, the rotating file sink and the global error capture below.
 
 ### What `forRoot` binds
 
-| Token            | Is                                                                  |
-| ---------------- | ------------------------------------------------------------------- |
-| `Logger`         | `@dunx/core`'s contract, backed by `@arkv/logger`'s implementation   |
-| `LoggerSettings` | the `LoggerConfig` it was configured with, so a factory can read it |
-| `ContextStore`   | `@arkv/logger`'s async-context store, shared by every logger        |
+| Token            | Is                                                                      |
+| ---------------- | ----------------------------------------------------------------------- |
+| `Logger`         | `@dunx/core`'s contract, backed by `@arkv/logger`'s implementation       |
+| `BackingLogger`  | the same instance, typed as the implementation — `child`, `flush`, `close` |
+| `LoggerSettings` | the `LoggerConfig` it was configured with, so a factory can read it     |
+| `ContextStore`   | `@arkv/logger`'s async-context store, shared by every logger            |
 
 `LoggerSettings` is a `token<LoggerConfig>` rather than a class, because the config
 type is upstream's — an interface, with no runtime value to name.
 
+`BackingLogger` exists because the contract covers the six levels and nothing else.
+Three things sit outside it — `child(bindings)`, `flush()` and `close()` — and this
+token is how an app reaches them without a cast, and without widening the contract
+for every implementation that will never have a transport to flush.
+
 Configuration is `@arkv/logger`'s own `LoggerConfig`, verbatim: `name`, `version`,
 `env`, `level`, `isDevelopment`, `maskFields`, `filterEvents`, `maxArrayLength`,
-`maxDepth`. Read its README for what each does — a parallel table here is exactly
-the duplication the "reuse `@arkv`" rule exists to prevent. `DEFAULT_MASK_FIELDS` is
-re-exported so you can see what is already redacted before adding to it.
+`maxDepth`, `transports`, `bindings`, `onTransportError`. Read its README for what
+each does — a parallel table here is exactly the duplication the "reuse `@arkv`"
+rule exists to prevent. `DEFAULT_MASK_FIELDS` is re-exported so you can see what is
+already redacted before adding to it.
 
 There is no `forRootAsync`. Pass a function, sync or async, and eager resolution
 settles it before any constructor runs:
@@ -1192,6 +1213,70 @@ settles it before any constructor runs:
 ```ts
 LoggerModule.forRoot(async () => ({ level: await settings.logLevel() }));
 ```
+
+### Transports
+
+`ConsoleTransport`, `FileTransport` and the `Transport` interface are re-exported.
+Supplying `transports` **replaces** the default console sink, so include one
+explicitly to keep stdout:
+
+```ts
+import {
+  ConsoleTransport,
+  FileTransport,
+  LoggerModule,
+  LogLevel,
+} from '@dunx/infra/logger';
+
+LoggerModule.forRoot({
+  level: LogLevel.DEBUG,
+  transports: [
+    new ConsoleTransport(),
+    new FileTransport({
+      path: 'logs/app.log',
+      level: LogLevel.WARN,
+      interval: 'daily',
+      maxFiles: 7,
+      bufferBytes: 64 * 1024,
+    }),
+  ],
+});
+```
+
+A transport's own `level` is independent of the logger's, so debug can go to the
+terminal while only warnings reach disk. A transport that throws is isolated —
+a full disk surfaces on `onTransportError`, never as an exception in the request
+path that happened to log a line.
+
+The second argument to `forRoot` is dunx's own, and currently holds one option:
+
+```ts
+LoggerModule.forRoot({ level: LogLevel.INFO }, { captureGlobalErrors: true });
+```
+
+That installs `uncaughtException` and `unhandledRejection` handlers which log
+through this logger and flush before the process goes away, and removes them again
+on shutdown. Pass upstream's `CaptureGlobalErrorsOptions` instead of `true` to keep
+the process alive after an uncaught exception.
+
+### Shutdown
+
+`FileTransport` batches when `bufferBytes` is set, so entries can be pending when
+the app stops. The module registers a lifecycle-only provider whose `onShutdown`
+flushes and closes every transport — nothing an app has to remember:
+
+```ts
+const app = await AppFactory.create(AppModule);
+app.enableShutdownHooks();
+```
+
+It runs late. `App.shutdown` walks instances in reverse resolution order, and the
+logger resolves before anything that depends on it, so services can still log while
+they close.
+
+That provider is not an adapter — it wraps no method and forwards no call. It exists
+because core's shutdown looks for `onShutdown()` and upstream's method is `close()`,
+and putting `close()` on the contract would oblige every implementation to have one.
 
 ### Request context
 
@@ -1213,6 +1298,21 @@ export class RequestScope {
 
 Entries logged inside `run()` carry `"requestId":"…"`; entries logged outside it do
 not.
+
+Nested scopes **merge**: an inner `runWithContext({ userId })` inherits the outer
+`requestId` and overrides only the keys it names, so the field entries are most
+often correlated by does not vanish one frame down. The merged context is a fresh
+object, so an inner scope never leaks back out. Pass `{ inherit: false }` for a
+scope that must start clean, such as a detached background job.
+
+For static fields that are not per-request — a module or worker name — use
+`child(bindings)` on `BackingLogger` instead. Per-call fields and async context both
+take precedence over bindings, and the transports are shared, so close the root
+logger rather than a child:
+
+```ts
+const logger = app.get(BackingLogger).child({ module: 'users' });
+```
 
 ## Verified against
 

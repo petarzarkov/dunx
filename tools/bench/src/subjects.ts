@@ -1,0 +1,101 @@
+import type { Subject } from './types.js';
+
+export const subjects: readonly Subject[] = [
+  {
+    id: 'bun-serve',
+    label: 'Bun.serve (raw)',
+    runtime: 'bun',
+    entry: 'servers/bun-serve.ts',
+    preload: [],
+    versionOf: null,
+    validator: 'zod (hand-wired)',
+    notes: [
+      'The ceiling. @dunx/http is a layer on top of this exact API, so the gap between them is dunx overhead and nothing else.',
+      'Uses Bun.serve({ routes }) — the same native router @dunx/http dispatches through.',
+    ],
+  },
+  {
+    id: 'dunx',
+    label: '@dunx/http',
+    runtime: 'bun',
+    entry: 'servers/dunx.ts',
+    preload: ['@dunx/compiler/preload'],
+    versionOf: '@dunx/http',
+    validator: 'zod (Standard Schema)',
+    notes: [
+      'Runs with the @dunx/compiler preload and one constructor-injected service, which is how a real dunx app is written.',
+      'DI resolution and route discovery happen at boot, so they show up in the startup number and not in the per-request number.',
+    ],
+  },
+  {
+    id: 'elysia',
+    label: 'Elysia',
+    runtime: 'bun',
+    entry: 'servers/elysia.ts',
+    preload: [],
+    versionOf: 'elysia',
+    validator: 'zod (Standard Schema)',
+    notes: [
+      'Bun-native. Given zod rather than its own TypeBox validator so the validate scenario stays comparable; TypeBox is compiled and would be faster.',
+    ],
+  },
+  {
+    id: 'hono-bun',
+    label: 'Hono (Bun)',
+    runtime: 'bun',
+    entry: 'servers/hono.ts',
+    preload: [],
+    versionOf: 'hono',
+    validator: 'zod (@hono/zod-validator)',
+    notes: [
+      'Hono on Bun.serve, so it shares the runtime with Bun.serve, dunx and Elysia.',
+    ],
+  },
+  {
+    id: 'hono-node',
+    label: 'Hono (Node)',
+    runtime: 'node',
+    entry: 'servers/hono-node.ts',
+    preload: [],
+    versionOf: 'hono',
+    validator: 'zod (@hono/zod-validator)',
+    notes: [
+      'The same Hono app on node:http via @hono/node-server. Included so one framework appears on both runtimes and the runtime term can be separated from the framework term.',
+    ],
+  },
+  {
+    id: 'node-http',
+    label: 'node:http (raw)',
+    runtime: 'node',
+    entry: 'servers/node-http.ts',
+    preload: [],
+    versionOf: null,
+    validator: 'zod (hand-wired)',
+    notes: [
+      'The Node ceiling: a bare requestListener with a hand-rolled switch, no framework. Routing is a startsWith chain, which is faster than any real router.',
+    ],
+  },
+  {
+    id: 'fastify',
+    label: 'Fastify (Node)',
+    runtime: 'node',
+    entry: 'servers/fastify.ts',
+    preload: [],
+    versionOf: 'fastify',
+    validator: 'zod (validatorCompiler)',
+    notes: [
+      'Given zod through its validatorCompiler hook rather than its default ajv/JSON Schema path, so the validate scenario stays comparable. Ajv compiles to straight-line JS and is materially faster than zod — this understates Fastify on that one scenario.',
+      'No response schema is set, so serialisation is JSON.stringify rather than fast-json-stringify, matching every other subject.',
+    ],
+  },
+  {
+    id: 'express',
+    label: 'Express (Node)',
+    runtime: 'node',
+    entry: 'servers/express.ts',
+    preload: [],
+    versionOf: 'express',
+    validator: 'zod (hand-wired)',
+    notes: ['Express 5 with express.json() for the validate scenario only.'],
+  },
+];

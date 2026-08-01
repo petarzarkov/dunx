@@ -1,7 +1,27 @@
+import { ConsoleLogger } from '../logger/console.js';
+import { AsyncRequestContext, RequestContext } from '../logger/context.js';
+import { Logger } from '../logger/logger.js';
 import { Injector } from './injector.js';
 import { hasOnInit, hasOnShutdown } from './lifecycle.js';
 import { collectModules, readModule, type ModuleRef } from './module.js';
+import { provide } from './provider.js';
 import type { InjectionToken } from './token.js';
+
+/**
+ * The two contracts core guarantees are resolvable. Both are last-resort: a
+ * module binding either one replaces it, and `@dunx/infra/logger` binds both.
+ */
+const registerDefaults = (injector: Injector): void => {
+  injector.registerDefault(
+    provide(RequestContext, { useClass: AsyncRequestContext }),
+  );
+  injector.registerDefault(
+    provide(Logger, {
+      useFactory: (context: RequestContext) => new ConsoleLogger(context),
+      inject: [RequestContext] as const,
+    }),
+  );
+};
 
 // Declared here rather than reusing NodeJS.Signals so the published .d.ts does
 // not oblige consumers to install @types/node.
@@ -69,6 +89,11 @@ export class AppFactory {
         injector.register(registration, module.name);
       }
     }
+    // After every module, so an app that binds either of these wins. Offered at
+    // all so `Logger` and `RequestContext` are injectable with no logging module
+    // imported — which is what lets @dunx/http log requests out of the box.
+    registerDefaults(injector);
+
     for (const token of injector.tokens) {
       await injector.resolve(token);
     }

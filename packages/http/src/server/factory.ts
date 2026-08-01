@@ -2,7 +2,10 @@ import {
   collectModules,
   AppError,
   AppFactory,
+  Logger,
+  provide,
   readControllers,
+  RequestContext,
   type DynamicModule,
   type ModuleRef,
 } from '@dunx/core';
@@ -15,6 +18,7 @@ import {
   type HttpApp,
   type HttpOptions,
 } from './application.js';
+import { RequestLoggingMiddleware } from './request-logging.js';
 import { assertNoCollisions } from './routes.js';
 
 export type { HttpApp, HttpOptions } from './application.js';
@@ -35,10 +39,26 @@ export class HttpFactory {
     root: ModuleRef,
     options: HttpOptions = {},
   ): Promise<HttpApp> {
+    // Bound here rather than left to self-binding, because its constructor takes
+    // the options object as well as two injectables. `Logger` and
+    // `RequestContext` always resolve: @dunx/core binds a default for each.
+    const logging = provide(RequestLoggingMiddleware, {
+      useFactory: (logger: Logger, context: RequestContext) =>
+        new RequestLoggingMiddleware(
+          logger,
+          context,
+          typeof options.requestLogging === 'object'
+            ? options.requestLogging
+            : {},
+        ),
+      inject: [Logger, RequestContext] as const,
+    });
+
     const scope: DynamicModule = {
       module: HttpModule,
       imports: [root],
-      providers: [PubSub],
+      providers:
+        options.requestLogging === false ? [PubSub] : [PubSub, logging],
     };
     const app = await AppFactory.create(scope);
     const modules = collectModules(scope);

@@ -1,4 +1,4 @@
-import { Logger } from '../logger.js';
+import { Logger } from '@dunx/core';
 
 interface Call {
   readonly label: string;

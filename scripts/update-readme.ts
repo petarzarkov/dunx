@@ -49,7 +49,8 @@ function discoverPackages(): PackageEntry[] {
     });
 }
 
-const COVERAGE_PAGE = 'https://petarzarkov.github.io/dunx';
+const DOCS_SITE = 'https://petarzarkov.github.io/dunx';
+const COVERAGE_PAGE = `${DOCS_SITE}/#/coverage`;
 
 function npmBadges(name: string): string {
   const encoded = encodeURIComponent(name);
@@ -60,9 +61,13 @@ function npmBadges(name: string): string {
   return `${version} ${downloads} ${size}`;
 }
 
-/** Badge svgs are generated per package by `bun run gen:cov` and served from Pages. */
+/**
+ * Badge svgs are generated per package by `bun run gen:cov` into
+ * `tools/docs/public/badges/`, which the build copies to `/badges/` in the deployed
+ * documentation site.
+ */
 function coverageBadge(folder: string): string {
-  return `[![cov](${COVERAGE_PAGE}/coverage-${folder}.svg)](${COVERAGE_PAGE}#${folder})`;
+  return `[![cov](${DOCS_SITE}/badges/coverage-${folder}.svg)](${COVERAGE_PAGE})`;
 }
 
 function buildPackagesTable(entries: PackageEntry[]): string {
@@ -104,6 +109,11 @@ function buildProjectStructure(entries: PackageEntry[]): string {
   const topDefs: [string, string, string][] = [
     ['├── ', 'packages/', 'Published packages'],
     ['├── ', 'examples/', 'Private apps that consume the packages'],
+    [
+      '├── ',
+      'tools/',
+      'Private workspaces, never published — docs site and benchmarks',
+    ],
     ['├── ', 'docs/', 'Architecture and design docs'],
     ['├── ', 'scripts/', 'Monorepo-level scripts'],
     ['├── ', '.github/workflows/', 'CI/CD pipeline'],

@@ -1,4 +1,11 @@
-import { provide, token, type DynamicModule, type Token } from '@dunx/core';
+import {
+  provide,
+  token,
+  type Deps,
+  type DynamicModule,
+  type FactoryProvider,
+  type Token,
+} from '@dunx/core';
 import { Redis } from './client.js';
 import { RedisConnection } from './connection.js';
 import { RedisOptions, type RedisOptionsInit } from './options.js';
@@ -53,15 +60,15 @@ const connectionFrom = (
  */
 const namedModule = (
   name: string,
-  options: RedisOptions | (() => RedisOptions | Promise<RedisOptions>),
+  options: RedisOptions | FactoryProvider<RedisOptions, Deps>,
 ): DynamicModule => {
   const optionsToken = token<RedisOptions>(`RedisOptions(${name})`);
   // Branch on the call, not the argument: a union of provider shapes matches
   // neither `provide` overload.
   const optionsProvider =
-    typeof options === 'function'
-      ? provide(optionsToken, { useFactory: options })
-      : provide(optionsToken, { useValue: options });
+    options instanceof RedisOptions
+      ? provide(optionsToken, { useValue: options })
+      : provide(optionsToken, options);
 
   return {
     module: RedisModule,
@@ -97,22 +104,47 @@ export class RedisModule {
    * machinery: the container resolves eagerly and awaits factories before any
    * constructor runs, so awaited config is already settled by then.
    *
+   * The factory may also **inject**, which a bare loader cannot — reading the url
+   * off `ConfigService`, say:
+   *
+   * ```ts
+   * RedisModule.forRootAsync({
+   *   useFactory: (config: ConfigService<AppConfig>) => ({
+   *     url: config.get('redis').url,
+   *   }),
+   *   inject: [ConfigService],
+   * });
+   * ```
+   *
    * `name` is a parameter rather than a field of the awaited init because the
    * token has to exist before the factory runs.
    */
   static forRootAsync(
     load: () => RedisOptionsInit | Promise<RedisOptionsInit>,
     name?: string,
+  ): DynamicModule;
+  static forRootAsync<const D extends Deps>(
+    config: FactoryProvider<RedisOptionsInit, D>,
+    name?: string,
+  ): DynamicModule;
+  static forRootAsync(
+    source:
+      | (() => RedisOptionsInit | Promise<RedisOptionsInit>)
+      | FactoryProvider<RedisOptionsInit, Deps>,
+    name?: string,
   ): DynamicModule {
-    const build = async (): Promise<RedisOptions> =>
-      new RedisOptions(await load());
+    const load = typeof source === 'function' ? source : source.useFactory;
+    const inject = typeof source === 'function' ? [] : (source.inject ?? []);
+    const useFactory = async (
+      ...deps: readonly unknown[]
+    ): Promise<RedisOptions> => new RedisOptions(await load(...deps));
 
-    if (name !== undefined) return namedModule(name, build);
+    if (name !== undefined) return namedModule(name, { useFactory, inject });
 
     return {
       module: RedisModule,
       providers: [
-        provide(RedisOptions, { useFactory: build }),
+        provide(RedisOptions, { useFactory, inject }),
         connectionFrom(RedisConnection, RedisOptions),
       ],
     };

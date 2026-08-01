@@ -43,6 +43,24 @@ export class Injector {
     });
   }
 
+  /** Whether anything already claims this token. What `registerDefault` asks. */
+  has(token: InjectionToken<unknown>): boolean {
+    return this.#bindings.has(token);
+  }
+
+  /**
+   * Bind only if nothing else did. This is how `Logger` and `RequestContext` are
+   * always resolvable without a module: an app that imports one binds it, and
+   * that binding wins because the default is offered after every module's.
+   */
+  registerDefault(registration: Registration): void {
+    if (this.#bindings.has(registration.token)) return;
+    this.#bindings.set(registration.token, {
+      provider: registration.provider,
+      module: '(default)',
+    });
+  }
+
   get tokens(): readonly InjectionToken<unknown>[] {
     return [...this.#bindings.keys()];
   }

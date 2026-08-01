@@ -1,0 +1,113 @@
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpError,
+  HttpStatusCode,
+  Post,
+  type Input,
+} from '@dunx/http';
+import { z } from 'zod';
+import { Ledger } from './ledger.service.js';
+import type { Entry } from './schema.js';
+
+const EntryIndex = z
+  .object({ id: z.coerce.number().int().min(1) })
+  .meta({ id: 'EntryIndex', title: 'A ledger entry id in the path' });
+
+const CreateEntry = z
+  .object({
+    memo: z.string().min(1).max(80),
+    amount: z.number().int(),
+  })
+  .meta({ id: 'CreateEntry', title: 'A single ledger movement' });
+
+/** Both legs succeed or neither does — the rollback is the point of the route. */
+const Transfer = z
+  .object({
+    from: z.string().min(1).max(80),
+    to: z.string().min(1).max(80),
+    amount: z.number().int().positive(),
+    /**
+     * Throw between the two legs on purpose. The response is a 409 and the row
+     * count is unchanged — which is the only way to see from outside that the
+     * first insert was rolled back rather than committed.
+     */
+    fail: z.boolean().default(false),
+  })
+  .meta({ id: 'Transfer', title: 'Move an amount between two memos' });
+
+const listEntries = {
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  }),
+} as const;
+const oneEntry = { params: EntryIndex } as const;
+const createEntry = { body: CreateEntry } as const;
+const transfer = { body: Transfer } as const;
+
+@Controller('ledger')
+export class LedgerController {
+  constructor(private readonly ledger: Ledger) {}
+
+  @Get('/', listEntries)
+  list(input: Input<typeof listEntries>): {
+    entries: readonly Entry[];
+    balance: number;
+  } {
+    return {
+      entries: this.ledger.list(input.query.limit),
+      balance: this.ledger.balance(),
+    };
+  }
+
+  @Get('/:id', oneEntry)
+  one(input: Input<typeof oneEntry>): Entry {
+    const entry = this.ledger.find(input.params.id);
+    if (entry === undefined) {
+      throw new HttpError(
+        HttpStatusCode.NOT_FOUND,
+        `No ledger entry ${input.params.id}`,
+      );
+    }
+    return entry;
+  }
+
+  @Post('/', createEntry)
+  create(input: Input<typeof createEntry>): Entry {
+    return this.ledger.add(input.body.memo, input.body.amount);
+  }
+
+  /**
+   * The failure path is the interesting one: `"fail": true` throws between the
+   * two inserts, and the 409's `rows` is unchanged — proof the first leg was
+   * rolled back rather than committed.
+   */
+  @Post('/transfer', transfer)
+  async transfer(
+    input: Input<typeof transfer>,
+  ): Promise<{ balance: number; rows: number }> {
+    const { from, to, amount, fail } = input.body;
+    try {
+      const balance = await this.ledger.transfer(from, to, amount, fail);
+      return { balance, rows: this.ledger.rows() };
+    } catch (error) {
+      throw new HttpError(
+        HttpStatusCode.CONFLICT,
+        `${(error as Error).message} — rolled back, still ${this.ledger.rows()} rows`,
+      );
+    }
+  }
+
+  @Delete('/:id', oneEntry)
+  remove(input: Input<typeof oneEntry>): { deleted: boolean } {
+    const deleted = this.ledger.remove(input.params.id);
+    if (!deleted) {
+      throw new HttpError(
+        HttpStatusCode.NOT_FOUND,
+        `No ledger entry ${input.params.id}`,
+      );
+    }
+    return { deleted };
+  }
+}

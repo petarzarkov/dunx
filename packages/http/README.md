@@ -250,6 +250,60 @@ else it could attach to.
 - Two `@UseGuards` on one target read top to bottom. Two of one metadata key read
   bottom-up, so the topmost decorator wins.
 
+## Request logging, on by default
+
+Every request produces **one** structured entry, request and response together:
+
+```json
+{
+  "level": "info",
+  "message": "POST /api/users 201",
+  "requestId": "b1f0…",
+  "method": "POST",
+  "event": "/api/users",
+  "flow": "http",
+  "context": "UsersController.create",
+  "request": { "body": { "name": "ada" }, "userAgent": "curl/8.5.0" },
+  "statusCode": 201,
+  "responseBody": { "id": 3, "name": "ada" },
+  "elapsedMs": 5
+}
+```
+
+One entry, not two, is the point. Nest logs on the way in from a middleware and on
+the way out from an interceptor, because they are different classes and the
+interceptor cannot see what the middleware saw. Here they are the same closure, so
+there is no pair to correlate by `requestId` to find out how a call ended. A 4xx
+logs at `warn`, a 5xx at `error`.
+
+It needs no configuration: `Logger` and `RequestContext` are `@dunx/core`
+contracts with default bindings, so this works in an app that imported no logging
+module. Import `@dunx/infra/logger` and the same entries go through
+`@arkv/logger` — sanitized, masked, optionally to a rotating file — with nothing
+here changing.
+
+Everything the **handler** logs in between carries the same `requestId`, `method`,
+`event` and `context`, because the whole call runs inside `runWithContext`. An
+inbound `x-request-id` is honoured so a trace survives across services; otherwise
+one is minted and returned on the response.
+
+```ts
+HttpFactory.create(AppModule, { requestLogging: false }); // off
+HttpFactory.create(AppModule, {
+  requestLogging: { ignore: ['/health'], responseBody: false, maxBodyLength: 512 },
+});
+```
+
+### Unmatched paths are logged too
+
+`Bun.serve({ routes })` answers a miss itself, so nothing in the middleware chain
+would ever see a 404 — invisible to logging, metrics and tracing. `listen()`
+installs one `fetch` fallback that runs the global middleware and returns
+`{"error":"NOT_FOUND","status":404}`.
+
+This is not a JavaScript router. Bun still does every bit of the matching; the
+fallback runs only after it has decided nothing matched.
+
 ## App-level configuration
 
 `create()` boots the container and discovers routes; `listen()` is what builds the
@@ -258,7 +312,7 @@ else it could attach to.
 ```ts
 const app = await HttpFactory.create(AppModule);
 app.setGlobalPrefix('api');
-app.use(RequestLoggerMiddleware);
+app.use(AuditMiddleware);
 app.set('trust proxy', true);
 app.enableCors({ origin: 'https://example.com', credentials: true });
 await app.listen(3000);

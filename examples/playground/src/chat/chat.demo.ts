@@ -1,5 +1,5 @@
+import { Logger } from '@dunx/core';
 import { PubSub, type HttpApp } from '@dunx/http';
-import { Logger } from '../logger.js';
 import { Lobby } from './lobby.service.js';
 
 interface Client {

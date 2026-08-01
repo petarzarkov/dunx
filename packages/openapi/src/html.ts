@@ -1,3 +1,5 @@
+import { CLIENT } from './page-client.js';
+import { tryBlock } from './page-form.js';
 import { COMPONENTS_PREFIX } from './refs.js';
 import {
   OPERATION_ORDER,
@@ -13,6 +15,10 @@ import {
  * else's viewer: one `<style>` block, `<details>` for the folding, and nothing that
  * needs to be fetched. `Bun.escapeHTML` does the escaping and `Bun.markdown` renders
  * the prose — both native, so this file is a renderer rather than a dependency.
+ *
+ * The one script it carries is `page-client.ts`, which makes each operation
+ * sendable. `swagger-ui-dist` unpacks to 11.7 MB to do that; this is ~90 lines
+ * and keeps the no-external-requests guarantee the tests assert.
  */
 const STYLE = `
 :root {
@@ -87,6 +93,35 @@ pre {
 .warn ul { margin: .35rem 0 0; padding-left: 1.2rem; }
 .prose > :first-child { margin-top: 0; }
 .prose > :last-child { margin-bottom: 0; }
+.tryit { margin-top: 1.2rem; border-top: 1px dashed var(--line); padding-top: .4rem; }
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: .6rem; margin-bottom: .7rem;
+}
+.grid .wide { grid-column: 1 / -1; }
+.try label { display: flex; flex-direction: column; gap: .25rem; font-size: .82rem; }
+.try label span { color: var(--muted); display: flex; gap: .4rem; align-items: baseline; }
+.try label em { font-style: normal; font-size: .72rem; opacity: .75; }
+.try input, .try textarea {
+  font: .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--code); color: var(--fg); border: 1px solid var(--line);
+  border-radius: .35rem; padding: .4rem .5rem; width: 100%; resize: vertical;
+}
+.try input:focus, .try textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.try button {
+  font: 600 .82rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--accent); color: #fff; border: 0; border-radius: .35rem;
+  padding: .55rem .9rem; cursor: pointer;
+}
+.try button:disabled { opacity: .55; cursor: progress; }
+.out { margin-top: .8rem; border-left: 3px solid var(--line); padding-left: .7rem; }
+.out.ok { border-left-color: #2f9e44; }
+.out.bad { border-left-color: #c92a2a; }
+.out p {
+  margin: 0 0 .3rem; font: 600 .82rem ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.out pre { max-height: 22rem; }
+.out pre.hdr { font-size: .78rem; color: var(--muted); max-height: 9rem; }
 `;
 
 const escape = (value: string): string => Bun.escapeHTML(value);
@@ -198,6 +233,7 @@ const operationBlock = (
   path: string,
   method: OperationKey,
   operation: OperationObject,
+  schemas: Readonly<Record<string, JsonSchema>>,
 ): string => {
   const summary = operation.summary ?? '';
   const deprecated =
@@ -225,6 +261,7 @@ const operationBlock = (
       : '') +
     responseList(operation) +
     securityLine(operation) +
+    tryBlock(path, method, operation, schemas) +
     '</div></details>'
   );
 };
@@ -275,7 +312,12 @@ export const renderPage = (
       const entries = grouped.get(tag) ?? [];
       const blocks = entries
         .map((entry) =>
-          operationBlock(entry.path, entry.method, entry.operation),
+          operationBlock(
+            entry.path,
+            entry.method,
+            entry.operation,
+            document.components.schemas,
+          ),
         )
         .join('');
       return `<h2>${escape(tag)}</h2>${blocks}`;
@@ -317,6 +359,6 @@ export const renderPage = (
     warnings +
     sections +
     (schemas === '' ? '' : `<h2>Schemas</h2>${schemas}`) +
-    '</main></body></html>'
+    `</main><script>${CLIENT}</script></body></html>`
   );
 };

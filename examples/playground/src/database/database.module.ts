@@ -1,7 +1,8 @@
 import { Module } from '@dunx/core';
 import { DbModule, SqliteOptions } from '@dunx/infra/db';
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
-import { Config } from '../config.js';
+import { AppConfigService } from '../config.js';
+import { LedgerController } from './ledger.controller.js';
 import { Ledger } from './ledger.service.js';
 import * as schema from './schema.js';
 
@@ -16,18 +17,19 @@ import * as schema from './schema.js';
     // known once the factory has produced the options — too late to register a
     // provider under it.
     DbModule.forRootAsync(BunSQLiteDatabase, {
-      useFactory: (config: Config) =>
+      useFactory: (config: AppConfigService) =>
         new SqliteOptions({
           // Required, and the reason it is: this is the type argument that reaches
           // `BunSQLiteDatabase<typeof schema>` in every constructor below.
           schema,
-          filename: config.databaseFile,
+          filename: config.get('database').file,
           // The only place a pragma can run before the first query.
           pragmas: ['foreign_keys = ON'],
         }),
-      inject: [Config],
+      inject: [AppConfigService],
     }),
   ],
+  controllers: [LedgerController],
   providers: [Ledger],
 })
 export class DatabaseModule {}

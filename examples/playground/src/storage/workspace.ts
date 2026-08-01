@@ -1,8 +1,8 @@
+import { Logger } from '@dunx/core';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { OnShutdown } from '@dunx/core';
-import { Logger } from '../logger.js';
 
 /**
  * Owns a scratch directory under the OS temp dir — never inside the repo — and

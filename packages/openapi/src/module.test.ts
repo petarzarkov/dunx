@@ -108,7 +108,9 @@ describe('a real server serving its own document', () => {
     expect(page).toContain('ThingsController_list');
     expect(page).toContain('Every thing');
     expect(page).toContain('<a href="/api/openapi.json">');
-    expect(page).not.toContain('<script');
+    // One inline script, so a route can be sent from the page. Nothing fetched.
+    expect(page).not.toContain('src=');
+    expect(page).not.toContain('<link');
     expect(page).not.toContain('cdn');
   });
 

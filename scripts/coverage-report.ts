@@ -1,12 +1,30 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import type { CoverageModel } from '../tools/docs/scripts/extract/model.js';
+
+/**
+ * Turns the root `bun test --coverage` lcov into the model the documentation
+ * site renders, plus the README's badge SVGs.
+ *
+ * The report used to be a standalone HTML page published as the GitHub Pages
+ * root. `tools/docs` is the Pages root now, so this writes *into* it: the model
+ * to `src/generated/`, the badges to `public/badges/` where the build copies them
+ * verbatim into the deployed site.
+ */
 
 const ROOT_DIR = resolve(import.meta.dir, '..');
 const PACKAGES_DIR = join(ROOT_DIR, 'packages');
 const COVERAGE_DIR = join(ROOT_DIR, 'coverage');
 const LCOV_PATH = join(COVERAGE_DIR, 'lcov.info');
-
-const REPO_URL = 'https://github.com/petarzarkov/dunx';
+const DOCS_DIR = join(ROOT_DIR, 'tools', 'docs');
+const MODEL_DIR = join(DOCS_DIR, 'src', 'generated');
+const BADGE_DIR = join(DOCS_DIR, 'public', 'badges');
 
 interface FileCoverage {
   path: string;
@@ -36,9 +54,6 @@ const pct = (hit: number, found: number): number =>
 
 const format = (value: number): string =>
   value === 100 ? '100' : value.toFixed(1);
-
-const level = (value: number): 'high' | 'medium' | 'low' =>
-  value >= 90 ? 'high' : value >= 75 ? 'medium' : 'low';
 
 const parseLcov = (raw: string): FileCoverage[] => {
   const files: FileCoverage[] = [];
@@ -194,158 +209,6 @@ const badge = (value: number | null): string => {
 `;
 };
 
-const fileRow = (file: FileCoverage): string => {
-  const lines = pct(file.linesHit, file.linesFound);
-  const name = file.path.replace(/^packages\/[^/]+\//, '');
-
-  return `<tr>
-  <td class="file">${name}</td>
-  <td class="num ${level(lines)}">${format(lines)}%</td>
-  <td class="num">${file.linesHit}/${file.linesFound}</td>
-  <td class="num">${file.funcsHit}/${file.funcsFound}</td>
-  <td class="gaps">${formatRanges(file.uncovered) || '—'}</td>
-</tr>`;
-};
-
-const packageSection = (pkg: PackageCoverage): string => {
-  const lines = pct(pkg.linesHit, pkg.linesFound);
-  const funcs = pct(pkg.funcsHit, pkg.funcsFound);
-
-  return `<details id="${pkg.name}"${lines < 90 ? ' open' : ''}>
-  <summary>
-    <span class="pkg">@dunx/${pkg.name}</span>
-    <span class="bar"><span class="fill ${level(lines)}" style="width:${lines}%"></span></span>
-    <span class="pct ${level(lines)}">${format(lines)}%</span>
-    <span class="meta">${pkg.files.length} files · ${format(funcs)}% functions</span>
-  </summary>
-  <table>
-    <thead><tr><th>File</th><th>Lines</th><th>Covered</th><th>Functions</th><th>Uncovered lines</th></tr></thead>
-    <tbody>${pkg.files.map(fileRow).join('\n')}</tbody>
-  </table>
-</details>`;
-};
-
-const page = (
-  packages: PackageCoverage[],
-  untested: string[],
-  totals: {
-    linesFound: number;
-    linesHit: number;
-    funcsFound: number;
-    funcsHit: number;
-  },
-): string => {
-  const lines = pct(totals.linesHit, totals.linesFound);
-  const funcs = pct(totals.funcsHit, totals.funcsFound);
-  const sha = process.env['GITHUB_SHA'];
-  const stamp = new Date().toUTCString();
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>dunx coverage</title>
-<style>
-:root {
-  color-scheme: light dark;
-  --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --panel: #f6f8fa;
-  --high: #1a7f37; --medium: #9a6700; --low: #cf222e;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #30363d; --panel: #161b22;
-    --high: #3fb950; --medium: #d29922; --low: #f85149;
-  }
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 68rem;
-  background: var(--bg); color: var(--fg);
-  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-}
-h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
-a { color: inherit; }
-.sub { color: var(--muted); font-size: .875rem; margin: 0 0 2rem; }
-.totals { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
-.card {
-  flex: 1 1 12rem; padding: 1rem 1.25rem; border: 1px solid var(--line);
-  border-radius: 8px; background: var(--panel);
-}
-.card .value { font-size: 2rem; font-weight: 600; line-height: 1.1; }
-.card .label { color: var(--muted); font-size: .8125rem; text-transform: uppercase; letter-spacing: .04em; }
-details { border: 1px solid var(--line); border-radius: 8px; margin-bottom: .625rem; background: var(--panel); scroll-margin-top: 1rem; }
-details:target { box-shadow: 0 0 0 2px var(--medium); }
-summary {
-  display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem;
-  cursor: pointer; flex-wrap: wrap; list-style: none;
-}
-/* A flex summary drops the native disclosure marker, so draw our own. */
-summary::-webkit-details-marker { display: none; }
-summary::before { content: '\\25B8'; color: var(--muted); font-size: .75rem; }
-details[open] > summary::before { content: '\\25BE'; }
-.pkg { font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .875rem; }
-.bar { flex: 1 1 8rem; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; min-width: 6rem; }
-.fill { display: block; height: 100%; }
-.fill.high { background: var(--high); } .fill.medium { background: var(--medium); } .fill.low { background: var(--low); }
-.pct { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 3.5rem; text-align: right; }
-.meta { color: var(--muted); font-size: .8125rem; flex-basis: 100%; }
-.high { color: var(--high); } .medium { color: var(--medium); } .low { color: var(--low); }
-table { width: 100%; border-collapse: collapse; font-size: .8125rem; display: block; overflow-x: auto; }
-th, td { padding: .375rem 1rem; text-align: left; border-top: 1px solid var(--line); white-space: nowrap; }
-th { color: var(--muted); font-weight: 500; }
-.file { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-.gaps { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: normal; }
-.untested { color: var(--muted); font-size: .875rem; margin-top: 2rem; }
-.untested code { font-size: .8125rem; }
-</style>
-</head>
-<body>
-<h1>dunx coverage</h1>
-<p class="sub">
-  ${packages.length} packages · generated ${stamp}
-  ${sha ? `· <a href="${REPO_URL}/commit/${sha}">${sha.slice(0, 7)}</a>` : ''}
-  · <a href="${REPO_URL}">repository</a>
-</p>
-
-<div class="totals">
-  <div class="card">
-    <div class="value ${level(lines)}">${format(lines)}%</div>
-    <div class="label">Lines</div>
-  </div>
-  <div class="card">
-    <div class="value ${level(funcs)}">${format(funcs)}%</div>
-    <div class="label">Functions</div>
-  </div>
-  <div class="card">
-    <div class="value">${totals.linesHit}<span class="label"> / ${totals.linesFound}</span></div>
-    <div class="label">Lines covered</div>
-  </div>
-</div>
-
-${packages.map(packageSection).join('\n')}
-
-${
-  untested.length
-    ? `<p class="untested">No test files found in: ${untested.map((n) => `<code>@dunx/${n}</code>`).join(', ')}</p>`
-    : ''
-}
-<script>
-  // Per-package badges link to #<package>; expand that row so the deep link lands on
-  // the file table rather than a collapsed summary.
-  const openTarget = () => {
-    if (!/^#[a-z0-9-]+$/i.test(location.hash)) return;
-    document.querySelector('details' + location.hash)?.setAttribute('open', '');
-  };
-  openTarget();
-  addEventListener('hashchange', openTarget);
-</script>
-</body>
-</html>
-`;
-};
-
 if (!existsSync(LCOV_PATH)) {
   console.error(
     `No coverage data at ${LCOV_PATH}. Run \`bun test --coverage\` first.`,
@@ -369,28 +232,55 @@ const totals = packages.reduce(
 
 const totalLines = pct(totals.linesHit, totals.linesFound);
 
-writeFileSync(
-  join(COVERAGE_DIR, 'index.html'),
-  page(packages, untested, totals),
-);
-writeFileSync(join(COVERAGE_DIR, 'coverage.svg'), badge(totalLines));
+const model: CoverageModel = {
+  generatedAt: new Date().toISOString(),
+  commit: process.env['GITHUB_SHA'] ?? null,
+  totals: {
+    lines: totals.linesFound,
+    linesHit: totals.linesHit,
+    funcs: totals.funcsFound,
+    funcsHit: totals.funcsHit,
+  },
+  packages: packages.map((pkg) => ({
+    name: pkg.name,
+    lines: pkg.linesFound,
+    linesHit: pkg.linesHit,
+    funcs: pkg.funcsFound,
+    funcsHit: pkg.funcsHit,
+    files: pkg.files.map((file) => ({
+      path: file.path,
+      lines: file.linesFound,
+      linesHit: file.linesHit,
+      funcs: file.funcsFound,
+      funcsHit: file.funcsHit,
+      uncovered: formatRanges(file.uncovered),
+    })),
+  })),
+  untested,
+};
+
+mkdirSync(MODEL_DIR, { recursive: true });
+mkdirSync(BADGE_DIR, { recursive: true });
+
+writeFileSync(join(MODEL_DIR, 'coverage.json'), JSON.stringify(model));
+writeFileSync(join(BADGE_DIR, 'coverage.svg'), badge(totalLines));
 
 for (const pkg of packages) {
   writeFileSync(
-    join(COVERAGE_DIR, `coverage-${pkg.name}.svg`),
+    join(BADGE_DIR, `coverage-${pkg.name}.svg`),
     badge(pct(pkg.linesHit, pkg.linesFound)),
   );
 }
 
 for (const name of untested) {
-  writeFileSync(join(COVERAGE_DIR, `coverage-${name}.svg`), badge(null));
+  writeFileSync(join(BADGE_DIR, `coverage-${name}.svg`), badge(null));
 }
 
 console.log(
-  `Coverage report: ${format(totalLines)}% lines across ${packages.length} packages (${files.length} files)`,
+  `Coverage model: ${format(totalLines)}% lines across ${packages.length} packages (${files.length} files) -> ${relative(ROOT_DIR, MODEL_DIR)}/coverage.json`,
 );
 console.log(
-  `Badges: coverage.svg + ${packages.length + untested.length} per-package`,
+  `Badges: coverage.svg + ${packages.length + untested.length} per-package -> ${relative(ROOT_DIR, BADGE_DIR)}/`,
 );
 if (untested.length) {
   console.log(`No tests in: ${untested.join(', ')}`);

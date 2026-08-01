@@ -1,10 +1,11 @@
+import { Logger } from '@dunx/core';
 import {
   EncodableFormat,
+  type EncodedImage,
   ImageFit,
   Images,
   ImagesOptions,
 } from '@dunx/infra/images';
-import { Logger } from '../logger.js';
 
 /**
  * A 4x4 RGB gradient PNG — the only binary in the example, and small enough to
@@ -15,12 +16,50 @@ const SEED_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAKElEQVR42g3HMQEAAAzC' +
   'MEzip3pqki1fktBgWEhKi2X9SEWZn9Hh2DgEahfxpRmu7gAAAABJRU5ErkJggg==';
 
+export interface RenderOptions {
+  readonly width: number;
+  readonly height?: number | undefined;
+  readonly fit: ImageFit;
+  readonly format: EncodableFormat;
+  readonly quality?: number | undefined;
+}
+
 export class Thumbnails {
   constructor(
     private readonly images: Images,
     private readonly config: ImagesOptions,
     private readonly logger: Logger,
   ) {}
+
+  /** The 64x48 source every route below derives from, grown from the 4x4 seed. */
+  private async source(): Promise<Uint8Array> {
+    const seed = new Uint8Array(Buffer.from(SEED_PNG_BASE64, 'base64'));
+    const seeded = await this.images.load(seed);
+    return seeded
+      .resize(64, 48, { fit: ImageFit.FILL })
+      .to(EncodableFormat.PNG)
+      .toBytes();
+  }
+
+  async render(options: RenderOptions): Promise<EncodedImage> {
+    const pipeline = await this.images.load(await this.source());
+    const resized = pipeline.resize(options.width, options.height, {
+      fit: options.fit,
+    });
+    // A quality only means something to a lossy encoder, so it is only passed
+    // when one was asked for.
+    return options.quality === undefined
+      ? resized.to(options.format).encode()
+      : resized.to(options.format, { quality: options.quality }).encode();
+  }
+
+  async describe(
+    base64: string,
+  ): Promise<{ width: number; height: number; format: string }> {
+    const bytes = new Uint8Array(Buffer.from(base64, 'base64'));
+    const meta = await this.images.metadata(bytes);
+    return { width: meta.width, height: meta.height, format: meta.format };
+  }
 
   async demonstrate(): Promise<void> {
     const { images, logger } = this;

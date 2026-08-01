@@ -57,15 +57,29 @@ jobs:
       - name: Test
         run: bun run test:cov
 
-      # Test that the example boots the whole DI graph and exits 0.
-      - name: Boot the example
-        run: bun run --filter '@dunx/playground' start
+      # test:cov deliberately covers only ./packages and ./scripts, and the docs
+      # site needs its own bunfig preload (a DOM), so
+      # its suite runs from its own workspace.
+      - name: Test the documentation site
+        run: bun run --filter '@dunx/docs' test
 
-      - name: Upload coverage report
+      # `start` is a long-running service now, so it can never exit 0. `tour`
+      # boots the same app, narrates every package and exits — which is the
+      # end-to-end check that the whole DI graph builds and every part works.
+      - name: Tour the example
+        run: bun run --filter '@dunx/playground' tour
+
+      # `bun run build` already built the site once, before the coverage model
+      # and badges existed. Rebuild so the deployed artifact carries them.
+      - name: Build the documentation site
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        run: bun run docs:build
+
+      - name: Upload the documentation site
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./coverage
+          path: ./tools/docs/dist
 
       - name: Configure git identity
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -101,6 +115,6 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
-      - name: Deploy coverage report to GitHub Pages
+      - name: Deploy the documentation site to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4
