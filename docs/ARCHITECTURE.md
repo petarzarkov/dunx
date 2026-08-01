@@ -969,6 +969,46 @@ Full methodology, subject list and results table:
 [`tools/bench/README.md`](../tools/bench/README.md). Recorded here are the decisions
 and the measurements behind them.
 
+**The first thing the harness found was a regression dunx had shipped to itself.**
+`@dunx/http` had just made `RequestLoggingMiddleware` a default, and the bench
+subject predated it, so the suite was quietly measuring the logger. dunx fell from
+~86-94% of raw `Bun.serve` to **34% on `json`, 33% on `params` and 9.6% on
+`validate`** — 8.5k req/s against 88k, a p50 of 7.4 ms. Setting
+`requestLogging: false` restored ~89%, which located the fault precisely.
+
+Three causes, in order of cost:
+
+- **`response.clone().text()` on every JSON response**, and `req.clone().text()` on
+  every JSON request body. Two clone-and-buffer passes over every payload, on the
+  hot path, to fill fields most responses never need read. Both are now **off by
+  default** — which is the right default for privacy and log volume independently of
+  speed, since the response body is also the field most likely to carry a secret.
+- **`new URL(req.url)` per request**, parsing scheme, host, port, query and hash to
+  reach a pathname. Replaced with an `indexOf` slice; the query string is parsed
+  only when there is one.
+- What remains is `JSON.stringify` plus a `write` per line, which is the irreducible
+  price of logging and is why `dunx-logging` is its own subject rather than folded
+  into the framework's number.
+
+**The rest of the gap to Elysia was async machinery on values that were never
+promises.** The general request path is
+`async (req) => toResponse(await handler(await read(req)), status)` wrapped in an
+`async` try/catch. For a route with no middleware, no CORS and no declared schemas,
+`read` is the identity reader and a sync handler returns a plain object — so both
+`await`s cost an async frame and a microtask tick for nothing, twice per request.
+
+`buildRoutes` now emits a **synchronous handler** for exactly that shape, returning a
+`Response` rather than a `Promise<Response>` (Bun accepts either). A handler that
+does return a promise is adopted instead of awaited by a wrapper. Measured on
+`plaintext`: **89.5% -> 95.9%** of raw `Bun.serve`. Elysia's advantage was that it
+compiles this shape ahead of time; this reaches most of the same place without a
+code generator.
+
+The lesson worth keeping: a default that is convenient in development can be the
+single largest cost in production, and nobody would have known without a harness
+that compares against the floor. `Bun.serve` as a subject is what made the
+regression legible — a 9.6% row is impossible to rationalise.
+
 **The load generator is native, and that was measured rather than assumed.** The
 harness supports two: [oha](https://github.com/hatoo/oha) (Rust, via `bun run
 setup`) and a fallback driver written on Bun's `fetch` across worker threads. Against

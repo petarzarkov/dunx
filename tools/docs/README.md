@@ -18,16 +18,38 @@ that already exists in the repo:
 
 | Page             | Source                                                     |
 | ---------------- | ---------------------------------------------------------- |
-| Landing          | the root `README.md`                                       |
+| Benchmarks       | `tools/bench/results/latest.json`                          |
+| Landing          | the root `README.md`, plus a summary of the benchmark run   |
 | Guides           | `docs/*.md`, rendered by `Bun.markdown.html`               |
 | Package overview | that package's `README.md`                                 |
 | API reference    | the doc comments in `packages/*/src/**/*.ts`               |
 | Coverage         | `tools/docs/src/generated/coverage.json`                   |
 
-`scripts/generate.ts` writes `src/generated/site.json`; `bun run gen:cov`
-(`scripts/coverage-report.ts` at the repo root) writes
-`src/generated/coverage.json` and the badge SVGs in `public/badges/`. Both
-directories are gitignored — they are build output.
+`scripts/generate.ts` writes `src/generated/site.json` and
+`src/generated/bench.json`; `bun run gen:cov` (`scripts/coverage-report.ts` at
+the repo root) writes `src/generated/coverage.json` and the badge SVGs in
+`public/badges/`. Both directories are gitignored — they are build output.
+
+## The benchmark page
+
+`generate.ts` copies `tools/bench/results/latest.json` into
+`src/generated/bench.json` after checking its `schemaVersion` against the mirror
+of the harness's shape in `scripts/extract/model.ts`. A run is not required to
+build: when the file is missing — or written by a newer schema — `bench.json` is
+the literal `null`, and the page says how to produce one instead of rendering
+half a report. `results/latest.json` is the one file under `results/` that is
+_not_ gitignored, because CI builds the site from a clean checkout and an
+untracked report would deploy a page with no numbers on it.
+
+Nothing on that page is a chart library. The bars are `<div>`s whose width is
+the same percentage the neighbouring cell prints, which is both zero bytes of
+dependency and impossible to drift from the number it claims to show. Colour
+encodes the **runtime**, not the ranking: a Bun subject beating a Node one says
+something about Bun and nothing about the framework. `@dunx/http` is marked in
+every table, and rows are ordered by the measured value alone — so it is marked
+where it comes third on cold start exactly as it is where it comes second on
+throughput. `Where dunx loses` is computed from the report rather than written
+down, so it cannot go stale against a newer run.
 
 ## Why `oxc-parser` and not the TypeScript compiler API
 
@@ -84,8 +106,9 @@ src/
   App.tsx              # shell, navigation
   router.ts            # hash router — GitHub Pages needs no rewrite rules
   data.ts              # the generated JSON, parsed once
-  components/          # Prose, SymbolCard, Search (Mantine Spotlight)
-  pages/               # Home, Guide, PackagePage, Coverage, NotFound
+  bench.ts             # ranking, baseline percentages and headlines over the run
+  components/          # Prose, SymbolCard, Search, BenchBars, BenchSummary
+  pages/               # Benchmarks, Home, Guide, PackagePage, Coverage, NotFound
 ```
 
 Routing is hash-based (`#/api/core`) on purpose: GitHub Pages serves static
@@ -98,6 +121,9 @@ files with no SPA fallback, so a path-based router would 404 on every deep link.
 mounts the app in happy-dom and asserts the generated model actually reaches the
 DOM. `happydom.ts` is the test preload; it registers that
 text-import suffix so `src/data.ts` needs no Bun-specific code path.
+
+The benchmark assertions are `test.if(bench !== null)`, so they check real
+numbers when the build had a run and skip rather than fail when it did not.
 
 ## Not done yet
 

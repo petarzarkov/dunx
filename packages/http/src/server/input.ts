@@ -147,6 +147,16 @@ const then =
   };
 
 /**
+ * Whether {@link buildInputReader} will return the identity reader — nothing
+ * parsed, nothing validated, nothing awaited. `buildRoutes` asks so it can skip
+ * the async machinery for such a route entirely.
+ */
+export const readsNothing = (options: RouteSchemas | undefined): boolean =>
+  options?.body === undefined &&
+  options?.query === undefined &&
+  options?.params === undefined;
+
+/**
  * Folds the declared schemas into a single closure, the way `compose` folds
  * middleware: which parsers and validators run is decided here, at boot, so per
  * request there is no metadata to read and no branch left to take.

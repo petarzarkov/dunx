@@ -14,6 +14,13 @@ export interface Middleware {
 
 export type RouteHandler = (req: BunRequest) => Promise<Response>;
 
+/**
+ * What goes into the `Bun.serve` route table. Wider than `RouteHandler` because
+ * Bun accepts a plain `Response`, which is what lets a route with nothing to
+ * await skip promises altogether — see `buildRoutes`.
+ */
+export type ServedHandler = (req: BunRequest) => Response | Promise<Response>;
+
 /** Folded into one closure per route at boot — no per-request array iteration. */
 export const compose = (
   middleware: readonly Middleware[],

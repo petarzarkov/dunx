@@ -10,6 +10,7 @@ import {
   Text,
   Title,
 } from '@mantine/core';
+import { BenchSummary } from '../components/BenchSummary';
 import { Prose } from '../components/Prose';
 import { site } from '../data';
 import { href, RouteKind } from '../router';
@@ -31,7 +32,14 @@ export const Home = (): React.JSX.Element => (
           anything the runtime already does.
         </Text>
         <Group>
-          <Button component="a" href={href(RouteKind.Guide, 'architecture')}>
+          <Button component="a" href={href(RouteKind.Bench)}>
+            See the benchmarks
+          </Button>
+          <Button
+            variant="default"
+            component="a"
+            href={href(RouteKind.Guide, 'architecture')}
+          >
             Read the architecture
           </Button>
           <Button
@@ -44,6 +52,8 @@ export const Home = (): React.JSX.Element => (
           </Button>
         </Group>
       </Stack>
+
+      <BenchSummary />
 
       <div>
         <Title order={2} size="h3" mb="sm">

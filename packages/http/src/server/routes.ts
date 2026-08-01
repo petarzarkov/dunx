@@ -5,8 +5,13 @@ import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
 import { defaultErrorMapper, HttpError, type ErrorMapper } from './errors.js';
-import { buildInputReader } from './input.js';
-import { compose, type Middleware, type RouteHandler } from './middleware.js';
+import { buildInputReader, readsNothing } from './input.js';
+import {
+  compose,
+  type Middleware,
+  type RouteHandler,
+  type ServedHandler,
+} from './middleware.js';
 import { HttpStatusCode } from './status.js';
 
 /** How a `@UseGuards` class becomes an instance. `listen()` passes `app.get`. */
@@ -20,7 +25,7 @@ export type RouteMethod = HttpMethod | 'OPTIONS';
 
 export type BunRoutes = Record<
   string,
-  Partial<Record<RouteMethod, RouteHandler>>
+  Partial<Record<RouteMethod, ServedHandler>>
 >;
 
 /**
@@ -29,7 +34,7 @@ export type BunRoutes = Record<
  */
 export type ServeRoutes = Record<
   string,
-  Partial<Record<RouteMethod, RouteHandler | UpgradeHandler>>
+  Partial<Record<RouteMethod, ServedHandler | UpgradeHandler>>
 >;
 
 /**
@@ -157,6 +162,44 @@ export const buildFallback = (
   return cors ? withCors(cors, run) : run;
 };
 
+/**
+ * The synchronous path, taken when a route has no middleware, no CORS and no
+ * declared schemas.
+ *
+ * Bun accepts a plain `Response` from a route handler, so such a route needs no
+ * promise at all: the two `await`s in the general path are on values that were
+ * never going to be thenable, and each one still costs an async frame and a
+ * microtask tick. Worth ~6 points of throughput against raw `Bun.serve` on the
+ * `params` scenario in `tools/bench` — which is most of what separated dunx from
+ * Elysia, whose whole trick is compiling this shape ahead of time.
+ *
+ * A handler that *does* return a promise still works: it is adopted here rather
+ * than awaited by a wrapper.
+ */
+const directOr = (
+  guarded: RouteHandler,
+  route: DiscoveredRoute,
+  status: number,
+  onError: ErrorMapper,
+  noMiddleware: boolean,
+): ServedHandler => {
+  if (!noMiddleware || !readsNothing(route.options)) return guarded;
+
+  return (req) => {
+    try {
+      const value = route.handler({ req });
+      return value instanceof Promise
+        ? value.then(
+            (resolved) => toResponse(resolved, status),
+            (error: unknown) => onError(error, req),
+          )
+        : toResponse(value, status);
+    } catch (error) {
+      return onError(error, req);
+    }
+  };
+};
+
 export const buildRoutes = (
   discovered: readonly DiscoveredRoute[],
   middleware: readonly Middleware[] = [],
@@ -198,7 +241,9 @@ export const buildRoutes = (
     const byMethod = (routes[route.path] ??= {});
     // Outside the error mapper, so a mapped 500 still carries the CORS headers the
     // browser needs in order to show it.
-    byMethod[route.method] = cors ? withCors(cors, guarded) : guarded;
+    byMethod[route.method] = cors
+      ? withCors(cors, guarded)
+      : directOr(guarded, route, status, onError, chain.length === 0);
   }
 
   if (cors) {

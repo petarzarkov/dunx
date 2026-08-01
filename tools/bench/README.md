@@ -50,6 +50,7 @@ And one thing per subject:
 | ----------------- | ------- | ------------------------------------------------------------------------------ |
 | `bun-serve`       | Bun     | The ceiling. `@dunx/http` sits on this API; the gap is dunx overhead.          |
 | `dunx`            | Bun     | `@dunx/http`, with the compiler preload and a constructor-injected dependency. |
+| `dunx-logging`    | Bun     | The same app with `requestLogging` left at its default — see below.            |
 | `elysia`          | Bun     | The other Bun-native framework.                                                |
 | `hono-bun`        | Bun     | Hono on `Bun.serve`.                                                           |
 | `hono-node`       | Node    | The *same* Hono app on `node:http`, so runtime can be separated from framework. |
@@ -59,6 +60,25 @@ And one thing per subject:
 
 Each subject is a single file under `servers/`, small enough to read in full. If a
 number looks wrong, read the file — that is the whole implementation.
+
+#### Why dunx appears twice
+
+`@dunx/http` installs `RequestLoggingMiddleware` by default: one structured entry
+per request. **No other subject in this suite logs anything.** Comparing a
+framework that writes and flushes a line per request against seven that write
+nothing measures the logger, not the framework — so the primary `dunx` subject
+passes `requestLogging: false`, which is the apples-to-apples number.
+
+The cost of the default is not swept under that: `dunx-logging` is the identical
+app with the default left alone, in the same table, so both are visible. Read
+`dunx` as "the framework" and `dunx-logging` as "the framework plus
+out-of-the-box observability".
+
+This split exists because measuring found the default was costing far more than
+anyone had guessed — the response-body capture cloned and buffered every payload
+on the hot path. That is now off by default, and the remaining gap between the two
+rows is `JSON.stringify` plus a `write` per request, which is the irreducible
+price of a log line.
 
 ### Deliberate handicaps, in both directions
 
@@ -332,7 +352,10 @@ Fastify's optimised path; with ajv it would not look like this.
 ## Output
 
 The stdout table is for humans. `results/latest.json` (or `--out <path>`) is for
-machines — the docs site consumes it. Shape:
+machines — `tools/docs` reads it at build time and renders it as the site's
+leading page, so it is the one file under `results/` that is committed rather
+than gitignored. A checkout without it still builds; the page says there is no
+run. Shape:
 
 ```jsonc
 {

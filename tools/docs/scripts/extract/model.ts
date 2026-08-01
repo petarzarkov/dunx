@@ -99,6 +99,102 @@ export interface CoverageModel {
   readonly untested: readonly string[];
 }
 
+/**
+ * The benchmark report, as `tools/bench` writes it to `results/latest.json`.
+ * The shape is that harness's contract, documented in `tools/bench/README.md`
+ * and versioned by `schemaVersion`; this is a mirror of it, not a re-derivation.
+ * A build with no run emits `null` in its place.
+ */
+export const BENCH_SCHEMA_VERSION = 1;
+
+export type BenchRuntime = 'bun' | 'node';
+
+export interface BenchMachine {
+  readonly cpuModel: string;
+  readonly cores: number;
+  readonly ramGiB: number;
+  readonly platform: string;
+  readonly kernel: string;
+  readonly arch: string;
+  readonly bun: string;
+  readonly node: string;
+}
+
+export interface BenchLoadGenerator {
+  readonly id: string;
+  readonly version: string;
+  readonly binary: string | null;
+  readonly limitations: readonly string[];
+}
+
+export interface BenchConfig {
+  readonly connections: number;
+  readonly durationSeconds: number;
+  readonly warmupSeconds: number;
+  readonly runs: number;
+  readonly startupSamples: number;
+}
+
+export interface BenchSubject {
+  readonly id: string;
+  readonly label: string;
+  readonly runtime: BenchRuntime;
+  readonly version: string;
+  readonly validator: string;
+  readonly notes: readonly string[];
+  readonly entry: string;
+  readonly preload: readonly string[];
+  readonly versionOf: string | null;
+}
+
+export interface BenchScenario {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly method: string;
+  readonly path: string;
+  readonly body?: string | undefined;
+  readonly contentType?: string | undefined;
+  readonly expectStatus: number;
+  readonly expectBody: string;
+  readonly expectMime: string;
+}
+
+export interface BenchSpread {
+  readonly median: number;
+  readonly min: number;
+  readonly max: number;
+  readonly stddev: number;
+}
+
+export interface BenchResult {
+  readonly subject: string;
+  readonly scenario: string;
+  readonly rps: BenchSpread;
+  readonly latencyP50Ms: BenchSpread;
+  readonly latencyP99Ms: BenchSpread;
+  readonly totalErrors: number;
+  readonly totalNon2xx: number;
+}
+
+export interface BenchStartup {
+  readonly subject: string;
+  readonly samplesMs: readonly number[];
+  readonly medianMs: number;
+}
+
+export interface BenchModel {
+  readonly schemaVersion: number;
+  readonly generatedAt: string;
+  readonly machine: BenchMachine;
+  readonly loadGenerator: BenchLoadGenerator;
+  readonly config: BenchConfig;
+  readonly subjects: readonly BenchSubject[];
+  readonly scenarios: readonly BenchScenario[];
+  readonly results: readonly BenchResult[];
+  readonly startup: readonly BenchStartup[];
+}
+
 export interface SiteModel {
   readonly generatedAt: string;
   readonly repoUrl: string;

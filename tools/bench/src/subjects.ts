@@ -28,6 +28,19 @@ export const subjects: readonly Subject[] = [
     ],
   },
   {
+    id: 'dunx-logging',
+    label: '@dunx/http (+ request logging)',
+    runtime: 'bun',
+    entry: 'servers/dunx-logging.ts',
+    preload: ['@dunx/compiler/preload'],
+    versionOf: '@dunx/http',
+    validator: 'zod (Standard Schema)',
+    notes: [
+      'The same app as `dunx` with `requestLogging` left at its default, so the cost of one structured entry per request is visible rather than folded into the framework number.',
+      'No other subject logs anything, which is why this is a separate row and not the primary one.',
+    ],
+  },
+  {
     id: 'elysia',
     label: 'Elysia',
     runtime: 'bun',

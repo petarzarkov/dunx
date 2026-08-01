@@ -1,3 +1,8 @@
 .bench-tmp/
 .bin/
-results/
+# `results/*`, not `results/`: git cannot re-include a path inside an excluded
+# directory, and the one published run has to be tracked. The docs site renders
+# it, and CI builds that site from a clean checkout — an untracked report means
+# the deployed page has no numbers on it.
+results/*
+!results/latest.json

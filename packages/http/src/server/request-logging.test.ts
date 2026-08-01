@@ -87,21 +87,27 @@ describe('request logging', () => {
     const entry = entries.find((e) => e['message'] === 'GET /things 200');
     expect(entry).toBeDefined();
     expect(entry?.['statusCode']).toBe(200);
-    expect(entry?.['responseBody']).toEqual(['one']);
     expect(entry?.['context']).toBe('ThingsController.list');
     expect(typeof entry?.['requestId']).toBe('string');
     expect(typeof entry?.['elapsedMs']).toBe('number');
+    // Bodies are off by default: reading one means cloning and buffering every
+    // payload, which measured at two thirds of the throughput on tools/bench's
+    // `validate` scenario.
+    expect(entry?.['responseBody']).toBeUndefined();
   });
 
   it('emits exactly one entry per request, carrying both halves', async () => {
     const entries = await captured(async () => {
-      await withApp(async (_app, url) => {
-        await fetch(new URL('things', url), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ name: 'ada' }),
-        });
-      });
+      await withApp(
+        async (_app, url) => {
+          await fetch(new URL('things', url), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: 'ada' }),
+          });
+        },
+        { requestLogging: { requestBody: true, responseBody: true } },
+      );
     });
 
     const matched = entries.filter((e) =>
@@ -110,6 +116,26 @@ describe('request logging', () => {
     expect(matched).toHaveLength(1);
     expect(matched[0]?.['request']).toMatchObject({ body: { name: 'ada' } });
     expect(matched[0]?.['responseBody']).toEqual({ name: 'ada' });
+  });
+
+  it('omits both bodies unless asked, and the handler still reads its own', async () => {
+    const entries = await captured(async () => {
+      await withApp(async (_app, url) => {
+        const response = await fetch(new URL('things', url), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'grace' }),
+        });
+        // The middleware did not consume the stream the handler needed.
+        expect(await response.json()).toEqual({ name: 'grace' });
+      });
+    });
+
+    const entry = entries.find((e) =>
+      String(e['message']).startsWith('POST /things'),
+    );
+    expect(entry?.['responseBody']).toBeUndefined();
+    expect(entry?.['request']).not.toHaveProperty('body');
   });
 
   it('reuses an inbound x-request-id and returns it', async () => {

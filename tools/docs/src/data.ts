@@ -1,6 +1,8 @@
+import benchRaw from './generated/bench.json' with { type: 'text' };
 import coverageRaw from './generated/coverage.json' with { type: 'text' };
 import siteRaw from './generated/site.json' with { type: 'text' };
 import type {
+  BenchModel,
   CoverageModel,
   PackageDoc,
   SiteModel,
@@ -14,6 +16,9 @@ import type {
  */
 export const site = JSON.parse(siteRaw) as SiteModel;
 export const coverage = JSON.parse(coverageRaw) as CoverageModel;
+
+/** `null` when the build had no `tools/bench/results/latest.json`. */
+export const bench = JSON.parse(benchRaw) as BenchModel | null;
 
 export const packageByDir = (dir: string): PackageDoc | undefined =>
   site.packages.find((pkg) => pkg.dir === dir);

@@ -2,13 +2,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { buildGuide, renderDoc, slugify, type LinkTargets } from './content';
 import { extractPackage, type Manifest } from './extract/index';
-import type { CoverageModel, PackageDoc, SiteModel } from './extract/model';
+import {
+  BENCH_SCHEMA_VERSION,
+  type BenchModel,
+  type CoverageModel,
+  type PackageDoc,
+  type SiteModel,
+} from './extract/model';
 
 const TOOL_ROOT = resolve(import.meta.dir, '..');
 const REPO_ROOT = resolve(TOOL_ROOT, '../..');
 const PACKAGES_DIR = join(REPO_ROOT, 'packages');
 const DOCS_DIR = join(REPO_ROOT, 'docs');
 const OUT_DIR = join(TOOL_ROOT, 'src', 'generated');
+const BENCH_RESULTS = join(REPO_ROOT, 'tools/bench/results/latest.json');
 
 const REPO_URL = 'https://github.com/petarzarkov/dunx';
 
@@ -38,6 +45,30 @@ const emptyCoverage = (): CoverageModel => ({
   packages: [],
   untested: [],
 });
+
+/**
+ * `results/` is gitignored bar the one published run, and a benchmark takes
+ * minutes to produce, so a clean checkout can legitimately have no report. That
+ * is not a build failure: the page says so and the rest of the site is
+ * unaffected. A report from a future schema is treated the same way rather than
+ * rendered through a mismatched reader.
+ */
+const readBench = (): BenchModel | null => {
+  if (!existsSync(BENCH_RESULTS)) {
+    console.warn('docs: no benchmark run at tools/bench/results/latest.json');
+    return null;
+  }
+
+  const model = JSON.parse(readFileSync(BENCH_RESULTS, 'utf8')) as BenchModel;
+  if (model.schemaVersion !== BENCH_SCHEMA_VERSION) {
+    console.warn(
+      `docs: benchmark schemaVersion ${model.schemaVersion}, expected ${BENCH_SCHEMA_VERSION} — skipping`,
+    );
+    return null;
+  }
+
+  return model;
+};
 
 const dirs = packageDirs();
 const dirNames = dirs.map((dir) => basename(dir));
@@ -78,8 +109,11 @@ const site: SiteModel = {
   home: render(read(join(REPO_ROOT, 'README.md'))),
 };
 
+const bench = readBench();
+
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, 'site.json'), JSON.stringify(site));
+writeFileSync(join(OUT_DIR, 'bench.json'), JSON.stringify(bench));
 
 // Coverage is produced by scripts/coverage-report.ts, which runs after the test
 // suite — later than this in CI. Seed an empty model so the site always builds.
@@ -95,5 +129,9 @@ const publicCount = packages.reduce(
 );
 
 console.log(
-  `docs: ${packages.length} packages, ${publicCount} public / ${symbolCount} exported symbols, ${guides.length} guides`,
+  `docs: ${packages.length} packages, ${publicCount} public / ${symbolCount} exported symbols, ` +
+    `${guides.length} guides, ` +
+    (bench
+      ? `${bench.results.length} benchmark cells from ${bench.generatedAt}`
+      : 'no benchmark run'),
 );

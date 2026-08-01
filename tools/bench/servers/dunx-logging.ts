@@ -9,6 +9,19 @@ import {
 } from '@dunx/http';
 import { echo, jsonPayload, personSchema, PLAINTEXT, port } from './shared.js';
 
+/**
+ * `@dunx/http` exactly as `HttpFactory.create` leaves it: `requestLogging` on,
+ * which is the default and therefore what an app gets unless it opts out.
+ *
+ * It is a separate subject rather than the primary one because no other subject
+ * in the suite logs anything, so this row measures dunx's default *observability*
+ * against seven servers that are silent. Both numbers matter and both are here:
+ * `dunx` is the framework, `dunx-logging` is the framework plus a structured line
+ * per request written to stdout.
+ *
+ * Its stdout is a pipe the harness drains, so this does not measure terminal
+ * rendering — but it does measure `JSON.stringify` plus a `write` per request.
+ */
 class Greeter {
   text(): string {
     return PLAINTEXT;
@@ -25,9 +38,6 @@ const validate = {
   status: 200,
 } as const satisfies RouteSchemas;
 
-// A constructor-injected dependency, resolved by @dunx/compiler's preload. It is
-// here because that is how a real dunx app is written, and its cost belongs in the
-// startup number rather than being quietly left out.
 @Controller()
 class BenchController {
   constructor(private readonly greeter: Greeter) {}
@@ -56,12 +66,5 @@ class BenchController {
 @Module({ controllers: [BenchController], providers: [Greeter] })
 class AppModule {}
 
-// `requestLogging: false` because **no other subject logs**, and comparing a
-// framework that writes a structured line per request against seven that write
-// nothing measures the logger, not the framework. The cost of dunx's default is
-// not hidden — it is its own subject, `dunx-logging`, in the same table.
-const app = await HttpFactory.create(AppModule, {
-  port: port(),
-  requestLogging: false,
-});
+const app = await HttpFactory.create(AppModule, { port: port() });
 await app.listen();

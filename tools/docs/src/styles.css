@@ -168,6 +168,64 @@ body {
   margin: 2rem 0;
 }
 
+/* Benchmark bars. Plain divs sized by the percentage the adjacent cell prints,
+   so a chart library is not in the bundle for four bar charts. Colour encodes
+   the runtime — the honest grouping, since a Bun subject beating a Node one is
+   a statement about the runtime, not about the framework. */
+.bench-track {
+  position: relative;
+  flex: 1;
+  min-width: 6rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--mantine-color-default-border);
+}
+
+.bench-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mantine-color-indigo-filled);
+}
+
+.bench-fill[data-runtime='node'] {
+  background: var(--mantine-color-teal-filled);
+}
+
+/* Where the fastest rival framework landed, on the same scale as the fill. */
+.bench-marker {
+  position: absolute;
+  top: -0.2rem;
+  width: 2px;
+  height: 0.95rem;
+  background: var(--mantine-color-text);
+  opacity: 0.65;
+}
+
+.bench-swatch {
+  width: 0.85rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--mantine-color-indigo-filled);
+}
+
+.bench-swatch[data-runtime='node'] {
+  background: var(--mantine-color-teal-filled);
+}
+
+.bench-swatch-focus {
+  background: transparent;
+  border-left: 3px solid var(--mantine-primary-color-filled);
+  border-radius: 0;
+}
+
+.bench-row-focus > td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--mantine-primary-color-filled);
+}
+
+.bench-row-focus > td {
+  background: var(--mantine-color-default);
+}
+
 .signature,
 .member-signature {
   white-space: pre-wrap;

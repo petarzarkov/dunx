@@ -13,7 +13,8 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { spotlight } from '@mantine/spotlight';
 import { Search } from './components/Search';
-import { site } from './data';
+import { bench, site } from './data';
+import { Benchmarks } from './pages/Benchmarks';
 import { Coverage } from './pages/Coverage';
 import { Guide } from './pages/Guide';
 import { Home } from './pages/Home';
@@ -45,6 +46,16 @@ const Navigation = ({
   onNavigate: () => void;
 }): React.JSX.Element => (
   <>
+    <NavLink
+      component="a"
+      href={href(RouteKind.Bench)}
+      label="Benchmarks"
+      description={
+        bench ? `${bench.subjects.length} subjects, vs Bun.serve` : 'No run yet'
+      }
+      active={route.kind === RouteKind.Bench}
+      onClick={onNavigate}
+    />
     <NavLink
       component="a"
       href={href(RouteKind.Home)}
@@ -99,6 +110,8 @@ const Page = ({ route }: { route: Route }): React.JSX.Element => {
   switch (route.kind) {
     case RouteKind.Home:
       return <Home />;
+    case RouteKind.Bench:
+      return <Benchmarks />;
     case RouteKind.Guide:
       return <Guide slug={route.slug} />;
     case RouteKind.Api:

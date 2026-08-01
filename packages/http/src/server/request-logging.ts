@@ -10,13 +10,40 @@ export const REQUEST_ID_HEADER = 'x-request-id';
 export interface RequestLoggingOptions {
   /** Bodies past this many characters are logged as a size. Default 2048. `0` omits them. */
   readonly maxBodyLength?: number;
-  /** Log the request body. Default `true`. */
+  /**
+   * Log the request body. Default **`false`**.
+   *
+   * Reading it means `req.clone().text()` — a second copy of every payload,
+   * buffered and parsed, on the hot path. Measured on the `validate` scenario in
+   * `tools/bench`, turning both body options on costs roughly two thirds of the
+   * throughput. It is also the field most likely to contain a password.
+   *
+   * Turn it on in development, where seeing the payload is the point.
+   */
   readonly requestBody?: boolean;
-  /** Log the response body. Default `true`. */
+  /** Log the response body. Default **`false`** — same clone-and-buffer cost. */
   readonly responseBody?: boolean;
   /** Paths to skip entirely — a health check polled every second, say. */
   readonly ignore?: readonly string[];
 }
+
+/**
+ * `new URL(req.url)` parses the scheme, host, port, query and hash to reach one
+ * string. This slices it out instead, which is what every request needs and all
+ * that most of them need.
+ */
+const pathnameOf = (url: string): string => {
+  const start = url.indexOf('/', url.indexOf('://') + 3);
+  if (start === -1) return '/';
+  const end = url.indexOf('?', start);
+  return end === -1 ? url.slice(start) : url.slice(start, end);
+};
+
+const queryOf = (url: string): Record<string, string> | undefined => {
+  const start = url.indexOf('?');
+  if (start === -1) return undefined;
+  return Object.fromEntries(new URLSearchParams(url.slice(start + 1)));
+};
 
 const parse = (text: string, limit: number): unknown => {
   if (limit === 0) return undefined;
@@ -59,14 +86,14 @@ export class RequestLoggingMiddleware implements Middleware {
     options: RequestLoggingOptions = {},
   ) {
     this.#limit = options.maxBodyLength ?? 2048;
-    this.#requestBody = options.requestBody ?? true;
-    this.#responseBody = options.responseBody ?? true;
+    this.#requestBody = options.requestBody ?? false;
+    this.#responseBody = options.responseBody ?? false;
     this.#ignore = new Set(options.ignore ?? []);
   }
 
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
-    const url = new URL(req.url);
-    if (this.#ignore.has(url.pathname)) return next();
+    const path = pathnameOf(req.url);
+    if (this.#ignore.has(path)) return next();
 
     const started = Bun.nanoseconds();
     const elapsed = (): number =>
@@ -79,22 +106,21 @@ export class RequestLoggingMiddleware implements Middleware {
       {
         requestId,
         method: ctx.method,
-        event: url.pathname,
+        event: path,
         flow: 'http',
         context: `${ctx.controller}.${ctx.handler}`,
       },
       async () => {
+        const query = queryOf(req.url);
         const request = {
-          ...(url.search === ''
-            ? {}
-            : { query: Object.fromEntries(url.searchParams) }),
+          ...(query === undefined ? {} : { query }),
           ...(await this.#body(req)),
           userAgent: req.headers.get('user-agent'),
         };
 
         try {
           const response = await next();
-          this.logger.info(`${req.method} ${url.pathname} ${response.status}`, {
+          this.logger.info(`${req.method} ${path} ${response.status}`, {
             request,
             statusCode: response.status,
             ...(await this.#responseFields(response)),
@@ -116,7 +142,7 @@ export class RequestLoggingMiddleware implements Middleware {
             statusCode: status,
             elapsedMs: elapsed(),
           };
-          const line = `${req.method} ${url.pathname} ${status}`;
+          const line = `${req.method} ${path} ${status}`;
           if (status < HttpStatusCode.INTERNAL_SERVER_ERROR) {
             this.logger.warn(line, entry);
           } else {

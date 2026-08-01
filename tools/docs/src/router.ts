@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 export const RouteKind = Object.freeze({
   Home: 'home',
+  Bench: 'benchmarks',
   Guide: 'guide',
   Api: 'api',
   Coverage: 'coverage',
@@ -17,6 +18,7 @@ export interface Route {
 }
 
 const KINDS: Record<string, RouteKind> = {
+  benchmarks: RouteKind.Bench,
   guide: RouteKind.Guide,
   api: RouteKind.Api,
   coverage: RouteKind.Coverage,

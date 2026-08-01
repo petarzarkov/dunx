@@ -4,17 +4,31 @@ import { site } from '../data';
 import { href, navigate, RouteKind } from '../router';
 
 /**
- * One flat action list over everything the build produced: guides, their
- * section headings, the packages, and every documented symbol.
+ * One flat action list over everything the build produced: the benchmarks
+ * page, the guides, their section headings, the packages, and every documented
+ * symbol.
  */
 const buildActions = (): SpotlightActionData[] => {
-  const actions: SpotlightActionData[] = site.guides.map((guide) => ({
-    id: `guide-${guide.slug}`,
-    label: guide.title,
-    description: guide.source,
-    group: 'Guides',
-    onClick: () => navigate(href(RouteKind.Guide, guide.slug)),
-  }));
+  const actions: SpotlightActionData[] = [
+    {
+      id: 'page-benchmarks',
+      label: 'Benchmarks',
+      description:
+        '@dunx/http against Bun.serve, Elysia, Hono, Fastify, Express',
+      group: 'Pages',
+      onClick: () => navigate(href(RouteKind.Bench)),
+    },
+  ];
+
+  for (const guide of site.guides) {
+    actions.push({
+      id: `guide-${guide.slug}`,
+      label: guide.title,
+      description: guide.source,
+      group: 'Guides',
+      onClick: () => navigate(href(RouteKind.Guide, guide.slug)),
+    });
+  }
 
   for (const guide of site.guides) {
     for (const heading of guide.headings) {
