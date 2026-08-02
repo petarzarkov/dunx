@@ -127,6 +127,7 @@ for (const dir of ORDER) {
       console.error(`\nFAIL ${pkg.name} — stopping before the rest.`);
       process.exit(1);
     }
+    publishedThisRun += 1;
     console.log(
       `${DRY ? 'would publish' : 'published'} ${pkg.name}@${VERSION}`,
     );
