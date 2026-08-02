@@ -89,7 +89,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@arkv/logger": "^0.8.1"
+    "@arkv/logger": "^0.8.2"
   },
   "devDependencies": {
     "@dunx/core": "workspace:*",

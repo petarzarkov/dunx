@@ -1,11 +1,19 @@
 # What to send upstream to `@arkv`
 
-> **All three proposals are implemented and open as
-> [arkv#4](https://github.com/petarzarkov/arkv/pull/4).** A PR rather than a push,
-> because pushing arkv's `main` publishes to npm and those packages are used by
-> other projects. Merge when a release is wanted, then bump `@arkv/logger` here.
+> **Done.** All three proposals shipped in
+> [arkv#4](https://github.com/petarzarkov/arkv/pull/4), released as
+> `@arkv/logger@0.8.2` and `@arkv/colors@0.7.5`, and `@dunx/infra` is bumped to it.
 > Everything below is the analysis that produced it, kept because the reasoning is
 > what makes the diff reviewable.
+>
+> **One prediction in it was wrong.** This file said the local and upstream halves
+> "compose; nothing has to be undone when A lands". They compose, but there are now
+> **two** gates: dunx defaults `isDevelopment` to `Bun.enableANSIColors`, and the
+> upstream formatter checks `isColorSupported()`. So `isDevelopment: true` on its
+> own no longer forces colour on a non-terminal, which broke a `@dunx/infra` test
+> asserting exactly that. The new behaviour is the right one - escapes in JSON on a
+> pipe were the defect - and `FORCE_COLOR=1` is how a consumer overrides both. The
+> test now says so.
 
 The workspace at `~/repos/arkv` was read end to end against the
 question CLAUDE.md actually asks: is dunx doing something worse than a package the

@@ -74,6 +74,14 @@ describe('LoggerModule', () => {
     expect(Bun.stripANSI(lines[0]!) !== lines[0]!).toBe(Bun.enableANSIColors);
   });
 
+  /*
+   * There are two gates now, not one. dunx defaults `isDevelopment` to
+   * `Bun.enableANSIColors`, and since @arkv/logger 0.8.2 the formatter itself
+   * checks `isColorSupported()` - the upstream half of the same fix. So
+   * `isDevelopment: true` alone no longer forces colour on a non-terminal, which
+   * is correct: escapes in JSON on a pipe were the defect. `FORCE_COLOR` is how a
+   * consumer overrides both.
+   */
   it('still lets the consumer force colour on, since the default is only a default', async () => {
     @Module({
       imports: [
@@ -83,11 +91,41 @@ describe('LoggerModule', () => {
     class Root {}
 
     const app = await AppFactory.create(Root);
-    const lines = await captured(() => {
-      app.get(Logger).info('forced');
-    });
+    const previous = process.env['FORCE_COLOR'];
+    process.env['FORCE_COLOR'] = '1';
+    try {
+      const lines = await captured(() => {
+        app.get(Logger).info('forced');
+      });
+      expect(Bun.stripANSI(lines[0]!)).not.toBe(lines[0]!);
+    } finally {
+      if (previous === undefined) delete process.env['FORCE_COLOR'];
+      else process.env['FORCE_COLOR'] = previous;
+    }
+  });
 
-    expect(Bun.stripANSI(lines[0]!)).not.toBe(lines[0]!);
+  it('writes no escapes into the JSON when colour is unsupported', async () => {
+    @Module({
+      imports: [
+        LoggerModule.forRoot({ level: LogLevel.INFO, isDevelopment: true }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const previous = process.env['NO_COLOR'];
+    process.env['NO_COLOR'] = '1';
+    try {
+      const lines = await captured(() => {
+        app.get(Logger).info('piped');
+      });
+      // The whole point: a log shipper has to be able to parse this.
+      expect(Bun.stripANSI(lines[0]!)).toBe(lines[0]!);
+      expect(JSON.parse(lines[0]!).message).toBe('piped');
+    } finally {
+      if (previous === undefined) delete process.env['NO_COLOR'];
+      else process.env['NO_COLOR'] = previous;
+    }
   });
 
   it('binds @arkv/logger to the @dunx/core contract with no adapter', async () => {
