@@ -163,7 +163,14 @@ describe('the generated document', () => {
     expect(operationOf(document, '/users/{id}', 'get').tags).toEqual([
       'People',
     ]);
-    expect(document.tags).toEqual([{ name: 'Reports' }, { name: 'Users' }]);
+    // Declared from the tags the operations actually carry, `People` included.
+    // A document that declares tags nothing uses, and uses tags it never
+    // declares, makes every viewer's sidebar disagree with its operation list.
+    expect(document.tags).toEqual([
+      { name: 'People' },
+      { name: 'Reports' },
+      { name: 'Users' },
+    ]);
   });
 
   it('carries the summary, description and deprecation @ApiDoc declared', () => {
@@ -328,78 +335,83 @@ describe('security, from the metadata the guards read', () => {
 });
 
 /**
- * Endpoints served by something other than a dunx controller are invisible to
- * route discovery. Better Auth is the motivating case: it owns a dozen paths
- * behind its own handler, and without this the document describes an API with no
- * authentication surface at all.
+ * Class tags plus per-method summaries is the most common annotation pattern
+ * there is, and it needs the two `@ApiDoc`s to compose rather than replace: in
+ * NestJS `@ApiTags` on the class and `@ApiOperation` on the method are separate
+ * decorators, and dunx has one.
  */
-describe('contributed paths', () => {
-  const fragment = {
-    paths: { '/api/auth/session': { get: { summary: 'Session' } } },
-    schemas: { Session: { type: 'object' } },
-    tags: [{ name: 'auth' }],
-  };
+describe('@ApiDoc at class scope and at method scope', () => {
+  @ApiDoc({ tags: ['notes'], description: 'class-level' })
+  @Controller('notes')
+  class NotesController {
+    @ApiDoc({ summary: 'method-level' })
+    @Get('/a')
+    a(): null {
+      return null;
+    }
 
-  it('merges paths, schemas and tags a contributor supplies', async () => {
-    const { document, warnings } = await generateDocument([], {
-      title: 'API',
-      version: '1',
-      contribute: [fragment],
-    });
+    @Get('/b')
+    b(): null {
+      return null;
+    }
 
-    expect(document.paths['/api/auth/session'] as unknown).toEqual({
-      get: { summary: 'Session' },
-    });
-    expect(document.components.schemas?.['Session']).toEqual({
-      type: 'object',
-    });
-    expect(document.tags?.some((tag) => tag.name === 'auth')).toBe(true);
-    expect(warnings).toEqual([]);
+    @ApiDoc({ tags: ['drafts'], description: 'method-level' })
+    @Get('/c')
+    c(): null {
+      return null;
+    }
+  }
+
+  @Module({ controllers: [NotesController] })
+  class NotesModule {}
+
+  it('composes them per field, so an annotated method keeps the class tag', async () => {
+    const { document } = await generateDocument(
+      describeRoutes(NotesModule),
+      info,
+    );
+    const a = operationOf(document, '/notes/a', 'get');
+
+    expect(a.tags).toEqual(['notes']);
+    expect(a.description).toBe('class-level');
+    expect(a.summary).toBe('method-level');
   });
 
-  it('accepts an async contributor', async () => {
-    const { document } = await generateDocument([], {
-      title: 'API',
-      version: '1',
-      contribute: [async () => fragment],
-    });
+  it('leaves an unannotated method with the class values alone', async () => {
+    const { document } = await generateDocument(
+      describeRoutes(NotesModule),
+      info,
+    );
+    const b = operationOf(document, '/notes/b', 'get');
 
-    expect(document.paths['/api/auth/session']).toBeDefined();
+    expect(b.tags).toEqual(['notes']);
+    expect(b.description).toBe('class-level');
+    expect(b.summary).toBeUndefined();
   });
 
-  it('keeps a declared route and warns when a contributor collides', async () => {
-    // The contributor is describing endpoints the generator could not see, so a
-    // collision means it was wrong. Replacing real documentation with a guess is
-    // the worse outcome.
-    const routes = await generateDocument([], {
-      title: 'API',
-      version: '1',
-      contribute: [
-        { paths: { '/x': { get: { summary: 'from contributor' } } } },
-        { paths: { '/x': { get: { summary: 'second contributor' } } } },
-      ],
-    });
+  it('lets the method win on a field they both set', async () => {
+    const { document } = await generateDocument(
+      describeRoutes(NotesModule),
+      info,
+    );
+    const c = operationOf(document, '/notes/c', 'get');
 
-    expect(routes.document.paths['/x'] as unknown).toEqual({
-      get: { summary: 'from contributor' },
-    });
-    expect(routes.warnings.join(' ')).toContain('"/x"');
+    expect(c.tags).toEqual(['drafts']);
+    expect(c.description).toBe('method-level');
   });
 
-  it('survives a contributor that throws', async () => {
-    const { document, warnings } = await generateDocument([], {
-      title: 'API',
-      version: '1',
-      contribute: [
-        () => {
-          throw new Error('library exploded');
-        },
-        fragment,
-      ],
-    });
-
-    // A library that cannot produce its schema costs documentation, not boot.
-    expect(warnings.join(' ')).toContain('library exploded');
-    expect(document.paths['/api/auth/session']).toBeDefined();
+  it('declares exactly the tags the operations carry', async () => {
+    const { document } = await generateDocument(
+      describeRoutes(NotesModule),
+      info,
+    );
+    expect(document.tags).toEqual([{ name: 'drafts' }, { name: 'notes' }]);
   });
 });
+
+/**
+ * Without a `response` key every success is a bare `{ description: 'OK' }`, so
+ * the document cannot drive client codegen and a `.meta({ id })` on a
+ * response-only schema is inert - nothing references it, so it never reaches
+ * `components`.
+ */

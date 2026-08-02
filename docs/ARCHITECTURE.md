@@ -1168,6 +1168,51 @@ route decorators and serves self-contained HTML. Security requirements come from
 guards' own `@Public()` / `@Roles()` metadata. Zod is a `peerDependency`; the per-vendor
 adapter this section anticipated is a vendor check around `z.toJSONSchema`.
 
+#### Four corrections from porting `dunx-template`
+
+The port produced a document that was internally incoherent, and the fixes each
+turned on where a piece of information lives rather than on the generator's logic.
+
+**A method-level `@ApiDoc` used to replace the class-level one wholesale**, because a
+route's resolved `meta` is a `MetaRecord` and a handler's value overrides the class's
+in it. That is right for `@Roles` and `@Public`, which are single values, and wrong for
+a value made of independent fields - class `tags` plus a per-method `summary` is the
+most common annotation pattern there is, and it was unreachable. The merge cannot be
+recovered from an already-collapsed record, so `DiscoveredRoute` now carries
+`classMeta` next to `meta` and `apiDocFor` composes the two per field. The alternative
+considered and rejected was a per-key merge function on `MetaKey`: it needs a
+symbol-to-merger registry that `mergeMeta` can reach, and with two copies of
+`@dunx/http` in a tree the lookup misses and the old behaviour comes back silently.
+Mutating each method's record from the class decorator was rejected too - it
+accumulates at class-definition time, which is exactly the cross-file leak the marker
+design avoids, and a subclass would rewrite its base's functions.
+
+**`doc.tags` used to be derived from class names** while the operations carried
+`@ApiDoc` tags, so the document declared tags nothing used and used tags it never
+declared. It is now read back off the built operations, which makes the two agree by
+construction rather than by two derivations happening to match.
+
+**`RouteSchemas` gained `response`**, keyed by status code and taking the same
+Standard Schema values the request side takes, so a named response schema hoists into
+`components/schemas` exactly as a body does. Two decisions inside it: it is converted
+with `io: 'output'` rather than `'input'`, because it describes what comes back (a
+defaulted field is always present, `additionalProperties: false` is an output-side
+claim) - the cost is that a schema used both ways converts twice and one
+`.meta({ id })` cannot name both views if they differ. And it is **never validated**:
+a per-response validation pass paid for a documentation feature is the wrong trade
+when the handler's return type already checks the answer for free. Nothing in
+`@dunx/http`'s request path reads the key.
+
+**`OpenApiModule.forRootAsync`** exists for the reason every other configurable
+module has the pair. Its interesting half was the mount paths: a decorator's
+arguments are evaluated when the class definition is, long before a container could
+run the factory. So `RouteMeta.path` became `RoutePath` - `string | (() => string)`,
+resolved by `discoverRoutes`, which runs after every provider has settled. The
+alternatives were worse: exporting `markRoute` so the factory could re-mark its own
+prototype is a mutation escape hatch with no other caller, and pushing the controller
+into the module's `controllers` array from inside the factory is too late, since
+controllers are registered as providers while the container is being built.
+
 ## Spikes to resolve
 
 Run through `/spike`: measure on real Bun, record the result under **Verified

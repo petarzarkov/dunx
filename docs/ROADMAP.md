@@ -234,9 +234,7 @@ produced 22 findings.
 | [di-overrides-rejects-self-bound](./roadmap/di-overrides-rejects-self-bound.md)       | Bug, high. Blocks the common unit-test stub.        |
 | [transform-emitted-js-diagnostic](./roadmap/transform-emitted-js-diagnostic.md)       | Bug, high. Error tells you to do what you did.      |
 | [di-import-type-diagnostic](./roadmap/di-import-type-diagnostic.md)                   | Diagnostic, high frequency.                         |
-| [openapi-response-schemas](./roadmap/openapi-response-schemas.md)                     | Missing feature, high. No response bodies at all.   |
-| [openapi-apidoc-merge-and-tags](./roadmap/openapi-apidoc-merge-and-tags.md)           | Two bugs, high. Incoherent document.                |
-| [openapi-forroot-async](./roadmap/openapi-forroot-async.md)                           | Missing feature, medium.                            |
+| [openapi-forroot-async](./roadmap/openapi-forroot-async.md)                           | Missing feature, medium. `HttpOptions` half only.   |
 | [http-request-id-and-ignore](./roadmap/http-request-id-and-ignore.md)                 | Three findings, medium and low.                     |
 | [infra-packaging-findings](./roadmap/infra-packaging-findings.md)                     | Four findings, medium and low.                      |
 | [testing-http-options](./roadmap/testing-http-options.md)                             | Design, medium. Silently a different app.           |

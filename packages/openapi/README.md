@@ -44,6 +44,11 @@ document: they are routes.
 | `path`        | `/docs`          | Where the HTML page is mounted            |
 | `jsonPath`    | `/openapi.json`  | Where the document is mounted             |
 
+`forRootAsync({ root, useFactory, inject })` is the same module with everything but
+`root` produced by a factory that may await and may inject, for the usual reason
+every other configurable module has the pair: reading the title, the version or the
+mount path off `ConfigService` is the one thing a plain `forRoot` cannot do.
+
 ## zod is a peerDependency, and that is the point
 
 Bun ships no schema API, so validation is the one place dunx cannot satisfy its
@@ -137,6 +142,7 @@ and turns a hit into a warning.
 | `options.query`                   | One query parameter per property             |
 | `options.body`                    | `requestBody`, `application/json`            |
 | `options.status`, else 201 or 200 | The success response                         |
+| `options.response`               | A `content` schema per status code           |
 | Any declared schema               | A `400` referencing `ValidationError`        |
 | `@Public()` / `@Roles()`          | `security` - see below                       |
 | `@ApiDoc()`                       | `summary`, `description`, `tags`, deprecation |
@@ -153,9 +159,29 @@ The `400` is real and worth documenting. It is `defaultErrorMapper`'s output for
 { "error": "Invalid body", "status": 400, "issues": [{ "message": "…", "path": "tags.0.label" }] }
 ```
 
-There is no response *body* schema, because `RouteSchemas` has no `response` field
-to read one from. Inventing a second channel for it would be the drift this
-package exists to avoid.
+### Response bodies
+
+`options.response` is the same channel as the request side, keyed by status code:
+
+```ts
+const one = {
+  params: UserIndex,
+  response: { 200: SanitizedUser, 404: Problem },
+} as const satisfies RouteSchemas;
+```
+
+A named schema hoists into `components/schemas` and the response `$ref`s it,
+exactly as a request body does, so the document can drive client codegen. Two
+things follow from it being one contract rather than a second channel:
+
+- It is converted with `io: 'output'`, because it describes what comes **back**: a
+  field with a default is always present, and `additionalProperties: false` is an
+  output-side claim. A schema used in both directions therefore converts twice, and
+  if the two views differ it needs a different `.meta({ id })` for each.
+- **It is never validated.** It documents the response; it does not enforce it.
+  Paying a validation pass on every response for a documentation feature would be
+  the wrong trade, and the handler's return type already checks the answer at
+  compile time. Nothing in `@dunx/http`'s request path reads the key.
 
 ### Security comes from the guards' own metadata
 
@@ -186,15 +212,22 @@ Prose no schema can carry, on the same mechanism as `@Roles`:
 ```ts
 import { ApiDoc } from '@dunx/openapi';
 
-@ApiDoc({
-  summary: 'One user',
-  description: 'Reads a single user by id.\n\nReturns `404` when there is none.',
-  tags: ['People'],
-  deprecated: false,
-})
-@Get('/:id', oneUser)
-one(input: Input<typeof oneUser>) {}
+@ApiDoc({ tags: ['People'] })
+@Controller('users')
+class UsersController {
+  @ApiDoc({
+    summary: 'One user',
+    description: 'Reads a single user by id.\n\nReturns `404` when there is none.',
+  })
+  @Get('/:id', oneUser)
+  one(input: Input<typeof oneUser>) {}
+}
 ```
+
+The class's and the method's compose **per field**, the method winning where both
+spoke, so class tags plus per-method summaries needs no repetition. The document's
+top-level `tags` list is then derived from the tags the operations actually carry,
+which is what keeps a viewer's sidebar and its operation list in agreement.
 
 ## The page
 

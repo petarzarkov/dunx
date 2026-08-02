@@ -90,6 +90,8 @@ export interface RouteSchemas {
   readonly params?: StandardSchemaV1;
   /** Overrides the default success status: 201 for POST, 200 otherwise. */
   readonly status?: number;
+  /** What the route answers with, keyed by status. Documented, never validated. */
+  readonly response?: Readonly<Record<number, StandardSchemaV1>>;
 }
 ```
 
@@ -98,6 +100,24 @@ the framework never parses a query string; omit `body` and it never reads the
 request stream. There is no "validate everything by default" mode and no global
 pipe to turn off, because there is nothing to turn off: an undeclared source is
 untouched code, not skipped code.
+
+`response` is the exception that proves the rule, and the one key here the request
+path never reads:
+
+```ts
+export const oneUser = {
+  params: UserIndex,
+  response: { 200: SanitizedUser, 404: NotFound },
+} as const satisfies RouteSchemas;
+```
+
+It is the same Standard Schema contract as the request side, so
+[`@dunx/openapi`](./09-openapi.md) hoists a named response schema into
+`components/schemas` exactly as it hoists a body. But it **documents the response;
+it does not enforce it.** Running a validation pass over every response body would
+be a per-request cost paid for a documentation feature, and the handler's own
+return type already checks the answer at compile time and for free. `response`
+does not appear in `Input<O>` either: nothing about it reaches the handler.
 
 Write the options object next to the schemas and hand the same value to both the
 decorator and the annotation:
@@ -398,8 +418,9 @@ The full harness, its caveats and how to rerun it are in `tools/bench/README.md`
 - **A `params` schema replaces `req.params` on `input`, not on `req`.**
   `input.req.params` is still the raw string record.
 - **The framework validates input, not output.** A handler's return value is
-  serialised as it is. If a response shape matters, that is a type-level concern
-  and the annotation on the handler is where it lives.
+  serialised as it is, `response` schemas included: they document the answer for
+  `@dunx/openapi` and nothing checks them at runtime. If a response shape matters,
+  the annotation on the handler is what enforces it.
 - **`status` on the options object changes the success status only.** Errors
   still come from the thrown `HttpError` or from the mapper.
 - **A schema that is not an object is fine for `body` and wrong for

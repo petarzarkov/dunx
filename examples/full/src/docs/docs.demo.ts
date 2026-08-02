@@ -48,6 +48,21 @@ export class DocsDemo {
       `POST /api/users 400 -> ` +
         JSON.stringify(create?.responses['400']?.content?.['application/json']),
     );
+    // `options.response` is the same contract as the request side, so a named
+    // response schema becomes a component and the operation $refs it. It is
+    // documentation only - nothing validates a response.
+    const one = document.paths['/api/users/{id}']?.get;
+    logger.info(
+      `GET /api/users/{id} responses -> ` +
+        JSON.stringify(
+          Object.fromEntries(
+            Object.entries(one?.responses ?? {}).map(([status, response]) => [
+              status,
+              response.content?.['application/json']?.schema,
+            ]),
+          ),
+        ),
+    );
     const list = document.paths['/api/users']?.get;
     logger.info(`GET /api/users query -> ${JSON.stringify(list?.parameters)}`);
 

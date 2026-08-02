@@ -46,6 +46,26 @@ export interface RouteSchemas {
   readonly params?: StandardSchemaV1;
   /** Overrides the default success status: 201 for POST, 200 otherwise. */
   readonly status?: number;
+  /**
+   * What the route answers with, keyed by status code, in the same Standard
+   * Schema the request side takes - so a response schema with a `.meta({ id })`
+   * hoists into `components/schemas` exactly as a request body does, and there is
+   * one contract for both directions.
+   *
+   * ```ts
+   * const one = {
+   *   params: UserIndex,
+   *   response: { 200: SanitizedUser, 404: Problem },
+   * } as const satisfies RouteSchemas;
+   * ```
+   *
+   * **Never validated.** It documents the response; it does not enforce it.
+   * Running a validation pass over every response body would be a per-request
+   * cost paid for a documentation feature, which is the wrong trade - the
+   * handler's own return type is what checks the answer, at compile time and for
+   * free. Nothing in the request path reads this key.
+   */
+  readonly response?: Readonly<Record<number, StandardSchemaV1>>;
 }
 
 /**

@@ -111,6 +111,15 @@ const withApp = async (
   }
 };
 
+/**
+ * Rejects everything, which is how "a response schema documents and never runs" is
+ * asserted rather than assumed: if anything ever validated against it, the reader
+ * below could not succeed.
+ */
+const Rejecting = schema<never>(() => ({
+  issues: [{ message: 'a response schema must never be validated' }],
+}));
+
 describe('body parsing by content-type', () => {
   it('turns a malformed JSON body into a 400, not a 500', async () => {
     await withApp(async (_app, url) => {
@@ -214,6 +223,103 @@ describe('buildInputReader()', () => {
     // No promise, so a schema-less route pays nothing for the feature existing.
     expect(read(request)).toEqual({ req: request });
     expect(read({} as BunRequest)).not.toBeInstanceOf(Promise);
+  });
+
+  it('stays synchronous for params and query against a sync validator', () => {
+    // Standard Schema *permits* a promise; awaiting one that never comes cost an
+    // async frame and a tick per schema. Neither of these allocates one now.
+    const params = buildInputReader({
+      params: schema<number>((v) => ({ value: Number(v) })),
+    });
+    const query = buildInputReader({
+      query: schema<number>(() => ({ value: 1 })),
+    });
+
+    expect(params(request)).not.toBeInstanceOf(Promise);
+    expect(query(request)).not.toBeInstanceOf(Promise);
+    expect(params(request)).toEqual({ req: request, params: NaN });
+  });
+
+  it('slices the query string exactly as `new URL().searchParams` did', () => {
+    // The reader stopped parsing the whole URL to reach `searchParams`, which was
+    // ~1000 of the ~1500 ns a query route cost. These are the cases where a slice
+    // could differ from a parse.
+    const seen = schema<unknown>((value) => ({ value }));
+    const read = buildInputReader({ query: seen });
+    const queryOf = (url: string): unknown =>
+      (read(new Request(url) as BunRequest) as { query: unknown }).query;
+
+    for (const url of [
+      'http://test/x',
+      'http://test/x?',
+      'http://test/x?a=1',
+      'http://test/x?tag=a&tag=b&tag=c',
+      'http://test/x?a=one+two&b=%2Ffoo%3D',
+      'http://test/x?flag&a=',
+      'http://test/x?a=1#frag',
+      'http://test/x?a=1&b=2#a=nope',
+      'http://test/x#only-a-fragment',
+      'http://test/x?a=%3F%23',
+    ]) {
+      const grouped: Record<string, unknown> = {};
+      for (const [key, value] of new URL(url).searchParams) {
+        const existing = grouped[key];
+        if (existing === undefined) grouped[key] = value;
+        else if (Array.isArray(existing)) existing.push(value);
+        else grouped[key] = [existing, value];
+      }
+      expect(queryOf(url)).toEqual(grouped);
+    }
+  });
+
+  it('adopts an async validator, and reports its issues the same way', async () => {
+    const read = buildInputReader({ params: Slow });
+    const pending = read(request);
+    expect(pending).toBeInstanceOf(Promise);
+
+    let caught: unknown;
+    try {
+      await pending;
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    expect((caught as ValidationError).issues).toEqual([
+      { message: 'text must be a string' },
+    ]);
+  });
+
+  it('resolves the declared schemas once, at build time', async () => {
+    let calls = 0;
+    const counted = schema<number>((value) => {
+      calls += 1;
+      return { value: Number(value) };
+    });
+    const read = buildInputReader({ params: counted });
+
+    expect(calls).toBe(0);
+    await read(request);
+    await read(request);
+    expect(calls).toBe(2);
+  });
+});
+
+describe('buildInputReader()', () => {
+  const request = new Request('http://test/x') as BunRequest;
+
+  it('is synchronous and allocation-only when nothing is declared', () => {
+    const read = buildInputReader(undefined);
+
+    // No promise, so a schema-less route pays nothing for the feature existing.
+    expect(read(request)).toEqual({ req: request });
+    expect(read({} as BunRequest)).not.toBeInstanceOf(Promise);
+  });
+
+  it('builds no reader for a response schema, which is documentation only', () => {
+    const read = buildInputReader({ response: { 200: Rejecting } });
+
+    expect(read(request)).toEqual({ req: request });
+    expect(read(request)).not.toBeInstanceOf(Promise);
   });
 
   it('stays synchronous for params and query against a sync validator', () => {

@@ -18,8 +18,15 @@ import type { JsonSchema } from './types.js';
  */
 type ZodModule = typeof import('zod');
 
+/**
+ * Which side of the wire a schema is describing. `input` is a request, `output` a
+ * response: a field with a default is optional going in and always present coming
+ * back, and `additionalProperties: false` is an output-side claim.
+ */
+export type SchemaDirection = 'input' | 'output';
+
 interface ToJsonSchemaParams {
-  readonly io: 'input' | 'output';
+  readonly io: SchemaDirection;
   readonly unrepresentable: 'any';
 }
 
@@ -97,6 +104,7 @@ const convertRoot = async (
   schema: StandardSchemaV1,
   store: SchemaStore,
   fallbackName: string,
+  io: SchemaDirection,
 ): Promise<RootConversion> => {
   const vendor = vendorOf(schema);
   if (vendor !== 'zod') {
@@ -119,14 +127,12 @@ const convertRoot = async (
 
   let emitted: Record<string, unknown>;
   try {
-    // `io: 'input'` is what a *request* looks like: a field with a default is
-    // optional going in and present coming out, and `additionalProperties: false`
-    // is an output-side claim. `unrepresentable: 'any'` because a Date or a bigint
-    // in a schema must not take the whole document down.
-    emitted = zod.toJSONSchema(schema, {
-      io: 'input',
-      unrepresentable: 'any',
-    });
+    // `io` is the direction: a *request* is the input side, where a field with a
+    // default is optional and `additionalProperties: false` would be an
+    // output-side claim, and a documented *response* is the output side.
+    // `unrepresentable: 'any'` because a Date or a bigint in a schema must not
+    // take the whole document down.
+    emitted = zod.toJSONSchema(schema, { io, unrepresentable: 'any' });
   } catch (error) {
     store.warn(
       `${fallbackName}: zod refused to convert this schema - ` +
@@ -171,18 +177,22 @@ export interface Converted {
 }
 
 /**
- * The body case: a named schema becomes a `components/schemas` entry and a `$ref`,
- * an anonymous one is inlined where it is used.
+ * The body case, and the response case with `io: 'output'`: a named schema becomes
+ * a `components/schemas` entry and a `$ref`, an anonymous one is inlined where it
+ * is used. One contract for both directions, so a response schema is hoisted
+ * exactly as a request one is.
  */
 export const convertSchema = async (
   schema: StandardSchemaV1,
   fallbackName: string,
   store: SchemaStore,
+  io: SchemaDirection = 'input',
 ): Promise<Converted> => {
   const { root, id, unconverted } = await convertRoot(
     schema,
     store,
     fallbackName,
+    io,
   );
   if (root === undefined) {
     return {
@@ -214,6 +224,7 @@ export const convertObject = async (
     schema,
     store,
     fallbackName,
+    'input',
   );
   if (root === undefined) {
     return {

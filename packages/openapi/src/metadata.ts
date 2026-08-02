@@ -3,6 +3,7 @@ import {
   metaKey,
   PUBLIC,
   ROLES,
+  type DiscoveredRoute,
   type MetaKey,
   type MetaRecord,
 } from '@dunx/http';
@@ -57,6 +58,21 @@ export const apiDocOf = (record: MetaRecord | undefined): ApiDocMeta => {
     ...(deprecated === true ? { deprecated: true } : {}),
   };
 };
+
+/**
+ * The class's `@ApiDoc` and the method's, composed **per field**, the method
+ * winning where both spoke.
+ *
+ * A route's resolved `meta` is a record, so a method-level `@ApiDoc` replaces the
+ * class-level object in it wholesale - right for `@Roles`, wrong for a value made
+ * of independent fields. Class `tags` plus per-method `summary` is the most common
+ * annotation pattern there is, and it needs the class's own record, which is why
+ * `DiscoveredRoute` carries it alongside the merged one.
+ */
+export const apiDocFor = (route: DiscoveredRoute): ApiDocMeta => ({
+  ...apiDocOf(route.classMeta),
+  ...apiDocOf(route.meta),
+});
 
 /** What `@Roles('admin')` declared, class-level or method-level - merged already. */
 export const rolesOf = (

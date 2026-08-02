@@ -1,4 +1,9 @@
-import { markController, markRoute, type HttpMethod } from './marker.js';
+import {
+  markController,
+  markRoute,
+  type HttpMethod,
+  type RoutePath,
+} from './marker.js';
 import type { Input, RouteSchemas } from './schema.js';
 
 type ControllerTarget = abstract new (...args: never[]) => object;
@@ -22,7 +27,7 @@ export const Controller =
  */
 const verb =
   (method: HttpMethod) =>
-  <const O extends RouteSchemas>(path = '/', options?: O) =>
+  <const O extends RouteSchemas>(path: RoutePath = '/', options?: O) =>
   <M extends (input: Input<O>) => unknown>(
     value: M,
     _context: ClassMethodDecoratorContext,

@@ -9,12 +9,27 @@ const CONTROLLER = Symbol.for('dunx.controller');
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+/**
+ * A literal path, or a thunk read at **discovery** rather than at decoration.
+ *
+ * Discovery runs after every provider has settled, which is the whole point: a
+ * path that came out of validated configuration is knowable by then even though
+ * a decorator's arguments were evaluated long before the container existed.
+ * `OpenApiModule.forRootAsync` is what needs it - it mounts its page and its
+ * document where `ConfigService` says. The thunk is called once per discovery,
+ * so it has to answer the same thing every time.
+ */
+export type RoutePath = string | (() => string);
+
 export interface RouteMeta {
   readonly method: HttpMethod;
-  readonly path: string;
+  readonly path: RoutePath;
   /** The decorator's second argument. `buildRoutes` resolves it once, at boot. */
   readonly options?: RouteSchemas | undefined;
 }
+
+export const resolvePath = (path: RoutePath): string =>
+  typeof path === 'function' ? path() : path;
 
 interface RouteMarked {
   readonly [ROUTE]?: RouteMeta;

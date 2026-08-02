@@ -124,6 +124,13 @@ The controller prefix and the method path are joined and normalised: duplicate
 slashes collapse and a trailing slash is stripped, so `@Controller('users/')` plus
 `@Get('/')` is `/users`.
 
+The path may also be a **thunk** (`RoutePath` is `string | (() => string)`), read at
+route discovery rather than at decoration. That exists for one situation: a path that
+comes out of validated configuration is not known when a decorator's arguments are
+evaluated, but discovery runs after every provider has settled, so it is known by
+then. `OpenApiModule.forRootAsync` is the caller - it mounts its page where
+`ConfigService` says. A thunk has to answer the same path every time it is called.
+
 There is no `@Options` and no `@Head`. `HttpMethod` is
 `'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'`, and `OPTIONS` is reserved for the
 CORS preflight handler.
