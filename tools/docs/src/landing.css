@@ -1,0 +1,255 @@
+/* Landing-page presentation only. Kept out of `styles.css` because that file
+   dresses the documentation chrome, which every route uses, while none of this
+   renders anywhere but `#/`.
+
+   Every colour resolves through a Mantine CSS variable rather than a literal,
+   so the light and dark schemes both follow the theme instead of needing a
+   second palette maintained by hand. */
+
+.landing {
+  --edge: var(--mantine-color-default-border);
+  --accent-a: var(--mantine-color-indigo-5);
+  --accent-b: var(--mantine-color-violet-5);
+  --accent-c: var(--mantine-color-cyan-5);
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(2.75rem, 7vw, 5.5rem) 0 clamp(2.25rem, 5vw, 4rem);
+  border-bottom: 1px solid var(--edge);
+}
+
+/* A grid that fades out before it reaches any edge, so it reads as depth rather
+   than as graph paper. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-image:
+    linear-gradient(to right, var(--edge) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--edge) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: radial-gradient(
+    ellipse 75% 65% at 50% 0%,
+    #000 35%,
+    transparent 100%
+  );
+  opacity: 0.55;
+}
+
+.hero-glow {
+  position: absolute;
+  z-index: -1;
+  top: -17rem;
+  left: 50%;
+  translate: -50% 0;
+  width: min(1150px, 130vw);
+  height: 32rem;
+  pointer-events: none;
+  filter: blur(72px);
+  opacity: 0.62;
+  background:
+    radial-gradient(
+      circle at 32% 52%,
+      color-mix(in srgb, var(--accent-a) 45%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      circle at 68% 42%,
+      color-mix(in srgb, var(--accent-c) 34%, transparent),
+      transparent 58%
+    );
+}
+
+.gradient-text {
+  background: linear-gradient(
+    100deg,
+    var(--mantine-color-indigo-4),
+    var(--mantine-color-violet-4) 42%,
+    var(--mantine-color-cyan-4)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-title {
+  font-size: clamp(2.35rem, 4.6vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+}
+
+.install {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.45rem 0.45rem 0.45rem 0.8rem;
+  border: 1px solid var(--edge);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-default);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.85rem;
+}
+
+.install-prompt {
+  user-select: none;
+  color: var(--mantine-color-dimmed);
+}
+
+/* An editor frame. The traffic lights are decorative and marked aria-hidden;
+   the tab strip underneath is a real tablist. */
+.win {
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-body);
+  box-shadow: 0 24px 55px -24px rgb(0 0 0 / 45%);
+}
+
+.win-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--edge);
+  background: var(--mantine-color-default);
+}
+
+.win-dots {
+  display: flex;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+.win-dot {
+  width: 0.66rem;
+  height: 0.66rem;
+  border-radius: 999px;
+  background: var(--edge);
+}
+
+.win-tabs {
+  display: flex;
+  gap: 0.15rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.win-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.win-tab {
+  padding: 0.2rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mantine-color-dimmed);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.win-tab:hover {
+  color: var(--mantine-color-text);
+}
+
+.win-tab[data-active='true'] {
+  color: var(--mantine-color-text);
+  background: var(--mantine-color-body);
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+.win-body {
+  margin: 0;
+  padding: 0.95rem 1.05rem;
+  overflow-x: auto;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  tab-size: 2;
+}
+
+.stat-band {
+  border-block: 1px solid var(--edge);
+  background: var(--mantine-color-default);
+}
+
+.stat-value {
+  font-size: clamp(1.5rem, 2.7vw, 2.1rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.feature {
+  height: 100%;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.feature:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent-a) 55%, var(--edge));
+  box-shadow: 0 12px 30px -18px rgb(0 0 0 / 55%);
+}
+
+.feature-icon {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 9px;
+  color: var(--mantine-primary-color-filled);
+  background: var(--mantine-primary-color-light);
+}
+
+/* The integration row: logos would mean remote images, and this site makes no
+   external requests, so the names carry it. */
+.integration {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--mantine-color-default);
+  font-size: 0.85rem;
+}
+
+.step-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.site-footer {
+  border-top: 1px solid var(--edge);
+  background: var(--mantine-color-default);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature {
+    transition: none;
+  }
+
+  .feature:hover {
+    transform: none;
+  }
+}

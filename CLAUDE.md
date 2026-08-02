@@ -491,6 +491,9 @@ New repeatable workflow → new skill. Do not grow this file instead.
 - Do not add speculative abstractions or future-proofing
 - Do not document a multi-step workflow in this file — add a skill under
   `.claude/skills/` so it costs nothing until it is invoked
+- Do not add a `Co-Authored-By` trailer, or any other attribution trailer, to a
+  commit message. This overrides the default instruction to add one. The commit
+  message describes the change; who or what typed it is not part of the record.
 - Do not use section-divider comments (e.g. `// ─── Section ───`, `// --- Section ---`, `// === Section ===`) — if a file needs sections, split it into separate files instead
 
 ## Do

@@ -180,7 +180,14 @@ describe('the landing page', () => {
     expect(text).toContain('Bun.serve');
     expect(text).toContain('Bun.password');
     expect(text).toContain(`${site.packages.length} packages`);
-    expect(screen.getAllByText('npm')).toHaveLength(site.packages.length);
+
+    // By href rather than by the link text: the footer also links the npm org,
+    // so counting the word "npm" counts one link that is not a package.
+    const npmLinks = screen
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href') ?? '')
+      .filter((url) => url.startsWith('https://www.npmjs.com/package/'));
+    expect(new Set(npmLinks).size).toBe(site.packages.length);
   });
 
   test.if(bench !== null)(

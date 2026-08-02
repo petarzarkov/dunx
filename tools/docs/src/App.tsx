@@ -12,6 +12,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { spotlight } from '@mantine/spotlight';
+import { Footer } from './components/Footer';
 import { Search } from './components/Search';
 import { bench, site } from './data';
 import { Benchmarks } from './pages/Benchmarks';
@@ -123,10 +124,77 @@ const Page = ({ route }: { route: Route }): React.JSX.Element => {
   }
 };
 
+const Header = ({
+  opened,
+  onToggle,
+  withBurger,
+}: {
+  opened: boolean;
+  onToggle: () => void;
+  withBurger: boolean;
+}): React.JSX.Element => (
+  <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+    <Group gap="sm" wrap="nowrap">
+      {withBurger && (
+        <Burger opened={opened} onClick={onToggle} hiddenFrom="sm" size="sm" />
+      )}
+      <Anchor href={href(RouteKind.Home)} underline="never" c="inherit">
+        <Text fw={800} size="lg" ff="monospace">
+          dunx
+        </Text>
+      </Anchor>
+    </Group>
+    <Group gap="xs" wrap="nowrap">
+      <Anchor
+        href={href(RouteKind.Bench)}
+        size="sm"
+        c="dimmed"
+        visibleFrom="xs"
+      >
+        Benchmarks
+      </Anchor>
+      <UnstyledButton className="search-trigger" onClick={spotlight.open}>
+        <Text size="sm" c="dimmed">
+          Search
+        </Text>
+        <Text size="xs" c="dimmed" className="kbd">
+          ⌘K
+        </Text>
+      </UnstyledButton>
+      <Anchor href={site.repoUrl} target="_blank" size="sm" c="dimmed">
+        GitHub
+      </Anchor>
+      <ColorSchemeToggle />
+    </Group>
+  </Group>
+);
+
+/**
+ * The landing page drops the sidebar and runs full width; every other route
+ * keeps it. A marketing page constrained to the documentation gutter looks like
+ * a documentation page, which is the thing being fixed — and it means the
+ * footer is the only navigation landmark on `#/`.
+ */
 export const App = (): React.JSX.Element => {
   const route = useRoute();
   const [opened, { toggle, close }] = useDisclosure(false);
   useScrollTo(route);
+  const landing = route.kind === RouteKind.Home;
+
+  if (landing) {
+    return (
+      <AppShell header={{ height: 56 }} padding={0}>
+        <AppShell.Header>
+          <Header opened={opened} onToggle={toggle} withBurger={false} />
+        </AppShell.Header>
+        <AppShell.Main>
+          <Home />
+          <Footer />
+          <Search />
+        </AppShell.Main>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell
@@ -135,35 +203,7 @@ export const App = (): React.JSX.Element => {
       padding={0}
     >
       <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap">
-            <Burger
-              opened={opened}
-              onClick={toggle}
-              hiddenFrom="sm"
-              size="sm"
-            />
-            <Anchor href={href(RouteKind.Home)} underline="never" c="inherit">
-              <Text fw={800} size="lg" ff="monospace">
-                dunx
-              </Text>
-            </Anchor>
-          </Group>
-          <Group gap="xs" wrap="nowrap">
-            <UnstyledButton className="search-trigger" onClick={spotlight.open}>
-              <Text size="sm" c="dimmed">
-                Search
-              </Text>
-              <Text size="xs" c="dimmed" className="kbd">
-                ⌘K
-              </Text>
-            </UnstyledButton>
-            <Anchor href={site.repoUrl} target="_blank" size="sm" c="dimmed">
-              GitHub
-            </Anchor>
-            <ColorSchemeToggle />
-          </Group>
-        </Group>
+        <Header opened={opened} onToggle={toggle} withBurger />
       </AppShell.Header>
 
       <AppShell.Navbar p="xs">

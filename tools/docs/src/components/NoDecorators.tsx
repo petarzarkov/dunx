@@ -2,41 +2,32 @@ import { Anchor, Card, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { href, RouteKind } from '../router';
 import { CodeBlock } from './CodeBlock';
 
-const SERVICE = `export class UsersRepository {
-  constructor(private readonly db: DbConnection) {}
-}
-
-export class UsersService {
-  constructor(private readonly repo: UsersRepository) {}
-
-  findAll() {
-    return this.repo.all();
-  }
-}`;
-
-const CONTROLLER = `@Controller('users')
-export class UsersController {
-  constructor(private readonly users: UsersService) {}
-
-  @Get('/')
-  list() {
-    return this.users.findAll();
-  }
-}`;
-
 const PRELOAD = `preload = ["@dunx/compiler/preload"]`;
 
+const NEST = `@Injectable()
+export class UsersService {
+  constructor(
+    @Inject(UsersRepository)
+    private readonly repo: UsersRepository,
+  ) {}
+}`;
+
+const DUNX = `export class UsersService {
+  constructor(private readonly repo: UsersRepository) {}
+}`;
+
 /**
- * The strongest thing dunx has, shown before any adjective gets a chance:
- * constructor injection with nothing annotating it.
+ * The hero already shows what dunx code looks like, so this section does the
+ * thing the hero cannot: put it beside the framework it is being compared with,
+ * and say what makes the difference possible.
  */
 export const NoDecorators = (): React.JSX.Element => (
-  <Stack gap="md">
-    <Stack gap={4}>
-      <Title order={2} size="h3">
+  <Stack gap="xl">
+    <Stack gap={6}>
+      <Title order={2} size="h2">
         Constructor injection, with nothing annotating it
       </Title>
-      <Text c="dimmed" maw={720}>
+      <Text c="dimmed" maw={640}>
         No <code>@Injectable()</code>. No <code>@Inject()</code> — TC39 standard
         decorators have no parameter decorators, so it does not exist and never
         will. No <code>reflect-metadata</code>, no{' '}
@@ -45,15 +36,13 @@ export const NoDecorators = (): React.JSX.Element => (
     </Stack>
 
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-      <CodeBlock label="users.service.ts" code={SERVICE} />
-      <CodeBlock label="users.controller.ts" code={CONTROLLER} />
+      <CodeBlock label="NestJS" code={NEST} />
+      <CodeBlock label="dunx" code={DUNX} />
     </SimpleGrid>
 
-    <Card withBorder radius="md" padding="md">
+    <Card withBorder radius="md" padding="lg">
       <Stack gap="sm">
-        <Text size="sm" fw={600}>
-          What turns it on — one line, once, per app
-        </Text>
+        <Text fw={700}>What turns it on — one line, once, per app</Text>
         <CodeBlock label="bunfig.toml" code={PRELOAD} />
         <Text size="sm" c="dimmed">
           <Anchor href={href(RouteKind.Api, 'compiler')}>
