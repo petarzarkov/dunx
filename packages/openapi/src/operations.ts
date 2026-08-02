@@ -1,6 +1,6 @@
 import { HttpStatusCode, type DiscoveredRoute } from '@dunx/http';
 import { convertObject, convertSchema } from './convert.js';
-import { apiDocOf, isPublic, rolesOf } from './metadata.js';
+import { apiDocFor, isPublic, rolesOf } from './metadata.js';
 import { refTo, type SchemaStore } from './refs.js';
 import type {
   JsonSchema,
@@ -94,7 +94,9 @@ const statusText = (status: number): string => {
   const name = Object.entries(HttpStatusCode).find(
     ([, value]) => value === status,
   )?.[0];
-  if (name === undefined) return 'Success';
+  // A status outside the map can still be declared, by `options.status` or by a
+  // `options.response` key, and calling a 451 a success would be a quiet lie.
+  if (name === undefined) return status < 400 ? 'Success' : 'Error';
   // `OK` is an initialism, not a word; every other name in the map reads as prose.
   if (!name.includes('_') && name.length <= 3) return name;
   const words = name.toLowerCase().replaceAll('_', ' ');
@@ -149,10 +151,21 @@ const parametersFor = async (
   return parameters;
 };
 
-const responsesFor = (
+/**
+ * The declared success status first, then the framework's own 400, then every
+ * status `options.response` describes. Integer-like keys iterate in ascending
+ * numeric order whatever the insertion order, so the document comes out sorted by
+ * status without sorting it.
+ *
+ * A response schema is converted with `io: 'output'` - it describes what comes
+ * back, where a defaulted field is always present. It is never validated; nothing
+ * in the request path reads `options.response`.
+ */
+const responsesFor = async (
   route: DiscoveredRoute,
+  operationId: string,
   store: SchemaStore,
-): Readonly<Record<string, ResponseObject>> => {
+): Promise<Readonly<Record<string, ResponseObject>>> => {
   const status = statusOf(route);
   const responses: Record<string, ResponseObject> = {
     [String(status)]: { description: statusText(status) },
@@ -172,6 +185,19 @@ const responsesFor = (
     };
   }
 
+  for (const [code, schema] of Object.entries(options?.response ?? {})) {
+    const converted = await convertSchema(
+      schema,
+      `${operationId}Response${code}`,
+      store,
+      'output',
+    );
+    responses[code] = {
+      description: responses[code]?.description ?? statusText(Number(code)),
+      content: { 'application/json': { schema: converted.schema } },
+    };
+  }
+
   return responses;
 };
 
@@ -185,7 +211,7 @@ export const buildOperation = async (
   store: SchemaStore,
 ): Promise<OperationObject> => {
   const operationId = operationIdOf(route);
-  const doc = apiDocOf(route.meta);
+  const doc = apiDocFor(route);
   const roles = rolesOf(route.meta);
   const parameters = await parametersFor(route, operationId, store);
 
@@ -213,7 +239,7 @@ export const buildOperation = async (
           },
         }
       : {}),
-    responses: responsesFor(route, store),
+    responses: await responsesFor(route, operationId, store),
     // `@Public` is an explicit empty requirement, which overrides a document-level
     // default; a route that declared nothing inherits it instead.
     ...(isPublic(route.meta)

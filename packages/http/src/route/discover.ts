@@ -1,7 +1,12 @@
 import type { Ctor } from '@dunx/core';
 import type { Middleware } from '../server/middleware.js';
-import { prefixOf, routeMetaOf, type HttpMethod } from './marker.js';
-import { guardsOf, mergeMeta, type MetaRecord } from './metadata.js';
+import {
+  prefixOf,
+  resolvePath,
+  routeMetaOf,
+  type HttpMethod,
+} from './marker.js';
+import { guardsOf, mergeMeta, metaOf, type MetaRecord } from './metadata.js';
 import type { RouteInput, RouteSchemas } from './schema.js';
 
 export interface DiscoveredRoute {
@@ -14,6 +19,14 @@ export interface DiscoveredRoute {
   readonly options?: RouteSchemas | undefined;
   /** The class's metadata merged under the handler's, which wins. Resolved here, once. */
   readonly meta?: MetaRecord | undefined;
+  /**
+   * The class's own record, unmerged. `meta` above is the resolved view, where a
+   * handler's value **replaces** the class's - which is what `@Roles` and
+   * `@Public` want and what a value composed of independent fields does not:
+   * `@ApiDoc`'s class-level `tags` have to survive a method-level `summary`, and
+   * a per-field merge cannot be recovered from an already-collapsed record.
+   */
+  readonly classMeta?: MetaRecord | undefined;
   /** Class-level `@UseGuards` first, then method-level. `buildRoutes` resolves them. */
   readonly guards?: readonly Ctor<Middleware>[] | undefined;
 }
@@ -58,12 +71,13 @@ export const discoverRoutes = (
       const marked = descriptor.value as object;
       routes.push({
         method: meta.method,
-        path: joinPath(prefix, meta.path),
+        path: joinPath(prefix, resolvePath(meta.path)),
         controller: klass.name,
         handlerName: name,
         handler: members[name]!.bind(instance),
         options: meta.options,
         meta: mergeMeta(klass, marked),
+        classMeta: metaOf(klass),
         guards: [...classGuards, ...guardsOf(marked)],
       });
     }

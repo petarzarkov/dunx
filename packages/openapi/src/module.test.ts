@@ -156,6 +156,65 @@ describe('a real server serving its own document', () => {
   });
 });
 
+/**
+ * Every other configurable module has a `forRootAsync` for exactly this: the one
+ * thing a zero-argument factory cannot do is read its options off another
+ * provider. Without it `title`, `version`, `description`, `path` and `jsonPath`
+ * are the only configuration in an app that cannot come from validated config.
+ */
+describe('forRootAsync', () => {
+  class DocsConfig {
+    readonly title = 'Configured API';
+    readonly version = '9.9.9';
+    readonly path = '/reference';
+    readonly jsonPath = '/reference.json';
+  }
+
+  @Module({ imports: [ThingsModule], providers: [DocsConfig] })
+  class ConfiguredModule {}
+
+  const startAsync = async (): Promise<[HttpApp, string]> => {
+    const app = await HttpFactory.create(
+      OpenApiModule.forRootAsync({
+        root: ConfiguredModule,
+        useFactory: (config: DocsConfig) => ({
+          title: config.title,
+          version: config.version,
+          path: config.path,
+          jsonPath: config.jsonPath,
+        }),
+        inject: [DocsConfig] as const,
+      }),
+      { port: 0 },
+    );
+    return [app, await app.listen()];
+  };
+
+  it('takes info off a provider, and mounts where that provider says', async () => {
+    const [app, url] = await startAsync();
+    try {
+      const response = await fetch(new URL('reference.json', url));
+      expect(response.status).toBe(200);
+
+      const document = (await response.json()) as OpenApiDocument;
+      expect(document.info.title).toBe('Configured API');
+      expect(document.info.version).toBe('9.9.9');
+      // The configured paths are the paths the document describes: they are
+      // routes, discovered like any other.
+      expect(Object.keys(document.paths).sort()).toEqual([
+        '/reference',
+        '/reference.json',
+        '/things',
+      ]);
+      expect((await fetch(new URL('openapi.json', url))).status).toBe(404);
+      expect((await fetch(new URL('reference', url))).status).toBe(200);
+      expect(app.get(OpenApiExplorer).warnings).toEqual([]);
+    } finally {
+      await app.shutdown();
+    }
+  });
+});
+
 describe('mountPrefix', () => {
   it('reads the prefix off the served path', () => {
     expect(mountPrefix('/api/openapi.json', '/openapi.json')).toBe('/api');

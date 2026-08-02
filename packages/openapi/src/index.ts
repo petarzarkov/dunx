@@ -7,12 +7,14 @@ export {
   vendorOf,
   type Converted,
   type ObjectShape,
+  type SchemaDirection,
 } from './convert.js';
 // Route metadata, on `@dunx/http`'s generic mechanism. `@ApiDoc` writes it; the
 // readers are exported so a generator of your own can use the same channel.
 export {
   ApiDoc,
   API_DOC,
+  apiDocFor,
   apiDocOf,
   isPublic,
   rolesOf,
@@ -37,6 +39,8 @@ export {
 export {
   OpenApiExplorer,
   OpenApiModule,
+  type OpenApiAsyncOptions,
+  type OpenApiInfo,
   type OpenApiOptions,
 } from './module.js';
 export { mountPrefix, withPrefix } from './mount.js';

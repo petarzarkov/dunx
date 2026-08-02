@@ -5,7 +5,6 @@ import {
   buildOperation,
   pathTemplate,
   SECURITY_SCHEME,
-  tagOf,
 } from './operations.js';
 import { danglingRefs, SchemaStore } from './refs.js';
 import {
@@ -14,6 +13,7 @@ import {
   type JsonSchema,
   type OpenApiDocument,
   type OperationKey,
+  type OperationObject,
   type PathItemObject,
   type ServerObject,
   type TagObject,
@@ -87,8 +87,22 @@ const ordered = (routes: readonly DiscoveredRoute[]): DiscoveredRoute[] =>
     );
   });
 
-const tagsOf = (routes: readonly DiscoveredRoute[]): readonly TagObject[] =>
-  [...new Set(routes.map(tagOf))].sort().map((name) => ({ name }));
+/**
+ * Declared from the tags the operations **carry**, not from the controllers' class
+ * names. Deriving them separately let a document declare tags nothing used and use
+ * tags it never declared, which puts every viewer's sidebar at odds with its own
+ * operation list. Reading them back off the built operations is what makes the two
+ * agree by construction.
+ */
+const tagsOf = (
+  operations: readonly OperationObject[],
+): readonly TagObject[] => {
+  const names = new Set<string>();
+  for (const operation of operations) {
+    for (const tag of operation.tags ?? []) names.add(tag);
+  }
+  return [...names].sort().map((name) => ({ name }));
+};
 
 /**
  * Routes to an OpenAPI 3.1 document. `routes` is exactly what
@@ -105,11 +119,14 @@ export const generateDocument = async (
 ): Promise<GeneratedDocument> => {
   const store = new SchemaStore();
   const paths: Record<string, PathItemObject> = {};
+  const operations: OperationObject[] = [];
 
   for (const route of ordered(routes)) {
     const template = pathTemplate(route.path);
     const item = (paths[template] ??= {});
-    item[METHOD_KEYS[route.method]] = await buildOperation(route, store);
+    const operation = await buildOperation(route, store);
+    item[METHOD_KEYS[route.method]] = operation;
+    operations.push(operation);
   }
 
   const guarded = routes.some((route) => rolesOf(route.meta) !== undefined);
@@ -132,7 +149,7 @@ export const generateDocument = async (
     ...(info.servers !== undefined && info.servers.length > 0
       ? { servers: info.servers }
       : {}),
-    tags: tagsOf(routes),
+    tags: tagsOf(operations),
     paths,
     components,
   };

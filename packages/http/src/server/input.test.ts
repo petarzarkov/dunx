@@ -91,6 +91,15 @@ const NumericId = schema<{ id: number }>((value) => {
     : { issues: [{ message: 'id must be numeric', path: ['id'] }] };
 });
 
+/**
+ * Rejects everything, which is how "a response schema documents and never runs"
+ * is asserted rather than assumed: if anything ever validated against it, the
+ * route below could not answer 200.
+ */
+const Rejecting = schema<never>(() => ({
+  issues: [{ message: 'a response schema must never be validated' }],
+}));
+
 const createNote = { body: Note } as const;
 const acceptNote = { body: Note, status: HttpStatusCode.ACCEPTED } as const;
 const segmented = { body: Segmented } as const;
@@ -100,6 +109,7 @@ const formNote = { body: Fields } as const;
 const searchNotes = { query: Paging } as const;
 const oneNote = { params: NumericId } as const;
 const replaceNote = { body: Note, params: NumericId } as const;
+const documentedNote = { response: { 200: Rejecting } } as const;
 
 @Controller('notes')
 class NotesController {
@@ -159,6 +169,11 @@ class NotesController {
   @Get('/nothing')
   nothing(): null {
     return null;
+  }
+
+  @Get('/documented', documentedNote)
+  documented(_input: Input<typeof documentedNote>): { text: string } {
+    return { text: 'unchecked' };
   }
 
   @Get('/boom')
@@ -439,6 +454,18 @@ describe('response wrapping', () => {
     });
   });
 
+  it('never validates a declared response schema', async () => {
+    // `response` documents the answer; it does not enforce it. Paying a
+    // validation pass on every response for a documentation feature would be the
+    // wrong trade, and the handler's return type is what TypeScript is for.
+    await withApp(async (_app, url) => {
+      const response = await fetch(new URL('notes/documented', url));
+
+      expect(response.status).toBe(HttpStatusCode.OK);
+      expect(await response.json()).toEqual({ text: 'unchecked' });
+    });
+  });
+
   it('still maps a thrown HttpError through onError', async () => {
     await withApp(async (_app, url) => {
       const response = await fetch(new URL('notes/boom', url));
@@ -461,6 +488,13 @@ describe('buildInputReader()', () => {
     // No promise, so a schema-less route pays nothing for the feature existing.
     expect(read(request)).toEqual({ req: request });
     expect(read({} as BunRequest)).not.toBeInstanceOf(Promise);
+  });
+
+  it('builds no reader for a response schema, which is documentation only', () => {
+    const read = buildInputReader({ response: { 200: Rejecting } });
+
+    expect(read(request)).toEqual({ req: request });
+    expect(read(request)).not.toBeInstanceOf(Promise);
   });
 
   it('stays synchronous for params and query against a sync validator', () => {

@@ -39,6 +39,29 @@ otherwise would be the first lie in the file.
 | `path`        | `/docs`         | Where the HTML page is mounted             |
 | `jsonPath`    | `/openapi.json` | Where the document is mounted              |
 
+`forRootAsync({ root, useFactory, inject })` is the same module with everything but
+`root` produced by a factory, which is how any of the above comes off validated
+config:
+
+```ts
+OpenApiModule.forRootAsync({
+  root: AppModule,
+  useFactory: (config: AppConfigService) => ({
+    title: config.get('app').name,
+    version: config.get('app').version,
+    path: config.get('app').docsPath,
+  }),
+  inject: [AppConfigService],
+});
+```
+
+`root` stays outside the factory because it is a module reference: the graph has to
+exist before the container that would run the factory does. The mount paths do not
+have that problem, because the controller declares its two routes with **path
+thunks** and route discovery runs after every provider has settled - so by the time
+anything reads a path, the factory that produced it has returned. That is what
+`RoutePath` in `@dunx/http` is for.
+
 zod is an **optional** `peerDependency`. Install it and schemas convert; do not,
 and the document still generates with warnings where the schemas would have been.
 
@@ -51,7 +74,8 @@ is actually served. From each route it reads:
 - `options.body`, `options.query`, `options.params` - the Standard Schema objects.
 - `options.status` - the success status, following the same rule `buildRoutes`
   applies: an explicit status, else 201 for POST, else 200.
-- `meta` - whatever `@Public`, `@Roles` and `@ApiDoc` wrote.
+- `options.response` - the Standard Schema per status code the route answers with.
+- `meta` and `classMeta` - whatever `@Public`, `@Roles` and `@ApiDoc` wrote.
 - the path and the method, from the verb decorator.
 
 It constructs nothing. `discoverRoutes` walks an instance's prototype chain
@@ -81,6 +105,10 @@ await Bun.write('openapi.json', JSON.stringify(document, null, 2));
 - `operationId` is `Controller_handler`, for example `UsersController_one`.
 - The tag is the controller's name with a trailing `Controller` stripped, so
   `UsersController` documents itself as `Users`. `@ApiDoc({ tags })` overrides it.
+- The document's top-level `tags` list is read back off the **operations**, so it
+  declares exactly the tags they carry. Deriving it separately from the class names
+  let a document declare tags nothing used and use tags it never declared, which
+  puts a viewer's sidebar at odds with its own operation list.
 - Path parameters are driven by the **path**, not by the schema. OpenAPI requires
   every path parameter to appear in the template, so a schema property that is not
   a path token is not a path parameter. A token with no matching schema property
@@ -111,6 +139,39 @@ That is the framework's real error shape, from `defaultErrorMapper` and the issu
 flattening in the input reader. Documenting it beats leaving a caller to discover
 it from a failing request.
 
+### Response bodies
+
+`options.response` is keyed by status code and takes the same Standard Schema
+values the request side takes:
+
+```ts
+export const oneUser = {
+  params: UserIndex,
+  response: { 200: SanitizedUser, 404: NotFound },
+} as const satisfies RouteSchemas;
+```
+
+One contract for both directions, so a named response schema hoists into
+`components/schemas` and the operation `$ref`s it exactly as a request body does -
+which is what makes the document usable for client codegen, and what makes a
+`.meta({ id })` on a response-only schema mean something.
+
+Two consequences of it being the same contract rather than a second channel:
+
+- The response side is converted with **`io: 'output'`**, because it describes what
+  comes back: a field with a default is always present there, and
+  `additionalProperties: false` is an output-side claim. The request side keeps
+  `io: 'input'`. A schema used both ways therefore converts twice, and if the two
+  views differ, one `.meta({ id })` cannot name both.
+- **It is never validated.** See
+  [Validation](./06-validation.md#routeschemas): documenting a response is not
+  enforcing it, and paying a validation pass per response for a documentation
+  feature would be the wrong trade.
+
+A status the route does not otherwise mention is documented from this key alone, so
+a `404` a handler throws is in the document without a second annotation. The
+declared success status keeps its own description and gains the `content`.
+
 ## `@ApiDoc`
 
 Schemas describe shape. They cannot describe intent, grouping or deprecation, so
@@ -118,7 +179,7 @@ Schemas describe shape. They cannot describe intent, grouping or deprecation, so
 
 ```ts
 @ApiDoc({
-  tags: ['Notes'],
+  tags: ['notes'],
   description: 'A list in memory, for showing the prefix, middleware and CORS.',
 })
 @Controller('notes')
@@ -142,12 +203,22 @@ export class NotesController {
 | `tags`        | `string[]` | Overrides the tag derived from the class name. |
 | `deprecated`  | `boolean`  | Only `true` is emitted.                        |
 
-It works at class scope and at method scope, and the method wins, because
-`@ApiDoc` is a thin wrapper over `@dunx/http`'s generic route-metadata channel:
-`metaKey` mints a unique symbol, `meta` writes it, and `RouteContext.get` resolves
-handler-first-then-class. There is no parallel registry and no second discovery
-pass. See [Middleware and guards](./07-middleware-and-guards.md#route-metadata)
-for the mechanism.
+It works at class scope and at method scope, and the two **compose per field**: the
+operation above is tagged `notes` from the class, described from the class, and
+summarised and deprecated from the method. The method wins only on a field they both
+set. So class tags plus per-method summaries - the most common annotation pattern
+there is - needs no repetition, and dropping the class `tags` from a method does not
+silently fall back to the class-name default.
+
+`@ApiDoc` is otherwise a thin wrapper over `@dunx/http`'s generic route-metadata
+channel: `metaKey` mints a unique symbol and `meta` writes it. There is no parallel
+registry and no second discovery pass. See
+[Middleware and guards](./07-middleware-and-guards.md#route-metadata) for the
+mechanism, and note where documentation differs from it: `RouteContext.get` resolves
+a key handler-first-then-class, which **replaces** the class's value, and that is
+right for `@Roles` and wrong for a value made of independent fields. Composing the
+two needs the class's own record, which is why a `DiscoveredRoute` carries
+`classMeta` next to the merged `meta`.
 
 ## Security comes from the guards' own metadata
 
@@ -358,9 +429,13 @@ the samples and the fields.
 - **A non-object schema for `query` or `params` documents nothing** and produces
   a warning: a query string is a set of named parameters, and there is nothing to
   expand.
-- **Response bodies are not documented beyond a status and a description.** dunx
-  validates input, not output, so there is no schema to read. `@ApiDoc` carries
-  the prose.
+- **A response schema is documentation, not enforcement.** `options.response` is
+  never validated, so a handler that returns something else produces a document
+  that lies. The handler's return type is what keeps the two honest.
+- **A schema used in both directions converts twice**, with `io: 'input'` for the
+  request and `io: 'output'` for the response. If the two views differ - anything
+  with a `.default()` - one `.meta({ id })` cannot name both, and the store keeps
+  the first and warns.
 - **`x-required-roles` is an extension**, not standard OpenAPI. It is there so a
   reader can see the roles without parsing the description sentence.
 - **A class-level `@Roles` documents every route on that class**, whether or not

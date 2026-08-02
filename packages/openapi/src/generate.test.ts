@@ -164,7 +164,14 @@ describe('the generated document', () => {
     expect(operationOf(document, '/users/{id}', 'get').tags).toEqual([
       'People',
     ]);
-    expect(document.tags).toEqual([{ name: 'Reports' }, { name: 'Users' }]);
+    // Declared from the tags the operations actually carry, `People` included.
+    // A document that declares tags nothing uses, and uses tags it never
+    // declares, makes every viewer's sidebar disagree with its operation list.
+    expect(document.tags).toEqual([
+      { name: 'People' },
+      { name: 'Reports' },
+      { name: 'Users' },
+    ]);
   });
 
   it('carries the summary, description and deprecation @ApiDoc declared', () => {
@@ -325,6 +332,245 @@ describe('security, from the metadata the guards read', () => {
 
     const unguarded = await generateDocument(describeRoutes(UsersModule), info);
     expect(unguarded.document.components.securitySchemes).toBeUndefined();
+  });
+});
+
+/**
+ * Class tags plus per-method summaries is the most common annotation pattern
+ * there is, and it needs the two `@ApiDoc`s to compose rather than replace: in
+ * NestJS `@ApiTags` on the class and `@ApiOperation` on the method are separate
+ * decorators, and dunx has one.
+ */
+describe('@ApiDoc at class scope and at method scope', () => {
+  @ApiDoc({ tags: ['notes'], description: 'class-level' })
+  @Controller('notes')
+  class NotesController {
+    @ApiDoc({ summary: 'method-level' })
+    @Get('/a')
+    a(): null {
+      return null;
+    }
+
+    @Get('/b')
+    b(): null {
+      return null;
+    }
+
+    @ApiDoc({ tags: ['drafts'], description: 'method-level' })
+    @Get('/c')
+    c(): null {
+      return null;
+    }
+  }
+
+  @Module({ controllers: [NotesController] })
+  class NotesModule {}
+
+  it('composes them per field, so an annotated method keeps the class tag', async () => {
+    const { document } = await generateDocument(
+      describeRoutes(NotesModule),
+      info,
+    );
+    const a = operationOf(document, '/notes/a', 'get');
+
+    expect(a.tags).toEqual(['notes']);
+    expect(a.description).toBe('class-level');
+    expect(a.summary).toBe('method-level');
+  });
+
+  it('leaves an unannotated method with the class values alone', async () => {
+    const { document } = await generateDocument(
+      describeRoutes(NotesModule),
+      info,
+    );
+    const b = operationOf(document, '/notes/b', 'get');
+
+    expect(b.tags).toEqual(['notes']);
+    expect(b.description).toBe('class-level');
+    expect(b.summary).toBeUndefined();
+  });
+
+  it('lets the method win on a field they both set', async () => {
+    const { document } = await generateDocument(
+      describeRoutes(NotesModule),
+      info,
+    );
+    const c = operationOf(document, '/notes/c', 'get');
+
+    expect(c.tags).toEqual(['drafts']);
+    expect(c.description).toBe('method-level');
+  });
+
+  it('declares exactly the tags the operations carry', async () => {
+    const { document } = await generateDocument(
+      describeRoutes(NotesModule),
+      info,
+    );
+    expect(document.tags).toEqual([{ name: 'drafts' }, { name: 'notes' }]);
+  });
+});
+
+/**
+ * Without a `response` key every success is a bare `{ description: 'OK' }`, so
+ * the document cannot drive client codegen and a `.meta({ id })` on a
+ * response-only schema is inert - nothing references it, so it never reaches
+ * `components`.
+ */
+describe('documented response bodies', () => {
+  const SanitizedUser = z
+    .object({ id: z.number().int(), name: z.string() })
+    .meta({ id: 'SanitizedUser' });
+
+  const Problem = z.object({ error: z.string() });
+
+  const showUser = {
+    params: UserIndex,
+    response: { 200: SanitizedUser, 404: Problem },
+  } as const satisfies RouteSchemas;
+
+  const listPeople = {
+    response: { 200: z.array(SanitizedUser) },
+  } as const satisfies RouteSchemas;
+
+  const createPerson = {
+    body: CreateUser,
+    response: { 201: SanitizedUser },
+  } as const satisfies RouteSchemas;
+
+  const removePerson = {
+    status: HttpStatusCode.NO_CONTENT,
+  } as const satisfies RouteSchemas;
+
+  @Controller('people')
+  class PeopleController {
+    @Get('/', listPeople)
+    list(_input: Input<typeof listPeople>): null {
+      return null;
+    }
+
+    @Get('/:id', showUser)
+    one(_input: Input<typeof showUser>): null {
+      return null;
+    }
+
+    @Post('/', createPerson)
+    create(_input: Input<typeof createPerson>): null {
+      return null;
+    }
+
+    @Delete('/:id', removePerson)
+    remove(_input: Input<typeof removePerson>): undefined {
+      return undefined;
+    }
+  }
+
+  @Module({ controllers: [PeopleController] })
+  class PeopleModule {}
+
+  const built = generateDocument(describeRoutes(PeopleModule), info);
+
+  it('refs a named response schema, hoisted like a request body', async () => {
+    const { document, warnings } = await built;
+
+    expect(
+      operationOf(document, '/people/{id}', 'get').responses['200'],
+    ).toEqual({
+      description: 'OK',
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/SanitizedUser' },
+        },
+      },
+    });
+    expect(Object.keys(document.components.schemas)).toContain('SanitizedUser');
+    expect(warnings).toEqual([]);
+    expect(danglingRefs(document)).toEqual([]);
+  });
+
+  it('inlines an anonymous one, and documents a status the route never defaults to', async () => {
+    const { document } = await built;
+    const responses = operationOf(document, '/people/{id}', 'get').responses;
+
+    expect(Object.keys(responses)).toEqual(['200', '400', '404']);
+    expect(responses['404']).toEqual({
+      description: 'Not found',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: { error: { type: 'string' } },
+            required: ['error'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+  });
+
+  it('hoists a $def a response root only referenced', async () => {
+    const { document } = await built;
+
+    expect(operationOf(document, '/people', 'get').responses['200']).toEqual({
+      description: 'OK',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/SanitizedUser' },
+          },
+        },
+      },
+    });
+  });
+
+  it('documents the verb’s own success status, not only 200', async () => {
+    const { document } = await built;
+    const created = operationOf(document, '/people', 'post').responses['201'];
+
+    expect(created?.content?.['application/json']?.schema).toEqual({
+      $ref: '#/components/schemas/SanitizedUser',
+    });
+  });
+
+  it('leaves a route that declared no response body exactly as it was', async () => {
+    const { document } = await built;
+
+    expect(operationOf(document, '/people/{id}', 'delete').responses).toEqual({
+      '204': { description: 'No content' },
+    });
+  });
+
+  it('reads the response side as output: a default is present coming back', async () => {
+    const Paged = z.object({ take: z.number().default(10) });
+    const paged = { response: { 200: Paged } } as const satisfies RouteSchemas;
+
+    @Controller('paged')
+    class PagedController {
+      @Get('/', paged)
+      list(_input: Input<typeof paged>): null {
+        return null;
+      }
+    }
+
+    @Module({ controllers: [PagedController] })
+    class PagedModule {}
+
+    const { document } = await generateDocument(
+      describeRoutes(PagedModule),
+      info,
+    );
+    // `io: 'output'`, unlike the request side: a field with a default is optional
+    // going in and always present coming out.
+    expect(
+      operationOf(document, '/paged', 'get').responses['200']?.content?.[
+        'application/json'
+      ]?.schema,
+    ).toEqual({
+      type: 'object',
+      properties: { take: { type: 'number', default: 10 } },
+      required: ['take'],
+      additionalProperties: false,
+    });
   });
 });
 
