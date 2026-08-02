@@ -1,4 +1,4 @@
-import type { OnShutdown } from '@dunx/core';
+import { Logger, type OnShutdown } from '@dunx/core';
 import { createBunRedisClient, type IRedisClient } from 'bullmq';
 import { QueueOptions } from './options.js';
 
@@ -50,12 +50,49 @@ const boundClientClass = (
  */
 export class QueueConnection implements OnShutdown {
   readonly #options: QueueOptions;
+  readonly #logger: Logger;
   readonly #client: new (url?: string) => Bun.RedisClient;
   readonly #open: { adapter: IRedisClient; raw: Bun.RedisClient }[] = [];
 
-  constructor(options: QueueOptions) {
+  constructor(options: QueueOptions, logger: Logger) {
     this.#options = options;
+    this.#logger = logger;
     this.#client = boundClientClass(options);
+  }
+
+  /**
+   * Every adapter client gets an `error` listener, including the ones bullmq
+   * derives with `duplicate()`.
+   *
+   * `bun-redis-client.js` does `this.emit('error', error)` on an unexpected close.
+   * An `error` event with no listener throws, and Bun prints the raw `RedisError`
+   * to stderr - two unstructured multi-line blocks per failed publish, bypassing
+   * the bound Logger entirely, in an app whose logging is otherwise JSON.
+   *
+   * Attaching to the client dunx hands over was not enough: bullmq duplicates it
+   * for connections it may block on, and the duplicate is a fresh emitter. So
+   * `duplicate()` is wrapped to attach to whatever it returns.
+   *
+   * **This does not cover every case, and cannot.** With an unreachable broker,
+   * `JobPublisher.publish` still produces two bare dumps: measured on bullmq
+   * 6.0.5, `client()` is called once and two errors escape, so the emitters that
+   * throw are ones bullmq constructed internally and never handed back. The
+   * publisher passes its own client, so there is nothing further dunx can attach
+   * to. Recorded in docs/roadmap/queue-publisher-bare-stderr.md as an upstream
+   * defect with a reproduction.
+   */
+  #handleErrors(adapter: IRedisClient): IRedisClient {
+    adapter.on('error', (error: unknown) => {
+      this.#logger.warn('the queue connection reported an error', { error });
+    });
+
+    const derived = adapter as { duplicate?: () => IRedisClient };
+    const duplicate = derived.duplicate;
+    if (typeof duplicate === 'function') {
+      derived.duplicate = (): IRedisClient =>
+        this.#handleErrors(duplicate.call(adapter));
+    }
+    return adapter;
   }
 
   /**
@@ -65,12 +102,11 @@ export class QueueConnection implements OnShutdown {
    */
   client(): IRedisClient {
     const raw = new this.#client(this.#options.url);
-    const adapter = createBunRedisClient(raw);
-    // bullmq drops its own error listener when it closes a connection it did not
-    // create. Closing the socket after that emits 'error' on a listener-less
-    // EventEmitter, which throws rather than being ignored - so shutdown would
-    // fail on its last step. Measured on bullmq 6.0.5.
-    adapter.on('error', () => undefined);
+    // Handled before it is handed over: bullmq drops its own error listener when
+    // it closes a connection it did not create, and an 'error' on a listener-less
+    // emitter throws rather than being ignored - which used to fail shutdown on
+    // its last step. Measured on bullmq 6.0.5.
+    const adapter = this.#handleErrors(createBunRedisClient(raw));
     this.#open.push({ adapter, raw });
     return adapter;
   }

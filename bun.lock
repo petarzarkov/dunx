@@ -151,6 +151,9 @@
     "packages/openapi": {
       "name": "@dunx/openapi",
       "version": "0.2.11",
+      "bin": {
+        "dunx-openapi": "dist/cli.js",
+      },
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",

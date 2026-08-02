@@ -19,8 +19,9 @@ import { JobPublisher } from './publisher.js';
  */
 const bindings: readonly Registration[] = [
   provide(QueueConnection, {
-    useFactory: (options: QueueOptions) => new QueueConnection(options),
-    inject: [QueueOptions] as const,
+    useFactory: (options: QueueOptions, logger: Logger) =>
+      new QueueConnection(options, logger),
+    inject: [QueueOptions, Logger] as const,
   }),
   provide(JobPublisher, {
     useFactory: (
