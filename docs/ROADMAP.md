@@ -233,6 +233,33 @@ the hardcoded-`PgDialect` and drizzle-`transaction()` measurements and the datab
 design section. Manifest descriptions, `CLAUDE.md`'s package table and the root
 README now name the `Logger` contract and `/logger`.
 
+**The suite that exited 1 with zero failures - fixed.** It was
+`packages/openapi/src/page-ui.test.ts`, roughly one run in forty, and the cause was a
+teardown race: `GlobalRegistrator.unregister()` deletes the globals **first** and
+aborts happy-dom's own tasks second, so a React commit still queued when the file
+ended ran with no `window` and threw between tests. happy-dom could never have
+aborted it anyway - react-dom posts its next unit of work to a native
+`MessageChannel`, which happy-dom neither wraps nor tracks. The fix is one line,
+`await happyDOM.waitUntilComplete()` before unregistering, which drains rather than
+aborts. The guard is deterministic rather than a one-in-forty gamble: a final test
+leaves a request in flight on purpose, which fails **every** run without the drain
+(15/15) and none with it. Then 200 consecutive clean runs of the real file.
+
+**`requestLogging: { correlate: false }`.** The `AsyncLocalStorage` scope, which
+`bun run logging` prices at +0.91 µs, can now be turned off for an app whose handlers
+never log. The request entry is unchanged either way - the five correlation fields go
+onto it directly instead of being read back out of the store - so what is traded is
+only the lines _between_, which then carry no `requestId`. Measured delta in
+`docs/guide/12-logging.md`.
+
+**Two bullmq connection bugs, found while chasing the SIGTERM hang and fixed.**
+bullmq rebuilds a connection with `new (this.raw.constructor)(this.raw.url)` for a
+worker's blocking `duplicate()` and for every reconnect. That dropped the connection
+options, and - because `Bun.RedisClient` has no `url` property at all - it dropped
+the **url** too, so a worker pointed at a remote Redis silently block-polled Bun's
+default one. `@dunx/infra/queue` now hands bullmq a `Bun.RedisClient` subclass
+carrying both. The hang itself is still open and is upstream's; see the roadmap file.
+
 ## Open items
 
 **One file per item in [docs/roadmap/](./roadmap/).** Delete a file when its item is
@@ -248,8 +275,7 @@ Feedback goes in as a new file rather than into conversation.
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                          |
 | [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                            |
 | [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)             | Bug. Bypasses the bound Logger on a publish failure.                 |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                 |
-| [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                         | Unreproduced.                                                        |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file.         |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                       |
 
 ### From porting nestjs-template to dunx-template

@@ -94,6 +94,25 @@ describe('QueueModule.forRoot', () => {
 
     expect(app.get(QueueOptions).url).toMatch(/^(valkey|redis|rediss):\/\//);
   });
+
+  it('keeps the configured url when bullmq duplicates the connection', async () => {
+    // A worker's blocking connection is `connection.duplicate()`, and bullmq's
+    // Bun adapter rebuilds it from `this.raw.url` - which `Bun.RedisClient` does
+    // not have. Unbound, the duplicate resolves Bun's *default* url instead, so
+    // a worker pointed at a remote Redis would block-poll localhost and never
+    // see a job. Nothing on the port below listens, so a duplicate that reaches
+    // anything at all reached the wrong server.
+    app = await AppFactory.create(
+      QueueModule.forRoot({ url: 'redis://127.0.0.1:6399' }),
+    );
+    const adapter = app.get(QueueConnection).client();
+    adapter.on('error', () => undefined);
+    const duplicate = adapter.duplicate();
+    duplicate.on('error', () => undefined);
+
+    await expect(duplicate.get('dunx:duplicate-probe')).rejects.toThrow();
+    duplicate.disconnect();
+  });
 });
 
 describe('QueueModule.forRootAsync', () => {

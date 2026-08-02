@@ -369,6 +369,78 @@ describe('request logging', () => {
     expect(seen.header).toBe(given);
   });
 
+  it('logs the same entry without the scope under correlate: false', async () => {
+    const seen: { header?: string | undefined } = {};
+    const entries = await captured(async () => {
+      await withApp(
+        async (app, url) => {
+          logger = app.get(Logger);
+          const response = await fetch(new URL('things/inner', url));
+          seen.header = response.headers.get('x-request-id') ?? undefined;
+        },
+        { requestLogging: { correlate: false } },
+      );
+    });
+
+    const entry = entries.find(
+      (e) => e['message'] === 'GET /things/inner 200',
+    ) as Record<string, unknown>;
+    expect(entry['requestId']).toBe(seen.header);
+    expect(entry['method']).toBe('GET');
+    expect(entry['event']).toBe('/things/inner');
+    expect(entry['flow']).toBe('http');
+    expect(entry['context']).toBe('ThingsController.inner');
+    expect(entry['statusCode']).toBe(200);
+
+    // The trade, and the whole reason it is not the default: the handler's own
+    // line has no store to read the id back out of.
+    const inner = entries.find((e) => e['message'] === 'from the handler');
+    expect(inner?.['requestId']).toBeUndefined();
+  });
+
+  it('keeps the fields on a failure under correlate: false', async () => {
+    const entries = await captured(async () => {
+      await withApp(
+        async (_app, url) => {
+          await fetch(new URL('things/boom', url));
+        },
+        { requestLogging: { correlate: false } },
+      );
+    });
+
+    const entry = entries.find((e) => e['level'] === 'warn') as Record<
+      string,
+      unknown
+    >;
+    expect(entry['statusCode']).toBe(418);
+    expect(entry['requestId']).toMatch(UUID);
+    expect(entry['context']).toBe('ThingsController.boom');
+  });
+
+  it('still stamps the response on an ignored path under correlate: false', async () => {
+    const seen: { header?: string | undefined } = {};
+    const entries = await captured(async () => {
+      await withApp(
+        async (_app, url) => {
+          const response = await fetch(new URL('things', url));
+          seen.header = response.headers.get('x-request-id') ?? undefined;
+        },
+        {
+          requestLogging: {
+            correlate: false,
+            ignore: ['/things'],
+            correlateIgnored: true,
+          },
+        },
+      );
+    });
+
+    expect(seen.header).toMatch(UUID);
+    expect(
+      entries.find((e) => e['message'] === 'GET /things 200'),
+    ).toBeUndefined();
+  });
+
   it('binds RequestContext by default, so an app can use it directly', async () => {
     await withApp(
       async (app) => {

@@ -340,6 +340,11 @@ is what makes it free. `correlateIgnored: true` keeps the id and the scope on th
 paths and still writes no entry, which is "do not log the health check but do keep
 its request id".
 
+`correlate: false` drops the async scope for **every** path. The entry itself is
+unchanged - the same five fields are written straight onto it - so only the lines a
+handler writes in between lose their `requestId`. That scope is +0.91 µs, 17% of what
+request logging costs, and an app whose handlers never log pays it for nothing.
+
 ### Bodies are off by default, and what that costs
 
 `requestBody` and `responseBody` default to **`false`**. Turning either on means a

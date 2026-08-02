@@ -9,6 +9,11 @@ import { Logger, LOG_LEVELS, RequestContext, type LogLevel } from '@dunx/core';
  * `RequestLoggingMiddleware` with everything past a given step removed. `entry`
  * onwards use the real middleware and vary only the bound `Logger`.
  *
+ * `uncorrelated` is the one row that subtracts rather than adds: the shipped
+ * default with `correlate: false`, so `default` minus it is what the
+ * `AsyncLocalStorage` scope costs in the configuration that actually ships,
+ * rather than in the truncated one the `als` row measures.
+ *
  * The loggers below must stay a faithful copy of `ConsoleLogger` minus the step
  * they are named for. When that file changes, these change with it - otherwise the
  * table decomposes an implementation that is no longer the one shipping.
@@ -26,6 +31,7 @@ export const loggingVariants = Object.freeze([
   'serialize',
   'unbatched',
   'default',
+  'uncorrelated',
 ] as const);
 export type LoggingVariant = (typeof loggingVariants)[number];
 

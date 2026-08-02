@@ -132,6 +132,11 @@ timer alive **after `close()`** and the process never exits. It is a Bun-level
 bug: `RedisConnection.onShutdown` cannot reach the timer, so the option is the
 only mitigation. See [docs/bun-apis.md](../../docs/bun-apis.md).
 
+`maxRetries: 0` does not cover every case. A connect to an address that neither
+accepts nor refuses it - a dropped SYN rather than a closed port - leaks past
+`close()` whatever the options say, and there is no workaround at all. A refused
+port and a healthy server are both clean. Same file.
+
 ### Named connections
 
 A named registration binds `redisConnection(name)` and deliberately does not also
