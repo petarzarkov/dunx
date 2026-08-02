@@ -60,7 +60,7 @@ dunx/
 └── .husky/             # Git hooks
 ```
 
-## Getting Started
+## Development
 
 ```bash
 # Install all dependencies

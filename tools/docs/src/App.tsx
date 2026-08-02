@@ -115,7 +115,7 @@ const Page = ({ route }: { route: Route }): React.JSX.Element => {
     case RouteKind.Guide:
       return <Guide slug={route.slug} />;
     case RouteKind.Api:
-      return <PackagePage dir={route.slug} />;
+      return <PackagePage dir={route.slug} anchor={route.anchor} />;
     case RouteKind.Coverage:
       return <Coverage />;
     default:

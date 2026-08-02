@@ -11,6 +11,7 @@ import {
   Title,
 } from '@mantine/core';
 import type { DocMember, DocSymbol } from '../../scripts/extract/model';
+import { symbolAnchor } from '../router';
 import { Prose } from './Prose';
 
 const KIND_COLOR: Record<string, string> = {
@@ -20,9 +21,6 @@ const KIND_COLOR: Record<string, string> = {
   type: 'grape',
   variable: 'orange',
 };
-
-export const symbolAnchor = (symbol: DocSymbol): string =>
-  `symbol-${symbol.name}`;
 
 const MemberRow = ({ member }: { member: DocMember }): React.JSX.Element => (
   <Table.Tr>
@@ -55,19 +53,27 @@ const MemberRow = ({ member }: { member: DocMember }): React.JSX.Element => (
   </Table.Tr>
 );
 
+/**
+ * `linked` is the symbol the current route's `?h=` names. It is a rendered
+ * state rather than a class the scroll effect pokes on afterwards, so it
+ * survives re-renders and a test can assert it.
+ */
 export const SymbolCard = ({
   symbol,
   repoUrl,
+  linked = false,
 }: {
   symbol: DocSymbol;
   repoUrl: string;
+  linked?: boolean;
 }): React.JSX.Element => (
   <Paper
     withBorder
     radius="md"
     p="md"
-    id={symbolAnchor(symbol)}
-    style={{ scrollMarginTop: '5rem' }}
+    id={symbolAnchor(symbol.name)}
+    className={linked ? 'symbol-card symbol-card-linked' : 'symbol-card'}
+    data-linked={linked || undefined}
   >
     <Stack gap="sm">
       <Group justify="space-between" align="flex-start" wrap="nowrap">

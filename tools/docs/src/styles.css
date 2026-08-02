@@ -226,6 +226,38 @@ body {
   background: var(--mantine-color-default);
 }
 
+.code-pane {
+  overflow: hidden;
+}
+
+.code-pane-label {
+  padding: 0.4rem 0.9rem;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-default);
+}
+
+.code-pane-body {
+  margin: 0;
+  padding: 0.9rem;
+  overflow-x: auto;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+/* Every symbol card is an anchor target, so it must clear the sticky header
+   when scrolled to. The ring marks the one the current `?h=` names — a search
+   hit has to be identifiable once it is on screen, not merely on screen. */
+.symbol-card,
+[id^='scenario-'] {
+  scroll-margin-top: 6.5rem;
+}
+
+.symbol-card-linked {
+  border-color: var(--mantine-primary-color-filled);
+  box-shadow: 0 0 0 2px var(--mantine-primary-color-light);
+}
+
 .signature,
 .member-signature {
   white-space: pre-wrap;

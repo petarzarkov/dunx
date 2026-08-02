@@ -1,6 +1,6 @@
-import benchRaw from './generated/bench.json' with { type: 'text' };
-import coverageRaw from './generated/coverage.json' with { type: 'text' };
-import siteRaw from './generated/site.json' with { type: 'text' };
+import benchRaw from './generated/bench.json?raw';
+import coverageRaw from './generated/coverage.json?raw';
+import siteRaw from './generated/site.json?raw';
 import type {
   BenchModel,
   CoverageModel,
@@ -9,10 +9,10 @@ import type {
 } from '../scripts/extract/model';
 
 /**
- * `with { type: 'text' }` rather than a JSON import: the model is over a
- * megabyte, and handing it to TypeScript as a literal type costs far more than
- * parsing it at boot. A standard import attribute, so `Bun.build` needs no
- * plugin and no `?raw` suffix.
+ * `?raw` rather than a JSON import: the model is over a megabyte, and handing
+ * it to TypeScript as a literal type costs far more than parsing it at boot.
+ * The suffix is Vite's; `src/env.d.ts` types it and `happydom.ts` teaches the
+ * test runner the same resolution.
  */
 export const site = JSON.parse(siteRaw) as SiteModel;
 export const coverage = JSON.parse(coverageRaw) as CoverageModel;

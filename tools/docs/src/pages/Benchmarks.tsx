@@ -17,10 +17,13 @@ import {
   decimal,
   integer,
   machineLine,
+  NOISE_PCT,
   scenarioHeadlines,
+  scoreboard,
   startupHeadline,
   startupRows,
   throughputRows,
+  type Verdict,
 } from '../bench';
 import { StartupChart, ThroughputChart } from '../components/BenchChart';
 import {
@@ -58,8 +61,9 @@ const Stat = ({
 const Headlines = ({ model }: { model: BenchModel }): React.JSX.Element => {
   const scenarios = scenarioHeadlines(model);
   const startup = startupHeadline(model);
+  const board = scoreboard(model);
   const pcts = scenarios.map((scenario) => scenario.focusPct);
-  const behind = scenarios.filter((scenario) => !scenario.focusLeadsRival);
+  const rival = board.rivalLabel ?? 'the fastest rival';
 
   return (
     <SimpleGrid cols={{ base: 1, sm: 3 }}>
@@ -73,26 +77,85 @@ const Headlines = ({ model }: { model: BenchModel }): React.JSX.Element => {
         hint={`of the ceiling, across ${scenarios.length} scenarios. The rest is framework overhead.`}
       />
       <Stat
-        label="Scenarios lost"
-        value={`${behind.length} of ${scenarios.length}`}
-        hint={
-          behind.length === 0
-            ? 'dunx is the fastest framework in every scenario here.'
-            : `Behind ${[...new Set(behind.map((s) => s.rivalLabel))].join(', ')}.`
-        }
+        label={`Against ${rival}`}
+        value={`${board.ahead}W ${board.tied}T ${board.behind}L`}
+        hint={`Won ${board.ahead}, tied ${board.tied}, lost ${board.behind} of ${board.total}. A gap inside ±${NOISE_PCT} points is a tie on this setup, not a result.`}
       />
       <Stat
         label="Cold start"
         value={startup ? `${decimal(startup.ratio, 2)}x` : '—'}
         hint={
           startup
-            ? `${decimal(startup.focusMs, 1)} ms against ${startup.baselineLabel}'s ${decimal(startup.baselineMs, 1)} ms — rank ${startup.rank} of ${startup.total}.`
+            ? `${decimal(startup.focusMs, 1)} ms against ${startup.baselineLabel}'s ${decimal(startup.baselineMs, 1)} ms — rank ${startup.rank} of ${startup.total}. dunx's clearest loss on this page.`
             : 'No startup samples in this run.'
         }
       />
     </SimpleGrid>
   );
 };
+
+const VERDICT_COLOR: Record<Verdict, string> = {
+  ahead: 'indigo',
+  tied: 'gray',
+  behind: 'orange',
+};
+
+/** One row per scenario: where dunx landed, and against whom. */
+const Scoreboard = ({ model }: { model: BenchModel }): React.JSX.Element => (
+  <Card withBorder radius="md" padding="md">
+    <Title order={2} size="h4" mb="xs">
+      Scenario by scenario
+    </Title>
+    <Table verticalSpacing="xs" fz="sm">
+      <Table.Thead>
+        <Table.Tr>
+          <Table.Th>Scenario</Table.Th>
+          <Table.Th ta="right" w={110}>
+            dunx
+          </Table.Th>
+          <Table.Th ta="right" w={140}>
+            Fastest rival
+          </Table.Th>
+          <Table.Th ta="right" w={90}>
+            Rank
+          </Table.Th>
+          <Table.Th ta="right" w={90}>
+            Verdict
+          </Table.Th>
+        </Table.Tr>
+      </Table.Thead>
+      <Table.Tbody>
+        {scenarioHeadlines(model).map((scenario) => (
+          <Table.Tr key={scenario.id}>
+            <Table.Td>
+              <Anchor href={`#/benchmarks?h=scenario-${scenario.id}`}>
+                {scenario.title}
+              </Anchor>
+            </Table.Td>
+            <Table.Td ta="right" fw={700}>
+              {decimal(scenario.focusPct, 1)}%
+            </Table.Td>
+            <Table.Td ta="right" c="dimmed">
+              {scenario.rivalLabel} {decimal(scenario.rivalPct, 1)}%
+            </Table.Td>
+            <Table.Td ta="right">
+              {scenario.focusRank} / {scenario.subjectCount}
+            </Table.Td>
+            <Table.Td ta="right">
+              <Badge
+                size="sm"
+                variant="light"
+                color={VERDICT_COLOR[scenario.verdict]}
+              >
+                {scenario.verdict}
+              </Badge>
+            </Table.Td>
+          </Table.Tr>
+        ))}
+      </Table.Tbody>
+    </Table>
+  </Card>
+);
 
 const Losses = ({ model }: { model: BenchModel }): React.JSX.Element | null => {
   const scenarios = scenarioHeadlines(model);
@@ -126,8 +189,9 @@ const Losses = ({ model }: { model: BenchModel }): React.JSX.Element | null => {
           </List.Item>
         )}
         <List.Item>
-          Differences under about 3% are noise on this setup. Several of the
-          gaps above are not.
+          A gap under {NOISE_PCT} points is noise on this setup — that is why
+          the scoreboard above reads some of these as ties. The rest are wider
+          than that and are real.
         </List.Item>
       </List>
     </Card>
@@ -229,10 +293,7 @@ export const Benchmarks = (): React.JSX.Element => {
   }
 
   const model = bench;
-  const totalBad = model.results.reduce(
-    (sum, result) => sum + result.totalErrors + result.totalNon2xx,
-    0,
-  );
+  const totalBad = model.results.reduce((sum, result) => sum + result.bad, 0);
 
   return (
     <Container size="lg" py="xl">
@@ -245,7 +306,9 @@ export const Benchmarks = (): React.JSX.Element => {
             worth having is the gap to raw <code>Bun.serve</code>: dunx is a
             layer on that exact API, so the gap is dunx&apos;s own overhead and
             nothing else. Rows are ordered by measured throughput, losses
-            included.
+            included, and request logging — which is on by default and which no
+            other subject does — is its own row rather than folded into the
+            framework&apos;s number.
           </Text>
           <Text size="xs" c="dimmed" ff="monospace">
             {machineLine(model)}
@@ -270,13 +333,14 @@ export const Benchmarks = (): React.JSX.Element => {
         </Stack>
 
         <Headlines model={model} />
+        <Scoreboard model={model} />
         <Losses model={model} />
         <Caveats model={model} />
 
         <RuntimeLegend />
 
         {model.scenarios.map((scenario) => (
-          <Stack key={scenario.id} gap="xs">
+          <Stack key={scenario.id} gap="xs" id={`scenario-${scenario.id}`}>
             <Group gap="sm" align="baseline">
               <Title order={2} size="h3">
                 {scenario.title}

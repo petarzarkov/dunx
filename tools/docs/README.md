@@ -1,6 +1,6 @@
 # @dunx/docs
 
-The documentation site for dunx: **React + Mantine over `Bun.build`**, built to static
+The documentation site for dunx: **React + Mantine over Vite**, built to static
 output and deployed to GitHub Pages at <https://petarzarkov.github.io/dunx>.
 
 Private, never published. Per CLAUDE.md, `tools/*` may depend on anything —
@@ -11,45 +11,113 @@ bun run docs:dev      # extract, then serve with HMR
 bun run docs:build    # extract, then build to tools/docs/dist
 ```
 
+## Vite, and why it is not `Bun.build`
+
+It was `Bun.build` — `bun build ./index.html` did the same job in 41 ms against
+Vite 5's 1.7 s, at ~25% more gzipped JS. Vite 8 is Rolldown, which removed the
+speed argument, and Mantine plus `@mantine/charts`/recharts had grown the size
+one. Re-measured on this site, same content, `gzip -9`:
+
+| Bundler            | JS raw    | JS gzip      | CSS gzip | Build   |
+| ------------------ | --------- | ------------ | -------- | ------- |
+| `Bun.build`        | 1829.6 KB | **506.5 KB** | 35.0 KB  | ~0.15 s |
+| Vite 8 (Rolldown)  | 1558.1 KB | **426.8 KB** | 31.2 KB  | ~0.30 s |
+
+83.5 KB less over the wire for 150 ms nobody waits on. Two consequences worth
+knowing before reversing it: text imports are Vite's `?raw` rather than
+`with { type: 'text' }` (typed by `src/env.d.ts`, taught to `bun test` by
+`happydom.ts`), and `public/` copying and the `dist/` clean are Vite's rather
+than a hand-written `scripts/build.ts`.
+
 ## What the site is made of
 
-Nothing here is hand-maintained prose. Every page is generated from something
-that already exists in the repo:
+Almost nothing here is hand-maintained prose. Every page is generated from
+something that already exists in the repo:
 
-| Page             | Source                                                     |
-| ---------------- | ---------------------------------------------------------- |
-| Benchmarks       | `tools/bench/results/latest.json`                          |
-| Landing          | the root `README.md`, plus a summary of the benchmark run   |
-| Guides           | `docs/*.md`, rendered by `Bun.markdown.html`               |
-| Package overview | that package's `README.md`                                 |
-| API reference    | the doc comments in `packages/*/src/**/*.ts`               |
-| Coverage         | `tools/docs/src/generated/coverage.json`                   |
+| Page             | Source                                                    |
+| ---------------- | --------------------------------------------------------- |
+| Benchmarks       | `tools/bench/results/latest.json`                         |
+| Landing          | the root `README.md`, plus a summary of the benchmark run |
+| Guides           | `docs/*.md`, rendered by `Bun.markdown.html`              |
+| Package overview | that package's `README.md`                                |
+| API reference    | the doc comments in `packages/*/src/**/*.ts`              |
+| Coverage         | `tools/docs/src/generated/coverage.json`                  |
+
+The landing page's hero, its dependency-injection sample and its four claim
+panels are the exception, and are written by hand — but the numbers inside them
+are not. The request-logging cost, the throughput range and the win/tie/loss
+scoreboard are all read off the benchmark model, so a rerun rewrites the page
+rather than leaving it overstating.
 
 `scripts/generate.ts` writes `src/generated/site.json` and
 `src/generated/bench.json`; `bun run gen:cov` (`scripts/coverage-report.ts` at
 the repo root) writes `src/generated/coverage.json` and the badge SVGs in
 `public/badges/`. Both directories are gitignored — they are build output.
 
+## What a README loses on the way in
+
+A package README also serves someone working in this repository, and that reader
+is not the one on the docs site. `siteMarkdown` in `scripts/content.ts` drops:
+
+- the centered title-and-badges block a README opens with, and
+- every `##` section whose heading begins with one of:
+
+  **Install** · **Installation** · **License** · **Licence** · **Contributing** ·
+  **Development** · **Building** · **Project Structure** · **Scripts** ·
+  **Commit Convention** · **Versioning** · **Adding a New Package** ·
+  **Packages**
+
+Matching is on the heading's slug with a `-` word boundary, so
+`## Install it as a devDependency` goes with `## Install`, and `## Setup` — which
+is API documentation in `@dunx/compiler` — stays. Nested `###` headings go with
+their parent `##`. Fenced code is tracked, so the `# bunfig.toml` inside
+`packages/compiler/README.md`'s example is not mistaken for a heading.
+
+**Naming a section is how an author chooses.** Content worth keeping should not
+live under one of those headings; `@dunx/testing`'s single-copy-of-`@dunx/core`
+reasoning sits under `## Install it as a devDependency` and is therefore not on
+the site.
+
+`Packages` is on the list for a different reason: the site generates its own
+package index from the manifests, and the root README's version of it is a wall
+of shields. The guides under `docs/` are exempt from all of this — they *are*
+repository documentation.
+
 ## The benchmark page
 
-`generate.ts` copies `tools/bench/results/latest.json` into
-`src/generated/bench.json` after checking its `schemaVersion` against the mirror
-of the harness's shape in `scripts/extract/model.ts`. A run is not required to
-build: when the file is missing — or written by a newer schema — `bench.json` is
-the literal `null`, and the page says how to produce one instead of rendering
-half a report. `results/latest.json` is the one file under `results/` that is
-_not_ gitignored, because CI builds the site from a clean checkout and an
-untracked report would deploy a page with no numbers on it.
+`scripts/extract/bench.ts` reads `tools/bench/results/latest.json`, checks its
+`schemaVersion` against the mirror of the harness's shape in
+`scripts/extract/model.ts`, and writes a **projection** of it to
+`src/generated/bench.json`. The report is the harness's evidence — every run's
+startup samples, each scenario's expected body and mime type, each subject's
+entry file and preloads — and none of that reaches a pixel. Copying it verbatim
+put ~48 KB of JSON in the bundle where the projection is 10.6 KB. `BenchReport`
+is the mirror, `BenchModel` is what the site carries, and a field that survives
+`projectBench` is a field something renders.
 
-Nothing on that page is a chart library. The bars are `<div>`s whose width is
-the same percentage the neighbouring cell prints, which is both zero bytes of
-dependency and impossible to drift from the number it claims to show. Colour
-encodes the **runtime**, not the ranking: a Bun subject beating a Node one says
-something about Bun and nothing about the framework. `@dunx/http` is marked in
-every table, and rows are ordered by the measured value alone — so it is marked
-where it comes third on cold start exactly as it is where it comes second on
-throughput. `Where dunx loses` is computed from the report rather than written
-down, so it cannot go stale against a newer run.
+A run is not required to build: when the file is missing — or written by a newer
+schema — `bench.json` is the literal `null`, and the page says how to produce one
+instead of rendering half a report. `results/latest.json` is the one file under
+`results/` that is _not_ gitignored, because CI builds the site from a clean
+checkout and an untracked report would deploy a page with no numbers on it.
+
+`@dunx/http` is marked in every table, and rows are ordered by the measured value
+alone — so it is marked where it comes third on cold start exactly as it is where
+it comes second on throughput. Colour encodes the **runtime**, not the ranking: a
+Bun subject beating a Node one says something about Bun and nothing about the
+framework.
+
+Every claim on the page is computed from the report:
+
+- the **scoreboard** classifies each scenario against the fastest rival through
+  `NOISE_PCT`, a ±3 point band. A rerun that turns a win into a tie rewrites the
+  sentence. `Verdict` is what the badges read.
+- `Where dunx loses` uses **strict ordering**, not the band, so a 1.1 point
+  deficit is still listed as a loss even where the scoreboard calls it a tie.
+  The two are deliberately not the same test.
+- request logging is a **separate subject**, because it is on by default and no
+  other subject does it. Its cost appears on the landing page next to the claim,
+  not buried.
 
 ## Why `oxc-parser` and not the TypeScript compiler API
 
@@ -91,36 +159,61 @@ types:
 ## Layout
 
 ```
+vite.config.ts         # base path, react plugin — the whole build config
+happydom.ts            # test preload: a DOM, plus Vite's ?raw for bun test
 scripts/
   generate.ts          # entrypoint: writes src/generated/site.json
-  content.ts           # markdown -> HTML, heading ids, link rewriting
+  content.ts           # markdown -> HTML, heading ids, links, siteMarkdown
   extract/
     ast.ts             # structural views over oxc's ESTree output
     jsdoc.ts           # doc-comment binding and tag parsing
     signature.ts       # source-slice signatures
     symbols.ts         # a module's exported declarations
     surface.ts         # entrypoint -> re-export graph -> public surface
+    bench.ts           # report -> the projection the site carries
     index.ts           # per-package orchestration
     model.ts           # the JSON model both sides share
 src/
   App.tsx              # shell, navigation
-  router.ts            # hash router — GitHub Pages needs no rewrite rules
+  router.ts            # hash router, symbol anchors, scroll restoration
   data.ts              # the generated JSON, parsed once
-  bench.ts             # ranking, baseline percentages and headlines over the run
-  components/          # Prose, SymbolCard, Search, BenchBars, BenchSummary
+  bench.ts             # ranking, baseline percentages, verdicts, scoreboard
+  components/          # Prose, SymbolCard, Search, CodeBlock, NoDecorators, Bench*
   pages/               # Benchmarks, Home, Guide, PackagePage, Coverage, NotFound
 ```
 
 Routing is hash-based (`#/api/core`) on purpose: GitHub Pages serves static
 files with no SPA fallback, so a path-based router would 404 on every deep link.
 
+## Deep-linking a symbol
+
+`#/api/core?h=symbol-ConsoleLogger` is what a search hit navigates to, and three
+things have to hold for it to land — all three were wrong at once, which is why
+clicking a symbol used to open the package readme:
+
+1. `symbolHref` in `router.ts` emits the `?h=`. The search action used to
+   navigate to the bare package route.
+2. `PackagePage` opens the **API tab** when the anchor names a symbol. `Tabs` is
+   `keepMounted={false}`, so on the readme tab the card is not in the DOM at all.
+   A linked symbol also bypasses the kind filter, the text filter and the
+   Internal switch: the reader asked for that one by name.
+3. `useScrollTo` **retries across frames** and re-scrolls until the target stops
+   moving. The card mounts a commit after the route changes, and the cards below
+   it finish laying out after that, so one lookup lands near the symbol rather
+   than on it. Instant, not smooth — a cold load can be thousands of pixels
+   short.
+
+The card the anchor names renders with `data-linked="true"` and a ring, because
+being on screen and being findable are not the same thing.
+
 ## Tests
 
 `bun test` runs two suites: `scripts/extract.test.ts` over the extractor
-(including a real extraction of `@dunx/core`), and `src/site.test.tsx`, which
-mounts the app in happy-dom and asserts the generated model actually reaches the
-DOM. `happydom.ts` is the test preload; it registers that
-text-import suffix so `src/data.ts` needs no Bun-specific code path.
+(including a real extraction of `@dunx/core` and the `siteMarkdown` rules), and
+`src/site.test.tsx`, which mounts the app in happy-dom and asserts the generated
+model actually reaches the DOM. `happydom.ts` is the test preload; it registers a
+`Bun.plugin` for Vite's `?raw` suffix so `src/data.ts` needs no test-only code
+path.
 
 The benchmark assertions are `test.if(bench !== null)`, so they check real
 numbers when the build had a run and skip rather than fail when it did not.
@@ -129,4 +222,5 @@ numbers when the build had a run and skip rather than fail when it did not.
 
 - No syntax highlighting in code blocks — they are styled, not tokenised.
 - The OpenAPI document `@dunx/openapi` produces is not yet a page here.
-- The bundle is one chunk; it is not code-split per package.
+- The bundle is one chunk; it is not code-split, and `recharts` is in it whether
+  or not the reader ever opens the benchmark page.

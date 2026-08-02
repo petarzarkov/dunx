@@ -10,6 +10,29 @@ export const BASELINE = 'bun-serve';
 /** The subject this site is about. Marked in every table, wins and losses alike. */
 export const FOCUS = 'dunx';
 
+/** The same app with `requestLogging` left on, measured separately on purpose. */
+export const FOCUS_LOGGING = 'dunx-logging';
+
+/**
+ * Run-to-run spread on this setup, in percentage points of the baseline. A gap
+ * narrower than this is not a result, and a headline that reads it as one is
+ * the page lying quietly. The benchmark page states the same figure.
+ */
+export const NOISE_PCT = 3;
+
+export const Verdict = Object.freeze({
+  Ahead: 'ahead',
+  Tied: 'tied',
+  Behind: 'behind',
+} as const);
+export type Verdict = (typeof Verdict)[keyof typeof Verdict];
+
+export const verdictOf = (focusPct: number, rivalPct: number): Verdict => {
+  const gap = focusPct - rivalPct;
+  if (Math.abs(gap) <= NOISE_PCT) return Verdict.Tied;
+  return gap > 0 ? Verdict.Ahead : Verdict.Behind;
+};
+
 export interface ThroughputRow {
   readonly id: string;
   readonly label: string;
@@ -51,13 +74,13 @@ export const throughputRows = (
   const cells = model.results.filter(
     (result) => result.scenario === scenarioId,
   );
-  const baseline = cells.find((cell) => cell.subject === BASELINE)?.rps.median;
+  const baseline = cells.find((cell) => cell.subject === BASELINE)?.rps;
 
   return cells
     .flatMap((cell) => {
       const subject = subjects.get(cell.subject);
       if (!subject) return [];
-      const reference = baseline ?? cell.rps.median;
+      const reference = baseline ?? cell.rps;
 
       return [
         {
@@ -65,13 +88,12 @@ export const throughputRows = (
           label: subject.label,
           runtime: subject.runtime,
           version: subject.version,
-          rps: cell.rps.median,
-          stddev: cell.rps.stddev,
-          p50: cell.latencyP50Ms.median,
-          p99: cell.latencyP99Ms.median,
-          pctOfBaseline:
-            reference === 0 ? 0 : (cell.rps.median / reference) * 100,
-          bad: cell.totalErrors + cell.totalNon2xx,
+          rps: cell.rps,
+          stddev: cell.rpsStddev,
+          p50: cell.p50Ms,
+          p99: cell.p99Ms,
+          pctOfBaseline: reference === 0 ? 0 : (cell.rps / reference) * 100,
+          bad: cell.bad,
         },
       ];
     })
@@ -96,8 +118,8 @@ export const startupRows = (model: BenchModel): StartupRow[] => {
           label: subject.label,
           runtime: subject.runtime,
           medianMs: entry.medianMs,
-          minMs: Math.min(...entry.samplesMs),
-          maxMs: Math.max(...entry.samplesMs),
+          minMs: entry.minMs,
+          maxMs: entry.maxMs,
           ratioToBaseline: reference === 0 ? 0 : entry.medianMs / reference,
         },
       ];
@@ -115,7 +137,12 @@ export interface ScenarioHeadline {
   /** Fastest subject that is not the raw baseline — the framework dunx is up against. */
   readonly rivalLabel: string;
   readonly rivalPct: number;
+  /** Strict ordering. `Where dunx loses` is driven by this and not by the verdict. */
   readonly focusLeadsRival: boolean;
+  /** The same comparison read against `NOISE_PCT`. */
+  readonly verdict: Verdict;
+  /** Percentage of the baseline the same app reaches with request logging on. */
+  readonly loggingPct: number | null;
 }
 
 export const scenarioHeadlines = (model: BenchModel): ScenarioHeadline[] =>
@@ -123,7 +150,10 @@ export const scenarioHeadlines = (model: BenchModel): ScenarioHeadline[] =>
     const rows = throughputRows(model, scenario.id);
     const focusIndex = rows.findIndex((row) => row.id === FOCUS);
     const focus = rows[focusIndex];
-    const rival = rows.find((row) => row.id !== BASELINE && row.id !== FOCUS);
+    const rival = rows.find(
+      (row) =>
+        row.id !== BASELINE && row.id !== FOCUS && row.id !== FOCUS_LOGGING,
+    );
     if (!focus || !rival) return [];
 
     return [
@@ -137,9 +167,41 @@ export const scenarioHeadlines = (model: BenchModel): ScenarioHeadline[] =>
         rivalLabel: rival.label,
         rivalPct: rival.pctOfBaseline,
         focusLeadsRival: focus.rps >= rival.rps,
+        verdict: verdictOf(focus.pctOfBaseline, rival.pctOfBaseline),
+        loggingPct:
+          rows.find((row) => row.id === FOCUS_LOGGING)?.pctOfBaseline ?? null,
       },
     ];
   });
+
+export interface Scoreboard {
+  readonly ahead: number;
+  readonly tied: number;
+  readonly behind: number;
+  readonly total: number;
+  /** The rival every scenario was read against, when it is the same one. */
+  readonly rivalLabel: string | null;
+}
+
+/**
+ * How dunx did against the fastest other framework, scenario by scenario, with
+ * the noise band applied. Computed rather than written down: a rerun that turns
+ * a win into a tie has to change this sentence too.
+ */
+export const scoreboard = (model: BenchModel): Scoreboard => {
+  const headlines = scenarioHeadlines(model);
+  const rivals = new Set(headlines.map((headline) => headline.rivalLabel));
+  const count = (verdict: Verdict): number =>
+    headlines.filter((headline) => headline.verdict === verdict).length;
+
+  return {
+    ahead: count(Verdict.Ahead),
+    tied: count(Verdict.Tied),
+    behind: count(Verdict.Behind),
+    total: headlines.length,
+    rivalLabel: rivals.size === 1 ? ([...rivals][0] ?? null) : null,
+  };
+};
 
 export interface StartupHeadline {
   readonly focusMs: number;
