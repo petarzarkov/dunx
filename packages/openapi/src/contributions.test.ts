@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test';
-import { Module } from '@dunx/core';
+import { AppFactory, Module } from '@dunx/core';
 import { Controller, Get } from '@dunx/http';
 import { describeRoutes } from './discover.js';
 import { generateDocument } from './generate.js';
-import { OpenApiExplorer } from './module.js';
+import { OpenApiExplorer, OpenApiModule } from './module.js';
 
 @Controller('users')
 class UsersController {
@@ -59,4 +59,39 @@ test('and neither moves when there is no prefix', async () => {
     CONTRIBUTED,
     '/users',
   ]);
+});
+
+class Auth {
+  readonly api = {
+    generateOpenAPISchema: async () => ({
+      paths: { '/sign-in': { post: { responses: {} } } },
+    }),
+  };
+}
+
+@Module({ controllers: [UsersController], providers: [Auth] })
+class AppModule {}
+
+test('a contributor can inject through forRootAsync', async () => {
+  const app = await AppFactory.create(
+    OpenApiModule.forRootAsync({
+      root: AppModule,
+      useFactory: (auth: Auth) => ({
+        title: 'T',
+        version: '1',
+        contribute: [
+          async () => {
+            const raw = await auth.api.generateOpenAPISchema();
+            return { paths: raw.paths, schemas: {}, tags: [] };
+          },
+        ],
+      }),
+      inject: [Auth],
+    }),
+  );
+
+  // The documentation routes are in there too, deliberately - they are routes.
+  const paths = Object.keys(app.get(OpenApiExplorer).document().paths).sort();
+  expect(paths).toEqual(['/docs', '/openapi.json', '/sign-in', '/users']);
+  await app.shutdown();
 });
