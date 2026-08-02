@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 36" width="140" height="36" fill="none" role="img" aria-label="dunx">
+  <linearGradient id="dunx-x" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#22b8cf" />
+    <stop offset=".5" stop-color="#4c6ef5" />
+    <stop offset="1" stop-color="#7950f2" />
+  </linearGradient>
+  <g stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(0 -.4) scale(1.15)">
+      <path d="M5.6 26.1V16.3a10.4 10.4 0 0 1 20.8 0v9.8" stroke="currentColor" stroke-width="3.48" />
+      <path d="m11.4 13.1 9.2 9.2m0-9.2-9.2 9.2" stroke="url(#dunx-x)" stroke-width="3.48" />
+    </g>
+    <g transform="translate(40 0)">
+      <path d="M22 6v24" stroke="currentColor" />
+      <circle cx="14" cy="22" r="8" stroke="currentColor" />
+      <path d="M32 14v9a7 7 0 0 0 14 0v7" stroke="currentColor" />
+      <path d="M56 30v-9a7 7 0 0 1 14 0v9" stroke="currentColor" />
+      <path d="m80 14 14 16m0-16L80 30" stroke="url(#dunx-x)" />
+    </g>
+  </g>
+</svg>

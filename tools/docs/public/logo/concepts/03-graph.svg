@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="dunx">
+  <defs>
+    <linearGradient id="s3" x1="17" y1="8" x2="30" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22b8cf" />
+      <stop offset=".5" stop-color="#4c6ef5" />
+      <stop offset="1" stop-color="#7950f2" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M7 5.5c7 0 4 10.5 10 10.5M7 26.5c7 0 4-10.5 10-10.5"
+    stroke="currentColor"
+    stroke-width="2.6"
+    fill="none"
+  />
+  <g fill="currentColor">
+    <circle cx="5" cy="5.5" r="3.1" />
+    <circle cx="5" cy="16" r="3.1" />
+    <circle cx="5" cy="26.5" r="3.1" />
+    <rect x="5" y="14.7" width="12" height="2.6" />
+  </g>
+  <rect x="17" y="8" width="13" height="16" rx="4" fill="url(#s3)" />
+</svg>
