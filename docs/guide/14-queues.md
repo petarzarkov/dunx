@@ -47,7 +47,7 @@ will be `SIGKILL`ed by whatever supervises it. Reproductions for both leaks are 
 Earlier versions of this guide also told you to **pin ioredis 5**. That advice was
 wrong and has been withdrawn: ioredis 6 did not remove `ioredis/built/utils`, both of
 bullmq's builds import it, and Bun runs the CJS one. Any ioredis from 5.0.0 up works.
-The measurement is in ARCHITECTURE.md, "Not pinning ioredis 5".
+The measurement is in architecture/queues.md, "Not pinning ioredis 5".
 
 ## A handler is a method with a decorator
 

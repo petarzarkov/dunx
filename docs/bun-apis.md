@@ -171,7 +171,7 @@ need a spawned process to catch, which is what `@dunx/infra/redis` now has.
 holding `Queue`, which is how you tell. This matters because a previous note here
 claimed the ESM build was the safe one: both builds statically import `ioredis` and
 `ioredis/built/utils`, ioredis 6.0.0 still ships that path, and no pin is needed.
-Full measurement in ARCHITECTURE.md, "Not pinning ioredis 5".
+Full measurement in architecture/queues.md, "Not pinning ioredis 5".
 
 Real but missing from `bun-types`: `psubscribe`, `punsubscribe`, `pubsub`, `script`,
 `select`, `connected`, `bufferedAmount`, `onclose`, `onconnect`. Of these `pubsub`,

@@ -59,6 +59,25 @@ const guideSections = (): [string, (typeof site.guides)[number][]][] => {
   return groups;
 };
 
+/**
+ * The reference documents, sectionless ones first and then each named section in
+ * the order the generator assigned. `order` is 0 for a page with no section, so
+ * sorting on it keeps those at the top in their existing arrangement.
+ */
+const referenceSections = (): [string, (typeof site.guides)[number][]][] => {
+  const groups = new Map<string, (typeof site.guides)[number][]>();
+  for (const guide of site.guides) {
+    if (guide.category !== 'reference') continue;
+    const group = groups.get(guide.section) ?? [];
+    group.push(guide);
+    groups.set(guide.section, group);
+  }
+  for (const pages of groups.values()) {
+    pages.sort((a, b) => a.order - b.order);
+  }
+  return [...groups].sort(([a], [b]) => a.localeCompare(b));
+};
+
 const Navigation = ({
   route,
   onNavigate,
@@ -112,22 +131,37 @@ const Navigation = ({
     ))}
 
     {/* The repo's own documents. Written for someone changing dunx rather than
-        someone using it, which is why they are a separate group. */}
-    <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
-      Reference
-    </Text>
-    {site.guides
-      .filter((guide) => guide.category === 'reference')
-      .map((guide) => (
-        <NavLink
-          key={guide.slug}
-          component="a"
-          href={href(RouteKind.Guide, guide.slug)}
-          label={guide.title}
-          active={route.kind === RouteKind.Guide && route.slug === guide.slug}
-          onClick={onNavigate}
-        />
-      ))}
+        someone using it, which is why they are a separate group.
+
+        Grouped the same way the tour is, because the architecture record is
+        twelve pages with a reading order and four of them share a title with a
+        guide - Logging, Database, Queues, Authentication. Flat and unsorted, that
+        read as duplicates of the guides. */}
+    {referenceSections().map(([section, pages]) => (
+      <Fragment key={section || 'reference'}>
+        <Text
+          size="xs"
+          fw={700}
+          tt="uppercase"
+          c="dimmed"
+          mt="md"
+          mb={4}
+          px="xs"
+        >
+          {section || 'Reference'}
+        </Text>
+        {pages.map((guide) => (
+          <NavLink
+            key={guide.slug}
+            component="a"
+            href={href(RouteKind.Guide, guide.slug)}
+            label={guide.title}
+            active={route.kind === RouteKind.Guide && route.slug === guide.slug}
+            onClick={onNavigate}
+          />
+        ))}
+      </Fragment>
+    ))}
 
     <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
       Packages

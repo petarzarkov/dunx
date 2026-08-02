@@ -163,7 +163,7 @@ gzipped JS for it. **Both halves of that stopped being true and it was reversed
 by re-measuring**: Vite 8 is Rolldown, so the same site builds in ~0.30 s against
 `Bun.build`'s ~0.15 s, a difference that means nothing in CI, while tree shaking
 puts the gzipped JS at 416.9 KB against 506.5 KB. Re-measure before reversing it
-again; the numbers are in ARCHITECTURE.md, "Documentation site".
+again; the numbers are in architecture/tooling.md, "Documentation site".
 
 `tools/openapi-ui` **does** use Vite, for the opposite reason: its bundle is
 inlined byte-for-byte into the page `@dunx/openapi` serves, so Rollup's
@@ -219,7 +219,7 @@ Consequences to keep in mind when changing this area:
   The container detects that via `ctor.length` and fails at boot with the preload
   snippet. Do not "fix" that by making core register the plugin on import - it
   would make DI import-order dependent and pull a native parser into core. The
-  reasoning is in docs/ARCHITECTURE.md, "Why `@dunx/core` does not register it
+  reasoning is in docs/architecture/dependency-injection.md, "Why `@dunx/core` does not register it
   itself".
 - The record is a **thunk**, evaluated at resolution rather than class-definition
   time. That is what makes a dependency declared later in the file, or across a

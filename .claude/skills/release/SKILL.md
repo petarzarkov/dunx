@@ -10,7 +10,7 @@ together, even the ones a release did not touch. Change detection decides _wheth
 to release, never _what_. The reason is a correctness one - a published range names a
 concrete version of `@dunx/core`, so independent versions would let an app end up
 with two copies of it, and in this container a token _is_ a class object. Full
-reasoning: ARCHITECTURE.md, "Versioning is lockstep".
+reasoning: architecture/packaging.md, "Versioning is lockstep".
 
 **Do not make versions independent again** without also solving the duplicate-core
 problem - see that section for the two alternatives and why each was rejected.

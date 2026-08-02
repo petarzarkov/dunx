@@ -1,7 +1,7 @@
 // The same technique as marker.ts: a decorator sets a symbol property on the
 // function or the class it receives and returns it. Nothing accumulates at class
 // definition time, so there is no ordering dependence and no cross-file leak.
-// See docs/ARCHITECTURE.md, "Route discovery".
+// See docs/architecture/http.md, "Route discovery".
 import type { Ctor } from '@dunx/core';
 import type { Middleware } from '../server/middleware.js';
 

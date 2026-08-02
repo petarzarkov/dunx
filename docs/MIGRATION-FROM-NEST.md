@@ -57,7 +57,7 @@ Apps opt in with one line in `bunfig.toml`:
 preload = ["@dunx/transform/preload"]
 ```
 
-See ARCHITECTURE.md, "Constructor injection without decorator metadata", for how
+See architecture/dependency-injection.md, "Constructor injection without decorator metadata", for how
 it works and what it refuses to guess.
 
 What still changes, per class:
@@ -247,7 +247,7 @@ designed**. The reference app has 14 usages across `@CurrentUser` and
 `@UuidParam`.
 
 `@Body`/`@Query`/`@Param` are already answered - schemas move onto the route
-decorator (ARCHITECTURE.md, "Params without parameter decorators"). Custom ones
+decorator (architecture/dependency-injection.md, "Params without parameter decorators"). Custom ones
 are not, because they read state a guard put there.
 
 The natural shape, given item 1, is that middleware writes onto a typed

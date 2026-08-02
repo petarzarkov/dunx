@@ -46,7 +46,7 @@ const boundClientClass = (
  *
  * ioredis is still a load-time requirement of bullmq's barrel - measured on
  * bullmq 6.0.5, which statically imports it from `redis-connection` despite
- * declaring it an optional peer. See docs/ARCHITECTURE.md, "Queues".
+ * declaring it an optional peer. See docs/architecture/queues.md, "Queues".
  */
 export class QueueConnection implements OnShutdown {
   readonly #options: QueueOptions;

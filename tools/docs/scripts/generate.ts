@@ -55,8 +55,16 @@ const packageDirs = (): string[] =>
     .map((dir) => resolve(dir))
     .sort();
 
+/**
+ * The reference documents: `docs/*.md` plus the architecture record, which is one
+ * page per subject under `docs/architecture/`. Globbed rather than listed so
+ * adding a page is one file and no registration.
+ */
 const guideFiles = (): string[] =>
-  [...new Bun.Glob('*.md').scanSync({ cwd: DOCS_DIR })].sort();
+  [
+    ...new Bun.Glob('*.md').scanSync({ cwd: DOCS_DIR }),
+    ...new Bun.Glob('architecture/*.md').scanSync({ cwd: DOCS_DIR }),
+  ].sort();
 
 /**
  * The hand-written tour, ordered by the numeric prefix on each filename. The
@@ -97,6 +105,50 @@ const sectionOf = (slug: string): string => {
   return found?.[0] ?? SECTIONS[SECTIONS.length - 1]?.[0] ?? '';
 };
 
+/**
+ * `docs/ARCHITECTURE.md` -> `architecture`; `docs/architecture/logging.md` ->
+ * `architecture-logging`.
+ *
+ * Namespaced by directory because four of the architecture pages share a name with
+ * a guide - logging, database, queues, authentication - and a bare basename made
+ * them collide, so one silently overwrote the other's body file.
+ */
+const referenceSlug = (file: string): string =>
+  slugify(file.replace(/\.md$/, '').replace(/\//g, '-'));
+
+/**
+ * Reading order for the architecture record, which is one page per subject.
+ *
+ * Listed rather than globbed, because these have a genuine order - constraints
+ * first, since every other page rests on the measurements - and a directory
+ * listing would sort them alphabetically into nonsense. A page missing from here
+ * sorts last rather than failing the build.
+ */
+const ARCHITECTURE_ORDER: readonly string[] = [
+  'architecture',
+  'architecture-constraints',
+  'architecture-dependency-injection',
+  'architecture-http',
+  'architecture-database',
+  'architecture-authentication',
+  'architecture-queues',
+  'architecture-logging',
+  'architecture-packaging',
+  'architecture-tooling',
+  'architecture-benchmarks',
+  'architecture-cost-of-validation',
+  'architecture-cost-of-logging',
+];
+
+/** Architecture pages get their own nav heading; the rest stay under Reference. */
+const referencePlacement = (
+  slug: string,
+): { order: number; section: string } => {
+  const at = ARCHITECTURE_ORDER.indexOf(slug);
+  if (at === -1) return { order: 0, section: '' };
+  return { order: at + 1, section: 'Architecture' };
+};
+
 /** `docs/guide/03-providers.md` -> slug `providers`, order `3`. */
 const tourSlug = (file: string): { slug: string; order: number } => {
   const base = basename(file, '.md');
@@ -121,7 +173,11 @@ const linkTargets = (
   const guides = new Map<string, string>();
 
   for (const file of reference) {
-    guides.set(file, `#/guide/${slugify(basename(file, '.md'))}`);
+    const href = `#/guide/${referenceSlug(file)}`;
+    guides.set(file, href);
+    guides.set(basename(file), href);
+    guides.set(`docs/${file}`, href);
+    guides.set(`./${file}`, href);
   }
 
   for (const file of tour) {
@@ -188,16 +244,20 @@ const tour = tourFiles().map((file) => {
   );
 });
 
-const reference = guideFiles().map((file) =>
-  buildGuide(
-    slugify(basename(file, '.md')),
+const reference = guideFiles().map((file) => {
+  const slug = referenceSlug(file);
+  const { order, section } = referencePlacement(slug);
+  return buildGuide(
+    slug,
     `docs/${file}`,
     read(join(DOCS_DIR, file)),
     targets,
     basename(file, '.md'),
     'reference',
-  ),
-);
+    order,
+    section,
+  );
+});
 
 const guides = [...tour, ...reference];
 

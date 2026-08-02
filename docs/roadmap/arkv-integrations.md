@@ -85,7 +85,7 @@ before parsing, which is plausibly why this was never noticed upstream.
 **dunx is not waiting on this and is not patching it.** `@dunx/infra/logger` now
 defaults `isDevelopment` to `Bun.enableANSIColors`, which is the Bun-specific half and
 therefore stays on the dunx side by the same rule. The two compose; nothing has to be
-undone when A lands. See ARCHITECTURE.md, "Colour in `@dunx/infra/logger`".
+undone when A lands. See architecture/logging.md, "Colour in `@dunx/infra/logger`".
 
 ## Proposal B - `FORCE_COLOR=0` currently forces colour on
 

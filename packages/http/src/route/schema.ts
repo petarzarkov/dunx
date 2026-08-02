@@ -71,8 +71,8 @@ export interface RouteSchemas {
 /**
  * The handler's parameter type, derived from its own options object. It has to be
  * written out - a standard method decorator can *check* a parameter's type but
- * cannot contextually type an unannotated one (docs/ARCHITECTURE.md, "Verified
- * constraints") - but every field type still comes from the schemas, so nothing
+ * cannot contextually type an unannotated one
+ * (docs/architecture/constraints.md) - but every field type still comes from the schemas, so nothing
  * is declared twice:
  *
  * ```ts

@@ -67,8 +67,33 @@ describe('the generated model', () => {
   });
 
   test('the guides are left whole - they are repo documentation', async () => {
-    const architecture = await loadGuide('architecture');
-    expect(architecture?.html).toContain('<h2 id="documentation-site');
+    // The section this used to look for on the architecture page moved when that
+    // document was split; whichever page owns it must still carry it entire.
+    const tooling = await loadGuide('architecture-tooling');
+    expect(tooling?.html).toContain('<h2 id="documentation-site');
+  });
+
+  /**
+   * `docs/ARCHITECTURE.md` was 2,689 lines. It is now an index over
+   * `docs/architecture/*.md`, and the four pages sharing a name with a guide -
+   * logging, database, queues, authentication - are why reference slugs carry
+   * their directory: a bare basename made them collide and one body file
+   * silently overwrote the other.
+   */
+  test('every link on the architecture index resolves to a page', async () => {
+    const index = await loadGuide('architecture');
+    const slugs = new Set(site.guides.map((guide) => guide.slug));
+    const linked = [
+      ...(index?.html ?? '').matchAll(/href="#\/guide\/([a-z0-9-]+)"/g),
+    ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
+
+    expect(linked.length).toBeGreaterThan(10);
+    for (const slug of linked) expect(slugs).toContain(slug);
+  });
+
+  test('no two guides share a slug', () => {
+    const slugs = site.guides.map((guide) => guide.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
   });
 
   /**
@@ -104,12 +129,23 @@ describe('the generated model', () => {
   });
 
   test('separates the hand-written tour from the repo reference docs', () => {
+    const reference = site.guides
+      .filter((g) => g.category === 'reference')
+      .map((g) => g.slug)
+      .sort();
+
+    // The top-level documents, plus one page per architecture subject. Asserted as
+    // "these four and some architecture pages" rather than a frozen list, so adding
+    // an architecture page is one file and no test edit.
+    expect(reference.filter((s) => !s.startsWith('architecture-'))).toEqual([
+      'architecture',
+      'bun-apis',
+      'migration-from-nest',
+      'roadmap',
+    ]);
     expect(
-      site.guides
-        .filter((g) => g.category === 'reference')
-        .map((g) => g.slug)
-        .sort(),
-    ).toEqual(['architecture', 'bun-apis', 'migration-from-nest', 'roadmap']);
+      reference.filter((s) => s.startsWith('architecture-')).length,
+    ).toBeGreaterThan(8);
 
     const tour = site.guides.filter((g) => g.category === 'guide');
     expect(tour.length).toBeGreaterThan(0);

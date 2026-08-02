@@ -123,7 +123,7 @@ discovery by marker-plus-prototype-scan, `JobPublisher`, `JobDispatcher`, and
 `WorkerFactory` as the worker process's entrypoint. Publish and consume are
 deliberately different objects - `forRoot` binds the publish side only, so a web
 process opens no worker. Documented in `packages/infra/README.md`, "queue", with the
-design in [ARCHITECTURE.md](./ARCHITECTURE.md), "Queues".
+design in [ARCHITECTURE.md](./architecture/queues.md), "Queues".
 
 **The ioredis collision resolved better than expected.** Measured on bullmq 6.0.5:
 `ioredis` is an _optional_ peer of bullmq 6, which ships `createBunRedisClient` - an
@@ -132,7 +132,7 @@ goes through Bun's client and no ioredis client is ever constructed. `ioredis` m
 still be _installed_, because bullmq statically imports it, so it is an optional peer
 of `@dunx/infra` too. CLAUDE.md's "Where the two halves collide" has since been
 rewritten to match; the full measurement is in
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Queues".
+[ARCHITECTURE.md](./architecture/queues.md), "Queues".
 
 **And the ioredis follow-ups are closed, one of them by falsifying it.** The advice
 to _pin ioredis 5_ rested on three claims and re-measurement broke all three: ioredis
@@ -147,7 +147,7 @@ it. The range skew (`>=5.0.0` peer against a `^6.0.0` dev dependency) is fixed b
 making the dev dependency match, and two tests in `packages/infra/src/index.test.ts`
 now hold the shape: dunx's ioredis peer range must equal the installed bullmq's, and
 both peers must be optional together. Reasoning in
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Not pinning ioredis 5".
+[ARCHITECTURE.md](./architecture/queues.md), "Not pinning ioredis 5".
 
 **`@dunx/auth` keeps its name.** `@dunx/better-auth` was declined, and not only on the
 cost of renaming a published package: every dunx integration is named for the
@@ -159,7 +159,7 @@ Renaming auth alone would have made it the one vendor-named package in the set.
 **Versioning stays lockstep until core 1.0.0.** There is no pre-1.0 range policy that
 works - a caret cannot span a `0.x` minor, and `>=` promises across majors dunx cannot
 keep - and no work done now would survive the 1.0 change.
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Versioning is lockstep".
+[ARCHITECTURE.md](./architecture/packaging.md), "Versioning is lockstep".
 
 **`@dunx/infra/logger` no longer colours a pipe.** `@arkv/logger` chooses coloured
 output from `NODE_ENV` with no terminal check anywhere on the path, so the
@@ -199,7 +199,7 @@ better-auth's tables (its CLI generates them and they follow the plugins), and a
 of the auth flow itself.
 
 The measurements and the two-strings-for-one-URL `basePath`/`mountAt` problem are in
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Authentication".
+[ARCHITECTURE.md](./architecture/authentication.md), "Authentication".
 
 **Redis as the WebSocket adapter - built.** Multi-node gateway fan-out, and the
 dependency question that blocked it is settled: **both the contract and the Redis
@@ -304,7 +304,7 @@ its test.
 
 React + Mantine bundled by `Bun.build`, static output, deployed to **GitHub Pages** as the Pages
 root. Coverage is a page inside it. Design and the parser decision:
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Documentation site"; the extractor's own
+[ARCHITECTURE.md](./architecture/tooling.md), "Documentation site"; the extractor's own
 limits: `tools/docs/README.md`.
 
 Nothing on the site is hand-written prose. The landing page is the root README,
@@ -332,7 +332,7 @@ Eight subjects (raw `Bun.serve`, `@dunx/http`, Elysia, Hono on both Bun and Node
 `node:http`, Fastify, Express) across four identical workloads, plus cold-start.
 Methodology, machine and every deliberate handicap are in
 [`tools/bench/README.md`](../tools/bench/README.md); the measured findings are in
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Benchmark harness".
+[ARCHITECTURE.md](./architecture/benchmarks.md), "Benchmark harness".
 
 It publishes the losses. dunx costs 6-21% against raw `Bun.serve` depending on the
 scenario, loses to Elysia on all four, and boots in roughly twice raw `Bun.serve`'s
@@ -350,6 +350,206 @@ Open follow-ups, none blocking:
   input reader per request.
 - `tools/docs` should read `results/latest.json`. The shape is documented and
   versioned by `schemaVersion` in the bench README; do not re-derive it.
+
+## The phase plan
+
+Exit criteria are written as individually checkable statements on purpose.
+`/whats-next` reads this section to place the work and to fill in `HANDOFF.md`'s
+next steps, so a criterion that cannot be verified against the tree by inspection
+is a criterion that gets reported wrong. Keep them mechanical.
+
+The phases below are written from the framework's point of view.
+[MIGRATION-FROM-NEST.md](./MIGRATION-FROM-NEST.md) is the same roadmap seen from
+a migrating NestJS application, and it argues for two reorderings: route metadata
+moves into Phase 2, and OpenAPI ahead of Phase 4. Read it before planning a phase.
+
+### Phase 1 - DI proven end to end
+
+Ship `@dunx/core` and a single `examples/full` app that boots a fully
+dependency-injected application graph **with no HTTP at all**.
+
+Keeping HTTP out is the point. If the example can only be evaluated by curling
+it, ergonomic problems in the container hide behind routing. A no-HTTP example
+forces `inject()`, tokens, async factories, and shutdown ordering to stand on
+their own.
+
+Exit criteria:
+
+- `inject()` resolves classes and tokens, with inference and no manual generics
+- `provide()` covers `useClass`, `useValue`, and async `useFactory`
+- `@Module()` composes across at least two feature modules
+- A circular dependency throws a readable error naming the full cycle
+- `onInit` / `onShutdown` run in dependency order; `SIGTERM` closes cleanly
+- Resolving a provider twice returns the same instance
+- The example runs via `bun start`, exits 0, and CI asserts that
+
+`examples/full` is one app that grows through the phases, not a new example per
+phase. It was `examples/playground` until the examples were restructured; the rename
+is cosmetic, but what sits beside it now is not.
+
+Where a part needs a service CI does not have (Redis, Postgres, S3), it reports that
+it is skipping and the app still exits 0 - otherwise CI teaches everyone to ignore
+it.
+
+#### Per-package examples were reverted; a ladder of four replaced them
+
+The original decision - recorded here as "seven apps meant seven bootstraps to keep
+alive and nowhere that showed the packages composing" - **stands, and was not
+reversed.** What changed is that "one example" turned out to be the wrong reading of
+it. There are now four, and the distinction is that they are not one per package:
+
+| Example              | Answers                                                         |
+| -------------------- | --------------------------------------------------------------- |
+| `examples/minimal`   | "what does this framework look like?" - five files, two minutes |
+| `examples/databases` | "how do I set up my database?" - SQLite ×2, Postgres, MySQL     |
+| `examples/testing`   | "how do I test it?" - overrides, a real server, a guard         |
+| `examples/full`      | "does it all actually compose?" - every package, one service    |
+
+Each is a **question an evaluator asks in order**, not a package with a demo bolted
+on. `@dunx/http` has no example of its own and never will; it appears in all four.
+`full` is still the only place the packages are shown composing, which is what the
+original objection was about, and it did not shrink to make room for the others.
+
+**The maintenance objection still stands and is the binding constraint.** Every
+example is a bootstrap that rots the moment nobody runs it, so each is wired into
+CI the same way `full`'s `tour` is - `bun run --filter '@dunx/example-*' test` runs
+all of their suites, and `full` additionally runs its `tour`. An example that cannot
+be kept alive by CI does not get added. That is the whole test for whether a fifth
+one earns its place, and it is why several plausible candidates were rejected:
+
+- **An auth example.** It would be `full`'s `src/auth/` copied with the rest deleted:
+  same better-auth config, same schema, same guard, no new question answered.
+- **A queue / background-worker example.** Its entire subject needs Redis, so in CI
+  it would skip and demonstrate nothing. `full`'s `bun run worker` already isolates
+  the two-process shape, which is the part that is genuinely hard to see.
+- **An OpenAPI-first example.** `full` already generates the document from the zod
+  schemas its routes validate against; a second app would only have fewer routes in
+  it.
+
+#### `examples/databases` is one app with four configurations, not four apps
+
+Four containers run in sequence inside one process, because the container is flat
+and each backend binds its own `DbConnection` - two in one app would be a duplicate
+token. One workspace rather than four is less to keep alive, and it puts the
+SQLite-async and SQLite-sync services in adjacent files, which is where the choice
+between them is actually made.
+
+It uses `AppFactory`, not `HttpFactory`. That is the same argument Phase 1 makes
+above: with no HTTP, nothing about the database wiring can hide behind a route.
+
+MySQL is the interesting part, and it is a **fifth backend that `@dunx/infra/db`
+does not ship**, assembled in the example in about forty lines with no change to the
+package - which is the strongest available evidence that `DbOptions.open()` is the
+right seam. drizzle has no Bun-native MySQL driver, so it is `drizzle-orm/mysql-proxy`
+with `Bun.SQL` as the transport: drizzle owns the dialect, Bun owns the socket, and
+`mysql2` is never installed. Verified against MySQL 8; the callback contract, the
+two `Bun.SQL` bugs it works around, and the transaction gap are all in
+[bun-apis.md](./bun-apis.md), "`Bun.SQL` and `bun:sqlite`".
+
+Promoting it into `@dunx/infra/db` as a `MysqlOptions<TSchema>` is a reasonable next
+step and deliberately not taken here: the example is the place to prove it works
+before it becomes a supported surface with a schema type parameter to maintain.
+
+### Phase 2 - HTTP
+
+`@dunx/http`, the `Bun.serve` adapter, the middleware chain, the error mapper,
+and route-collision detection. `examples/full` grows a controller; its Phase 1
+assertions keep passing unchanged.
+
+Also `@dunx/transform`, the load-time transform that makes constructor injection
+work. It landed here rather than in Phase 1 because the need only became clear
+once real application code was being written against `inject()`.
+
+Exit criteria:
+
+- A class with constructor parameters resolves without any annotation
+- A parameter whose type is erased fails at boot naming that parameter
+- A subclass with no constructor of its own inherits its base's dependencies
+- `inject()` still works, and both mechanisms work in one class
+- `examples/full` uses constructor injection throughout and `bun start` exits 0
+
+### Phase 3 - Validation
+
+Standard Schema wiring and typed route input. Gated on the inference spike
+below.
+
+### Phase 4 - Testing & scaffolder
+
+`@dunx/testing` (`createTestApp({ modules, overrides })`, real server on port 0)
+and `@dunx/create-app`.
+
+### Phase 5 - OpenAPI - **built**
+
+`@dunx/openapi` generates an OpenAPI 3.1 document from the zod schemas already on the
+route decorators and serves self-contained HTML. Security requirements come from the
+guards' own `@Public()` / `@Roles()` metadata. Zod is a `peerDependency`; the per-vendor
+adapter this section anticipated is a vendor check around `z.toJSONSchema`.
+
+#### Four corrections from porting `dunx-template`
+
+The port produced a document that was internally incoherent, and the fixes each
+turned on where a piece of information lives rather than on the generator's logic.
+
+**A method-level `@ApiDoc` used to replace the class-level one wholesale**, because a
+route's resolved `meta` is a `MetaRecord` and a handler's value overrides the class's
+in it. That is right for `@Roles` and `@Public`, which are single values, and wrong for
+a value made of independent fields - class `tags` plus a per-method `summary` is the
+most common annotation pattern there is, and it was unreachable. The merge cannot be
+recovered from an already-collapsed record, so `DiscoveredRoute` now carries
+`classMeta` next to `meta` and `apiDocFor` composes the two per field. The alternative
+considered and rejected was a per-key merge function on `MetaKey`: it needs a
+symbol-to-merger registry that `mergeMeta` can reach, and with two copies of
+`@dunx/http` in a tree the lookup misses and the old behaviour comes back silently.
+Mutating each method's record from the class decorator was rejected too - it
+accumulates at class-definition time, which is exactly the cross-file leak the marker
+design avoids, and a subclass would rewrite its base's functions.
+
+**`doc.tags` used to be derived from class names** while the operations carried
+`@ApiDoc` tags, so the document declared tags nothing used and used tags it never
+declared. It is now read back off the built operations, which makes the two agree by
+construction rather than by two derivations happening to match.
+
+**`RouteSchemas` gained `response`**, keyed by status code and taking the same
+Standard Schema values the request side takes, so a named response schema hoists into
+`components/schemas` exactly as a body does. Two decisions inside it: it is converted
+with `io: 'output'` rather than `'input'`, because it describes what comes back (a
+defaulted field is always present, `additionalProperties: false` is an output-side
+claim) - the cost is that a schema used both ways converts twice and one
+`.meta({ id })` cannot name both views if they differ. And it is **never validated**:
+a per-response validation pass paid for a documentation feature is the wrong trade
+when the handler's return type already checks the answer for free. Nothing in
+`@dunx/http`'s request path reads the key.
+
+The explorer renders those responses through **`SchemaView`, the same component the
+request body uses** - one property table with the required markers, formats,
+constraints and `$ref` resolution, not a second one. Every component in
+`tools/openapi-ui` costs bytes twice, in the JS and in the CSS list in
+`src/styles.ts`, and the whole bundle is a committed string in
+`packages/openapi/src/ui-bundle.ts` that every consumer of the package downloads, so
+"reuse it" is a size decision before it is a taste one. The documented response and
+the try-it-out result stay **separate**: the `Responses` section is the contract and
+the panel under the `Send it` divider is one real request, and merging them would let
+a 500 from a local run read as the specification. `src/operation.test.tsx` holds all
+of that down.
+
+**`OpenApiModule.forRootAsync`** exists for the reason every other configurable
+module has the pair. Its interesting half was the mount paths: a decorator's
+arguments are evaluated when the class definition is, long before a container could
+run the factory. So `RouteMeta.path` became `RoutePath` - `string | (() => string)`,
+resolved by `discoverRoutes`, which runs after every provider has settled. The
+alternatives were worse: exporting `markRoute` so the factory could re-mark its own
+prototype is a mutation escape hatch with no other caller, and pushing the controller
+into the module's `controllers` array from inside the factory is too late, since
+controllers are registered as providers while the container is being built.
+
+## Spikes to resolve
+
+Run through `/spike`: measure on real Bun, record the result in
+[architecture/constraints.md](./architecture/constraints.md), then delete the item from here. A spike that changes the
+public API shape belongs before the code it gates.
+
+None open. Route input inference was the last one; its result is recorded in
+[architecture/constraints.md](./architecture/constraints.md).
 
 ## Rejected - do not reopen without reading why
 
