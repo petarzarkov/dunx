@@ -23,7 +23,7 @@
   "scripts": {
     "prepare": "husky || true",
     "install:clean": "find . -name node_modules -type d -prune -exec rm -rf {} + && rm -f bun.lock && bun install",
-    "build": "bun run --filter '*' build",
+    "build": "bun scripts/build-all.ts",
     "test": "bun run --filter '*' test",
     "test:cov": "bun test ./packages ./scripts --coverage && bun run gen:cov",
     "lint": "oxlint --fix .",
