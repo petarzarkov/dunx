@@ -260,9 +260,20 @@ Small, independent, each recorded where it belongs:
 - **bullmq 6.0.5's CJS build imports `ioredis/built/utils`, which ioredis 6 removed.**
   The ESM build does not, which is why the suite passes. Pin ioredis 5 if anything
   might load the CJS entry.
-- **No in-process HTTP + worker composition.** `WorkerFactory` builds its own
-  container, so a single process cannot both serve and consume. Deliberate, but it is
-  why the full example needs `bun run worker`.
+- ~~**No in-process HTTP + worker composition.**~~ **Fixed.**
+  `WorkerFactory.attach(app, root)` consumes inside a container that already
+  exists, so one process can serve HTTP and work the queues. It returns a
+  `QueueConsumer`, the consuming half of `WorkerFactory.create` with no `App` of
+  its own; `create` now wraps the same class.
+
+  **The caller must `stop()` the consumer before shutting the app down**, and
+  nothing can enforce it: core's `App` exposes no hook to register against, and a
+  worker still running when providers tear down finds its database connection
+  closed underneath it. A worker _process_ still gets that ordering for free,
+  because it owns the container. Verified against a live Redis: a job published
+  and consumed, the container confirmed still running after `stop()` and torn down
+  only by `shutdown()`.
+
 - **`@dunx/testing` cannot be used by another published package's tests**, only by
   `examples/*`, for the same build-ordering reason as item 1. The topological build
   removes the ordering problem; this has not been re-tried since.
