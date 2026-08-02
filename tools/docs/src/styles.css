@@ -208,6 +208,18 @@ body {
   background: var(--mantine-color-teal-filled);
 }
 
+.bench-fill[data-runtime='go'] {
+  background: var(--mantine-color-cyan-filled);
+}
+
+.bench-fill[data-runtime='rust'] {
+  background: var(--mantine-color-orange-filled);
+}
+
+.bench-fill[data-runtime='jvm'] {
+  background: var(--mantine-color-red-filled);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bench-fill {
     animation: none;
@@ -233,6 +245,18 @@ body {
 
 .bench-swatch[data-runtime='node'] {
   background: var(--mantine-color-teal-filled);
+}
+
+.bench-swatch[data-runtime='go'] {
+  background: var(--mantine-color-cyan-filled);
+}
+
+.bench-swatch[data-runtime='rust'] {
+  background: var(--mantine-color-orange-filled);
+}
+
+.bench-swatch[data-runtime='jvm'] {
+  background: var(--mantine-color-red-filled);
 }
 
 .bench-swatch-focus {

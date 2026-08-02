@@ -337,7 +337,9 @@ export const Benchmarks = (): React.JSX.Element => {
         <Losses model={model} />
         <Caveats model={model} />
 
-        <RuntimeLegend />
+        <RuntimeLegend
+          runtimes={model.subjects.map((subject) => subject.runtime)}
+        />
 
         {model.scenarios.map((scenario) => (
           <Stack key={scenario.id} gap="xs" id={`scenario-${scenario.id}`}>

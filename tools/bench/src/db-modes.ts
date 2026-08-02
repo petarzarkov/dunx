@@ -27,7 +27,11 @@ import { selectGenerator, type LoadGeneratorChoice } from './loadgen/index.js';
 import { readMachine } from './machine.js';
 import { resultsDir } from './paths.js';
 import { spread } from './stats.js';
-import { startSubject, type SubjectProcess } from './subject-process.js';
+import {
+  bunCommand,
+  startSubject,
+  type SubjectProcess,
+} from './subject-process.js';
 import type {
   LoadRequest,
   LoadSample,
@@ -132,7 +136,8 @@ const servers = new Map<Mode, SubjectProcess>();
 const bring = async (unit: Unit): Promise<Live> => {
   let server = servers.get(unit.mode);
   if (server === undefined) {
-    server = await startSubject(subject(unit.mode), 'node', undefined, {
+    const chosen = subject(unit.mode);
+    server = await startSubject(chosen, bunCommand(chosen), {
       DB_MODE: unit.mode,
     });
     servers.set(unit.mode, server);

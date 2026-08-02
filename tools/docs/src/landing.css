@@ -574,6 +574,21 @@
   opacity: 0.75;
 }
 
+.speed-fill[data-runtime='go'] {
+  background: var(--mantine-color-cyan-filled);
+  opacity: 0.75;
+}
+
+.speed-fill[data-runtime='rust'] {
+  background: var(--mantine-color-orange-filled);
+  opacity: 0.75;
+}
+
+.speed-fill[data-runtime='jvm'] {
+  background: var(--mantine-color-red-filled);
+  opacity: 0.75;
+}
+
 .speed-row[data-focus='true'] .speed-fill {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-a) 70%, transparent);
 }

@@ -1,0 +1,17 @@
+[package]
+name = "dunx-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# One [[bin]] per Rust subject, named after its id in src/subjects.ts - the
+# harness builds `cargo build --release --bin <subject id>`.
+[[bin]]
+name = "axum"
+path = "src/axum.rs"
+
+[dependencies]
+axum = "0.8"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "net", "rt"] }
+validator = { version = "0.20", features = ["derive"] }

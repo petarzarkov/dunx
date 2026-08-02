@@ -21,7 +21,11 @@ import { selectGenerator, type LoadGeneratorChoice } from './loadgen/index.js';
 import { readMachine } from './machine.js';
 import { resultsDir } from './paths.js';
 import { spread } from './stats.js';
-import { startSubject, type SubjectProcess } from './subject-process.js';
+import {
+  bunCommand,
+  startSubject,
+  type SubjectProcess,
+} from './subject-process.js';
 import type {
   LoadRequest,
   LoadSample,
@@ -190,7 +194,7 @@ interface Live {
  * The process is then left running, because the measured rounds are interleaved.
  */
 const bring = async (unit: Unit): Promise<Live> => {
-  const server = await startSubject(unit.subject, 'node', undefined, {
+  const server = await startSubject(unit.subject, bunCommand(unit.subject), {
     VALIDATOR: unit.validator,
   });
   const url = `${server.baseUrl}${unit.scenario.path}`;

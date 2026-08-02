@@ -20,6 +20,7 @@ import { resultsDir } from './paths.js';
 import { scenarios } from './scenarios.js';
 import { spread } from './stats.js';
 import {
+  bunCommand,
   startSubject,
   type StdoutSink,
   type SubjectProcess,
@@ -173,8 +174,7 @@ interface Live {
 const bring = async (unit: Unit, scenario: Scenario): Promise<Live> => {
   const server = await startSubject(
     subject,
-    'node',
-    undefined,
+    bunCommand(subject),
     { LOGGING_VARIANT: unit.variant },
     unit.stdout,
   );
