@@ -261,6 +261,7 @@ const { values } = parseArgs({
     warmup: { type: 'string' },
     runs: { type: 'string' },
     loadgen: { type: 'string' },
+    'allow-fallback': { type: 'boolean' },
     validators: { type: 'string' },
     out: { type: 'string' },
     help: { type: 'boolean' },
@@ -296,6 +297,7 @@ const config = {
 
 const generator = await selectGenerator(
   (values.loadgen ?? 'auto') as LoadGeneratorChoice,
+  values['allow-fallback'] === true,
 );
 const machine = await readMachine('node');
 const units = unitsFor(chosen);

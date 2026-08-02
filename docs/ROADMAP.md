@@ -218,7 +218,6 @@ Feedback goes in as a new file rather than into conversation.
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                  |
 | [ioredis-cjs-pin](./roadmap/ioredis-cjs-pin.md)                                     | Defect. Known, currently harmless.                                    |
 | [auth-package-name](./roadmap/auth-package-name.md)                                 | Decision. Window closed once published.                               |
-| [bench-harness-silent-degradation](./roadmap/bench-harness-silent-degradation.md)   | Bug. Unusable numbers with no warning when oha is absent.             |
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                         | Unreproduced.                                                         |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                        |
 

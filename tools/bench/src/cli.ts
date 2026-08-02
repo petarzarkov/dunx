@@ -8,6 +8,8 @@ import type { BenchConfig, Scenario, Subject } from './types.js';
 export interface Options {
   readonly config: BenchConfig;
   readonly loadgen: LoadGeneratorChoice;
+  /** Accept the built-in generator when oha is absent. Off by default. */
+  readonly allowFallback: boolean;
   readonly subjects: readonly Subject[];
   readonly scenarios: readonly Scenario[];
   readonly out: string;
@@ -22,6 +24,7 @@ export const usage = `bun run start [options]
   --runs <n>             measured runs per scenario (default 5)
   --startup-samples <n>  cold starts timed per subject (default 7)
   --loadgen <name>       auto | oha | fetch (default auto: oha if installed)
+  --allow-fallback       run without oha, accepting numbers too noisy to read
   --subjects <a,b>       comma-separated subject ids (default all)
   --scenarios <a,b>      comma-separated scenario ids (default all)
   --out <path>           JSON report path (default results/latest.json)
@@ -77,6 +80,7 @@ export const parseOptions = (argv: readonly string[]): Options | null => {
       runs: { type: 'string' },
       'startup-samples': { type: 'string' },
       loadgen: { type: 'string' },
+      'allow-fallback': { type: 'boolean' },
       subjects: { type: 'string' },
       scenarios: { type: 'string' },
       out: { type: 'string' },
@@ -96,6 +100,7 @@ export const parseOptions = (argv: readonly string[]): Options | null => {
       startupSamples: positive(values['startup-samples'], 7, 'startup-samples'),
     },
     loadgen: asChoice(values.loadgen),
+    allowFallback: values['allow-fallback'] === true,
     subjects: pick(subjects, values.subjects, 'subject'),
     scenarios: pick(scenarios, values.scenarios, 'scenario'),
     out: values.out ?? `${resultsDir}/latest.json`,

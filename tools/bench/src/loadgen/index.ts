@@ -33,15 +33,42 @@ export const findOha = async (): Promise<{
   return null;
 };
 
+/**
+ * `allowFallback` exists because the built-in generator cannot resolve what this
+ * harness measures, and silently substituting it produced a plausible-looking
+ * table nobody could trust.
+ *
+ * Measured in a checkout with no `.bin/oha`: the fallback capped at 14-65k req/s
+ * against oha's 115k on the same row, with standard deviations of 17-30k, and rows
+ * in an order that contradicted itself - the `requestid` step came out faster than
+ * the baseline it is strictly slower than. `bun run logging` decomposes request
+ * logging into steps worth 0.04 to 2.04 microseconds; a generator with a 20k
+ * standard deviation cannot see any of them.
+ *
+ * `.bin/oha` is gitignored and installed by `bun run setup`, so a fresh clone or a
+ * git worktree never has it. Refusing is the only honest default.
+ */
 export const selectGenerator = async (
   choice: LoadGeneratorChoice,
+  allowFallback = false,
 ): Promise<LoadGenerator> => {
+  // Asking for it by name is consent.
   if (choice === 'fetch') return fetchGenerator();
   const oha = await findOha();
   if (oha !== null) return ohaGenerator(oha.binary, oha.version);
   if (choice === 'oha') {
     throw new Error(
       'oha was requested but not found. Run `bun run setup`, or drop --loadgen.',
+    );
+  }
+  if (!allowFallback) {
+    throw new Error(
+      'oha was not found, and the built-in generator cannot resolve the ' +
+        'differences this harness reports: measured, it has a standard deviation ' +
+        'wider than most of the numbers in the table.\n\n' +
+        '  bun run setup            install oha, then rerun\n' +
+        '  --allow-fallback         accept the built-in generator anyway\n' +
+        '  --loadgen fetch          same thing, stated explicitly',
     );
   }
   return fetchGenerator();

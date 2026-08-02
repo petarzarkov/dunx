@@ -9,7 +9,7 @@ if (options === null) {
   process.exit(0);
 }
 
-const generator = await selectGenerator(options.loadgen);
+const generator = await selectGenerator(options.loadgen, options.allowFallback);
 if (generator.id === 'fetch' && options.loadgen === 'auto') {
   process.stderr.write(
     'No oha binary found, falling back to the JavaScript fetch driver.\n' +
