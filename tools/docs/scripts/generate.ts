@@ -18,6 +18,10 @@ const REPO_ROOT = resolve(TOOL_ROOT, '../..');
 const PACKAGES_DIR = join(REPO_ROOT, 'packages');
 const DOCS_DIR = join(REPO_ROOT, 'docs');
 const OUT_DIR = join(TOOL_ROOT, 'src', 'generated');
+// Created here, not next to the first write. `src/generated/` is gitignored, so
+// on a clean checkout it does not exist, and a write placed above the mkdir fails
+// with ENOENT only in CI. That happened once already.
+mkdirSync(OUT_DIR, { recursive: true });
 const BENCH_RESULTS = join(REPO_ROOT, 'tools/bench/results/latest.json');
 
 const REPO_URL = 'https://github.com/petarzarkov/dunx';
@@ -166,7 +170,6 @@ const site: SiteModel = {
 
 const bench = readBench(BENCH_RESULTS);
 
-mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, 'site.json'), JSON.stringify(site));
 writeFileSync(join(OUT_DIR, 'bench.json'), JSON.stringify(bench));
 // Last: every highlight() call above has interned its colours by now.
