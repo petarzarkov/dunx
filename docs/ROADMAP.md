@@ -125,16 +125,51 @@ deliberately different objects - `forRoot` binds the publish side only, so a web
 process opens no worker. Documented in `packages/infra/README.md`, "queue", with the
 design in [ARCHITECTURE.md](./ARCHITECTURE.md), "Queues".
 
-**The ioredis collision resolved better than expected, and CLAUDE.md is now stale
-on it.** CLAUDE.md's "Where the two halves collide" section says `ioredis` arrives
-transitively as bullmq's engine and that an app therefore gets both clients. Measured
-on bullmq 6.0.5: `ioredis` is an _optional_ peer of bullmq 6, which ships
-`createBunRedisClient` - an adapter over **`Bun.RedisClient`** - and dunx uses it, so
-every byte of queue traffic goes through Bun's client and no ioredis client is ever
-constructed. `ioredis` must still be _installed_, because bullmq's barrel statically
-imports it, so it is an optional peer of `@dunx/infra` too. That section of CLAUDE.md,
-and its `@dunx/infra` subpath row, want an owner's edit; the full measurement is in
+**The ioredis collision resolved better than expected.** Measured on bullmq 6.0.5:
+`ioredis` is an _optional_ peer of bullmq 6, which ships `createBunRedisClient` - an
+adapter over **`Bun.RedisClient`** - and dunx uses it, so every byte of queue traffic
+goes through Bun's client and no ioredis client is ever constructed. `ioredis` must
+still be _installed_, because bullmq statically imports it, so it is an optional peer
+of `@dunx/infra` too. CLAUDE.md's "Where the two halves collide" has since been
+rewritten to match; the full measurement is in
 [ARCHITECTURE.md](./ARCHITECTURE.md), "Queues".
+
+**And the ioredis follow-ups are closed, one of them by falsifying it.** The advice
+to _pin ioredis 5_ rested on three claims and re-measurement broke all three: ioredis
+6.0.0 still ships `built/utils`, both of bullmq's builds import it, and the CJS build
+is the one Bun actually runs. No pin. The advice is withdrawn from
+`docs/guide/14-queues.md` and `bun-apis.md`, where it had been published to users.
+The companion finding - `/queue` cannot be imported without ioredis while the manifest
+calls it optional - is not a contradiction once stated properly: `ioredis` is optional
+in exactly the sense `bullmq` is, needed if and only if `/queue` is, and there is no
+deep-import escape because `bullmq/dist/{cjs,esm}/classes/queue.js` both fail without
+it. The range skew (`>=5.0.0` peer against a `^6.0.0` dev dependency) is fixed by
+making the dev dependency match, and two tests in `packages/infra/src/index.test.ts`
+now hold the shape: dunx's ioredis peer range must equal the installed bullmq's, and
+both peers must be optional together. Reasoning in
+[ARCHITECTURE.md](./ARCHITECTURE.md), "Not pinning ioredis 5".
+
+**`@dunx/auth` keeps its name.** `@dunx/better-auth` was declined, and not only on the
+cost of renaming a published package: every dunx integration is named for the
+capability rather than the vendor, so `@dunx/infra/db` is drizzle without being called
+`@dunx/drizzle` and `@dunx/infra/queue` is bullmq without being called `@dunx/bullmq`.
+Renaming auth alone would have made it the one vendor-named package in the set.
+[ARCHITECTURE.md](./ARCHITECTURE.md), "And it stays `@dunx/auth`".
+
+**Versioning stays lockstep until core 1.0.0.** There is no pre-1.0 range policy that
+works - a caret cannot span a `0.x` minor, and `>=` promises across majors dunx cannot
+keep - and no work done now would survive the 1.0 change.
+[ARCHITECTURE.md](./ARCHITECTURE.md), "Versioning is lockstep".
+
+**`@dunx/infra/logger` no longer colours a pipe.** `@arkv/logger` chooses coloured
+output from `NODE_ENV` with no terminal check anywhere on the path, so the
+zero-argument `LoggerModule.forRoot()` wrote ANSI escapes into its JSON in any
+container with `NODE_ENV` unset, and neither `NO_COLOR` nor `FORCE_COLOR=0` helped.
+dunx now defaults `isDevelopment` to `Bun.enableANSIColors` - a default, not a patch,
+and the Bun-specific half by CLAUDE.md's own boundary. The portable gate is written up
+as a proposal against `@arkv/colors`' existing `isColorSupported()` in
+[arkv-integrations](./roadmap/arkv-integrations.md), together with a second defect it
+turned up: `FORCE_COLOR=0` is tested for presence, so it forces colour _on_.
 
 **Documentation debt.** `packages/infra/README.md`'s `## db` section was rewritten
 against the drizzle API, and its `## logger` section added. `ARCHITECTURE.md` gained
@@ -208,17 +243,14 @@ Feedback goes in as a new file rather than into conversation.
 | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Feature. Gin, Axum, Spring. Also a falsification test on the harness. |
 | [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.                      |
-| [docs-bundle-splitting](./roadmap/docs-bundle-splitting.md)                         | Performance. 127 KB of guides on every page load.                     |
 | [openapi-ui-subpath](./roadmap/openapi-ui-subpath.md)                               | Performance. ~5 ms of cold start for a page most apps never open.     |
 | [async-local-storage-cost](./roadmap/async-local-storage-cost.md)                   | Measured. +0.91 us, and `enterWith` segfaults Bun.                    |
 | [document-pinning-all-packages](./roadmap/document-pinning-all-packages.md)         | Docs. Mixing minors warns and can duplicate core.                     |
-| [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Exploration. Not a hard requirement.                                  |
+| [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Three upstream proposals. Nothing left to adopt.                      |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                           |
-| [independent-versions](./roadmap/independent-versions.md)                           | Decision. Peers done; needs a range policy, or 1.0.                   |
+| [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                             |
 | [testing-from-published-package](./roadmap/testing-from-published-package.md)       | Probably unblocked, untested.                                         |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                  |
-| [ioredis-cjs-pin](./roadmap/ioredis-cjs-pin.md)                                     | Defect. Known, currently harmless.                                    |
-| [auth-package-name](./roadmap/auth-package-name.md)                                 | Decision. Window closed once published.                               |
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                         | Unreproduced.                                                         |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                        |
 
@@ -236,7 +268,6 @@ produced 22 findings.
 | [transform-emitted-js-diagnostic](./roadmap/transform-emitted-js-diagnostic.md)       | Bug, high. Error tells you to do what you did.      |
 | [di-import-type-diagnostic](./roadmap/di-import-type-diagnostic.md)                   | Diagnostic, high frequency.                         |
 | [openapi-forroot-async](./roadmap/openapi-forroot-async.md)                           | Missing feature, medium. `HttpOptions` half only.   |
-| [infra-packaging-findings](./roadmap/infra-packaging-findings.md)                     | Four findings, medium and low.                      |
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;

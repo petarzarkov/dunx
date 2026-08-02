@@ -179,8 +179,7 @@ const Packages = (): React.JSX.Element => (
                   {pkg.name}
                 </Anchor>
                 <Badge size="xs" variant="default">
-                  {pkg.symbols.filter((s) => s.subpaths.length > 0).length}{' '}
-                  exports
+                  {pkg.exports.length} exports
                 </Badge>
               </Group>
               <Text size="sm" c="dimmed" lineClamp={4}>

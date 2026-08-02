@@ -45,3 +45,48 @@ describe('@dunx/infra root barrel', () => {
     expect(names.filter((name) => name in queue)).toEqual([]);
   });
 });
+
+/**
+ * dunx never imports `ioredis` - it is declared only so that installing `/queue`
+ * produces something that loads, because bullmq reaches it from `utils/index` in
+ * both its builds. So dunx has no opinion of its own about which versions are
+ * acceptable, and the only honest range is the one bullmq itself declares.
+ * Mirroring it by hand is how it goes stale; this is the guard.
+ */
+describe("the ioredis peer range is bullmq's, not dunx's", () => {
+  const read = async (path: string): Promise<Record<string, unknown>> =>
+    (await Bun.file(path).json()) as Record<string, unknown>;
+
+  it('declares exactly what the installed bullmq declares', async () => {
+    const mine = await read(
+      new URL('../package.json', import.meta.url).pathname,
+    );
+    const theirs = await read(
+      Bun.resolveSync('bullmq/package.json', import.meta.dir),
+    );
+
+    const peer = (json: Record<string, unknown>): string | undefined =>
+      (json['peerDependencies'] as Record<string, string> | undefined)?.[
+        'ioredis'
+      ];
+
+    expect(peer(mine)).toBe(peer(theirs));
+  });
+
+  /**
+   * Both are optional, and they are optional *together*: `/queue` needs both or
+   * neither. npm has no way to say that, so the pairing lives here and in guide 14.
+   */
+  it('marks ioredis optional exactly as it marks bullmq', async () => {
+    const mine = await read(
+      new URL('../package.json', import.meta.url).pathname,
+    );
+    const meta = mine['peerDependenciesMeta'] as Record<
+      string,
+      { optional?: boolean }
+    >;
+
+    expect(meta['ioredis']?.optional).toBe(true);
+    expect(meta['bullmq']?.optional).toBe(true);
+  });
+});

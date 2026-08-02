@@ -55,6 +55,41 @@ describe('LoggerModule', () => {
     expect(JSON.parse(lines[0]!)['message']).toBe('at the threshold');
   });
 
+  /**
+   * Upstream picks coloured output from `NODE_ENV` alone, with no terminal check
+   * on the path, so `forRoot()` in a container with `NODE_ENV` unset wrote ANSI
+   * escapes into the JSON and nothing downstream could parse it. Neither
+   * `NO_COLOR` nor `FORCE_COLOR=0` suppressed it. The equality is the assertion:
+   * it holds at a terminal and in a pipe, and only the pre-fix default breaks it.
+   */
+  it('colours the default transport only when Bun says the terminal can', async () => {
+    @Module({ imports: [LoggerModule.forRoot({ level: LogLevel.INFO })] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const lines = await captured(() => {
+      app.get(Logger).info('piped');
+    });
+
+    expect(Bun.stripANSI(lines[0]!) !== lines[0]!).toBe(Bun.enableANSIColors);
+  });
+
+  it('still lets the consumer force colour on, since the default is only a default', async () => {
+    @Module({
+      imports: [
+        LoggerModule.forRoot({ level: LogLevel.INFO, isDevelopment: true }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const lines = await captured(() => {
+      app.get(Logger).info('forced');
+    });
+
+    expect(Bun.stripANSI(lines[0]!)).not.toBe(lines[0]!);
+  });
+
   it('binds @arkv/logger to the @dunx/core contract with no adapter', async () => {
     @Module({ imports: [LoggerModule.forRoot({ level: LogLevel.DEBUG })] })
     class Root {}

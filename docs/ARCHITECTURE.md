@@ -994,6 +994,36 @@ so this is verified rather than assumed. `@mantine/code-highlight` went with it:
 highlighting happens at generate time now, and nothing under `tools/docs`
 imported it.
 
+**The model is one file per route, and the landing page carries none of them.**
+`site.json` was imported into the entry chunk, so `#/` downloaded all 21 guide
+bodies and all eight package readmes before rendering a page that shows neither.
+`generate.ts` now writes `index.json` (nav, landing page, footer, search index),
+`guides/<slug>.json` and `packages/<dir>.json`. Measured on the entry chunk, which
+is all `#/` fetches, `gzip -9`:
+
+| Entry chunk     | JS raw    | JS gzip      |
+| --------------- | --------- | ------------ |
+| one `site.json` | 2529.9 KB | **595.2 KB** |
+| split per route | 937.2 KB  | **266.1 KB** |
+
+329.1 KB off the landing page, 55% of it. Summed over all 30 chunks the total rises
+instead, 595.2 KB to 626.3 KB gzipped, because each is compressed against its own
+dictionary; nobody downloads all 30, which is the point.
+
+Three things decided rather than derived:
+
+- **The chunk table is generated, not globbed.** `import.meta.glob` is a Vite
+  feature `bun test` does not have, and a template-literal `import()` is a bundler
+  feature rather than a language one. `generated/chunks.ts` is a table of literal
+  specifiers, so Vite splits on it, the test runner resolves it through the `?raw`
+  plugin `happydom.ts` already installs, and `tsc` checks it. Nothing in `src/`
+  became bundler-specific.
+- **The index keeps a symbol's name, kind and line** and drops its signature, doc
+  comment and members, which is what lets `Search` still index all 382 public
+  symbols across all eight packages from a 50 KB index.
+- **`site.home` is gone.** It rendered the root README into the model and no
+  component had read it since the landing page was rebuilt.
+
 **The site carries a projection of the benchmark report, not the report.**
 `results/latest.json` holds every run's samples, each scenario's expected body and
 each subject's entry file - evidence for the harness, and ~48 KB of JSON that
@@ -1237,6 +1267,18 @@ a per-response validation pass paid for a documentation feature is the wrong tra
 when the handler's return type already checks the answer for free. Nothing in
 `@dunx/http`'s request path reads the key.
 
+The explorer renders those responses through **`SchemaView`, the same component the
+request body uses** - one property table with the required markers, formats,
+constraints and `$ref` resolution, not a second one. Every component in
+`tools/openapi-ui` costs bytes twice, in the JS and in the CSS list in
+`src/styles.ts`, and the whole bundle is a committed string in
+`packages/openapi/src/ui-bundle.ts` that every consumer of the package downloads, so
+"reuse it" is a size decision before it is a taste one. The documented response and
+the try-it-out result stay **separate**: the `Responses` section is the contract and
+the panel under the `Send it` divider is one real request, and merging them would let
+a 500 from a local run read as the specification. `src/operation.test.tsx` holds all
+of that down.
+
 **`OpenApiModule.forRootAsync`** exists for the reason every other configurable
 module has the pair. Its interesting half was the mount paths: a decorator's
 arguments are evaluated when the class definition is, long before a container could
@@ -1288,6 +1330,35 @@ queue worker imports, and none of those have an HTTP server. A package that pull
 
 So the dependency runs the other way: `@dunx/auth` depends on `@dunx/core` and
 `@dunx/http`, and on `@dunx/infra` **not at all**.
+
+### And it stays `@dunx/auth`, not `@dunx/better-auth`
+
+Proposed on the grounds that the package is better-auth and nothing else, so the
+install line should say so - and that `@dunx/compiler` becoming `@dunx/transform` was
+the precedent. **Declined.**
+
+That precedent does not carry. `compiler` was renamed because it **overstated** what
+the package is: it is a load-time transform, not a compiler, and the name promised a
+thing that did not exist. `auth` overstates nothing. It understates a coupling, which
+is a much milder fault and the ordinary one for an integration package.
+
+The decisive argument is consistency, and it cuts the other way from the proposal.
+Every dunx integration is named for the **capability**, never the vendor:
+`@dunx/infra/db` is drizzle and nothing else, `@dunx/infra/queue` is bullmq and
+nothing else, and neither is called `@dunx/drizzle` or `@dunx/bullmq`. Renaming auth
+alone would make it the single vendor-named package in the set - a _less_ coherent
+scheme, not a more legible one. The vendor belongs in the description, the README and
+the peer dependency, where it already is in all three cases.
+
+It also keeps the name from becoming a hostage. A capability name survives replacing
+the library behind it; `@dunx/better-auth` would be a dead package the day it did not
+wrap better-auth.
+
+The cost of doing it anyway had already stopped being zero: `0.1.0`, `0.1.1` and every
+release since are published, so a rename means a deprecation, a republish, and an
+edit to every install line in the guides and the scaffolder. Paying that for a naming
+preference that is arguably backwards was not worth it. Reopening this needs a reason
+other than the name reading oddly.
 
 ### Not depending on `@dunx/infra`, while still using its connections
 
@@ -1585,14 +1656,14 @@ and `worker.close()` waiting 244 ms for a 250 ms handler rather than dropping it
 
 Three findings that shaped the code:
 
-- **ioredis is a load-time requirement of bullmq's barrel.** `classes/index` exports
-  `redis-connection`, which statically imports `ioredis` and `ioredis/built/utils`,
-  so `import { Queue } from 'bullmq'` throws `Cannot find module` without it -
-  despite bullmq 6 declaring `ioredis` an _optional_ peer and shipping three other
-  backends. So `ioredis` is listed as an optional peer of `@dunx/infra` as well:
-  declaring it is how a consumer's install produces something that works, and
-  nothing in dunx reaches for it. If bullmq makes that import lazy, the entry
-  disappears.
+- **ioredis is a load-time requirement of bullmq, in both its builds.** `utils/index`
+  and `classes/redis-connection` statically import `ioredis` and
+  `ioredis/built/utils`, so `import { Queue } from 'bullmq'` throws
+  `Cannot find module` without it - despite bullmq 6 declaring `ioredis` an
+  _optional_ peer and shipping three other backends. So `ioredis` is listed as an
+  optional peer of `@dunx/infra` as well: declaring it is how a consumer's install
+  produces something that works, and nothing in dunx reaches for it. If bullmq makes
+  that import lazy, the entry disappears. Measured in full below.
 - **bullmq does not close a connection it was handed.** Measured with `CLIENT LIST`:
   four connections live, three after `worker.close()` + `queue.close()` - it closed
   only the duplicate it created itself. `QueueConnection.onShutdown` closes the
@@ -1607,6 +1678,52 @@ Three findings that shaped the code:
 unlike every other area. `src/index.ts` re-exporting it would put bullmq's static
 `ioredis` import behind `import '@dunx/infra'` for every consumer, queue or no
 queue. The subpath is the only way in.
+
+### Not pinning ioredis 5, because the reason to had three false premises
+
+An earlier note here and in `docs/guide/14-queues.md` told readers to **pin ioredis
+5**, on the grounds that bullmq's CJS build imports `ioredis/built/utils`, that
+ioredis 6 removed it, and that only the ESM build was safe. Re-measured on bullmq
+6.0.5 + ioredis 5.8.2 and 6.0.0 + Bun 1.3.14, **all three are wrong**:
+
+- **ioredis 6.0.0 still ships `built/utils`** and still exports
+  `CONNECTION_CLOSED_ERROR_MSG` from it (`built/utils/index.js:375`). Nothing was
+  removed. Both 5.8.2 and 6.0.0 load bullmq's `Queue` from either build.
+- **Both builds import it.** `dist/cjs/utils/index.js:25` and
+  `dist/esm/utils/index.js:4`, plus `redis-connection` in each. There is no safe
+  build.
+- **The CJS build is the one Bun runs.** bullmq 6.0.5 declares no `exports` map and
+  no `"type": "module"`, so the bare specifier resolves to `main`. The imported
+  namespace carries `__esModule` and a `default` holding `Queue`, which is the CJS
+  shape. The suite has been exercising the "unsafe" path all along and passing.
+
+So the pin would have frozen a superseded major to avoid a failure that does not
+happen. It is not applied, and the advice is removed from the guide and from
+`bun-apis.md`.
+
+What the error actually reports is **ioredis absent**, and that is not fixable from
+this side. `bullmq/dist/{cjs,esm}/classes/queue.js` both fail without it, because
+everything routes through `utils/index`; only `classes/bun-redis-client.js` loads
+standalone, and it is useless without `Queue` and `Worker`. So the barrel is not at
+fault and there is no deep-import escape - **`/queue` cannot be imported without
+ioredis, and cannot be made to be.**
+
+`ioredis` nonetheless stays an **optional** peer, because it is optional in exactly
+the sense `bullmq` is: needed if and only if `/queue` is used. Requiring it would
+put ioredis in the install of every consumer of `/db`, `/files`, `/images`,
+`/logger` and `/redis`, which is the outcome the ban exists to prevent. npm cannot
+express "optional, but in lockstep with bullmq", so `packages/infra/src/index.test.ts`
+does: one test asserts both peers carry `optional: true`, and guide 14 says
+`bun add bullmq ioredis`.
+
+The range is **bullmq's, not dunx's**. dunx never imports ioredis, so it has no
+opinion that could be better informed than the library that does, and the peer
+therefore mirrors bullmq's own `>=5.0.0` rather than narrowing to the major CI
+happens to resolve. The second test in that file asserts the two ranges are equal,
+so bullmq changing its requirement fails here instead of leaving dunx advertising a
+stale one - the same guard shape as the `LOG_LEVELS` test. The `devDependency` was
+`^6.0.0` against a `>=5.0.0` peer; it now matches the peer, as `bullmq`'s and
+`drizzle-orm`'s already did.
 
 ### Job discovery
 
@@ -1863,6 +1980,22 @@ The cost of lockstep is that an untouched package still takes a version. For a
 pre-1.0 framework whose packages move together anyway that is a feature: one number
 answers "which versions work together", which is the question a consumer of six
 packages actually has.
+
+**Decided: lockstep stays until `@dunx/core` reaches 1.0.0, and that release is the
+one trigger that reopens it.** Independent versions were held open pending a range
+policy, and there is no pre-1.0 range that works. A caret cannot span a `0.x` minor,
+so `@dunx/http@0.3.0` naming `@dunx/core@^0.2.0` while `@dunx/infra@0.4.0` names
+`^0.3.0` is an unsatisfiable peer set - a hard install failure now that these are
+peers, rather than the silent duplication `dependencies` used to produce. `>=x.y.z`
+installs cleanly but promises compatibility across every future major, which is a
+promise a pre-1.0 framework cannot keep, and it would be discovered as a runtime
+token mismatch rather than an install error. Waiting is not a deferral for want of an
+answer: post-1.0 a caret spans the whole major, the policy writes itself, and no
+work done now would survive the change anyway.
+
+Until then the thing to avoid is treating lockstep as an accident. It is load-bearing,
+and `resolveWorkspaceRange` writing `^<version>` is only sound _because_ every package
+in a release names the same number.
 
 ## The API explorer (`tools/openapi-ui`)
 
@@ -2459,3 +2592,39 @@ a copy, and `ConsoleLogger` then spreads that copy into the entry, so the reques
 fields are copied twice per line. Removing one copy means either changing what
 `getContext()` returns - which `@arkv/logger`'s `ContextStore` also implements - or
 changing the order of the keys in every log line.
+
+## Colour in `@dunx/infra/logger`, and where the fix belongs
+
+`LoggerModule.forRoot()` used to write ANSI escapes into its JSON whenever stdout was
+not a terminal, which makes the logs unparseable for anything downstream. Measured:
+with `Bun.enableANSIColors === false` and `process.stdout.isTTY === undefined`, a
+default entry came out as `{\u001b[36m"level":\u001b[39m...`, 26 escapes in one line.
+Neither `NO_COLOR=1` nor `FORCE_COLOR=0` suppressed it.
+
+The cause is upstream and it is not an edge case. `@arkv/logger` picks the pretty
+formatter from `isDevelopment`, which defaults to `process.env.NODE_ENV !== 'production'`,
+and **nothing on the colour path asks whether the output is a terminal** - not the
+logger, not `ConsoleTransport`, not the formatter. So the zero-argument
+`LoggerModule.forRoot()` in a container with `NODE_ENV` unset hit it, not just an app
+that passed `isDevelopment: true`.
+
+This split cleanly along the boundary CLAUDE.md already draws, so both halves were
+done rather than one:
+
+- **dunx supplies the default, because the good answer is Bun-specific.**
+  `isDevelopment` now defaults to `Bun.enableANSIColors`, which already folds in TTY
+  detection, `NO_COLOR` and `FORCE_COLOR`. That is not a patch, a wrapper or a
+  vendored copy - it is dunx choosing the default for an option upstream exposes, and
+  a consumer passing `isDevelopment` still wins. `Bun.enableANSIColors` is also
+  strictly the better question: upstream's option controls colour and nothing else,
+  so `NODE_ENV` was never what it wanted to know.
+- **The portable gate belongs upstream and stays there.** `@arkv` targets Node and
+  the web, so it cannot use `Bun.*`; its own `@arkv/colors` already exports
+  `isColorSupported()` and nothing in the logger calls it. That proposal, with the
+  exact call site and a second defect it turned up (`FORCE_COLOR=0` is read as
+  presence, so it forces colour _on_), is in `docs/roadmap/arkv-integrations.md`.
+
+The two compose: once the upstream gate lands, dunx's default is still the right one
+and nothing here has to be undone. `packages/infra/src/logger/module.test.ts` asserts
+the entry is coloured **exactly when** `Bun.enableANSIColors` is true, which holds at
+a terminal and in a pipe and fails on the old default.
