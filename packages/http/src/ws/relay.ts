@@ -51,6 +51,21 @@ export interface RelayOptions {
    * @default console.warn
    */
   readonly onError?: (error: unknown, phase: RelayPhase) => void;
+  /**
+   * What to do when the **boot** subscribe fails. Publishing recovers on its own —
+   * every publish retries the broker — but a failed subscribe used to be retried
+   * by nothing, so the node stayed permanently deaf to other nodes while still
+   * looking healthy.
+   *
+   * Bounded rather than infinite, and the timer is unref'd, so a broker that never
+   * comes back cannot hold the process open or spin forever.
+   */
+  readonly resubscribe?: {
+    /** Retries after the first failure. `0` disables them. @default 5 */
+    readonly attempts?: number;
+    /** First delay; doubles each attempt, capped at 30s. @default 500 */
+    readonly delayMs?: number;
+  };
 }
 
 export const DEFAULT_RELAY_CHANNEL = 'dunx:ws';

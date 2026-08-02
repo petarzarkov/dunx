@@ -429,3 +429,92 @@ describe.skipIf(!HAS_REDIS)('two nodes over real Redis', () => {
     }
   });
 });
+
+/**
+ * A relay whose boot `subscribe` failed used to be retried by nothing: the node
+ * reported the failure once and then silently never received a relayed message
+ * again, for the life of the process. Publishing kept working, which is what made
+ * it hard to notice — fan-out looked one-way rather than broken.
+ */
+describe('a boot subscribe that fails', () => {
+  const failing = (failures: number) => {
+    const state = { attempts: 0, subscribed: false, reported: [] as unknown[] };
+    const relay: PubSubRelay = {
+      publish: () => 0,
+      subscribe: () => {
+        state.attempts += 1;
+        if (state.attempts <= failures) throw new Error('broker down');
+        state.subscribed = true;
+        return undefined;
+      },
+    };
+    const onError = (error: unknown): void => {
+      state.reported.push(error);
+    };
+    return { relay, state, onError };
+  };
+
+  it('retries until it succeeds', async () => {
+    const pubsub = new PubSub();
+    const { relay, state, onError } = failing(2);
+
+    await pubsub.relayThrough(relay, {
+      onError,
+      resubscribe: { attempts: 5, delayMs: 1 },
+    });
+    expect(state.subscribed).toBe(false);
+
+    expect(state.reported).toHaveLength(1);
+
+    await Bun.sleep(60);
+    expect(state.subscribed).toBe(true);
+    expect(state.attempts).toBe(3);
+    // Reported once when it started failing, not once per retry.
+    expect(state.reported).toHaveLength(1);
+    await pubsub.close();
+  });
+
+  it('gives up after the configured number of attempts', async () => {
+    const pubsub = new PubSub();
+    const { relay, state, onError } = failing(Number.POSITIVE_INFINITY);
+
+    await pubsub.relayThrough(relay, {
+      onError,
+      resubscribe: { attempts: 2, delayMs: 1 },
+    });
+    await Bun.sleep(60);
+
+    // The first call plus two retries, and then it stops rather than spinning.
+    expect(state.attempts).toBe(3);
+    await pubsub.close();
+  });
+
+  it('stops retrying once closed', async () => {
+    const pubsub = new PubSub();
+    const { relay, state, onError } = failing(Number.POSITIVE_INFINITY);
+
+    await pubsub.relayThrough(relay, {
+      onError,
+      resubscribe: { attempts: 10, delayMs: 5 },
+    });
+    await pubsub.close();
+    const afterClose = state.attempts;
+
+    await Bun.sleep(40);
+    expect(state.attempts).toBe(afterClose);
+  });
+
+  it('does not retry when retries are turned off', async () => {
+    const pubsub = new PubSub();
+    const { relay, state, onError } = failing(Number.POSITIVE_INFINITY);
+
+    await pubsub.relayThrough(relay, {
+      onError,
+      resubscribe: { attempts: 0 },
+    });
+    await Bun.sleep(30);
+
+    expect(state.attempts).toBe(1);
+    await pubsub.close();
+  });
+});

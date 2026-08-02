@@ -221,17 +221,36 @@ of peers is the remaining prize and needs a range policy settled first — `vers
 resolves `workspace:*` to an **exact** version, and a peer range wants a caret or a
 `>=`, which is a decision with real consequences for a consumer holding six packages.
 
-### 2. `@dunx/create-app`
+### 2. `@dunx/create-app` — **done**
 
-The last unbuilt item from the original phase list: a scaffolder. Everything it would
-generate now exists, which is the reason it was left until last.
+`bunx @dunx/create-app my-api` writes the `minimal` template. Its `src/` is a
+byte-for-byte copy of `examples/minimal` and a test fails the moment they drift —
+that example is the one CI boots, which is what makes the template trustworthy
+rather than merely plausible.
+
+Three things worth not rediscovering:
+
+- **`bun create dunx-app` cannot work.** `bun create <template>` resolves the
+  _unscoped_ npm package `create-<template>`, and a scoped package never matches.
+  Publishing an unscoped `create-dunx-app` alias is the only way to get that
+  spelling, and it was not judged worth leaving the scope for.
+- **Versions are resolved at run time**, not written into the template. Lockstep
+  is what makes that correct: the version doing the scaffolding is by definition a
+  set that works together.
+- **`.gitignore` ships as `_gitignore`** because npm renames a published one to
+  `.npmignore`.
 
 ### 3. The loose ends the built work left behind
 
 Small, independent, each recorded where it belongs:
 
-- **A relay whose boot subscribe failed is retried by nothing.** Raising `maxRetries`
-  is the only recovery today. `@dunx/http`, `ws/relay.ts`.
+- ~~**A relay whose boot subscribe failed is retried by nothing.**~~ **Fixed.**
+  `RelayOptions.resubscribe` retries the boot subscribe with doubling backoff
+  capped at 30s, five attempts by default, `0` to disable. The timer is unref'd so
+  a broker that never returns cannot hold the process open, and `close()` cancels
+  a pending retry before it can fire against a relay being torn down. Publishing
+  always recovered on its own — every publish retries — which is what made this
+  hard to notice: fan-out looked one-way rather than broken.
 - **A process that attempted a queue operation while Redis was down does not exit on
   `SIGTERM`** — bullmq holds a connection whose retry timer outlives `close()`, and
   nothing in userland can reach it. Importing the module is not enough to trigger it;

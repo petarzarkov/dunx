@@ -38,6 +38,9 @@ export class PubSub {
   #onRelayError = defaultRelayError;
   /** So a broker that is down is reported once, not once per publish. */
   #relayFailing = false;
+  #resubscribeTimer: ReturnType<typeof setTimeout> | undefined;
+  #resubscribeLeft = 0;
+  #resubscribeDelay = 0;
 
   /** Called with the live server by `listen()`; also usable directly. */
   attach(server: Server<SocketData>): void {
@@ -83,6 +86,20 @@ export class PubSub {
     this.#relay = relay;
     this.#channel = options.channel ?? DEFAULT_RELAY_CHANNEL;
     this.#onRelayError = options.onError ?? defaultRelayError;
+    this.#resubscribeLeft = options.resubscribe?.attempts ?? 5;
+    this.#resubscribeDelay = options.resubscribe?.delayMs ?? 500;
+
+    await this.#trySubscribe();
+  }
+
+  /**
+   * One subscribe attempt, scheduling the next on failure. Separate from
+   * `relayThrough` because a retry has to run the identical path — including the
+   * synchronous-throw handling, which Bun's client needs.
+   */
+  async #trySubscribe(): Promise<void> {
+    const relay = this.#relay;
+    if (!relay) return;
 
     try {
       // Bun's client throws synchronously for some states, so the call is inside
@@ -91,9 +108,24 @@ export class PubSub {
         this.#inbound(message);
       });
       this.#relayFailing = false;
+      this.#resubscribeLeft = 0;
     } catch (error) {
       this.#degrade(error, 'subscribe');
+      this.#scheduleResubscribe();
     }
+  }
+
+  #scheduleResubscribe(): void {
+    if (this.#resubscribeLeft <= 0 || this.#relay === undefined) return;
+    this.#resubscribeLeft -= 1;
+    const delay = this.#resubscribeDelay;
+    // Capped so a long-dead broker settles into a slow poll instead of growing
+    // unboundedly; unref'd so it can never be the reason a process stays up.
+    this.#resubscribeDelay = Math.min(delay * 2, 30_000);
+    this.#resubscribeTimer = setTimeout(() => {
+      void this.#trySubscribe();
+    }, delay);
+    this.#resubscribeTimer.unref?.();
   }
 
   /** Bytes sent locally, `0` if the message was dropped, `-1` under backpressure. */
@@ -130,6 +162,13 @@ export class PubSub {
   async close(): Promise<void> {
     const relay = this.#relay;
     this.#relay = undefined;
+    // Before anything can await: a pending retry must not fire against a relay
+    // this call is closing.
+    this.#resubscribeLeft = 0;
+    if (this.#resubscribeTimer !== undefined) {
+      clearTimeout(this.#resubscribeTimer);
+      this.#resubscribeTimer = undefined;
+    }
     this.#server = undefined;
     if (!relay?.close) return;
     try {
