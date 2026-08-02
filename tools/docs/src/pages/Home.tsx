@@ -20,6 +20,7 @@ import { Honesty } from '../components/Honesty';
 import { NoDecorators } from '../components/NoDecorators';
 import { RequestFlow } from '../components/RequestFlow';
 import { ShowMeTheCode } from '../components/ShowMeTheCode';
+import { SpeedPanel } from '../components/SpeedPanel';
 import { Stats } from '../components/Stats';
 import { site } from '../data';
 import { href, RouteKind } from '../router';
@@ -229,6 +230,7 @@ export const Home = (): React.JSX.Element => (
       <Container size="lg" component="section">
         <NoDecorators />
       </Container>
+      <SpeedPanel />
       <ShowMeTheCode />
       <RequestFlow />
       <Container size="lg" component="section">

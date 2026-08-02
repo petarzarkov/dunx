@@ -252,3 +252,68 @@ export const integer = (value: number): string =>
 
 export const decimal = (value: number, places = 2): string =>
   value.toFixed(places);
+
+export interface SpeedMultiple {
+  readonly id: string;
+  readonly label: string;
+  readonly runtime: BenchRuntime;
+  readonly rps: number;
+  /** How many times dunx's throughput exceeds this subject's. */
+  readonly times: number;
+}
+
+export interface HeadlineSpeed {
+  readonly scenario: string;
+  readonly focusRps: number;
+  /** Every subject dunx is faster than, slowest first, so the biggest multiple leads. */
+  readonly multiples: readonly SpeedMultiple[];
+  /** The two largest, which are what a headline can carry. */
+  readonly headline: readonly SpeedMultiple[];
+  /** True when every headline subject runs on a different runtime than dunx. */
+  readonly crossesRuntime: boolean;
+}
+
+/**
+ * The "N times faster than X" figures, computed rather than written down.
+ *
+ * Two honesty constraints are baked in rather than left to the caller. The
+ * baseline and dunx's own logging variant are excluded, because "dunx is 1.0x
+ * `Bun.serve`" is not a comparison and "dunx is 1.3x dunx" is nonsense. And
+ * `crossesRuntime` is exposed so the component can say what the multiple actually
+ * contains: dunx runs on Bun and the Node subjects do not, so a 13x against NestJS
+ * is a runtime difference and a framework difference multiplied together.
+ */
+export const headlineSpeed = (
+  model: BenchModel,
+  scenarioId: string,
+): HeadlineSpeed | null => {
+  const rows = throughputRows(model, scenarioId);
+  const focus = rows.find((row) => row.id === FOCUS);
+  if (!focus) return null;
+
+  const multiples = rows
+    .filter(
+      (row) =>
+        row.id !== FOCUS && row.id !== FOCUS_LOGGING && row.id !== BASELINE,
+    )
+    .filter((row) => row.rps < focus.rps)
+    .map((row) => ({
+      id: row.id,
+      label: row.label,
+      runtime: row.runtime,
+      rps: row.rps,
+      times: focus.rps / row.rps,
+    }))
+    .sort((a, b) => b.times - a.times);
+
+  const headline = multiples.slice(0, 2);
+  return {
+    scenario: scenarioId,
+    focusRps: focus.rps,
+    multiples,
+    headline,
+    crossesRuntime:
+      headline.length > 0 &&
+      headline.every((entry) => entry.runtime !== focus.runtime),
+  };
+};

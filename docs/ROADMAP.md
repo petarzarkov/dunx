@@ -203,7 +203,6 @@ Feedback goes in as a new file rather than into conversation.
 
 | Item                                                                          | Shape                                                             |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [elysia-style-hero-graphic](./roadmap/elysia-style-hero-graphic.md)           | Feature. Asked for twice.                                         |
 | [design-polish](./roadmap/design-polish.md)                                   | Feature. Landing page rebuilt; not yet striking.                  |
 | [docs-guide-sections](./roadmap/docs-guide-sections.md)                       | Feature. 17 guides in one flat list.                              |
 | [docs-bundle-splitting](./roadmap/docs-bundle-splitting.md)                   | Performance. 127 KB of guides on every page load.                 |
