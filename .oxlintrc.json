@@ -28,7 +28,8 @@
     "**/*.md",
     "**/*.json",
     "dist",
-    ".claude/worktrees"
+    ".claude/worktrees",
+    "packages/openapi/src/ui-bundle.ts"
   ],
   "rules": {
     "constructor-super": "error",

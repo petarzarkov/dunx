@@ -128,7 +128,7 @@ it('documents every route the one app serves', () => {
 
 it('serves a docs page that fetches nothing', () => {
   expect(tour.text).toMatch(
-    /GET \/api\/docs -> 200 text\/html; charset=utf-8, \d+ bytes, 1 inline script, external requests: none/,
+    /GET \/api\/docs -> 200 text\/html; charset=utf-8, \d+ bytes, 2 inline scripts, external requests: none/,
   );
 });
 

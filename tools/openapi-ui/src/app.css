@@ -1,0 +1,46 @@
+.prose > :first-child {
+  margin-top: 0;
+}
+.prose > :last-child {
+  margin-bottom: 0;
+}
+.prose p {
+  margin: 0 0 0.6em;
+}
+.prose code {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.85em;
+  background: var(--mantine-color-default-hover);
+  border-radius: var(--mantine-radius-sm);
+  padding: 0.1em 0.3em;
+}
+.prose pre {
+  overflow-x: auto;
+  background: var(--mantine-color-default-hover);
+  border-radius: var(--mantine-radius-sm);
+  padding: 0.6em 0.7em;
+}
+.prose ul,
+.prose ol {
+  margin: 0 0 0.6em;
+  padding-left: 1.2em;
+}
+
+.dunx-json {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  white-space: pre;
+  margin: 0;
+}
+
+.dunx-monospace input,
+.dunx-monospace textarea {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.82rem;
+}
+
+.dunx-verb {
+  font-family: var(--mantine-font-family-monospace);
+  min-width: 4.6rem;
+}

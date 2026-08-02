@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    /* Vite bundles this workspace, so resolution is the bundler's, not Node's.
+       That is what lets the .tsx imports stay extensionless — the published
+       packages keep nodenext and their mandatory .js extensions. */
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "resolveJsonModule": false,
+    "noEmit": true
+  },
+  "include": ["src", "scripts"],
+  "exclude": ["node_modules", "dist"]
+}

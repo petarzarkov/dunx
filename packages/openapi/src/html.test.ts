@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { renderPage } from './html.js';
-import type { OpenApiDocument } from './types.js';
+import { MODEL_ELEMENT_ID, renderPage } from './html.js';
+import { buildModel } from './model.js';
+import type { OpenApiDocument, PageModel } from './index.js';
 
 const document: OpenApiDocument = {
   openapi: '3.1.0',
@@ -9,7 +10,7 @@ const document: OpenApiDocument = {
     version: '1.2.3',
     description: 'Two routes and **one** schema.',
   },
-  tags: [{ name: 'Users' }],
+  tags: [{ name: 'Users', description: 'People, mostly.' }],
   paths: {
     '/users': {
       get: {
@@ -78,126 +79,137 @@ const document: OpenApiDocument = {
   },
 };
 
-const page = renderPage(document, {
+const options = {
   jsonHref: '/api/openapi.json',
   warnings: ['one schema degraded'],
-});
+};
+const page = renderPage(document, options);
+
+/** The `<script type="application/json">` the bundle boots from. */
+const embedded = (): PageModel => {
+  const open = `<script type="application/json" id="${MODEL_ELEMENT_ID}">`;
+  const from = page.indexOf(open) + open.length;
+  return JSON.parse(page.slice(from, page.indexOf('</script>', from)));
+};
+
+/**
+ * The page without either script body — the markup a browser actually parses as
+ * markup. Everything inside a `<script>` is text to the HTML parser, so an
+ * `href="` or a `src=` in minified React is not a resource, and asserting over
+ * it would only be asserting about somebody else's string table.
+ */
+const shell = page.replace(/(<script[^>]*>)[\s\S]*?(<\/script>)/g, '$1$2');
 
 describe('the docs page', () => {
   it('is a self-contained HTML document', () => {
     expect(page.startsWith('<!doctype html>')).toBe(true);
     expect(page).toContain('</html>');
     expect(page).toContain('<style>');
+    expect(page).toContain('<div id="root"></div>');
   });
 
-  it('fetches nothing: no CDN, no external URL at all', () => {
-    // One inline <script> now, so operations can be sent. It is the enhancement,
-    // not the content — what still must hold is that nothing is *fetched*.
-    expect(page).not.toContain('src=');
-    expect(page).not.toContain('<link');
-    expect(page).not.toContain('url(');
-    expect(page).not.toContain('//cdn');
-    expect(page).not.toContain('https://unpkg');
-    // The only script is the one written into the page.
-    expect([...page.matchAll(/<script/g)]).toHaveLength(1);
-    // Every href is either the document this page describes or a fragment of the
-    // page itself. Nothing leaves the origin.
-    const hrefs = [...page.matchAll(/href="([^"]*)"/g)].map(
-      (match) => match[1] ?? '',
+  /**
+   * The guarantee is unchanged; the proof had to change with the page. The old
+   * page was hand-written HTML, so `not.toContain('src=')` over the whole string
+   * was both sound and cheap. The page now inlines a built bundle, and minified
+   * React contains `.src=` in its own code — so the assertion moved from the
+   * text to the *tags*, which is what actually decides whether a browser fetches.
+   */
+  it('fetches nothing: no CDN, no src=, no <link>', () => {
+    expect(shell).not.toMatch(/\ssrc=/);
+    expect(shell).not.toMatch(/<link\b/);
+    expect(shell).not.toMatch(
+      /<(img|iframe|object|embed|source|track|video|audio)\b/,
     );
-    expect(hrefs).toContain('/api/openapi.json');
-    expect(hrefs.filter((href) => href !== '/api/openapi.json')).toEqual([
-      '#schema-CreateUser',
-      '#schema-ValidationError',
+    // Two scripts: the model as data, and the explorer. Neither is fetched.
+    // Counted by their closers — react-dom carries the literal `"<script>"` in
+    // a string of its own, which the browser never sees as a tag.
+    expect([...page.matchAll(/<\/script>/g)]).toHaveLength(2);
+    // The only href in the markup is the document this page describes.
+    expect([...shell.matchAll(/href="([^"]*)"/g)].map((m) => m[1])).toEqual([
+      '/api/openapi.json',
     ]);
+    // Nothing in the bundle's own CSS or code reaches off the origin either.
+    expect(page).not.toMatch(/url\(\s*["']?(https?:)?\/\//);
+    expect(page).not.toContain('@import');
+    expect(page).not.toContain('//cdn');
+    expect(page).not.toContain('unpkg.com');
+    expect(page).not.toContain('jsdelivr');
+    expect(page).not.toContain('fonts.googleapis');
   });
 
-  it('links a $ref to the definition on the same page', () => {
-    expect(page).toContain(
-      '<a href="#schema-CreateUser"><code>CreateUser</code></a>',
+  it('closes neither script tag early', () => {
+    for (const part of page.split('<script').slice(1)) {
+      const body = part.slice(part.indexOf('>') + 1);
+      expect(body.slice(0, body.indexOf('</script>'))).not.toContain(
+        '</script',
+      );
+    }
+  });
+
+  it('carries the whole document, so the explorer fetches none of it', () => {
+    const model = embedded();
+    expect(model.document).toEqual(document);
+    expect(model.jsonHref).toBe('/api/openapi.json');
+    expect(model.warnings).toEqual(['one schema degraded']);
+  });
+
+  it('escapes the one character that could end the data block', () => {
+    // `<script>alert(1)</script>` lives in a description. Written raw it would
+    // close the block; `<` is the same text to any JSON parser.
+    expect(page).not.toContain('<script>alert(1)');
+    expect(embedded().prose['op:UsersController_create']).toContain(
+      '&lt;script&gt;alert(1)&lt;/script&gt;',
     );
-    expect(page).toContain('<details class="op" id="schema-CreateUser">');
   });
 
-  it('groups operations by tag and shows the method, path and summary', () => {
-    expect(page).toContain('<h2>Users</h2>');
-    expect(page).toContain('<span class="verb get">GET</span>');
-    expect(page).toContain('<span class="route">/users</span>');
-    expect(page).toContain('Every user');
-    expect(page).toContain('UsersController_create');
-  });
-
-  it('renders descriptions as markdown without trusting their HTML', () => {
-    expect(page).toContain('<p>Creates one.</p>');
-    expect(page).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-  });
-
-  it('escapes what is not prose', () => {
-    expect(page).toContain('&lt;Users &amp; More&gt;');
-    expect(page).not.toContain('<Users & More>');
-  });
-
-  it('shows the security requirement, the roles, and their absence', () => {
-    expect(page).toContain('<code>bearer</code>');
-    expect(page).toContain('Roles: <code>admin</code>.');
-    expect(page).toContain('public');
-  });
-
-  it('shows the schemas and the warnings', () => {
-    expect(page).toContain('<h2>Schemas</h2>');
-    expect(page).toContain('CreateUser');
-    expect(page).toContain('one schema degraded');
+  it('links to the document itself and says so when JavaScript is off', () => {
+    expect(page).toContain('<noscript>');
+    expect(page).toContain('href="/api/openapi.json"');
   });
 });
 
-describe('sending a route from the page', () => {
-  it('emits a form per operation, carrying the method and path template', () => {
-    expect(page).toContain(
-      '<form class="try" data-method="get" data-path="/users/{id}">',
-    );
-    expect(page).toContain(
-      '<form class="try" data-method="post" data-path="/users">',
-    );
-  });
+describe('the model the page embeds', () => {
+  const model = buildModel(document, options);
 
-  it('gives every parameter an input tagged with where it goes', () => {
-    expect(page).toContain('data-in="query" data-name="limit"');
-    // `/users/{id}` declares no `parameters` at all. Without an input derived
-    // from the template the request would go out with a literal "{id}" in it.
-    expect(page).toContain('data-in="path" data-name="id"');
+  it('renders descriptions as markdown without trusting their HTML', () => {
+    expect(model.prose['info']).toContain('<strong>one</strong>');
+    expect(model.prose['op:UsersController_create']).toContain(
+      '<p>Creates one.</p>',
+    );
+    expect(model.prose['tag:Users']).toContain('People, mostly.');
   });
 
   it('pre-fills the body from the schema, so sending is one click', () => {
     // Derived from CreateUser, refs resolved against components/schemas.
-    expect(page).toContain('<textarea data-body');
-    expect(page).toContain('&quot;name&quot;: &quot;string&quot;');
+    const sample = model.samples['UsersController_create'] ?? '';
+    expect(JSON.parse(sample)).toEqual({
+      name: 'string',
+      age: 18,
+      tags: ['string'],
+    });
+    // A GET with no request body gets no sample rather than an empty one.
+    expect(model.samples['UsersController_list']).toBeUndefined();
   });
 
-  it('seeds an Authorization line only where a scheme is required', () => {
-    const forms = page.split('<form class="try"');
-    // POST /users declares `security: [{ bearer: [] }]`; GET /users/{id} is
-    // explicitly public, so it gets an empty box.
-    // The placeholder is on every box; what differs is the pre-filled *value*.
-    const value = (form: string | undefined): string =>
-      /<textarea data-headers[^>]*>([^<]*)<\/textarea>/.exec(form ?? '')?.[1] ??
-      '';
-
-    const guarded = forms.find((form) =>
-      form.includes('data-method="post" data-path="/users"'),
-    );
-    expect(value(guarded)).toBe('Authorization: Bearer ');
-
-    const open = forms.find((form) => form.includes('data-path="/users/{id}"'));
-    expect(value(open)).toBe('');
+  it('gives every parameter a field tagged with where it goes', () => {
+    expect(model.fields['UsersController_list']).toEqual([
+      { name: 'limit', in: 'query', required: false, placeholder: '0' },
+    ]);
+    // `/users/{id}` declares no `parameters` at all. Without a field derived
+    // from the template the request would go out with a literal "{id}" in it.
+    expect(model.fields['UsersController_one']).toEqual([
+      { name: 'id', in: 'path', required: true, placeholder: 'string' },
+    ]);
   });
 
-  it('carries the client inline, and it is the whole of the JavaScript', () => {
-    expect(page).toContain("form.matches('form.try')");
-    expect(page).toContain('performance.now()');
-    // The literal closing tag inside the script would end it early.
-    const script = page.slice(page.indexOf('<script>') + 8);
-    expect(script.slice(0, script.indexOf('</script>'))).not.toContain(
-      '</script',
-    );
+  it('leaves security, roles and their absence for the UI to read', () => {
+    const create = document.paths['/users']?.post;
+    expect(create?.security).toEqual([{ bearer: [] }]);
+    expect(create?.['x-required-roles']).toEqual(['admin']);
+    expect(document.paths['/users/{id}']?.get?.security).toEqual([]);
+    expect(model.document.components.securitySchemes).toEqual({
+      bearer: { type: 'http', scheme: 'bearer' },
+    });
   });
 });

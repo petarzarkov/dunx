@@ -105,13 +105,17 @@ describe('a real server serving its own document', () => {
 
     const page = await response.text();
     expect(page.startsWith('<!doctype html>')).toBe(true);
+    // The document travels in the page, so the explorer boots without a fetch.
     expect(page).toContain('ThingsController_list');
     expect(page).toContain('Every thing');
-    expect(page).toContain('<a href="/api/openapi.json">');
-    // One inline script, so a route can be sent from the page. Nothing fetched.
-    expect(page).not.toContain('src=');
-    expect(page).not.toContain('<link');
-    expect(page).not.toContain('cdn');
+    expect(page).toContain('"jsonHref":"/api/openapi.json"');
+    // The bundle is inlined: no `src=`, no `<link>`, nothing from a CDN. The
+    // assertion is on the tags rather than the text because minified React
+    // contains both `src=` and a `"<script>"` string of its own.
+    expect(page).not.toMatch(/<script[^>]*\ssrc=/);
+    expect(page).not.toMatch(/<link\b/);
+    expect(page).not.toContain('//cdn');
+    expect(page).not.toMatch(/url\(\s*["']?(https?:)?\/\//);
   });
 
   it('moves with the global prefix rather than sitting beside it', async () => {

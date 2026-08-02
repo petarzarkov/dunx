@@ -39,7 +39,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun ../../scripts/build-package.ts",
+    "build": "bun ../../tools/openapi-ui/scripts/build.ts && bun ../../scripts/build-package.ts",
     "test": "bun test --bail",
     "test:cov": "bun test --coverage",
     "typecheck": "tsc --noEmit"

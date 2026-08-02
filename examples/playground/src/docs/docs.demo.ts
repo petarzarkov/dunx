@@ -60,17 +60,19 @@ export class DocsDemo {
 
     const page = await fetch(new URL('api/docs', url));
     const html = await page.text();
-    // The page carries one inline <script> so a route can be sent from it. What
-    // still has to hold is that nothing is *fetched*: no src, no stylesheet
-    // link, no CSS url(), no CDN.
+    // Two inline scripts: the document as JSON, and the explorer bundle. What
+    // still has to hold is that nothing is *fetched* — so the check is on the
+    // markup, with both script bodies removed. Inside a <script> everything is
+    // text, and minified React's own string table contains `src=` and `<script`.
+    const shell = html.replace(/(<script[^>]*>)[\s\S]*?(<\/script>)/g, '$1$2');
     const external =
-      html.includes('src=') ||
-      html.includes('<link') ||
-      html.includes('url(') ||
+      /\ssrc=/.test(shell) ||
+      /<link\b/.test(shell) ||
+      /url\(\s*["']?(https?:)?\/\//.test(html) ||
       html.includes('//cdn');
     logger.info(
       `GET /api/docs -> ${page.status} ${page.headers.get('content-type')}, ` +
-        `${html.length} bytes, ${(html.match(/<script/g) ?? []).length} inline script, ` +
+        `${html.length} bytes, ${(html.match(/<\/script>/g) ?? []).length} inline scripts, ` +
         `external requests: ${external ? 'some' : 'none'}`,
     );
   }

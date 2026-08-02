@@ -24,7 +24,16 @@ export {
   type DocumentInfo,
   type GeneratedDocument,
 } from './generate.js';
-export { renderPage, type PageOptions } from './html.js';
+export { MODEL_ELEMENT_ID, renderPage, type PageOptions } from './html.js';
+// What the page hands its explorer. Exported so a page of your own can be built
+// on the same pre-computed prose, samples and fields.
+export {
+  buildModel,
+  fieldsFor,
+  type ModelOptions,
+  type PageModel,
+  type TryField,
+} from './model.js';
 export {
   OpenApiExplorer,
   OpenApiModule,
