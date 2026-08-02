@@ -10,7 +10,7 @@
     "transform"
   ],
   "homepage": "https://github.com/petarzarkov/dunx/tree/main/packages/transform#readme",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": {
     "name": "Petar Zarkov",
     "email": "pzarko1@gmail.com",

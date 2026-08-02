@@ -50,6 +50,35 @@ describe('published manifests survive npm publish unaltered', () => {
   });
 
   /**
+   * The repo is Apache-2.0 and every LICENSE file in it is the Apache text, but
+   * all ten manifests said `MIT` - and 0.1.0 went to npm carrying that. A package's
+   * declared licence is what tooling and consumers read, so it disagreeing with the
+   * file shipped beside it is the one licence bug that actually misleads someone.
+   */
+  it('declares the licence the LICENSE file actually is', async () => {
+    const root = new URL('..', import.meta.url).pathname;
+    const licence = await Bun.file(`${root}/LICENSE`).text();
+    expect(licence).toContain('Apache License');
+
+    for (const { name, json } of await manifests()) {
+      expect(`${name}: ${String(json['license'])}`).toBe(`${name}: Apache-2.0`);
+    }
+  });
+
+  it('ships an identical LICENSE beside every published package', async () => {
+    const root = new URL('..', import.meta.url).pathname;
+    const licence = await Bun.file(`${root}/LICENSE`).text();
+
+    for (const { name } of await manifests()) {
+      const dir = name.replace('@dunx/', '');
+      const shipped = await Bun.file(`${root}/packages/${dir}/LICENSE`).text();
+      // `files` lists LICENSE, so a package missing or diverging from it would
+      // publish with no licence text at all.
+      expect(`${name}: ${shipped === licence}`).toBe(`${name}: true`);
+    }
+  });
+
+  /**
    * A concrete version here is not a style choice, it is a permanent pin.
    * `version.ts` and `first-publish.ts` only rewrite ranges that still say
    * `workspace:`, so an internal dependency written as `0.1.0` keeps that value

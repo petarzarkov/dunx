@@ -9,7 +9,7 @@ A Bun-native dependency injection framework - NestJS-shaped ergonomics, none of 
 [![CI](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml/badge.svg)](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml)
 [![coverage](https://petarzarkov.github.io/dunx/badges/coverage.svg)](https://petarzarkov.github.io/dunx/#/coverage)
 [![docs](https://img.shields.io/badge/docs-petarzarkov.github.io%2Fdunx-blue)](https://petarzarkov.github.io/dunx)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7.0-blue.svg)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3-black.svg)](https://bun.sh)
 
@@ -179,4 +179,4 @@ the numbers.
 
 ## License
 
-[MIT](LICENSE)
+[Apache-2.0](LICENSE)

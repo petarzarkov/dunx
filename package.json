@@ -4,7 +4,7 @@
   "private": true,
   "description": "The dunx monorepo",
   "homepage": "https://github.com/petarzarkov/dunx#readme",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": {
     "name": "Petar Zarkov",
     "email": "pzarko1@gmail.com",

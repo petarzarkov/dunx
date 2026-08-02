@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Benchmark harness comparing @dunx/http against other backend frameworks and runtimes",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": {
     "name": "Petar Zarkov",
     "email": "pzarko1@gmail.com",
