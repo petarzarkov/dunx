@@ -264,3 +264,11 @@ body {
   font-size: 0.82rem;
   line-height: 1.55;
 }
+
+/* No keyboard to press it with, and it is what pushes the header controls off
+   the right edge on a phone. */
+@media (max-width: 48em) {
+  .kbd {
+    display: none;
+  }
+}

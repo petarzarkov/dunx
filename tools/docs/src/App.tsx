@@ -161,7 +161,13 @@ const Header = ({
           ⌘K
         </Text>
       </UnstyledButton>
-      <Anchor href={site.repoUrl} target="_blank" size="sm" c="dimmed">
+      <Anchor
+        href={site.repoUrl}
+        target="_blank"
+        size="sm"
+        c="dimmed"
+        visibleFrom="sm"
+      >
         GitHub
       </Anchor>
       <ColorSchemeToggle />

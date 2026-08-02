@@ -62,7 +62,9 @@ const InstallLine = (): React.JSX.Element => (
     <span className="install-prompt" aria-hidden="true">
       $
     </span>
-    <span>{INSTALL}</span>
+    {/* Scrolls on its own rather than wrapping: a wrapped command pushed the
+        copy button out of the box on a phone. */}
+    <span className="install-cmd">{INSTALL}</span>
     <CopyButton value={INSTALL}>
       {({ copied, copy }) => (
         <Button

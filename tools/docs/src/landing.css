@@ -97,7 +97,25 @@
   font-size: 0.85rem;
 }
 
+.install-cmd {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.install-cmd::-webkit-scrollbar {
+  display: none;
+}
+
+/* A flex item shrinks by default, which clipped the label to "Cop" on a phone. */
+.install > button {
+  flex: 0 0 auto;
+}
+
 .install-prompt {
+  flex: 0 0 auto;
   user-select: none;
   color: var(--mantine-color-dimmed);
 }
