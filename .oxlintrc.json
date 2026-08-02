@@ -122,6 +122,7 @@
     "typescript/no-inferrable-types": "error",
     "typescript/prefer-for-of": "error",
     "typescript/prefer-function-type": "error",
+    "max-lines": ["error", { "max": 500 }],
     "dunx/no-brand-prefix": "error",
     "dunx/no-enum": "error"
   },

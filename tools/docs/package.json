@@ -13,8 +13,7 @@
     "typecheck": "bun run generate && tsc --noEmit"
   },
   "dependencies": {
-    "@mantine/charts": "^9.5.0",
-    "@mantine/code-highlight": "^8.3.6",
+    "@mantine/charts": "^8.3.6",
     "@mantine/core": "^8.3.6",
     "@mantine/hooks": "^8.3.6",
     "@mantine/spotlight": "^8.3.6",

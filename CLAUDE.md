@@ -326,6 +326,9 @@ Every package manifest needs `"type": "module"`. Without it,
 - Repo-local rules live in `scripts/oxlint-plugin.js`, wired via `jsPlugins`. oxlint
   has no `no-restricted-syntax`, so anything syntax-shaped goes there. Currently:
   `dunx/no-enum` and `dunx/no-brand-prefix`.
+- `max-lines` is set to 500 and is an **error**, which is what makes the 500-line
+  rule below a gate rather than a convention. It counts every line, comments and
+  blanks included, so the number in the config is the number in the docs.
 - **That plugin is `.js`, and must stay `.js`.** oxlint loads a JS plugin by
   spawning **Node**, not Bun, so a `.ts` file there dies with
   `ERR_UNKNOWN_FILE_EXTENSION` on any Node below 22.18 - which broke the
@@ -486,7 +489,8 @@ New repeatable workflow → new skill. Do not grow this file instead.
 - Do not add CommonJS output or a second/third tsconfig per package
 - Do not write a JavaScript router - `Bun.serve({ routes })` handles params, per-method
   dispatch, and method-miss 404s natively
-- Do not exceed 500 lines per source file
+- Do not exceed 500 lines per source file, tests included - `max-lines` in
+  `.oxlintrc.json` is an error, so `lint:check` fails rather than a reviewer noticing
 - Do not add Biome or ESLint
 - Do not prefix identifiers with `Dunx` - the brand belongs in the package name,
   not in every symbol. Use `App`: `AppFactory`, `AppError`, `AppModule`. Enforced

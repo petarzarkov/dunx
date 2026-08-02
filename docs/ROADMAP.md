@@ -89,11 +89,14 @@ Two things it surfaced. First, `bun run --filter '*'` orders builds by
 `dependencies` only, so **a published package's tests cannot import a workspace
 package that is not one of its runtime dependencies** - converting
 `packages/openapi/src/module.test.ts` made openapi's build race the harness's and was
-reverted. Second, `workspace:*` publishes as an **exact** version, which would give a
-consumer a nested second `@dunx/core` and therefore tokens that match nothing;
-`@dunx/testing` uses `workspace:^`, and the other packages should be looked at. While
-core is pre-1.0 that still needs `@dunx/testing` republished whenever core or http
-takes a **minor** bump, since `^0.4.0` does not admit `0.5.0`.
+reverted. Second, `workspace:*` used to publish as an **exact** version, which would
+give a consumer a nested second `@dunx/core` and therefore tokens that match nothing.
+**Fixed for every package at once**, in the publish path rather than in eight
+manifests: `resolveWorkspaceRange` in `scripts/workspace-ranges.ts` writes
+`^<version>`, and `version.ts` and `first-publish.ts` both call it instead of
+carrying a copy. The source form stays `workspace:*`, which `manifests.test.ts` still
+asserts. While core is pre-1.0 that still needs `@dunx/testing` republished whenever
+core or http takes a **minor** bump, since `^0.4.0` does not admit `0.5.0`.
 
 What remains: **`@dunx/create-app`**, the other half of Phase 4. Nothing in the
 harness blocks it. Two smaller omissions, both deliberate and recorded in
@@ -215,8 +218,6 @@ Feedback goes in as a new file rather than into conversation.
 | [testing-from-published-package](./roadmap/testing-from-published-package.md) | Probably unblocked, untested.                                     |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                 | Defect. Not reachable from userland.                              |
 | [ioredis-cjs-pin](./roadmap/ioredis-cjs-pin.md)                               | Defect. Known, currently harmless.                                |
-| [mantine-version-mismatch](./roadmap/mantine-version-mismatch.md)             | Risk. Mantine 8 and 9 mixed in `tools/docs`.                      |
-| [max-lines-not-enforced](./roadmap/max-lines-not-enforced.md)                 | Small. A documented rule with no lint behind it.                  |
 | [auth-package-name](./roadmap/auth-package-name.md)                           | Decision. Window closed once published.                           |
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                   | Unreproduced.                                                     |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                     | Delivered, with a boundary note worth keeping.                    |
@@ -239,10 +240,8 @@ produced 22 findings.
 | [openapi-forroot-async](./roadmap/openapi-forroot-async.md)                           | Missing feature, medium.                            |
 | [http-request-id-and-ignore](./roadmap/http-request-id-and-ignore.md)                 | Three findings, medium and low.                     |
 | [infra-packaging-findings](./roadmap/infra-packaging-findings.md)                     | Four findings, medium and low.                      |
-| [peer-ranges-exact](./roadmap/peer-ranges-exact.md)                                   | Packaging, medium.                                  |
 | [testing-http-options](./roadmap/testing-http-options.md)                             | Design, medium. Silently a different app.           |
 | [http-trailing-slash](./roadmap/http-trailing-slash.md)                               | Low. Undocumented.                                  |
-| [create-app-polish](./roadmap/create-app-polish.md)                                   | Four findings, one blocks a flow.                   |
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;

@@ -7,10 +7,10 @@ description: Version and publish @dunx/* packages to npm. Use when cutting a rel
 
 Releases are **lockstep**: every `@dunx/*` package shares one version and ships
 together, even the ones a release did not touch. Change detection decides _whether_
-to release, never _what_. The reason is a correctness one - `version.ts` rewrites
-`workspace:*` to an **exact** version at publish time, so independent versions would
-let an app end up with two copies of `@dunx/core`, and in this container a token _is_
-a class object. Full reasoning: ARCHITECTURE.md, "Versioning is lockstep".
+to release, never _what_. The reason is a correctness one - a published range names a
+concrete version of `@dunx/core`, so independent versions would let an app end up
+with two copies of it, and in this container a token _is_ a class object. Full
+reasoning: ARCHITECTURE.md, "Versioning is lockstep".
 
 **Do not make versions independent again** without also solving the duplicate-core
 problem - see that section for the two alternatives and why each was rejected.
@@ -43,12 +43,18 @@ Force every package to publish regardless of computed bumps by putting
   executes npm on its own runtime, so CI needs no `setup-node`. The pin must stay
   **>= 11.5.1**; `ubuntu-latest` still ships npm 10.x, so the pin is doing real
   work. Bump the constant to upgrade.
-- **`workspace:` ranges.** `npm publish` does not expand them, so `version.ts`
-  rewrites them to concrete versions around the publish and restores
-  `package.json` afterwards. If a publish dies mid-run, check `git diff` for a
-  package manifest left with concrete versions where `workspace:*` belongs. Under
-  lockstep an exact pin is the _desired_ result, so `workspace:*` is correct and
-  `workspace:^` is not - a caret cannot span a pre-1.0 minor bump anyway.
+- **`workspace:` ranges.** `npm publish` does not expand them, so the publish path
+  rewrites them to concrete ranges around the publish and restores `package.json`
+  afterwards. The policy is one function, `resolveWorkspaceRange` in
+  `scripts/workspace-ranges.ts`, shared by `version.ts` and `first-publish.ts`
+  because a second copy of it is how the two would drift: **`workspace:*` publishes
+  as `^<version>`**, not as an exact pin. Every internal range is a
+  `peerDependency`, and an exact peer accepts one version and nothing else, so a
+  consumer whose core resolved one patch ahead gets an `ERESOLVE` from npm or a
+  nested second copy of core. The caret's pre-1.0 limit (`^0.2.0` excludes `0.3.0`)
+  is why versioning stays lockstep, not a reason to go back to exact - exact
+  excludes `0.2.1` as well. If a publish dies mid-run, check `git diff` for a package
+  manifest left with concrete ranges where `workspace:*` belongs.
 - **`--provenance` only under `GITHUB_ACTIONS`.** It errors anywhere else, which
   would break a manual publish.
 

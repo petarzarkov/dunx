@@ -2,6 +2,17 @@ import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { semver } from 'bun';
+import {
+  bumpVersion,
+  determineBumpType,
+  getChangedSrcPackages,
+  getForcePublishTarget,
+} from './bump.js';
+import {
+  assertNoWorkspaceRanges,
+  readWorkspaceVersions,
+  resolveWorkspaceDeps,
+} from './workspace-ranges.js';
 
 const isDryRun = process.env['DRY_RUN'] === 'true';
 
@@ -12,148 +23,8 @@ const PACKAGES_DIR = join(ROOT_DIR, 'packages');
 // ships npm 10.x. `bunx` fetches this exact version and runs it on bun's own
 // runtime, so no Node install is needed anywhere in CI.
 const NPM = 'bunx npm@11.10.1';
-const WORKSPACE_PROTOCOL = 'workspace:';
-const DEPENDENCY_FIELDS = [
-  'dependencies',
-  'peerDependencies',
-  'optionalDependencies',
-] as const;
-
-const parseScopes = (raw: string): string[] =>
-  raw
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-const getForcePublishTarget = (): {
-  force: boolean;
-  packages: string[] | null;
-} => {
-  const envForce = process.env['FORCE_PUBLISH'];
-  if (envForce === 'true') return { force: true, packages: null };
-  if (envForce && envForce !== 'false')
-    return { force: true, packages: parseScopes(envForce) };
-
-  try {
-    const commitMessage = execSync('git log -1 --pretty=format:"%s%n%b"', {
-      stdio: 'pipe',
-    })
-      .toString()
-      .trim();
-
-    const scopedMatch = commitMessage.match(/\[force-publish:([^\]]+)\]/);
-    if (scopedMatch && scopedMatch[1])
-      return { force: true, packages: parseScopes(scopedMatch[1]) };
-    if (commitMessage.includes('[force-publish]'))
-      return { force: true, packages: null };
-
-    return { force: false, packages: null };
-  } catch {
-    return { force: false, packages: null };
-  }
-};
 
 const forcePublish = getForcePublishTarget();
-
-export const bumpVersion = (
-  version: string,
-  type: 'major' | 'minor' | 'patch',
-): string => {
-  const parts = version.split('.').map(Number);
-  const [major, minor, patch] = parts;
-
-  // Validated once, on integer-ness. The previous per-case `!major` / `!minor` /
-  // `!patch` guards were meant to catch NaN, but 0 is falsy too, so every bump of
-  // a version with a zero component threw - including 1.2.0 -> 1.2.1.
-  if (
-    parts.length !== 3 ||
-    major === undefined ||
-    minor === undefined ||
-    patch === undefined ||
-    !parts.every((part) => Number.isInteger(part) && part >= 0)
-  ) {
-    throw new Error(`Invalid version: ${version}`);
-  }
-
-  switch (type) {
-    case 'major':
-      return `${major + 1}.0.0`;
-    case 'minor':
-      return `${major}.${minor + 1}.0`;
-    case 'patch':
-      return `${major}.${minor}.${patch + 1}`;
-    default:
-      throw new Error(`Invalid bump type: ${String(type)}`);
-  }
-};
-
-const extractCommitType = (message: string): string | null => {
-  // Handle squashed merge commits: "Merge pull request #123 from branch\n\nfeat: message"
-  // or "feat(scope): message (#123)"
-  const mergeMatch = message.match(
-    /(?:Merge.*?\n\n?)?(?:^|\n)(feat|fix|chore|docs|test|style|refactor|perf|build|ci|revert|security|sync)(?:\([^)]+\))?(!)?: /m,
-  );
-
-  if (mergeMatch && mergeMatch[1]) {
-    return mergeMatch[1];
-  }
-
-  return null;
-};
-
-const determineBumpType = (): 'major' | 'minor' | 'patch' => {
-  try {
-    const commitMessage = execSync('git log -1 --pretty=format:"%s%n%b"', {
-      stdio: 'pipe',
-    })
-      .toString()
-      .trim();
-
-    if (
-      commitMessage.includes('!:') ||
-      commitMessage.includes('BREAKING CHANGE')
-    ) {
-      return 'major';
-    }
-
-    const commitType = extractCommitType(commitMessage);
-
-    if (commitType === 'feat') {
-      return 'minor';
-    }
-
-    return 'patch';
-  } catch (error) {
-    console.warn(
-      'Could not determine bump type from commit message, defaulting to patch',
-      error,
-    );
-    return 'patch';
-  }
-};
-
-const getChangedSrcPackages = (): Set<string> | null => {
-  try {
-    const out = execSync('git diff-tree --no-commit-id --name-only -r HEAD', {
-      stdio: 'pipe',
-    })
-      .toString()
-      .trim();
-
-    if (!out) return null;
-
-    const dirs = new Set<string>();
-    for (const file of out.split('\n')) {
-      const match = file.match(
-        /^packages\/([^/]+)\/(src\/|frontend\/src\/|package\.json|README\.md)/,
-      );
-      if (match && match[1]) dirs.add(match[1]);
-    }
-    return dirs;
-  } catch {
-    return null;
-  }
-};
 
 const findPublishablePackages = (): {
   name: string;
@@ -246,92 +117,22 @@ const applyVersionBumps = (
   return bumped;
 };
 
-const readWorkspaceVersions = (): Map<string, string> => {
-  const versions = new Map<string, string>();
-
-  for (const entry of readdirSync(PACKAGES_DIR, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const pkgJsonPath = join(PACKAGES_DIR, entry.name, 'package.json');
-    if (!existsSync(pkgJsonPath)) continue;
-    const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-    if (pkg.name && pkg.version) versions.set(pkg.name, pkg.version);
-  }
-
-  return versions;
-};
-
-/**
- * The last thing between a `workspace:` range and a published tarball.
- *
- * `npm publish` copies these ranges verbatim, so a package shipped with
- * `"@dunx/core": "workspace:*"` fails to install for every consumer. The rewrite
- * above is the mechanism that prevents it - this asserts the mechanism actually
- * ran, because it only runs on the `publishPackage` path, and the first publish
- * of a package has to be done by hand (OIDC trusted publishing cannot attach to a
- * package that does not exist yet). That manual path is exactly where this would
- * otherwise slip through, and it now spans five packages rather than one since
- * `@dunx/core` and `@dunx/http` became peers.
- */
-export const assertNoWorkspaceRanges = (pkg: {
-  name?: string;
-  [field: string]: unknown;
-}): void => {
-  const offenders: string[] = [];
-  for (const field of DEPENDENCY_FIELDS) {
-    const deps = pkg[field] as Record<string, string> | undefined;
-    if (!deps) continue;
-    for (const [name, range] of Object.entries(deps)) {
-      if (range.startsWith(WORKSPACE_PROTOCOL)) {
-        offenders.push(`${field}.${name} = "${range}"`);
-      }
-    }
-  }
-  if (offenders.length > 0) {
-    throw new Error(
-      `Refusing to publish ${pkg.name ?? 'package'}: unresolved workspace ` +
-        `ranges would ship and break every consumer install - ` +
-        offenders.join(', '),
-    );
-  }
-};
-
 /**
  * `npm publish` leaves `workspace:` ranges untouched in the packed tarball (unlike
  * `bun publish`), so swap them for concrete ranges, publish, then put the source
- * package.json back exactly as it was - version bump included.
+ * package.json back exactly as it was - version bump included. The range policy
+ * itself is in `workspace-ranges.ts`, shared with `first-publish.ts`.
  */
 const withResolvedWorkspaceDeps = (pkgDir: string, publish: () => void) => {
   const pkgJsonPath = join(pkgDir, 'package.json');
   const original = readFileSync(pkgJsonPath, 'utf-8');
   const pkg = JSON.parse(original);
-  const versions = readWorkspaceVersions();
-  let resolvedAny = false;
+  const versions = readWorkspaceVersions(PACKAGES_DIR);
 
-  for (const field of DEPENDENCY_FIELDS) {
-    const deps: Record<string, string> | undefined = pkg[field];
-    if (!deps) continue;
+  const rewritten = resolveWorkspaceDeps(pkg, (name) => versions.get(name));
+  for (const line of rewritten) console.log(`  ${line}`);
 
-    for (const [name, range] of Object.entries(deps)) {
-      if (!range.startsWith(WORKSPACE_PROTOCOL)) continue;
-
-      const version = versions.get(name);
-      if (!version) {
-        throw new Error(
-          `${pkg.name} depends on ${name} via "${range}" but no workspace package named ${name} was found`,
-        );
-      }
-
-      const specifier = range.slice(WORKSPACE_PROTOCOL.length);
-      deps[name] =
-        specifier === '*' || specifier === ''
-          ? version
-          : `${specifier}${version}`;
-      resolvedAny = true;
-      console.log(`  ${name}: ${range} -> ${deps[name]}`);
-    }
-  }
-
-  if (!resolvedAny) {
+  if (rewritten.length === 0) {
     assertNoWorkspaceRanges(pkg);
     publish();
     return;
@@ -589,8 +390,9 @@ const runVersionBump = (allPackages: PublishablePackage[]): void => {
   pushVersionCommit(bumpedPackages.map((p) => p.packageJsonPath));
 };
 
-// Guarded so the pure helpers above can be imported by a test without the script
-// running its whole publish flow.
+// Guarded so importing this file cannot start a publish. The pure helpers moved to
+// `bump.ts` and `workspace-ranges.ts`, which is where the tests import from - this
+// file is now only the flow that stitches them together.
 void (async () => {
   if (!import.meta.main) return;
   if (isDryRun) {
