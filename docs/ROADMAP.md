@@ -249,7 +249,6 @@ Feedback goes in as a new file rather than into conversation.
 | [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                            |
 | [global-guard-guards-the-404](./roadmap/global-guard-guards-the-404.md)             | Design gap. A global guard turns every 404 into a 401.               |
 | [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)             | Bug. Bypasses the bound Logger on a publish failure.                 |
-| [relay-resubscribe-passthrough](./roadmap/relay-resubscribe-passthrough.md)         | Missing feature. Pass-through, no design question.                   |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                 |
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                         | Unreproduced.                                                        |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                       |

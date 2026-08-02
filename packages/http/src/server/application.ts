@@ -11,7 +11,7 @@ import {
 import { joinPath, type DiscoveredRoute } from '../route/discover.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import { PubSub } from '../ws/pubsub.js';
-import type { PubSubRelay, RelayPhase } from '../ws/relay.js';
+import type { PubSubRelay, RelayOptions, RelayPhase } from '../ws/relay.js';
 import type { SocketData, SocketOptions } from '../ws/socket.js';
 import { attachAddressSource, ClientAddress } from './client-address.js';
 import type { CorsOptions } from './cors.js';
@@ -60,6 +60,16 @@ export interface HttpOptions extends AppOptions {
   readonly relay?: PubSubRelay;
   /** The broker channel the relay carries frames on. @default 'dunx:ws' */
   readonly relayChannel?: string;
+  /**
+   * How hard to retry a subscribe that failed. Same shape as
+   * `RelayOptions.resubscribe`: bounded, doubling, and on an unref'd timer, so a
+   * broker that never comes back cannot hold the process open.
+   *
+   * Here rather than only on `relayThrough` because reaching for that to set one
+   * option means giving up `relay` above entirely - the two conflict, and the
+   * second to run throws `PubSub already relays`.
+   */
+  readonly relayResubscribe?: RelayOptions['resubscribe'];
 }
 
 /**
@@ -95,6 +105,7 @@ export class HttpApplication implements HttpApp {
   readonly #websocket: WebSocketRuntime | undefined;
   readonly #relay: PubSubRelay | undefined;
   readonly #relayChannel: string | undefined;
+  readonly #relayResubscribe: RelayOptions['resubscribe'];
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -122,6 +133,7 @@ export class HttpApplication implements HttpApp {
     this.#websocket = websocket;
     this.#relay = options.relay;
     this.#relayChannel = options.relayChannel;
+    this.#relayResubscribe = options.relayResubscribe;
     this.gatewayPaths = websocket?.paths ?? [];
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
@@ -221,6 +233,9 @@ export class HttpApplication implements HttpApp {
       await pubsub.relayThrough(this.#relay, {
         ...(this.#relayChannel !== undefined && {
           channel: this.#relayChannel,
+        }),
+        ...(this.#relayResubscribe !== undefined && {
+          resubscribe: this.#relayResubscribe,
         }),
         onError: (error: unknown, phase: RelayPhase) => {
           logger.warn(
