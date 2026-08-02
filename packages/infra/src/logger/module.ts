@@ -93,8 +93,21 @@ const bindings = (options: LoggerModuleOptions): readonly Registration[] => [
     inject: [ContextStore] as const,
   }),
   provide(BackingLogger, {
+    // `isDevelopment` is upstream's colour switch and nothing else, and upstream
+    // defaults it from `NODE_ENV` with no terminal check anywhere on the path - so
+    // a container with `NODE_ENV` unset writes ANSI escapes into its JSON and the
+    // logs stop parsing. `Bun.enableANSIColors` is the question actually being
+    // asked, and it already folds in TTY, `NO_COLOR` and `FORCE_COLOR`. The
+    // consumer still wins, and this is the Bun-specific half of the fix: the
+    // portable one belongs upstream (docs/roadmap/arkv-integrations.md).
     useFactory: (settings: LoggerConfig, context: ContextStore) =>
-      new ArkvLogger(settings, context),
+      new ArkvLogger(
+        {
+          ...settings,
+          isDevelopment: settings.isDevelopment ?? Bun.enableANSIColors,
+        },
+        context,
+      ),
     inject: [LoggerSettings, ContextStore] as const,
   }),
   provide(Logger, {

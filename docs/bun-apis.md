@@ -162,10 +162,12 @@ before `close()`, and a `subscribe()` that failed to connect needs `connect()` f
 `bun test` cannot observe either, because the runner exits the process itself - they
 need a spawned process to catch, which is what `@dunx/infra/redis` now has.
 
-**bullmq 6.0.5's CJS build imports `ioredis/built/utils`, which ioredis 6 removed.**
-Its ESM build does not, which is why the suite passes on ioredis 6 while a script that
-resolves the CJS entry fails with `Cannot find module 'ioredis/built/utils'`. Pin
-ioredis 5 if anything might load the CJS path.
+**bullmq 6.0.5 has no `exports` map and no `"type": "module"`, so Bun resolves it to
+`main` - the CJS build.** The imported namespace carries `__esModule` and a `default`
+holding `Queue`, which is how you tell. This matters because a previous note here
+claimed the ESM build was the safe one: both builds statically import `ioredis` and
+`ioredis/built/utils`, ioredis 6.0.0 still ships that path, and no pin is needed.
+Full measurement in ARCHITECTURE.md, "Not pinning ioredis 5".
 
 Real but missing from `bun-types`: `psubscribe`, `punsubscribe`, `pubsub`, `script`,
 `select`, `connected`, `bufferedAmount`, `onclose`, `onconnect`. Of these `pubsub`,

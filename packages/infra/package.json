@@ -95,7 +95,7 @@
     "@dunx/core": "workspace:*",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",
-    "ioredis": "^6.0.0"
+    "ioredis": ">=5.0.0"
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",

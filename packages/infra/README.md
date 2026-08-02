@@ -213,7 +213,7 @@ root)` inside a container that already exists.
 
 **[Read the Queues guide](../../docs/guide/14-queues.md)** before deploying this.
 It covers the publish/consume split, handler discovery, `jobTimeoutMs`, shutdown
-ordering, the ioredis boundary, and **two known defects** you should know about.
+ordering, the ioredis boundary, and **a known shutdown defect** you should know about.
 
 ## files
 

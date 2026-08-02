@@ -18,7 +18,7 @@ installs neither. `ioredis` is there for bullmq's sake, not dunx's: see
 
 ## Read this before you deploy it
 
-Two known defects, both recorded in `docs/ROADMAP.md`.
+One known defect, recorded in `docs/ROADMAP.md`.
 
 **A process that attempted a queue operation while Redis was down does not exit on
 `SIGTERM`.** bullmq creates its connection on first use and holds a handle whose
@@ -42,11 +42,10 @@ The process will be `SIGKILL`ed by whatever supervises it.
 `Bun.RedisClient` alone is clean in the same scenario: it rejects with
 `Max reconnection attempts reached` and the process exits 0.
 
-**bullmq 6.0.5's CJS build imports `ioredis/built/utils`, which ioredis 6
-removed.** The ESM build does not, which is why the test suite passes on ioredis 6
-while a script resolving the CJS entry fails with
-`Cannot find module 'ioredis/built/utils'`. **Pin ioredis 5 if anything might load
-the CJS path.**
+Earlier versions of this guide also told you to **pin ioredis 5**. That advice was
+wrong and has been withdrawn: ioredis 6 did not remove `ioredis/built/utils`, both of
+bullmq's builds import it, and Bun runs the CJS one. Any ioredis from 5.0.0 up works.
+The measurement is in ARCHITECTURE.md, "Not pinning ioredis 5".
 
 ## A handler is a method with a decorator
 
@@ -378,13 +377,19 @@ dropping it.
 
 Three findings shaped the code:
 
-- **ioredis is a load-time requirement of bullmq's barrel.** `classes/index`
-  exports `redis-connection`, which statically imports `ioredis` and
+- **ioredis is a load-time requirement of bullmq, in both its builds.**
+  `utils/index` and `classes/redis-connection` statically import `ioredis` and
   `ioredis/built/utils`, so `import { Queue } from 'bullmq'` throws
   `Cannot find module` without it, despite bullmq 6 declaring `ioredis` an
   _optional_ peer and shipping three other backends. That is the only reason it is
   listed as an optional peer of `@dunx/infra`. If bullmq makes that import lazy,
   the entry disappears.
+
+  It is optional in the same sense `bullmq` is - needed if and only if you use
+  `/queue` - which is why `bun add bullmq ioredis` installs the pair. Any version
+  from 5.0.0 works, because that is the range bullmq itself declares and dunx has
+  no opinion beyond it.
+
 - **bullmq does not close a connection it was handed.** Measured with
   `CLIENT LIST`: four connections live, three after `worker.close()` plus
   `queue.close()`. It closed only the duplicate it created itself.
