@@ -1,6 +1,6 @@
 # What to send upstream to `@arkv`
 
-The workspace at `/home/petarzarkov/repos/arkv` was read end to end against the
+The workspace at `~/repos/arkv` was read end to end against the
 question CLAUDE.md actually asks: is dunx doing something worse than a package the
 owner already maintains?
 

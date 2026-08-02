@@ -67,7 +67,7 @@ Do not write a dunx ORM, a dunx validator, a dunx auth flow, or a dunx job queue
 
 ### Reuse the `@arkv` workspace - and extend it upstream
 
-The repo owner maintains `@arkv/*` at `/home/petarzarkov/repos/arkv`, all published
+The repo owner maintains `@arkv/*` at `~/repos/arkv`, all published
 to npm. **Do not reimplement what they already do**, and do not fork them into dunx:
 
 | Need                                         | Use                                      | Never                                                      |
@@ -85,7 +85,7 @@ upstream, it is a breaking type change for every arkv consumer.
 
 **Improvements go into the `@arkv` repo, not into dunx.** If dunx needs the logger to
 do something it does not do, add it at
-`/home/petarzarkov/repos/arkv/packages/logger`, publish, and bump the dependency
+`~/repos/arkv/packages/logger`, publish, and bump the dependency
 here. A local patch, wrapper-with-extra-behaviour, or vendored copy is the wrong
 answer - it forks a package the owner maintains and the fix stops reaching his other
 projects.

@@ -26,7 +26,7 @@ structurally, with no adapter class in between.
 
 ## Reference implementations - do not design from scratch
 
-`/home/petarzarkov/repos/nestjs-template` is a working production app by the same
+`~/repos/nestjs-template` is a working production app by the same
 owner. **Read the relevant part before designing any of the items below.** It is
 NestJS-shaped, so port the _approach_, not the wiring.
 

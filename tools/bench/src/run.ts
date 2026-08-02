@@ -1,4 +1,5 @@
 import { buildNodeEntries } from './build.js';
+import { repoRoot } from './paths.js';
 import { describeSubjects, readMachine } from './machine.js';
 import { spread } from './stats.js';
 import { bunCommand, startSubject, verifySubject } from './subject-process.js';
@@ -229,7 +230,12 @@ export const runSuite = async (
     loadGenerator: {
       id: generator.id,
       version: generator.version,
-      binary: generator.binary,
+      // Repo-relative: this file is committed, and an absolute path would
+      // publish whoever's machine generated it.
+      binary:
+        generator.binary === null
+          ? null
+          : generator.binary.replace(`${repoRoot}/`, ''),
       limitations: generator.limitations,
     },
     config,

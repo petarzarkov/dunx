@@ -1,6 +1,6 @@
 # Adopt what is good from nestjs-template
 
-**Ongoing.** The owner spent months on `/home/petarzarkov/repos/nestjs-template`
+**Ongoing.** The owner spent months on `~/repos/nestjs-template`
 and rates it. Treat it as a source of proven patterns.
 
 ## Adopted
@@ -21,7 +21,7 @@ and rates it. Treat it as a source of proven patterns.
 
 ## Still to mine
 
-The template port in `/home/petarzarkov/repos/dunx-template` is reading the whole
+The template port in `~/repos/dunx-template` is reading the whole
 thing and will surface candidates. Areas worth a look:
 
 - Swagger UI preauthorization: the template hooks the sign-in response and calls

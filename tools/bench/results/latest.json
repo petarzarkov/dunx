@@ -14,7 +14,7 @@
   "loadGenerator": {
     "id": "oha",
     "version": "oha 1.15.0",
-    "binary": "/home/petarzarkov/repos/dunx/tools/bench/.bin/oha",
+    "binary": "tools/bench/.bin/oha",
     "limitations": [
       "Runs on the same machine as the subject, so the loopback interface and the scheduler are shared. Numbers are a relative ranking, not an absolute capacity.",
       "Open-loop rate limiting is off, so this is a closed-loop test: latency is measured under whatever load the fixed connection count produces, and is subject to coordinated omission.",
