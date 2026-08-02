@@ -1,0 +1,19 @@
+{
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    /* The one directory in this repo with legacy decorators. NestJS's programming
+       model requires them and its parameter decorators need the emitted metadata,
+       so a benchmark subject measuring NestJS has to have them — measuring a fake
+       Nest would measure nothing.
+
+       CLAUDE.md's ban exists so *dunx* never needs them, and it still never does:
+       this directory is excluded from the parent tsconfig, and nothing outside it
+       imports anything in it. The subject registry references these entrypoints as
+       string paths, so the compiler never crosses the boundary. */
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "noEmit": true
+  },
+  "include": ["."],
+  "exclude": []
+}

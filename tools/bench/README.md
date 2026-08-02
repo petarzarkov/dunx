@@ -59,6 +59,8 @@ And one thing per subject:
 | `dunx`            | Bun     | `@dunx/http`, with the compiler preload and a constructor-injected dependency. |
 | `dunx-logging`    | Bun     | The same app with `requestLogging` left at its default — see below.            |
 | `elysia`          | Bun     | The other Bun-native framework.                                                |
+| `nest-express`    | Node    | **NestJS on its default adapter.** dunx is Nest-shaped, so this is the closest comparison in the suite. |
+| `nest-fastify`    | Node    | The same Nest app on the Fastify adapter, isolating adapter from framework.    |
 | `hono-bun`        | Bun     | Hono on `Bun.serve`.                                                           |
 | `hono-node`       | Node    | The *same* Hono app on `node:http`, so runtime can be separated from framework. |
 | `node-http`       | Node    | The Node ceiling: a bare `requestListener`, no framework.                      |
@@ -67,6 +69,30 @@ And one thing per subject:
 
 Each subject is a single file under `servers/`, small enough to read in full. If a
 number looks wrong, read the file — that is the whole implementation.
+
+#### Reading the NestJS rows fairly
+
+dunx borrows Nest's shape — modules, controllers, constructor injection, guards,
+decorator-declared routes — so "what does that programming model cost" is the most
+useful question this suite can answer. It is also the easiest one to answer
+dishonestly, because **Nest runs on Node here and dunx runs on Bun**, and a naive
+reading credits dunx with a runtime difference it did not earn.
+
+Three comparisons, in increasing usefulness:
+
+- `dunx` vs `nest-express` mixes framework *and* runtime. Do not quote it alone.
+- `nest-express` vs `express`, and `nest-fastify` vs `fastify`: same runtime, same
+  server, Nest added. **That gap is Nest's own overhead** — the DI container, the
+  interceptor and pipe chain, the metadata reflection.
+- `dunx` vs raw `Bun.serve` alongside `nest-express` vs raw `node:http`: each
+  framework against its own runtime's ceiling. This is the fair comparison, and it
+  is the one to quote.
+
+Nest is also the only subject using **legacy decorators and `reflect-metadata`** —
+its programming model requires them. dunx uses TC39 standard decorators and records
+constructor types at build time instead, which is where its startup difference
+mostly comes from. `servers/nest/` has its own `tsconfig.json` for exactly this and
+is excluded from every other project in the repo.
 
 #### Why dunx appears twice
 

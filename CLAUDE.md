@@ -169,6 +169,13 @@ site — measured, and recorded in ARCHITECTURE.md.
 - Use TC39 standard decorators. There are no parameter decorators in that
   proposal, so `@Inject()` does not exist and never will.
 - Do not add `reflect-metadata` or `tsyringe`.
+- **One carve-out, and it proves the rule rather than bending it:**
+  `tools/bench/servers/nest/` sets both flags and imports `reflect-metadata`,
+  because the NestJS benchmark subject has to run NestJS's actual programming
+  model — measuring a fake Nest would measure nothing. It has its own
+  `tsconfig.json`, it is excluded from every other project, and the subject
+  registry reaches it by string path so no compiler ever crosses the boundary.
+  Nothing else may use them, and dunx itself still never needs them.
 
 ## Dependency injection
 

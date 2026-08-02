@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.json",
   "include": ["src", "servers"],
-  "exclude": ["node_modules", "results"]
+  "exclude": ["node_modules", "results", "servers/nest"]
 }

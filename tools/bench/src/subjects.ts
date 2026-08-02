@@ -53,6 +53,32 @@ export const subjects: readonly Subject[] = [
     ],
   },
   {
+    id: 'nest-express',
+    label: 'NestJS (Express)',
+    runtime: 'node',
+    entry: 'servers/nest/express.ts',
+    preload: [],
+    versionOf: '@nestjs/core',
+    validator: 'zod (pipe)',
+    notes: [
+      'dunx is deliberately Nest-shaped — modules, controllers, DI, guards — so this is the most direct answer to what that programming model costs.',
+      'The default adapter, which is what most Nest apps ship. Compare against the `express` row to separate Nest from the server underneath it.',
+      'The one subject using legacy decorators and reflect-metadata, which Nest requires; see servers/nest/tsconfig.json.',
+    ],
+  },
+  {
+    id: 'nest-fastify',
+    label: 'NestJS (Fastify)',
+    runtime: 'node',
+    entry: 'servers/nest/fastify.ts',
+    preload: [],
+    versionOf: '@nestjs/core',
+    validator: 'zod (pipe)',
+    notes: [
+      'The same Nest application on the Fastify adapter, so the pair isolates the adapter from the framework the way hono-bun/hono-node isolates the runtime.',
+    ],
+  },
+  {
     id: 'hono-bun',
     label: 'Hono (Bun)',
     runtime: 'bun',
