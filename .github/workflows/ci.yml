@@ -63,11 +63,27 @@ jobs:
       - name: Test the documentation site
         run: bun run --filter '@dunx/docs' test
 
+      # Every example is a bootstrap that rots the moment nobody runs it, so all of
+      # them are kept alive here rather than only the full one. test:cov above
+      # deliberately covers ./packages and ./scripts only — the examples need their
+      # own bunfig preload (the compiler transform), so their suites run from their
+      # own workspaces. An example whose backing service is absent (Redis, Postgres,
+      # MySQL, S3) reports that it is skipping and still exits 0.
+      - name: Test the examples
+        run: bun run --filter '@dunx/example-*' test
+
       # `start` is a long-running service now, so it can never exit 0. `tour`
       # boots the same app, narrates every package and exits — which is the
       # end-to-end check that the whole DI graph builds and every part works.
-      - name: Tour the example
-        run: bun run --filter '@dunx/playground' tour
+      - name: Tour the full example
+        run: bun run --filter '@dunx/example-full' tour
+
+      # The one example with no HTTP: four containers, one per database
+      # configuration. SQLite always runs; Postgres and MySQL report that they are
+      # skipping. Separate from the suites above because it is the entrypoint a
+      # reader actually runs.
+      - name: Run the databases example
+        run: bun run --filter '@dunx/example-databases' start
 
       # `bun run build` already built the site once, before the coverage model
       # and badges existed. Rebuild so the deployed artifact carries them.

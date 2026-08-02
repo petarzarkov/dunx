@@ -60,8 +60,10 @@ export class SqlOptions<
         `"${this.url}" names ${dialect}, and drizzle-orm/bun-sql is Postgres ` +
           'only — it builds a PgDialect unconditionally, so a non-Postgres URL ' +
           'would compile $1 placeholders and Postgres quoting against a server ' +
-          'that does not speak them. Use SqliteOptions for SQLite; MySQL and ' +
-          'MariaDB have no drizzle driver on Bun.SQL.',
+          'that does not speak them. Use SqliteOptions for SQLite. For MySQL and ' +
+          'MariaDB there is no drizzle driver on Bun.SQL, but drizzle-orm/' +
+          'mysql-proxy over Bun.SQL works and needs no change to this package — ' +
+          'examples/databases/src/mysql/driver.ts is a working DbOptions for it.',
       );
     }
     this.#driver = { ...driver, url: this.url };

@@ -338,6 +338,76 @@ a DDL block has to be one statement per call. `db.exec()`/ the raw handle's`exec
   The silent one is the dangerous one: a timestamp column quietly loses every row.
   Convert to ISO 8601 for SQLite; Postgres takes a native binding.
 
+- **`Bun.SQL` cannot be used with `instanceof`.** `s instanceof Bun.SQL` throws
+  `TypeError: instanceof called on an object with an invalid prototype property`,
+  which follows from `prototype` being `undefined` above. Narrow on
+  `options.adapter`, or hold the client on a class you own.
+
+#### `POSTGRES_URL` in the environment silently overrides an explicit `url`
+
+Measured on 1.3.14. In the **options-object** form only,
+`new Bun.SQL({ url: 'mysql://…' })` becomes `adapter: 'postgres'` and dials the
+Postgres URL from the environment, failing with a bare `Connection closed` that
+names nothing. The explicit argument loses to the ambient variable.
+
+| Variable set                | `new Bun.SQL({ url: mysqlUrl })`   |
+| --------------------------- | ---------------------------------- |
+| `POSTGRES_URL`              | **hijacked** → `adapter: postgres` |
+| `PGURL`                     | **hijacked** → `adapter: postgres` |
+| `TLS_POSTGRES_DATABASE_URL` | **hijacked** → `adapter: postgres` |
+| `DATABASE_URL`              | ok → `adapter: mysql`              |
+| `MYSQL_URL`                 | ok → `adapter: mysql`              |
+
+Three forms are unaffected, all verified: `new Bun.SQL(urlString)`,
+`new Bun.SQL(new URL(url))`, and `new Bun.SQL({ url, adapter: 'mysql' })`. Note
+that `@dunx/infra/db`'s `SqlOptions` uses the options-object form — harmless there,
+because that backend is Postgres by construction, but any non-Postgres backend
+built on `Bun.SQL` must name its `adapter`.
+
+#### An in-flight MySQL query does not hold the event loop open
+
+Measured on 1.3.14, and the failure is silent. A script whose only pending work is
+a `Bun.SQL` query on the **MySQL** adapter exits **with code 0, mid-query** — no
+error, no unhandled rejection, no output after the last completed statement. The
+loop drains because the query holds no reference on it.
+
+A long-running server never sees this, because `Bun.serve` keeps a reference. A CLI,
+a migration, a seeder or a one-shot script does. Holding a `setInterval` for the
+duration of the work is the workaround; `examples/databases/src/main.ts` does
+exactly that and says why. The Postgres adapter and `bun:sqlite` are unaffected.
+
+#### drizzle over `Bun.SQL` for MySQL — verified working
+
+There is no Bun-native drizzle MySQL driver: drizzle 0.45.2's Bun entrypoints are
+`bun-sql` (Postgres — `bun-sql/driver.js` builds a `PgDialect` unconditionally, so a
+MySQL URL through it emits `$1` placeholders and double-quoted identifiers) and
+`bun-sqlite`. Its MySQL drivers are `mysql2` and `mysql-proxy`.
+
+`drizzle-orm/mysql-proxy` over `Bun.SQL` works and keeps Rule 1: drizzle owns the
+dialect, Bun owns the socket, `mysql2` is never installed. Verified against MySQL 8
+— inserts, selects, `where`, ordering, updates, deletes, aggregates,
+`$returningId()` single and multi-row, inner and left joins, `placeholder()`
+prepared statements, and the `mysql-proxy` migrator.
+
+Three details the adapter has to get right, all found by running it:
+
+- **`.values()` is mandatory for `method === 'all'`.** drizzle's `mapResultRow`
+  indexes rows positionally, and `Bun.SQL`'s default object rows **lose columns on a
+  join** — `users.id, users.name, posts.id, posts.name` returns two keys, not four,
+  because the later names overwrite the earlier. A manual object→array conversion
+  would be silently wrong.
+- **`method === 'execute'` covers SELECTs too**, whenever the query carries no
+  fields. Return the rows when the result array is non-empty, or `db.execute(sql…)`
+  silently yields nothing.
+- **`insertId`/`affectedRows` go in `rows[0]`**, not at the top level, despite
+  `RemoteCallback`'s declared type — `mysql-proxy/session.js` reads
+  `data[0].insertId`. Bun's own property is `lastInsertRowid`.
+
+`mysql-proxy` refuses `db.transaction()` and `iterator()` outright. `Bun.SQL`'s
+`begin()` reserves a connection, so a transaction is that plus a second drizzle
+handle over the reserved socket. The whole adapter is
+`examples/databases/src/mysql/driver.ts`.
+
 ### `Bun.color` — `'ansi'` is not a fixed encoding, and can emit a raw newline
 
 `Bun.color(hex, 'ansi')` returns whatever the _current terminal_ is judged to

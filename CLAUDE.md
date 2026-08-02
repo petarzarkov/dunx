@@ -141,7 +141,7 @@ packages/<name>/        # Each published package
   dist/                 # Build output (gitignored)
   package.json
   tsconfig.json         # Extends ../../tsconfig.json — one per package, no build variants
-examples/playground/    # The one example app. Not one per package — see ARCHITECTURE.md
+examples/<name>/        # minimal, databases, testing, full — a ladder, not one per package
 tools/<name>/           # Private workspace tooling, never published
 docs/                   # Architecture and design docs
 scripts/                # Repo-level scripts (bun-native TS)
@@ -409,10 +409,29 @@ structurally what `DbConnection` and `RedisConnection` provide, which also remov
 
 Planned, in roadmap order: `@dunx/create-app`.
 
-There is **one** example app, `examples/playground`, which CI boots and which grows
-through the phases. Per-package examples were tried and reverted — see
-docs/ARCHITECTURE.md, Phase 1. A part needing an absent service (Redis, Postgres, S3)
-prints that it is skipping and the app still exits 0.
+## Examples
+
+Four, and they are a **ladder of questions an evaluator asks in order** — not one
+per package. `@dunx/http` has no example of its own; it is in all four.
+
+| Workspace            | Answers                                                    |
+| -------------------- | ---------------------------------------------------------- |
+| `examples/minimal`   | what does this look like? Five files, `HttpFactory.create` |
+| `examples/databases` | how do I set up a database? SQLite ×2, Postgres, MySQL     |
+| `examples/testing`   | how do I test it? Overrides, a real server, a guard        |
+| `examples/full`      | does it compose? Every package, one long-running service   |
+
+Package names are `@dunx/example-<dir>`, so `bun run --filter '@dunx/example-*'`
+addresses them all — which is how CI keeps them alive. **Every example must be in
+CI**; that is the whole test for whether a fifth one earns its place. Per-package
+examples were tried and reverted and that reversal still holds — see
+docs/ARCHITECTURE.md, Phase 1, which also records which candidates were rejected.
+
+A part needing an absent service (Redis, Postgres, MySQL, S3) prints that it is
+skipping and the app still exits 0.
+
+`examples/full` is the one that grows through the phases. `examples/minimal` is
+valuable only because it is small — do not add to it.
 
 ## Repo Scripts
 

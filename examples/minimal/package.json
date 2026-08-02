@@ -1,0 +1,20 @@
+{
+  "name": "@dunx/example-minimal",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The smallest dunx app — a service, a controller, a module and HttpFactory.create",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/compiler": "workspace:*",
+    "@dunx/core": "workspace:*",
+    "@dunx/http": "workspace:*"
+  },
+  "devDependencies": {
+    "@dunx/testing": "workspace:*"
+  }
+}

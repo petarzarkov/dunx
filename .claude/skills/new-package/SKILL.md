@@ -1,6 +1,6 @@
 ---
 name: new-package
-description: Add a workspace to the dunx monorepo — a published package under packages/ or a private app under examples/ — with correct manifest fields, tsconfig, exports-driven build entrypoints, README, and coverage badge. Use when creating @dunx/http, @dunx/testing, @dunx/create-app, examples/playground, or when adding a public subpath export to an existing package.
+description: Add a workspace to the dunx monorepo — a published package under packages/ or a private app under examples/ — with correct manifest fields, tsconfig, exports-driven build entrypoints, README, and coverage badge. Use when creating @dunx/http, @dunx/testing, @dunx/create-app, examples/full, or when adding a public subpath export to an existing package.
 ---
 
 # /new-package
@@ -41,19 +41,33 @@ built. So the manifest edit _is_ the build change — add the `exports` key, the
 ## Private example — `examples/<name>/`
 
 Same skeleton, minus publishing: `"private": true`, no `files`, no `exports`, no
-`publishConfig`. Depend on packages with `"@dunx/core": "workspace:*"`. Give it a
-`start` script — CI asserts examples boot and exit 0.
+`publishConfig`. Depend on packages with `"@dunx/core": "workspace:*"`.
 
-Two kinds of example, and they are not interchangeable:
+**Name it `@dunx/example-<dir>`.** CI reaches every example through
+`bun run --filter '@dunx/example-*' test`, so an off-pattern name is an example
+that silently stops being checked. It needs a `bunfig.toml` with the compiler
+preload under both the root and `[test]`, a `tsconfig.json` extending the root, a
+`typecheck` script, and a **`test` script with at least one test** — `--filter`
+matches only workspaces that have the script, so an example without one is skipped
+without saying so.
 
-- **`examples/playground`** is the _integration_ example. It grows through the
-  phases and proves the pieces work together. Do not fork it per phase.
-- **`examples/<package>`** demonstrates exactly one package. Every published
-  package gets one, named after it, and CI asserts it boots and exits 0.
+There are four, and they are **not one per package** — they are a ladder of
+questions an evaluator asks in order (`minimal` → `databases` / `testing` →
+`full`). Per-package examples were tried and reverted; that reversal holds. Before
+adding a fifth, read docs/ARCHITECTURE.md, Phase 1, which records which candidates
+were rejected and why:
 
-An example that needs a service CI does not have (Redis, Postgres, S3, network)
-must detect that, print a clear "skipping" line, and **still exit 0**. An example
-that cannot run is an example nobody notices has rotted.
+- `examples/full` is the _integration_ example. It grows through the phases and is
+  the only place the packages are shown composing. Do not fork it per phase, and do
+  not carve pieces out of it into new examples.
+- `examples/minimal` is valuable only because it is small. Do not add to it.
+- A new example must answer a **question the existing four do not**, and must be
+  keepable alive by CI. If its whole subject needs a service CI does not have, it
+  would demonstrate nothing there — that is a rejection, not a caveat.
+
+An example that needs a service CI does not have (Redis, Postgres, MySQL, S3,
+network) must detect that, print a clear "skipping" line, and **still exit 0**. An
+example that cannot run is an example nobody notices has rotted.
 
 ## Invariants
 

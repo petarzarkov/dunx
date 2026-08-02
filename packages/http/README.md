@@ -87,7 +87,7 @@ parameter. Path params without a `params` schema stay on `input.req.params`.
 Validation is the **Standard Schema** spec (`~standard.validate`, sync or async),
 restated in this package's own types — so Zod 4, Valibot and ArkType all work and
 `@dunx/http` still has zero dependencies. Anything with a `~standard` property
-qualifies, including a hand-written object; see `examples/playground`.
+qualifies, including a hand-written object; see `examples/full`.
 
 ### Body parsing
 

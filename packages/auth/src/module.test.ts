@@ -113,7 +113,7 @@ const DDL = `
 
 /**
  * A `DrizzleSource`, which is the shape `@dunx/infra/db`'s `DbConnection` has. Bound
- * as a token so `forRootAsync` has something to inject, exactly as the playground
+ * as a token so `forRootAsync` has something to inject, exactly as the full example
  * injects the real `DbConnection`.
  */
 class Connection implements DrizzleSource {

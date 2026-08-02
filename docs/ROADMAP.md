@@ -174,7 +174,7 @@ web layer. The cost accepted is a little relay-specific connection glue instead 
 reusing `@dunx/infra/redis`'s general-purpose client.
 
 An app that would rather reuse its own connections satisfies the two methods itself,
-and `@dunx/infra`'s `RedisConnection` **already does, structurally** — the playground
+and `@dunx/infra`'s `RedisConnection` **already does, structurally** — the full example
 runs its second node on exactly that. Reasoning, the one-channel constraint that
 `psubscribe` forces, and the duplicate-delivery defence:
 [ARCHITECTURE.md](./ARCHITECTURE.md), "Multi-node websocket fan-out".
@@ -238,7 +238,7 @@ Small, independent, each recorded where it belongs:
   might load the CJS entry.
 - **No in-process HTTP + worker composition.** `WorkerFactory` builds its own
   container, so a single process cannot both serve and consume. Deliberate, but it is
-  why the playground needs `bun run worker`.
+  why the full example needs `bun run worker`.
 - **`@dunx/testing` cannot be used by another published package's tests**, only by
   `examples/*`, for the same build-ordering reason as item 1. Fixing item 1 fixes this.
 

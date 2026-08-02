@@ -428,7 +428,7 @@ Anything that is a **runtime value** can be its own token, so most code needs no
 An `interface` is erased at compile time, so `inject(SomeInterface)` cannot exist —
 that is the same erasure the `emitDecoratorMetadata` measurement above shows
 degrading to `Object`. Replacing the interface with an abstract class is what makes
-the token disappear. `examples/playground` uses zero `token()` calls for this
+the token disappear. `examples/full` uses zero `token()` calls for this
 reason.
 
 `token<T>()` returns a **unique object**; the name is only a label for error
@@ -1036,7 +1036,7 @@ moves into Phase 2, and OpenAPI ahead of Phase 4. Read it before planning a phas
 
 ### Phase 1 — DI proven end to end
 
-Ship `@dunx/core` and a single `examples/playground` app that boots a fully
+Ship `@dunx/core` and a single `examples/full` app that boots a fully
 dependency-injected application graph **with no HTTP at all**.
 
 Keeping HTTP out is the point. If the example can only be evaluated by curling
@@ -1054,19 +1054,77 @@ Exit criteria:
 - Resolving a provider twice returns the same instance
 - The example runs via `bun start`, exits 0, and CI asserts that
 
-The playground is one app that grows through the phases, not a new example per
-phase, and not one per package. Per-package examples were tried and reverted: seven
-apps meant seven bootstraps to keep alive and nowhere that showed the packages
-composing, which is the thing actually worth demonstrating.
+`examples/full` is one app that grows through the phases, not a new example per
+phase. It was `examples/playground` until the examples were restructured; the rename
+is cosmetic, but what sits beside it now is not.
 
 Where a part needs a service CI does not have (Redis, Postgres, S3), it reports that
 it is skipping and the app still exits 0 — otherwise CI teaches everyone to ignore
 it.
 
+#### Per-package examples were reverted; a ladder of four replaced them
+
+The original decision — recorded here as "seven apps meant seven bootstraps to keep
+alive and nowhere that showed the packages composing" — **stands, and was not
+reversed.** What changed is that "one example" turned out to be the wrong reading of
+it. There are now four, and the distinction is that they are not one per package:
+
+| Example              | Answers                                                         |
+| -------------------- | --------------------------------------------------------------- |
+| `examples/minimal`   | "what does this framework look like?" — five files, two minutes |
+| `examples/databases` | "how do I set up my database?" — SQLite ×2, Postgres, MySQL     |
+| `examples/testing`   | "how do I test it?" — overrides, a real server, a guard         |
+| `examples/full`      | "does it all actually compose?" — every package, one service    |
+
+Each is a **question an evaluator asks in order**, not a package with a demo bolted
+on. `@dunx/http` has no example of its own and never will; it appears in all four.
+`full` is still the only place the packages are shown composing, which is what the
+original objection was about, and it did not shrink to make room for the others.
+
+**The maintenance objection still stands and is the binding constraint.** Every
+example is a bootstrap that rots the moment nobody runs it, so each is wired into
+CI the same way `full`'s `tour` is — `bun run --filter '@dunx/example-*' test` runs
+all of their suites, and `full` additionally runs its `tour`. An example that cannot
+be kept alive by CI does not get added. That is the whole test for whether a fifth
+one earns its place, and it is why several plausible candidates were rejected:
+
+- **An auth example.** It would be `full`'s `src/auth/` copied with the rest deleted:
+  same better-auth config, same schema, same guard, no new question answered.
+- **A queue / background-worker example.** Its entire subject needs Redis, so in CI
+  it would skip and demonstrate nothing. `full`'s `bun run worker` already isolates
+  the two-process shape, which is the part that is genuinely hard to see.
+- **An OpenAPI-first example.** `full` already generates the document from the zod
+  schemas its routes validate against; a second app would only have fewer routes in
+  it.
+
+#### `examples/databases` is one app with four configurations, not four apps
+
+Four containers run in sequence inside one process, because the container is flat
+and each backend binds its own `DbConnection` — two in one app would be a duplicate
+token. One workspace rather than four is less to keep alive, and it puts the
+SQLite-async and SQLite-sync services in adjacent files, which is where the choice
+between them is actually made.
+
+It uses `AppFactory`, not `HttpFactory`. That is the same argument Phase 1 makes
+above: with no HTTP, nothing about the database wiring can hide behind a route.
+
+MySQL is the interesting part, and it is a **fifth backend that `@dunx/infra/db`
+does not ship**, assembled in the example in about forty lines with no change to the
+package — which is the strongest available evidence that `DbOptions.open()` is the
+right seam. drizzle has no Bun-native MySQL driver, so it is `drizzle-orm/mysql-proxy`
+with `Bun.SQL` as the transport: drizzle owns the dialect, Bun owns the socket, and
+`mysql2` is never installed. Verified against MySQL 8; the callback contract, the
+two `Bun.SQL` bugs it works around, and the transaction gap are all in
+[bun-apis.md](./bun-apis.md), "`Bun.SQL` and `bun:sqlite`".
+
+Promoting it into `@dunx/infra/db` as a `MysqlOptions<TSchema>` is a reasonable next
+step and deliberately not taken here: the example is the place to prove it works
+before it becomes a supported surface with a schema type parameter to maintain.
+
 ### Phase 2 — HTTP
 
 `@dunx/http`, the `Bun.serve` adapter, the middleware chain, the error mapper,
-and route-collision detection. The playground grows a controller; its Phase 1
+and route-collision detection. `examples/full` grows a controller; its Phase 1
 assertions keep passing unchanged.
 
 Also `@dunx/compiler`, the load-time transform that makes constructor injection
@@ -1079,7 +1137,7 @@ Exit criteria:
 - A parameter whose type is erased fails at boot naming that parameter
 - A subclass with no constructor of its own inherits its base's dependencies
 - `inject()` still works, and both mechanisms work in one class
-- The playground uses constructor injection throughout and `bun start` exits 0
+- `examples/full` uses constructor injection throughout and `bun start` exits 0
 
 ### Phase 3 — Validation
 
@@ -1268,7 +1326,7 @@ reads as "no session" and would sign every user out.
 
 The four better-auth tables are better-auth's, they change with the plugins an app
 enables, and its own CLI generates them (`bunx @better-auth/cli generate`). A copy
-inside dunx is a copy that rots against the library that reads it. The playground has
+inside dunx is a copy that rots against the library that reads it. `examples/full` has
 a generated one at `src/database/auth.schema.ts`, re-exported into the app's single
 schema object — which is all `drizzleDatabase(connection)` needs, because
 `@dunx/infra/db` builds its handle with `drizzle({ client, schema })` and the adapter
@@ -1322,7 +1380,7 @@ itself — and `@dunx/infra`'s `RedisConnection` **already does, structurally**:
 `publish(channel, message)` and `subscribe(channel, listener)` are its own names and
 shapes, so `app.get(PubSub).relayThrough(app.get(RedisConnection))` typechecks with
 no adapter between them. That is the `@dunx/auth` `RedisStore` precedent — declare
-the shape, let the app supply anything that fits — and `examples/playground` runs its
+the shape, let the app supply anything that fits — and `examples/full` runs its
 second node that way on purpose.
 
 ### One channel, because `psubscribe` does not work
@@ -1600,7 +1658,7 @@ Two consequences worth keeping:
   its own tests, so that made openapi's build race `@dunx/testing`'s, and putting
   `@dunx/testing` in openapi's `dependencies` would ship a test package to
   production. Reverted. `examples/*` have no such limit — nothing builds in parallel
-  with them — which is why `examples/playground/src/service.test.ts` is where the
+  with them — which is why `examples/full/src/service.test.ts` is where the
   harness is exercised against a real app.
 
 `@dunx/http` is therefore not optional, and `createTestServer` imports it normally.

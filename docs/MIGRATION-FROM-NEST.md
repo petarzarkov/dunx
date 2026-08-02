@@ -305,7 +305,7 @@ These two are the honest gate on whether any given Nest app can move today.
 async database factory, one CRUD controller, an auth guard reading `@Roles`, and
 a health endpoint.
 
-`examples/playground` cannot surface any of the blocked items above; it has no
+`examples/full` cannot surface any of the blocked items above; it has no
 controller metadata, no dynamic module, and no validation, so all three gaps are
 invisible in the one app CI actually boots. A parity example turns this document
 from a list of claims into a build target.

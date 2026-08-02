@@ -50,7 +50,7 @@ export interface QueueOptionsInit {
    * and a route waiting on it hangs instead of answering. And with **any**
    * `maxRetries > 0`, a client that never connected keeps a retry timer alive past
    * `close()` and the process never exits — verified here at `maxRetries: 3`,
-   * where a playground boot with no Redis survived SIGTERM for 12s. See
+   * where a full-example boot with no Redis survived SIGTERM for 12s. See
    * docs/bun-apis.md, "A failed connection leaks a retry timer past `close()`".
    *
    * So `0` is the only default that both fails fast and lets the process die.

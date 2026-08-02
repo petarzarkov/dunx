@@ -15,8 +15,18 @@
         "typescript": "7.0.2",
       },
     },
-    "examples/playground": {
-      "name": "@dunx/playground",
+    "examples/databases": {
+      "name": "@dunx/example-databases",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/infra": "workspace:*",
+        "drizzle-orm": "^0.45.2",
+      },
+    },
+    "examples/full": {
+      "name": "@dunx/example-full",
       "version": "0.0.0",
       "dependencies": {
         "@dunx/auth": "workspace:*",
@@ -29,6 +39,31 @@
         "bullmq": "^6.0.5",
         "drizzle-orm": "^0.45.2",
         "ioredis": "^6.0.0",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@dunx/testing": "workspace:*",
+      },
+    },
+    "examples/minimal": {
+      "name": "@dunx/example-minimal",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/http": "workspace:*",
+      },
+      "devDependencies": {
+        "@dunx/testing": "workspace:*",
+      },
+    },
+    "examples/testing": {
+      "name": "@dunx/example-testing",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/compiler": "workspace:*",
+        "@dunx/core": "workspace:*",
+        "@dunx/http": "workspace:*",
         "zod": "^4.4.3",
       },
       "devDependencies": {
@@ -287,6 +322,14 @@
 
     "@dunx/docs": ["@dunx/docs@workspace:tools/docs"],
 
+    "@dunx/example-databases": ["@dunx/example-databases@workspace:examples/databases"],
+
+    "@dunx/example-full": ["@dunx/example-full@workspace:examples/full"],
+
+    "@dunx/example-minimal": ["@dunx/example-minimal@workspace:examples/minimal"],
+
+    "@dunx/example-testing": ["@dunx/example-testing@workspace:examples/testing"],
+
     "@dunx/http": ["@dunx/http@workspace:packages/http"],
 
     "@dunx/infra": ["@dunx/infra@workspace:packages/infra"],
@@ -294,8 +337,6 @@
     "@dunx/openapi": ["@dunx/openapi@workspace:packages/openapi"],
 
     "@dunx/openapi-ui": ["@dunx/openapi-ui@workspace:tools/openapi-ui"],
-
-    "@dunx/playground": ["@dunx/playground@workspace:examples/playground"],
 
     "@dunx/testing": ["@dunx/testing@workspace:packages/testing"],
 

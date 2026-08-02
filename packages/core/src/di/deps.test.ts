@@ -10,7 +10,7 @@ import { token, type Ctor } from './token.js';
 /**
  * Stands in for `@dunx/compiler`. Core is tested without the plugin on purpose:
  * the container's contract is the metadata, not the transform that writes it, and
- * `examples/playground` covers the two working together.
+ * `examples/full` covers the two working together.
  */
 const withDeps = (
   ctor: Ctor<unknown>,

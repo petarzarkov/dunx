@@ -40,6 +40,24 @@ and what is next.
 | [`@dunx/openapi`](./packages/openapi) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fopenapi)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fopenapi?label=dls)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fopenapi?label=size)](https://www.npmjs.com/package/%40dunx%2Fopenapi) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-openapi.svg)](https://petarzarkov.github.io/dunx/#/coverage) | OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate |
 | [`@dunx/testing`](./packages/testing) | [![npm](https://img.shields.io/npm/v/%40dunx%2Ftesting)](https://www.npmjs.com/package/%40dunx%2Ftesting) [![dls](https://img.shields.io/npm/dt/%40dunx%2Ftesting?label=dls)](https://www.npmjs.com/package/%40dunx%2Ftesting) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Ftesting?label=size)](https://www.npmjs.com/package/%40dunx%2Ftesting) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-testing.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0 |
 
+## Examples
+
+A ladder, not one per package — each answers the next question an evaluator asks.
+All four are kept alive by CI, and each exits 0 with no database, Redis or S3
+installed.
+
+| Example                                    | Answers                                                            |
+| ------------------------------------------ | -------------------------------------------------------------------- |
+| [`examples/minimal`](./examples/minimal)     | What does it look like? Five files, read top to bottom in two minutes |
+| [`examples/databases`](./examples/databases) | How do I set up a database? SQLite (async and sync), Postgres, MySQL  |
+| [`examples/testing`](./examples/testing)     | How do I test it? Overrides, a real server on port 0, a guard         |
+| [`examples/full`](./examples/full)           | Does it compose? Every package in one long-running service            |
+
+```bash
+bun install
+bun run --filter '@dunx/example-minimal' start
+```
+
 ## Project Structure
 
 ```
