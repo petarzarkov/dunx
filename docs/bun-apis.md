@@ -343,6 +343,32 @@ a DDL block has to be one statement per call. `db.exec()`/ the raw handle's`exec
   which follows from `prototype` being `undefined` above. Narrow on
   `options.adapter`, or hold the client on a class you own.
 
+#### `AsyncLocalStorage.enterWith()` segfaults after any `await`
+
+Measured on 1.3.14. Three lines are enough:
+
+```ts
+import { AsyncLocalStorage } from 'node:async_hooks';
+const als = new AsyncLocalStorage<number>();
+als.enterWith(1);
+await Promise.resolve(); // panic(main thread): Segmentation fault
+```
+
+| form                                 | result                               |
+| ------------------------------------ | ------------------------------------ |
+| `enterWith` with no `await` after it | fine, at any iteration count         |
+| `enterWith` then any `await`         | **segfault**, on the first call      |
+| `run()` with an async callback       | fine, measured to 300,000 iterations |
+
+`enterWith` is the cheaper primitive on paper - it sets the store for the current
+execution instead of wrapping a callback, so it should skip an async frame. It
+cannot be used at all. dunx's `AsyncRequestContext` and `@arkv/logger` both use
+`run()`, which is not a preference between two working options but the only one
+that works.
+
+Worth re-checking on a Bun upgrade: a working `enterWith` would remove an async
+frame from every logged request, against a measured `run()` cost of +0.91 us.
+
 #### `POSTGRES_URL` in the environment silently overrides an explicit `url`
 
 Measured on 1.3.14. In the **options-object** form only,

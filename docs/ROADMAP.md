@@ -195,88 +195,31 @@ the hardcoded-`PgDialect` and drizzle-`transaction()` measurements and the datab
 design section. Manifest descriptions, `CLAUDE.md`'s package table and the root
 README now name the `Logger` contract and `/logger`.
 
-## Next, in order
+## Open items
 
-**Every item that was on this list is built.** Better Auth, queues and the websocket
-relay all landed, along with `@dunx/testing` - which means the ordering argument that
-used to live here has been spent, and what follows is a fresh list rather than a
-renumbered one.
+**One file per item in [docs/roadmap/](./roadmap/).** Delete a file when its item is
+delivered rather than marking it done, so the folder only ever holds open work.
+Feedback goes in as a new file rather than into conversation.
 
-### 1. `@dunx/core` as a `peerDependency` - **done**
-
-`@dunx/core` and `@dunx/http` are `peerDependencies` of every package that uses them,
-each with a matching `devDependency` supplying the workspace link that build and test
-resolve through. The blocker was build ordering, not the dependency shape:
-`bun run build` is now `scripts/build-all.ts`, which orders by `dependencies`,
-`peerDependencies` **and** `devDependencies`, in waves so unrelated packages still
-build concurrently.
-
-Re-measured from a clean tree rather than assumed: `bun run --filter '*' build` still
-fails with `TS7016`, `bun run build` succeeds, and the full suite passes.
-
-**Versioning stays lockstep, deliberately.** Peers stop the installer duplicating
-core; lockstep keeps the exact version `version.ts` writes into the peer range
-coherent across the set. The two solve different halves. Independent versions on top
-of peers is the remaining prize and needs a range policy settled first - `version.ts`
-resolves `workspace:*` to an **exact** version, and a peer range wants a caret or a
-`>=`, which is a decision with real consequences for a consumer holding six packages.
-
-### 2. `@dunx/create-app` - **done**
-
-`bunx @dunx/create-app my-api` writes the `minimal` template. Its `src/` is a
-byte-for-byte copy of `examples/minimal` and a test fails the moment they drift -
-that example is the one CI boots, which is what makes the template trustworthy
-rather than merely plausible.
-
-Three things worth not rediscovering:
-
-- **`bun create dunx-app` cannot work.** `bun create <template>` resolves the
-  _unscoped_ npm package `create-<template>`, and a scoped package never matches.
-  Publishing an unscoped `create-dunx-app` alias is the only way to get that
-  spelling, and it was not judged worth leaving the scope for.
-- **Versions are resolved at run time**, not written into the template. Lockstep
-  is what makes that correct: the version doing the scaffolding is by definition a
-  set that works together.
-- **`.gitignore` ships as `_gitignore`** because npm renames a published one to
-  `.npmignore`.
-
-### 3. The loose ends the built work left behind
-
-Small, independent, each recorded where it belongs:
-
-- ~~**A relay whose boot subscribe failed is retried by nothing.**~~ **Fixed.**
-  `RelayOptions.resubscribe` retries the boot subscribe with doubling backoff
-  capped at 30s, five attempts by default, `0` to disable. The timer is unref'd so
-  a broker that never returns cannot hold the process open, and `close()` cancels
-  a pending retry before it can fire against a relay being torn down. Publishing
-  always recovered on its own - every publish retries - which is what made this
-  hard to notice: fan-out looked one-way rather than broken.
-- **A process that attempted a queue operation while Redis was down does not exit on
-  `SIGTERM`** - bullmq holds a connection whose retry timer outlives `close()`, and
-  nothing in userland can reach it. Importing the module is not enough to trigger it;
-  a healthy Redis is unaffected. Measured, with the table in
-  [bun-apis.md](./bun-apis.md). Serving is unaffected, so this is a shutdown defect
-  only.
-- **bullmq 6.0.5's CJS build imports `ioredis/built/utils`, which ioredis 6 removed.**
-  The ESM build does not, which is why the suite passes. Pin ioredis 5 if anything
-  might load the CJS entry.
-- ~~**No in-process HTTP + worker composition.**~~ **Fixed.**
-  `WorkerFactory.attach(app, root)` consumes inside a container that already
-  exists, so one process can serve HTTP and work the queues. It returns a
-  `QueueConsumer`, the consuming half of `WorkerFactory.create` with no `App` of
-  its own; `create` now wraps the same class.
-
-  **The caller must `stop()` the consumer before shutting the app down**, and
-  nothing can enforce it: core's `App` exposes no hook to register against, and a
-  worker still running when providers tear down finds its database connection
-  closed underneath it. A worker _process_ still gets that ordering for free,
-  because it owns the container. Verified against a live Redis: a job published
-  and consumed, the container confirmed still running after `stop()` and torn down
-  only by `shutdown()`.
-
-- **`@dunx/testing` cannot be used by another published package's tests**, only by
-  `examples/*`, for the same build-ordering reason as item 1. The topological build
-  removes the ordering problem; this has not been re-tried since.
+| Item                                                                          | Shape                                                             |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [elysia-style-hero-graphic](./roadmap/elysia-style-hero-graphic.md)           | Feature. Asked for twice.                                         |
+| [design-polish](./roadmap/design-polish.md)                                   | Feature. Landing page rebuilt; not yet striking.                  |
+| [docs-guide-sections](./roadmap/docs-guide-sections.md)                       | Feature. 17 guides in one flat list.                              |
+| [docs-bundle-splitting](./roadmap/docs-bundle-splitting.md)                   | Performance. 127 KB of guides on every page load.                 |
+| [openapi-ui-subpath](./roadmap/openapi-ui-subpath.md)                         | Performance. ~5 ms of cold start for a page most apps never open. |
+| [async-local-storage-cost](./roadmap/async-local-storage-cost.md)             | Measured. +0.91 us, and `enterWith` segfaults Bun.                |
+| [arkv-integrations](./roadmap/arkv-integrations.md)                           | Exploration. Not a hard requirement.                              |
+| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)         | Ongoing. Better Auth OpenAPI merge adopted.                       |
+| [independent-versions](./roadmap/independent-versions.md)                     | Decision. Peers done; needs a range policy, or 1.0.               |
+| [testing-from-published-package](./roadmap/testing-from-published-package.md) | Probably unblocked, untested.                                     |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                 | Defect. Not reachable from userland.                              |
+| [ioredis-cjs-pin](./roadmap/ioredis-cjs-pin.md)                               | Defect. Known, currently harmless.                                |
+| [mantine-version-mismatch](./roadmap/mantine-version-mismatch.md)             | Risk. Mantine 8 and 9 mixed in `tools/docs`.                      |
+| [max-lines-not-enforced](./roadmap/max-lines-not-enforced.md)                 | Small. A documented rule with no lint behind it.                  |
+| [auth-package-name](./roadmap/auth-package-name.md)                           | Decision. Window closed once published.                           |
+| [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                   | Unreproduced.                                                     |
+| [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                     | Delivered, with a boundary note worth keeping.                    |
 
 ## `tools/` - private workspaces, never published
 
