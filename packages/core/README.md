@@ -142,6 +142,33 @@ built-in Bun implements natively.
 `ConsoleLogger` does **not** sanitize, mask, rotate or colour. That is the whole
 argument for swapping in `@dunx/infra/logger`, which is one import.
 
+#### Entries at `info` and below are batched
+
+One `console.log` per entry is one `write(2)` per entry, and on `tools/bench`'s
+logging harness that was the single largest component of request logging — dearer
+than the `JSON.stringify` that produced the line. `ConsoleLogger` concatenates those
+entries and writes them **once per event-loop turn**, which takes the write below
+what the harness can measure.
+
+The trade is real: a line still in the buffer is lost if the process dies without
+unwinding — `SIGKILL`, an OOM kill, a segfault. What bounds it:
+
+- **`warn`, `error` and `fatal` are never buffered.** They are written immediately
+  and flush everything queued behind them, so the entries you go looking for after a
+  crash, and everything leading up to them, were never held back.
+- The window is one event-loop turn.
+- `logger.flush()` is public; `onShutdown()` calls it, so the container flushes on a
+  graceful stop, and `process.on('exit')` catches the rest.
+- `new ConsoleLogger(context, level, false)` writes every entry as it happens.
+
+```ts
+provide(Logger, {
+  useFactory: (context: RequestContext) =>
+    new ConsoleLogger(context, 'info', false),
+  inject: [RequestContext] as const,
+});
+```
+
 ### The contracts
 
 `Logger` is an `abstract class` rather than an interface on purpose: the compiler

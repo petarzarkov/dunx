@@ -20,6 +20,7 @@
     "start": "bun src/index.ts",
     "db-modes": "bun src/db-modes.ts",
     "validation": "bun src/validation.ts",
+    "logging": "bun src/logging.ts",
     "test": "bun test --bail",
     "typecheck": "tsc --noEmit && tsc --noEmit -p servers/nest"
   },

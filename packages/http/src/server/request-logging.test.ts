@@ -4,16 +4,24 @@ import { Controller, Get, Post } from '../route/decorators.js';
 import type { Input, RouteSchemas } from '../route/schema.js';
 import { HttpError } from './errors.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import type { Middleware } from './middleware.js';
 
-/** Captures both streams: warn and above go to stderr by design. */
+/**
+ * Captures both streams: warn and above go to stderr by design. One `console.log`
+ * may carry several entries — `ConsoleLogger` batches everything at `info` and
+ * below into one write per event-loop turn — so each call is split back apart.
+ * `withApp` shuts the app down inside `run`, and that flushes what is pending.
+ */
 const captured = async (
   run: () => Promise<void>,
 ): Promise<Record<string, unknown>[]> => {
   const lines: string[] = [];
   const { log, error } = console;
-  console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
-  console.error = (...args: unknown[]) =>
-    lines.push(args.map(String).join(' '));
+  const record = (...args: unknown[]): void => {
+    lines.push(...args.map(String).join(' ').split('\n'));
+  };
+  console.log = record;
+  console.error = record;
   try {
     await run();
   } finally {
@@ -169,6 +177,34 @@ describe('request logging', () => {
     expect(
       entries.find((e) => e['message'] === 'GET /things/broken 500')?.['level'],
     ).toBe('error');
+  });
+
+  /**
+   * `next()` is adopted with `.then` rather than awaited, so a middleware that
+   * throws out of `handle` *synchronously* no longer arrives as a rejection. It is
+   * still a request this middleware promised to log, and the branch that catches it
+   * exists only for this case.
+   */
+  it('logs a downstream middleware that throws synchronously', async () => {
+    class SyncThrow implements Middleware {
+      handle(): Promise<Response> {
+        throw new HttpError(403, 'nope');
+      }
+    }
+
+    const entries = await captured(async () => {
+      await withApp(
+        async (_app, url) => {
+          const response = await fetch(new URL('things', url));
+          expect(response.status).toBe(403);
+        },
+        { middleware: [SyncThrow] },
+      );
+    });
+
+    const entry = entries.find((e) => e['message'] === 'GET /things 403');
+    expect(entry?.['level']).toBe('warn');
+    expect(entry?.['statusCode']).toBe(403);
   });
 
   it('puts the handler’s own entries in the same request scope', async () => {

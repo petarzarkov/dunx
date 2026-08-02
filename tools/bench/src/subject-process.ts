@@ -1,4 +1,3 @@
-import type { Subprocess } from 'bun';
 import { root } from './paths.js';
 import type { Scenario, Subject } from './types.js';
 
@@ -35,30 +34,40 @@ const command = (
   return [nodeBinary, nodeEntry];
 };
 
+/**
+ * Where a subject's stdout goes, which is a measurement decision and not a detail.
+ *
+ * `'null'` — the default — is `/dev/null`: a real fd, so a `console.log` is a real
+ * `write(2)`, but one that can never block. `'blocked'` is a pipe nobody reads,
+ * which is what the harness used to do to every subject: 64 KiB in, the pipe is
+ * full, and every further write parks the server until the kernel has room. That
+ * is not a property of the framework, so it is opt-in and only the logging harness
+ * asks for it — see `src/logging.ts`.
+ */
+export type StdoutSink = 'null' | 'blocked';
+
 export const startSubject = async (
   subject: Subject,
   nodeBinary: string,
   nodeEntry: string | undefined,
   extraEnv: Readonly<Record<string, string>> = {},
+  stdout: StdoutSink = 'null',
 ): Promise<SubjectProcess> => {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const startedAt = performance.now();
-  const proc: Subprocess<'ignore', 'pipe', 'pipe'> = Bun.spawn(
-    command(subject, nodeBinary, nodeEntry),
-    {
-      cwd: root,
-      env: {
-        ...process.env,
-        ...extraEnv,
-        PORT: String(port),
-        NODE_ENV: 'production',
-      },
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe',
+  const proc = Bun.spawn(command(subject, nodeBinary, nodeEntry), {
+    cwd: root,
+    env: {
+      ...process.env,
+      ...extraEnv,
+      PORT: String(port),
+      NODE_ENV: 'production',
     },
-  );
+    stdin: 'ignore',
+    stdout: stdout === 'blocked' ? 'pipe' : Bun.file('/dev/null'),
+    stderr: 'pipe',
+  });
 
   const stop = async (): Promise<void> => {
     proc.kill('SIGKILL');

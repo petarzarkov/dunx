@@ -6,3 +6,7 @@
 # the deployed page has no numbers on it.
 results/*
 !results/latest.json
+# `logging.json` is tracked for the same reason: `src/logging-tables.ts` renders the
+# README's "Request logging cost" section from it, and a checkout without it would
+# regenerate that section as "no run recorded".
+!results/logging.json

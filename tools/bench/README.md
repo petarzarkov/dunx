@@ -249,7 +249,7 @@ transcribed by hand.
 ```
 AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
 linux 7.0.0-28-generic x64 | bun 1.3.14 | node v24.13.1 | oha oha 1.15.0
-64 connections | 3s warmup | 4 x 4s measured | 2026-08-01
+64 connections | 3s warmup | 5 x 5s measured | 2026-08-02
 dunx-logging 0.0.0 | elysia 1.4.29 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1
 ```
 
@@ -259,71 +259,71 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 116,941 | 1,494 | 0.518 | 1.043 | 100.0% |
-| Elysia | 115,435 | 497 | 0.525 | 1.057 | 98.7% |
-| **@dunx/http** | **114,133** | 1,459 | 0.527 | 1.061 | **97.6%** |
-| Hono (Bun) | 91,829 | 2,355 | 0.663 | 1.318 | 78.5% |
-| @dunx/http (+ request logging) | 48,756 | 1,512 | 1.217 | 2.383 | 41.7% |
-| node:http (raw) | 48,175 | 871 | 1.283 | 2.547 | 41.2% |
-| Fastify (Node) | 44,248 | 1,855 | 1.418 | 2.706 | 37.8% |
-| Hono (Node) | 42,644 | 2,174 | 1.440 | 2.800 | 36.5% |
-| Express (Node) | 27,244 | 934 | 2.271 | 2.973 | 23.3% |
+| **@dunx/http** | **133,889** | 3,687 | 0.448 | 0.904 | **102.0%** |
+| Elysia | 133,169 | 2,253 | 0.455 | 0.925 | 101.4% |
+| Bun.serve (raw) | 131,314 | 2,314 | 0.465 | 0.935 | 100.0% |
+| Hono (Bun) | 104,085 | 1,825 | 0.582 | 1.180 | 79.3% |
+| @dunx/http (+ request logging) | 73,143 | 2,281 | 0.845 | 1.582 | 55.7% |
+| node:http (raw) | 51,282 | 1,244 | 1.252 | 2.393 | 39.1% |
+| Fastify (Node) | 44,905 | 2,473 | 1.393 | 2.735 | 34.2% |
+| Hono (Node) | 43,219 | 796 | 1.451 | 2.652 | 32.9% |
+| Express (Node) | 27,738 | 511 | 2.305 | 2.722 | 21.1% |
 
 **JSON** — `GET /json`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 115,031 | 1,263 | 0.526 | 1.057 | 100.0% |
-| **@dunx/http** | **109,169** | 806 | 0.557 | 1.117 | **94.9%** |
-| Elysia | 107,917 | 945 | 0.564 | 1.130 | 93.8% |
-| Hono (Bun) | 75,941 | 4,303 | 0.815 | 1.628 | 66.0% |
-| node:http (raw) | 46,552 | 108 | 1.339 | 2.664 | 40.5% |
-| @dunx/http (+ request logging) | 46,157 | 1,834 | 1.291 | 2.526 | 40.1% |
-| Fastify (Node) | 42,727 | 1,320 | 1.466 | 2.828 | 37.1% |
-| Hono (Node) | 37,747 | 1,133 | 1.650 | 3.252 | 32.8% |
-| Express (Node) | 26,462 | 659 | 2.365 | 4.646 | 23.0% |
+| Bun.serve (raw) | 130,456 | 6,320 | 0.460 | 0.944 | 100.0% |
+| **@dunx/http** | **117,838** | 4,290 | 0.496 | 1.030 | **90.3%** |
+| Elysia | 113,802 | 4,428 | 0.518 | 1.065 | 87.2% |
+| Hono (Bun) | 86,944 | 2,061 | 0.678 | 1.363 | 66.6% |
+| @dunx/http (+ request logging) | 69,038 | 1,852 | 0.900 | 1.683 | 52.9% |
+| node:http (raw) | 50,859 | 1,398 | 1.215 | 2.364 | 39.0% |
+| Fastify (Node) | 45,035 | 958 | 1.386 | 2.503 | 34.5% |
+| Hono (Node) | 38,496 | 658 | 1.653 | 2.579 | 29.5% |
+| Express (Node) | 23,379 | 2,218 | 2.532 | 6.211 | 17.9% |
 
 **Path parameter** — `GET /params/42`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 112,362 | 2,475 | 0.540 | 1.083 | 100.0% |
-| Elysia | 110,129 | 1,609 | 0.548 | 1.101 | 98.0% |
-| **@dunx/http** | **104,456** | 2,398 | 0.577 | 1.159 | **93.0%** |
-| Hono (Bun) | 76,382 | 273 | 0.799 | 1.588 | 68.0% |
-| node:http (raw) | 47,642 | 988 | 1.312 | 2.611 | 42.4% |
-| @dunx/http (+ request logging) | 44,374 | 2,380 | 1.339 | 2.634 | 39.5% |
-| Fastify (Node) | 43,044 | 2,698 | 1.446 | 2.837 | 38.3% |
-| Hono (Node) | 34,949 | 1,624 | 1.751 | 3.470 | 31.1% |
-| Express (Node) | 25,073 | 579 | 2.506 | 3.992 | 22.3% |
+| Bun.serve (raw) | 126,481 | 1,780 | 0.477 | 0.967 | 100.0% |
+| Elysia | 120,536 | 3,880 | 0.501 | 1.025 | 95.3% |
+| **@dunx/http** | **119,501** | 1,630 | 0.498 | 1.005 | **94.5%** |
+| Hono (Bun) | 79,459 | 4,706 | 0.744 | 1.546 | 62.8% |
+| @dunx/http (+ request logging) | 68,976 | 1,296 | 0.873 | 1.689 | 54.5% |
+| node:http (raw) | 47,113 | 2,818 | 1.325 | 2.613 | 37.2% |
+| Fastify (Node) | 42,116 | 2,265 | 1.514 | 2.804 | 33.3% |
+| Hono (Node) | 35,933 | 1,934 | 1.759 | 3.468 | 28.4% |
+| Express (Node) | 24,289 | 2,057 | 2.529 | 4.805 | 19.2% |
 
 **Body validation** — `POST /validate`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 76,593 | 2,564 | 0.787 | 1.568 | 100.0% |
-| **@dunx/http** | **69,081** | 1,360 | 0.884 | 1.756 | **90.2%** |
-| Elysia | 64,154 | 1,220 | 0.940 | 1.858 | 83.8% |
-| Hono (Bun) | 47,110 | 416 | 1.305 | 2.577 | 61.5% |
-| @dunx/http (+ request logging) | 36,833 | 145 | 1.651 | 3.195 | 48.1% |
-| node:http (raw) | 32,426 | 1,100 | 1.925 | 3.831 | 42.3% |
-| Fastify (Node) | 22,156 | 109 | 2.682 | 9.109 | 28.9% |
-| Hono (Node) | 19,821 | 818 | 3.173 | 6.169 | 25.9% |
-| Express (Node) | 17,447 | 258 | 3.602 | 6.903 | 22.8% |
+| Bun.serve (raw) | 89,130 | 930 | 0.678 | 1.348 | 100.0% |
+| **@dunx/http** | **75,806** | 2,087 | 0.792 | 1.575 | **85.1%** |
+| Elysia | 69,026 | 1,837 | 0.881 | 1.765 | 77.4% |
+| @dunx/http (+ request logging) | 56,235 | 694 | 1.089 | 1.747 | 63.1% |
+| Hono (Bun) | 47,025 | 476 | 1.335 | 2.498 | 52.8% |
+| node:http (raw) | 30,999 | 925 | 1.981 | 3.953 | 34.8% |
+| Fastify (Node) | 22,831 | 1,139 | 2.540 | 9.366 | 25.6% |
+| Hono (Node) | 21,099 | 1,401 | 2.940 | 5.706 | 23.7% |
+| Express (Node) | 15,717 | 1,763 | 3.917 | 7.122 | 17.6% |
 
-**Startup** — cold process to first served request, 5 samples
+**Startup** — cold process to first served request, 7 samples
 
 | Subject | median ms | min ms | max ms |
 | ------- | --------: | -----: | -----: |
-| Bun.serve (raw) | 28.0 | 27.0 | 28.6 |
-| Hono (Bun) | 32.8 | 32.5 | 33.6 |
-| **@dunx/http** | **52.6** | 51.6 | 58.0 |
-| @dunx/http (+ request logging) | 54.1 | 52.9 | 55.4 |
-| Elysia | 59.9 | 57.8 | 60.1 |
-| node:http (raw) | 70.2 | 67.0 | 73.5 |
-| Hono (Node) | 88.3 | 86.2 | 89.7 |
-| Express (Node) | 105.4 | 102.1 | 107.6 |
-| Fastify (Node) | 136.0 | 129.5 | 137.6 |
+| Bun.serve (raw) | 27.6 | 25.4 | 29.5 |
+| Hono (Bun) | 33.7 | 32.2 | 36.5 |
+| @dunx/http (+ request logging) | 54.7 | 53.2 | 57.6 |
+| **@dunx/http** | **55.4** | 52.5 | 56.6 |
+| Elysia | 60.1 | 57.5 | 82.3 |
+| node:http (raw) | 72.5 | 69.4 | 78.6 |
+| Hono (Node) | 95.0 | 91.5 | 98.2 |
+| Express (Node) | 106.3 | 103.7 | 114.5 |
+| Fastify (Node) | 134.2 | 132.1 | 149.7 |
 
 ### What these say, including where dunx loses
 
@@ -331,10 +331,10 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Scenario | Bun.serve | @dunx/http | dunx costs |
 | -------- | --------: | ---------: | ---------: |
-| `plaintext` | 116,941 | 114,133 | −2.4% |
-| `json` | 115,031 | 109,169 | −5.1% |
-| `params` | 112,362 | 104,456 | −7.0% |
-| `validate` | 76,593 | 69,081 | −9.8% |
+| `plaintext` | 131,314 | 133,889 | +2.0% |
+| `json` | 130,456 | 117,838 | −9.7% |
+| `params` | 126,481 | 119,501 | −5.5% |
+| `validate` | 89,130 | 75,806 | −14.9% |
 
 **A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
 *through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
@@ -342,11 +342,12 @@ the two land within each other's standard deviation — which they now do on
 `plaintext` — the honest reading is "no measurable overhead", not "faster than
 `Bun.serve`". Differences under about 3% on this setup are noise.
 
-**`dunx-logging` is the same app with `requestLogging` left at its default**, and it
-lands at roughly 40-50% of the baseline where `dunx` is 90-100%. That gap is one
-structured line per request: `JSON.stringify` plus a `write`, inside an
-`AsyncLocalStorage` scope. Nothing else in this table logs anything, which is why the
-two rows exist separately — see "Why dunx appears twice".
+**`dunx-logging` is the same app with `requestLogging` left at its default**, and
+the gap to `dunx` is one structured line per request: reading `req.headers`, an
+`AsyncLocalStorage` scope, building the entry, `JSON.stringify`, and the write.
+Nothing else in this table logs anything, which is why the two rows exist separately
+— see "Why dunx appears twice". A third harness decomposes that gap step by step; see
+"Request logging cost" below.
 
 **Validation is still the largest absolute cost**, but most of it is not the
 framework's and not the validator's. Splitting it took a second harness — see
@@ -507,6 +508,62 @@ Caveats specific to this harness, in the same spirit as the handicaps above:
 - One payload, 69 bytes, three fields. Nothing here predicts a deeply nested schema,
   where the engines diverge much more than they do at this size.
 
+## Request logging cost
+
+Generated from `results/logging.json` by `bun src/readme-tables.ts` — never
+transcribed by hand. Reproduce with `bun run logging`.
+
+`dunx-logging` in the main suite is one number, and one number cannot say *which*
+part of writing a structured line per request is expensive. Every row below is the
+same app on the same `json` route, in its own process, with one more
+piece of the default logging path switched on than the row above it.
+
+```
+AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.3.14 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 4s measured | 2026-08-02
+```
+
+**Measured round-robin across all rows**, for the reason the validation harness
+records: the differences are a few percent and the machine drifts by more than that
+over a run. Read anything under about **±0.5 µs** as unresolvable.
+
+| Step | req/s | µs/req | this step adds | total |
+| ---- | ----: | -----: | -------------: | ----: |
+| `requestLogging: false` | 115,307 | 8.67 | — | — |
+| one middleware that only calls `next()` | 114,650 | 8.72 | +0.05 µs | +0.05 µs |
+| + the pathname sliced out of `req.url` | 105,844 | 9.45 | +0.73 µs | +0.78 µs |
+| + `x-request-id` and `user-agent` read | 93,148 | 10.74 | +1.29 µs | +2.06 µs |
+| + `crypto.randomUUID()` | 92,793 | 10.78 | +0.04 µs | +2.10 µs |
+| + `runWithContext` around the handler | 85,556 | 11.69 | +0.91 µs | +3.02 µs |
+| + `x-request-id` set on the response | 85,806 | 11.65 | −0.03 µs | +2.98 µs |
+| + the real middleware, `Logger` discards | 80,290 | 12.45 | +0.80 µs | +3.78 µs |
+| + `new Date().toISOString()` | 79,218 | 12.62 | +0.17 µs | +3.95 µs |
+| + the entry and `JSON.stringify`, string dropped | 68,180 | 14.67 | +2.04 µs | +5.99 µs |
+| batched instead — **the shipped default** | 71,151 | 14.05 | −0.61 µs | +5.38 µs |
+
+Reading it: the middleware chain, `crypto.randomUUID()` and setting
+`x-request-id` on the response are each at or below what this harness can resolve.
+What costs is the **first touch of `req.headers`**, the `AsyncLocalStorage`
+scope, and **building and serialising the entry** — and, before it was batched, the
+write.
+
+### The write, and the pipe nobody was reading
+
+| Write | req/s | µs/req |
+| ----- | ----: | -----: |
+| batched, `/dev/null` | 71,151 | 14.05 |
+| one `console.log` per entry, `/dev/null` | 62,851 | 15.91 |
+| batched, into a pipe nobody reads | 65,746 | 15.21 |
+| one per entry, into a pipe nobody reads | 53,796 | 18.59 |
+
+The last row is what this harness was reporting before either fix, and neither of
+its two costs is a property of `@dunx/http`. Subjects were spawned with
+`stdout: 'pipe'` and nothing ever read it: 64 KiB in, the pipe is full and the
+server parks on every further write. Subjects now write to `/dev/null`, and
+`ConsoleLogger` batches everything at `info` and below into one write per
+event-loop turn — which also makes a slow consumer far less able to stall the
+server. `warn` and above are never batched.
+
 ## Output
 
 The stdout table is for humans. `results/latest.json` (or `--out <path>`) is for
@@ -519,6 +576,16 @@ builds; the page says there is no run.
 "Validation cost" section. Its shape is `ValidationReport` in `src/types.ts`. Nothing
 outside this workspace reads it, and a checkout without it still regenerates the
 rest of the README.
+
+`results/logging.json` is the third, written by `bun run logging` and read by
+`src/logging-tables.ts` for the "Request logging cost" section. Its shape is
+`LoggingReport` in `src/types.ts`.
+
+**A subject's stdout goes to `/dev/null`** (`StdoutSink` in
+`src/subject-process.ts`). It used to be a pipe nobody read, which meant a subject
+that logged parked on a full 64 KiB pipe — worth 2.68 µs/request, and a property of
+the harness rather than of the framework. The logging harness keeps the blocked case
+as an explicit row so the difference stays visible.
 
 `latest.json`'s shape:
 
@@ -585,9 +652,13 @@ tools/bench/
       raw.ts          raw Bun.serve, one route per step of the decomposition
       dunx.ts         the dunx app, declared and hand-written variants
       schemas.ts      the one schema shape in every library, dynamically imported
+    logging/          the request-logging harness's one subject
+      dunx.ts         the app, with the middleware truncated at $LOGGING_VARIANT
+      variants.ts     the step list and the three stand-in Logger bindings
   src/
     index.ts          entrypoint for the framework suite
     validation.ts     entrypoint for the validation harness
+    logging.ts        entrypoint for the request-logging harness
     cli.ts            flags
     run.ts            orchestration: startup, warmup, measured runs
     subject-process.ts  spawn, readiness, contract verification, stop
@@ -596,8 +667,9 @@ tools/bench/
     subjects.ts       the subject registry, including each one's handicaps
     loadgen/          oha adapter, Bun fetch driver, worker, histogram
     report.ts         the stdout table
-    readme-tables.ts  regenerates both README results sections
+    readme-tables.ts  regenerates every generated README section
     validation-tables.ts  the "Validation cost" section
+    logging-tables.ts     the "Request logging cost" section
     machine.ts        CPU/RAM/OS/runtime/package versions
     stats.ts          median, stddev, spread
 ```

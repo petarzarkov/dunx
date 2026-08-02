@@ -16,13 +16,25 @@ interface Captured {
 
 const original = { log: console.log, error: console.error };
 
+/**
+ * Entries at `info` and below are batched into one write per event-loop turn, so
+ * a captured call may carry several lines and the buffer has to be flushed before
+ * the real `console` comes back — otherwise the tail of a test lands on the
+ * terminal instead of in `out`.
+ */
 const capture = (run: () => void): Captured => {
   const out: Record<string, unknown>[] = [];
   const err: Record<string, unknown>[] = [];
-  console.log = (line: unknown) => out.push(JSON.parse(String(line)));
-  console.error = (line: unknown) => err.push(JSON.parse(String(line)));
+  const into =
+    (target: Record<string, unknown>[]) =>
+    (line: unknown): void => {
+      for (const one of String(line).split('\n')) target.push(JSON.parse(one));
+    };
+  console.log = into(out);
+  console.error = into(err);
   try {
     run();
+    new ConsoleLogger().flush();
   } finally {
     console.log = original.log;
     console.error = original.error;
@@ -177,5 +189,90 @@ describe('ConsoleLogger', () => {
   it('works with no context at all', () => {
     const { out } = capture(() => new ConsoleLogger().info('no context'));
     expect(out[0]?.['message']).toBe('no context');
+  });
+});
+
+/**
+ * One `console.log` per request measured at 1.84 µs on `bun run logging` — the
+ * single largest component of request logging. Batching is what removes it, and
+ * the durability the batch gives up is bounded by the two rules asserted here.
+ */
+describe('ConsoleLogger buffering', () => {
+  it('holds an info entry until the buffer is flushed', () => {
+    const seen: string[] = [];
+    console.log = (line: unknown) => seen.push(String(line));
+    const logger = new ConsoleLogger();
+    try {
+      logger.info('held');
+      expect(seen).toHaveLength(0);
+      logger.flush();
+      expect(seen).toHaveLength(1);
+    } finally {
+      console.log = original.log;
+    }
+    expect(JSON.parse(String(seen[0]))['message']).toBe('held');
+  });
+
+  it('batches a turn of entries into one write', () => {
+    const seen: string[] = [];
+    console.log = (line: unknown) => seen.push(String(line));
+    const logger = new ConsoleLogger();
+    try {
+      logger.info('one');
+      logger.info('two');
+      logger.info('three');
+      logger.flush();
+    } finally {
+      console.log = original.log;
+    }
+
+    expect(seen).toHaveLength(1);
+    expect(String(seen[0]).split('\n')).toHaveLength(3);
+  });
+
+  it('never buffers warn and above, and flushes what is queued behind them', () => {
+    const order: string[] = [];
+    console.log = (line: unknown) => order.push(`out:${String(line)}`);
+    console.error = (line: unknown) => order.push(`err:${String(line)}`);
+    const logger = new ConsoleLogger();
+    try {
+      logger.info('before');
+      logger.error('the failure');
+    } finally {
+      console.log = original.log;
+      console.error = original.error;
+    }
+
+    // The info went out with the error and not after it: an entry you would go
+    // looking for after a crash is never held, and neither is anything ahead of it.
+    expect(order).toHaveLength(2);
+    expect(order[0]?.startsWith('out:')).toBe(true);
+    expect(order[1]?.startsWith('err:')).toBe(true);
+  });
+
+  it('flushes on shutdown, which is the hook the container calls', () => {
+    const seen: string[] = [];
+    console.log = (line: unknown) => seen.push(String(line));
+    const logger = new ConsoleLogger();
+    try {
+      logger.info('pending at shutdown');
+      logger.onShutdown();
+    } finally {
+      console.log = original.log;
+    }
+    expect(seen).toHaveLength(1);
+  });
+
+  it('writes every entry as it happens when buffering is off', () => {
+    const seen: string[] = [];
+    console.log = (line: unknown) => seen.push(String(line));
+    const logger = new ConsoleLogger(undefined, 'info', false);
+    try {
+      logger.info('one');
+      logger.info('two');
+    } finally {
+      console.log = original.log;
+    }
+    expect(seen).toHaveLength(2);
   });
 });
