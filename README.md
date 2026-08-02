@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="tools/docs/public/logo/logo-mark-color.svg" width="96" height="96" alt="" />
+
 # dunx
 
 A Bun-native dependency injection framework — NestJS-shaped ergonomics, none of the NestJS runtime.

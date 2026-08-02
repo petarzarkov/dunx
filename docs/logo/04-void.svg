@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="dunx">
+  <defs>
+    <linearGradient id="s4" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22b8cf" />
+      <stop offset=".5" stop-color="#4c6ef5" />
+      <stop offset="1" stop-color="#7950f2" />
+    </linearGradient>
+    <path id="s4b" d="M16.92 10.98 23 3.91 28.09 9l-7.07 6.08Z" />
+  </defs>
+  <g fill="url(#s4)" stroke="url(#s4)" stroke-width="1.6" stroke-linejoin="round">
+    <use href="#s4b" />
+    <use href="#s4b" transform="rotate(90 16 16)" />
+    <use href="#s4b" transform="rotate(180 16 16)" />
+    <use href="#s4b" transform="rotate(270 16 16)" />
+  </g>
+</svg>

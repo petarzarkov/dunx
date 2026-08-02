@@ -27,6 +27,12 @@ body {
   font-family: var(--mantine-font-family-monospace);
 }
 
+.site-footer {
+  margin-top: 3rem;
+  padding: 1.5rem var(--mantine-spacing-md);
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
 .filters {
   position: sticky;
   top: 56px;

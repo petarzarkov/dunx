@@ -2,17 +2,20 @@ import {
   ActionIcon,
   AppShell,
   Anchor,
+  Box,
   Burger,
   Group,
   NavLink,
   ScrollArea,
   Text,
   UnstyledButton,
+  VisuallyHidden,
   useMantineColorScheme,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { spotlight } from '@mantine/spotlight';
 import { Footer } from './components/Footer';
+import { LogoMark, Wordmark } from './components/Logo';
 import { Search } from './components/Search';
 import { bench, site } from './data';
 import { Benchmarks } from './pages/Benchmarks';
@@ -107,6 +110,34 @@ const Navigation = ({
   </>
 );
 
+/** Plain anchors, not a `nav` — the sidebar is the page's one navigation
+ * landmark and a second would make it ambiguous to a screen reader. */
+const DocsFooter = (): React.JSX.Element => (
+  <Box component="footer" className="site-footer">
+    <Group justify="space-between" align="center" gap="lg">
+      <Group gap={10} wrap="nowrap" align="center">
+        <LogoMark size={22} />
+        <Wordmark height={16} />
+        <VisuallyHidden>dunx</VisuallyHidden>
+      </Group>
+      <Text size="xs" c="dimmed">
+        MIT licensed. Nothing here reimplements what Bun already ships.
+      </Text>
+      <Group gap="lg">
+        <Anchor href={href(RouteKind.Bench)} size="sm" c="dimmed">
+          Benchmarks
+        </Anchor>
+        <Anchor href={href(RouteKind.Coverage)} size="sm" c="dimmed">
+          Coverage
+        </Anchor>
+        <Anchor href={site.repoUrl} target="_blank" size="sm" c="dimmed">
+          GitHub
+        </Anchor>
+      </Group>
+    </Group>
+  </Box>
+);
+
 const Page = ({ route }: { route: Route }): React.JSX.Element => {
   switch (route.kind) {
     case RouteKind.Home:
@@ -139,9 +170,11 @@ const Header = ({
         <Burger opened={opened} onClick={onToggle} hiddenFrom="sm" size="sm" />
       )}
       <Anchor href={href(RouteKind.Home)} underline="never" c="inherit">
-        <Text fw={800} size="lg" ff="monospace">
-          dunx
-        </Text>
+        <Group gap={10} wrap="nowrap" align="center">
+          <LogoMark size={26} />
+          <Wordmark height={19} />
+          <VisuallyHidden>dunx</VisuallyHidden>
+        </Group>
       </Anchor>
     </Group>
     <Group gap="xs" wrap="nowrap">
@@ -220,6 +253,7 @@ export const App = (): React.JSX.Element => {
 
       <AppShell.Main>
         <Page route={route} />
+        <DocsFooter />
         <Search />
       </AppShell.Main>
     </AppShell>
