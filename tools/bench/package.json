@@ -19,6 +19,7 @@
     "setup": "bun src/setup.ts",
     "start": "bun src/index.ts",
     "validation": "bun src/validation.ts",
+    "logging": "bun src/logging.ts",
     "test": "bun test --bail",
     "typecheck": "tsc --noEmit"
   },

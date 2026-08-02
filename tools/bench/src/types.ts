@@ -134,6 +134,34 @@ export interface ValidationReport {
   readonly units: readonly ValidationUnit[];
 }
 
+/** One row of the request-logging harness: how much of the logging path is on. */
+export interface LoggingUnit {
+  readonly id: string;
+  readonly label: string;
+  readonly adds: string;
+  readonly stdout: 'null' | 'blocked';
+  readonly rps: Spread;
+  readonly latencyP50Ms: Spread;
+  readonly latencyP99Ms: Spread;
+  readonly bad: number;
+}
+
+/** What `bun run logging` writes. Rendered by `src/logging-tables.ts`. */
+export interface LoggingReport {
+  readonly schemaVersion: 1;
+  readonly generatedAt: string;
+  readonly machine: MachineInfo;
+  readonly loadGenerator: { readonly id: string; readonly version: string };
+  readonly config: {
+    readonly connections: number;
+    readonly durationSeconds: number;
+    readonly warmupSeconds: number;
+    readonly runs: number;
+  };
+  readonly scenario: string;
+  readonly units: readonly LoggingUnit[];
+}
+
 export interface Report {
   readonly schemaVersion: 1;
   readonly generatedAt: string;

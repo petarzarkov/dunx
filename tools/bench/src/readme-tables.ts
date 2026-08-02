@@ -12,6 +12,7 @@
  * It replaces everything between the `## Results` heading and the next `##`, and
  * touches nothing else.
  */
+import { loggingSection } from './logging-tables.js';
 import { median, stddev } from './stats.js';
 import type { Report } from './types.js';
 import { validationSection } from './validation-tables.js';
@@ -169,11 +170,12 @@ the two land within each other's standard deviation — which they now do on
 \`plaintext\` — the honest reading is "no measurable overhead", not "faster than
 \`Bun.serve\`". Differences under about 3% on this setup are noise.
 
-**\`dunx-logging\` is the same app with \`requestLogging\` left at its default**, and it
-lands at roughly 40-50% of the baseline where \`dunx\` is 90-100%. That gap is one
-structured line per request: \`JSON.stringify\` plus a \`write\`, inside an
-\`AsyncLocalStorage\` scope. Nothing else in this table logs anything, which is why the
-two rows exist separately — see "Why dunx appears twice".
+**\`dunx-logging\` is the same app with \`requestLogging\` left at its default**, and
+the gap to \`dunx\` is one structured line per request: reading \`req.headers\`, an
+\`AsyncLocalStorage\` scope, building the entry, \`JSON.stringify\`, and the write.
+Nothing else in this table logs anything, which is why the two rows exist separately
+— see "Why dunx appears twice". A third harness decomposes that gap step by step; see
+"Request logging cost" below.
 
 **Validation is still the largest absolute cost**, but most of it is not the
 framework's and not the validator's. Splitting it took a second harness — see
@@ -213,6 +215,14 @@ if (validation === null) {
 } else {
   readme = replaceSection(readme, '## Validation cost', validation);
   console.log('README validation section regenerated.');
+}
+
+const logging = await loggingSection();
+if (logging === null) {
+  console.log('No results/logging.json — logging section left as it is.');
+} else {
+  readme = replaceSection(readme, '## Request logging cost', logging);
+  console.log('README request logging section regenerated.');
 }
 
 await Bun.write(readmePath, readme);

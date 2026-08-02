@@ -1817,3 +1817,183 @@ handler's return value. Removing it means generating per-route source and `eval`
 it, which is Elysia's approach; it would trade a readable dispatch path for a code
 generator, and at 1.3 µs on a request whose parse alone is 2.9 µs it is not the next
 thing worth doing.
+
+## The cost of request logging (`tools/bench` logging harness)
+
+`bun run logging` is the third harness, and it exists because `dunx-logging` in the
+main suite was **one number for at least eight different things**. It sat at 40-45%
+of raw `Bun.serve` while `dunx` sat at 90-98%, so dunx's _default_ configuration —
+the one nearly every user runs — cost more than half the throughput, and nothing said
+which half.
+
+`servers/logging/dunx.ts` is one app whose middleware is truncated at a step chosen
+by `$LOGGING_VARIANT`, plus three stand-in `Logger` bindings that stop after the
+entry, after the timestamp, and after `JSON.stringify`. Rows are brought up together
+and measured **round-robin**, for the reason the validation harness records.
+
+Where `dunx-logging` ended up, as a fraction of raw `Bun.serve` in the same run:
+
+| Scenario    | before | after |
+| ----------- | -----: | ----: |
+| `plaintext` |  41.7% | 55.7% |
+| `json`      |  40.1% | 52.9% |
+| `params`    |  39.5% | 54.5% |
+| `validate`  |  48.1% | 63.1% |
+
+**Two of those points are a harness fix and the rest are code, and the split is worth
+being explicit about.** Measured as overhead over `requestLogging: false` on the
+`json` route: the old code into `/dev/null` cost **+10.51 µs**; the new code
+unbatched costs **+7.24 µs**; the new code as shipped costs **+5.38 µs**. So the
+structural changes are worth ~3.3 µs and batching ~1.9 µs. Separately, the pipe the
+harness never drained was worth 2.68 µs on top of that with an unbatched writer, and
+that was never dunx's cost at all.
+
+### The harness was measuring the pipe, not the framework
+
+Before anything else: `startSubject` spawned every subject with `stdout: 'pipe'` and
+**nothing ever read it**. 64 KiB in, the pipe is full, and the server parks on every
+subsequent write until the kernel finds room. Seven of the eight subjects log
+nothing, so only `dunx-logging` ever hit it — the one row where it mattered.
+
+Measured, on the `json` scenario: an unbatched writer into an unread pipe cost
+**2.68 µs/request** more than the same writer into `/dev/null`. Subjects now write to
+`/dev/null` (`StdoutSink` in `src/subject-process.ts`), which is a real `write(2)`
+that can never block, and the blocked-pipe case survives as an explicit row rather
+than as the default. The docstring in `servers/dunx-logging.ts` claimed the harness
+drained that pipe; it never did.
+
+### Where the time went
+
+Every row is the same app on the same `GET /json` route, one step further along the
+default path than the row above it. Measured **after** the changes below; the noise
+floor is about ±0.5 µs, so three of these steps are not resolvable at all.
+
+| Step                                             | adds     |
+| ------------------------------------------------ | -------- |
+| one middleware that only calls `next()`          | +0.05 µs |
+| the pathname sliced out of `req.url`             | +0.73 µs |
+| `x-request-id` and `user-agent` read             | +1.29 µs |
+| `crypto.randomUUID()`                            | +0.04 µs |
+| `runWithContext` around the handler              | +0.91 µs |
+| `x-request-id` set on the response               | −0.04 µs |
+| the entry object, the timings, `Logger` dispatch | +0.80 µs |
+| `new Date().toISOString()`, cached per ms        | +0.17 µs |
+| building and serialising the line                | +2.05 µs |
+| the write, batched                               | −0.62 µs |
+
+Three suspicions were wrong and are worth recording as wrong:
+
+- **`crypto.randomUUID()` is free.** 0.04 µs, an order of magnitude under the noise
+  floor, and 90 ns in a hot loop. A per-process prefix plus a counter would save
+  nothing measurable and would leak how many requests the process has served.
+- **Losing the direct dispatch path costs nothing measurable.** A bare
+  `next()`-only middleware is 0.05 µs. The 6 points that path is worth on `params`
+  do not reappear as a cost here, because the request is already paying for
+  everything else.
+- **`response.headers.set` is free**, despite an isolated `Bun.serve` probe putting
+  it at 0.70 µs. The isolated probe was measuring a different baseline; the harness
+  is the arbiter.
+
+What actually costs: **the first touch of `req.headers`** (1.29 µs — Bun
+materialises the whole header map, and the inbound `x-request-id` is part of the
+contract, so it is irreducible), the **`AsyncLocalStorage` scope** (0.91 µs, which is
+what makes a handler's own log lines carry `requestId`), and **building and
+serialising the entry** (2.05 µs, most of it `JSON.stringify`).
+
+### The write was the largest single component, and batching removed it
+
+One `console.log` per request measured **+1.24 µs** against not writing at all — more
+than the `JSON.stringify` that produced the line. `ConsoleLogger` now concatenates
+entries at `info` and below into one string and writes it once per event-loop turn,
+and the write becomes **unmeasurable** (−0.62 µs against the serialise-only row, i.e.
+inside the noise floor). It also largely defuses the blocked-pipe case: with batching
+an unread pipe costs 1.16 µs instead of 2.68.
+
+Things that were measured and did **not** work, all in a real `Bun.serve` handler:
+
+| Strategy                                       | vs no write |
+| ---------------------------------------------- | ----------- |
+| `console.log(line)`                            | +1.84 µs    |
+| `process.stdout.write(line + '\n')`            | +1.44 µs    |
+| `process.stdout.write(encoder.encode(line))`   | +1.43 µs    |
+| `Bun.stdout.writer({ highWaterMark: 64 KiB })` | +1.37 µs    |
+| the same sink at 4 KiB                         | +1.86 µs    |
+| batch into an array, flush on a **microtask**  | +1.48 µs    |
+| concatenate, flush on a **macrotask**          | +0.27 µs    |
+
+**`Bun.stdout.writer()` is the Bun-native API and it lost**, which is the one place
+this work went against Rule 1's ordering. A `FileSink.write()` encodes into its own
+buffer on every call, so it pays per entry exactly what it was meant to save; a JS
+string concatenation is a rope and pays almost nothing. Only the _flush_ is a write,
+and once per turn it does not matter which API performs it — so the flush goes
+through `console.log`, which is also what keeps `console` interception working in
+tests.
+
+**Microtask batching does not batch.** Microtasks drain after essentially every
+request, so the batch size is one and the cost is the same as writing directly. The
+macrotask turn is what lets Bun accumulate a real batch.
+
+### The durability trade, and what bounds it
+
+A line still sitting in the buffer is lost if the process dies without unwinding — a
+`SIGKILL`, an OOM kill, a segfault — which is exactly when a log matters most. Three
+things bound it, and they are asserted in `packages/core/src/logger/console.test.ts`:
+
+- **`warn`, `error` and `fatal` are never buffered.** They go out immediately _and_
+  flush everything queued behind them, so the entries you go looking for after a
+  crash — and everything that led up to them — were never held back. This is what
+  makes the trade acceptable rather than merely fast.
+- The window is **one event-loop turn**, not a timer interval.
+- `flush()` is public, `onShutdown()` calls it so the container flushes on a
+  graceful stop, and `process.on('exit')` catches the rest.
+- `new ConsoleLogger(context, level, false)` opts out entirely.
+
+### The other two changes
+
+**`request-logging.ts` has no `async` function left in it.** `#body` and
+`#responseFields` were `async` and, with both body options off — the default — they
+returned `{}` immediately, so every request paid two async frames and two `await`s on
+values that were never promises. They now return `Promise<unknown> | undefined`,
+where `undefined` means there is nothing to read and the caller stays synchronous,
+and the scope callback passed to `runWithContext` is a plain function using `.then`
+rather than an `async` arrow. This is the same fault the input reader had, found the
+same way, and an isolated probe puts an `async` scope callback at 0.44 µs over a
+synchronous one. The pathname and the query string now come out of **one** pair of
+`indexOf` calls instead of scanning `req.url` twice.
+
+**`ConsoleLogger` has a fast path for `logger.info(string, object)`**, which is the
+shape every framework call has. The general path spends two array allocations (the
+rest parameter, then `[message, ...rest]`), a third object and an `Object.assign` to
+reach an entry the fast path builds as one literal. The timestamp is cached by
+millisecond: at any rate worth logging, `Date.now()` has not moved since the previous
+entry, and `new Date().toISOString()` measured ~170 ns.
+
+### Rejected: skipping the entry when the level would drop it
+
+`Logger` exposes `logLevel`, so `RequestLoggingMiddleware` could check at
+construction whether `info` survives and skip building the `request` object. It was
+not done. The default level _is_ `info`, so the gate never fires in the configuration
+being optimised; and a 4xx logs at `warn` and a 5xx at `error`, both of which need
+the same `request` object, which is not known until after `next()` resolves. The
+branch would add a field and a condition to buy nothing on the default path.
+
+### Rejected: a cheaper request id
+
+Covered above — `crypto.randomUUID()` measured at 0.04 µs, and a counter-based id
+would trade an unmeasurable saving for leaking request volume in a header that is
+returned to the caller.
+
+### What still costs
+
+The remaining ~5.4 µs over `requestLogging: false` is **~1.3 µs of `req.headers`,
+~0.9 µs of `AsyncLocalStorage`, ~2.1 µs of entry construction and
+`JSON.stringify`**, and ~0.7 µs of reading `req.url`. The first two are the contract:
+an inbound `x-request-id` has to be honoured and a handler's own log lines have to
+carry the id. The third is the one with room left, and the obvious move — hand-rolling
+a serialiser instead of `JSON.stringify` — is a JavaScript reimplementation of a
+platform primitive with string escaping to get wrong, which Rule 1 forbids. One real
+saving is available and blocked on a contract: `RequestContext.getContext()` returns
+a copy, and `ConsoleLogger` then spreads that copy into the entry, so the request
+fields are copied twice per line. Removing one copy means either changing what
+`getContext()` returns — which `@arkv/logger`'s `ContextStore` also implements — or
+changing the order of the keys in every log line.

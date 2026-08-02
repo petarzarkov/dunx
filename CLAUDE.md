@@ -230,6 +230,12 @@ writes one JSON line per entry and `AsyncRequestContext` is `AsyncLocalStorage`,
 a Node built-in Bun implements natively. `ConsoleLogger` does **not** sanitize,
 mask or rotate — that is what makes swapping in `@dunx/infra/logger` worth it.
 
+`ConsoleLogger` **batches `info` and below into one write per event-loop turn** —
+a `write(2)` per entry was the largest single cost in request logging. `warn` and
+above are never batched and flush what is queued behind them, `flush()` is public,
+and `onShutdown()` calls it. Measurements and the durability trade: ARCHITECTURE.md,
+"The cost of request logging".
+
 `RequestContext` is the same trick as `Logger`: an abstract class in core that
 `@arkv/logger`'s `ContextStore` satisfies structurally, so the binding is a
 `provide` with no adapter between them.

@@ -27,24 +27,6 @@ export interface RequestLoggingOptions {
   readonly ignore?: readonly string[];
 }
 
-/**
- * `new URL(req.url)` parses the scheme, host, port, query and hash to reach one
- * string. This slices it out instead, which is what every request needs and all
- * that most of them need.
- */
-const pathnameOf = (url: string): string => {
-  const start = url.indexOf('/', url.indexOf('://') + 3);
-  if (start === -1) return '/';
-  const end = url.indexOf('?', start);
-  return end === -1 ? url.slice(start) : url.slice(start, end);
-};
-
-const queryOf = (url: string): Record<string, string> | undefined => {
-  const start = url.indexOf('?');
-  if (start === -1) return undefined;
-  return Object.fromEntries(new URLSearchParams(url.slice(start + 1)));
-};
-
 const parse = (text: string, limit: number): unknown => {
   if (limit === 0) return undefined;
   if (text.length === 0) return undefined;
@@ -55,6 +37,12 @@ const parse = (text: string, limit: number): unknown => {
     return text;
   }
 };
+
+const elapsedMs = (started: number): number =>
+  Math.round((Bun.nanoseconds() - started) / 1e6);
+
+/** What the entry's `request` field carries, built in the order it is logged. */
+type RequestFields = Record<string, unknown>;
 
 /**
  * One structured entry per request, carrying the request and its response.
@@ -73,6 +61,12 @@ const parse = (text: string, limit: number): unknown => {
  * Everything the handler logs in between carries `requestId`, `method`, `event`
  * and `context` without being passed anything, because the whole call runs
  * inside `runWithContext`.
+ *
+ * **Nothing here is `async`.** Reading the request or the response body are the
+ * only steps that can ever wait, both are off by default, and both are adopted
+ * with `.then` rather than awaited — the same rule `input.ts` follows, for the
+ * same measured reason. An `async` scope callback alone cost 0.44 µs/request
+ * against a synchronous one on raw `Bun.serve`.
  */
 export class RequestLoggingMiddleware implements Middleware {
   readonly #limit: number;
@@ -92,12 +86,18 @@ export class RequestLoggingMiddleware implements Middleware {
   }
 
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
-    const path = pathnameOf(req.url);
-    if (this.#ignore.has(path)) return next();
+    // `new URL(req.url)` parses the scheme, host, port, query and hash to reach one
+    // string. This finds the same two offsets once and slices both the pathname and
+    // the query out of them, which is what every request needs and all that most of
+    // them need.
+    const url = req.url;
+    const from = url.indexOf('/', url.indexOf('://') + 3);
+    const mark = from === -1 ? -1 : url.indexOf('?', from);
+    const path =
+      from === -1 ? '/' : mark === -1 ? url.slice(from) : url.slice(from, mark);
+    if (this.#ignore.size > 0 && this.#ignore.has(path)) return next();
 
     const started = Bun.nanoseconds();
-    const elapsed = (): number =>
-      Math.round((Bun.nanoseconds() - started) / 1e6);
     // An inbound id is honoured so a trace survives across services; otherwise
     // this is where one is minted.
     const requestId = req.headers.get(REQUEST_ID_HEADER) ?? crypto.randomUUID();
@@ -110,71 +110,142 @@ export class RequestLoggingMiddleware implements Middleware {
         flow: 'http',
         context: `${ctx.controller}.${ctx.handler}`,
       },
-      async () => {
-        const query = queryOf(req.url);
-        const request = {
-          ...(query === undefined ? {} : { query }),
-          ...(await this.#body(req)),
-          userAgent: req.headers.get('user-agent'),
-        };
-
-        try {
-          const response = await next();
-          this.logger.info(`${req.method} ${path} ${response.status}`, {
-            request,
-            statusCode: response.status,
-            ...(await this.#responseFields(response)),
-            elapsedMs: elapsed(),
-          });
-          response.headers.set(REQUEST_ID_HEADER, requestId);
-          return response;
-        } catch (error) {
-          // Logged and rethrown: the error mapper still owns the status and the
-          // response shape. A 404 or a rejected body is the caller's fault, and
-          // logging every probe at `error` would drown the ones that matter.
-          const status =
-            error instanceof HttpError
-              ? error.status
-              : HttpStatusCode.INTERNAL_SERVER_ERROR;
-          const entry = {
-            request,
-            err: error,
-            statusCode: status,
-            elapsedMs: elapsed(),
-          };
-          const line = `${req.method} ${path} ${status}`;
-          if (status < HttpStatusCode.INTERNAL_SERVER_ERROR) {
-            this.logger.warn(line, entry);
-          } else {
-            this.logger.error(line, entry);
-          }
-          throw error;
+      () => {
+        const request: RequestFields = {};
+        if (mark !== -1) {
+          request['query'] = Object.fromEntries(
+            new URLSearchParams(url.slice(mark + 1)),
+          );
         }
+        const body = this.#body(req);
+        if (body === undefined) {
+          request['userAgent'] = req.headers.get('user-agent');
+          return this.#dispatch(req, path, requestId, started, request, next);
+        }
+        return body.then((value) => {
+          if (value !== undefined) request['body'] = value;
+          request['userAgent'] = req.headers.get('user-agent');
+          return this.#dispatch(req, path, requestId, started, request, next);
+        });
       },
     );
   }
 
-  /** Clones, so the handler's own stream is never the one that was consumed. */
-  async #body(req: BunRequest): Promise<{ body?: unknown }> {
-    if (!this.#requestBody) return {};
-    if (req.method === 'GET' || req.method === 'HEAD') return {};
-    if (!(req.headers.get('content-type') ?? '').includes('application/json')) {
-      return {};
+  #dispatch(
+    req: BunRequest,
+    path: string,
+    requestId: string,
+    started: number,
+    request: RequestFields,
+    next: Next,
+  ): Promise<Response> {
+    // `next()` is only ever a promise once the chain bottoms out in a route, but a
+    // user middleware ahead of the route may throw out of `handle` synchronously,
+    // and that request is still one this middleware promised to log.
+    let settled: Promise<Response>;
+    try {
+      settled = next();
+    } catch (error) {
+      this.#failed(req, path, started, request, error);
+      throw error;
     }
-    const body = parse(await req.clone().text(), this.#limit);
-    return body === undefined ? {} : { body };
+    return settled.then(
+      (response) =>
+        this.#succeeded(req, path, requestId, started, request, response),
+      (error: unknown) => {
+        this.#failed(req, path, started, request, error);
+        throw error;
+      },
+    );
   }
 
-  async #responseFields(
+  /**
+   * Logged and rethrown: the error mapper still owns the status and the response
+   * shape. A 404 or a rejected body is the caller's fault, and logging every probe
+   * at `error` would drown the ones that matter.
+   */
+  #failed(
+    req: BunRequest,
+    path: string,
+    started: number,
+    request: RequestFields,
+    error: unknown,
+  ): void {
+    const status =
+      error instanceof HttpError
+        ? error.status
+        : HttpStatusCode.INTERNAL_SERVER_ERROR;
+    const entry = {
+      request,
+      err: error,
+      statusCode: status,
+      elapsedMs: elapsedMs(started),
+    };
+    const line = `${req.method} ${path} ${status}`;
+    if (status < HttpStatusCode.INTERNAL_SERVER_ERROR) {
+      this.logger.warn(line, entry);
+    } else {
+      this.logger.error(line, entry);
+    }
+  }
+
+  #succeeded(
+    req: BunRequest,
+    path: string,
+    requestId: string,
+    started: number,
+    request: RequestFields,
     response: Response,
-  ): Promise<{ responseBody?: unknown }> {
-    if (!this.#responseBody) return {};
+  ): Response | Promise<Response> {
+    const body = this.#responseFields(response);
+    if (body === undefined) {
+      this.logger.info(`${req.method} ${path} ${response.status}`, {
+        request,
+        statusCode: response.status,
+        elapsedMs: elapsedMs(started),
+      });
+      response.headers.set(REQUEST_ID_HEADER, requestId);
+      return response;
+    }
+    return body.then((value) => {
+      this.logger.info(`${req.method} ${path} ${response.status}`, {
+        request,
+        statusCode: response.status,
+        ...(value === undefined ? {} : { responseBody: value }),
+        elapsedMs: elapsedMs(started),
+      });
+      response.headers.set(REQUEST_ID_HEADER, requestId);
+      return response;
+    });
+  }
+
+  /**
+   * `undefined` — the default — means there is nothing to read, and the caller
+   * stays on the synchronous path. Clones when there is, so the handler's own
+   * stream is never the one that was consumed.
+   */
+  #body(req: BunRequest): Promise<unknown> | undefined {
+    if (!this.#requestBody) return undefined;
+    if (req.method === 'GET' || req.method === 'HEAD') return undefined;
+    if (!(req.headers.get('content-type') ?? '').includes('application/json')) {
+      return undefined;
+    }
+    return req
+      .clone()
+      .text()
+      .then((text) => parse(text, this.#limit));
+  }
+
+  #responseFields(response: Response): Promise<unknown> | undefined {
+    if (!this.#responseBody) return undefined;
     if (
       !(response.headers.get('content-type') ?? '').includes('application/json')
     ) {
-      return {};
+      return undefined;
     }
-    const body = parse(await response.clone().text(), this.#limit);
-    return body === undefined ? {} : { responseBody: body };
+    return response
+      .clone()
+      .text()
+      .then((text) => parse(text, this.#limit));
   }
 }
