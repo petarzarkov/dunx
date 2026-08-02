@@ -11,7 +11,11 @@ import {
   type Node,
 } from './ast.js';
 import { applyEdits, type Edit } from './edits.js';
-import { collectTypeOnlyNames, erasedNames } from './erased.js';
+import {
+  collectTypeOnlyNames,
+  erasedNames,
+  type ErasureCause,
+} from './erased.js';
 
 /**
  * `Symbol.for`, not `Symbol`: two copies of `@dunx/core` in one dependency tree
@@ -53,18 +57,25 @@ const annotationOf = (param: Node): Node | undefined => {
 const entryFor = (
   source: string,
   param: Node,
-  erased: ReadonlySet<string>,
+  erased: ReadonlyMap<string, ErasureCause>,
 ): string => {
-  const unresolved = `{ unresolved: ${JSON.stringify(slice(source, param))} }`;
+  const text = JSON.stringify(slice(source, param));
+  const unresolved = `{ unresolved: ${text} }`;
   const annotation = annotationOf(param);
 
   if (!annotation || !isTypeReference(annotation)) return unresolved;
 
   const token = slice(source, annotation.typeName);
   // A qualified name (`ns.Thing`) is a runtime value; a bare erased name is not.
-  if (erased.has(token)) return unresolved;
+  const cause = erased.get(token);
+  if (cause === undefined) return token;
 
-  return token;
+  // The annotation reads the same whether the name was imported with
+  // `import type` or declared as an interface, so the one case with a one-line
+  // fix carries the identifier for the boot error to name.
+  return cause === 'import-type'
+    ? `{ unresolved: ${text}, typeOnly: ${JSON.stringify(token)} }`
+    : unresolved;
 };
 
 /**

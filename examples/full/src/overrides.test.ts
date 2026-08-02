@@ -1,5 +1,5 @@
 import { expect, it } from 'bun:test';
-import { ConfigModule, Logger, provide } from '@dunx/core';
+import { ConfigModule, Logger, provide, token } from '@dunx/core';
 import {
   createTestApp,
   createTestServer,
@@ -46,19 +46,22 @@ it('boots the users slice with the logger replaced', async () => {
 });
 
 it('refuses an override for a token the slice does not bind', async () => {
-  class FixedConfig extends AppConfigService {}
+  // A token(), not a class. The container self-binds any class whether or not a
+  // module lists it, so overriding one - AppConfigService included - is
+  // replacing a real binding rather than adding a phantom. This guardrail is for
+  // the case with nothing behind it, where a typo would otherwise leave the
+  // suite asserting against the real provider it thought it had swapped.
+  const NotBound = token<object>('NotBound');
 
   const message = await createTestApp({
     modules: [UsersModule],
-    overrides: [provide(AppConfigService, { useClass: FixedConfig })],
+    overrides: [provide(NotBound, { useValue: {} })],
   }).then(
     () => 'it resolved',
     (error: unknown) => (error as Error).message,
   );
 
-  // ConfigModule is not in this list, so nothing binds AppConfigService - and a
-  // silent no-op would have left the suite asserting against the real config.
-  expect(message).toContain('Nothing to override for AppConfigService');
+  expect(message).toContain('Nothing to override for NotBound');
 });
 
 /**

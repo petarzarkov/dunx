@@ -182,9 +182,10 @@ describe('createTestApp()', () => {
         }),
       ),
     ).toBe(
-      'Nothing to override for Clock: no module in the graph binds it. An ' +
-        'override replaces a binding - it cannot add one, because a token nobody ' +
-        'bound is a token nothing under test resolves.',
+      'Nothing to override for Clock: no module in the graph binds it, and it ' +
+        'is not a class, so nothing self-binds it either. An override replaces ' +
+        'a binding - it cannot add one, because a token nobody bound is a token ' +
+        'nothing under test resolves.',
     );
   });
 

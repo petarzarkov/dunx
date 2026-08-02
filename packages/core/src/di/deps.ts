@@ -9,6 +9,12 @@ const DEPS = Symbol.for('dunx.deps');
 /** A constructor parameter whose type named nothing that exists at runtime. */
 export interface UnresolvedDep {
   readonly unresolved: string;
+  /**
+   * Set when the name was erased specifically by an `import type`. That case has
+   * a one-line fix and the annotation looks identical to the cases that do not,
+   * so it is worth telling apart.
+   */
+  readonly typeOnly?: string;
 }
 
 export type DepEntry = InjectionToken<unknown> | UnresolvedDep;

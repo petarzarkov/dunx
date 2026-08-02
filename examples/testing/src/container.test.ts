@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Logger, LogLevel, Module, provide } from '@dunx/core';
+import { Logger, LogLevel, Module, provide, token } from '@dunx/core';
 import { createTestApp, RecordingLogger } from '@dunx/testing';
 import { ForecastClient } from './weather/forecast.client.js';
 import { WeatherModule } from './weather/weather.module.js';
@@ -68,10 +68,13 @@ describe('createTestApp', () => {
   });
 
   test('an override naming a token nobody binds is an error', async () => {
-    class NotBoundAnywhere {}
+    // A token(), deliberately, not a class. A class is self-bound by the
+    // container whether or not a module lists it, so overriding one is
+    // replacing a real binding and is allowed. A token has nothing behind it,
+    // so a typo here would otherwise leave the suite asserting against the real
+    // provider it thought it had swapped.
+    const NotBoundAnywhere = token<object>('NotBoundAnywhere');
 
-    // Not a silent no-op - which is what would otherwise leave a suite asserting
-    // against the real provider it thought it had swapped.
     const message = await createTestApp({
       modules: [WeatherModule],
       overrides: [provide(NotBoundAnywhere, { useValue: {} })],

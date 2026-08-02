@@ -225,6 +225,30 @@ describe('overrides', () => {
     expect(app.get(Logger)).toBe(logger);
   });
 
+  it('overrides a class no module lists, because it self-binds', async () => {
+    class Repo {
+      find(): string {
+        return 'real';
+      }
+    }
+
+    @Module({})
+    class EmptyModule {}
+
+    // The container resolves this class without anyone binding it, so an
+    // override for it is replacing something, not adding it. Refusing this was
+    // the container disagreeing with itself about the same class in the same
+    // graph - and a collaborator nobody listed is the usual thing to stub.
+    const plain = await AppFactory.create(EmptyModule);
+    expect(plain.get(Repo).find()).toBe('real');
+
+    const fake = { find: () => 'fake' } as Repo;
+    const app = await AppFactory.create(EmptyModule, {
+      overrides: [provide(Repo, { useValue: fake })],
+    });
+    expect(app.get(Repo).find()).toBe('fake');
+  });
+
   it('rejects an override for a token nobody binds', async () => {
     @Module({})
     class EmptyModule {}

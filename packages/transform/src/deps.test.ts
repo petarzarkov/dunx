@@ -67,8 +67,10 @@ describe('erased parameters', () => {
 export class Service {
   constructor(private readonly config: Config) {}
 }`;
+    // The identifier rides along so the boot error can say which import to
+    // change: the annotation alone reads the same as an interface's.
     expect(entriesFor(source, 'Service')).toBe(
-      '{ unresolved: "private readonly config: Config" }',
+      '{ unresolved: "private readonly config: Config", typeOnly: "Config" }',
     );
   });
 

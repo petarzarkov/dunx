@@ -6,7 +6,7 @@ import { Injector } from './injector.js';
 import { hasOnInit, hasOnShutdown } from './lifecycle.js';
 import { collectModules, readModule, type ModuleRef } from './module.js';
 import { provide, type Registration } from './provider.js';
-import { describeToken, type InjectionToken } from './token.js';
+import { describeToken, isCtor, type InjectionToken } from './token.js';
 
 /**
  * The two contracts core guarantees are resolvable. Both are last-resort: a
@@ -29,8 +29,9 @@ const assertEveryOverrideReplaced = (
 
   throw new AppError(
     `Nothing to override for ${missing.map(describeToken).join(', ')}: no module ` +
-      'in the graph binds it. An override replaces a binding - it cannot add one, ' +
-      'because a token nobody bound is a token nothing under test resolves.',
+      'in the graph binds it, and it is not a class, so nothing self-binds it ' +
+      'either. An override replaces a binding - it cannot add one, because a ' +
+      'token nobody bound is a token nothing under test resolves.',
   );
 };
 
@@ -137,6 +138,18 @@ export class AppFactory {
     // Substituted too, so overriding `Logger` works in an app that binds none.
     for (const registration of defaults()) {
       injector.registerDefault(substitute(registration));
+    }
+    // A class no module listed is still resolvable, because an unbound
+    // constructor self-binds. So an override for one does have a binding to
+    // replace, and refusing it contradicted the container about the same class
+    // in the same graph - while the collaborator nobody listed is exactly what
+    // a unit test stubs. A `token()` nobody bound stays an error: there is no
+    // self-binding behind it, so it really would be adding rather than
+    // replacing.
+    for (const [token, registration] of overrides) {
+      if (replaced.has(token) || !isCtor(token)) continue;
+      injector.registerLazy(registration);
+      replaced.add(token);
     }
     assertEveryOverrideReplaced(overrides, replaced);
 

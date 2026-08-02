@@ -1,6 +1,7 @@
 import { isUnresolved, readDeps, type Constructible } from './deps.js';
 import { CircularDependencyError, AppError } from './errors.js';
 import { swapInjector } from './inject.js';
+import { missingTransformMessage } from './transform-hint.js';
 import type { ErasedProvider, Registration } from './provider.js';
 import {
   describeToken,
@@ -19,6 +20,8 @@ class PendingSignal {
 interface Bound {
   readonly provider: ErasedProvider;
   readonly module: string;
+  /** Excluded from eager resolution. See `registerLazy`. */
+  readonly lazy?: boolean;
 }
 
 export class Injector {
@@ -61,8 +64,28 @@ export class Injector {
     });
   }
 
+  /**
+   * Bind without joining the eager set, so the binding is constructed only if
+   * something asks for it.
+   *
+   * This is how an override for a class no module lists behaves the same as the
+   * self-binding it replaces. A self-bound class is not in `#bindings` at all
+   * and is built on demand; registering its override eagerly would construct a
+   * stub for a collaborator the graph under test never reaches.
+   */
+  registerLazy(registration: Registration): void {
+    if (this.#bindings.has(registration.token)) return;
+    this.#bindings.set(registration.token, {
+      provider: registration.provider,
+      module: '(override)',
+      lazy: true,
+    });
+  }
+
   get tokens(): readonly InjectionToken<unknown>[] {
-    return [...this.#bindings.keys()];
+    return [...this.#bindings]
+      .filter(([, bound]) => bound.lazy !== true)
+      .map(([token]) => token);
   }
 
   /** Construction-completion order, so dependencies come before their dependents. */
@@ -155,25 +178,28 @@ export class Injector {
     // saw this file. Constructing it anyway would pass `undefined` and fail later
     // somewhere unrelated, so the missing setup is reported here instead.
     if (deps.length === 0 && ctor.length > 0) {
-      throw new AppError(
-        `${ctor.name} declares ${ctor.length} constructor parameter(s) but no ` +
-          'dependencies were recorded for it, so @dunx/transform did not transform ' +
-          `${ctor.name}. Register the plugin, then retry:\n\n` +
-          '  # bunfig.toml\n' +
-          '  preload = ["@dunx/transform/preload"]\n\n' +
-          '  [test]\n' +
-          '  preload = ["@dunx/transform/preload"]\n',
-      );
+      throw new AppError(missingTransformMessage(ctor.name, ctor.length));
     }
 
     return deps.map((dep, index) => {
       if (!isUnresolved(dep)) return this.get(dep);
 
+      // The annotation is identical whether the name was imported with
+      // `import type` or is an interface, so quoting it alone points at a line
+      // that is already correct. Only the import-type case has a one-line fix,
+      // and it is the likely one: `verbatimModuleSyntax` is on in the scaffold,
+      // which is exactly what makes an editor offer to add `type`.
+      const remedy =
+        dep.typeOnly === undefined
+          ? 'Replace the type with an abstract class, or bind it with token() ' +
+            'and declare the parameter as that token.'
+          : `${dep.typeOnly} is imported with \`import type\`, which erases it. ` +
+            'Make it a value import.';
+
       throw new AppError(
         `${ctor.name} cannot be constructed: parameter ${index + 1} ` +
           `(${dep.unresolved}) names nothing that exists at runtime, so there is ` +
-          'no token to resolve. Replace the type with an abstract class, or bind ' +
-          'it with token() and declare the parameter as that token.',
+          `no token to resolve. ${remedy}`,
       );
     });
   }
