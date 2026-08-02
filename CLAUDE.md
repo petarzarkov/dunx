@@ -302,7 +302,7 @@ still does all the matching, and the fallback runs only once it has matched noth
 ## Building
 
 ```bash
-bun run build         # all packages: bun run --filter '*' build
+bun run build         # every workspace, in dependency order (scripts/build-all.ts)
 ```
 
 Within a package, `build` is `bun ../../scripts/build-package.ts` - one
@@ -353,7 +353,9 @@ Every package manifest needs `"type": "module"`. Without it,
 
 - Runner: `bun test`
 - `bun run test` - run tests with bail on first failure (per package, via `--filter '*'`)
-- `bun run test:cov` - one root run over `./packages ./scripts` so everything lands in
+- `bun run test:cov` - one root run over `./packages ./scripts` (excluding
+  `**/templates/**`, which holds a working app whose test cannot resolve from there)
+  so everything lands in
   a single `coverage/lcov.info`, then `bun run gen:cov`. It deliberately excludes
   `examples/`: the root has no compiler preload, because core's missing-transform
   test asserts that un-transformed state. Example tests run per workspace, where the
