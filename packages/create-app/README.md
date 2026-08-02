@@ -61,6 +61,12 @@ package shares one number and ships together - so the version doing the
 scaffolding is by definition a set that works together. Writing versions into the
 template would go stale on the next release.
 
+Keep it that way when you add a package later. The packages peer-depend on each
+other by caret range, so mixing minors warns on install - and can leave two copies
+of `@dunx/core` in one tree, which breaks dependency injection outright: a token
+*is* a class object, so two copies are two different classes and a provider bound
+against one is invisible to the other.
+
 **The template's `.gitignore` ships as `_gitignore`.** npm renames a published
 `.gitignore` to `.npmignore`, which would leave every scaffolded app without one.
 The scaffolder puts the dot back on write.

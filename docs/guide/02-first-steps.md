@@ -178,6 +178,37 @@ preload runs when you run the app. If you compile ahead of time with
 
 `@dunx/testing` is a dev dependency and is what `src/app.test.ts` uses.
 
+### Keep every `@dunx/*` on the same version
+
+The scaffold already does this, and it matters when you add a package by hand
+later.
+
+dunx releases in lockstep: every package shares one version and ships together,
+even the ones a release did not touch. The packages peer-depend on each other by
+caret range, so mixing minors resolves to a graph that warns on install:
+
+```
+warn: incorrect peer dependency "@dunx/http@0.2.0"
+```
+
+That happens when a lockfile already has an entry satisfying your range. Adding
+`@dunx/auth` to an app pinned at `^0.2.0` can resolve auth to 0.2.5 and leave the
+rest at 0.2.0, and `@dunx/auth@0.2.5` peers on `@dunx/http@^0.2.5`.
+
+The warning is the good case. The bad one is **two copies of `@dunx/core` in one
+tree, which breaks dependency injection outright**: a token _is_ a class object, so
+two copies are two different classes, and a provider bound against one is invisible
+to a resolution against the other. The error you get says nothing is bound, from
+somewhere unrelated to the version mismatch.
+
+So when you add a package, match the version to the ones already installed:
+
+```bash
+bun add @dunx/auth@$(bun pm pkg get dependencies.@dunx/core --workspaces=false | tr -d '"^')
+```
+
+Or edit the manifest so every `@dunx/*` range reads the same, and reinstall.
+
 ### `tsconfig.json`
 
 ```json
