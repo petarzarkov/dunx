@@ -4,7 +4,13 @@ A route declares the shape of what it accepts on the decorator itself, and the
 framework parses, validates and types the request before the handler runs.
 
 ```ts
-import { Controller, Get, Post, type Input, type RouteSchemas } from '@dunx/http';
+import {
+  Controller,
+  Get,
+  Post,
+  type Input,
+  type RouteSchemas,
+} from '@dunx/http';
 import { z } from 'zod';
 
 const CreateUser = z.object({ name: z.string().min(1).max(40) });
@@ -67,7 +73,7 @@ does not know or care which library produced the object.
 
 ### Sync and async validators
 
-`~standard.validate` is *permitted* to return a promise. zod, Valibot and ArkType
+`~standard.validate` is _permitted_ to return a promise. zod, Valibot and ArkType
 never do, and the input reader is built around that: it checks
 `result instanceof Promise` and only allocates a promise link when it gets one.
 A validator that really is asynchronous still works and is awaited correctly; it
@@ -158,13 +164,13 @@ supposed to send one, so a hostile request target cannot change what a schema se
 
 The content type decides the parser:
 
-| `content-type`                      | parsed with                        |
-| ----------------------------------- | ---------------------------------- |
-| `application/json`, anything `+json` | `req.json()`                       |
-| `application/x-www-form-urlencoded` | `URLSearchParams`, grouped         |
-| `multipart/form-data`               | `req.formData()`, grouped          |
-| `text/*`                            | `req.text()`                       |
-| anything else                       | 415, before the schema is consulted |
+| `content-type`                       | parsed with                         |
+| ------------------------------------ | ----------------------------------- |
+| `application/json`, anything `+json` | `req.json()`                        |
+| `application/x-www-form-urlencoded`  | `URLSearchParams`, grouped          |
+| `multipart/form-data`                | `req.formData()`, grouped           |
+| `text/*`                             | `req.text()`                        |
+| anything else                        | 415, before the schema is consulted |
 
 No `content-type` header at all reads as JSON. `fetch` omits the header for a
 bodyless request, and answering 415 there would be useless because the schema is
@@ -182,7 +188,7 @@ export const UserIndex = z.object({ id: z.coerce.number().int().min(1) });
 
 `z.coerce.number()` turns `"42"` into `42` before `.int().min(1)` runs, so by the
 time the handler executes `input.params.id` is a `number` at runtime **and** in
-the type, because `Input<>` reads the schema's *output* type rather than its
+the type, because `Input<>` reads the schema's _output_ type rather than its
 input:
 
 ```ts
@@ -202,7 +208,7 @@ means the handler sees a `number` whether or not the caller sent `?limit=`, and
 `"999"` is a 400 rather than a page size nobody intended.
 
 This is one of the two reasons the framework does not try to be clever about
-types on its own. The other is that `.default()` changes the *type* as well as the
+types on its own. The other is that `.default()` changes the _type_ as well as the
 value, and only the validator knows that.
 
 ## `Input<typeof schema>` and why it must be written out
@@ -212,7 +218,7 @@ framework can remove.
 
 A TC39 standard method decorator is
 `(value: V, context: ClassMethodDecoratorContext) => V | void`. It receives the
-method and can *reject* one whose type does not match, but there is no mechanism
+method and can _reject_ one whose type does not match, but there is no mechanism
 in the proposal for a decorator to contextually type an unannotated parameter.
 This was measured with `tsc` rather than assumed:
 
@@ -222,7 +228,7 @@ unannotated parameter          -> TS7006: Parameter 'input' implicitly has an 'a
 annotated with the wrong type  -> TS1241 + TS1270, naming the mismatched property
 ```
 
-So the guarantee is a *check*, not an inference. Get the annotation wrong and the
+So the guarantee is a _check_, not an inference. Get the annotation wrong and the
 compiler names the property that does not line up; leave it off and `strict` mode
 rejects the implicit `any`. What it is never allowed to be is silently wrong.
 
@@ -232,9 +238,15 @@ function over the options object:
 ```ts
 export type Input<O extends RouteSchemas> = {
   readonly req: BunRequest;
-} & (O extends { body: infer B } ? { readonly body: InferOutput<B> } : unknown) &
-  (O extends { query: infer Q } ? { readonly query: InferOutput<Q> } : unknown) &
-  (O extends { params: infer P } ? { readonly params: InferOutput<P> } : unknown);
+} & (O extends { body: infer B }
+  ? { readonly body: InferOutput<B> }
+  : unknown) &
+  (O extends { query: infer Q }
+    ? { readonly query: InferOutput<Q> }
+    : unknown) &
+  (O extends { params: infer P }
+    ? { readonly params: InferOutput<P> }
+    : unknown);
 ```
 
 Every field type still comes from the schema. `Input<typeof createUser>` is
@@ -292,7 +304,7 @@ Two other failures are not validation failures and do not carry issues:
   rejected, so there was never a value to validate.
 - An undeclared content type is
   `415 Unsupported content type "application/xml". Declared bodies accept
-  application/json, application/x-www-form-urlencoded, multipart/form-data or text/*.`
+application/json, application/x-www-form-urlencoded, multipart/form-data or text/*.`
 
 Replace all of it by passing `onError` to `HttpFactory.create`; see
 [Middleware and guards](./07-middleware-and-guards.md#the-error-mapper).
@@ -337,12 +349,12 @@ This repo publishes its losses, and here the loss is not where most people expec
 Four raw `Bun.serve` routes, each doing exactly one thing more than the one above
 it, all answering the same bytes, all against a 69 byte three-field payload:
 
-| Step                                   | req/s   | µs/req | this step adds |
-| -------------------------------------- | ------: | -----: | -------------: |
-| `GET /json`, no request body at all    | 113,881 |   8.78 |              - |
-| `POST`, body on the wire, never read   | 110,537 |   9.05 |       +0.27 µs |
-| `POST` + `await req.json()`            |  82,341 |  12.14 |       +3.10 µs |
-| `POST` + `req.json()` + zod            |  76,412 |  13.09 |       +0.94 µs |
+| Step                                 |   req/s | µs/req | this step adds |
+| ------------------------------------ | ------: | -----: | -------------: |
+| `GET /json`, no request body at all  | 113,881 |   8.78 |              - |
+| `POST`, body on the wire, never read | 110,537 |   9.05 |       +0.27 µs |
+| `POST` + `await req.json()`          |  82,341 |  12.14 |       +3.10 µs |
+| `POST` + `req.json()` + zod          |  76,412 |  13.09 |       +0.94 µs |
 
 **Reading the body costs about three times what validating it costs.** Putting the
 payload on the wire is near free; `req.json()` is 3.10 µs and zod is 0.94 µs. Of
@@ -352,13 +364,13 @@ choice of validator affects it.
 
 Which is why there is no throughput argument for steering anyone off zod:
 
-| Validator                    |   costs | `~standard` |
-| ---------------------------- | ------: | ----------- |
-| TypeBox, `TypeCompiler` AOT  | -0.01 µs | bridged     |
-| ajv, compiled JSON Schema    |  0.34 µs | bridged     |
-| ArkType                      |  0.42 µs | native      |
-| Valibot                      |  0.89 µs | native      |
-| zod                          |  0.94 µs | native      |
+| Validator                   |    costs | `~standard` |
+| --------------------------- | -------: | ----------- |
+| TypeBox, `TypeCompiler` AOT | -0.01 µs | bridged     |
+| ajv, compiled JSON Schema   |  0.34 µs | bridged     |
+| ArkType                     |  0.42 µs | native      |
+| Valibot                     |  0.89 µs | native      |
+| zod                         |  0.94 µs | native      |
 
 zod, Valibot and ArkType are within noise of each other; the noise floor for that
 harness is about ±0.3 µs. Both compiled options land at or under it, which means
@@ -366,7 +378,7 @@ TypeBox's compiled checker is indistinguishable from not validating at all on a
 payload this size. Saving 0.9 µs on a 13 µs request is 7%, against giving up zod's
 ecosystem, error messages and `z.toJSONSchema`. Pick on API and error quality.
 
-The number that *was* worth chasing was the framework's own. A route with a
+The number that _was_ worth chasing was the framework's own. A route with a
 declared `body` used to go through six `async` frames, exactly one of which
 (`req.json()`) ever had anything to wait for, and the reader's plumbing cost
 2.05 µs, nearly twice what zod itself cost. Rebuilding it to adopt promises rather

@@ -33,7 +33,11 @@ export class RequestLog {
 export class RequestLoggerMiddleware implements Middleware {
   constructor(private readonly log: RequestLog) {}
 
-  async handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
+  async handle(
+    req: BunRequest,
+    ctx: RouteContext,
+    next: Next,
+  ): Promise<Response> {
     const response = await next();
     this.log.entries.push(
       `${req.method} ${new URL(req.url).pathname} -> ${response.status} ` +
@@ -204,14 +208,14 @@ export class RolesGuard implements Middleware {
 
 Refusing a request is `throw`. Allowing it is `return next()`. That is the
 difference from a boolean-returning guard, and it buys two things: the guard says
-*why* in the same statement that rejects, and the rejection travels the ordinary
+_why_ in the same statement that rejects, and the rejection travels the ordinary
 error path so the mapper, the logger and CORS all treat it like any other failure.
 A `403` from a guard is `{"error":"Requires one of: admin","status":403}`, not a
 generic Forbidden.
 
 **Nothing downstream runs.** `next()` was never called, so no further middleware
 executes, the input reader never reads the body, and the handler is never invoked.
-(The controller *instance* already exists: dunx resolves the container eagerly at
+(The controller _instance_ already exists: dunx resolves the container eagerly at
 `HttpFactory.create()`, so every controller is constructed once at boot and the
 handler is a bound method closed over it. A guard prevents the call, not the
 construction, and there is no per-request instantiation to prevent.)
@@ -224,16 +228,22 @@ construction, and there is no per-request instantiation to prevent.)
 class ReportsController {
   @Public()
   @Get('/health')
-  health() { return { ok: true }; }
+  health() {
+    return { ok: true };
+  }
 
   @UseGuards(RolesGuard)
   @Post('/')
-  create() { return { created: true }; }
+  create() {
+    return { created: true };
+  }
 
   @Roles('editor')
   @UseGuards(RolesGuard)
   @Get('/draft')
-  draft() { return { draft: true }; }
+  draft() {
+    return { draft: true };
+  }
 }
 ```
 
@@ -274,7 +284,7 @@ export class AuthGuard implements Middleware {
 }
 ```
 
-Note that the global guard still *runs* on a public route. It chose to skip. That
+Note that the global guard still _runs_ on a public route. It chose to skip. That
 is what makes `@Public()` do something rather than decorate, and it is why
 `@dunx/auth`'s `SessionGuard` can be installed globally at all: better-auth's own
 sign-in endpoints are `@Public()`, and a sign-in route that needed a session could
@@ -299,11 +309,17 @@ export const defaultErrorMapper: ErrorMapper = (error) => {
     );
   }
   if (error instanceof HttpError) {
-    return Response.json({ error: error.message, status: error.status }, { status: error.status });
+    return Response.json(
+      { error: error.message, status: error.status },
+      { status: error.status },
+    );
   }
   console.error(error);
   return Response.json(
-    { error: 'Internal Server Error', status: HttpStatusCode.INTERNAL_SERVER_ERROR },
+    {
+      error: 'Internal Server Error',
+      status: HttpStatusCode.INTERNAL_SERVER_ERROR,
+    },
     { status: HttpStatusCode.INTERNAL_SERVER_ERROR },
   );
 };
@@ -321,7 +337,10 @@ Replace it wholesale:
 const app = await HttpFactory.create(AppModule, {
   onError: (error, req) => {
     if (error instanceof TenantMissing) {
-      return Response.json({ error: 'Unknown tenant', status: 404 }, { status: 404 });
+      return Response.json(
+        { error: 'Unknown tenant', status: 404 },
+        { status: 404 },
+      );
     }
     return defaultErrorMapper(error, req);
   },
@@ -334,7 +353,7 @@ falling through to `defaultErrorMapper` is the normal way to handle the rest.
 ### Where the mapper sits
 
 Inside CORS and outside everything else. A mapped 500 still carries the CORS
-headers a browser needs in order to *show* it, which is exactly the case where a
+headers a browser needs in order to _show_ it, which is exactly the case where a
 missing header turns a readable error into a silent network failure in the
 console.
 
@@ -346,16 +365,16 @@ binding, so it works in an app that imported no logging module at all, and picks
 up `@arkv/logger` automatically once `@dunx/infra/logger` is imported.
 
 ```ts
-HttpFactory.create(AppModule, { requestLogging: false });          // remove it
+HttpFactory.create(AppModule, { requestLogging: false }); // remove it
 HttpFactory.create(AppModule, { requestLogging: { ignore: ['/health'] } }); // tune it
 ```
 
-| Option           | Default | Notes                                                        |
-| ---------------- | ------- | ------------------------------------------------------------ |
-| `maxBodyLength`  | `2048`  | Longer bodies log as `[N bytes]`. `0` omits them entirely.    |
-| `requestBody`    | `false` | Costs a `req.clone().text()` per request.                     |
-| `responseBody`   | `false` | Same clone-and-buffer cost on the way out.                    |
-| `ignore`         | `[]`    | Exact paths to skip, for a health check polled every second.  |
+| Option          | Default | Notes                                                        |
+| --------------- | ------- | ------------------------------------------------------------ |
+| `maxBodyLength` | `2048`  | Longer bodies log as `[N bytes]`. `0` omits them entirely.   |
+| `requestBody`   | `false` | Costs a `req.clone().text()` per request.                    |
+| `responseBody`  | `false` | Same clone-and-buffer cost on the way out.                   |
+| `ignore`        | `[]`    | Exact paths to skip, for a health check polled every second. |
 
 A 4xx logs at `warn`, a 5xx at `error`, everything else at `info`. Do not add a
 second "received request" line: the pair is precisely the thing being avoided.
@@ -395,14 +414,14 @@ app.enableCors({
 });
 ```
 
-| Option           | Default                                | Notes                                            |
-| ---------------- | -------------------------------------- | ------------------------------------------------ |
-| `origin`         | `'*'`                                  | A string, a list, or an `(origin) => boolean`.    |
-| `methods`        | the verbs the path declares            | Only for overriding the derived list.             |
-| `allowedHeaders` | echoes `Access-Control-Request-Headers` |                                                  |
-| `exposedHeaders` | none                                   | What the browser lets script read.                |
-| `credentials`    | `false`                                |                                                   |
-| `maxAge`         | unset                                  | Seconds the browser may cache the preflight.      |
+| Option           | Default                                 | Notes                                          |
+| ---------------- | --------------------------------------- | ---------------------------------------------- |
+| `origin`         | `'*'`                                   | A string, a list, or an `(origin) => boolean`. |
+| `methods`        | the verbs the path declares             | Only for overriding the derived list.          |
+| `allowedHeaders` | echoes `Access-Control-Request-Headers` |                                                |
+| `exposedHeaders` | none                                    | What the browser lets script read.             |
+| `credentials`    | `false`                                 |                                                |
+| `maxAge`         | unset                                   | Seconds the browser may cache the preflight.   |
 
 Four behaviours worth knowing:
 

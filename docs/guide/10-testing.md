@@ -5,7 +5,11 @@ application would have, with the bindings you name replaced, and optionally bind
 a real `Bun.serve` in front of it.
 
 ```ts
-import { createTestApp, createTestServer, RecordingLogger } from '@dunx/testing';
+import {
+  createTestApp,
+  createTestServer,
+  RecordingLogger,
+} from '@dunx/testing';
 ```
 
 The runner is `bun test`. There is no separate test framework to install and
@@ -81,7 +85,10 @@ test('the discarded provider is never constructed', async () => {
   }
 
   @Module({
-    providers: [provide(ForecastClient, { useClass: Exploding }), WeatherService],
+    providers: [
+      provide(ForecastClient, { useClass: Exploding }),
+      WeatherService,
+    ],
   })
   class ExplodingWeather {}
 
@@ -180,12 +187,12 @@ defaults, so it never fires spuriously on a token only the defaults provide.
 A `Logger` that keeps entries instead of writing them, so a suite can assert on
 what was logged and stays quiet when it does not care.
 
-| Member              | Does                                             |
-| ------------------- | ------------------------------------------------ |
-| `entries`           | `{ level, message, params }[]`, in order.         |
-| `at(level)`         | Filters by `LogLevel`.                            |
-| `clear()`           | Empties `entries`.                                |
-| `logLevel`          | `LogLevel.VERBOSE`, so nothing is filtered out.   |
+| Member      | Does                                            |
+| ----------- | ----------------------------------------------- |
+| `entries`   | `{ level, message, params }[]`, in order.       |
+| `at(level)` | Filters by `LogLevel`.                          |
+| `clear()`   | Empties `entries`.                              |
+| `logLevel`  | `LogLevel.VERBOSE`, so nothing is filtered out. |
 
 It exists because the `Logger` contract is seven levels of three overloads each,
 and every suite that wanted a silent logger would otherwise hand-write the same
@@ -211,7 +218,9 @@ test('validates, routes and serialises through the real server', async () => {
     prefix: 'api',
   });
 
-  const { status, body } = await server.json<{ advice: string }>('api/weather/oslo');
+  const { status, body } = await server.json<{ advice: string }>(
+    'api/weather/oslo',
+  );
 
   expect(status).toBe(200);
   expect(body.advice).toBe('take a coat');
@@ -226,20 +235,23 @@ client's URLs carry it.
 
 `TestServer` is a `TestClient` plus two things:
 
-| Member                | Does                                                          |
-| --------------------- | -------------------------------------------------------------- |
-| `url`                 | The base URL, as `listen()` returned it.                        |
-| `request(path?, init?)` | The raw `Response`. For bytes, HTML, or a header assertion.   |
-| `json<T>(path?, init?)` | `{ status, headers, body }` in one await.                     |
-| `app`                 | The `HttpApp`, for `app.get(...)` on anything in the container. |
-| `close()`             | `app.shutdown()`: stops the server, then tears the container down. |
+| Member                  | Does                                                               |
+| ----------------------- | ------------------------------------------------------------------ |
+| `url`                   | The base URL, as `listen()` returned it.                           |
+| `request(path?, init?)` | The raw `Response`. For bytes, HTML, or a header assertion.        |
+| `json<T>(path?, init?)` | `{ status, headers, body }` in one await.                          |
+| `app`                   | The `HttpApp`, for `app.get(...)` on anything in the container.    |
+| `close()`               | `app.shutdown()`: stops the server, then tears the container down. |
 
 `json:` on the init object serialises a body and sets `content-type:
 application/json` unless the headers already carry one. It covers every verb, so
 there is no `post`/`put`/`patch` triple to remember:
 
 ```ts
-const { status, body } = await server.json('echo', { method: 'POST', json: { id: 7 } });
+const { status, body } = await server.json('echo', {
+  method: 'POST',
+  json: { id: 7 },
+});
 ```
 
 ### Why a real server rather than a mocked HTTP layer
@@ -380,7 +392,9 @@ production app never builds. A fixture class that needs binding goes in a two-li
 `@Module`, where it would live if it were real:
 
 ```ts
-@Module({ providers: [provide(Clock, { useValue: new FixedClock('2026-01-01') })] })
+@Module({
+  providers: [provide(Clock, { useValue: new FixedClock('2026-01-01') })],
+})
 class FixedTime {}
 
 const app = await createTestApp({ modules: [BillingModule, FixedTime] });

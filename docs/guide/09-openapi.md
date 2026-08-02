@@ -17,7 +17,8 @@ const app = await HttpFactory.create(
   OpenApiModule.forRoot({
     title: 'dunx full example',
     version: '0.1.0',
-    description: 'Generated from the same zod schemas the routes validate against.',
+    description:
+      'Generated from the same zod schemas the routes validate against.',
     root: AppModule,
   }),
 );
@@ -28,15 +29,15 @@ is still handed one module ref and the root is named once. That is also why the
 document describes the documentation routes: they are routes, and pretending
 otherwise would be the first lie in the file.
 
-| Option        | Default           | Meaning                                     |
-| ------------- | ----------------- | ------------------------------------------- |
-| `title`       | required          | `info.title`                                |
-| `version`     | required          | `info.version`                              |
-| `description` | none              | `info.description`                          |
-| `servers`     | none              | `servers[]`                                 |
-| `root`        | required          | The module graph to document and to import  |
-| `path`        | `/docs`           | Where the HTML page is mounted              |
-| `jsonPath`    | `/openapi.json`   | Where the document is mounted               |
+| Option        | Default         | Meaning                                    |
+| ------------- | --------------- | ------------------------------------------ |
+| `title`       | required        | `info.title`                               |
+| `version`     | required        | `info.version`                             |
+| `description` | none            | `info.description`                         |
+| `servers`     | none            | `servers[]`                                |
+| `root`        | required        | The module graph to document and to import |
+| `path`        | `/docs`         | Where the HTML page is mounted             |
+| `jsonPath`    | `/openapi.json` | Where the document is mounted              |
 
 zod is an **optional** `peerDependency`. Install it and schemas convert; do not,
 and the document still generates with warnings where the schemas would have been.
@@ -63,10 +64,13 @@ no server:
 ```ts
 import { describeRoutes, generateDocument } from '@dunx/openapi';
 
-const { document, warnings } = await generateDocument(describeRoutes(AppModule), {
-  title: 'API',
-  version: '1.0.0',
-});
+const { document, warnings } = await generateDocument(
+  describeRoutes(AppModule),
+  {
+    title: 'API',
+    version: '1.0.0',
+  },
+);
 await Bun.write('openapi.json', JSON.stringify(document, null, 2));
 ```
 
@@ -131,12 +135,12 @@ export class NotesController {
 }
 ```
 
-| Field         | Type              | Notes                                             |
-| ------------- | ----------------- | ------------------------------------------------- |
-| `summary`     | `string`          | One line.                                         |
-| `description` | `string`          | Markdown, rendered server side.                   |
-| `tags`        | `string[]`        | Overrides the tag derived from the class name.    |
-| `deprecated`  | `boolean`         | Only `true` is emitted.                           |
+| Field         | Type       | Notes                                          |
+| ------------- | ---------- | ---------------------------------------------- |
+| `summary`     | `string`   | One line.                                      |
+| `description` | `string`   | Markdown, rendered server side.                |
+| `tags`        | `string[]` | Overrides the tag derived from the class name. |
+| `deprecated`  | `boolean`  | Only `true` is emitted.                        |
 
 It works at class scope and at method scope, and the method wins, because
 `@ApiDoc` is a thin wrapper over `@dunx/http`'s generic route-metadata channel:
@@ -150,11 +154,11 @@ for the mechanism.
 There is no `@ApiBearerAuth`. The document reads the same `@Public()` and
 `@Roles()` that the guards read at runtime, so the two cannot drift:
 
-| Route declares      | Operation gets                                            |
-| ------------------- | ---------------------------------------------------------- |
-| `@Public()`         | `security: []`, an explicit empty requirement               |
-| `@Roles('editor')`  | `security: [{ bearer: [] }]` and `x-required-roles: ['editor']` |
-| neither             | nothing, so it inherits any document-level default          |
+| Route declares     | Operation gets                                                  |
+| ------------------ | --------------------------------------------------------------- |
+| `@Public()`        | `security: []`, an explicit empty requirement                   |
+| `@Roles('editor')` | `security: [{ bearer: [] }]` and `x-required-roles: ['editor']` |
+| neither            | nothing, so it inherits any document-level default              |
 
 The description gains a line too: `Requires one of these roles: \`editor\`.`
 
@@ -310,11 +314,11 @@ statically, `index.ts` re-exports `renderPage`, so `import '@dunx/openapi'` load
 the whole thing whether or not `/docs` is ever mounted. Measured in this repo with
 `bun build` over `packages/openapi/src/index.ts`:
 
-| Build                                    |   Bytes |
-| ---------------------------------------- | ------: |
-| the package, explorer inlined            | 476,463 |
-| `src/ui-bundle.ts`, the explorer string  | ~456,000 |
-| what is left, the generator              |  ~40,000 |
+| Build                                   |    Bytes |
+| --------------------------------------- | -------: |
+| the package, explorer inlined           |  476,463 |
+| `src/ui-bundle.ts`, the explorer string | ~456,000 |
+| what is left, the generator             |  ~40,000 |
 
 So the explorer is **more than eleven times** the size of the code that generates
 the document. The served page went from 70 KiB to 458 KiB, a 6.5x increase, or

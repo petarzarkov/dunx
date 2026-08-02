@@ -84,15 +84,15 @@ said it was.
 
 ## The lifecycle decorators
 
-| Decorator     | Handler signature                                | Notes                                                             |
-| ------------- | ------------------------------------------------ | ----------------------------------------------------------------- |
-| `@OnUpgrade()`| `(req: BunRequest) => Response \| unknown`        | Before the socket exists. Return a `Response` to refuse.           |
-| `@OnOpen()`   | `(socket: Socket) => void`                        | The socket is live.                                                |
-| `@OnMessage(event?)` | `(data, socket) => unknown`                | With a name, routed by envelope; without, the raw catch-all.       |
-| `@OnClose()`  | `(socket, code: number, reason: string) => void`  |                                                                    |
-| `@OnDrain()`  | `(socket: Socket) => void`                        | Backpressure relieved; safe to resume sending.                     |
-| `@OnPing()`   | `(data: Buffer, socket: Socket) => void`          | Observation only; Bun still answers with a pong.                   |
-| `@OnPong()`   | `(data: Buffer, socket: Socket) => void`          |                                                                    |
+| Decorator            | Handler signature                                | Notes                                                        |
+| -------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| `@OnUpgrade()`       | `(req: BunRequest) => Response \| unknown`       | Before the socket exists. Return a `Response` to refuse.     |
+| `@OnOpen()`          | `(socket: Socket) => void`                       | The socket is live.                                          |
+| `@OnMessage(event?)` | `(data, socket) => unknown`                      | With a name, routed by envelope; without, the raw catch-all. |
+| `@OnClose()`         | `(socket, code: number, reason: string) => void` |                                                              |
+| `@OnDrain()`         | `(socket: Socket) => void`                       | Backpressure relieved; safe to resume sending.               |
+| `@OnPing()`          | `(data: Buffer, socket: Socket) => void`         | Observation only; Bun still answers with a pong.             |
+| `@OnPong()`          | `(data: Buffer, socket: Socket) => void`         |                                                              |
 
 Every handler may be synchronous or `async`. A returned promise is adopted, and a
 rejection goes to the same error handler a synchronous throw does.
@@ -241,15 +241,15 @@ export class Lobby {
 Listing `PubSub` in your own `providers` is the container's duplicate-binding
 error, not a second instance.
 
-| Member                              | Does                                                                 |
-| ----------------------------------- | -------------------------------------------------------------------- |
+| Member                              | Does                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
 | `publish(topic, data, compress?)`   | `server.publish`. Bytes sent locally, `0` if dropped, `-1` under backpressure. |
-| `publishEvent(topic, event, data?)` | The same envelope `@OnMessage(event)` reads.                          |
-| `subscriberCount(topic)`            | Subscribers on **this** node only.                                    |
-| `origin`                            | This process's id on the relay channel.                               |
-| `attached` / `relaying`             | Whether `listen()` has run, and whether a relay is configured.        |
-| `relayThrough(relay, options?)`     | Opt into multi-node fan-out.                                          |
-| `close()`                           | Releases a relay this `PubSub` owns.                                  |
+| `publishEvent(topic, event, data?)` | The same envelope `@OnMessage(event)` reads.                                   |
+| `subscriberCount(topic)`            | Subscribers on **this** node only.                                             |
+| `origin`                            | This process's id on the relay channel.                                        |
+| `attached` / `relaying`             | Whether `listen()` has run, and whether a relay is configured.                 |
+| `relayThrough(relay, options?)`     | Opt into multi-node fan-out.                                                   |
+| `close()`                           | Releases a relay this `PubSub` owns.                                           |
 
 `PubSub.publish` is `server.publish`, which **reaches the sender**.
 `socket.publish` does not, absent `publishToSelf`. The two are not
@@ -400,10 +400,10 @@ await app.get(PubSub).relayThrough(relay, {
 });
 ```
 
-| Field     | Default | Meaning                                          |
-| --------- | ------- | ------------------------------------------------ |
-| `attempts`| `5`     | Retries after the first failure. `0` disables.    |
-| `delayMs` | `500`   | First delay. Doubles each attempt, capped at 30s. |
+| Field      | Default | Meaning                                           |
+| ---------- | ------- | ------------------------------------------------- |
+| `attempts` | `5`     | Retries after the first failure. `0` disables.    |
+| `delayMs`  | `500`   | First delay. Doubles each attempt, capped at 30s. |
 
 Bounded rather than infinite, and the timer is `unref`'d, so a broker that never
 comes back can neither hold the process open nor spin forever. A successful
@@ -445,7 +445,7 @@ hang, and an app that hangs on `SIGTERM` gets `SIGKILL` anyway.
 `PubSub.close()` runs **before** the container tears down, because a relay this app
 owns holds two Redis sockets and, with `maxRetries: 0`, nothing else will ever
 close them. It also drops the server reference, which is what makes a relay the
-*app* owns safe to leave subscribed: `PubSubRelay` has no unsubscribe, so a frame
+_app_ owns safe to leave subscribed: `PubSubRelay` has no unsubscribe, so a frame
 may still arrive on a shared connection after this node stopped, and with no
 server there is nothing for it to fan out to.
 
