@@ -221,6 +221,38 @@ Feedback goes in as a new file rather than into conversation.
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                   | Unreproduced.                                                     |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                     | Delivered, with a boundary note worth keeping.                    |
 
+### From porting nestjs-template to dunx-template
+
+The template was rebuilt on dunx 0.1.1 with all eight packages installed **from
+npm**, which is the only way packaging faults surface. It runs: 52 unit and
+integration tests, 10 e2e, 90% line coverage, Docker builds and serves. It also
+produced 22 findings.
+
+| Item                                                                                  | Shape                                               |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [di-dynamic-module-unions-decorator](./roadmap/di-dynamic-module-unions-decorator.md) | Bug, high. Blocks the standard Nest module pattern. |
+| [di-overrides-rejects-self-bound](./roadmap/di-overrides-rejects-self-bound.md)       | Bug, high. Blocks the common unit-test stub.        |
+| [transform-emitted-js-diagnostic](./roadmap/transform-emitted-js-diagnostic.md)       | Bug, high. Error tells you to do what you did.      |
+| [di-import-type-diagnostic](./roadmap/di-import-type-diagnostic.md)                   | Diagnostic, high frequency.                         |
+| [openapi-response-schemas](./roadmap/openapi-response-schemas.md)                     | Missing feature, high. No response bodies at all.   |
+| [openapi-apidoc-merge-and-tags](./roadmap/openapi-apidoc-merge-and-tags.md)           | Two bugs, high. Incoherent document.                |
+| [openapi-forroot-async](./roadmap/openapi-forroot-async.md)                           | Missing feature, medium.                            |
+| [http-request-id-and-ignore](./roadmap/http-request-id-and-ignore.md)                 | Three findings, medium and low.                     |
+| [infra-packaging-findings](./roadmap/infra-packaging-findings.md)                     | Four findings, medium and low.                      |
+| [peer-ranges-exact](./roadmap/peer-ranges-exact.md)                                   | Packaging, medium.                                  |
+| [testing-http-options](./roadmap/testing-http-options.md)                             | Design, medium. Silently a different app.           |
+| [http-trailing-slash](./roadmap/http-trailing-slash.md)                               | Low. Undocumented.                                  |
+| [create-app-polish](./roadmap/create-app-polish.md)                                   | Four findings, one blocks a flow.                   |
+
+**What held up under a clean-room consume,** which is worth as much as the bug list:
+all 13 working subpath exports resolve at runtime and under `nodenext`;
+`tsc --noEmit` is clean with optional peers absent; sourcemaps carry
+`sourcesContent` so stack traces resolve despite `src/` not shipping; the transform
+preload works from `node_modules` including subclass inheritance, forward references
+and `inject()` in field initialisers; no peer warnings on a clean install; and
+`bunx @dunx/create-app` scaffolds an app that boots, serves, typechecks and passes
+its test.
+
 ## `tools/` - private workspaces, never published
 
 ### `tools/docs` - the documentation site - **built**
