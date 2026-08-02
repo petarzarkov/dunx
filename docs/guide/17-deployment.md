@@ -19,11 +19,11 @@ boot fails with an error naming the class rather than constructing it with
 
 Three ways to supply it, all equivalent:
 
-| Where | How |
-| ----- | --- |
-| `bun run` | `preload` in `bunfig.toml`, next to the entrypoint |
-| A bundled build | `Bun.build({ plugins: [depsPlugin] })` |
-| A test | `Bun.plugin(depsPlugin)` from a preload file |
+| Where           | How                                                |
+| --------------- | -------------------------------------------------- |
+| `bun run`       | `preload` in `bunfig.toml`, next to the entrypoint |
+| A bundled build | `Bun.build({ plugins: [depsPlugin] })`             |
+| A test          | `Bun.plugin(depsPlugin)` from a preload file       |
 
 `node_modules` is skipped by the plugin: a published package was already
 transformed by its own build, and re-parsing dependencies on every load is pure
