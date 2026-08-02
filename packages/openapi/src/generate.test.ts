@@ -478,3 +478,80 @@ describe('schemas that need more than a prefix rewrite', () => {
     expect(danglingRefs(result.document)).toEqual([]);
   });
 });
+
+/**
+ * Endpoints served by something other than a dunx controller are invisible to
+ * route discovery. Better Auth is the motivating case: it owns a dozen paths
+ * behind its own handler, and without this the document describes an API with no
+ * authentication surface at all.
+ */
+describe('contributed paths', () => {
+  const fragment = {
+    paths: { '/api/auth/session': { get: { summary: 'Session' } } },
+    schemas: { Session: { type: 'object' } },
+    tags: [{ name: 'auth' }],
+  };
+
+  it('merges paths, schemas and tags a contributor supplies', async () => {
+    const { document, warnings } = await generateDocument([], {
+      title: 'API',
+      version: '1',
+      contribute: [fragment],
+    });
+
+    expect(document.paths['/api/auth/session'] as unknown).toEqual({
+      get: { summary: 'Session' },
+    });
+    expect(document.components.schemas?.['Session']).toEqual({
+      type: 'object',
+    });
+    expect(document.tags?.some((tag) => tag.name === 'auth')).toBe(true);
+    expect(warnings).toEqual([]);
+  });
+
+  it('accepts an async contributor', async () => {
+    const { document } = await generateDocument([], {
+      title: 'API',
+      version: '1',
+      contribute: [async () => fragment],
+    });
+
+    expect(document.paths['/api/auth/session']).toBeDefined();
+  });
+
+  it('keeps a declared route and warns when a contributor collides', async () => {
+    // The contributor is describing endpoints the generator could not see, so a
+    // collision means it was wrong. Replacing real documentation with a guess is
+    // the worse outcome.
+    const routes = await generateDocument([], {
+      title: 'API',
+      version: '1',
+      contribute: [
+        { paths: { '/x': { get: { summary: 'from contributor' } } } },
+        { paths: { '/x': { get: { summary: 'second contributor' } } } },
+      ],
+    });
+
+    expect(routes.document.paths['/x'] as unknown).toEqual({
+      get: { summary: 'from contributor' },
+    });
+    expect(routes.warnings.join(' ')).toContain('"/x"');
+  });
+
+  it('survives a contributor that throws', async () => {
+    const { document, warnings } = await generateDocument([], {
+      title: 'API',
+      version: '1',
+      contribute: [
+        () => {
+          throw new Error('library exploded');
+        },
+        fragment,
+      ],
+    });
+
+    // A library that cannot produce its schema costs documentation, not boot.
+    expect(warnings.join(' ')).toContain('library exploded');
+    expect(document.paths['/api/auth/session']).toBeDefined();
+  });
+});

@@ -16,3 +16,9 @@ export { bunPassword } from './password.js';
 // imports nothing at runtime - unlike `@dunx/auth/drizzle`, which pulls
 // better-auth's drizzle adapter and therefore `drizzle-orm` in behind it.
 export { redisStorage, type RedisStore } from './redis.js';
+export {
+  betterAuthDocument,
+  type AuthDocumentFragment,
+  type AuthDocumentOptions,
+  type OpenApiCapableAuth,
+} from './openapi.js';
