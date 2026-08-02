@@ -64,10 +64,36 @@ const assertResolved = (pkg: Manifest): void => {
   }
 };
 
+/**
+ * The packument at `registry.npmjs.org/<name>` 404s for minutes after a brand-new
+ * package is first published — CDN lag, not failure. The per-version document is
+ * immediate and is what makes this script resumable: a rerun after a partial
+ * failure skips what already went up instead of failing on it.
+ */
+const alreadyPublished = async (
+  name: string,
+  version: string,
+): Promise<boolean> => {
+  const url = `https://registry.npmjs.org/${name.replace('/', '%2f')}/${version}`;
+  const response = await fetch(url, { method: 'HEAD' });
+  return response.ok;
+};
+
+let publishedThisRun = 0;
+
 for (const dir of ORDER) {
   const path = join(root, dir, 'package.json');
   const original = readFileSync(path, 'utf-8');
   const pkg = JSON.parse(original) as Manifest;
+
+  if (!DRY && (await alreadyPublished(pkg.name, VERSION))) {
+    console.log(`skipped ${pkg.name}@${VERSION} — already on npm`);
+    continue;
+  }
+
+  // npm rate-limits bursts of new-package publishes with a 403 that reads like a
+  // permissions error. Measured: four in a row went through, the fifth did not.
+  if (publishedThisRun > 0 && !DRY) await Bun.sleep(5000);
 
   pkg.version = VERSION;
   for (const field of FIELDS) {
