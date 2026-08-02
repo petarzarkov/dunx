@@ -1,6 +1,6 @@
 {
   "name": "@dunx/openapi",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate",
   "keywords": [
     "bun",
