@@ -4,7 +4,8 @@ bullmq over `Bun.RedisClient`, and how the ioredis question resolved by measurin
 
 ## Queues (`@dunx/infra/queue`)
 
-**bullmq is the queue.** Rule 1's second half applied again: retries, backoff,
+**bullmq is the queue.** Never invent what a mature library solves, again: retries,
+backoff,
 priorities, rate limiting, delayed jobs, schedulers and stall recovery are bullmq's,
 and a dunx implementation of any of them would be a worse one. `bullmq` is an
 optional `peerDependency`. What the area contributes is the four things bullmq has

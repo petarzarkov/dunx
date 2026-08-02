@@ -3,7 +3,7 @@
  *
  * Applied by `AuthModule` whenever `emailAndPassword` is enabled and no `password`
  * of your own is given. better-auth's default is a **pure-JavaScript scrypt**;
- * `Bun.password` is native bcrypt, which is Rule 1's first half - if Bun ships it,
+ * `Bun.password` is native bcrypt, and the rule is simple - if Bun ships it,
  * use Bun.
  *
  * Bun pre-hashes the input, so bcrypt's 72-byte cap is a non-issue even for a

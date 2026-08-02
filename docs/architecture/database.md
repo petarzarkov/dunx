@@ -9,7 +9,7 @@ package shipped a hand-rolled `Database` abstract class with a `sql` tagged
 template, `all`/`get`/`run`/`exec`, a `Repository` base and a `quoteIdentifier`
 helper, and two implementations satisfying it. All of that is retired.
 
-This is Rule 1's second half - _never invent what a mature library already
+This is the second half of the principle - _never invent what a mature library already
 solves_ - applied to the one place it was being violated. The hand-rolled contract
 was an ORM's front half: it had a query surface, so it would have grown result
 mapping, relations, and a migration story, each one a worse version of something

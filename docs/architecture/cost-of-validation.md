@@ -130,7 +130,7 @@ Three changes, each measured:
 
    What is left is `new URLSearchParams(search)` at ~624 ns, and it stays. Splitting
    on `&`/`=` and calling `decodeURIComponent` by hand would be faster and is exactly
-   what Rule 1's first half forbids: a JavaScript reimplementation of a Web standard
+   exactly what is ruled out: a JavaScript reimplementation of a Web standard
    Bun implements natively, with `+`-versus-`%20`, repeated keys, empty values and
    malformed escapes to get wrong.
 

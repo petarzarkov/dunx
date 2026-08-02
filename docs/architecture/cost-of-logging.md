@@ -106,7 +106,8 @@ Things that were measured and did **not** work, all in a real `Bun.serve` handle
 | concatenate, flush on a **macrotask**          | +0.27 µs    |
 
 **`Bun.stdout.writer()` is the Bun-native API and it lost**, which is the one place
-this work went against Rule 1's ordering. A `FileSink.write()` encodes into its own
+this work preferred a library to the platform primitive. A `FileSink.write()`
+encodes into its own
 buffer on every call, so it pays per entry exactly what it was meant to save; a JS
 string concatenation is a rope and pays almost nothing. Only the _flush_ is a write,
 and once per turn it does not matter which API performs it - so the flush goes
@@ -222,7 +223,7 @@ The remaining ~5.4 µs over `requestLogging: false` is **~1.3 µs of `req.header
 an inbound `x-request-id` has to be honoured and a handler's own log lines have to
 carry the id. The third is the one with room left, and the obvious move - hand-rolling
 a serialiser instead of `JSON.stringify` - is a JavaScript reimplementation of a
-platform primitive with string escaping to get wrong, which Rule 1 forbids. One real
+platform primitive with string escaping to get wrong. One real
 saving is available and blocked on a contract: `RequestContext.getContext()` returns
 a copy, and `ConsoleLogger` then spreads that copy into the entry, so the request
 fields are copied twice per line. Removing one copy means either changing what

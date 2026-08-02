@@ -22,7 +22,7 @@ implementation for every package.
 
 `tools/*` is outside all of this. Those workspaces are `"private": true`, never
 published, and build with whatever suits them - `tools/docs` is a React bundle,
-not a `Bun.build` package. Rule 1 constrains what dunx ships; it does not
+not a `Bun.build` package. The dependency rules constrain what dunx ships; they do not
 constrain what builds its website.
 
 ## Scaffolder (`create-app`)

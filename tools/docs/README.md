@@ -4,7 +4,7 @@ The documentation site for dunx: **React + Mantine over Vite**, built to static
 output and deployed to GitHub Pages at <https://petarzarkov.github.io/dunx>.
 
 Private, never published. Per CLAUDE.md, `tools/*` may depend on anything -
-Rule 1 governs what dunx _ships_, not what builds its website.
+The dependency rules govern what dunx _ships_, not what builds its website.
 
 ```bash
 bun run docs:dev      # extract, then serve with HMR

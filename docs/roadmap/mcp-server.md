@@ -42,7 +42,8 @@ start. Open questions, in the order they need answering:
 
 ## Constraints it inherits
 
-- Rule 1 still applies to anything published. An MCP server over `Bun.serve` and
+- The dependency rules still apply to anything published. An MCP server over
+  `Bun.serve` and
   stdio needs no dependency; a framework SDK would need justifying.
 - If it stays in `tools/`, it may depend on anything - that is what `tools/bench`
   depending on express is allowed for.

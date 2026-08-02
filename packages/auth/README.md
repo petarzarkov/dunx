@@ -198,7 +198,7 @@ Written bare, `Auth` carries better-auth's core endpoints only.
 better-auth's default hasher is **pure-JavaScript scrypt**. `AuthModule` replaces it
 with `bunPassword` - native bcrypt through `Bun.password` - whenever
 `emailAndPassword` is enabled and you did not supply a `password` of your own. That is
-Rule 1's first half: if Bun ships it, use Bun.
+The rule is simple: if Bun ships it, use Bun.
 
 Bun pre-hashes the input, so bcrypt's 72-byte cap is a non-issue even for a
 maximum-length multibyte password, and `verify` reads a hash from another algorithm as

@@ -1,6 +1,7 @@
 # The tools
 
-The documentation site and the API explorer: private workspaces, and the only place Rule 1 does not govern.
+The documentation site and the API explorer: private workspaces, and the only place the
+dependency rules do not govern.
 
 ## Documentation site (`tools/docs`)
 

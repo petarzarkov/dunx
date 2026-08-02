@@ -379,7 +379,7 @@ first, because everything else needs it, so it goes last.
 
 ## The ioredis boundary
 
-Rule 1 bans `ioredis` for dunx's own code, because `Bun.RedisClient` exists.
+dunx does not use `ioredis` in its own code, because `Bun.RedisClient` exists.
 bullmq needs _a_ Redis client. The resolution is not a compromise, and it was
 found by measuring rather than by assuming.
 

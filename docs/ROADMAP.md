@@ -4,7 +4,7 @@ What is built, what is next, and the reference implementations to work from. Rea
 [ARCHITECTURE.md](./ARCHITECTURE.md) for the decisions behind the built parts and
 [../CLAUDE.md](../CLAUDE.md) for the rules that constrain the next ones.
 
-The governing principle, from CLAUDE.md Rule 1: **never reimplement what Bun does,
+The governing principle: **never reimplement what Bun does,
 never invent what a mature library already solves.** Everything below is one or the
 other.
 
@@ -19,7 +19,8 @@ other.
 | `@dunx/openapi`   | OpenAPI 3.1 from route zod schemas, self-contained HTML                |
 | `@dunx/testing`   | Bindings replaced in place, a real `Bun.serve` on port 0               |
 
-The two integrations are deliberate, per Rule 1's second half: `drizzle-orm` is an
+The two integrations are deliberate - never invent what a mature library already
+solves: `drizzle-orm` is an
 optional `peerDependency` and drives `bun:sqlite`/`Bun.SQL` through its own Bun
 adapters; `@arkv/logger` is a `dependency` and satisfies core's `Logger` contract
 structurally, with no adapter class in between.

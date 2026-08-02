@@ -335,8 +335,10 @@ subscriptions on one channel is another way to get every message twice.
 Every topic's frames travel on a single broker channel, `dunx:ws` by default.
 
 Two things force it. A node cannot know which topics its sockets joined, because
-`socket.subscribe` goes straight into Bun. And Bun's `psubscribe` does not work,
-so pattern subscription is not available either.
+`socket.subscribe` goes straight into Bun. And pattern subscription is not an option:
+`Bun.RedisClient.psubscribe(pattern)` is accepted, but unlike
+`subscribe(channel, listener)` it takes no listener - passing one throws - and the
+client exposes no hook for pattern messages. Re-checked on Bun 1.3.14.
 
 The cost is stated plainly: **every node reads every relayed frame** and drops the
 ones for topics it has no local subscriber on, which is a `server.publish`

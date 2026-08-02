@@ -56,7 +56,7 @@ the same raw `Bun.serve` process at 64 connections, oha extracts **135k req/s** 
 the JavaScript driver plateaus at **80k**, collapsing to **23k** at 256 connections
 as thirty worker threads contend on Bun's connection pool. The JS driver would have
 understated every Bun subject by roughly 40% and compressed the whole ranking. This
-is Rule 1's "native, not a JavaScript reimplementation" holding in a place where it
+is "native, not a JavaScript reimplementation" holding in a place where it
 is easy to check: `oxc-parser` over a JS AST library is the same call.
 
 **oha has headroom over the fastest subject, and that was checked too.** One

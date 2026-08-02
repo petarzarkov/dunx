@@ -26,7 +26,8 @@ that contradicts it is a decision made without measuring.
 ## The integrations
 
 Three areas are a mature library wired in rather than dunx code, which is the second
-half of Rule 1. None of them restates the library's own surface.
+half of the principle above: **never reimplement what Bun does, never invent what a
+mature library already solves.** None of them restates the library's own surface.
 
 | Page                                               | Library                                        |
 | -------------------------------------------------- | ---------------------------------------------- |

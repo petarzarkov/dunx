@@ -6,7 +6,8 @@ better-auth mounted on Bun.serve: the module, the guard and two Bun-native adapt
 
 **better-auth is the authentication system.** `@dunx/auth` is the wiring around it and
 nothing else: no sign-in flow, no session table, no password reset, no OAuth dance.
-Rule 1's second half is not a close call here - an auth system is years of edge cases,
+Never inventing what a mature library solves is not a close call here - an auth
+system is years of edge cases,
 and a half-built one is a liability dressed as a feature. `better-auth` is an optional
 `peerDependency`, as is `drizzle-orm` behind the `@dunx/auth/drizzle` subpath.
 
@@ -168,7 +169,7 @@ it costs nothing anywhere else.
 
 better-auth's default hasher is a **pure-JavaScript scrypt**; `AuthModule` substitutes
 native bcrypt through `Bun.password` whenever `emailAndPassword` is enabled and no
-`password` was supplied. Rule 1's first half, and it is what
+`password` was supplied. Bun's own primitive rather than a library, and it is what
 `nestjs-template/src/auth/auth.config.ts` already does. Bun pre-hashes the input, so
 bcrypt's 72-byte cap is a non-issue even for a maximum-length multibyte password, and
 `verify` swallows Bun's `UnsupportedAlgorithm` throw so a hash from another algorithm

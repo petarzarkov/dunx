@@ -47,99 +47,70 @@ injectable, and the constructor parameter's type is read at load time by
 `@dunx/transform`. [Providers](./03-providers.md) explains how, and what happens
 when the type cannot be recovered.
 
-## Rule 1, and its two halves
+## What it is built on
 
-Every capability dunx ships must sit on a Bun-native API or a native low-level
-implementation. That rule pulls in two opposite directions on purpose, and almost
-every design decision in the framework falls out of one half or the other.
+**Bun does the I/O.** `Bun.serve({ routes })` matches paths, dispatches per method
+and answers a method miss, in native Zig, so dunx ships no router: it builds the
+routes object at boot and hands it over. The same goes for SQLite, Postgres, Redis,
+S3, image resizing, password hashing and `.env` loading, each of which Bun already
+does. `ConfigModule` has no loader because Bun reads `.env` itself.
 
-### Never reimplement what Bun already does
+You can see where the line falls in the dependency tree: `@dunx/core` has **zero
+dependencies**, and nothing in dunx pulls in express, `ws`, ioredis, pg, sharp or
+dotenv.
 
-`Bun.serve({ routes })` handles path parameters, per-method dispatch and
-404-on-method-miss in native Zig. So dunx does not ship a router. Its job is to
-build the `routes` object at boot and hand it to Bun.
-[Controllers](./05-controllers.md) covers what that means for you in practice: it
-is why an unmatched method is a 404 rather than a 405, and why `enableCors()` has
-to mount an explicit `OPTIONS` handler per path instead of inferring a preflight.
+One exception, and it is the parser. Bun cannot tell you a TypeScript
+constructor's parameter types, so `@dunx/transform` reads them with
+[oxc-parser](https://github.com/oxc-project/oxc), a Rust parser over N-API. It is
+build-time only, which is why it is a separate package: merging it into the core
+would put a Rust parser in every production deploy.
 
-The same rule bans `express`, `ws`, `socket.io`, `ioredis`, `pg`, `mysql2`,
-`better-sqlite3`, `sharp`, `glob`, `chokidar`, `axios`, `bcrypt`, `dotenv`,
-`@aws-sdk/*` and `lodash` from the dependency tree. Bun already ships an
-equivalent for each, and a JavaScript reimplementation of a platform primitive is
-slower, larger and a maintenance liability. `.env` loading is the clearest case:
-Bun reads `.env` and `.env.local` itself, so `ConfigModule` has no loader and dunx
-has no `dotenv`.
+**Libraries do the hard parts.** Where Bun has no primitive, dunx integrates
+something mature rather than growing its own:
 
-There is one sanctioned exception to "Bun first", and it is the parser. Bun has no
-API for reading a TypeScript file's constructor parameter types, so
-`@dunx/transform` uses `oxc-parser`, a Rust parser over N-API. Native, compiled,
-not a JavaScript AST library. That package is build-time only and is the reason it
-is a separate package: merging it into `@dunx/core` would put a Rust parser in
-every production deploy.
+| Concern            | Library                             | What dunx adds                                        |
+| ------------------ | ----------------------------------- | ----------------------------------------------------- |
+| Validation         | zod, Valibot, ArkType, TypeBox, ajv | Nothing. Routes target the Standard Schema interface  |
+| ORM and migrations | drizzle-orm                         | A module over `drizzle-orm/bun-sqlite` and `/bun-sql` |
+| Authentication     | better-auth                         | The mount and a guard, none of the flow               |
+| Queues             | bullmq                              | A module over bullmq's own `createBunRedisClient`     |
 
-### Never invent what a mature library already solves
+These are `peerDependencies`. You install them and you own the version, and where a
+library has a Bun-native driver that driver is the one dunx uses.
 
-The other failure mode is worse. Hand-rolling an ORM, a validator, an auth system
-or a job queue means years of edge cases, and a half-built one is a liability
-dressed as a feature. Where Bun ships no primitive for a hard problem, dunx
-integrates the best-in-class library instead of competing with it:
-
-| Concern         | Library                             | How dunx relates to it                                         |
-| --------------- | ----------------------------------- | -------------------------------------------------------------- |
-| Validation      | zod, Valibot, ArkType, TypeBox, ajv | Targets the Standard Schema interface, so any of them drops in |
-| ORM, migrations | drizzle-orm                         | `@dunx/infra/db` over `drizzle-orm/bun-sqlite` and `/bun-sql`  |
-| Authentication  | better-auth                         | `@dunx/auth` mounts it and adds a guard, nothing of the flow   |
-| Queues          | bullmq                              | `@dunx/infra/queue` over bullmq's `createBunRedisClient`       |
-
-Those libraries are `peerDependencies`, never bundled. You install and own the
-version. Where the library offers a Bun-native driver, that driver is mandatory:
-`drizzle-orm/bun-sqlite`, not `better-sqlite3`. The library owns the abstraction,
-Bun owns the I/O, and both halves of Rule 1 hold at once.
-
-Validation is the cleanest illustration of the "interface, not library" line.
-`@dunx/http` restates the Standard Schema v1 types in one file and depends on no
-validator at all. Anything with a `~standard` property qualifies, including a
-hand-written object. TypeBox 0.34 and ajv 8 do not ship `~standard`, and both were
-bridged in about ten lines each in the benchmark harness, with no change to
+Validation shows the shape of it best: `@dunx/http` restates the Standard Schema
+types in one file and depends on no validator at all. Anything with a `~standard`
+property works, a hand-written object included. TypeBox and ajv do not ship one, and
+each took about ten lines to bridge in the benchmark harness without touching
 `@dunx/http`.
 
-## What dunx deliberately does not do
+## What it does not have
 
-These are decisions, not gaps. Each one is recorded with its reasoning in
-[ARCHITECTURE.md](../ARCHITECTURE.md).
+Decisions rather than gaps, each with its reasoning in
+[the architecture record](../ARCHITECTURE.md).
 
-**No `@Injectable()` and no `@Inject()`.** TC39 standard decorators have no
-parameter decorators, so `@Inject()` has no migration path off the legacy dialect
-and will never exist here. `inject()` in a field initializer is the escape hatch
-for the cases a constructor parameter cannot express.
+**No `@Injectable()`, no `@Inject()`.** TC39 decorators have no parameter
+decorators, so `@Inject()` has nowhere to come from. `inject()` in a field
+initializer covers what a constructor parameter cannot express.
 
-**No module encapsulation.** The container is flat. `imports` is traversal only:
-it pulls a module's registrations into the same container. There is no `exports`
-list, no visibility boundary, and therefore no "provider is not exported from
-module X" error. This is the largest deliberate divergence from the frameworks this
-borrows from, and the first thing you will notice. What is genuinely lost is
-per-module rebinding, and the answer is to use two tokens. See
-[Modules](./04-modules.md).
+**No module encapsulation.** The container is flat and `imports` only traverses, so
+there is no `exports` list and no "provider is not exported from module X". This is
+the biggest departure from the frameworks dunx borrows its shape from, and the first
+thing you will notice. What you lose is per-module rebinding; the answer is two
+tokens. See [Modules](./04-modules.md).
 
-**No `forwardRef`.** The dependency record `@dunx/transform` writes is a thunk,
-evaluated at resolution rather than at class-definition time, so a dependency
-declared later in the file or reached across a circular import resolves without
-ceremony.
+**No `forwardRef`.** Dependencies are recorded as a thunk and read at resolution, so
+a class declared later in the file, or across a circular import, resolves anyway.
 
-**No request-scoped DI.** Every provider is a singleton, as a Spring bean is by
-default. Request-scoped injection is where a container's complexity and its
-per-request cost both concentrate, so per-request state is an explicit argument
-here, and request-scoped correlation is `AsyncLocalStorage` through
+**No request-scoped DI.** Every provider is a singleton. Per-request state is an
+argument, and per-request correlation is `AsyncLocalStorage` through
 `RequestContext`, which never touches the container.
 
-**No JavaScript router.** Covered above.
+**No lazy resolution.** `AppFactory.create()` builds every provider and awaits every
+async factory before the server binds, so a wiring mistake fails at boot instead of
+on the first request that hits it. It costs boot time, measured below.
 
-**No lazy resolution.** `AppFactory.create()` instantiates every provider and
-awaits every async factory before the server binds, so wiring errors surface at
-boot rather than at first request. That is also what lets `inject()` stay
-synchronous. It costs boot time, and the cost is measured below.
-
-**No CommonJS, no Node.** Every package is ESM only and Bun only.
+**No CommonJS and no Node.** ESM only, Bun only.
 
 ## The measured position
 
@@ -234,9 +205,8 @@ never a goal.
 path for either on Bun at all.
 
 **You want a mature ecosystem of third-party modules.** There is not one. dunx is
-eight packages maintained in one repository. The established frameworks have a
-decade or more of community
-modules and dunx has none of them.
+eight packages in one repository. The established frameworks have a decade or more
+of community modules behind them and dunx has none.
 
 ## Where to go next
 
