@@ -1908,12 +1908,71 @@ Two decisions came out of measuring rather than guessing:
 - **`Tooltip` and `ScrollArea` were dropped** for `title=` and `overflow: auto`,
   which took 490 KiB to 437 KiB. `Tooltip` drags in floating-ui.
 
-**This is the one number worth revisiting.** 437 KiB inlined is ~3x smaller than
-swagger-ui's own bundle and normal for a modern web app, but it is 6.5x the page
-it replaced, and it lands in a package that otherwise ships ~40 KiB with zero
-runtime dependencies. If that trade stops being worth it, the lever is the
-rendering layer, not Mantine: `preact/compat` would remove ~170 KiB, at the cost
-of running Mantine on a compatibility shim.
+437 KiB inlined is ~3x smaller than swagger-ui's own bundle and normal for a
+modern web app. What made it the one number worth revisiting was not the bytes but
+**where they were paid**: it landed in a package that otherwise ships ~40 KiB with
+zero runtime dependencies, and it landed at import, on every consumer, whether or
+not `/docs` was ever mounted.
+
+### The explorer is behind `@dunx/openapi/ui`, and that needed `splitting: true`
+
+`html.ts` exports `renderShell(document, options, ui)` and takes the script to
+inline as an argument rather than importing it. `src/ui.ts` is the entrypoint that
+pairs it with `UI`, exported as `./ui` in the manifest, and
+`OpenApiExplorer.page()` does `await import('./ui.js')` on the first request for a
+given mount prefix. `page()` is async as a result, and so is the controller
+handler; the per-prefix cache is unchanged, so only the first request pays.
+
+|                 |  inlined | behind `./ui` | pre-explorer baseline |
+| --------------- | -------: | ------------: | --------------------: |
+| `dist/index.js` |  479,596 |    **19,807** |                40,948 |
+| import          | 10.88 ms |   **5.73 ms** |               ~6.1 ms |
+| RSS             | 42.5 MiB |  **37.0 MiB** |              37.0 MiB |
+
+Import and RSS are the median of 15 interleaved `bun` processes each, one import
+and out. The `inlined` column is a bundle rebuilt from the same source with the
+explorer imported statically (480,901 B), so both sides are measured in the same
+session rather than one being quoted from an earlier run; the real pre-split
+`dist/index.js` measured 9.64-11.64 ms over 5 runs, which agrees. The absolute
+figures move with machine load - a second 15-run pass gave 9.45 against 5.19 - so
+the number to hold onto is the **ratio, a stable ~1.8x**, and the RSS delta.
+
+The whole of the explorer's boot cost is recovered. `dist/index.js` is 19,807 B
+plus a 13,132 B shared chunk against a 40,948 B pre-explorer baseline, and
+`dist/ui.js` carries the 447,850 B.
+
+The split turned up a **type-graph** cost that had been shipping unnoticed. `UI`
+was only ever used in a value position, so `html.d.ts` never named it and
+`dist/ui-bundle.d.ts` - a 456 KB single-line declaration holding the literal type
+of a minified bundle - was 456 KB of tarball nobody's tsc read. Exporting `UI`
+from `./ui` would have made every consumer of the subpath parse it. The generator
+in `tools/openapi-ui/scripts/build.ts` now emits `export const UI: string`, and
+the widening annotation collapses that declaration from **456,550 B to 98 B**. The
+annotation is load bearing; removing it silently restores the 456 KB file.
+
+**The dynamic import alone would have been a no-op**, and that was measured rather
+than assumed. `scripts/build-package.ts` set `splitting: false`, and with splitting
+off `Bun.build` inlines a relative `await import()` into the importing entry: a
+200 KB module behind a dynamic import produced a **200,980 B** entry with
+`splitting: false` and a **350 B** entry plus a chunk with it on. Shipping the
+subpath without flipping the flag would have claimed a win it could not
+demonstrate.
+
+`splitting: true` is shared by all eight packages, because there is one build
+script and it stays that way. It turned out to be an improvement for the
+multi-entry ones rather than a risk: a module two subpaths share was previously
+duplicated into both entries, giving a consumer who imports both **two module
+instances**. Sharing a chunk fixes that and shrinks the output - `@dunx/infra`
+127.7 KB → 71.7 KB of dist JS, `@dunx/transform` 10.3 KB → 5.6 KB, `@dunx/auth`
+18.7 KB → 14.8 KB, `@dunx/create-app` 7.5 KB → 5.1 KB. Single-entry packages with
+no dynamic imports (`@dunx/core`, `@dunx/http`) emit byte-identical output. The
+`bin` chmod, the test-declaration sweep and the `bin`-declaration sweep are all
+keyed off entrypoints, not chunks, so none of them changed.
+
+With the boot cost gone, 437 KiB is paid by the person looking at the page, which
+is the right place for it. **`preact/compat` is therefore rejected rather than
+pending**: it would remove ~170 KiB from a cost nobody pays until they ask for it,
+in exchange for running Mantine on a compatibility shim.
 
 ### Vite here, `bun build` in `tools/docs`
 

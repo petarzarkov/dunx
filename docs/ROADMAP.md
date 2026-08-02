@@ -209,12 +209,10 @@ Feedback goes in as a new file rather than into conversation.
 | [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Feature. Gin, Axum, Spring. Also a falsification test on the harness. |
 | [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.                      |
 | [docs-bundle-splitting](./roadmap/docs-bundle-splitting.md)                         | Performance. 127 KB of guides on every page load.                     |
-| [openapi-ui-subpath](./roadmap/openapi-ui-subpath.md)                               | Performance. ~5 ms of cold start for a page most apps never open.     |
 | [async-local-storage-cost](./roadmap/async-local-storage-cost.md)                   | Measured. +0.91 us, and `enterWith` segfaults Bun.                    |
 | [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Exploration. Not a hard requirement.                                  |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                           |
 | [independent-versions](./roadmap/independent-versions.md)                           | Decision. Peers done; needs a range policy, or 1.0.                   |
-| [testing-from-published-package](./roadmap/testing-from-published-package.md)       | Probably unblocked, untested.                                         |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                  |
 | [ioredis-cjs-pin](./roadmap/ioredis-cjs-pin.md)                                     | Defect. Known, currently harmless.                                    |
 | [auth-package-name](./roadmap/auth-package-name.md)                                 | Decision. Window closed once published.                               |

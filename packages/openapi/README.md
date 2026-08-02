@@ -245,6 +245,12 @@ and `renderPage` inlines that string. 437 KiB, against `swagger-ui-dist`'s
 dependency this package is willing to take, and both of which would end the
 no-external-requests guarantee that `html.test.ts` asserts.
 
+**That bundle is behind `@dunx/openapi/ui`, and it is loaded on demand.** The
+barrel does not import it, and `OpenApiExplorer.page()` reaches it through a
+dynamic import on the first request for the page, so a service that never opens
+`/docs` never parses a React app. Importing `@dunx/openapi` costs 19,807 B and
+about 5.7 ms rather than 479,596 B and about 10.9 ms.
+
 The document itself travels in a `<script type="application/json">`, so the page
 boots without a request. Two Bun APIs do the work a dependency usually would:
 `Bun.escapeHTML` escapes the shell, and `Bun.markdown.html` renders every
@@ -282,8 +288,14 @@ own page is one route. `buildModel` is exported too, so a page of your own can
 reuse the pre-rendered prose, the samples and the fields:
 
 ```ts
-import { buildModel, renderPage } from '@dunx/openapi';
+import { buildModel, renderShell } from '@dunx/openapi';
+// The same shell with dunx's own explorer in it. This is the import that costs
+// 456 KB, which is why it is a subpath rather than part of the barrel.
+import { renderPage } from '@dunx/openapi/ui';
 ```
+
+`renderShell(document, options, ui)` takes the script to inline as its third
+argument, so a page built on your own frontend never loads dunx's.
 
 ## Without the module
 

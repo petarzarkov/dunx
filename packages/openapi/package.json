@@ -33,6 +33,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "import": "./dist/ui.js"
     }
   },
   "publishConfig": {
@@ -47,6 +51,7 @@
   "devDependencies": {
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
+    "@dunx/testing": "workspace:*",
     "@happy-dom/global-registrator": "^20.11.1",
     "zod": "^4.4.3"
   },

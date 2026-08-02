@@ -1,6 +1,5 @@
 import { buildModel } from './model.js';
 import type { OpenApiDocument } from './types.js';
-import { UI } from './ui-bundle.js';
 
 /**
  * The page is a shell: a boot stylesheet, the model as JSON, and the explorer
@@ -12,6 +11,10 @@ import { UI } from './ui-bundle.js';
  * written into `ui-bundle.ts`. Serving the built output rather than hand-written
  * markup is what let the page grow disclosure controls, an auth dialog and a
  * schema renderer without any of that landing in a backend package.
+ *
+ * That bundle arrives as an **argument**, not an import, which is what keeps this
+ * module cheap: `./ui.js` is the entrypoint that pairs the two, and it is loaded
+ * lazily. See `renderPage` there.
  */
 const BOOT = `
 :root { color-scheme: light dark; }
@@ -44,9 +47,10 @@ export interface PageOptions {
 /** The id the bundle reads its model from. Shared with `tools/openapi-ui`. */
 export const MODEL_ELEMENT_ID = 'dunx-openapi-model';
 
-export const renderPage = (
+export const renderShell = (
   document: OpenApiDocument,
   options: PageOptions,
+  ui: string,
 ): string => {
   const title = `${document.info.title} ${document.info.version}`;
 
@@ -60,6 +64,6 @@ export const renderPage = (
     `${escape(options.jsonHref)}</a>.</p></noscript>` +
     `<script type="application/json" id="${MODEL_ELEMENT_ID}">` +
     `${embed(buildModel(document, options))}</script>` +
-    `<script>${UI}</script></body></html>`
+    `<script>${ui}</script></body></html>`
   );
 };

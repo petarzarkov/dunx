@@ -92,7 +92,20 @@ const result = await Bun.build({
   target: 'bun',
   format: 'esm',
   packages: 'external',
-  splitting: false,
+  // Splitting is what makes a lazy subpath real. With it off, Bun **inlines** a
+  // relative `await import()` into the importing entry - measured: a 200 KB module
+  // behind a dynamic import produced a 200,980 B entry with `splitting: false` and
+  // a 350 B entry plus a chunk with it on. `@dunx/openapi` needs that, or its
+  // `./ui` split would be a no-op that still shipped 456 KB to every consumer.
+  //
+  // It is safe for the other packages and better for the multi-entry ones. A
+  // module two subpaths share was previously **duplicated** into both, so
+  // `@dunx/infra/db` and `@dunx/infra/queue` each carried their own copy - and
+  // their own module instance. Sharing a chunk fixes both: infra's dist went from
+  // 127.7 KB to 71.7 KB, transform's from 10.3 KB to 5.6 KB. Single-entry packages
+  // with no dynamic imports (`@dunx/core`, `@dunx/http`) emit byte-identical
+  // output.
+  splitting: true,
   sourcemap: 'linked',
 });
 

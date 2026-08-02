@@ -171,6 +171,11 @@ tree-shaking earns its 1.8 s. Its build writes `packages/openapi/src/ui-bundle.t
 cannot go stale. Read `tools/openapi-ui/README.md` before touching it; every
 component added costs bytes twice, in JS and in the CSS list in `src/styles.ts`.
 
+That bundle is behind the **`@dunx/openapi/ui`** subpath and reached with
+`await import()` from `OpenApiExplorer.page()`, so importing `@dunx/openapi` does
+not load it. `html.ts` takes the script to inline as an argument (`renderShell`)
+and must not import `ui-bundle.ts`, or the split silently reverts.
+
 ## Decorators - standard only
 
 - The root tsconfig deliberately does **not** set `experimentalDecorators` or
@@ -311,6 +316,12 @@ implementation for every package. It derives entrypoints from the manifest's
 being built. `Bun.build` emits the JS, `tsc --emitDeclarationOnly` the `.d.ts`
 (Bun has no `--dts`). Use `/new-package` when adding a package or an export.
 
+`splitting` is **on**, and must stay on. With it off `Bun.build` inlines a
+relative `await import()` into the importing entry, which would make
+`@dunx/openapi`'s `./ui` split a no-op that still shipped 456 KB to every
+consumer - measured, in ARCHITECTURE.md. It also stopped multi-entry packages
+duplicating a shared module into every subpath.
+
 Relative imports **must** carry a `.js` extension. `tsc` copies the specifier
 verbatim into the emitted `.d.ts`, and an extensionless one fails to resolve for
 consumers on `node16`/`nodenext`. `moduleResolution: nodenext` in the root
@@ -385,16 +396,16 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 ## Packages Overview
 
-| Package            | Contains                                                                                                             |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `@dunx/core`       | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                    |
-| `@dunx/transform`  | Load-time constructor-dependency transform (only native dep)                                                         |
-| `@dunx/http`       | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation                                 |
-| `@dunx/infra`      | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger`                                                        |
-| `@dunx/openapi`    | OpenAPI 3.1 from the routes' own zod schemas, plus `tools/openapi-ui`'s explorer inlined (zod is a `peerDependency`) |
-| `@dunx/auth`       | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                       |
-| `@dunx/testing`    | `createTestApp` / `createTestServer` - overrides replaced in place, real server on port 0                            |
-| `@dunx/create-app` | `bunx @dunx/create-app my-api` - scaffolds the `minimal` template, with versions resolved at run time                |
+| Package            | Contains                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `@dunx/core`       | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                             |
+| `@dunx/transform`  | Load-time constructor-dependency transform (only native dep)                                                                  |
+| `@dunx/http`       | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation                                          |
+| `@dunx/infra`      | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger`                                                                 |
+| `@dunx/openapi`    | OpenAPI 3.1 from the routes' own zod schemas; `tools/openapi-ui`'s explorer inlined behind `./ui` (zod is a `peerDependency`) |
+| `@dunx/auth`       | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                                |
+| `@dunx/testing`    | `createTestApp` / `createTestServer` - overrides replaced in place, real server on port 0                                     |
+| `@dunx/create-app` | `bunx @dunx/create-app my-api` - scaffolds the `minimal` template, with versions resolved at run time                         |
 
 Eight packages, deliberately few. Merging is nearly free because the runtime weight is
 almost nil - `@dunx/core` has **zero dependencies**, and ESM tree-shaking drops what

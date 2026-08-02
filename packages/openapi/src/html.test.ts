@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { MODEL_ELEMENT_ID, renderPage } from './html.js';
+import { MODEL_ELEMENT_ID } from './html.js';
 import { buildModel } from './model.js';
+import { renderPage } from './ui.js';
 import type { OpenApiDocument, PageModel } from './index.js';
 
 const document: OpenApiDocument = {
