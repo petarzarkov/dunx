@@ -73,17 +73,14 @@ export class QueueConnection implements OnShutdown {
    * for connections it may block on, and the duplicate is a fresh emitter. So
    * `duplicate()` is wrapped to attach to whatever it returns.
    *
-   * **This does not cover every case, and cannot.** With an unreachable broker,
-   * `JobPublisher.publish` still produces two bare dumps: measured on bullmq
-   * 6.0.5, `client()` is called once and two errors escape, so the emitters that
-   * throw are ones bullmq constructed internally and never handed back. The
-   * publisher passes its own client, so there is nothing further dunx can attach
-   * to. Recorded in docs/roadmap/queue-publisher-bare-stderr.md as an upstream
-   * defect with a reproduction.
+   * This covers the clients. The other half was the `Queue` itself: `QueueBase`
+   * forwards its connection's errors onto the Queue, so the object `JobPublisher`
+   * constructs needed a listener too. Both are handled now and an unreachable
+   * broker writes nothing raw.
    */
   #handleErrors(adapter: IRedisClient): IRedisClient {
     adapter.on('error', (error: unknown) => {
-      this.#logger.warn('the queue connection reported an error', { error });
+      this.#logger.warn('the queue connection reported an error', error);
     });
 
     const derived = adapter as { duplicate?: () => IRedisClient };

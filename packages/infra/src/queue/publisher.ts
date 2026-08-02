@@ -53,6 +53,16 @@ export class JobPublisher implements OnShutdown {
         defaultJobOptions: this.#options.defaultJobOptions,
       }),
     });
+
+    // `QueueBase` forwards its connection's errors onto the Queue, and an 'error'
+    // event with no listener throws rather than being ignored - so an unreachable
+    // broker wrote raw RedisError dumps to stderr, bypassing this Logger, on top
+    // of rejecting the publish. `Worker` has had this listener all along; the
+    // Queue did not.
+    created.on('error', (error: unknown) => {
+      this.#logger.warn(`the "${name}" queue reported an error`, error);
+    });
+
     this.#queues.set(name, created);
     return created;
   }

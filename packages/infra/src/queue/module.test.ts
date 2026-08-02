@@ -1,4 +1,12 @@
-import { AppFactory, Module, provide, token, type App } from '@dunx/core';
+import {
+  AppFactory,
+  ConsoleLogger,
+  Logger,
+  Module,
+  provide,
+  token,
+  type App,
+} from '@dunx/core';
 import { afterEach, describe, expect, it } from 'bun:test';
 import { RedisError } from '../redis/errors.js';
 import { QueueConnection } from './connection.js';
@@ -87,6 +95,51 @@ describe('QueueModule.forRoot', () => {
 
     expect(app.get(QueueConnection).open).toBe(0);
     expect(app.get(JobPublisher).opened).toEqual([]);
+  });
+
+  /*
+   * `QueueBase` forwards its connection's errors onto the Queue itself
+   * (`queue-base.js:44`), and an `error` event with no listener throws rather
+   * than being ignored - so an unreachable broker wrote two raw RedisError dumps
+   * to stderr, bypassing the bound Logger, in addition to rejecting the publish.
+   *
+   * Asserted on the Queue rather than by capturing stderr, because reproducing it
+   * needs a broker that is not there and several seconds of connection timeout.
+   * The behaviour behind it is checked below.
+   */
+  it('listens for errors on every queue it opens', async () => {
+    app = await AppFactory.create(QueueModule.forRoot({ url }));
+    const queue = app.get(JobPublisher).queue('emails');
+
+    expect(queue.listenerCount('error')).toBeGreaterThan(0);
+  });
+
+  it('reports a queue error through the bound Logger, with the error', async () => {
+    const entries: { message: string; params: unknown[] }[] = [];
+    @Module({
+      imports: [QueueModule.forRoot({ url })],
+      providers: [
+        provide(Logger, {
+          useValue: {
+            ...new ConsoleLogger(undefined, 'fatal'),
+            warn: (message: string, ...params: unknown[]) =>
+              entries.push({ message, params }),
+          } as unknown as Logger,
+        }),
+      ],
+    })
+    class Root {}
+
+    app = await AppFactory.create(Root);
+    const queue = app.get(JobPublisher).queue('emails');
+    const failure = new Error('broker went away');
+    queue.emit('error', failure);
+
+    expect(entries[0]?.message).toContain('emails');
+    // Positionally, not as `{ error }`: an Error's own properties are
+    // non-enumerable, so wrapping it in an object logged `"error":{}` - a line
+    // saying something failed without saying what.
+    expect(entries[0]?.params[0]).toBe(failure);
   });
 
   it('defaults the url the same way @dunx/infra/redis does', async () => {

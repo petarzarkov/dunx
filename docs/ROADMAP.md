@@ -276,7 +276,6 @@ Feedback goes in as a new file rather than into conversation.
 | [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                            |
 | [anchor-scroll-on-cold-load](./roadmap/anchor-scroll-on-cold-load.md)               | Suspected defect. Needs one minute in a real browser.                |
 | [mcp-server](./roadmap/mcp-server.md)                                               | Feature. Requested. Ask the framework about itself.                  |
-| [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)             | Bug. Bypasses the bound Logger on a publish failure.                 |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file.        |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                       |
 
