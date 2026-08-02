@@ -112,7 +112,7 @@ function buildProjectStructure(entries: PackageEntry[]): string {
     [
       '├── ',
       'tools/',
-      'Private workspaces, never published — docs site and benchmarks',
+      'Private workspaces, never published — docs site, benchmarks, API explorer',
     ],
     ['├── ', 'docs/', 'Architecture and design docs'],
     ['├── ', 'scripts/', 'Monorepo-level scripts'],

@@ -1571,6 +1571,83 @@ pre-1.0 framework whose packages move together anyway that is a feature: one num
 answers "which versions work together", which is the question a consumer of six
 packages actually has.
 
+## The API explorer (`tools/openapi-ui`)
+
+`@dunx/openapi`'s page was hand-written HTML inside a backend package: a `<style>`
+block, `<details>` for the folding and ~90 lines of inlined DOM code. It had no
+auth handling, no disclosure affordance and printed schemas as
+`JSON.stringify(…, null, 2)`. Growing it further was the wrong direction, so the
+UI is now a frontend workspace whose built bundle the package serves.
+
+### The bundle is inlined, and that is what constrains everything
+
+The page's guarantee is that it fetches **nothing** — no CDN, no `src=`, no
+`<link>`. `swagger-ui-dist` (11.7 MB unpacked) and `@scalar/api-reference` (11 MB)
+were rejected over exactly that, and the guarantee did not get cheaper because the
+UI got better. So the bundle is a string in `packages/openapi/src/ui-bundle.ts`,
+written by `tools/openapi-ui/scripts/build.ts` and interpolated into one
+`<script>`. `</` is escaped at build time, not per request.
+
+`ui-bundle.ts` is **generated and committed**. `bun test ./packages` at the root
+and `tsc --noEmit` in a fresh clone both have to work without a Vite run, and the
+publish path must not depend on one. `packages/openapi`'s `build` runs the UI
+build first, so the committed copy cannot go stale.
+
+### What it costs — measured
+
+| Build                                     | Raw         | gzip        |
+| ----------------------------------------- | ----------- | ----------- |
+| react + react-dom, nothing else           | 188 KiB     | 60 KiB      |
+| + Mantine, `styles.css` barrel            | 517 KiB     | 128 KiB     |
+| + Mantine, per-component CSS              | 381 KiB     | 110 KiB     |
+| **shipped** (the explorer, per-component) | **437 KiB** | **123 KiB** |
+
+The served page went from **70 KiB to 458 KiB** (6.5x; 6.6 KiB to ~125 KiB
+gzipped). React is 188 KiB of it and is the floor — Mantine adds ~150 KiB of JS
+and ~80 KiB of CSS on top.
+
+Two decisions came out of measuring rather than guessing:
+
+- **Per-component CSS, not the barrel.** `@mantine/core/styles.css` is 234 KiB for
+  a dozen components; importing `styles/Accordion.css` and friends is a third of
+  that. The list in `src/styles.ts` is load-bearing — a missing file is an
+  unstyled component, not a build error.
+- **`Tooltip` and `ScrollArea` were dropped** for `title=` and `overflow: auto`,
+  which took 490 KiB to 437 KiB. `Tooltip` drags in floating-ui.
+
+**This is the one number worth revisiting.** 437 KiB inlined is ~3x smaller than
+swagger-ui's own bundle and normal for a modern web app, but it is 6.5x the page
+it replaced, and it lands in a package that otherwise ships ~40 KiB with zero
+runtime dependencies. If that trade stops being worth it, the lever is the
+rendering layer, not Mantine: `preact/compat` would remove ~170 KiB, at the cost
+of running Mantine on a compatibility shim.
+
+### Vite here, `bun build` in `tools/docs`
+
+The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms and
+took Bun's ~25 % larger output, which is right for a site. Every byte here is
+inlined into a page a backend serves, so Rollup's tree-shaking wins and the ~1.8 s
+is paid once per package build.
+
+### Markdown and samples stay on the server
+
+`Bun.markdown.html` renders every description and `sampleFor` pre-computes every
+request body, both in `packages/openapi/src/model.ts`; the results travel in the
+model. Rendering markdown in the browser would have meant a parser in the bundle,
+and re-implementing `sampleFor` would have meant two of it. This is also what
+keeps the raw-HTML escaping (`noHtmlBlocks`, `noHtmlSpans`, `tagFilter`) in one
+place — the client only ever sees already-escaped HTML.
+
+### The no-external-requests test had to change shape
+
+`expect(page).not.toContain('src=')` was sound over hand-written HTML and is
+meaningless over a minified React bundle, which contains `.src=`, `href="` and the
+literal string `"<script>"` in its own code. The assertion moved to the **tags**:
+the page is stripped of both script bodies, and the remaining markup must carry no
+`src=`, no `<link>` and no off-origin `href`. The whole page is still checked for
+`url(http`, `@import` and CDN hosts. `page-ui.test.ts` then proves it positively —
+it runs the real bundle in happy-dom and asserts zero fetches during boot.
+
 ## Benchmark harness (`tools/bench`)
 
 Full methodology, subject list and results table:

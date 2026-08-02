@@ -53,7 +53,7 @@ dunx/
 │   ├── openapi         # OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate
 │   └── testing         # Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0
 ├── examples/           # Private apps that consume the packages
-├── tools/              # Private workspaces, never published — docs site and benchmarks
+├── tools/              # Private workspaces, never published — docs site, benchmarks, API explorer
 ├── docs/               # Architecture and design docs
 ├── scripts/            # Monorepo-level scripts
 ├── .github/workflows/  # CI/CD pipeline

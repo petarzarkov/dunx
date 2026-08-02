@@ -11,6 +11,7 @@
     ".idea",
     ".env*",
     "README.md",
-    ".claude/worktrees"
+    ".claude/worktrees",
+    "packages/openapi/src/ui-bundle.ts"
   ]
 }

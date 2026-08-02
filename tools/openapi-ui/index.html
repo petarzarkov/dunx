@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>dunx API explorer — dev</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- `bun run dev` has no backend behind it, so the model is a fixture. The
+         served page gets the real one from @dunx/openapi. -->
+    <script type="application/json" id="dunx-openapi-model">
+      {
+        "jsonHref": "/openapi.json",
+        "warnings": ["ExampleController.weird degraded to a permissive schema"],
+        "prose": {
+          "info": "<p>A fixture, so the explorer can be developed without a server.</p>",
+          "op:Notes_create": "<p>Creates a note. The body is <em>pre-filled</em>.</p>"
+        },
+        "samples": { "Notes_create": "{\n  \"memo\": \"string\"\n}" },
+        "fields": {
+          "Notes_list": [
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "placeholder": "0"
+            }
+          ],
+          "Notes_one": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "placeholder": "string"
+            }
+          ],
+          "Notes_create": []
+        },
+        "document": {
+          "openapi": "3.1.0",
+          "info": {
+            "title": "Fixture API",
+            "version": "1.0.0",
+            "description": "dev"
+          },
+          "servers": [{ "url": "http://localhost:3000" }],
+          "tags": [
+            { "name": "Notes", "description": "Everything about notes." }
+          ],
+          "paths": {
+            "/notes": {
+              "get": {
+                "operationId": "Notes_list",
+                "tags": ["Notes"],
+                "summary": "Every note",
+                "parameters": [
+                  {
+                    "name": "limit",
+                    "in": "query",
+                    "required": false,
+                    "schema": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    }
+                  }
+                ],
+                "responses": {
+                  "200": {
+                    "description": "OK",
+                    "content": {
+                      "application/json": {
+                        "schema": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Note" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "security": []
+              },
+              "post": {
+                "operationId": "Notes_create",
+                "tags": ["Notes"],
+                "summary": "Create one",
+                "requestBody": {
+                  "required": true,
+                  "content": {
+                    "application/json": {
+                      "schema": { "$ref": "#/components/schemas/CreateNote" }
+                    }
+                  }
+                },
+                "responses": {
+                  "201": {
+                    "description": "Created",
+                    "content": {
+                      "application/json": {
+                        "schema": { "$ref": "#/components/schemas/Note" }
+                      }
+                    }
+                  },
+                  "400": { "description": "Rejected" },
+                  "500": { "description": "Broke" }
+                },
+                "security": [{ "bearer": [] }],
+                "x-required-roles": ["admin"]
+              }
+            },
+            "/notes/{id}": {
+              "get": {
+                "operationId": "Notes_one",
+                "tags": ["Notes"],
+                "summary": "One note",
+                "responses": { "200": { "description": "OK" } },
+                "security": [{ "apiKey": [] }]
+              }
+            }
+          },
+          "components": {
+            "schemas": {
+              "Note": {
+                "type": "object",
+                "required": ["id", "memo"],
+                "properties": {
+                  "id": { "type": "string", "format": "uuid" },
+                  "memo": { "type": "string", "maxLength": 500 },
+                  "state": { "type": "string", "enum": ["draft", "live"] },
+                  "author": { "$ref": "#/components/schemas/Author" }
+                }
+              },
+              "Author": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" }
+                }
+              },
+              "CreateNote": {
+                "type": "object",
+                "required": ["memo"],
+                "properties": { "memo": { "type": "string" } }
+              }
+            },
+            "securitySchemes": {
+              "bearer": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+              },
+              "apiKey": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Api-Key"
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

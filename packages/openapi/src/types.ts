@@ -66,6 +66,10 @@ export interface SecuritySchemeObject {
   readonly scheme?: string;
   readonly bearerFormat?: string;
   readonly description?: string;
+  /** `apiKey` only: where the key travels. The page needs it to send one. */
+  readonly in?: 'header' | 'query' | 'cookie';
+  /** `apiKey` only: the header, query parameter or cookie name. */
+  readonly name?: string;
 }
 
 export interface ComponentsObject {

@@ -198,44 +198,59 @@ one(input: Input<typeof oneUser>) {}
 
 ## The page
 
-`GET /docs` is one self-contained HTML document: a `<style>` block, `<details>`
-for the folding, one inline `<script>`, and **nothing to fetch** — no CDN, no
-`src=`, no bundled copy of somebody else's viewer. It renders operations grouped
-by tag with their parameters, request bodies, responses and security, then the
-schemas.
+`GET /docs` is one self-contained HTML document: a boot `<style>`, the document
+as JSON, the API explorer inlined as a second `<script>`, and **nothing to
+fetch** — no CDN, no `src=`, no `<link>`. It is an API explorer, with a
+disclosure control per operation, an **Authorize** dialog, parameter and schema
+tables, colour-coded status codes, a filter box and a light/dark toggle.
 
-Two Bun APIs do the work a dependency usually would: `Bun.escapeHTML` escapes
-every interpolation, and `Bun.markdown.html` renders descriptions — with
-`noHtmlBlocks`, `noHtmlSpans` and `tagFilter` on, so raw HTML in a schema's
-description is escaped rather than trusted.
+The explorer is a real frontend — Vite, React and Mantine, in `tools/openapi-ui`
+— whose **built bundle** is what this package serves. Nothing about it is
+hand-written markup in a backend package any more, and nothing about it is
+fetched: `bun run build` writes the tree-shaken bundle into `src/ui-bundle.ts`,
+and `renderPage` inlines that string. 437 KiB, against `swagger-ui-dist`'s
+11.7 MB unpacked and `@scalar/api-reference`'s 11 MB — neither of which is a
+dependency this package is willing to take, and both of which would end the
+no-external-requests guarantee that `html.test.ts` asserts.
+
+The document itself travels in a `<script type="application/json">`, so the page
+boots without a request. Two Bun APIs do the work a dependency usually would:
+`Bun.escapeHTML` escapes the shell, and `Bun.markdown.html` renders every
+description **on the server** — with `noHtmlBlocks`, `noHtmlSpans` and
+`tagFilter` on, so raw HTML in a schema's description is escaped rather than
+trusted, and no markdown parser lands in the bundle. `sampleFor` runs there too,
+for the same reason.
 
 ### Sending a route
 
-Every operation gets a form, so a route can be executed from the page — the one
-thing a static rendering cannot do, and the usual reason to reach for swagger-ui.
+Every operation is executable from the page — the one thing a static rendering
+cannot do, and the usual reason to reach for swagger-ui.
 
+- **Credentials are entered once.** The **Authorize** dialog reads
+  `components.securitySchemes` and offers a field per scheme: a bearer token, an
+  API key (sent as the header or query parameter the scheme names), or a basic
+  username and password. They are applied to every operation that declares the
+  scheme and kept in the tab's `sessionStorage`.
 - **Path parameters** are substituted into the template. Every `{name}` gets an
   input whether or not the document declares it, so a request can never go out
   with a literal `{id}` in it.
 - **Query parameters** are appended only when filled in.
 - **The body** arrives pre-filled from the schema — refs resolved, `minimum` and
   `format` honoured — so sending is a click rather than a typing exercise.
-- **Headers** are one `Name: value` per line, which is why there is no special
-  `Authorization` field. Operations that declare a security scheme start with
-  `Authorization: Bearer ` already in the box.
-- The response shows the status, the elapsed time, the headers and the body,
-  pretty-printed when it is JSON.
+- **Extra headers** are still one `Name: value` per line, and a line typed by
+  hand wins over what the dialog would have sent.
+- The response shows the status, the elapsed time, the size, the headers and the
+  body, pretty-printed when it is JSON.
 
-That is ~90 lines of inlined JavaScript. `swagger-ui-dist` unpacks to 11.7 MB and
-`@scalar/api-reference` to 11 MB to do the same job; neither is a dependency this
-package is willing to take, and both would end the no-external-requests guarantee
-that `html.test.ts` asserts.
+The page needs JavaScript, which the hand-written one did not. That is the cost
+of the explorer; `<noscript>` links the document itself.
 
-If you want one of them anyway, point it at `/openapi.json`. Serving your own page
-is one route:
+If you would rather point swagger-ui or Scalar at `/openapi.json`, serving your
+own page is one route. `buildModel` is exported too, so a page of your own can
+reuse the pre-rendered prose, the samples and the fields:
 
 ```ts
-import { renderPage } from '@dunx/openapi';
+import { buildModel, renderPage } from '@dunx/openapi';
 ```
 
 ## Without the module
