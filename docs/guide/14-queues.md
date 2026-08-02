@@ -20,27 +20,29 @@ installs neither. `ioredis` is there for bullmq's sake, not dunx's: see
 
 Two known defects, both recorded in `docs/ROADMAP.md`.
 
-**A process that attempted a queue operation while Redis was down does not exit on
-`SIGTERM`.** bullmq creates its connection on first use and holds a handle whose
-retry timer outlives `close()`. `maxRetries: 0` does not clear it, because the
-handle is bullmq's rather than Bun's, and nothing in userland can reach it.
+**A process that attempted a queue operation against a Redis it could not reach
+does not exit on `SIGTERM`.** It is **two** upstream leaks, one in Bun and one in
+bullmq, and neither is reachable from userland. Bisected a layer at a time, with
+`connectionTimeout: 2000, maxRetries: 0` throughout:
 
-The trigger is narrow, and it was measured rather than assumed:
+| server                      | `Bun.RedisClient` | bullmq's adapter | a bullmq `Queue` |
+| --------------------------- | ----------------- | ---------------- | ---------------- |
+| healthy                     | exits 0           | exits 0          | exits 0          |
+| refused (nothing listening) | exits 0           | **never exits**  | **never exits**  |
+| black-holed (SYN dropped)   | **never exits**   | **never exits**  | **never exits**  |
 
-| Redis       | Published? | `SIGTERM`       |
-| ----------- | ---------- | --------------- |
-| unreachable | no         | exits in ~1 s   |
-| unreachable | yes        | **never exits** |
-| reachable   | yes        | exits in ~2 s   |
+The black-holed row is Bun's: a connect that never completes keeps a handle past
+`close()`, and no client option changes it. The refused row is bullmq's: its
+adapter runs a `setTimeout` reconnect chain and both `disconnect()` and `quit()`
+return early once the connection has dropped, which is exactly when one is
+pending.
 
-So a healthy deployment is unaffected, and an app that imports `QueueModule`
-without publishing is unaffected. What hangs is a process that served a queue
-route while Redis was down. It **serves correctly throughout**, answering 503 in
-single-digit milliseconds, so this is a shutdown defect, not an availability one.
-The process will be `SIGKILL`ed by whatever supervises it.
-
-`Bun.RedisClient` alone is clean in the same scenario: it rejects with
-`Max reconnection attempts reached` and the process exits 0.
+An app that imports `QueueModule` without publishing is unaffected, and so is a
+healthy deployment. What hangs is a process that served a queue route while Redis
+was unreachable. It **serves correctly throughout**, answering 503 in single-digit
+milliseconds, so this is a shutdown defect, not an availability one. The process
+will be `SIGKILL`ed by whatever supervises it. Reproductions for both leaks are in
+`docs/roadmap/queue-shutdown-sigterm.md`.
 
 **bullmq 6.0.5's CJS build imports `ioredis/built/utils`, which ioredis 6
 removed.** The ESM build does not, which is why the test suite passes on ioredis 6
@@ -168,6 +170,25 @@ timer alive past `close()` and the process never exits. Verified at
 The trade: **a worker set to `0` will not ride out a Redis blip.** Raise it if that
 matters more than a clean exit on a cold start against an absent Redis. They
 cannot both be had until Bun clears the timer on `close()`.
+
+Neither of these is what the bounded default _cannot_ fix - see the two leaks
+above, which survive `maxRetries: 0` entirely.
+
+### The connection bullmq builds for itself is bounded too
+
+bullmq does not keep the client it is handed. A `Worker`'s blocking connection is
+`connection.duplicate()`, and every reconnect rebuilds one, both with
+`new (this.raw.constructor)(this.raw.url)`. That drops the options - so
+`maxRetries: 0` would have applied to the first socket only - and, because
+`Bun.RedisClient` has **no `url` property** on Bun 1.3.14, it dropped the url too:
+the replacement resolved Bun's default (`$VALKEY_URL`, `$REDIS_URL`,
+`valkey://localhost:6379`), so a worker pointed at a remote Redis would block-poll
+localhost and never see a job.
+
+`@dunx/infra/queue` hands bullmq a `Bun.RedisClient` **subclass** that carries the
+url and reapplies the options, so every one of those reconstructions comes out the
+same as the first. Nothing to configure; it is how `QueueConnection` builds a
+client.
 
 ## Publish side and worker side are different processes
 
@@ -393,6 +414,12 @@ Three findings shaped the code:
   bullmq detaches its own handler on close and Node's `EventEmitter` throws for an
   unhandled `error`. Shutdown would fail on its last step. The adapter gets a no-op
   `error` listener at construction.
+- **The adapter has to be disconnected before its socket is closed.** bullmq reads
+  a socket that closed without being told to as a blip and schedules a reconnect,
+  which would rebuild the connection being torn down. `QueueConnection.onShutdown`
+  calls `disconnect()` on the adapter and then `close()` on the socket - both, in
+  that order, because `disconnect()` skips the close for a client that never
+  finished connecting.
 
 One client is opened **per bullmq object** rather than one shared, because a
 `Worker` blocks on `BZPOPMIN` and bullmq duplicates whatever it is given to get a

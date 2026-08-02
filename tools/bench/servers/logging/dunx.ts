@@ -183,7 +183,12 @@ class AppModule {}
 
 const app = await HttpFactory.create(AppModule, {
   port: port(),
-  requestLogging: step < ENTRY ? false : {},
+  requestLogging:
+    step < ENTRY
+      ? false
+      : variant === 'uncorrelated'
+        ? { correlate: false }
+        : {},
   middleware: stepped ? [StepMiddleware] : [],
 });
 await app.listen();

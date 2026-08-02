@@ -60,12 +60,14 @@ This matters more than it looks under an orchestrator. Kubernetes sends
 process that ignores the first signal loses whatever was in flight.
 
 One known defect, recorded in [ROADMAP.md](../ROADMAP.md): **a process that
-attempted a queue operation while Redis was unreachable does not exit on
-`SIGTERM`**. bullmq holds a connection whose retry timer outlives `close()`, and
-nothing in userland can reach it. Serving is unaffected and a healthy Redis is
-unaffected; it is a shutdown defect only. If you run workers against a Redis that
-may be down at deploy time, set a grace period short enough that `SIGKILL`
-arrives promptly.
+attempted a Redis operation against a server it could not reach does not exit on
+`SIGTERM`**. Two upstream leaks produce it, and neither is reachable from
+userland - a `Bun.RedisClient` whose TCP connect never completes keeps a handle
+past `close()`, and bullmq's Bun adapter cannot cancel its own reconnect timer
+once the connection has dropped. Serving is unaffected and a healthy Redis is
+unaffected; it is a shutdown defect only. If you deploy against a Redis that may
+be down at the time, set a grace period short enough that `SIGKILL` arrives
+promptly.
 
 ## Configuration
 

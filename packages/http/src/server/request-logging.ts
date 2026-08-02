@@ -1,4 +1,8 @@
-import { Logger, RequestContext } from '@dunx/core';
+import {
+  Logger,
+  RequestContext,
+  type RequestFields as ScopeFields,
+} from '@dunx/core';
 import type { BunRequest } from 'bun';
 import type { RouteContext } from './context.js';
 import { HttpError } from './errors.js';
@@ -46,6 +50,25 @@ export interface RequestLoggingOptions {
    * that buys correlation and not the half that builds and serialises the entry.
    */
   readonly correlateIgnored?: boolean;
+  /**
+   * Wrap every request in an `AsyncLocalStorage` scope. Default **`true`**.
+   *
+   * The scope is what lets a service logging four frames down come out carrying
+   * `requestId` without being handed a request object. It is measured: the
+   * `runWithContext` row of `bun run logging` is **+0.91 µs**, 17% of the 5.38 µs
+   * request logging costs over `requestLogging: false`.
+   *
+   * `correlate: false` skips it. **The request entry is unchanged** - the same
+   * `requestId`, `method`, `event`, `flow` and `context` fields are written onto
+   * it directly instead of being read back out of the store. What is lost is
+   * everything *else* the request logs: those lines carry no `requestId`, and
+   * `updateContext` from a handler has nothing to update.
+   *
+   * Worth it for an app whose handlers never log, or one that passes correlation
+   * explicitly. Leave it on otherwise; correlation is most of what a request id
+   * is for.
+   */
+  readonly correlate?: boolean;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -99,7 +122,8 @@ type RequestFields = Record<string, unknown>;
  *
  * Everything the handler logs in between carries `requestId`, `method`, `event`
  * and `context` without being passed anything, because the whole call runs
- * inside `runWithContext`.
+ * inside `runWithContext` - unless `correlate: false`, which drops the scope and
+ * with it that guarantee, but not the fields on this middleware's own entry.
  *
  * **Nothing here is `async`.** Reading the request or the response body are the
  * only steps that can ever wait, both are off by default, and both are adopted
@@ -113,6 +137,7 @@ export class RequestLoggingMiddleware implements Middleware {
   readonly #responseBody: boolean;
   readonly #ignore: ReadonlySet<string>;
   readonly #correlateIgnored: boolean;
+  readonly #correlate: boolean;
 
   constructor(
     private readonly logger: Logger,
@@ -124,6 +149,7 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#responseBody = options.responseBody ?? false;
     this.#ignore = new Set(options.ignore ?? []);
     this.#correlateIgnored = options.correlateIgnored ?? false;
+    this.#correlate = options.correlate ?? true;
   }
 
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
@@ -144,40 +170,84 @@ export class RequestLoggingMiddleware implements Middleware {
 
     const started = Bun.nanoseconds();
     const requestId = traceId(req.headers.get(REQUEST_ID_HEADER));
+    const scope: ScopeFields = {
+      requestId,
+      method: ctx.method,
+      event: path,
+      flow: 'http',
+      context: `${ctx.controller}.${ctx.handler}`,
+    };
 
-    return this.context.runWithContext(
-      {
+    // The same five fields either way. Under `correlate` they go into the store,
+    // which the logger reads back for every line the request writes; without it
+    // they are merged straight onto this middleware's own entry, so the request
+    // log is identical and only the lines in between lose their id.
+    return this.#correlate
+      ? this.context.runWithContext(scope, () =>
+          this.#begin(
+            req,
+            url,
+            mark,
+            path,
+            requestId,
+            started,
+            next,
+            undefined,
+          ),
+        )
+      : this.#begin(req, url, mark, path, requestId, started, next, scope);
+  }
+
+  #begin(
+    req: BunRequest,
+    url: string,
+    mark: number,
+    path: string,
+    requestId: string,
+    started: number,
+    next: Next,
+    scope: ScopeFields | undefined,
+  ): Promise<Response> {
+    const request: RequestFields = {};
+    if (mark !== -1) {
+      request['query'] = Object.fromEntries(
+        new URLSearchParams(url.slice(mark + 1)),
+      );
+    }
+    const body = this.#body(req);
+    if (body === undefined) {
+      request['userAgent'] = req.headers.get('user-agent');
+      return this.#dispatch(
+        req,
+        path,
         requestId,
-        method: ctx.method,
-        event: path,
-        flow: 'http',
-        context: `${ctx.controller}.${ctx.handler}`,
-      },
-      () => {
-        const request: RequestFields = {};
-        if (mark !== -1) {
-          request['query'] = Object.fromEntries(
-            new URLSearchParams(url.slice(mark + 1)),
-          );
-        }
-        const body = this.#body(req);
-        if (body === undefined) {
-          request['userAgent'] = req.headers.get('user-agent');
-          return this.#dispatch(req, path, requestId, started, request, next);
-        }
-        return body.then((value) => {
-          if (value !== undefined) request['body'] = value;
-          request['userAgent'] = req.headers.get('user-agent');
-          return this.#dispatch(req, path, requestId, started, request, next);
-        });
-      },
-    );
+        started,
+        request,
+        next,
+        scope,
+      );
+    }
+    return body.then((value) => {
+      if (value !== undefined) request['body'] = value;
+      request['userAgent'] = req.headers.get('user-agent');
+      return this.#dispatch(
+        req,
+        path,
+        requestId,
+        started,
+        request,
+        next,
+        scope,
+      );
+    });
   }
 
   /**
    * An ignored path under `correlateIgnored`: the scope and the response header,
    * and no entry. Nothing is timed and no fields are collected, because nothing
-   * here is ever logged.
+   * here is ever logged. Under `correlate: false` there is no scope to open here
+   * either - only the response header is left, which is all `correlateIgnored`
+   * can still mean once nothing reads the store.
    */
   #correlated(
     req: BunRequest,
@@ -186,6 +256,11 @@ export class RequestLoggingMiddleware implements Middleware {
     next: Next,
   ): Promise<Response> {
     const requestId = traceId(req.headers.get(REQUEST_ID_HEADER));
+    const stamp = (response: Response): Response => {
+      response.headers.set(REQUEST_ID_HEADER, requestId);
+      return response;
+    };
+    if (!this.#correlate) return next().then(stamp);
     return this.context.runWithContext(
       {
         requestId,
@@ -194,11 +269,7 @@ export class RequestLoggingMiddleware implements Middleware {
         flow: 'http',
         context: `${ctx.controller}.${ctx.handler}`,
       },
-      () =>
-        next().then((response) => {
-          response.headers.set(REQUEST_ID_HEADER, requestId);
-          return response;
-        }),
+      () => next().then(stamp),
     );
   }
 
@@ -209,6 +280,7 @@ export class RequestLoggingMiddleware implements Middleware {
     started: number,
     request: RequestFields,
     next: Next,
+    scope: ScopeFields | undefined,
   ): Promise<Response> {
     // `next()` is only ever a promise once the chain bottoms out in a route, but a
     // user middleware ahead of the route may throw out of `handle` synchronously,
@@ -217,14 +289,22 @@ export class RequestLoggingMiddleware implements Middleware {
     try {
       settled = next();
     } catch (error) {
-      this.#failed(req, path, started, request, error);
+      this.#failed(req, path, started, request, error, scope);
       throw error;
     }
     return settled.then(
       (response) =>
-        this.#succeeded(req, path, requestId, started, request, response),
+        this.#succeeded(
+          req,
+          path,
+          requestId,
+          started,
+          request,
+          response,
+          scope,
+        ),
       (error: unknown) => {
-        this.#failed(req, path, started, request, error);
+        this.#failed(req, path, started, request, error, scope);
         throw error;
       },
     );
@@ -241,12 +321,14 @@ export class RequestLoggingMiddleware implements Middleware {
     started: number,
     request: RequestFields,
     error: unknown,
+    scope: ScopeFields | undefined,
   ): void {
     const status =
       error instanceof HttpError
         ? error.status
         : HttpStatusCode.INTERNAL_SERVER_ERROR;
     const entry = {
+      ...scope,
       request,
       err: error,
       statusCode: status,
@@ -267,10 +349,12 @@ export class RequestLoggingMiddleware implements Middleware {
     started: number,
     request: RequestFields,
     response: Response,
+    scope: ScopeFields | undefined,
   ): Response | Promise<Response> {
     const body = this.#responseFields(response);
     if (body === undefined) {
       this.logger.info(`${req.method} ${path} ${response.status}`, {
+        ...scope,
         request,
         statusCode: response.status,
         elapsedMs: elapsedMs(started),
@@ -280,6 +364,7 @@ export class RequestLoggingMiddleware implements Middleware {
     }
     return body.then((value) => {
       this.logger.info(`${req.method} ${path} ${response.status}`, {
+        ...scope,
         request,
         statusCode: response.status,
         ...(value === undefined ? {} : { responseBody: value }),

@@ -380,6 +380,7 @@ interface RequestLoggingOptions {
   responseBody?: boolean; // default false
   ignore?: readonly string[]; // paths skipped entirely - see below
   correlateIgnored?: boolean; // default false; keep the id on an ignored path
+  correlate?: boolean; // default true; false drops the async scope - see below
 }
 ```
 
@@ -417,6 +418,28 @@ the header, `crypto.randomUUID()`, the `runWithContext` scope and one
 `Headers.set`, which is **~2.2 µs** of the ~5.4 the full default path costs in the
 table below. What it never pays for is building and serialising the entry, which is
 the expensive half.
+
+### Turning the async scope off with `correlate: false`
+
+The `runWithContext` scope is the single most expensive thing request logging does
+that is not the entry itself - **+0.91 µs**, 17% of the 5.38 the whole default path
+costs. An app whose handlers never log pays it for nothing.
+
+```ts
+HttpFactory.create(AppModule, { requestLogging: { correlate: false } });
+```
+
+**The request entry is unchanged.** The same `requestId`, `method`, `event`, `flow`
+and `context` fields are written onto it directly instead of being read back out of
+the store, so the line a log pipeline sees is identical and the `x-request-id`
+response header still goes out. What is lost is everything _else_ the request logs:
+those lines carry no `requestId`, and `updateContext` in a handler has nothing to
+update.
+
+It is not the default because correlation is most of what a request id is for.
+Reach for it when handlers do not log, or when the app already threads correlation
+through explicitly. With `ignore` and `correlateIgnored` it wins: an ignored path
+then gets the response header and no scope.
 
 ## What it costs
 

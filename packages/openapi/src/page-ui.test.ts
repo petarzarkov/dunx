@@ -38,6 +38,7 @@ const browser = globalThis as unknown as {
   };
   HTMLInputElement: { prototype: object };
   HTMLTextAreaElement: { prototype: object };
+  happyDOM: { waitUntilComplete(): Promise<void> };
   fetch: unknown;
 };
 
@@ -159,6 +160,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // `unregister()` deletes the globals first and aborts happy-dom's own tasks
+  // second, so anything still queued when the last test ends runs with no
+  // `window` left and throws between tests - which exits `bun test` 1 while the
+  // summary still reads `0 fail`. React's next unit of work is posted to a
+  // native `MessageChannel` happy-dom neither wraps nor tracks, so aborting
+  // could never have reached it. Draining first is what closes the race: every
+  // tracked timer runs to completion and `waitUntilComplete`'s settle turn lets
+  // the scheduler post and commit its last message, all with the DOM still up.
+  await browser.happyDOM.waitUntilComplete();
   await GlobalRegistrator.unregister();
 });
 
@@ -276,5 +286,18 @@ describe('sending an operation', () => {
     const panel = form.closest('[data-operation]');
     expect(panel?.textContent).toContain('400 Bad Request');
     expect(panel?.textContent).toContain('nope');
+  });
+
+  it('puts the request on the wire before the handler yields', () => {
+    sent.length = 0;
+    const form = formFor('Notes_create');
+    form.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    expect(sent).toHaveLength(1);
+    // Deliberately not awaited, and deliberately last. The response renders
+    // while the suite is tearing the DOM down, which is the race `afterAll`
+    // drains; without that drain this file exits 1 every run.
   });
 });

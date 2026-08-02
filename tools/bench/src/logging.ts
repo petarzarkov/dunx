@@ -144,6 +144,13 @@ const units: readonly Unit[] = [
     stdout: 'null',
   },
   {
+    id: 'uncorrelated',
+    variant: 'uncorrelated',
+    label: 'the default with `correlate: false`',
+    adds: '**removes** the `AsyncLocalStorage` scope',
+    stdout: 'null',
+  },
+  {
     id: 'default-blocked',
     variant: 'default',
     label: 'the default, into a pipe nobody reads',
