@@ -14,7 +14,10 @@ import {
 import { BenchSummary } from '../components/BenchSummary';
 import { Features } from '../components/Features';
 import { Hero } from '../components/Hero';
+import { Honesty } from '../components/Honesty';
 import { NoDecorators } from '../components/NoDecorators';
+import { RequestFlow } from '../components/RequestFlow';
+import { ShowMeTheCode } from '../components/ShowMeTheCode';
 import { Stats } from '../components/Stats';
 import { site } from '../data';
 import { href, RouteKind } from '../router';
@@ -214,17 +217,20 @@ export const Home = (): React.JSX.Element => (
   <Box className="landing">
     <Hero />
     <Stats />
-    <Stack gap={72} py={72}>
+    <div className="landing-sections">
       <Features />
       <Container size="lg" component="section">
         <NoDecorators />
       </Container>
+      <ShowMeTheCode />
+      <RequestFlow />
       <Container size="lg" component="section">
         <BenchSummary />
       </Container>
+      <Honesty />
       <Integrations />
       <Packages />
       <GetStarted />
-    </Stack>
+    </div>
   </Box>
 );
