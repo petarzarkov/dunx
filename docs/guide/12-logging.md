@@ -352,6 +352,33 @@ of a `{"error":"NOT_FOUND","status":404}`. That is not a JavaScript router: Bun
 still does all the matching, and the fallback only runs once it has matched
 nothing.
 
+**Every global middleware runs on a miss, guards included.** A miss matched no
+route, so it carries no route metadata, and a guard reading none of it refuses: an
+app with a global `SessionGuard` answers an anonymous request for a nonexistent
+path with that guard's status, not a 404. There is no `@Public()` to put on a path
+that does not exist.
+
+That is the default because the alternative leaks: if a miss answers 404 while
+every real path answers 401, the difference enumerates your surface. If you would
+rather have the conventional 404:
+
+```ts
+await HttpFactory.create(AppModule, { notFound: 'public' });
+```
+
+The miss then reports itself as `@Public()`, so a guard honouring that flag passes
+it through. Either way it is still logged and still gets a request id, which is the
+reason the fallback runs the middleware at all.
+
+A guard can decide for itself under either setting. `UNMATCHED` is set on a miss
+and no real route ever sets it:
+
+```ts
+import { PUBLIC, UNMATCHED } from '@dunx/http';
+
+if (ctx.get(PUBLIC) === true && ctx.get(UNMATCHED) !== true) return next();
+```
+
 Everything the handler logs in between carries `requestId`, `method`, `event` and
 `context` without being passed anything, because the whole call runs inside
 `runWithContext`.

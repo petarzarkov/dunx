@@ -2,6 +2,7 @@ import { AppError, type Ctor } from '@dunx/core';
 import type { BunRequest } from 'bun';
 import type { DiscoveredRoute } from '../route/discover.js';
 import type { HttpMethod } from '../route/marker.js';
+import { PUBLIC, UNMATCHED, type MetaKey } from '../route/metadata.js';
 import type { RouteInput } from '../route/schema.js';
 import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
@@ -119,14 +120,28 @@ export const withUpgradeRoutes = (
 /**
  * The context an unmatched request gets. There is no controller and no handler,
  * and saying so is more useful to a log line than an empty string.
+ *
+ * A miss carries no route metadata, so a global guard reading none of it refuses,
+ * which makes every 404 a 401 for an anonymous caller with no `@Public()`
+ * anywhere to put. **That is deliberate and stays the default**: an unmatched
+ * path answering 404 while every real path answers 401 tells a prober exactly
+ * which paths exist.
+ *
+ * `notFound: 'public'` opts into the conventional 404 by reporting the miss as
+ * public. Either way `UNMATCHED` is set, and no real route ever sets it, so a
+ * guard can tell a genuinely public route from one that matched nothing.
  */
-const unmatchedContext = (req: Request): RouteContext =>
+const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
   Object.freeze({
     controller: '(unmatched)',
     handler: '(none)',
     method: req.method as HttpMethod,
     path: new URL(req.url).pathname,
-    get: () => undefined,
+    get: <T>(key: MetaKey<T>): T | undefined => {
+      if (key.id === UNMATCHED.id) return true as T;
+      if (key.id === PUBLIC.id && isPublic) return true as T;
+      return undefined;
+    },
   });
 
 /**
@@ -145,6 +160,7 @@ export const buildFallback = (
   middleware: readonly Middleware[] = [],
   onError: ErrorMapper = defaultErrorMapper,
   cors?: CorsOptions,
+  notFound: 'guarded' | 'public' = 'guarded',
 ): RouteHandler => {
   // The canonical status name, not a sentence naming the path back at the
   // caller: an unmatched path is the one place where echoing the request would
@@ -155,7 +171,11 @@ export const buildFallback = (
 
   const run: RouteHandler = async (req) => {
     try {
-      return await compose(middleware, unmatchedContext(req), miss)(req);
+      return await compose(
+        middleware,
+        unmatchedContext(req, notFound === 'public'),
+        miss,
+      )(req);
     } catch (error) {
       return onError(error, req);
     }

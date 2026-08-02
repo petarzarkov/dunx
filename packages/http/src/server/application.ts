@@ -70,6 +70,25 @@ export interface HttpOptions extends AppOptions {
    * second to run throws `PubSub already relays`.
    */
   readonly relayResubscribe?: RelayOptions['resubscribe'];
+  /**
+   * What an unmatched path looks like to global middleware.
+   *
+   * `'guarded'`, the default, gives the miss no route metadata, so a global guard
+   * refuses it and an anonymous caller gets that guard's status rather than a 404.
+   * That is deliberate: a 404 on a miss while every real path answers 401 tells a
+   * prober which paths exist.
+   *
+   * `'public'` reports the miss as `@Public()`, so a guard honouring that flag
+   * passes it through to the conventional 404. The request is still logged and
+   * still gets a request id either way, which is the whole reason the fallback
+   * runs the middleware at all.
+   *
+   * A guard can discriminate under either setting: `UNMATCHED` is set on the miss
+   * and no real route ever sets it.
+   *
+   * @default 'guarded'
+   */
+  readonly notFound?: 'guarded' | 'public';
 }
 
 /**
@@ -106,6 +125,7 @@ export class HttpApplication implements HttpApp {
   readonly #relay: PubSubRelay | undefined;
   readonly #relayChannel: string | undefined;
   readonly #relayResubscribe: RelayOptions['resubscribe'];
+  readonly #notFound: 'guarded' | 'public';
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -134,6 +154,7 @@ export class HttpApplication implements HttpApp {
     this.#relay = options.relay;
     this.#relayChannel = options.relayChannel;
     this.#relayResubscribe = options.relayResubscribe;
+    this.#notFound = options.notFound ?? 'guarded';
     this.gatewayPaths = websocket?.paths ?? [];
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
@@ -204,7 +225,12 @@ export class HttpApplication implements HttpApp {
     // invisible to request logging. This runs only after Bun has matched nothing,
     // so Bun is still the router - it just puts the global middleware in front of
     // the 404 and returns it in the framework's error shape.
-    const fetch = buildFallback(middleware, this.#onError, this.#cors);
+    const fetch = buildFallback(
+      middleware,
+      this.#onError,
+      this.#cors,
+      this.#notFound,
+    );
 
     // Two literals, one call: a route that may answer `undefined` because it
     // upgraded is only a valid route table when `websocket` is there to receive it,

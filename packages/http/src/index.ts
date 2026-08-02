@@ -27,6 +27,7 @@ export {
   PUBLIC,
   Roles,
   ROLES,
+  UNMATCHED,
   UseGuards,
   type MetaKey,
   type MetaRecord,

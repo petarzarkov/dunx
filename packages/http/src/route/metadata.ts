@@ -64,6 +64,13 @@ export const meta =
 export const ROLES: MetaKey<readonly string[]> = metaKey('roles');
 export const PUBLIC: MetaKey<boolean> = metaKey('public');
 export const HIDDEN: MetaKey<boolean> = metaKey('hidden');
+/**
+ * Set only by the not-found fallback, never by a route. A guard that wants to
+ * authenticate unmatched paths rather than 404 them reads this: the miss reports
+ * itself as `PUBLIC` so the common case is a 404, and this is how to tell a
+ * genuinely public route from one that matched nothing.
+ */
+export const UNMATCHED: MetaKey<boolean> = metaKey('unmatched');
 
 export const Roles = (...roles: readonly string[]) => meta(ROLES, roles);
 export const Public = () => meta(PUBLIC, true);

@@ -247,7 +247,6 @@ Feedback goes in as a new file rather than into conversation.
 | [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Three upstream proposals. Nothing left to adopt.                     |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                          |
 | [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                            |
-| [global-guard-guards-the-404](./roadmap/global-guard-guards-the-404.md)             | Design gap. A global guard turns every 404 into a 401.               |
 | [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)             | Bug. Bypasses the bound Logger on a publish failure.                 |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                 |
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                         | Unreproduced.                                                        |
