@@ -104,15 +104,19 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       # Authenticated by npm trusted publishing (OIDC) via the id-token permission
-      # above - no NPM_TOKEN. Each package needs a trusted publisher on npmjs.com
-      # pointing at this repo and this workflow file. version.ts runs the npm CLI
-      # through `bunx npm@<pinned>`, so there is no Node/npm setup step to keep here.
-      # UNCOMMENT when READY
-      # - name: Version bump & publish
-      #   if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      #   run: bun run version
-      #   env:
-      #     FORCE_PUBLISH: ${{ contains(github.event.head_commit.message, '[force-publish]') }}
+      # above - no NPM_TOKEN. Each package needs a trusted publisher configured on
+      # npmjs.com pointing at this repo and at this workflow **filename**; renaming
+      # ci.yml silently breaks publishing for every package. version.ts runs the npm
+      # CLI through `bunx npm@<pinned>`, so there is no Node/npm setup step here.
+      #
+      # Live as of 0.1.0, which was published by hand because a package with no
+      # versions on npm has no trusted-publisher settings page to configure yet.
+      # Every release from here is this step.
+      - name: Version bump & publish
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        run: bun run version
+        env:
+          FORCE_PUBLISH: ${{ contains(github.event.head_commit.message, '[force-publish]') }}
 
   # Separate job so the `github-pages` environment (and any branch protection on it)
   # never gates the CI job itself - PR runs must not need it.
