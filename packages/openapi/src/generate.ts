@@ -40,7 +40,7 @@ const METHOD_KEYS: Readonly<Record<HttpMethod, OperationKey>> = Object.freeze({
 });
 
 // Code-unit order, not `localeCompare`: a generated document has to come out
-// byte-identical on every machine, and collation is locale-dependent — it sorts
+// byte-identical on every machine, and collation is locale-dependent - it sorts
 // `/reports/{id}` before `/reports/health` under ICU and after it without.
 const ordered = (routes: readonly DiscoveredRoute[]): DiscoveredRoute[] =>
   [...routes].sort((left, right) => {
@@ -59,7 +59,7 @@ const tagsOf = (routes: readonly DiscoveredRoute[]): readonly TagObject[] =>
 /**
  * Routes to an OpenAPI 3.1 document. `routes` is exactly what
  * `discoverRoutes()` produced, so the document describes the table the server
- * actually serves — the schemas here are the objects the request path validates
+ * actually serves - the schemas here are the objects the request path validates
  * against, not a reconstruction of them.
  *
  * Async because zod is a `peerDependency` loaded on demand. Nothing throws: a

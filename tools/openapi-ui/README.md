@@ -13,7 +13,7 @@ bun run typecheck
 ## How the bundle reaches the published package
 
 `@dunx/openapi` has **zero runtime dependencies** and its page provably fetches
-nothing — no CDN, no `src=`, no `<link>`. So the explorer cannot be a dependency
+nothing - no CDN, no `src=`, no `<link>`. So the explorer cannot be a dependency
 and cannot be an asset the browser requests. It is **text**, inlined into the
 HTML.
 
@@ -32,7 +32,7 @@ Rollup's tree-shaking is worth the ~1.8 s.
 ## The contract with the server
 
 The page carries a `<script type="application/json" id="dunx-openapi-model">`
-holding a `PageModel` — the OpenAPI document verbatim, plus the three things only
+holding a `PageModel` - the OpenAPI document verbatim, plus the three things only
 the server can compute:
 
 | Field     | Written by                            | Why not in the browser                       |
@@ -46,7 +46,7 @@ declaration of the model and no build-order dependency between the two.
 
 ## Keeping it small
 
-Every component costs bytes twice — once in JavaScript, once in the CSS file
+Every component costs bytes twice - once in JavaScript, once in the CSS file
 `src/styles.ts` has to import. `Tooltip` (floating-ui) and `ScrollArea` were
 dropped for `title=` and `overflow: auto`, which took the bundle from 490 KiB to
 437 KiB. Icons are four inline paths rather than an icon package. Before adding a

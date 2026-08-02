@@ -64,7 +64,7 @@ export const bumpVersion = (
 
   // Validated once, on integer-ness. The previous per-case `!major` / `!minor` /
   // `!patch` guards were meant to catch NaN, but 0 is falsy too, so every bump of
-  // a version with a zero component threw — including 1.2.0 -> 1.2.1.
+  // a version with a zero component threw - including 1.2.0 -> 1.2.1.
   if (
     parts.length !== 3 ||
     major === undefined ||
@@ -265,7 +265,7 @@ const readWorkspaceVersions = (): Map<string, string> => {
  *
  * `npm publish` copies these ranges verbatim, so a package shipped with
  * `"@dunx/core": "workspace:*"` fails to install for every consumer. The rewrite
- * above is the mechanism that prevents it — this asserts the mechanism actually
+ * above is the mechanism that prevents it - this asserts the mechanism actually
  * ran, because it only runs on the `publishPackage` path, and the first publish
  * of a package has to be done by hand (OIDC trusted publishing cannot attach to a
  * package that does not exist yet). That manual path is exactly where this would
@@ -289,7 +289,7 @@ export const assertNoWorkspaceRanges = (pkg: {
   if (offenders.length > 0) {
     throw new Error(
       `Refusing to publish ${pkg.name ?? 'package'}: unresolved workspace ` +
-        `ranges would ship and break every consumer install — ` +
+        `ranges would ship and break every consumer install - ` +
         offenders.join(', '),
     );
   }
@@ -298,7 +298,7 @@ export const assertNoWorkspaceRanges = (pkg: {
 /**
  * `npm publish` leaves `workspace:` ranges untouched in the packed tarball (unlike
  * `bun publish`), so swap them for concrete ranges, publish, then put the source
- * package.json back exactly as it was — version bump included.
+ * package.json back exactly as it was - version bump included.
  */
 const withResolvedWorkspaceDeps = (pkgDir: string, publish: () => void) => {
   const pkgJsonPath = join(pkgDir, 'package.json');
@@ -536,7 +536,7 @@ const runVersionBump = (allPackages: PublishablePackage[]): void => {
   // This is a correctness requirement, not tidiness. `version.ts` rewrites a
   // `workspace:*` range to the dependency's exact version at publish time, so with
   // independent versions `@dunx/http@0.2.0` would pin `@dunx/core@0.1.0` while a
-  // later `@dunx/infra@0.3.0` pinned `@dunx/core@0.2.0` — and an app using both
+  // later `@dunx/infra@0.3.0` pinned `@dunx/core@0.2.0` - and an app using both
   // would install **two copies of @dunx/core**. In this container a token *is* a
   // class object, so two copies means two distinct `Logger` classes and
   // `app.get(Logger)` silently missing the binding another package registered.
@@ -550,14 +550,14 @@ const runVersionBump = (allPackages: PublishablePackage[]): void => {
   // rather than a replacement for this one: a peer cannot be duplicated by the
   // installer, and lockstep keeps the exact version this script writes into it
   // coherent. Independent versions on top of peers is the remaining prize and
-  // needs a range policy first — see docs/ROADMAP.md item 1. The build ordering
+  // needs a range policy first - see docs/ROADMAP.md item 1. The build ordering
   // that used to block peers is fixed: `bun run build` is `scripts/build-all.ts`,
   // which orders by peerDependencies and devDependencies too. Re-measured on a
-  // clean tree — the old `--filter '*' build` still fails with TS7016, the new one
+  // clean tree - the old `--filter '*' build` still fails with TS7016, the new one
   // does not.
   //
   // Cost: an untouched package still gets a version. For a pre-1.0 framework whose
-  // packages move together that is a feature — one number answers "which versions
+  // packages move together that is a feature - one number answers "which versions
   // work together".
   if (changedSrcPackages !== null) {
     console.log(
@@ -570,7 +570,7 @@ const runVersionBump = (allPackages: PublishablePackage[]): void => {
   if (isDryRun || bumpedPackages.length === 0) return;
 
   // Publish BEFORE committing/pushing the bump. If publish fails, main is left
-  // untouched so the next run retries the same bump cleanly — a committed-but-
+  // untouched so the next run retries the same bump cleanly - a committed-but-
   // unpublished version would otherwise be orphaned ([skip ci] + diff-based
   // change detection means it never gets republished). The isVersionPublished
   // guard makes reruns idempotent and lets a failed-push-after-publish recover.

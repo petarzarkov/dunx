@@ -8,7 +8,7 @@ import { HandlerKind } from './marker.js';
 
 /**
  * One gateway reduced to direct references, built once at boot. Dispatch reads
- * these fields and nothing else — no lookup, no metadata, no DI per message.
+ * these fields and nothing else - no lookup, no metadata, no DI per message.
  */
 export interface GatewayRuntime {
   readonly name: string;

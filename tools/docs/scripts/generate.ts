@@ -99,7 +99,7 @@ writeFileSync(join(OUT_DIR, 'site.json'), JSON.stringify(site));
 writeFileSync(join(OUT_DIR, 'bench.json'), JSON.stringify(bench));
 
 // Coverage is produced by scripts/coverage-report.ts, which runs after the test
-// suite — later than this in CI. Seed an empty model so the site always builds.
+// suite - later than this in CI. Seed an empty model so the site always builds.
 const coveragePath = join(OUT_DIR, 'coverage.json');
 if (!existsSync(coveragePath)) {
   writeFileSync(coveragePath, JSON.stringify(emptyCoverage()));

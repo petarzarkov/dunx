@@ -1,6 +1,6 @@
 /**
  * Frozen object plus an indexed-access union, not an `enum`. An enum emits a
- * runtime object that no other syntax can produce, which is why the repo bans it —
+ * runtime object that no other syntax can produce, which is why the repo bans it -
  * see CLAUDE.md. This gives the same `HttpStatusCode.NOT_FOUND` ergonomics, a
  * narrower type, and erases cleanly.
  */

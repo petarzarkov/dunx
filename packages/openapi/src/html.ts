@@ -4,7 +4,7 @@ import { UI } from './ui-bundle.js';
 
 /**
  * The page is a shell: a boot stylesheet, the model as JSON, and the explorer
- * bundle inlined. Nothing is fetched — no CDN, no `src=`, no `<link>` — which is
+ * bundle inlined. Nothing is fetched - no CDN, no `src=`, no `<link>` - which is
  * the guarantee `html.test.ts` asserts and the reason `swagger-ui-dist` (11.7 MB,
  * and a CDN in practice) was never an option.
  *

@@ -57,7 +57,7 @@ describe('RedisOptions url', () => {
   });
 
   // Bun takes an unparseable string and only fails later, as an opaque
-  // "Connection closed" — this is the check that turns it into a boot error.
+  // "Connection closed" - this is the check that turns it into a boot error.
   it('rejects an unparseable url up front', () => {
     let thrown: unknown;
     try {

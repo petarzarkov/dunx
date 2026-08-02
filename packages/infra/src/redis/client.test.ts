@@ -36,7 +36,7 @@ const reachable = async (): Promise<boolean> => {
 
 const live = await reachable();
 if (!live) {
-  console.log(`[dunx] redis integration tests skipped — ${url} unreachable`);
+  console.log(`[dunx] redis integration tests skipped - ${url} unreachable`);
 }
 
 // A fresh namespace per run, so a leftover key can never make a test pass.
@@ -342,7 +342,7 @@ describe.if(live)('shutdown', () => {
    * never notice: measured on Bun 1.3.14, a `Bun.RedisClient` left in subscriber
    * mode keeps the event loop alive after `close()`, so a service that shut down
    * cleanly still hung forever. `onShutdown` leaves subscriber mode first, and
-   * this is what proves it — without the `unsubscribe()` the spawn times out.
+   * this is what proves it - without the `unsubscribe()` the spawn times out.
    */
   it('lets the process exit after a subscription was opened', async () => {
     const source = new URL('./', import.meta.url).pathname;

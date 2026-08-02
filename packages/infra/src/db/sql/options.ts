@@ -14,7 +14,7 @@ import { SqlConnection } from './connection.js';
 /**
  * Extends the driver's own option type rather than restating it, so pooling, TLS
  * and auth stay in sync with whatever Bun supports. `url` is required and
- * `adapter` is dropped — the URL scheme already decides it.
+ * `adapter` is dropped - the URL scheme already decides it.
  */
 export interface SqlInit<TSchema extends Record<string, unknown>> extends Omit<
   Bun.SQL.PostgresOrMySQLOptions,
@@ -26,7 +26,7 @@ export interface SqlInit<TSchema extends Record<string, unknown>> extends Omit<
 }
 
 /**
- * Configuration for the `Bun.SQL` backend — Postgres. A class, so it is
+ * Configuration for the `Bun.SQL` backend - Postgres. A class, so it is
  * injectable.
  *
  * The dialect is resolved from the URL **at construction**, so a bad URL throws
@@ -49,7 +49,7 @@ export class SqlOptions<
   constructor(init: SqlInit<TSchema>) {
     super();
     // `schema` and `url` are consumed here, so neither rides along into the
-    // driver options — a schema object is every table and column in the app.
+    // driver options - a schema object is every table and column in the app.
     const { schema, url, ...driver } = init;
     this.schema = schema;
     this.url = url instanceof URL ? url.href : url;
@@ -58,11 +58,11 @@ export class SqlOptions<
     if (dialect !== Dialect.POSTGRES) {
       throw new DatabaseError(
         `"${this.url}" names ${dialect}, and drizzle-orm/bun-sql is Postgres ` +
-          'only — it builds a PgDialect unconditionally, so a non-Postgres URL ' +
+          'only - it builds a PgDialect unconditionally, so a non-Postgres URL ' +
           'would compile $1 placeholders and Postgres quoting against a server ' +
           'that does not speak them. Use SqliteOptions for SQLite. For MySQL and ' +
           'MariaDB there is no drizzle driver on Bun.SQL, but drizzle-orm/' +
-          'mysql-proxy over Bun.SQL works and needs no change to this package — ' +
+          'mysql-proxy over Bun.SQL works and needs no change to this package - ' +
           'examples/databases/src/mysql/driver.ts is a working DbOptions for it.',
       );
     }

@@ -89,7 +89,7 @@ export const formatReport = (report: Report): string => {
     const baseline = rows.find((row) => row.subject === BASELINE)?.rps.median;
 
     out.push(
-      `\n${scenario.title.toUpperCase()} — ${scenario.method} ${scenario.path}`,
+      `\n${scenario.title.toUpperCase()} - ${scenario.method} ${scenario.path}`,
     );
     out.push(`  ${scenario.description}`);
     out.push(
@@ -123,7 +123,7 @@ export const formatReport = (report: Report): string => {
 
   if (report.startup.length > 0) {
     const rows = [...report.startup].sort((a, b) => a.medianMs - b.medianMs);
-    out.push('\nSTARTUP — cold process to first served request');
+    out.push('\nSTARTUP - cold process to first served request');
     out.push(
       `  ${report.startup[0]?.samplesMs.length ?? 0} samples each, polled at 1 ms so treat anything under ~5 ms as equal`,
     );

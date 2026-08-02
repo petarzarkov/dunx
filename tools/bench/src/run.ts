@@ -94,7 +94,7 @@ export const runSuite = async (
   if (machine.node === 'not found') {
     runnable = chosenSubjects.filter((subject) => subject.runtime === 'bun');
     note(
-      `No Node binary at "${nodeBinary}" — skipping the Node subjects. Set BENCH_NODE to include them.`,
+      `No Node binary at "${nodeBinary}" - skipping the Node subjects. Set BENCH_NODE to include them.`,
     );
   }
 

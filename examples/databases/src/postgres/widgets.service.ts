@@ -7,11 +7,11 @@ import { widgets, type Widget } from './schema.js';
 
 /**
  * Postgres, through `drizzle-orm/bun-sql` over `Bun.SQL`. No `pg`, no
- * `postgres.js` — Bun owns the socket, the pool and the wire protocol; drizzle
+ * `postgres.js` - Bun owns the socket, the pool and the wire protocol; drizzle
  * owns the SQL.
  *
  * Compare this file with the SQLite one: the imports differ by two lines and the
- * bodies are the same. That is the point of the async SQLite mode — the move from
+ * bodies are the same. That is the point of the async SQLite mode - the move from
  * one to the other is a change to a module, not to a repository.
  */
 export class PostgresWidgets implements OnInit {
@@ -36,7 +36,7 @@ export class PostgresWidgets implements OnInit {
 
   /**
    * On Postgres `transaction()` delegates to drizzle's own, which is genuinely
-   * async — it goes through `Bun.SQL`'s `begin()`, which reserves a connection for
+   * async - it goes through `Bun.SQL`'s `begin()`, which reserves a connection for
    * the duration. That is also why the callback is handed a `PgTransaction` rather
    * than the database: the pooled outer handle would take a different connection
    * and sit outside the transaction.

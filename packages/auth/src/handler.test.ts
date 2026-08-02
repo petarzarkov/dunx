@@ -54,7 +54,7 @@ describe('AuthHandler', () => {
 
     expect((await fetch(`${base}/api/auth/ok`)).status).toBe(200);
     // The wildcard claims nothing outside the mount. An unmatched path reaches the
-    // fallback, where the global guard rejects it before the 404 — which is the
+    // fallback, where the global guard rejects it before the 404 - which is the
     // right answer, since a 404 there would enumerate the app's surface.
     expect((await fetch(`${base}/elsewhere`)).status).toBe(401);
     await app.shutdown();
@@ -119,8 +119,8 @@ describe('AuthHandler', () => {
     const app = await appWith({ basePath: '/api/auth' });
     const base = (await app.listen(0)).replace(/\/$/, '');
 
-    // better-auth declares no PUT/PATCH/DELETE endpoints of its own, so its router —
-    // not Bun's — is what answers. Reaching it at all is the assertion.
+    // better-auth declares no PUT/PATCH/DELETE endpoints of its own, so its router -
+    // not Bun's - is what answers. Reaching it at all is the assertion.
     for (const method of ['PUT', 'PATCH', 'DELETE']) {
       const response = await fetch(`${base}/api/auth/ok`, { method });
       expect(response.status).not.toBe(405);

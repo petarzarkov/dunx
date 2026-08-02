@@ -22,7 +22,7 @@ export type GuardResolver = (guard: Ctor<Middleware>) => Middleware;
 const construct: GuardResolver = (guard) =>
   new (guard as new () => Middleware)();
 
-/** `OPTIONS` is never a `@Get`-style route — only CORS mounts one. */
+/** `OPTIONS` is never a `@Get`-style route - only CORS mounts one. */
 export type RouteMethod = HttpMethod | 'OPTIONS';
 
 export type BunRoutes = Record<
@@ -40,7 +40,7 @@ export type ServeRoutes = Record<
 >;
 
 /**
- * A `Response` passes through untouched — that is the escape hatch, and nothing
+ * A `Response` passes through untouched - that is the escape hatch, and nothing
  * about it is worth second-guessing. Nothing at all is a 204: `Response.json(null)`
  * would be a body claiming to be no body.
  */
@@ -105,7 +105,7 @@ export const assertNoGatewayCollisions = (
 
 /**
  * The two tables in one. A gateway's `GET` is what Bun's router matches on an
- * upgrade — the reason no `fetch` handler is needed for a socket to connect.
+ * upgrade - the reason no `fetch` handler is needed for a socket to connect.
  */
 export const withUpgradeRoutes = (
   routes: BunRoutes,
@@ -131,7 +131,7 @@ const unmatchedContext = (req: Request): RouteContext =>
 
 /**
  * Bun answers an unmatched path itself, so nothing in the middleware chain ever
- * sees it — which makes a 404 invisible to request logging, metrics and tracing.
+ * sees it - which makes a 404 invisible to request logging, metrics and tracing.
  *
  * This is the only `fetch` handler dunx installs, and it is not a router: Bun
  * still does all the matching, and this runs only once Bun has decided nothing
@@ -170,7 +170,7 @@ export const buildFallback = (
  * there is genuinely something to wait for.
  *
  * The general path is `async (req) => toResponse(await handler(await read(req)))`
- * inside an `async` try/catch — four `await`s across two async frames, on values
+ * inside an `async` try/catch - four `await`s across two async frames, on values
  * that are usually not thenable at all. A route with no declared schemas awaits
  * nothing; a route with only `query` or `params` awaits nothing either, because
  * every Standard Schema validator worth using is synchronous. Even a `body` route,
@@ -179,7 +179,7 @@ export const buildFallback = (
  *
  * Worth ~6 points of throughput against raw `Bun.serve` on the `params` scenario
  * when it covered only schema-less routes, and a further ~5 on `validate` when it
- * was extended to cover reading ones — which is most of what separated dunx from
+ * was extended to cover reading ones - which is most of what separated dunx from
  * Elysia, whose whole trick is compiling this shape ahead of time.
  *
  * A handler or a validator that *does* return a promise still works: it is adopted
@@ -196,7 +196,7 @@ const directOr = (
   if (!noMiddleware) return guarded;
 
   // `toResponse` throws on a value `JSON.stringify` cannot take, so it is inside
-  // the mapper's reach on every branch — including the `then` callbacks, where a
+  // the mapper's reach on every branch - including the `then` callbacks, where a
   // throw would otherwise escape as an unhandled rejection instead of a 500.
   const settle = (value: unknown, req: BunRequest): Response => {
     try {
@@ -247,7 +247,7 @@ export const buildRoutes = (
 ): BunRoutes => {
   assertNoCollisions(discovered);
   const routes: BunRoutes = {};
-  // One instance per guard class for the whole table — what the container returns,
+  // One instance per guard class for the whole table - what the container returns,
   // and what the default resolver has to match to be interchangeable with it.
   const instances = new Map<Ctor<Middleware>, Middleware>();
   const guardOf = (guard: Ctor<Middleware>): Middleware => {

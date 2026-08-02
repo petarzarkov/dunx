@@ -10,7 +10,7 @@ export class ConfigError extends AppError {
 /**
  * The validated configuration, injectable.
  *
- * Parameterise it at the injection site — the transform records the bare name of
+ * Parameterise it at the injection site - the transform records the bare name of
  * a generic annotation, so the type argument costs nothing at runtime:
  *
  * ```ts
@@ -20,7 +20,7 @@ export class ConfigError extends AppError {
  * ```
  *
  * `AppConfig` is whatever the `validate` function returns; nothing declares it
- * twice. A type alias will **not** work in that position — the transform needs a
+ * twice. A type alias will **not** work in that position - the transform needs a
  * runtime value to record, and an alias erases.
  */
 export class ConfigService<T extends object = Record<string, unknown>> {
@@ -41,7 +41,7 @@ export class ConfigService<T extends object = Record<string, unknown>> {
 
   /**
    * Named for the NestJS method it replaces. Guards the value being present, not
-   * the key being declared — a missing key is already a type error.
+   * the key being declared - a missing key is already a type error.
    */
   getOrThrow<K extends keyof T>(key: K): NonNullable<T[K]> {
     const value = this.values[key];

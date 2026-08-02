@@ -14,7 +14,7 @@ bun install
 bun run --filter '@dunx/example-full' start
 ```
 
-Then open **<http://localhost:3000/api/docs>** — the swagger page is generated from
+Then open **<http://localhost:3000/api/docs>** - the swagger page is generated from
 the same zod schemas the routes validate against, so every endpoint below is
 listed, typed and callable from the browser.
 
@@ -32,35 +32,35 @@ services first, then the database and the temp directory they were using.
 | Command         | Does                                                                |
 | --------------- | -------------------------------------------------------------------- |
 | `bun start`     | serves on `PORT` (default 3000) and holds                            |
-| `bun run worker`| consumes queued jobs — **a second process, on purpose**              |
+| `bun run worker`| consumes queued jobs - **a second process, on purpose**              |
 | `bun run tour`  | boots the same app, narrates every package, shuts down, exits 0      |
 
 The tour is what CI runs. It is the end-to-end check that the whole DI graph builds
-and that every package still does what its comments claim — `bun start` cannot be
+and that every package still does what its comments claim - `bun start` cannot be
 that check, because a service never exits.
 
 ## What is mounted
 
 | Routes            | Exercises                                                              |
 | ----------------- | ------------------------------------------------------------------------ |
-| `/api/users`      | `@dunx/http` — zod on params, query and body; 201 from the verb         |
+| `/api/users`      | `@dunx/http` - zod on params, query and body; 201 from the verb         |
 | `/api/notes`      | the global prefix, middleware, CORS                                     |
-| `/api/ledger`     | `@dunx/infra/db` — drizzle over `bun:sqlite`, seeds, transactions        |
-| `/api/files`      | `@dunx/infra/files` — `Storage`, globbing, traversal refusal, presign    |
-| `/api/images`     | `@dunx/infra/images` — `Bun.Image` resize and re-encode                  |
-| `/api/cache`      | `@dunx/infra/redis` — `Bun.RedisClient`, degrading when nothing is up    |
+| `/api/ledger`     | `@dunx/infra/db` - drizzle over `bun:sqlite`, seeds, transactions        |
+| `/api/files`      | `@dunx/infra/files` - `Storage`, globbing, traversal refusal, presign    |
+| `/api/images`     | `@dunx/infra/images` - `Bun.Image` resize and re-encode                  |
+| `/api/cache`      | `@dunx/infra/redis` - `Bun.RedisClient`, degrading when nothing is up    |
 | `/api/reports`    | `@Public`, `@Roles` and `@UseGuards`                                    |
 | `/api/health`     | which of the above are actually working                                 |
-| `/api/jobs`       | `@dunx/infra/queue` — bullmq; publishes here, consumed by `bun run worker` |
-| `/api/auth/*`     | `@dunx/auth` — better-auth mounted, with `Bun.password` hashing          |
-| `/api/wiring`     | `@dunx/core` — `token()`, `inject()` and the three `provide()` shapes    |
+| `/api/jobs`       | `@dunx/infra/queue` - bullmq; publishes here, consumed by `bun run worker` |
+| `/api/auth/*`     | `@dunx/auth` - better-auth mounted, with `Bun.password` hashing          |
+| `/api/wiring`     | `@dunx/core` - `token()`, `inject()` and the three `provide()` shapes    |
 | `/chat`           | a websocket gateway on the **same** `Bun.serve` as the routes            |
 
 ### Things worth trying
 
 ```bash
 # The transaction is one unit. `fail` throws between the two inserts, and the
-# row count in the 409 is unchanged — proof the first leg was rolled back.
+# row count in the 409 is unchanged - proof the first leg was rolled back.
 curl -s localhost:3000/api/ledger
 curl -sX POST localhost:3000/api/ledger/transfer -H 'content-type: application/json' \
   -d '{"from":"checking","to":"savings","amount":25,"fail":true}'
@@ -76,8 +76,8 @@ curl -s localhost:3000/api/reports                                  # 401
 curl -s localhost:3000/api/reports -H 'authorization: Bearer viewer'  # 200
 ```
 
-`bun run tour` also boots a **second node** for `/chat` — a second `Bun.serve` and a
-second container in the same process — and relays a publish between the two through
+`bun run tour` also boots a **second node** for `/chat` - a second `Bun.serve` and a
+second container in the same process - and relays a publish between the two through
 Redis, asserting one delivery per client. Node A relays with `@dunx/http`'s
 `RedisRelay`; node B relays through the app's own `@dunx/infra/redis` connection,
 which satisfies `PubSubRelay` structurally. With no Redis running it says it is
@@ -85,7 +85,7 @@ skipping and the app still exits 0.
 
 ### The queue needs two processes
 
-A worker is its own container — its own connections, no HTTP server — so this is the
+A worker is its own container - its own connections, no HTTP server - so this is the
 one area the service cannot demonstrate alone. Run both:
 
 ```bash
@@ -103,7 +103,7 @@ curl -s localhost:3000/api/jobs/thumbnails/1
 ```
 
 The handler in [src/jobs/thumbnail.jobs.ts](./src/jobs/thumbnail.jobs.ts) injects the
-same `Thumbnails` service the HTTP image routes use — one wiring, two entry points.
+same `Thumbnails` service the HTTP image routes use - one wiring, two entry points.
 `@JobHandler` is the whole registration; the worker finds it by walking prototypes,
 the same discovery routes and gateways use.
 
@@ -116,8 +116,8 @@ in [docs/bun-apis.md](../../docs/bun-apis.md).
 
 ## Configuration
 
-Every setting goes through one validation function — `validate` in
-[src/config.ts](./src/config.ts) — and nothing downstream reads `process.env`. Bun
+Every setting goes through one validation function - `validate` in
+[src/config.ts](./src/config.ts) - and nothing downstream reads `process.env`. Bun
 loads `.env` and `.env.local` itself, so there is no loader and no `dotenv`.
 
 | Variable        | Default                 | Effect                                   |
@@ -126,7 +126,7 @@ loads `.env` and `.env.local` itself, so there is no loader and no `dotenv`.
 | `LOG_LEVEL`     | `info`                  | `verbose`…`fatal`                         |
 | `LOG_FILE`      | _unset_                 | also append rotating JSON to this path    |
 | `DATABASE_FILE` | `:memory:`              | a path makes the ledger survive restarts  |
-| `REDIS_URL`     | Bun's own default chain | absent is fine — the cache routes say so  |
+| `REDIS_URL`     | Bun's own default chain | absent is fine - the cache routes say so  |
 | `CORS_ORIGIN`   | `https://example.com`   | the allowed origin                        |
 | `IMAGE_QUALITY` | `82`                    | encoder quality                           |
 
@@ -181,5 +181,5 @@ across services; otherwise one is minted and returned on the response.
 
 An unmatched path is logged too. Bun answers a miss itself and the middleware chain
 would never see it, so `@dunx/http` installs one `fetch` fallback that puts the
-global middleware in front of a `{"error":"NOT_FOUND","status":404}` — Bun is still
+global middleware in front of a `{"error":"NOT_FOUND","status":404}` - Bun is still
 the router.

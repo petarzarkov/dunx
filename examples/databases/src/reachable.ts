@@ -2,7 +2,7 @@
  * Whether a server-backed database is actually up.
  *
  * Every example in this repo has to exit 0 with nothing installed, otherwise CI
- * teaches everyone to ignore it. SQLite is always live — it is a file, or not even
+ * teaches everyone to ignore it. SQLite is always live - it is a file, or not even
  * that. Postgres and MySQL are not, so each is probed once before its module is
  * imported, and the run reports that it is skipping instead of failing.
  *

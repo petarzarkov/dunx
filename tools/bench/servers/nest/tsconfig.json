@@ -3,7 +3,7 @@
   "compilerOptions": {
     /* The one directory in this repo with legacy decorators. NestJS's programming
        model requires them and its parameter decorators need the emitted metadata,
-       so a benchmark subject measuring NestJS has to have them — measuring a fake
+       so a benchmark subject measuring NestJS has to have them - measuring a fake
        Nest would measure nothing.
 
        CLAUDE.md's ban exists so *dunx* never needs them, and it still never does:

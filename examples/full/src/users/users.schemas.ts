@@ -4,7 +4,7 @@ import { z } from 'zod';
 /**
  * Real zod, dropped straight into a route's options: `z.object()` already carries
  * `~standard` (vendor `zod`, version 1), which is the entire contract
- * `@dunx/http` validates against — so nothing adapts anything, and the framework
+ * `@dunx/http` validates against - so nothing adapts anything, and the framework
  * still depends on no validator.
  *
  * `.meta({ id })` names the definition zod emits under `$defs`, which is the slot

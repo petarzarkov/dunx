@@ -37,12 +37,12 @@ const command = (
 /**
  * Where a subject's stdout goes, which is a measurement decision and not a detail.
  *
- * `'null'` — the default — is `/dev/null`: a real fd, so a `console.log` is a real
+ * `'null'` - the default - is `/dev/null`: a real fd, so a `console.log` is a real
  * `write(2)`, but one that can never block. `'blocked'` is a pipe nobody reads,
  * which is what the harness used to do to every subject: 64 KiB in, the pipe is
  * full, and every further write parks the server until the kernel has room. That
  * is not a property of the framework, so it is opt-in and only the logging harness
- * asks for it — see `src/logging.ts`.
+ * asks for it - see `src/logging.ts`.
  */
 export type StdoutSink = 'null' | 'blocked';
 

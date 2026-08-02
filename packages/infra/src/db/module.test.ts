@@ -27,14 +27,14 @@ type Schema = typeof schema;
 
 /**
  * The token, instantiated to this schema. The runtime value is drizzle's class
- * either way — writing the type argument once here is what a repository does with
+ * either way - writing the type argument once here is what a repository does with
  * its constructor annotation, and it is what keeps `app.get` typed.
  */
 const handle: AbstractCtor<BunSQLiteDatabase<Schema>> = BunSQLiteDatabase;
 
 /**
- * Stands in for `@dunx/transform`. This package cannot depend on it — the plugin is
- * what builds `@dunx/infra` — so the tests write the record it would append.
+ * Stands in for `@dunx/transform`. This package cannot depend on it - the plugin is
+ * what builds `@dunx/infra` - so the tests write the record it would append.
  */
 const records = (ctor: object, deps: () => readonly unknown[]): void => {
   Object.defineProperty(ctor, Symbol.for('dunx.deps'), { value: deps });
@@ -44,8 +44,8 @@ const shutdowns: string[] = [];
 
 /**
  * The point of the whole arrangement: the annotation is drizzle's own class with
- * the schema as its type argument. `@dunx/transform` records the bare name — a real
- * runtime class, so a usable token — and ignores the type argument, so the schema
+ * the schema as its type argument. `@dunx/transform` records the bare name - a real
+ * runtime class, so a usable token - and ignores the type argument, so the schema
  * types survive into every query below.
  */
 class WidgetsRepository {
@@ -148,7 +148,7 @@ describe('DbModule.forRoot', () => {
       readonly rows: number;
 
       constructor(db: BunSQLiteDatabase<Schema>) {
-        // No await, no `db.ready()` — the async factory has already settled.
+        // No await, no `db.ready()` - the async factory has already settled.
         db.run(sql`CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT)`);
         this.rows = db.select().from(widgets).all().length;
       }

@@ -31,7 +31,7 @@ export interface StandardSchemaIssue {
     | undefined;
 }
 
-/** The validated output of a schema — `InferOutput<typeof CreateNote>` is `Note`. */
+/** The validated output of a schema - `InferOutput<typeof CreateNote>` is `Note`. */
 export type InferOutput<S> =
   S extends StandardSchemaV1<unknown, infer Out> ? Out : never;
 
@@ -50,9 +50,9 @@ export interface RouteSchemas {
 
 /**
  * The handler's parameter type, derived from its own options object. It has to be
- * written out — a standard method decorator can *check* a parameter's type but
+ * written out - a standard method decorator can *check* a parameter's type but
  * cannot contextually type an unannotated one (docs/ARCHITECTURE.md, "Verified
- * constraints") — but every field type still comes from the schemas, so nothing
+ * constraints") - but every field type still comes from the schemas, so nothing
  * is declared twice:
  *
  * ```ts

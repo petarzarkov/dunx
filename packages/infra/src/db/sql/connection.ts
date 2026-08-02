@@ -11,7 +11,7 @@ import {
  * `drizzle-orm/bun-sql` over a `Bun.SQL` client.
  *
  * Postgres only. `Bun.SQL` itself speaks four dialects, but
- * `drizzle-orm/bun-sql` hardcodes `new PgDialect(...)` — there is no branch on
+ * `drizzle-orm/bun-sql` hardcodes `new PgDialect(...)` - there is no branch on
  * `client.options.adapter` anywhere in it. Pointed at a `sqlite://` client it
  * still compiles `$1` placeholders and Postgres quoting, and the trivial cases
  * even appear to work, which is worse than failing. `SqlOptions` refuses a

@@ -17,7 +17,7 @@ export interface TestServerOptions
 
 export interface TestServer extends TestClient {
   readonly app: HttpApp;
-  /** `app.shutdown()` — stops the server, then tears the container down. */
+  /** `app.shutdown()` - stops the server, then tears the container down. */
   close(): Promise<void>;
 }
 
@@ -25,7 +25,7 @@ export interface TestServer extends TestClient {
  * A **real** `Bun.serve` on port 0, with the same override semantics as
  * {@link createTestApp}. Nothing is faked: `Bun.serve` binds in about a
  * millisecond, and a fake would only be able to prove the parts of the request
- * path dunx wrote rather than the parts Bun owns — routing, params, method
+ * path dunx wrote rather than the parts Bun owns - routing, params, method
  * dispatch, upgrades.
  *
  * ```ts

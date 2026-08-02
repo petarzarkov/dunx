@@ -10,7 +10,7 @@ import {
 import type { JsonSchema } from './types.js';
 
 /**
- * Standard Schema v1 has no JSON Schema export — it is a *validation* interface,
+ * Standard Schema v1 has no JSON Schema export - it is a *validation* interface,
  * and deliberately nothing more. So conversion is per vendor, behind the vendor tag
  * the interface does carry, and zod is the vendor implemented here. Anything else
  * degrades to a permissive schema plus a warning: claiming to have documented a
@@ -89,7 +89,7 @@ interface RootConversion {
 /**
  * Converts, hoists `$defs` into `components/schemas`, and rewrites the refs that
  * pointed at them. zod emits `#/$defs/Tag`; OpenAPI wants
- * `#/components/schemas/Tag`. That is the whole difference — the definitions
+ * `#/components/schemas/Tag`. That is the whole difference - the definitions
  * themselves need no editing, which is why `.meta({ id })` is the only annotation
  * this package asks for.
  */
@@ -112,7 +112,7 @@ const convertRoot = async (
   if (!zod) {
     store.warn(
       `${fallbackName}: the schema is zod's, but zod could not be imported. ` +
-        'It is a peerDependency of @dunx/openapi — install it to get real schemas.',
+        'It is a peerDependency of @dunx/openapi - install it to get real schemas.',
     );
     return { root: undefined, unconverted: vendor };
   }
@@ -129,7 +129,7 @@ const convertRoot = async (
     });
   } catch (error) {
     store.warn(
-      `${fallbackName}: zod refused to convert this schema — ` +
+      `${fallbackName}: zod refused to convert this schema - ` +
         `${error instanceof Error ? error.message : String(error)}`,
     );
     return { root: undefined, unconverted: vendor };
@@ -137,7 +137,7 @@ const convertRoot = async (
 
   const { $schema: _schema, $defs: defs, ...rest } = emitted;
   const id = metaOf(schema)?.id;
-  // A cyclic schema refs the document root as `#`, which means "this schema" —
+  // A cyclic schema refs the document root as `#`, which means "this schema" -
   // true where zod emitted it, false once it is one entry among many. Hoisting is
   // what gives it a place to point at, so a self-ref forces it.
   const name = id ?? fallbackName;
@@ -202,7 +202,7 @@ export interface ObjectShape {
 
 /**
  * The parameter case. `?limit=10` is one parameter per property, so the root object
- * has to be read rather than referenced — a `$ref` cannot be split into
+ * has to be read rather than referenced - a `$ref` cannot be split into
  * `parameters` entries.
  */
 export const convertObject = async (

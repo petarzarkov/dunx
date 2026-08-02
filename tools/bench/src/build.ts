@@ -17,7 +17,7 @@ export const buildNodeEntries = async (
 
   // `naming` is by basename, so two entries with the same filename in different
   // directories overwrite each other. Bun reports that as "Multiple files share
-  // the same output path", which does not name the subjects — this does.
+  // the same output path", which does not name the subjects - this does.
   // `servers/nest/express.ts` against `servers/express.ts` is how it happened.
   const byBase = new Map<string, string[]>();
   for (const subject of nodeSubjects) {

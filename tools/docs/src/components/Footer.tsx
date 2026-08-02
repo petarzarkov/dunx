@@ -42,7 +42,7 @@ const Link = ({
 };
 
 /**
- * The landing page has no sidebar, so this is the only navigation on it — which
+ * The landing page has no sidebar, so this is the only navigation on it - which
  * is why every package is listed here rather than a curated few.
  */
 export const Footer = (): React.JSX.Element => (

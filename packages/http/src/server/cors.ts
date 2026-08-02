@@ -9,7 +9,7 @@ export type CorsOrigin =
 export interface CorsOptions {
   /**
    * `'*'` by default. A concrete string, a list, or a predicate all answer with the
-   * caller's own origin only when it is allowed — a request from anywhere else gets
+   * caller's own origin only when it is allowed - a request from anywhere else gets
    * no CORS headers at all, which is what makes the browser block it.
    */
   readonly origin?: CorsOrigin;
@@ -26,7 +26,7 @@ export interface CorsOptions {
 const ORIGIN = 'access-control-allow-origin';
 
 /**
- * `*` is illegal alongside credentials — a browser rejects the pair — so a
+ * `*` is illegal alongside credentials - a browser rejects the pair - so a
  * credentialed wildcard reflects the caller instead.
  */
 const allowedOrigin = (
@@ -83,7 +83,7 @@ export const withCors = (
 
 /**
  * `Bun.serve({ routes })` answers a method miss with 404, so a preflight cannot be
- * inferred — every CORS-enabled path gets its own `OPTIONS` handler, built at boot
+ * inferred - every CORS-enabled path gets its own `OPTIONS` handler, built at boot
  * from the methods that path actually declares.
  */
 export const preflight = (

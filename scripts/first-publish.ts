@@ -10,14 +10,14 @@
  *
  * `DUNX_VERSION` overrides the version, which defaults to 0.1.0. Publishing is
  * idempotent per package only in the sense that npm refuses a version that
- * already exists — rerunning after a partial failure will fail on the packages
+ * already exists - rerunning after a partial failure will fail on the packages
  * that already went up, which is safe but noisy. Set `DUNX_VERSION` or trim
  * `ORDER` to resume.
  *
  * It does the one thing a bare `npm publish` would get wrong: `workspace:*` is
  * not expanded by npm, so every internal range is rewritten to the concrete
  * version around the publish and the manifest restored afterwards. The assertion
- * is the same one `version.ts` runs — an unresolved range reaching npm breaks
+ * is the same one `version.ts` runs - an unresolved range reaching npm breaks
  * every consumer install.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -66,7 +66,7 @@ const assertResolved = (pkg: Manifest): void => {
 
 /**
  * The packument at `registry.npmjs.org/<name>` 404s for minutes after a brand-new
- * package is first published — CDN lag, not failure. The per-version document is
+ * package is first published - CDN lag, not failure. The per-version document is
  * immediate and is what makes this script resumable: a rerun after a partial
  * failure skips what already went up instead of failing on it.
  */
@@ -87,7 +87,7 @@ for (const dir of ORDER) {
   const pkg = JSON.parse(original) as Manifest;
 
   if (!DRY && (await alreadyPublished(pkg.name, VERSION))) {
-    console.log(`skipped ${pkg.name}@${VERSION} — already on npm`);
+    console.log(`skipped ${pkg.name}@${VERSION} - already on npm`);
     continue;
   }
 
@@ -112,7 +112,7 @@ for (const dir of ORDER) {
   try {
     const flags = DRY ? '--dry-run' : '';
     // stdio is inherited, not piped. npm's 2FA is a browser flow that prints a
-    // URL and then waits on the terminal — piping it makes the publish fail with
+    // URL and then waits on the terminal - piping it makes the publish fail with
     // EOTP no matter what the user does.
     // No --provenance: it requires GITHUB_ACTIONS and errors anywhere else.
     const proc = Bun.spawnSync(
@@ -126,7 +126,7 @@ for (const dir of ORDER) {
     if (proc.exitCode !== 0) {
       // `throw`, never `process.exit`: exit skips the `finally` below, which is
       // how an aborted run once left a manifest holding a resolved version where
-      // `workspace:*` belongs — and that got committed.
+      // `workspace:*` belongs - and that got committed.
       throw new Error(`${pkg.name} failed to publish`);
     }
     publishedThisRun += 1;
@@ -134,7 +134,7 @@ for (const dir of ORDER) {
       `${DRY ? 'would publish' : 'published'} ${pkg.name}@${VERSION}`,
     );
   } catch (error) {
-    console.error(`\nFAIL ${pkg.name} — stopping before the rest.`);
+    console.error(`\nFAIL ${pkg.name} - stopping before the rest.`);
     throw error;
   } finally {
     // Restore the source manifest, keeping the new version.

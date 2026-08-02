@@ -186,7 +186,7 @@ const Explorer = ({ model }: { model: PageModel }): JSX.Element => {
 
         <Paper withBorder p="xs" radius="sm">
           <Text fz="xs" c="dimmed" ta="center">
-            Served inline by @dunx/openapi — this page fetches nothing it was
+            Served inline by @dunx/openapi - this page fetches nothing it was
             not given.
           </Text>
         </Paper>

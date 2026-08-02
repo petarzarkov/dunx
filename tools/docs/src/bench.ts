@@ -134,7 +134,7 @@ export interface ScenarioHeadline {
   readonly focusPct: number;
   readonly focusRank: number;
   readonly subjectCount: number;
-  /** Fastest subject that is not the raw baseline — the framework dunx is up against. */
+  /** Fastest subject that is not the raw baseline - the framework dunx is up against. */
   readonly rivalLabel: string;
   readonly rivalPct: number;
   /** Strict ordering. `Where dunx loses` is driven by this and not by the verdict. */

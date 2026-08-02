@@ -119,7 +119,7 @@ describe('discoverRoutes()', () => {
     class Unrelated {}
 
     expect(discoverRoutes(new Unrelated())).toEqual([]);
-    // Orphan's own route is still its own — it is simply in nobody else's chain.
+    // Orphan's own route is still its own - it is simply in nobody else's chain.
     expect(routesOf(new Orphan())).toEqual(['GET /leaked']);
   });
 

@@ -121,7 +121,7 @@ describe('configured modules', () => {
     })
     class Root {}
 
-    // Client is bound by BareModule and by StoreModule — the flat container says so.
+    // Client is bound by BareModule and by StoreModule - the flat container says so.
     expect(await rejectionMessage(AppFactory.create(Root))).toContain(
       'Duplicate binding for Client',
     );

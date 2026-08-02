@@ -11,7 +11,7 @@ interface Prototyped {
  * `discoverRoutes` walks an instance's prototype chain looking for marked methods,
  * and `Object.create(Controller.prototype)` is that chain with nothing behind it:
  * `instance.constructor` still resolves to the class, every method is still
- * reachable, and no constructor — or dependency of one — has to exist. Generation
+ * reachable, and no constructor - or dependency of one - has to exist. Generation
  * reads metadata; it never calls a handler.
  */
 export const describeRoutes = (root: ModuleRef): readonly DiscoveredRoute[] => {

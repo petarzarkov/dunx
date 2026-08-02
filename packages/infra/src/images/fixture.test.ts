@@ -12,7 +12,7 @@ const SEED_PNG_BASE64 =
 export const seedPng = (): Uint8Array =>
   new Uint8Array(Buffer.from(SEED_PNG_BASE64, 'base64'));
 
-/** A 64x48 PNG — non-square, so aspect-ratio behaviour is observable. */
+/** A 64x48 PNG - non-square, so aspect-ratio behaviour is observable. */
 export const sourcePng = async (): Promise<Uint8Array> =>
   new Bun.Image(seedPng()).resize(64, 48, { fit: 'fill' }).png().bytes();
 
@@ -22,7 +22,7 @@ export const sourceJpeg = async (): Promise<Uint8Array> =>
 export const sourceWebp = async (): Promise<Uint8Array> =>
   new Bun.Image(await sourcePng()).webp().bytes();
 
-/** Header intact, pixel data cut in half — decodes only as far as metadata. */
+/** Header intact, pixel data cut in half - decodes only as far as metadata. */
 export const truncatedPng = async (): Promise<Uint8Array> => {
   const png = await sourcePng();
   return png.subarray(0, png.byteLength >> 1);

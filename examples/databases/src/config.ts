@@ -2,7 +2,7 @@ import { ConfigService, type ConfigSource } from '@dunx/core';
 
 /**
  * Three URLs and nothing else. Bun loads `.env` and `.env.local` itself, so there
- * is no loader here and no `dotenv` — `ConfigModule`'s whole contract is the one
+ * is no loader here and no `dotenv` - `ConfigModule`'s whole contract is the one
  * `validate` function below, and a hand-written one costs no dependency.
  */
 export interface DatabasesConfig {

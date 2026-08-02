@@ -4,7 +4,7 @@ import { Logger } from '@dunx/core';
 /**
  * A plain provider, two hops from the request, holding no reference to it. `require()`
  * reads the principal `SessionGuard` established for this request out of
- * `AsyncLocalStorage` — the reason `AuthContext` exists rather than the caller being
+ * `AsyncLocalStorage` - the reason `AuthContext` exists rather than the caller being
  * an extra parameter on every method between here and the route.
  */
 export class Audit {

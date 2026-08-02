@@ -370,7 +370,7 @@
 }
 
 /* Block, not flex. Mantine's Container centres with `margin-inline: auto`, and
-   an auto cross-axis margin cancels `align-items: stretch` — inside a Stack each
+   an auto cross-axis margin cancels `align-items: stretch` - inside a Stack each
    section shrank to fit-content instead of filling to its 1140px cap, so the
    ones without a wide code block sat visibly narrower than the ones with one. */
 .landing-sections {

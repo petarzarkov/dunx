@@ -1,13 +1,13 @@
 export interface Token<T> {
   readonly description: string;
-  // Phantom. Never assigned — it exists so Token<A> and Token<B> are distinct
+  // Phantom. Never assigned - it exists so Token<A> and Token<B> are distinct
   // types rather than both being { description: string }.
   readonly resolves?: T;
 }
 
 // Any constructor is callable: `@dunx/transform` records each class's parameter
 // types, and the container resolves them before calling `new`. `never[]` is what
-// makes an arbitrary signature assignable here — parameters are contravariant.
+// makes an arbitrary signature assignable here - parameters are contravariant.
 export type Ctor<T> = new (...args: never[]) => T;
 
 // An abstract class cannot be constructed, so it is usable as a token but not as

@@ -32,7 +32,7 @@ const pkg = (await Bun.file(join(CWD, 'package.json')).json()) as Manifest;
 
 if (pkg.type !== 'module') {
   throw new Error(
-    `${pkg.name ?? CWD}: package.json must set "type": "module" — dunx is ESM only.`,
+    `${pkg.name ?? CWD}: package.json must set "type": "module" - dunx is ESM only.`,
   );
 }
 

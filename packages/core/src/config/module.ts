@@ -18,7 +18,7 @@ export interface ConfigModuleOptions<T extends object> {
    */
   readonly validate: (env: ConfigSource) => T | Promise<T>;
   /**
-   * Defaults to `Bun.env`, which already carries `.env` and `.env.local` —
+   * Defaults to `Bun.env`, which already carries `.env` and `.env.local` -
    * Bun loads them itself, so there is no loader here and no `dotenv`.
    *
    * Pass a plain object in a test rather than mutating the process environment.
@@ -36,7 +36,7 @@ export interface ConfigModuleOptions<T extends object> {
    *
    * Without this, `inject: [ConfigService]` resolves to
    * `ConfigService<Record<string, unknown>>` and a factory declaring
-   * `ConfigService<AppConfig>` is rejected — parameters are contravariant, and
+   * `ConfigService<AppConfig>` is rejected - parameters are contravariant, and
    * the token carries no type argument to recover. A subclass is a distinct
    * runtime value, so it is both a precise token and a usable annotation.
    *
@@ -49,7 +49,7 @@ export class ConfigModule {
   /**
    * Validates once at boot and binds the result to `ConfigService`.
    *
-   * The container is flat, so there is no `isGlobal` to pass — one registration
+   * The container is flat, so there is no `isGlobal` to pass - one registration
    * is visible everywhere. And there is no `forRootAsync`: eager resolution
    * settles an async `validate` before any constructor runs.
    */

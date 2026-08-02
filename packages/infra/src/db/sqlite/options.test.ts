@@ -12,7 +12,7 @@ import { SqliteConnection } from './connection.js';
 import { SqliteOptions } from './options.js';
 
 /**
- * A `Date` is deliberately outside `SQLQueryBindings` — binding one is the whole
+ * A `Date` is deliberately outside `SQLQueryBindings` - binding one is the whole
  * point of the strict-mode tests, so the cast is the test setup, not a shortcut.
  */
 const dateBinding = (): SQLQueryBindings =>
@@ -32,7 +32,7 @@ const selectOne = <T extends Record<string, unknown> = Record<string, unknown>>(
   statement: string,
 ): T | null => raw.query<T, []>(statement).get();
 
-// A real file in an OS temp directory that is removed whole afterwards — WAL and
+// A real file in an OS temp directory that is removed whole afterwards - WAL and
 // SHM siblings included. Nothing file-backed is ever written inside the repo.
 let directory: string;
 let scratch: string;
@@ -139,7 +139,7 @@ describe('SqliteOptions.toDriverOptions', () => {
     expect(driver).not.toHaveProperty('create');
   });
 
-  it('carries no filename — the driver takes it positionally', () => {
+  it('carries no filename - the driver takes it positionally', () => {
     expect(
       new SqliteOptions({ schema: {}, filename: scratch }).toDriverOptions(),
     ).not.toHaveProperty('filename');

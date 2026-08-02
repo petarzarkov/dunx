@@ -20,7 +20,7 @@ const tokens = new Map<string, Token<RedisConnection>>();
  * lookup would miss. Same name in, same token out.
  *
  * A `Token` is not a constructor type, so a named connection cannot be a
- * constructor parameter — reach it with `inject()` in a field initialiser:
+ * constructor parameter - reach it with `inject()` in a field initialiser:
  *
  * ```ts
  * class Sessions {
@@ -37,7 +37,7 @@ export const redisConnection = (name: string): Token<RedisConnection> => {
 };
 
 /**
- * `useFactory` rather than `useClass: Redis`. Either would work — declaring
+ * `useFactory` rather than `useClass: Redis`. Either would work - declaring
  * `inject` here just makes the binding explicit and independent of the transform.
  *
  * A consumer's runtime plugin does skip `node_modules`, but that does not matter:
@@ -56,7 +56,7 @@ const connectionFrom = (
 
 /**
  * A named connection binds its own options token, so two of them do not collide
- * on `RedisOptions` — the flat container reports that as a duplicate binding.
+ * on `RedisOptions` - the flat container reports that as a duplicate binding.
  */
 const namedModule = (
   name: string,
@@ -82,7 +82,7 @@ const namedModule = (
 export class RedisModule {
   /**
    * Binds `RedisConnection` and `RedisOptions` for the default connection, or
-   * `redisConnection(init.name)` alone when `name` is set — a named registration
+   * `redisConnection(init.name)` alone when `name` is set - a named registration
    * deliberately does not also claim `RedisConnection`, so several can coexist
    * alongside one default.
    */
@@ -104,7 +104,7 @@ export class RedisModule {
    * machinery: the container resolves eagerly and awaits factories before any
    * constructor runs, so awaited config is already settled by then.
    *
-   * The factory may also **inject**, which a bare loader cannot — reading the url
+   * The factory may also **inject**, which a bare loader cannot - reading the url
    * off `ConfigService`, say:
    *
    * ```ts

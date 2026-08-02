@@ -1,7 +1,7 @@
 /**
  * The whole wire protocol: one JSON object, an event name, and a payload. It is
  * only ever read for a gateway that declares at least one `@OnMessage(event)`
- * handler — a gateway with only a raw `@OnMessage()` never parses anything.
+ * handler - a gateway with only a raw `@OnMessage()` never parses anything.
  */
 export interface Envelope {
   readonly event: string;
@@ -12,7 +12,7 @@ export const encode = (event: string, data: unknown): string =>
   JSON.stringify({ event, data });
 
 /**
- * `undefined` for anything that is not an envelope — binary frames, invalid JSON,
+ * `undefined` for anything that is not an envelope - binary frames, invalid JSON,
  * a non-object, or a missing `event`. Those fall through to the raw handler
  * instead of being rejected here.
  */

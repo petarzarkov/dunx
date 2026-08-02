@@ -22,7 +22,7 @@ const createReport = { body: z.object({ title: z.string().min(1) }) } as const;
 // `@UseGuards(AuthGuard)` at class scope rather than as global middleware: every
 // other route in this app is meant to be reachable without credentials, and a
 // global guard would challenge all of them. `@Roles('admin')` is a class-level
-// default overridden per method below — metadata decides nothing until a guard
+// default overridden per method below - metadata decides nothing until a guard
 // reads it.
 @Roles('admin')
 @UseGuards(AuthGuard)

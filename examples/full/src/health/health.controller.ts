@@ -12,7 +12,7 @@ export interface AreaStatus {
 
 /**
  * What is actually working right now. Redis is the only area that can be down
- * without stopping the app, so it is the only one that ever reports `degraded` —
+ * without stopping the app, so it is the only one that ever reports `degraded` -
  * everything else is in-process and either booted or the app did not.
  */
 @Controller('health')

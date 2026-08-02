@@ -1,7 +1,7 @@
 /**
  * What `PubSub` needs from something that carries a message to the other nodes:
  * publish, and subscribe. Nothing else, so anything that already talks to a
- * broker satisfies it — `@dunx/infra/redis`'s `RedisConnection` does, structurally
+ * broker satisfies it - `@dunx/infra/redis`'s `RedisConnection` does, structurally
  * and with no adapter, and so does a bare `Bun.RedisClient` pair.
  *
  * The return types are `unknown` rather than `Promise<void>` deliberately: Bun's
@@ -15,7 +15,7 @@ export interface PubSubRelay {
   publish(channel: string, message: string): unknown;
   /**
    * Deliver every message published to `channel` to `listener`. Called once, with
-   * one channel — pattern subscription is not used, because Bun's `psubscribe`
+   * one channel - pattern subscription is not used, because Bun's `psubscribe`
    * does not work (see docs/bun-apis.md).
    */
   subscribe(channel: string, listener: (message: string) => void): unknown;
@@ -36,7 +36,7 @@ export interface RelayOptions {
    * The one broker channel every topic's frames travel on.
    *
    * One channel rather than one per topic, because a node cannot know which
-   * topics its sockets joined — `socket.subscribe()` goes straight into Bun — and
+   * topics its sockets joined - `socket.subscribe()` goes straight into Bun - and
    * `psubscribe` is unusable. The cost is that every node reads every relayed
    * frame and drops the ones for topics it has no local subscriber on, which is a
    * `server.publish` returning `0`. Two apps sharing a Redis need two channels.
@@ -52,8 +52,8 @@ export interface RelayOptions {
    */
   readonly onError?: (error: unknown, phase: RelayPhase) => void;
   /**
-   * What to do when the **boot** subscribe fails. Publishing recovers on its own —
-   * every publish retries the broker — but a failed subscribe used to be retried
+   * What to do when the **boot** subscribe fails. Publishing recovers on its own -
+   * every publish retries the broker - but a failed subscribe used to be retried
    * by nothing, so the node stayed permanently deaf to other nodes while still
    * looking healthy.
    *
@@ -80,7 +80,7 @@ export const defaultRelayError = (error: unknown, phase: RelayPhase): void => {
 
 /**
  * One relayed publish: which process published it, which topic it belongs to, and
- * the frame itself. `origin` is the whole duplicate-delivery defence — the broker
+ * the frame itself. `origin` is the whole duplicate-delivery defence - the broker
  * echoes a publish back to the publisher, and fanning that out locally a second
  * time would give every client on the originating node the message twice.
  */

@@ -6,10 +6,10 @@
  *
  * What differs is only how the handler reaches the database.
  *
- * - `async` — the shape someone writes when the repository might one day be
+ * - `async` - the shape someone writes when the repository might one day be
  *   Postgres: `await` drizzle's thenable query builder, an `async` handler, and
  *   `transaction()` with an `async` callback.
- * - `sync` — `.get()`/`.all()`/`.run()` and `transactionSync()`, with no `async`
+ * - `sync` - `.get()`/`.all()`/`.run()` and `transactionSync()`, with no `async`
  *   and no `await` between `Bun.serve` and the row.
  *
  * The two controllers are written out in full rather than branching inside one
@@ -53,7 +53,7 @@ const sync = process.env['DB_MODE'] === 'sync';
 
 /**
  * The two rows `/write` moves an amount between, and the one `/read` selects.
- * Updates rather than inserts, so the table stays 500 rows for the whole run — an
+ * Updates rather than inserts, so the table stays 500 rows for the whole run - an
  * insert-per-request would grow the work under later rounds and turn drift into an
  * apparent difference between modes.
  */

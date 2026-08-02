@@ -30,8 +30,8 @@ let db: BunSQLiteDatabase<Schema>;
 let dir: string;
 
 /**
- * Fixtures are plain `.js` with no imports, so a directory outside the repo — which
- * cannot resolve `drizzle-orm` — is still a valid seed folder. `db.run` takes raw
+ * Fixtures are plain `.js` with no imports, so a directory outside the repo - which
+ * cannot resolve `drizzle-orm` - is still a valid seed folder. `db.run` takes raw
  * SQL text, which is all a fixture needs.
  */
 const seeder = (name: string, body: string): Promise<void> =>
@@ -313,7 +313,7 @@ describe('a seed that fails', () => {
 
     const error = await rejection(runSeeds(db, { dir }));
     expect(error.message).toBe('seed blew up');
-    // Both halves of the same transaction — and the insert is before an await,
+    // Both halves of the same transaction - and the insert is before an await,
     // which is exactly what drizzle's own bun-sqlite transaction cannot undo.
     expect(labels()).toEqual([]);
     expect(journaled()).toEqual([]);

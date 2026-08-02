@@ -13,7 +13,7 @@ const tempRoot = (): string =>
 /**
  * A consumer with constructor injection. `bun test` runs from source with no
  * `@dunx/transform` preload, so the dependency record the plugin would have
- * appended is written by hand — exactly as core's own dynamic-module test does.
+ * appended is written by hand - exactly as core's own dynamic-module test does.
  */
 class Uploads {
   constructor(private readonly storage: Storage) {}

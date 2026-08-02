@@ -9,12 +9,12 @@ import * as schema from '../database/schema.js';
  * `bunx @better-auth/cli generate` and then `drizzle-kit`, which own the SQL.
  *
  * The column names are drizzle's defaults for the schema in `database/auth.schema.ts`
- * — camelCase, because that file passes no explicit names.
+ * - camelCase, because that file passes no explicit names.
  */
 /**
  * One statement per entry, not one template with four. `db.run` goes through
  * `bun:sqlite`'s `prepare`, which compiles a single statement and silently drops
- * whatever follows the first semicolon — the table after it simply never exists.
+ * whatever follows the first semicolon - the table after it simply never exists.
  */
 const TABLES = [
   sql`CREATE TABLE IF NOT EXISTS user (
@@ -75,7 +75,7 @@ export class AuthTables implements OnInit {
   /**
    * `onInit`, not the module factory: `betterAuth()` opens no connection and issues
    * no query when it is built, so the tables only have to exist before the first
-   * request — and this runs before `listen()` binds.
+   * request - and this runs before `listen()` binds.
    */
   onInit(): void {
     for (const table of TABLES) this.db.run(table);

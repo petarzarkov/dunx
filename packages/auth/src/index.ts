@@ -13,6 +13,6 @@ export {
 } from './options.js';
 export { bunPassword } from './password.js';
 // `secondaryStorage` over `Bun.RedisClient`. It stays on the main entry because it
-// imports nothing at runtime — unlike `@dunx/auth/drizzle`, which pulls
+// imports nothing at runtime - unlike `@dunx/auth/drizzle`, which pulls
 // better-auth's drizzle adapter and therefore `drizzle-orm` in behind it.
 export { redisStorage, type RedisStore } from './redis.js';

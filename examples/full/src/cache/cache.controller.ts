@@ -26,7 +26,7 @@ const putSession = { params: SessionKey, body: StoreSession } as const;
 
 /**
  * Every route here answers **503 with the connection error's own message** when
- * no Redis is running, rather than 500 — a cache that is not up is a degraded
+ * no Redis is running, rather than 500 - a cache that is not up is a degraded
  * service, not a bug, and `bun start` must still boot without one.
  */
 @Controller('cache')

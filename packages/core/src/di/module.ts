@@ -3,7 +3,7 @@ import type { Registration } from './provider.js';
 import type { Ctor } from './token.js';
 
 // Symbol.for, not Symbol: two copies of @dunx/core in a dependency tree still
-// agree on the key. Same marker technique as route discovery — no accumulator.
+// agree on the key. Same marker technique as route discovery - no accumulator.
 const MODULE = Symbol.for('dunx.module');
 
 /** A bare class is shorthand for binding it to itself. */
@@ -13,7 +13,7 @@ export type ModuleClass = abstract new (...args: never[]) => object;
 
 export interface ModuleOptions {
   // Traversal only. Importing a module registers its providers into the same flat
-  // container — it does not create a visibility boundary.
+  // container - it does not create a visibility boundary.
   readonly imports?: readonly ModuleRef[];
   // Registered exactly like providers. Kept separate so an HTTP adapter can find
   // which instances to scan for routes; core itself only constructs them.
@@ -22,7 +22,7 @@ export interface ModuleOptions {
 }
 
 /**
- * A configured module — what a `static forRoot(options)` returns. The
+ * A configured module - what a `static forRoot(options)` returns. The
  * registrations it carries are merged with whatever the class's own `@Module`
  * decorator declares, so a module can have a static core plus configured extras.
  *
@@ -102,7 +102,7 @@ const resolveRef = (ref: ModuleRef): ResolvedModule => {
  *
  * A bare class is visited once however many modules import it, which is what makes
  * a diamond import register once and a cycle terminate. Two *different*
- * configurations of the same module are deliberately not deduped — both register,
+ * configurations of the same module are deliberately not deduped - both register,
  * so the duplicate-token check reports them by name instead of silently keeping
  * whichever was reached first.
  */

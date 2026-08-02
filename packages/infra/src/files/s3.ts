@@ -19,7 +19,7 @@ export class S3StorageOptions extends StorageOptions {
   /**
    * Passed straight to `Bun.S3Client`. Anything omitted falls back to the
    * environment (`S3_BUCKET`/`AWS_BUCKET`, `AWS_ACCESS_KEY_ID`, …), which is how
-   * Bun resolves credentials — this package adds no resolution of its own.
+   * Bun resolves credentials - this package adds no resolution of its own.
    */
   readonly client: S3Options;
   /** Prepended to every key, so one bucket can host several roots. */
@@ -37,7 +37,7 @@ export class S3StorageOptions extends StorageOptions {
 }
 
 /**
- * `Bun.S3Client` — no `@aws-sdk`, no signing code of our own.
+ * `Bun.S3Client` - no `@aws-sdk`, no signing code of our own.
  *
  * Keys are relative to the configured prefix in both directions: what `write()`
  * takes is what `list()` and `stat()` give back, so moving a bucket under a
@@ -95,7 +95,7 @@ export class S3Storage extends Storage {
   async readStream(key: string): Promise<ReadableStream<Uint8Array>> {
     const file = this.#client.file(this.objectKey(key));
     // One HEAD, so a missing object rejects here instead of erroring mid-stream.
-    // The GET has not started yet — the returned stream is still lazy.
+    // The GET has not started yet - the returned stream is still lazy.
     if (!(await file.exists())) throw new FileNotFoundError(key);
     return file.stream();
   }
@@ -127,7 +127,7 @@ export class S3Storage extends Storage {
         ? this.#prefix
         : `${this.#prefix}${normalizeKey(options.prefix)}`;
     // S3 has no glob, so the pattern is applied to the keys it returns. That
-    // also means maxKeys cannot be derived from `limit` when a glob is in play —
+    // also means maxKeys cannot be derived from `limit` when a glob is in play -
     // the page would be capped before the filter ran.
     const matcher =
       options?.glob === undefined ? undefined : new Bun.Glob(options.glob);
@@ -179,7 +179,7 @@ export class S3Storage extends Storage {
   }
 
   /**
-   * Synchronous and offline — signing is HMAC over the request, so this needs
+   * Synchronous and offline - signing is HMAC over the request, so this needs
    * credentials but never the network.
    */
   presign(key: string, options?: PresignOptions): string {

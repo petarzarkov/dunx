@@ -71,8 +71,8 @@ const Headlines = ({ model }: { model: BenchModel }): React.JSX.Element => {
         label="dunx vs raw Bun.serve"
         value={
           pcts.length === 0
-            ? '—'
-            : `${decimal(Math.min(...pcts), 1)}–${decimal(Math.max(...pcts), 1)}%`
+            ? '-'
+            : `${decimal(Math.min(...pcts), 1)}-${decimal(Math.max(...pcts), 1)}%`
         }
         hint={`of the ceiling, across ${scenarios.length} scenarios. The rest is framework overhead.`}
       />
@@ -83,10 +83,10 @@ const Headlines = ({ model }: { model: BenchModel }): React.JSX.Element => {
       />
       <Stat
         label="Cold start"
-        value={startup ? `${decimal(startup.ratio, 2)}x` : '—'}
+        value={startup ? `${decimal(startup.ratio, 2)}x` : '-'}
         hint={
           startup
-            ? `${decimal(startup.focusMs, 1)} ms against ${startup.baselineLabel}'s ${decimal(startup.baselineMs, 1)} ms — rank ${startup.rank} of ${startup.total}. dunx's clearest loss on this page.`
+            ? `${decimal(startup.focusMs, 1)} ms against ${startup.baselineLabel}'s ${decimal(startup.baselineMs, 1)} ms - rank ${startup.rank} of ${startup.total}. dunx's clearest loss on this page.`
             : 'No startup samples in this run.'
         }
       />
@@ -172,7 +172,7 @@ const Losses = ({ model }: { model: BenchModel }): React.JSX.Element | null => {
       <List size="sm" spacing={6}>
         {behind.map((scenario) => (
           <List.Item key={scenario.id}>
-            <b>{scenario.title}</b> — {scenario.rivalLabel} reaches{' '}
+            <b>{scenario.title}</b> - {scenario.rivalLabel} reaches{' '}
             {decimal(scenario.rivalPct, 1)}% of raw <code>Bun.serve</code>, dunx{' '}
             {decimal(scenario.focusPct, 1)}%. dunx places {scenario.focusRank}{' '}
             of {scenario.subjectCount}.
@@ -180,16 +180,16 @@ const Losses = ({ model }: { model: BenchModel }): React.JSX.Element | null => {
         ))}
         {startup && startup.ratio > 1 && (
           <List.Item>
-            <b>Cold start</b> — {decimal(startup.focusMs, 1)} ms against{' '}
+            <b>Cold start</b> - {decimal(startup.focusMs, 1)} ms against{' '}
             {startup.baselineLabel}&apos;s {decimal(startup.baselineMs, 1)} ms,
             roughly {decimal(startup.ratio, 1)}x. That is the compiler preload
             parsing every loaded module plus eager DI resolution and route
-            discovery — paid once at boot, and a real cost on a short-lived
+            discovery - paid once at boot, and a real cost on a short-lived
             process.
           </List.Item>
         )}
         <List.Item>
-          A gap under {NOISE_PCT} points is noise on this setup — that is why
+          A gap under {NOISE_PCT} points is noise on this setup - that is why
           the scoreboard above reads some of these as ties. The rest are wider
           than that and are real.
         </List.Item>
@@ -224,7 +224,7 @@ const Caveats = ({ model }: { model: BenchModel }): React.JSX.Element => (
       </List.Item>
       <List.Item>
         Compare within a runtime first. A Bun subject beating a Node one is a
-        statement about Bun, not about the framework — which is why the same
+        statement about Bun, not about the framework - which is why the same
         Hono application is measured on both, and why the colour below encodes
         the runtime.
       </List.Item>
@@ -306,8 +306,8 @@ export const Benchmarks = (): React.JSX.Element => {
             worth having is the gap to raw <code>Bun.serve</code>: dunx is a
             layer on that exact API, so the gap is dunx&apos;s own overhead and
             nothing else. Rows are ordered by measured throughput, losses
-            included, and request logging — which is on by default and which no
-            other subject does — is its own row rather than folded into the
+            included, and request logging - which is on by default and which no
+            other subject does - is its own row rather than folded into the
             framework&apos;s number.
           </Text>
           <Text size="xs" c="dimmed" ff="monospace">

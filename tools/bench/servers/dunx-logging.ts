@@ -19,12 +19,12 @@ import { echo, jsonPayload, personSchema, PLAINTEXT, port } from './shared.js';
  * `dunx` is the framework, `dunx-logging` is the framework plus a structured line
  * per request written to stdout.
  *
- * Its stdout is `/dev/null`, so this does not measure terminal rendering — but it
+ * Its stdout is `/dev/null`, so this does not measure terminal rendering - but it
  * does measure building the entry, `JSON.stringify`, and a real `write(2)`.
  *
  * It used to be a pipe **nobody read**, which is not a measurement of dunx at all:
  * 64 KiB in, the pipe is full, and the server parks on every further write. That
- * alone was worth 2.68 µs/request — see `bun run logging` and ARCHITECTURE.md.
+ * alone was worth 2.68 µs/request - see `bun run logging` and ARCHITECTURE.md.
  */
 class Greeter {
   text(): string {

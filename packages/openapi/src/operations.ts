@@ -18,7 +18,7 @@ export const bearerScheme: SecuritySchemeObject = Object.freeze({
   scheme: 'bearer',
   description:
     'Whatever the guards in front of these routes accept. dunx does not ship an ' +
-    'authentication scheme — this documents that a guard is there.',
+    'authentication scheme - this documents that a guard is there.',
 });
 
 /** `#/components/schemas/ValidationError`, registered on first use. */

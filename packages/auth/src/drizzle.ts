@@ -10,12 +10,12 @@ import {
  * Restated structurally rather than imported, for the same reason `@dunx/http`
  * restates Standard Schema: it keeps `@dunx/auth`'s dependency list at `@dunx/core`
  * and `@dunx/http`, and it means a bare `drizzle({ client, schema })` handle works
- * here too. An `@dunx/infra/db` connection satisfies it with no adapter in between —
+ * here too. An `@dunx/infra/db` connection satisfies it with no adapter in between -
  * `dialect` is exactly that union and `db` is exactly `unknown`.
  */
 export interface DrizzleSource {
   readonly dialect: 'postgres' | 'mysql' | 'mariadb' | 'sqlite';
-  /** The drizzle handle — `BunSQLiteDatabase` or `BunSQLDatabase`. */
+  /** The drizzle handle - `BunSQLiteDatabase` or `BunSQLDatabase`. */
   readonly db: unknown;
 }
 
@@ -45,7 +45,7 @@ const PROVIDERS: Readonly<
  *
  * The `provider` comes from the connection's own dialect, so swapping `bun:sqlite`
  * for `Bun.SQL` needs no edit at the call site. The schema does not have to be passed
- * either — `@dunx/infra/db` builds its handle with `drizzle({ client, schema })` and
+ * either - `@dunx/infra/db` builds its handle with `drizzle({ client, schema })` and
  * the adapter reads `db._.fullSchema`, so the better-auth tables being in the app's
  * schema object is the whole requirement.
  *

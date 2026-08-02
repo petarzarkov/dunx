@@ -5,7 +5,7 @@ import { LogLevel } from './types.js';
 
 /**
  * The default binding for `Logger`, so this is what an app that imported no logging
- * module actually gets — including `@dunx/http`'s request logging, which is on by
+ * module actually gets - including `@dunx/http`'s request logging, which is on by
  * default. It writes one JSON line per entry and nothing more; `@dunx/infra/logger`
  * replaces it with `@arkv/logger` for sanitizing, masking and rotation.
  */
@@ -19,7 +19,7 @@ const original = { log: console.log, error: console.error };
 /**
  * Entries at `info` and below are batched into one write per event-loop turn, so
  * a captured call may carry several lines and the buffer has to be flushed before
- * the real `console` comes back — otherwise the tail of a test lands on the
+ * the real `console` comes back - otherwise the tail of a test lands on the
  * terminal instead of in `out`.
  */
 const capture = (run: () => void): Captured => {
@@ -193,7 +193,7 @@ describe('ConsoleLogger', () => {
 });
 
 /**
- * One `console.log` per request measured at 1.84 µs on `bun run logging` — the
+ * One `console.log` per request measured at 1.84 µs on `bun run logging` - the
  * single largest component of request logging. Batching is what removes it, and
  * the durability the batch gives up is bounded by the two rules asserted here.
  */

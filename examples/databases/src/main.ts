@@ -11,7 +11,7 @@ import { Widgets } from './sqlite/widgets.service.js';
 
 /**
  * Four containers, one after another, because each binds its own `DbConnection`
- * and the container is flat — two backends in one app would be a duplicate token,
+ * and the container is flat - two backends in one app would be a duplicate token,
  * which dunx rejects at boot naming both modules. Running an app per dialect is
  * also what a real deployment does.
  *
@@ -73,7 +73,7 @@ const sqliteSync = async (logger: Logger): Promise<void> => {
 const postgres = async (logger: Logger, url: string): Promise<void> => {
   const why = await reachable(url);
   if (why !== null) {
-    logger.info(`postgres        skipping — ${why}`);
+    logger.info(`postgres        skipping - ${why}`);
     return;
   }
 
@@ -99,7 +99,7 @@ const postgres = async (logger: Logger, url: string): Promise<void> => {
 const mysql = async (logger: Logger, url: string): Promise<void> => {
   const why = await reachable(url);
   if (why !== null) {
-    logger.info(`mysql           skipping — ${why}`);
+    logger.info(`mysql           skipping - ${why}`);
     return;
   }
 
@@ -124,13 +124,13 @@ const mysql = async (logger: Logger, url: string): Promise<void> => {
 
 const run = async (): Promise<void> => {
   /**
-   * A timer, for the event loop, and not decoration — without it this script exits
+   * A timer, for the event loop, and not decoration - without it this script exits
    * **silently with code 0** in the middle of the MySQL section.
    *
    * On Bun 1.3.14 an in-flight `Bun.SQL` query on the **MySQL** adapter does not
    * hold a reference on the event loop. A long-running server never notices,
    * because `Bun.serve` holds one; a script like this has nothing else pending, so
-   * the loop drains while the query is outstanding and the process just stops —
+   * the loop drains while the query is outstanding and the process just stops -
    * no error, no rejection, no output, exit 0. Measured: with this interval the
    * MySQL section completes every time, without it never. The Postgres adapter and
    * `bun:sqlite` are unaffected. See docs/bun-apis.md.

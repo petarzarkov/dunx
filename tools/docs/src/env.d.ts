@@ -10,7 +10,7 @@ declare module '*.css';
  * The generated model is imported with Vite's `?raw` suffix, so the module is
  * the file's *text*. TypeScript would otherwise resolve a `.json` import to its
  * parsed shape, which is both the wrong type and a megabyte-wide literal for
- * the checker to carry — hence `resolveJsonModule: false` here and this
+ * the checker to carry - hence `resolveJsonModule: false` here and this
  * declaration in its place. Declared locally rather than pulled in from
  * `vite/client`, which would mean overriding the root tsconfig's `types`.
  */

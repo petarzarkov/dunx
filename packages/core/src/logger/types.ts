@@ -1,5 +1,5 @@
 /**
- * Frozen object plus an indexed-access union, not an `enum` — see CLAUDE.md and
+ * Frozen object plus an indexed-access union, not an `enum` - see CLAUDE.md and
  * `@dunx/http`'s `HttpStatusCode`. One exported name serves as both the value
  * (`LogLevel.DEBUG`) and the type (`level: LogLevel`), and it erases cleanly
  * instead of emitting a runtime object with reverse mappings.
@@ -16,7 +16,7 @@ export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 
 /**
  * Ascending severity. Position in this array is what `level` filtering compares,
- * and the backing logger compares against its **own** copy — so these names must
+ * and the backing logger compares against its **own** copy - so these names must
  * stay identical to `@arkv/logger`'s. A name it does not know indexes to `-1`,
  * which sits below every real level, so drift disables filtering rather than
  * raising. `@dunx/infra`'s logger tests assert the two arrays are equal.

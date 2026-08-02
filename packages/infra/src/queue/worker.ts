@@ -26,7 +26,7 @@ export interface WorkerAppOptions {
 
 /**
  * What a worker process holds. `create` discovers and validates; `start` is what
- * opens the connections — so a wiring mistake fails before anything consumes.
+ * opens the connections - so a wiring mistake fails before anything consumes.
  */
 export interface WorkerApp extends App {
   /** Every handler discovered, after the `queues` filter. */
@@ -104,7 +104,7 @@ class WorkerApplication implements WorkerApp {
   /**
    * Not delegated to the core app: every worker has to stop before providers tear
    * down, or a handler still running would find its database connection closed
-   * underneath it. `close()` without `force` is what makes that safe — bullmq stops
+   * underneath it. `close()` without `force` is what makes that safe - bullmq stops
    * fetching and waits for what is already running.
    */
   async shutdown(): Promise<void> {
@@ -143,8 +143,8 @@ class WorkerApplication implements WorkerApp {
       this.#logger.debug(`Job completed ${describeJob(job)}`),
     );
     worker.on('failed', (job, error) => {
-      // A job can fail before bullmq has one to report — a lock lost to a stall
-      // check, say — and the queue is still worth naming.
+      // A job can fail before bullmq has one to report - a lock lost to a stall
+      // check, say - and the queue is still worth naming.
       const subject = job ? describeJob(job) : `a job on ${queue}`;
       this.#logger.error(`Job failed ${subject}`, error);
     });
@@ -157,7 +157,7 @@ class WorkerApplication implements WorkerApp {
 
 /**
  * Read off the module graph rather than by resolving the token, because
- * `QueueOptions` is a class whose constructor argument is optional — so an unbound
+ * `QueueOptions` is a class whose constructor argument is optional - so an unbound
  * container would **self-bind** it and hand back defaults instead of failing. A
  * worker silently pointed at `localhost` is worse than one that will not boot.
  */
@@ -180,8 +180,8 @@ const assertQueueModule = (modules: readonly ResolvedModule[]): void => {
 /**
  * The entrypoint of a worker process.
  *
- * It boots the same container an HTTP process would — the root module it is given
- * may be the app's own, or a narrower one that leaves the controllers out — then
+ * It boots the same container an HTTP process would - the root module it is given
+ * may be the app's own, or a narrower one that leaves the controllers out - then
  * finds the handlers by inspection and consumes for them:
  *
  * ```ts

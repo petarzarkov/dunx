@@ -18,12 +18,12 @@ import { Widgets } from './widgets.service.js';
  * `DbModule.forRoot` infers the injection token from. A flag would leave that
  * inference with a union to guess at.
  *
- * Only one of the two may be imported at a time — the container is flat and throws
+ * Only one of the two may be imported at a time - the container is flat and throws
  * on a duplicate token, and both bind `DbConnection`.
  */
 export class SqliteModule {
   /**
-   * Asynchronous mode — the default, and what to pick if the app might move to
+   * Asynchronous mode - the default, and what to pick if the app might move to
    * Postgres later, since every call is already awaited. The handle bound is
    * drizzle's `BunSQLiteDatabase`.
    *
@@ -55,7 +55,7 @@ export class SqliteModule {
    * comes off the validated config, which is the one thing a zero-argument
    * `forRoot` cannot reach.
    *
-   * `forRootAsync` takes the token as its first argument, unlike `forRoot` — which
+   * `forRootAsync` takes the token as its first argument, unlike `forRoot` - which
    * class the handle is bound under only becomes known once the factory has
    * produced the options, too late to register a provider under it.
    *

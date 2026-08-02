@@ -123,7 +123,7 @@ describe('SessionGuard', () => {
       return ok();
     });
     expect(seen).toBe(caller);
-    // The scope closes with the request — nothing leaks to the next one.
+    // The scope closes with the request - nothing leaks to the next one.
     expect(context.current()).toBeUndefined();
   });
 

@@ -49,7 +49,7 @@ export interface HttpOptions extends AppOptions {
    */
   readonly websocket?: SocketOptions;
   /**
-   * Multi-node websocket fan-out. Absent — the default — means `PubSub` publishes
+   * Multi-node websocket fan-out. Absent - the default - means `PubSub` publishes
    * to this process only, which is exactly Bun's native pub/sub and costs nothing.
    *
    * `new RedisRelay({ url })` is the batteries-included one. Anything with a
@@ -64,7 +64,7 @@ export interface HttpOptions extends AppOptions {
 
 /**
  * Everything below `listen()` configures the route table, which is built exactly
- * once — when the server binds. Calling any of them afterwards throws rather than
+ * once - when the server binds. Calling any of them afterwards throws rather than
  * being quietly dropped.
  */
 export interface HttpApp extends App {
@@ -76,7 +76,7 @@ export interface HttpApp extends App {
   setting<K extends keyof AppSettings>(key: K): AppSettings[K];
   /** Mounts an `OPTIONS` preflight per path. Last call wins. */
   enableCors(options?: CorsOptions): this;
-  /** The same `inject(ClientAddress)` singleton — honours `'trust proxy'`. */
+  /** The same `inject(ClientAddress)` singleton - honours `'trust proxy'`. */
   clientIp(req: BunRequest): string | undefined;
   /** Every gateway path this app upgrades on, exactly as mounted. */
   readonly gatewayPaths: readonly string[];
@@ -164,7 +164,7 @@ export class HttpApplication implements HttpApp {
 
   /**
    * The one `Bun.serve` call. A gateway's upgrade is a native `GET` route in the
-   * same table, so Bun's router — not a hand-written `fetch` fallback — is what
+   * same table, so Bun's router - not a hand-written `fetch` fallback - is what
    * matches an upgrade, and no `fetch` handler is needed at all.
    */
   async listen(port = this.#port): Promise<string> {
@@ -188,7 +188,7 @@ export class HttpApplication implements HttpApp {
 
     // Bun's own 404 never reaches the middleware chain, so an unmatched path is
     // invisible to request logging. This runs only after Bun has matched nothing,
-    // so Bun is still the router — it just puts the global middleware in front of
+    // so Bun is still the router - it just puts the global middleware in front of
     // the 404 and returns it in the framework's error shape.
     const fetch = buildFallback(middleware, this.#onError, this.#cors);
 
@@ -233,7 +233,7 @@ export class HttpApplication implements HttpApp {
   }
 
   // Not delegated to the core app: the server has to stop before providers tear
-  // down, so the signal handler must land here. With a gateway the stop is forced —
+  // down, so the signal handler must land here. With a gateway the stop is forced -
   // a graceful stop waits for open connections and a WebSocket does not close on
   // its own, so it would hang. Those clients see a 1006 close.
   async shutdown(): Promise<void> {
@@ -269,7 +269,7 @@ export class HttpApplication implements HttpApp {
     }));
   }
 
-  // #started rather than #server, which shutdown() clears — a hook called after
+  // #started rather than #server, which shutdown() clears - a hook called after
   // the server stopped is just as ineffective as one called while it ran.
   #assertNotStarted(hook: string): void {
     if (!this.#started) return;

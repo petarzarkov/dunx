@@ -45,7 +45,7 @@ describe('what is injected', () => {
     expect(connection.dialect).toBe(Dialect.SQLITE);
   });
 
-  it('exposes no query methods of its own — those are drizzle’s', () => {
+  it('exposes no query methods of its own - those are drizzle’s', () => {
     const holder = connection as unknown as Record<string, unknown>;
     expect(holder['sql']).toBeUndefined();
     expect(holder['all']).toBeUndefined();
@@ -135,7 +135,7 @@ describe('querying through drizzle', () => {
 
   /**
    * The relational API only exists when the schema generic reached the handle. It
-   * typechecks here, which is the assertion — with the default `TSchema` drizzle
+   * typechecks here, which is the assertion - with the default `TSchema` drizzle
    * types `query` as a `DrizzleTypeError`.
    */
   it('exposes the relational query API, which proves the schema generic arrived', async () => {

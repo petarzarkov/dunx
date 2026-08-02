@@ -46,7 +46,7 @@ export class Images {
    *
    * Throws `ImageError` with `UNKNOWN_FORMAT` when no signature matches and
    * `FORMAT_NOT_ALLOWED` when the container is excluded by `allowedFormats`.
-   * Nothing is decoded yet — a structurally intact header with corrupt pixels
+   * Nothing is decoded yet - a structurally intact header with corrupt pixels
    * only fails once a terminal runs, or immediately via {@link verify}.
    */
   async load(source: ImageSource): Promise<ImagePipeline> {

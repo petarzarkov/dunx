@@ -1,7 +1,7 @@
 /**
  * What `write()` accepts. A `ReadableStream` is listed deliberately: it is the
  * one input neither `Bun.write` nor `S3Client.write` takes, and the backends
- * route it through a sink instead of buffering it — see stream.ts.
+ * route it through a sink instead of buffering it - see stream.ts.
  */
 export type WriteData =
   | string
@@ -16,7 +16,7 @@ export interface FileStat {
   /** MIME type. Derived from the key's extension on both backends. */
   readonly type: string;
   readonly lastModified: Date;
-  /** S3 only — the local filesystem stores no entity tag. */
+  /** S3 only - the local filesystem stores no entity tag. */
   readonly etag?: string | undefined;
 }
 
@@ -48,8 +48,8 @@ export interface PresignOptions {
 }
 
 /**
- * The one contract both backends satisfy. Inject this — never `LocalStorage` or
- * `S3Storage` — and swapping the backend is a change to one `forRoot` call.
+ * The one contract both backends satisfy. Inject this - never `LocalStorage` or
+ * `S3Storage` - and swapping the backend is a change to one `forRoot` call.
  *
  * An abstract class, not an interface, because a dunx constructor parameter has
  * to name something that exists at runtime for `@dunx/transform` to record it.
@@ -75,7 +75,7 @@ export abstract class Storage {
 
   /**
    * Async iterable rather than an array, so a bucket with a million objects is
-   * paged rather than accumulated. Ordering is whatever the backend gives —
+   * paged rather than accumulated. Ordering is whatever the backend gives -
    * lexicographic on S3, filesystem order for a glob scan.
    */
   abstract list(options?: ListOptions): AsyncIterable<ListEntry>;
@@ -93,7 +93,7 @@ export abstract class Storage {
 
 /**
  * Configuration, and the backend it selects. `FilesModule` binds one of these
- * and asks it for the `Storage` — so adding a backend means adding a subclass
+ * and asks it for the `Storage` - so adding a backend means adding a subclass
  * here, not a branch in the module.
  */
 export abstract class StorageOptions {

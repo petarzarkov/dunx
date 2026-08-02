@@ -14,7 +14,7 @@ import { UsersService } from './users.service.js';
 export class UsersController {
   constructor(private readonly users: UsersService) {}
 
-  // `Input<typeof listUsers>` has to be written out — a standard method decorator
+  // `Input<typeof listUsers>` has to be written out - a standard method decorator
   // can check a parameter's type but cannot contextually type an unannotated one.
   // Every field type still comes from the schema, so nothing is declared twice.
   @Get('/', listUsers)
@@ -35,7 +35,7 @@ export class UsersController {
     return user;
   }
 
-  // No req.json(), no Response.json(), no status — the body arrives validated and
+  // No req.json(), no Response.json(), no status - the body arrives validated and
   // typed, and 201 is the POST default.
   @Post('/', createUser)
   create(input: Input<typeof createUser>): Promise<User> {

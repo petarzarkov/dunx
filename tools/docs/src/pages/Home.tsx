@@ -65,7 +65,7 @@ const Integrations = (): React.JSX.Element => (
         <Text c="dimmed" maw={640}>
           Where Bun ships no primitive for a hard problem, dunx integrates the
           best-in-class library instead of competing with it. All four are peer
-          dependencies — you install them and own the version.
+          dependencies - you install them and own the version.
         </Text>
       </Stack>
       <Group gap="sm">
@@ -83,7 +83,7 @@ const Integrations = (): React.JSX.Element => (
       <Text size="sm" c="dimmed">
         There is no dunx ORM, no dunx validator, no dunx auth flow and no dunx
         job queue. Where a library offers a Bun-native driver, that driver is
-        mandatory — <code>drizzle-orm/bun-sqlite</code> and{' '}
+        mandatory - <code>drizzle-orm/bun-sqlite</code> and{' '}
         <code>drizzle-orm/bun-sql</code>, never <code>pg</code> or{' '}
         <code>better-sqlite3</code>.
       </Text>

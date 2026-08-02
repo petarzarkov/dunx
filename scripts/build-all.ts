@@ -9,7 +9,7 @@
  *
  * This orders by `dependencies` **and** `peerDependencies` **and**
  * `devDependencies`, restricted to workspace packages, which is what makes
- * peers safe. Packages with no edge between them still build concurrently — the
+ * peers safe. Packages with no edge between them still build concurrently - the
  * sort produces waves, not a queue, so the common case costs nothing.
  *
  * Run directly (`bun scripts/build-all.ts`) or through `bun run build`.

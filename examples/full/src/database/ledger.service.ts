@@ -16,7 +16,7 @@ import { ledger, type Entry } from './schema.js';
 export class Ledger implements OnInit, OnShutdown {
   /**
    * `SyncDatabase` is drizzle's `BunSQLiteDatabase` under a name that says the
-   * connection was opened in synchronous mode — which is what makes
+   * connection was opened in synchronous mode - which is what makes
    * `transactionSync` below reachable. `@dunx/transform` records the bare type name
    * (a real runtime class, so a usable token) and ignores the type argument, so the
    * schema types survive injection. `DbConnection` is the lifecycle and the driver
@@ -32,7 +32,7 @@ export class Ledger implements OnInit, OnShutdown {
    * Standing in for a migration rather than replacing one: schema changes are
    * `drizzle-kit generate` plus drizzle-orm/bun-sqlite/migrator, which own the
    * SQL, the journal and the snapshot folder. A `:memory:` database has nowhere
-   * to keep any of that, so the table is created here — and at `onInit`, so the
+   * to keep any of that, so the table is created here - and at `onInit`, so the
    * routes below have somewhere to write before the first request arrives.
    */
   async onInit(): Promise<void> {
@@ -88,7 +88,7 @@ export class Ledger implements OnInit, OnShutdown {
    * Both legs or neither. `transaction()` from `@dunx/infra/db`, not
    * `db.transaction()`: drizzle's own on bun-sqlite delegates to `bun:sqlite`'s
    * synchronous `transaction()`, which commits as soon as the callback returns its
-   * promise — so everything after the first `await` would run in autocommit. That
+   * promise - so everything after the first `await` would run in autocommit. That
    * is what makes the rollback below possible at all.
    */
   transfer(
@@ -113,7 +113,7 @@ export class Ledger implements OnInit, OnShutdown {
 
   /**
    * The same two legs, with nothing to await. `transactionSync` is drizzle's own
-   * `db.transaction()` — correct here precisely because the callback cannot return
+   * `db.transaction()` - correct here precisely because the callback cannot return
    * a promise, which is the case its early commit breaks. The return type is
    * `number`, not `Promise<number>`, so a controller calling this needs no `async`
    * and the request never yields.
@@ -139,8 +139,8 @@ export class Ledger implements OnInit, OnShutdown {
         'table "ledger" created at onInit',
     );
 
-    // The escape hatch. `raw` is `unknown` on the base — the abstract class cannot
-    // promise either driver — and `instanceof` is what restores the concrete type.
+    // The escape hatch. `raw` is `unknown` on the base - the abstract class cannot
+    // promise either driver - and `instanceof` is what restores the concrete type.
     if (this.connection instanceof SqliteConnection) {
       logger.info(`raw driver -> bun:sqlite ${this.connection.raw.filename}`);
     }
@@ -157,7 +157,7 @@ export class Ledger implements OnInit, OnShutdown {
       .all();
     logger.info(`select -> ${JSON.stringify(rows)}`);
 
-    // `.get()` is `undefined` when there is no row — never `null`.
+    // `.get()` is `undefined` when there is no row - never `null`.
     const missing = db
       .select()
       .from(ledger)
@@ -174,7 +174,7 @@ export class Ledger implements OnInit, OnShutdown {
   }
 
   /**
-   * The same rollback with no promise anywhere — `transactionSync` throws where
+   * The same rollback with no promise anywhere - `transactionSync` throws where
    * `transaction` rejects, so the recovery is `try`/`catch` rather than `.catch()`.
    */
   private rollsBackSynchronously(): void {
@@ -225,7 +225,7 @@ export class Ledger implements OnInit, OnShutdown {
 
   /**
    * Seed *data*, which is the half `drizzle-kit` has no concept of. Numbered files
-   * in `seeds/`, each applied once and recorded in `dunx_seeds` — so this reports
+   * in `seeds/`, each applied once and recorded in `dunx_seeds` - so this reports
    * them journaled rather than applied, `onInit` having already run them.
    */
   private async seeds(): Promise<void> {

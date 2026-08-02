@@ -77,7 +77,7 @@ export class HttpDemo {
     );
 
     // Bun.serve answers a method miss with 404, so a preflight can never be
-    // inferred — enableCors mounts an explicit OPTIONS per path.
+    // inferred - enableCors mounts an explicit OPTIONS per path.
     const allowed = await preflight(url, origin);
     logger.info(
       `enableCors: OPTIONS from ${origin} -> ${allowed.status} ${describeCors(allowed)}`,

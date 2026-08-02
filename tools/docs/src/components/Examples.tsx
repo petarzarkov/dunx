@@ -29,7 +29,7 @@ const EXAMPLES: readonly Example[] = [
     dir: 'minimal',
     title: 'minimal',
     blurb:
-      'Five files and nothing else — a service, a controller, a module, HttpFactory.create and the one preload line. Its whole value is being small enough to read in two minutes.',
+      'Five files and nothing else - a service, a controller, a module, HttpFactory.create and the one preload line. Its whole value is being small enough to read in two minutes.',
     run: 'bun run start',
     tags: ['start here'],
   },
@@ -53,7 +53,7 @@ const EXAMPLES: readonly Example[] = [
     dir: 'full',
     title: 'full',
     blurb:
-      'One long-running service that exercises everything at once — DI, config, logging, routes, websocket gateways, guards, database, redis, queues, files, images, auth and OpenAPI. This is the one to open in a browser.',
+      'One long-running service that exercises everything at once - DI, config, logging, routes, websocket gateways, guards, database, redis, queues, files, images, auth and OpenAPI. This is the one to open in a browser.',
     run: 'bun run start',
     tags: ['everything'],
   },

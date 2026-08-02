@@ -7,6 +7,6 @@ coverageDir = "coverage"
 coverageReporter = ["text", "lcov"]
 coverageSkipTestFiles = true
 # Cross-package imports resolve to built output (a package's node_modules entry points
-# at its sibling's dist/), which would otherwise be counted twice — once as src, once
+# at its sibling's dist/), which would otherwise be counted twice - once as src, once
 # as dist.
 coveragePathIgnorePatterns = ["**/dist/**"]

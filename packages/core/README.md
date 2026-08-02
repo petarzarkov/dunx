@@ -1,7 +1,7 @@
 # @dunx/core
 
 The dependency injection container, modules, lifecycle, configuration, and the
-`Logger` and `RequestContext` contracts. **Zero dependencies** — that is a
+`Logger` and `RequestContext` contracts. **Zero dependencies** - that is a
 constraint, not a coincidence: it is what lets `@dunx/http` inject a logger
 without pulling a logging implementation in behind it.
 
@@ -30,8 +30,8 @@ opt in with one line in `bunfig.toml`:
 preload = ["@dunx/transform/preload"]
 ```
 
-A parameter whose type is erased — an interface, a primitive, a union, a type-only
-import — becomes a **boot error naming that parameter**, not a silent `undefined`.
+A parameter whose type is erased - an interface, a primitive, a union, a type-only
+import - becomes a **boot error naming that parameter**, not a silent `undefined`.
 That is the wart `emitDecoratorMetadata` has and this does not.
 
 `inject()` in a field initializer is the escape hatch for a value with no
@@ -57,15 +57,15 @@ One binding per token, and a duplicate is a boot error naming both modules. What
 is lost is per-module rebinding; use two tokens.
 
 Resolution is **eager**, and async factories are settled before any constructor
-runs — which is why there is no `forRootAsync` for asynchrony alone. Where a module
+runs - which is why there is no `forRootAsync` for asynchrony alone. Where a module
 does have one (`LoggerModule`, `ImagesModule`, `RedisModule`, `FilesModule`,
 `DbModule`) it is for the other thing a zero-argument function cannot do: **inject**.
 
-`onInit` runs in dependency order, `onShutdown` in reverse — so a service drains
+`onInit` runs in dependency order, `onShutdown` in reverse - so a service drains
 before the database it holds.
 
 `AppFactory.create(root, { overrides })` takes registrations that **replace** a
-module's binding for the same token, in place, as the flat list is assembled — so
+module's binding for the same token, in place, as the flat list is assembled - so
 the duplicate check still runs, an override for a token nobody binds is an error,
 and the discarded provider is never instantiated (its `useFactory` never runs).
 `@dunx/testing` is what consumes it; there is no reason to reach for it directly in
@@ -118,7 +118,7 @@ Bun already loads `.env` and `.env.local`, so there is no loader here and no
 mutating the process environment.
 
 **Why the subclass.** `inject: [ConfigService]` resolves to
-`ConfigService<Record<string, unknown>>` — the token carries no type argument to
+`ConfigService<Record<string, unknown>>` - the token carries no type argument to
 recover, and parameters are contravariant, so a factory annotating
 `ConfigService<AppConfig>` is rejected. A subclass is a distinct runtime value, so
 it is both a precise token and a usable annotation. `ConfigService` stays bound to
@@ -145,13 +145,13 @@ argument for swapping in `@dunx/infra/logger`, which is one import.
 #### Entries at `info` and below are batched
 
 One `console.log` per entry is one `write(2)` per entry, and on `tools/bench`'s
-logging harness that was the single largest component of request logging — dearer
+logging harness that was the single largest component of request logging - dearer
 than the `JSON.stringify` that produced the line. `ConsoleLogger` concatenates those
 entries and writes them **once per event-loop turn**, which takes the write below
 what the harness can measure.
 
 The trade is real: a line still in the buffer is lost if the process dies without
-unwinding — `SIGKILL`, an OOM kill, a segfault. What bounds it:
+unwinding - `SIGKILL`, an OOM kill, a segfault. What bounds it:
 
 - **`warn`, `error` and `fatal` are never buffered.** They are written immediately
   and flush everything queued behind them, so the entries you go looking for after a
@@ -185,12 +185,12 @@ export class Users {
 }
 ```
 
-Six levels — `verbose`, `debug`, `info`, `warn`, `error`, `fatal` — each taking a
+Six levels - `verbose`, `debug`, `info`, `warn`, `error`, `fatal` - each taking a
 message plus extras, a plain object merged into the entry, or an `Error`. `log` is
 a deprecated alias for `info`; it emits `"level":"info"` either way and exists
 because NestJS's `LoggerService` mandates the name.
 
-`RequestContext` is request-scoped fields propagated across async boundaries —
+`RequestContext` is request-scoped fields propagated across async boundaries -
 `getContext`, `updateContext`, `runWithContext`. `@arkv/logger`'s `ContextStore`
 satisfies it structurally, so `@dunx/infra/logger` binds one to the other with no
 adapter class, and the logger then reads the very store the HTTP middleware wrote.

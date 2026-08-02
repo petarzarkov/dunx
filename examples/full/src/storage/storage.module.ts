@@ -7,7 +7,7 @@ import { Workspace } from './workspace.js';
 @Module({
   imports: [
     // The root has to exist before `LocalStorageOptions` names it, and creating
-    // it is async — which is the whole reason `forRootAsync` takes a factory that
+    // it is async - which is the whole reason `forRootAsync` takes a factory that
     // may await and may inject.
     FilesModule.forRootAsync({
       useFactory: async (workspace: Workspace) =>

@@ -1,5 +1,5 @@
 /**
- * Structural views over oxc's ESTree-with-TypeScript output — only the node
+ * Structural views over oxc's ESTree-with-TypeScript output - only the node
  * shapes the doc extractor reads. Same technique, and the same reasoning, as
  * `packages/transform/src/ast.ts`: oxc hands back a plain object graph, so a
  * narrow interface per node kind beats importing a full AST type package.

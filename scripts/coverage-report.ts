@@ -46,7 +46,7 @@ interface PackageCoverage {
 
 /**
  * Weighted total, as lcov/istanbul define it. Note this will not match bun's own
- * `All files` row in the text reporter — that one is an unweighted mean of the
+ * `All files` row in the text reporter - that one is an unweighted mean of the
  * per-file percentages, so a tiny fully-covered file counts as much as a big one.
  */
 const pct = (hit: number, found: number): number =>

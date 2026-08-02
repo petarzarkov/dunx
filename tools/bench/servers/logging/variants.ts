@@ -10,7 +10,7 @@ import { Logger, LOG_LEVELS, RequestContext, type LogLevel } from '@dunx/core';
  * onwards use the real middleware and vary only the bound `Logger`.
  *
  * The loggers below must stay a faithful copy of `ConsoleLogger` minus the step
- * they are named for. When that file changes, these change with it — otherwise the
+ * they are named for. When that file changes, these change with it - otherwise the
  * table decomposes an implementation that is no longer the one shipping.
  */
 export const loggingVariants = Object.freeze([
@@ -43,7 +43,7 @@ export const sink: { line: string; stamp: string; count: number } = {
 };
 
 /**
- * Counts the entry and does nothing else — isolates everything before the logger.
+ * Counts the entry and does nothing else - isolates everything before the logger.
  * It counts rather than returning, so the call cannot be inlined away.
  */
 export class DiscardLogger extends Logger {

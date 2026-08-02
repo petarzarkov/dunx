@@ -6,7 +6,7 @@ import { Sessions } from './sessions.service.js';
 
 @Module({
   imports: [
-    // Without a url Bun's own chain decides it — $VALKEY_URL, then $REDIS_URL,
+    // Without a url Bun's own chain decides it - $VALKEY_URL, then $REDIS_URL,
     // then valkey://localhost:6379. Connections are lazy, so nothing is dialled
     // here and an unavailable cache cannot stop the process from booting.
     // `eager: true` would opt into finding out at startup, which is the opposite

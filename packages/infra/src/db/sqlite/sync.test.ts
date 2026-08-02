@@ -205,7 +205,7 @@ describe('transactionSync', () => {
 
 describe('the type gate', () => {
   /**
-   * Never called — `tsc --noEmit` is the assertion. Each `@ts-expect-error` fails
+   * Never called - `tsc --noEmit` is the assertion. Each `@ts-expect-error` fails
    * the typecheck if the line below it stops being an error, which is the only way
    * to test that a mistake is unwritable rather than merely discouraged.
    */

@@ -36,7 +36,7 @@ describe('scaffold', () => {
     expect(manifest.name).toBe('my-api');
   });
 
-  test('resolves the version placeholder — lockstep makes it knowable', async () => {
+  test('resolves the version placeholder - lockstep makes it knowable', async () => {
     const cwd = workspace();
     const { directory } = await scaffold({ target: 'app', cwd });
     const manifest = await read(directory, 'package.json');
@@ -45,7 +45,7 @@ describe('scaffold', () => {
     const parsed = JSON.parse(manifest) as {
       dependencies: Record<string, string>;
     };
-    // Every @dunx dependency must be a real range, not a workspace protocol —
+    // Every @dunx dependency must be a real range, not a workspace protocol -
     // `workspace:*` in a scaffolded app is an install error.
     for (const [name, range] of Object.entries(parsed.dependencies)) {
       expect(name.startsWith('@dunx/')).toBe(true);

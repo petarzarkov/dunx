@@ -24,7 +24,7 @@ class Trail {
 
 /**
  * The combination @Public exists for: one global guard, and the routes that opt
- * out of it. It reads the metadata the route declared — nothing else could tell
+ * out of it. It reads the metadata the route declared - nothing else could tell
  * `/reports/health` apart from `/reports`.
  */
 class AuthGuard implements Middleware {
@@ -40,7 +40,7 @@ class AuthGuard implements Middleware {
   }
 }
 
-/** A guard is middleware that throws — there is no second concept. */
+/** A guard is middleware that throws - there is no second concept. */
 class RolesGuard implements Middleware {
   readonly #trail = inject(Trail);
 
@@ -181,7 +181,7 @@ describe('@Public with a global guard', () => {
     });
   });
 
-  it('runs the global guard on the public route too — it chose to skip', async () => {
+  it('runs the global guard on the public route too - it chose to skip', async () => {
     await withApp(async (url, app) => {
       await call(url, 'reports/health');
 
@@ -279,7 +279,7 @@ describe('RouteContext', () => {
         const { contexts } = app.get(Captured);
 
         expect(contexts).toHaveLength(2);
-        // One object, closed over by the chain — nothing was resolved per request.
+        // One object, closed over by the chain - nothing was resolved per request.
         expect(contexts[0]).toBe(contexts[1]);
         expect(Object.isFrozen(contexts[0])).toBe(true);
       },

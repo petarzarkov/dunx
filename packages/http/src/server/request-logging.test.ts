@@ -8,8 +8,8 @@ import type { Middleware } from './middleware.js';
 
 /**
  * Captures both streams: warn and above go to stderr by design. One `console.log`
- * may carry several entries — `ConsoleLogger` batches everything at `info` and
- * below into one write per event-loop turn — so each call is split back apart.
+ * may carry several entries - `ConsoleLogger` batches everything at `info` and
+ * below into one write per event-loop turn - so each call is split back apart.
  * `withApp` shuts the app down inside `run`, and that flushes what is pending.
  */
 const captured = async (

@@ -6,7 +6,7 @@ import { transaction, type SqlTransaction } from './transaction.js';
 
 /**
  * Either drizzle handle. Seeding is the one place this package is deliberately
- * dialect-agnostic — a seed file's own body is not, because it names tables.
+ * dialect-agnostic - a seed file's own body is not, because it names tables.
  */
 export type SeedableDb<TSchema extends Record<string, unknown>> =
   | BunSQLiteDatabase<TSchema>
@@ -54,7 +54,7 @@ export interface SeedOptions {
   readonly env?: string;
   /** The journal table. Defaults to `dunx_seeds`. */
   readonly table?: string;
-  /** Defaults to `*.seeder.{ts,js}` — Bun runs TypeScript, a build emits JS. */
+  /** Defaults to `*.seeder.{ts,js}` - Bun runs TypeScript, a build emits JS. */
   readonly pattern?: string;
 }
 
@@ -105,8 +105,8 @@ const names = async <TSchema extends Record<string, unknown>>(
 
 /**
  * `IF NOT EXISTS` so this is safe on every boot. `applied_at` is written as an ISO
- * 8601 string rather than a `Date`: `bun:sqlite` has no date type and rejects — or,
- * unstrict, silently NULLs — a `Date` binding, and Postgres parses the string into
+ * 8601 string rather than a `Date`: `bun:sqlite` has no date type and rejects - or,
+ * unstrict, silently NULLs - a `Date` binding, and Postgres parses the string into
  * `timestamptz` anyway.
  */
 const journal = async <TSchema extends Record<string, unknown>>(
@@ -125,7 +125,7 @@ const journal = async <TSchema extends Record<string, unknown>>(
 
 /**
  * Numbered, sorted by number, and a duplicate number is an error rather than a
- * coin flip — the whole value of a journal is that the order is the same
+ * coin flip - the whole value of a journal is that the order is the same
  * everywhere.
  */
 const discover = async (
@@ -197,13 +197,13 @@ const load = async <TSchema extends Record<string, unknown>>(
  *
  * This is not a migration runner and does not try to be one. Schema changes are
  * `drizzle-kit generate` plus `drizzle-orm/bun-sqlite/migrator` (sync) or
- * `drizzle-orm/bun-sql/migrator` (async) — drizzle-kit owns the SQL, the journal
+ * `drizzle-orm/bun-sql/migrator` (async) - drizzle-kit owns the SQL, the journal
  * and the snapshot folder. What it has no concept of is *data*, which is what this
  * is for, and why the journal table is separate from drizzle's own.
  *
  * A seed and its journal row are written in **one transaction**, so a seed that
  * throws leaves no record and no half-applied data. On `bun:sqlite` that
- * transaction is this package's `transaction()`, not drizzle's — drizzle's cannot
+ * transaction is this package's `transaction()`, not drizzle's - drizzle's cannot
  * roll back an async callback there.
  */
 export const runSeeds = async <TSchema extends Record<string, unknown>>(

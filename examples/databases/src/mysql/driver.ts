@@ -16,14 +16,14 @@ import * as schema from './schema.js';
 
 /**
  * MySQL for `@dunx/infra/db`, assembled in this example rather than shipped by the
- * package — and needing no change to the package to work, which is the point.
+ * package - and needing no change to the package to work, which is the point.
  * `DbOptions.open()` is where a backend lives, so adding one is a new class, not
  * an edit to a dispatch table inside `DbModule`.
  *
  * ### Why it is built this way
  *
  * drizzle 0.45.2 has no Bun-native MySQL driver. Its only Bun entrypoints are
- * `bun-sql` (Postgres — it builds a `PgDialect` unconditionally) and `bun-sqlite`.
+ * `bun-sql` (Postgres - it builds a `PgDialect` unconditionally) and `bun-sqlite`.
  * Its MySQL drivers are `mysql2` and `mysql-proxy`, and `mysql2` is a JavaScript
  * reimplementation of a wire protocol Bun already speaks, so it is out.
  *
@@ -54,7 +54,7 @@ const callbackFor =
       // POSITIONALLY, and `Bun.SQL`'s default object rows lose columns on a join:
       // selecting `users.id, users.name, posts.id, posts.name` comes back with two
       // keys, not four, because the later names overwrite the earlier ones.
-      // Measured — a manual object-to-array conversion would be silently wrong.
+      // Measured - a manual object-to-array conversion would be silently wrong.
       return { rows: await client.unsafe(query, params).values() };
     }
 
@@ -101,7 +101,7 @@ export class MysqlConnection extends DbConnection<MySqlRemoteDatabase<Schema>> {
   }
 
   /**
-   * `db.transaction()` throws on this driver — `mysql-proxy/session.js` hardcodes
+   * `db.transaction()` throws on this driver - `mysql-proxy/session.js` hardcodes
    * "Transactions are not supported by the MySql Proxy driver", because a callback
    * transport has no way to pin its statements to one connection.
    *
@@ -123,7 +123,7 @@ export class MysqlConnection extends DbConnection<MySqlRemoteDatabase<Schema>> {
 
 /**
  * What `DbModule.forRoot` takes. `MySqlRemoteDatabase` is a real runtime class, so
- * it is the injection token as well as the type — the same trick `SqliteOptions`
+ * it is the injection token as well as the type - the same trick `SqliteOptions`
  * and `SqlOptions` use, and the reason a service can annotate the schema-typed
  * handle and still be resolved by name.
  */
@@ -143,7 +143,7 @@ export class MysqlOptions extends DbOptions<MySqlRemoteDatabase<Schema>> {
       // `adapter` is not redundant, and leaving it out is a real bug on Bun
       // 1.3.14: in the **options-object** form, `POSTGRES_URL`, `PGURL` or
       // `TLS_POSTGRES_DATABASE_URL` in the environment silently overrides an
-      // explicitly passed `url` and forces `adapter: 'postgres'` — so a MySQL URL
+      // explicitly passed `url` and forces `adapter: 'postgres'` - so a MySQL URL
       // is dialled as Postgres and fails with a bare "Connection closed".
       // Measured; `new Bun.SQL(urlString)` and `new Bun.SQL(new URL(url))` are
       // unaffected, and so is naming the adapter. See docs/bun-apis.md.

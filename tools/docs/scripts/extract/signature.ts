@@ -10,7 +10,7 @@ import type {
 
 /**
  * Longest initializer kept inline. Generous because the frozen-object-plus-union
- * pattern that stands in for `enum` here _is_ the documentation — truncating it
+ * pattern that stands in for `enum` here _is_ the documentation - truncating it
  * to the name would hide every member.
  */
 const INLINE_LIMIT = 900;

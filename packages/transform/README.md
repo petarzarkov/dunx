@@ -51,7 +51,7 @@ The record is a **thunk**, so it is evaluated when the container resolves the cl
 rather than when the module is defined. A dependency declared later in the file, or
 reached through a circular import, therefore needs no `forwardRef`.
 
-Only the appended statement is added — every other byte of the original source is
+Only the appended statement is added - every other byte of the original source is
 preserved, so comments, formatting, and the line numbers in stack traces are
 unchanged.
 

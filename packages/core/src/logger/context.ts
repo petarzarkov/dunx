@@ -24,8 +24,8 @@ export interface RunWithContextOptions {
  * no dependencies: `@dunx/http`'s request logging injects this without pulling a
  * logger implementation in behind it, exactly as it does with {@link Logger}.
  *
- * `@arkv/logger`'s `ContextStore` satisfies this structurally — same three
- * methods, same signatures — so `@dunx/infra/logger` binds one to the other with
+ * `@arkv/logger`'s `ContextStore` satisfies this structurally - same three
+ * methods, same signatures - so `@dunx/infra/logger` binds one to the other with
  * no adapter class, and the logger then reads the very store the middleware wrote.
  */
 export abstract class RequestContext {
@@ -60,7 +60,7 @@ export class AsyncRequestContext extends RequestContext {
 
   /**
    * Nested scopes merge. `AsyncLocalStorage.run` on its own replaces the store
-   * outright, which would drop the `requestId` an outer scope established — the
+   * outright, which would drop the `requestId` an outer scope established - the
    * field a log is most often correlated by. The merged object is fresh, so an
    * `updateContext` inside does not leak back out.
    */

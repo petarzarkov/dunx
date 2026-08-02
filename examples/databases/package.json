@@ -2,7 +2,7 @@
   "name": "@dunx/example-databases",
   "version": "0.0.0",
   "private": true,
-  "description": "Setting up @dunx/infra/db on SQLite (async and sync), Postgres and MySQL — the same repository code against three dialects",
+  "description": "Setting up @dunx/infra/db on SQLite (async and sync), Postgres and MySQL - the same repository code against three dialects",
   "type": "module",
   "scripts": {
     "start": "bun src/main.ts",

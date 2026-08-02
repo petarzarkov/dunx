@@ -17,7 +17,7 @@ const jpeg = await sourceJpeg();
 const truncated = await truncatedPng();
 
 // One pipeline shared by the whole suite. Safe precisely because operations are
-// immutable — with a raw Bun.Image every test would reconfigure its neighbours.
+// immutable - with a raw Bun.Image every test would reconfigure its neighbours.
 const base = await images.load(png);
 
 const dims = async (bytes: Uint8Array): Promise<string> => {
@@ -188,7 +188,7 @@ describe('geometry and colour', () => {
 });
 
 describe('chaining', () => {
-  it('is immutable — an operation never mutates the pipeline it came from', async () => {
+  it('is immutable - an operation never mutates the pipeline it came from', async () => {
     const small = base.resize(8, 8);
     const large = base.resize(48, 48);
 

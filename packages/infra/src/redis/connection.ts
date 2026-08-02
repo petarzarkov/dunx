@@ -54,14 +54,14 @@ export type MessageListener = (message: string, channel: string) => void;
  * so an interface here would be a boot error at the injection site. See
  * CLAUDE.md, "Dependency injection".
  *
- * The surface is a curated subset of `Bun.RedisClient`'s ~250 methods — the ones
+ * The surface is a curated subset of `Bun.RedisClient`'s ~250 methods - the ones
  * an application reaches for. Anything missing is one `send()` away, which is why
  * there is no attempt at completeness.
  */
 export abstract class RedisConnection {
   /**
    * `abstract` stops TypeScript constructing this, but the container works on
-   * runtime values, where every class self-binds — so `get(RedisConnection)` with
+   * runtime values, where every class self-binds - so `get(RedisConnection)` with
    * nothing bound would otherwise hand back a bare instance whose every method is
    * `undefined`. `new.target` is the subclass when a real implementation calls
    * `super()`, and this class itself only in the case worth rejecting.

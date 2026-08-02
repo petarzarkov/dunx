@@ -3,7 +3,7 @@ import { AppModule } from './app.module.js';
 
 /**
  * The app the tests test. It exists so the suite is testing something that really
- * runs — `/weather/:city` will genuinely try to reach the network, which is what
+ * runs - `/weather/:city` will genuinely try to reach the network, which is what
  * makes the override in `container.test.ts` worth having.
  */
 const app = await HttpFactory.create(AppModule);

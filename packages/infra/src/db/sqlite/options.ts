@@ -17,7 +17,7 @@ import {
 
 export interface SqliteInit<TSchema extends Record<string, unknown>> {
   /**
-   * The drizzle schema — `import * as schema from './schema.js'`. Required, and
+   * The drizzle schema - `import * as schema from './schema.js'`. Required, and
    * the reason it is: it is the type argument that flows all the way to
    * `BunSQLiteDatabase<typeof schema>` at the injection site. Pass `{}` if you
    * only run `sql` templates.
@@ -28,13 +28,13 @@ export interface SqliteInit<TSchema extends Record<string, unknown>> {
   /** Opens `SQLITE_OPEN_READONLY`. Suppresses `create`. */
   readonly readOnly?: boolean;
   /**
-   * Create the file if it is missing. Default `true` — and `false` does not
+   * Create the file if it is missing. Default `true` - and `false` does not
    * currently stop it: `new Database(path, { create: false })` still creates a
    * missing file on Bun 1.3.14. Use `readOnly` if the file must already exist.
    */
   readonly create?: boolean;
   /**
-   * Default `true`, unlike the driver — and unlike what drizzle opens for you.
+   * Default `true`, unlike the driver - and unlike what drizzle opens for you.
    * Strict mode turns an unsupported binding into a `TypeError` instead of a
    * silent `NULL`, which is what a raw `Date` in a `sql` template would otherwise
    * become.
@@ -51,7 +51,7 @@ export interface SqliteInit<TSchema extends Record<string, unknown>> {
 
 /**
  * Bun accepts `sqlite://./dev.db`, `file:./dev.db` and a bare path, but
- * `bun:sqlite` itself only takes a path — so the scheme comes off here. A bare
+ * `bun:sqlite` itself only takes a path - so the scheme comes off here. A bare
  * `:memory:` has no scheme and passes through untouched.
  */
 const toPath = (filename: string | URL): string => {
@@ -61,7 +61,7 @@ const toPath = (filename: string | URL): string => {
   if (stripped.length === 0) {
     throw new DatabaseError(
       `"${raw}" names no SQLite database. Use ':memory:', a path, or a ` +
-        'sqlite:// URL with one — for example sqlite://./dev.db.',
+        'sqlite:// URL with one - for example sqlite://./dev.db.',
     );
   }
   return stripped;
@@ -70,7 +70,7 @@ const toPath = (filename: string | URL): string => {
 /**
  * Everything the two `bun:sqlite` modes share: the normalised init, the driver
  * options, and opening the driver. Exported only because the emitted declarations
- * name it — `SqliteOptions` and `SyncSqliteOptions` are what an app constructs.
+ * name it - `SqliteOptions` and `SyncSqliteOptions` are what an app constructs.
  *
  * They are siblings rather than one class with a `mode` flag because the mode
  * decides `TDb`, and `TDb` is what `DbModule.forRoot` infers the injection token
@@ -108,7 +108,7 @@ export abstract class SqliteSettings<
       strict: this.strict,
       safeIntegers: this.safeIntegers,
     };
-    // Mutually exclusive open flags — CREATE alongside READONLY is meaningless.
+    // Mutually exclusive open flags - CREATE alongside READONLY is meaningless.
     if (this.readOnly) options.readonly = true;
     else options.create = this.create;
     return options;
@@ -116,7 +116,7 @@ export abstract class SqliteSettings<
 
   /**
    * The open call and the pragmas, which run before the handle is visible to
-   * anything. Nothing here blocks — `open()` is a promise only because
+   * anything. Nothing here blocks - `open()` is a promise only because
    * `DbOptions` has to describe `Bun.SQL`'s handshake as well.
    */
   protected openDriver(): BunSqlite {

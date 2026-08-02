@@ -107,7 +107,7 @@ const PackagePanel = ({ pkg }: { pkg: CoveragePackage }): React.JSX.Element => {
                       {file.funcsHit}/{file.funcs}
                     </Table.Td>
                     <Table.Td c="dimmed" ff="monospace">
-                      {file.uncovered || '—'}
+                      {file.uncovered || '-'}
                     </Table.Td>
                   </Table.Tr>
                 );
@@ -132,7 +132,7 @@ export const Coverage = (): React.JSX.Element => {
           <Title order={1}>Coverage</Title>
           <Text c="dimmed" size="sm">
             Weighted over every package, from the single root{' '}
-            <code>bun test --coverage</code> run. Lines and functions only — Bun
+            <code>bun test --coverage</code> run. Lines and functions only - Bun
             emits no branch records.
           </Text>
         </Stack>

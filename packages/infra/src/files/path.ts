@@ -3,7 +3,7 @@ import { PathTraversalError } from './errors.js';
 
 /**
  * Both separators, so a `..\\..` key cannot walk past a check that only knows
- * about `/`. `node:path` is string maths only — nothing here touches the disk.
+ * about `/`. `node:path` is string maths only - nothing here touches the disk.
  */
 const hasParentSegment = (key: string): boolean =>
   key.split(/[/\\]/).includes('..');
@@ -16,7 +16,7 @@ const isInside = (root: string, path: string): boolean =>
  * refused identically on every platform: `..\\..\\etc` is a single legal
  * filename to POSIX `resolve` but three segments to Windows, and a key that
  * escapes on one OS must not quietly become a file on the other. The boundary
- * check then catches what segments cannot — an absolute key, or a root-relative
+ * check then catches what segments cannot - an absolute key, or a root-relative
  * one that resolves out.
  */
 const checkWithin = (root: string, key: string, allowRoot: boolean): string => {
@@ -30,7 +30,7 @@ const checkWithin = (root: string, key: string, allowRoot: boolean): string => {
 
 /**
  * Absolute on-disk path for `key`, guaranteed to sit strictly inside `root`.
- * Rejects `../`, an absolute key, and the root itself — none of which name a
+ * Rejects `../`, an absolute key, and the root itself - none of which name a
  * file the caller is entitled to.
  *
  * `resolve` collapses segments textually. A symlink inside the root that points

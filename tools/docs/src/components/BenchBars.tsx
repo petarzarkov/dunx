@@ -134,7 +134,7 @@ export const StartupTable = ({
         <Table.Thead>
           <Table.Tr>
             <Table.Th w={170}>Subject</Table.Th>
-            <Table.Th>Cold start — shorter is better</Table.Th>
+            <Table.Th>Cold start - shorter is better</Table.Th>
             <Table.Th ta="right" w={100}>
               median ms
             </Table.Th>

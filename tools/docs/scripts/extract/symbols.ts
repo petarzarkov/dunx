@@ -212,7 +212,7 @@ const isDeprecated = (doc: DocComment | null): boolean =>
 
 /**
  * Every symbol a module declares and exports. Re-exports (`export { x } from`)
- * carry no declaration here — they are resolved by the surface graph, which
+ * carry no declaration here - they are resolved by the surface graph, which
  * points them back at the module that does declare them.
  */
 export const collectSymbols = (

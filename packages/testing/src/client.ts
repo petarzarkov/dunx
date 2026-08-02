@@ -16,7 +16,7 @@ export interface JsonResponse<T> {
 export interface TestClient {
   /** The server's base URL, as `listen()` returned it. */
   readonly url: string;
-  /** The raw `Response` — for bytes, HTML, or asserting on a header. */
+  /** The raw `Response` - for bytes, HTML, or asserting on a header. */
   request(path?: string, init?: JsonInit): Promise<Response>;
   /** Status, headers and parsed body in one await, which is the common assertion. */
   json<T = unknown>(path?: string, init?: JsonInit): Promise<JsonResponse<T>>;
@@ -68,7 +68,7 @@ export const testClient = (url: string): TestClient => ({
             text.slice(0, 300);
       throw new Error(
         `${init.method ?? 'GET'} ${target(url, path).pathname} answered ` +
-          `${response.status} with ${body}\n\nThat is not JSON — use request() ` +
+          `${response.status} with ${body}\n\nThat is not JSON - use request() ` +
           'for a response that is not.',
       );
     }

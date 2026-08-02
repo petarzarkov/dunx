@@ -17,7 +17,7 @@ export interface ApiDocMeta {
 }
 
 /**
- * Route metadata is `@dunx/http`'s generic mechanism — `metaKey` mints a unique
+ * Route metadata is `@dunx/http`'s generic mechanism - `metaKey` mints a unique
  * symbol and `meta` writes it onto the method or the class. `@ApiDoc` is a wrapper
  * over it and nothing more, which is why documentation needs no parallel registry
  * and no second discovery pass.
@@ -38,7 +38,7 @@ const stringsOf = (value: unknown): readonly string[] | undefined =>
     : undefined;
 
 /**
- * A `MetaRecord` is `ReadonlyMap<symbol, unknown>` — whoever wrote the value chose
+ * A `MetaRecord` is `ReadonlyMap<symbol, unknown>` - whoever wrote the value chose
  * its shape, so it is checked here rather than asserted.
  */
 export const apiDocOf = (record: MetaRecord | undefined): ApiDocMeta => {
@@ -58,7 +58,7 @@ export const apiDocOf = (record: MetaRecord | undefined): ApiDocMeta => {
   };
 };
 
-/** What `@Roles('admin')` declared, class-level or method-level — merged already. */
+/** What `@Roles('admin')` declared, class-level or method-level - merged already. */
 export const rolesOf = (
   record: MetaRecord | undefined,
 ): readonly string[] | undefined => {

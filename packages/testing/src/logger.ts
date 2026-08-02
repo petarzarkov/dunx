@@ -12,8 +12,8 @@ export interface RecordedLog {
  *
  * It is here because the contract is seven levels of three overloads each: every
  * suite that wants a silent logger would otherwise hand-write the same thirty
- * lines. Nothing is interpreted — no level filtering, no error promotion, no
- * merging of extras — because those are the backing logger's behaviour and
+ * lines. Nothing is interpreted - no level filtering, no error promotion, no
+ * merging of extras - because those are the backing logger's behaviour and
  * asserting against a reimplementation of them would prove nothing.
  *
  * ```ts

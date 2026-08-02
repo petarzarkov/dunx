@@ -33,7 +33,7 @@ export interface QueueOptionsInit {
   /** bullmq's key prefix. @default 'bull' */
   readonly prefix?: string;
   /**
-   * Forwarded verbatim to every `Worker` — `concurrency`, `limiter`,
+   * Forwarded verbatim to every `Worker` - `concurrency`, `limiter`,
    * `lockDuration`, `stalledInterval` and the rest. Deliberately a passthrough:
    * restating bullmq's knobs here would be a second, staler copy of its docs.
    */
@@ -41,7 +41,7 @@ export interface QueueOptionsInit {
   /** Forwarded verbatim as every `Queue`'s `defaultJobOptions`. */
   readonly defaultJobOptions?: JobsOptions;
   /**
-   * Forwarded to every `Bun.RedisClient` the queue opens — `connectionTimeout`,
+   * Forwarded to every `Bun.RedisClient` the queue opens - `connectionTimeout`,
    * `maxRetries`, `autoReconnect` and the rest.
    *
    * **Defaults to `{ connectionTimeout: 5000, maxRetries: 0 }`, and both halves
@@ -49,14 +49,14 @@ export interface QueueOptionsInit {
    * that cannot reach Redis retries without bound, so `publish()` never settles
    * and a route waiting on it hangs instead of answering. And with **any**
    * `maxRetries > 0`, a client that never connected keeps a retry timer alive past
-   * `close()` and the process never exits — verified here at `maxRetries: 3`,
+   * `close()` and the process never exits - verified here at `maxRetries: 3`,
    * where a full-example boot with no Redis survived SIGTERM for 12s. See
    * docs/bun-apis.md, "A failed connection leaks a retry timer past `close()`".
    *
    * So `0` is the only default that both fails fast and lets the process die.
    *
    * **The trade:** a worker set to `0` will not ride out a Redis blip. Raise it if
-   * that matters more than a clean exit on a cold start against an absent Redis —
+   * that matters more than a clean exit on a cold start against an absent Redis -
    * they cannot both be had until Bun clears the timer on `close()`.
    */
   readonly connection?: Bun.RedisOptions;
@@ -65,7 +65,7 @@ export interface QueueOptionsInit {
    * call fails and retries instead of holding its lock until the stall check
    * reclaims it.
    *
-   * Not a bullmq feature — bullmq has `lockDuration` and stall detection, which
+   * Not a bullmq feature - bullmq has `lockDuration` and stall detection, which
    * answer "did the worker die", not "is this handler stuck". Off by default.
    */
   readonly jobTimeoutMs?: number;
@@ -87,7 +87,7 @@ export class QueueOptions {
     this.url = assertUrl(init.url ?? defaultRedisUrl());
     this.prefix = init.prefix ?? 'bull';
     this.worker = init.worker ?? {};
-    // Bounded on purpose — see `connection` above. Unbounded retries turn an
+    // Bounded on purpose - see `connection` above. Unbounded retries turn an
     // absent Redis into a hung request and a process that will not exit.
     this.connection = {
       connectionTimeout: 5000,

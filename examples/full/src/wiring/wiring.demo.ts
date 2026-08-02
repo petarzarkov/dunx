@@ -4,7 +4,7 @@ import { BUILD_STAMP, FEATURE_FLAGS } from './tokens.js';
 
 /**
  * The DI primitives, narrated. Everything else in this app uses constructor
- * injection and nothing else, which is the point — this exists so the escape
+ * injection and nothing else, which is the point - this exists so the escape
  * hatches are shown once rather than never.
  */
 export class WiringDemo {
@@ -31,7 +31,7 @@ export class WiringDemo {
     const first = token<number>('duplicate');
     const second = token<number>('duplicate');
     this.logger.info(
-      `token('duplicate') === token('duplicate') -> ${first === second} — identity, not the string`,
+      `token('duplicate') === token('duplicate') -> ${first === second} - identity, not the string`,
     );
 
     // `inject()` only works while the container is constructing something. Outside

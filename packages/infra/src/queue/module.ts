@@ -13,8 +13,8 @@ import { JobPublisher } from './publisher.js';
 /**
  * `QueueConnection` is bound as a factory over `QueueOptions`, and `JobPublisher`
  * as one over the connection, which is what fixes the teardown order. dunx tears
- * down in reverse construction order, so the connection — constructed first,
- * because the publisher needs it — closes its sockets last, after every queue has
+ * down in reverse construction order, so the connection - constructed first,
+ * because the publisher needs it - closes its sockets last, after every queue has
  * closed.
  */
 const bindings: readonly Registration[] = [
@@ -33,7 +33,7 @@ const bindings: readonly Registration[] = [
 ];
 
 /**
- * Binds `QueueOptions`, `QueueConnection` and `JobPublisher` — the publish side,
+ * Binds `QueueOptions`, `QueueConnection` and `JobPublisher` - the publish side,
  * which is all a web process needs.
  *
  * A worker process imports the same module and adds `WorkerFactory.create`, which
@@ -56,7 +56,7 @@ export class QueueModule {
    * machinery: the container resolves eagerly and awaits factories before any
    * constructor runs, so awaited config is already settled by then.
    *
-   * The factory may also **inject**, which a bare loader cannot — reading the url
+   * The factory may also **inject**, which a bare loader cannot - reading the url
    * off `ConfigService`, say:
    *
    * ```ts

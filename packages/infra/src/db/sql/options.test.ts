@@ -12,7 +12,7 @@ const liveUrl = Bun.env['DUNX_DB_TEST_URL'];
 
 /**
  * `toDriverOptions()` is typed as `Bun.SQL.Options`, a union whose SQLite member
- * has none of the pooling keys — so inspecting them needs the Postgres member.
+ * has none of the pooling keys - so inspecting them needs the Postgres member.
  */
 const serverOptions = (
   options: SqlOptions<Record<string, never>>,
@@ -136,7 +136,7 @@ describe('SqlOptions.toDriverOptions', () => {
     ).toBe('postgres://localhost:5432/app');
   });
 
-  it('drops adapter — the scheme already decides it', () => {
+  it('drops adapter - the scheme already decides it', () => {
     expect(
       serverOptions(
         new SqlOptions({ schema: {}, url: 'postgres://localhost:5432/app' }),
@@ -176,8 +176,8 @@ describe('SqlOptions as an injection token source', () => {
 describe.skipIf(liveUrl === undefined)(
   'SqlOptions.open against a real Postgres',
   () => {
-    // Never reached when the variable is unset — skipIf has already taken the
-    // block out — but the fallback keeps `url` a plain string for the typechecker.
+    // Never reached when the variable is unset - skipIf has already taken the
+    // block out - but the fallback keeps `url` a plain string for the typechecker.
     const options = (): SqlOptions<Record<string, never>> =>
       new SqlOptions({ schema: {}, url: liveUrl ?? '', max: 1 });
 

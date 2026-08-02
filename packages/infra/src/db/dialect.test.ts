@@ -71,7 +71,7 @@ describe('dialectFromUrl', () => {
       expect(dialectFromUrl(new URL(url))).toBe(dialect);
   });
 
-  // `new URL()` rejects all three, so only the string path can reach them —
+  // `new URL()` rejects all three, so only the string path can reach them -
   // which is why the function parses the scheme itself rather than using URL.
   it.each(['sqlite://:memory:', 'sqlite:dev.db', 'file:./dev.db'])(
     'reads the unparseable-as-URL sqlite form %p',
@@ -113,7 +113,7 @@ describe('dialectFromUrl', () => {
   );
 
   /**
-   * Bun reads a schemeless string as a Postgres *host* — `{ url: './dev.db' }`
+   * Bun reads a schemeless string as a Postgres *host* - `{ url: './dev.db' }`
    * reports `adapter: 'postgres'` and only fails later with a socket error.
    */
   it.each([

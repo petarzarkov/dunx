@@ -3,7 +3,7 @@ import { PubSub } from '@dunx/http';
 /**
  * A plain service that publishes without holding a socket. `PubSub` is bound by
  * `HttpFactory` around the root module, so nothing has to be imported or
- * registered for this to resolve — listing it in `providers` would be the
+ * registered for this to resolve - listing it in `providers` would be the
  * container's duplicate-binding error.
  */
 export class Lobby {

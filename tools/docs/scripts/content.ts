@@ -59,8 +59,8 @@ export const rewriteHref = (href: string, targets: LinkTargets): string => {
  * word boundary, so `## Install it as a devDependency` goes with `## Install`.
  *
  * The line is: drop a section that documents the repository rather than the
- * package — how to install from source, how to contribute, what the licence is,
- * how the monorepo is laid out — or that the site already generates for itself,
+ * package - how to install from source, how to contribute, what the licence is,
+ * how the monorepo is laid out - or that the site already generates for itself,
  * which is only the package index. Everything else reaches the page, and an
  * author decides which side a section falls on purely by naming it. The list is
  * published in `tools/docs/README.md` so it is predictable without reading this
@@ -97,12 +97,12 @@ const CENTERED_OPEN = /^ {0,3}<div align="center">/;
 const CENTERED_CLOSE = /^ {0,3}<\/div>/;
 
 /**
- * The part of a README the site renders. Applied to READMEs only — the guides
+ * The part of a README the site renders. Applied to READMEs only - the guides
  * under `docs/` *are* repository documentation, so nothing is dropped from
  * them.
  *
  * Line-oriented rather than run over the produced HTML, so heading ids and link
- * rewriting only ever see kept content — and fenced code is tracked, because
+ * rewriting only ever see kept content - and fenced code is tracked, because
  * `packages/transform/README.md` opens a block with `# bunfig.toml` in it.
  */
 export const siteMarkdown = (markdown: string): string => {

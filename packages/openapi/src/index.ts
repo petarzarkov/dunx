@@ -1,4 +1,4 @@
-// The conversion half. `convertSchema` is the vendor check itself — zod goes through
+// The conversion half. `convertSchema` is the vendor check itself - zod goes through
 // `z.toJSONSchema`, anything else degrades to a permissive schema and a warning.
 export {
   convertObject,

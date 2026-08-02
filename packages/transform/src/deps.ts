@@ -72,8 +72,8 @@ const entryFor = (
  * declared type, as thunks on the class itself.
  *
  * A thunk, not a literal: the body is evaluated when the record is read rather
- * than when the module is defined, so a dependency declared later in the file —
- * or in a circular import — is not a temporal-dead-zone crash. That is what
+ * than when the module is defined, so a dependency declared later in the file -
+ * or in a circular import - is not a temporal-dead-zone crash. That is what
  * removes the need for Nest's `forwardRef`, and it is also why a class decorator
  * cannot read the field record while it runs: the statement is appended after the
  * class, which is after decoration.
@@ -89,7 +89,7 @@ export const transform = (
       .slice(0, 3)
       .map((error) => error.message)
       .join('; ');
-    throw new Error(`${filename}: could not parse — ${detail}`);
+    throw new Error(`${filename}: could not parse - ${detail}`);
   }
 
   const program = parsed.program;

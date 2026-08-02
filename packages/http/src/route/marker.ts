@@ -1,5 +1,5 @@
 // Symbol.for, so two copies of @dunx/http in a tree still agree on the key. The
-// marker goes on the method function itself — nothing accumulates at class
+// marker goes on the method function itself - nothing accumulates at class
 // definition time, so there is no ordering dependence and no cross-file leak.
 // See docs/ARCHITECTURE.md, "Route discovery".
 import type { RouteSchemas } from './schema.js';

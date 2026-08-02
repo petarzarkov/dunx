@@ -3,7 +3,7 @@ import { AppError } from '@dunx/core';
 /**
  * Every failure this package raises, as a stable string code.
  *
- * The `ERR_IMAGE_*` and `ERR_INVALID_*` values are Bun's own — `Bun.Image`
+ * The `ERR_IMAGE_*` and `ERR_INVALID_*` values are Bun's own - `Bun.Image`
  * rejects with a plain `Error`/`TypeError` carrying `error.code`, and those
  * codes are passed through unchanged so a caller can switch on one code space.
  * The last two are added here for conditions Bun has no code for.
@@ -14,14 +14,14 @@ export const ImageErrorCode = Object.freeze({
   /** Header was valid, pixel data was not. Truncated or corrupted payload. */
   DECODE_FAILED: 'ERR_IMAGE_DECODE_FAILED',
   ENCODE_FAILED: 'ERR_IMAGE_ENCODE_FAILED',
-  /** HEIC/AVIF/TIFF without an OS codec — see ImagesModule docs. */
+  /** HEIC/AVIF/TIFF without an OS codec - see ImagesModule docs. */
   FORMAT_UNSUPPORTED: 'ERR_IMAGE_FORMAT_UNSUPPORTED',
   /** `width * height` exceeded `maxPixels`, refused before pixel allocation. */
   TOO_MANY_PIXELS: 'ERR_IMAGE_TOO_MANY_PIXELS',
   INVALID_STATE: 'ERR_INVALID_STATE',
   /** Bad argument: a non-multiple-of-90 rotation, an unknown resize filter. */
   INVALID_ARGUMENT: 'ERR_INVALID_ARG_TYPE',
-  /** The source could not be read at all — bad path, unreadable file, closed blob. */
+  /** The source could not be read at all - bad path, unreadable file, closed blob. */
   UNREADABLE_SOURCE: 'ERR_IMAGE_UNREADABLE_SOURCE',
   /** Recognised, decodable, but excluded by `allowedFormats`. */
   FORMAT_NOT_ALLOWED: 'ERR_IMAGE_FORMAT_NOT_ALLOWED',

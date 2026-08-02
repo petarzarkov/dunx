@@ -17,7 +17,7 @@ export const Controller =
  *
  * The `M` constraint is the guarantee. A wrongly annotated `input` is a
  * `TS1241` + `TS1270` naming the mismatched property; an unannotated one is
- * `TS7006`. Inference is impossible here — see docs/ARCHITECTURE.md, "A route
+ * `TS7006`. Inference is impossible here - see docs/ARCHITECTURE.md, "A route
  * decorator can *check* a handler's input type but cannot *infer* it".
  */
 const verb =

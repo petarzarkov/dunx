@@ -6,7 +6,7 @@ import { widgets, type Widget } from './schema.js';
 
 /**
  * The same three operations, in **synchronous mode**. Not one `await`, not one
- * promise, not one microtask — `bun:sqlite` is a function call into SQLite, and
+ * promise, not one microtask - `bun:sqlite` is a function call into SQLite, and
  * this mode stops pretending otherwise.
  *
  * `SyncDatabase` is `BunSQLiteDatabase` under a name that says the connection was
@@ -15,7 +15,7 @@ import { widgets, type Widget } from './schema.js';
  * to a service that asked for the async handle, or the reverse.
  *
  * The relationship is one-way. A `SyncDatabase` *is* a `BunSQLiteDatabase`, so
- * anything already written against the async handle still takes this one — sync
+ * anything already written against the async handle still takes this one - sync
  * mode is a superset, not a fork.
  */
 export class SyncWidgets implements OnInit {
@@ -45,7 +45,7 @@ export class SyncWidgets implements OnInit {
    * async: the bug the async `transaction()` works around is entirely downstream of
    * a callback that returns a promise.
    *
-   * The callback is held to that at compile time — an `async` one is a type error
+   * The callback is held to that at compile time - an `async` one is a type error
    * naming the constraint, rather than a rollback that silently does nothing.
    *
    * The return is a count rather than the two rows because `NotThenable`'s object

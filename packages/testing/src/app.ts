@@ -16,7 +16,7 @@ class TestModule {}
 
 export interface TestAppOptions extends AppOptions {
   /**
-   * The graph under test. A single module, or several — they become the `imports`
+   * The graph under test. A single module, or several - they become the `imports`
    * of one synthetic root, so no fixture module has to be written by hand.
    */
   readonly modules: ModuleRef | readonly ModuleRef[];

@@ -4,7 +4,7 @@ import { AppModule } from './app.module.js';
 import { port } from '../shared.js';
 
 /**
- * NestJS on its default Express adapter — the configuration most Nest apps ship.
+ * NestJS on its default Express adapter - the configuration most Nest apps ship.
  *
  * dunx is deliberately Nest-shaped (modules, controllers, DI, guards), so this row
  * and `nest-fastify` are the most direct answer to "what does that programming

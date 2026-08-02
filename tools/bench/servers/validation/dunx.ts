@@ -1,6 +1,6 @@
 /**
  * The `@dunx/http` side of the comparison. `/validate` is the framework doing the
- * work — a declared `body` schema, so the route takes the async path through the
+ * work - a declared `body` schema, so the route takes the async path through the
  * input reader. The two `/manual-*` routes declare nothing and do the same work by
  * hand inside the handler, which keeps them on the synchronous dispatch path.
  *

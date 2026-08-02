@@ -28,7 +28,7 @@ const build = (options: Registration, mountAt: string): DynamicModule => {
     module: AuthModule,
     controllers: [mountHandler(mountAt)],
     // Every binding declares its own `inject`, so nothing here needs
-    // `@dunx/transform`'s transform to have run — the same reason
+    // `@dunx/transform`'s transform to have run - the same reason
     // `RequestLoggingMiddleware` and `@dunx/infra/redis`'s `Redis` are bound this way.
     providers: [
       options,
@@ -52,14 +52,14 @@ const build = (options: Registration, mountAt: string): DynamicModule => {
 /**
  * Binds three tokens and one controller:
  *
- * - `AuthOptions` — what `betterAuth()` was called with, and where it is mounted.
- * - `Auth` — the better-auth instance itself.
- * - `AuthContext` — the authenticated caller, per request.
+ * - `AuthOptions` - what `betterAuth()` was called with, and where it is mounted.
+ * - `Auth` - the better-auth instance itself.
+ * - `AuthContext` - the authenticated caller, per request.
  * - a prefixed `AuthHandler`, serving every better-auth endpoint under `basePath`.
  *
  * `SessionGuard` is registered as a provider rather than installed as global
  * middleware, because whether it guards the whole app or one controller is the app's
- * decision — pass it to `HttpFactory.create(root, { middleware: [SessionGuard] })`
+ * decision - pass it to `HttpFactory.create(root, { middleware: [SessionGuard] })`
  * or to `@UseGuards(SessionGuard)`.
  */
 export class AuthModule {
@@ -75,10 +75,10 @@ export class AuthModule {
    * ```
    *
    * `const O` is load-bearing: it keeps the literal `plugins` tuple, which is what
-   * `betterAuth()` infers the plugin endpoints from — and therefore what
+   * `betterAuth()` infers the plugin endpoints from - and therefore what
    * `Auth<typeof options>` resolves to at an injection site.
    *
-   * `mountAt` only matters under a global prefix — see {@link AuthOptions.mountAt}.
+   * `mountAt` only matters under a global prefix - see {@link AuthOptions.mountAt}.
    */
   static forRoot<const O extends BetterAuthOptions>(
     options: O,
@@ -92,7 +92,7 @@ export class AuthModule {
   }
 
   /**
-   * `forRoot` with the options behind a factory that may await and may inject —
+   * `forRoot` with the options behind a factory that may await and may inject -
    * which is the only way the secret, the base URL and the database can come from
    * `ConfigService` rather than from module scope:
    *
@@ -111,7 +111,7 @@ export class AuthModule {
    * `mountAt` is a second, **synchronous** argument for the same reason
    * `DbModule.forRootAsync` takes its token positionally: the mount is a route in
    * Bun's table, and that table is built before any factory has run. It is only
-   * needed under a global prefix — see {@link AuthOptions.mountAt}. Omitting it while
+   * needed under a global prefix - see {@link AuthOptions.mountAt}. Omitting it while
    * the factory returns a non-default `basePath` is a boot error, because that
    * combination could only ever have mounted the handler where better-auth is not
    * looking.
@@ -138,7 +138,7 @@ export class AuthModule {
           if (mountAt === undefined && resolved.basePath !== mounted) {
             throw new AuthError(
               `The factory returned basePath ${resolved.basePath}, but the handler ` +
-                `is mounted at ${mounted} — the table was built before the factory ` +
+                `is mounted at ${mounted} - the table was built before the factory ` +
                 'ran, so it could not follow. Pass the route path as ' +
                 "forRootAsync's second argument.",
             );

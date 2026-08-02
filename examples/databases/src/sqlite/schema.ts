@@ -3,7 +3,7 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 /**
  * `sqliteTable`, from `drizzle-orm/sqlite-core`. The three dialects in this
  * example each get their own schema module, because the column builders are
- * dialect-specific — that is drizzle's design, not a dunx one, and it is why the
+ * dialect-specific - that is drizzle's design, not a dunx one, and it is why the
  * three folders here are siblings rather than one parameterised thing.
  *
  * `typeof schema` is what flows into `BunSQLiteDatabase<typeof schema>` at every

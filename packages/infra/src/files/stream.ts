@@ -11,7 +11,7 @@ import type { FileSink } from 'bun';
  * resident at a time, so a file larger than memory still transfers.
  *
  * `FileSink.write` returns a promise once its buffer fills, which is how
- * backpressure reaches the producer — hence the await. Its return value is a
+ * backpressure reaches the producer - hence the await. Its return value is a
  * buffered-bytes counter rather than a per-chunk count, so the total is taken
  * from the chunks instead.
  */

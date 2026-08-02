@@ -35,7 +35,7 @@ export const configured = (
 
 /**
  * Credentials are entered once and applied to every operation that asks for the
- * scheme — the whole point of the dialog, and what retyping an `Authorization`
+ * scheme - the whole point of the dialog, and what retyping an `Authorization`
  * header per operation used to cost.
  *
  * An `apiKey` scheme is honoured where it says it travels: `in: 'query'` becomes

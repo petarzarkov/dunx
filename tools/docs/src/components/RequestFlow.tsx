@@ -13,7 +13,7 @@ const STEPS: readonly Step[] = [
     what: 'matches the route',
     native: true,
     detail:
-      'Path params and per-method dispatch happen in Zig. dunx registers routes with Bun and never walks a JavaScript router — a method miss is Bun’s 404, not ours.',
+      'Path params and per-method dispatch happen in Zig. dunx registers routes with Bun and never walks a JavaScript router - a method miss is Bun’s 404, not ours.',
   },
   {
     who: 'RequestLoggingMiddleware',
@@ -37,7 +37,7 @@ const STEPS: readonly Step[] = [
     who: 'Standard Schema',
     what: 'validates params, query, body',
     detail:
-      'Whatever validator the route’s schema came from — zod, Valibot, ArkType. Coercion happens here, so :id is already a number when the handler reads it. A failure is a 400 that never reaches your code.',
+      'Whatever validator the route’s schema came from - zod, Valibot, ArkType. Coercion happens here, so :id is already a number when the handler reads it. A failure is a 400 that never reaches your code.',
   },
   {
     who: 'Your handler',
@@ -49,7 +49,7 @@ const STEPS: readonly Step[] = [
     who: '@dunx/http',
     what: 'turns the return value into a Response',
     detail:
-      'An object becomes JSON, a string stays text, 201 is the POST default. A thrown HttpError is mapped to its status; anything else is a 500 that gets logged with its stack. When the handler is synchronous and reads no body, this whole path stays synchronous — no promise is allocated.',
+      'An object becomes JSON, a string stays text, 201 is the POST default. A thrown HttpError is mapped to its status; anything else is a 500 that gets logged with its stack. When the handler is synchronous and reads no body, this whole path stays synchronous - no promise is allocated.',
   },
   {
     who: 'RequestLoggingMiddleware',

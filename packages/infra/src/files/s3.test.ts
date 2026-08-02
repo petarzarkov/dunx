@@ -17,7 +17,7 @@ const storage = (prefix = ''): S3Storage =>
 /** Real credentials in the environment turn the integration block on. */
 const liveBucket = Bun.env['DUNX_S3_TEST_BUCKET'];
 
-/** See local.test.ts — bun:test's `.rejects` chain is not typed as thenable. */
+/** See local.test.ts - bun:test's `.rejects` chain is not typed as thenable. */
 const rejection = (promise: Promise<unknown>): Promise<unknown> =>
   promise.then(
     () => {
@@ -172,8 +172,8 @@ describe('S3Storage.presign', () => {
 describe.skipIf(liveBucket === undefined)(
   'S3Storage against a real bucket',
   () => {
-    // Never reached when the variable is unset — skipIf has already taken the block
-    // out — but the fallback keeps `bucket` a plain string for the typechecker.
+    // Never reached when the variable is unset - skipIf has already taken the block
+    // out - but the fallback keeps `bucket` a plain string for the typechecker.
     const live = (): S3Storage =>
       new S3Storage(
         new S3StorageOptions({ bucket: liveBucket ?? '' }, 'dunx-files-test'),

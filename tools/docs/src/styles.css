@@ -176,7 +176,7 @@ body {
 
 /* Benchmark bars. Plain divs sized by the percentage the adjacent cell prints,
    so a chart library is not in the bundle for four bar charts. Colour encodes
-   the runtime — the honest grouping, since a Bun subject beating a Node one is
+   the runtime - the honest grouping, since a Bun subject beating a Node one is
    a statement about the runtime, not about the framework. */
 .bench-track {
   position: relative;
@@ -252,7 +252,7 @@ body {
 }
 
 /* Every symbol card is an anchor target, so it must clear the sticky header
-   when scrolled to. The ring marks the one the current `?h=` names — a search
+   when scrolled to. The ring marks the one the current `?h=` names - a search
    hit has to be identifiable once it is on screen, not merely on screen. */
 .symbol-card,
 [id^='scenario-'] {

@@ -23,7 +23,7 @@ const BUN_APIS = [
   'Bun.Glob',
 ];
 
-/** Inline paths rather than an icon package — nine strokes are not a dependency. */
+/** Inline paths rather than an icon package - nine strokes are not a dependency. */
 const PATHS = Object.freeze({
   inject: 'M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5',
   bolt: 'M13 2 4 14h7l-1 8 9-12h-7z',
@@ -90,7 +90,7 @@ export const Features = (): React.JSX.Element => {
           <Feature icon={PATHS.inject} title="Injection without annotation">
             <code>@dunx/transform</code> reads constructor parameter types at
             load time and records them as a thunk, so a dependency declared
-            later in the file — or across a circular import — resolves with no{' '}
+            later in the file - or across a circular import - resolves with no{' '}
             <code>forwardRef</code>. An erased type is a boot error naming the
             parameter, not a silent <code>undefined</code>.
           </Feature>
@@ -104,7 +104,7 @@ export const Features = (): React.JSX.Element => {
 
           <Feature icon={PATHS.log} title="One log line per request">
             On by default, outermost in the chain, carrying request and response
-            in a single entry — 4xx at <code>warn</code>, 5xx at{' '}
+            in a single entry - 4xx at <code>warn</code>, 5xx at{' '}
             <code>error</code>, unmatched paths included. Nest needs a
             middleware plus an interceptor; middleware here wraps{' '}
             <code>next()</code>.
@@ -122,7 +122,7 @@ export const Features = (): React.JSX.Element => {
           <Feature icon={PATHS.layers} title="Bun-native all the way down">
             No <code>express</code>, no <code>ws</code>, no <code>ioredis</code>
             , no <code>pg</code>, no <code>sharp</code>, no <code>dotenv</code>.
-            Routing is <code>Bun.serve</code>&apos;s own router — path params
+            Routing is <code>Bun.serve</code>&apos;s own router - path params
             and per-method dispatch in Zig, not a JavaScript router.
             <Group gap={5} mt="xs">
               {BUN_APIS.map((api) => (
@@ -135,7 +135,7 @@ export const Features = (): React.JSX.Element => {
             Routes validate against Standard Schema, so zod, Valibot and ArkType
             all work. <code>@dunx/openapi</code> turns those same schemas into
             an OpenAPI 3.1 document and a self-contained page that makes every
-            route testable — no CDN, no external request.
+            route testable - no CDN, no external request.
           </Feature>
 
           <Feature icon={PATHS.flask} title="Tests against a real server">
@@ -147,7 +147,7 @@ export const Features = (): React.JSX.Element => {
         </SimpleGrid>
 
         <Text size="sm" c="dimmed">
-          {site.packages.length} packages, deliberately few — merging is nearly
+          {site.packages.length} packages, deliberately few - merging is nearly
           free because ESM tree-shaking drops what is not imported.
         </Text>
       </Stack>

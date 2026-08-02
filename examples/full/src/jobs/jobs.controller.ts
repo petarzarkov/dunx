@@ -43,7 +43,7 @@ export class JobsController {
     return {
       id: job.id ?? '(unassigned)',
       queue: THUMBNAIL_QUEUE,
-      // `waiting` until a worker takes it — which is the observable point of a
+      // `waiting` until a worker takes it - which is the observable point of a
       // queue, so it is in the response rather than hidden.
       state: await job.getState(),
     };
@@ -79,7 +79,7 @@ export class JobsController {
   }
 
   /**
-   * No Redis is a degraded queue, not a broken app — the same contract the cache
+   * No Redis is a degraded queue, not a broken app - the same contract the cache
    * routes keep. bullmq surfaces the failure through ioredis rather than Bun's
    * client, so the connection-error shape is not guaranteed to match; anything
    * unrecognised still becomes a 503 rather than a 500, because "the queue is not

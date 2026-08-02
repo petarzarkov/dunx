@@ -63,7 +63,7 @@ export const readBench = (file: string): BenchModel | null => {
   const report = JSON.parse(readFileSync(file, 'utf8')) as BenchReport;
   if (report.schemaVersion !== BENCH_SCHEMA_VERSION) {
     console.warn(
-      `docs: benchmark schemaVersion ${report.schemaVersion}, expected ${BENCH_SCHEMA_VERSION} — skipping`,
+      `docs: benchmark schemaVersion ${report.schemaVersion}, expected ${BENCH_SCHEMA_VERSION} - skipping`,
     );
     return null;
   }

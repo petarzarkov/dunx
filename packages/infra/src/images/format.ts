@@ -2,7 +2,7 @@
  * The container formats `Bun.Image` can identify. Matches `Bun.Image.Format`
  * one-for-one, so a value read from `metadata().format` is always one of these.
  *
- * Frozen object plus an indexed-access union, not an `enum` — see CLAUDE.md.
+ * Frozen object plus an indexed-access union, not an `enum` - see CLAUDE.md.
  */
 export const ImageFormat = Object.freeze({
   JPEG: 'jpeg',
@@ -18,7 +18,7 @@ export const ImageFormat = Object.freeze({
 export type ImageFormat = (typeof ImageFormat)[keyof typeof ImageFormat];
 
 /**
- * The subset Bun has an encoder for. `bmp`, `tiff` and `gif` decode only —
+ * The subset Bun has an encoder for. `bmp`, `tiff` and `gif` decode only -
  * there is no `.bmp()`/`.tiff()`/`.gif()` on `Bun.Image`, so they can be read
  * but never written.
  */
@@ -84,7 +84,7 @@ const HEIC_BRANDS = new Set([
 const AVIF_BRANDS = new Set(['avif', 'avis']);
 
 /**
- * Identify a container from its leading bytes. Content, never filename — a
+ * Identify a container from its leading bytes. Content, never filename - a
  * `.png` holding JPEG bytes reports `jpeg`.
  *
  * `undefined` means no signature matched, which is the same condition Bun

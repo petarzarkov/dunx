@@ -18,7 +18,7 @@ export interface RenderResult {
 }
 
 /**
- * A job handler is a method with a decorator and nothing else — no registry, no
+ * A job handler is a method with a decorator and nothing else - no registry, no
  * class decorator, no queue token. `WorkerFactory` finds it by walking the
  * prototypes of the classes already in `providers`, the same marker-plus-scan the
  * route and gateway discovery use.

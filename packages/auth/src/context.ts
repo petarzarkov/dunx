@@ -5,21 +5,21 @@ import type { BetterAuthOptions } from 'better-auth';
 import type { Principal } from './auth.js';
 
 /**
- * How the authenticated caller reaches a handler — and anything the handler calls,
+ * How the authenticated caller reaches a handler - and anything the handler calls,
  * however deep.
  *
  * `AsyncLocalStorage`, for the same reason `@dunx/core`'s `RequestContext` is: it is
  * a Node built-in Bun implements natively, and it is the only mechanism that gets a
  * value from middleware to a service three constructor hops away without passing
- * it. The alternatives were both worse — request-scoped DI was measured and rejected
+ * it. The alternatives were both worse - request-scoped DI was measured and rejected
  * (docs/ARCHITECTURE.md), and hanging the principal off `req` reaches a route
  * handler but nothing a route handler calls.
  *
  * It is a **second** store rather than a key in `RequestContext`. That store is the
  * log record: every field in it is serialized into every line the request writes, so
  * a session object there would be noise on each entry and a redaction hazard in the
- * ones that matter. What does go there is `userId` — a well-known `RequestFields`
- * key — so the log lines are correlated without carrying the principal.
+ * ones that matter. What does go there is `userId` - a well-known `RequestFields`
+ * key - so the log lines are correlated without carrying the principal.
  */
 export class AuthContext {
   readonly #storage = new AsyncLocalStorage<Principal>();

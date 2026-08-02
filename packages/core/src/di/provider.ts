@@ -16,8 +16,8 @@ export interface ClassProvider<T> {
 
 export interface FactoryProvider<T, D extends Deps> {
   readonly useFactory: (...deps: Resolved<D>) => T | Promise<T>;
-  // Factories cannot use inject() — after the first await the module-level
-  // current injector is no longer theirs — so their dependencies are declared.
+  // Factories cannot use inject() - after the first await the module-level
+  // current injector is no longer theirs - so their dependencies are declared.
   readonly inject?: D;
 }
 

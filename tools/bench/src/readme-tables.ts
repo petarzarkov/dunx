@@ -2,7 +2,7 @@
  * Regenerates the results tables in `README.md` from `results/latest.json`.
  *
  * The tables used to be transcribed by hand, which is a standing invitation to a
- * typo nobody can catch by reading — a benchmark whose published numbers do not
+ * typo nobody can catch by reading - a benchmark whose published numbers do not
  * match its own report is worse than no benchmark. Run this after `bun run start`:
  *
  * ```bash
@@ -126,7 +126,7 @@ const versions = report.subjects
 
 const section = `## Results
 
-Generated from \`results/latest.json\` by \`bun src/readme-tables.ts\` — never
+Generated from \`results/latest.json\` by \`bun src/readme-tables.ts\` - never
 transcribed by hand.
 
 \`\`\`
@@ -138,48 +138,48 @@ ${versions}
 
 Reproduce with \`bun run start\`; the full JSON lands in \`results/latest.json\`.
 
-**Plain text** — \`GET /plaintext\`
+**Plain text** - \`GET /plaintext\`
 
 ${throughputTable('plaintext')}
 
-**JSON** — \`GET /json\`
+**JSON** - \`GET /json\`
 
 ${throughputTable('json')}
 
-**Path parameter** — \`GET /params/42\`
+**Path parameter** - \`GET /params/42\`
 
 ${throughputTable('params')}
 
-**Body validation** — \`POST /validate\`
+**Body validation** - \`POST /validate\`
 
 ${throughputTable('validate')}
 
-**Startup** — cold process to first served request, ${c.startupSamples} samples
+**Startup** - cold process to first served request, ${c.startupSamples} samples
 
 ${startupTable()}
 
 ### What these say, including where dunx loses
 
-**The dunx tax over raw \`Bun.serve\`** — the number this harness exists to produce:
+**The dunx tax over raw \`Bun.serve\`** - the number this harness exists to produce:
 
 ${taxTable()}
 
 **A figure at or above 100% is noise, not a win.** \`@dunx/http\` dispatches
 *through* \`Bun.serve\`; it cannot serve a request faster than the API it calls. When
-the two land within each other's standard deviation — which they now do on
-\`plaintext\` — the honest reading is "no measurable overhead", not "faster than
+the two land within each other's standard deviation - which they now do on
+\`plaintext\` - the honest reading is "no measurable overhead", not "faster than
 \`Bun.serve\`". Differences under about 3% on this setup are noise.
 
 **\`dunx-logging\` is the same app with \`requestLogging\` left at its default**, and
 the gap to \`dunx\` is one structured line per request: reading \`req.headers\`, an
 \`AsyncLocalStorage\` scope, building the entry, \`JSON.stringify\`, and the write.
 Nothing else in this table logs anything, which is why the two rows exist separately
-— see "Why dunx appears twice". A third harness decomposes that gap step by step; see
+- see "Why dunx appears twice". A third harness decomposes that gap step by step; see
 "Request logging cost" below.
 
 **Validation is still the largest absolute cost**, but most of it is not the
-framework's and not the validator's. Splitting it took a second harness — see
-"Validation cost" below — and the answer is that \`req.json()\` costs about 3 µs while
+framework's and not the validator's. Splitting it took a second harness - see
+"Validation cost" below - and the answer is that \`req.json()\` costs about 3 µs while
 zod costs about 1 µs. dunx's own share of the \`validate\` row was 3.7 µs per request
 and is now ~1.4 µs, which moved it from 84% of the baseline to over 90% and past
 Elysia on this scenario. What remains is dispatch, not validation.
@@ -211,7 +211,7 @@ console.log(`README results section regenerated from ${report.generatedAt}`);
 
 const validation = await validationSection();
 if (validation === null) {
-  console.log('No results/validation.json — validation section left as it is.');
+  console.log('No results/validation.json - validation section left as it is.');
 } else {
   readme = replaceSection(readme, '## Validation cost', validation);
   console.log('README validation section regenerated.');
@@ -219,7 +219,7 @@ if (validation === null) {
 
 const logging = await loggingSection();
 if (logging === null) {
-  console.log('No results/logging.json — logging section left as it is.');
+  console.log('No results/logging.json - logging section left as it is.');
 } else {
   readme = replaceSection(readme, '## Request logging cost', logging);
   console.log('README request logging section regenerated.');

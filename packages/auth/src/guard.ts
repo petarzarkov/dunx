@@ -19,7 +19,7 @@ interface Roled {
  * What roles a user holds. better-auth's `admin` plugin stores them in a single
  * `role` column, comma-separated for more than one; a custom plugin may use an
  * array. Both read the same here, and a user with none reads as `[]` rather than
- * throwing — an app may well not use roles at all.
+ * throwing - an app may well not use roles at all.
  */
 export const rolesOf = (user: object): readonly string[] => {
   const role = (user as Roled).role;
@@ -40,13 +40,13 @@ export const rolesOf = (user: object): readonly string[] => {
  * Authenticates every request it sees through better-auth's own session lookup, and
  * composes with the metadata `@dunx/http` already carries:
  *
- * - `@Public()` — skipped outright. No session lookup, no rejection, no role check.
+ * - `@Public()` - skipped outright. No session lookup, no rejection, no role check.
  *   That is what makes it safe to install globally: better-auth's own endpoints are
  *   `@Public()`, and a sign-in route that needed a session could never be reached.
  *   A public route that wants to *adapt* to an optional caller injects `Auth` and
- *   calls `auth.api.getSession({ headers: req.headers })` itself — one line, and it
+ *   calls `auth.api.getSession({ headers: req.headers })` itself - one line, and it
  *   does not put a lookup on every public request in the app.
- * - `@Roles('admin')` — a 403 unless the caller holds one of them.
+ * - `@Roles('admin')` - a 403 unless the caller holds one of them.
  *
  * Install it globally with `HttpFactory.create(root, { middleware: [SessionGuard] })`
  * and opt routes out with `@Public()`, or scope it with `@UseGuards(SessionGuard)`

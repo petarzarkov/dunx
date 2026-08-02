@@ -1,7 +1,7 @@
 /**
  * OpenAPI 3.1 restated as types, the same way `@dunx/http` restates Standard
  * Schema: the specification is a document shape, not a runtime, so depending on a
- * package for it would buy nothing. Only what this generator emits is declared —
+ * package for it would buy nothing. Only what this generator emits is declared -
  * a field missing here is a field dunx does not produce.
  */
 
@@ -51,7 +51,7 @@ export interface OperationObject {
   readonly responses: Readonly<Record<string, ResponseObject>>;
   /** Absent means "inherit the document default"; `[]` means "explicitly open". */
   readonly security?: readonly SecurityRequirement[];
-  /** What `@Roles` declared. A scheme's scopes cannot carry it — roles are not scopes. */
+  /** What `@Roles` declared. A scheme's scopes cannot carry it - roles are not scopes. */
   readonly 'x-required-roles'?: readonly string[];
   /** The Standard Schema vendor whose schema could not be converted. */
   readonly 'x-schema-vendor'?: string;

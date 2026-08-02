@@ -1,4 +1,4 @@
-# dunx — Architecture
+# dunx - Architecture
 
 A Bun-native DI framework with NestJS-shaped ergonomics and none of the Nest
 runtime. Standard (TC39) decorators, no `reflect-metadata`, no `tsyringe`, no
@@ -10,7 +10,7 @@ Elysia and Hono own Bun's web-framework space and are mature. Neither offers
 dependency injection, modules, or class-based controllers, and Elysia's chained
 builder API is precisely what NestJS refugees bounce off. That gap is the whole
 product. dunx should stay a **DI + structure** framework that happens to serve
-HTTP — not drift into a general web framework.
+HTTP - not drift into a general web framework.
 
 ## Verified constraints
 
@@ -28,7 +28,7 @@ There is no reason to build a radix tree in JavaScript. dunx's job is to _emit_
 the `routes` object at boot and hand it to Bun.
 
 **`server.upgrade(req)` works from inside a `routes` handler.** Bun's own types
-bless it — `Serve.RoutesWithUpgrade` allows `Response | undefined | void` when
+bless it - `Serve.RoutesWithUpgrade` allows `Response | undefined | void` when
 `websocket` is present. So a WebSocket gateway is mounted as a native `GET` route
 rather than needing a hand-written `fetch` fallback, which means **Bun's router does
 run on the upgrade path** and a gateway path may be a pattern (`/room/:room`, with
@@ -77,14 +77,14 @@ paramtypes: [ "Db", "Object", "Number" ]
 
 An interface degrades to `Object`, a primitive to `Number`. Constructor
 injection therefore _requires_ `@Inject(TOKEN)` for everything that isn't a
-class — Nest's worst ergonomic wart, inherited on day one.
+class - Nest's worst ergonomic wart, inherited on day one.
 
 **Standard decorators + `inject()` work today, zero dependencies.** Route
 metadata collection and a full singleton graph both run under TC39 decorators
 with no polyfill and no `experimentalDecorators`.
 
 **Member decorators are applied before the class decorator.** Source order within
-a class, then the class itself — so a class decorator can drain what its own
+a class, then the class itself - so a class decorator can drain what its own
 members pushed:
 
 ```
@@ -93,7 +93,7 @@ member list   member one   class Users
 
 **`ctx.metadata` is write-only in Bun, and leaks in both directions.** Bun 1.3.14
 hands a `ctx.metadata` object to decorators but leaves `Symbol.metadata`
-undefined, so nothing can read it back off the class without a polyfill — the
+undefined, so nothing can read it back off the class without a polyfill - the
 exact "must be the first import" fragility being escaped. Polyfill it and each
 class's metadata object gets its parent's as its **prototype**, so `routes ??= []`
 in a subclass resolves through the chain and mutates the _parent's_ array:
@@ -105,7 +105,7 @@ Base[Symbol.metadata]  : { routes: [ "list", "one" ] }   # "one" belongs to User
 Posts[Symbol.metadata] : { routes: [ "list", "one" ] }   # Posts has neither method
 ```
 
-`Object.hasOwn(Posts, Symbol.metadata)` is `true`, so ownership cannot filter it —
+`Object.hasOwn(Posts, Symbol.metadata)` is `true`, so ownership cannot filter it -
 the class owns its metadata object; the array inside is shared.
 
 **A global pending array drained by the class decorator loses and leaks routes.**
@@ -119,8 +119,8 @@ Orphan(@Get leaked, undecorated), then @Controller Unrelated(@Get mine):
   Unrelated -> [ "leaked", "mine" ]               # leaks, and across files
 ```
 
-`name in Klass.prototype` separates the two exactly — `list` is in `Users`'s
-chain, `leaked` is not in `Unrelated`'s — which turns both into boot errors.
+`name in Klass.prototype` separates the two exactly - `list` is in `Users`'s
+chain, `leaked` is not in `Unrelated`'s - which turns both into boot errors.
 
 **Overriding a decorated base method without re-decorating dispatches to the
 override.** A closure over `instance[name]` resolves through the prototype chain
@@ -157,7 +157,7 @@ annotated with the wrong type  -> TS1241 + TS1270, naming the mismatched propert
 
 A standard method decorator is `(value: V, ctx: ClassMethodDecoratorContext) => V | void`,
 so it can reject a mismatched `V` but has no way to contextually type an
-unannotated parameter. Input must therefore be annotated — and the annotation is a
+unannotated parameter. Input must therefore be annotated - and the annotation is a
 type-level function over the options object, so each type is still written once:
 
 ```ts
@@ -173,7 +173,7 @@ Verified that the wrong return type on that exact shape fails with
 `Type 'string' is not assignable to type 'number'`.
 
 **`drizzle-orm/bun-sql` is Postgres, not `Bun.SQL`.** `Bun.SQL` speaks four
-dialects — `postgres`, `mysql`, `mariadb`, `sqlite`, quoted from its own rejection
+dialects - `postgres`, `mysql`, `mariadb`, `sqlite`, quoted from its own rejection
 message. Its drizzle adapter speaks one. Read from `bun-sql/driver.js` in
 drizzle-orm 0.45.2:
 
@@ -182,14 +182,14 @@ const dialect = new PgDialect({ casing: config.casing });
 ```
 
 Unconditional, with no branch on `client.options.adapter` anywhere in the module.
-Pointed at a `sqlite://` client it does not error — it compiles `$1` placeholders
+Pointed at a `sqlite://` client it does not error - it compiles `$1` placeholders
 and Postgres identifier quoting against SQLite, and the trivial cases pass, which
 is worse than failing.
 
 Two consequences. `SqlOptions` rejects a non-Postgres URL at construction rather
 than at connect time; and **MySQL/MariaDB have no drizzle path on Bun at all**,
 since drizzle's own MySQL adapters need `mysql2`, a client Bun already replaces.
-This also retired a trick the `@dunx/infra` test suite used to rely on — running
+This also retired a trick the `@dunx/infra` test suite used to rely on - running
 the `Bun.SQL` suite over that driver's SQLite adapter so the whole code path was
 covered with no server installed. A green suite compiling Postgres SQL against
 SQLite proves nothing, so the wire-protocol tests skip unless `DUNX_DB_TEST_URL`
@@ -199,7 +199,7 @@ names a reachable server.
 synchronous-commit behaviour.** `bun:sqlite`'s own `db.transaction()` commits when
 its callback **returns its promise**, so awaited work is already committed and a
 later throw rolls back nothing (recorded in [bun-apis.md](./bun-apis.md)). drizzle
-does not work around it — `bun-sqlite/session.js` delegates straight to it:
+does not work around it - `bun-sqlite/session.js` delegates straight to it:
 
 ```js
 const nativeTx = this.client.transaction(() => {
@@ -208,7 +208,7 @@ const nativeTx = this.client.transaction(() => {
 nativeTx[config.behavior ?? 'deferred']();
 ```
 
-Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch — the row is
+Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch - the row is
 still there. So `drizzle` being a mature library does not make this one safe, and
 `@dunx/infra/db` exports a standalone `transaction(db, fn)` that issues
 `BEGIN`/`COMMIT`/`ROLLBACK` itself. There is one connection, so overlapping
@@ -218,7 +218,7 @@ same function delegates to drizzle's own `transaction()`, which is genuinely asy
 because `Bun.SQL`'s `begin()` reserves a connection for the duration.
 
 **A decorator cannot publish a type back onto the class it decorates.** Measured on
-TypeScript 7.0.2 — both routes fail with `TS2339: Property 'table' does not exist`:
+TypeScript 7.0.2 - both routes fail with `TS2339: Property 'table' does not exist`:
 
 ```
 @Entity('users') class UserA {}   UserA.table   // decorator defineProperty'd a static
@@ -232,7 +232,7 @@ cannot tell the type system it is there.
 This is why **entity decorators were rejected**. drizzle's whole value is the table
 object's _type_ carrying column types into every query; a decorator could build a
 working table at runtime while every query degraded to `unknown`. Recovering the
-types would mean hand-writing a mapped type mirroring drizzle's `BuildColumns` — a
+types would mean hand-writing a mapped type mirroring drizzle's `BuildColumns` - a
 second source of truth that drifts from the first, which is exactly the duplication
 decorators were meant to remove. drizzle's native `sqliteTable` object schema is the
 supported path.
@@ -240,7 +240,7 @@ supported path.
 The same limit explains why `@Post('/', opts)` can _check_ a handler's input
 annotation but not _infer_ it. Decorators observe; they do not type. Note the
 contrast with `@Controller`, `@Get`, `@Module`, `@Gateway` and `@Roles`, which all
-work fine — they only _record_ metadata read back at boot, and publish nothing to
+work fine - they only _record_ metadata read back at boot, and publish nothing to
 the type system.
 
 ## The decorator dialect decision
@@ -255,7 +255,7 @@ dunx uses **standard decorators only**. The root `tsconfig.json` must not set
 `experimentalDecorators` or `emitDecoratorMetadata`.
 
 That rules out the _decorator_ route to constructor injection. It does not rule
-out constructor injection — see below.
+out constructor injection - see below.
 
 ## Constructor injection without decorator metadata
 
@@ -279,7 +279,7 @@ Object.defineProperty(UsersService, Symbol.for('dunx.deps'), {
 ```
 
 The container reads that record and resolves the arguments before calling `new`.
-So the user-facing syntax carries **no annotation at all** — no `@Injectable`, no
+So the user-facing syntax carries **no annotation at all** - no `@Injectable`, no
 `@Inject`, no `inject()`, no `reflect-metadata`, no `experimentalDecorators`.
 
 ### Registering the transform
@@ -287,7 +287,7 @@ So the user-facing syntax carries **no annotation at all** — no `@Injectable`,
 Three ways, same plugin object:
 
 ```toml
-# bunfig.toml — for `bun run` and `bun test`
+# bunfig.toml - for `bun run` and `bun test`
 preload = ["@dunx/transform/preload"]
 
 [test]
@@ -377,7 +377,7 @@ Two limits worth recording. The transform only rewrites **class declarations**: 
 `ClassExpression`'s own name is bound inside the class body, so a statement
 appended after `const X = class Inner {}` could not reference `Inner`. And because
 a plugin sees one file at a time, it cannot tell a DI provider from a plain data
-class — `new HttpError(404, 'x')` also has constructor parameters. So it records
+class - `new HttpError(404, 'x')` also has constructor parameters. So it records
 metadata for every annotated class and lets the container raise the error only if
 something is actually resolved as a provider. That is why the error is a boot
 error and not a build error.
@@ -387,7 +387,7 @@ off, and both mechanisms may be used in the same class.
 
 ## Core primitives (`@dunx/core`)
 
-There is no `@Injectable()` — every class is injectable by default.
+There is no `@Injectable()` - every class is injectable by default.
 
 | Primitive                                              | Purpose                                                  |
 | ------------------------------------------------------ | -------------------------------------------------------- |
@@ -395,7 +395,7 @@ There is no `@Injectable()` — every class is injectable by default.
 | `inject<T>(token): T`                                  | Escape hatch, in a field initializer. Always synchronous |
 | `token<T>(name)`                                       | Opaque token for interfaces, config objects, primitives  |
 | `provide(token, {useClass \| useValue \| useFactory})` | Binding, including async factories                       |
-| `@Module({imports, providers})`                        | Class decorator. Registration only — see below           |
+| `@Module({imports, providers})`                        | Class decorator. Registration only - see below           |
 | `AppFactory.create(RootModule)`                        | Builds, resolves, runs `onInit`. Returns a live `App`    |
 
 `AppFactory.create()` is async and there is no separate `init()`: resolution is
@@ -408,7 +408,7 @@ finished, whoever triggered it.
 Anything that is a **runtime value** can be its own token, so most code needs no
 `token()` call at all. In order of preference:
 
-1. **A concrete class** — `inject(Config)`. Nothing to declare; an unbound class
+1. **A concrete class** - `inject(Config)`. Nothing to declare; an unbound class
    self-binds.
 2. **An abstract class** for a contract whose implementation is built elsewhere.
    It is a runtime value, so it works as a token, and it cannot be constructed, so
@@ -425,7 +425,7 @@ Anything that is a **runtime value** can be its own token, so most code needs no
    (`token<string>('Dsn')`), or a value whose type you do not own and cannot
    subclass.
 
-An `interface` is erased at compile time, so `inject(SomeInterface)` cannot exist —
+An `interface` is erased at compile time, so `inject(SomeInterface)` cannot exist -
 that is the same erasure the `emitDecoratorMetadata` measurement above shows
 degrading to `Object`. Replacing the interface with an abstract class is what makes
 the token disappear. `examples/full` uses zero `token()` calls for this
@@ -442,8 +442,8 @@ useless object rather than erroring. TypeScript blocks it in the `providers` arr
 (a bare entry must be constructible), but not at the `inject()` call site.
 
 `@Module` is a marker, not a container. It writes its options onto the class as a
-`Symbol.for('dunx.module')` property — the same technique as route discovery, no
-accumulator — and the class is **never instantiated**. Reading it uses
+`Symbol.for('dunx.module')` property - the same technique as route discovery, no
+accumulator - and the class is **never instantiated**. Reading it uses
 `Object.hasOwn`, so subclassing a module does not inherit its bindings; that
 throws instead. The class name is where the duplicate-binding error gets "bound by
 module X and module Y". `controllers` and `middleware` arrive with Phase 2, since
@@ -457,8 +457,8 @@ case carries no function calls at all:
 export class UsersModule {}
 ```
 
-`provide()` is only needed where a token is genuinely being bound — an interface, a
-config object, an async factory — which is exactly where Nest needs its object form
+`provide()` is only needed where a token is genuinely being bound - an interface, a
+config object, an async factory - which is exactly where Nest needs its object form
 too. It stays a **call** rather than a `{ provide, useValue }` literal because
 per-element type inference across a heterogeneous array requires one: that is
 precisely why Nest's `useValue` is untyped, and dunx's is checked against the
@@ -494,7 +494,7 @@ before the server binds. Wiring errors surface at boot, not at first request. Th
 is what lets `inject()` stay synchronous: by the time any constructor runs, every
 async provider is already resolved.
 
-There is no static graph to topologically sort — `inject()` calls are only
+There is no static graph to topologically sort - `inject()` calls are only
 discovered by running the field initializers. So construction is recursive and
 synchronous, and an async factory reached from inside a constructor parks its
 promise, throws a private signal to unwind, and the async caller awaits the token
@@ -531,14 +531,14 @@ unreadable stack.
 ## Modules group registrations; they do not encapsulate
 
 The syntax is Nest's. The semantics are not, and that distinction is the whole
-point — an earlier draft of this document argued for plain-object modules, but the
+point - an earlier draft of this document argued for plain-object modules, but the
 argument was always about semantics and the object literal was never load-bearing.
 
-The container is flat. `imports` exists, but it is **traversal only** — it pulls a
+The container is flat. `imports` exists, but it is **traversal only** - it pulls a
 module's registrations into the same flat container. There is no `exports` list, no
 visibility boundary, and therefore no "provider is not exported from module X"
 error. `AppFactory.create(RootModule)` walks the import graph, imports before
-importers so dependencies register first, and visits each module once — which makes
+importers so dependencies register first, and visits each module once - which makes
 a diamond import register once rather than tripping the duplicate-binding check,
 and makes a circular import terminate instead of erroring. A module is a named list
 of registrations and a list of other modules to include.
@@ -547,7 +547,7 @@ So the encapsulation Nest gives you is absent by design. It is also largely
 recoverable elsewhere: `inject(BillingService)` needs a value import of
 `BillingService`, so cross-domain coupling is already visible in the import graph
 and enforceable with a lint boundary rule at zero runtime cost. What is genuinely
-lost is per-module _rebinding_ — a `LOGGER` token bound differently in two
+lost is per-module _rebinding_ - a `LOGGER` token bound differently in two
 features. Use two tokens. That is the price of the flat container.
 
 This is the largest deliberate divergence from Nest and the first thing users
@@ -555,7 +555,7 @@ will notice. It should be loud in the README.
 
 Two modules binding the same token is therefore a real hazard, and last-wins would
 be silent. `app.init()` collects every module's registrations into one flat list
-and **throws on a duplicate token**, naming both modules — the same rule as route
+and **throws on a duplicate token**, naming both modules - the same rule as route
 collisions.
 
 That leaves no room for overrides to be an extra module that wins, so
@@ -563,7 +563,7 @@ That leaves no room for overrides to be an extra module that wins, so
 list and **replaces in place**, keyed by token; an override naming a token nobody
 binds is itself an error. The count per token never changes, so the duplicate check
 still runs unmodified and there is no bypass. Replacement also means a discarded
-provider's factory never runs — which matters when it is the async `useFactory`
+provider's factory never runs - which matters when it is the async `useFactory`
 that opens the real database.
 
 Built, as `AppFactory.create(root, { overrides })` in core with `@dunx/testing`
@@ -571,7 +571,7 @@ wrapping it. See "Test harness (`@dunx/testing`)" below for what that cost.
 
 ## Configured modules, and why there is no `forRootAsync`
 
-A module that needs options exposes a static factory returning a `DynamicModule` —
+A module that needs options exposes a static factory returning a `DynamicModule` -
 its own identity plus the registrations that configuration implies:
 
 ```ts
@@ -615,7 +615,7 @@ One mechanism, not two. The eager-resolution decision paid for itself here.
 
 ### Deduplication is per-reference, not per-module
 
-A bare class is visited once however many modules import it — that is what makes a
+A bare class is visited once however many modules import it - that is what makes a
 diamond import register once rather than tripping the duplicate-binding check. The
 same `DynamicModule` **object** imported twice is likewise visited once.
 
@@ -645,7 +645,7 @@ interface Middleware {
 }
 ```
 
-A guard is still middleware that throws — there is no `CanActivate`. What
+A guard is still middleware that throws - there is no `CanActivate`. What
 `@UseGuards`, `@Roles` and `@Public` added is not a sixth extension point but a
 **scope** and a **metadata channel** for the one that already existed. `ctx.get(key)`
 reads metadata merged handler-first-then-class at discovery, so a method-level
@@ -653,7 +653,7 @@ reads metadata merged handler-first-then-class at discovery, so a method-level
 
 Guards are middleware that throw. Interceptors wrap `next()`. Pipes become
 schema validation in the route options. Filters become one error mapper. Chains
-compose into a single closure per route **at boot** — no per-request array
+compose into a single closure per route **at boot** - no per-request array
 iteration.
 
 ## Params without parameter decorators
@@ -678,14 +678,14 @@ Zod 4, Valibot, and ArkType all work with zero dependencies in `@dunx/*`.
 2. Discover routes per controller by walking the constructed instance's prototype
    chain (see **Route discovery**). Zero routes throws
 3. Join controller prefix + method path, normalize
-4. **Detect collisions and throw** — Bun silently lets one route win
+4. **Detect collisions and throw** - Bun silently lets one route win
 5. Build the `routes` object; each handler is a closure over the
    already-constructed instance and its bound method, with the middleware chain
    already folded in
 6. Hand to `Bun.serve`
 
 Step 2 needs the instance, not just the class, so that the handler can be bound off
-it — which is what makes an undecorated override in a subclass dispatch correctly.
+it - which is what makes an undecorated override in a subclass dispatch correctly.
 That ordering is guaranteed: container resolution is eager and completes first.
 
 Field-initialized routes are part of **Route discovery** but not yet implemented:
@@ -695,7 +695,7 @@ producer.
 
 Middleware is a **class** with `handle(req, ctx, next)`, resolved from the container
 so it gets constructor injection. Global middleware is passed to
-`HttpFactory.create` or `app.use()`, not to `@Module` — in a flat container with no
+`HttpFactory.create` or `app.use()`, not to `@Module` - in a flat container with no
 module boundary, "module middleware" could only ever mean global middleware, so
 hanging it off a module would imply a scope that does not exist.
 
@@ -705,7 +705,7 @@ global outermost, then class-level, then method-level, then the handler.
 
 Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in
-`Response.json()`, and map thrown errors. No lookup, no DI, no metadata read —
+`Response.json()`, and map thrown errors. No lookup, no DI, no metadata read -
 route metadata and the `RouteContext` join the **boot-time** set, not the
 per-request one. The context is frozen and shared by every request to its route, and
 `ctx.get` is a `Map` lookup over an already-merged record rather than a prototype
@@ -713,7 +713,7 @@ walk.
 
 ## Route discovery
 
-Both original candidates were measured and both fail — see **Verified
+Both original candidates were measured and both fail - see **Verified
 constraints**. `ctx.metadata` is unreadable without polyfilling `Symbol.metadata`
 and shares mutable state up the prototype chain. A global pending array drained by
 the class decorator hands a base class's routes to whichever subclass is defined
@@ -738,7 +738,7 @@ Consequences, all measured:
 - **No accumulator, so no ordering dependence and no cross-file leak.** An
   undecorated class's marked methods are never reached, because its prototype is in
   no other class's chain.
-- **No class decorator is required at all** — and so no `@Routes()`. Inheriting
+- **No class decorator is required at all** - and so no `@Routes()`. Inheriting
   from an undecorated abstract base works for any number of subclasses.
   `@Controller` is reduced to supplying a prefix and may be omitted;
   `@Module({ controllers })` is what registers a controller. The prefix is read
@@ -760,8 +760,8 @@ package shipped a hand-rolled `Database` abstract class with a `sql` tagged
 template, `all`/`get`/`run`/`exec`, a `Repository` base and a `quoteIdentifier`
 helper, and two implementations satisfying it. All of that is retired.
 
-This is Rule 1's second half — _never invent what a mature library already
-solves_ — applied to the one place it was being violated. The hand-rolled contract
+This is Rule 1's second half - _never invent what a mature library already
+solves_ - applied to the one place it was being violated. The hand-rolled contract
 was an ORM's front half: it had a query surface, so it would have grown result
 mapping, relations, and a migration story, each one a worse version of something
 drizzle already ships. The rule's own resolution of the tension is what the layer
@@ -773,18 +773,18 @@ database never installs it.
 
 What remains is only what a drizzle handle genuinely lacks:
 
-- **A lifecycle.** `DbConnection` is an abstract class — so it is an injection
-  token — holding `close()`, `onShutdown()`, `backend`, `dialect`, and the raw
+- **A lifecycle.** `DbConnection` is an abstract class - so it is an injection
+  token - holding `close()`, `onShutdown()`, `backend`, `dialect`, and the raw
   driver handle. drizzle has none of these; it does not even know whether its
   driver is open.
 - **Module wiring.** `DbModule` binds three tokens: `DbOptions`, `DbConnection`,
-  and **drizzle's own database class**. That last one is the whole trick — drizzle's
+  and **drizzle's own database class**. That last one is the whole trick - drizzle's
   `BunSQLiteDatabase` and `BunSQLDatabase` are real runtime classes, so a class is
   usable as a token directly, and `@dunx/transform` records the bare type name from
   `db: BunSQLiteDatabase<typeof schema>` while ignoring the type argument. One
   erased class is the token; the schema types stay on the annotation. No wrapper
   object, and no `token()` call.
-- **An async-safe transaction**, for the bun-sqlite quirk measured above — and a
+- **An async-safe transaction**, for the bun-sqlite quirk measured above - and a
   synchronous one for when the callback needs no promise at all, below.
 - **Data seeding.** `drizzle-kit` owns schema migrations and their journal; it has
   no concept of data. `runSeeds` is numbered files, one transaction per seed
@@ -793,14 +793,14 @@ What remains is only what a drizzle handle genuinely lacks:
 
 Two costs are accepted rather than papered over. `DbModule.forRootAsync` has to
 take the token as its first argument, because which drizzle class the token is only
-becomes knowable after the options factory has run — too late to register a
+becomes knowable after the options factory has run - too late to register a
 provider under it. And because schema modules are dialect-specific (`sqliteTable`
 vs `pgTable`), the two backends are a build-time choice; "one `DATABASE_URL` naming
 either" is no longer a supported shape, and the old contract only ever supported it
 by hiding the differences.
 
 Entity decorators were the alternative considered for the schema and were
-**measured and rejected** — see **Verified constraints**, "A decorator cannot
+**measured and rejected** - see **Verified constraints**, "A decorator cannot
 publish a type back onto the class it decorates". drizzle's native object schema is
 the supported path.
 
@@ -808,7 +808,7 @@ the supported path.
 
 `bun:sqlite` is synchronous underneath and `@dunx/http` has a dispatch path that
 allocates no promise when a handler returns a plain value, so a request can in
-principle go parse → query → respond without yielding. Reads already could —
+principle go parse → query → respond without yielding. Reads already could -
 drizzle's bun-sqlite builders have `.all()`/`.get()`/`.run()`. What stopped a
 _write_ was `transaction()`, which returns a promise, so any route that wrote
 anything went back to `async`.
@@ -821,7 +821,7 @@ token becomes `SyncDatabase`, and `transactionSync(db, fn)` becomes reachable.
 
 **`SyncDatabase` is an empty subclass of drizzle's `BunSQLiteDatabase` with one
 declared property, `synchronous: true`.** The property is what stops the two from
-being structurally identical, which is the whole mechanism — TypeScript is
+being structurally identical, which is the whole mechanism - TypeScript is
 structural, so an empty subclass would be mutually assignable and would gate
 nothing. `SyncSqliteConnection` defines the property on the handle drizzle built,
 so the type is true rather than claimed; it is non-enumerable, so nothing that
@@ -833,7 +833,7 @@ is a superset, not a fork.
 Two type-level gates, both compile errors:
 
 - A service annotating `SyncDatabase` in an app configured with `SqliteOptions`
-  fails to resolve at boot — nothing bound that token.
+  fails to resolve at boot - nothing bound that token.
 - `transactionSync`'s callback is constrained to a non-thenable return, so an
   `async` callback does not compile.
 
@@ -844,21 +844,21 @@ Every part of that failure is downstream of the callback being asynchronous. Rem
 the promise and `bun:sqlite`'s own wrapper is exactly right, so `transactionSync`
 **delegates to drizzle's `db.transaction()`** instead of issuing `BEGIN`/`COMMIT`
 itself: no statement strings, no serialising queue, no promise. Verified on Bun
-1.3.14 — a synchronous callback that throws leaves no row, an async one leaves the
+1.3.14 - a synchronous callback that throws leaves no row, an async one leaves the
 row, which is the pair the workaround was built for. Verified too that the two
 compose: a `transactionSync` opened while an async `transaction()` is suspended
 across an `await` takes a **savepoint** rather than failing, because `bun:sqlite`
 branches on `Database.inTransaction`, which the outer `BEGIN` has already set.
 
 **There is no Postgres counterpart and there will not be one.** `Bun.SQL` is a
-socket. The asymmetry is structural rather than documented — `SqlOptions` simply has
-no sync sibling, and `transactionSync` does not accept a `BunSQLDatabase` — so the
+socket. The asymmetry is structural rather than documented - `SqlOptions` simply has
+no sync sibling, and `transactionSync` does not accept a `BunSQLDatabase` - so the
 API cannot pretend the two backends are symmetric.
 
 One deliberate ugliness: `SqliteConnection` gained a second type parameter for the
 handle, and assigns it with `as unknown as TDb`. The alternatives were a subclass
-redeclaring `db` — which TypeScript 7 rejects as `declare override`, and which
-without `declare` would define the field as `undefined` over the base's assignment —
+redeclaring `db` - which TypeScript 7 rejects as `declare override`, and which
+without `declare` would define the field as `undefined` over the base's assignment -
 or a standalone `SyncSqliteConnection` that is not a `SqliteConnection`, breaking
 `connection instanceof SqliteConnection` for the raw-handle escape hatch. One cast
 in one constructor, immediately made true by the subclass, was the smaller cost.
@@ -870,7 +870,7 @@ in one constructor, immediately made true by the subclass, was the smaller cost.
 Two scenarios per mode, `requestLogging: false` so every route stays on the direct
 dispatch path: a single indexed `SELECT`, and a transaction doing two `UPDATE`s and
 a read. An earlier version inserted rows instead of updating them and had to be
-thrown away — the table grew under later rounds, so the write scenario measured its
+thrown away - the table grew under later rounds, so the write scenario measured its
 own history (σ was twice the median).
 
 AMD Ryzen 9 5950X, 32 threads, Bun 1.3.14, oha 1.15.0, 64 connections, 11 rounds of
@@ -883,17 +883,17 @@ AMD Ryzen 9 5950X, 32 threads, Bun 1.3.14, oha 1.15.0, 64 connections, 11 rounds
 | `write:async` | 7,942  |  370 | 7.435  | 15.580 |
 | `write:sync`  | 8,283  |  410 | 7.104  | 15.140 |
 
-**Synchronous mode is ~4–6% more req/s and ~0.2–0.3 ms off p50**, reproduced across
+**Synchronous mode is ~4-6% more req/s and ~0.2-0.3 ms off p50**, reproduced across
 two independent runs (read +5.7% then +4.4%; write +4.2% then +4.3%). Say the rest
 of it plainly: σ on the read rows is ~8% of the median, so a single round proves
-nothing and the per-round ranges overlap. The effect is real — it is consistent in
-direction across 18 rounds and both scenarios — but it sits at the edge of this
+nothing and the per-round ranges overlap. The effect is real - it is consistent in
+direction across 18 rounds and both scenarios - but it sits at the edge of this
 box's noise floor, not comfortably above it. At ~57 µs of service time per request,
 the saving is roughly 3 µs: one async frame, one promise from drizzle's thenable
 builder, one promise adoption in the dispatch path.
 
-The framing that motivated the work — "one API call could be 5–10 ms instead of
-30–50 ms" — is **right about SQLite and wrong about this feature**. That difference
+The framing that motivated the work - "one API call could be 5-10 ms instead of
+30-50 ms" - is **right about SQLite and wrong about this feature**. That difference
 is an embedded database versus one over a network, and an app gets it from
 `SqliteOptions` just as much as from `SyncSqliteOptions`. What sync mode buys on top
 is single-digit percent, plus a request path with no promise in it at all, which is
@@ -918,7 +918,7 @@ Both halves run from the shared `scripts/build-package.ts`, so there is one
 implementation for every package.
 
 `tools/*` is outside all of this. Those workspaces are `"private": true`, never
-published, and build with whatever suits them — `tools/docs` is a React bundle,
+published, and build with whatever suits them - `tools/docs` is a React bundle,
 not a `Bun.build` package. Rule 1 constrains what dunx ships; it does not
 constrain what builds its website.
 
@@ -938,19 +938,19 @@ the graph. Same site, same content, both bundlers, gzip -9:
 | `Bun.build`       | 1829.6 KB | **506.5 KB** | 312.4 KB | 35.0 KB  | ~0.15 s |
 | Vite 8 (Rolldown) | 1558.1 KB | **426.8 KB** | 212.5 KB | 31.2 KB  | ~0.30 s |
 
-83.5 KB less over the wire, for 150 ms nobody waits on — a docs site is built in
+83.5 KB less over the wire, for 150 ms nobody waits on - a docs site is built in
 CI and read over a network. What the move costs, and what has to move with it if
 it is ever reversed:
 
 - Text imports are Vite's `?raw`, not `with { type: 'text' }`. `src/env.d.ts`
   declares `*?raw` locally rather than pulling `vite/client` in, which would mean
   overriding the root tsconfig's `types`. `happydom.ts` registers a `Bun.plugin`
-  teaching the test runner the same suffix — the runner is still `bun test`.
+  teaching the test runner the same suffix - the runner is still `bun test`.
 - `public/` copying and the `dist/` clean are Vite's; `scripts/build.ts` is gone.
 
 **The site carries a projection of the benchmark report, not the report.**
 `results/latest.json` holds every run's samples, each scenario's expected body and
-each subject's entry file — evidence for the harness, and ~48 KB of JSON that
+each subject's entry file - evidence for the harness, and ~48 KB of JSON that
 reaches no pixel. `scripts/extract/bench.ts` narrows it to what renders, which is
 10.6 KB. `BenchReport` in `model.ts` stays the harness's mirror; `BenchModel` is
 the site's shape, and a field surviving the projection means something renders it.
@@ -959,16 +959,16 @@ the site's shape, and a field surviving the projection means something renders i
 `## Install`, `## License` and the monorepo's own build instructions, which are
 for someone working in this repository and not for someone reading the docs.
 `siteMarkdown` in `scripts/content.ts` drops a `##` section whose slug matches
-`EXCLUDED_SECTIONS` with a `-` word boundary — so `## Install it as a
-devDependency` goes with `## Install` — plus the centered title-and-badges block
+`EXCLUDED_SECTIONS` with a `-` word boundary - so `## Install it as a
+devDependency` goes with `## Install` - plus the centered title-and-badges block
 every README opens with. The list is published in `tools/docs/README.md`, and an
 author decides which side a section falls on by naming it. Guides under `docs/`
 are exempt: they _are_ repository documentation, and dropping sections from them
 would lose real content.
 
 **The API reference is extracted, not written.** `tools/docs/scripts/extract/`
-parses every `packages/*/src/**/*.ts` with **`oxc-parser`** — the parser
-`@dunx/transform` already depends on — and reads three things off each exported
+parses every `packages/*/src/**/*.ts` with **`oxc-parser`** - the parser
+`@dunx/transform` already depends on - and reads three things off each exported
 declaration:
 
 - the **signature**, sliced from the source text between AST offsets (from the
@@ -985,7 +985,7 @@ TypeScript's own API was the alternative and was rejected: the only thing it
 adds is _inferred_ types for un-annotated declarations, which this codebase
 barely has, in exchange for running a full type checker over five packages at
 build time. What that costs is recorded in `tools/docs/README.md` along with the
-gaps it leaves — no cross-package type links, no namespace re-export expansion,
+gaps it leaves - no cross-package type links, no namespace re-export expansion,
 one entry per overload set.
 
 Two details worth not re-deriving:
@@ -1034,7 +1034,7 @@ The phases below are written from the framework's point of view.
 a migrating NestJS application, and it argues for two reorderings: route metadata
 moves into Phase 2, and OpenAPI ahead of Phase 4. Read it before planning a phase.
 
-### Phase 1 — DI proven end to end
+### Phase 1 - DI proven end to end
 
 Ship `@dunx/core` and a single `examples/full` app that boots a fully
 dependency-injected application graph **with no HTTP at all**.
@@ -1059,22 +1059,22 @@ phase. It was `examples/playground` until the examples were restructured; the re
 is cosmetic, but what sits beside it now is not.
 
 Where a part needs a service CI does not have (Redis, Postgres, S3), it reports that
-it is skipping and the app still exits 0 — otherwise CI teaches everyone to ignore
+it is skipping and the app still exits 0 - otherwise CI teaches everyone to ignore
 it.
 
 #### Per-package examples were reverted; a ladder of four replaced them
 
-The original decision — recorded here as "seven apps meant seven bootstraps to keep
-alive and nowhere that showed the packages composing" — **stands, and was not
+The original decision - recorded here as "seven apps meant seven bootstraps to keep
+alive and nowhere that showed the packages composing" - **stands, and was not
 reversed.** What changed is that "one example" turned out to be the wrong reading of
 it. There are now four, and the distinction is that they are not one per package:
 
 | Example              | Answers                                                         |
 | -------------------- | --------------------------------------------------------------- |
-| `examples/minimal`   | "what does this framework look like?" — five files, two minutes |
-| `examples/databases` | "how do I set up my database?" — SQLite ×2, Postgres, MySQL     |
-| `examples/testing`   | "how do I test it?" — overrides, a real server, a guard         |
-| `examples/full`      | "does it all actually compose?" — every package, one service    |
+| `examples/minimal`   | "what does this framework look like?" - five files, two minutes |
+| `examples/databases` | "how do I set up my database?" - SQLite ×2, Postgres, MySQL     |
+| `examples/testing`   | "how do I test it?" - overrides, a real server, a guard         |
+| `examples/full`      | "does it all actually compose?" - every package, one service    |
 
 Each is a **question an evaluator asks in order**, not a package with a demo bolted
 on. `@dunx/http` has no example of its own and never will; it appears in all four.
@@ -1083,7 +1083,7 @@ original objection was about, and it did not shrink to make room for the others.
 
 **The maintenance objection still stands and is the binding constraint.** Every
 example is a bootstrap that rots the moment nobody runs it, so each is wired into
-CI the same way `full`'s `tour` is — `bun run --filter '@dunx/example-*' test` runs
+CI the same way `full`'s `tour` is - `bun run --filter '@dunx/example-*' test` runs
 all of their suites, and `full` additionally runs its `tour`. An example that cannot
 be kept alive by CI does not get added. That is the whole test for whether a fifth
 one earns its place, and it is why several plausible candidates were rejected:
@@ -1100,7 +1100,7 @@ one earns its place, and it is why several plausible candidates were rejected:
 #### `examples/databases` is one app with four configurations, not four apps
 
 Four containers run in sequence inside one process, because the container is flat
-and each backend binds its own `DbConnection` — two in one app would be a duplicate
+and each backend binds its own `DbConnection` - two in one app would be a duplicate
 token. One workspace rather than four is less to keep alive, and it puts the
 SQLite-async and SQLite-sync services in adjacent files, which is where the choice
 between them is actually made.
@@ -1110,7 +1110,7 @@ above: with no HTTP, nothing about the database wiring can hide behind a route.
 
 MySQL is the interesting part, and it is a **fifth backend that `@dunx/infra/db`
 does not ship**, assembled in the example in about forty lines with no change to the
-package — which is the strongest available evidence that `DbOptions.open()` is the
+package - which is the strongest available evidence that `DbOptions.open()` is the
 right seam. drizzle has no Bun-native MySQL driver, so it is `drizzle-orm/mysql-proxy`
 with `Bun.SQL` as the transport: drizzle owns the dialect, Bun owns the socket, and
 `mysql2` is never installed. Verified against MySQL 8; the callback contract, the
@@ -1121,7 +1121,7 @@ Promoting it into `@dunx/infra/db` as a `MysqlOptions<TSchema>` is a reasonable 
 step and deliberately not taken here: the example is the place to prove it works
 before it becomes a supported surface with a schema type parameter to maintain.
 
-### Phase 2 — HTTP
+### Phase 2 - HTTP
 
 `@dunx/http`, the `Bun.serve` adapter, the middleware chain, the error mapper,
 and route-collision detection. `examples/full` grows a controller; its Phase 1
@@ -1139,17 +1139,17 @@ Exit criteria:
 - `inject()` still works, and both mechanisms work in one class
 - `examples/full` uses constructor injection throughout and `bun start` exits 0
 
-### Phase 3 — Validation
+### Phase 3 - Validation
 
 Standard Schema wiring and typed route input. Gated on the inference spike
 below.
 
-### Phase 4 — Testing & scaffolder
+### Phase 4 - Testing & scaffolder
 
 `@dunx/testing` (`createTestApp({ modules, overrides })`, real server on port 0)
 and `@dunx/create-app`.
 
-### Phase 5 — OpenAPI — **built**
+### Phase 5 - OpenAPI - **built**
 
 `@dunx/openapi` generates an OpenAPI 3.1 document from the zod schemas already on the
 route decorators and serves self-contained HTML. Security requirements come from the
@@ -1169,7 +1169,7 @@ None open. Route input inference was the last one; its result is recorded under
 
 **better-auth is the authentication system.** `@dunx/auth` is the wiring around it and
 nothing else: no sign-in flow, no session table, no password reset, no OAuth dance.
-Rule 1's second half is not a close call here — an auth system is years of edge cases,
+Rule 1's second half is not a close call here - an auth system is years of edge cases,
 and a half-built one is a liability dressed as a feature. `better-auth` is an optional
 `peerDependency`, as is `drizzle-orm` behind the `@dunx/auth/drizzle` subpath.
 
@@ -1177,12 +1177,12 @@ and a half-built one is a liability dressed as a feature. `better-auth` is an op
 
 `@dunx/auth` exists to mount better-auth, and `module.ts` imports `betterAuth` as a
 **value**, so `dist/index.js` cannot load without it. Declaring it
-`optional: true` would promise something the build does not honour — a consumer who
+`optional: true` would promise something the build does not honour - a consumer who
 skipped it would get a module-resolution crash on import rather than the install-time
 warning a required peer produces.
 
 `drizzle-orm` stays optional because only the `@dunx/auth/drizzle` subpath imports
-it, and `dist/index.js` contains no reference to it — verified rather than assumed.
+it, and `dist/index.js` contains no reference to it - verified rather than assumed.
 That is the same test `@dunx/infra` passes for its five other subpaths: a peer is
 optional exactly when the entry point a consumer imports does not need it.
 
@@ -1190,7 +1190,7 @@ optional exactly when the entry point a consumer imports does not need it.
 
 The guard is `@dunx/http` middleware and reads `@dunx/http`'s `PUBLIC` and `ROLES`
 metadata keys, so the code needs `@dunx/http`'s types. `@dunx/infra` must not depend
-on the web layer — the same coupling was proposed for a request logger in `/logger`
+on the web layer - the same coupling was proposed for a request logger in `/logger`
 and refused for the same reason: `@dunx/infra` is what a CLI script, a seeder or a
 queue worker imports, and none of those have an HTTP server. A package that pulled
 `@dunx/http` in behind `@dunx/infra/db` would put a route table in every one of them.
@@ -1211,7 +1211,7 @@ stays at two.
 The concrete forcing function was a build-order race. `@dunx/infra` as a
 `devDependency` of `@dunx/auth` is not an edge `bun run --filter '*'` orders on, so
 `tsc --emitDeclarationOnly` in `@dunx/auth` ran against a `packages/infra/dist` that
-had just been `rm -rf`'d. Type-only imports would not have helped — tsc needs the
+had just been `rm -rf`'d. Type-only imports would not have helped - tsc needs the
 `.d.ts` either way. Restating removed the edge instead of sequencing it.
 
 `drizzleDatabase` also lives on its **own subpath**, because it imports
@@ -1221,8 +1221,8 @@ would make `drizzle-orm` a hard requirement for a Prisma or MongoDB user.
 ### The instance is bound under an abstract class
 
 `betterAuth()` returns a plain object, so there is no class to use as a token. `Auth`
-is an abstract class whose five members are **aliases of better-auth's own** —
-`Instance<O>['handler']`, `Instance<O>['api']`, and so on — which a real instance
+is an abstract class whose five members are **aliases of better-auth's own** -
+`Instance<O>['handler']`, `Instance<O>['api']`, and so on - which a real instance
 satisfies structurally. Same shape as `Logger` and `RequestContext` in `@dunx/core`,
 and it is what makes `constructor(private readonly auth: Auth)` work at all.
 
@@ -1230,7 +1230,7 @@ It is generic over the options, which is the `BunSQLiteDatabase<typeof schema>` 
 again: the token is the erased class, the type argument rides on the annotation, so
 `Auth<typeof authOptions>` recovers the plugin-widened `api`. Measured: assigning
 `betterAuth(opts)` to `Auth<typeof opts>` typechecks, and **widening `Auth<O>` to
-`Auth<BetterAuthOptions>` does not** — `$context` is invariant through
+`Auth<BetterAuthOptions>` does not** - `$context` is invariant through
 `PluginContext<O>`. So the module narrows the token variable rather than widening the
 value, the same move `DbModule` makes with `DbConnection`.
 
@@ -1240,15 +1240,15 @@ token would otherwise resolve to an object whose every member is `undefined`.
 
 ### Mounting: five wildcard routes, and Bun is still the router
 
-`Bun.serve({ routes })` matches `<basePath>/*` natively — verified on Bun 1.3.14,
+`Bun.serve({ routes })` matches `<basePath>/*` natively - verified on Bun 1.3.14,
 including that it does **not** match the bare `<basePath>`, which better-auth has no
 endpoint at. `AuthHandler` declares one route per verb (`GET`, `POST`, `PUT`, `PATCH`,
 `DELETE`; the last three because a plugin may declare them) and each returns
 `auth.handler(req)` untouched. `buildRoutes` passes a `Response` straight through, so
 `Set-Cookie` and redirects survive.
 
-The controller is a **subclass** created in `forRoot` — `Controller(basePath)(class
-MountedAuthHandler extends AuthHandler {})` — rather than `@Controller` on the shared
+The controller is a **subclass** created in `forRoot` - `Controller(basePath)(class
+MountedAuthHandler extends AuthHandler {})` - rather than `@Controller` on the shared
 class, because the prefix is only known once the module is configured. `discoverRoutes`
 walks the prototype chain and `prefixOf` is a plain lookup, so the subclass inherits
 the routes and contributes only the prefix.
@@ -1260,7 +1260,7 @@ ever be created.
 ### `basePath` and `mountAt` are two strings for one URL
 
 better-auth resolves an endpoint by comparing the **whole pathname** to its own
-`basePath` — measured: `baseURL: 'http://host/api'` with `basePath: '/auth'` serving at
+`basePath` - measured: `baseURL: 'http://host/api'` with `basePath: '/auth'` serving at
 `/api/auth/*` answers 404 to everything, so the path in `baseURL` is not consulted.
 
 That collides with `setGlobalPrefix`, which rewrites every discovered route. With
@@ -1271,7 +1271,7 @@ case (no prefix) uses neither.
 
 Both mistakes are caught rather than left silent. An async factory that returns a
 non-default `basePath` without a `mountAt` fails at boot. A wrong explicit `mountAt`
-cannot be known at boot — the global prefix is applied at `listen()` — so
+cannot be known at boot - the global prefix is applied at `listen()` - so
 `AuthHandler` checks the pathname against `basePath` on the **first** request only and
 throws an `AuthError` naming both, instead of letting better-auth 404 silently.
 
@@ -1280,13 +1280,13 @@ throws an `AuthError` naming both, instead of letting better-auth 404 silently.
 `AuthContext` owns an `AsyncLocalStorage<Principal>`; `SessionGuard` runs `next()`
 inside it. Two alternatives were rejected: request-scoped DI was measured and turned
 down (see **Rejected**), and attaching the principal to `req` reaches a route handler
-but nothing a route handler calls — which is the case that matters, since the caller is
+but nothing a route handler calls - which is the case that matters, since the caller is
 usually wanted three constructor hops down.
 
 It is deliberately **not** a key in `@dunx/core`'s `RequestContext`. That store is the
 log record: every field in it is serialized into every line the request writes, so a
 session object there would be noise on each entry and a redaction hazard in the ones
-that matter. `userId` does go there — a well-known `RequestFields` key — which is why
+that matter. `userId` does go there - a well-known `RequestFields` key - which is why
 every log line inside a guarded request is already correlated to the user.
 
 ### `@Public()` skips the guard outright
@@ -1295,7 +1295,7 @@ The alternative considered was resolving the session best-effort on a public rou
 `AuthContext.current()` would work there. It was dropped: the mounted auth endpoints
 are all `@Public()`, so it would have put a duplicate session lookup on the busiest
 public path in the app, `get-session` included. A public route that wants an optional
-caller calls `auth.api.getSession({ headers: req.headers })` — one line, explicit, and
+caller calls `auth.api.getSession({ headers: req.headers })` - one line, explicit, and
 it costs nothing anywhere else.
 
 ### `Bun.password` replaces better-auth's scrypt
@@ -1313,7 +1313,7 @@ scrypt-hashed user table needs password resets, or its own `password` implementa
 
 better-auth's `secondaryStorage` marks `getAndDelete` and `increment` optional because
 most clients cannot do them atomically. `Bun.RedisClient` can, through `GETDEL` and
-`INCR`, both already on `@dunx/infra/redis`'s contract — so all five methods are
+`INCR`, both already on `@dunx/infra/redis`'s contract - so all five methods are
 implemented rather than the three that are mandatory. Without them better-auth falls
 back to read-then-delete for single-use credentials, which is a race, and to a
 non-atomic rate-limit counter. `increment`'s TTL is applied only when `INCR` returns
@@ -1328,12 +1328,12 @@ The four better-auth tables are better-auth's, they change with the plugins an a
 enables, and its own CLI generates them (`bunx @better-auth/cli generate`). A copy
 inside dunx is a copy that rots against the library that reads it. `examples/full` has
 a generated one at `src/database/auth.schema.ts`, re-exported into the app's single
-schema object — which is all `drizzleDatabase(connection)` needs, because
+schema object - which is all `drizzleDatabase(connection)` needs, because
 `@dunx/infra/db` builds its handle with `drizzle({ client, schema })` and the adapter
 reads `db._.fullSchema`.
 
 Two findings from building that fixture, both worth remembering: `db.run(sql\`…\`)`goes through`bun:sqlite`'s `prepare`, which compiles **one** statement and silently
-drops what follows the first semicolon — four `CREATE TABLE`s in one template gives
+drops what follows the first semicolon - four `CREATE TABLE`s in one template gives
 one table. And better-auth rejects a cookie-bearing state change with no `Origin`
 header (`MISSING_OR_NULL_ORIGIN`), so a server-side client has to send one matching
 `trustedOrigins`; a browser does it for free.
@@ -1356,7 +1356,7 @@ interface PubSubRelay {
 ```
 
 Default: nothing. With no relay configured `PubSub` is byte-for-byte the code it was
-before — one `server.publish` call and no branch that costs anything measurable.
+before - one `server.publish` call and no branch that costs anything measurable.
 
 The Redis-backed implementation, `RedisRelay`, uses **`Bun.RedisClient` directly**.
 It is a Bun global, so this adds **zero dependencies** to `@dunx/http`, which still
@@ -1366,8 +1366,8 @@ depends only on `@dunx/core`.
 connection handling, retry policy and error classification already exist. It was
 rejected on the dependency direction: the relay has to be reachable from `PubSub`,
 `PubSub` is `@dunx/http`, and `@dunx/infra` must not depend on the web layer. That
-coupling has now been refused three times — for the request logger, for `@dunx/auth`,
-and here — for the same reason each time: `@dunx/infra` is what a CLI script, a
+coupling has now been refused three times - for the request logger, for `@dunx/auth`,
+and here - for the same reason each time: `@dunx/infra` is what a CLI script, a
 seeder or a queue worker imports, and none of those have an HTTP server.
 
 The cost accepted is a small amount of **relay-specific connection glue** that does
@@ -1376,11 +1376,11 @@ not reuse `@dunx/infra/redis`'s general-purpose client: URL validation, the
 about 60 lines, and it buys a package with one dependency.
 
 An app that would rather reuse its existing connections satisfies the two methods
-itself — and `@dunx/infra`'s `RedisConnection` **already does, structurally**:
+itself - and `@dunx/infra`'s `RedisConnection` **already does, structurally**:
 `publish(channel, message)` and `subscribe(channel, listener)` are its own names and
 shapes, so `app.get(PubSub).relayThrough(app.get(RedisConnection))` typechecks with
-no adapter between them. That is the `@dunx/auth` `RedisStore` precedent — declare
-the shape, let the app supply anything that fits — and `examples/full` runs its
+no adapter between them. That is the `@dunx/auth` `RedisStore` precedent - declare
+the shape, let the app supply anything that fits - and `examples/full` runs its
 second node that way on purpose.
 
 ### One channel, because `psubscribe` does not work
@@ -1389,20 +1389,20 @@ Frames for **every** topic travel on one broker channel, not one channel per top
 Two reasons, both forced:
 
 - A node cannot know which topics its sockets joined. `socket.subscribe(topic)` goes
-  straight into Bun, and there is no hook and no way to enumerate it — so
+  straight into Bun, and there is no hook and no way to enumerate it - so
   subscribing to a Redis channel when a topic gains its first local member is not
   implementable.
 - `psubscribe` is unusable on Bun 1.3.14 (see [bun-apis.md](./bun-apis.md)), so a
   wildcard subscription is not available either.
 
 The cost is that every node reads every relayed frame and drops the ones for topics
-it has no local subscriber on — a `server.publish` returning `0`. Two apps sharing
+it has no local subscriber on - a `server.publish` returning `0`. Two apps sharing
 one Redis need two channels, which is what `relayChannel` is for.
 
 ### Duplicate delivery is the failure mode, and an origin id is the defence
 
 Redis delivers a published message to **every** subscriber of the channel, the
-publishing application included — a relay's own subscribe connection receives what
+publishing application included - a relay's own subscribe connection receives what
 its publish connection just sent. Fanning that out locally a second time would
 deliver twice to every client on the publishing node, which is worse than not having
 the feature.
@@ -1410,14 +1410,14 @@ the feature.
 So every frame carries the publishing process's id (`Bun.randomUUIDv7`, once per
 `PubSub` instance) and the inbound path drops a frame whose origin is its own. The
 other half of the rule is that the inbound path calls `server.publish` and
-**nothing else** — re-relaying there would put the frame back on the channel that
+**nothing else** - re-relaying there would put the frame back on the channel that
 delivered it, forever.
 
 `relayThrough` throws on a second call rather than replacing the relay: two
 subscriptions on one channel is the other way to get every message twice.
 
 The guard is a test that asserts **exactly one** delivery per subscriber with
-relaying on — `packages/http/src/ws/relay.test.ts`, once over an in-memory bus and
+relaying on - `packages/http/src/ws/relay.test.ts`, once over an in-memory bus and
 once over real Redis with two `Bun.serve` instances and a client on each. Both fail
 with two frames if the origin check is removed, which was verified by removing it.
 
@@ -1425,7 +1425,7 @@ with two frames if the origin check is removed, which was verified by removing i
 
 A `Bun.RedisClient` in subscriber mode rejects every data command and throws
 synchronously doing it, so the subscription cannot share the socket that publishes.
-`RedisRelay` opens two, lazily — the same `pubClient`/`subClient` split
+`RedisRelay` opens two, lazily - the same `pubClient`/`subClient` split
 `nestjs-template`'s socket.io adapter makes.
 
 `maxRetries` defaults to `0` because a client that never connects keeps a retry
@@ -1438,21 +1438,21 @@ accepts that hazard.
 further `Bun.RedisClient` behaviours hold the event loop open past `close()`, and the
 symptom of both is a service that shut down cleanly and then hangs forever:
 
-- a client that **entered** subscriber mode — fixed by `unsubscribe()` before
+- a client that **entered** subscriber mode - fixed by `unsubscribe()` before
   `close()`;
-- a `subscribe()` that **failed to connect** — fixed by `connect()` before
+- a `subscribe()` that **failed to connect** - fixed by `connect()` before
   `subscribe()`, which fails first and releases cleanly. `unsubscribe()` cannot
   rescue this one, because the client is not in subscriber mode.
 
 Both were already latent in `@dunx/infra/redis` and are fixed there too. The
 measurements are in [bun-apis.md](./bun-apis.md). The guards have to be **spawn-based
 tests**: `bun test` exits the runner process itself, so a held-open event loop is
-invisible from inside the suite — which is exactly why this survived until an example
+invisible from inside the suite - which is exactly why this survived until an example
 app tried to shut down.
 
 Absence is tolerated at every step: a failed subscribe reports once and leaves local
 fan-out untouched; a failed publish reports once and not again until one succeeds;
-the app boots either way. A malformed **URL**, by contrast, throws at construction —
+the app boots either way. A malformed **URL**, by contrast, throws at construction -
 that is a config bug, and degrading silently would turn a typo into single-node
 fan-out nobody notices.
 
@@ -1460,7 +1460,7 @@ fan-out nobody notices.
 
 `socket.publish(topic, data)` is Bun's own method on the socket and does not go
 through `PubSub`, so it stays local. Anything that must cross nodes goes through
-`PubSub`. `subscriberCount` is local too — Bun counts its own sockets and cannot
+`PubSub`. `subscriberCount` is local too - Bun counts its own sockets and cannot
 count another node's.
 
 ## Queues (`@dunx/infra/queue`)
@@ -1469,7 +1469,7 @@ count another node's.
 priorities, rate limiting, delayed jobs, schedulers and stall recovery are bullmq's,
 and a dunx implementation of any of them would be a worse one. `bullmq` is an
 optional `peerDependency`. What the area contributes is the four things bullmq has
-no opinion about — where a handler lives, how it is found, how it is injected, and
+no opinion about - where a handler lives, how it is found, how it is injected, and
 when it stops.
 
 ### The ioredis boundary, as it actually resolved
@@ -1480,7 +1480,7 @@ reimplementing a Bun primitive. The measurement changed the answer for the bette
 
 **bullmq 6 ships `createBunRedisClient`, an `IRedisClient` adapter over
 `Bun.RedisClient`.** bullmq accepts either a connection description it builds a
-client from, or an already-built client implementing that interface — so
+client from, or an already-built client implementing that interface - so
 `QueueConnection` builds `Bun.RedisClient` instances and hands them over wrapped.
 Every byte of queue traffic goes through Bun's client. dunx neither imports nor
 constructs ioredis, and there is no shared socket with `@dunx/infra/redis`: a queue
@@ -1496,14 +1496,14 @@ Three findings that shaped the code:
 
 - **ioredis is a load-time requirement of bullmq's barrel.** `classes/index` exports
   `redis-connection`, which statically imports `ioredis` and `ioredis/built/utils`,
-  so `import { Queue } from 'bullmq'` throws `Cannot find module` without it —
+  so `import { Queue } from 'bullmq'` throws `Cannot find module` without it -
   despite bullmq 6 declaring `ioredis` an _optional_ peer and shipping three other
   backends. So `ioredis` is listed as an optional peer of `@dunx/infra` as well:
   declaring it is how a consumer's install produces something that works, and
   nothing in dunx reaches for it. If bullmq makes that import lazy, the entry
   disappears.
 - **bullmq does not close a connection it was handed.** Measured with `CLIENT LIST`:
-  four connections live, three after `worker.close()` + `queue.close()` — it closed
+  four connections live, three after `worker.close()` + `queue.close()` - it closed
   only the duplicate it created itself. `QueueConnection.onShutdown` closes the
   rest, and is bound as the first-constructed provider so reverse-order teardown
   runs it last.
@@ -1544,23 +1544,23 @@ exists to avoid.
 
 ### Publish and consume are different processes, so they are different objects
 
-`QueueModule.forRoot()` binds the **publish** side only — `QueueOptions`,
-`QueueConnection`, `JobPublisher` — so a web process importing it opens no worker.
+`QueueModule.forRoot()` binds the **publish** side only - `QueueOptions`,
+`QueueConnection`, `JobPublisher` - so a web process importing it opens no worker.
 `WorkerFactory.create(root)` is the consume side, and it is the same shape as
 `HttpFactory.create`: boot the container, `collectModules(root)` for the graph,
 discover by inspection, validate eagerly, and return an object wrapping `App` whose
 `shutdown()` sequences its own resource ahead of the container's.
 
 `create` discovers and validates; `start()` opens connections. That split is what
-makes a wiring mistake — no `QueueModule`, no handlers, a misspelled name in
-`queues` — fail before anything consumes, and what lets `worker.jobs` be asserted in
+makes a wiring mistake - no `QueueModule`, no handlers, a misspelled name in
+`queues` - fail before anything consumes, and what lets `worker.jobs` be asserted in
 a test with no server running.
 
 The "no `QueueModule`" check reads the **module graph**, not the container, and the
 reason generalises past queues: **every class self-binds, so a class whose
 constructor arguments are all optional resolves successfully when nothing bound it.**
-`app.get(QueueOptions)` on a container with no `QueueModule` returns defaults — a
-worker silently pointed at `localhost` — rather than throwing. Any presence check for
+`app.get(QueueOptions)` on a container with no `QueueModule` returns defaults - a
+worker silently pointed at `localhost` - rather than throwing. Any presence check for
 a class-shaped token has the same hole; `collectModules(root)` and a token comparison
 do not.
 
@@ -1571,7 +1571,7 @@ a wrapper would be a surface to outgrow.
 ### The one behaviour that is dunx's, not bullmq's
 
 `jobTimeoutMs`. bullmq has `lockDuration` and stall detection, which answer _did the
-worker die_, not _is this handler stuck_ — a handler hung on an external call renews
+worker die_, not _is this handler stuck_ - a handler hung on an external call renews
 its lock and never finishes. The dispatcher races the handler against a timer and
 clears it in a `finally`, since an uncleared timer would hold the loop open for its
 full duration after a fast job. Off by default.
@@ -1579,7 +1579,7 @@ full duration after a fast job. Off by default.
 ### Shutdown ordering
 
 `WorkerApplication.shutdown()` closes every bullmq `Worker` first, then delegates to
-`app.shutdown()` — the same reason `HttpApplication` stops the server before the
+`app.shutdown()` - the same reason `HttpApplication` stops the server before the
 providers tear down. `close()` without `force` stops fetching and waits for what is
 already running, so an in-flight handler finishes while the database connection it is
 using is still open. The container's reverse-construction-order teardown then closes
@@ -1601,7 +1601,7 @@ cover.
 are deliberately not exported, because exporting the container would freeze its
 shape as public API, and a testing package that duplicated the register-resolve-
 `onInit` loop would be a second container to keep in step with the first. So core
-grew the seam and `@dunx/testing` is a thin wrapper over it — `substitute()` is
+grew the seam and `@dunx/testing` is a thin wrapper over it - `substitute()` is
 fifteen lines on the path that was already assembling the list, and costs an empty
 `Map` lookup per registration when no overrides are passed.
 
@@ -1612,20 +1612,20 @@ without a second mechanism.
 
 **The always-bound defaults are substituted too.** `Logger` and `RequestContext`
 are offered by `registerDefault` after every module, so nothing in the module graph
-binds them in a typical app — and an override of `Logger` would therefore have been
+binds them in a typical app - and an override of `Logger` would therefore have been
 "nothing to override". They are now built as a `Registration[]` and run through the
 same substitution, which is what makes silencing the logger in a test possible at
 all. The unmatched-override check runs after both stages.
 
 **`requestLogging` defaults to `false` in `createTestServer` only.** The framework
 default stays on. A suite is the one context where one structured line per request
-is pure noise, and the alternative — every suite passing `requestLogging: false` —
+is pure noise, and the alternative - every suite passing `requestLogging: false` -
 is a default in the wrong place. Asserting on request logging means asking for it.
 
-**`@dunx/core` and `@dunx/http` are `dependencies` at `workspace:^` — measured, not
+**`@dunx/core` and `@dunx/http` are `dependencies` at `workspace:^` - measured, not
 assumed.** Peers were the first choice and are the better contract: a second copy of
 core in a consumer's tree is a second `Logger` class and therefore a token that
-matches nothing, so overrides would silently replace nothing — exactly the failure
+matches nothing, so overrides would silently replace nothing - exactly the failure
 the unmatched-override error exists to prevent. It did not survive the build **at the
 time**; the topological build fixed that and peers are now in use. The measurement
 below is kept because it is why the build had to change first.
@@ -1634,7 +1634,7 @@ below is kept because it is why the build had to change first.
 Measured on Bun 1.3.14: with core in `devDependencies` and in `peerDependencies`
 (both tried, including a `workspace:` range in the peer field), `@dunx/testing`'s
 `tsc` ran concurrently with core's own build and failed with `TS7016: Could not find
-a declaration file for module '@dunx/core'` — `build-package.ts` deletes `dist/`
+a declaration file for module '@dunx/core'` - `build-package.ts` deletes `dist/`
 before writing it. In CI, where no `dist` exists at all, that is not a race but a
 certainty.
 
@@ -1643,7 +1643,7 @@ Two consequences worth keeping:
 - The range is `workspace:^`, not the `workspace:*` every other package uses.
   `scripts/version.ts` publishes `workspace:*` as the **exact** version, so
   `@dunx/testing@0.4.0` would demand `@dunx/core@0.4.0` and a consumer on 0.4.1
-  would get a nested second copy — the duplication being avoided. `workspace:^`
+  would get a nested second copy - the duplication being avoided. `workspace:^`
   publishes as `^0.4.0`, which hoists across patches. The same hazard exists in the
   other packages' `workspace:*` dependencies and deserves its own pass.
 
@@ -1659,8 +1659,8 @@ Two consequences worth keeping:
   `packages/openapi/src/module.test.ts` to the harness. A package's build typechecks
   its own tests, so that made openapi's build race `@dunx/testing`'s, and putting
   `@dunx/testing` in openapi's `dependencies` would ship a test package to
-  production. Reverted. `examples/*` have no such limit — nothing builds in parallel
-  with them — which is why `examples/full/src/service.test.ts` is where the
+  production. Reverted. `examples/*` have no such limit - nothing builds in parallel
+  with them - which is why `examples/full/src/service.test.ts` is where the
   harness is exercised against a real app.
 
 `@dunx/http` is therefore not optional, and `createTestServer` imports it normally.
@@ -1669,7 +1669,7 @@ Two consequences worth keeping:
 shape and stays that shape. A `providers` list would make the harness able to
 assemble graphs that do not exist in the app, which is how a suite ends up
 asserting against a container the production app never builds. A fixture class that
-needs binding goes in a two-line `@Module` — where it would live if it were real.
+needs binding goes in a two-line `@Module` - where it would live if it were real.
 
 **Two request helpers, no assertion DSL.** `json()` returns `{ status, headers, body }`
 and `request()` returns the `Response`. A JSON body is `json:` on the init object
@@ -1682,7 +1682,7 @@ seven levels of three overloads: it records and interprets nothing.
 **`prefix` is `string | undefined` where every other option is not.** A suite that
 runs one fixture prefixed and unprefixed passes a variable, and under
 `exactOptionalPropertyTypes` that is otherwise a conditional spread at the call
-site. "No prefix" and "absent" are the same state here, so nothing is lost — this
+site. "No prefix" and "absent" are the same state here, so nothing is lost - this
 is not a licence to widen options where they differ.
 
 ## Versioning is lockstep, and that is a correctness requirement
@@ -1701,7 +1701,7 @@ the `workspace:` protocol untouched. With independent versions that produces:
 ```
 
 An app installing both gets **two copies of `@dunx/core`**. In this container a
-token _is_ a class object — `provide(Logger, …)` keys a `Map` by the class itself —
+token _is_ a class object - `provide(Logger, …)` keys a `Map` by the class itself -
 so two copies means two distinct `Logger` classes, and `app.get(Logger)` misses the
 binding another package registered. It fails silently, at boot, with a message
 about a missing provider for a token the user can plainly see is bound.
@@ -1715,7 +1715,7 @@ Two alternatives were considered and rejected:
 - **Caret ranges.** Pre-1.0 `^0.1.0` excludes `0.2.0`, so a minor bump of core still
   fragments the graph. `^` only helps within a patch series.
 - **`@dunx/core` as a `peerDependency`.** This was rejected here and has since been
-  **adopted** — the entry stays because the reason it was rejected is the useful part.
+  **adopted** - the entry stays because the reason it was rejected is the useful part.
   Peers are the textbook answer and they resolve to one copy, but `bun run --filter
 '*' build` orders builds by `dependencies` alone, so moving core to a peer raced
   `tsc` against core's own `.d.ts` emit and failed with `TS7016`. The fix was a
@@ -1745,7 +1745,7 @@ UI is now a frontend workspace whose built bundle the package serves.
 
 ### The bundle is inlined, and that is what constrains everything
 
-The page's guarantee is that it fetches **nothing** — no CDN, no `src=`, no
+The page's guarantee is that it fetches **nothing** - no CDN, no `src=`, no
 `<link>`. `swagger-ui-dist` (11.7 MB unpacked) and `@scalar/api-reference` (11 MB)
 were rejected over exactly that, and the guarantee did not get cheaper because the
 UI got better. So the bundle is a string in `packages/openapi/src/ui-bundle.ts`,
@@ -1757,7 +1757,7 @@ and `tsc --noEmit` in a fresh clone both have to work without a Vite run, and th
 publish path must not depend on one. `packages/openapi`'s `build` runs the UI
 build first, so the committed copy cannot go stale.
 
-### What it costs — measured
+### What it costs - measured
 
 | Build                                     | Raw         | gzip        |
 | ----------------------------------------- | ----------- | ----------- |
@@ -1767,14 +1767,14 @@ build first, so the committed copy cannot go stale.
 | **shipped** (the explorer, per-component) | **437 KiB** | **123 KiB** |
 
 The served page went from **70 KiB to 458 KiB** (6.5x; 6.6 KiB to ~125 KiB
-gzipped). React is 188 KiB of it and is the floor — Mantine adds ~150 KiB of JS
+gzipped). React is 188 KiB of it and is the floor - Mantine adds ~150 KiB of JS
 and ~80 KiB of CSS on top.
 
 Two decisions came out of measuring rather than guessing:
 
 - **Per-component CSS, not the barrel.** `@mantine/core/styles.css` is 234 KiB for
   a dozen components; importing `styles/Accordion.css` and friends is a third of
-  that. The list in `src/styles.ts` is load-bearing — a missing file is an
+  that. The list in `src/styles.ts` is load-bearing - a missing file is an
   unstyled component, not a build error.
 - **`Tooltip` and `ScrollArea` were dropped** for `title=` and `overflow: auto`,
   which took 490 KiB to 437 KiB. `Tooltip` drags in floating-ui.
@@ -1800,7 +1800,7 @@ request body, both in `packages/openapi/src/model.ts`; the results travel in the
 model. Rendering markdown in the browser would have meant a parser in the bundle,
 and re-implementing `sampleFor` would have meant two of it. This is also what
 keeps the raw-HTML escaping (`noHtmlBlocks`, `noHtmlSpans`, `tagFilter`) in one
-place — the client only ever sees already-escaped HTML.
+place - the client only ever sees already-escaped HTML.
 
 ### The no-external-requests test had to change shape
 
@@ -1809,7 +1809,7 @@ meaningless over a minified React bundle, which contains `.src=`, `href="` and t
 literal string `"<script>"` in its own code. The assertion moved to the **tags**:
 the page is stripped of both script bodies, and the remaining markup must carry no
 `src=`, no `<link>` and no off-origin `href`. The whole page is still checked for
-`url(http`, `@import` and CDN hosts. `page-ui.test.ts` then proves it positively —
+`url(http`, `@import` and CDN hosts. `page-ui.test.ts` then proves it positively -
 it runs the real bundle in happy-dom and asserts zero fetches during boot.
 
 ## Benchmark harness (`tools/bench`)
@@ -1822,7 +1822,7 @@ and the measurements behind them.
 `@dunx/http` had just made `RequestLoggingMiddleware` a default, and the bench
 subject predated it, so the suite was quietly measuring the logger. dunx fell from
 ~86-94% of raw `Bun.serve` to **34% on `json`, 33% on `params` and 9.6% on
-`validate`** — 8.5k req/s against 88k, a p50 of 7.4 ms. Setting
+`validate`** - 8.5k req/s against 88k, a p50 of 7.4 ms. Setting
 `requestLogging: false` restored ~89%, which located the fault precisely.
 
 Three causes, in order of cost:
@@ -1830,7 +1830,7 @@ Three causes, in order of cost:
 - **`response.clone().text()` on every JSON response**, and `req.clone().text()` on
   every JSON request body. Two clone-and-buffer passes over every payload, on the
   hot path, to fill fields most responses never need read. Both are now **off by
-  default** — which is the right default for privacy and log volume independently of
+  default** - which is the right default for privacy and log volume independently of
   speed, since the response body is also the field most likely to carry a secret.
 - **`new URL(req.url)` per request**, parsing scheme, host, port, query and hash to
   reach a pathname. Replaced with an `indexOf` slice; the query string is parsed
@@ -1843,7 +1843,7 @@ Three causes, in order of cost:
 promises.** The general request path is
 `async (req) => toResponse(await handler(await read(req)), status)` wrapped in an
 `async` try/catch. For a route with no middleware, no CORS and no declared schemas,
-`read` is the identity reader and a sync handler returns a plain object — so both
+`read` is the identity reader and a sync handler returns a plain object - so both
 `await`s cost an async frame and a microtask tick for nothing, twice per request.
 
 `buildRoutes` now emits a **synchronous handler** for exactly that shape, returning a
@@ -1857,7 +1857,7 @@ code generator.
 The lesson worth keeping: a default that is convenient in development can be the
 single largest cost in production, and nobody would have known without a harness
 that compares against the floor. `Bun.serve` as a subject is what made the
-regression legible — a 9.6% row is impossible to rationalise.
+regression legible - a 9.6% row is impossible to rationalise.
 
 **The load generator is native, and that was measured rather than assumed.** The
 harness supports two: [oha](https://github.com/hatoo/oha) (Rust, via `bun run
@@ -1891,19 +1891,19 @@ understates Fastify and Elysia, and the JSON report records each subject's valid
 so the handicap is visible rather than implied.
 
 **Latency histograms, not reservoir sampling.** The fallback driver buckets latencies
-at 1 µs up to 100 ms and merges `Uint32Array`s across workers. The alternative —
-sampling a subset — needs an RNG, and a sampled p99 is a p99 with an error bar nobody
+at 1 µs up to 100 ms and merges `Uint32Array`s across workers. The alternative -
+sampling a subset - needs an RNG, and a sampled p99 is a p99 with an error bar nobody
 reads. It also keeps `Math.random` out of a number that matters, per the `@arkv/rng`
 rule.
 
 What the harness found, in one line each:
 
-- `@dunx/http` costs **6–7%** against raw `Bun.serve` on plain dispatch and JSON,
+- `@dunx/http` costs **6-7%** against raw `Bun.serve` on plain dispatch and JSON,
   **14%** with a path parameter, **21%** with body validation.
 - It **loses to Elysia on all four scenarios**; the `params` gap (85.8% vs 95.5% of
   baseline) is the largest and is the clearest optimisation target. Elysia compiles
   per-route handler code ahead of time.
-- It **boots in ~53 ms against raw `Bun.serve`'s ~27 ms** — the compiler's oxc parse
+- It **boots in ~53 ms against raw `Bun.serve`'s ~27 ms** - the compiler's oxc parse
   plus eager DI resolution and route discovery. That is the trade this architecture
   makes on purpose: paid once at boot, never per request. It is a real cost on a
   short-lived process.
@@ -1918,13 +1918,13 @@ What the harness found, in one line each:
 holds the validator constant at zod so `validate` minus `json` reads as one
 framework's plumbing, which folds **the absolute cost of parsing and validating**
 together with **dunx's own overhead**. This one separates them. `servers/validation/`
-has two subjects — raw `Bun.serve` and a dunx app — each serving routes that add one
+has two subjects - raw `Bun.serve` and a dunx app - each serving routes that add one
 step at a time, and `$VALIDATOR` swaps the library behind `~standard` without
 changing anything else.
 
 **The first version of this harness measured each row to completion in turn, and that
 was wrong.** The differences it exists to report are 2-4%, and the machine's own
-throughput drifts by more than that over the minutes a run takes — so the drift landed
+throughput drifts by more than that over the minutes a run takes - so the drift landed
 on whichever row happened to be measured while it was happening. It produced
 `raw:parse` as _slower_ than `raw:noop`, which does strictly more work, and several
 negative validator costs. The runner now brings every unit up first and measures them
@@ -1936,7 +1936,7 @@ monotonic on the first attempt afterwards. Noise floor at this throughput is abo
 
 | Step                                     | µs/req | adds     |
 | ---------------------------------------- | -----: | -------- |
-| `GET /json`, no request body             |   8.78 | —        |
+| `GET /json`, no request body             |   8.78 | -        |
 | `POST`, body on the wire, **never read** |   9.05 | +0.27 µs |
 | `POST` + `await req.json()`              |  12.14 | +3.10 µs |
 | `POST` + `req.json()` + zod              |  13.09 | +0.94 µs |
@@ -1944,7 +1944,7 @@ monotonic on the first attempt afterwards. Noise floor at this throughput is abo
 Putting a body on the wire is near-free; reading it is 3.10 µs and validating it is
 0.94 µs. The ~30% drop from the `json` scenario to the `validate` scenario that every
 subject in the main suite pays is therefore **77% `req.json()` and 23% zod**. The
-primitive that would fix it is a validating parser Bun does not ship — recorded in
+primitive that would fix it is a validating parser Bun does not ship - recorded in
 [bun-apis.md](./bun-apis.md), along with why dunx must not write one.
 
 ### Every validator is cheaper than the parse
@@ -1962,18 +1962,18 @@ changed. Cost is that validator's own time, taken as the raw `Bun.serve` subject
 | zod                         |  0.94 µs | native      |
 
 **zod, Valibot and ArkType are within noise of each other**, and both compiled options
-land at or under the noise floor — TypeBox's compiled checker is indistinguishable
+land at or under the noise floor - TypeBox's compiled checker is indistinguishable
 from not validating at all on a three-field payload. All five are under the 3.10 µs
 the parse costs, so **there is no throughput argument for steering a user off zod**: a
 0.9 µs saving on a request that takes 13 µs is 7%, against giving up zod's ecosystem,
 error messages and `z.toJSONSchema` (which `@dunx/openapi` uses). The advice this
 produces is "pick on API, not on this table", and the table exists so that advice is
 checkable. It would very likely read differently on a deeply nested schema, where
-compiled straight-line code diverges from an interpreter far more than at this size —
+compiled straight-line code diverges from an interpreter far more than at this size -
 which is a limitation of the payload, and is recorded in the harness's README.
 
 Neither TypeBox 0.34 nor ajv 8 exposes `~standard`. Both were bridged in about ten
-lines each in `servers/validation/schemas.ts` — a boolean `Check` plus their error
+lines each in `servers/validation/schemas.ts` - a boolean `Check` plus their error
 iterator, wrapped in a `~standard.validate`. That a compiled JSON Schema checker
 drops into a dunx route with no change to `@dunx/http` is the payoff of targeting an
 interface instead of a library, and it is worth knowing it was tested rather than
@@ -1983,28 +1983,28 @@ subclass with an `issues` getter, which the existing code already handles.
 ### Where dunx's 11 points went: async machinery, not validation
 
 The main suite's `validate` row sat at **84.0% of raw `Bun.serve`** while `json` sat
-at 95.3%. Splitting dunx's side the same way — two extra dunx routes that declare no
+at 95.3%. Splitting dunx's side the same way - two extra dunx routes that declare no
 schemas and do the parse and the validation inside the handler, so they stay on the
-synchronous dispatch path — located it. Measured **before** the changes below:
+synchronous dispatch path - located it. Measured **before** the changes below:
 
 | Subject                                       | µs/req | dunx's share        |
 | --------------------------------------------- | -----: | ------------------- |
-| raw `Bun.serve`, parse in the handler         |  11.89 | —                   |
+| raw `Bun.serve`, parse in the handler         |  11.89 | -                   |
 | dunx, no schemas, parse in the handler        |  13.06 | 1.17 µs dispatch    |
 | dunx, no schemas, validate in the handler     |  14.56 | + zod               |
-| dunx, `body` declared — the framework does it |  16.62 | **+2.05 µs reader** |
+| dunx, `body` declared - the framework does it |  16.62 | **+2.05 µs reader** |
 
-**The input reader cost 2.05 µs — nearly twice what zod itself cost.** An in-process
+**The input reader cost 2.05 µs - nearly twice what zod itself cost.** An in-process
 microbenchmark against a fake request (so no real parse is involved) put the reader's
 plumbing at **597 ns/request with a no-op schema**, against ~250 ns for zod's actual
 `validate` on the same payload.
 
-The cause was async machinery on values that were never promises — the same fault the
+The cause was async machinery on values that were never promises - the same fault the
 `plaintext` fast path had, one layer down. A route with a declared `body` went through
 six `async` frames: `guarded`, `chained`, the reader, the fold step, `readBody`, and
 `validated`. Exactly one of them, `req.json()`, ever had anything to wait for.
 Standard Schema _permits_ `~standard.validate` to return a promise, and none of zod,
-Valibot or ArkType ever does — verified, all three return a plain object.
+Valibot or ArkType ever does - verified, all three return a plain object.
 
 Three changes, each measured:
 
@@ -2013,7 +2013,7 @@ Three changes, each measured:
    instead of awaiting it. A `query`- or `params`-only route with a synchronous
    validator now returns the input **with no promise at all**; a `body` route pays one
    promise link on `req.json()` instead of six frames. The `then` fold returns the
-   draft rather than `void` precisely so the reader can be `(req) => fill({ req })` —
+   draft rather than `void` precisely so the reader can be `(req) => fill({ req })` -
    threading the draft back through a second `then` cost a measurable 58 ns.
    `mediaTypeOf` also short-circuits on a verbatim `application/json` header rather
    than slicing, trimming and lowercasing it: worth ~70 ns when the header is bare.
@@ -2024,12 +2024,12 @@ Three changes, each measured:
    rather than awaited.
 3. **A `query` route stopped parsing the whole URL, and `grouped` stopped iterating.**
    `new URL(req.url).searchParams` resolved scheme, host, port, path and fragment to
-   reach a query string, then built a `URLSearchParams` anyway — measured at **~1,040
+   reach a query string, then built a `URLSearchParams` anyway - measured at **~1,040
    of the ~1,520 ns** a three-pair query route cost, which was more than the entire
    body reader. An `indexOf('?')` slice into `new URLSearchParams` removes the URL
    parse; the fragment is still stripped, because `new URL` stripped it and a
    request-target that carries one should not change what a schema sees.
-   `RequestLoggingMiddleware` had taken exactly this slice for exactly this reason —
+   `RequestLoggingMiddleware` had taken exactly this slice for exactly this reason -
    the same fault twice, in two files, found the same way.
 
    `grouped` then switched from `for…of` destructuring to `forEach`, which both
@@ -2055,7 +2055,7 @@ route:
 In the main suite that is **`validate` 84.0% -> 92.3% of raw `Bun.serve`**, which also
 puts dunx **9 points ahead of Elysia** on the one scenario where it used to be level
 (Elysia is at 83.2% in the same run). The reader now costs _less_ than doing the same
-work by hand in a handler — the "framework does it" row comes out 0.19 µs **below**
+work by hand in a handler - the "framework does it" row comes out 0.19 µs **below**
 the hand-written one, inside the noise floor, which is the honest reading of "no longer
 costs anything". The microbenchmark agrees and can resolve it: the reader's plumbing
 went from **597 ns to 146 ns** with a no-op schema, a 4.1x improvement, and a
@@ -2066,7 +2066,7 @@ Nothing about the `json`, `params` or `plaintext` rows moved, which is the check
 changes 1 and 2 are confined to routes that declare a schema.
 
 Change 3 has **no HTTP evidence at all**, and that is a gap rather than a detail:
-neither harness has a route with a declared `query` schema — the main suite's `params`
+neither harness has a route with a declared `query` schema - the main suite's `params`
 scenario reads `input.req.params` with no schema, so it never touches the query path.
 The 1,520 -> 1,024 ns is microbenchmark-only, and the right fix is a `query` scenario
 in the harness rather than a larger claim here.
@@ -2076,11 +2076,11 @@ in the harness rather than a larger claim here.
 Most routes declare exactly one schema, so the fold and the shared `InputDraft` are
 avoidable: a hand-written body-only reader that builds `{ req, body }` as one literal
 and calls `~standard.validate` inline measured **306 ns/request against the shipped
-reader's 394 ns** on the same microbenchmark — a real, repeatable 88 ns.
+reader's 394 ns** on the same microbenchmark - a real, repeatable 88 ns.
 
 Rejected. 88 ns is 0.6% of a 14 µs request, which is **below the noise floor of the
 HTTP harness** (run-to-run stddev is 1-3%), so the win cannot be demonstrated at the
-level anyone experiences it — and unlike the `forEach` change above, which is a
+level anyone experiences it - and unlike the `forEach` change above, which is a
 comparable 140 ns, it does not pay for itself in simplicity. It would need one code
 path per declared combination to be consistent, and would duplicate the 415 and 400
 handling that `bodyFill` owns, where `forEach` replaced a `for…of` with fewer moving
@@ -2108,8 +2108,8 @@ thing worth doing.
 
 `bun run logging` is the third harness, and it exists because `dunx-logging` in the
 main suite was **one number for at least eight different things**. It sat at 40-45%
-of raw `Bun.serve` while `dunx` sat at 90-98%, so dunx's _default_ configuration —
-the one nearly every user runs — cost more than half the throughput, and nothing said
+of raw `Bun.serve` while `dunx` sat at 90-98%, so dunx's _default_ configuration -
+the one nearly every user runs - cost more than half the throughput, and nothing said
 which half.
 
 `servers/logging/dunx.ts` is one app whose middleware is truncated at a step chosen
@@ -2139,7 +2139,7 @@ that was never dunx's cost at all.
 Before anything else: `startSubject` spawned every subject with `stdout: 'pipe'` and
 **nothing ever read it**. 64 KiB in, the pipe is full, and the server parks on every
 subsequent write until the kernel finds room. Seven of the eight subjects log
-nothing, so only `dunx-logging` ever hit it — the one row where it mattered.
+nothing, so only `dunx-logging` ever hit it - the one row where it mattered.
 
 Measured, on the `json` scenario: an unbatched writer into an unread pipe cost
 **2.68 µs/request** more than the same writer into `/dev/null`. Subjects now write to
@@ -2180,7 +2180,7 @@ Three suspicions were wrong and are worth recording as wrong:
   it at 0.70 µs. The isolated probe was measuring a different baseline; the harness
   is the arbiter.
 
-What actually costs: **the first touch of `req.headers`** (1.29 µs — Bun
+What actually costs: **the first touch of `req.headers`** (1.29 µs - Bun
 materialises the whole header map, and the inbound `x-request-id` is part of the
 contract, so it is irreducible), the **`AsyncLocalStorage` scope** (0.91 µs, which is
 what makes a handler's own log lines carry `requestId`), and **building and
@@ -2188,7 +2188,7 @@ serialising the entry** (2.05 µs, most of it `JSON.stringify`).
 
 ### The write was the largest single component, and batching removed it
 
-One `console.log` per request measured **+1.24 µs** against not writing at all — more
+One `console.log` per request measured **+1.24 µs** against not writing at all - more
 than the `JSON.stringify` that produced the line. `ConsoleLogger` now concatenates
 entries at `info` and below into one string and writes it once per event-loop turn,
 and the write becomes **unmeasurable** (−0.62 µs against the serialise-only row, i.e.
@@ -2211,7 +2211,7 @@ Things that were measured and did **not** work, all in a real `Bun.serve` handle
 this work went against Rule 1's ordering. A `FileSink.write()` encodes into its own
 buffer on every call, so it pays per entry exactly what it was meant to save; a JS
 string concatenation is a rope and pays almost nothing. Only the _flush_ is a write,
-and once per turn it does not matter which API performs it — so the flush goes
+and once per turn it does not matter which API performs it - so the flush goes
 through `console.log`, which is also what keeps `console` interception working in
 tests.
 
@@ -2221,13 +2221,13 @@ macrotask turn is what lets Bun accumulate a real batch.
 
 ### The durability trade, and what bounds it
 
-A line still sitting in the buffer is lost if the process dies without unwinding — a
-`SIGKILL`, an OOM kill, a segfault — which is exactly when a log matters most. Three
+A line still sitting in the buffer is lost if the process dies without unwinding - a
+`SIGKILL`, an OOM kill, a segfault - which is exactly when a log matters most. Three
 things bound it, and they are asserted in `packages/core/src/logger/console.test.ts`:
 
 - **`warn`, `error` and `fatal` are never buffered.** They go out immediately _and_
   flush everything queued behind them, so the entries you go looking for after a
-  crash — and everything that led up to them — were never held back. This is what
+  crash - and everything that led up to them - were never held back. This is what
   makes the trade acceptable rather than merely fast.
 - The window is **one event-loop turn**, not a timer interval.
 - `flush()` is public, `onShutdown()` calls it so the container flushes on a
@@ -2237,7 +2237,7 @@ things bound it, and they are asserted in `packages/core/src/logger/console.test
 ### The other two changes
 
 **`request-logging.ts` has no `async` function left in it.** `#body` and
-`#responseFields` were `async` and, with both body options off — the default — they
+`#responseFields` were `async` and, with both body options off - the default - they
 returned `{}` immediately, so every request paid two async frames and two `await`s on
 values that were never promises. They now return `Promise<unknown> | undefined`,
 where `undefined` means there is nothing to read and the caller stays synchronous,
@@ -2265,7 +2265,7 @@ branch would add a field and a condition to buy nothing on the default path.
 
 ### Rejected: a cheaper request id
 
-Covered above — `crypto.randomUUID()` measured at 0.04 µs, and a counter-based id
+Covered above - `crypto.randomUUID()` measured at 0.04 µs, and a counter-based id
 would trade an unmeasurable saving for leaking request volume in a header that is
 returned to the caller.
 
@@ -2275,11 +2275,11 @@ The remaining ~5.4 µs over `requestLogging: false` is **~1.3 µs of `req.header
 ~0.9 µs of `AsyncLocalStorage`, ~2.1 µs of entry construction and
 `JSON.stringify`**, and ~0.7 µs of reading `req.url`. The first two are the contract:
 an inbound `x-request-id` has to be honoured and a handler's own log lines have to
-carry the id. The third is the one with room left, and the obvious move — hand-rolling
-a serialiser instead of `JSON.stringify` — is a JavaScript reimplementation of a
+carry the id. The third is the one with room left, and the obvious move - hand-rolling
+a serialiser instead of `JSON.stringify` - is a JavaScript reimplementation of a
 platform primitive with string escaping to get wrong, which Rule 1 forbids. One real
 saving is available and blocked on a contract: `RequestContext.getContext()` returns
 a copy, and `ConsoleLogger` then spreads that copy into the entry, so the request
 fields are copied twice per line. Removing one copy means either changing what
-`getContext()` returns — which `@arkv/logger`'s `ContextStore` also implements — or
+`getContext()` returns - which `@arkv/logger`'s `ContextStore` also implements - or
 changing the order of the keys in every log line.

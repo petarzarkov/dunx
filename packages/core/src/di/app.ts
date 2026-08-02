@@ -29,7 +29,7 @@ const assertEveryOverrideReplaced = (
 
   throw new AppError(
     `Nothing to override for ${missing.map(describeToken).join(', ')}: no module ` +
-      'in the graph binds it. An override replaces a binding — it cannot add one, ' +
+      'in the graph binds it. An override replaces a binding - it cannot add one, ' +
       'because a token nobody bound is a token nothing under test resolves.',
   );
 };
@@ -94,7 +94,7 @@ export interface AppOptions {
    * rather than a winner. The count per token never changes, which is why the
    * duplicate-binding check still runs unmodified.
    *
-   * An override naming a token nobody binds is an error — a silent no-op there is
+   * An override naming a token nobody binds is an error - a silent no-op there is
    * a test that asserts against the real provider it thought it had swapped.
    *
    * Because the replacement happens before anything resolves, the discarded
@@ -110,7 +110,7 @@ export interface AppOptions {
 export class AppFactory {
   /**
    * Builds the container from the root module's import graph, resolves every
-   * provider, and runs `onInit` in dependency order. The returned app is live —
+   * provider, and runs `onInit` in dependency order. The returned app is live -
    * there is no separate init step, because dunx resolves eagerly.
    */
   static async create(root: ModuleRef, options: AppOptions = {}): Promise<App> {
@@ -133,7 +133,7 @@ export class AppFactory {
     }
     // After every module, so an app that binds either of these wins. Offered at
     // all so `Logger` and `RequestContext` are injectable with no logging module
-    // imported — which is what lets @dunx/http log requests out of the box.
+    // imported - which is what lets @dunx/http log requests out of the box.
     // Substituted too, so overriding `Logger` works in an app that binds none.
     for (const registration of defaults()) {
       injector.registerDefault(substitute(registration));

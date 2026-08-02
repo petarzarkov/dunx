@@ -24,7 +24,7 @@ export interface ValidationIssue {
 
 /**
  * A declared schema rejected the input. Always a 400, and the issues survive into
- * the response body — a caller cannot fix what it cannot see.
+ * the response body - a caller cannot fix what it cannot see.
  */
 export class ValidationError extends HttpError {
   override name = 'ValidationError';

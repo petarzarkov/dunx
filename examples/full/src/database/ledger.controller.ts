@@ -22,7 +22,7 @@ const CreateEntry = z
   })
   .meta({ id: 'CreateEntry', title: 'A single ledger movement' });
 
-/** Both legs succeed or neither does — the rollback is the point of the route. */
+/** Both legs succeed or neither does - the rollback is the point of the route. */
 const Transfer = z
   .object({
     from: z.string().min(1).max(80),
@@ -30,7 +30,7 @@ const Transfer = z
     amount: z.number().int().positive(),
     /**
      * Throw between the two legs on purpose. The response is a 409 and the row
-     * count is unchanged — which is the only way to see from outside that the
+     * count is unchanged - which is the only way to see from outside that the
      * first insert was rolled back rather than committed.
      */
     fail: z.boolean().default(false),
@@ -80,7 +80,7 @@ export class LedgerController {
 
   /**
    * The failure path is the interesting one: `"fail": true` throws between the
-   * two inserts, and the 409's `rows` is unchanged — proof the first leg was
+   * two inserts, and the 409's `rows` is unchanged - proof the first leg was
    * rolled back rather than committed.
    */
   @Post('/transfer', transfer)
@@ -94,13 +94,13 @@ export class LedgerController {
     } catch (error) {
       throw new HttpError(
         HttpStatusCode.CONFLICT,
-        `${(error as Error).message} — rolled back, still ${this.ledger.rows()} rows`,
+        `${(error as Error).message} - rolled back, still ${this.ledger.rows()} rows`,
       );
     }
   }
 
   /**
-   * The same transfer with no `async` and no `await` on the path at all — the
+   * The same transfer with no `async` and no `await` on the path at all - the
    * handler returns a value, `@dunx/http` turns it into a `Response` without
    * allocating a promise, and SQLite answered on the same tick. What makes it
    * possible is `SyncSqliteOptions` in `DatabaseModule`; `transactionSync` will not
@@ -118,7 +118,7 @@ export class LedgerController {
     } catch (error) {
       throw new HttpError(
         HttpStatusCode.CONFLICT,
-        `${(error as Error).message} — rolled back, still ${this.ledger.rows()} rows`,
+        `${(error as Error).message} - rolled back, still ${this.ledger.rows()} rows`,
       );
     }
   }

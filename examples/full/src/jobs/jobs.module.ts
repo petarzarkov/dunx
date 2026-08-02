@@ -11,7 +11,7 @@ import { ThumbnailJobs } from './thumbnail.jobs.js';
  * this module.
  *
  * `QueueModule.forRoot` binds the publish side alone, so importing it does not
- * open a worker — a web process that publishes never consumes by accident.
+ * open a worker - a web process that publishes never consumes by accident.
  * `PicturesModule` is here because the handler injects `Thumbnails`, and the
  * worker's container has to be able to build it.
  */

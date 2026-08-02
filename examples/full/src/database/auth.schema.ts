@@ -3,7 +3,7 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 /**
  * better-auth's four tables, plus the columns its `admin` plugin adds. **Generated,
  * not written**: `bunx @better-auth/cli generate` emits this from the very options
- * `AuthModule` is configured with, which is why `@dunx/auth` ships no copy — the
+ * `AuthModule` is configured with, which is why `@dunx/auth` ships no copy - the
  * shape follows the plugins an app enables.
  *
  * They live in the app's one schema module, so `drizzle({ client, schema })` carries
@@ -20,7 +20,7 @@ export const user = sqliteTable('user', {
   email: text().notNull().unique(),
   emailVerified: integer({ mode: 'boolean' }).notNull().default(false),
   image: text(),
-  /** `admin` plugin. Comma-separated for more than one — `rolesOf` splits it. */
+  /** `admin` plugin. Comma-separated for more than one - `rolesOf` splits it. */
   role: text(),
   banned: integer({ mode: 'boolean' }),
   banReason: text(),

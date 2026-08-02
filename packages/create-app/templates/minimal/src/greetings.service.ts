@@ -1,7 +1,7 @@
 import { Logger, type OnInit } from '@dunx/core';
 
 /**
- * A provider. No decorator, no registration boilerplate — being listed in a
+ * A provider. No decorator, no registration boilerplate - being listed in a
  * module's `providers` is what makes it injectable.
  *
  * `Logger` in the constructor is the whole dependency injection story: the

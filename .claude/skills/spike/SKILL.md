@@ -27,7 +27,7 @@ That is why the decisions above it hold. A spike keeps that property.
 5. **Record the result** in docs/ARCHITECTURE.md:
    - confirmed → a **Verified constraints** entry with the command, the Bun
      version, and the literal output in a fenced block. Match the existing
-     terseness — the `paramtypes: [ "Db", "Object", "Number" ]` entry is the
+     terseness - the `paramtypes: [ "Db", "Object", "Number" ]` entry is the
      model.
    - refuted → write down the fallback and why, under the decision it affects.
      A rejected approach recorded is the whole point of that document.
@@ -42,7 +42,7 @@ That is why the decisions above it hold. A spike keeps that property.
 - A spike that changes the public API shape belongs **before** the code it gates,
   not after.
 - One spike, one claim. Two questions are two probes.
-- Probes may use anything — including the dialects this repo bans in shipped code
+- Probes may use anything - including the dialects this repo bans in shipped code
   (`experimentalDecorators`, `reflect-metadata`) if refuting them is the point.
   That is how the existing `emitDecoratorMetadata` entry was produced. Scratchpad
   only.

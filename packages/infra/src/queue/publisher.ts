@@ -6,7 +6,7 @@ import { QueueOptions } from './options.js';
 
 /**
  * Enqueues jobs. The other half of the split the dispatcher is: nothing here knows
- * how a job runs, and nothing in the dispatcher knows how one arrives — so a web
+ * how a job runs, and nothing in the dispatcher knows how one arrives - so a web
  * process imports this and never opens a worker.
  *
  * bullmq's `Queue` is the return type rather than something wrapped: it already

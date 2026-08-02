@@ -144,7 +144,7 @@ describe('buildGateways()', () => {
   });
 
   // An app with only controllers is the common case, so no gateways is not an
-  // error — it is what makes `listen()` skip the websocket half entirely.
+  // error - it is what makes `listen()` skip the websocket half entirely.
   it('accepts an app with no gateways at all', () => {
     expect(buildGateways([]).size).toBe(0);
   });

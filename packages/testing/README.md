@@ -2,7 +2,7 @@
 
 The container an app already has, with named bindings **replaced in place**, plus a
 real `Bun.serve` on port 0. No mocking framework, no fake request object, no
-in-memory transport — Bun binds a socket in about a millisecond, so the thing under
+in-memory transport - Bun binds a socket in about a millisecond, so the thing under
 test is the thing that ships.
 
 ```ts
@@ -33,7 +33,7 @@ This is the whole design, and it follows from the container being flat.
 
 `@dunx/core` collects every module's registrations into one list and **throws on a
 duplicate token**, naming both modules. So a test override cannot be an extra
-module appended at the end that wins — there is no "wins". It would be a duplicate.
+module appended at the end that wins - there is no "wins". It would be a duplicate.
 
 `createTestApp` therefore assembles the same flat list the app would have and
 substitutes by token as it goes. Three consequences worth relying on:
@@ -47,7 +47,7 @@ substitutes by token as it goes. Three consequences worth relying on:
   prevent.
 - **The discarded provider is never instantiated.** Its `useFactory` never runs and
   its `onInit` never fires. Overriding the database does not open a connection to
-  the real database — that is the one guarantee here that a hand-rolled fixture
+  the real database - that is the one guarantee here that a hand-rolled fixture
   usually gets wrong, and `app.test.ts` proves it with a factory that throws if it
   is ever called.
 
@@ -59,19 +59,19 @@ applies there as well.
 
 | Export                      | What it is                                                              |
 | --------------------------- | ----------------------------------------------------------------------- |
-| `createTestApp(options)`    | `Promise<App>` — the core container, overrides applied                  |
-| `createTestServer(options)` | `Promise<TestServer>` — the same, plus `Bun.serve` on port 0 and a client |
-| `testClient(url)`           | `TestClient` — the request helpers against any base URL                 |
+| `createTestApp(options)`    | `Promise<App>` - the core container, overrides applied                  |
+| `createTestServer(options)` | `Promise<TestServer>` - the same, plus `Bun.serve` on port 0 and a client |
+| `testClient(url)`           | `TestClient` - the request helpers against any base URL                 |
 | `testRoot(modules)`         | The synthetic root module, for driving `HttpFactory` yourself           |
 | `RecordingLogger`           | A `Logger` that keeps entries instead of writing them                   |
 
 `modules` takes one module ref or several; several become the `imports` of one
 synthetic root, so no fixture module has to be written by hand. Anything a module
-ref can be works — a class, or a `DynamicModule` from a `forRoot`.
+ref can be works - a class, or a `DynamicModule` from a `forRoot`.
 
 `TestServer` is a `TestClient` plus `app` (the real `HttpApp`, for `app.get(...)`)
 and `close()`. `createTestServer` passes `HttpOptions` through, with two
-differences: `port` is always 0, and **`requestLogging` defaults to `false`** — it
+differences: `port` is always 0, and **`requestLogging` defaults to `false`** - it
 is on by default in production for good reasons, none of which apply to a suite
 that would otherwise print one JSON line per assertion. Pass
 `requestLogging: true` to test the logging itself.
@@ -87,7 +87,7 @@ const image = await server.request('avatars/7.png'); // the raw Response
 ```
 
 `json` on the init object is serialized and sets `content-type: application/json`
-unless `headers` already carries one — one option for every verb, rather than a
+unless `headers` already carries one - one option for every verb, rather than a
 `post`/`put`/`patch` triple. `json()` reads the body as text before parsing, so a
 route that answered 204, HTML or a plain-text error fails with the status,
 content-type and body rather than with `JSON.parse`'s message.
@@ -107,7 +107,7 @@ expect(logger.at(LogLevel.ERROR)).toEqual([]);
 ```
 
 It records; it does not interpret. No level filtering, no error promotion, no
-merging of extras — those are `@arkv/logger`'s behaviour, and asserting against a
+merging of extras - those are `@arkv/logger`'s behaviour, and asserting against a
 reimplementation of them would prove nothing.
 
 ## Deliberately not here
@@ -123,7 +123,7 @@ reimplementation of them would prove nothing.
   needs binding goes in a two-line `@Module`, which is also where it would live if
   it were real.
 - **A fake HTTP dispatcher.** It could only exercise the parts of the request path
-  dunx wrote, and not the parts Bun owns — route matching, params, method
+  dunx wrote, and not the parts Bun owns - route matching, params, method
   dispatch, upgrades. The real server is cheaper than the lie.
 - **Database fixtures, transactional rollback, seeding.** That is drizzle's
   surface, not this package's. `@dunx/infra/db` binds an in-memory `bun:sqlite`
@@ -139,7 +139,7 @@ bun add -d @dunx/testing
 ```
 
 `@dunx/core` and `@dunx/http` are `dependencies`, at a **caret** range. What matters
-is that your app and this package resolve to **one copy of `@dunx/core`** — two
+is that your app and this package resolve to **one copy of `@dunx/core`** - two
 copies means two `Logger` classes and two `RequestContext` classes, so tokens that
 match nothing and overrides that silently replace nothing. A caret range hoists to
 the copy your app already has.

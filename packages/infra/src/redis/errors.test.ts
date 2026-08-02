@@ -62,7 +62,7 @@ describe('toRedisError', () => {
   });
 
   /**
-   * Bun reports server-side errors under INVALID_RESPONSE — the response parsed
+   * Bun reports server-side errors under INVALID_RESPONSE - the response parsed
    * fine, the command was wrong. Pinned so the surprise stays documented.
    */
   it('maps a server error under INVALID_RESPONSE', () => {

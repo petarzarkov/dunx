@@ -3,10 +3,10 @@
  * doing strictly more than the one before it, so the drop from the `json` number
  * to the `validate` number can be attributed instead of guessed at:
  *
- * - `/json`     GET, no request body at all — the anchor.
- * - `/discard`  POST with the body on the wire, never read — transport only.
- * - `/parse`    POST, `await req.json()` — adds the parse.
- * - `/validate` POST, parse plus `$VALIDATOR` — adds the validator.
+ * - `/json`     GET, no request body at all - the anchor.
+ * - `/discard`  POST with the body on the wire, never read - transport only.
+ * - `/parse`    POST, `await req.json()` - adds the parse.
+ * - `/validate` POST, parse plus `$VALIDATOR` - adds the validator.
  *
  * Every route answers the same bytes, so the load generator is doing identical
  * work in all four cases.

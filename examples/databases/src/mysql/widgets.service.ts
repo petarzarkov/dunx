@@ -6,7 +6,7 @@ import * as schema from './schema.js';
 import { widgets, type Widget } from './schema.js';
 
 /**
- * MySQL. The query code is drizzle's, exactly as on the other two dialects —
+ * MySQL. The query code is drizzle's, exactly as on the other two dialects -
  * everything MySQL-specific is in `driver.ts` and in the two notes below.
  */
 export class MysqlWidgets implements OnInit {
@@ -25,7 +25,7 @@ export class MysqlWidgets implements OnInit {
   }
 
   /**
-   * MySQL has no `RETURNING`, so drizzle offers `$returningId()` instead — it reads
+   * MySQL has no `RETURNING`, so drizzle offers `$returningId()` instead - it reads
    * the `insertId` the adapter forwards and, for a multi-row insert, counts forward
    * from it. Reading the row back is the second statement.
    */
@@ -47,7 +47,7 @@ export class MysqlWidgets implements OnInit {
   }
 
   /**
-   * Not `transaction()` from `@dunx/infra/db` — that dispatches on `bun:sqlite` vs
+   * Not `transaction()` from `@dunx/infra/db` - that dispatches on `bun:sqlite` vs
    * `bun-sql`, and this handle is neither. `mysql-proxy` refuses `db.transaction()`
    * outright, so the connection opens one on `Bun.SQL` and builds a drizzle handle
    * over the reserved socket. See `MysqlConnection.transaction`.

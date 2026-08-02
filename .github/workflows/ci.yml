@@ -65,7 +65,7 @@ jobs:
 
       # Every example is a bootstrap that rots the moment nobody runs it, so all of
       # them are kept alive here rather than only the full one. test:cov above
-      # deliberately covers ./packages and ./scripts only — the examples need their
+      # deliberately covers ./packages and ./scripts only - the examples need their
       # own bunfig preload (the compiler transform), so their suites run from their
       # own workspaces. An example whose backing service is absent (Redis, Postgres,
       # MySQL, S3) reports that it is skipping and still exits 0.
@@ -73,7 +73,7 @@ jobs:
         run: bun run --filter '@dunx/example-*' test
 
       # `start` is a long-running service now, so it can never exit 0. `tour`
-      # boots the same app, narrates every package and exits — which is the
+      # boots the same app, narrates every package and exits - which is the
       # end-to-end check that the whole DI graph builds and every part works.
       - name: Tour the full example
         run: bun run --filter '@dunx/example-full' tour
@@ -104,7 +104,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       # Authenticated by npm trusted publishing (OIDC) via the id-token permission
-      # above — no NPM_TOKEN. Each package needs a trusted publisher on npmjs.com
+      # above - no NPM_TOKEN. Each package needs a trusted publisher on npmjs.com
       # pointing at this repo and this workflow file. version.ts runs the npm CLI
       # through `bunx npm@<pinned>`, so there is no Node/npm setup step to keep here.
       # UNCOMMENT when READY
@@ -115,7 +115,7 @@ jobs:
       #     FORCE_PUBLISH: ${{ contains(github.event.head_commit.message, '[force-publish]') }}
 
   # Separate job so the `github-pages` environment (and any branch protection on it)
-  # never gates the CI job itself — PR runs must not need it.
+  # never gates the CI job itself - PR runs must not need it.
   pages:
     needs: ci
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')

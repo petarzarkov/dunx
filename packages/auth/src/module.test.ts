@@ -23,7 +23,7 @@ import { AuthModule } from './module.js';
 /**
  * The better-auth tables, as its own CLI would generate them for
  * `drizzle-orm/sqlite-core` with the `admin` plugin enabled. dunx ships no copy of
- * this — see `drizzleDatabase` — so the fixture is here for the same reason an app
+ * this - see `drizzleDatabase` - so the fixture is here for the same reason an app
  * would have one.
  */
 const timestamp = () =>
@@ -300,7 +300,7 @@ describe('AuthModule', () => {
     expect(allowed.status).toBe(200);
   });
 
-  it('skips @Public routes outright — no session, even with a cookie', async () => {
+  it('skips @Public routes outright - no session, even with a cookie', async () => {
     const anonymous = await fetch(`${base}/secrets/open`);
     expect(anonymous.status).toBe(200);
     expect(await anonymous.json()).toEqual({ caller: null });

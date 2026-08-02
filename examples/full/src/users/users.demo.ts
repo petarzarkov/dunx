@@ -46,7 +46,7 @@ export class UsersDemo {
     const rejected = await post(url, { name: 42 });
     logger.info(`POST /api/users {"name":42} -> ${await show(rejected)}`);
 
-    // A nested issue's path is flattened to dots — the same rendering OpenAPI
+    // A nested issue's path is flattened to dots - the same rendering OpenAPI
     // clients expect.
     const nested = await post(url, { name: 'ada', tags: [{ label: '' }] });
     logger.info(

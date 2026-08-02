@@ -28,7 +28,7 @@ export const NoDecorators = (): React.JSX.Element => (
         Constructor injection, with nothing annotating it
       </Title>
       <Text c="dimmed" maw={640}>
-        No <code>@Injectable()</code>. No <code>@Inject()</code> — TC39 standard
+        No <code>@Injectable()</code>. No <code>@Inject()</code> - TC39 standard
         decorators have no parameter decorators, so it does not exist and never
         will. No <code>reflect-metadata</code>, no{' '}
         <code>experimentalDecorators</code>, no <code>tsyringe</code>.
@@ -42,7 +42,7 @@ export const NoDecorators = (): React.JSX.Element => (
 
     <Card withBorder radius="md" padding="lg">
       <Stack gap="sm">
-        <Text fw={700}>What turns it on — one line, once, per app</Text>
+        <Text fw={700}>What turns it on - one line, once, per app</Text>
         <CodeBlock label="bunfig.toml" code={PRELOAD} />
         <Text size="sm" c="dimmed">
           <Anchor href={href(RouteKind.Api, 'compiler')}>
@@ -51,12 +51,12 @@ export const NoDecorators = (): React.JSX.Element => (
           reads each class&apos;s constructor parameter types at load time and
           records them on the class as a thunk; the container resolves them
           before calling <code>new</code>. A thunk rather than a value, which is
-          what makes a dependency declared later in the file — or across a
-          circular import — work with no <code>forwardRef</code>.
+          what makes a dependency declared later in the file - or across a
+          circular import - work with no <code>forwardRef</code>.
         </Text>
         <Text size="sm" c="dimmed">
-          A parameter whose type erased — an interface, a primitive, a union, a
-          type-only import — is a <b>boot error naming that parameter</b>, not a
+          A parameter whose type erased - an interface, a primitive, a union, a
+          type-only import - is a <b>boot error naming that parameter</b>, not a
           silent <code>undefined</code>. That is the wart{' '}
           <code>emitDecoratorMetadata</code> has and this does not.
         </Text>

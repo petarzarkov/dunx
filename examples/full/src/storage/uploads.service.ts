@@ -5,7 +5,7 @@ const REPORT = 'reports/q1.csv';
 const ARCHIVE = 'reports/q2.csv';
 
 /**
- * Injects `Storage`, never `LocalStorage` — swapping a disk for a bucket is then
+ * Injects `Storage`, never `LocalStorage` - swapping a disk for a bucket is then
  * one `forRoot` call in storage.module.ts and nothing here changes.
  */
 export class Uploads {
@@ -17,7 +17,7 @@ export class Uploads {
   async demonstrate(): Promise<void> {
     const { storage, logger } = this;
 
-    // The contract cannot promise a root — narrowing to the backend is how you
+    // The contract cannot promise a root - narrowing to the backend is how you
     // reach anything backend-specific.
     if (storage instanceof LocalStorage) {
       logger.info(`root ${storage.root} (an OS temp dir, removed on shutdown)`);

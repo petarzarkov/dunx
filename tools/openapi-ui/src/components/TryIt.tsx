@@ -91,9 +91,9 @@ export interface TryItProps {
 /**
  * The form that makes an operation executable.
  *
- * Everything the previous page's inline client did is still here — path
+ * Everything the previous page's inline client did is still here - path
  * substitution, query parameters only when filled, the schema-derived body, the
- * free-text header box — with the credentials from the dialog folded in and the
+ * free-text header box - with the credentials from the dialog folded in and the
  * response split into a body and a header tab.
  */
 export const TryIt = ({

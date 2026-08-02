@@ -14,8 +14,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 /**
  * Walks any JSON value and rewrites every `$ref` through `map`. Structural, not
- * schema-aware: a `$ref` is legal anywhere in a JSON Schema — inside `items`,
- * `properties`, `anyOf`, `patternProperties`, a `$def` of its own — so nothing here
+ * schema-aware: a `$ref` is legal anywhere in a JSON Schema - inside `items`,
+ * `properties`, `anyOf`, `patternProperties`, a `$def` of its own - so nothing here
  * knows which keywords those are.
  */
 export const rewriteRefs = (
@@ -56,7 +56,7 @@ export const collectRefs = (
 /**
  * Every `$ref` in the document that does not land on a present
  * `components/schemas` entry. A dangling `$ref` is the usual way generated OpenAPI
- * is silently broken — a viewer renders an empty box and says nothing — so this is
+ * is silently broken - a viewer renders an empty box and says nothing - so this is
  * asserted on rather than hoped for.
  */
 export const danglingRefs = (document: OpenApiDocument): readonly string[] => {
@@ -76,8 +76,8 @@ export const danglingRefs = (document: OpenApiDocument): readonly string[] => {
 
 /**
  * `components/schemas` while it is being filled, plus the warnings collected on the
- * way. Nothing in this package throws over a schema it cannot convert — a document
- * missing one body is worth more than no document at all — so every degradation
+ * way. Nothing in this package throws over a schema it cannot convert - a document
+ * missing one body is worth more than no document at all - so every degradation
  * lands here instead.
  */
 export class SchemaStore {
@@ -93,7 +93,7 @@ export class SchemaStore {
   }
 
   /**
-   * Identical definitions collapse — the same zod object reached from two routes is
+   * Identical definitions collapse - the same zod object reached from two routes is
    * one component. Two *different* schemas claiming one name keeps the first and
    * warns: renaming would silently repoint refs a caller had already read.
    */

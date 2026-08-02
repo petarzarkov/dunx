@@ -31,8 +31,8 @@ export class ChatGateway {
    * becomes `socket.data.context`, which is how a room name or an authenticated
    * user gets carried onto the connection.
    *
-   * It is handed the `BunRequest` because the upgrade really is a route — Bun
-   * matched it — so headers, query and path params are all readable here.
+   * It is handed the `BunRequest` because the upgrade really is a route - Bun
+   * matched it - so headers, query and path params are all readable here.
    */
   @OnUpgrade()
   upgrade(req: BunRequest): Response | { nickname: string } {
@@ -45,7 +45,7 @@ export class ChatGateway {
 
   @OnOpen()
   opened(socket: Socket): void {
-    // Bun's own pub/sub — topics live in the runtime, not in a JavaScript map.
+    // Bun's own pub/sub - topics live in the runtime, not in a JavaScript map.
     socket.subscribe(Lobby.TOPIC);
     socket.send('welcome');
   }

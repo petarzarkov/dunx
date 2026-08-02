@@ -42,7 +42,7 @@ const reachable = async (): Promise<boolean> => {
 
 const live = await reachable();
 if (!live) {
-  console.log(`[dunx] queue integration tests skipped — ${url} unreachable`);
+  console.log(`[dunx] queue integration tests skipped - ${url} unreachable`);
 }
 
 // A fresh namespace per run, so a leftover job can never make a test pass.
@@ -54,7 +54,7 @@ const HUNG = `${ns}-hung`;
 
 /**
  * Injected into the handlers with `inject()` in a field initialiser, which needs no
- * compiler transform — and doubles as the witness that container teardown runs
+ * compiler transform - and doubles as the witness that container teardown runs
  * after the workers have drained.
  */
 class Recorder {
@@ -298,7 +298,7 @@ describe.if(live)('shutdown', () => {
 
     await worker.shutdown();
 
-    // Not just "the handler finished" — it finished *before* the providers it
+    // Not just "the handler finished" - it finished *before* the providers it
     // depends on were torn down, which is what reverse-order shutdown buys.
     expect(recorder.events).toEqual([
       'slow:started',

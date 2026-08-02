@@ -22,7 +22,7 @@ const createNote = {
 } as const satisfies RouteSchemas;
 
 /**
- * `@ApiDoc` carries what no zod schema can — prose, grouping, deprecation. It is a
+ * `@ApiDoc` carries what no zod schema can - prose, grouping, deprecation. It is a
  * thin wrapper over `@dunx/http`'s generic route-metadata channel (`metaKey` mints
  * a symbol, `meta` writes it), which is why documentation needs no parallel
  * registry and no second discovery pass. At class scope it names the tag every
@@ -34,7 +34,7 @@ const createNote = {
 })
 @Controller('notes')
 export class NotesController {
-  // ClientAddress is a framework class with no registration — the container
+  // ClientAddress is a framework class with no registration - the container
   // self-binds it, and app.listen() hands it the live server.
   constructor(
     private readonly notes: NotesService,

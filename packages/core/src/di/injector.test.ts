@@ -57,7 +57,7 @@ describe('inject()', () => {
     expect(config.url).toBe('db://one');
   });
 
-  it('self-binds an unregistered class — every class is injectable by default', async () => {
+  it('self-binds an unregistered class - every class is injectable by default', async () => {
     @Module({ providers: [UsersService] })
     class UsersModule {}
 
@@ -95,7 +95,7 @@ describe('inject()', () => {
     expect(() => inject(Logger)).toThrow(/outside of construction/);
   });
 
-  it('is unavailable inside a factory — factories declare deps instead', async () => {
+  it('is unavailable inside a factory - factories declare deps instead', async () => {
     @Module({
       providers: [provide(DsnToken, { useFactory: () => inject(Config).url })],
     })
@@ -114,7 +114,7 @@ describe('provide()', () => {
         provide(Config, { useValue: { url: 'db://async' } }),
         provide(Logger, { useClass: Logger }),
         provide(DsnToken, {
-          // `config` is inferred from `inject: [Config]` — no annotation here.
+          // `config` is inferred from `inject: [Config]` - no annotation here.
           useFactory: async (config) => {
             await Promise.resolve();
             return `${config.url}/pool`;

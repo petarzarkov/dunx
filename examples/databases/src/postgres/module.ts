@@ -7,7 +7,7 @@ import { PostgresWidgets } from './widgets.service.js';
  * Postgres, in five lines of configuration.
  *
  * `SqlInit` extends `Bun.SQL`'s own option type rather than restating it, so
- * pooling, TLS and auth stay in sync with whatever Bun supports — `max`,
+ * pooling, TLS and auth stay in sync with whatever Bun supports - `max`,
  * `idleTimeout`, `tls` and the rest are all accepted here.
  *
  * The dialect is resolved from the URL **at construction**, so a bad URL throws
@@ -17,7 +17,7 @@ import { PostgresWidgets } from './widgets.service.js';
  *
  * The handshake is awaited inside `open()` rather than deferred to the first
  * query. dunx settles every async factory before it constructs anything, so a
- * repository can never be handed a client that has not connected — there is no
+ * repository can never be handed a client that has not connected - there is no
  * lazy connect and no `await db.ready()`.
  */
 export class PostgresModule {

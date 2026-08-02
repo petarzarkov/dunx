@@ -10,7 +10,7 @@ import { BUILD_STAMP, FEATURE_FLAGS, type BuildStamp } from './tokens.js';
  * everything in this app uses.
  *
  * The two `inject()` calls are the escape hatch. A `Token<T>` cannot be written as
- * a parameter type — it is a value, not a type — so the transform has nothing to
+ * a parameter type - it is a value, not a type - so the transform has nothing to
  * record and a constructor parameter could never reach it. `inject()` in a **field
  * initializer** runs inside the container's construction of this object, which is
  * the only window where it works; calling it later throws with that message.

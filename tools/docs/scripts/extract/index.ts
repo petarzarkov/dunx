@@ -30,7 +30,7 @@ const parseFile = (file: string): ParsedModule => {
       .slice(0, 2)
       .map((error) => error.message)
       .join('; ');
-    throw new Error(`${file}: could not parse — ${detail}`);
+    throw new Error(`${file}: could not parse - ${detail}`);
   }
   return {
     source,

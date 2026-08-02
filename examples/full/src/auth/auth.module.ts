@@ -13,7 +13,7 @@ import { ProfileController } from './profile.controller.js';
 @Module({
   imports: [
     // `forRootAsync` because the secret and the base URL come from the validated
-    // config, and the database from the connection `DatabaseModule` already opened —
+    // config, and the database from the connection `DatabaseModule` already opened -
     // none of which a zero-argument factory could reach.
     AuthModule.forRootAsync(
       {
@@ -27,7 +27,7 @@ import { ProfileController } from './profile.controller.js';
           // the connection still closes exactly once, last.
           database: drizzleDatabase(connection),
           // `password: bunPassword` is what `AuthModule` would apply anyway when
-          // `emailAndPassword` is on and no hasher is given — named here so it is
+          // `emailAndPassword` is on and no hasher is given - named here so it is
           // visible. better-auth's own default is a pure-JavaScript scrypt;
           // `bunPassword` is `Bun.password`'s native bcrypt, which is Rule 1's
           // first half. Bun pre-hashes, so bcrypt's 72-byte cap is a non-issue.
@@ -38,13 +38,13 @@ import { ProfileController } from './profile.controller.js';
           },
           // `admin` puts `role` on the user, which `@Roles()` then reads. `bearer`
           // lets a non-browser client send `Authorization: Bearer <token>` instead of
-          // a cookie — which is what the tour does.
+          // a cookie - which is what the tour does.
           plugins: [admin(), bearer()],
         }),
         inject: [AppConfigService, DbConnection] as const,
       },
       // The route path. The global prefix turns it into `/api/auth`, the `basePath`
-      // above — see AuthOptions.mountAt.
+      // above - see AuthOptions.mountAt.
       '/auth',
     ),
   ],

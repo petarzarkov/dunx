@@ -20,7 +20,7 @@ import {
 
 /**
  * The config `@arkv/logger` accepts, bound as a token so a factory can read it.
- * dunx does not restate it — a parallel config type is the duplication the
+ * dunx does not restate it - a parallel config type is the duplication the
  * "reuse `@arkv`" rule in CLAUDE.md exists to prevent.
  */
 export const LoggerSettings = token<LoggerConfig>('LoggerConfig');
@@ -29,13 +29,13 @@ export const LoggerSettings = token<LoggerConfig>('LoggerConfig');
  * The same instance `Logger` resolves to, typed as the implementation.
  *
  * Core's contract covers the six levels and nothing else, on purpose. The
- * implementation carries three things beyond it — `child(bindings)`,
- * `flush()` and `close()` — and this token is how an app reaches them without
+ * implementation carries three things beyond it - `child(bindings)`,
+ * `flush()` and `close()` - and this token is how an app reaches them without
  * a cast or an adapter class widening the contract for everyone.
  */
 export const BackingLogger = token<ArkvLogger>('BackingLogger');
 
-/** Options, or a function returning them — possibly async. */
+/** Options, or a function returning them - possibly async. */
 export type LoggerConfigSource =
   | LoggerConfig
   | (() => LoggerConfig | Promise<LoggerConfig>);
@@ -87,7 +87,7 @@ const bindings = (options: LoggerModuleOptions): readonly Registration[] => [
   // Core's contract, bound to the very store this logger reads. Without it
   // @dunx/http's request logging would write a requestId into core's default
   // store and @arkv/logger would read its own, so no entry would carry one.
-  // `ContextStore` satisfies `RequestContext` structurally — no adapter.
+  // `ContextStore` satisfies `RequestContext` structurally - no adapter.
   provide(RequestContext, {
     useFactory: (store: ContextStore) => store,
     inject: [ContextStore] as const,
@@ -133,7 +133,7 @@ export class LoggerModule {
   }
 
   /**
-   * The same bindings, with the config produced by a factory that may inject —
+   * The same bindings, with the config produced by a factory that may inject -
    * which is the only thing `forRoot` cannot express, since the function it takes
    * receives no arguments. Reading the level off `ConfigService` is the case:
    *

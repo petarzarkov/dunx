@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 /**
  * One validation function, which is the whole `ConfigModule` contract. dunx does
- * not pick the library — this is zod because the routes already use it, and a
+ * not pick the library - this is zod because the routes already use it, and a
  * hand-written function that throws would work identically.
  *
  * `.default()` is where a value comes from when the variable is unset, so a clean
@@ -53,13 +53,13 @@ export interface AppConfig {
 /**
  * One name for the typed config everywhere. A subclass rather than
  * `ConfigService<AppConfig>` at each site because a factory's `inject: [...]`
- * carries no type argument — the class does, and it is a real runtime value, so
+ * carries no type argument - the class does, and it is a real runtime value, so
  * it is both a precise token and a usable constructor annotation.
  */
 export class AppConfigService extends ConfigService<AppConfig> {}
 
 /**
- * Flat variables in, a shaped object out — the reason `config.get('log')` hands
+ * Flat variables in, a shaped object out - the reason `config.get('log')` hands
  * back a group rather than a lone string. Everything downstream reads this
  * shape; nothing downstream reads `process.env`.
  */

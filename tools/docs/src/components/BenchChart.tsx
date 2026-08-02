@@ -3,7 +3,7 @@ import { useComputedColorScheme } from '@mantine/core';
 import { FOCUS, integer, type StartupRow, type ThroughputRow } from '../bench';
 
 /**
- * The charts, from `@mantine/charts` — the same design system as the rest of the
+ * The charts, from `@mantine/charts` - the same design system as the rest of the
  * site, so a bar here reads like a component rather than a bolted-on widget.
  *
  * They sit **above** the detail tables rather than replacing them. A chart shows

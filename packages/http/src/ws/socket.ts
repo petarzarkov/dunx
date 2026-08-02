@@ -12,7 +12,7 @@ export interface SocketData<T = unknown> {
 
 /**
  * Bun's native socket, unwrapped. `send`, `subscribe`, `unsubscribe`,
- * `isSubscribed`, `publish`, `cork` and `close` are its own methods — nothing here
+ * `isSubscribed`, `publish`, `cork` and `close` are its own methods - nothing here
  * reimplements them.
  */
 export type Socket<T = unknown> = ServerWebSocket<SocketData<T>>;

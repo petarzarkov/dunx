@@ -10,14 +10,14 @@ import { DbConnection, DbOptions } from './connection.js';
 /**
  * Binds three tokens:
  *
- * - `DbOptions` — the resolved configuration, so anything can read the dialect.
- * - `DbConnection` — the lifecycle and the raw driver handle.
- * - drizzle's own database class — `BunSQLiteDatabase` or `BunSQLDatabase` — which
+ * - `DbOptions` - the resolved configuration, so anything can read the dialect.
+ * - `DbConnection` - the lifecycle and the raw driver handle.
+ * - drizzle's own database class - `BunSQLiteDatabase` or `BunSQLDatabase` - which
  *   is what a repository injects. There is no wrapper: drizzle is the interface.
  *
  * The drizzle handle is bound through a factory that depends on `DbConnection`,
  * which is what fixes the shutdown order. dunx tears down in reverse construction
- * order, so the connection — constructed first, because everything else needs it —
+ * order, so the connection - constructed first, because everything else needs it -
  * closes last, after every repository has drained.
  *
  * Every factory settles before the first constructor runs, so the connection is
@@ -46,11 +46,11 @@ export class DbModule {
 
   /**
    * The same `forRoot`, with the options produced by a factory that may await and
-   * may inject — for when the URL comes from a secret store or a `Config`.
+   * may inject - for when the URL comes from a secret store or a `Config`.
    *
    * `token` has to be passed, unlike in `forRoot`. drizzle's database class is the
    * injection token, and which class that is only becomes known once the factory
-   * has produced the options — too late to register a provider under it:
+   * has produced the options - too late to register a provider under it:
    *
    * ```ts
    * DbModule.forRootAsync(BunSQLiteDatabase, {

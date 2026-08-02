@@ -9,7 +9,7 @@ type HandlerMethod = (...args: never[]) => unknown;
  *
  * There is no class decorator to go with it. A method's marker is the whole
  * record, and `WorkerFactory` finds it by walking the prototype chains of the
- * classes the modules already declare — so a handler needs no second
+ * classes the modules already declare - so a handler needs no second
  * registration, and an abstract base's marked methods are inherited by every
  * subclass. See `packages/infra/README.md`, "queue", for a worked example.
  */

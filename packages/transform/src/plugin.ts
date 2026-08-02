@@ -15,7 +15,7 @@ import { transform } from './deps.js';
 export const depsPlugin: BunPlugin = {
   name: 'dunx-deps',
   setup(build) {
-    // A runtime plugin's onLoad must always return a result — there is no
+    // A runtime plugin's onLoad must always return a result - there is no
     // "decline and fall through", so untransformed files are handed back as-is.
     build.onLoad({ filter: /\.tsx?$/ }, async ({ path }) => {
       const source = await Bun.file(path).text();

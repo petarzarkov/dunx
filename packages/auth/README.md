@@ -1,13 +1,13 @@
 # @dunx/auth
 
 [Better Auth](https://better-auth.com) for dunx. **This package is not an
-authentication system** — better-auth is, and it is very good at it. This is the
+authentication system** - better-auth is, and it is very good at it. This is the
 wiring: a module that builds the instance from your `ConfigService`, five routes that
 mount its handler, a guard that composes with the `@Public()` and `@Roles()` metadata
 `@dunx/http` already carries, and two adapters that let it drive Bun's own APIs.
 
 `better-auth` is a **required peer dependency**. Install it yourself and own its
-version — dunx does not bundle it — but it is not optional, because this package
+version - dunx does not bundle it - but it is not optional, because this package
 imports `betterAuth` as a value and cannot load without it. Marking it optional would
 trade an install-time warning for a module-resolution crash.
 
@@ -15,7 +15,7 @@ trade an install-time warning for a module-resolution crash.
 bun add @dunx/auth better-auth
 ```
 
-`drizzle-orm` **is** an optional peer, needed only by `@dunx/auth/drizzle` — which is
+`drizzle-orm` **is** an optional peer, needed only by `@dunx/auth/drizzle` - which is
 its own subpath precisely so that a Prisma, Kysely or MongoDB app never loads it.
 `dist/index.js` contains no reference to drizzle, which is the test a peer has to
 pass to be called optional.
@@ -33,7 +33,7 @@ documentation is the documentation.
 | `Auth`                | The injection token for the better-auth instance                      |
 | `SessionGuard`        | Middleware: authenticates, then reads `@Public()` and `@Roles()`       |
 | `AuthContext`         | The authenticated caller, reachable from any service in the request    |
-| `Principal`           | `{ session, user }` — better-auth's own inferred session type          |
+| `Principal`           | `{ session, user }` - better-auth's own inferred session type          |
 | `bunPassword`         | `Bun.password` bcrypt in place of better-auth's JavaScript scrypt      |
 | `redisStorage`        | `secondaryStorage` over `Bun.RedisClient`                             |
 | `drizzleDatabase`     | `database` over the drizzle handle `@dunx/infra/db` already opened     |
@@ -71,7 +71,7 @@ for when the secret is not behind config.
 
 `forRootAsync` exists for the one reason it exists on `LoggerModule`, `DbModule` and
 the rest: a zero-argument function cannot read `ConfigService`. It is not a second
-mechanism — dunx settles every async factory before the first constructor runs, so
+mechanism - dunx settles every async factory before the first constructor runs, so
 the instance is built and the connection handshaked before anything can ask for
 either.
 
@@ -85,7 +85,7 @@ bunx @better-auth/cli generate
 ```
 
 Put the result in the schema object you already hand `@dunx/infra/db`, and
-`drizzleDatabase(connection)` needs no schema argument — `@dunx/infra/db` builds its
+`drizzleDatabase(connection)` needs no schema argument - `@dunx/infra/db` builds its
 handle with `drizzle({ client, schema })`, and better-auth's adapter reads
 `db._.fullSchema` off it. `examples/full/src/database/auth.schema.ts` is a
 generated schema in place.
@@ -96,7 +96,7 @@ the library that reads them.
 ## Mounting
 
 `AuthHandler` puts better-auth's `(request: Request) => Promise<Response>` behind five
-wildcard routes — `GET`, `POST`, `PUT`, `PATCH` and `DELETE` at `<basePath>/*`.
+wildcard routes - `GET`, `POST`, `PUT`, `PATCH` and `DELETE` at `<basePath>/*`.
 `Bun.serve` matches a wildcard natively, so **Bun is still the router**: dunx does not
 restate, wrap or re-dispatch a single better-auth endpoint, and the `Response` comes
 back untouched, `Set-Cookie` headers and redirects included.
@@ -121,10 +121,10 @@ paths, rather than better-auth quietly answering 404 to everything.
 ## The guard
 
 ```ts
-// Global — every route needs a session unless it says otherwise.
+// Global - every route needs a session unless it says otherwise.
 HttpFactory.create(root, { middleware: [SessionGuard] });
 
-// or scoped — this controller needs one, nothing else does.
+// or scoped - this controller needs one, nothing else does.
 @UseGuards(SessionGuard)
 @Controller('profile')
 class ProfileController {}
@@ -135,10 +135,10 @@ session through better-auth's own `api.getSession`, so a cookie and the `bearer`
 plugin's `Authorization: Bearer <token>` both work, and then reads the metadata
 `@dunx/http` already had:
 
-- **`@Public()`** — skipped outright. No session lookup, no rejection, no role check.
+- **`@Public()`** - skipped outright. No session lookup, no rejection, no role check.
   That is what makes the guard safe to install globally: `AuthHandler` is `@Public()`,
   and a sign-in endpoint that required a session could never be reached.
-- **`@Roles('admin', 'editor')`** — a 403 unless the caller holds one of them.
+- **`@Roles('admin', 'editor')`** - a 403 unless the caller holds one of them.
   `@dunx/openapi` already reads the same key for its security schemes.
 
 A public route that wants to *adapt* to an optional caller asks better-auth itself:
@@ -173,7 +173,7 @@ but nothing a route handler calls. `AsyncLocalStorage` is a Node built-in Bun
 implements natively, and it is already how `@dunx/core` carries request state.
 
 It is a **second** store rather than a key in `RequestContext`, because that one is
-the log record — every field in it is serialized into every line the request writes,
+the log record - every field in it is serialized into every line the request writes,
 so a session object there would be noise on each entry and a redaction hazard in the
 ones that matter. What does go there is `userId`, which is why every log line inside a
 guarded request is already correlated to the user.
@@ -196,7 +196,7 @@ Written bare, `Auth` carries better-auth's core endpoints only.
 ## Password hashing
 
 better-auth's default hasher is **pure-JavaScript scrypt**. `AuthModule` replaces it
-with `bunPassword` — native bcrypt through `Bun.password` — whenever
+with `bunPassword` - native bcrypt through `Bun.password` - whenever
 `emailAndPassword` is enabled and you did not supply a `password` of your own. That is
 Rule 1's first half: if Bun ships it, use Bun.
 
@@ -227,12 +227,12 @@ costing a database round trip per request.
 
 All five methods are implemented, not the three that are mandatory. `getAndDelete` and
 `increment` are optional in better-auth's interface because most clients cannot do
-them atomically — `Bun.RedisClient` can, through `GETDEL` and `INCR`. Without them
+them atomically - `Bun.RedisClient` can, through `GETDEL` and `INCR`. Without them
 better-auth falls back to read-then-delete for single-use credentials, which is a
 race, and to a non-atomic rate-limit counter.
 
 `redisStorage` takes a `RedisStore`, which is six methods restated rather than
-imported — an `@dunx/infra/redis` `RedisConnection` satisfies it structurally, and so
+imported - an `@dunx/infra/redis` `RedisConnection` satisfies it structurally, and so
 does anything else shaped like `Bun.RedisClient`.
 
 ## What is bound
@@ -247,5 +247,5 @@ does anything else shaped like `Bun.RedisClient`.
 | `SessionGuard`| The guard, ready for `middleware: [...]` or `@UseGuards`         |
 
 Every one of them declares its own `inject` list, so none of it needs
-`@dunx/transform`'s transform to have run — `@dunx/auth` works in an app with no
+`@dunx/transform`'s transform to have run - `@dunx/auth` works in an app with no
 preload.

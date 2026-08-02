@@ -4,7 +4,7 @@ import { AppModule } from './app.module.js';
 
 /**
  * The whole app behind a real `Bun.serve` on port 0. This is also what CI runs to
- * prove the example still boots — see `examples/testing` for overrides and the
+ * prove the example still boots - see `examples/testing` for overrides and the
  * rest of `@dunx/testing`.
  */
 describe('minimal', () => {

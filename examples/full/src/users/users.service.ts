@@ -5,7 +5,7 @@ import { UsersRepository, type User } from './users.repository.js';
 
 export class UsersService implements OnInit, OnShutdown {
   // `ConfigService<AppConfig>` injects because the transform records the bare
-  // name of a generic annotation — the type argument costs nothing at runtime.
+  // name of a generic annotation - the type argument costs nothing at runtime.
   constructor(
     private readonly repository: UsersRepository,
     private readonly logger: Logger,

@@ -84,7 +84,7 @@ export {
   type ServeRoutes,
 } from './server/routes.js';
 export type { AppSettings } from './server/settings.js';
-// One name, both meanings — the value for `HttpStatusCode.NOT_FOUND`, the type for
+// One name, both meanings - the value for `HttpStatusCode.NOT_FOUND`, the type for
 // annotations. Exactly what an enum gives, without the enum.
 export { HttpStatusCode, type HttpStatusName } from './server/status.js';
 // The websocket half: gateways are declared in @Module({ providers }) and served by

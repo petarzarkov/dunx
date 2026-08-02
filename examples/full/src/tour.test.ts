@@ -6,7 +6,7 @@ const APP_DIR = new URL('..', import.meta.url).pathname;
 /**
  * The tour is the end-to-end check: it boots the same app `bun start` serves,
  * narrates every package and exits 0. Assertions read the structured entries
- * rather than raw stdout — `NODE_ENV=production` selects the plain JSON
+ * rather than raw stdout - `NODE_ENV=production` selects the plain JSON
  * formatter, so there is no ANSI to strip and a message containing a comma is
  * not broken up by the colouriser.
  *
@@ -90,8 +90,8 @@ it('validates zod schemas and wraps the return', () => {
 });
 
 it('generates a JSON Schema from the same zod schema', () => {
-  // `.meta({ id })` names the $defs entry — the slot OpenAPI calls
-  // components/schemas — and `.meta({ title })` lands inline.
+  // `.meta({ id })` names the $defs entry - the slot OpenAPI calls
+  // components/schemas - and `.meta({ title })` lands inline.
   expect(tour.text).toContain(
     '"$defs":{"Tag":{"type":"object","properties":{"label":{"type":"string",' +
       '"minLength":1}},"required":["label"],"additionalProperties":false,' +
@@ -102,7 +102,7 @@ it('generates a JSON Schema from the same zod schema', () => {
 
 it('documents every route the one app serves', () => {
   expect(tour.text).toMatch(/GET \/api\/openapi\.json -> 200 openapi 3\.1\.0/);
-  // Every area is reachable and therefore documented — that is what makes the
+  // Every area is reachable and therefore documented - that is what makes the
   // service explorable rather than a script.
   for (const path of [
     '/api/ledger',
@@ -163,7 +163,7 @@ it('runs @dunx/infra/db on bun:sqlite at :memory:', () => {
   expect(tour.text).toContain('get() with no match -> undefined');
   expect(tour.text).toMatch(/committed transaction -> \d+ rows, balance \d+/);
   // Both transactions await inside the callback, which is what drizzle's own
-  // bun-sqlite transaction() cannot survive — hence @dunx/infra/db's.
+  // bun-sqlite transaction() cannot survive - hence @dunx/infra/db's.
   expect(tour.text).toContain('transaction threw: rolled back on purpose');
   expect(tour.text).toMatch(
     /rolled back transaction -> still \d+ rows, "discarded" never landed/,
@@ -230,13 +230,13 @@ it('exits 0 with no redis at all', async () => {
   // Everything after the cache still ran.
   expect(run.text).toContain('2 users: ada, grace');
   // The websocket relay points at the same dead url, so the app boots, warns,
-  // and fans out locally — and the process still exits, which is what `code`
+  // and fans out locally - and the process still exits, which is what `code`
   // being 0 proves.
   expect(run.text).toContain(
     'skipping the relay demo: no Redis to relay through',
   );
   expect(run.text).toContain(
-    'the app booted anyway and fan-out stayed local — that is the degraded path',
+    'the app booted anyway and fan-out stayed local - that is the degraded path',
   );
   expect(run.text).toMatch(/the websocket relay could not (subscribe|publish)/);
 });
@@ -296,7 +296,7 @@ it('tells middleware which route it was folded into', () => {
 it('enforces @Public, @Roles and a method-scoped @UseGuards', () => {
   // The controller-scoped guard runs, reads ctx.get(PUBLIC), and lets it past.
   expect(tour.text).toContain(
-    'AuthGuard: GET /api/reports/health is @Public() — skipping',
+    'AuthGuard: GET /api/reports/health is @Public() - skipping',
   );
   expect(tour.text).toContain(
     '@Public() GET /api/reports/health, no credentials -> 200 {"ok":true}',
@@ -332,7 +332,7 @@ it('enforces @Public, @Roles and a method-scoped @UseGuards', () => {
 it('leaves every other route reachable without credentials', () => {
   // The whole reason AuthGuard is on the controller rather than global.
   expect(tour.text).not.toContain(
-    'AuthGuard: GET /api/users is @Public() — skipping',
+    'AuthGuard: GET /api/users is @Public() - skipping',
   );
   expect(tour.text).toContain('GET /api/users -> 200 [{"id":1,"name":"ada"}');
 });

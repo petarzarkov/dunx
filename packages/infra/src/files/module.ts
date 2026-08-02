@@ -8,7 +8,7 @@ import { Storage, StorageOptions } from './storage.js';
 
 /**
  * Bound identically by both factories. The backend is whichever `StorageOptions`
- * subclass got configured, so the module never branches on one — and
+ * subclass got configured, so the module never branches on one - and
  * `forRootAsync` really is `forRoot` with a factory in front of it.
  */
 const storage = provide(Storage, {

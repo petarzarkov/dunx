@@ -117,7 +117,7 @@ describe('rolling back', () => {
 
   /**
    * The measurement this whole function exists for. `bun:sqlite`'s own
-   * `transaction()` — which is what drizzle's `db.transaction()` delegates to —
+   * `transaction()` - which is what drizzle's `db.transaction()` delegates to -
    * commits as soon as the callback returns its promise, so the insert below is
    * already committed before the throw is even reached.
    */
@@ -216,7 +216,7 @@ describe('rolling back', () => {
 
 describe('what drizzle’s own transaction() does here', () => {
   /**
-   * Not a test of this package — a test of the claim in its doc comment. If Bun
+   * Not a test of this package - a test of the claim in its doc comment. If Bun
    * ever fixes this, the assertion fails and the reasoning gets revisited rather
    * than silently outliving the bug.
    */

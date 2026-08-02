@@ -29,7 +29,7 @@ export interface RedisOptionsInit {
   readonly name?: string;
   /** @default 10000 */
   readonly connectionTimeout?: number;
-  /** @default 0 — no timeout */
+  /** @default 0 - no timeout */
   readonly idleTimeout?: number;
   /** @default true */
   readonly autoReconnect?: boolean;
@@ -42,7 +42,7 @@ export interface RedisOptionsInit {
   readonly tls?: boolean | Bun.TLSOptions;
   /**
    * Run `PING` during `onInit` so an unreachable server fails at boot instead of
-   * at the first command. Off by default — a cache should not stop a process
+   * at the first command. Off by default - a cache should not stop a process
    * from starting.
    *
    * @default false
@@ -68,7 +68,7 @@ export const assertRedisUrl = (url: string): string => {
   }
 
   // Bun accepts an unparseable string here and only fails later, at connect time,
-  // as an opaque "Connection closed" — so both checks happen up front instead.
+  // as an opaque "Connection closed" - so both checks happen up front instead.
   if (!(REDIS_PROTOCOLS as readonly string[]).includes(parsed.protocol)) {
     throw new RedisError(
       RedisErrorCode.INVALID_URL,

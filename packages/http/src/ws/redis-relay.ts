@@ -3,7 +3,7 @@ import type { PubSubRelay } from './relay.js';
 
 /**
  * The schemes `Bun.RedisClient` accepts. Checked here because Bun takes any string
- * and only fails later, at connect time, as an opaque `Connection closed` — which
+ * and only fails later, at connect time, as an opaque `Connection closed` - which
  * an absence-tolerant relay would swallow, turning a typo into silent single-node
  * fan-out.
  */
@@ -32,7 +32,7 @@ export interface RedisRelayOptions {
    * `0` by default, and that default is not a preference: a `Bun.RedisClient` that
    * never connects keeps an internal retry timer alive past `close()`, and the
    * process then never exits. A relay is exactly the connection most likely to be
-   * absent — a single-node deployment with `REDIS_URL` left over from staging —
+   * absent - a single-node deployment with `REDIS_URL` left over from staging -
    * so the default has to be the one that lets the app boot, degrade, and still
    * exit. Raise it when Redis is a hard requirement and you want Bun to reconnect
    * for you.
@@ -65,7 +65,7 @@ const assertUrl = (url: string): string => {
 };
 
 /**
- * A {@link PubSubRelay} on `Bun.RedisClient` — a Bun global, so this costs
+ * A {@link PubSubRelay} on `Bun.RedisClient` - a Bun global, so this costs
  * `@dunx/http` no dependency at all.
  *
  * **Two connections, not one.** A client in subscriber mode rejects every data

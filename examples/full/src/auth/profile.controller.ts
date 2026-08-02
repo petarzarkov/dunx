@@ -8,7 +8,7 @@ import { Audit } from './audit.service.js';
  * is meant to be reachable without credentials.
  *
  * Nothing here is handed a user. `Audit` reads the caller out of `AuthContext`, which
- * is `AsyncLocalStorage` — so a service two hops from the request sees the principal
+ * is `AsyncLocalStorage` - so a service two hops from the request sees the principal
  * without it being threaded through a signature.
  */
 @UseGuards(SessionGuard)

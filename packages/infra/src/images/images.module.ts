@@ -32,7 +32,7 @@ export class ImagesModule {
    * ```
    *
    * Use {@link ImagesModule.forRootAsync} when the options have to come from
-   * another provider — that is the one thing a zero-argument function cannot do.
+   * another provider - that is the one thing a zero-argument function cannot do.
    *
    * `Images` is bound through an explicit factory rather than as a bare class so
    * that `@dunx/infra/images` works with or without the `@dunx/transform` preload.
@@ -59,7 +59,7 @@ export class ImagesModule {
 
   /**
    * The same two bindings, with the options produced by a factory that may
-   * inject — reading the quality off `ConfigService`, say:
+   * inject - reading the quality off `ConfigService`, say:
    *
    * ```ts
    * ImagesModule.forRootAsync({

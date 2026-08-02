@@ -233,7 +233,7 @@ export const Operation = ({
           )}
 
           {body.map(([type, value_]) => (
-            <Section key={type} title={`Request body — ${type}`}>
+            <Section key={type} title={`Request body - ${type}`}>
               <SchemaView schema={value_.schema} schemas={schemas} />
             </Section>
           ))}

@@ -16,11 +16,11 @@ import { HttpStatusCode } from './status.js';
 
 /**
  * Built once per route at boot. A route that declares nothing gets the identity
- * reader — no parse, no validation, not even a promise.
+ * reader - no parse, no validation, not even a promise.
  *
  * A reader **returns a promise only when it has something to wait for**. A `body`
- * schema always does; `query` and `params` against a synchronous validator — which
- * zod, Valibot and ArkType all are — resolve without one.
+ * schema always does; `query` and `params` against a synchronous validator - which
+ * zod, Valibot and ArkType all are - resolve without one.
  */
 export type InputReader = (req: BunRequest) => RouteInput | Promise<RouteInput>;
 
@@ -89,7 +89,7 @@ const JSON_MEDIA = 'application/json';
 // a 415 there would be useless, since the schema is about to reject `undefined`.
 const mediaTypeOf = (req: BunRequest): string => {
   const header = req.headers.get('content-type');
-  // The header almost every JSON client sends, verbatim — worth not slicing,
+  // The header almost every JSON client sends, verbatim - worth not slicing,
   // trimming and lowercasing on the hot path.
   if (header === JSON_MEDIA || header === null) return JSON_MEDIA;
   const end = header.indexOf(';');
@@ -121,7 +121,7 @@ const accept = (source: InputSource, result: StandardSchemaResult<unknown>) => {
  * Validates, assigns, and hands the draft back. Returning the draft rather than
  * `void` is what lets the reader be `(req) => fill({ req })`: a body route then
  * costs one promise link in total, where threading the draft back through a second
- * `then` cost two — worth ~120 ns per request, measured.
+ * `then` cost two - worth ~120 ns per request, measured.
  */
 const fillWith = (
   draft: InputDraft,
@@ -157,7 +157,7 @@ const bodyFill =
 
     // Both handlers on one `then`, so the parse costs a single promise link. A
     // `ValidationError` from the success handler is deliberately not visible to the
-    // rejection handler — only an unreadable or mangled body is a parse failure.
+    // rejection handler - only an unreadable or mangled body is a parse failure.
     return parse(draft.req).then(
       (value) => fillWith(draft, 'body', schema, value),
       (error: unknown) => {
@@ -174,7 +174,7 @@ const bodyFill =
 /**
  * The query string, without parsing the whole URL to reach it. `new URL(req.url)`
  * resolves scheme, host, port, path and fragment to hand back a `searchParams`, and
- * measured **~1,000 ns of the ~1,500 ns** a `query` route used to cost — more than
+ * measured **~1,000 ns of the ~1,500 ns** a `query` route used to cost - more than
  * the entire body reader. `RequestLoggingMiddleware` took the same slice for the
  * same reason.
  *

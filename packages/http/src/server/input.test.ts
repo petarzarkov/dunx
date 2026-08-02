@@ -13,7 +13,7 @@ import { HttpFactory, type HttpApp } from './factory.js';
 import { buildInputReader } from './input.js';
 import { HttpStatusCode } from './status.js';
 
-/** A Standard Schema by hand — the point being that no dependency is involved. */
+/** A Standard Schema by hand - the point being that no dependency is involved. */
 const schema = <T>(
   validate: (
     value: unknown,
@@ -34,7 +34,7 @@ const Note = schema<{ text: string }>((value) => {
     : { issues: [{ message: 'text must be a string', path: ['text'] }] };
 });
 
-// Valibot-shaped path segments — objects with a `key`, not bare keys.
+// Valibot-shaped path segments - objects with a `key`, not bare keys.
 const Segmented = schema<{ text: string }>((value) => {
   const text = field(value, 'text');
   return typeof text === 'string'

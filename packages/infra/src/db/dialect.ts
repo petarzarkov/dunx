@@ -1,7 +1,7 @@
 import { DatabaseError } from './errors.js';
 
 /**
- * The four dialects `Bun.SQL` accepts. Taken from Bun's own rejection message —
+ * The four dialects `Bun.SQL` accepts. Taken from Bun's own rejection message -
  * `new Bun.SQL('oracle://…')` throws with exactly this list.
  *
  * Bun accepting a dialect is not the same as this package supporting it; see
@@ -17,9 +17,9 @@ export const Dialect = Object.freeze({
 export type DialectName = (typeof Dialect)[keyof typeof Dialect];
 
 export const Backend = Object.freeze({
-  /** `drizzle-orm/bun-sqlite` over `bun:sqlite` — embedded, no server, synchronous underneath. */
+  /** `drizzle-orm/bun-sqlite` over `bun:sqlite` - embedded, no server, synchronous underneath. */
   SQLITE: 'sqlite',
-  /** `drizzle-orm/bun-sql` over `Bun.SQL` — pooled, asynchronous, Postgres. */
+  /** `drizzle-orm/bun-sql` over `Bun.SQL` - pooled, asynchronous, Postgres. */
   SQL: 'sql',
 } as const);
 
@@ -42,7 +42,7 @@ const SCHEMES: Readonly<Record<string, DialectName>> = Object.freeze({
  * Which dialect a connection URL names.
  *
  * This is stricter than Bun on purpose. Bun reads a *schemeless* string as a
- * Postgres host — `new Bun.SQL({ url: './dev.db' })` reports `adapter:
+ * Postgres host - `new Bun.SQL({ url: './dev.db' })` reports `adapter:
  * 'postgres'` and then fails at connect time with a socket error. Rejecting it
  * here turns that into a message about the URL.
  */
@@ -55,7 +55,7 @@ export const dialectFromUrl = (url: string | URL): DialectName => {
   if (!dialect) {
     throw new DatabaseError(
       `"${href}" is not a connection URL Bun.SQL understands. Expected one of ` +
-        `${Object.keys(SCHEMES).join(', ')} — note that pg:// is not supported.`,
+        `${Object.keys(SCHEMES).join(', ')} - note that pg:// is not supported.`,
     );
   }
   return dialect;

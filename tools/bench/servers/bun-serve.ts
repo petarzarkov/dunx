@@ -9,7 +9,7 @@ import {
 
 // Handlers, not Bun's static-`Response` route form. A static Response is served
 // from a precomputed buffer and would beat every framework here for reasons that
-// have nothing to do with framework overhead — see README, "What is not measured".
+// have nothing to do with framework overhead - see README, "What is not measured".
 Bun.serve({
   port: port(),
   routes: {

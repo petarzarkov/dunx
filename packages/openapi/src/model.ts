@@ -21,7 +21,7 @@ export interface TryField {
  * What the page hands its UI: the document verbatim, plus the three things only
  * the server can compute.
  *
- * `prose` is `Bun.markdown` output and `samples` is `sampleFor` output — both
+ * `prose` is `Bun.markdown` output and `samples` is `sampleFor` output - both
  * native, both already covered by tests here, and neither worth a second
  * implementation in the browser bundle. Keeping them on this side is also what
  * stops a markdown parser from landing in the page.
@@ -40,7 +40,7 @@ export interface PageModel {
 
 /**
  * Author-written prose. Bun parses the markdown; nothing here reimplements it.
- * Raw HTML is turned off in the parser rather than trusted — a description
+ * Raw HTML is turned off in the parser rather than trusted - a description
  * reaching this page came from a schema, and a schema can come from anywhere.
  */
 const prose = (markdown: string): string =>
@@ -63,8 +63,8 @@ const placeholderFor = (parameter: ParameterObject): string => {
 /**
  * Every `{name}` in the path gets an input, declared or not.
  *
- * A document is free to leave a path parameter out of `parameters` — it is bad
- * practice but it is valid — and without this the template would be sent with a
+ * A document is free to leave a path parameter out of `parameters` - it is bad
+ * practice but it is valid - and without this the template would be sent with a
  * literal `{id}` in it. Declared parameters win, so their schema and
  * requiredness are kept; the rest are synthesised as required strings.
  */

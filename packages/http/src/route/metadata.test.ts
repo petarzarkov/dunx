@@ -116,7 +116,7 @@ describe('meta()', () => {
     }
 
     expect(read(new Reports(), 'health', PUBLIC)).toBe(true);
-    // The roles are still there — a guard that reads PUBLIC first is what makes
+    // The roles are still there - a guard that reads PUBLIC first is what makes
     // the route public, which is the whole point of the pair.
     expect(read(new Reports(), 'health', ROLES)).toEqual(['admin']);
   });
@@ -301,7 +301,7 @@ describe('metadata isolation', () => {
     Roles('changed')(Reports);
 
     // The context closed over a record resolved once. Only a fresh discovery sees
-    // the new value — which is what makes the request path free of reflection.
+    // the new value - which is what makes the request path free of reflection.
     expect(ctx.get(ROLES)).toEqual(['admin']);
     expect(read(new Reports(), 'list', ROLES)).toEqual(['changed']);
   });

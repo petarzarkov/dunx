@@ -79,7 +79,7 @@ export const collectModuleExports = (program: Program): ModuleExports => {
 };
 
 /**
- * `./foo.js` as written in source maps to `src/foo.ts` on disk — relative
+ * `./foo.js` as written in source maps to `src/foo.ts` on disk - relative
  * imports carry a `.js` extension throughout this repo because `tsc` copies
  * the specifier verbatim into the emitted declarations.
  */

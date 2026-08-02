@@ -27,7 +27,7 @@ const rpsOf = (report: ValidationReport, id: string): number =>
 
 const stepTable = (report: ValidationReport): string => {
   const steps: readonly [string, string][] = [
-    ['raw:json', '`GET /json` — no request body at all'],
+    ['raw:json', '`GET /json` - no request body at all'],
     ['raw:discard', '`POST`, body on the wire, never read'],
     ['raw:parse', '`POST` + `await req.json()`'],
     ['raw:zod', '`POST` + `req.json()` + zod'],
@@ -40,7 +40,7 @@ const stepTable = (report: ValidationReport): string => {
       const previous = steps[index - 1];
       const added =
         previous === undefined
-          ? '—'
+          ? '-'
           : delta(rpsOf(report, previous[0]), unit.rps.median);
       return `| ${label} | ${int(unit.rps.median)} | ${micros(unit.rps.median).toFixed(2)} | ${added} |`;
     })
@@ -61,7 +61,7 @@ const frameworkTable = (report: ValidationReport): string => {
       'dunx:manual-validate',
       '`@dunx/http`, no schemas, validate in the handler',
     ],
-    ['dunx:zod', '`@dunx/http`, `body` declared — the framework does it'],
+    ['dunx:zod', '`@dunx/http`, `body` declared - the framework does it'],
   ];
 
   const body = rows
@@ -97,7 +97,7 @@ const validatorTable = (report: ValidationReport): string => {
         dunx: unit.rps.median,
         // Everything above `raw:parse`, which is the same request with no
         // validation at all. A reading at or below zero means "under the noise
-        // floor", not "free" — it is printed rather than clamped.
+        // floor", not "free" - it is printed rather than clamped.
         cost: micros(raw.rps.median) - micros(parse),
       };
     })
@@ -129,7 +129,7 @@ export const validationSection = async (): Promise<string | null> => {
 
   return `## Validation cost
 
-Generated from \`results/validation.json\` by \`bun src/readme-tables.ts\` — never
+Generated from \`results/validation.json\` by \`bun src/readme-tables.ts\` - never
 transcribed by hand. Reproduce with \`bun run validation\`.
 
 The main suite above holds the validator constant at zod on purpose, which folds two
@@ -142,7 +142,7 @@ ${c.connections} connections | ${c.warmupSeconds}s warmup | ${c.runs} x ${c.dura
 \`\`\`
 
 **Every row is one fresh process, and the measured rounds are interleaved across all
-of them** rather than run to completion one row at a time — the differences here are
+of them** rather than run to completion one row at a time - the differences here are
 2-4% and the machine drifts by more than that over a run. Read anything under about
 **±0.3 µs** as unresolvable: that is what the run-to-run standard deviations work out
 to at this throughput.
@@ -155,7 +155,7 @@ it, all answering the same bytes:
 ${stepTable(report)}
 
 **\`req.json()\` is the expensive step by a wide margin**, and putting the body on the
-wire is near-free — the difference between *sending* it and *reading* it is what
+wire is near-free - the difference between *sending* it and *reading* it is what
 costs. No framework can remove that, and no choice of validator affects it. The
 primitive that would is a validating parser Bun does not ship; see
 [\`docs/bun-apis.md\`](../../docs/bun-apis.md).
@@ -163,7 +163,7 @@ primitive that would is a validating parser Bun does not ship; see
 ### Validators through the same Standard Schema seam
 
 The same dunx app and the same schema shape, with only the library behind
-\`~standard\` changed. **costs** is that validator's own time — the raw \`Bun.serve\`
+\`~standard\` changed. **costs** is that validator's own time - the raw \`Bun.serve\`
 row's µs/req above the \`req.json()\`-only row.
 
 ${validatorTable(report)}
@@ -171,12 +171,12 @@ ${validatorTable(report)}
 **zod, Valibot and ArkType are within noise of each other**, and the two compiled
 options are at or below what this harness can resolve at this payload size. Every one
 of them is cheaper than \`req.json()\`, so **there is no throughput argument for
-choosing between them** — pick on API, error quality and ecosystem. If a profile
+choosing between them** - pick on API, error quality and ecosystem. If a profile
 genuinely points at validation, the compiled route is there.
 
 \`noop\` and \`noop-async\` are the last two rows and are not validators: \`noop\` is a
 hand-written pass-through, which is dunx's plumbing with the validator's cost taken
-out, and \`noop-async\` is the same thing behind a resolved promise — so the gap
+out, and \`noop-async\` is the same thing behind a resolved promise - so the gap
 between them is what a validator that answers asynchronously costs.
 
 Neither TypeBox 0.34 nor ajv 8 ships \`~standard\`. Both were bridged in about ten
@@ -190,13 +190,13 @@ interface rather than a library.
 ${frameworkTable(report)}
 
 The two \`manual\` rows declare no schemas and do the work inside the handler, which
-keeps them on the synchronous dispatch path — so they separate dunx's **dispatch**
+keeps them on the synchronous dispatch path - so they separate dunx's **dispatch**
 cost from its **input reader** cost. Dispatch is the second row minus the first.
 
 The reader is the fourth row minus the third, and it is now at or below zero: the
 framework's reader costs no more than writing \`validate(await req.json())\` in the
 handler yourself. It used to cost **2.05 µs more**, which was twice what zod itself
-cost — the reason is in
+cost - the reason is in
 [\`docs/ARCHITECTURE.md\`](../../docs/ARCHITECTURE.md), "The cost of request
 validation".
 `;

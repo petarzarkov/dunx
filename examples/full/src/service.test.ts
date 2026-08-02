@@ -5,11 +5,11 @@ import { createApp } from './bootstrap.js';
 
 /**
  * The routes, exercised in-process against the same `createApp()` that `bun
- * start` uses — so what is asserted here is what actually serves.
+ * start` uses - so what is asserted here is what actually serves.
  *
  * `@dunx/testing`'s client owns the fetch-and-parse plumbing. `createTestServer`
- * is not used here on purpose: the point of this suite is that `createApp()` — the
- * real bootstrap, with its prefix, CORS and middleware — is what answers.
+ * is not used here on purpose: the point of this suite is that `createApp()` - the
+ * real bootstrap, with its prefix, CORS and middleware - is what answers.
  */
 let app: HttpApp;
 let client: TestClient;
@@ -127,7 +127,7 @@ it('round-trips an object through Storage and refuses to escape the root', async
   const listed = await json<{ keys: string[] }>('files');
   expect(listed.body.keys).toContain('reports/q1.csv');
 
-  // A bad request, not a 500 — Storage rejects it before any syscall.
+  // A bad request, not a 500 - Storage rejects it before any syscall.
   const escaped = await json<{ error: string }>(
     'files/object?key=../../etc/passwd',
   );

@@ -6,7 +6,7 @@ export interface Edit {
 
 /**
  * Splices edits into the original text rather than reprinting the AST, so
- * everything untouched keeps its exact bytes — comments, formatting, and the
+ * everything untouched keeps its exact bytes - comments, formatting, and the
  * line numbers stack traces point at.
  */
 export const applyEdits = (source: string, edits: readonly Edit[]): string => {

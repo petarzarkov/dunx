@@ -5,7 +5,7 @@ import { GreetingsService } from './greetings.service.js';
  * A controller is a provider with routes on it. `GreetingsService` in the
  * constructor is resolved the same way the service's own `Logger` was.
  *
- * Returning a plain object is enough — `@dunx/http` serialises it. There is no
+ * Returning a plain object is enough - `@dunx/http` serialises it. There is no
  * `Response.json()` to remember and no `res` to forget to send.
  */
 @Controller('greetings')
@@ -19,7 +19,7 @@ export class GreetingsController {
 
   /**
    * No schemas are declared, so a path param stays on `input.req.params` as a
-   * string. Declaring a `params` schema is what makes it typed and coerced —
+   * string. Declaring a `params` schema is what makes it typed and coerced -
    * `examples/full` does that; this one is showing the shape, not validation.
    */
   @Get('/:name')

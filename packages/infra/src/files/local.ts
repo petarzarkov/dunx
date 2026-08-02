@@ -75,7 +75,7 @@ export class LocalStorage extends Storage {
 
   async readStream(key: string): Promise<ReadableStream<Uint8Array>> {
     const file = this.#file(key);
-    // Bun.file().stream() is lazy — it opens on the first read, so a missing
+    // Bun.file().stream() is lazy - it opens on the first read, so a missing
     // file surfaces as a stream error rather than a rejection. Checked here so
     // the contract holds; the returned stream is still unread.
     if (!(await file.exists())) throw new FileNotFoundError(key);
@@ -88,7 +88,7 @@ export class LocalStorage extends Storage {
       return Bun.write(path, data, { createPath: this.#createPath });
     }
 
-    // A FileSink neither creates parent directories nor truncates — it writes
+    // A FileSink neither creates parent directories nor truncates - it writes
     // over the existing bytes from offset 0 and leaves any tail behind. An empty
     // Bun.write does both jobs first, then the sink streams in over the top.
     await Bun.write(path, '', { createPath: this.#createPath });
@@ -116,7 +116,7 @@ export class LocalStorage extends Storage {
 
     let yielded = 0;
     try {
-      // dot: true — S3 has no notion of a hidden object, so neither does this.
+      // dot: true - S3 has no notion of a hidden object, so neither does this.
       for await (const relative of glob.scan({
         cwd,
         dot: true,

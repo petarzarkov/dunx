@@ -6,14 +6,14 @@ import * as schema from './schema.js';
 import { widgets, type Widget } from './schema.js';
 
 /**
- * SQLite in **asynchronous mode** — the default, and what `SqliteOptions` binds.
+ * SQLite in **asynchronous mode** - the default, and what `SqliteOptions` binds.
  *
  * `BunSQLiteDatabase<typeof schema>` is drizzle's own class, so it is both the
  * injection token and the typed handle: `@dunx/transform` records the bare type
  * name and ignores the type argument, which is how the schema types survive
  * injection. There is no dunx wrapper around drizzle anywhere in this file.
  *
- * This is the mode to pick if the app might move to Postgres later — every call
+ * This is the mode to pick if the app might move to Postgres later - every call
  * here is already awaited, so the move is a change to one module.
  */
 export class Widgets implements OnInit {
@@ -22,7 +22,7 @@ export class Widgets implements OnInit {
   /**
    * Standing in for a migration rather than replacing one. Real schema changes are
    * `drizzle-kit generate` plus `drizzle-orm/bun-sqlite/migrator`, which own the
-   * SQL, the journal and the snapshot folder — a `:memory:` database has nowhere
+   * SQL, the journal and the snapshot folder - a `:memory:` database has nowhere
    * to keep any of that. `onInit` runs after the graph is built and before the
    * first caller, so the table exists by the time anything queries it.
    */
@@ -49,7 +49,7 @@ export class Widgets implements OnInit {
   /**
    * `transaction()` is `@dunx/infra/db`'s, not drizzle's, and on `bun:sqlite` that
    * matters: drizzle delegates to `bun:sqlite`'s own wrapper, which commits as soon
-   * as the callback *returns its promise* — so every statement after the first
+   * as the callback *returns its promise* - so every statement after the first
    * `await` runs in autocommit and a later throw rolls back nothing. This issues
    * `BEGIN`/`COMMIT`/`ROLLBACK` itself, so an async callback is atomic.
    */

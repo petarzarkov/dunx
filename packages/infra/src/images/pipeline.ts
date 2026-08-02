@@ -50,7 +50,7 @@ export interface ModulateOptions {
 }
 
 export interface QualityOptions {
-  /** 1–100. Falls back to `ImagesOptions.quality`. */
+  /** 1-100. Falls back to `ImagesOptions.quality`. */
   readonly quality?: number;
 }
 
@@ -59,13 +59,13 @@ export interface JpegOptions extends QualityOptions {
 }
 
 export interface PngOptions {
-  /** zlib level 0–9. */
+  /** zlib level 0-9. */
   readonly compressionLevel?: number;
   /** Quantize to a palette and emit an indexed PNG. */
   readonly palette?: boolean;
-  /** Palette size, 2–256. Only meaningful with `palette`. */
+  /** Palette size, 2-256. Only meaningful with `palette`. */
   readonly colors?: number;
-  /** Floyd–Steinberg dithering. Only meaningful with `palette`. */
+  /** Floyd-Steinberg dithering. Only meaningful with `palette`. */
   readonly dither?: boolean;
 }
 
@@ -96,8 +96,8 @@ export interface EncodedImage extends ImageMetadata {
 
 /**
  * Operations recorded so far, as a record rather than a list, because that is
- * what the engine does: `Bun.Image` chainables *overwrite* — calling `.resize()`
- * twice keeps only the second — and the pipeline always executes in the fixed
+ * what the engine does: `Bun.Image` chainables *overwrite* - calling `.resize()`
+ * twice keeps only the second - and the pipeline always executes in the fixed
  * order `autoOrient -> rotate -> flip/flop -> resize -> modulate` no matter what
  * order the calls came in.
  */
@@ -157,7 +157,7 @@ export class ImagePipeline {
   /**
    * The format a terminal will emit.
    *
-   * With no `to()` the source format is reused — except for `gif`, `bmp` and
+   * With no `to()` the source format is reused - except for `gif`, `bmp` and
    * `tiff`, which Bun can decode but not encode. Bun's own docs claim it
    * "re-encodes in the source format"; for those three it actually falls back
    * to PNG, and `blob().type` agrees.
@@ -263,7 +263,7 @@ export class ImagePipeline {
   /**
    * Header-only read of the **source**: `Bun.Image.metadata()` reports the
    * dimensions and format of the input and ignores every recorded operation, so
-   * this never reflects a `resize` or a `to`. It also does not decode pixels —
+   * this never reflects a `resize` or a `to`. It also does not decode pixels -
    * a truncated file still answers. Use {@link encode} for the real output.
    */
   sourceMetadata(): Promise<ImageMetadata> {
@@ -322,7 +322,7 @@ export class ImagePipeline {
 
   /**
    * A ThumbHash low-quality placeholder of the **source** as a
-   * `data:image/png;base64,...` URL — a <=32px blur, roughly 1–2 KB.
+   * `data:image/png;base64,...` URL - a <=32px blur, roughly 1-2 KB.
    *
    * Like {@link sourceMetadata} this ignores recorded operations: the
    * placeholder always describes the input image.

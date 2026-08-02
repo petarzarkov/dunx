@@ -10,7 +10,7 @@ export type TemplateName = (typeof TEMPLATES)[number];
 /**
  * Every `@dunx/*` version in a template manifest is this placeholder. Versioning
  * is lockstep, so the right version to install is whatever version of
- * `@dunx/create-app` is doing the scaffolding — resolved at run time rather than
+ * `@dunx/create-app` is doing the scaffolding - resolved at run time rather than
  * written into the template, which would go stale on the next release.
  */
 export const VERSION_PLACEHOLDER = '__DUNX_VERSION__';
@@ -45,12 +45,12 @@ export class ScaffoldError extends Error {
 /**
  * `dist/index.js` and `dist/cli.js` both sit one level under the package root, so
  * `../templates` resolves the same from either. In the source tree it resolves
- * from `src/`, which is the same depth — so tests exercise the real path rather
+ * from `src/`, which is the same depth - so tests exercise the real path rather
  * than a special case.
  *
  * `fileURLToPath`, not `new URL(...).pathname`: the latter stays percent-encoded,
  * so an install under a directory with a space in it looks for `space%20test/`
- * and reports the template missing. On Windows it is worse — it yields a
+ * and reports the template missing. On Windows it is worse - it yields a
  * leading-slash, drive-lettered path that resolves nowhere.
  */
 const templatesRoot = (): string =>

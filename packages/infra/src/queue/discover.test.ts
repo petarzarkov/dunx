@@ -61,7 +61,7 @@ class Plain {
 
 /**
  * The real container, not a stub. `discoverJobs` resolves a token to ask its
- * instance for handlers, and only a real injector gets `useClass` right — the
+ * instance for handlers, and only a real injector gets `useClass` right - the
  * markers are on the class, the instance comes from the token.
  */
 const jobsOf = async (root: ModuleRef): Promise<readonly DiscoveredJob[]> => {
@@ -176,7 +176,7 @@ describe('discoverJobs across modules', () => {
   });
 
   it('finds a handler on a class bound through useClass', async () => {
-    // The token is not the class — the class is what carries the markers, and the
+    // The token is not the class - the class is what carries the markers, and the
     // instance the token resolves to is what they bind to.
     const mailer = token<Emails>('Mailer');
 

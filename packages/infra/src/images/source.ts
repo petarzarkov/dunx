@@ -4,7 +4,7 @@ import { ImageError, ImageErrorCode, toImageError } from './errors.js';
  * Anything this package will decode.
  *
  * `BunFile` is a `Blob`, and `Buffer` is an `ArrayBufferView`, so both are
- * already covered. A `string` is a filesystem path or a `data:` URL —
+ * already covered. A `string` is a filesystem path or a `data:` URL -
  * `Bun.Image` accepts both, and so does this.
  *
  * Deliberately not accepted: `Response` and `ReadableStream`. `Bun.Image`

@@ -110,7 +110,7 @@ const Navigation = ({
   </>
 );
 
-/** Plain anchors, not a `nav` — the sidebar is the page's one navigation
+/** Plain anchors, not a `nav` - the sidebar is the page's one navigation
  * landmark and a second would make it ambiguous to a screen reader. */
 const DocsFooter = (): React.JSX.Element => (
   <Box component="footer" className="site-footer">
@@ -211,7 +211,7 @@ const Header = ({
 /**
  * The landing page drops the sidebar and runs full width; every other route
  * keeps it. A marketing page constrained to the documentation gutter looks like
- * a documentation page, which is the thing being fixed — and it means the
+ * a documentation page, which is the thing being fixed - and it means the
  * footer is the only navigation landmark on `#/`.
  */
 export const App = (): React.JSX.Element => {

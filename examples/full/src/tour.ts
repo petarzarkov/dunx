@@ -4,7 +4,7 @@ import { Tour } from './tour/tour.service.js';
 
 /**
  * The scripted walkthrough: boot the same app `bun start` serves, narrate every
- * package, shut down, exit 0. This is what CI runs — it is the end-to-end check
+ * package, shut down, exit 0. This is what CI runs - it is the end-to-end check
  * that the whole DI graph builds and every part works.
  */
 async function run(): Promise<void> {

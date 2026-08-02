@@ -93,7 +93,7 @@ const embedded = (): PageModel => {
 };
 
 /**
- * The page without either script body — the markup a browser actually parses as
+ * The page without either script body - the markup a browser actually parses as
  * markup. Everything inside a `<script>` is text to the HTML parser, so an
  * `href="` or a `src=` in minified React is not a resource, and asserting over
  * it would only be asserting about somebody else's string table.
@@ -112,7 +112,7 @@ describe('the docs page', () => {
    * The guarantee is unchanged; the proof had to change with the page. The old
    * page was hand-written HTML, so `not.toContain('src=')` over the whole string
    * was both sound and cheap. The page now inlines a built bundle, and minified
-   * React contains `.src=` in its own code — so the assertion moved from the
+   * React contains `.src=` in its own code - so the assertion moved from the
    * text to the *tags*, which is what actually decides whether a browser fetches.
    */
   it('fetches nothing: no CDN, no src=, no <link>', () => {
@@ -122,7 +122,7 @@ describe('the docs page', () => {
       /<(img|iframe|object|embed|source|track|video|audio)\b/,
     );
     // Two scripts: the model as data, and the explorer. Neither is fetched.
-    // Counted by their closers — react-dom carries the literal `"<script>"` in
+    // Counted by their closers - react-dom carries the literal `"<script>"` in
     // a string of its own, which the browser never sees as a tag.
     expect([...page.matchAll(/<\/script>/g)]).toHaveLength(2);
     // The only href in the markup is the document this page describes.

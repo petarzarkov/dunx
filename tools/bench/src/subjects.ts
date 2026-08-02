@@ -11,7 +11,7 @@ export const subjects: readonly Subject[] = [
     validator: 'zod (hand-wired)',
     notes: [
       'The ceiling. @dunx/http is a layer on top of this exact API, so the gap between them is dunx overhead and nothing else.',
-      'Uses Bun.serve({ routes }) — the same native router @dunx/http dispatches through.',
+      'Uses Bun.serve({ routes }) - the same native router @dunx/http dispatches through.',
     ],
   },
   {
@@ -61,7 +61,7 @@ export const subjects: readonly Subject[] = [
     versionOf: '@nestjs/core',
     validator: 'zod (pipe)',
     notes: [
-      'dunx is deliberately Nest-shaped — modules, controllers, DI, guards — so this is the most direct answer to what that programming model costs.',
+      'dunx is deliberately Nest-shaped - modules, controllers, DI, guards - so this is the most direct answer to what that programming model costs.',
       'The default adapter, which is what most Nest apps ship. Compare against the `express` row to separate Nest from the server underneath it.',
       'The one subject using legacy decorators and reflect-metadata, which Nest requires; see servers/nest/tsconfig.json.',
     ],
@@ -123,7 +123,7 @@ export const subjects: readonly Subject[] = [
     versionOf: 'fastify',
     validator: 'zod (validatorCompiler)',
     notes: [
-      'Given zod through its validatorCompiler hook rather than its default ajv/JSON Schema path, so the validate scenario stays comparable. Ajv compiles to straight-line JS and is materially faster than zod — this understates Fastify on that one scenario.',
+      'Given zod through its validatorCompiler hook rather than its default ajv/JSON Schema path, so the validate scenario stays comparable. Ajv compiles to straight-line JS and is materially faster than zod - this understates Fastify on that one scenario.',
       'No response schema is set, so serialisation is JSON.stringify rather than fast-json-stringify, matching every other subject.',
     ],
   },

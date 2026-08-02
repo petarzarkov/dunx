@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { OnShutdown } from '@dunx/core';
 
 /**
- * Owns a scratch directory under the OS temp dir — never inside the repo — and
+ * Owns a scratch directory under the OS temp dir - never inside the repo - and
  * removes it on shutdown, so two consecutive `bun start` runs cannot see each
  * other's bytes.
  *

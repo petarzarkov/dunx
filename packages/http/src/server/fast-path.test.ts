@@ -22,12 +22,12 @@ import { HttpStatusCode } from './status.js';
  * `await`s are usually on values that were never thenable.
  *
  * That is a real fork in the dispatch logic, so both branches are exercised here
- * and the observable behaviour is asserted to be identical — including every
+ * and the observable behaviour is asserted to be identical - including every
  * failure mode, because a rejected body must still be a 400 carrying every issue
  * with its path flattened to dots, whichever branch produced it. The optimisation
  * is only worth having if nothing about it is visible to a caller.
  */
-/** A Standard Schema by hand — @dunx/http depends on no validator. */
+/** A Standard Schema by hand - @dunx/http depends on no validator. */
 const named: StandardSchemaV1<unknown, { name: string }> = {
   '~standard': {
     version: 1,
@@ -119,7 +119,7 @@ class Marker implements Middleware {
 
 @Controller('fast')
 class FastController {
-  /** Sync, no schemas, no middleware — the fast path. */
+  /** Sync, no schemas, no middleware - the fast path. */
   @Get('/sync')
   sync(): { via: string } {
     return { via: 'sync' };
@@ -347,7 +347,7 @@ describe('buildRoutes emits a synchronous handler where it can', () => {
 });
 
 for (const [name, options] of branches) {
-  describe(`observable behaviour is identical — ${name}`, () => {
+  describe(`observable behaviour is identical - ${name}`, () => {
     it('serves a sync handler', async () => {
       await withApp(async (url) => {
         const response = await fetch(new URL('fast/sync', url));
@@ -557,7 +557,7 @@ for (const [name, options] of branches) {
 
 describe('CORS keeps a route on the async path', () => {
   it('still applies CORS headers to a would-be fast route', async () => {
-    // `enableCors` is a hook between create() and listen(), not an option — and
+    // `enableCors` is a hook between create() and listen(), not an option - and
     // it is the reason the fast path checks for CORS at all: the header has to be
     // applied to the response, which needs the async wrapper.
     const app = await HttpFactory.create(FastModule, { requestLogging: false });

@@ -11,7 +11,7 @@ interface AppConfig {
   readonly sentryDsn?: string;
 }
 
-/** Stands in for a zod `.parse` — one function, throwing on bad input. */
+/** Stands in for a zod `.parse` - one function, throwing on bad input. */
 const validate = (env: ConfigSource): AppConfig => {
   const port = Number(env['PORT']);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -77,7 +77,7 @@ describe('ConfigModule', () => {
     })
     class Root {}
 
-    // The app owns validation, so it owns the message — dunx does not restate it.
+    // The app owns validation, so it owns the message - dunx does not restate it.
     expect(AppFactory.create(Root)).rejects.toThrow(
       'PORT must be a port number, got undefined',
     );
@@ -157,7 +157,7 @@ describe('a subclass binding', () => {
     expect(typed.get('port')).toBe(3000);
     expect(typed.values.db.host).toBe('localhost');
 
-    // An alias, not a second instance — library code knowing only the base
+    // An alias, not a second instance - library code knowing only the base
     // contract must reach the same object.
     const base: unknown = app.get(ConfigService);
     expect(base).toBe(typed);

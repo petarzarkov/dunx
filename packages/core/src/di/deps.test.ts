@@ -292,7 +292,7 @@ describe('deferred resolution', () => {
 
   it('surfaces an unbound constructor dependency as a provider error', async () => {
     // A token() has no constructor, so it cannot self-bind. An unbound abstract
-    // class would be constructed instead — `abstract` is erased at runtime, which
+    // class would be constructed instead - `abstract` is erased at runtime, which
     // is the erasure cost recorded in docs/ARCHITECTURE.md.
     const Missing = token<{ value(): string }>('Missing');
     class Needs {

@@ -8,7 +8,7 @@ import {
 } from '@dunx/infra/images';
 
 /**
- * A 4x4 RGB gradient PNG — the only binary in the example, and small enough to
+ * A 4x4 RGB gradient PNG - the only binary in the example, and small enough to
  * read as a constant. Everything larger is derived from it at runtime by
  * `Bun.Image` itself, so nothing is checked in and nothing is downloaded.
  */
@@ -76,7 +76,7 @@ export class Thumbnails {
     );
 
     // Content-based: the container comes from magic bytes, never a filename. And
-    // this is a header read, not a decode — a truncated file would still answer.
+    // this is a header read, not a decode - a truncated file would still answer.
     const meta = await images.metadata(source);
     logger.info(`metadata -> ${meta.width}x${meta.height} ${meta.format}`);
 

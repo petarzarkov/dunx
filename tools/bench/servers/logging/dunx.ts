@@ -47,7 +47,7 @@ const ENTRY = stepOf('entry');
 
 /**
  * `RequestLoggingMiddleware` truncated at `step`. Each branch is decided once, at
- * module scope, against a constant — so a variant pays for the work it declares
+ * module scope, against a constant - so a variant pays for the work it declares
  * and not for the check.
  */
 class StepMiddleware implements Middleware {
@@ -88,7 +88,7 @@ class StepMiddleware implements Middleware {
         context: `${ctx.controller}.${ctx.handler}`,
       },
       // Synchronous and `.then`, not `async`/`await`, because that is what the
-      // shipped middleware does — an async scope callback measured 0.44 µs dearer.
+      // shipped middleware does - an async scope callback measured 0.44 µs dearer.
       () => {
         const settled = next();
         if (step < RESP_HEADER) return settled;

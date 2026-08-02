@@ -14,7 +14,7 @@ const CREDENTIALS = {
 /**
  * The whole loop over HTTP: better-auth's own mounted endpoints sign a user up and
  * in, then dunx's `SessionGuard` decides who reaches `/api/profile`. Nothing here
- * reimplements an auth flow — every `/api/auth/*` call lands in better-auth.
+ * reimplements an auth flow - every `/api/auth/*` call lands in better-auth.
  */
 export class AuthDemo {
   constructor(
@@ -23,7 +23,7 @@ export class AuthDemo {
     private readonly db: SyncDatabase<typeof schema>,
   ) {}
 
-  /** What `Origin` has to be for better-auth's CSRF check — see {@link post}. */
+  /** What `Origin` has to be for better-auth's CSRF check - see {@link post}. */
   #origin = '';
 
   async demonstrate(url: string): Promise<void> {
@@ -134,7 +134,7 @@ export class AuthDemo {
 
   /**
    * `Origin` is set because better-auth rejects a cookie-bearing state change without
-   * one — `MISSING_OR_NULL_ORIGIN`, its CSRF check. A browser sends it for free; a
+   * one - `MISSING_OR_NULL_ORIGIN`, its CSRF check. A browser sends it for free; a
    * server-side client has to, and the value that has to match is `trustedOrigins`,
    * which defaults to the configured `baseURL`.
    */

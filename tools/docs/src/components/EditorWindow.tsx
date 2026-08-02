@@ -7,7 +7,7 @@ export interface EditorFile {
 
 /**
  * A tabbed editor frame for the landing page. The tab strip is a real
- * `tablist` — the files are alternative views of one panel, which is what the
+ * `tablist` - the files are alternative views of one panel, which is what the
  * pattern is for, and it keeps the sample reachable by keyboard.
  *
  * Not tokenised. There is no syntax highlighter in the bundle, and shipping one

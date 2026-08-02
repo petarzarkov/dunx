@@ -30,7 +30,7 @@ const threw = (promise: Promise<unknown>): Promise<string> =>
 
 /**
  * SQLite always runs. Postgres and MySQL are probed once and skipped if nothing is
- * listening, so a clean checkout with no Docker still exits 0 — `describe.skipIf`
+ * listening, so a clean checkout with no Docker still exits 0 - `describe.skipIf`
  * is the honest way to say that, because a skipped test is reported as skipped
  * rather than as passing.
  */

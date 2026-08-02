@@ -1,6 +1,6 @@
 import { AppError } from '@dunx/core';
 
-/** Frozen object rather than an `enum` — see CLAUDE.md. */
+/** Frozen object rather than an `enum` - see CLAUDE.md. */
 export const QueueErrorCode = Object.freeze({
   /** Two handlers claim the same `(queue, name)` pair. A boot error. */
   DUPLICATE_HANDLER: 'ERR_QUEUE_DUPLICATE_HANDLER',

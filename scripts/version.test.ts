@@ -40,7 +40,7 @@ describe('bumpVersion()', () => {
 /**
  * The rewrite that turns `workspace:*` into a real version only runs on the
  * `publishPackage` path, and the first publish of a package has to be done by
- * hand — OIDC trusted publishing cannot attach to a package that does not exist
+ * hand - OIDC trusted publishing cannot attach to a package that does not exist
  * yet. That manual path is where an unresolved range would slip through and break
  * every consumer install, so the assertion is what actually holds the line.
  */
@@ -81,7 +81,7 @@ describe('assertNoWorkspaceRanges', () => {
     expect(message).toContain('optionalDependencies.@dunx/c');
   });
 
-  it('ignores devDependencies — consumers never install them', () => {
+  it('ignores devDependencies - consumers never install them', () => {
     expect(() =>
       assertNoWorkspaceRanges({
         name: '@dunx/http',

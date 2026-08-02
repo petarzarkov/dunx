@@ -47,7 +47,7 @@ export const symbolAnchor = (name: string): string => `${SYMBOL_PREFIX}${name}`;
 
 /**
  * A package page scrolled to one symbol. Without the `?h=`, every API hit in
- * the search results lands on the top of the same page — which is the bug this
+ * the search results lands on the top of the same page - which is the bug this
  * exists to prevent recurring.
  */
 export const symbolHref = (dir: string, name: string): string =>
@@ -83,7 +83,7 @@ const SCROLL_ATTEMPTS = 30;
  * link carried one, to the top otherwise.
  *
  * It retries across frames rather than looking once. The target may not be in
- * the DOM yet on the frame the route changes — a package page opens the API tab
+ * the DOM yet on the frame the route changes - a package page opens the API tab
  * in response to the anchor, and `Tabs` is `keepMounted={false}`, so the card
  * mounts a commit later. Looking once is what made a search hit land on the top
  * of the page instead of on the symbol.

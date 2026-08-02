@@ -1,7 +1,7 @@
 /**
  * The landing page's code samples. Every one of these is lifted from the
  * example app rather than written for the page, because a sample that was never
- * run is a liability — the whole point of the tour is that this is what the
+ * run is a liability - the whole point of the tour is that this is what the
  * framework actually looks like.
  */
 export interface Sample {
@@ -18,7 +18,7 @@ export const SAMPLES: readonly Sample[] = [
     label: 'Routes',
     file: 'users.controller.ts',
     blurb:
-      'The body arrives validated and typed. No req.json(), no Response.json(), no manual status — 201 is the POST default, and a thrown HttpError is mapped for you.',
+      'The body arrives validated and typed. No req.json(), no Response.json(), no manual status - 201 is the POST default, and a thrown HttpError is mapped for you.',
     code: `@Controller('users')
 export class UsersController {
   constructor(private readonly users: UsersService) {}
@@ -49,7 +49,7 @@ export class UsersController {
     label: 'Validation',
     file: 'users.schemas.ts',
     blurb:
-      'Real zod, dropped straight into a route. z.object() already carries ~standard, which is the entire contract @dunx/http validates against — so nothing adapts anything, and the framework depends on no validator. Valibot and ArkType work the same way.',
+      'Real zod, dropped straight into a route. z.object() already carries ~standard, which is the entire contract @dunx/http validates against - so nothing adapts anything, and the framework depends on no validator. Valibot and ArkType work the same way.',
     code: `export const Tag = z
   .object({ label: z.string().min(1) })
   .meta({ id: 'Tag', title: 'A label attached to a user' });
@@ -71,7 +71,7 @@ export const oneUser = {
     label: 'Modules',
     file: 'app.module.ts',
     blurb:
-      'Import order is construction order, and shutdown runs in reverse — so config and the logger are built first and torn down last, and the database outlives every feature that uses it.',
+      'Import order is construction order, and shutdown runs in reverse - so config and the logger are built first and torn down last, and the database outlives every feature that uses it.',
     code: `@Module({
   imports: [
     ConfigModule.forRoot({ validate, as: AppConfigService }),
@@ -94,7 +94,7 @@ export class AppModule {}`,
     label: 'Config',
     file: 'config.ts',
     blurb:
-      'One validation function, which is the whole ConfigModule contract — it takes the raw env and returns the shaped, typed object, and whatever it throws is what boot fails with. dunx does not pick the library; a hand-written function works identically and costs no dependency. Bun loads .env itself, so there is no loader and no dotenv.',
+      'One validation function, which is the whole ConfigModule contract - it takes the raw env and returns the shaped, typed object, and whatever it throws is what boot fails with. dunx does not pick the library; a hand-written function works identically and costs no dependency. Bun loads .env itself, so there is no loader and no dotenv.',
     code: `const envSchema = z.object({
   PORT: z.coerce.number().int().min(0).max(65535).default(3000),
   LOG_LEVEL: z.enum(LogLevel).default(LogLevel.INFO),
@@ -120,7 +120,7 @@ export class AppConfigService extends ConfigService<AppConfig> {}`,
     label: 'Database',
     file: 'database.module.ts',
     blurb:
-      'drizzle over bun:sqlite and Bun.SQL — dunx does not write an ORM. SyncSqliteOptions runs SQLite in synchronous mode, which binds the SyncDatabase token and makes transactionSync reachable. dunx settles every async factory before the first constructor runs, so the connection is open and its pragmas applied by the time a repository is built.',
+      'drizzle over bun:sqlite and Bun.SQL - dunx does not write an ORM. SyncSqliteOptions runs SQLite in synchronous mode, which binds the SyncDatabase token and makes transactionSync reachable. dunx settles every async factory before the first constructor runs, so the connection is open and its pragmas applied by the time a repository is built.',
     code: `DbModule.forRootAsync(SyncDatabase, {
   useFactory: (config: AppConfigService) =>
     new SyncSqliteOptions({
@@ -145,7 +145,7 @@ export class Ledger {
     label: 'WebSockets',
     file: 'chat.gateway.ts',
     blurb:
-      'Served by the same Bun.serve call as the HTTP routes: HttpFactory discovers the gateway from providers and listen() mounts the upgrade as a native route. Topics live in the runtime — Bun’s own pub/sub, not a JavaScript map.',
+      'Served by the same Bun.serve call as the HTTP routes: HttpFactory discovers the gateway from providers and listen() mounts the upgrade as a native route. Topics live in the runtime - Bun’s own pub/sub, not a JavaScript map.',
     code: `@Gateway('/chat')
 export class ChatGateway {
   constructor(
@@ -176,7 +176,7 @@ export class ChatGateway {
     label: 'Queues',
     file: 'jobs.module.ts',
     blurb:
-      'bullmq, driven through Bun.RedisClient by bullmq’s own Bun adapter — no ioredis in dunx’s output. forRoot binds the publish side alone, so a web process that publishes never opens a worker by accident.',
+      'bullmq, driven through Bun.RedisClient by bullmq’s own Bun adapter - no ioredis in dunx’s output. forRoot binds the publish side alone, so a web process that publishes never opens a worker by accident.',
     code: `@Module({
   imports: [
     QueueModule.forRootAsync({

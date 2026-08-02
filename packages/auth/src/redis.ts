@@ -4,7 +4,7 @@ type SecondaryStorage = NonNullable<BetterAuthOptions['secondaryStorage']>;
 
 /**
  * The six commands this needs, restated rather than imported from
- * `@dunx/infra/redis` — same reasoning as {@link DrizzleSource}. A `RedisConnection`
+ * `@dunx/infra/redis` - same reasoning as {@link DrizzleSource}. A `RedisConnection`
  * satisfies it structurally (its parameters are wider, which is the assignable
  * direction), and a test double is six methods instead of the whole surface.
  */
@@ -28,7 +28,7 @@ export interface RedisStore {
  *
  * All five methods are implemented, not the three that are mandatory.
  * `getAndDelete` and `increment` are optional in better-auth's interface because most
- * clients cannot do them atomically — `Bun.RedisClient` can, through `GETDEL` and
+ * clients cannot do them atomically - `Bun.RedisClient` can, through `GETDEL` and
  * `INCR`, both already on `@dunx/infra/redis`'s contract. Without them better-auth
  * falls back to read-then-delete for single-use credentials, which is a race, and to
  * a non-atomic rate-limit counter.
@@ -39,7 +39,7 @@ export interface RedisStore {
  *
  * Redis being unreachable is deliberately **not** softened here. Bun's client
  * connects lazily and queues, so a command against a down server rejects and
- * better-auth's own error path is what should see it — a swallowed `null` from `get`
+ * better-auth's own error path is what should see it - a swallowed `null` from `get`
  * would read as "no session" and sign every user out.
  */
 export const redisStorage = (connection: RedisStore): SecondaryStorage => ({

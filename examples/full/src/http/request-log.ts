@@ -7,13 +7,13 @@ export class RequestLog {
 }
 
 /**
- * A class with `handle(req, ctx, next)`, resolved from the container — which is
+ * A class with `handle(req, ctx, next)`, resolved from the container - which is
  * what lets it inject. Chains are folded into one closure per route at boot, and
  * `ctx` is the route it was folded into: names, method, path, and its metadata.
  *
  * **This does not log.** `@dunx/http` already installs
- * `RequestLoggingMiddleware` by default — one structured entry per request,
- * with `requestId` propagated through `RequestContext` — so an app writing its
+ * `RequestLoggingMiddleware` by default - one structured entry per request,
+ * with `requestId` propagated through `RequestContext` - so an app writing its
  * own would be logging everything twice. What is left here is the part a
  * framework cannot supply: an app-specific side effect, kept because the tour
  * asserts on it and because it is the smallest possible example of the seam.

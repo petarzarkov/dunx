@@ -59,7 +59,7 @@ const connect = async (base: string): Promise<Client> => {
 
 /**
  * A second node, in-process. Two `Bun.serve` instances, two containers, two
- * `PubSub`s with two different origin ids — everything a second deployment has
+ * `PubSub`s with two different origin ids - everything a second deployment has
  * except a second pid, which the relay logic cannot tell apart anyway.
  *
  * It reuses the very same `ChatGateway`, and takes only what that gateway needs:
@@ -78,7 +78,7 @@ export class ChatDemo {
   async demonstrate(app: HttpApp, url: string): Promise<void> {
     const { logger } = this;
     logger.info(
-      `gateway paths: ${JSON.stringify(app.gatewayPaths)} — setGlobalPrefix moves routes, not gateways`,
+      `gateway paths: ${JSON.stringify(app.gatewayPaths)} - setGlobalPrefix moves routes, not gateways`,
     );
 
     const [ada, grace] = await Promise.all([connect(url), connect(url)]);
@@ -113,13 +113,13 @@ export class ChatDemo {
 
   /**
    * The relay: a publish on this node reaching a client connected to a *different*
-   * node, exactly once. Both nodes run in this process — two `Bun.serve`
-   * instances, two containers — which is every part of a two-machine deployment
+   * node, exactly once. Both nodes run in this process - two `Bun.serve`
+   * instances, two containers - which is every part of a two-machine deployment
    * that the fan-out logic can distinguish.
    *
    * Node A relays through `RedisRelay`, which `createApp` handed to
    * `HttpFactory`. Node B relays through the application's **own**
-   * `RedisConnection`, which satisfies `PubSubRelay` structurally — two methods,
+   * `RedisConnection`, which satisfies `PubSubRelay` structurally - two methods,
    * no adapter, and `@dunx/http` depending on `@dunx/infra` not at all.
    */
   async relayed(url: string): Promise<void> {
@@ -127,7 +127,7 @@ export class ChatDemo {
     if (!(await this.#redisUp())) {
       logger.warn('skipping the relay demo: no Redis to relay through');
       logger.info(
-        'the app booted anyway and fan-out stayed local — that is the degraded path',
+        'the app booted anyway and fan-out stayed local - that is the degraded path',
       );
       return;
     }
@@ -143,7 +143,7 @@ export class ChatDemo {
       // ids minted in the same second share their leading digits.
       logger.info(
         `origins: A …${this.pubsub.origin.slice(-6)} / B …${peerPubsub.origin.slice(-6)} ` +
-          '— what tells a node its own echoed frame',
+          '- what tells a node its own echoed frame',
       );
 
       const [onA, onB] = await Promise.all([connect(url), connect(peerUrl)]);
@@ -153,14 +153,14 @@ export class ChatDemo {
       this.pubsub.publishEvent(Lobby.TOPIC, 'said', said);
       logger.info(`node B's client <- ${await onB.next()} (relayed via Redis)`);
       // Redis echoes a publish back to its publisher. Fanning that out again would
-      // deliver twice on node A, so the origin check drops it — and these counts
+      // deliver twice on node A, so the origin check drops it - and these counts
       // are what would show it if it did not.
       await Bun.sleep(200);
       const delivered = (client: Client): number =>
         client.received.filter((frame) => frame.includes(said)).length;
       logger.info(
         `deliveries of "${said}": A ${delivered(onA)}, B ${delivered(onB)} ` +
-          '(one each — the echo was dropped, not fanned out again)',
+          '(one each - the echo was dropped, not fanned out again)',
       );
 
       onA.close();

@@ -3,7 +3,7 @@ import type { OpenApiDocument } from './types.js';
 
 /**
  * Where the app actually mounted this controller. `setGlobalPrefix('api')` prefixes
- * every discovered route — including the document's own — so the request URL is the
+ * every discovered route - including the document's own - so the request URL is the
  * evidence: declared at `/openapi.json`, answered at `/api/openapi.json`, therefore
  * every other route in the table moved by the same `/api`.
  *

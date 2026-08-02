@@ -19,7 +19,7 @@ export class DocsDemo {
 
   /**
    * The document is served by a controller in the same graph, so it goes through the
-   * same middleware and the same CORS as everything else — and describes the paths
+   * same middleware and the same CORS as everything else - and describes the paths
    * the app really mounted, `setGlobalPrefix('api')` included.
    */
   async demonstrate(app: HttpApp, url: string): Promise<void> {
@@ -61,7 +61,7 @@ export class DocsDemo {
     const page = await fetch(new URL('api/docs', url));
     const html = await page.text();
     // Two inline scripts: the document as JSON, and the explorer bundle. What
-    // still has to hold is that nothing is *fetched* — so the check is on the
+    // still has to hold is that nothing is *fetched* - so the check is on the
     // markup, with both script bodies removed. Inside a <script> everything is
     // text, and minified React's own string table contains `src=` and `<script`.
     const shell = html.replace(/(<script[^>]*>)[\s\S]*?(<\/script>)/g, '$1$2');
@@ -79,7 +79,7 @@ export class DocsDemo {
 
   /**
    * The guarded app, whose `AuthGuard` is global. Security in the document comes from
-   * the same `@Public()` and `@Roles()` metadata the guards read at runtime — there
+   * the same `@Public()` and `@Roles()` metadata the guards read at runtime - there
    * is no second annotation for the documentation to disagree with.
    */
   async guarded(url: string): Promise<void> {
@@ -99,7 +99,7 @@ export class DocsDemo {
     );
 
     // The class-level @Roles('admin') is merged into every one of its routes, so it
-    // is documented on this one too — even though no RolesGuard reads it here. The
+    // is documented on this one too - even though no RolesGuard reads it here. The
     // document describes what the metadata declares; which guard enforces it is a
     // separate decision, and one no generator can see.
     const list = document.paths['/api/reports']?.get;

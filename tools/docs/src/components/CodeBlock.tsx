@@ -1,7 +1,7 @@
 import { Paper, Text } from '@mantine/core';
 
 /**
- * A labelled code pane. Not tokenised — there is no highlighter in the bundle,
+ * A labelled code pane. Not tokenised - there is no highlighter in the bundle,
  * and a docs site that ships one to colour four samples has its priorities the
  * wrong way round.
  */

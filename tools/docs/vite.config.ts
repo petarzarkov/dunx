@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
  * Vite 8 (Rolldown) rather than `Bun.build`, and the reason is tree shaking.
  * Measured on this site with Mantine, `@mantine/charts` and recharts in the
  * graph: 426.8 KB gzipped JS against `Bun.build`'s 506.5 KB, and 31.2 KB of CSS
- * against 35.0 KB — 83.5 KB less over the wire for the same pixels. The build
+ * against 35.0 KB - 83.5 KB less over the wire for the same pixels. The build
  * speed that bought `Bun.build` the job originally has stopped being a
  * difference worth having: 0.3 s against 0.15 s, both irrelevant in CI.
  *
@@ -22,7 +22,7 @@ export default defineConfig({
   build: {
     sourcemap: false,
     // One entry, one chunk. The warning is about a threshold this site has no
-    // intention of meeting — it ships a full design system and a chart library.
+    // intention of meeting - it ships a full design system and a chart library.
     chunkSizeWarningLimit: 2048,
   },
 });

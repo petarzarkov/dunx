@@ -28,7 +28,7 @@
     "esModuleInterop": true /* Fix default imports for CommonJS modules. */,
     "forceConsistentCasingInFileNames": true /* Prevent casing mismatches across OSs. */,
     "isolatedModules": true /* Ensure each file can be transpiled safely in isolation by bundlers. */,
-    "verbatimModuleSyntax": true /* Force `import type` for types. Safe now that nothing emits CommonJS — that pairing is what raised TS1287. */,
+    "verbatimModuleSyntax": true /* Force `import type` for types. Safe now that nothing emits CommonJS - that pairing is what raised TS1287. */,
     "skipLibCheck": true /* Do not typecheck the shipped .d.ts of dependencies. */,
     "noEmit": true /* Typecheck only. scripts/build-package.ts emits JS via Bun and .d.ts via tsc flag overrides. */,
     "sourceMap": false,

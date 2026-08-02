@@ -3,14 +3,14 @@
  *
  * Applied by `AuthModule` whenever `emailAndPassword` is enabled and no `password`
  * of your own is given. better-auth's default is a **pure-JavaScript scrypt**;
- * `Bun.password` is native bcrypt, which is Rule 1's first half — if Bun ships it,
+ * `Bun.password` is native bcrypt, which is Rule 1's first half - if Bun ships it,
  * use Bun.
  *
  * Bun pre-hashes the input, so bcrypt's 72-byte cap is a non-issue even for a
  * maximum-length multibyte password.
  *
  * `verify` swallows Bun's `UnsupportedAlgorithm` throw, so a hash produced by a
- * *different* algorithm — a scrypt hash written before this was in place — is a
+ * *different* algorithm - a scrypt hash written before this was in place - is a
  * clean authentication failure rather than a 500. Those users must reset their
  * password to get a bcrypt hash; pass your own `password` implementation instead
  * if you are migrating an existing user table and cannot.

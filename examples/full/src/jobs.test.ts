@@ -8,7 +8,7 @@ import { createApp } from './bootstrap.js';
  * second process and this suite spawns it.
  *
  * Every assertion is skipped when Redis is unreachable, because `bun run test` has
- * to pass on a machine with nothing running — the same contract the cache routes
+ * to pass on a machine with nothing running - the same contract the cache routes
  * keep.
  */
 const APP_DIR = new URL('..', import.meta.url).pathname;

@@ -56,14 +56,14 @@ interface Unit {
  * Ordered so each row adds exactly one thing to the row above it. `default` is the
  * shipped configuration; `default-blocked` is the same process with its stdout
  * going into a pipe nobody reads, which is a property of the consumer and not of
- * dunx — it is here because it is what the harness used to measure.
+ * dunx - it is here because it is what the harness used to measure.
  */
 const units: readonly Unit[] = [
   {
     id: 'off',
     variant: 'off',
     label: '`requestLogging: false`',
-    adds: '—',
+    adds: '-',
     stdout: 'null',
   },
   {
@@ -133,13 +133,13 @@ const units: readonly Unit[] = [
     id: 'unbatched',
     variant: 'unbatched',
     label: '+ one `console.log` per entry',
-    adds: 'a `write(2)` per request — what dunx used to do',
+    adds: 'a `write(2)` per request - what dunx used to do',
     stdout: 'null',
   },
   {
     id: 'default',
     variant: 'default',
-    label: 'batched instead — **the shipped default**',
+    label: 'batched instead - **the shipped default**',
     adds: 'one write per event-loop turn',
     stdout: 'null',
   },

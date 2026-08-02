@@ -25,7 +25,7 @@ import type { OpenApiDocument } from './types.js';
 export interface OpenApiOptions extends DocumentInfo {
   /**
    * The module graph to document. It is also what gets imported, so this configured
-   * module is what you hand `HttpFactory.create()` — one root, named once.
+   * module is what you hand `HttpFactory.create()` - one root, named once.
    */
   readonly root: ModuleRef;
   /** Where the HTML page is mounted. Default `/docs`. */
@@ -36,7 +36,7 @@ export interface OpenApiOptions extends DocumentInfo {
 
 /**
  * The generated document, plus the two renderings of it the controller serves. Built
- * once at boot — the request path only serialises — and keyed by mount prefix,
+ * once at boot - the request path only serialises - and keyed by mount prefix,
  * because `setGlobalPrefix()` is applied after the container is built.
  */
 export class OpenApiExplorer {
@@ -89,7 +89,7 @@ interface DocPaths {
 
 /**
  * The controller is built per `forRoot` call because its paths are configuration and
- * a decorator's arguments are evaluated when the class definition is — which, for a
+ * a decorator's arguments are evaluated when the class definition is - which, for a
  * class declared in a function, is when the function runs. So `@Get(paths.json)` is
  * an ordinary decorator reading an ordinary closure variable, and the routes are
  * discovered, guarded, CORS-wrapped and middleware-wrapped exactly like any other
@@ -137,7 +137,7 @@ export class OpenApiModule {
    * );
    * ```
    *
-   * The factory is async, so the whole document — every schema conversion included —
+   * The factory is async, so the whole document - every schema conversion included -
    * is settled before the first constructor runs and `warnings` is readable at boot.
    */
   static forRoot(options: OpenApiOptions): DynamicModule {

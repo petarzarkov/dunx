@@ -9,20 +9,20 @@ Where Bun ships the primitive, the primitive is what runs: `Bun.SQL`,
 `@aws-sdk`, no `glob`, no `sharp`.
 
 Three areas do not hand-roll an abstraction, because a mature library already owns
-one — and each of those libraries drives a Bun API underneath:
+one - and each of those libraries drives a Bun API underneath:
 
 - **`/db` is drizzle.** `drizzle-orm/bun-sqlite` over `bun:sqlite`, or
   `drizzle-orm/bun-sql` over `Bun.SQL`. `drizzle-orm` is an **optional peer
   dependency**, so an app using only `/files` never installs it.
 - **`/queue` is bullmq**, running on `Bun.RedisClient` through bullmq's own
   `createBunRedisClient`. dunx contributes handler discovery, injection and
-  shutdown ordering — not retries, backoff, rate limiting or scheduling.
+  shutdown ordering - not retries, backoff, rate limiting or scheduling.
   `bullmq` is an **optional peer dependency** too.
 - **`/logger` is `@arkv/logger`**, bound to the `Logger` contract that lives in
   `@dunx/core`. The contract and the wiring are dunx's; the configuration, the
   sanitizer and the async context store are upstream's.
 
-Import from the barrel or from an area subpath — the subpaths exist so it is
+Import from the barrel or from an area subpath - the subpaths exist so it is
 obvious what a file uses, and so tree-shaking is not something you have to reason
 about:
 
@@ -40,13 +40,13 @@ import { DbModule, Images, LoggerModule, RedisConnection, Storage } from '@dunx/
 
 `/queue` is the one area the barrel deliberately does **not** re-export. bullmq's
 own entry point statically imports `ioredis`, so exporting it from the root would
-make both a hard requirement of `import '@dunx/infra'` — including for an app that
+make both a hard requirement of `import '@dunx/infra'` - including for an app that
 has no queue. Reach it at `@dunx/infra/queue`.
 
 Anything injectable by a **constructor parameter** is a runtime class here, never
 an interface: an `interface` erases and leaves nothing for `@dunx/transform` to
-record as a parameter type. It is an abstract class where dunx owns the contract —
-`Storage`, `DbConnection`, `DbOptions`, `ImagesOptions`, `Logger` — and the
+record as a parameter type. It is an abstract class where dunx owns the contract -
+`Storage`, `DbConnection`, `DbOptions`, `ImagesOptions`, `Logger` - and the
 library's own class where it does not (`BunSQLiteDatabase`, `ContextStore`). The
 `token()` calls in the package are the exceptions that prove the rule:
 `redisConnection('jobs')` names a *second* connection, which no class can, and
@@ -58,11 +58,11 @@ And a `forRootAsync` is never a second mechanism: dunx resolves eagerly and sett
 every async factory before any constructor runs, so it is `forRoot` with a factory
 in front of it.
 
-## db — `@dunx/infra/db`
+## db - `@dunx/infra/db`
 
 **drizzle is the database layer**, not one option among several. What a repository
 injects is drizzle's own database class, and every query is drizzle's query
-builder. This package adds no query abstraction over it — there is no `Database`
+builder. This package adds no query abstraction over it - there is no `Database`
 contract, no `db.sql` template, no `Repository` base class.
 
 What it does add is the four things a drizzle handle has none of:
@@ -113,7 +113,7 @@ export class UsersRepository {
 Two things about that annotation. The import is a **value** import, not
 `import type`: `@dunx/transform` records the constructor parameter's type name and
 the container resolves it as a token, so a type-only import would be recorded as
-`unresolved` and fail at boot. And the token is the **erased** class — the
+`unresolved` and fail at boot. And the token is the **erased** class - the
 compiler records `BunSQLiteDatabase` and ignores the type argument, which is what
 lets one runtime class be the token while the schema types survive on the
 annotation.
@@ -132,20 +132,20 @@ the differences:
 | Driver          | `bun:sqlite`                                 | `Bun.SQL`                          |
 | Dialect         | SQLite                                       | **Postgres only**                  |
 | Injected as     | `BunSQLiteDatabase<typeof schema>`           | `BunSQLDatabase<typeof schema>`    |
-| Builders        | synchronous — `.run()` / `.all()` / `.get()` | asynchronous — `await` the builder |
+| Builders        | synchronous - `.run()` / `.all()` / `.get()` | asynchronous - `await` the builder |
 | Raw SQL         | `db.run` / `db.all` / `db.get`               | `db.execute`                       |
 | Schema tables   | `sqliteTable`                                | `pgTable`                          |
 | Connection      | one embedded handle                          | pooled, over a socket              |
 | Server          | none                                         | one has to be running              |
 
-Schema modules are per dialect too — a `sqliteTable` is a compile error where a
+Schema modules are per dialect too - a `sqliteTable` is a compile error where a
 `PgTable` is expected. So which backend an app uses is a build-time decision, and
 "one `DATABASE_URL` naming either SQLite or Postgres" is not a shape this package
 supports any more.
 
 #### `SqlOptions` is Postgres only
 
-`Bun.SQL` speaks four dialects: `postgres`, `mysql`, `mariadb`, `sqlite` — that
+`Bun.SQL` speaks four dialects: `postgres`, `mysql`, `mariadb`, `sqlite` - that
 list is quoted from Bun's own rejection message. `drizzle-orm/bun-sql` speaks
 **one**. Its `driver.js` builds `new PgDialect({ casing: config.casing })`
 unconditionally; there is no branch on `client.options.adapter` anywhere in it.
@@ -155,19 +155,19 @@ So a non-Postgres URL is refused at construction rather than at connect time:
 ```ts
 new SqlOptions({ schema, url: 'mysql://localhost/app' });
 // DatabaseError: "mysql://localhost/app" names mysql, and drizzle-orm/bun-sql is
-// Postgres only — it builds a PgDialect unconditionally, so a non-Postgres URL
+// Postgres only - it builds a PgDialect unconditionally, so a non-Postgres URL
 // would compile $1 placeholders and Postgres quoting against a server that does
 // not speak them. Use SqliteOptions for SQLite; MySQL and MariaDB have no
 // drizzle driver on Bun.SQL.
 ```
 
-Pointed at a `sqlite://` client it would not error at all — it would compile `$1`
+Pointed at a `sqlite://` client it would not error at all - it would compile `$1`
 placeholders and `"quoted"` identifiers against SQLite, and the trivial cases
 would appear to work. That is worse than failing, and it is why the check exists.
 
 **MySQL and MariaDB therefore have no drizzle path on Bun.** `Bun.SQL` reaches
 them, but nothing in drizzle drives `Bun.SQL` as anything other than Postgres, and
-drizzle's own MySQL adapters need `mysql2` — a client Bun already replaces, so this
+drizzle's own MySQL adapters need `mysql2` - a client Bun already replaces, so this
 package does not ship one.
 
 `dialectFromUrl` is what decides, and it is deliberately stricter than Bun: Bun
@@ -175,7 +175,7 @@ reads a _schemeless_ string as a Postgres host, so `{ url: './dev.db' }` reports
 `adapter: 'postgres'` and then fails much later with a socket error. `pg://` is not
 a scheme Bun accepts; `postgres://`, `postgresql://`, `sqlite:` and `file:` are.
 
-### Synchronous mode — `SyncSqliteOptions`
+### Synchronous mode - `SyncSqliteOptions`
 
 `bun:sqlite` is synchronous underneath, and `@dunx/http` has a dispatch path that
 allocates no promise when a handler returns a plain value. Put those together and a
@@ -192,7 +192,7 @@ import { DbModule, SyncDatabase, SyncSqliteOptions } from '@dunx/infra/db';
 DbModule.forRoot(new SyncSqliteOptions({ schema, filename: './dev.db' }));
 ```
 
-Every init field is `SqliteOptions`'s — same `filename`, `pragmas`, `strict`,
+Every init field is `SqliteOptions`'s - same `filename`, `pragmas`, `strict`,
 `readOnly`, `safeIntegers`. Two things change:
 
 - The injection token becomes **`SyncDatabase`**, so a repository annotates
@@ -232,11 +232,11 @@ export class LedgerController {
 Two type-level gates, both of which are compile errors rather than advice:
 
 - A service asking for `SyncDatabase` in an app that configured `SqliteOptions`
-  **fails to resolve at boot** — the container bound `BunSQLiteDatabase`, and
+  **fails to resolve at boot** - the container bound `BunSQLiteDatabase`, and
   nothing bound `SyncDatabase`.
 - `transactionSync`'s callback cannot return a promise. An `async` callback is
   rejected by the constraint on its return type, because a synchronous transaction
-  commits when the callback returns — an `async` one would commit before its first
+  commits when the callback returns - an `async` one would commit before its first
   `await` resumed, which is the exact bug `transaction()` exists to route around.
 
 ```ts
@@ -247,7 +247,7 @@ transactionSync(asyncModeHandle, (tx) => 1);   // does not compile
 
 The relationship is one-way. A `SyncDatabase` **is** a `BunSQLiteDatabase`, so
 `transaction()`, `runSeeds()` and any repository written before the mode existed
-all still take it. Synchronous mode is a superset, not a fork — and if one route
+all still take it. Synchronous mode is a superset, not a fork - and if one route
 genuinely needs to await something mid-transaction, `transaction()` is still there
 for that route.
 
@@ -256,7 +256,7 @@ for that route.
 There is **no `SyncSqlOptions`, and there will not be one.** `Bun.SQL` talks to a
 server over a socket; nothing about an API makes a socket return a row instead of a
 promise. Sync mode is SQLite for good, so an app that might move to Postgres later
-should stay on `SqliteOptions` — which is why that is still the default.
+should stay on `SqliteOptions` - which is why that is still the default.
 
 `open()` still returns a promise, because `DbOptions` has to describe `Bun.SQL`'s
 handshake too. `SyncSqliteOptions.openSync()` is the same thing without it, for a
@@ -267,8 +267,8 @@ the same way. `closeSync()` is on both.
 
 #### What it is worth
 
-Measured end to end through a real `Bun.serve` — `bun run db-modes` in
-`tools/bench` — synchronous mode is **~4–6% more requests per second and ~0.2–0.3 ms
+Measured end to end through a real `Bun.serve` - `bun run db-modes` in
+`tools/bench` - synchronous mode is **~4-6% more requests per second and ~0.2-0.3 ms
 off p50**, on both a single-row read and a two-write transaction. That is a real but
 small win, at the edge of the run-to-run noise on the measuring machine. It is not
 the 5 ms-versus-30 ms difference people mean when they say SQLite is fast: that one
@@ -288,7 +288,7 @@ const one = db.select().from(users).where(eq(users.id, id)).get();
 const total = db.select({ n: count() }).from(users).get()?.n ?? 0;
 ```
 
-`.get()` returns **`undefined`** when there is no row — drizzle's choice, and worth
+`.get()` returns **`undefined`** when there is no row - drizzle's choice, and worth
 knowing if you are coming from a wrapper that returned `null`. `.returning()` hands
 back the row the database actually wrote.
 
@@ -336,13 +336,13 @@ unstrict one writes `NULL` for a binding it cannot use. Called with a positional
 array instead, the same driver states it plainly:
 `TypeError: Binding expected string, TypedArray, boolean, number, bigint or null`.
 
-That is why `strict: true` is this package's default, unlike the driver's — it
+That is why `strict: true` is this package's default, unlike the driver's - it
 turns the silent `NULL` into a throw. It is also why `SqliteOptions` opens the
 `bun:sqlite` handle itself instead of letting `drizzle('./dev.db')` do it: drizzle's
 own path forwards only `readonly`/`create`/`readwrite` and hands back a
 **non-strict** handle.
 
-Two ways to write a timestamp, both verified. Pick one per column — they store
+Two ways to write a timestamp, both verified. Pick one per column - they store
 different things:
 
 ```ts
@@ -359,7 +359,7 @@ db.select().from(audit).get()?.at; // a Date back out
 ```
 
 The mapping belongs to the **column**, so it applies to the builder and never to a
-`sql` template — which is also the trap: a raw `INSERT` of an ISO string into a
+`sql` template - which is also the trap: a raw `INSERT` of an ISO string into a
 `{ mode: 'timestamp' }` column stores text where the reader expects epoch seconds,
 and SQLite will not stop you. `runSeeds` sidesteps it by declaring `applied_at` as
 `TEXT` and writing an ISO string, since it only ever uses raw SQL.
@@ -369,10 +369,10 @@ string and, per [docs/bun-apis.md](../../docs/bun-apis.md), takes a native `Date
 binding as well. So a `sql` template written against SQLite is the one that breaks,
 and the one this package's `strict: true` default is aimed at. Worth knowing if you
 reach for `Bun.SQL` directly: its **SQLite** adapter has no strict switch and
-silently writes `NULL` for a `Date`, with no error at all — which is a second reason
+silently writes `NULL` for a `Date`, with no error at all - which is a second reason
 `SqlOptions` refuses a `sqlite://` URL.
 
-### Transactions — `transaction(db, fn)`
+### Transactions - `transaction(db, fn)`
 
 A standalone function rather than a method, because on one of the two backends it
 replaces drizzle's own:
@@ -416,7 +416,7 @@ nativeTx[config.behavior ?? 'deferred']();
 That wrapper commits as soon as the callback **returns its promise**, so
 `client.inTransaction` is already `false` before the first `await` resumes, every
 statement after it runs in autocommit, and a later throw rolls back nothing.
-Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch — the row is
+Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch - the row is
 still there. drizzle inherits the behaviour rather than fixing it, which is why
 `transaction()` issues `BEGIN`/`COMMIT`/`ROLLBACK` itself.
 
@@ -429,7 +429,7 @@ turn and takes a savepoint, so it must not queue behind itself.
 Everything above is downstream of the callback being asynchronous. Take the promise
 away and `bun:sqlite`'s wrapper is exactly correct, so in [synchronous
 mode](#synchronous-mode--syncsqliteoptions) `transactionSync` delegates to drizzle's
-own `db.transaction()` rather than issuing statements itself — one native
+own `db.transaction()` rather than issuing statements itself - one native
 transaction, no `BEGIN` strings, no queue, no promise:
 
 ```ts
@@ -441,8 +441,8 @@ const balance = transactionSync(db, (tx) => {
 ```
 
 It returns the value, not a promise; it throws where `transaction()` rejects, so
-recovery is `try`/`catch`. Nesting is `tx.transaction(...)` — drizzle's own
-savepoint — since this function takes the database, the same shape as Postgres.
+recovery is `try`/`catch`. Nesting is `tx.transaction(...)` - drizzle's own
+savepoint - since this function takes the database, the same shape as Postgres.
 
 The two compose. A `transactionSync` opened while an async `transaction()` is
 suspended across an `await` takes a **savepoint** rather than failing, because
@@ -450,11 +450,11 @@ suspended across an `await` takes a **savepoint** rather than failing, because
 set. Rolling that savepoint back leaves the enclosing transaction open.
 
 On **Postgres** this delegates to drizzle's `db.transaction()`, which is genuinely
-async — it goes through `Bun.SQL`'s `begin()`, and that reserves a connection for
+async - it goes through `Bun.SQL`'s `begin()`, and that reserves a connection for
 the duration. The handle the callback gets there is drizzle's `PgTransaction`
 (exported as `SqlTransaction<TSchema>`), not the database, because the pooled outer
 handle would take a different connection and sit outside the transaction. Nesting
-on Postgres is therefore `tx.transaction(...)` — drizzle's own savepoint — since
+on Postgres is therefore `tx.transaction(...)` - drizzle's own savepoint - since
 this function's Postgres overload takes the database:
 
 ```ts
@@ -466,12 +466,12 @@ await transaction(pg, async (tx) => {
 });
 ```
 
-### Seeding — `runSeeds`
+### Seeding - `runSeeds`
 
 Data, not schema. Schema changes are `drizzle-kit generate` plus
 `drizzle-orm/bun-sqlite/migrator` (sync) or `drizzle-orm/bun-sql/migrator`
 (async); drizzle-kit owns the SQL, its own journal, and the snapshot folder. What
-it has no concept of is _data_, which is what this is for — and why its journal
+it has no concept of is _data_, which is what this is for - and why its journal
 table is separate from drizzle's.
 
 ```ts
@@ -507,7 +507,7 @@ export function seed(db: BunSQLiteDatabase<typeof schema>): void {
   belong in. `env` defaults to `NODE_ENV`, then `'development'`.
 - The journal table defaults to `dunx_seeds` and is created `IF NOT EXISTS` on
   every call, so it is safe on every boot. `applied_at` is `TEXT` on SQLite and
-  `TIMESTAMPTZ` on Postgres, written as an ISO 8601 **string** either way — because
+  `TIMESTAMPTZ` on Postgres, written as an ISO 8601 **string** either way - because
   of the `Date` refusal above, and because Postgres parses the string anyway.
 - The default pattern is `*.seeder.{ts,js}`: Bun runs TypeScript directly, and a
   build emits JS.
@@ -519,7 +519,7 @@ names tables is dialect-specific regardless.
 
 ### Options are classes
 
-So they are injectable — `constructor(private readonly options: DbOptions)` works,
+So they are injectable - `constructor(private readonly options: DbOptions)` works,
 and `options.dialect` is how something stays dialect-aware without knowing which
 module configured it.
 
@@ -544,11 +544,11 @@ new SqlOptions({
 `SqlInit` extends `Bun.SQL.PostgresOrMySQLOptions`, so pooling, TLS and auth stay
 in sync with whatever Bun supports rather than being restated here. `url` becomes
 required and `adapter` is dropped, since the scheme already decides it. Neither
-`schema` nor `url` rides along into the driver options — a schema object is every
+`schema` nor `url` rides along into the driver options - a schema object is every
 table and column in the app.
 
 One `SqliteInit` option does not do what it says, recorded rather than papered
-over. `create: false` does **not** stop a missing file being created — verified
+over. `create: false` does **not** stop a missing file being created - verified
 through `SqliteOptions` on Bun 1.3.14, where `{ strict: true, create: false }`
 opens and creates. (`{ create: false }` on its own throws `SQLITE_MISUSE` even for a
 file that exists, which is why `strict` is always sent.) Use `readOnly` when the
@@ -569,7 +569,7 @@ DbModule.forRootAsync(BunSQLiteDatabase, {
 
 `forRootAsync` takes **the token first**, unlike every other `forRootAsync` in this
 package. drizzle's database class is the injection token, and which class that is
-only becomes known once the factory has produced the options — too late to register
+only becomes known once the factory has produced the options - too late to register
 a provider under it. So it has to be named up front.
 
 Both bind **three** tokens:
@@ -578,11 +578,11 @@ Both bind **three** tokens:
 | -------------------------------------- | ------------------------------------------- |
 | `DbOptions`                            | the resolved configuration                  |
 | `DbConnection`                         | the lifecycle and the raw driver handle      |
-| `BunSQLiteDatabase` / `BunSQLDatabase` | drizzle's handle — what a repository injects |
+| `BunSQLiteDatabase` / `BunSQLDatabase` | drizzle's handle - what a repository injects |
 
 The drizzle handle is bound through a factory that depends on `DbConnection`, and
 that is what fixes the shutdown order: dunx tears down in reverse construction
-order, so the connection — constructed first, because everything else needs it —
+order, so the connection - constructed first, because everything else needs it -
 closes last. Because every factory settles before the first constructor runs, the
 connection is open, handshaked and pragma'd by the time the first repository is
 built. No lazy connect, no `await db.ready()`.
@@ -604,12 +604,12 @@ the connection was still usable.
 One thing this deliberately does not do: guard queries after `close()`. drizzle
 holds no state and cannot be asked whether its driver is open, and wrapping every
 method to find out would be the query abstraction this package exists without. A
-query issued after shutdown therefore surfaces as the driver's own error —
-`DrizzleError`, `cause: Cannot use a closed database` — not a `DatabaseError`
+query issued after shutdown therefore surfaces as the driver's own error -
+`DrizzleError`, `cause: Cannot use a closed database` - not a `DatabaseError`
 explaining itself. `SqliteConnection.closed` / `SqlConnection.closed` is where that
 fact lives if you need to branch on it.
 
-### The raw handle — `connection.raw`
+### The raw handle - `connection.raw`
 
 Anything backend-specific is one narrowing away. `raw` is `unknown` on
 `DbConnection` because the base cannot promise either driver:
@@ -637,8 +637,8 @@ export class Snapshots {
 `serialize()`, `deserialize()`, `loadExtension()` and `iterate()` are `bun:sqlite`
 capabilities drizzle does not surface, and this is the door to them (`strict`,
 `safeIntegers` and `PRAGMA` are already `SqliteInit` options, because they have to be
-set at open time). The `Bun.SQL` client is itself a function — it _is_ the tagged
-template — so
+set at open time). The `Bun.SQL` client is itself a function - it _is_ the tagged
+template - so
 `typeof raw === 'function'`. Note that its SQLite adapter does not support
 `reserve()`: _"This adapter doesn't support connection reservation"_.
 
@@ -654,12 +654,12 @@ static and a `C & { table }` return type fail with
 drizzle's whole value is that the table object's _type_ carries column types into
 every query. A decorator could have built a working table at runtime while every
 query degraded to `unknown`, and recovering the types would mean hand-writing a
-mapped type mirroring drizzle's `BuildColumns` — a second source of truth that
+mapped type mirroring drizzle's `BuildColumns` - a second source of truth that
 drifts from the first, which is the duplication decorators were meant to remove.
 drizzle's native `sqliteTable` / `pgTable` object schema is the supported path.
 
 The measurement is in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md), under
-**Verified constraints** — "A decorator cannot publish a type back onto the class
+**Verified constraints** - "A decorator cannot publish a type back onto the class
 it decorates".
 
 ### Testing
@@ -678,16 +678,16 @@ The Postgres backend has no equivalent trick, and an earlier version of this
 package claimed one: it ran its `Bun.SQL` suite over that driver's SQLite adapter.
 That is invalid now. `drizzle-orm/bun-sql` would compile `$1` placeholders and
 Postgres quoting against SQLite, the trivial cases would pass, and a green suite
-would be proving nothing — worse than a red one. So the offline `SqlOptions` tests
+would be proving nothing - worse than a red one. So the offline `SqlOptions` tests
 cover URL handling, driver options and token identity only, and everything that
 needs the wire skips unless `DUNX_DB_TEST_URL` names a reachable Postgres.
 
-## redis — `@dunx/infra/redis`
+## redis - `@dunx/infra/redis`
 
 > **A connection that may be absent must set `maxRetries: 0`.** With retries
 > enabled, a `Bun.RedisClient` that never connects keeps an internal timer alive
-> **after `close()`** and the process never exits. It is a Bun-level bug —
-> `RedisConnection.onShutdown` cannot reach the timer — so the option is the only
+> **after `close()`** and the process never exits. It is a Bun-level bug -
+> `RedisConnection.onShutdown` cannot reach the timer - so the option is the only
 > mitigation. See `docs/bun-apis.md`.
 
 
@@ -734,7 +734,7 @@ RedisModule.forRootAsync(async () => ({ url: await secrets.get('REDIS_URL') }));
 | Option                 | Default                                                  | Notes                                   |
 | ---------------------- | -------------------------------------------------------- | --------------------------------------- |
 | `url`                  | `$VALKEY_URL` → `$REDIS_URL` → `valkey://localhost:6379` | Validated when the module is configured |
-| `name`                 | —                                                        | Binds `redisConnection(name)` instead   |
+| `name`                 | -                                                        | Binds `redisConnection(name)` instead   |
 | `eager`                | `false`                                                  | Connect and `PING` during `onInit`      |
 | `connectionTimeout`    | `10000`                                                  |                                         |
 | `idleTimeout`          | `0`                                                      |                                         |
@@ -742,7 +742,7 @@ RedisModule.forRootAsync(async () => ({ url: await secrets.get('REDIS_URL') }));
 | `maxRetries`           | `10`                                                     |                                         |
 | `enableOfflineQueue`   | `true`                                                   |                                         |
 | `enableAutoPipelining` | `true`                                                   |                                         |
-| `tls`                  | —                                                        | `boolean` or `Bun.TLSOptions`           |
+| `tls`                  | -                                                        | `boolean` or `Bun.TLSOptions`           |
 
 Connections are lazy: nothing is dialled until the first command, so an
 unavailable cache does not stop the process from booting. Set `eager: true` when
@@ -818,8 +818,8 @@ try {
 }
 ```
 
-Bun raises some of these **synchronously** — a data command issued while the
-connection is in subscriber mode throws rather than rejecting — so the wrapper
+Bun raises some of these **synchronously** - a data command issued while the
+connection is in subscriber mode throws rather than rejecting - so the wrapper
 catches around the call, not just the await, and you only ever see a rejection.
 
 `RedisErrorCode.INVALID_RESPONSE` is the counter-intuitive one: Bun uses it for
@@ -834,7 +834,7 @@ under it. The response parsed fine; the command was wrong.
 await redis.subscribe('events', (message, channel) => {
   console.log(channel, message);
 });
-await redis.set('still', 'works'); // fine — different socket
+await redis.set('still', 'works'); // fine - different socket
 ```
 
 This is not an optimisation. A `Bun.RedisClient` in subscriber mode rejects every
@@ -851,7 +851,7 @@ Found by probing Bun 1.3.14, not from its docs:
   absent from `bun-types`. Passing a listener throws `ERR_INVALID_ARG_TYPE`
   (it accepts only strings and buffers), and passing patterns alone returns a
   promise that **never settles**. There is no pattern subscription here as a result,
-  and `send('PSUBSCRIBE', …)` will not help — the reply has nowhere to be delivered.
+  and `send('PSUBSCRIBE', …)` will not help - the reply has nowhere to be delivered.
 - **`exists()` is single-key.** Bun coerces Redis's integer reply to a boolean, so a
   multi-key call cannot tell "one of three" from "three of three". Use
   `send('EXISTS', keys)` for a count.
@@ -864,7 +864,7 @@ Found by probing Bun 1.3.14, not from its docs:
   while the module is being configured instead.
 - `psubscribe`, `punsubscribe`, `pubsub`, `script`, and `select` are all on the
   prototype but missing from `bun-types`. Of those, `pubsub`, `script`, and `select`
-  do work — reach them through `send()`.
+  do work - reach them through `send()`.
 - Buffer-valued subscriptions are not implemented by Bun; listeners get strings.
 - Transactions (`MULTI`/`EXEC`) and Lua (`EVAL`) have no wrapper. `send()` works for
   `EVAL`; `MULTI` needs command-ordering guarantees that `enableAutoPipelining`
@@ -874,14 +874,14 @@ Found by probing Bun 1.3.14, not from its docs:
 
 The integration suite probes the server first and skips itself when nothing
 answers, so `bun test` passes on a machine with no Redis. Unit coverage of option
-handling, module wiring, error mapping, and lifecycle needs no server at all —
+handling, module wiring, error mapping, and lifecycle needs no server at all -
 `Bun.RedisClient` connects lazily, so a container can be built and torn down
 against an address that is never dialled.
 
-## queue — `@dunx/infra/queue`
+## queue - `@dunx/infra/queue`
 
 **bullmq is the queue.** dunx adds no retry policy, no backoff, no rate limiter, no
-scheduler — those are bullmq's, and a second implementation of them would be a
+scheduler - those are bullmq's, and a second implementation of them would be a
 worse one. What this area adds is the four things bullmq has no opinion about:
 where a handler lives, how it is found, how it is injected, and when it stops.
 
@@ -907,7 +907,7 @@ bun add bullmq ioredis
 
 ### Two things to know before you deploy this
 
-**Connections are bounded by default** — `{ connectionTimeout: 5000, maxRetries: 0 }`,
+**Connections are bounded by default** - `{ connectionTimeout: 5000, maxRetries: 0 }`,
 overridable through `connection`. Bun's own defaults retry without bound, which turns
 an unreachable Redis into a route that never answers instead of one that fails. With
 the default, `publish()` rejects in single-digit milliseconds and a controller can map
@@ -918,7 +918,7 @@ exit on `SIGTERM`.** bullmq creates its connection on first use and holds a hand
 whose retry timer outlives `close()`; `maxRetries: 0` does not clear it, because the
 handle is bullmq's rather than Bun's and nothing in userland can reach it.
 
-Measured, and the trigger is narrow — importing the module is not enough:
+Measured, and the trigger is narrow - importing the module is not enough:
 
 | Redis | Published? | `SIGTERM` |
 | ----- | ---------- | --------- |
@@ -928,12 +928,12 @@ Measured, and the trigger is narrow — importing the module is not enough:
 
 So a healthy deployment is unaffected, and an app that imports `QueueModule` without
 publishing is unaffected. What hangs is a process that served a queue route while
-Redis was down. It serves correctly throughout — 503 in single-digit milliseconds —
+Redis was down. It serves correctly throughout - 503 in single-digit milliseconds -
 so this is a shutdown defect, not an availability one. Evidence in
 [docs/bun-apis.md](../../docs/bun-apis.md).
 
 Both are **optional peer dependencies**, so an app using only `/files` installs
-neither. `ioredis` is there for bullmq's sake, not dunx's — see
+neither. `ioredis` is there for bullmq's sake, not dunx's - see
 [The ioredis boundary](#the-ioredis-boundary).
 
 ### Setup
@@ -951,7 +951,7 @@ import { QueueModule } from '@dunx/infra/queue';
 export class AppModule {}
 ```
 
-`forRoot()` binds `QueueOptions`, `QueueConnection` and `JobPublisher` — the
+`forRoot()` binds `QueueOptions`, `QueueConnection` and `JobPublisher` - the
 **publish** side, which is all a web process needs. Importing it opens no worker and
 consumes nothing. With no `url` it follows the same chain `/redis` does: `$VALKEY_URL`,
 then `$REDIS_URL`, then `valkey://localhost:6379`. `forRootAsync({ useFactory, inject })`
@@ -964,8 +964,8 @@ is the same thing with the options behind a factory that may await and may injec
 | `url`               | `$VALKEY_URL` → `$REDIS_URL` → `valkey://localhost:6379` | Validated when the module is configured                  |
 | `prefix`            | `'bull'`                                                 | bullmq's key prefix                                      |
 | `worker`            | `{}`                                                     | Forwarded verbatim to every `Worker`                     |
-| `defaultJobOptions` | —                                                        | Forwarded verbatim as every `Queue`'s `defaultJobOptions` |
-| `jobTimeoutMs`      | —                                                        | Not a bullmq feature. See below                          |
+| `defaultJobOptions` | -                                                        | Forwarded verbatim as every `Queue`'s `defaultJobOptions` |
+| `jobTimeoutMs`      | -                                                        | Not a bullmq feature. See below                          |
 
 `worker` and `defaultJobOptions` are **passthroughs on purpose**. `concurrency`,
 `limiter`, `lockDuration`, `stalledInterval`, `attempts`, `backoff`,
@@ -985,7 +985,7 @@ export class Signups {
 ```
 
 `publish(queue, name, data, options?)` returns bullmq's own `Job`, and
-`publisher.queue(name)` returns bullmq's own `Queue` — with `addBulk`,
+`publisher.queue(name)` returns bullmq's own `Queue` - with `addBulk`,
 `upsertJobScheduler`, `getJobCounts`, `drain` and everything else already on it.
 There is no wrapper to outgrow.
 
@@ -993,7 +993,7 @@ A queue is opened on first use, not declared up front: a queue is a key prefix, 
 a resource to reserve, so there is nothing a registration step could validate.
 `onShutdown` closes every queue that was opened.
 
-### Consuming — the worker process
+### Consuming - the worker process
 
 A worker is a separate process running `WorkerFactory`:
 
@@ -1013,11 +1013,11 @@ await worker.closed;
 ```
 
 The root module it is handed may be the app's own or a narrower one that leaves the
-controllers out — it is a normal dunx container either way, so a handler gets the
+controllers out - it is a normal dunx container either way, so a handler gets the
 same constructor injection a controller does.
 
 `create` discovers and validates; `start` is what opens connections. So a wiring
-mistake — no `QueueModule`, no handlers, a misspelled name in `queues` — fails
+mistake - no `QueueModule`, no handlers, a misspelled name in `queues` - fails
 before anything consumes, and `worker.jobs` can be inspected in a test without a
 server running.
 
@@ -1038,10 +1038,10 @@ an accumulator.
 What follows from that:
 
 - **No second registration.** A handler's class is declared in
-  `@Module({ providers })` — or `controllers` — like any other injectable. There is
+  `@Module({ providers })` - or `controllers` - like any other injectable. There is
   no `registerQueue`, no `@Processor` class decorator and no queue token to inject.
 - **A handler may be inherited.** An abstract base's marked method is found on every
-  subclass, and overriding it *without* re-decorating still works — the marker is on
+  subclass, and overriding it *without* re-decorating still works - the marker is on
   the base's function, and dispatch is bound off the instance, so it lands on the
   override.
 - **Two handlers for one `(queue, name)` is a boot error** naming both, because it
@@ -1050,7 +1050,7 @@ What follows from that:
   a prototype chain from until it has been built. Put handlers on a class provider.
 
 An arriving job whose name no handler claims fails with a message saying what that
-worker *does* serve — the shape of the bug is usually a worker deployed ahead of the
+worker *does* serve - the shape of the bug is usually a worker deployed ahead of the
 handler that serves it, and bullmq retries it under the job's own `attempts`.
 
 ### `jobTimeoutMs`
@@ -1066,7 +1066,7 @@ default; it is the one behaviour here that bullmq does not already own.
 That order is the point: `close()` without `force` stops fetching and waits for what
 is already running, so an in-flight job finishes while the database connection it is
 using is still open. The container's own reverse-construction-order teardown then
-closes the publisher's queues, and last of all the sockets — `QueueConnection` is
+closes the publisher's queues, and last of all the sockets - `QueueConnection` is
 constructed first, because everything else needs it, so it goes last.
 
 `enableShutdownHooks()` wires SIGTERM and SIGINT to that sequence.
@@ -1078,7 +1078,7 @@ needs *a* Redis client. The resolution is not a compromise:
 
 **Every byte of queue traffic goes through `Bun.RedisClient`.** bullmq accepts either
 a connection description it builds a client from, or an already-built client
-implementing its `IRedisClient` interface — and bullmq 6 ships
+implementing its `IRedisClient` interface - and bullmq 6 ships
 `createBunRedisClient`, an adapter over Bun's client. `QueueConnection` uses it. dunx
 neither imports nor constructs ioredis, and `@dunx/infra/redis` is untouched: a
 queue's sockets are its own, one per bullmq object.
@@ -1095,7 +1095,7 @@ so `bun test` passes on a machine with no Redis. Discovery, dispatch, options an
 module wiring need no server at all: `create` opens no socket, so a container can be
 built, inspected and torn down against an address that is never dialled.
 
-## files — `@dunx/infra/files`
+## files - `@dunx/infra/files`
 
 One storage contract, two backends, on `Bun.file`, `Bun.write`, `Bun.Glob` and
 `Bun.S3Client`.
@@ -1112,7 +1112,7 @@ export class Uploads {
 
 `Storage` is an abstract class, so it is both the injectable contract and the
 token. Whether the bytes land on a disk or in a bucket is decided in one
-`forRoot` call — nothing above changes.
+`forRoot` call - nothing above changes.
 
 ### Setup
 
@@ -1129,7 +1129,7 @@ class AppModule {}
 const app = await AppFactory.create(AppModule);
 ```
 
-S3 — or R2, or MinIO, or Spaces — is the same call with different options:
+S3 - or R2, or MinIO, or Spaces - is the same call with different options:
 
 ```ts
 import { FilesModule, S3StorageOptions } from '@dunx/infra/files';
@@ -1142,7 +1142,7 @@ FilesModule.forRoot(
 );
 ```
 
-Anything omitted from the client options falls back to the environment —
+Anything omitted from the client options falls back to the environment -
 `S3_BUCKET`/`AWS_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
 `AWS_REGION`, `AWS_ENDPOINT`. That is `Bun.S3Client`'s own resolution; this
 package adds none of its own.
@@ -1177,7 +1177,7 @@ abstract class Storage {
 
 `write` takes a `string`, `Uint8Array`, `ArrayBuffer`, `Blob`, or
 `ReadableStream`, and returns the byte count. `delete` is idempotent on both
-backends — removing a key that was never there is not an error. A missing key
+backends - removing a key that was never there is not an error. A missing key
 raises `FileNotFoundError` whichever backend you are on.
 
 `list` is an `AsyncIterable`, so a bucket with a million objects is paged rather
@@ -1189,7 +1189,7 @@ for await (const entry of storage.list({ prefix: 'reports', glob: '*.csv' })) {
 }
 ```
 
-Keys are always relative to the storage root — the configured directory locally,
+Keys are always relative to the storage root - the configured directory locally,
 the configured prefix on S3. What `write` takes is what `list` and `stat` give
 back, so putting a bucket behind a prefix does not ripple into call sites.
 
@@ -1220,7 +1220,7 @@ That covers `../`, an absolute key, an empty key, and the root itself. A key is
 accepted or refused identically on every platform: `..\..\etc` is one legal
 filename to POSIX but three segments to Windows, so `..` is checked as a segment
 on both separators before the path is resolved at all. S3 keys get the same
-treatment — a key is opaque to S3, so a `..` in one was meant as a path, and
+treatment - a key is opaque to S3, so a `..` in one was meant as a path, and
 under a prefix it would escape it.
 
 One thing this does not do: `resolve` collapses segments textually, so a symlink
@@ -1232,18 +1232,18 @@ the root writable by anything you would not trust with its contents.
 
 Nothing here buffers a whole file to satisfy the contract. `readStream` returns
 `Bun.file().stream()` (or the S3 `GET` body) unread, and a `ReadableStream`
-passed to `write` is pumped chunk by chunk into a sink — `FileSink` locally, a
+passed to `write` is pumped chunk by chunk into a sink - `FileSink` locally, a
 multipart `NetworkSink` on S3. A file larger than memory transfers either way.
 
 Two things forced the sink rather than `Bun.write`, both measured on Bun 1.3.14:
 
 - `Bun.write(path, stream)` matches no overload and silently persists the string
-  `"[object ReadableStream]"` — 23 bytes where a file was expected.
+  `"[object ReadableStream]"` - 23 bytes where a file was expected.
 - `Bun.write(path, new Response(stream))` never settles when the response body is
   itself a stream.
 
-A `FileSink` also neither creates parent directories nor truncates — it writes
-over the existing bytes from offset 0 and leaves any tail in place — so a
+A `FileSink` also neither creates parent directories nor truncates - it writes
+over the existing bytes from offset 0 and leaves any tail in place - so a
 streaming local write does an empty `Bun.write` first to do both jobs, then
 streams in over the top.
 
@@ -1254,7 +1254,7 @@ Two places where a call costs more than it looks:
   On S3 that is one extra `HEAD`.
 - `list({ glob })` on S3 lists by prefix and applies the pattern to the keys that
   come back, because S3 has no glob. The page size is therefore not capped by
-  `limit` when a glob is in play — capping it would truncate before the filter
+  `limit` when a glob is in play - capping it would truncate before the filter
   ran.
 
 ### Listing details worth knowing
@@ -1269,7 +1269,7 @@ Two places where a call costs more than it looks:
 - A prefix that does not exist lists as empty on both backends rather than
   raising.
 
-## images — `@dunx/infra/images`
+## images - `@dunx/infra/images`
 
 Decode, inspect and transform images on `Bun.Image`. No native module install.
 
@@ -1295,7 +1295,7 @@ export class Thumbnails {
 `load()` takes a `BunFile`, a `Blob`, an `ArrayBuffer`, a `Uint8Array`, a
 `Buffer`, a filesystem path, or a `data:` URL, and normalises all of them to
 bytes. A `Response` or a `ReadableStream` is refused with
-`ERR_IMAGE_UNREADABLE_SOURCE` — call `.blob()` first.
+`ERR_IMAGE_UNREADABLE_SOURCE` - call `.blob()` first.
 
 ### Format detection is content-based
 
@@ -1361,7 +1361,7 @@ the container header and never decodes pixels, so a **truncated file still
 reports its declared dimensions**:
 
 ```ts
-await images.metadata(halfAFile); // { width: 64, height: 48, format: 'png' } — resolves!
+await images.metadata(halfAFile); // { width: 64, height: 48, format: 'png' } - resolves!
 await images.verify(halfAFile); // throws ImageError ERR_IMAGE_DECODE_FAILED
 ```
 
@@ -1370,7 +1370,7 @@ pixels have to be known-good. `verify()` runs a full decode.
 
 ### Configuration
 
-`ImagesOptions` is an `abstract class`, so it is a usable injection token — an
+`ImagesOptions` is an `abstract class`, so it is a usable injection token - an
 `interface` would erase and `@dunx/transform` would record the parameter as
 unresolved.
 
@@ -1402,7 +1402,7 @@ inject `Images` by constructor.
 **Lazy, and re-runnable.** The constructor and every chainable only record
 settings; the decode/transform/encode pipeline runs on a worker thread when a
 terminal is awaited. Awaiting a second terminal on the same instance re-runs it
-rather than throwing — there is no consumed state. Parallel terminals via
+rather than throwing - there is no consumed state. Parallel terminals via
 `Promise.all` on one instance are safe.
 
 **Chainables mutate and overwrite.** They return `this`, not a clone, and
@@ -1411,7 +1411,7 @@ calling one twice keeps only the last call. Execution order is fixed at
 order you called them in.
 
 **`metadata()` ignores the chain.** It returns `{ width, height, format }` for
-the **source** — `new Bun.Image(x).resize(32, 24).metadata()` still reports the
+the **source** - `new Bun.Image(x).resize(32, 24).metadata()` still reports the
 input's 64x48 and the input's format. It also reads the header only, so it
 succeeds on a truncated file.
 
@@ -1454,7 +1454,7 @@ _value_ for `filter` throws.
 
 **Undocumented but present.** `Bun.file(path).image()` and
 `Blob.prototype.image()` both exist and return a `Bun.Image`. A `data:` URL is
-accepted as constructor input even though the signature only says `string` — a
+accepted as constructor input even though the signature only says `string` - a
 plain URL is not, and is treated as a path (`ENOENT`).
 
 **Platform.** `Bun.Image.backend` is `'bun'` on Linux and `'system'` on
@@ -1467,7 +1467,7 @@ AVIF encoding is unavailable under the `bun` backend, and setting
 `linear` works as a resize filter (an alias for `bilinear`) even though it is
 missing from the error message listing the valid names.
 
-## logger — `@dunx/infra/logger`
+## logger - `@dunx/infra/logger`
 
 `@arkv/logger`, bound to the `Logger` contract that lives in `@dunx/core`. dunx
 supplies the contract and the wiring and **restates none of the configuration**.
@@ -1500,14 +1500,14 @@ One structured JSON line either way; `isDevelopment` (default
 upstream's sanitizer, not a dunx reimplementation of one.
 
 The level is `info`, and the method is `info`. `log` survives as a deprecated alias
-that emits the same `"level":"info"` — upstream keeps it because NestJS's
+that emits the same `"level":"info"` - upstream keeps it because NestJS's
 `LoggerService` mandates the name, and the contract keeps it so that class still
 satisfies it.
 
 ### The split, and why
 
-- The **contract** — `abstract class Logger`, plus `LogLevel`, `LOG_LEVELS`,
-  `isErrorLevel`, `LogEntry` and `SerializedError` — lives in **`@dunx/core`**,
+- The **contract** - `abstract class Logger`, plus `LogLevel`, `LOG_LEVELS`,
+  `isErrorLevel`, `LogEntry` and `SerializedError` - lives in **`@dunx/core`**,
   which has zero dependencies. That is what lets `@dunx/http` middleware inject
   `Logger` without pulling a logger implementation in behind it.
 - The **implementation** lives here, where dependencies are normal. `@arkv/logger`
@@ -1523,7 +1523,7 @@ CLAUDE.md a fix the logger needs belongs upstream in `@arkv` rather than in a du
 subclass.
 
 Because the contract is a **copy** of the level names rather than a re-export, the
-two can drift — and the failure is silent, not loud. The backing logger filters by
+two can drift - and the failure is silent, not loud. The backing logger filters by
 `LOG_LEVELS.indexOf(level)`; a name it does not know yields `-1`, which sorts below
 every real level, so a stale name turns level filtering into "emit everything"
 instead of raising. `module.test.ts` asserts the two arrays are equal for exactly
@@ -1540,22 +1540,22 @@ added transports, the rotating file sink and the global error capture below.
 | Token            | Is                                                                      |
 | ---------------- | ----------------------------------------------------------------------- |
 | `Logger`         | `@dunx/core`'s contract, backed by `@arkv/logger`'s implementation       |
-| `BackingLogger`  | the same instance, typed as the implementation — `child`, `flush`, `close` |
+| `BackingLogger`  | the same instance, typed as the implementation - `child`, `flush`, `close` |
 | `LoggerSettings` | the `LoggerConfig` it was configured with, so a factory can read it     |
 | `ContextStore`   | `@arkv/logger`'s async-context store, shared by every logger            |
 
 `LoggerSettings` is a `token<LoggerConfig>` rather than a class, because the config
-type is upstream's — an interface, with no runtime value to name.
+type is upstream's - an interface, with no runtime value to name.
 
 `BackingLogger` exists because the contract covers the six levels and nothing else.
-Three things sit outside it — `child(bindings)`, `flush()` and `close()` — and this
+Three things sit outside it - `child(bindings)`, `flush()` and `close()` - and this
 token is how an app reaches them without a cast, and without widening the contract
 for every implementation that will never have a transport to flush.
 
 Configuration is `@arkv/logger`'s own `LoggerConfig`, verbatim: `name`, `version`,
 `env`, `level`, `isDevelopment`, `maskFields`, `filterEvents`, `maxArrayLength`,
 `maxDepth`, `transports`, `bindings`, `onTransportError`. Read its README for what
-each does — a parallel table here is exactly the duplication the "reuse `@arkv`"
+each does - a parallel table here is exactly the duplication the "reuse `@arkv`"
 rule exists to prevent. `DEFAULT_MASK_FIELDS` is re-exported so you can see what is
 already redacted before adding to it.
 
@@ -1596,7 +1596,7 @@ LoggerModule.forRoot({
 ```
 
 A transport's own `level` is independent of the logger's, so debug can go to the
-terminal while only warnings reach disk. A transport that throws is isolated —
+terminal while only warnings reach disk. A transport that throws is isolated -
 a full disk surfaces on `onTransportError`, never as an exception in the request
 path that happened to log a line.
 
@@ -1615,7 +1615,7 @@ the process alive after an uncaught exception.
 
 `FileTransport` batches when `bufferBytes` is set, so entries can be pending when
 the app stops. The module registers a lifecycle-only provider whose `onShutdown`
-flushes and closes every transport — nothing an app has to remember:
+flushes and closes every transport - nothing an app has to remember:
 
 ```ts
 const app = await AppFactory.create(AppModule);
@@ -1626,14 +1626,14 @@ It runs late. `App.shutdown` walks instances in reverse resolution order, and th
 logger resolves before anything that depends on it, so services can still log while
 they close.
 
-That provider is not an adapter — it wraps no method and forwards no call. It exists
+That provider is not an adapter - it wraps no method and forwards no call. It exists
 because core's shutdown looks for `onShutdown()` and upstream's method is `close()`,
 and putting `close()` on the contract would oblige every implementation to have one.
 
 ### Request context
 
 `ContextStore` is one shared `AsyncLocalStorage`, so a correlation id set once is
-merged into every entry logged inside that flow — and nothing per-request goes near
+merged into every entry logged inside that flow - and nothing per-request goes near
 the container:
 
 ```ts
@@ -1657,7 +1657,7 @@ often correlated by does not vanish one frame down. The merged context is a fres
 object, so an inner scope never leaks back out. Pass `{ inherit: false }` for a
 scope that must start clean, such as a detached background job.
 
-For static fields that are not per-request — a module or worker name — use
+For static fields that are not per-request - a module or worker name - use
 `child(bindings)` on `BackingLogger` instead. Per-call fields and async context both
 take precedence over bindings, and the transports are shared, so close the root
 logger rather than a child:

@@ -26,7 +26,7 @@ const timestamp = (): string => {
 
 /**
  * Pending `info`-and-below output, shared by every instance because they all write
- * to the same descriptor — separate buffers would interleave two loggers' lines.
+ * to the same descriptor - separate buffers would interleave two loggers' lines.
  */
 let pending = '';
 let scheduled = false;
@@ -42,12 +42,12 @@ const flushPending = (): void => {
 
 /**
  * One `console.log` per request is one `write(2)` per request, and measured on
- * `bun run logging` it cost **1.84 µs** — the largest single component of request
+ * `bun run logging` it cost **1.84 µs** - the largest single component of request
  * logging, more than the `JSON.stringify` that produced the line. Concatenating
  * into one string and writing it once per event-loop turn costs **0.27 µs**.
  *
  * **The trade:** a line that is still in this buffer is lost if the process dies
- * without unwinding — a `SIGKILL`, an OOM kill, a segfault — which is exactly when
+ * without unwinding - a `SIGKILL`, an OOM kill, a segfault - which is exactly when
  * the log matters most. Three things bound it:
  *
  * - **`warn`, `error` and `fatal` are never buffered.** They go out immediately and
@@ -76,13 +76,13 @@ const emit = (line: string, toError: boolean): void => {
 
 /**
  * The default binding for {@link Logger}, so `Logger` is injectable in an app
- * that has imported no logging module at all — which is what lets `@dunx/http`
+ * that has imported no logging module at all - which is what lets `@dunx/http`
  * turn request logging on by default without booting into "No provider".
  *
  * Deliberately small: one JSON line per entry on stdout, stderr from `warn` up
  * so a shipper can separate them. It does **not** sanitize, mask, rotate or
  * colour. `@dunx/infra/logger` replaces it with `@arkv/logger`, which does all
- * of that, and the swap is one import — see `packages/infra/README.md`.
+ * of that, and the swap is one import - see `packages/infra/README.md`.
  */
 export class ConsoleLogger extends Logger implements OnShutdown {
   readonly #minimum: number;

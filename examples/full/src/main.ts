@@ -17,7 +17,7 @@ async function bootstrap(): Promise<void> {
 
   for (const area of await app.get(HealthController).areas()) {
     const mark = area.state === 'live' ? '✓' : '·';
-    logger.info(`${mark} ${area.name} — ${area.detail}`);
+    logger.info(`${mark} ${area.name} - ${area.detail}`);
   }
 
   logger.info(`listening on ${url}`);

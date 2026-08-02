@@ -4,13 +4,13 @@ import type { BackendName, DialectName } from './dialect.js';
 /**
  * What owns the socket or the file handle.
  *
- * drizzle is the interface for *querying* — this package adds no query
+ * drizzle is the interface for *querying* - this package adds no query
  * abstraction over it. But a drizzle handle has no `close()` and no lifecycle
  * hook, so something has to hold the driver, know how to shut it down, and hand
  * the raw handle back. That is all this is: no `sql`, no `all`, no `get`, no
  * `run`. Those are drizzle's.
  *
- * It is an abstract class rather than an interface so it is an injection token —
+ * It is an abstract class rather than an interface so it is an injection token -
  * `constructor(private readonly connection: DbConnection)` is how a service
  * reaches `raw` without knowing which backend is configured.
  */
@@ -19,15 +19,15 @@ export abstract class DbConnection<TDb = unknown> implements OnShutdown {
   abstract readonly dialect: DialectName;
 
   /**
-   * The drizzle handle. Bound in the container under drizzle's own class —
-   * `BunSQLiteDatabase` or `BunSQLDatabase` — so a repository injects the real
+   * The drizzle handle. Bound in the container under drizzle's own class -
+   * `BunSQLiteDatabase` or `BunSQLDatabase` - so a repository injects the real
    * thing rather than a wrapper.
    */
   abstract readonly db: TDb;
 
   /**
    * The driver handle underneath drizzle: a `bun:sqlite` `Database` or a
-   * `Bun.SQL` client. `unknown` here because the base cannot promise either —
+   * `Bun.SQL` client. `unknown` here because the base cannot promise either -
    * narrow with `instanceof SqliteConnection` / `instanceof SqlConnection`, which
    * restores the concrete type.
    */
@@ -39,7 +39,7 @@ export abstract class DbConnection<TDb = unknown> implements OnShutdown {
   /**
    * Concrete, not abstract: the hook and the explicit call are one operation.
    * `@dunx/core` shuts down in reverse construction order, and every repository
-   * depends on the drizzle handle which depends on this — so everything holding
+   * depends on the drizzle handle which depends on this - so everything holding
    * the connection has already drained by the time this fires.
    */
   async onShutdown(): Promise<void> {
@@ -58,7 +58,7 @@ export abstract class DbOptions<TDb = unknown> {
 
   /**
    * The token the drizzle handle is bound to. drizzle's database classes are real
-   * runtime classes, so they are usable as tokens directly — which is what lets a
+   * runtime classes, so they are usable as tokens directly - which is what lets a
    * repository annotate `BunSQLiteDatabase<typeof schema>` and get both the token
    * (the erased class name) and the schema types (the type argument).
    */

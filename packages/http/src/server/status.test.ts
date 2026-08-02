@@ -19,7 +19,7 @@ describe('HttpStatusCode', () => {
     expect(HttpStatusCode.OK).toBe(200);
   });
 
-  it('holds no reverse mapping — the thing an enum would add', () => {
+  it('holds no reverse mapping - the thing an enum would add', () => {
     expect(Object.keys(HttpStatusCode)).not.toContain('200');
     expect(
       Object.values(HttpStatusCode).every((code) => typeof code === 'number'),

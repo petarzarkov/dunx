@@ -11,8 +11,8 @@ export class UsersRepository {
   /**
    * `SyncDatabase` because `DatabaseModule` configured synchronous mode; it is
    * drizzle's `BunSQLiteDatabase` with a name the container can tell apart.
-   * `@dunx/transform` records the bare type name — a real runtime class, so a usable
-   * token — and ignores the type argument, so the schema types survive injection.
+   * `@dunx/transform` records the bare type name - a real runtime class, so a usable
+   * token - and ignores the type argument, so the schema types survive injection.
    *
    * Every method below is `async` although bun-sqlite executes synchronously: the
    * HTTP layer awaits them, and moving this table to the pooled backend then costs

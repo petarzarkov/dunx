@@ -1,5 +1,5 @@
 /**
- * Stands in for a secret store — production would read a vault, this reads one
+ * Stands in for a secret store - production would read a vault, this reads one
  * environment variable. A test binds a subclass with known keys instead, which is
  * smaller than any mocking API and needs no interface in front of it.
  */

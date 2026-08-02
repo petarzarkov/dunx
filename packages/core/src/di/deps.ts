@@ -28,7 +28,7 @@ export const isUnresolved = (entry: DepEntry): entry is UnresolvedDep =>
  * base's dependencies with it. A subclass that does declare one gets its own
  * record from the compiler, which shadows the base's.
  *
- * Calling the thunk here — not at class-definition time — is what lets a
+ * Calling the thunk here - not at class-definition time - is what lets a
  * dependency be declared later in the file, or across a circular import, without
  * a temporal-dead-zone crash.
  */

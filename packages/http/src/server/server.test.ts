@@ -120,7 +120,7 @@ describe('middleware', () => {
     expect(response.headers.get('x-wrapped')).toBe('1');
   });
 
-  it('turns a throwing middleware into a mapped error — a guard', async () => {
+  it('turns a throwing middleware into a mapped error - a guard', async () => {
     class Guard implements Middleware {
       handle(): Promise<Response> {
         throw new HttpError(403, 'Forbidden');
@@ -179,7 +179,7 @@ class UsersController {
     return { id: input.req.params['id'] };
   }
 
-  // No body schema, so the raw request is still there — and the 201 now comes
+  // No body schema, so the raw request is still there - and the 201 now comes
   // from the verb rather than from a hand-built Response.
   @Post('/')
   create(input: Input<RouteSchemas>): Promise<unknown> {
@@ -233,7 +233,7 @@ describe('HttpFactory', () => {
   it('maps a thrown HttpError and lets Bun answer a method miss', async () => {
     await withApp(async (_app, url) => {
       expect((await fetch(new URL('users/boom', url))).status).toBe(418);
-      // Bun's native routes handle the method miss — no JS router involved.
+      // Bun's native routes handle the method miss - no JS router involved.
       expect(
         (await fetch(new URL('users/42', url), { method: 'DELETE' })).status,
       ).toBe(404);

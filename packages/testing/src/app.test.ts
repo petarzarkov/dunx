@@ -44,7 +44,7 @@ const Dsn = token<string>('Dsn');
 /**
  * The consumer takes its dependency as a constructor parameter. `bun test` runs
  * from source with no `@dunx/transform` preload, so the record the plugin would
- * have appended is written by hand — as core's own dynamic-module test does.
+ * have appended is written by hand - as core's own dynamic-module test does.
  */
 class Reports {
   constructor(private readonly db: Database) {}
@@ -183,7 +183,7 @@ describe('createTestApp()', () => {
       ),
     ).toBe(
       'Nothing to override for Clock: no module in the graph binds it. An ' +
-        'override replaces a binding — it cannot add one, because a token nobody ' +
+        'override replaces a binding - it cannot add one, because a token nobody ' +
         'bound is a token nothing under test resolves.',
     );
   });
@@ -206,7 +206,7 @@ describe('createTestApp()', () => {
     ).toContain('Nothing to override for Clock, Mailer:');
   });
 
-  it('still reports a duplicate binding — replacing is not a bypass', async () => {
+  it('still reports a duplicate binding - replacing is not a bypass', async () => {
     @Module({ providers: [provide(Database, { useClass: RealDatabase })] })
     class OneModule {}
 
@@ -224,7 +224,7 @@ describe('createTestApp()', () => {
       ),
     ).toBe(
       'Duplicate binding for Database: bound by module "OneModule" and module ' +
-        '"TwoModule". The container is flat — one binding per token.',
+        '"TwoModule". The container is flat - one binding per token.',
     );
   });
 

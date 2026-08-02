@@ -23,7 +23,7 @@ const collect = async (
 
 /**
  * bun:test's `.rejects` chain is not typed as thenable, so the rejection is
- * captured by hand — the same approach core's own tests take.
+ * captured by hand - the same approach core's own tests take.
  */
 const rejection = (promise: Promise<unknown>): Promise<unknown> =>
   promise.then(
@@ -256,7 +256,7 @@ describe('LocalStorage', () => {
       expect(await collect(storage.list({ prefix: 'nowhere' }))).toEqual([]);
     });
 
-    it('leaves size and lastModified unset — a glob scan does not stat', async () => {
+    it('leaves size and lastModified unset - a glob scan does not stat', async () => {
       for await (const entry of storage.list({ glob: 'top.md' })) {
         expect(entry.size).toBeUndefined();
         expect(entry.lastModified).toBeUndefined();

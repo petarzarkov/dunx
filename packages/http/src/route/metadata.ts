@@ -6,7 +6,7 @@ import type { Ctor } from '@dunx/core';
 import type { Middleware } from '../server/middleware.js';
 
 // Symbol.for for the two storage slots, so two copies of @dunx/http in one tree
-// still read each other's records. The keys themselves are unique — see metaKey.
+// still read each other's records. The keys themselves are unique - see metaKey.
 const META = Symbol.for('dunx.meta');
 const GUARDS = Symbol.for('dunx.guards');
 
@@ -17,7 +17,7 @@ export interface MetaKey<T> {
   /** For error messages and debugging only. Identity is the symbol. */
   readonly name: string;
   readonly id: symbol;
-  // Phantom. Never assigned — it exists so MetaKey<readonly string[]> and
+  // Phantom. Never assigned - it exists so MetaKey<readonly string[]> and
   // MetaKey<boolean> are distinct types rather than both being { name, id }.
   readonly reads?: T;
 }
@@ -41,7 +41,7 @@ interface GuardMarked {
 
 /**
  * Copy-on-write, defined as an **own** property. The seed is read with plain
- * lookup, so a subclass starts from its base's record — but the base's Map is
+ * lookup, so a subclass starts from its base's record - but the base's Map is
  * never mutated, which is what keeps two subclasses of one base independent.
  */
 const write = <T>(target: object, key: MetaKey<T>, value: T): void => {
@@ -68,7 +68,7 @@ export const Roles = (...roles: readonly string[]) => meta(ROLES, roles);
 export const Public = () => meta(PUBLIC, true);
 
 /**
- * Guards are middleware, so they compose rather than override — which is why they
+ * Guards are middleware, so they compose rather than override - which is why they
  * are not a `MetaKey`. Valid on a method or on a class.
  */
 export const UseGuards =
@@ -78,7 +78,7 @@ export const UseGuards =
     // An own record means a second @UseGuards on the same target: decorators apply
     // bottom-up, so the later-applied one goes in front and the list reads
     // top-to-bottom. An inherited one means a subclass, whose guards run after
-    // the base's — and defineProperty leaves the base's array untouched.
+    // the base's - and defineProperty leaves the base's array untouched.
     const merged = Object.hasOwn(target, GUARDS)
       ? [...guards, ...existing]
       : [...existing, ...guards];

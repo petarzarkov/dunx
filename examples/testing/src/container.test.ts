@@ -5,7 +5,7 @@ import { ForecastClient } from './weather/forecast.client.js';
 import { WeatherModule } from './weather/weather.module.js';
 import { WeatherService } from './weather/weather.service.js';
 
-/** The fake. A class the test wrote — no mocking framework, no interface. */
+/** The fake. A class the test wrote - no mocking framework, no interface. */
 class FixedForecast extends ForecastClient {
   constructor(private readonly celsius: number) {
     super();
@@ -17,7 +17,7 @@ class FixedForecast extends ForecastClient {
 }
 
 /**
- * `createTestApp` builds the container and nothing else — no server, no port. Use
+ * `createTestApp` builds the container and nothing else - no server, no port. Use
  * it when the thing under test is a service, which is most of the time.
  */
 describe('createTestApp', () => {
@@ -55,7 +55,7 @@ describe('createTestApp', () => {
     class ExplodingWeather {}
 
     // Overrides *replace*; they are not an extra binding appended at the end that
-    // wins. So the discarded provider is never instantiated — its constructor never
+    // wins. So the discarded provider is never instantiated - its constructor never
     // runs, its `onInit` never fires and, when it is a database, no connection is
     // opened. That last one is the guarantee a hand-rolled fixture usually misses.
     const app = await createTestApp({
@@ -70,7 +70,7 @@ describe('createTestApp', () => {
   test('an override naming a token nobody binds is an error', async () => {
     class NotBoundAnywhere {}
 
-    // Not a silent no-op — which is what would otherwise leave a suite asserting
+    // Not a silent no-op - which is what would otherwise leave a suite asserting
     // against the real provider it thought it had swapped.
     const message = await createTestApp({
       modules: [WeatherModule],

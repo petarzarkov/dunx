@@ -38,7 +38,7 @@ const fileAndConsole = (path: string): Transport[] => [
 ];
 
 /**
- * Import order is construction order, and shutdown runs in reverse — so config
+ * Import order is construction order, and shutdown runs in reverse - so config
  * and the logger are built first and torn down last, and the database and the
  * workspace outlive every feature that uses them.
  */
@@ -47,7 +47,7 @@ const fileAndConsole = (path: string): Transport[] => [
     ConfigModule.forRoot({ validate, as: AppConfigService }),
     // The level comes from the validated config, which is the one thing a
     // zero-argument `forRoot` function cannot reach. `captureGlobalErrors` turns
-    // an uncaught exception into a fatal entry that is flushed before exit —
+    // an uncaught exception into a fatal entry that is flushed before exit -
     // worth having in a service that is meant to stay up.
     LoggerModule.forRootAsync(
       {
@@ -75,7 +75,7 @@ const fileAndConsole = (path: string): Transport[] => [
     ChatModule,
     JobsModule,
     GuardsModule,
-    // After DatabaseModule, so better-auth reuses the connection it opened — and so
+    // After DatabaseModule, so better-auth reuses the connection it opened - and so
     // the auth tables are created after the ledger's, both at onInit.
     AccountsModule,
     HealthModule,

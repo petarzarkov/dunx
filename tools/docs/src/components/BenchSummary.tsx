@@ -26,7 +26,7 @@ const VERDICT_LABEL: Record<Verdict, string> = {
 /**
  * The above-the-fold block on the landing page. It carries the headline
  * throughput, the verdict against the fastest rival, and the cold-start ratio
- * in the same breath — the losses are in the summary, not only on the full
+ * in the same breath - the losses are in the summary, not only on the full
  * page. Every sentence is computed, so a rerun that turns a win into a tie
  * rewrites this card rather than leaving it lying.
  */
@@ -52,7 +52,7 @@ export const BenchSummary = (): React.JSX.Element | null => {
             </Text>
           </Group>
           <Text fw={700} fz={28} lh={1.2}>
-            {decimal(Math.min(...pcts), 1)}–{decimal(Math.max(...pcts), 1)}% of
+            {decimal(Math.min(...pcts), 1)}-{decimal(Math.max(...pcts), 1)}% of
             raw <code>Bun.serve</code>
           </Text>
           <Text size="sm" c="dimmed" maw={620}>
@@ -62,7 +62,7 @@ export const BenchSummary = (): React.JSX.Element | null => {
             <b>
               {board.ahead} ahead, {board.tied} tied, {board.behind} behind
             </b>{' '}
-            — tied meaning inside the ±{NOISE_PCT} point run-to-run band.
+            - tied meaning inside the ±{NOISE_PCT} point run-to-run band.
             {startup &&
               startup.ratio > 1 &&
               ` It boots in ${decimal(startup.ratio, 1)}x the baseline's time, which is the loss.`}
@@ -110,7 +110,7 @@ export const BenchSummary = (): React.JSX.Element | null => {
         <Text size="xs" c="dimmed">
           Bar is <code>@dunx/http</code> as a fraction of raw{' '}
           <code>Bun.serve</code>; the tick marks where {rival} landed.
-          Closed-loop latency on one shared machine — read the caveats before
+          Closed-loop latency on one shared machine - read the caveats before
           quoting any of this.
         </Text>
       </Stack>

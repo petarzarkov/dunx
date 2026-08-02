@@ -61,7 +61,7 @@ const pointerPath = (pointer: string): readonly string[] =>
 /**
  * The two JSON Schema subjects get the same email check, because neither validates
  * `format` on its own and the point is to compare engines, not regexes. zod,
- * Valibot and ArkType each bring their own — noted in the README, since it is the
+ * Valibot and ArkType each bring their own - noted in the README, since it is the
  * one place the schemas are not literally identical.
  */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

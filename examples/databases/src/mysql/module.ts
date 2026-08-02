@@ -10,7 +10,7 @@ import { MysqlWidgets } from './widgets.service.js';
  * The one extra binding: `DbModule` registers the connection under the abstract
  * `DbConnection` token, and `MysqlWidgets` needs the concrete class for its
  * `transaction()` helper. Rebinding the class to the *same instance* through a
- * factory is how a service annotates the narrower type — no cast, and no second
+ * factory is how a service annotates the narrower type - no cast, and no second
  * connection opened, because the factory returns what `DbConnection` already
  * resolved to.
  */

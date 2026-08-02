@@ -2,10 +2,10 @@
 
 `Bun.serve` adapter for [dunx](https://github.com/petarzarkov/dunx). Class-based
 controllers **and WebSocket gateways**, standard decorators, and no JavaScript
-router — Bun's native `routes` does path params and per-method dispatch in Zig.
+router - Bun's native `routes` does path params and per-method dispatch in Zig.
 
 `Bun.serve` takes `routes` and `websocket` in one call, so both live here: one
-`listen()`, one server, one port. Zero dependencies beyond `@dunx/core` — no
+`listen()`, one server, one port. Zero dependencies beyond `@dunx/core` - no
 `express`, no `ws`, no `socket.io`.
 
 ## Install
@@ -69,14 +69,14 @@ create(input: Input<typeof createNote>): Note {
 
 `Input<typeof opts>` has to be written out. A standard method decorator can
 **check** a handler's parameter type but cannot contextually type an unannotated
-one, so the annotation is required — and it is a type-level function over the
+one, so the annotation is required - and it is a type-level function over the
 options object, so each type is still declared exactly once. A wrong annotation is
 a compile error naming the mismatched property; an unannotated parameter is
 `TS7006`.
 
 | Field          | Source                                | Declared by |
 | -------------- | ------------------------------------- | ----------- |
-| `input.req`    | the `BunRequest` — always present     | always      |
+| `input.req`    | the `BunRequest` - always present     | always      |
 | `input.body`   | parsed by `content-type`, then validated | `body`   |
 | `input.query`  | `new URL(req.url).searchParams`        | `query`     |
 | `input.params` | `req.params`                           | `params`    |
@@ -85,7 +85,7 @@ With no options at all, annotate `Input<RouteSchemas>` for the request, or take 
 parameter. Path params without a `params` schema stay on `input.req.params`.
 
 Validation is the **Standard Schema** spec (`~standard.validate`, sync or async),
-restated in this package's own types — so Zod 4, Valibot and ArkType all work and
+restated in this package's own types - so Zod 4, Valibot and ArkType all work and
 `@dunx/http` still has zero dependencies. Anything with a `~standard` property
 qualifies, including a hand-written object; see `examples/full`.
 
@@ -98,7 +98,7 @@ Parsed only when `body` is declared, by media type:
 | `application/json`, `*+json`, none  | `req.json()`                             |
 | `application/x-www-form-urlencoded` | fields; a repeated key becomes an array  |
 | `multipart/form-data`               | fields and `File`s, same repeat rule     |
-| `text/*`                            | `req.text()` — a string                  |
+| `text/*`                            | `req.text()` - a string                  |
 | anything else                       | **415**, nothing read                    |
 
 A body the caller mangled is a **400** (`Malformed application/json body`), never a
@@ -109,16 +109,16 @@ the schema error that is about to be more useful.
 
 | Handler returns   | Response                                     |
 | ----------------- | -------------------------------------------- |
-| a `Response`      | passed through untouched — the escape hatch  |
+| a `Response`      | passed through untouched - the escape hatch  |
 | `undefined`/`null`| `204`, no body                               |
 | anything else     | `Response.json(value)` at the status below   |
 
-Status precedence: `options.status`, else **201 for POST**, else **200** — Nest's
+Status precedence: `options.status`, else **201 for POST**, else **200** - Nest's
 rule. A thrown `HttpError` still goes through the error mapper.
 
 ### Validation failures
 
-A rejected schema is a `ValidationError` — a `400` whose body carries every issue,
+A rejected schema is a `ValidationError` - a `400` whose body carries every issue,
 with the path flattened to dots (both `['a', 0]` and `[{ key: 'a' }, { key: 0 }]`
 render as `a.0`):
 
@@ -132,7 +132,7 @@ render as `a.0`):
 
 ### Which validator to use
 
-Any of them. This is measured rather than asserted — `bun run validation` in
+Any of them. This is measured rather than asserted - `bun run validation` in
 `tools/bench` runs the same dunx app and the same schema shape with only the library
 behind `~standard` changed, and reports what each one costs per request:
 
@@ -146,13 +146,13 @@ behind `~standard` changed, and reports what each one costs per request:
 
 **`await req.json()` on the same request costs 3.10 µs**, which is more than all of
 them put together. So validation is not where a slow endpoint's time goes, and
-swapping zod for a compiled validator buys about 7% of a small request — worth having
+swapping zod for a compiled validator buys about 7% of a small request - worth having
 if a profile points at it, not worth restructuring for. zod is what `@dunx/openapi`
 reads schemas from (via `z.toJSONSchema`), and it is the default for that reason
 rather than a performance one. Three fields, though: a deeply nested schema would very
 likely separate these engines much further.
 
-Two of the five ship no `~standard` property. Bridging one is small enough to inline —
+Two of the five ship no `~standard` property. Bridging one is small enough to inline -
 this is the whole of it:
 
 ```ts
@@ -181,7 +181,7 @@ Full numbers, methodology and the ajv version:
 ## Route metadata and scoped middleware
 
 A decorator annotates a route; a guard reads the annotation back. Metadata on its
-own enforces nothing — which is why `@Roles` needs a guard that looks at it, and
+own enforces nothing - which is why `@Roles` needs a guard that looks at it, and
 why one global guard plus `@Public()` is the combination worth learning.
 
 ```ts
@@ -251,7 +251,7 @@ const app = await HttpFactory.create(AppModule, { middleware: [AuthGuard] });
 ### `RouteContext`
 
 The second argument to `handle`. Built **once per route at boot** and closed over
-by the chain, so `get` is a `Map` lookup over an already-merged record — not a
+by the chain, so `get` is a `Map` lookup over an already-merged record - not a
 prototype walk, and nothing is resolved per request.
 
 | Member         | Is                                                        |
@@ -263,7 +263,7 @@ prototype walk, and nothing is resolved per request.
 | `get(key)`     | The metadata value, or `undefined`                        |
 
 `get` resolves the **handler's** metadata first and the **controller class's**
-second — the same override direction as Nest's `Reflector.getAllAndOverride`.
+second - the same override direction as Nest's `Reflector.getAllAndOverride`.
 
 ### Your own keys
 
@@ -326,7 +326,7 @@ logs at `warn`, a 5xx at `error`.
 It needs no configuration: `Logger` and `RequestContext` are `@dunx/core`
 contracts with default bindings, so this works in an app that imported no logging
 module. Import `@dunx/infra/logger` and the same entries go through
-`@arkv/logger` — sanitized, masked, optionally to a rotating file — with nothing
+`@arkv/logger` - sanitized, masked, optionally to a rotating file - with nothing
 here changing.
 
 Everything the **handler** logs in between carries the same `requestId`, `method`,
@@ -337,7 +337,7 @@ one is minted and returned on the response.
 ### Bodies are off by default, and what that costs
 
 `requestBody` and `responseBody` default to **`false`**. Turning either on means a
-`clone().text()` — a second copy of every payload, buffered and parsed, on the hot
+`clone().text()` - a second copy of every payload, buffered and parsed, on the hot
 path. Measured in `tools/bench`, both on cost roughly two thirds of the throughput
 on the `validate` scenario. The response body is also the field most likely to
 carry a secret, so this is the right default twice over.
@@ -345,7 +345,7 @@ carry a secret, so this is the right default twice over.
 Turn them on in development, where seeing the payload is the point:
 
 ```ts
-// Off entirely — what the benchmark's primary `dunx` subject uses, since no other
+// Off entirely - what the benchmark's primary `dunx` subject uses, since no other
 // framework in that suite logs anything.
 HttpFactory.create(AppModule, { requestLogging: false });
 
@@ -362,15 +362,15 @@ HttpFactory.create(AppModule, {
 
 **Even at its cheapest, a log line is not free.** `tools/bench` carries `dunx` and
 `dunx-logging` as separate subjects for exactly this reason: with logging off dunx
-runs at 81–100% of raw `Bun.serve` depending on the scenario, and with it on, 40–45%.
+runs at 81-100% of raw `Bun.serve` depending on the scenario, and with it on, 40-45%.
 The remainder is `JSON.stringify` plus a `write` per request inside an
 `AsyncLocalStorage` scope. If you need the last of the throughput, turn it off and
-sample at the edge instead — but know what you gave up.
+sample at the edge instead - but know what you gave up.
 
 ### Unmatched paths are logged too
 
 `Bun.serve({ routes })` answers a miss itself, so nothing in the middleware chain
-would ever see a 404 — invisible to logging, metrics and tracing. `listen()`
+would ever see a 404 - invisible to logging, metrics and tracing. `listen()`
 installs one `fetch` fallback that runs the global middleware and returns
 `{"error":"NOT_FOUND","status":404}`.
 
@@ -381,7 +381,7 @@ fallback runs only after it has decided nothing matched.
 
 A route with **no middleware and no CORS** is dispatched by a handler in which
 nothing is `async`. It returns a `Response` rather than a `Promise<Response>`
-wherever it has nothing to wait for — Bun accepts either. The general path awaits the
+wherever it has nothing to wait for - Bun accepts either. The general path awaits the
 input reader, the handler and the response coercion, and for most shapes those awaits
 are on values that were never thenable, each costing an async frame and a microtask
 tick for nothing.
@@ -389,16 +389,16 @@ tick for nothing.
 | Route shape                              | What it costs                             |
 | ---------------------------------------- | ----------------------------------------- |
 | no schemas                               | no promise at all                         |
-| `query` and/or `params`, sync validator   | no promise at all — read and validated inline |
+| `query` and/or `params`, sync validator   | no promise at all - read and validated inline |
 | `body` declared                          | one promise link, for `req.json()`        |
 
 Measured in `tools/bench`: `plaintext` 89.5% -> 97.2% of raw `Bun.serve` when this
 covered only schema-less routes, and `validate` 84.0% -> 92.3% once it was extended
 to routes that read input. A handler that *does* return a promise, or a validator
-that does, is adopted rather than wrapped — nothing about this is conditional on
+that does, is adopted rather than wrapped - nothing about this is conditional on
 writing sync code.
 
-Adding middleware — including `requestLogging` — opts a route back into the async
+Adding middleware - including `requestLogging` - opts a route back into the async
 path, because middleware is `async` by contract.
 
 ## App-level configuration
@@ -417,13 +417,13 @@ await app.listen(3000);
 
 Calling any of them **after** `listen()` throws. The route table and the middleware
 chain are folded into one closure per route when the server binds, so a late call
-could only ever be a silent no-op — the failure mode worth trading for an error.
+could only ever be a silent no-op - the failure mode worth trading for an error.
 
 | Hook                     | Effect                                                                        |
 | ------------------------ | ----------------------------------------------------------------------------- |
 | `setGlobalPrefix(p)`     | Prefixes every discovered route. Slashes normalised; last call wins           |
 | `use(...middleware)`     | Appends container-resolved `Ctor<Middleware>`, so it can inject               |
-| `set(key, value)`        | Typed settings — a key must exist on `AppSettings`, so a typo is a type error |
+| `set(key, value)`        | Typed settings - a key must exist on `AppSettings`, so a typo is a type error |
 | `setting(key)`           | Reads one back                                                                |
 | `enableCors(options?)`   | Response headers plus an `OPTIONS` preflight per path. Last call wins         |
 | `clientIp(req)`          | The `inject(ClientAddress)` singleton, honouring `'trust proxy'`              |
@@ -433,11 +433,11 @@ could only ever be a silent no-op — the failure mode worth trading for an erro
 
 - **Middleware order**: `HttpOptions.middleware` first (outermost), then each
   `use()` call in the order it was made, then a controller's `@UseGuards`, then a
-  method's — innermost. Outermost sees the request first and the response last.
+  method's - innermost. Outermost sees the request first and the response last.
 - **Port**: the `listen(port)` argument, else `HttpOptions.port`, else `3000`.
 - **Error mapper**: `HttpOptions.onError`; there is no imperative equivalent.
 - **Overrides**: `HttpOptions.overrides` is core's `AppOptions.overrides`, passed
-  straight through — bindings replaced in place, which is what `@dunx/testing`'s
+  straight through - bindings replaced in place, which is what `@dunx/testing`'s
   `createTestServer` uses.
 - **Repeated calls**: `setGlobalPrefix`, `set` and `enableCors` all replace, so the
   last call wins. `use()` appends.
@@ -448,7 +448,7 @@ could only ever be a silent no-op — the failure mode worth trading for an erro
 ### CORS and preflight
 
 `Bun.serve({ routes })` answers a method miss with `404`, so a preflight can never
-be inferred — `enableCors()` mounts an explicit `OPTIONS` handler on every path,
+be inferred - `enableCors()` mounts an explicit `OPTIONS` handler on every path,
 built at boot from the methods that path actually declares. `origin` takes a
 string, a list, or a predicate; anything not allowed gets **no** CORS headers at
 all, which is what makes the browser block it. `'*'` is the default, and because a
@@ -459,7 +459,7 @@ a mapped `500` still carries them.
 
 ### Client IP
 
-`ClientAddress` needs no registration — every class is injectable, and `listen()`
+`ClientAddress` needs no registration - every class is injectable, and `listen()`
 hands the resolved singleton the live server:
 
 ```ts
@@ -480,7 +480,7 @@ send whatever it likes.
 
 ## WebSocket gateways
 
-A gateway is a normal injectable class declared in `@Module({ providers })` — there
+A gateway is a normal injectable class declared in `@Module({ providers })` - there
 is no second list and no module to configure. `HttpFactory` finds it by its
 `@Gateway` marker, and `listen()` mounts it on the same server as the routes:
 
@@ -539,7 +539,7 @@ path that upgrades.
 
 | Decorator           | Signature                             | Notes                                                          |
 | ------------------- | ------------------------------------- | -------------------------------------------------------------- |
-| `@Gateway(path)`    | class                                 | Required — it is what marks the provider as a gateway          |
+| `@Gateway(path)`    | class                                 | Required - it is what marks the provider as a gateway          |
 | `@OnUpgrade()`      | `(req: BunRequest)`                   | Return a `Response` to refuse; anything else becomes `context` |
 | `@OnOpen()`         | `(socket)`                            |                                                                |
 | `@OnMessage(event)` | `(data, socket)`                      | Routed by envelope event name                                  |
@@ -549,7 +549,7 @@ path that upgrades.
 | `@OnPing()`         | `(data, socket)`                      | Bun still answers with a pong                                  |
 | `@OnPong()`         | `(data, socket)`                      |                                                                |
 
-Handlers may be `async`. A returned value is sent to the sender — under the same
+Handlers may be `async`. A returned value is sent to the sender - under the same
 event name for `@OnMessage(event)`, verbatim (or JSON) for the raw handler, and
 never for a lifecycle handler. Return `undefined` to send nothing.
 
@@ -569,7 +569,7 @@ needed** for a socket to connect. Consequences, all measured:
   and can be returned as the connection's `context`.
 - A plain `GET` on a gateway path is **426**; any other method is Bun's native
   **404**, because the upgrade is mounted as a `GET`. A path no gateway and no
-  controller serves is the same native 404 — there is nothing to fall through to.
+  controller serves is the same native 404 - there is nothing to fall through to.
 - A path claimed by both a gateway and a controller route is a **boot error**
   naming both, since one of the two would otherwise be dropped from the table.
 - `setGlobalPrefix()` moves routes, **not** gateways. A gateway path is the exact
@@ -588,7 +588,7 @@ These throw at boot rather than picking a winner:
 - two handlers claiming one event or one lifecycle slot, named individually
 - two gateways on one path, named individually
 - a `@Gateway` class with no handlers at all
-- a handler-declaring provider that is **not** a `@Gateway` — it could never
+- a handler-declaring provider that is **not** a `@Gateway` - it could never
   receive a frame, so it is an error instead of a silent no-op
 
 ### The envelope
@@ -603,7 +603,7 @@ smallest one that works:
 It is **opt-in**: a frame is only parsed for a gateway that declares at least one
 `@OnMessage(event)` handler. A gateway with only a raw `@OnMessage()` never sees
 JSON it did not ask for. Binary frames, invalid JSON, a non-object, a missing
-`event`, and an event no handler claims all fall through to the raw handler — and
+`event`, and an event no handler claims all fall through to the raw handler - and
 are ignored if there is none. Nothing is ever replied to the sender that a handler
 did not return.
 
@@ -618,7 +618,7 @@ Topics live in Bun, not in a JavaScript map. A socket joins one with
 native methods on the socket you already hold.
 
 `PubSub` is the injectable side, for publishing without a socket. `HttpFactory`
-binds it around your root module, so nothing has to be imported or registered —
+binds it around your root module, so nothing has to be imported or registered -
 listing it in `providers` as well is the container's duplicate-binding error:
 
 ```ts
@@ -634,7 +634,7 @@ class Notifier {
 ```
 
 `publish` returns the bytes sent, `0` if the message was dropped, `-1` under
-backpressure — Bun's own status. It goes through `server.publish`, which reaches
+backpressure - Bun's own status. It goes through `server.publish`, which reaches
 **every** subscriber including the socket whose handler triggered it (unlike
 `socket.publish`, which honours `publishToSelf`). Publishing before the server is
 listening throws saying so.
@@ -665,7 +665,7 @@ the default logs.
 ### Shutdown with a live socket
 
 Measured: a graceful `server.stop()` waits for open connections, and a WebSocket
-does not close on its own — so it **never resolves** while a socket is open. An app
+does not close on its own - so it **never resolves** while a socket is open. An app
 with at least one gateway therefore force-stops (`stop(true)`) in `shutdown()`, and
 those clients see a `1006` close. An app with no gateways still stops gracefully.
 Bun also delivers an empty close `reason` to `@OnClose` once a socket has exchanged
@@ -686,7 +686,7 @@ const app = await HttpFactory.create(AppModule, {
 });
 ```
 
-That is the whole opt-in. `RedisRelay` is `Bun.RedisClient` — a Bun global — so this
+That is the whole opt-in. `RedisRelay` is `Bun.RedisClient` - a Bun global - so this
 adds **no dependency**, and with no `relay` configured nothing here runs at all.
 
 Nothing else changes. `socket.subscribe(topic)` is still Bun's, and a topic no
@@ -726,11 +726,11 @@ await app.get(PubSub).relayThrough(app.get(RedisConnection), {
 await app.listen(3000);
 ```
 
-Only one relay per `PubSub` — a second `relayThrough` throws, because two
+Only one relay per `PubSub` - a second `relayThrough` throws, because two
 subscriptions on one channel is the other way to deliver everything twice.
 
 `socket.publish(topic, data)` is Bun's own method and stays local; anything that must
-cross nodes goes through `PubSub`. `subscriberCount` is local too — Bun cannot count
+cross nodes goes through `PubSub`. `subscriberCount` is local too - Bun cannot count
 another node's sockets.
 
 `maxRetries` on `RedisRelay` defaults to `0`, and that is deliberate: a
@@ -740,7 +740,7 @@ Bun's reconnection.
 
 ## Status codes
 
-`HttpStatusCode` is a frozen object, not an `enum` — one name serving as both the
+`HttpStatusCode` is a frozen object, not an `enum` - one name serving as both the
 value and the type, so it reads like an enum and erases like a constant:
 
 ```ts
@@ -769,7 +769,7 @@ still works.
 - Schemas, parsers and the status are resolved in `buildRoutes` at boot, into the
   same closure the middleware chain folds into. Per request the framework parses
   and validates what was declared, calls the method, wraps the return, and maps a
-  throw — no metadata read, no lookup, no DI.
+  throw - no metadata read, no lookup, no DI.
 - Gateways use the same marker-plus-prototype-scan discovery as routes, and go into
   the same route table. `withUpgradeRoutes` and `buildWebSocket` are exported for
   anyone assembling `Bun.serve` themselves.

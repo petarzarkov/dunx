@@ -198,7 +198,7 @@ export interface BenchReport {
 /**
  * What the *site* carries, which is strictly what it renders.
  *
- * The report holds the harness's evidence — every run's samples, the request
+ * The report holds the harness's evidence - every run's samples, the request
  * bodies and expected responses each scenario asserts, each subject's entry
  * file and preloads. None of that reaches a pixel, and shipping it verbatim put
  * ~48 KB of JSON in the bundle where 19 KB says the same thing. `projectBench`

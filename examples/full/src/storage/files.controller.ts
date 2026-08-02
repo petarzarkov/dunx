@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 /**
  * The key is a query parameter rather than a path segment because keys contain
- * slashes — `reports/q1.csv` is one key, not two segments. Traversal is rejected
+ * slashes - `reports/q1.csv` is one key, not two segments. Traversal is rejected
  * by `Storage` itself rather than by a pattern here, which is the behaviour worth
  * seeing: try `?key=../../etc/passwd`.
  */
@@ -34,7 +34,7 @@ const objectKey = { query: FileKey } as const;
 const writeFile = { query: FileKey, body: WriteFile } as const;
 
 /**
- * Injects `Storage`, never `LocalStorage` — swapping a disk for a bucket is one
+ * Injects `Storage`, never `LocalStorage` - swapping a disk for a bucket is one
  * `forRoot` call in storage.module.ts and nothing here changes.
  */
 @Controller('files')
@@ -53,7 +53,7 @@ export class FilesController {
     })) {
       keys.push(entry.key);
     }
-    // The contract cannot promise a root — narrowing to the backend is how you
+    // The contract cannot promise a root - narrowing to the backend is how you
     // reach anything backend-specific.
     const root =
       this.storage instanceof LocalStorage ? this.storage.root : '(remote)';
@@ -115,7 +115,7 @@ export class FilesController {
   }
 
   /**
-   * A traversal is a bad request, not a server fault — `Storage` rejects it
+   * A traversal is a bad request, not a server fault - `Storage` rejects it
    * before any syscall, and without this it would surface as a 500.
    */
   private async present(key: string): Promise<void> {

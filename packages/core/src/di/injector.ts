@@ -33,7 +33,7 @@ export class Injector {
     if (existing) {
       throw new AppError(
         `Duplicate binding for ${describeToken(registration.token)}: bound by module ` +
-          `"${existing.module}" and module "${module}". The container is flat — one ` +
+          `"${existing.module}" and module "${module}". The container is flat - one ` +
           'binding per token.',
       );
     }
@@ -80,7 +80,7 @@ export class Injector {
       );
     }
 
-    // Every class is injectable by default — an unbound constructor self-binds.
+    // Every class is injectable by default - an unbound constructor self-binds.
     const provider =
       this.#bindings.get(key)?.provider ??
       (isCtor(token) ? ({ kind: 'class', ctor: token } as const) : undefined);

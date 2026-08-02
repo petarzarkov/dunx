@@ -2,7 +2,7 @@ import { AppError } from '@dunx/core';
 
 /**
  * The `code` values `Bun.RedisClient` puts on the errors it throws, plus one of
- * ours for URL validation. Frozen object rather than an `enum` — see CLAUDE.md.
+ * ours for URL validation. Frozen object rather than an `enum` - see CLAUDE.md.
  *
  * `INVALID_RESPONSE` is the surprising one: Bun uses it for errors the *server*
  * returned, so `WRONGTYPE` and `ERR unknown command` both arrive under it. The
@@ -26,7 +26,7 @@ export class RedisError extends AppError {
   constructor(
     readonly code: string,
     message: string,
-    /** The command that failed, uppercased — absent for connection setup. */
+    /** The command that failed, uppercased - absent for connection setup. */
     readonly command?: string,
     cause?: unknown,
   ) {
@@ -45,8 +45,8 @@ const codeOf = (error: unknown): string => {
 /**
  * Normalises whatever came out of `Bun.RedisClient` into a `RedisError`.
  *
- * Bun raises some of these *synchronously* — calling a data command while the
- * connection is in subscriber mode throws rather than rejecting — so callers wrap
+ * Bun raises some of these *synchronously* - calling a data command while the
+ * connection is in subscriber mode throws rather than rejecting - so callers wrap
  * the invocation, not just the await, and an `async` wrapper turns both shapes
  * into a rejection.
  */

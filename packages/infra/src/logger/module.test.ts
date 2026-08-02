@@ -28,7 +28,7 @@ describe('LoggerModule', () => {
   /**
    * The contract's level names are handed straight to the backing logger, which
    * looks them up by position in its own `LOG_LEVELS`. A name it does not know
-   * indexes to `-1`, which is *below* every real level — so a drifted enum does
+   * indexes to `-1`, which is *below* every real level - so a drifted enum does
    * not throw, it silently disables filtering. Comparing the two arrays is the
    * only cheap guard against that.
    */
@@ -62,7 +62,7 @@ describe('LoggerModule', () => {
     const app = await AppFactory.create(Root);
     const logger = app.get(Logger);
 
-    // Structural satisfaction is the whole point — assert the contract's surface.
+    // Structural satisfaction is the whole point - assert the contract's surface.
     expect(logger.logLevel).toBe(LogLevel.DEBUG);
     // `log` alongside `info` because the contract keeps it as a deprecated alias.
     for (const level of [
@@ -266,7 +266,7 @@ describe('LoggerModule', () => {
 
     const app = await AppFactory.create(Root);
     app.get(Logger).info('pending');
-    // Written, but neither flushed nor closed — a buffering FileTransport is
+    // Written, but neither flushed nor closed - a buffering FileTransport is
     // still holding the entry at this point.
     expect(calls).toEqual(['write']);
 

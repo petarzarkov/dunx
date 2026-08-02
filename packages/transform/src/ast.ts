@@ -1,5 +1,5 @@
 /**
- * Minimal structural views over oxc's ESTree output — only the node shapes the
+ * Minimal structural views over oxc's ESTree output - only the node shapes the
  * dependency transform reads. Verified against real `oxc-parser` output.
  */
 export interface Node {
@@ -81,7 +81,7 @@ export const isParameterProperty = guard<TSParameterProperty>(
 /**
  * Declarations only. A `ClassExpression`'s own name is bound inside the class
  * body, not outside it, so a statement appended after `const X = class Foo {}`
- * could not reference `Foo` — it would be a ReferenceError at load.
+ * could not reference `Foo` - it would be a ReferenceError at load.
  */
 export const isClassDeclaration = (node: Node): node is ClassNode =>
   node.type === 'ClassDeclaration';

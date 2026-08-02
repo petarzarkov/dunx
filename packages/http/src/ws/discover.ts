@@ -111,7 +111,7 @@ const classOf = (
 
 /**
  * Gateways are declared in `@Module({ providers })` like any other injectable and
- * found here by their marker — the same discovery-by-inspection controllers get,
+ * found here by their marker - the same discovery-by-inspection controllers get,
  * with no second registration key to keep in step.
  */
 export const discoverGateways = (

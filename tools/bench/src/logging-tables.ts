@@ -44,8 +44,8 @@ const ladderTable = (report: LoggingReport): string => {
     baseline ??= cost;
     rows.push(
       `| ${unit.label} | ${int(unit.rps.median)} | ${cost.toFixed(2)} | ` +
-        `${previous === undefined ? '—' : signed(cost - previous)} | ` +
-        `${previous === undefined ? '—' : signed(cost - baseline)} |`,
+        `${previous === undefined ? '-' : signed(cost - previous)} | ` +
+        `${previous === undefined ? '-' : signed(cost - baseline)} |`,
     );
     previous = cost;
   }
@@ -88,7 +88,7 @@ export const loggingSection = async (): Promise<string | null> => {
 
   return `## Request logging cost
 
-Generated from \`results/logging.json\` by \`bun src/readme-tables.ts\` — never
+Generated from \`results/logging.json\` by \`bun src/readme-tables.ts\` - never
 transcribed by hand. Reproduce with \`bun run logging\`.
 
 \`dunx-logging\` in the main suite is one number, and one number cannot say *which*
@@ -110,7 +110,7 @@ ${ladderTable(report)}
 Reading it: the middleware chain, \`crypto.randomUUID()\` and setting
 \`x-request-id\` on the response are each at or below what this harness can resolve.
 What costs is the **first touch of \`req.headers\`**, the \`AsyncLocalStorage\`
-scope, and **building and serialising the entry** — and, before it was batched, the
+scope, and **building and serialising the entry** - and, before it was batched, the
 write.
 
 ### The write, and the pipe nobody was reading
@@ -122,7 +122,7 @@ its two costs is a property of \`@dunx/http\`. Subjects were spawned with
 \`stdout: 'pipe'\` and nothing ever read it: 64 KiB in, the pipe is full and the
 server parks on every further write. Subjects now write to \`/dev/null\`, and
 \`ConsoleLogger\` batches everything at \`info\` and below into one write per
-event-loop turn — which also makes a slow consumer far less able to stall the
+event-loop turn - which also makes a slow consumer far less able to stall the
 server. \`warn\` and above are never batched.
 `;
 };

@@ -5,7 +5,7 @@ import { AppConfigService, RELAY_CHANNEL } from './config.js';
 import { RequestLoggerMiddleware } from './http/request-log.js';
 
 /**
- * One app, built the same way for `bun start`, `bun run tour` and the tests —
+ * One app, built the same way for `bun start`, `bun run tour` and the tests -
  * so what the tests exercise is what actually serves.
  *
  * `create()` boots the container and discovers routes and gateways; `listen()` is
@@ -28,7 +28,7 @@ export const createApp = async (): Promise<HttpApp> => {
       websocket: { idleTimeout: 30 },
       // Multi-node websocket fan-out, on `Bun.RedisClient` and therefore on no
       // dependency at all. No url, so it resolves the same chain `RedisModule`
-      // does — $VALKEY_URL, $REDIS_URL, then localhost. The relay cannot read the
+      // does - $VALKEY_URL, $REDIS_URL, then localhost. The relay cannot read the
       // validated config for the same reason the port cannot: the container does
       // not exist yet when these options are read.
       //

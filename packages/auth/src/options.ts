@@ -6,7 +6,7 @@ import { bunPassword } from './password.js';
 export const DEFAULT_BASE_PATH = '/api/auth';
 
 /**
- * One leading slash, no trailing one — the shape `@dunx/http`'s route paths take,
+ * One leading slash, no trailing one - the shape `@dunx/http`'s route paths take,
  * so the mount and better-auth's own URL building agree character for character.
  *
  * The root is rejected: the mount is `<basePath>/*`, and at `/` that wildcard would

@@ -1,8 +1,8 @@
 import { useId } from 'react';
 
 /**
- * The mark is the wordmark's own last two letters: the `n` — an arch on two
- * legs — sheltering the `x`. Both cuts are drawn here rather than loaded from
+ * The mark is the wordmark's own last two letters: the `n` - an arch on two
+ * legs - sheltering the `x`. Both cuts are drawn here rather than loaded from
  * `public/logo/`, because an `<img>` cannot inherit `currentColor`, and the
  * neutral stroke has to follow the colour scheme the header is painted in.
  * The geometry is byte-identical to those files; change one, change both.

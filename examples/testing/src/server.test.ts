@@ -21,7 +21,7 @@ class FixedForecast extends ForecastClient {
 /**
  * `createTestServer` is `createTestApp` plus a real `Bun.serve` on port 0 and a
  * client pointed at it. No fake dispatcher: a fake could only exercise the parts of
- * the request path dunx wrote, not the parts Bun owns — route matching, params,
+ * the request path dunx wrote, not the parts Bun owns - route matching, params,
  * method dispatch, upgrades. Bun binds a socket in about a millisecond, so the real
  * server is cheaper than the lie.
  *
@@ -57,8 +57,8 @@ describe('createTestServer', () => {
 });
 
 /**
- * A guard is worth testing through the server, because what it reads —
- * `@Public()`, `@Roles()` — is route metadata that only exists once routes have
+ * A guard is worth testing through the server, because what it reads -
+ * `@Public()`, `@Roles()` - is route metadata that only exists once routes have
  * been discovered. Calling `guard.handle()` directly would test a different thing.
  */
 describe('a guard, through the real request path', () => {

@@ -11,8 +11,8 @@
  *
  * Two scenarios, four units:
  *
- * - `read` — one indexed `SELECT`, awaited (`async`) versus `.get()` (`sync`).
- * - `write` — two inserts and a count in one transaction: this package's
+ * - `read` - one indexed `SELECT`, awaited (`async`) versus `.get()` (`sync`).
+ * - `write` - two inserts and a count in one transaction: this package's
  *   `transaction()`, which issues `BEGIN`/`COMMIT` around an async callback and
  *   serialises overlapping ones through a queue, versus `transactionSync()`, which
  *   is `bun:sqlite`'s own native transaction.

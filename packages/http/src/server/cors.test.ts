@@ -242,7 +242,7 @@ describe('enableCors()', () => {
     await withApp(
       () => undefined,
       async (url) => {
-        // Bun answers the method miss itself — nothing mounted OPTIONS.
+        // Bun answers the method miss itself - nothing mounted OPTIONS.
         expect(
           (await fetch(new URL('users', url), { method: 'OPTIONS' })).status,
         ).toBe(404);

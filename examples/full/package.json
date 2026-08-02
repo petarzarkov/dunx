@@ -2,7 +2,7 @@
   "name": "@dunx/example-full",
   "version": "0.0.0",
   "private": true,
-  "description": "The dunx example app — one long-running service exercising DI, config, logging, HTTP routes, websocket gateways, guards, db, redis, files, images and OpenAPI",
+  "description": "The dunx example app - one long-running service exercising DI, config, logging, HTTP routes, websocket gateways, guards, db, redis, files, images and OpenAPI",
   "type": "module",
   "scripts": {
     "start": "bun src/main.ts",

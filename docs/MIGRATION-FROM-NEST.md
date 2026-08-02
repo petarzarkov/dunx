@@ -1,7 +1,7 @@
 # Migrating from NestJS
 
 A gap analysis between what a production NestJS application actually uses and
-what dunx provides. Read [ARCHITECTURE.md](./ARCHITECTURE.md) first — this
+what dunx provides. Read [ARCHITECTURE.md](./ARCHITECTURE.md) first - this
 document assumes its decisions and does not relitigate them.
 
 This is a **living gap table**. It is also the roadmap's reality check: the
@@ -13,7 +13,7 @@ two disagree, this one names the cost.
 
 Numbers below were counted against [nestjs-template](https://github.com/petarzarkov/nestjs-template) (monolith:
 Drizzle, BullMQ, Redis, Better Auth, socket.io, Swagger + Scalar, an
-OpenAPI-driven admin CMS) on 2026-07-28. It is the acceptance test — "dunx is
+OpenAPI-driven admin CMS) on 2026-07-28. It is the acceptance test - "dunx is
 ready" means that app can move without redesign.
 
 | Surface                                                | Count      |
@@ -45,7 +45,7 @@ export class UsersService {
   constructor(private readonly repo: UsersRepository) {}
 }
 
-// dunx — delete one line
+// dunx - delete one line
 export class UsersService {
   constructor(private readonly repo: UsersRepository) {}
 }
@@ -64,10 +64,10 @@ What still changes, per class:
 
 | Nest                          | dunx                                        |
 | ----------------------------- | ------------------------------------------- |
-| `@Injectable()`               | delete it — every class is injectable       |
+| `@Injectable()`               | delete it - every class is injectable       |
 | `@Inject(TOKEN) private x: T` | declare the parameter as the token's type   |
-| `@Global()`                   | delete it — the container is flat           |
-| `exports: [...]`              | delete it — there is no visibility boundary |
+| `@Global()`                   | delete it - the container is flat           |
+| `exports: [...]`              | delete it - there is no visibility boundary |
 | `{ provide: X, useClass: Y }` | `provide(X, { useClass: Y })`               |
 | `OnModuleInit`                | `OnInit`                                    |
 | `OnModuleDestroy`             | `OnShutdown`                                |
@@ -108,7 +108,7 @@ concept count:
 - **Boot is eager**, so a wiring error is a boot error rather than a
   first-request 500.
 - **Guards, interceptors, pipes, and filters collapse into one `Middleware`
-  concept** — five extension points become one.
+  concept** - five extension points become one.
 
 ## Gap table
 
@@ -128,9 +128,9 @@ ARCHITECTURE.md, unbuilt · **undesigned** = no decision recorded anywhere.
 | `useFactory` + `inject`            | `provide(T, { useFactory, inject })` | done        |
 | `OnModuleInit` / `OnModuleDestroy` | `OnInit` / `OnShutdown`              | done        |
 | `app.get(Token)`                   | `app.get(Token)`                     | done        |
-| `Module.forRoot(opts)`             | —                                    | **blocked** |
-| `@Optional()`                      | —                                    | undesigned  |
-| `forwardRef()`                     | not needed — cycles are a boot error | n/a         |
+| `Module.forRoot(opts)`             | -                                    | **blocked** |
+| `@Optional()`                      | -                                    | undesigned  |
+| `forwardRef()`                     | not needed - cycles are a boot error | n/a         |
 | Request scope                      | rejected by design                   | n/a         |
 
 ### HTTP
@@ -141,15 +141,15 @@ ARCHITECTURE.md, unbuilt · **undesigned** = no decision recorded anywhere.
 | Route params (`/:id`)                   | native `Bun.serve({ routes })` | done         |
 | Exception filters                       | one `ErrorMapper`              | done         |
 | Global middleware                       | `HttpOptions.middleware`       | done         |
-| Per-route / per-controller middleware   | —                              | **blocked**  |
-| `@SetMetadata` + `Reflector`            | —                              | **blocked**  |
-| `@UseGuards` / `@Roles` / `@Public`     | —                              | **blocked**  |
+| Per-route / per-controller middleware   | -                              | **blocked**  |
+| `@SetMetadata` + `Reflector`            | -                              | **blocked**  |
+| `@UseGuards` / `@Roles` / `@Public`     | -                              | **blocked**  |
 | `@Body` / `@Query` / `@Param`           | schemas on the route decorator | planned (P3) |
-| `createParamDecorator` (`@CurrentUser`) | —                              | undesigned   |
-| `setGlobalPrefix`                       | —                              | undesigned   |
-| `enableCors`                            | —                              | undesigned   |
+| `createParamDecorator` (`@CurrentUser`) | -                              | undesigned   |
+| `setGlobalPrefix`                       | -                              | undesigned   |
+| `enableCors`                            | -                              | undesigned   |
 | `app.getUrl()`                          | `listen()` returns the URL     | done         |
-| `app.use(expressMiddleware)`            | —                              | out of scope |
+| `app.use(expressMiddleware)`            | -                              | out of scope |
 | `@HttpCode` / `@Header` / `@Redirect`   | return a `Response`            | n/a          |
 
 ### Ecosystem
@@ -159,15 +159,15 @@ ARCHITECTURE.md, unbuilt · **undesigned** = no decision recorded anywhere.
 | `nestjs-zod` / `ValidationPipe`        | Standard Schema on route decorators     | planned (P3) |
 | `@nestjs/testing` (`overrideProvider`) | `createTestApp({ modules, overrides })` | done         |
 | `@nestjs/swagger`                      | `@dunx/openapi`                         | planned (P5) |
-| `@nestjs/schedule` (`@Cron`)           | —                                       | undesigned   |
+| `@nestjs/schedule` (`@Cron`)           | -                                       | undesigned   |
 | `@nestjs/throttler`                    | middleware                              | undesigned   |
 | `@nestjs/cache-manager`                | middleware                              | undesigned   |
-| `@nestjs/terminus`                     | —                                       | undesigned   |
-| `@nestjs/bullmq` + `@bull-board/*`     | —                                       | undesigned   |
-| `@nestjs/websockets` + socket.io       | —                                       | undesigned   |
-| `@nestjs/serve-static`                 | —                                       | undesigned   |
-| `@nestjs/platform-express` (`app.use`) | —                                       | out of scope |
-| `@thallesp/nestjs-better-auth`         | —                                       | undesigned   |
+| `@nestjs/terminus`                     | -                                       | undesigned   |
+| `@nestjs/bullmq` + `@bull-board/*`     | -                                       | undesigned   |
+| `@nestjs/websockets` + socket.io       | -                                       | undesigned   |
+| `@nestjs/serve-static`                 | -                                       | undesigned   |
+| `@nestjs/platform-express` (`app.use`) | -                                       | out of scope |
+| `@thallesp/nestjs-better-auth`         | -                                       | undesigned   |
 
 ## The blocked items, in dependency order
 
@@ -187,7 +187,7 @@ That is unimplementable in dunx today because:
   `BunRequest`. It cannot know which controller or handler matched.
 - There is no `@SetMetadata` equivalent and no way to read a marker back.
 
-The mechanism already exists — `Symbol.for('dunx.route')` on the method function
+The mechanism already exists - `Symbol.for('dunx.route')` on the method function
 in [marker.ts](../packages/http/src/route/marker.ts). Generalise it:
 
 ```ts
@@ -211,7 +211,7 @@ interface Middleware {
 
 Discovery already walks the prototype chain per instance, so it can collect
 markers into a frozen `RouteContext` at boot. `compose()` in middleware.ts folds
-one closure per route, so `ctx` is a closed-over constant — **no reflection per
+one closure per route, so `ctx` is a closed-over constant - **no reflection per
 request**, which is the whole reason Nest's `Reflector` is a per-request cost and
 this is not.
 
@@ -224,7 +224,7 @@ chain only.
 `ModuleClass` in [module.ts](../packages/core/src/di/module.ts) is
 `abstract new (...args: never[]) => object`, so `imports: [ConfigModule.forRoot({
 validate })]` does not typecheck. The reference app defines 4 of its own and
-consumes a dozen more from third-party packages — it is _the_ idiom for a
+consumes a dozen more from third-party packages - it is _the_ idiom for a
 configurable module, and no Nest app of any size avoids it.
 
 ```ts
@@ -246,7 +246,7 @@ deferred, because it also changes the `imports` type.
 designed**. The reference app has 14 usages across `@CurrentUser` and
 `@UuidParam`.
 
-`@Body`/`@Query`/`@Param` are already answered — schemas move onto the route
+`@Body`/`@Query`/`@Param` are already answered - schemas move onto the route
 decorator (ARCHITECTURE.md, "Params without parameter decorators"). Custom ones
 are not, because they read state a guard put there.
 
@@ -301,7 +301,7 @@ These two are the honest gate on whether any given Nest app can move today.
 
 ## Suggested next artifact
 
-`examples/nest-parity` — a stripped port of the reference app: config module,
+`examples/nest-parity` - a stripped port of the reference app: config module,
 async database factory, one CRUD controller, an auth guard reading `@Roles`, and
 a health endpoint.
 

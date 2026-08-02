@@ -9,7 +9,7 @@ export { inject } from './inject.js';
 export type { OnInit, OnShutdown } from './lifecycle.js';
 // collectModules + readControllers are the adapter seam: an HTTP package needs to
 // walk the import graph and find which instances to scan. Injector, readModule and
-// the lifecycle type guards stay internal — nothing outside core consumes them, and
+// the lifecycle type guards stay internal - nothing outside core consumes them, and
 // exporting Injector would freeze the container's shape as public API.
 export {
   collectModules,

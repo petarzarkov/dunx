@@ -47,7 +47,7 @@ const hasBody = (spec: RequestSpec): boolean =>
 
 /**
  * Auth first, then the operation's own header parameters, then the free-text box
- * — so a line typed by hand always wins over what the dialog would have sent.
+ * - so a line typed by hand always wins over what the dialog would have sent.
  */
 export const buildHeaders = (spec: RequestSpec): Record<string, string> => {
   const headers: Record<string, string> = { ...spec.auth.headers };

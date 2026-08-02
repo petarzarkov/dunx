@@ -10,7 +10,7 @@ describe('Auth', () => {
 
     const app = await AppFactory.create(Root);
     // Every class self-binds in the container, and `abstract` is a compile-time
-    // notion — so without the guard this would be an object whose `handler` is
+    // notion - so without the guard this would be an object whose `handler` is
     // `undefined`, and the first symptom would be a request failing.
     expect(() => app.get(Auth)).toThrow(AuthError);
     expect(() => app.get(Auth)).toThrow('AuthModule.forRoot');

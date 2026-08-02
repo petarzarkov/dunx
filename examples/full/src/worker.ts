@@ -6,14 +6,14 @@ import { AppConfigService, validate } from './config.js';
 import { JobsModule } from './jobs/jobs.module.js';
 
 /**
- * `bun run worker` — the consumer, and **a second process on purpose**.
+ * `bun run worker` - the consumer, and **a second process on purpose**.
  *
  * A worker is its own container: it builds only what a handler needs, opens a
  * bullmq `Worker` per queue, and has no HTTP server. That is why the full example
  * cannot demonstrate queues from `bun start` alone, and why this file exists
  * rather than a flag on the main app.
  *
- * It shares exactly one thing with the web process — `JobsModule` — so the two
+ * It shares exactly one thing with the web process - `JobsModule` - so the two
  * agree on the queue name and the handler without agreeing on anything else.
  */
 @Module({
@@ -37,7 +37,7 @@ async function run(): Promise<void> {
   worker.enableShutdownHooks();
 
   const logger = worker.get(Logger);
-  logger.info('worker consuming — ctrl-c to stop');
+  logger.info('worker consuming - ctrl-c to stop');
   logger.info('enqueue with: curl -X POST localhost:3000/api/jobs/thumbnails');
 
   // An in-flight job is drained by `onShutdown` before this resolves.

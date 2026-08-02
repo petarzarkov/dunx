@@ -8,14 +8,14 @@ bun install
 bun run --filter '@dunx/example-testing' test
 ```
 
-The app itself is deliberately thin — [`src/weather`](./src/weather) calls an
+The app itself is deliberately thin - [`src/weather`](./src/weather) calls an
 external forecast API, [`src/reports`](./src/reports) is behind an API-key guard.
 Both exist to have something worth substituting.
 
 | File                                                 | Shows                                                   |
 | ---------------------------------------------------- | --------------------------------------------------------- |
-| [`src/container.test.ts`](./src/container.test.ts)   | `createTestApp` — overrides, and `RecordingLogger`      |
-| [`src/server.test.ts`](./src/server.test.ts)         | `createTestServer` — a real `Bun.serve`, and a guard    |
+| [`src/container.test.ts`](./src/container.test.ts)   | `createTestApp` - overrides, and `RecordingLogger`      |
+| [`src/server.test.ts`](./src/server.test.ts)         | `createTestServer` - a real `Bun.serve`, and a guard    |
 
 ## The class is the seam
 
@@ -41,13 +41,13 @@ instance is all you need.
 
 This is the whole design, and it follows from the container being flat. `@dunx/core`
 collects every module's registrations into one list and **throws on a duplicate
-token** — so an override cannot be an extra module tacked on the end that wins,
+token** - so an override cannot be an extra module tacked on the end that wins,
 because there is no "wins". Three consequences the tests assert:
 
 - **The discarded provider is never constructed.** Its constructor never runs, its
   `onInit` never fires, and overriding a database opens no connection. The test
   binds a class whose constructor throws and then overrides it; the suite passes.
-- **An override naming a token nobody binds is an error**, not a silent no-op — the
+- **An override naming a token nobody binds is an error**, not a silent no-op - the
   failure mode where a typo leaves you asserting against the real provider.
 - **The duplicate-binding check still runs**, so a test cannot paper over a wiring
   bug that boot would have caught.
@@ -68,7 +68,7 @@ expect(logger.at(LogLevel.ERROR).map((e) => e.message)).toEqual([
 
 The `Logger` contract is seven levels of three overloads each, so every suite that
 wants a quiet app would otherwise hand-write the same thirty lines. It records; it
-does not interpret — no level filtering, no error promotion.
+does not interpret - no level filtering, no error promotion.
 
 ## A real server, not a fake dispatcher
 
@@ -79,7 +79,7 @@ await server.close();
 ```
 
 Port 0, real `Bun.serve`, real sockets. A fake dispatcher could only exercise the
-parts of the request path dunx wrote — not route matching, params, method dispatch
+parts of the request path dunx wrote - not route matching, params, method dispatch
 or upgrades, which are Bun's. Bun binds a socket in about a millisecond, so the
 real server is cheaper than the lie.
 
@@ -97,8 +97,8 @@ const raw = await server.request('avatars/7.png'); // the Response itself
 
 ## Testing a guard
 
-Test it through the server, not by calling `handle()`. What a guard reads —
-`@Public()`, `@Roles()` — is route metadata that only exists once routes have been
+Test it through the server, not by calling `handle()`. What a guard reads -
+`@Public()`, `@Roles()` - is route metadata that only exists once routes have been
 discovered, so a direct call tests a different thing.
 
 ```ts
@@ -107,7 +107,7 @@ expect((await server.json('reports', { headers: { 'x-api-key': 'nope' } })).stat
 expect((await server.json('reports/health')).status).toBe(200);                // @Public()
 ```
 
-The guard's own dependency is overridden the same way anything else is — the suite
+The guard's own dependency is overridden the same way anything else is - the suite
 binds a key store with one known key.
 
 ## Websockets
@@ -124,5 +124,5 @@ const ws = new WebSocket(`${server.url.replace('http', 'ws')}chat`);
 ## Databases in tests
 
 Not this package's surface. `@dunx/infra/db` binds an in-memory `bun:sqlite` with
-the same driver as production, which is a better fixture than a mock —
+the same driver as production, which is a better fixture than a mock -
 [`examples/databases`](../databases) sets that up.

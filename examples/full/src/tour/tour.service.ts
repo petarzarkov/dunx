@@ -34,43 +34,43 @@ export class Tour {
   ) {}
 
   async run(app: HttpApp, url: string): Promise<void> {
-    this.group('@dunx/core — token(), inject() and the three provide() shapes');
+    this.group('@dunx/core - token(), inject() and the three provide() shapes');
     this.wiring.demonstrate();
 
-    this.group('@dunx/infra/db — drizzle over bun:sqlite');
+    this.group('@dunx/infra/db - drizzle over bun:sqlite');
     await this.ledger.demonstrate();
 
-    this.group('@dunx/infra/files — LocalStorage under an OS temp dir');
+    this.group('@dunx/infra/files - LocalStorage under an OS temp dir');
     await this.uploads.demonstrate();
 
-    this.group('@dunx/infra/images — Bun.Image');
+    this.group('@dunx/infra/images - Bun.Image');
     await this.thumbnails.demonstrate();
 
-    this.group('@dunx/infra/redis — Bun.RedisClient');
+    this.group('@dunx/infra/redis - Bun.RedisClient');
     await this.sessions.demonstrate();
 
-    this.group('@dunx/http — zod schemas on the users routes');
+    this.group('@dunx/http - zod schemas on the users routes');
     await this.users.demonstrate(url);
 
-    this.group('@dunx/http — app-level configuration');
+    this.group('@dunx/http - app-level configuration');
     await this.http.demonstrate(app, url);
 
-    this.group('@dunx/http — @Gateway("/chat"), same Bun.serve as the routes');
+    this.group('@dunx/http - @Gateway("/chat"), same Bun.serve as the routes');
     await this.chat.demonstrate(app, url);
 
-    this.group('@dunx/http — the websocket relay, two nodes, one topic');
+    this.group('@dunx/http - the websocket relay, two nodes, one topic');
     await this.chat.relayed(url);
 
-    this.group('@dunx/http — @Public, @Roles and @UseGuards');
+    this.group('@dunx/http - @Public, @Roles and @UseGuards');
     await this.guards.demonstrate(url);
 
-    this.group('@dunx/auth — better-auth mounted, SessionGuard, AuthContext');
+    this.group('@dunx/auth - better-auth mounted, SessionGuard, AuthContext');
     await this.auth.demonstrate(url);
 
-    this.group('@dunx/openapi — the document, from the routes own zod schemas');
+    this.group('@dunx/openapi - the document, from the routes own zod schemas');
     await this.docs.demonstrate(app, url);
 
-    this.group('@dunx/openapi — security, from the guards own metadata');
+    this.group('@dunx/openapi - security, from the guards own metadata');
     await this.docs.guarded(url);
   }
 

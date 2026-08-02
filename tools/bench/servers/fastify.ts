@@ -13,7 +13,7 @@ const app = Fastify({ logger: false });
 
 // Swaps Fastify's ajv/JSON-Schema path for the same zod schema every other subject
 // runs, so the validate scenario compares frameworks and not validators. Ajv
-// compiles to straight-line JS and is faster than this — see the subject notes.
+// compiles to straight-line JS and is faster than this - see the subject notes.
 app.setValidatorCompiler(({ schema }) => {
   const zodSchema = schema as unknown as z.ZodType;
   return (data) => {

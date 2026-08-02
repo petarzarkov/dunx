@@ -218,7 +218,7 @@ describe('two nodes over an in-memory relay', () => {
       }
 
       // One frame on the channel. A node that re-relayed what it received would
-      // have put a second one there — and then a third, forever.
+      // have put a second one there - and then a third, forever.
       expect(bus.published).toHaveLength(1);
 
       for (const client of [ada, onB]) client.close();
@@ -310,7 +310,7 @@ describe('RedisRelay when Redis is not there', () => {
 
 /**
  * Runs `body` against a real `RedisRelay` in a subprocess, calls `close()`, and
- * answers the exit code — `0` only if nothing kept the event loop alive.
+ * answers the exit code - `0` only if nothing kept the event loop alive.
  */
 const released = async (body: string): Promise<number> => {
   const module = new URL('./redis-relay.ts', import.meta.url).pathname;
@@ -434,7 +434,7 @@ describe.skipIf(!HAS_REDIS)('two nodes over real Redis', () => {
  * A relay whose boot `subscribe` failed used to be retried by nothing: the node
  * reported the failure once and then silently never received a relayed message
  * again, for the life of the process. Publishing kept working, which is what made
- * it hard to notice — fan-out looked one-way rather than broken.
+ * it hard to notice - fan-out looked one-way rather than broken.
  */
 describe('a boot subscribe that fails', () => {
   const failing = (failures: number) => {

@@ -149,7 +149,7 @@ describe('named connections', () => {
       /RedisConnection is a contract/,
     );
     // RedisOptions is genuinely constructible, so self-binding yields defaults
-    // rather than an error — what matters is that it is not the named config.
+    // rather than an error - what matters is that it is not the named config.
     expect(app.get(RedisOptions).url).toBe(defaultRedisUrl());
     await app.shutdown();
   });
@@ -271,7 +271,7 @@ describe('lifecycle', () => {
       RedisModule.forRoot({ url: unreachable }),
     );
     // No subscriber connection exists yet, so this must not dial one just to
-    // send UNSUBSCRIBE — Bun would throw ERR_REDIS_INVALID_STATE.
+    // send UNSUBSCRIBE - Bun would throw ERR_REDIS_INVALID_STATE.
     await app.get(RedisConnection).unsubscribe('never');
     await app.shutdown();
   });

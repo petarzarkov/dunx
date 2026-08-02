@@ -5,11 +5,11 @@
  * The main suite holds the validator constant at zod so `validate` minus `json` is
  * readable as one framework's plumbing. That leaves two costs folded together:
  *
- * 1. **What parsing and validating cost at all** — the ~36% drop from `json` to
+ * 1. **What parsing and validating cost at all** - the ~36% drop from `json` to
  *    `validate` that every subject pays. `servers/validation/raw.ts` splits it into
  *    transport, `req.json()` and the validator, on raw `Bun.serve`.
  * 2. **What each validator costs** through the same Standard Schema seam, in the
- *    same dunx app, on the same schema shape — so a user can pick one on evidence.
+ *    same dunx app, on the same schema shape - so a user can pick one on evidence.
  *
  * ```bash
  * bun run validation                      # everything
@@ -99,7 +99,7 @@ const unitsFor = (chosen: readonly ValidatorId[]): readonly Unit[] => {
     {
       id: 'raw:json',
       group: 'decompose',
-      label: 'GET /json — no body on the wire',
+      label: 'GET /json - no body on the wire',
       subject: rawSubject,
       validator: 'noop',
       scenario: jsonScenario,
@@ -303,7 +303,7 @@ const units = unitsFor(chosen);
 /**
  * All units are brought up first and then measured **round-robin**, which the
  * framework suite does not need to do and this one does. Its whole output is the
- * difference between rows that differ by one step of work — often 2-4% — and the
+ * difference between rows that differ by one step of work - often 2-4% - and the
  * machine's own throughput drifts by more than that over the minutes a run takes.
  * Measuring each unit to completion in turn maps that drift onto unit identity: the
  * first attempt at this had `raw:parse` come out *slower* than `raw:noop`, which does

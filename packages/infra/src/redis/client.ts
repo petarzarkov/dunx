@@ -41,7 +41,7 @@ const scanArgs = (options: ScanOptions | undefined): (string | number)[] => {
 /**
  * `RedisConnection` on top of `Bun.RedisClient`.
  *
- * Not exported from the package root — bind it through `RedisModule.forRoot()`,
+ * Not exported from the package root - bind it through `RedisModule.forRoot()`,
  * which is what decides how the connection is constructed.
  */
 export class Redis extends RedisConnection implements OnInit, OnShutdown {
@@ -70,7 +70,7 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
    *
    * `connect()` before `ping()`, not just `ping()`. Commands normally connect
    * lazily, but with `enableOfflineQueue: false` there is no queue to hold the
-   * first one while the handshake runs, so it is rejected outright — a failure
+   * first one while the handshake runs, so it is rejected outright - a failure
    * about the offline queue rather than about the server.
    */
   async onInit(): Promise<void> {
@@ -104,7 +104,7 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
   /**
    * Every command goes through here. The call is inside the `try` rather than just
    * the await, because Bun throws synchronously for state errors (subscriber mode)
-   * and argument errors — an `async` wrapper turns both into one rejection shape.
+   * and argument errors - an `async` wrapper turns both into one rejection shape.
    */
   async #run<T>(command: string, call: () => Promise<T>): Promise<T> {
     try {

@@ -20,7 +20,7 @@ import {
 } from '../shared.js';
 
 /**
- * The NestJS subject, shared by the Express and Fastify adapters — the only thing
+ * The NestJS subject, shared by the Express and Fastify adapters - the only thing
  * that differs between them is which platform `NestFactory` is handed, which is
  * the whole point of having both.
  *
@@ -29,7 +29,7 @@ import {
  * and that ban is about dunx's own design: dunx uses TC39 standard decorators and
  * has no parameter decorators, which is why `@Inject()` does not exist there. A
  * benchmark subject measuring NestJS obviously has to run NestJS's programming
- * model, legacy decorators and all — measuring a fake Nest would measure nothing.
+ * model, legacy decorators and all - measuring a fake Nest would measure nothing.
  * Nothing outside `servers/nest/` may use them.
  *
  * `reflect-metadata` is imported by the entrypoints for the same reason.

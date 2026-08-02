@@ -73,7 +73,7 @@ describe('the generated model', () => {
     expect(site.home).not.toContain('img.shields.io');
   });
 
-  test('the guides are left whole — they are repo documentation', () => {
+  test('the guides are left whole - they are repo documentation', () => {
     const architecture = site.guides.find((g) => g.slug === 'architecture');
     expect(architecture?.html).toContain('<h2 id="documentation-site');
   });
@@ -267,7 +267,7 @@ describe('navigation', () => {
 
 /**
  * Reported: search `Logger`, click the `ConsoleLogger` hit, and the page that
- * opens is `@dunx/core`'s readme with no mention of the symbol. Two causes —
+ * opens is `@dunx/core`'s readme with no mention of the symbol. Two causes -
  * the action navigated to the bare package route with no `?h=`, and the API tab
  * that holds the cards is not the one a package page opens on.
  */

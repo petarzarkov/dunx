@@ -1,7 +1,7 @@
 # @dunx/example-databases
 
 Setting up `@dunx/infra/db` on **SQLite** (asynchronous *and* synchronous),
-**Postgres** and **MySQL** — the same three operations against each, so the parts
+**Postgres** and **MySQL** - the same three operations against each, so the parts
 that differ are the only parts on screen.
 
 ```bash
@@ -24,7 +24,7 @@ read.
 | `MysqlModule.forUrl()`        | `drizzle-orm/mysql-proxy` over `Bun.SQL`    | `MySqlRemoteDatabase` |
 
 Four containers rather than one, because the container is flat and each binds its
-own `DbConnection` — two backends in one app would be a duplicate token, which
+own `DbConnection` - two backends in one app would be a duplicate token, which
 dunx rejects at boot naming both modules. Running one app per database is also
 what a real deployment does.
 
@@ -33,7 +33,7 @@ what a real deployment does.
 Both are `bun:sqlite`. What differs is whether the handle is a promise.
 
 ```ts
-// asynchronous — the default
+// asynchronous - the default
 DbModule.forRoot(new SqliteOptions({ schema, filename }));
 constructor(private readonly db: BunSQLiteDatabase<typeof schema>) {}
 await db.select().from(widgets);
@@ -45,7 +45,7 @@ db.select().from(widgets).all();
 ```
 
 **Pick sync if the app is SQLite for good.** `bun:sqlite` is a function call into
-SQLite — there is no socket, nothing to wait for, and no reason for a promise. The
+SQLite - there is no socket, nothing to wait for, and no reason for a promise. The
 handler never yields, so nothing can interleave between two statements.
 
 **Pick async if Postgres is plausible later.** Every call is already awaited, so
@@ -56,7 +56,7 @@ differ by two lines and the bodies are the same.
 
 The mode is not a runtime flag, and cannot be: it decides which class the drizzle
 handle is bound under, and that is what `DbModule.forRoot` infers the injection
-token from. It is also enforced — a service annotating `SyncDatabase` will not
+token from. It is also enforced - a service annotating `SyncDatabase` will not
 resolve in an app that bound `BunSQLiteDatabase`.
 
 ### Transactions differ, and the difference is the point
@@ -68,7 +68,7 @@ resolve in an app that bound `BunSQLiteDatabase`.
 
 `transaction()` on `bun:sqlite` issues `BEGIN`/`COMMIT`/`ROLLBACK` itself rather
 than delegating to drizzle, because drizzle delegates to `bun:sqlite`'s wrapper,
-which commits as soon as the callback *returns its promise* — so every statement
+which commits as soon as the callback *returns its promise* - so every statement
 after the first `await` runs in autocommit and a later throw rolls back nothing.
 
 `transactionSync()` **does** delegate, and that is correct: the whole failure is
@@ -76,7 +76,7 @@ downstream of a callback that returns a promise, and this one cannot. An `async`
 callback is a compile error naming the constraint.
 
 One wart worth knowing: `transactionSync`'s return type is constrained to
-"not a promise", and that constraint's object branch is a TypeScript *weak type* —
+"not a promise", and that constraint's object branch is a TypeScript *weak type* -
 so returning an object or an array from the callback is rejected even though it is
 not thenable. Return a scalar, or use the async `transaction()`.
 
@@ -86,13 +86,13 @@ not thenable. Return a scalar, or use the async `transaction()`.
 DbModule.forRoot(new SqlOptions({ schema, url, max: 4 }));
 ```
 
-`drizzle-orm/bun-sql` over `Bun.SQL`. No `pg`, no `postgres.js` — Bun owns the
+`drizzle-orm/bun-sql` over `Bun.SQL`. No `pg`, no `postgres.js` - Bun owns the
 socket, the pool and the wire protocol. `SqlInit` extends `Bun.SQL`'s own option
 type rather than restating it, so `max`, `idleTimeout` and `tls` are all accepted.
 
 The dialect is resolved from the URL at construction, so a bad URL throws before
 any I/O. The handshake is awaited inside `open()`, and dunx settles every async
-factory before it constructs anything — so a repository can never be handed a
+factory before it constructs anything - so a repository can never be handed a
 client that has not connected.
 
 ```bash
@@ -104,14 +104,14 @@ bun run --filter '@dunx/example-databases' start
 
 **There is no Bun-native drizzle driver for MySQL, and this example builds one in
 about forty lines.** [`mysql/driver.ts`](./src/mysql/driver.ts) is the whole of it,
-and `@dunx/infra` needed no change to accept it — `DbOptions.open()` is where a
+and `@dunx/infra` needed no change to accept it - `DbOptions.open()` is where a
 backend lives, so adding one is a new class rather than an edit to a dispatch table.
 
 The reasoning: drizzle 0.45.2's only Bun entrypoints are `bun-sql` (Postgres, it
 builds a `PgDialect` unconditionally) and `bun-sqlite`. Its MySQL drivers are
 `mysql2` and `mysql-proxy`. `mysql2` is a JavaScript reimplementation of a wire
 protocol Bun already speaks. `mysql-proxy` is drizzle's MySQL dialect with the
-transport left as a callback — so `Bun.SQL` supplies the transport, drizzle owns
+transport left as a callback - so `Bun.SQL` supplies the transport, drizzle owns
 the SQL, and nothing pulls in `mysql2`.
 
 ```ts
@@ -127,14 +127,14 @@ const db = drizzle(async (query, params, method) => {
 Three details in that, all load-bearing and all found by running it:
 
 1. **`.values()` is mandatory** for `'all'`. drizzle's `mapResultRow` indexes rows
-   positionally, and `Bun.SQL`'s default object rows *lose columns on a join* —
+   positionally, and `Bun.SQL`'s default object rows *lose columns on a join* -
    selecting `users.id, users.name, posts.id, posts.name` comes back with two keys,
    not four. A manual object-to-array conversion would be silently wrong.
 2. **`execute` has two shapes.** drizzle passes `'execute'` whenever the query
    carries no fields, which includes `db.execute(sql\`SELECT …\`)`. Without the
    `result.length > 0` branch those rows are discarded.
 3. **`insertId` goes in `rows[0]`**, not at the top level, despite what
-   `RemoteCallback`'s type says — `session.js` reads `data[0].insertId`. Following
+   `RemoteCallback`'s type says - `session.js` reads `data[0].insertId`. Following
    the declared signature breaks `$returningId()`. Bun's own property is
    `lastInsertRowid`.
 
@@ -163,7 +163,7 @@ decoding is drizzle's, so `boolean` 1 arrives as `true` and `timestamp` as a `Da
 Both measured on Bun 1.3.14, both recorded in [docs/bun-apis.md](../../docs/bun-apis.md).
 
 **`POSTGRES_URL` in the environment overrides an explicitly passed `url`.** In the
-options-object form only — `new Bun.SQL({ url: 'mysql://…' })` with `POSTGRES_URL`
+options-object form only - `new Bun.SQL({ url: 'mysql://…' })` with `POSTGRES_URL`
 set silently becomes `adapter: 'postgres'` and dials the wrong server, failing with
 a bare "Connection closed". `PGURL` and `TLS_POSTGRES_DATABASE_URL` do it too;
 `DATABASE_URL` and `MYSQL_URL` do not. Unaffected forms: `new Bun.SQL(urlString)`,
@@ -171,7 +171,7 @@ a bare "Connection closed". `PGURL` and `TLS_POSTGRES_DATABASE_URL` do it too;
 last two.
 
 **An in-flight MySQL query does not hold the event loop open.** A script with
-nothing else pending exits **silently with code 0** in the middle of a query — no
+nothing else pending exits **silently with code 0** in the middle of a query - no
 error, no rejection, no output. A server never notices because `Bun.serve` holds a
 reference; a CLI does. [`main.ts`](./src/main.ts) holds one `setInterval` for the
 duration for exactly this reason. Postgres and `bun:sqlite` are unaffected.
@@ -179,8 +179,8 @@ duration for exactly this reason. Postgres and `bun:sqlite` are unaffected.
 ## Migrations
 
 None of the three run migrations here, and that is deliberate. Schema changes are
-`drizzle-kit generate` plus the dialect's own migrator — which own the SQL, the
-journal and the snapshot folder — and a `:memory:` database has nowhere to keep any
+`drizzle-kit generate` plus the dialect's own migrator - which own the SQL, the
+journal and the snapshot folder - and a `:memory:` database has nowhere to keep any
 of that. Each service creates its table in `onInit` instead, which runs after the
 graph is built and before the first caller.
 
@@ -202,5 +202,5 @@ bun run --filter '@dunx/example-databases' test
 ```
 
 SQLite always runs. Postgres and MySQL are probed once and reported as **skipped**
-if nothing is listening — a skipped test says so, where a silently passing one
+if nothing is listening - a skipped test says so, where a silently passing one
 would not.

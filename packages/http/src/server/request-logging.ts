@@ -13,7 +13,7 @@ export interface RequestLoggingOptions {
   /**
    * Log the request body. Default **`false`**.
    *
-   * Reading it means `req.clone().text()` — a second copy of every payload,
+   * Reading it means `req.clone().text()` - a second copy of every payload,
    * buffered and parsed, on the hot path. Measured on the `validate` scenario in
    * `tools/bench`, turning both body options on costs roughly two thirds of the
    * throughput. It is also the field most likely to contain a password.
@@ -21,9 +21,9 @@ export interface RequestLoggingOptions {
    * Turn it on in development, where seeing the payload is the point.
    */
   readonly requestBody?: boolean;
-  /** Log the response body. Default **`false`** — same clone-and-buffer cost. */
+  /** Log the response body. Default **`false`** - same clone-and-buffer cost. */
   readonly responseBody?: boolean;
-  /** Paths to skip entirely — a health check polled every second, say. */
+  /** Paths to skip entirely - a health check polled every second, say. */
   readonly ignore?: readonly string[];
 }
 
@@ -48,8 +48,8 @@ type RequestFields = Record<string, unknown>;
  * One structured entry per request, carrying the request and its response.
  *
  * Installed by `HttpFactory.create` unless `requestLogging: false`. It injects
- * `Logger` and `RequestContext` — both `@dunx/core` contracts, both bound by
- * default — so it works with no logging module imported, and picks up
+ * `Logger` and `RequestContext` - both `@dunx/core` contracts, both bound by
+ * default - so it works with no logging module imported, and picks up
  * `@arkv/logger` automatically once `@dunx/infra/logger` is.
  *
  * **One entry, not two.** Nest needs a middleware for the inbound half and an
@@ -64,7 +64,7 @@ type RequestFields = Record<string, unknown>;
  *
  * **Nothing here is `async`.** Reading the request or the response body are the
  * only steps that can ever wait, both are off by default, and both are adopted
- * with `.then` rather than awaited — the same rule `input.ts` follows, for the
+ * with `.then` rather than awaited - the same rule `input.ts` follows, for the
  * same measured reason. An `async` scope callback alone cost 0.44 µs/request
  * against a synchronous one on raw `Bun.serve`.
  */
@@ -220,7 +220,7 @@ export class RequestLoggingMiddleware implements Middleware {
   }
 
   /**
-   * `undefined` — the default — means there is nothing to read, and the caller
+   * `undefined` - the default - means there is nothing to read, and the caller
    * stays on the synchronous path. Clones when there is, so the handler's own
    * stream is never the one that was consumed.
    */

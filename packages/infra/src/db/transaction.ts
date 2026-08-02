@@ -12,7 +12,7 @@ export type SqlTransaction<TSchema extends Record<string, unknown>> =
   Parameters<Parameters<BunSQLDatabase<TSchema>['transaction']>[0]>[0];
 
 /**
- * The handle drizzle hands a `bun:sqlite` transaction callback — its own
+ * The handle drizzle hands a `bun:sqlite` transaction callback - its own
  * `SQLiteBunTransaction`, derived rather than restated. Nesting is
  * `tx.transaction(...)`, which takes a savepoint.
  */
@@ -38,7 +38,7 @@ type NotThenable =
 /** Per-handle transaction state. Off to the side, because drizzle owns the handle. */
 interface Scope {
   depth: number;
-  /** Serialises top-level transactions — see below. */
+  /** Serialises top-level transactions - see below. */
   queue: Promise<unknown>;
 }
 
@@ -114,10 +114,10 @@ const sqliteTransaction = <TSchema extends Record<string, unknown>, T>(
  *
  * Because drizzle's is synchronous there. `drizzle-orm/bun-sqlite` delegates to
  * `bun:sqlite`'s own `db.transaction()`, and that wrapper commits as soon as the
- * callback **returns its promise** — so `client.inTransaction` is already `false`
+ * callback **returns its promise** - so `client.inTransaction` is already `false`
  * before the first `await` resumes, every statement after an `await` runs in
  * autocommit, and a later throw rolls back nothing. Measured on Bun 1.3.14:
- * insert, `await Bun.sleep(1)`, throw, catch — the row is still there.
+ * insert, `await Bun.sleep(1)`, throw, catch - the row is still there.
  *
  * This issues `BEGIN`/`COMMIT`/`ROLLBACK` itself instead, so an async callback is
  * atomic. There is only one connection, so two overlapping top-level transactions
@@ -126,12 +126,12 @@ const sqliteTransaction = <TSchema extends Record<string, unknown>, T>(
  * itself.
  *
  * On Postgres this delegates to drizzle's own `db.transaction()`, which is
- * genuinely async — it goes through `Bun.SQL`'s `begin()`, which reserves a
+ * genuinely async - it goes through `Bun.SQL`'s `begin()`, which reserves a
  * connection for the duration. The handle a Postgres callback receives is
  * drizzle's `PgTransaction`, not the database, because the pooled backend's outer
  * handle would take a different connection and sit outside the transaction. That
- * also means nesting on Postgres is `tx.transaction(...)` — drizzle's own, which
- * takes a savepoint — since this function's second overload takes the database.
+ * also means nesting on Postgres is `tx.transaction(...)` - drizzle's own, which
+ * takes a savepoint - since this function's second overload takes the database.
  */
 export function transaction<TSchema extends Record<string, unknown>, T>(
   db: BunSQLiteDatabase<TSchema>,
@@ -161,7 +161,7 @@ export function transaction<TSchema extends Record<string, unknown>, T>(
 }
 
 /**
- * Runs `fn` in a real `bun:sqlite` transaction and returns its value — not a
+ * Runs `fn` in a real `bun:sqlite` transaction and returns its value - not a
  * promise, not a microtask, nothing to await. Commits on return, rolls back on
  * throw, and nests as a savepoint via `tx.transaction(...)`.
  *
@@ -169,7 +169,7 @@ export function transaction<TSchema extends Record<string, unknown>, T>(
  *
  * The workaround `transaction()` above exists because drizzle's bun-sqlite
  * transaction delegates to `bun:sqlite`'s, which commits the moment the callback
- * **returns** — so a callback that returns a promise has already committed before
+ * **returns** - so a callback that returns a promise has already committed before
  * its first `await` resumes. Everything about that failure is downstream of the
  * callback being asynchronous. Take the promise away and the wrapper is exactly
  * right, so this delegates instead of issuing `BEGIN`/`COMMIT` itself: one native

@@ -4,7 +4,7 @@ import type { JsonSchema } from './types.js';
 
 /**
  * `sampleFor` fills the request body box on the docs page. It is best effort by
- * design, but its guesses are what a reader sends first — a wrong one produces a
+ * design, but its guesses are what a reader sends first - a wrong one produces a
  * 400 that looks like the framework's fault, so the precedence rules and the
  * recursion guard are worth pinning down.
  */

@@ -20,7 +20,7 @@ export const resolve = (schema: JsonSchema, schemas: Schemas): JsonSchema => {
   return name === undefined ? schema : (schemas[name] ?? schema);
 };
 
-/** `array of User`, `string · uuid`, `integer` — what the reader needs at a glance. */
+/** `array of User`, `string · uuid`, `integer` - what the reader needs at a glance. */
 export const typeLabel = (schema: JsonSchema, schemas: Schemas): string => {
   const name = refName(schema);
   if (name !== undefined) return name;

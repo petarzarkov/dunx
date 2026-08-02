@@ -10,8 +10,8 @@ import type { OpenApiDocument } from './types.js';
  *
  * `fetch` is stubbed rather than pointed at a real server: happy-dom replaces the
  * global `Response`, which a live `Bun.serve` in the same process then rejects.
- * What is under test is the page — boot, render, URL assembly, headers, body,
- * response rendering — not the server, which every other suite already covers.
+ * What is under test is the page - boot, render, URL assembly, headers, body,
+ * response rendering - not the server, which every other suite already covers.
  *
  * happy-dom is a devDependency; it never ships.
  */
@@ -205,7 +205,7 @@ describe('sending an operation', () => {
     type(form.querySelector('[data-in="query"]') as El, 'author');
     await submit(form);
 
-    // 7, not "{id}" — and the query only appears because it was filled in.
+    // 7, not "{id}" - and the query only appears because it was filled in.
     expect(sent[0]?.url).toBe('http://api.test/notes/7?expand=author');
     expect(sent[0]?.method).toBe('GET');
     expect(sent[0]?.body).toBeUndefined();

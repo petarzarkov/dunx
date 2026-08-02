@@ -13,13 +13,13 @@ import * as schema from './schema.js';
     //
     // The first argument is the token, unlike `forRoot`. The database class is
     // what a repository injects, and which class that is only becomes known once
-    // the factory has produced the options — too late to register a provider
+    // the factory has produced the options - too late to register a provider
     // under it.
     //
     // `SyncSqliteOptions` rather than `SqliteOptions`, so this app runs SQLite in
     // **synchronous mode**: the token becomes `SyncDatabase`, and `transactionSync`
     // becomes reachable. `SqliteOptions` is the default and still what an app
-    // wants if it might move to Postgres later — sync mode is SQLite for good.
+    // wants if it might move to Postgres later - sync mode is SQLite for good.
     DbModule.forRootAsync(SyncDatabase, {
       useFactory: (config: AppConfigService) =>
         new SyncSqliteOptions({

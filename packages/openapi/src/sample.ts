@@ -95,7 +95,7 @@ export const sampleFor = (
     case 'null':
       return null;
     default:
-      // No `type` and no composition — an unconstrained schema. `{}` is the
+      // No `type` and no composition - an unconstrained schema. `{}` is the
       // honest answer, and the reader edits it.
       return node['properties'] === undefined ? null : {};
   }

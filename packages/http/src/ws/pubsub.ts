@@ -17,11 +17,11 @@ import type { SocketData } from './socket.js';
  * runtime, not in a JavaScript registry: `socket.subscribe(topic)` is what joins
  * one, and Bun does the fan-out.
  *
- * Injectable — `HttpFactory` binds it, so a service can publish without holding a
+ * Injectable - `HttpFactory` binds it, so a service can publish without holding a
  * socket and without registering anything.
  *
  * With a {@link PubSubRelay} attached the same publish also reaches the other
- * nodes. Without one — the default — nothing here touches a broker and the cost is
+ * nodes. Without one - the default - nothing here touches a broker and the cost is
  * exactly Bun's.
  */
 export class PubSub {
@@ -64,12 +64,12 @@ export class PubSub {
    * Opt into multi-node fan-out: every `publish` from here on also goes to
    * `relay`, and everything other nodes put on the channel is fanned out locally.
    *
-   * `HttpFactory.create(root, { relay })` is the shorthand — `listen()` calls this.
+   * `HttpFactory.create(root, { relay })` is the shorthand - `listen()` calls this.
    * Call it directly when the relay has to come out of the container, which is the
    * case for an app reusing its own `@dunx/infra/redis` connection:
    * `app.get(PubSub).relayThrough(app.get(RedisConnection))` before `listen()`.
    *
-   * A broker that cannot be reached is reported through `onError` and left alone —
+   * A broker that cannot be reached is reported through `onError` and left alone -
    * local fan-out is unaffected, and the app boots either way.
    */
   async relayThrough(
@@ -79,7 +79,7 @@ export class PubSub {
     if (this.#relay) {
       throw new AppError(
         'PubSub already relays. Two subscriptions on one channel would deliver ' +
-          'every relayed message twice — pass HttpOptions.relay or call ' +
+          'every relayed message twice - pass HttpOptions.relay or call ' +
           'relayThrough(), not both.',
       );
     }
@@ -94,7 +94,7 @@ export class PubSub {
 
   /**
    * One subscribe attempt, scheduling the next on failure. Separate from
-   * `relayThrough` because a retry has to run the identical path — including the
+   * `relayThrough` because a retry has to run the identical path - including the
    * synchronous-throw handling, which Bun's client needs.
    */
   async #trySubscribe(): Promise<void> {

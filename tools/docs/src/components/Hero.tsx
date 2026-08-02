@@ -101,7 +101,7 @@ const MeasuredLine = (): React.JSX.Element | null => {
           , cold start <b>{decimal(startup.focusMs, 1)} ms</b>
         </>
       )}{' '}
-      — measured on this machine, published with the standard deviation and the
+      - measured on this machine, published with the standard deviation and the
       losses.
     </Text>
   );
@@ -134,7 +134,7 @@ export const Hero = (): React.JSX.Element => (
               </h1>
               <Text size="lg" c="dimmed" maw={540}>
                 A dependency injection framework built on Bun&apos;s own
-                primitives. Constructor injection with nothing annotating it —
+                primitives. Constructor injection with nothing annotating it -
                 no <code>@Injectable()</code>, no <code>@Inject()</code>, no{' '}
                 <code>reflect-metadata</code>.
               </Text>

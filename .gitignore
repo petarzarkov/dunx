@@ -147,10 +147,10 @@ tmp
 tools/docs/src/generated/
 tools/docs/public/badges/
 
-# Session resume point written by /whats-next — regenerated per session, not a
+# Session resume point written by /whats-next - regenerated per session, not a
 # repo artifact
 HANDOFF.md
 
 # Throwaway git worktrees created for isolated subagent runs. Never tracked, and
-# never linted or formatted — they are copies of the repo, not part of it.
+# never linted or formatted - they are copies of the repo, not part of it.
 .claude/worktrees/

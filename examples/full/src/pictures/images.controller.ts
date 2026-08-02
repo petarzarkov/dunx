@@ -40,7 +40,7 @@ export class ImagesController {
     });
   }
 
-  /** The same render, described rather than returned — easier to read in swagger. */
+  /** The same render, described rather than returned - easier to read in swagger. */
   @Get('/metadata', render)
   async metadata(input: Input<typeof render>): Promise<{
     width: number;
@@ -60,7 +60,7 @@ export class ImagesController {
   }
 
   /**
-   * Format detection is content-based — magic bytes, never a filename — and this
+   * Format detection is content-based - magic bytes, never a filename - and this
    * is a header read rather than a decode, so a truncated file still answers.
    */
   @Post('/describe', describe)
