@@ -154,4 +154,4 @@ the copy your app already has.
 Peers would have expressed that better, and were tried first: `bun run --filter '*'`
 derives its build order from `dependencies` only, so a peer-only manifest cannot be
 built in this monorepo at all. The reasoning and the measurement are in
-[ARCHITECTURE.md](../../docs/ARCHITECTURE.md), "Test harness".
+[architecture/packaging.md](../../docs/architecture/packaging.md), "Test harness".

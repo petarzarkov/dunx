@@ -28,7 +28,7 @@ from memory.
 5. `bun run build && bun run typecheck && bun run test`.
 6. `bun run gen:cov && bun run gen:readme` - picks up the coverage badge and the
    README Packages table row.
-7. Add the row to the Packages Overview table in [CLAUDE.md](CLAUDE.md).
+7. Add the row to the Packages Overview table in [CLAUDE.md](../../../CLAUDE.md).
 8. **First publish must be manual** - see `/release`.
 
 ## Adding a public subpath to an existing package

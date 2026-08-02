@@ -1,18 +1,18 @@
 ---
 name: spike
-description: Resolve an open technical question by measuring it on real Bun instead of assuming, then record the verified result in docs/ARCHITECTURE.md. Use for the "Spikes to resolve" items, before committing to any API shape that depends on runtime or tsc behaviour, and whenever a design argument turns on "does Bun/TypeScript actually do X?".
+description: Resolve an open technical question by measuring it on real Bun instead of assuming, then record the verified result in docs/architecture/constraints.md. Use for the "Spikes to resolve" items, before committing to any API shape that depends on runtime or tsc behaviour, and whenever a design argument turns on "does Bun/TypeScript actually do X?".
 ---
 
 # /spike
 
 Every constraint in the **Verified constraints** section of
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) was measured, not reasoned about.
+[docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) was measured, not reasoned about.
 That is why the decisions above it hold. A spike keeps that property.
 
 ## Procedure
 
 1. **State the question as a falsifiable claim** and name what it gates. From
-   docs/ARCHITECTURE.md: "does `@Post(path, { body: Schema })` constrain the
+   docs/architecture/constraints.md: "does `@Post(path, { body: Schema })` constrain the
    method signature through the method decorator's generic?" gates Phase 3.
    "Does the `WeakMap` pending-drain survive subclassed controllers without
    `Symbol.metadata`?" gates Phase 2.

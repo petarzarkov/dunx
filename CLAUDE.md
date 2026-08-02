@@ -104,7 +104,7 @@ was resolved by measuring.** bullmq 6 ships `createBunRedisClient`, an
 every byte of queue traffic goes through Bun's client and `dist/` contains no
 reference to ioredis. `ioredis` must still be _installed_, because bullmq 6.0.5's
 barrel imports it statically despite documenting it as optional (measured, recorded
-in ARCHITECTURE.md "Queues"), so it is an optional peer.
+in docs/architecture/queues.md), so it is an optional peer.
 
 The general rule stands, and is what let the better answer be found:
 

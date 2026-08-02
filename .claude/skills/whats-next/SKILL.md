@@ -1,6 +1,6 @@
 ---
 name: whats-next
-description: Write or refresh HANDOFF.md - a compact resume point holding completed objectives, live file paths, approaches already tried and rejected, and the exact next steps, placed against the roadmap in docs/ARCHITECTURE.md. Use before /compact or /clear, at the end of a task block, when the context window crosses ~50%, or when asked "what's next", "where were we", "hand this off", or "resume".
+description: Write or refresh HANDOFF.md - a compact resume point holding completed objectives, live file paths, approaches already tried and rejected, and the exact next steps, placed against the roadmap in docs/ROADMAP.md. Use before /compact or /clear, at the end of a task block, when the context window crosses ~50%, or when asked "what's next", "where were we", "hand this off", or "resume".
 ---
 
 # /whats-next
@@ -18,7 +18,7 @@ git status --short && git log --oneline -8
 ```
 
 Read the **Roadmap** and **Spikes to resolve** sections of
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). That doc is the source of truth for
+[docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md). That doc is the source of truth for
 what "next" means - the current phase's exit criteria _are_ the next steps.
 Never invent a roadmap position from the conversation.
 
@@ -73,7 +73,7 @@ never write "N/A" or "none".
 - **Rejected is the highest-value section.** It is the only content a fresh
   session cannot re-derive from the tree. Record the approach, the symptom, and
   the path it lives or lived in. Rejections already written down in
-  docs/ARCHITECTURE.md belong there, not here - link, don't copy.
+  docs/architecture/ belong there, not here - link, don't copy.
 - Paths as clickable relative markdown links.
 - If an exit criterion has become true, say so. If docs/ARCHITECTURE.md is stale,
   fix that doc - do not record the drift in HANDOFF.md.

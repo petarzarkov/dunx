@@ -196,7 +196,7 @@ names a reachable server.
 **drizzle's `transaction()` on bun-sqlite inherits `bun:sqlite`'s
 synchronous-commit behaviour.** `bun:sqlite`'s own `db.transaction()` commits when
 its callback **returns its promise**, so awaited work is already committed and a
-later throw rolls back nothing (recorded in [bun-apis.md](./bun-apis.md)). drizzle
+later throw rolls back nothing (recorded in [bun-apis.md](../bun-apis.md)). drizzle
 does not work around it - `bun-sqlite/session.js` delegates straight to it:
 
 ```js

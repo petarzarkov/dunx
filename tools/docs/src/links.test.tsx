@@ -1,0 +1,110 @@
+import { describe, expect, test } from 'bun:test';
+import { loadGuide, loadPackage, site } from './data';
+
+/**
+ * Every internal link on the site, resolved against what the site actually
+ * serves.
+ *
+ * This exists because two classes of broken link shipped. A bare `#anchor` is
+ * read as a route by a hash router, so in-page links navigated away from the page
+ * they were written on; and `docs/ARCHITECTURE.md` being split moved a dozen
+ * section anchors without moving the links that pointed at them. Both were found
+ * by a reader, not by a check.
+ */
+const pages = async (): Promise<
+  { slug: string; html: string; headings: readonly string[] }[]
+> => {
+  const out: { slug: string; html: string; headings: readonly string[] }[] = [];
+  for (const guide of site.guides) {
+    const body = await loadGuide(guide.slug);
+    out.push({
+      slug: guide.slug,
+      html: body?.html ?? '',
+      headings: guide.headings.map((heading) => heading.id),
+    });
+  }
+  return out;
+};
+
+const packagePages = async (): Promise<{ slug: string; html: string }[]> => {
+  const out: { slug: string; html: string }[] = [];
+  for (const pkg of site.packages) {
+    const body = await loadPackage(pkg.dir);
+    out.push({ slug: pkg.dir, html: body?.readme ?? '' });
+  }
+  return out;
+};
+
+const hrefs = (html: string): string[] =>
+  [...html.matchAll(/href="([^"]+)"/g)].flatMap((match) =>
+    match[1] === undefined ? [] : [match[1]],
+  );
+
+const internal = (href: string): boolean => href.startsWith('#');
+
+describe('internal links', () => {
+  test('no link is a bare fragment', async () => {
+    const offenders: string[] = [];
+    for (const page of [...(await pages()), ...(await packagePages())]) {
+      for (const href of hrefs(page.html)) {
+        // `#/...` is a route. `#anything-else` is a fragment that would replace
+        // the route rather than scroll within it.
+        if (href.startsWith('#') && !href.startsWith('#/')) {
+          offenders.push(`${page.slug}: ${href}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('every in-site link points at a page that exists', async () => {
+    const guideSlugs = new Set(site.guides.map((guide) => guide.slug));
+    const packageDirs = new Set(site.packages.map((pkg) => pkg.dir));
+    const offenders: string[] = [];
+
+    for (const page of [...(await pages()), ...(await packagePages())]) {
+      for (const href of hrefs(page.html)) {
+        if (!internal(href)) continue;
+        const [route = ''] = href.slice(2).split('?');
+        const [kind = '', slug = ''] = route.split('/');
+
+        if (kind === '' || kind === 'bench' || kind === 'coverage') continue;
+        if (kind === 'guide' && guideSlugs.has(slug)) continue;
+        if (kind === 'api' && packageDirs.has(slug)) continue;
+        offenders.push(`${page.slug}: ${href}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /*
+   * The `?h=` half. A link may resolve to a real page and still land at the top of
+   * it, which is what happened to every anchor into the architecture record after
+   * it was split into twelve files.
+   */
+  test('every ?h= anchor names a heading on the page it targets', async () => {
+    const all = await pages();
+    const headingsBySlug = new Map(
+      all.map((page) => [page.slug, new Set(page.headings)]),
+    );
+    const offenders: string[] = [];
+
+    for (const page of [...all, ...(await packagePages())]) {
+      for (const href of hrefs(page.html)) {
+        if (!internal(href) || !href.includes('?h=')) continue;
+        const [route = '', query = ''] = href.slice(2).split('?');
+        const [kind = '', slug = ''] = route.split('/');
+        if (kind !== 'guide') continue;
+
+        const anchor = new URLSearchParams(query).get('h');
+        const known = headingsBySlug.get(slug);
+        // A page with fewer than three headings renders no contents list, but its
+        // ids are still in the index, so this stays checkable either way.
+        if (anchor !== null && known && !known.has(anchor)) {
+          offenders.push(`${page.slug} -> #/guide/${slug}?h=${anchor}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});

@@ -10,11 +10,14 @@ import {
 import { useChunk } from '../chunk';
 import { Prose } from '../components/Prose';
 import { guideBySlug, loadGuide, site } from '../data';
+import { href, RouteKind } from '../router';
 import { NotFound } from './NotFound';
 
 const TableOfContents = ({
+  slug,
   headings,
 }: {
+  slug: string;
   headings: readonly { id: string; text: string }[];
 }): React.JSX.Element | null => {
   if (headings.length < 3) return null;
@@ -27,7 +30,26 @@ const TableOfContents = ({
       {headings.map((heading) => (
         <Anchor
           key={heading.id}
-          href={`#${heading.id}`}
+          onClick={(event) => {
+            // The href stays a real route so middle-click and copy-link work; the
+            // scroll happens here, where the page is already laid out. Scrolling
+            // from an effect on a cold load raced the code-block layout and left
+            // the viewport past the end of the document, showing nothing.
+            const target = document.getElementById(heading.id);
+            if (!target) return;
+            event.preventDefault();
+            target.scrollIntoView({ block: 'start' });
+          }}
+          // The page's own route, not `#id`. A bare fragment in a hash-routed
+          // site is read as a route, so every entry here used to navigate away
+          // from the page it belonged to.
+          //
+          // Deliberately without `?h=`: that path runs a scroll-retry loop in
+          // `router.ts` which lands on a blank viewport in headless Chrome, on
+          // guides and on package pages alike. The click below scrolls a
+          // laid-out page instead, which is reliable. See
+          // docs/roadmap/anchor-scroll-on-cold-load.md.
+          href={href(RouteKind.Guide, slug)}
           size="sm"
           c="dimmed"
           lineClamp={1}
@@ -47,6 +69,7 @@ const TableOfContents = ({
 export const Guide = ({ slug }: { slug: string }): React.JSX.Element => {
   const guide = guideBySlug(slug);
   const body = useChunk(() => loadGuide(slug), slug);
+
   if (!guide) return <NotFound what={`guide "${slug}"`} />;
 
   return (
@@ -72,7 +95,7 @@ export const Guide = ({ slug }: { slug: string }): React.JSX.Element => {
             </Stack>
           )}
         </Stack>
-        <TableOfContents headings={guide.headings} />
+        <TableOfContents slug={slug} headings={guide.headings} />
       </Group>
     </Container>
   );

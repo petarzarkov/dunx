@@ -207,13 +207,19 @@ const targets = linkTargets(guideFiles(), tourFiles(), dirNames);
 
 await startHighlighter();
 
-const render = (markdown: string): string =>
-  markdown === '' ? '' : renderDoc(markdown, targets).html;
+const render = (markdown: string, self = ''): string =>
+  markdown === '' ? '' : renderDoc(markdown, targets, self).html;
 
-/** A README, minus the sections that document the repo rather than the package. */
-const renderReadme = (file: string): string => {
+/**
+ * A README, minus the sections that document the repo rather than the package.
+ *
+ * `self` is the package page's own route, so a `#anchor` link inside a README
+ * scrolls instead of navigating away - a bare `#` replaces the route in a
+ * hash-routed site.
+ */
+const renderReadme = (file: string, dir: string): string => {
   const markdown = read(file);
-  return markdown === '' ? '' : render(siteMarkdown(markdown));
+  return markdown === '' ? '' : render(siteMarkdown(markdown), `#/api/${dir}`);
 };
 
 const packages: PackageDoc[] = dirs.map((packageDir) => {
@@ -225,7 +231,7 @@ const packages: PackageDoc[] = dirs.map((packageDir) => {
     repoRoot: REPO_ROOT,
     packageDir,
     manifest,
-    readme: renderReadme(join(packageDir, 'README.md')),
+    readme: renderReadme(join(packageDir, 'README.md'), basename(packageDir)),
     render,
   });
 });

@@ -36,7 +36,7 @@ Putting a body on the wire is near-free; reading it is 3.10 µs and validating i
 0.94 µs. The ~30% drop from the `json` scenario to the `validate` scenario that every
 subject in the main suite pays is therefore **77% `req.json()` and 23% zod**. The
 primitive that would fix it is a validating parser Bun does not ship - recorded in
-[bun-apis.md](./bun-apis.md), along with why dunx must not write one.
+[bun-apis.md](../bun-apis.md), along with why dunx must not write one.
 
 ### Every validator is cheaper than the parse
 

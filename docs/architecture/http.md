@@ -161,7 +161,7 @@ Two reasons, both forced:
   straight into Bun, and there is no hook and no way to enumerate it - so
   subscribing to a Redis channel when a topic gains its first local member is not
   implementable.
-- `psubscribe` is unusable on Bun 1.3.14 (see [bun-apis.md](./bun-apis.md)), so a
+- `psubscribe` is unusable on Bun 1.3.14 (see [bun-apis.md](../bun-apis.md)), so a
   wildcard subscription is not available either.
 
 The cost is that every node reads every relayed frame and drops the ones for topics
@@ -214,7 +214,7 @@ symptom of both is a service that shut down cleanly and then hangs forever:
   rescue this one, because the client is not in subscriber mode.
 
 Both were already latent in `@dunx/infra/redis` and are fixed there too. The
-measurements are in [bun-apis.md](./bun-apis.md). The guards have to be **spawn-based
+measurements are in [bun-apis.md](../bun-apis.md). The guards have to be **spawn-based
 tests**: `bun test` exits the runner process itself, so a held-open event loop is
 invisible from inside the suite - which is exactly why this survived until an example
 app tried to shut down.

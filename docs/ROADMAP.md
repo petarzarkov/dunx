@@ -107,7 +107,7 @@ no `providers` key on the options (a fixture class goes in a two-line `@Module`)
 **Drizzle as the database layer.** Built, tested, and now documented as _the_
 driver rather than an option. The hand-rolled `Database` contract, `Repository` and
 `quoteIdentifier` are retired; the reasoning is in
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Database layer". Entity decorators were
+[architecture/database.md](./architecture/database.md). Entity decorators were
 **measured and rejected** - the compiler's field reader, built for them, was
 reverted since it shipped as public API serving nothing (`erased.ts` stayed, the
 constructor reader needs it).
@@ -123,7 +123,7 @@ discovery by marker-plus-prototype-scan, `JobPublisher`, `JobDispatcher`, and
 `WorkerFactory` as the worker process's entrypoint. Publish and consume are
 deliberately different objects - `forRoot` binds the publish side only, so a web
 process opens no worker. Documented in `packages/infra/README.md`, "queue", with the
-design in [ARCHITECTURE.md](./architecture/queues.md), "Queues".
+design in [architecture/queues.md](./architecture/queues.md), "Queues".
 
 **The ioredis collision resolved better than expected.** Measured on bullmq 6.0.5:
 `ioredis` is an _optional_ peer of bullmq 6, which ships `createBunRedisClient` - an
@@ -132,7 +132,7 @@ goes through Bun's client and no ioredis client is ever constructed. `ioredis` m
 still be _installed_, because bullmq statically imports it, so it is an optional peer
 of `@dunx/infra` too. CLAUDE.md's "Where the two halves collide" has since been
 rewritten to match; the full measurement is in
-[ARCHITECTURE.md](./architecture/queues.md), "Queues".
+[architecture/queues.md](./architecture/queues.md), "Queues".
 
 **And the ioredis follow-ups are closed, one of them by falsifying it.** The advice
 to _pin ioredis 5_ rested on three claims and re-measurement broke all three: ioredis
@@ -147,19 +147,19 @@ it. The range skew (`>=5.0.0` peer against a `^6.0.0` dev dependency) is fixed b
 making the dev dependency match, and two tests in `packages/infra/src/index.test.ts`
 now hold the shape: dunx's ioredis peer range must equal the installed bullmq's, and
 both peers must be optional together. Reasoning in
-[ARCHITECTURE.md](./architecture/queues.md), "Not pinning ioredis 5".
+[architecture/queues.md](./architecture/queues.md), "Not pinning ioredis 5".
 
 **`@dunx/auth` keeps its name.** `@dunx/better-auth` was declined, and not only on the
 cost of renaming a published package: every dunx integration is named for the
 capability rather than the vendor, so `@dunx/infra/db` is drizzle without being called
 `@dunx/drizzle` and `@dunx/infra/queue` is bullmq without being called `@dunx/bullmq`.
 Renaming auth alone would have made it the one vendor-named package in the set.
-[ARCHITECTURE.md](./ARCHITECTURE.md), "And it stays `@dunx/auth`".
+[architecture/authentication.md](./architecture/authentication.md), "And it stays `@dunx/auth`".
 
 **Versioning stays lockstep until core 1.0.0.** There is no pre-1.0 range policy that
 works - a caret cannot span a `0.x` minor, and `>=` promises across majors dunx cannot
 keep - and no work done now would survive the 1.0 change.
-[ARCHITECTURE.md](./architecture/packaging.md), "Versioning is lockstep".
+[architecture/packaging.md](./architecture/packaging.md), "Versioning is lockstep".
 
 **`@dunx/infra/logger` no longer colours a pipe.** `@arkv/logger` chooses coloured
 output from `NODE_ENV` with no terminal check anywhere on the path, so the
@@ -199,7 +199,7 @@ better-auth's tables (its CLI generates them and they follow the plugins), and a
 of the auth flow itself.
 
 The measurements and the two-strings-for-one-URL `basePath`/`mountAt` problem are in
-[ARCHITECTURE.md](./architecture/authentication.md), "Authentication".
+[architecture/authentication.md](./architecture/authentication.md), "Authentication".
 
 **Redis as the WebSocket adapter - built.** Multi-node gateway fan-out, and the
 dependency question that blocked it is settled: **both the contract and the Redis
@@ -215,7 +215,7 @@ An app that would rather reuse its own connections satisfies the two methods its
 and `@dunx/infra`'s `RedisConnection` **already does, structurally** - the full example
 runs its second node on exactly that. Reasoning, the one-channel constraint that
 `psubscribe` forces, and the duplicate-delivery defence:
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Multi-node websocket fan-out".
+[architecture/http.md](./architecture/http.md), "Multi-node websocket fan-out".
 
 It also turned up two Bun findings worth remembering as one **class** of bug, both
 now in [bun-apis.md](./bun-apis.md): a `Bun.RedisClient` holds the event loop open
@@ -274,6 +274,7 @@ Feedback goes in as a new file rather than into conversation.
 | [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Done, as arkv#4. Awaiting a merge and a version bump.                |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                          |
 | [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                            |
+| [anchor-scroll-on-cold-load](./roadmap/anchor-scroll-on-cold-load.md)               | Suspected defect. Needs one minute in a real browser.                |
 | [mcp-server](./roadmap/mcp-server.md)                                               | Feature. Requested. Ask the framework about itself.                  |
 | [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)             | Bug. Bypasses the bound Logger on a publish failure.                 |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file.        |
@@ -305,7 +306,7 @@ its test.
 
 React + Mantine bundled by `Bun.build`, static output, deployed to **GitHub Pages** as the Pages
 root. Coverage is a page inside it. Design and the parser decision:
-[ARCHITECTURE.md](./architecture/tooling.md), "Documentation site"; the extractor's own
+[architecture/tooling.md](./architecture/tooling.md), "Documentation site"; the extractor's own
 limits: `tools/docs/README.md`.
 
 Nothing on the site is hand-written prose. The landing page is the root README,
@@ -333,7 +334,7 @@ Eight subjects (raw `Bun.serve`, `@dunx/http`, Elysia, Hono on both Bun and Node
 `node:http`, Fastify, Express) across four identical workloads, plus cold-start.
 Methodology, machine and every deliberate handicap are in
 [`tools/bench/README.md`](../tools/bench/README.md); the measured findings are in
-[ARCHITECTURE.md](./architecture/benchmarks.md), "Benchmark harness".
+[architecture/benchmarks.md](./architecture/benchmarks.md), "Benchmark harness".
 
 It publishes the losses. dunx costs 6-21% against raw `Bun.serve` depending on the
 scenario, loses to Elysia on all four, and boots in roughly twice raw `Bun.serve`'s

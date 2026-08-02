@@ -5,7 +5,7 @@ How subjects are made comparable, what the harness refuses to do, and why a resu
 ## Benchmark harness (`tools/bench`)
 
 Full methodology, subject list and results table:
-[`tools/bench/README.md`](../tools/bench/README.md). Recorded here are the decisions
+[`tools/bench/README.md`](../../tools/bench/README.md). Recorded here are the decisions
 and the measurements behind them.
 
 **The first thing the harness found was a regression dunx had shipped to itself.**

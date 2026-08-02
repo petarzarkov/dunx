@@ -112,7 +112,7 @@ export const Hero = (): React.JSX.Element => (
             <Group gap="sm">
               <Button
                 component="a"
-                href={href(RouteKind.Guide, 'architecture')}
+                href={href(RouteKind.Guide, 'introduction')}
                 size="md"
               >
                 Get started

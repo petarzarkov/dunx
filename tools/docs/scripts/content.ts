@@ -33,8 +33,21 @@ export interface LinkTargets {
  * does not host at all has to become an absolute link back to GitHub rather
  * than a dead relative one.
  */
-export const rewriteHref = (href: string, targets: LinkTargets): string => {
-  if (/^(?:[a-z]+:|#|\/\/)/i.test(href)) return href;
+export const rewriteHref = (
+  href: string,
+  targets: LinkTargets,
+  /** The route this document is served at, for same-page `#anchor` links. */
+  self = '',
+): string => {
+  // A bare `#anchor` in a hash-routed site replaces the route rather than
+  // scrolling, so `#two-things` navigated away from the page it was written on.
+  // Rewritten to the page's own route plus `?h=`, the same mechanism a search hit
+  // uses. Without a known route there is nothing better to do than leave it.
+  if (href.startsWith('#')) {
+    const anchor = href.slice(1);
+    return self && anchor ? `${self}?h=${anchor}` : href;
+  }
+  if (/^(?:[a-z]+:|\/\/)/i.test(href)) return href;
 
   const [path = '', hash] = href.split('#');
   const suffix = hash ? `#${hash}` : '';
@@ -154,6 +167,8 @@ export interface RenderedDoc {
 export const renderDoc = (
   markdown: string,
   targets: LinkTargets,
+  /** The route this document is served at. Needed for same-page anchors. */
+  self = '',
 ): RenderedDoc => {
   const headings: { id: string; text: string }[] = [];
   const seen = new Map<string, number>();
@@ -176,7 +191,7 @@ export const renderDoc = (
 
   html = html.replace(
     ANCHOR,
-    (_match, href: string) => `<a href="${rewriteHref(href, targets)}"`,
+    (_match, href: string) => `<a href="${rewriteHref(href, targets, self)}"`,
   );
 
   return { html, headings };
@@ -197,7 +212,7 @@ export const buildGuide = (
   order = 0,
   section = '',
 ): GuidePage => {
-  const { html, headings } = renderDoc(markdown, targets);
+  const { html, headings } = renderDoc(markdown, targets, `#/guide/${slug}`);
   return {
     slug,
     category,

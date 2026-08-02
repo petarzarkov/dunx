@@ -29,9 +29,9 @@ Since then:
 
 ## Left
 
-- The benchmark section is a table plus the speed panel, not the graphic in
-  [elysia-style-hero-graphic.md](./elysia-style-hero-graphic.md), if that file is
-  still open.
+- The benchmark section is the speed panel plus a table. The bar-chart graphic that
+  was tracked separately is delivered, so what is left here is whether the panel
+  earns the space it takes.
 - No illustration anywhere else. The lifecycle is the only drawing on the page.
 - Light mode is now correct and still the plainer of the two.
 

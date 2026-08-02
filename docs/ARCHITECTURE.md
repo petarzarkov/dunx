@@ -1,11 +1,14 @@
 # Architecture
 
-The design record: what was measured, what was rejected, and why. Not a tutorial -
-for that, start with the [Introduction](./guide/01-introduction.md).
+The design record: what was measured, what was rejected, and why. It exists so a
+decision is not re-litigated, and so a constraint that was probed on real Bun is not
+re-derived from memory.
 
-This was one 2,700-line file. It is now twelve pages, because nobody reads the
-thirtieth screen of a document and the parts have almost nothing to do with each
-other. Read the page you need.
+**Not a tutorial.** If you want to learn dunx, start with the
+[Introduction](./guide/01-introduction.md); each page below assumes you already
+know what the thing being justified does.
+
+One page per subject. Read the one you need.
 
 ## Read this first
 

@@ -32,8 +32,7 @@ with no `exports`, `main` or `types`, so nothing in it is importable at all.
 **Backoff: dropped, and the premise was wrong twice.** This file used to say doubling
 backoff was implemented twice, in the relay's resubscribe and the queue's retry. It is
 implemented **once**, at `packages/http/src/ws/pubsub.ts:124`. The queue does not
-retry: bullmq does, through its own `attempts` and `backoff`, and ARCHITECTURE.md's
-"Queues" is explicit that a dunx implementation of that would be a worse one. There
+retry: bullmq does, through its own `attempts` and `backoff`, and architecture/queues.md is explicit that a dunx implementation of that would be a worse one. There
 is nothing upstream to share with: `@arkv/shared`'s `retry`
 (`packages/shared/src/async/async.utils.ts:4`) takes a **constant** `delayMs` with no
 multiplier, jitter, cap, `AbortSignal` or predicate, and a workspace-wide grep for

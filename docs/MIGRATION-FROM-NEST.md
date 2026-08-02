@@ -5,7 +5,7 @@ what dunx provides. Read [ARCHITECTURE.md](./ARCHITECTURE.md) first - this
 document assumes its decisions and does not relitigate them.
 
 This is a **living gap table**. It is also the roadmap's reality check: the
-phases in ARCHITECTURE.md were written from the framework's point of view, and
+phases in ROADMAP.md were written from the framework's point of view, and
 this document is written from a migrating application's point of view. Where the
 two disagree, this one names the cost.
 
