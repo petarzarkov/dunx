@@ -8,7 +8,7 @@ import { provide } from './provider.js';
 import { token, type Ctor } from './token.js';
 
 /**
- * Stands in for `@dunx/compiler`. Core is tested without the plugin on purpose:
+ * Stands in for `@dunx/transform`. Core is tested without the plugin on purpose:
  * the container's contract is the metadata, not the transform that writes it, and
  * `examples/full` covers the two working together.
  */
@@ -194,8 +194,8 @@ describe('missing transform', () => {
 
     const message = await rejectionMessage(AppFactory.create(Root));
     expect(message).toContain('Untransformed declares 1 constructor parameter');
-    expect(message).toContain('@dunx/compiler did not transform');
-    expect(message).toContain('preload = ["@dunx/compiler/preload"]');
+    expect(message).toContain('@dunx/transform did not transform');
+    expect(message).toContain('preload = ["@dunx/transform/preload"]');
   });
 
   it('does not fire for a constructor whose parameters all have defaults', async () => {

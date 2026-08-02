@@ -357,7 +357,7 @@ describe('HttpFactory', () => {
         return next();
       }
     }
-    // Stands in for @dunx/compiler, which does not run over this package's tests.
+    // Stands in for @dunx/transform, which does not run over this package's tests.
     Object.defineProperty(CountingMiddleware, Symbol.for('dunx.deps'), {
       value: () => [Counter],
     });

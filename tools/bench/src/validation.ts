@@ -54,7 +54,7 @@ const dunxSubject: Subject = {
   label: '@dunx/http',
   runtime: 'bun',
   entry: 'servers/validation/dunx.ts',
-  preload: ['@dunx/compiler/preload'],
+  preload: ['@dunx/transform/preload'],
   versionOf: '@dunx/http',
   validator: 'varies',
   notes: [],

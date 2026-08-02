@@ -1,7 +1,7 @@
 import type { Ctor, InjectionToken } from './token.js';
 
 /**
- * Written by `@dunx/compiler` as a thunk on the class itself. `Symbol.for`, so two
+ * Written by `@dunx/transform` as a thunk on the class itself. `Symbol.for`, so two
  * copies of `@dunx/core` in one dependency tree still agree on the key.
  */
 const DEPS = Symbol.for('dunx.deps');

@@ -69,9 +69,9 @@ is not the one on the docs site. `siteMarkdown` in `scripts/content.ts` drops:
 
 Matching is on the heading's slug with a `-` word boundary, so
 `## Install it as a devDependency` goes with `## Install`, and `## Setup` — which
-is API documentation in `@dunx/compiler` — stays. Nested `###` headings go with
+is API documentation in `@dunx/transform` — stays. Nested `###` headings go with
 their parent `##`. Fenced code is tracked, so the `# bunfig.toml` inside
-`packages/compiler/README.md`'s example is not mistaken for a heading.
+`packages/transform/README.md`'s example is not mistaken for a heading.
 
 **Naming a section is how an author chooses.** Content worth keeping should not
 live under one of those headings; `@dunx/testing`'s single-copy-of-`@dunx/core`
@@ -123,7 +123,7 @@ Every claim on the page is computed from the report:
 
 The extractor reads every `.ts` file under each package's `src/`, finds the
 exported declarations, and pulls the doc comment, the signature and the source
-location off each one. `packages/compiler` already drives `oxc-parser` for the
+location off each one. `packages/transform` already drives `oxc-parser` for the
 constructor-dependency transform, and the same parser answers every question the
 extractor has:
 

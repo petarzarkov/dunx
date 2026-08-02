@@ -24,11 +24,11 @@ curl localhost:3000/greetings/ada     # {"greeting":"hello, ada","served":1}
 
 ```toml
 # bunfig.toml
-preload = ["@dunx/compiler/preload"]
+preload = ["@dunx/transform/preload"]
 ```
 
 Constructor injection needs no decorator and no `@Inject()`, because
-`@dunx/compiler` reads each class's constructor parameter types at load time and
+`@dunx/transform` reads each class's constructor parameter types at load time and
 records them for the container. That preload is how it runs.
 
 Leave it out and boot fails with an error naming the class and telling you to add

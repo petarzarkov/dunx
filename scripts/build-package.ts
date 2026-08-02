@@ -1,8 +1,8 @@
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-// Imported from source, not dist: this script is what builds @dunx/compiler, so
+// Imported from source, not dist: this script is what builds @dunx/transform, so
 // depending on its output would not bootstrap.
-import { depsPlugin } from '../packages/compiler/src/plugin.js';
+import { depsPlugin } from '../packages/transform/src/plugin.js';
 
 /**
  * Bun-native package build. Run from a package root: `bun ../../scripts/build-package.ts`.

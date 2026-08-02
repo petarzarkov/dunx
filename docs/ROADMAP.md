@@ -10,14 +10,14 @@ other.
 
 ## Built
 
-| Package          | Contains                                                               |
-| ---------------- | ---------------------------------------------------------------------- |
-| `@dunx/core`     | DI container, modules, lifecycle, the `Logger` contract — zero deps    |
-| `@dunx/compiler` | Load-time transform: constructor parameter types                       |
-| `@dunx/http`     | Routes, websocket gateways, middleware, guards, CORS, validation       |
-| `@dunx/infra`    | `/db` (drizzle) `/redis` `/files` `/images` `/logger` (`@arkv/logger`) |
-| `@dunx/openapi`  | OpenAPI 3.1 from route zod schemas, self-contained HTML                |
-| `@dunx/testing`  | Bindings replaced in place, a real `Bun.serve` on port 0               |
+| Package           | Contains                                                               |
+| ----------------- | ---------------------------------------------------------------------- |
+| `@dunx/core`      | DI container, modules, lifecycle, the `Logger` contract — zero deps    |
+| `@dunx/transform` | Load-time transform: constructor parameter types                       |
+| `@dunx/http`      | Routes, websocket gateways, middleware, guards, CORS, validation       |
+| `@dunx/infra`     | `/db` (drizzle) `/redis` `/files` `/images` `/logger` (`@arkv/logger`) |
+| `@dunx/openapi`   | OpenAPI 3.1 from route zod schemas, self-contained HTML                |
+| `@dunx/testing`   | Bindings replaced in place, a real `Bun.serve` on port 0               |
 
 The two integrations are deliberate, per Rule 1's second half: `drizzle-orm` is an
 optional `peerDependency` and drives `bun:sqlite`/`Bun.SQL` through its own Bun

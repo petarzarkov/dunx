@@ -9,7 +9,7 @@ import { widgets, type Widget } from './schema.js';
  * SQLite in **asynchronous mode** — the default, and what `SqliteOptions` binds.
  *
  * `BunSQLiteDatabase<typeof schema>` is drizzle's own class, so it is both the
- * injection token and the typed handle: `@dunx/compiler` records the bare type
+ * injection token and the typed handle: `@dunx/transform` records the bare type
  * name and ignores the type argument, which is how the schema types survive
  * injection. There is no dunx wrapper around drizzle anywhere in this file.
  *

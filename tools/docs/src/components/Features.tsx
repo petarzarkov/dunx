@@ -88,7 +88,7 @@ export const Features = (): React.JSX.Element => {
 
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
           <Feature icon={PATHS.inject} title="Injection without annotation">
-            <code>@dunx/compiler</code> reads constructor parameter types at
+            <code>@dunx/transform</code> reads constructor parameter types at
             load time and records them as a thunk, so a dependency declared
             later in the file — or across a circular import — resolves with no{' '}
             <code>forwardRef</code>. An erased type is a boot error naming the

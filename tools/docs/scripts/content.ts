@@ -103,7 +103,7 @@ const CENTERED_CLOSE = /^ {0,3}<\/div>/;
  *
  * Line-oriented rather than run over the produced HTML, so heading ids and link
  * rewriting only ever see kept content — and fenced code is tracked, because
- * `packages/compiler/README.md` opens a block with `# bunfig.toml` in it.
+ * `packages/transform/README.md` opens a block with `# bunfig.toml` in it.
  */
 export const siteMarkdown = (markdown: string): string => {
   const kept: string[] = [];

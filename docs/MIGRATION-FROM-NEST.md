@@ -35,7 +35,7 @@ An earlier revision of this document opened with constructor injection as "the
 one unavoidable rewrite" and proposed a codemod for it. That is no longer true,
 and the codemod no longer exists.
 
-`@dunx/compiler` reads constructor parameter types at load time and records them
+`@dunx/transform` reads constructor parameter types at load time and records them
 on the class, so the Nest shape works unchanged:
 
 ```ts
@@ -54,7 +54,7 @@ export class UsersService {
 Apps opt in with one line in `bunfig.toml`:
 
 ```toml
-preload = ["@dunx/compiler/preload"]
+preload = ["@dunx/transform/preload"]
 ```
 
 See ARCHITECTURE.md, "Constructor injection without decorator metadata", for how

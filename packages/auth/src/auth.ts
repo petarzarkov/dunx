@@ -9,7 +9,7 @@ import { AuthError } from './errors.js';
  * This is the same trick `Logger` and `RequestContext` use in `@dunx/core`: an
  * abstract class whose members are **aliases of better-auth's own** — not
  * restatements — which a real instance satisfies structurally. That is what makes
- * `constructor(private readonly auth: Auth)` work, since `@dunx/compiler` records
+ * `constructor(private readonly auth: Auth)` work, since `@dunx/transform` records
  * the bare type name and the container resolves it.
  *
  * The type argument is the `DbModule` trick from `@dunx/infra/db`: the token is the

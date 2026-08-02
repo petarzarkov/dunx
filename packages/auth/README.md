@@ -247,5 +247,5 @@ does anything else shaped like `Bun.RedisClient`.
 | `SessionGuard`| The guard, ready for `middleware: [...]` or `@UseGuards`         |
 
 Every one of them declares its own `inject` list, so none of it needs
-`@dunx/compiler`'s transform to have run — `@dunx/auth` works in an app with no
+`@dunx/transform`'s transform to have run — `@dunx/auth` works in an app with no
 preload.

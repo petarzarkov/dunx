@@ -25,7 +25,7 @@ const validate = {
   status: 200,
 } as const satisfies RouteSchemas;
 
-// A constructor-injected dependency, resolved by @dunx/compiler's preload. It is
+// A constructor-injected dependency, resolved by @dunx/transform's preload. It is
 // here because that is how a real dunx app is written, and its cost belongs in the
 // startup number rather than being quietly left out.
 @Controller()

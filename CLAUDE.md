@@ -16,7 +16,7 @@ conflict is worth raising rather than resolving quietly.
 Every capability dunx ships must be built on a **Bun-native API** or, failing
 that, a **native low-level implementation** — compiled, not JavaScript
 reimplementations of things the platform already does. `oxc-parser` in
-`@dunx/compiler` is the reference precedent: a Rust parser via N-API, chosen over
+`@dunx/transform` is the reference precedent: a Rust parser via N-API, chosen over
 a JavaScript AST library.
 
 There are two halves to this, and they pull in opposite directions on purpose.
@@ -197,12 +197,12 @@ export class UsersService {
 }
 ```
 
-`@dunx/compiler` reads each class's constructor parameter types at load time and
+`@dunx/transform` reads each class's constructor parameter types at load time and
 records them on the class as a thunk under `Symbol.for('dunx.deps')`; the
 container resolves them before calling `new`. Apps opt in with one line:
 
 ```toml
-preload = ["@dunx/compiler/preload"]
+preload = ["@dunx/transform/preload"]
 ```
 
 Consequences to keep in mind when changing this area:
@@ -381,19 +381,19 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 ## Packages Overview
 
-| Package          | Contains                                                                                                             |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `@dunx/core`     | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                    |
-| `@dunx/compiler` | Load-time constructor-dependency transform (only native dep)                                                         |
-| `@dunx/http`     | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation                                 |
-| `@dunx/infra`    | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger`                                                        |
-| `@dunx/openapi`  | OpenAPI 3.1 from the routes' own zod schemas, plus `tools/openapi-ui`'s explorer inlined (zod is a `peerDependency`) |
-| `@dunx/auth`     | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                       |
-| `@dunx/testing`  | `createTestApp` / `createTestServer` — overrides replaced in place, real server on port 0                            |
+| Package           | Contains                                                                                                             |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `@dunx/core`      | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                    |
+| `@dunx/transform` | Load-time constructor-dependency transform (only native dep)                                                         |
+| `@dunx/http`      | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation                                 |
+| `@dunx/infra`     | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger`                                                        |
+| `@dunx/openapi`   | OpenAPI 3.1 from the routes' own zod schemas, plus `tools/openapi-ui`'s explorer inlined (zod is a `peerDependency`) |
+| `@dunx/auth`      | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                       |
+| `@dunx/testing`   | `createTestApp` / `createTestServer` — overrides replaced in place, real server on port 0                            |
 
 Seven packages, deliberately few. Merging is nearly free because the runtime weight is
 almost nil — `@dunx/core` has **zero dependencies**, and ESM tree-shaking drops what
-is not imported. `@dunx/compiler` stays separate because it is the only package with a
+is not imported. `@dunx/transform` stays separate because it is the only package with a
 native dependency (`oxc-parser`) and is build-time only; merging it would put a Rust
 parser in every production deploy.
 

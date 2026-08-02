@@ -5,7 +5,7 @@ import { BUILD_STAMP, FEATURE_FLAGS, type BuildStamp } from './tokens.js';
  * The two mechanisms in one class, which is supported and occasionally the right
  * answer.
  *
- * `logger` is a **constructor parameter**: `@dunx/compiler` recorded its type at
+ * `logger` is a **constructor parameter**: `@dunx/transform` recorded its type at
  * load time, so it needs no annotation at all. That is the default and what almost
  * everything in this app uses.
  *

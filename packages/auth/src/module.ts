@@ -28,7 +28,7 @@ const build = (options: Registration, mountAt: string): DynamicModule => {
     module: AuthModule,
     controllers: [mountHandler(mountAt)],
     // Every binding declares its own `inject`, so nothing here needs
-    // `@dunx/compiler`'s transform to have run — the same reason
+    // `@dunx/transform`'s transform to have run — the same reason
     // `RequestLoggingMiddleware` and `@dunx/infra/redis`'s `Redis` are bound this way.
     providers: [
       options,

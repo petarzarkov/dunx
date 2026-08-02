@@ -44,7 +44,7 @@ const subject = (mode: Mode): Subject => ({
   label: `@dunx/infra/db (${mode})`,
   runtime: 'bun',
   entry: 'servers/db/sqlite.ts',
-  preload: ['@dunx/compiler/preload'],
+  preload: ['@dunx/transform/preload'],
   versionOf: '@dunx/infra',
   validator: 'none',
   notes: [],

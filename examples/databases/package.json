@@ -10,9 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dunx/compiler": "workspace:*",
     "@dunx/core": "workspace:*",
     "@dunx/infra": "workspace:*",
+    "@dunx/transform": "workspace:*",
     "drizzle-orm": "^0.45.2"
   }
 }

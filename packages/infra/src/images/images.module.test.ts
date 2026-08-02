@@ -83,7 +83,7 @@ describe('ImagesModule.forRoot', () => {
         return `${out.width}x${out.height} ${out.mimeType}`;
       }
     }
-    // @dunx/compiler records this at build time from the parameter type; the
+    // @dunx/transform records this at build time from the parameter type; the
     // in-package suite has no preload, so it is stated here explicitly.
     Object.defineProperty(Thumbnails, Symbol.for('dunx.deps'), {
       value: () => [Images],

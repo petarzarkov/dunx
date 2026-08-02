@@ -5,7 +5,7 @@ export interface Token<T> {
   readonly resolves?: T;
 }
 
-// Any constructor is callable: `@dunx/compiler` records each class's parameter
+// Any constructor is callable: `@dunx/transform` records each class's parameter
 // types, and the container resolves them before calling `new`. `never[]` is what
 // makes an arbitrary signature assignable here — parameters are contravariant.
 export type Ctor<T> = new (...args: never[]) => T;

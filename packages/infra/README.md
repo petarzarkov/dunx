@@ -44,7 +44,7 @@ make both a hard requirement of `import '@dunx/infra'` — including for an app 
 has no queue. Reach it at `@dunx/infra/queue`.
 
 Anything injectable by a **constructor parameter** is a runtime class here, never
-an interface: an `interface` erases and leaves nothing for `@dunx/compiler` to
+an interface: an `interface` erases and leaves nothing for `@dunx/transform` to
 record as a parameter type. It is an abstract class where dunx owns the contract —
 `Storage`, `DbConnection`, `DbOptions`, `ImagesOptions`, `Logger` — and the
 library's own class where it does not (`BunSQLiteDatabase`, `ContextStore`). The
@@ -111,7 +111,7 @@ export class UsersRepository {
 ```
 
 Two things about that annotation. The import is a **value** import, not
-`import type`: `@dunx/compiler` records the constructor parameter's type name and
+`import type`: `@dunx/transform` records the constructor parameter's type name and
 the container resolves it as a token, so a type-only import would be recorded as
 `unresolved` and fail at boot. And the token is the **erased** class — the
 compiler records `BunSQLiteDatabase` and ignores the type argument, which is what
@@ -1371,7 +1371,7 @@ pixels have to be known-good. `verify()` runs a full decode.
 ### Configuration
 
 `ImagesOptions` is an `abstract class`, so it is a usable injection token — an
-`interface` would erase and `@dunx/compiler` would record the parameter as
+`interface` would erase and `@dunx/transform` would record the parameter as
 unresolved.
 
 | Option           | Default                   | Effect                                           |
@@ -1391,7 +1391,7 @@ ImagesModule.forRoot(async () => ({ quality: await settings.imageQuality() }));
 ```
 
 `Images` is bound through an explicit factory, so this area works with or without
-the `@dunx/compiler` preload. You still need the preload for your _own_ classes to
+the `@dunx/transform` preload. You still need the preload for your _own_ classes to
 inject `Images` by constructor.
 
 ### What `Bun.Image` actually does

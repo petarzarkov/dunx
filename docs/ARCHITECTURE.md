@@ -265,7 +265,7 @@ conclusion was wrong: it assumed the parameter types had to be recovered at
 runtime, which is the only thing decorators could have done. They can be read at
 **load time** instead, from the source that still has them.
 
-`@dunx/compiler` is a Bun plugin. On load it parses each file with `oxc-parser`,
+`@dunx/transform` is a Bun plugin. On load it parses each file with `oxc-parser`,
 reads every class's constructor parameter types, and appends one statement per
 class:
 
@@ -288,14 +288,14 @@ Three ways, same plugin object:
 
 ```toml
 # bunfig.toml — for `bun run` and `bun test`
-preload = ["@dunx/compiler/preload"]
+preload = ["@dunx/transform/preload"]
 
 [test]
-preload = ["@dunx/compiler/preload"]
+preload = ["@dunx/transform/preload"]
 ```
 
 ```bash
-bun --preload @dunx/compiler/preload src/main.ts   # no config file at all
+bun --preload @dunx/transform/preload src/main.ts   # no config file at all
 ```
 
 ```ts
@@ -334,11 +334,11 @@ the file, and that is a boot error carrying the fix:
 
 ```
 UsersController declares 1 constructor parameter(s) but no dependencies were
-recorded for it, so @dunx/compiler did not transform UsersController.
+recorded for it, so @dunx/transform did not transform UsersController.
 Register the plugin, then retry:
 
   # bunfig.toml
-  preload = ["@dunx/compiler/preload"]
+  preload = ["@dunx/transform/preload"]
 ```
 
 The check cannot produce a false positive. A constructor whose parameters all have
@@ -780,7 +780,7 @@ What remains is only what a drizzle handle genuinely lacks:
 - **Module wiring.** `DbModule` binds three tokens: `DbOptions`, `DbConnection`,
   and **drizzle's own database class**. That last one is the whole trick — drizzle's
   `BunSQLiteDatabase` and `BunSQLDatabase` are real runtime classes, so a class is
-  usable as a token directly, and `@dunx/compiler` records the bare type name from
+  usable as a token directly, and `@dunx/transform` records the bare type name from
   `db: BunSQLiteDatabase<typeof schema>` while ignoring the type argument. One
   erased class is the token; the schema types stay on the annotation. No wrapper
   object, and no `token()` call.
@@ -968,7 +968,7 @@ would lose real content.
 
 **The API reference is extracted, not written.** `tools/docs/scripts/extract/`
 parses every `packages/*/src/**/*.ts` with **`oxc-parser`** — the parser
-`@dunx/compiler` already depends on — and reads three things off each exported
+`@dunx/transform` already depends on — and reads three things off each exported
 declaration:
 
 - the **signature**, sliced from the source text between AST offsets (from the
@@ -1127,7 +1127,7 @@ before it becomes a supported surface with a schema type parameter to maintain.
 and route-collision detection. `examples/full` grows a controller; its Phase 1
 assertions keep passing unchanged.
 
-Also `@dunx/compiler`, the load-time transform that makes constructor injection
+Also `@dunx/transform`, the load-time transform that makes constructor injection
 work. It landed here rather than in Phase 1 because the need only became clear
 once real application code was being written against `inject()`.
 

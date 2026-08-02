@@ -82,7 +82,7 @@ export const assertRedisUrl = (url: string): string => {
 
 /**
  * A class, not an interface, so it is a runtime value and can therefore be a
- * constructor parameter type that `@dunx/compiler` can record.
+ * constructor parameter type that `@dunx/transform` can record.
  */
 export class RedisOptions {
   readonly url: string;

@@ -1,4 +1,4 @@
-# @dunx/compiler
+# @dunx/transform
 
 Load-time transform that lets the dunx container use constructor injection.
 
@@ -14,22 +14,22 @@ No `@Injectable`, no `@Inject`, no `reflect-metadata`, no `experimentalDecorator
 
 ```toml
 # bunfig.toml
-preload = ["@dunx/compiler/preload"]
+preload = ["@dunx/transform/preload"]
 
 [test]
-preload = ["@dunx/compiler/preload"]
+preload = ["@dunx/transform/preload"]
 ```
 
 Or with no config file at all:
 
 ```bash
-bun --preload @dunx/compiler/preload src/main.ts
+bun --preload @dunx/transform/preload src/main.ts
 ```
 
 For a production build, pass the plugin to `Bun.build`:
 
 ```ts
-import { depsPlugin } from '@dunx/compiler';
+import { depsPlugin } from '@dunx/transform';
 
 await Bun.build({ entrypoints: ['src/main.ts'], plugins: [depsPlugin] });
 ```
@@ -80,5 +80,5 @@ plugin never saw is a boot error rather than a set of `undefined` fields:
 
 ```
 UsersController declares 1 constructor parameter(s) but no dependencies were
-recorded for it, so @dunx/compiler did not transform UsersController.
+recorded for it, so @dunx/transform did not transform UsersController.
 ```

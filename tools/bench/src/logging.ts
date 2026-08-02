@@ -38,7 +38,7 @@ const subject: Subject = {
   label: '@dunx/http',
   runtime: 'bun',
   entry: 'servers/logging/dunx.ts',
-  preload: ['@dunx/compiler/preload'],
+  preload: ['@dunx/transform/preload'],
   versionOf: '@dunx/http',
   validator: 'zod (Standard Schema)',
   notes: [],

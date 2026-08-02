@@ -3,7 +3,7 @@ import { ImageFormat } from './format.js';
 /**
  * The configuration contract, modelled as an `abstract class` so it is a
  * runtime value and therefore a usable injection token. An `interface` here
- * would erase and `@dunx/compiler` would record the parameter as `unresolved`.
+ * would erase and `@dunx/transform` would record the parameter as `unresolved`.
  *
  * Resolve it to read the effective configuration:
  * `constructor(private readonly config: ImagesOptions) {}`.

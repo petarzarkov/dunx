@@ -36,12 +36,12 @@ const STEPS = [
   {
     title: 'Install the packages',
     body: 'The core, the HTTP layer and the compiler. Everything else is opt-in.',
-    code: 'bun add @dunx/core @dunx/http @dunx/compiler',
+    code: 'bun add @dunx/core @dunx/http @dunx/transform',
   },
   {
     title: 'Turn the transform on',
     body: 'One line, once per app. It is what lets constructors go unannotated.',
-    code: '# bunfig.toml\npreload = ["@dunx/compiler/preload"]',
+    code: '# bunfig.toml\npreload = ["@dunx/transform/preload"]',
   },
   {
     title: 'Boot the server',

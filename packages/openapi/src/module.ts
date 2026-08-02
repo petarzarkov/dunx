@@ -99,7 +99,7 @@ const buildController = (paths: DocPaths) => {
   @Controller()
   class OpenApiController {
     // inject() in a field initializer, not a constructor parameter: this package
-    // works with or without the @dunx/compiler preload.
+    // works with or without the @dunx/transform preload.
     readonly #explorer = inject(OpenApiExplorer);
 
     @Public()

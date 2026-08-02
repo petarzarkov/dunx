@@ -22,12 +22,12 @@ export class UsersService {
 ```
 
 No `@Injectable`, no `@Inject`, no `reflect-metadata`, no `experimentalDecorators`.
-`@dunx/compiler` reads each class's constructor parameter types at load time and
+`@dunx/transform` reads each class's constructor parameter types at load time and
 records them on the class; the container resolves them before calling `new`. Apps
 opt in with one line in `bunfig.toml`:
 
 ```toml
-preload = ["@dunx/compiler/preload"]
+preload = ["@dunx/transform/preload"]
 ```
 
 A parameter whose type is erased — an interface, a primitive, a union, a type-only

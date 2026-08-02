@@ -33,7 +33,7 @@ type Schema = typeof schema;
 const handle: AbstractCtor<BunSQLiteDatabase<Schema>> = BunSQLiteDatabase;
 
 /**
- * Stands in for `@dunx/compiler`. This package cannot depend on it — the plugin is
+ * Stands in for `@dunx/transform`. This package cannot depend on it — the plugin is
  * what builds `@dunx/infra` — so the tests write the record it would append.
  */
 const records = (ctor: object, deps: () => readonly unknown[]): void => {
@@ -44,7 +44,7 @@ const shutdowns: string[] = [];
 
 /**
  * The point of the whole arrangement: the annotation is drizzle's own class with
- * the schema as its type argument. `@dunx/compiler` records the bare name — a real
+ * the schema as its type argument. `@dunx/transform` records the bare name — a real
  * runtime class, so a usable token — and ignores the type argument, so the schema
  * types survive into every query below.
  */

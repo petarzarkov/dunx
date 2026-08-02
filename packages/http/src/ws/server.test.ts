@@ -89,7 +89,7 @@ const closes: string[] = [];
 
 @Gateway('/chat')
 class ChatGateway {
-  // inject() rather than a constructor parameter: @dunx/compiler is not preloaded
+  // inject() rather than a constructor parameter: @dunx/transform is not preloaded
   // for this package's own tests. examples/ws proves the constructor path.
   readonly #rooms = inject(Rooms);
 
@@ -321,7 +321,7 @@ describe('HttpFactory with gateways', () => {
         return this.#greeter.greet(name);
       }
     }
-    // What @dunx/compiler emits for the constructor above.
+    // What @dunx/transform emits for the constructor above.
     Object.defineProperty(GreetGateway, Symbol.for('dunx.deps'), {
       value: () => [Greeter],
     });

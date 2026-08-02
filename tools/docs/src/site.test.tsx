@@ -40,12 +40,12 @@ describe('the generated model', () => {
   test('covers every published package', () => {
     expect(site.packages.map((pkg) => pkg.name).sort()).toEqual([
       '@dunx/auth',
-      '@dunx/compiler',
       '@dunx/core',
       '@dunx/http',
       '@dunx/infra',
       '@dunx/openapi',
       '@dunx/testing',
+      '@dunx/transform',
     ]);
   });
 
@@ -169,7 +169,7 @@ describe('the landing page', () => {
     expect(text).toContain(
       'constructor(private readonly repo: UsersRepository)',
     );
-    expect(text).toContain('preload = ["@dunx/compiler/preload"]');
+    expect(text).toContain('preload = ["@dunx/transform/preload"]');
     expect(text).toContain('reflect-metadata');
   });
 

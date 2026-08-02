@@ -139,7 +139,7 @@ export class SqliteOptions<
   /**
    * drizzle's database classes are real runtime classes, not interfaces, so the
    * class *is* the token. That is the whole trick behind injecting a
-   * schema-generic handle: `@dunx/compiler` records the bare type name from
+   * schema-generic handle: `@dunx/transform` records the bare type name from
    * `db: BunSQLiteDatabase<typeof schema>` and ignores the type argument, so the
    * token is the erased class while the schema types stay on the annotation.
    */

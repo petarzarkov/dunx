@@ -13,11 +13,11 @@
   },
   "dependencies": {
     "@dunx/auth": "workspace:*",
-    "@dunx/compiler": "workspace:*",
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/infra": "workspace:*",
     "@dunx/openapi": "workspace:*",
+    "@dunx/transform": "workspace:*",
     "better-auth": "^1.6.25",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",

@@ -10,9 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dunx/compiler": "workspace:*",
     "@dunx/core": "workspace:*",
-    "@dunx/http": "workspace:*"
+    "@dunx/http": "workspace:*",
+    "@dunx/transform": "workspace:*"
   },
   "devDependencies": {
     "@dunx/testing": "workspace:*"

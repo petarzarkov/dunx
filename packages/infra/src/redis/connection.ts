@@ -49,7 +49,7 @@ export type MessageListener = (message: string, channel: string) => void;
 /**
  * The injectable contract.
  *
- * An `abstract class` rather than an interface on purpose: `@dunx/compiler` records
+ * An `abstract class` rather than an interface on purpose: `@dunx/transform` records
  * constructor parameter *types*, and an interface has no runtime value to record,
  * so an interface here would be a boot error at the injection site. See
  * CLAUDE.md, "Dependency injection".

@@ -5,7 +5,7 @@ import { transform } from './deps.js';
  * Rewrites TypeScript as it is loaded so the container can read constructor
  * dependencies. Usable in three places, all the same object:
  *
- * - `bunfig.toml` -> `preload = ["@dunx/compiler/preload"]` for `bun run`
+ * - `bunfig.toml` -> `preload = ["@dunx/transform/preload"]` for `bun run`
  * - `Bun.build({ plugins: [depsPlugin] })` for a production build
  * - `Bun.plugin(depsPlugin)` from a test preload
  *

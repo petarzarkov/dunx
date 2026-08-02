@@ -19,11 +19,11 @@ export const subjects: readonly Subject[] = [
     label: '@dunx/http',
     runtime: 'bun',
     entry: 'servers/dunx.ts',
-    preload: ['@dunx/compiler/preload'],
+    preload: ['@dunx/transform/preload'],
     versionOf: '@dunx/http',
     validator: 'zod (Standard Schema)',
     notes: [
-      'Runs with the @dunx/compiler preload and one constructor-injected service, which is how a real dunx app is written.',
+      'Runs with the @dunx/transform preload and one constructor-injected service, which is how a real dunx app is written.',
       'DI resolution and route discovery happen at boot, so they show up in the startup number and not in the per-request number.',
     ],
   },
@@ -32,7 +32,7 @@ export const subjects: readonly Subject[] = [
     label: '@dunx/http (+ request logging)',
     runtime: 'bun',
     entry: 'servers/dunx-logging.ts',
-    preload: ['@dunx/compiler/preload'],
+    preload: ['@dunx/transform/preload'],
     versionOf: '@dunx/http',
     validator: 'zod (Standard Schema)',
     notes: [

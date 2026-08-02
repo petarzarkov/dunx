@@ -2,7 +2,7 @@ import { Anchor, Card, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { href, RouteKind } from '../router';
 import { CodeBlock } from './CodeBlock';
 
-const PRELOAD = `preload = ["@dunx/compiler/preload"]`;
+const PRELOAD = `preload = ["@dunx/transform/preload"]`;
 
 const NEST = `@Injectable()
 export class UsersService {
@@ -46,7 +46,7 @@ export const NoDecorators = (): React.JSX.Element => (
         <CodeBlock label="bunfig.toml" code={PRELOAD} />
         <Text size="sm" c="dimmed">
           <Anchor href={href(RouteKind.Api, 'compiler')}>
-            <code>@dunx/compiler</code>
+            <code>@dunx/transform</code>
           </Anchor>{' '}
           reads each class&apos;s constructor parameter types at load time and
           records them on the class as a thunk; the container resolves them

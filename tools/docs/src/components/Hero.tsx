@@ -51,11 +51,11 @@ await app.listen(3000);`,
   },
   {
     name: 'bunfig.toml',
-    code: `preload = ["@dunx/compiler/preload"]`,
+    code: `preload = ["@dunx/transform/preload"]`,
   },
 ];
 
-const INSTALL = 'bun add @dunx/core @dunx/http @dunx/compiler';
+const INSTALL = 'bun add @dunx/core @dunx/http @dunx/transform';
 
 const InstallLine = (): React.JSX.Element => (
   <div className="install">

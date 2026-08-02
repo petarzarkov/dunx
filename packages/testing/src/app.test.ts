@@ -43,7 +43,7 @@ const Dsn = token<string>('Dsn');
 
 /**
  * The consumer takes its dependency as a constructor parameter. `bun test` runs
- * from source with no `@dunx/compiler` preload, so the record the plugin would
+ * from source with no `@dunx/transform` preload, so the record the plugin would
  * have appended is written by hand — as core's own dynamic-module test does.
  */
 class Reports {

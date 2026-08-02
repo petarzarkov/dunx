@@ -19,9 +19,9 @@
       "name": "@dunx/example-databases",
       "version": "0.0.0",
       "dependencies": {
-        "@dunx/compiler": "workspace:*",
         "@dunx/core": "workspace:*",
         "@dunx/infra": "workspace:*",
+        "@dunx/transform": "workspace:*",
         "drizzle-orm": "^0.45.2",
       },
     },
@@ -30,11 +30,11 @@
       "version": "0.0.0",
       "dependencies": {
         "@dunx/auth": "workspace:*",
-        "@dunx/compiler": "workspace:*",
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
         "@dunx/infra": "workspace:*",
         "@dunx/openapi": "workspace:*",
+        "@dunx/transform": "workspace:*",
         "better-auth": "^1.6.25",
         "bullmq": "^6.0.5",
         "drizzle-orm": "^0.45.2",
@@ -49,9 +49,9 @@
       "name": "@dunx/example-minimal",
       "version": "0.0.0",
       "dependencies": {
-        "@dunx/compiler": "workspace:*",
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
+        "@dunx/transform": "workspace:*",
       },
       "devDependencies": {
         "@dunx/testing": "workspace:*",
@@ -61,9 +61,9 @@
       "name": "@dunx/example-testing",
       "version": "0.0.0",
       "dependencies": {
-        "@dunx/compiler": "workspace:*",
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
+        "@dunx/transform": "workspace:*",
         "zod": "^4.4.3",
       },
       "devDependencies": {
@@ -90,13 +90,6 @@
         "@types/bun",
         "drizzle-orm",
       ],
-    },
-    "packages/compiler": {
-      "name": "@dunx/compiler",
-      "version": "0.0.0",
-      "dependencies": {
-        "oxc-parser": "0.142.0",
-      },
     },
     "packages/core": {
       "name": "@dunx/core",
@@ -169,14 +162,21 @@
         "@types/bun",
       ],
     },
+    "packages/transform": {
+      "name": "@dunx/transform",
+      "version": "0.0.0",
+      "dependencies": {
+        "oxc-parser": "0.142.0",
+      },
+    },
     "tools/bench": {
       "name": "@dunx/bench",
       "version": "0.0.0",
       "dependencies": {
-        "@dunx/compiler": "workspace:*",
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
         "@dunx/infra": "workspace:*",
+        "@dunx/transform": "workspace:*",
         "@hono/node-server": "^2.0.12",
         "@hono/zod-validator": "^0.7.4",
         "@sinclair/typebox": "^0.34.52",
@@ -316,8 +316,6 @@
 
     "@dunx/bench": ["@dunx/bench@workspace:tools/bench"],
 
-    "@dunx/compiler": ["@dunx/compiler@workspace:packages/compiler"],
-
     "@dunx/core": ["@dunx/core@workspace:packages/core"],
 
     "@dunx/docs": ["@dunx/docs@workspace:tools/docs"],
@@ -339,6 +337,8 @@
     "@dunx/openapi-ui": ["@dunx/openapi-ui@workspace:tools/openapi-ui"],
 
     "@dunx/testing": ["@dunx/testing@workspace:packages/testing"],
+
+    "@dunx/transform": ["@dunx/transform@workspace:packages/transform"],
 
     "@emnapi/core": ["@emnapi/core@1.11.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA=="],
 

@@ -34,7 +34,7 @@ import { DEFAULT_BASE_PATH } from './options.js';
  *
  * `inject(Auth)` in a field rather than a constructor parameter, because a bare
  * class in `controllers` is bound as a class provider and would then need
- * `@dunx/compiler`'s transform to have run. This way mounting works in an app that
+ * `@dunx/transform`'s transform to have run. This way mounting works in an app that
  * never added the preload.
  */
 @Public()

@@ -35,7 +35,7 @@ export class ImagesModule {
    * another provider — that is the one thing a zero-argument function cannot do.
    *
    * `Images` is bound through an explicit factory rather than as a bare class so
-   * that `@dunx/infra/images` works with or without the `@dunx/compiler` preload.
+   * that `@dunx/infra/images` works with or without the `@dunx/transform` preload.
    * Consumers still need the preload for *their own* classes to inject `Images`
    * by constructor.
    */

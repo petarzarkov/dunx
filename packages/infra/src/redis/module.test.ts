@@ -31,12 +31,12 @@ describe('RedisModule.forRoot', () => {
 
   /**
    * The reason the connection is bound with `useFactory` and an explicit `inject`
-   * instead of `useClass: Redis`. `@dunx/compiler` only transforms `.ts` outside
+   * instead of `useClass: Redis`. `@dunx/transform` only transforms `.ts` outside
    * `node_modules`, so it never sees this package's published `dist`, and a
    * `useClass` binding would fail at boot for every consumer. There is no compiler
    * preload configured for this test run, which is exactly the situation.
    */
-  it('boots with no @dunx/compiler preload registered', async () => {
+  it('boots with no @dunx/transform preload registered', async () => {
     expect(
       globalThis[Symbol.for('dunx.deps') as unknown as never],
     ).toBeUndefined();

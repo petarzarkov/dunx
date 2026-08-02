@@ -134,7 +134,7 @@ These are choices that move the numbers. They are listed here rather than buried
   everyone else rather than `fast-json-stringify`. This understates Fastify.
 - **Express has `etag` and `x-powered-by` disabled.** Both are on by default and
   are work no other subject does. This flatters Express relative to its defaults.
-- **dunx runs with the `@dunx/compiler` preload and a real injected dependency**,
+- **dunx runs with the `@dunx/transform` preload and a real injected dependency**,
   because that is how a dunx app is written. DI resolution happens at boot, so it
   lands in the startup number and not the per-request number.
 - **No logging, no CORS, no middleware anywhere.** `@dunx/http` has none of these on

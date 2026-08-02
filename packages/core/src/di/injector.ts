@@ -157,12 +157,12 @@ export class Injector {
     if (deps.length === 0 && ctor.length > 0) {
       throw new AppError(
         `${ctor.name} declares ${ctor.length} constructor parameter(s) but no ` +
-          'dependencies were recorded for it, so @dunx/compiler did not transform ' +
+          'dependencies were recorded for it, so @dunx/transform did not transform ' +
           `${ctor.name}. Register the plugin, then retry:\n\n` +
           '  # bunfig.toml\n' +
-          '  preload = ["@dunx/compiler/preload"]\n\n' +
+          '  preload = ["@dunx/transform/preload"]\n\n' +
           '  [test]\n' +
-          '  preload = ["@dunx/compiler/preload"]\n',
+          '  preload = ["@dunx/transform/preload"]\n',
       );
     }
 

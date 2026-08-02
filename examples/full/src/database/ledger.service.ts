@@ -17,7 +17,7 @@ export class Ledger implements OnInit, OnShutdown {
   /**
    * `SyncDatabase` is drizzle's `BunSQLiteDatabase` under a name that says the
    * connection was opened in synchronous mode — which is what makes
-   * `transactionSync` below reachable. `@dunx/compiler` records the bare type name
+   * `transactionSync` below reachable. `@dunx/transform` records the bare type name
    * (a real runtime class, so a usable token) and ignores the type argument, so the
    * schema types survive injection. `DbConnection` is the lifecycle and the driver
    * underneath; drizzle has neither.

@@ -52,7 +52,7 @@ export interface PresignOptions {
  * `S3Storage` — and swapping the backend is a change to one `forRoot` call.
  *
  * An abstract class, not an interface, because a dunx constructor parameter has
- * to name something that exists at runtime for `@dunx/compiler` to record it.
+ * to name something that exists at runtime for `@dunx/transform` to record it.
  */
 export abstract class Storage {
   abstract read(key: string): Promise<string>;
