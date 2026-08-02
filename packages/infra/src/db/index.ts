@@ -18,6 +18,19 @@ export {
 } from './seed.js';
 export { SqlConnection } from './sql/connection.js';
 export { SqlOptions, type SqlInit } from './sql/options.js';
-export { SqliteConnection } from './sqlite/connection.js';
-export { SqliteOptions, type SqliteInit } from './sqlite/options.js';
-export { transaction, type SqlTransaction } from './transaction.js';
+export {
+  SqliteConnection,
+  SyncDatabase,
+  SyncSqliteConnection,
+} from './sqlite/connection.js';
+export {
+  SqliteOptions,
+  SyncSqliteOptions,
+  type SqliteInit,
+} from './sqlite/options.js';
+export {
+  transaction,
+  transactionSync,
+  type SqlTransaction,
+  type SyncTransaction,
+} from './transaction.js';

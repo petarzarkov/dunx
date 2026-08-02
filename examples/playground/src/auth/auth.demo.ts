@@ -1,7 +1,7 @@
 import { Auth } from '@dunx/auth';
 import { Logger } from '@dunx/core';
+import { SyncDatabase } from '@dunx/infra/db';
 import { eq } from 'drizzle-orm';
-import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import * as schema from '../database/schema.js';
 import { user } from '../database/schema.js';
 
@@ -20,7 +20,7 @@ export class AuthDemo {
   constructor(
     private readonly logger: Logger,
     private readonly auth: Auth,
-    private readonly db: BunSQLiteDatabase<typeof schema>,
+    private readonly db: SyncDatabase<typeof schema>,
   ) {}
 
   /** What `Origin` has to be for better-auth's CSRF check — see {@link post}. */

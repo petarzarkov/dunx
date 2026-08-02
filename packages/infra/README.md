@@ -175,6 +175,106 @@ reads a _schemeless_ string as a Postgres host, so `{ url: './dev.db' }` reports
 `adapter: 'postgres'` and then fails much later with a socket error. `pg://` is not
 a scheme Bun accepts; `postgres://`, `postgresql://`, `sqlite:` and `file:` are.
 
+### Synchronous mode — `SyncSqliteOptions`
+
+`bun:sqlite` is synchronous underneath, and `@dunx/http` has a dispatch path that
+allocates no promise when a handler returns a plain value. Put those together and a
+request can go parse → query → respond without ever yielding. What used to stop it
+was the transaction: `transaction()` returns a promise, so any route that wrote
+anything went back to `async`.
+
+Synchronous mode is that gap closed. It is chosen when the connection is
+configured, by constructing `SyncSqliteOptions` instead of `SqliteOptions`:
+
+```ts
+import { DbModule, SyncDatabase, SyncSqliteOptions } from '@dunx/infra/db';
+
+DbModule.forRoot(new SyncSqliteOptions({ schema, filename: './dev.db' }));
+```
+
+Every init field is `SqliteOptions`'s — same `filename`, `pragmas`, `strict`,
+`readOnly`, `safeIntegers`. Two things change:
+
+- The injection token becomes **`SyncDatabase`**, so a repository annotates
+  `SyncDatabase<typeof schema>`. It is drizzle's `BunSQLiteDatabase` under a name
+  the container can tell apart; the query builder is identical.
+- **`transactionSync(db, fn)`** becomes reachable, and it is the only thing that
+  accepts a `SyncDatabase`.
+
+```ts
+export class Ledger {
+  constructor(private readonly db: SyncDatabase<typeof schema>) {}
+
+  transfer(from: string, to: string, amount: number): number {
+    return transactionSync(this.db, (tx) => {
+      tx.insert(ledger).values({ memo: from, amount: -amount }).run();
+      tx.insert(ledger).values({ memo: to, amount }).run();
+      return tx.select({ n: count() }).from(ledger).get()?.n ?? 0;
+    });
+  }
+}
+
+@Controller('ledger')
+export class LedgerController {
+  constructor(private readonly ledger: Ledger) {}
+
+  // No `async`, no `await`, no promise: the row is in the response on the same tick.
+  @Post('/transfer', transfer)
+  transfer(input: Input<typeof transfer>): { balance: number } {
+    const { from, to, amount } = input.body;
+    return { balance: this.ledger.transfer(from, to, amount) };
+  }
+}
+```
+
+#### The mode is enforced, not documented
+
+Two type-level gates, both of which are compile errors rather than advice:
+
+- A service asking for `SyncDatabase` in an app that configured `SqliteOptions`
+  **fails to resolve at boot** — the container bound `BunSQLiteDatabase`, and
+  nothing bound `SyncDatabase`.
+- `transactionSync`'s callback cannot return a promise. An `async` callback is
+  rejected by the constraint on its return type, because a synchronous transaction
+  commits when the callback returns — an `async` one would commit before its first
+  `await` resumed, which is the exact bug `transaction()` exists to route around.
+
+```ts
+transactionSync(db, async (tx) => { … });     // does not compile
+transactionSync(db, () => Promise.resolve(1)); // does not compile
+transactionSync(asyncModeHandle, (tx) => 1);   // does not compile
+```
+
+The relationship is one-way. A `SyncDatabase` **is** a `BunSQLiteDatabase`, so
+`transaction()`, `runSeeds()` and any repository written before the mode existed
+all still take it. Synchronous mode is a superset, not a fork — and if one route
+genuinely needs to await something mid-transaction, `transaction()` is still there
+for that route.
+
+#### What it is not
+
+There is **no `SyncSqlOptions`, and there will not be one.** `Bun.SQL` talks to a
+server over a socket; nothing about an API makes a socket return a row instead of a
+promise. Sync mode is SQLite for good, so an app that might move to Postgres later
+should stay on `SqliteOptions` — which is why that is still the default.
+
+`open()` still returns a promise, because `DbOptions` has to describe `Bun.SQL`'s
+handshake too. `SyncSqliteOptions.openSync()` is the same thing without it, for a
+test or a script with no container. Lifecycle is unchanged: `DbConnection`,
+`onShutdown` and `runSeeds` behave identically in both modes, and
+`SyncSqliteConnection` is still a `SqliteConnection`, so `connection.raw` narrows
+the same way. `closeSync()` is on both.
+
+#### What it is worth
+
+Measured end to end through a real `Bun.serve` — `bun run db-modes` in
+`tools/bench` — synchronous mode is **~4–6% more requests per second and ~0.2–0.3 ms
+off p50**, on both a single-row read and a two-write transaction. That is a real but
+small win, at the edge of the run-to-run noise on the measuring machine. It is not
+the 5 ms-versus-30 ms difference people mean when they say SQLite is fast: that one
+is SQLite versus a database over a network, and you get it from either mode. The
+numbers and the caveats are in `docs/ARCHITECTURE.md`.
+
 ### Querying
 
 drizzle's builder, unchanged. On `bun:sqlite` it is **synchronous**, so a statement
@@ -323,6 +423,31 @@ still there. drizzle inherits the behaviour rather than fixing it, which is why
 There is only one connection, so two overlapping top-level transactions would issue
 a nested `BEGIN`. They queue instead. A nested call is already inside the holder's
 turn and takes a savepoint, so it must not queue behind itself.
+
+#### `transactionSync(db, fn)`, where `db.transaction()` **is** right
+
+Everything above is downstream of the callback being asynchronous. Take the promise
+away and `bun:sqlite`'s wrapper is exactly correct, so in [synchronous
+mode](#synchronous-mode--syncsqliteoptions) `transactionSync` delegates to drizzle's
+own `db.transaction()` rather than issuing statements itself — one native
+transaction, no `BEGIN` strings, no queue, no promise:
+
+```ts
+const balance = transactionSync(db, (tx) => {
+  tx.insert(ledger).values({ memo: 'from', amount: -25 }).run();
+  tx.insert(ledger).values({ memo: 'to', amount: 25 }).run();
+  return tx.select({ total: sum(ledger.amount) }).from(ledger).get()?.total ?? 0;
+});
+```
+
+It returns the value, not a promise; it throws where `transaction()` rejects, so
+recovery is `try`/`catch`. Nesting is `tx.transaction(...)` — drizzle's own
+savepoint — since this function takes the database, the same shape as Postgres.
+
+The two compose. A `transactionSync` opened while an async `transaction()` is
+suspended across an `await` takes a **savepoint** rather than failing, because
+`bun:sqlite` branches on `Database.inTransaction`, which the outer `BEGIN` already
+set. Rolling that savepoint back leaves the enclosing transaction open.
 
 On **Postgres** this delegates to drizzle's `db.transaction()`, which is genuinely
 async — it goes through `Bun.SQL`'s `begin()`, and that reserves a connection for

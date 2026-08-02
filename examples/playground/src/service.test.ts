@@ -90,6 +90,26 @@ it('rolls a transfer back as one unit, observably', async () => {
   expect(await entries()).toBe(before + 2);
 });
 
+it('rolls the synchronous transfer back the same way, with no async handler', async () => {
+  const entries = async (): Promise<number> =>
+    (await json<{ entries: unknown[] }>('ledger')).body.entries.length;
+  const before = await entries();
+
+  const ok = await json<{ rows: number }>(
+    'ledger/transfer-sync',
+    post({ from: 'checking', to: 'savings', amount: 25 }),
+  );
+  expect(ok.status).toBe(201);
+  expect(ok.body.rows).toBe(before + 2);
+
+  const rolled = await json(
+    'ledger/transfer-sync',
+    post({ from: 'a', to: 'b', amount: 5, fail: true }),
+  );
+  expect(rolled.status).toBe(409);
+  expect(await entries()).toBe(before + 2);
+});
+
 it('round-trips an object through Storage and refuses to escape the root', async () => {
   const written = await json('files/object?key=reports/q1.csv', {
     method: 'PUT',
@@ -189,6 +209,7 @@ it('documents every route it serves, with nothing unresolved', async () => {
     '/api/health',
     '/api/ledger',
     '/api/ledger/transfer',
+    '/api/ledger/transfer-sync',
     '/api/files/object',
     '/api/images/render',
     '/api/cache/{id}',

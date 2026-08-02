@@ -1,6 +1,6 @@
 import { Logger, type OnInit } from '@dunx/core';
+import { SyncDatabase } from '@dunx/infra/db';
 import { sql } from 'drizzle-orm';
-import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import * as schema from '../database/schema.js';
 
 /**
@@ -68,7 +68,7 @@ const TABLES = [
 
 export class AuthTables implements OnInit {
   constructor(
-    private readonly db: BunSQLiteDatabase<typeof schema>,
+    private readonly db: SyncDatabase<typeof schema>,
     private readonly logger: Logger,
   ) {}
 

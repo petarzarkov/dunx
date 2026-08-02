@@ -99,6 +99,30 @@ export class LedgerController {
     }
   }
 
+  /**
+   * The same transfer with no `async` and no `await` on the path at all — the
+   * handler returns a value, `@dunx/http` turns it into a `Response` without
+   * allocating a promise, and SQLite answered on the same tick. What makes it
+   * possible is `SyncSqliteOptions` in `DatabaseModule`; `transactionSync` will not
+   * compile against the async mode's handle.
+   */
+  @Post('/transfer-sync', transfer)
+  transferSync(input: Input<typeof transfer>): {
+    balance: number;
+    rows: number;
+  } {
+    const { from, to, amount, fail } = input.body;
+    try {
+      const balance = this.ledger.transferSync(from, to, amount, fail);
+      return { balance, rows: this.ledger.rows() };
+    } catch (error) {
+      throw new HttpError(
+        HttpStatusCode.CONFLICT,
+        `${(error as Error).message} — rolled back, still ${this.ledger.rows()} rows`,
+      );
+    }
+  }
+
   @Delete('/:id', oneEntry)
   remove(input: Input<typeof oneEntry>): { deleted: boolean } {
     const deleted = this.ledger.remove(input.params.id);

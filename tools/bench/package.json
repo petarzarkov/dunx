@@ -18,6 +18,7 @@
   "scripts": {
     "setup": "bun src/setup.ts",
     "start": "bun src/index.ts",
+    "db-modes": "bun src/db-modes.ts",
     "validation": "bun src/validation.ts",
     "test": "bun test --bail",
     "typecheck": "tsc --noEmit"
@@ -26,11 +27,13 @@
     "@dunx/compiler": "workspace:*",
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
+    "@dunx/infra": "workspace:*",
     "@hono/node-server": "^2.0.12",
     "@hono/zod-validator": "^0.7.4",
     "@sinclair/typebox": "^0.34.52",
     "ajv": "^8.20.0",
     "arktype": "^2.2.3",
+    "drizzle-orm": "^0.45.2",
     "elysia": "^1.4.29",
     "express": "^5.1.0",
     "fastify": "^5.6.1",
