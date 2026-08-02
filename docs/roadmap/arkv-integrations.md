@@ -1,5 +1,12 @@
 # What to send upstream to `@arkv`
 
+> **All three proposals are implemented and open as
+> [arkv#4](https://github.com/petarzarkov/arkv/pull/4).** A PR rather than a push,
+> because pushing arkv's `main` publishes to npm and those packages are used by
+> other projects. Merge when a release is wanted, then bump `@arkv/logger` here.
+> Everything below is the analysis that produced it, kept because the reasoning is
+> what makes the diff reviewable.
+
 The workspace at `~/repos/arkv` was read end to end against the
 question CLAUDE.md actually asks: is dunx doing something worse than a package the
 owner already maintains?
