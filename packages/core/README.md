@@ -188,7 +188,7 @@ export class Users {
 Six levels - `verbose`, `debug`, `info`, `warn`, `error`, `fatal` - each taking a
 message plus extras, a plain object merged into the entry, or an `Error`. `log` is
 a deprecated alias for `info`; it emits `"level":"info"` either way and exists
-because NestJS's `LoggerService` mandates the name.
+because a third-party `LoggerService` interface mandates the name.
 
 `RequestContext` is request-scoped fields propagated across async boundaries -
 `getContext`, `updateContext`, `runWithContext`. `@arkv/logger`'s `ContextStore`

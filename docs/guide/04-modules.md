@@ -1,7 +1,7 @@
 # Modules
 
 A module is a named list of registrations and a list of other modules to include.
-That sentence is the whole model, and it is shorter than Nest's on purpose.
+That sentence is the whole model, and it is deliberately shorter than the module systems it borrows its syntax from.
 
 ```ts
 import { Module } from '@dunx/core';
@@ -14,7 +14,7 @@ import { Module } from '@dunx/core';
 export class UsersModule {}
 ```
 
-The syntax is Nest's. The semantics are not, and that distinction is the most
+The syntax is the familiar one. The semantics are not, and that distinction is the most
 important thing on this page.
 
 ## `@Module` is a marker
@@ -64,16 +64,16 @@ create a visibility boundary. There is no `exports` list, no `isGlobal`, and
 therefore no "provider is not exported from module X" error, because there is
 nothing to export from.
 
-This is the largest deliberate divergence from Nest and it is worth being blunt
+This is the largest deliberate divergence from those systems and it is worth being blunt
 about what it costs.
 
 **What you lose.** Per-module rebinding. A `LOGGER` token bound to one
 implementation in billing and a different one in reporting cannot be expressed.
 One token has exactly one binding. The workaround is two tokens, and if that is
-unacceptable for your architecture then Nest's module system is a real feature
+unacceptable for your architecture then an encapsulating module system is a real feature
 dunx does not have.
 
-**What you keep, elsewhere.** The encapsulation Nest gives you is largely
+**What you keep, elsewhere.** The encapsulation those systems give you is largely
 recoverable outside the container. Reaching `BillingService` requires a value
 import of `BillingService`, so cross-domain coupling is already visible in the
 import graph and enforceable with a lint boundary rule at zero runtime cost.
@@ -158,7 +158,7 @@ class Root {
 await AppFactory.create(Root.dyn());
 ```
 
-That matches Nest, and it is the reason the duplicate above happens most often: a
+That matches the convention, and it is the reason the duplicate above happens most often: a
 `ConfigModule.forRoot()` in the decorator's `imports` and another in the static's
 is two configurations of one module. Put it in one place or the other.
 
@@ -223,8 +223,8 @@ only through its factory, like `MailerModule` above, needs no decorator at all.
 
 ## `forRoot` versus `forRootAsync`
 
-Nest's `forRootAsync` exists to build a module's options from other injected
-providers, asynchronously. It needs a distinct mechanism because Nest resolves
+The `forRootAsync` pattern exists to build a module's options from other injected
+providers, asynchronously. It needs a distinct mechanism because a container resolves
 lazily and has to defer.
 
 **dunx has no such mechanism, and does not need one.** Resolution is eager and

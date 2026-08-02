@@ -5,7 +5,7 @@ import type { MetaKey, MetaRecord } from '../route/metadata.js';
 /**
  * Which route the middleware is running for, and what that route's decorators
  * declared. `get` resolves the handler's metadata first and the controller class's
- * second - the same override direction as Nest's `getAllAndOverride`.
+ * second - the usual override direction for handler-over-class metadata.
  */
 export interface RouteContext {
   readonly controller: string;

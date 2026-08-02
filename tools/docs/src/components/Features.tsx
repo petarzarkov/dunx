@@ -105,9 +105,9 @@ export const Features = (): React.JSX.Element => {
           <Feature icon={PATHS.log} title="One log line per request">
             On by default, outermost in the chain, carrying request and response
             in a single entry - 4xx at <code>warn</code>, 5xx at{' '}
-            <code>error</code>, unmatched paths included. Nest needs a
-            middleware plus an interceptor; middleware here wraps{' '}
-            <code>next()</code>.
+            <code>error</code>, unmatched paths included. Where that usually
+            takes a middleware plus an interceptor, middleware here wraps{' '}
+            <code>next()</code> and sees both halves.
             {plaintext?.loggingPct != null && (
               <>
                 {' '}

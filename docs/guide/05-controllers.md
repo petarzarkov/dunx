@@ -51,7 +51,7 @@ dunx does not paper over it.
 
 **Paths are matched exactly, so a trailing slash is a different path.** `GET /t`
 is a 200 and `GET /t/` is a 404, and the same goes for `/t/sub/` and `POST /t/`.
-Nest, Express and Fastify all normalise it, so this is the one thing that breaks a
+Most frameworks normalise it, so this is the one thing that breaks a
 client ported from any of them - and it breaks as a 404 that reads like a missing
 route rather than like a slash.
 
@@ -330,7 +330,7 @@ case is genuinely faster; see [The fast path](#the-fast-path).
 
 ### Status codes
 
-Precedence: `options.status`, else **201 for POST**, else **200**. That is Nest's
+Precedence: `options.status`, else **201 for POST**, else **200**. That is the usual
 rule, kept because it is the one people already know.
 
 ```ts
@@ -482,7 +482,7 @@ rewrites the header, because a direct client can send whatever it likes.
 
 ## Middleware, guards and metadata
 
-One extension point, not five. Nest has middleware, guards, interceptors, pipes
+One extension point, not five. Comparable frameworks have middleware, guards, interceptors, pipes
 and filters; dunx has a `Middleware` interface, and the other four are things you
 already have:
 
@@ -607,7 +607,7 @@ doing.
 
 `@dunx/http` installs `RequestLoggingMiddleware` by default, outermost in the
 chain, writing **one structured entry per request** carrying the request and the
-response together. Nest needs a middleware plus an interceptor for that, because
+response together. Frameworks without that property need a middleware plus an interceptor, because
 they are different classes; dunx does not, because middleware wraps `next()`.
 
 A 4xx logs at `warn` and a 5xx at `error`. Unmatched paths are logged too, through

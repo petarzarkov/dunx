@@ -316,12 +316,19 @@ export const SNIPPETS: readonly Sample[] = [
   { id: 'run-test', label: 'bash', file: 'bash', blurb: '', code: 'bun test' },
 ];
 
-/** The NestJS-versus-dunx comparison, and the line that turns the transform on. */
+/**
+ * Annotation-driven DI against dunx, and the line that turns the transform on.
+ *
+ * Labelled by the pattern rather than by a framework: `@Injectable()` plus a
+ * parameter decorator is how Angular, tsyringe and every container built on
+ * `reflect-metadata` does it, so naming one of them would be both narrower and
+ * less accurate.
+ */
 export const COMPARISON: readonly Sample[] = [
   {
-    id: 'cmp-nest',
-    label: 'NestJS',
-    file: 'nest.ts',
+    id: 'cmp-annotated',
+    label: 'Annotation-driven',
+    file: 'annotated.ts',
     blurb: '',
     code: `@Injectable()
 export class UsersService {

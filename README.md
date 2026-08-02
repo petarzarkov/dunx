@@ -4,7 +4,7 @@
 
 # dunx
 
-A Bun-native dependency injection framework - NestJS-shaped ergonomics, none of the NestJS runtime.
+A Bun-native dependency injection framework - enterprise structure, Bun-native speed.
 
 [![CI](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml/badge.svg)](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml)
 [![coverage](https://petarzarkov.github.io/dunx/badges/coverage.svg)](https://petarzarkov.github.io/dunx/#/coverage)

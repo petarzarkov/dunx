@@ -94,14 +94,15 @@ export const Hero = (): React.JSX.Element => (
 
             <Stack gap="sm">
               <h1 className="hero-title">
-                Nest-shaped ergonomics.
+                Enterprise structure.
                 <br />
-                <span className="gradient-text">None of the runtime.</span>
+                <span className="gradient-text">Bun-native speed.</span>
               </h1>
               <Text size="lg" c="dimmed" maw={540}>
-                A dependency injection framework built on Bun&apos;s own
-                primitives. Constructor injection with nothing annotating it -
-                no <code>@Injectable()</code>, no <code>@Inject()</code>, no{' '}
+                Inversion of control, declarative modules and typed
+                configuration, on Bun&apos;s own primitives. Constructor
+                injection with nothing annotating it - no{' '}
+                <code>@Injectable()</code>, no <code>@Inject()</code>, no{' '}
                 <code>reflect-metadata</code>.
               </Text>
             </Stack>

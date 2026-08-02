@@ -60,8 +60,8 @@ what level filtering compares. Entries below the configured `logLevel` are dropp
 before anything is serialised.
 
 `log()` also exists and is **deprecated**. It emits `level: 'info'` either way. It
-is kept only because the backing `@arkv/logger` keeps it for NestJS's
-`LoggerService` shape, and dropping it here would reject that class.
+is kept only because the backing `@arkv/logger` keeps it to satisfy a third-party
+`LoggerService` interface, and dropping it here would reject that class.
 
 ### Three call shapes
 
@@ -335,7 +335,7 @@ The entry carries the request and its response together:
 }
 ```
 
-NestJS needs a middleware for the inbound half and an interceptor for the outbound
+A framework whose middleware cannot see the response needs a middleware for the inbound half and an interceptor for the outbound
 one, because they are different classes and the interceptor cannot see what the
 middleware saw. dunx does not, because middleware wraps `next()` and both halves
 are the same closure. There is no pair to correlate by `requestId` just to find out

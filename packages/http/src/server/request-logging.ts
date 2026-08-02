@@ -78,7 +78,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * is a UUID, which is what this middleware would have minted. It is a
  * caller-supplied string that ends up in every line the request writes, so a
  * newline, a megabyte, or a deliberate collision with somebody else's trace is
- * replaced by a fresh one rather than trusted. `nestjs-template` validated it the
+ * replaced by a fresh one rather than trusted. A production template validated it the
  * same way.
  *
  * The length check first: it is what keeps garbage away from the regex, and the
@@ -114,7 +114,8 @@ type RequestFields = Record<string, unknown>;
  * default - so it works with no logging module imported, and picks up
  * `@arkv/logger` automatically once `@dunx/infra/logger` is.
  *
- * **One entry, not two.** Nest needs a middleware for the inbound half and an
+ * **One entry, not two.** A framework whose middleware cannot see the response
+ * needs a middleware for the inbound half and an
  * interceptor for the outbound one, because they are different classes and the
  * interceptor cannot see what the middleware saw. Here they are the same
  * closure, so there is no pair to correlate by `requestId` to find out how a

@@ -113,7 +113,7 @@ the schema error that is about to be more useful.
 | `undefined`/`null`| `204`, no body                               |
 | anything else     | `Response.json(value)` at the status below   |
 
-Status precedence: `options.status`, else **201 for POST**, else **200** - Nest's
+Status precedence: `options.status`, else **201 for POST**, else **200** - the usual
 rule. A thrown `HttpError` still goes through the error mapper.
 
 ### Validation failures
@@ -263,7 +263,7 @@ prototype walk, and nothing is resolved per request.
 | `get(key)`     | The metadata value, or `undefined`                        |
 
 `get` resolves the **handler's** metadata first and the **controller class's**
-second - the same override direction as Nest's `Reflector.getAllAndOverride`.
+second - the usual override direction for handler-over-class metadata.
 
 ### Your own keys
 
@@ -317,7 +317,7 @@ Every request produces **one** structured entry, request and response together:
 }
 ```
 
-One entry, not two, is the point. Nest logs on the way in from a middleware and on
+One entry, not two, is the point. The common arrangement logs on the way in from a middleware and on
 the way out from an interceptor, because they are different classes and the
 interceptor cannot see what the middleware saw. Here they are the same closure, so
 there is no pair to correlate by `requestId` to find out how a call ended. A 4xx

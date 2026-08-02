@@ -111,7 +111,7 @@ export const SpeedPanel = (): React.JSX.Element | null => {
           </Badge>
           <Text size="sm" c="dimmed" maw={720}>
             {speed.crossesRuntime
-              ? `Colour is the runtime, and it is the point: dunx runs on Bun and every subject in the headline runs on Node, so each multiple is a runtime difference and a framework difference multiplied together. The comparisons that isolate the framework are NestJS against Express, NestJS against Fastify, and dunx against raw Bun.serve, where it costs ${decimal(ownCost, 1)}%.`
+              ? `Colour is the runtime, and it is the point: dunx runs on Bun and every subject in the headline runs on Node, so each multiple is a runtime difference and a framework difference multiplied together. The comparisons that isolate the framework are the two DI subjects against their own adapters, and dunx against raw Bun.serve, where it costs ${decimal(ownCost, 1)}%.`
               : 'Colour is the runtime. A comparison across runtimes carries both a runtime and a framework difference.'}{' '}
             Every figure here is regenerated from a real run;{' '}
             <Anchor href={href(RouteKind.Bench)}>the full results</Anchor> carry

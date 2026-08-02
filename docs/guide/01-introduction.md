@@ -5,7 +5,10 @@ modules, constructor injection, class-based controllers, lifecycle hooks and
 guards, and it serves HTTP through `Bun.serve` rather than through a server it
 wrote itself.
 
-If you have written NestJS, the shape will be familiar within a minute:
+The architecture is the one Spring and Angular established: inversion of control
+with a container that owns object lifetimes, declarative metadata instead of wiring
+code, and modules that draw domain boundaries. If you have worked in either, the
+shape will be familiar within a minute:
 
 ```ts
 import { Module } from '@dunx/core';
@@ -113,18 +116,20 @@ for the cases a constructor parameter cannot express.
 **No module encapsulation.** The container is flat. `imports` is traversal only:
 it pulls a module's registrations into the same container. There is no `exports`
 list, no visibility boundary, and therefore no "provider is not exported from
-module X" error. This is the largest deliberate divergence from Nest and the first
-thing you will notice. What is genuinely lost is per-module rebinding, and the
-answer is to use two tokens. See [Modules](./04-modules.md).
+module X" error. This is the largest deliberate divergence from the frameworks this
+borrows from, and the first thing you will notice. What is genuinely lost is
+per-module rebinding, and the answer is to use two tokens. See
+[Modules](./04-modules.md).
 
 **No `forwardRef`.** The dependency record `@dunx/transform` writes is a thunk,
 evaluated at resolution rather than at class-definition time, so a dependency
 declared later in the file or reached across a circular import resolves without
 ceremony.
 
-**No request-scoped DI.** Every provider is a singleton. Request-scoped DI is
-Nest's single biggest source of complexity and per-request cost. Per-request state
-is an explicit argument; request-scoped correlation is `AsyncLocalStorage` through
+**No request-scoped DI.** Every provider is a singleton, as a Spring bean is by
+default. Request-scoped injection is where a container's complexity and its
+per-request cost both concentrate, so per-request state is an explicit argument
+here, and request-scoped correlation is `AsyncLocalStorage` through
 `RequestContext`, which never touches the container.
 
 **No JavaScript router.** Covered above.
@@ -214,8 +219,8 @@ looks like.
 **You need per-module rebinding.** One token bound to two different
 implementations in two different features cannot be expressed. The container is
 flat and one token has exactly one binding. Two tokens is the answer, and if that
-answer is unacceptable for your architecture, Nest's module system is a real
-feature dunx does not have.
+answer is unacceptable for your architecture, an encapsulating module system is a
+real feature dunx does not have.
 
 **You need request-scoped or transient providers.** Not supported, rejected with
 measurements, and not coming back.
@@ -229,7 +234,8 @@ never a goal.
 path for either on Bun at all.
 
 **You want a mature ecosystem of third-party modules.** There is not one. dunx is
-eight packages maintained in one repository. Nest has a decade of community
+eight packages maintained in one repository. The established frameworks have a
+decade or more of community
 modules and dunx has none of them.
 
 ## Where to go next

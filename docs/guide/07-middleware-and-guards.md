@@ -1,6 +1,6 @@
 # Middleware and guards
 
-NestJS has middleware, guards, interceptors, pipes and filters: five concepts,
+Frameworks in this lineage tend to ship five concepts - middleware, guards, interceptors, pipes and filters -
 five base classes, five places to look when a request does something unexpected.
 dunx has one.
 
@@ -76,7 +76,7 @@ This is the design decision the rest of the page follows from.
 
 Because `handle` receives `next` and returns whatever it wants, **one class sees
 both halves of a request**. It can time the call, catch the error, rewrite the
-response, or refuse to call `next()` at all. Nest splits that across two base
+response, or refuse to call `next()` at all. Splitting that across two base
 classes: middleware runs before, an interceptor wraps the observable, and they
 are separate objects with no shared frame, so correlating the two halves means
 threading a request id through and reassembling the pair in a log aggregator.
@@ -175,7 +175,7 @@ documentation needs no parallel registry.
 A fresh `Symbol()` per `metaKey` call means two libraries that both name a key
 `roles` can never read each other's value. Identity is the symbol, not the string.
 
-Resolution is **handler first, then class**, the same direction as Nest's
+Resolution is **handler first, then class**, the same direction as the familiar
 `getAllAndOverride`. A method-level `@Public()` beats a class-level `@Roles()`.
 
 ## Guards

@@ -147,11 +147,11 @@ REDIS_URL=redis://127.0.0.1:1 bun run tour   # still exits 0
 ## Logging
 
 [src/http/request-log.ts](./src/http/request-log.ts) is the middleware, ported from
-the `RequestMiddleware` + `HttpLoggingInterceptor` pair in `nestjs-template`. dunx
+the usual `RequestMiddleware` + `HttpLoggingInterceptor` pair. dunx
 has no interceptors and does not need them: middleware wraps `next()`, so one class
 owns both halves.
 
-**One entry per request, not two.** The Nest version logs on the way in and again
+**One entry per request, not two.** The two-component version logs on the way in and again
 on the way out because the two halves are different classes. Here they are the same
 closure, so the request and its response go out together:
 

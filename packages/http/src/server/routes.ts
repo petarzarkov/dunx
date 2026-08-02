@@ -53,7 +53,7 @@ const toResponse = (value: unknown, status: number): Response => {
   return Response.json(value, { status });
 };
 
-/** Nest's rule: an explicit `status`, else 201 for POST, else 200. */
+/** The usual rule: an explicit `status`, else 201 for POST, else 200. */
 const statusFor = (route: DiscoveredRoute): number =>
   route.options?.status ??
   (route.method === 'POST' ? HttpStatusCode.CREATED : HttpStatusCode.OK);

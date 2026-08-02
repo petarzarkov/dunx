@@ -2,7 +2,7 @@ import { Anchor, Card, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { COMPARISON } from '../samples';
 import { href, RouteKind } from '../router';
 
-const [NEST, DUNX, PRELOAD] = COMPARISON;
+const [ANNOTATED, DUNX, PRELOAD] = COMPARISON;
 import { CodeBlock } from './CodeBlock';
 
 /**
@@ -25,7 +25,11 @@ export const NoDecorators = (): React.JSX.Element => (
     </Stack>
 
     <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-      <CodeBlock label="NestJS" code={NEST?.code ?? ''} id="cmp-nest" />
+      <CodeBlock
+        label="Annotation-driven"
+        code={ANNOTATED?.code ?? ''}
+        id="cmp-annotated"
+      />
       <CodeBlock label="dunx" code={DUNX?.code ?? ''} id="cmp-dunx" />
     </SimpleGrid>
 

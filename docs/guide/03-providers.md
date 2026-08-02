@@ -37,7 +37,7 @@ still agree on the key. The same technique carries module options and route
 metadata.
 
 The transform is the reason dunx can offer constructor injection at all without
-the legacy decorator dialect. `tsyringe` and Nest's `@Inject()` are locked to
+the legacy decorator dialect. `tsyringe` and every `@Inject()` parameter decorator are locked to
 `experimentalDecorators` permanently, because TC39 standard decorators have no
 parameter decorators and `constructor(@inject(X) x: X)` has no migration path.
 Reading the types at load time, from the source that still has them, sidesteps the
@@ -65,7 +65,7 @@ export class Pricing {}
 and for a dependency reached across a circular import, where one of the two
 modules is necessarily still evaluating when the other's record is written.
 
-Deferring the body is what removes the need for Nest's `forwardRef`. There is no
+Deferring the body is what removes the need for a `forwardRef` escape hatch. There is no
 `forwardRef` in dunx and there is nothing to replace it with, because the problem
 it solves does not arise.
 
@@ -128,7 +128,7 @@ This is strictly better than what `emitDecoratorMetadata` does, and that was
 measured rather than assumed. Given
 `constructor(db: Db, cache: Cache, n: number)` the legacy metadata table yields
 `["Db", "Object", "Number"]`: an interface degrades to `Object` and a primitive to
-`Number`, indistinguishably. That is why Nest needs `@Inject(TOKEN)` for
+`Number`, indistinguishably. That is why a metadata-driven container needs `@Inject(TOKEN)` for
 everything that is not a class. The transform can see the difference in the
 source, so it names the parameter instead of degrading it.
 
@@ -252,9 +252,9 @@ export class WiringModule {}
 Three kinds, and that is the complete list.
 
 `useValue` is checked against the token's type. This is the one place dunx's typing
-beats Nest's directly: `provide()` stays a _call_ rather than a
+beats the object-literal form directly: `provide()` stays a _call_ rather than a
 `{ provide, useValue }` object literal because per-element type inference across a
-heterogeneous array requires one, which is precisely why Nest's `useValue` is
+heterogeneous array requires one, which is precisely why the object-literal `useValue` is
 untyped.
 
 `useFactory` takes its dependencies from `inject`, positionally, with no generics
@@ -332,7 +332,7 @@ No provider for BuildStamp. Bind it with provide() in a module.
 Every provider is a singleton for the lifetime of the container. There is no
 `Scope.REQUEST`, no `Scope.TRANSIENT`, and no plan to add either.
 
-Request-scoped DI is Nest's single biggest source of complexity and per-request
+Request-scoped DI is a container's single biggest source of complexity and per-request
 cost, and it was measured and turned down. Per-request state is passed as an
 explicit argument. Request-scoped _context_, meaning logging correlation and the
 like, is a separate `AsyncLocalStorage` concern behind `RequestContext` that never

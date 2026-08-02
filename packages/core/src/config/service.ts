@@ -40,7 +40,7 @@ export class ConfigService<T extends object = Record<string, unknown>> {
   }
 
   /**
-   * Named for the NestJS method it replaces. Guards the value being present, not
+   * Named for the convention it follows. Guards the value being present, not
    * the key being declared - a missing key is already a type error.
    */
   getOrThrow<K extends keyof T>(key: K): NonNullable<T[K]> {

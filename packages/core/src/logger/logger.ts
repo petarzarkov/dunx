@@ -43,7 +43,8 @@ export abstract class Logger {
   /**
    * @deprecated Use {@link Logger.info}. Only a method name - the emitted `level`
    * is `'info'` either way. Kept because the backing `@arkv/logger` keeps it for
-   * NestJS's `LoggerService`, and dropping it here would reject that class.
+   * a third-party `LoggerService` interface, and dropping it here would reject
+   * that class.
    */
   abstract log(message: string, ...optionalParams: unknown[]): void;
   /** @deprecated Use {@link Logger.info}. */
