@@ -1,8 +1,9 @@
 import { Module } from '@dunx/core';
-import { HttpFactory, type HttpApp } from '@dunx/http';
+import { HIDDEN, HttpFactory, metaOf, type HttpApp } from '@dunx/http';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { describe, expect, it } from 'bun:test';
 import { SessionGuard } from './guard.js';
+import { mountHandler } from './handler.js';
 import { AuthModule } from './module.js';
 
 /**
@@ -127,4 +128,11 @@ describe('AuthHandler', () => {
     }
     await app.shutdown();
   });
+});
+
+// The mount is a wildcard: real, routed, and not expressible as an OpenAPI path
+// template. It used to reach the document as a literal `/auth/*` tagged with this
+// class's internal name, next to the paths `betterAuthDocument` describes properly.
+it('marks the mounted handler undocumented', () => {
+  expect(metaOf(mountHandler('/auth'))?.get(HIDDEN.id)).toBe(true);
 });

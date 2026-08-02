@@ -16,7 +16,9 @@ export type { HttpMethod, RouteMeta, RoutePath } from './route/marker.js';
 // `@Roles` and `@Public` are wrappers over it, and ROLES/PUBLIC are exported so a
 // user's own guard can read what they set.
 export {
+  ApiHidden,
   guardsOf,
+  HIDDEN,
   meta,
   metaKey,
   metaOf,

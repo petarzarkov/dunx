@@ -63,9 +63,25 @@ export const meta =
 
 export const ROLES: MetaKey<readonly string[]> = metaKey('roles');
 export const PUBLIC: MetaKey<boolean> = metaKey('public');
+export const HIDDEN: MetaKey<boolean> = metaKey('hidden');
 
 export const Roles = (...roles: readonly string[]) => meta(ROLES, roles);
 export const Public = () => meta(PUBLIC, true);
+
+/**
+ * Route, but not documented. Valid on a method or on a class.
+ *
+ * The motivating case is a handler mounted on a wildcard: `@dunx/auth` routes
+ * `<basePath>/*` to Better Auth's own handler, which is real and has to be
+ * routed, but `*` is not an OpenAPI path template - so documenting it produced an
+ * invalid entry named after an internal class, next to the 45 paths
+ * `betterAuthDocument` describes properly.
+ *
+ * It lives here rather than in `@dunx/openapi` because `@dunx/auth` must not
+ * depend on the documentation package to say a route is undocumented, and this is
+ * where the rest of the route metadata already is.
+ */
+export const ApiHidden = () => meta(HIDDEN, true);
 
 /**
  * Guards are middleware, so they compose rather than override - which is why they

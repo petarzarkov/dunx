@@ -1,5 +1,5 @@
 import { collectModules, readControllers, type ModuleRef } from '@dunx/core';
-import { discoverRoutes, type DiscoveredRoute } from '@dunx/http';
+import { discoverRoutes, HIDDEN, type DiscoveredRoute } from '@dunx/http';
 
 interface Prototyped {
   readonly prototype: object;
@@ -20,7 +20,10 @@ export const describeRoutes = (root: ModuleRef): readonly DiscoveredRoute[] => {
   for (const module of collectModules(root)) {
     for (const controller of readControllers(module)) {
       const { prototype } = controller as unknown as Prototyped;
-      routes.push(...discoverRoutes(Object.create(prototype) as object));
+      for (const route of discoverRoutes(Object.create(prototype) as object)) {
+        if (route.meta?.get(HIDDEN.id) === true) continue;
+        routes.push(route);
+      }
     }
   }
 

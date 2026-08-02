@@ -239,22 +239,21 @@ README now name the `Logger` contract and `/logger`.
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                  | Shape                                                                 |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md)   | Feature. Gin, Axum, Spring. Also a falsification test on the harness. |
-| [design-polish](./roadmap/design-polish.md)                                           | Feature. Landing page rebuilt; not yet striking.                      |
-| [async-local-storage-cost](./roadmap/async-local-storage-cost.md)                     | Measured. +0.91 us, and `enterWith` segfaults Bun.                    |
-| [document-pinning-all-packages](./roadmap/document-pinning-all-packages.md)           | Docs. Mixing minors warns and can duplicate core.                     |
-| [arkv-integrations](./roadmap/arkv-integrations.md)                                   | Three upstream proposals. Nothing left to adopt.                      |
-| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)                 | Ongoing. Better Auth OpenAPI merge adopted.                           |
-| [independent-versions](./roadmap/independent-versions.md)                             | Closed. One line, reopened by core 1.0.0.                             |
-| [openapi-exclude-mounted-controller](./roadmap/openapi-exclude-mounted-controller.md) | Bug. A wildcard mount documents itself as a literal `*` path.         |
-| [global-guard-guards-the-404](./roadmap/global-guard-guards-the-404.md)               | Design gap. A global guard turns every 404 into a 401.                |
-| [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)               | Bug. Bypasses the bound Logger on a publish failure.                  |
-| [relay-resubscribe-passthrough](./roadmap/relay-resubscribe-passthrough.md)           | Missing feature. Pass-through, no design question.                    |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                         | Defect. Not reachable from userland.                                  |
-| [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                           | Unreproduced.                                                         |
-| [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                             | Delivered, with a boundary note worth keeping.                        |
+| Item                                                                                | Shape                                                                 |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Feature. Gin, Axum, Spring. Also a falsification test on the harness. |
+| [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.                      |
+| [async-local-storage-cost](./roadmap/async-local-storage-cost.md)                   | Measured. +0.91 us, and `enterWith` segfaults Bun.                    |
+| [document-pinning-all-packages](./roadmap/document-pinning-all-packages.md)         | Docs. Mixing minors warns and can duplicate core.                     |
+| [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Three upstream proposals. Nothing left to adopt.                      |
+| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                           |
+| [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                             |
+| [global-guard-guards-the-404](./roadmap/global-guard-guards-the-404.md)             | Design gap. A global guard turns every 404 into a 401.                |
+| [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)             | Bug. Bypasses the bound Logger on a publish failure.                  |
+| [relay-resubscribe-passthrough](./roadmap/relay-resubscribe-passthrough.md)         | Missing feature. Pass-through, no design question.                    |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                  |
+| [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                         | Unreproduced.                                                         |
+| [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                        |
 
 ### From porting nestjs-template to dunx-template
 

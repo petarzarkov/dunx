@@ -1,5 +1,6 @@
 import { inject, type Ctor } from '@dunx/core';
 import {
+  ApiHidden,
   Controller,
   Delete,
   Get,
@@ -96,6 +97,14 @@ export class AuthHandler {
  * nothing of its own and inherits everything - `discoverRoutes` walks the prototype
  * chain for the routes, and `metaOf` and `prefixOf` are plain lookups, so `@Public()`
  * comes down from the base while the prefix stays own to the subclass.
+ *
+ * `@ApiHidden()` because the mount is a wildcard. The route is real and has to be
+ * served, but `*` is not an OpenAPI path template, so documenting it produced an
+ * invalid entry tagged with this class's internal name - alongside the paths
+ * `betterAuthDocument` describes properly, which is where the auth surface should
+ * be read from.
  */
 export const mountHandler = (mountAt: string): Ctor<AuthHandler> =>
-  Controller(mountAt)(class MountedAuthHandler extends AuthHandler {});
+  ApiHidden()(
+    Controller(mountAt)(class MountedAuthHandler extends AuthHandler {}),
+  );
