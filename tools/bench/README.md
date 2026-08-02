@@ -248,9 +248,9 @@ transcribed by hand.
 
 ```
 AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
-linux 7.0.0-28-generic x64 | bun 1.3.14 | node v24.13.1 | oha oha 1.15.0
+linux 7.0.0-28-generic x64 | bun 1.3.14 | node v20.20.2 | oha oha 1.15.0
 64 connections | 3s warmup | 5 x 5s measured | 2026-08-02
-dunx-logging 0.0.0 | elysia 1.4.29 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1
+dunx-logging 0.0.0 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1
 ```
 
 Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
@@ -259,71 +259,81 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| **@dunx/http** | **133,889** | 3,687 | 0.448 | 0.904 | **102.0%** |
-| Elysia | 133,169 | 2,253 | 0.455 | 0.925 | 101.4% |
-| Bun.serve (raw) | 131,314 | 2,314 | 0.465 | 0.935 | 100.0% |
-| Hono (Bun) | 104,085 | 1,825 | 0.582 | 1.180 | 79.3% |
-| @dunx/http (+ request logging) | 73,143 | 2,281 | 0.845 | 1.582 | 55.7% |
-| node:http (raw) | 51,282 | 1,244 | 1.252 | 2.393 | 39.1% |
-| Fastify (Node) | 44,905 | 2,473 | 1.393 | 2.735 | 34.2% |
-| Hono (Node) | 43,219 | 796 | 1.451 | 2.652 | 32.9% |
-| Express (Node) | 27,738 | 511 | 2.305 | 2.722 | 21.1% |
+| Elysia | 132,692 | 2,536 | 0.454 | 0.926 | 102.1% |
+| Bun.serve (raw) | 129,902 | 10,825 | 0.462 | 0.941 | 100.0% |
+| **@dunx/http** | **129,345** | 5,101 | 0.466 | 0.948 | **99.6%** |
+| Hono (Bun) | 105,057 | 4,295 | 0.576 | 1.158 | 80.9% |
+| @dunx/http (+ request logging) | 73,284 | 2,134 | 0.822 | 1.604 | 56.4% |
+| node:http (raw) | 50,161 | 3,001 | 1.260 | 2.475 | 38.6% |
+| Fastify (Node) | 44,482 | 2,153 | 1.404 | 2.778 | 34.2% |
+| Hono (Node) | 42,106 | 2,452 | 1.451 | 3.158 | 32.4% |
+| NestJS (Fastify) | 35,615 | 1,818 | 1.671 | 3.489 | 27.4% |
+| Express (Node) | 12,093 | 621 | 4.913 | 9.425 | 9.3% |
+| NestJS (Express) | 9,372 | 229 | 6.332 | 12.079 | 7.2% |
 
 **JSON** — `GET /json`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 130,456 | 6,320 | 0.460 | 0.944 | 100.0% |
-| **@dunx/http** | **117,838** | 4,290 | 0.496 | 1.030 | **90.3%** |
-| Elysia | 113,802 | 4,428 | 0.518 | 1.065 | 87.2% |
-| Hono (Bun) | 86,944 | 2,061 | 0.678 | 1.363 | 66.6% |
-| @dunx/http (+ request logging) | 69,038 | 1,852 | 0.900 | 1.683 | 52.9% |
-| node:http (raw) | 50,859 | 1,398 | 1.215 | 2.364 | 39.0% |
-| Fastify (Node) | 45,035 | 958 | 1.386 | 2.503 | 34.5% |
-| Hono (Node) | 38,496 | 658 | 1.653 | 2.579 | 29.5% |
-| Express (Node) | 23,379 | 2,218 | 2.532 | 6.211 | 17.9% |
+| Bun.serve (raw) | 129,307 | 2,715 | 0.470 | 0.955 | 100.0% |
+| Elysia | 124,670 | 14,082 | 0.484 | 0.978 | 96.4% |
+| **@dunx/http** | **122,982** | 995 | 0.491 | 0.993 | **95.1%** |
+| Hono (Bun) | 88,116 | 2,388 | 0.669 | 1.355 | 68.1% |
+| @dunx/http (+ request logging) | 67,145 | 2,166 | 0.920 | 1.664 | 51.9% |
+| node:http (raw) | 46,725 | 887 | 1.332 | 2.664 | 36.1% |
+| Fastify (Node) | 42,480 | 3,651 | 1.516 | 3.328 | 32.9% |
+| Hono (Node) | 38,482 | 2,796 | 1.645 | 3.099 | 29.8% |
+| NestJS (Fastify) | 35,262 | 1,606 | 1.728 | 3.359 | 27.3% |
+| Express (Node) | 11,439 | 570 | 5.114 | 11.057 | 8.8% |
+| NestJS (Express) | 9,204 | 312 | 6.477 | 11.726 | 7.1% |
 
 **Path parameter** — `GET /params/42`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 126,481 | 1,780 | 0.477 | 0.967 | 100.0% |
-| Elysia | 120,536 | 3,880 | 0.501 | 1.025 | 95.3% |
-| **@dunx/http** | **119,501** | 1,630 | 0.498 | 1.005 | **94.5%** |
-| Hono (Bun) | 79,459 | 4,706 | 0.744 | 1.546 | 62.8% |
-| @dunx/http (+ request logging) | 68,976 | 1,296 | 0.873 | 1.689 | 54.5% |
-| node:http (raw) | 47,113 | 2,818 | 1.325 | 2.613 | 37.2% |
-| Fastify (Node) | 42,116 | 2,265 | 1.514 | 2.804 | 33.3% |
-| Hono (Node) | 35,933 | 1,934 | 1.759 | 3.468 | 28.4% |
-| Express (Node) | 24,289 | 2,057 | 2.529 | 4.805 | 19.2% |
+| Bun.serve (raw) | 123,660 | 3,477 | 0.485 | 1.032 | 100.0% |
+| **@dunx/http** | **121,727** | 2,035 | 0.499 | 1.001 | **98.4%** |
+| Elysia | 117,234 | 10,308 | 0.481 | 1.208 | 94.8% |
+| Hono (Bun) | 82,242 | 10,034 | 0.739 | 1.496 | 66.5% |
+| @dunx/http (+ request logging) | 67,292 | 3,302 | 0.919 | 1.696 | 54.4% |
+| node:http (raw) | 48,723 | 1,900 | 1.306 | 2.466 | 39.4% |
+| Fastify (Node) | 43,722 | 1,925 | 1.383 | 2.726 | 35.4% |
+| Hono (Node) | 34,587 | 2,187 | 1.827 | 3.177 | 28.0% |
+| NestJS (Fastify) | 33,525 | 1,829 | 1.878 | 3.485 | 27.1% |
+| Express (Node) | 11,742 | 174 | 5.156 | 7.509 | 9.5% |
+| NestJS (Express) | 9,151 | 183 | 6.597 | 9.421 | 7.4% |
 
 **Body validation** — `POST /validate`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 89,130 | 930 | 0.678 | 1.348 | 100.0% |
-| **@dunx/http** | **75,806** | 2,087 | 0.792 | 1.575 | **85.1%** |
-| Elysia | 69,026 | 1,837 | 0.881 | 1.765 | 77.4% |
-| @dunx/http (+ request logging) | 56,235 | 694 | 1.089 | 1.747 | 63.1% |
-| Hono (Bun) | 47,025 | 476 | 1.335 | 2.498 | 52.8% |
-| node:http (raw) | 30,999 | 925 | 1.981 | 3.953 | 34.8% |
-| Fastify (Node) | 22,831 | 1,139 | 2.540 | 9.366 | 25.6% |
-| Hono (Node) | 21,099 | 1,401 | 2.940 | 5.706 | 23.7% |
-| Express (Node) | 15,717 | 1,763 | 3.917 | 7.122 | 17.6% |
+| Bun.serve (raw) | 79,417 | 4,552 | 0.723 | 1.717 | 100.0% |
+| **@dunx/http** | **72,648** | 1,801 | 0.845 | 1.700 | **91.5%** |
+| Elysia | 69,447 | 3,159 | 0.842 | 1.870 | 87.4% |
+| @dunx/http (+ request logging) | 52,655 | 2,203 | 1.163 | 2.042 | 66.3% |
+| Hono (Bun) | 47,635 | 4,377 | 1.232 | 3.262 | 60.0% |
+| node:http (raw) | 30,891 | 1,990 | 2.010 | 4.277 | 38.9% |
+| Hono (Node) | 21,754 | 183 | 2.864 | 5.618 | 27.4% |
+| Fastify (Node) | 19,150 | 1,674 | 3.130 | 6.117 | 24.1% |
+| NestJS (Fastify) | 15,333 | 1,184 | 3.872 | 7.431 | 19.3% |
+| Express (Node) | 9,129 | 534 | 6.632 | 9.776 | 11.5% |
+| NestJS (Express) | 7,515 | 143 | 8.063 | 12.228 | 9.5% |
 
 **Startup** — cold process to first served request, 7 samples
 
 | Subject | median ms | min ms | max ms |
 | ------- | --------: | -----: | -----: |
-| Bun.serve (raw) | 27.6 | 25.4 | 29.5 |
-| Hono (Bun) | 33.7 | 32.2 | 36.5 |
-| @dunx/http (+ request logging) | 54.7 | 53.2 | 57.6 |
-| **@dunx/http** | **55.4** | 52.5 | 56.6 |
-| Elysia | 60.1 | 57.5 | 82.3 |
-| node:http (raw) | 72.5 | 69.4 | 78.6 |
-| Hono (Node) | 95.0 | 91.5 | 98.2 |
-| Express (Node) | 106.3 | 103.7 | 114.5 |
-| Fastify (Node) | 134.2 | 132.1 | 149.7 |
+| Bun.serve (raw) | 28.2 | 27.3 | 30.4 |
+| Hono (Bun) | 34.4 | 32.7 | 35.5 |
+| @dunx/http (+ request logging) | 54.3 | 53.4 | 57.0 |
+| **@dunx/http** | **54.8** | 51.6 | 59.0 |
+| Elysia | 59.2 | 56.4 | 62.2 |
+| node:http (raw) | 71.9 | 67.6 | 75.0 |
+| Hono (Node) | 91.8 | 88.7 | 97.7 |
+| Express (Node) | 122.3 | 115.4 | 196.2 |
+| Fastify (Node) | 177.8 | 165.1 | 252.0 |
+| NestJS (Express) | 268.7 | 264.9 | 297.9 |
+| NestJS (Fastify) | 284.5 | 281.5 | 292.8 |
 
 ### What these say, including where dunx loses
 
@@ -331,10 +341,10 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Scenario | Bun.serve | @dunx/http | dunx costs |
 | -------- | --------: | ---------: | ---------: |
-| `plaintext` | 131,314 | 133,889 | +2.0% |
-| `json` | 130,456 | 117,838 | −9.7% |
-| `params` | 126,481 | 119,501 | −5.5% |
-| `validate` | 89,130 | 75,806 | −14.9% |
+| `plaintext` | 129,902 | 129,345 | −0.4% |
+| `json` | 129,307 | 122,982 | −4.9% |
+| `params` | 123,660 | 121,727 | −1.6% |
+| `validate` | 79,417 | 72,648 | −8.5% |
 
 **A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
 *through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
