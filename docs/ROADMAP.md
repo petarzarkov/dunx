@@ -237,11 +237,8 @@ produced 22 findings.
 | [openapi-response-schemas](./roadmap/openapi-response-schemas.md)                     | Missing feature, high. No response bodies at all.   |
 | [openapi-apidoc-merge-and-tags](./roadmap/openapi-apidoc-merge-and-tags.md)           | Two bugs, high. Incoherent document.                |
 | [openapi-forroot-async](./roadmap/openapi-forroot-async.md)                           | Missing feature, medium.                            |
-| [http-request-id-and-ignore](./roadmap/http-request-id-and-ignore.md)                 | Three findings, medium and low.                     |
-| [infra-packaging-findings](./roadmap/infra-packaging-findings.md)                     | Four findings, medium and low.                      |
+| [infra-packaging-findings](./roadmap/infra-packaging-findings.md)                     | Two findings left of four, medium and low.          |
 | [peer-ranges-exact](./roadmap/peer-ranges-exact.md)                                   | Packaging, medium.                                  |
-| [testing-http-options](./roadmap/testing-http-options.md)                             | Design, medium. Silently a different app.           |
-| [http-trailing-slash](./roadmap/http-trailing-slash.md)                               | Low. Undocumented.                                  |
 | [create-app-polish](./roadmap/create-app-polish.md)                                   | Four findings, one blocks a flow.                   |
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:

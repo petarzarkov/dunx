@@ -301,29 +301,36 @@ export type ErrorMapper = (error: unknown, req: Request) => Response;
 The default:
 
 ```ts
-export const defaultErrorMapper: ErrorMapper = (error) => {
-  if (error instanceof ValidationError) {
+export const errorMapper =
+  (logger: Logger): ErrorMapper =>
+  (error) => {
+    if (error instanceof ValidationError) {
+      return Response.json(
+        { error: error.message, status: error.status, issues: error.issues },
+        { status: error.status },
+      );
+    }
+    if (error instanceof HttpError) {
+      return Response.json(
+        { error: error.message, status: error.status },
+        { status: error.status },
+      );
+    }
+    logger.error('Unhandled error', error);
     return Response.json(
-      { error: error.message, status: error.status, issues: error.issues },
-      { status: error.status },
+      {
+        error: 'Internal Server Error',
+        status: HttpStatusCode.INTERNAL_SERVER_ERROR,
+      },
+      { status: HttpStatusCode.INTERNAL_SERVER_ERROR },
     );
-  }
-  if (error instanceof HttpError) {
-    return Response.json(
-      { error: error.message, status: error.status },
-      { status: error.status },
-    );
-  }
-  console.error(error);
-  return Response.json(
-    {
-      error: 'Internal Server Error',
-      status: HttpStatusCode.INTERNAL_SERVER_ERROR,
-    },
-    { status: HttpStatusCode.INTERNAL_SERVER_ERROR },
-  );
-};
+  };
 ```
+
+`create()` builds it from the **bound** `Logger` when `onError` is absent, so the
+stack lands in the same stream, and in the same shape, as everything else the
+service writes. `defaultErrorMapper` is the same mapper over core's
+`ConsoleLogger`, for the case with no container to ask.
 
 An `HttpError` is trusted: its status and its message reach the caller, because a
 `404 No user 7` is information the caller is entitled to. Anything else is
@@ -384,9 +391,12 @@ two thirds of the throughput on the `validate` benchmark scenario, and the reque
 body is the field most likely to contain a password. Turn them on in development,
 where seeing the payload is the point.
 
-An inbound `x-request-id` is honoured so a trace survives across services;
-otherwise one is minted with `crypto.randomUUID()`, and either way it comes back
-on the response header.
+An inbound `x-request-id` is honoured so a trace survives across services - but
+only if it is a UUID, because it is caller-supplied and ends up in every line the
+request writes. Anything else is replaced by a fresh `crypto.randomUUID()`. Either
+way it comes back on the response header, unless the path is in `ignore` and
+`correlateIgnored` is off; see
+[Logging](./12-logging.md#what-ignore-costs-and-how-to-buy-part-of-it-back).
 
 ### The 404 is logged too
 

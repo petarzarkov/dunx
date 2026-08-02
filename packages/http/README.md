@@ -331,8 +331,14 @@ here changing.
 
 Everything the **handler** logs in between carries the same `requestId`, `method`,
 `event` and `context`, because the whole call runs inside `runWithContext`. An
-inbound `x-request-id` is honoured so a trace survives across services; otherwise
-one is minted and returned on the response.
+inbound `x-request-id` is honoured so a trace survives across services - if it is a
+UUID; anything else is a caller-supplied string that would end up in every line, so
+it is replaced by a fresh one. Either way it is returned on the response.
+
+`ignore` skips a path **entirely** - no entry, no request id, no async scope - which
+is what makes it free. `correlateIgnored: true` keeps the id and the scope on those
+paths and still writes no entry, which is "do not log the health check but do keep
+its request id".
 
 ### Bodies are off by default, and what that costs
 

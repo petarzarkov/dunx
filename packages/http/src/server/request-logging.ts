@@ -23,9 +23,48 @@ export interface RequestLoggingOptions {
   readonly requestBody?: boolean;
   /** Log the response body. Default **`false`** - same clone-and-buffer cost. */
   readonly responseBody?: boolean;
-  /** Paths to skip entirely - a health check polled every second, say. */
+  /**
+   * Paths to skip entirely - a health check polled every second, say.
+   *
+   * **Entirely** is literal: no entry, no `x-request-id` on the response, and no
+   * `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated. That
+   * is what makes it free. `correlateIgnored` buys the correlation back.
+   */
   readonly ignore?: readonly string[];
+  /**
+   * Keep the request id and the async scope on an `ignore`d path. Default
+   * **`false`**.
+   *
+   * "Do not log the health check, but do keep its request id" is this. The path
+   * still writes no entry of its own; it gets an id - inbound or minted - on the
+   * response, and everything the handler logs carries it.
+   *
+   * It is not the default because it is not free: the ignored path pays for
+   * reading the header, `crypto.randomUUID()`, the `runWithContext` scope and the
+   * response header. On the `bun run logging` decomposition those four rows are
+   * ~2.2 µs, against ~5.4 µs for the whole default path - so it costs the half
+   * that buys correlation and not the half that builds and serialises the entry.
+   */
+  readonly correlateIgnored?: boolean;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * An inbound id is honoured so a trace survives across services - but only if it
+ * is a UUID, which is what this middleware would have minted. It is a
+ * caller-supplied string that ends up in every line the request writes, so a
+ * newline, a megabyte, or a deliberate collision with somebody else's trace is
+ * replaced by a fresh one rather than trusted. `nestjs-template` validated it the
+ * same way.
+ *
+ * The length check first: it is what keeps garbage away from the regex, and the
+ * common case has no header at all.
+ */
+const traceId = (inbound: string | null): string =>
+  inbound !== null && inbound.length === 36 && UUID.test(inbound)
+    ? inbound
+    : crypto.randomUUID();
 
 const parse = (text: string, limit: number): unknown => {
   if (limit === 0) return undefined;
@@ -73,6 +112,7 @@ export class RequestLoggingMiddleware implements Middleware {
   readonly #requestBody: boolean;
   readonly #responseBody: boolean;
   readonly #ignore: ReadonlySet<string>;
+  readonly #correlateIgnored: boolean;
 
   constructor(
     private readonly logger: Logger,
@@ -83,6 +123,7 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#requestBody = options.requestBody ?? false;
     this.#responseBody = options.responseBody ?? false;
     this.#ignore = new Set(options.ignore ?? []);
+    this.#correlateIgnored = options.correlateIgnored ?? false;
   }
 
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
@@ -95,12 +136,14 @@ export class RequestLoggingMiddleware implements Middleware {
     const mark = from === -1 ? -1 : url.indexOf('?', from);
     const path =
       from === -1 ? '/' : mark === -1 ? url.slice(from) : url.slice(from, mark);
-    if (this.#ignore.size > 0 && this.#ignore.has(path)) return next();
+    if (this.#ignore.size > 0 && this.#ignore.has(path)) {
+      return this.#correlateIgnored
+        ? this.#correlated(req, ctx, path, next)
+        : next();
+    }
 
     const started = Bun.nanoseconds();
-    // An inbound id is honoured so a trace survives across services; otherwise
-    // this is where one is minted.
-    const requestId = req.headers.get(REQUEST_ID_HEADER) ?? crypto.randomUUID();
+    const requestId = traceId(req.headers.get(REQUEST_ID_HEADER));
 
     return this.context.runWithContext(
       {
@@ -128,6 +171,34 @@ export class RequestLoggingMiddleware implements Middleware {
           return this.#dispatch(req, path, requestId, started, request, next);
         });
       },
+    );
+  }
+
+  /**
+   * An ignored path under `correlateIgnored`: the scope and the response header,
+   * and no entry. Nothing is timed and no fields are collected, because nothing
+   * here is ever logged.
+   */
+  #correlated(
+    req: BunRequest,
+    ctx: RouteContext,
+    path: string,
+    next: Next,
+  ): Promise<Response> {
+    const requestId = traceId(req.headers.get(REQUEST_ID_HEADER));
+    return this.context.runWithContext(
+      {
+        requestId,
+        method: ctx.method,
+        event: path,
+        flow: 'http',
+        context: `${ctx.controller}.${ctx.handler}`,
+      },
+      () =>
+        next().then((response) => {
+          response.headers.set(REQUEST_ID_HEADER, requestId);
+          return response;
+        }),
     );
   }
 

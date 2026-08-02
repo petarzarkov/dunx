@@ -753,6 +753,27 @@ Consequences, all measured:
 
 No `Symbol.metadata`, no polyfill, no import-order dependence.
 
+### Declined: trailing-slash normalisation
+
+`GET /t` is a 200 and `GET /t/` is a 404, and Nest, Express and Fastify all
+normalise, so it is the one thing that breaks a ported client - as a 404 that reads
+like a missing route. It stays a 404, and the reason is where the two candidate
+implementations would have to live.
+
+`joinPath` already normalises the **declared** side, so `@Get('sub/')` is `/t/sub`
+and both spellings are never live at once. The inbound side is Bun's: by the time
+anything in dunx can see that nothing matched, it is inside the `fetch` fallback,
+which holds middleware and the error mapper and **no route patterns**. Stripping the
+slash and re-dispatching there means matching `/t/7/` against `/t/:id` in
+JavaScript, which is the router this repo will not write. Registering `/t/` as a
+second entry in the `Bun.serve` table was the other option - native, and free per
+request - and was rejected as blast radius: it doubles a table that collision
+detection, gateway-path checking and the CORS `OPTIONS` mounting all walk, to buy
+an alias a proxy rewrite can supply.
+
+So it is documented in guide 05 and pinned by a test in `server.test.ts`, which is
+what makes it a decision rather than an oversight.
+
 ## Database layer (`@dunx/infra/db`)
 
 **drizzle is the database driver, not an option.** An earlier version of this
@@ -790,6 +811,19 @@ What remains is only what a drizzle handle genuinely lacks:
   no concept of data. `runSeeds` is numbered files, one transaction per seed
   covering the seed and its journal row, and a separate `dunx_seeds` table so the
   two journals never contend.
+
+**`casing` and `logger` are drizzle's and are forwarded, not restated.** Both
+backends forwarded only `schema` to `drizzle()`, which put two of drizzle's four
+config keys out of reach of anything constructed inside the container -
+`casing: 'snake_case'` being the standard drizzle idiom, and the query `logger`
+being how a slow endpoint gets diagnosed. The port of `nestjs-template` worked
+around it by spelling out every column name and dropping `casing` from
+`drizzle.config.ts` so drizzle-kit and the runtime handle would agree, and dropped a
+`DB_LOG_QUERIES` env var as unimplementable. Both init types now extend
+`DrizzleInit`, whose two fields are spread into `drizzle()` verbatim - the type is
+drizzle's `Casing` and drizzle's `Logger`, so this package holds no opinion about
+either and cannot fall behind them. `SqlOptions` destructures them out before
+building the `Bun.SQL` options, exactly as it does `schema` and `url`.
 
 Two costs are accepted rather than papered over. `DbModule.forRootAsync` has to
 take the token as its first argument, because which drizzle class the token is only
@@ -1622,6 +1656,30 @@ default stays on. A suite is the one context where one structured line per reque
 is pure noise, and the alternative - every suite passing `requestLogging: false` -
 is a default in the wrong place. Asserting on request logging means asking for it.
 
+**An omitted `middleware` warns rather than becoming a type error.** Every other
+`HttpOptions` field is absent unless passed, and for `middleware` and `onError` that
+means a fixture with no global guards and the default error mapper: it boots, it
+answers 200 where the application answers 401, and it says nothing. Reported from a
+port of `nestjs-template` as a first integration run of 12 pass / 10 fail.
+
+Three fixes were on the table. **Requiring the fields** (a present key that may be
+`undefined`, which `exactOptionalPropertyTypes` makes a real obligation) was
+rejected: it is loud in the right cases and noise in the majority, where an app has
+no globals at all, and it breaks every existing suite. **Documenting the shared
+`httpOptions(config)`** is done, in guide 10 - it is the actual fix, because one
+definition of the application cannot drift. **The warning** is the guard for the
+case where documentation was not read: a class provider whose prototype has a
+`handle` method is a `Middleware`, and if no `@UseGuards` attaches it and no
+`middleware` was passed, `createTestServer` writes one `console.warn` naming it.
+
+Two details are deliberate. The exclusion of route-scoped guards means the warning
+has no false positive on the common `@UseGuards` case - those are in the route table
+and cost the omission nothing - and it costs a second `discoverRoutes` pass over the
+controllers at fixture boot, which is boot-time work in tests only. And it goes to
+`console.warn`, not the bound `Logger`: a suite asserting `recording.entries` is
+empty must not find an entry the application never wrote. `middleware: []` is the
+opt-out, because "deliberately none" is expressible and "forgot" is not.
+
 **`@dunx/core` and `@dunx/http` are `dependencies` at `workspace:^` - measured, not
 assumed.** Peers were the first choice and are the better contract: a second copy of
 core in a consumer's tree is a second `Logger` class and therefore a token that
@@ -2268,6 +2326,53 @@ branch would add a field and a condition to buy nothing on the default path.
 Covered above - `crypto.randomUUID()` measured at 0.04 µs, and a counter-based id
 would trade an unmeasurable saving for leaking request volume in a header that is
 returned to the caller.
+
+### An inbound `x-request-id` is validated, not trusted
+
+It used to be `req.headers.get(REQUEST_ID_HEADER) ?? crypto.randomUUID()`, so
+`curl -H 'x-request-id: MY-OWN-ID'` was echoed on the response and written into
+every line the request produced. That is a caller-supplied string on a trust
+boundary: it can carry a newline, be a megabyte long, or be set to somebody else's
+trace id on purpose. `nestjs-template` ran `isUuid()` on it first, and that is what
+was adopted - the accepted shape is exactly the shape this middleware mints.
+
+Any UUID version passes; the check is the layout, not the version nibble, because
+an upstream service minting v7 is not a threat model. The order matters more than
+the regex: `inbound !== null` first, then `length === 36`, then the pattern. The
+common request carries no header at all and pays one comparison. Measured in
+isolation at 2M iterations, validating a present header costs **~40 ns** and the
+no-header path is unchanged - two orders of magnitude below the ±0.5 µs the harness
+can resolve, and below the `crypto.randomUUID()` call that follows it either way.
+
+### `ignore` skips everything, and `correlateIgnored` buys back the half worth having
+
+`ignore` returns `next()` before anything else happens, which is what makes it free
+and also means an ignored path has no `x-request-id` and no `AsyncLocalStorage`
+scope - so a health check's own log lines were uncorrelated, and guide 12 claimed
+the id was "always set on the response". Splitting `ignore` into two lists was
+rejected: the cost is not the path list, it is the work, and a second list would
+still not say which work. `correlateIgnored: boolean` names the work instead. On an
+ignored path it pays for the header read, the id, the scope and one `Headers.set` -
+the four rows above that sum to ~2.2 µs of the ~5.4 the full path costs - and never
+for the entry, which is the expensive half. Default `false`, so the shipped hot path
+is unchanged.
+
+### The 500's stack goes through the bound `Logger`
+
+`defaultErrorMapper` wrote it with `console.error`. In a JSON-only service that is
+one structured entry from request logging plus a multi-line, Bun-formatted dump
+that a collector reads as several broken records, and a custom `onError` was the
+only way to suppress it. `errorMapper(logger)` is now the real implementation and
+`HttpApplication` builds the default from `app.get(Logger)`, so the stack lands in
+the same stream and the same shape as everything else. `defaultErrorMapper` remains
+as `errorMapper(new ConsoleLogger())` for `buildRoutes`/`buildFallback` called
+directly, which have no container to ask.
+
+The `Error` is passed as its own argument rather than as `{ err: error }` inside the
+fields object, because `JSON.stringify(new Error('x'))` is `{}` - a field would drop
+the stack, while every `Logger` implementation picks an `Error` argument out and
+serialises it. This is the same class of bug as the `err` field in request
+logging's own entry, which is why the mapper's line is worth keeping alongside it.
 
 ### What still costs
 

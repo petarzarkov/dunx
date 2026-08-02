@@ -1,7 +1,8 @@
 import { Database as BunSqlite, type DatabaseOptions } from 'bun:sqlite';
 import type { AbstractCtor } from '@dunx/core';
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
-import { DbOptions } from '../connection.js';
+import type { Casing, Logger as QueryLogger } from 'drizzle-orm';
+import { DbOptions, drizzleOptions, type DrizzleInit } from '../connection.js';
 import {
   Backend,
   Dialect,
@@ -15,7 +16,9 @@ import {
   SyncSqliteConnection,
 } from './connection.js';
 
-export interface SqliteInit<TSchema extends Record<string, unknown>> {
+export interface SqliteInit<
+  TSchema extends Record<string, unknown>,
+> extends DrizzleInit {
   /**
    * The drizzle schema - `import * as schema from './schema.js'`. Required, and
    * the reason it is: it is the type argument that flows all the way to
@@ -90,6 +93,8 @@ export abstract class SqliteSettings<
   readonly strict: boolean;
   readonly safeIntegers: boolean;
   readonly pragmas: readonly string[];
+  readonly casing: Casing | undefined;
+  readonly logger: boolean | QueryLogger | undefined;
 
   constructor(init: SqliteInit<TSchema>) {
     super();
@@ -100,6 +105,8 @@ export abstract class SqliteSettings<
     this.strict = init.strict ?? true;
     this.safeIntegers = init.safeIntegers ?? false;
     this.pragmas = init.pragmas ?? [];
+    this.casing = init.casing;
+    this.logger = init.logger;
   }
 
   /** Exactly what is handed to `new Database(...)`. */
@@ -148,7 +155,11 @@ export class SqliteOptions<
 
   /** `async` only to satisfy the contract; opening a SQLite file does not block. */
   override async open(): Promise<SqliteConnection<TSchema>> {
-    return new SqliteConnection(this.openDriver(), this.schema);
+    return new SqliteConnection(
+      this.openDriver(),
+      this.schema,
+      drizzleOptions(this),
+    );
   }
 }
 
@@ -179,7 +190,11 @@ export class SyncSqliteOptions<
    * query and close without a single `await`.
    */
   openSync(): SyncSqliteConnection<TSchema> {
-    return new SyncSqliteConnection(this.openDriver(), this.schema);
+    return new SyncSqliteConnection(
+      this.openDriver(),
+      this.schema,
+      drizzleOptions(this),
+    );
   }
 
   override async open(): Promise<SyncSqliteConnection<TSchema>> {

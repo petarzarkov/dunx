@@ -1,4 +1,9 @@
-# Four packaging and API findings in @dunx/infra
+# Two remaining packaging findings in @dunx/infra
+
+Two of the original four are fixed: `SqliteOptions` and `SqlOptions` now forward
+drizzle's `casing` and `logger` through `DrizzleInit`, and the root barrel is the
+full union of every area it carries with `/queue` as the single documented
+exception - see ARCHITECTURE.md, "Database layer" and `packages/infra/README.md`.
 
 ## `/queue` cannot be imported without ioredis, which is marked optional
 
@@ -14,25 +19,12 @@ Every other subpath imports fine. `peerDependenciesMeta.ioredis.optional: true`
 means nothing warns. The manifest contradicts guide 14, which correctly says
 `bun add bullmq ioredis`. Either `ioredis` is not optional whenever `/queue` is
 imported, or `/queue`'s barrel should stop transitively reaching bullmq's CJS
-barrel. See also [ioredis-cjs-pin](./ioredis-cjs-pin.md).
+barrel. See also [ioredis-cjs-pin](./ioredis-cjs-pin.md), which is where the
+decision belongs.
 
-## `SqliteOptions` and `SqlOptions` forward only `schema` to drizzle
-
-**Missing feature. Medium.** `this.db = drizzle({ client: raw, schema })`, so
-drizzle's `casing` and `logger` are unreachable from inside the container.
-`casing: 'snake_case'` is the standard drizzle idiom and what `nestjs-template`
-used; the query `logger` is how a slow endpoint gets diagnosed.
-
-The template worked around it by spelling every column name out and dropping
-`casing` from `drizzle.config.ts` so the runtime handle and drizzle-kit agree. A
-`DB_LOG_QUERIES` env var was dropped as unimplementable.
-
-## The root barrel is a partial re-export
-
-**Low, but it costs time.** No queue symbols at all. `SyncDatabase`,
-`SyncSqliteOptions`, `transactionSync` and `SqliteOptions` are on `/db` only, while
-`DbModule`, `DbConnection`, `transaction` and `runSeeds` are on both. Guessing which
-barrel has a symbol is trial and error. Either re-export everything or nothing.
+This is also the whole reason `/queue` is the one area the root barrel does not
+re-export. `packages/infra/src/index.test.ts` asserts both halves, so whichever way
+this is resolved, the test says whether the exception can go.
 
 ## `@dunx/infra/logger` emits ANSI to a non-TTY when `isDevelopment: true`
 

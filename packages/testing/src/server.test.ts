@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { inject, Logger, LogLevel, Module, provide } from '@dunx/core';
-import { Controller, Get, Post, type RouteInput } from '@dunx/http';
+import {
+  Controller,
+  Get,
+  HttpError,
+  Post,
+  UseGuards,
+  type Middleware,
+  type RouteInput,
+} from '@dunx/http';
 import { RecordingLogger } from './logger.js';
 import { createTestServer, type TestServer } from './server.js';
 
@@ -206,5 +214,110 @@ describe('createTestServer() options', () => {
     await fixture.app.closed;
 
     expect(await rejectionMessage(fetch(new URL('echo', url)))).toBeTruthy();
+  });
+});
+
+class DenyGuard implements Middleware {
+  handle(): Promise<Response> {
+    throw new HttpError(401, 'UNAUTHORIZED');
+  }
+}
+
+@Controller('open')
+class OpenController {
+  @Get('/')
+  ok(): { ok: true } {
+    return { ok: true };
+  }
+}
+
+@Module({ controllers: [OpenController], providers: [DenyGuard] })
+class GlobalGuardModule {}
+
+@Controller('scoped')
+@UseGuards(DenyGuard)
+class ScopedController {
+  @Get('/')
+  ok(): { ok: true } {
+    return { ok: true };
+  }
+}
+
+@Module({ controllers: [ScopedController], providers: [DenyGuard] })
+class ScopedGuardModule {}
+
+const warnings = async (run: () => Promise<void>): Promise<string[]> => {
+  const lines: string[] = [];
+  const { warn } = console;
+  console.warn = (...args: unknown[]): void => {
+    lines.push(args.map(String).join(' '));
+  };
+  try {
+    await run();
+  } finally {
+    console.warn = warn;
+  }
+  return lines;
+};
+
+/**
+ * The failure this exists for: a suite that forgets `middleware` boots a server
+ * with no global guards and no error mapper, answers 200 where production answers
+ * 401, and says nothing about it.
+ */
+describe('createTestServer() global middleware', () => {
+  it('warns when the graph declares middleware and none was supplied', async () => {
+    let fixture: TestServer | undefined;
+    const lines = await warnings(async () => {
+      fixture = await createTestServer({ modules: [GlobalGuardModule] });
+    });
+
+    try {
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('DenyGuard');
+      expect(lines[0]).toContain('middleware');
+      // The point of the warning: this 200 is not what production answers.
+      expect((await fixture!.json('open')).status).toBe(200);
+    } finally {
+      await fixture?.close();
+    }
+  });
+
+  it('says nothing once middleware is supplied, empty included', async () => {
+    const supplied: TestServer[] = [];
+    const lines = await warnings(async () => {
+      supplied.push(
+        await createTestServer({
+          modules: [GlobalGuardModule],
+          middleware: [DenyGuard],
+        }),
+        await createTestServer({
+          modules: [GlobalGuardModule],
+          middleware: [],
+        }),
+      );
+    });
+
+    try {
+      expect(lines).toEqual([]);
+      expect((await supplied[0]!.request('open')).status).toBe(401);
+    } finally {
+      for (const server of supplied) await server.close();
+    }
+  });
+
+  it('says nothing about a guard @UseGuards already applies', async () => {
+    let fixture: TestServer | undefined;
+    const lines = await warnings(async () => {
+      fixture = await createTestServer({ modules: [ScopedGuardModule] });
+    });
+
+    try {
+      expect(lines).toEqual([]);
+      // Route-level guards are in the route table, so the fixture is the app.
+      expect((await fixture!.request('scoped')).status).toBe(401);
+    } finally {
+      await fixture?.close();
+    }
   });
 });

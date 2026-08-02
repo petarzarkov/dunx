@@ -44,10 +44,29 @@ last one answers 201.
 router, and writing one is a standing prohibition rather than a backlog item.
 `@dunx/http`'s job is to build the `routes` object at boot and hand it to Bun.
 
-Three consequences you will actually notice.
+Four consequences you will actually notice.
 
 **An unmatched method is a 404, not a 405.** That is Bun's native behaviour and
 dunx does not paper over it.
+
+**Paths are matched exactly, so a trailing slash is a different path.** `GET /t`
+is a 200 and `GET /t/` is a 404, and the same goes for `/t/sub/` and `POST /t/`.
+Nest, Express and Fastify all normalise it, so this is the one thing that breaks a
+client ported from any of them - and it breaks as a 404 that reads like a missing
+route rather than like a slash.
+
+dunx will not normalise it. The declared side already is: `@Get('/')` inside
+`@Controller('t')` is `/t`, never `/t/`, so there is no case where both spellings
+are live at once. What is left is the inbound URL, and the only place dunx could
+touch that is the `fetch` fallback below - which runs after Bun has matched
+nothing and therefore has no patterns to try `/t/7/` against. Matching it there
+would mean shipping a second, JavaScript router beside Bun's, which is the one
+thing this package will not do.
+
+So: send the path without the trailing slash. Declaring the other spelling is not
+an option either - route discovery strips it, so `@Get('sub/')` is `/t/sub` - and
+for a caller you do not control the normalisation belongs in front of dunx, where
+a reverse-proxy rewrite is one line.
 
 **CORS preflight cannot be inferred.** Since a method miss is a native 404, there
 is no fall-through for an `OPTIONS` request to land in. `enableCors()` therefore
@@ -351,13 +370,21 @@ The default mapper produces three shapes:
 // any other HttpError
 { "error": "No such user", "status": 404 }
 
-// anything else: logged with console.error, and the message is not leaked
+// anything else: logged through the bound Logger, and the message is not leaked
 { "error": "Internal Server Error", "status": 500 }
 ```
 
 The last line is the one that matters for security. An unrecognised throw is a
 500 with a fixed body. Your message, your stack and your database error text do
 not reach the client.
+
+The stack does reach **the log**, and it goes through the same `Logger` everything
+else does - `@arkv/logger` in a service that imported `@dunx/infra/logger`, core's
+`ConsoleLogger` otherwise. So it is one entry, one line, sanitized like the rest.
+It used to be a `console.error`, which in a JSON-only service meant one structured
+line plus a multi-line Bun-formatted dump that a collector reads as several broken
+records. An `HttpError` is not logged by the mapper at all: its status is the whole
+record, and request logging has already written the 4xx line.
 
 Replace the whole mapper with `HttpOptions.onError`:
 
@@ -379,6 +406,23 @@ An `ErrorMapper` is `(error: unknown, req: Request) => Response`. There is one p
 application and there is no imperative equivalent, so it must be passed to
 `create()`. This is the "filters" slot: dunx has one error mapper rather than an
 exception filter hierarchy.
+
+`defaultErrorMapper` writes through core's `ConsoleLogger`, because a bare export
+has no container to ask. `errorMapper(logger)` is the same mapper over any `Logger`
+you hand it, and is what `create()` builds from the bound one when `onError` is
+absent. Reach for it when the wrapper above should keep the app's logger rather
+than the default:
+
+```ts
+import { errorMapper } from '@dunx/http';
+
+const mapper = errorMapper(logger); // whatever LoggerModule was configured with
+
+const app = await HttpFactory.create(AppModule, {
+  onError: (error, req) =>
+    error instanceof DomainConflict ? conflict(error) : mapper(error, req),
+});
+```
 
 CORS headers are applied _outside_ the mapper, so a mapped 500 still carries the
 headers the browser needs in order to display it.

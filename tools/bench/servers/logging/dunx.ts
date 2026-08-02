@@ -38,6 +38,7 @@ if (!isLoggingVariant(raw)) {
 }
 const variant: LoggingVariant = raw;
 const step = stepOf(variant);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PASSTHRU = stepOf('passthru');
 const PATH = stepOf('path');
 const HEADERS = stepOf('headers');
@@ -73,7 +74,13 @@ class StepMiddleware implements Middleware {
       return next();
     }
 
-    const requestId = inbound ?? crypto.randomUUID();
+    // The shipped middleware's `traceId`, copied for the same reason the rest of
+    // this class is: an inbound id is only trusted if it is a UUID, so the row has
+    // to pay for the check or the step below it inherits the cost.
+    const requestId =
+      inbound !== null && inbound.length === 36 && UUID.test(inbound)
+        ? inbound
+        : crypto.randomUUID();
     if (step === REQUEST_ID) {
       sink.line = requestId;
       return next();

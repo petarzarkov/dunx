@@ -144,6 +144,24 @@ describe('SqlOptions.toDriverOptions', () => {
     ).not.toHaveProperty('adapter');
   });
 
+  /**
+   * drizzle's two options are consumed here like `schema` is: they configure the
+   * ORM, and `new Bun.SQL(...)` would reject or misread them.
+   */
+  it('keeps drizzle’s casing and logger away from the driver', () => {
+    const options = new SqlOptions({
+      schema: {},
+      url: 'postgres://localhost:5432/app',
+      casing: 'snake_case',
+      logger: true,
+    });
+
+    expect(options.casing).toBe('snake_case');
+    expect(options.logger).toBe(true);
+    expect(serverOptions(options)).not.toHaveProperty('casing');
+    expect(serverOptions(options)).not.toHaveProperty('logger');
+  });
+
   // Bun.SQL construction is lazy, so this asserts the option shape without
   // reaching the network.
   it('is what Bun.SQL actually accepts', () => {

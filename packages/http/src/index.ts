@@ -51,6 +51,7 @@ export {
 } from './server/cors.js';
 export {
   defaultErrorMapper,
+  errorMapper,
   HttpError,
   ValidationError,
   type ErrorMapper,

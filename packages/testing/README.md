@@ -76,6 +76,13 @@ is on by default in production for good reasons, none of which apply to a suite
 that would otherwise print one JSON line per assertion. Pass
 `requestLogging: true` to test the logging itself.
 
+Everything else is **absent unless passed**, and `middleware` and `onError` decide
+what the application is: forget them and the fixture has no global guards and the
+default error mapper, and answers 200 where production answers 401. Export one
+`httpOptions(config)` and spread it into both `main.ts` and every suite. Omitting
+`middleware` in a graph that declares a `Middleware` no `@UseGuards` attaches warns
+on `console.warn`; `middleware: []` says the omission is deliberate.
+
 ### The client
 
 Two methods, because a third would be the start of an assertion DSL:

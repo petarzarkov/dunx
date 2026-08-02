@@ -1,6 +1,6 @@
 import type { Database as BunSqlite } from 'bun:sqlite';
 import { BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite';
-import { DbConnection } from '../connection.js';
+import { DbConnection, type DrizzleInit } from '../connection.js';
 import {
   Backend,
   Dialect,
@@ -30,7 +30,7 @@ export class SqliteConnection<
 
   #closed = false;
 
-  constructor(raw: BunSqlite, schema: TSchema) {
+  constructor(raw: BunSqlite, schema: TSchema, options: DrizzleInit = {}) {
     super();
     this.raw = raw;
     // `TDb` exists so `SyncSqliteConnection` can narrow `db` without redeclaring
@@ -38,7 +38,7 @@ export class SqliteConnection<
     // assignment, and TypeScript 7 rejects `declare override`. The handle drizzle
     // returns is the same object in both modes; the subclass is what makes the
     // narrower type true, by defining the property that names it.
-    this.db = drizzle({ client: raw, schema }) as unknown as TDb;
+    this.db = drizzle({ client: raw, schema, ...options }) as unknown as TDb;
   }
 
   /**
@@ -102,8 +102,8 @@ export class SyncDatabase<
 export class SyncSqliteConnection<
   TSchema extends Record<string, unknown>,
 > extends SqliteConnection<TSchema, SyncDatabase<TSchema>> {
-  constructor(raw: BunSqlite, schema: TSchema) {
-    super(raw, schema);
+  constructor(raw: BunSqlite, schema: TSchema, options: DrizzleInit = {}) {
+    super(raw, schema, options);
     // Non-enumerable, so it stays out of anything that walks the handle.
     Object.defineProperty(this.db, 'synchronous', { value: true });
   }

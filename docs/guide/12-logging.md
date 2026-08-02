@@ -358,9 +358,18 @@ Everything the handler logs in between carries `requestId`, `method`, `event` an
 
 ### `x-request-id`
 
-An inbound `x-request-id` header is honoured, so a trace survives across services.
-Otherwise one is minted with `crypto.randomUUID()`. Either way it is set on the
-response.
+An inbound `x-request-id` header is honoured, so a trace survives across services -
+**but only if it is a UUID.** It is a caller-supplied string that ends up in every
+line the request writes, so `curl -H 'x-request-id: MY-OWN-ID'` is not echoed: a
+newline, a megabyte, or an id deliberately collided with somebody else's trace is
+dropped and a fresh `crypto.randomUUID()` used instead. Nothing tells the caller,
+because there is nothing a caller needs to do about it.
+
+Any UUID version is accepted; the check is the shape, not the version bits.
+
+It is set on the response of every request the middleware handles - which is every
+request except an `ignore`d one, and one of those too if `correlateIgnored` is on.
+See the option below.
 
 ### Options
 
@@ -369,7 +378,8 @@ interface RequestLoggingOptions {
   maxBodyLength?: number; // default 2048; bodies past this log as a size, 0 omits
   requestBody?: boolean; // default false
   responseBody?: boolean; // default false
-  ignore?: readonly string[]; // paths skipped entirely
+  ignore?: readonly string[]; // paths skipped entirely - see below
+  correlateIgnored?: boolean; // default false; keep the id on an ignored path
 }
 ```
 
@@ -380,7 +390,33 @@ in `tools/bench`, turning both on costs roughly **two thirds of the throughput**
 It is also the field most likely to contain a password. Turn them on in
 development, where seeing the payload is the point.
 
-`ignore` is for a health check polled every second.
+### What `ignore` costs, and how to buy part of it back
+
+`ignore` is for a health check polled every second, and **entirely** is literal.
+The middleware slices the pathname - it has to, to check the list - and then
+returns `next()` without touching anything else, so an ignored path has:
+
+- no entry, which is the point;
+- no `x-request-id` on the response;
+- no `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated - no
+  `requestId`, no `event`, no `context`.
+
+That is what makes it free. "Do not log the health check, but do keep its request
+id" is `correlateIgnored`:
+
+```ts
+HttpFactory.create(AppModule, {
+  requestLogging: { ignore: ['/health'], correlateIgnored: true },
+});
+```
+
+The path still writes no entry of its own. It gets an id - inbound if it was a
+UUID, minted otherwise - on the response, and everything the handler logs carries
+it. It is off by default because it is not free: that path then pays for reading
+the header, `crypto.randomUUID()`, the `runWithContext` scope and one
+`Headers.set`, which is **~2.2 µs** of the ~5.4 the full default path costs in the
+table below. What it never pays for is building and serialising the entry, which is
+the expensive half.
 
 ## What it costs
 

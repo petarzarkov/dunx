@@ -154,6 +154,8 @@ The handshake is awaited inside `open()` rather than deferred to the first query
 | `strict`       | `true`       | **Not the driver's default.** See below                       |
 | `safeIntegers` | `false`      | Return integers as `bigint` rather than truncating to 53 bits |
 | `pragmas`      | `[]`         | Run once after opening, each prefixed with `PRAGMA`           |
+| `casing`       | drizzle's    | `'snake_case'` or `'camelCase'`, forwarded to `drizzle()`     |
+| `logger`       | drizzle's    | `true`, or anything with `logQuery`, forwarded to `drizzle()` |
 
 `pragmas` is the only place `journal_mode = WAL` can be set before the first
 query.
@@ -167,6 +169,38 @@ Strict mode turns an unsupported binding into a `TypeError` instead of a silent
 `NULL`. It is also why `SqliteOptions` opens the `bun:sqlite` handle itself instead
 of letting `drizzle('./dev.db')` do it: drizzle's own path forwards only
 `readonly`/`create`/`readwrite` and hands back a **non-strict** handle.
+
+### drizzle's own options: `casing` and `logger`
+
+Both backends' init types extend `DrizzleInit`, whose two fields are drizzle's and
+are forwarded to `drizzle()` untouched. They are the reason opening the handle by
+hand is not the only way to reach them:
+
+```ts
+DbModule.forRoot(
+  new SqliteOptions({
+    schema,
+    filename: './dev.db',
+    casing: 'snake_case',
+    logger: { logQuery: (query, params) => logger.debug(query, { params }) },
+  }),
+);
+```
+
+`casing: 'snake_case'` lets a column be declared as `text()` with no name and
+resolve to `first_name`. It has to agree with `drizzle.config.ts`, because
+drizzle-kit generates migrations from the config while the handle queries with
+this - if they disagree, the migration writes one column name and the query reads
+another.
+
+`logger` takes `true` for drizzle's own console output, or anything with a
+`logQuery(query, params)` method. Routing it into the injected `Logger` at `debug`
+is how a slow endpoint gets diagnosed without a proxy in front of the database. It
+is per-connection, so a `DB_LOG_QUERIES` env flag is just
+`logger: config.DB_LOG_QUERIES` inside a `forRootAsync` factory.
+
+`SqlOptions` consumes both before building the `Bun.SQL` options, exactly as it
+consumes `schema` and `url` - the driver has no idea what `casing` means.
 
 ## Synchronous mode: `SyncSqliteOptions`
 
