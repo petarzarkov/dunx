@@ -21,6 +21,9 @@
     "url": "git+https://github.com/petarzarkov/dunx.git",
     "directory": "packages/openapi"
   },
+  "bin": {
+    "dunx-openapi": "dist/cli.js"
+  },
   "files": [
     "LICENSE",
     "README.md",

@@ -154,3 +154,4 @@ HANDOFF.md
 # Throwaway git worktrees created for isolated subagent runs. Never tracked, and
 # never linted or formatted - they are copies of the repo, not part of it.
 .claude/worktrees/
+packages/*/cli-fixture-*/

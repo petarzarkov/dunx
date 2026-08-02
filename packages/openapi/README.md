@@ -302,7 +302,36 @@ argument, so a page built on your own frontend never loads dunx's.
 The generator needs no container and no server. `describeRoutes` reads a module
 graph's routes without constructing a controller - `discoverRoutes` walks a
 prototype chain, and `Object.create(Controller.prototype)` is that chain with
-nothing behind it - so a document can be written to a file from a script:
+nothing behind it - so a document can be written to a file with no database and no
+port.
+
+That is a `bin`, because every app was otherwise writing the same forty lines:
+
+```bash
+bunx dunx-openapi ./src/app.module.ts
+bunx dunx-openapi ./src/openapi.config.ts --out public/openapi.json
+bunx dunx-openapi ./src/app.module.ts --stdout | jq '.paths | keys'
+```
+
+The entry exports either the root module as `default` or `root`, in which case
+title and version come from the nearest `package.json`, or an `openapi` function
+for anything more:
+
+```ts
+export const openapi = () => ({
+  root: appModule({ source, logLevel: 'fatal' }),
+  title: pkg.name,
+  version: pkg.version,
+  // Better Auth serves its own endpoints, so route discovery cannot see them.
+  contribute: [betterAuthDocument(auth, { basePath: '/api/auth' })],
+});
+```
+
+**`contribute` is why the CLI takes a function rather than only a module path.** A
+contribution describes endpoints dunx does not route, so it is the app's to
+declare - no CLI can infer that an app mounted Better Auth, or with which options.
+
+The primitives stay public for anything the CLI does not cover:
 
 ```ts
 import { describeRoutes, generateDocument } from '@dunx/openapi';
