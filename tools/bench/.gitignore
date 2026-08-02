@@ -1,5 +1,10 @@
 .bench-tmp/
 .bin/
+# Everything the cross-language subjects compile goes to `.bench-tmp/` by way of
+# CARGO_TARGET_DIR and -Dbench.target, and the Maven repository to `.bin/m2`.
+# These two catch a manual `cargo build` or `mvn package` run by hand in place.
+servers/rust/target/
+servers/java/target/
 # `results/*`, not `results/`: git cannot re-include a path inside an excluded
 # directory, and the one published run has to be tracked. The docs site renders
 # it, and CI builds that site from a clean checkout - an untracked report means

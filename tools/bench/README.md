@@ -11,7 +11,7 @@ to hide as the places it wins.
 
 ```bash
 bun run setup       # downloads oha into .bin/ (optional, but read "Load generator")
-bun run start       # full suite: 9 subjects x 4 scenarios
+bun run start       # full suite: 15 subjects x 4 scenarios, minus any whose toolchain is absent
 bun run validation  # the validation-cost harness - see "Validation cost"
 bun run db-modes    # @dunx/infra/db async vs synchronous SQLite, end to end
 bun run start --help
@@ -70,9 +70,19 @@ And one thing per subject:
 | `node-http`       | Node    | The Node ceiling: a bare `requestListener`, no framework.                      |
 | `fastify`         | Node    | The fast Node framework.                                                       |
 | `express`         | Node    | The one everyone actually has in production.                                   |
+| `nethttp`         | Go      | The Go ceiling: `net/http` and `http.ServeMux`, no framework.                  |
+| `gin`             | Go      | Gin, the Go framework Elysia's landing page compares itself against.           |
+| `axum`            | Rust    | Axum on tokio and hyper, no tower layers.                                      |
+| `spring`          | JVM     | Spring Boot on its default stack: Spring MVC, Tomcat, Jackson.                 |
 
 Each subject is a single file under `servers/`, small enough to read in full. If a
 number looks wrong, read the file - that is the whole implementation.
+
+The last four need a toolchain this repo does not otherwise use. They are
+**opt-in**: `bun run start` probes for each one, and if it is not there it prints a
+line saying which subjects it is skipping and produces a report without them, the
+same way the Node subjects drop out when `node` does not resolve. Nothing is
+downloaded and nothing is installed. See "Requirements".
 
 #### Reading the NestJS rows fairly
 
@@ -117,6 +127,53 @@ on the hot path. That is now off by default, and the remaining gap between the t
 rows is `JSON.stringify` plus a `write` per request, which is the irreducible
 price of a log line.
 
+#### Reading the Go, Rust and JVM rows fairly
+
+These four exist as a **falsification test on this harness**, not as a
+scoreboard. Elysia's landing page shows a JavaScript runtime beating Gin by 3.6x
+and Spring by 4.8x, which is not a plausible framework result, and the same
+question applies here: if `@dunx/http` comes out ahead of Gin or Axum, the first
+conclusion to reach for is that the harness is measuring something other than
+what it claims.
+
+Three things make these rows readable, and every one of them is a constraint
+that has to be stated with the number:
+
+**Threads.** Every subject in this suite is one process on one thread. Bun and
+Node are single-threaded because that is what they are; Go, tokio and Tomcat are
+single-threaded here because the harness **made** them, and that is the largest
+handicap in the file. `runtime.GOMAXPROCS(1)`, `#[tokio::main(flavor =
+"current_thread")]` and `server.tomcat.threads.max=1` are in the three source
+files. Without them a 32-core Go server would be measured against a
+single-threaded JavaScript one, which ranks the machine and not the framework.
+With them, the ranking is per-thread dispatch cost, which is the only thing the
+rest of this table has ever measured - and which is **not** what anyone deploying
+Go or Rust actually gets. Measured on the machine below: raw `net/http` goes from
+about 73k req/s at `GOMAXPROCS(1)` to about 230k with all 32 cores at the same 64
+connections, and Axum from about 121k to about 503k. Neither Bun subject can move
+at all, because `Bun.serve` is one thread.
+
+**Compilation is not startup.** The Go and Rust binaries and the Spring fat jar
+are all built in a prepare pass before anything is measured, and the build time is
+reported next to the toolchain rather than inside the startup column. So the
+startup column times the same thing for everyone: a cold process answering its
+first request. That is honest for Go and Rust, where the compile is genuinely
+somebody else's problem at deploy time, and it is honest for the JVM too - class
+loading and a JIT-free first request are real costs a JVM pays every boot, and
+they stay in the number.
+
+**JIT warmup.** Three seconds does not warm a JVM, so `spring` gets a
+30-second unmeasured warmup instead, recorded per subject in the report and
+printed above the tables. Reporting a cold JVM would be exactly the kind of
+flattering measurement this file exists to avoid, pointed the other way.
+
+**The validator is not held constant across languages.** Inside JavaScript every
+subject validates with zod, which is what makes `validate` minus `json` readable.
+There is no zod in Go, Rust or Java, so each uses the idiomatic choice -
+`go-playground/validator`, the `validator` crate, Hibernate Validator - and each
+brings its own email regex. Compare the cross-language `validate` rows to their
+own `json` row, not to a JavaScript subject's.
+
 ### Deliberate handicaps, in both directions
 
 These are choices that move the numbers. They are listed here rather than buried.
@@ -139,7 +196,19 @@ These are choices that move the numbers. They are listed here rather than buried
   lands in the startup number and not the per-request number.
 - **No logging, no CORS, no middleware anywhere.** `@dunx/http` has none of these on
   by default; enabling them for other subjects and not dunx, or vice versa, would
-  measure configuration rather than frameworks.
+  measure configuration rather than frameworks. `gin.New()` is used rather than
+  `gin.Default()` for exactly this reason: `Default` installs a per-request logger
+  and a recovery middleware.
+- **Rust is built with a plain `cargo build --release`.** No LTO, no
+  `codegen-units = 1`, no `panic = "abort"`. Those would be tuning nothing else in
+  this suite gets, and they understate Axum by however much they are worth.
+- **Axum is given `TCP_NODELAY`.** `axum::serve` leaves Nagle on; Go's `net/http`
+  and Bun's uSockets both set it. Measured over six interleaved rounds it makes no
+  difference this harness can resolve, but leaving it off would have been a socket
+  option masquerading as a framework difference.
+- **Spring Boot runs with no JVM flags, no AOT, no CDS and no native image.** That
+  understates what a tuned Spring deployment does, and it is what `spring init`
+  produces.
 
 ## What is not measured
 
@@ -148,7 +217,11 @@ These are choices that move the numbers. They are listed here rather than buried
   box. They do not predict what any of them does behind a real network.
 - **Concurrency beyond one process.** Every subject is single-process and
   single-threaded. No `reusePort`, no cluster, no worker pool. Real deployments scale
-  out and the ranking may not survive that.
+  out and the ranking may not survive that. **This is the assumption the
+  cross-language rows break**, and it is worth saying plainly: Go, tokio and Tomcat
+  all scale across cores in one process and the JavaScript runtimes do not, so a
+  per-thread ranking flatters Bun by exactly the factor the reader is not being
+  shown. See "Reading the Go, Rust and JVM rows fairly".
 - **Anything with I/O.** No database, no cache, no filesystem, no upstream calls. In
   an application that talks to Postgres, all of these differences are rounding error
   next to one query. That is the honest framing for every result below.
@@ -160,6 +233,11 @@ These are choices that move the numbers. They are listed here rather than buried
 
 ## Methodology
 
+0. **Everything is built before anything is measured.** `Bun.build` transpiles the
+   Node subjects; `go build`, `cargo build --release` and `mvn package` produce the
+   Go, Rust and JVM artifacts. All output lands in `.bench-tmp/` (and the Maven
+   repository in `.bin/m2`), both gitignored. A toolchain that does not resolve
+   drops its subjects with a note and the run continues. `src/toolchains.ts`.
 1. **Node subjects are transpiled first.** `Bun.build` emits ESM to `.bench-tmp/`
    with dependencies external, so Node loads the real express/fastify/hono from
    `node_modules`. This exists because Node's type stripper does not remap the `.js`
@@ -169,11 +247,15 @@ These are choices that move the numbers. They are listed here rather than buried
    inherits another scenario's warmed-up JIT state or heap.
 3. **Contract verification** before every measurement, as described above.
 4. **Warmup.** A full unmeasured load run (default 3 s) precedes the measured runs
-   for each scenario, so the measured window is against a JIT-warm server.
+   for each scenario, so the measured window is against a JIT-warm server. A subject
+   may declare a floor it needs regardless of `--warmup`; `spring` declares 30 s,
+   because 3 s does not warm a JVM. The floor is in the report and above the table.
 5. **Multiple runs.** Default 5 measured runs of 5 s each. The report gives the
    **median** and the **standard deviation** across runs, never a single run.
 6. **Startup is measured separately**, by spawning and killing the subject N times
-   (default 7) and timing spawn to first successful response.
+   (default 7) and timing spawn to first successful response. For the compiled
+   subjects that is the artifact, never the build - see "Reading the Go, Rust and
+   JVM rows fairly".
 7. **The machine is recorded** - CPU model, logical cores, RAM, kernel, arch, Bun
    version, Node version - along with every subject's package version, in both the
    stdout table and the JSON.
@@ -204,10 +286,21 @@ falls back to the JavaScript driver otherwise.
 setup` downloads a prebuilt binary into `.bin/` (gitignored); the harness also picks
 up `oha` from `PATH`, or from `$BENCH_OHA`. Adapter: `src/loadgen/oha.ts`.
 
-**It is not the bottleneck**, and that was checked rather than assumed. Driving one
-`Bun.serve` process at 64 connections gives ~130k req/s. Driving four `Bun.serve`
-processes with four oha instances at the same time gives **~385k req/s in total**. A
-generator with 3x headroom over the fastest subject is not what is being measured.
+**It is not the bottleneck**, and that was checked twice rather than assumed.
+Driving one `Bun.serve` process at 64 connections gives ~130k req/s. Driving four
+`Bun.serve` processes with four oha instances at the same time gives **~385k req/s
+in total**.
+
+The second check is the stronger one, and it exists because the first leaves a
+hole: four oha instances say nothing about what **one** oha instance at 64
+connections can do, which is the configuration every number in this file comes
+from. So: the Axum subject was rebuilt on a multi-threaded tokio runtime and
+driven by a single oha at the same 64 connections. It answered **~503k req/s**.
+The fastest subject in the table is around 130k, so one generator process has
+roughly **4x headroom** over it and the top of the table is the server's number,
+not the client's. Anyone who suspects otherwise should repeat that check before
+believing a ranking near the top - it is the cheapest way to falsify this harness
+and it is the one that was tried first.
 
 Limitations: shares the machine with the subject; closed-loop, so latency is subject
 to coordinated omission; HTTP/1.1 with keep-alive only, no TLS, no pipelining.
@@ -240,6 +333,19 @@ So: the fetch driver is usable for a *relative ranking of the slower subjects* a
 for smoke-testing the harness. It is not usable for the dunx-vs-`Bun.serve` gap,
 which is the number this harness exists to produce. **Install oha for anything you
 intend to quote.**
+
+## Cross-language rows are not in the tables below yet
+
+`nethttp`, `gin`, `axum` and `spring` are implemented, pass the contract check and
+run, but the published `results/latest.json` predates them. Regenerating it needs
+an idle machine, and every table in this file is generated from that one file
+rather than typed, so the rows appear the next time a clean full run is taken.
+Reproduce them meanwhile with `bun run start --subjects bun-serve,dunx,nethttp,gin,axum,spring`.
+
+What a clean run should be read for, in this order: whether the load generator has
+headroom over the fastest row (see "Load generator"), then whether the JavaScript
+rows sit above Gin and Axum - and if they do, "Reading the Go, Rust and JVM rows
+fairly" is the paragraph that says what that does and does not mean.
 
 ## Results
 
@@ -617,11 +723,20 @@ as an explicit row so the difference stays visible.
     "connections": 0, "durationSeconds": 0, "warmupSeconds": 0,
     "runs": 0, "startupSamples": 0
   },
+  "toolchains": [{                    // one per compiled language that was asked for
+    "runtime": "go" | "rust" | "jvm",
+    "label": "string",
+    "version": "string | null",       // null means absent, and its subjects were skipped
+    "subjects": ["string"],
+    "buildSeconds": 0.0               // deliberately NOT in the startup column
+  }],
   "subjects": [{
-    "id": "string", "label": "string", "runtime": "bun" | "node",
+    "id": "string", "label": "string",
+    "runtime": "bun" | "node" | "go" | "rust" | "jvm",
     "version": "string", "validator": "string",
     "notes": ["string"],              // the handicaps above, per subject
-    "entry": "string", "preload": ["string"], "versionOf": "string | null"
+    "entry": "string", "preload": ["string"], "versionOf": "string | null",
+    "warmupFloorSeconds": 0           // optional; only `spring` sets it
   }],
   "scenarios": [{
     "id": "string", "title": "string", "description": "string",
@@ -664,6 +779,14 @@ tools/bench/
     logging/          the request-logging harness's one subject
       dunx.ts         the app, with the middleware truncated at $LOGGING_VARIANT
       variants.ts     the step list and the three stand-in Logger bindings
+    go/               one Go module, one command per subject
+      shared/         the payloads and the one validator both Go subjects use
+      cmd/nethttp/    net/http and http.ServeMux, the Go floor
+      cmd/gin/        Gin
+    rust/             one Cargo package, one [[bin]] per subject
+      src/axum.rs     Axum on tokio, single-threaded
+    java/             one Maven project
+      src/main/java/bench/App.java   Spring Boot, MVC over Tomcat
   src/
     index.ts          entrypoint for the framework suite
     validation.ts     entrypoint for the validation harness
@@ -672,6 +795,7 @@ tools/bench/
     run.ts            orchestration: startup, warmup, measured runs
     subject-process.ts  spawn, readiness, contract verification, stop
     build.ts          Bun.build transpile of the Node subjects
+    toolchains.ts     probe, compile and skip for the Go, Rust and JVM subjects
     scenarios.ts      the four workloads and their exact expected responses
     subjects.ts       the subject registry, including each one's handicaps
     loadgen/          oha adapter, Bun fetch driver, worker, histogram
@@ -694,9 +818,34 @@ tools/bench/
 
 Node subjects need nothing extra - `src/build.ts` finds them by `runtime: 'node'`.
 
+A subject in an **existing** compiled language needs its source under
+`servers/go`, `servers/rust` or `servers/java`, and the naming the toolchain
+expects: a Go subject's `entry` is `servers/go/cmd/<id>/main.go`, a Rust subject
+needs a `[[bin]]` in `Cargo.toml` named after its id, and a JVM subject's
+`finalName` in `pom.xml` must be its id. It must also be single-threaded, for the
+reason in "Reading the Go, Rust and JVM rows fairly".
+
+A **new** language is one entry in `TOOLCHAINS` in `src/toolchains.ts`: the
+binaries to probe, the environment variables that override them, the hint printed
+when they are missing, and a `compile` returning the argv that runs the artifact.
+
 ## Requirements
 
-- Bun (the harness itself, and the Bun subjects).
-- Node **for the Node subjects only**. The harness uses `node` from `PATH`, or
-  `$BENCH_NODE`. If neither resolves, it prints a line saying so, skips those
-  subjects and still produces a report.
+Only the first is required. Every other row is opt-in: the harness probes for it,
+and if it is not there it prints a line naming the subjects it is skipping and
+still produces a report. That is what keeps the suite runnable in CI, which has
+none of them.
+
+| Need                     | For                      | Found via                        |
+| ------------------------ | ------------------------ | -------------------------------- |
+| **Bun**                  | the harness, Bun subjects | required                        |
+| Node                     | the four Node subjects   | `PATH`, or `$BENCH_NODE`         |
+| Go 1.22+                 | `nethttp`, `gin`         | `PATH`, or `$BENCH_GO`           |
+| Rust / Cargo             | `axum`                   | `PATH`, or `$BENCH_CARGO`        |
+| JDK 21+ **and** Maven    | `spring`                 | `PATH`, or `$BENCH_JAVA` and `$BENCH_MVN` |
+
+Nothing here is downloaded or installed for you - `bun run setup` fetches oha and
+that is all. The first build of each is slow (Go and Maven resolve dependencies
+from the network, Rust compiles about 200 crates); every run after that is cached.
+Maven's local repository is `.bin/m2` rather than `~/.m2`, so a benchmark run
+leaves nothing behind outside this workspace.

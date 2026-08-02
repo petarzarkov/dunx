@@ -1,6 +1,11 @@
 export type HttpMethod = 'GET' | 'POST';
 
-export type Runtime = 'bun' | 'node';
+/**
+ * `go`, `rust` and `jvm` need a compiler the other four do not. The harness
+ * probes for each one and skips its subjects when it is absent, so a checkout
+ * with only Bun and Node still produces a report - see `src/toolchains.ts`.
+ */
+export type Runtime = 'bun' | 'node' | 'go' | 'rust' | 'jvm';
 
 export interface Scenario {
   readonly id: string;
@@ -24,6 +29,13 @@ export interface Subject {
   readonly versionOf: string | null;
   readonly validator: string;
   readonly notes: readonly string[];
+  /**
+   * Unmeasured warmup this subject needs regardless of `--warmup`. Three seconds
+   * warms a JIT-free binary and a Bun process; it does not warm a JVM, and
+   * reporting a cold JVM would be as dishonest as under-reporting anything else
+   * here. Recorded in the report so the asymmetry is visible rather than hidden.
+   */
+  readonly warmupFloorSeconds?: number | undefined;
 }
 
 export interface LoadRequest {
@@ -162,6 +174,21 @@ export interface LoggingReport {
   readonly units: readonly LoggingUnit[];
 }
 
+/**
+ * One compiled-language toolchain, whether it was found, and what it cost to
+ * build with. `buildSeconds` is here precisely so it is *not* in the startup
+ * column: a Go or Rust binary and a Spring jar are produced before any
+ * measurement starts, and the startup number times the artifact, not the build.
+ */
+export interface ToolchainInfo {
+  readonly runtime: Runtime;
+  readonly label: string;
+  /** `null` when the toolchain was absent and its subjects were skipped. */
+  readonly version: string | null;
+  readonly subjects: readonly string[];
+  readonly buildSeconds: number;
+}
+
 export interface Report {
   readonly schemaVersion: 1;
   readonly generatedAt: string;
@@ -173,6 +200,7 @@ export interface Report {
     readonly limitations: readonly string[];
   };
   readonly config: BenchConfig;
+  readonly toolchains: readonly ToolchainInfo[];
   readonly subjects: readonly SubjectInfo[];
   readonly scenarios: readonly Scenario[];
   readonly results: readonly ScenarioResult[];

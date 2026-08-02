@@ -59,6 +59,40 @@ export const formatReport = (report: Report): string => {
     `  ${report.config.connections} connections | ${report.config.warmupSeconds}s warmup | ` +
       `${report.config.runs} x ${report.config.durationSeconds}s measured | ${report.generatedAt}`,
   );
+  const longer = report.subjects.filter(
+    (subject) =>
+      (subject.warmupFloorSeconds ?? 0) > report.config.warmupSeconds,
+  );
+  if (longer.length > 0) {
+    out.push(
+      `  longer warmup: ${longer.map((subject) => `${subject.label} ${subject.warmupFloorSeconds}s`).join(', ')}`,
+    );
+  }
+
+  if (report.toolchains.length > 0) {
+    out.push(
+      '\nTOOLCHAINS - compiled before the run, so no build time is in the startup column',
+    );
+    out.push(
+      render(
+        [
+          { header: 'runtime', align: 'left' },
+          { header: 'version', align: 'left' },
+          { header: 'subjects', align: 'left' },
+          { header: 'build s', align: 'right' },
+        ],
+        report.toolchains.map((chain) => [
+          chain.label,
+          chain.version ?? 'not found, subjects skipped',
+          chain.subjects.join(', ') || '-',
+          chain.version === null ? '-' : chain.buildSeconds.toFixed(1),
+        ]),
+      )
+        .split('\n')
+        .map((row) => `  ${row}`)
+        .join('\n'),
+    );
+  }
 
   out.push('\nSUBJECTS');
   out.push(
@@ -127,6 +161,11 @@ export const formatReport = (report: Report): string => {
     out.push(
       `  ${report.startup[0]?.samplesMs.length ?? 0} samples each, polled at 1 ms so treat anything under ~5 ms as equal`,
     );
+    if (report.toolchains.some((chain) => chain.version !== null)) {
+      out.push(
+        '  Go, Rust and JVM artifacts are built before the run: this times the artifact, never the build',
+      );
+    }
     out.push(
       render(
         [

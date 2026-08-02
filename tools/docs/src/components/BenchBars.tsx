@@ -29,20 +29,35 @@ const Bar = ({
   </div>
 );
 
-export const RuntimeLegend = (): React.JSX.Element => (
+const RUNTIME_LABEL: Readonly<Record<BenchRuntime, string>> = {
+  bun: 'Bun',
+  node: 'Node',
+  go: 'Go',
+  rust: 'Rust',
+  jvm: 'JVM',
+};
+
+/**
+ * Driven by the runtimes actually in the report rather than a fixed pair, so a
+ * run that includes the Go, Rust and JVM subjects labels them and a run without
+ * them does not advertise colours nothing on the page uses.
+ */
+export const RuntimeLegend = ({
+  runtimes,
+}: {
+  runtimes: readonly BenchRuntime[];
+}): React.JSX.Element => (
   <Group gap="lg">
-    <Group gap={6}>
-      <span className="bench-swatch" data-runtime="bun" />
-      <Text size="xs" c="dimmed">
-        Bun
-      </Text>
-    </Group>
-    <Group gap={6}>
-      <span className="bench-swatch" data-runtime="node" />
-      <Text size="xs" c="dimmed">
-        Node
-      </Text>
-    </Group>
+    {(Object.keys(RUNTIME_LABEL) as BenchRuntime[])
+      .filter((runtime) => runtimes.includes(runtime))
+      .map((runtime) => (
+        <Group gap={6} key={runtime}>
+          <span className="bench-swatch" data-runtime={runtime} />
+          <Text size="xs" c="dimmed">
+            {RUNTIME_LABEL[runtime]}
+          </Text>
+        </Group>
+      ))}
     <Group gap={6}>
       <span className="bench-swatch bench-swatch-focus" />
       <Text size="xs" c="dimmed">

@@ -20,19 +20,16 @@ export const freePort = async (): Promise<number> => {
   return port;
 };
 
-const command = (
-  subject: Subject,
-  nodeBinary: string,
-  nodeEntry: string | undefined,
-): string[] => {
-  if (subject.runtime === 'bun') {
-    const preload = subject.preload.flatMap((module) => ['--preload', module]);
-    return ['bun', ...preload, `${root}/${subject.entry}`];
-  }
-  if (nodeEntry === undefined)
-    throw new Error(`No transpiled entry for ${subject.id}`);
-  return [nodeBinary, nodeEntry];
-};
+/**
+ * How a Bun subject is launched. Every other runtime needs a transpile or a
+ * compile first, so `runSuite` works out its argv up front and hands it in - see
+ * `src/toolchains.ts`.
+ */
+export const bunCommand = (subject: Subject): readonly string[] => [
+  'bun',
+  ...subject.preload.flatMap((module) => ['--preload', module]),
+  `${root}/${subject.entry}`,
+];
 
 /**
  * Where a subject's stdout goes, which is a measurement decision and not a detail.
@@ -48,15 +45,14 @@ export type StdoutSink = 'null' | 'blocked';
 
 export const startSubject = async (
   subject: Subject,
-  nodeBinary: string,
-  nodeEntry: string | undefined,
+  exec: readonly string[],
   extraEnv: Readonly<Record<string, string>> = {},
   stdout: StdoutSink = 'null',
 ): Promise<SubjectProcess> => {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const startedAt = performance.now();
-  const proc = Bun.spawn(command(subject, nodeBinary, nodeEntry), {
+  const proc = Bun.spawn([...exec], {
     cwd: root,
     env: {
       ...process.env,
