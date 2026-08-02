@@ -54,13 +54,13 @@ Force every package to publish regardless of computed bumps by putting
 
 ## Failure modes
 
-| Symptom                                         | Cause                                                                                                                              |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| First publish of a new package fails in CI      | A package with no versions on npm has no trusted-publisher settings page yet. Publish it once by hand: `npm login && npm publish`. |
-| `dist-tag`, `deprecate`, `access` fail in CI    | Only `npm publish` can use the OIDC credential. Run these locally against a personal npm login.                                    |
-| Published tarball contains `src/` or test files | Missing or wrong `files` in the manifest. `publish-guard` catches this.                                                            |
-| Consumer on `node16`/`nodenext` cannot resolve  | An extensionless relative specifier reached the emitted `.d.ts`. Every relative import in source needs a `.js` extension.          |
-| CI publishes nothing and reports success        | No version changed. Expected — check the dry-run output.                                                                           |
+| Symptom                                         | Cause                                                                                                                                                                                                                                                |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First publish of a new package fails in CI      | A package with no versions on npm has no trusted-publisher settings page yet. Run `bunx npm@11.10.1 login` then `bun scripts/first-publish.ts` — **not** a bare `npm publish`, which ships `workspace:*` verbatim and breaks every consumer install. |
+| `dist-tag`, `deprecate`, `access` fail in CI    | Only `npm publish` can use the OIDC credential. Run these locally against a personal npm login.                                                                                                                                                      |
+| Published tarball contains `src/` or test files | Missing or wrong `files` in the manifest. `publish-guard` catches this.                                                                                                                                                                              |
+| Consumer on `node16`/`nodenext` cannot resolve  | An extensionless relative specifier reached the emitted `.d.ts`. Every relative import in source needs a `.js` extension.                                                                                                                            |
+| CI publishes nothing and reports success        | No version changed. Expected — check the dry-run output.                                                                                                                                                                                             |
 
 ## Never
 
