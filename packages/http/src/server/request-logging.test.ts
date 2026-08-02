@@ -66,6 +66,8 @@ class ThingsController {
 // Set from the container inside the test that needs it.
 let logger: Logger | undefined;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Module({ controllers: [ThingsController] })
 class ThingsModule {}
 
@@ -150,17 +152,52 @@ describe('request logging', () => {
     // A holder, not a `let`: assigning inside a closure keeps TypeScript's
     // narrowing from the initialiser, and `null` is not a useful type.
     const seen: { header?: string | undefined } = {};
+    const given = '3f8c1b0e-9a4d-4c2f-8e11-6b7a2d5c9f03';
     const entries = await captured(async () => {
       await withApp(async (_app, url) => {
         const response = await fetch(new URL('things', url), {
-          headers: { 'x-request-id': 'given-1' },
+          headers: { 'x-request-id': given },
         });
         seen.header = response.headers.get('x-request-id') ?? undefined;
       });
     });
 
-    expect(seen.header).toBe('given-1');
-    expect(entries.find((e) => e['requestId'] === 'given-1')).toBeDefined();
+    expect(seen.header).toBe(given);
+    expect(entries.find((e) => e['requestId'] === given)).toBeDefined();
+  });
+
+  /**
+   * The trust boundary: an inbound id is a caller-supplied string, and it ends up
+   * in every line the request writes. Anything that is not a UUID is replaced.
+   */
+  it('replaces an inbound x-request-id that is not a uuid', async () => {
+    const seen: { header?: string | undefined } = {};
+    const entries = await captured(async () => {
+      await withApp(async (_app, url) => {
+        const response = await fetch(new URL('things', url), {
+          headers: { 'x-request-id': 'MY-OWN-ID' },
+        });
+        seen.header = response.headers.get('x-request-id') ?? undefined;
+      });
+    });
+
+    expect(seen.header).not.toBe('MY-OWN-ID');
+    expect(seen.header).toMatch(UUID);
+    expect(entries.find((e) => e['requestId'] === 'MY-OWN-ID')).toBeUndefined();
+  });
+
+  it('replaces an inbound id shaped like a uuid but not one', async () => {
+    const seen: { header?: string | undefined } = {};
+    await captured(async () => {
+      await withApp(async (_app, url) => {
+        const response = await fetch(new URL('things', url), {
+          headers: { 'x-request-id': '3f8c1b0e-9a4d-4c2f-8e11-6b7a2d5c9zzz' },
+        });
+        seen.header = response.headers.get('x-request-id') ?? undefined;
+      });
+    });
+
+    expect(seen.header).toMatch(UUID);
   });
 
   it('logs a 4xx at warn and a 5xx at error', async () => {
@@ -266,6 +303,70 @@ describe('request logging', () => {
     const boom = entries.find((e) => e['message'] === 'GET /things/boom 418');
     expect(boom).toBeDefined();
     expect(boom?.['responseBody']).toBeUndefined();
+  });
+
+  /** What `ignore` costs on its own, so the guide can say it plainly. */
+  it('drops the request id along with the entry on an ignored path', async () => {
+    const seen: { header?: string | undefined } = {};
+    await captured(async () => {
+      await withApp(
+        async (_app, url) => {
+          const response = await fetch(new URL('things', url));
+          seen.header = response.headers.get('x-request-id') ?? undefined;
+        },
+        { requestLogging: { ignore: ['/things'] } },
+      );
+    });
+
+    expect(seen.header).toBeUndefined();
+  });
+
+  it('keeps the id and the scope on an ignored path when asked', async () => {
+    const seen: { header?: string | undefined } = {};
+    const entries = await captured(async () => {
+      await withApp(
+        async (app, url) => {
+          logger = app.get(Logger);
+          const response = await fetch(new URL('things/inner', url));
+          seen.header = response.headers.get('x-request-id') ?? undefined;
+          logger = undefined;
+        },
+        {
+          requestLogging: {
+            ignore: ['/things/inner'],
+            correlateIgnored: true,
+          },
+        },
+      );
+    });
+
+    // No entry for the request itself, which is what `ignore` is for.
+    expect(
+      entries.find((e) => e['message'] === 'GET /things/inner 200'),
+    ).toBeUndefined();
+    expect(seen.header).toMatch(UUID);
+    // But the handler's own line is still correlated with the response header.
+    const inner = entries.find((e) => e['message'] === 'from the handler');
+    expect(inner?.['requestId']).toBe(seen.header);
+    expect(inner?.['context']).toBe('ThingsController.inner');
+  });
+
+  it('honours an inbound id on a correlated ignored path', async () => {
+    const seen: { header?: string | undefined } = {};
+    const given = '9c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f';
+    await captured(async () => {
+      await withApp(
+        async (_app, url) => {
+          const response = await fetch(new URL('things', url), {
+            headers: { 'x-request-id': given },
+          });
+          seen.header = response.headers.get('x-request-id') ?? undefined;
+        },
+        { requestLogging: { ignore: ['/things'], correlateIgnored: true } },
+      );
+    });
+
+    expect(seen.header).toBe(given);
   });
 
   it('binds RequestContext by default, so an app can use it directly', async () => {

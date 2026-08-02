@@ -28,10 +28,15 @@ Import from the barrel or from an area subpath. The subpaths exist so it is
 obvious what a file uses, and so tree-shaking is not something you have to reason
 about.
 
+The rule, so which barrel has a symbol is never a guess: **if an area is in the
+root barrel at all, all of it is** - `@dunx/infra/db` and `@dunx/infra` name the
+same set.
+
 `/queue` is the one area the barrel deliberately does **not** re-export. bullmq's
 own entry point statically imports `ioredis`, so exporting it from the root would
 make both a hard requirement of `import '@dunx/infra'`, including for an app that
-has no queue. Reach it at `@dunx/infra/queue`.
+has no queue. Reach it at `@dunx/infra/queue`. `src/index.test.ts` holds both
+halves of that to account.
 
 ## Two conventions that run through all six
 
@@ -78,6 +83,10 @@ What this package adds is the four things a drizzle handle has none of:
 | `DbConnection`          | `close()`, `onShutdown()`, `backend`, `dialect`, and `raw`           |
 | `transaction(db, fn)`   | drizzle's own cannot roll back an async callback on `bun:sqlite`     |
 | `runSeeds(db, options)` | Seeding *data*, which `drizzle-kit` has no concept of                |
+
+drizzle's own `casing` and `logger` are on both backends' init - they extend
+`DrizzleInit` and are forwarded to `drizzle()` verbatim - so `casing: 'snake_case'`
+and a query logger are reachable without opening the handle by hand.
 
 Postgres is `SqlOptions`, synchronous SQLite is `SyncSqliteOptions`, and MySQL is
 `drizzle-orm/mysql-proxy` over `Bun.SQL`, worked through in

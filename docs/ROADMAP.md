@@ -218,6 +218,7 @@ Feedback goes in as a new file rather than into conversation.
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                  |
 | [ioredis-cjs-pin](./roadmap/ioredis-cjs-pin.md)                                     | Defect. Known, currently harmless.                                    |
 | [auth-package-name](./roadmap/auth-package-name.md)                                 | Decision. Window closed once published.                               |
+| [bench-harness-silent-degradation](./roadmap/bench-harness-silent-degradation.md)   | Bug. Unusable numbers with no warning when oha is absent.             |
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                         | Unreproduced.                                                         |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                        |
 
@@ -235,10 +236,7 @@ produced 22 findings.
 | [transform-emitted-js-diagnostic](./roadmap/transform-emitted-js-diagnostic.md)       | Bug, high. Error tells you to do what you did.      |
 | [di-import-type-diagnostic](./roadmap/di-import-type-diagnostic.md)                   | Diagnostic, high frequency.                         |
 | [openapi-forroot-async](./roadmap/openapi-forroot-async.md)                           | Missing feature, medium. `HttpOptions` half only.   |
-| [http-request-id-and-ignore](./roadmap/http-request-id-and-ignore.md)                 | Three findings, medium and low.                     |
 | [infra-packaging-findings](./roadmap/infra-packaging-findings.md)                     | Four findings, medium and low.                      |
-| [testing-http-options](./roadmap/testing-http-options.md)                             | Design, medium. Silently a different app.           |
-| [http-trailing-slash](./roadmap/http-trailing-slash.md)                               | Low. Undocumented.                                  |
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;

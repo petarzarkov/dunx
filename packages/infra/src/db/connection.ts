@@ -1,5 +1,40 @@
 import type { AbstractCtor, OnShutdown } from '@dunx/core';
+import type { Casing, Logger as QueryLogger } from 'drizzle-orm';
 import type { BackendName, DialectName } from './dialect.js';
+
+/**
+ * The drizzle-owned half of a connection's options. Not this package's to
+ * interpret: both backends' init types extend it and forward it to `drizzle()`
+ * verbatim, which is what makes `casing` and the query logger reachable from
+ * inside the container rather than only from a hand-built handle.
+ */
+export interface DrizzleInit {
+  /**
+   * How a column with no explicit name is spelled in SQL. `'snake_case'` is the
+   * drizzle idiom, and it has to agree with `drizzle.config.ts` - drizzle-kit
+   * generates migrations from the config, the handle queries with this.
+   */
+  readonly casing?: Casing;
+  /**
+   * `true` writes every query to the console. An object with `logQuery` sends it
+   * anywhere instead, core's `Logger` included, which is how a slow endpoint gets
+   * diagnosed without a proxy in front of the database.
+   */
+  readonly logger?: boolean | QueryLogger;
+}
+
+/**
+ * The keys that were actually set. `exactOptionalPropertyTypes` separates an
+ * absent `casing` from one explicitly `undefined`, and drizzle's config accepts
+ * only the first.
+ */
+export const drizzleOptions = (init: {
+  readonly casing: Casing | undefined;
+  readonly logger: boolean | QueryLogger | undefined;
+}): DrizzleInit => ({
+  ...(init.casing === undefined ? {} : { casing: init.casing }),
+  ...(init.logger === undefined ? {} : { logger: init.logger }),
+});
 
 /**
  * What owns the socket or the file handle.

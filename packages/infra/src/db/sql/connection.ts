@@ -1,5 +1,5 @@
 import { drizzle, type BunSQLDatabase } from 'drizzle-orm/bun-sql';
-import { DbConnection } from '../connection.js';
+import { DbConnection, type DrizzleInit } from '../connection.js';
 import {
   Backend,
   Dialect,
@@ -28,10 +28,10 @@ export class SqlConnection<
 
   #closed = false;
 
-  constructor(raw: Bun.SQL, schema: TSchema) {
+  constructor(raw: Bun.SQL, schema: TSchema, options: DrizzleInit = {}) {
     super();
     this.raw = raw;
-    this.db = drizzle({ client: raw, schema });
+    this.db = drizzle({ client: raw, schema, ...options });
   }
 
   override async close(): Promise<void> {

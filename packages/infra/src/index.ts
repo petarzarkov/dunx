@@ -1,3 +1,17 @@
+/**
+ * Every area in full, with **one** exception: `/queue`.
+ *
+ * The rule, so which barrel has a symbol is never a guess: if an area is here at
+ * all, all of it is here, and `@dunx/infra/db` and `@dunx/infra` name exactly the
+ * same set. `/queue` is absent because bullmq's own entry point imports `ioredis`
+ * statically, so re-exporting it would make ioredis a hard requirement of
+ * `import '@dunx/infra'` for every consumer, queue or no. Reach it at
+ * `@dunx/infra/queue`. `packages/infra/src/index.test.ts` holds both halves of
+ * that to account.
+ *
+ * The subpaths are still the better import: they say what a file uses, and they
+ * evaluate only the peers that area needs.
+ */
 export {
   Backend,
   type BackendName,
@@ -8,6 +22,7 @@ export {
   Dialect,
   dialectFromUrl,
   type DialectName,
+  type DrizzleInit,
   runSeeds,
   type SeedableDb,
   type SeedHandle,
@@ -21,7 +36,12 @@ export {
   SqliteOptions,
   SqlOptions,
   type SqlTransaction,
+  SyncDatabase,
+  SyncSqliteConnection,
+  SyncSqliteOptions,
+  type SyncTransaction,
   transaction,
+  transactionSync,
 } from './db/index.js';
 export {
   defaultRedisUrl,

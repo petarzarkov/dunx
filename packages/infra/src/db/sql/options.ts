@@ -1,6 +1,7 @@
 import type { AbstractCtor } from '@dunx/core';
+import type { Casing, Logger as QueryLogger } from 'drizzle-orm';
 import { BunSQLDatabase } from 'drizzle-orm/bun-sql';
-import { DbOptions } from '../connection.js';
+import { DbOptions, drizzleOptions, type DrizzleInit } from '../connection.js';
 import {
   Backend,
   Dialect,
@@ -16,10 +17,8 @@ import { SqlConnection } from './connection.js';
  * and auth stay in sync with whatever Bun supports. `url` is required and
  * `adapter` is dropped - the URL scheme already decides it.
  */
-export interface SqlInit<TSchema extends Record<string, unknown>> extends Omit<
-  Bun.SQL.PostgresOrMySQLOptions,
-  'url' | 'adapter'
-> {
+export interface SqlInit<TSchema extends Record<string, unknown>>
+  extends Omit<Bun.SQL.PostgresOrMySQLOptions, 'url' | 'adapter'>, DrizzleInit {
   /** `import * as schema from './schema.js'`. Pass `{}` if you only run `sql` templates. */
   readonly schema: TSchema;
   readonly url: string | URL;
@@ -44,15 +43,20 @@ export class SqlOptions<
 
   readonly schema: TSchema;
   readonly url: string;
+  readonly casing: Casing | undefined;
+  readonly logger: boolean | QueryLogger | undefined;
   readonly #driver: Bun.SQL.PostgresOrMySQLOptions;
 
   constructor(init: SqlInit<TSchema>) {
     super();
-    // `schema` and `url` are consumed here, so neither rides along into the
-    // driver options - a schema object is every table and column in the app.
-    const { schema, url, ...driver } = init;
+    // Everything drizzle owns is consumed here, so none of it rides along into the
+    // driver options - a schema object is every table and column in the app, and
+    // `Bun.SQL` has no idea what `casing` means.
+    const { schema, url, casing, logger, ...driver } = init;
     this.schema = schema;
     this.url = url instanceof URL ? url.href : url;
+    this.casing = casing;
+    this.logger = logger;
 
     const dialect = dialectFromUrl(this.url);
     if (dialect !== Dialect.POSTGRES) {
@@ -87,6 +91,6 @@ export class SqlOptions<
   override async open(): Promise<SqlConnection<TSchema>> {
     const client = new Bun.SQL(this.toDriverOptions());
     await client.connect();
-    return new SqlConnection(client, this.schema);
+    return new SqlConnection(client, this.schema, drizzleOptions(this));
   }
 }

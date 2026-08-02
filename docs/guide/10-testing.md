@@ -233,6 +233,50 @@ test('validates, routes and serialises through the real server', async () => {
 all available. `prefix` applies `setGlobalPrefix` before `listen()`, so the
 client's URLs carry it.
 
+### Pass the same `HttpOptions` production passes
+
+Every one of those fields is **absent unless you pass it**, and two of them decide
+what the application _is_: `middleware` is where global guards live, and `onError`
+is the error mapper. A suite that forgets them gets a server with no global guards
+and the default mapper, which boots fine and answers 200 where production answers 401. That is a fixture quietly testing a different application, and it has cost
+real time to find by hand.
+
+So define the options once, export them, and give the same function to `main.ts`
+and to every suite:
+
+```ts
+// src/http-options.ts
+export const httpOptions = (config: AppConfig): HttpOptions => ({
+  middleware: [ApiKeyGuard, RateLimit],
+  onError: mapDomainErrors,
+  requestLogging: { ignore: ['/health'], correlateIgnored: true },
+  port: config.PORT,
+});
+```
+
+```ts
+// main.ts
+const app = await HttpFactory.create(AppModule, httpOptions(config));
+```
+
+```ts
+// any suite
+const server = await createTestServer({
+  modules: [ApiModule],
+  ...httpOptions(config),
+});
+```
+
+`createTestServer` overrides `port` and `requestLogging` itself, so spreading the
+whole object is safe.
+
+**Forgetting is loud.** If the graph declares a `Middleware` implementation that no
+`@UseGuards` attaches - the shape of a global guard - and no `middleware` was
+passed, `createTestServer` writes one line to `console.warn` naming the class. Pass
+`middleware: []` to say the omission is deliberate and the warning goes away. It is
+`console.warn` rather than the bound `Logger` on purpose: a suite asserting on a
+`RecordingLogger` should not find an entry the application never wrote.
+
 `TestServer` is a `TestClient` plus two things:
 
 | Member                  | Does                                                               |
@@ -419,6 +463,9 @@ const app = await createTestApp({ modules: [BillingModule, FixedTime] });
 - **`prefix` accepts `string | undefined`** where the other options do not, so a
   suite that runs one fixture prefixed and unprefixed can pass a variable without
   a conditional spread at the call site.
+- **An omitted `HttpOptions` field is absent, not defaulted** to whatever
+  production uses. `middleware` and `onError` are the two that change what the app
+  does; share one `httpOptions(config)` between `main.ts` and the suites.
 
 This is the last of the core guides. `examples/testing` is a working version of
 everything above, and `examples/full/src/service.test.ts` exercises the harness

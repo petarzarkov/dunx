@@ -241,6 +241,26 @@ describe('HttpFactory', () => {
     });
   });
 
+  /**
+   * Pinned rather than fixed. Nest, Express and Fastify all normalise a trailing
+   * slash, so a ported client hits a 404 that looks like a missing route - but
+   * `Bun.serve({ routes })` owns matching, and the only place dunx could
+   * normalise is the `fetch` fallback, which by then has no pattern to match
+   * `/users/1/` against without becoming the JavaScript router this repo refuses
+   * to write. So the behaviour is documented in guide 05 and asserted here.
+   */
+  it('matches paths exactly - a trailing slash is a different path', async () => {
+    await withApp(async (_app, url) => {
+      expect((await fetch(new URL('users', url))).status).toBe(200);
+      expect((await fetch(new URL('users/', url))).status).toBe(404);
+      expect((await fetch(new URL('users/42', url))).status).toBe(200);
+      expect((await fetch(new URL('users/42/', url))).status).toBe(404);
+      // The declared side is normalised, though: `@Get('/')` under a prefix is
+      // `/users`, never `/users/`, so both spellings are never both live.
+      expect((await fetch(new URL('users//', url))).status).toBe(404);
+    });
+  });
+
   it('stops the server and tears providers down on shutdown', async () => {
     const app = await HttpFactory.create(AppModule);
     const url = await app.listen(0);

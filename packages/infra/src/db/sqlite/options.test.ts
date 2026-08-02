@@ -5,6 +5,7 @@ import { Database as BunSqlite, type SQLQueryBindings } from 'bun:sqlite';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { sql } from 'drizzle-orm';
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { DbOptions } from '../connection.js';
 import { Backend, Dialect } from '../dialect.js';
 import { DatabaseError } from '../errors.js';
@@ -281,6 +282,48 @@ describe('SqliteOptions.open', () => {
     }).open();
     expect(reader.db.all(sql`SELECT x FROM t`)).toEqual([{ x: 7 }]);
     await reader.close();
+  });
+
+  /**
+   * `casing` and the query `logger` are drizzle's own, and they were unreachable
+   * from inside the container while only `schema` was forwarded to `drizzle()`.
+   * `casing: 'snake_case'` is the standard drizzle idiom; the logger is how a slow
+   * endpoint gets diagnosed.
+   */
+  it('forwards casing, so an unnamed column resolves to snake_case', async () => {
+    const people = sqliteTable('people', {
+      id: integer().primaryKey(),
+      firstName: text(),
+    });
+    const connection = await new SqliteOptions({
+      schema: { people },
+      casing: 'snake_case',
+    }).open();
+    connection.raw.exec(
+      'CREATE TABLE people (id INTEGER PRIMARY KEY, first_name TEXT)',
+    );
+
+    await connection.db.insert(people).values({ id: 1, firstName: 'ada' });
+    expect(await connection.db.select().from(people)).toEqual([
+      { id: 1, firstName: 'ada' },
+    ]);
+    await connection.close();
+  });
+
+  it('forwards a query logger', async () => {
+    const queries: string[] = [];
+    const connection = await new SqliteOptions({
+      schema: {},
+      logger: {
+        logQuery: (query) => {
+          queries.push(query);
+        },
+      },
+    }).open();
+
+    connection.db.all(sql`SELECT 1 AS x`);
+    expect(queries).toEqual(['SELECT 1 AS x']);
+    await connection.close();
   });
 
   it('reaches the driver with readOnly, so a write fails', async () => {

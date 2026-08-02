@@ -15,7 +15,7 @@ import type { PubSubRelay, RelayPhase } from '../ws/relay.js';
 import type { SocketData, SocketOptions } from '../ws/socket.js';
 import { attachAddressSource, ClientAddress } from './client-address.js';
 import type { CorsOptions } from './cors.js';
-import { defaultErrorMapper, type ErrorMapper } from './errors.js';
+import { errorMapper, type ErrorMapper } from './errors.js';
 import type { Middleware } from './middleware.js';
 import {
   RequestLoggingMiddleware,
@@ -115,7 +115,9 @@ export class HttpApplication implements HttpApp {
       ...(options.requestLogging === false ? [] : [RequestLoggingMiddleware]),
       ...(options.middleware ?? []),
     ];
-    this.#onError = options.onError ?? defaultErrorMapper;
+    // The bound Logger, resolved only when the app did not bring its own mapper:
+    // a 500's stack belongs in the same stream as everything else.
+    this.#onError = options.onError ?? errorMapper(app.get(Logger));
     this.#port = options.port ?? 3000;
     this.#websocket = websocket;
     this.#relay = options.relay;

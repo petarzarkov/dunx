@@ -1,4 +1,4 @@
-export { DbConnection, DbOptions } from './connection.js';
+export { DbConnection, DbOptions, type DrizzleInit } from './connection.js';
 export {
   Backend,
   Dialect,
