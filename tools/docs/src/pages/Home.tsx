@@ -12,6 +12,7 @@ import {
   Title,
 } from '@mantine/core';
 import { BenchSummary } from '../components/BenchSummary';
+import { Examples } from '../components/Examples';
 import { Features } from '../components/Features';
 import { Hero } from '../components/Hero';
 import { Honesty } from '../components/Honesty';
@@ -183,18 +184,22 @@ const Packages = (): React.JSX.Element => (
                 {pkg.description}
               </Text>
               <Group gap={4} mt="auto" justify="space-between">
+                {/* `.` is every package's root export and says nothing; only
+                    the extra subpaths are worth a badge. */}
                 <Group gap={4}>
-                  {pkg.subpaths.map((subpath) => (
-                    <Badge
-                      key={subpath}
-                      size="xs"
-                      variant="light"
-                      color="gray"
-                      tt="none"
-                    >
-                      {subpath}
-                    </Badge>
-                  ))}
+                  {pkg.subpaths
+                    .filter((subpath) => subpath !== '.')
+                    .map((subpath) => (
+                      <Badge
+                        key={subpath}
+                        size="xs"
+                        variant="light"
+                        color="gray"
+                        tt="none"
+                      >
+                        {subpath}
+                      </Badge>
+                    ))}
                 </Group>
                 <Anchor
                   href={npmUrl(pkg.name)}
@@ -229,6 +234,7 @@ export const Home = (): React.JSX.Element => (
       </Container>
       <Honesty />
       <Integrations />
+      <Examples />
       <Packages />
       <GetStarted />
     </div>
