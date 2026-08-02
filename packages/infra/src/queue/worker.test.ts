@@ -13,7 +13,7 @@ import { JobHandler } from './decorators.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueModule } from './module.js';
 import { JobPublisher } from './publisher.js';
-import { WorkerFactory, type WorkerApp } from './worker.js';
+import { QueueConsumer, WorkerFactory, type WorkerApp } from './worker.js';
 
 const url = defaultRedisUrl();
 
@@ -336,5 +336,77 @@ describe.if(live)('jobTimeoutMs', () => {
 
     await publisher.queue(HUNG).obliterate({ force: true });
     await worker.shutdown();
+  });
+});
+
+/**
+ * `WorkerFactory.create` builds its own container, which is why a process could
+ * serve HTTP or consume jobs but never both. `attach` consumes inside a container
+ * that already exists.
+ */
+describe('WorkerFactory.attach', () => {
+  it('validates against the same rules as create, without a container of its own', async () => {
+    const root = moduleWith([]);
+    const app = await AppFactory.create(root);
+
+    const error = await WorkerFactory.attach(app, root).catch(
+      (reason: unknown) => reason,
+    );
+    expect(error).toBeInstanceOf(QueueError);
+    expect((error as QueueError).code).toBe(QueueErrorCode.NO_HANDLERS);
+
+    // The container is the caller's, so a rejected attach must leave it running.
+    expect(app.get(QueueConnection)).toBeInstanceOf(QueueConnection);
+    await app.shutdown();
+  });
+
+  it('reports a queue name no handler consumes', async () => {
+    const root = moduleWith([Emails]);
+    const app = await AppFactory.create(root);
+
+    const error = await WorkerFactory.attach(app, root, {
+      queues: [REPORTS],
+    }).catch((reason: unknown) => reason);
+    expect((error as QueueError).code).toBe(QueueErrorCode.NO_HANDLERS);
+
+    await app.shutdown();
+  });
+
+  it.if(live)(
+    'consumes in a container the caller owns, and leaves it running on stop',
+    async () => {
+      const root = moduleWith([Emails]);
+      const app = await AppFactory.create(root);
+      const recorder = app.get(Recorder);
+
+      const consumer = await WorkerFactory.attach(app, root);
+      expect(consumer).toBeInstanceOf(QueueConsumer);
+      expect(consumer.queues).toEqual([EMAILS]);
+      await consumer.start();
+
+      await app.get(JobPublisher).publish(EMAILS, 'welcome', { to: 'ada' });
+      await Bun.sleep(1500);
+      expect(recorder.events).toContain('welcome:ada');
+
+      // Stopping the consumer must not tear the container down: this is the
+      // whole difference from a worker process.
+      await consumer.stop();
+      expect(recorder.events).not.toContain('container:shutdown');
+
+      await app.shutdown();
+      expect(recorder.events).toContain('container:shutdown');
+    },
+  );
+
+  it.if(live)('stop() is idempotent', async () => {
+    const root = moduleWith([Emails]);
+    const app = await AppFactory.create(root);
+    const consumer = await WorkerFactory.attach(app, root);
+
+    await consumer.start();
+    await Promise.all([consumer.stop(), consumer.stop()]);
+    await consumer.stop();
+
+    await app.shutdown();
   });
 });

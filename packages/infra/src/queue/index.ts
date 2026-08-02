@@ -21,6 +21,7 @@ export {
 } from './options.js';
 export { JobPublisher } from './publisher.js';
 export {
+  QueueConsumer,
   WorkerFactory,
   type WorkerApp,
   type WorkerAppOptions,
