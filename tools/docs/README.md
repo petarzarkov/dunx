@@ -37,7 +37,7 @@ something that already exists in the repo:
 | Page             | Source                                                    |
 | ---------------- | --------------------------------------------------------- |
 | Benchmarks       | `tools/bench/results/latest.json`                         |
-| Landing          | the root `README.md`, plus a summary of the benchmark run |
+| Landing          | the package manifests, plus a summary of the benchmark run |
 | Guides           | `docs/*.md`, rendered by `Bun.markdown.html`              |
 | Package overview | that package's `README.md`                                |
 | API reference    | the doc comments in `packages/*/src/**/*.ts`              |
@@ -49,10 +49,48 @@ are not. The request-logging cost, the throughput range and the win/tie/loss
 scoreboard are all read off the benchmark model, so a rerun rewrites the page
 rather than leaving it overstating.
 
-`scripts/generate.ts` writes `src/generated/site.json` and
-`src/generated/bench.json`; `bun run gen:cov` (`scripts/coverage-report.ts` at
-the repo root) writes `src/generated/coverage.json` and the badge SVGs in
-`public/badges/`. Both directories are gitignored - they are build output.
+`scripts/generate.ts` writes `src/generated/`; `bun run gen:cov`
+(`scripts/coverage-report.ts` at the repo root) writes
+`src/generated/coverage.json` and the badge SVGs in `public/badges/`. Both
+directories are gitignored - they are build output.
+
+## One file per route, not one model
+
+The model used to be a single `site.json` imported into the entry chunk, so
+opening `#/` downloaded all 21 guide bodies and all eight package readmes to
+render a page that shows none of them. `generate.ts` now writes:
+
+| File                            | Holds                                                        |
+| ------------------------------- | ------------------------------------------------------------ |
+| `index.json`                    | the nav, the landing page, the footer, and the search index  |
+| `guides/<slug>.json`            | one guide's rendered HTML                                    |
+| `packages/<dir>.json`           | one package's readme and its full symbol documentation       |
+| `chunks.ts`                     | a `slug -> () => import(...)` table over the two above       |
+
+Measured, `gzip -9`, entry chunk only - which is all `#/` downloads:
+
+| Entry chunk       | JS raw     | JS gzip      |
+| ----------------- | ---------- | ------------ |
+| one `site.json`   | 2529.9 KB  | **595.2 KB** |
+| split per route   |  937.2 KB  | **266.1 KB** |
+
+329.1 KB less on the landing page, 55% of it. The sum over *every* chunk goes the
+other way, 2529.9 KB to 2554.8 KB raw and 595.2 KB to 626.3 KB gzipped, because
+each chunk is compressed against its own dictionary - the trade is deliberate:
+nobody downloads all 30.
+
+**`chunks.ts` is generated rather than a glob.** `import.meta.glob` is a Vite
+feature the `bun test` runner does not have, and a template-literal `import()` is
+a bundler feature rather than a language one. A generated table of literal
+specifiers is neither: Vite splits on it, `bun test` resolves it through the same
+`?raw` plugin `happydom.ts` already installs, and `tsc` checks it.
+
+The index keeps every public symbol's **name, kind and line** so `Search` can
+still index all 382 of them across all eight packages without pulling in a
+signature, a doc comment or a member list. `Guide` and `PackagePage` render their
+frame from the index on the first paint - title, source link, contents, export
+counts - and fill the body in when its chunk lands, so the split costs no layout
+shift.
 
 ## What a README loses on the way in
 
@@ -162,7 +200,7 @@ types:
 vite.config.ts         # base path, react plugin - the whole build config
 happydom.ts            # test preload: a DOM, plus Vite's ?raw for bun test
 scripts/
-  generate.ts          # entrypoint: writes src/generated/site.json
+  generate.ts          # entrypoint: writes src/generated/ - index, bodies, chunks.ts
   content.ts           # markdown -> HTML, heading ids, links, siteMarkdown
   extract/
     ast.ts             # structural views over oxc's ESTree output
@@ -176,7 +214,8 @@ scripts/
 src/
   App.tsx              # shell, navigation
   router.ts            # hash router, symbol anchors, scroll restoration
-  data.ts              # the generated JSON, parsed once
+  data.ts              # the index, parsed once, plus the per-route body loaders
+  chunk.ts             # useChunk: a per-route body as it arrives
   bench.ts             # ranking, baseline percentages, verdicts, scoreboard
   components/          # Prose, SymbolCard, Search, CodeBlock, NoDecorators, Bench*
   pages/               # Benchmarks, Home, Guide, PackagePage, Coverage, NotFound
@@ -222,5 +261,5 @@ numbers when the build had a run and skip rather than fail when it did not.
 
 - No syntax highlighting in code blocks - they are styled, not tokenised.
 - The OpenAPI document `@dunx/openapi` produces is not yet a page here.
-- The bundle is one chunk; it is not code-split, and `recharts` is in it whether
-  or not the reader ever opens the benchmark page.
+- The *content* is code-split per route, but the *code* is not: `recharts` is in
+  the entry chunk whether or not the reader ever opens the benchmark page.

@@ -16,7 +16,7 @@ import {
   startupRows,
   throughputRows,
 } from './bench';
-import { bench, site } from './data';
+import { bench, loadGuide, loadPackage, site } from './data';
 import { anchoredSymbol, parseRoute, symbolHref } from './router';
 
 const mount = (hash: string) => {
@@ -50,32 +50,57 @@ describe('the generated model', () => {
     ]);
   });
 
-  test('every package has a rendered readme and a public surface', () => {
+  test('every package has a rendered readme and a public surface', async () => {
     for (const pkg of site.packages) {
-      expect(pkg.readme.length).toBeGreaterThan(100);
-      expect(
-        pkg.symbols.filter((s) => s.subpaths.length > 0).length,
-      ).toBeGreaterThan(0);
+      const body = await loadPackage(pkg.dir);
+      expect(body?.readme.length).toBeGreaterThan(100);
+      expect(pkg.exports.length).toBeGreaterThan(0);
     }
   });
 
-  test('no readme carries repo-setup sections onto the site', () => {
+  test('no readme carries repo-setup sections onto the site', async () => {
     const banned =
       /<h2 id="(install|licen[cs]e|contributing|development|building|project-structure|scripts|versioning|packages)/;
     for (const pkg of site.packages) {
-      expect(pkg.readme).not.toMatch(banned);
+      expect((await loadPackage(pkg.dir))?.readme).not.toMatch(banned);
     }
-    expect(site.home).not.toMatch(banned);
-    // The landing page is the root README minus its plumbing, so the tree, the
-    // script table and the badge block must all be gone.
-    expect(site.home).not.toContain('bun run install:clean');
-    expect(site.home).not.toContain('├──');
-    expect(site.home).not.toContain('img.shields.io');
   });
 
-  test('the guides are left whole - they are repo documentation', () => {
-    const architecture = site.guides.find((g) => g.slug === 'architecture');
+  test('the guides are left whole - they are repo documentation', async () => {
+    const architecture = await loadGuide('architecture');
     expect(architecture?.html).toContain('<h2 id="documentation-site');
+  });
+
+  /**
+   * The whole model used to be one `site.json` in the entry chunk, so `#/`
+   * downloaded 21 guide bodies and eight package readmes to render a page that
+   * shows none of them. The index must keep carrying what the shell and the
+   * search reach for, and nothing that only a route reads.
+   */
+  test('the index carries the search surface and no page bodies', () => {
+    expect(JSON.stringify(site).length).toBeLessThan(120_000);
+    expect(site.guides.length).toBeGreaterThan(15);
+    for (const guide of site.guides) {
+      expect(guide.title).not.toBe('');
+      expect(guide.headings.length).toBeGreaterThan(0);
+      expect(guide).not.toHaveProperty('html');
+    }
+    for (const pkg of site.packages) {
+      expect(pkg).not.toHaveProperty('readme');
+      expect(pkg).not.toHaveProperty('symbols');
+      for (const symbol of pkg.exports) expect(symbol.name).not.toBe('');
+    }
+  });
+
+  test('every index entry has a body chunk behind it', async () => {
+    for (const guide of site.guides) {
+      expect((await loadGuide(guide.slug))?.html).toContain('<h2 id=');
+    }
+    for (const pkg of site.packages) {
+      expect((await loadPackage(pkg.dir))?.symbols.length).toBeGreaterThan(0);
+    }
+    expect(await loadGuide('no-such-guide')).toBeUndefined();
+    expect(await loadPackage('no-such-package')).toBeUndefined();
   });
 
   test('separates the hand-written tour from the repo reference docs', () => {
@@ -128,13 +153,6 @@ describe('the generated model', () => {
     );
     for (const section of sections) {
       expect(within(nav).getAllByText(section).length).toBeGreaterThan(0);
-    }
-  });
-
-  test('the guides carry rendered html and headings', () => {
-    for (const guide of site.guides) {
-      expect(guide.html).toContain('<h2 id=');
-      expect(guide.headings.length).toBeGreaterThan(0);
     }
   });
 });
@@ -262,20 +280,27 @@ describe('navigation', () => {
     expect(screen.getAllByText('dunx').length).toBeGreaterThan(0);
   });
 
-  test('a guide route renders the markdown that Bun produced', () => {
+  test('a guide route renders the markdown that Bun produced', async () => {
     mount('#/guide/architecture');
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings[0]?.textContent).toContain('Architecture');
     // The document's own `# Title` is dropped, so the page shows exactly one h1.
     expect(headings).toHaveLength(1);
-    expect(document.querySelector('.prose')?.innerHTML ?? '').toContain(
-      '<h2 id=',
-    );
+    // The title comes from the index and the body from the guide's own chunk,
+    // so the frame is on screen a tick before the prose is.
+    await waitFor(() => {
+      expect(document.querySelector('.prose')?.innerHTML ?? '').toContain(
+        '<h2 id=',
+      );
+    });
   });
 
   test('a package route renders its readme and its API reference', async () => {
     mount('#/api/core');
     expect(screen.getAllByText('@dunx/core').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      if (!document.querySelector('.prose')) throw new Error('no readme yet');
+    });
 
     fireEvent.click(screen.getByRole('tab', { name: /API reference/i }));
     await screen.findByText(/symbols$/);
@@ -367,9 +392,9 @@ describe('a symbol search hit', () => {
   });
 
   test('reaches a symbol the filters would otherwise hide', async () => {
-    const internal = site.packages
-      .find((pkg) => pkg.dir === 'core')
-      ?.symbols.find((symbol) => symbol.subpaths.length === 0);
+    const internal = (await loadPackage('core'))?.symbols.find(
+      (symbol) => symbol.subpaths.length === 0,
+    );
     if (!internal) throw new Error('no internal symbol in @dunx/core');
 
     mount(`#/api/core?h=symbol-${internal.name}`);

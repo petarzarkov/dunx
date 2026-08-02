@@ -138,7 +138,7 @@ const Navigation = ({
         component="a"
         href={href(RouteKind.Api, pkg.dir)}
         label={pkg.name}
-        description={`${pkg.symbols.filter((s) => s.subpaths.length > 0).length} exports`}
+        description={`${pkg.exports.length} exports`}
         active={route.kind === RouteKind.Api && route.slug === pkg.dir}
         onClick={onNavigate}
       />

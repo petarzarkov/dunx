@@ -12,10 +12,11 @@ import {
   Title,
 } from '@mantine/core';
 import { useEffect, useMemo, useState } from 'react';
-import type { DocSymbol } from '../../scripts/extract/model';
+import type { DocSymbol, PackageBody } from '../../scripts/extract/model';
+import { useChunk } from '../chunk';
 import { Prose } from '../components/Prose';
 import { SymbolCard } from '../components/SymbolCard';
-import { packageByDir, site } from '../data';
+import { loadPackage, packageByDir, site } from '../data';
 import { anchoredSymbol } from '../router';
 import { NotFound } from './NotFound';
 
@@ -31,13 +32,12 @@ const matches = (symbol: DocSymbol, query: string): boolean => {
 };
 
 const ApiReference = ({
-  dir,
+  body,
   linked,
 }: {
-  dir: string;
+  body: PackageBody | undefined;
   linked: string | null;
 }): React.JSX.Element => {
-  const pkg = packageByDir(dir);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
   const [showInternal, setShowInternal] = useState(false);
@@ -48,7 +48,7 @@ const ApiReference = ({
    * what decides whether the page they were sent to contains it.
    */
   const symbols = useMemo(() => {
-    const all = pkg?.symbols ?? [];
+    const all = body?.symbols ?? [];
     return all.filter(
       (symbol) =>
         symbol.name === linked ||
@@ -56,11 +56,11 @@ const ApiReference = ({
           (kind === 'all' || symbol.kind === kind) &&
           matches(symbol, query)),
     );
-  }, [pkg, query, kind, showInternal, linked]);
+  }, [body, query, kind, showInternal, linked]);
 
-  if (!pkg) return <NotFound what={`package "${dir}"`} />;
+  if (!body) return <Text c="dimmed">Loading the API reference…</Text>;
 
-  const internalCount = pkg.symbols.filter(
+  const internalCount = body.symbols.filter(
     (s) => s.subpaths.length === 0,
   ).length;
 
@@ -92,7 +92,7 @@ const ApiReference = ({
       </Box>
 
       <Text size="sm" c="dimmed">
-        {symbols.length} of {pkg.symbols.length} symbols
+        {symbols.length} of {body.symbols.length} symbols
       </Text>
 
       {symbols.map((symbol) => (
@@ -119,6 +119,7 @@ export const PackagePage = ({
   anchor: string | null;
 }): React.JSX.Element => {
   const pkg = packageByDir(dir);
+  const body = useChunk(() => loadPackage(dir), dir);
   const linked = anchoredSymbol(anchor);
   /**
    * A `?h=symbol-…` route has to open the API tab, or the card it names is
@@ -158,21 +159,23 @@ export const PackagePage = ({
             <Tabs.Tab value="api">
               API reference
               <Badge ml={6} size="xs" variant="default">
-                {pkg.symbols.filter((s) => s.subpaths.length > 0).length}
+                {pkg.exports.length}
               </Badge>
             </Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel value="readme" pt="md">
-            {pkg.readme ? (
-              <Prose html={pkg.readme} />
+            {body === undefined ? (
+              <Text c="dimmed">Loading the readme…</Text>
+            ) : body.readme ? (
+              <Prose html={body.readme} />
             ) : (
               <Text c="dimmed">This package has no README.</Text>
             )}
           </Tabs.Panel>
 
           <Tabs.Panel value="api" pt="md">
-            <ApiReference dir={dir} linked={linked} />
+            <ApiReference body={body} linked={linked} />
           </Tabs.Panel>
         </Tabs>
       </Stack>

@@ -9,10 +9,7 @@ interface Stat {
 }
 
 const publicExports = (): number =>
-  site.packages.reduce(
-    (sum, pkg) => sum + pkg.symbols.filter((s) => s.subpaths.length > 0).length,
-    0,
-  );
+  site.packages.reduce((sum, pkg) => sum + pkg.exports.length, 0);
 
 /**
  * Five numbers, every one of them read off the generated model rather than
