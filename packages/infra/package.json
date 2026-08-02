@@ -89,15 +89,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@arkv/logger": "^0.8.1",
-    "@dunx/core": "workspace:*"
+    "@arkv/logger": "^0.8.1"
   },
   "devDependencies": {
+    "@dunx/core": "workspace:*",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",
     "ioredis": "^6.0.0"
   },
   "peerDependencies": {
+    "@dunx/core": "workspace:*",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",
     "ioredis": ">=5.0.0"

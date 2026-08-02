@@ -202,33 +202,24 @@ relay all landed, along with `@dunx/testing` — which means the ordering argume
 used to live here has been spent, and what follows is a fresh list rather than a
 renumbered one.
 
-### 1. `@dunx/core` as a `peerDependency` — the build half is done
+### 1. `@dunx/core` as a `peerDependency` — **done**
 
-Versioning is currently **lockstep** because `version.ts` rewrites `workspace:*` to an
-exact version, and independent versions would let an app install two copies of
-`@dunx/core` — fatal here, because a DI token _is_ a class object. See
-[ARCHITECTURE.md](./ARCHITECTURE.md), "Versioning is lockstep".
+`@dunx/core` and `@dunx/http` are `peerDependencies` of every package that uses them,
+each with a matching `devDependency` supplying the workspace link that build and test
+resolve through. The blocker was build ordering, not the dependency shape:
+`bun run build` is now `scripts/build-all.ts`, which orders by `dependencies`,
+`peerDependencies` **and** `devDependencies`, in waves so unrelated packages still
+build concurrently.
 
-Peer dependencies are the better end state: they guarantee one copy without forcing
-every package to re-publish on every release. What blocked them was that
-`bun run --filter '*' build` ordered builds by `dependencies` alone — moving core to a
-peer was tried and the build failed with `TS7016`, because `tsc` in `@dunx/http` raced
-core's own `.d.ts` emit.
+Re-measured from a clean tree rather than assumed: `bun run --filter '*' build` still
+fails with `TS7016`, `bun run build` succeeds, and the full suite passes.
 
-**That blocker is gone.** `bun run build` is now `scripts/build-all.ts`, which orders
-by `dependencies`, `peerDependencies` **and** `devDependencies` restricted to workspace
-packages, and emits waves rather than a queue so unrelated packages still build
-concurrently — 3 waves over 8 workspaces in ~3 s.
-
-What is left is the migration itself, and it is not just moving a field. Each of
-`@dunx/http`, `@dunx/infra`, `@dunx/openapi`, `@dunx/auth` and `@dunx/testing` declares
-`@dunx/core` (and some also `@dunx/http`) as a `workspace:*` dependency. Moving those to
-peers means: a matching `devDependency` so the workspace still links for build and test,
-a real semver range at publish rather than `workspace:*` — which is a decision
-`scripts/version.ts` currently sidesteps by rewriting to an exact version — and a call on
-whether versioning stays lockstep. Lockstep plus peers is coherent and safe; independent
-versions plus peers is the actual prize and needs the range policy settled first.
-See [ARCHITECTURE.md](./ARCHITECTURE.md), "Versioning is lockstep".
+**Versioning stays lockstep, deliberately.** Peers stop the installer duplicating
+core; lockstep keeps the exact version `version.ts` writes into the peer range
+coherent across the set. The two solve different halves. Independent versions on top
+of peers is the remaining prize and needs a range policy settled first — `version.ts`
+resolves `workspace:*` to an **exact** version, and a peer range wants a caret or a
+`>=`, which is a decision with real consequences for a consumer holding six packages.
 
 ### 2. `@dunx/create-app`
 

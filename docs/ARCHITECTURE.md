@@ -1626,7 +1626,9 @@ is a default in the wrong place. Asserting on request logging means asking for i
 assumed.** Peers were the first choice and are the better contract: a second copy of
 core in a consumer's tree is a second `Logger` class and therefore a token that
 matches nothing, so overrides would silently replace nothing — exactly the failure
-the unmatched-override error exists to prevent. It does not survive the build.
+the unmatched-override error exists to prevent. It did not survive the build **at the
+time**; the topological build fixed that and peers are now in use. The measurement
+below is kept because it is why the build had to change first.
 
 `bun run --filter '*' build` derives its ordering from **`dependencies` only**.
 Measured on Bun 1.3.14: with core in `devDependencies` and in `peerDependencies`
@@ -1712,13 +1714,21 @@ Two alternatives were considered and rejected:
 
 - **Caret ranges.** Pre-1.0 `^0.1.0` excludes `0.2.0`, so a minor bump of core still
   fragments the graph. `^` only helps within a patch series.
-- **`@dunx/core` as a `peerDependency`.** This is the textbook answer — peers resolve
-  to one copy — and it was **measured, not assumed**: `bun run --filter '*' build`
-  orders builds by `dependencies` alone, so moving core to a peer races `tsc` in
-  `@dunx/http` against core's own `.d.ts` emit, and the build fails with
-  `TS7016: Could not find a declaration file for module '@dunx/core'`. Adopting peers
-  means replacing the filter-based build with a topological one first. Worth doing
-  eventually; it is not a prerequisite for shipping.
+- **`@dunx/core` as a `peerDependency`.** This was rejected here and has since been
+  **adopted** — the entry stays because the reason it was rejected is the useful part.
+  Peers are the textbook answer and they resolve to one copy, but `bun run --filter
+'*' build` orders builds by `dependencies` alone, so moving core to a peer raced
+  `tsc` against core's own `.d.ts` emit and failed with `TS7016`. The fix was a
+  topological build, not a different dependency shape. `scripts/build-all.ts` now
+  orders by `dependencies`, `peerDependencies` and `devDependencies`, and
+  `@dunx/core` and `@dunx/http` are peers with a matching `devDependency` supplying
+  the workspace link. Re-measured from a clean tree: `--filter '*' build` still fails
+  with `TS7016`, `bun run build` does not.
+
+  **Peers are a second guarantee, not a replacement for lockstep.** A peer cannot be
+  duplicated by the installer; lockstep keeps the exact version `version.ts` writes
+  into that peer range coherent across the set. Independent versions on top of peers
+  is the remaining prize and needs a range policy settled first.
 
 The cost of lockstep is that an untouched package still takes a version. For a
 pre-1.0 framework whose packages move together anyway that is a feature: one number

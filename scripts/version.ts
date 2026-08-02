@@ -507,9 +507,17 @@ const runVersionBump = (allPackages: PublishablePackage[]): void => {
   // identity cannot.
   //
   // Caret ranges do not save it: pre-1.0, `^0.1.0` excludes `0.2.0`, so a minor
-  // bump of core would still fragment the graph. Peer dependencies would, but
-  // `bun run --filter '*' build` orders builds by `dependencies` alone — measured:
-  // moving core to a peer races `tsc` against core's own `.d.ts` emit.
+  // bump of core would still fragment the graph.
+  //
+  // `@dunx/core` and `@dunx/http` **are** peers now, which is a second guarantee
+  // rather than a replacement for this one: a peer cannot be duplicated by the
+  // installer, and lockstep keeps the exact version this script writes into it
+  // coherent. Independent versions on top of peers is the remaining prize and
+  // needs a range policy first — see docs/ROADMAP.md item 1. The build ordering
+  // that used to block peers is fixed: `bun run build` is `scripts/build-all.ts`,
+  // which orders by peerDependencies and devDependencies too. Re-measured on a
+  // clean tree — the old `--filter '*' build` still fails with TS7016, the new one
+  // does not.
   //
   // Cost: an untouched package still gets a version. For a pre-1.0 framework whose
   // packages move together that is a feature — one number answers "which versions

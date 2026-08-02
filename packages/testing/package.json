@@ -46,11 +46,13 @@
     "test:cov": "bun test --coverage",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
+  "devDependencies": {
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*"
   },
   "peerDependencies": {
+    "@dunx/core": "workspace:*",
+    "@dunx/http": "workspace:*",
     "@types/bun": ">=1.3.0"
   },
   "peerDependenciesMeta": {
