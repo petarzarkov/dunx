@@ -208,10 +208,10 @@ Feedback goes in as a new file rather than into conversation.
 | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Feature. Gin, Axum, Spring. Also a falsification test on the harness. |
 | [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.                      |
-| [explorer-renders-responses](./roadmap/explorer-renders-responses.md)               | Feature. Response schemas reach the JSON but not the page.            |
 | [docs-bundle-splitting](./roadmap/docs-bundle-splitting.md)                         | Performance. 127 KB of guides on every page load.                     |
 | [openapi-ui-subpath](./roadmap/openapi-ui-subpath.md)                               | Performance. ~5 ms of cold start for a page most apps never open.     |
 | [async-local-storage-cost](./roadmap/async-local-storage-cost.md)                   | Measured. +0.91 us, and `enterWith` segfaults Bun.                    |
+| [document-pinning-all-packages](./roadmap/document-pinning-all-packages.md)         | Docs. Mixing minors warns and can duplicate core.                     |
 | [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Exploration. Not a hard requirement.                                  |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                           |
 | [independent-versions](./roadmap/independent-versions.md)                           | Decision. Peers done; needs a range policy, or 1.0.                   |

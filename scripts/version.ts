@@ -148,7 +148,10 @@ const withResolvedWorkspaceDeps = (pkgDir: string, publish: () => void) => {
 };
 
 const pushVersionCommit = (bumpedFiles: string[]): void => {
-  execSync(`git add ${bumpedFiles.join(' ')}`);
+  // bun.lock records every workspace's version, so a bump leaves it a release
+  // behind and the next `bun install` anywhere rewrites it as an unrelated diff.
+  execSync('bun install --lockfile-only', { stdio: 'inherit' });
+  execSync(`git add ${bumpedFiles.join(' ')} bun.lock`);
 
   const path = bumpedFiles[0];
   if (!path) {
