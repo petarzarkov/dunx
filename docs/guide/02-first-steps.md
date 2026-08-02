@@ -311,7 +311,7 @@ for no dependency. It does not sanitize, mask or rotate, which is what makes
 swapping in `@dunx/infra/logger` worth doing later.
 
 `Logger` is an `abstract class` rather than an interface, and that is deliberate.
-The transform records constructor parameter *types*, and an interface has no
+The transform records constructor parameter _types_, and an interface has no
 runtime value to record, so an interface in that position would be a boot error at
 the injection site.
 

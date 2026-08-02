@@ -42,11 +42,11 @@ deliberately does inherit; the reasoning for both is in
 
 ## The three lists
 
-| Key           | Contains                                                    |
-| ------------- | ------------------------------------------------------------ |
-| `imports`     | Other modules to pull in. Traversal only                    |
-| `controllers` | Classes whose constructed instances are scanned for routes  |
-| `providers`   | Everything else                                             |
+| Key           | Contains                                                   |
+| ------------- | ---------------------------------------------------------- |
+| `imports`     | Other modules to pull in. Traversal only                   |
+| `controllers` | Classes whose constructed instances are scanned for routes |
+| `providers`   | Everything else                                            |
 
 `controllers` and `providers` are registered **identically**. Core constructs both
 the same way; the split exists so an HTTP adapter can ask which instances to scan.
@@ -124,8 +124,8 @@ tripping the duplicate-binding check. A cycle in the import graph terminates
 instead of recursing.
 
 **Deduplication is per reference, not per module identity.** A bare class is one
-reference however many modules import it. The same `DynamicModule` *object*
-imported twice is likewise one reference. But two *different* configurations of
+reference however many modules import it. The same `DynamicModule` _object_
+imported twice is likewise one reference. But two _different_ configurations of
 the same module are two objects, and both register:
 
 ```
@@ -183,7 +183,9 @@ export class MailerModule {
 
 ```ts
 @Module({
-  imports: [MailerModule.forRoot(new MailerOptions(key, 'noreply@example.com'))],
+  imports: [
+    MailerModule.forRoot(new MailerOptions(key, 'noreply@example.com')),
+  ],
 })
 export class AppModule {}
 ```
@@ -205,7 +207,12 @@ every async factory is settled before any constructor runs, so "options computed
 from another provider" is already just a provider:
 
 ```ts
-import { provide, type Deps, type DynamicModule, type FactoryProvider } from '@dunx/core';
+import {
+  provide,
+  type Deps,
+  type DynamicModule,
+  type FactoryProvider,
+} from '@dunx/core';
 
 export class MailerModule {
   static forRoot(options: MailerOptions): DynamicModule {
@@ -273,7 +280,7 @@ DbModule.forRootAsync(SyncDatabase, {
 });
 ```
 
-The token comes first because *which* drizzle class the database binds to only
+The token comes first because _which_ drizzle class the database binds to only
 becomes knowable once the options factory has run, which is too late to register a
 provider under it. If your own module's token depends on its own options, you have
 the same problem and the same fix.

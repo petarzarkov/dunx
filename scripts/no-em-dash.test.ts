@@ -24,8 +24,13 @@ const ALLOWED = new Set([
 const BINARY = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp']);
 
 describe('no em or en dashes', () => {
-  it('across every tracked file', async () => {
-    const listed = await $`git ls-files`.text();
+  it('across every tracked and untracked file', async () => {
+    // `git ls-files` alone misses untracked files, so a green run on brand-new
+    // work meant nothing until it was staged. `--others --exclude-standard` adds
+    // everything git can see that is not ignored, which is what a new guide page
+    // is before anyone stages it.
+    const listed =
+      await $`git ls-files --cached --others --exclude-standard`.text();
     const offenders: string[] = [];
 
     for (const file of listed.split('\n').filter(Boolean)) {

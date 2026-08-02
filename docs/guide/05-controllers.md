@@ -177,12 +177,12 @@ export interface RouteSchemas {
 }
 ```
 
-| Field          | Source                                    | Present when       |
-| -------------- | ----------------------------------------- | ------------------ |
-| `input.req`    | the `BunRequest`                          | always             |
-| `input.body`   | parsed by `content-type`, then validated  | `body` declared    |
-| `input.query`  | the query string, then validated          | `query` declared   |
-| `input.params` | `req.params`, then validated              | `params` declared  |
+| Field          | Source                                   | Present when      |
+| -------------- | ---------------------------------------- | ----------------- |
+| `input.req`    | the `BunRequest`                         | always            |
+| `input.body`   | parsed by `content-type`, then validated | `body` declared   |
+| `input.query`  | the query string, then validated         | `query` declared  |
+| `input.params` | `req.params`, then validated             | `params` declared |
 
 Validation targets the **Standard Schema** spec (`~standard.validate`), restated
 in `@dunx/http`'s own types rather than depended on, because the spec is an
@@ -201,16 +201,16 @@ This is the one piece of ceremony dunx could not remove, and the reason is a
 TypeScript limit rather than a design choice.
 
 A standard method decorator is
-`(value: V, ctx: ClassMethodDecoratorContext) => V | void`. It can *reject* a
+`(value: V, ctx: ClassMethodDecoratorContext) => V | void`. It can _reject_ a
 mismatched `V`, but it has no way to contextually type an unannotated parameter.
 Decorators observe; they do not type. Measured with `tsc`, because this is a
 type-level claim `bun` cannot answer:
 
-| Handler                        | Result                                            |
-| ------------------------------ | -------------------------------------------------- |
-| annotated correctly            | compiles                                          |
-| unannotated parameter          | `TS7006: Parameter 'input' implicitly has an 'any' type` |
-| annotated with the wrong type  | `TS1241` + `TS1270`, naming the mismatched property |
+| Handler                       | Result                                                   |
+| ----------------------------- | -------------------------------------------------------- |
+| annotated correctly           | compiles                                                 |
+| unannotated parameter         | `TS7006: Parameter 'input' implicitly has an 'any' type` |
+| annotated with the wrong type | `TS1241` + `TS1270`, naming the mismatched property      |
 
 So the annotation is required. What makes it cheap is that `Input<O>` is a
 type-level function over the options object, so every field type still comes from
@@ -250,13 +250,13 @@ at all.
 
 Only when `body` is declared, and by media type:
 
-| `content-type`                      | `input.body` before validation           |
-| ----------------------------------- | ------------------------------------------ |
-| `application/json`, `*+json`, none  | `req.json()`                               |
-| `application/x-www-form-urlencoded` | fields; a repeated key becomes an array    |
-| `multipart/form-data`               | fields and `File`s, same repeat rule       |
-| `text/*`                            | `req.text()`, a string                     |
-| anything else                       | **415**, nothing read                      |
+| `content-type`                      | `input.body` before validation          |
+| ----------------------------------- | --------------------------------------- |
+| `application/json`, `*+json`, none  | `req.json()`                            |
+| `application/x-www-form-urlencoded` | fields; a repeated key becomes an array |
+| `multipart/form-data`               | fields and `File`s, same repeat rule    |
+| `text/*`                            | `req.text()`, a string                  |
+| anything else                       | **415**, nothing read                   |
 
 A repeated key becoming an array is the same rule for query strings, so `?tag=a&tag=b`
 reaches the schema whole instead of silently losing `a`.
@@ -286,11 +286,11 @@ and `issues`, if you want to remap it in your own error mapper.
 
 ## Returning values
 
-| Handler returns      | Response                                    |
-| -------------------- | --------------------------------------------- |
-| a `Response`         | passed through untouched, the escape hatch  |
-| `undefined` or `null`| **204**, no body                            |
-| anything else        | `Response.json(value)` at the status below  |
+| Handler returns       | Response                                   |
+| --------------------- | ------------------------------------------ |
+| a `Response`          | passed through untouched, the escape hatch |
+| `undefined` or `null` | **204**, no body                           |
+| anything else         | `Response.json(value)` at the status below |
 
 There is no `res` and nothing to forget to send. A `Response` returned directly is
 never second-guessed, which is what you reach for to stream, to redirect, or to
@@ -326,7 +326,7 @@ const enqueue = { body: Job, status: HttpStatusCode.ACCEPTED } as const;
 `HttpStatusName` gives you the names.
 
 A thrown `HttpError` still goes through the error mapper, so `status` only sets
-the *success* status.
+the _success_ status.
 
 ## Errors
 
@@ -365,7 +365,10 @@ Replace the whole mapper with `HttpOptions.onError`:
 const app = await HttpFactory.create(AppModule, {
   onError: (error, req) => {
     if (error instanceof DomainConflict) {
-      return Response.json({ error: error.message, status: 409 }, { status: 409 });
+      return Response.json(
+        { error: error.message, status: 409 },
+        { status: 409 },
+      );
     }
     return defaultErrorMapper(error, req);
   },
@@ -377,7 +380,7 @@ application and there is no imperative equivalent, so it must be passed to
 `create()`. This is the "filters" slot: dunx has one error mapper rather than an
 exception filter hierarchy.
 
-CORS headers are applied *outside* the mapper, so a mapped 500 still carries the
+CORS headers are applied _outside_ the mapper, so a mapped 500 still carries the
 headers the browser needs in order to display it.
 
 ## Application-level configuration
@@ -394,15 +397,15 @@ app.enableCors({ origin: 'https://example.com', credentials: true });
 await app.listen(3000);
 ```
 
-| Hook                    | Effect                                                              |
-| ----------------------- | --------------------------------------------------------------------- |
-| `setGlobalPrefix(p)`    | Prefixes every discovered route. Slashes normalised, last call wins |
-| `use(...middleware)`    | Appends container-resolved `Ctor<Middleware>`, so it can inject     |
-| `set(key, value)`       | Typed settings; a key must exist on `AppSettings`                   |
-| `setting(key)`          | Reads one back                                                      |
-| `enableCors(options?)`  | Response headers plus an `OPTIONS` preflight per path               |
-| `clientIp(req)`         | The `ClientAddress` singleton, honouring `'trust proxy'`            |
-| `listen(port?)`         | Builds the table and binds. A second call throws                    |
+| Hook                   | Effect                                                              |
+| ---------------------- | ------------------------------------------------------------------- |
+| `setGlobalPrefix(p)`   | Prefixes every discovered route. Slashes normalised, last call wins |
+| `use(...middleware)`   | Appends container-resolved `Ctor<Middleware>`, so it can inject     |
+| `set(key, value)`      | Typed settings; a key must exist on `AppSettings`                   |
+| `setting(key)`         | Reads one back                                                      |
+| `enableCors(options?)` | Response headers plus an `OPTIONS` preflight per path               |
+| `clientIp(req)`        | The `ClientAddress` singleton, honouring `'trust proxy'`            |
+| `listen(port?)`        | Builds the table and binds. A second call throws                    |
 
 Calling any of them **after** `listen()` throws:
 
@@ -452,7 +455,13 @@ at discovery with the handler's metadata merged over the class's. So
 `@Public()` overrides a class-level `@Roles()`:
 
 ```ts
-import { HttpError, HttpStatusCode, PUBLIC, ROLES, type Middleware } from '@dunx/http';
+import {
+  HttpError,
+  HttpStatusCode,
+  PUBLIC,
+  ROLES,
+  type Middleware,
+} from '@dunx/http';
 
 export class AuthGuard implements Middleware {
   constructor(private readonly logger: Logger) {}
@@ -525,7 +534,7 @@ A route with no declared schemas awaits nothing. A route with only `query` or
 `params` awaits nothing either, because every Standard Schema validator worth
 using is synchronous. Even a `body` route, which really does have to wait for
 `req.json()`, pays one promise link instead of six async frames. A handler or a
-validator that *does* return a promise still works: it is adopted rather than
+validator that _does_ return a promise still works: it is adopted rather than
 awaited by a wrapper.
 
 **Adding middleware opts a route back into the async path**, because middleware is

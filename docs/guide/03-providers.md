@@ -69,8 +69,8 @@ Deferring the body is what removes the need for Nest's `forwardRef`. There is no
 `forwardRef` in dunx and there is nothing to replace it with, because the problem
 it solves does not arise.
 
-Note that a genuine dependency *cycle* is still an error. A thunk fixes the
-ordering of *declarations*; it cannot make `A` need `B` while `B` needs `A`. See
+Note that a genuine dependency _cycle_ is still an error. A thunk fixes the
+ordering of _declarations_; it cannot make `A` need `B` while `B` needs `A`. See
 [Cycles](#cycles) below.
 
 ### Inheritance
@@ -92,7 +92,7 @@ export class UsersRepository extends Repository {
 }
 ```
 
-A subclass that *does* declare a constructor gets its own record from the
+A subclass that _does_ declare a constructor gets its own record from the
 transform, which shadows the base's.
 
 This is the opposite of the rule `@Module` uses, and the difference is
@@ -115,14 +115,14 @@ that token.
 
 Six cases are detected this way:
 
-| Parameter type              | Why it is erased                                       |
-| --------------------------- | ------------------------------------------------------ |
-| a local `interface`         | Interfaces have no runtime value                        |
-| a local `type` alias        | Same                                                    |
-| a type-only import          | `import type { X }` emits nothing                       |
-| an inline `type` specifier  | `import { type X }` emits nothing for `X`               |
-| a class type parameter      | `class Box<T> { constructor(x: T) {} }` erases `T`      |
-| a primitive or a union      | `number`, `string`, `A \| B` are not tokens             |
+| Parameter type             | Why it is erased                                   |
+| -------------------------- | -------------------------------------------------- |
+| a local `interface`        | Interfaces have no runtime value                   |
+| a local `type` alias       | Same                                               |
+| a type-only import         | `import type { X }` emits nothing                  |
+| an inline `type` specifier | `import { type X }` emits nothing for `X`          |
+| a class type parameter     | `class Box<T> { constructor(x: T) {} }` erases `T` |
+| a primitive or a union     | `number`, `string`, `A \| B` are not tokens        |
 
 This is strictly better than what `emitDecoratorMetadata` does, and that was
 measured rather than assumed. Given
@@ -191,7 +191,7 @@ hang off, which in practice means a `Token<T>`: a token is a value, not a type, 
 it cannot be written as a parameter type and the transform has nothing to record.
 
 The window is narrow and the mechanism is worth knowing. Constructor arguments are
-resolved *before* the injector is made ambient, because argument resolution
+resolved _before_ the injector is made ambient, because argument resolution
 recurses back through `get()` and must not see the class being built as its own
 scope. A module-level current injector is then set around the `new Klass()` call
 itself, so any `inject()` in a field initializer resolves against it. Field
@@ -252,7 +252,7 @@ export class WiringModule {}
 Three kinds, and that is the complete list.
 
 `useValue` is checked against the token's type. This is the one place dunx's typing
-beats Nest's directly: `provide()` stays a *call* rather than a
+beats Nest's directly: `provide()` stays a _call_ rather than a
 `{ provide, useValue }` object literal because per-element type inference across a
 heterogeneous array requires one, which is precisely why Nest's `useValue` is
 untyped.
@@ -321,7 +321,7 @@ are all optional resolves successfully when nothing bound it, so
 `app.get(QueueOptions)` on a container with no `QueueModule` returns defaults
 rather than throwing. Any presence check for a class-shaped token has that hole.
 
-An unbound token that is *not* a class fails cleanly:
+An unbound token that is _not_ a class fails cleanly:
 
 ```
 No provider for BuildStamp. Bind it with provide() in a module.
@@ -334,7 +334,7 @@ Every provider is a singleton for the lifetime of the container. There is no
 
 Request-scoped DI is Nest's single biggest source of complexity and per-request
 cost, and it was measured and turned down. Per-request state is passed as an
-explicit argument. Request-scoped *context*, meaning logging correlation and the
+explicit argument. Request-scoped _context_, meaning logging correlation and the
 like, is a separate `AsyncLocalStorage` concern behind `RequestContext` that never
 touches the container. That is what carries `requestId` through a request without
 a per-request provider graph.
@@ -353,7 +353,7 @@ you have to follow. There is no static graph to topologically sort, since
 `inject()` calls are only discovered by running field initializers. So
 construction is recursive and synchronous, and an async factory reached from
 inside a constructor parks its promise, throws a private signal to unwind, and the
-async caller awaits that token and *retries* the construction. Each retry resolves
+async caller awaits that token and _retries_ the construction. Each retry resolves
 at least one more async binding, so it terminates in at most one pass per async
 dependency, and a factory is never invoked twice because the promise is parked
 before the signal is thrown.
@@ -388,14 +388,14 @@ Both may return a promise, and both are awaited.
 
 Note the split of responsibilities. Anything that must exist before a constructor
 runs belongs in a `useFactory`, because factories are awaited during resolution.
-`onInit` runs after the *entire* graph is constructed, which makes it the right
+`onInit` runs after the _entire_ graph is constructed, which makes it the right
 place for work that depends on peers being ready: running migrations, seeding,
 subscribing, or logging what the app resolved to.
 
 ## Ordering
 
 Construction order is dependency order, and it is recorded as construction
-*completion* order: a value is appended to the container's list once it exists, so
+_completion_ order: a value is appended to the container's list once it exists, so
 a dependency always appears before its dependent.
 
 Two things follow.
@@ -413,7 +413,7 @@ stops the `Bun.serve` server first, then closes `PubSub`, then delegates to the
 container's teardown. Requests in flight finish against providers that are still
 alive.
 
-Beyond dependency order, the order tokens are *registered* decides the rest, and
+Beyond dependency order, the order tokens are _registered_ decides the rest, and
 that is a module-graph question. [Modules](./04-modules.md) covers it: imports
 register before importers, so a module listed first in `imports` is constructed
 first and torn down last.
@@ -431,8 +431,8 @@ thrown as `CircularDependencyError`, which carries the path as a
 it, a field-initializer
 cycle would be unbounded recursion with an unreadable stack.
 
-To be precise about what is and is not a cycle: a circular *import* between two
-files is fine, because the dependency record is a thunk. A circular *dependency*,
+To be precise about what is and is not a cycle: a circular _import_ between two
+files is fine, because the dependency record is a thunk. A circular _dependency_,
 where two providers each need the other constructed first, is not, and no
 mechanism can make it one. Break it by extracting the shared piece into a third
 provider, or by having one side depend on an event rather than an object.

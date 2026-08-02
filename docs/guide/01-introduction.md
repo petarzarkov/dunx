@@ -81,12 +81,12 @@ or a job queue means years of edge cases, and a half-built one is a liability
 dressed as a feature. Where Bun ships no primitive for a hard problem, dunx
 integrates the best-in-class library instead of competing with it:
 
-| Concern        | Library                             | How dunx relates to it                                          |
-| -------------- | ----------------------------------- | ---------------------------------------------------------------- |
-| Validation     | zod, Valibot, ArkType, TypeBox, ajv | Targets the Standard Schema interface, so any of them drops in   |
-| ORM, migrations| drizzle-orm                         | `@dunx/infra/db` over `drizzle-orm/bun-sqlite` and `/bun-sql`    |
-| Authentication | better-auth                         | `@dunx/auth` mounts it and adds a guard, nothing of the flow     |
-| Queues         | bullmq                              | `@dunx/infra/queue` over bullmq's `createBunRedisClient`         |
+| Concern         | Library                             | How dunx relates to it                                         |
+| --------------- | ----------------------------------- | -------------------------------------------------------------- |
+| Validation      | zod, Valibot, ArkType, TypeBox, ajv | Targets the Standard Schema interface, so any of them drops in |
+| ORM, migrations | drizzle-orm                         | `@dunx/infra/db` over `drizzle-orm/bun-sqlite` and `/bun-sql`  |
+| Authentication  | better-auth                         | `@dunx/auth` mounts it and adds a guard, nothing of the flow   |
+| Queues          | bullmq                              | `@dunx/infra/queue` over bullmq's `createBunRedisClient`       |
 
 Those libraries are `peerDependencies`, never bundled. You install and own the
 version. Where the library offers a Bun-native driver, that driver is mandatory:
@@ -145,12 +145,12 @@ overhead and nothing else. From
 logical cores, Bun 1.3.14, oha 1.15.0, 64 connections, 3 s warmup, 5 measured runs
 of 5 s, dated 2026-08-02:
 
-| Scenario    | raw `Bun.serve` | `@dunx/http` | dunx costs | Elysia          |
+| Scenario    | raw `Bun.serve` | `@dunx/http` | dunx costs |          Elysia |
 | ----------- | --------------: | -----------: | ---------: | --------------: |
-| `plaintext` | 138,507 req/s   | 135,442      | 2.2%       | 132,503 (95.7%) |
-| `json`      | 130,055 req/s   | 123,306      | 5.2%       | 124,264 (95.5%) |
-| `params`    | 126,000 req/s   | 123,263      | 2.2%       | 124,507 (98.8%) |
-| `validate`  | 84,701 req/s    | 78,311       | 7.5%       | 70,831 (83.6%)  |
+| `plaintext` |   138,507 req/s |      135,442 |       2.2% | 132,503 (95.7%) |
+| `json`      |   130,055 req/s |      123,306 |       5.2% | 124,264 (95.5%) |
+| `params`    |   126,000 req/s |      123,263 |       2.2% | 124,507 (98.8%) |
+| `validate`  |    84,701 req/s |       78,311 |       7.5% |  70,831 (83.6%) |
 
 Read that with the harness's own rules. A figure at or above 100% would be noise,
 not a win: dunx dispatches through `Bun.serve` and cannot serve a request faster
@@ -160,15 +160,15 @@ points as signal and a gap of 2 as nothing.
 
 Startup is the clearest loss, and it is a real one:
 
-| Subject           | cold start to first served request (median of 7) |
-| ----------------- | ------------------------------------------------: |
-| raw `Bun.serve`   | 26.7 ms                                            |
-| **`@dunx/http`**  | **53.1 ms**                                        |
-| Elysia            | 58.2 ms                                            |
-| raw `node:http`   | 72.8 ms                                            |
-| Express           | 120.2 ms                                           |
-| Fastify           | 146.1 ms                                           |
-| NestJS (Express)  | 270.7 ms                                           |
+| Subject          | cold start to first served request (median of 7) |
+| ---------------- | -----------------------------------------------: |
+| raw `Bun.serve`  |                                          26.7 ms |
+| **`@dunx/http`** |                                      **53.1 ms** |
+| Elysia           |                                          58.2 ms |
+| raw `node:http`  |                                          72.8 ms |
+| Express          |                                         120.2 ms |
+| Fastify          |                                         146.1 ms |
+| NestJS (Express) |                                         270.7 ms |
 
 Roughly twice raw `Bun.serve`, from the `oxc-parser` preload plus eager DI
 resolution and route discovery. That is the trade this architecture makes on
