@@ -164,6 +164,19 @@ On push to `main`, CI automatically:
 | `fix:`, `chore:`, etc. | patch |
 | Breaking change (`!:`) | major |
 
+## Contributing
+
+Pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) is the full guide:
+how to get set up, which checks CI runs, the repo's rules on native
+implementations and third-party dependencies, and the house style that a review
+will hold you to.
+
+The short version: Bun only, no `npm`/`npx`/`yarn`/`pnpm`; `bun install` then
+`bun run build` before anything else; run `lint:check`, `format:check`,
+`typecheck` and `test:cov` before you push; conventional commits; a bug fix comes
+with the test that would have caught it; and a claim about performance comes with
+the numbers.
+
 ## License
 
 [MIT](LICENSE)
