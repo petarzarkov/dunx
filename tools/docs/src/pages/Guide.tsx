@@ -1,6 +1,15 @@
-import { Anchor, Container, Group, Stack, Text, Title } from '@mantine/core';
+import {
+  Anchor,
+  Container,
+  Group,
+  Skeleton,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core';
+import { useChunk } from '../chunk';
 import { Prose } from '../components/Prose';
-import { guideBySlug, site } from '../data';
+import { guideBySlug, loadGuide, site } from '../data';
 import { NotFound } from './NotFound';
 
 const TableOfContents = ({
@@ -30,8 +39,14 @@ const TableOfContents = ({
   );
 };
 
+/**
+ * The title, the source link and the contents come from the index, so the page
+ * is complete except for its prose on the first frame. Only the body is a
+ * separate chunk - see `src/data.ts`.
+ */
 export const Guide = ({ slug }: { slug: string }): React.JSX.Element => {
   const guide = guideBySlug(slug);
+  const body = useChunk(() => loadGuide(slug), slug);
   if (!guide) return <NotFound what={`guide "${slug}"`} />;
 
   return (
@@ -47,7 +62,15 @@ export const Guide = ({ slug }: { slug: string }): React.JSX.Element => {
           >
             {guide.source} on GitHub
           </Anchor>
-          <Prose html={guide.html} />
+          {body ? (
+            <Prose html={body.html} />
+          ) : (
+            <Stack gap="sm" aria-busy="true">
+              <Skeleton height={12} radius="sm" />
+              <Skeleton height={12} radius="sm" width="92%" />
+              <Skeleton height={12} radius="sm" width="70%" />
+            </Stack>
+          )}
         </Stack>
         <TableOfContents headings={guide.headings} />
       </Group>

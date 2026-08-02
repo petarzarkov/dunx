@@ -994,6 +994,36 @@ so this is verified rather than assumed. `@mantine/code-highlight` went with it:
 highlighting happens at generate time now, and nothing under `tools/docs`
 imported it.
 
+**The model is one file per route, and the landing page carries none of them.**
+`site.json` was imported into the entry chunk, so `#/` downloaded all 21 guide
+bodies and all eight package readmes before rendering a page that shows neither.
+`generate.ts` now writes `index.json` (nav, landing page, footer, search index),
+`guides/<slug>.json` and `packages/<dir>.json`. Measured on the entry chunk, which
+is all `#/` fetches, `gzip -9`:
+
+| Entry chunk     | JS raw    | JS gzip      |
+| --------------- | --------- | ------------ |
+| one `site.json` | 2529.9 KB | **595.2 KB** |
+| split per route | 937.2 KB  | **266.1 KB** |
+
+329.1 KB off the landing page, 55% of it. Summed over all 30 chunks the total rises
+instead, 595.2 KB to 626.3 KB gzipped, because each is compressed against its own
+dictionary; nobody downloads all 30, which is the point.
+
+Three things decided rather than derived:
+
+- **The chunk table is generated, not globbed.** `import.meta.glob` is a Vite
+  feature `bun test` does not have, and a template-literal `import()` is a bundler
+  feature rather than a language one. `generated/chunks.ts` is a table of literal
+  specifiers, so Vite splits on it, the test runner resolves it through the `?raw`
+  plugin `happydom.ts` already installs, and `tsc` checks it. Nothing in `src/`
+  became bundler-specific.
+- **The index keeps a symbol's name, kind and line** and drops its signature, doc
+  comment and members, which is what lets `Search` still index all 382 public
+  symbols across all eight packages from a 50 KB index.
+- **`site.home` is gone.** It rendered the root README into the model and no
+  component had read it since the landing page was rebuilt.
+
 **The site carries a projection of the benchmark report, not the report.**
 `results/latest.json` holds every run's samples, each scenario's expected body and
 each subject's entry file - evidence for the harness, and ~48 KB of JSON that
@@ -1236,6 +1266,18 @@ claim) - the cost is that a schema used both ways converts twice and one
 a per-response validation pass paid for a documentation feature is the wrong trade
 when the handler's return type already checks the answer for free. Nothing in
 `@dunx/http`'s request path reads the key.
+
+The explorer renders those responses through **`SchemaView`, the same component the
+request body uses** - one property table with the required markers, formats,
+constraints and `$ref` resolution, not a second one. Every component in
+`tools/openapi-ui` costs bytes twice, in the JS and in the CSS list in
+`src/styles.ts`, and the whole bundle is a committed string in
+`packages/openapi/src/ui-bundle.ts` that every consumer of the package downloads, so
+"reuse it" is a size decision before it is a taste one. The documented response and
+the try-it-out result stay **separate**: the `Responses` section is the contract and
+the panel under the `Send it` divider is one real request, and merging them would let
+a 500 from a local run read as the specification. `src/operation.test.tsx` holds all
+of that down.
 
 **`OpenApiModule.forRootAsync`** exists for the reason every other configurable
 module has the pair. Its interesting half was the mount paths: a decorator's

@@ -51,3 +51,16 @@ Every component costs bytes twice - once in JavaScript, once in the CSS file
 dropped for `title=` and `overflow: auto`, which took the bundle from 490 KiB to
 437 KiB. Icons are four inline paths rather than an icon package. Before adding a
 component, check what it drags in.
+
+That is why a documented response renders through **`SchemaView`**, the component
+the request body already uses, rather than through a response-shaped copy of it:
+one property table, one set of styles, and a `$ref` resolves the same on both
+sides. It is still kept clearly apart from the **try-it-out** result below the
+`Send it` divider - one is the contract, the other is one real request.
+
+## Tests
+
+`src/explorer.test.ts` covers the logic with no DOM: auth assembly, URL and header
+building, grouping and filtering. `src/operation.test.tsx` mounts one operation and
+asserts what a reader sees - the documented responses, their resolved schemas, and
+that they stay separate from the send panel.

@@ -52,8 +52,12 @@ const buildActions = (): SpotlightActionData[] => {
       onClick: () => navigate(href(RouteKind.Api, pkg.dir)),
     });
 
-    for (const symbol of pkg.symbols) {
-      if (symbol.subpaths.length === 0) continue;
+    /**
+     * The index carries every public symbol's name, kind and line, and nothing
+     * else about it - which is exactly what a hit needs, and is what lets the
+     * documentation itself stay in the per-package chunk.
+     */
+    for (const symbol of pkg.exports) {
       actions.push({
         id: `symbol-${pkg.dir}-${symbol.name}-${symbol.line}`,
         label: symbol.name,

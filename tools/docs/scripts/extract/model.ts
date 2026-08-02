@@ -60,6 +60,32 @@ export interface PackageDoc {
 }
 
 /**
+ * A symbol as the search index and the export counts see it: enough to name it
+ * and link to it, and none of the documentation that makes a `DocSymbol` large.
+ */
+export interface SymbolRef {
+  readonly name: string;
+  readonly kind: SymbolKind;
+  readonly line: number;
+}
+
+/** A package without its readme or its symbol documentation. */
+export interface PackageMeta {
+  readonly name: string;
+  readonly dir: string;
+  readonly description: string;
+  readonly subpaths: readonly string[];
+  /** Only what a public subpath re-exports. Internal symbols live in the body. */
+  readonly exports: readonly SymbolRef[];
+}
+
+/** The half of a package only `PackagePage` renders, fetched when it opens. */
+export interface PackageBody {
+  readonly readme: string;
+  readonly symbols: readonly DocSymbol[];
+}
+
+/**
  * `guide` pages are the hand-written tour under `docs/guide/`, ordered by the
  * numeric prefix on their filename. `reference` pages are the repo's own
  * documents at the top of `docs/`, which are written for contributors rather
@@ -67,7 +93,7 @@ export interface PackageDoc {
  */
 export type GuideCategory = 'guide' | 'reference';
 
-export interface GuidePage {
+export interface GuideMeta {
   readonly slug: string;
   readonly category: GuideCategory;
   /**
@@ -83,8 +109,17 @@ export interface GuidePage {
   readonly title: string;
   /** Repo-relative path the page was rendered from. */
   readonly source: string;
-  readonly html: string;
   readonly headings: readonly { readonly id: string; readonly text: string }[];
+}
+
+/** A guide plus the rendered body, which is the part that is loaded per route. */
+export interface GuidePage extends GuideMeta {
+  readonly html: string;
+}
+
+/** What one guide's chunk holds. */
+export interface GuideBody {
+  readonly html: string;
 }
 
 export interface CoverageFile {
@@ -271,10 +306,15 @@ export interface BenchModel {
   readonly startup: readonly BenchStartup[];
 }
 
-export interface SiteModel {
+/**
+ * Everything the shell renders before a route is chosen: the nav, the landing
+ * page, the footer and the search index. It carries no guide body and no symbol
+ * documentation, because none of `#/` reads either - those load per route from
+ * `generated/guides/<slug>.json` and `generated/packages/<dir>.json`.
+ */
+export interface SiteIndex {
   readonly generatedAt: string;
   readonly repoUrl: string;
-  readonly packages: readonly PackageDoc[];
-  readonly guides: readonly GuidePage[];
-  readonly home: string;
+  readonly packages: readonly PackageMeta[];
+  readonly guides: readonly GuideMeta[];
 }
