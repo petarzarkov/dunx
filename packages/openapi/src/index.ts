@@ -26,7 +26,10 @@ export {
   type DocumentInfo,
   type GeneratedDocument,
 } from './generate.js';
-export { MODEL_ELEMENT_ID, renderPage, type PageOptions } from './html.js';
+// The page *shell*, which is cheap. The explorer bundle it wraps is 456 KB, so
+// the renderer that supplies it lives at `@dunx/openapi/ui` and is imported on
+// demand - importing this barrel must not drag a React app in with it.
+export { MODEL_ELEMENT_ID, renderShell, type PageOptions } from './html.js';
 // What the page hands its explorer. Exported so a page of your own can be built
 // on the same pre-computed prose, samples and fields.
 export {

@@ -72,7 +72,7 @@
     },
     "packages/auth": {
       "name": "@dunx/auth",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
@@ -93,11 +93,11 @@
     },
     "packages/core": {
       "name": "@dunx/core",
-      "version": "0.2.4",
+      "version": "0.2.5",
     },
     "packages/create-app": {
       "name": "@dunx/create-app",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "bin": {
         "create-dunx-app": "dist/cli.js",
       },
@@ -110,7 +110,7 @@
     },
     "packages/http": {
       "name": "@dunx/http",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "devDependencies": {
         "@dunx/core": "workspace:*",
       },
@@ -124,7 +124,7 @@
     },
     "packages/infra": {
       "name": "@dunx/infra",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "dependencies": {
         "@arkv/logger": "^0.8.1",
       },
@@ -150,10 +150,11 @@
     },
     "packages/openapi": {
       "name": "@dunx/openapi",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
+        "@dunx/testing": "workspace:*",
         "@happy-dom/global-registrator": "^20.11.1",
         "zod": "^4.4.3",
       },
@@ -170,7 +171,7 @@
     },
     "packages/testing": {
       "name": "@dunx/testing",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
@@ -186,7 +187,7 @@
     },
     "packages/transform": {
       "name": "@dunx/transform",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "dependencies": {
         "oxc-parser": "0.142.0",
       },

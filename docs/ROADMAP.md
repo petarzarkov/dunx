@@ -243,13 +243,11 @@ Feedback goes in as a new file rather than into conversation.
 | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Feature. Gin, Axum, Spring. Also a falsification test on the harness. |
 | [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.                      |
-| [openapi-ui-subpath](./roadmap/openapi-ui-subpath.md)                               | Performance. ~5 ms of cold start for a page most apps never open.     |
 | [async-local-storage-cost](./roadmap/async-local-storage-cost.md)                   | Measured. +0.91 us, and `enterWith` segfaults Bun.                    |
 | [document-pinning-all-packages](./roadmap/document-pinning-all-packages.md)         | Docs. Mixing minors warns and can duplicate core.                     |
 | [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Three upstream proposals. Nothing left to adopt.                      |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                           |
 | [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                             |
-| [testing-from-published-package](./roadmap/testing-from-published-package.md)       | Probably unblocked, untested.                                         |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Defect. Not reachable from userland.                                  |
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                         | Unreproduced.                                                         |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                        |

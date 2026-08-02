@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { renderPage } from './html.js';
 import type { OpenApiDocument } from './types.js';
+import { renderPage } from './ui.js';
 
 /**
  * The inlined bundle is the page, and a string assertion cannot prove it renders

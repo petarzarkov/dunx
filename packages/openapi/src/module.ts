@@ -20,7 +20,6 @@ import {
   type DocumentInfo,
   type GeneratedDocument,
 } from './generate.js';
-import { renderPage } from './html.js';
 import { mountPrefix, withPrefix } from './mount.js';
 import type { OpenApiDocument } from './types.js';
 
@@ -89,9 +88,16 @@ export class OpenApiExplorer {
     return serialised;
   }
 
-  page(prefix = ''): string {
+  /**
+   * Async because the explorer is loaded on demand. `./ui.js` pulls in ~456 KB of
+   * inlined bundle and about 5 ms of parse, and a service that never opens the
+   * page should not pay either at boot. The first request for a given prefix pays
+   * it; the cache answers every one after that.
+   */
+  async page(prefix = ''): Promise<string> {
     const cached = this.#pages.get(prefix);
     if (cached !== undefined) return cached;
+    const { renderPage } = await import('./ui.js');
     const html = renderPage(this.document(prefix), {
       jsonHref: joinPath(prefix, this.#jsonPath),
       warnings: this.warnings,
@@ -148,8 +154,9 @@ const buildController = (paths: DocPaths) => {
 
     @Public()
     @Get(() => paths.ui)
-    page(input: Input<RouteSchemas>): Response {
-      return new Response(this.#explorer.page(this.#prefix(input, paths.ui)), {
+    async page(input: Input<RouteSchemas>): Promise<Response> {
+      const html = await this.#explorer.page(this.#prefix(input, paths.ui));
+      return new Response(html, {
         headers: { 'content-type': 'text/html; charset=utf-8' },
       });
     }
