@@ -250,10 +250,8 @@ Feedback goes in as a new file rather than into conversation.
 | [independent-versions](./roadmap/independent-versions.md)                               | Closed. One line, reopened by core 1.0.0.                             |
 | [openapi-exclude-mounted-controller](./roadmap/openapi-exclude-mounted-controller.md)   | Bug. A wildcard mount documents itself as a literal `*` path.         |
 | [betterauth-document-needs-container](./roadmap/betterauth-document-needs-container.md) | Missing feature. Its own usage example cannot run.                    |
-| [openapi-capable-auth-weak-type](./roadmap/openapi-capable-auth-weak-type.md)           | Bug. The documented no-plugin path is a compile error.                |
 | [global-guard-guards-the-404](./roadmap/global-guard-guards-the-404.md)                 | Design gap. A global guard turns every 404 into a 401.                |
 | [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)                 | Bug. Bypasses the bound Logger on a publish failure.                  |
-| [drizzle-schema-export-names](./roadmap/drizzle-schema-export-names.md)                 | Docs. The adapter keys on export name, not table name.                |
 | [relay-resubscribe-passthrough](./roadmap/relay-resubscribe-passthrough.md)             | Missing feature. Pass-through, no design question.                    |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                           | Defect. Not reachable from userland.                                  |
 | [flaky-aggregate-suite](./roadmap/flaky-aggregate-suite.md)                             | Unreproduced.                                                         |

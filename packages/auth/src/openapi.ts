@@ -15,9 +15,18 @@ export interface AuthDocumentFragment {
   }[];
 }
 
-/** Just enough of a Better Auth instance to ask it for its schema. */
+/**
+ * Just enough of a Better Auth instance to ask it for its schema.
+ *
+ * `api` is `object` with the method optional on top, rather than an interface
+ * whose only member is optional. Every-property-optional triggers TypeScript's
+ * weak-type check, which rejects any argument sharing no property with it - so an
+ * instance built without the `openAPI()` plugin failed to compile, and the doc
+ * below promising it "contributes nothing rather than throwing" described a path
+ * that could not be written.
+ */
 export interface OpenApiCapableAuth {
-  readonly api: {
+  readonly api: object & {
     generateOpenAPISchema?: () => Promise<unknown>;
   };
 }

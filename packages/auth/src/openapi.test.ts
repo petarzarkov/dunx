@@ -57,6 +57,28 @@ describe('betterAuthDocument', () => {
     expect(fragment).toEqual({ paths: {}, schemas: {}, tags: [] });
   });
 
+  // Uncast on purpose. `authWith` goes through `as never`, so every other test
+  // here would still pass if the parameter type rejected a real instance - and
+  // it did: an all-optional interface is a weak type, and TypeScript refuses an
+  // argument sharing no property with it. An instance built without the plugin
+  // is exactly that, so the case above was documented, tested, and impossible to
+  // write. This is a compile-time assertion; the runtime expectation is the one
+  // above.
+  it('accepts an instance whose api has no generateOpenAPISchema', async () => {
+    const auth = {
+      api: {
+        signInEmail: async () => ({ token: 't' }),
+        getSession: async () => null,
+      },
+    };
+
+    const fragment = await betterAuthDocument(auth, {
+      basePath: '/api/auth',
+    })();
+
+    expect(fragment.paths).toEqual({});
+  });
+
   it('honours a custom tag', async () => {
     const fragment = await betterAuthDocument(
       authWith({
