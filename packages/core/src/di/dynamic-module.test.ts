@@ -205,3 +205,70 @@ describe('configured modules', () => {
     ]);
   });
 });
+
+describe('a DynamicModule naming its own decorated class', () => {
+  const A = token<string>('A');
+  const B = token<string>('B');
+  const Cfg = token<string>('ConfigInput');
+
+  /*
+   * The options union rather than replace, which is what Nest does and what
+   * `resolveRef` has always done deliberately. Pinned because the alternative
+   * reading - that the dynamic options win - is the one people arrive with, and
+   * a silent change either way would break apps invisibly.
+   */
+  it('unions the decorator options with the dynamic ones', async () => {
+    @Module({ providers: [provide(A, { useValue: 'decorator-A' })] })
+    class Root {
+      static dyn(): DynamicModule {
+        return {
+          module: Root,
+          providers: [provide(B, { useValue: 'dynamic-B' })],
+        };
+      }
+    }
+
+    const app = await AppFactory.create(Root.dyn());
+    expect(app.get(A)).toBe('decorator-A');
+    expect(app.get(B)).toBe('dynamic-B');
+    await app.shutdown();
+  });
+
+  // The consequence of that union, and the error people actually hit. It printed
+  // one module name twice, which sent them looking for a second module.
+  it('says so when the union collects one module twice', async () => {
+    class ConfigModule {
+      static forRoot(value: string): DynamicModule {
+        return {
+          module: ConfigModule,
+          providers: [provide(Cfg, { useValue: value })],
+        };
+      }
+    }
+
+    @Module({ imports: [ConfigModule.forRoot('a')] })
+    class Root {
+      static dyn(): DynamicModule {
+        return { module: Root, imports: [ConfigModule.forRoot('b')] };
+      }
+    }
+
+    const message = await rejectionMessage(AppFactory.create(Root.dyn()));
+    expect(message).toContain('"ConfigModule" was configured more than once');
+    expect(message).toContain('Configure it in one of them.');
+  });
+
+  it('still names both modules when two really do collide', async () => {
+    @Module({ providers: [provide(A, { useValue: 'one' })] })
+    class OneModule {}
+
+    @Module({ providers: [provide(A, { useValue: 'two' })] })
+    class TwoModule {}
+
+    @Module({ imports: [OneModule, TwoModule] })
+    class Root {}
+
+    const message = await rejectionMessage(AppFactory.create(Root));
+    expect(message).toContain('module "OneModule" and module "TwoModule"');
+  });
+});

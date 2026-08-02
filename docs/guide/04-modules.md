@@ -129,13 +129,38 @@ imported twice is likewise one reference. But two _different_ configurations of
 the same module are two objects, and both register:
 
 ```
-Duplicate binding for Options: bound by module "StoreModule" and module "StoreModule".
+Duplicate binding for Options: "StoreModule" was configured more than once and both
+copies were collected.
 ```
 
 That is deliberate, not a bug. Last-wins would have been silent and first-wins
 would depend on traversal order, so neither is something a reader could predict.
 Both configurations register and the conflict surfaces, reusing the flat
 container's existing rule instead of adding a second one.
+
+**A `DynamicModule` unions its options with its own class's decorator.** If
+`Root.forRoot()` returns `{ module: Root, providers: [...] }` and `Root` is also
+decorated with `@Module({ providers: [...] })`, both sets are collected. The
+dynamic options do not replace the declared ones:
+
+```ts
+@Module({ providers: [provide(A, { useValue: 'from the decorator' })] })
+class Root {
+  static dyn(): DynamicModule {
+    return {
+      module: Root,
+      providers: [provide(B, { useValue: 'from the static' })],
+    };
+  }
+}
+
+// Both A and B resolve.
+await AppFactory.create(Root.dyn());
+```
+
+That matches Nest, and it is the reason the duplicate above happens most often: a
+`ConfigModule.forRoot()` in the decorator's `imports` and another in the static's
+is two configurations of one module. Put it in one place or the other.
 
 ## Dynamic modules
 

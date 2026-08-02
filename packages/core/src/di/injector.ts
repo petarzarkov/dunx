@@ -34,10 +34,22 @@ export class Injector {
   register(registration: Registration, module: string): void {
     const existing = this.#bindings.get(registration.token);
     if (existing) {
+      // Same name on both sides means one module reached the graph twice, not two
+      // modules colliding - printing the name twice sent people looking for a
+      // second module that does not exist. The usual cause is a `forRoot()` in a
+      // decorator's imports and another in a DynamicModule's: the two options sets
+      // union rather than replace, so both configured copies are collected.
+      const cause =
+        existing.module === module
+          ? `"${module}" was configured more than once and both copies were ` +
+            'collected. A DynamicModule unions its options with the ones its ' +
+            "class's @Module decorator declares, so a forRoot() in each place is " +
+            'two bindings. Configure it in one of them.'
+          : `bound by module "${existing.module}" and module "${module}". The ` +
+            'container is flat - one binding per token.';
+
       throw new AppError(
-        `Duplicate binding for ${describeToken(registration.token)}: bound by module ` +
-          `"${existing.module}" and module "${module}". The container is flat - one ` +
-          'binding per token.',
+        `Duplicate binding for ${describeToken(registration.token)}: ${cause}`,
       );
     }
     this.#bindings.set(registration.token, {

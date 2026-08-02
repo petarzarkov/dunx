@@ -260,13 +260,9 @@ npm**, which is the only way packaging faults surface. It runs: 52 unit and
 integration tests, 10 e2e, 90% line coverage, Docker builds and serves. It also
 produced 22 findings.
 
-| Item                                                                                  | Shape                                               |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [di-dynamic-module-unions-decorator](./roadmap/di-dynamic-module-unions-decorator.md) | Bug, high. Blocks the standard Nest module pattern. |
-| [di-overrides-rejects-self-bound](./roadmap/di-overrides-rejects-self-bound.md)       | Bug, high. Blocks the common unit-test stub.        |
-| [transform-emitted-js-diagnostic](./roadmap/transform-emitted-js-diagnostic.md)       | Bug, high. Error tells you to do what you did.      |
-| [di-import-type-diagnostic](./roadmap/di-import-type-diagnostic.md)                   | Diagnostic, high frequency.                         |
-| [openapi-forroot-async](./roadmap/openapi-forroot-async.md)                           | Missing feature, medium. `HttpOptions` half only.   |
+| Item                                                        | Shape                                             |
+| ----------------------------------------------------------- | ------------------------------------------------- |
+| [openapi-forroot-async](./roadmap/openapi-forroot-async.md) | Missing feature, medium. `HttpOptions` half only. |
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;
