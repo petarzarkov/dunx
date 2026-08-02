@@ -69,18 +69,38 @@ const Navigation = ({
     />
 
     <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
-      Guides
+      Guide
     </Text>
-    {site.guides.map((guide) => (
-      <NavLink
-        key={guide.slug}
-        component="a"
-        href={href(RouteKind.Guide, guide.slug)}
-        label={guide.title}
-        active={route.kind === RouteKind.Guide && route.slug === guide.slug}
-        onClick={onNavigate}
-      />
-    ))}
+    {site.guides
+      .filter((guide) => guide.category === 'guide')
+      .map((guide) => (
+        <NavLink
+          key={guide.slug}
+          component="a"
+          href={href(RouteKind.Guide, guide.slug)}
+          label={guide.title}
+          active={route.kind === RouteKind.Guide && route.slug === guide.slug}
+          onClick={onNavigate}
+        />
+      ))}
+
+    {/* The repo's own documents. Written for someone changing dunx rather than
+        someone using it, which is why they are a separate group. */}
+    <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
+      Reference
+    </Text>
+    {site.guides
+      .filter((guide) => guide.category === 'reference')
+      .map((guide) => (
+        <NavLink
+          key={guide.slug}
+          component="a"
+          href={href(RouteKind.Guide, guide.slug)}
+          label={guide.title}
+          active={route.kind === RouteKind.Guide && route.slug === guide.slug}
+          onClick={onNavigate}
+        />
+      ))}
 
     <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
       Packages

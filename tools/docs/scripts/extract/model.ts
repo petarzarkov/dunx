@@ -59,8 +59,19 @@ export interface PackageDoc {
   readonly symbols: readonly DocSymbol[];
 }
 
+/**
+ * `guide` pages are the hand-written tour under `docs/guide/`, ordered by the
+ * numeric prefix on their filename. `reference` pages are the repo's own
+ * documents at the top of `docs/`, which are written for contributors rather
+ * than for someone learning the framework, so the nav keeps them apart.
+ */
+export type GuideCategory = 'guide' | 'reference';
+
 export interface GuidePage {
   readonly slug: string;
+  readonly category: GuideCategory;
+  /** Position within the category. Reference pages sort alphabetically. */
+  readonly order: number;
   readonly title: string;
   /** Repo-relative path the page was rendered from. */
   readonly source: string;

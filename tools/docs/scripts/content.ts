@@ -188,10 +188,14 @@ export const buildGuide = (
   markdown: string,
   targets: LinkTargets,
   fallbackTitle: string,
+  category: GuidePage['category'] = 'reference',
+  order = 0,
 ): GuidePage => {
   const { html, headings } = renderDoc(markdown, targets);
   return {
     slug,
+    category,
+    order,
     source,
     title: titleOf(markdown, fallbackTitle),
     html,

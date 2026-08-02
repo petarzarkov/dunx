@@ -78,13 +78,28 @@ describe('the generated model', () => {
     expect(architecture?.html).toContain('<h2 id="documentation-site');
   });
 
+  test('separates the hand-written tour from the repo reference docs', () => {
+    expect(
+      site.guides
+        .filter((g) => g.category === 'reference')
+        .map((g) => g.slug)
+        .sort(),
+    ).toEqual(['architecture', 'bun-apis', 'migration-from-nest', 'roadmap']);
+
+    const tour = site.guides.filter((g) => g.category === 'guide');
+    expect(tour.length).toBeGreaterThan(0);
+    // The numeric prefix states the order and is stripped from the slug, so a
+    // reorder never changes a URL.
+    for (const page of tour) {
+      expect(page.slug).not.toMatch(/^\d/);
+      expect(page.order).toBeGreaterThan(0);
+    }
+    expect(tour.map((g) => g.order)).toEqual(
+      tour.map((g) => g.order).sort((a, b) => a - b),
+    );
+  });
+
   test('the guides carry rendered html and headings', () => {
-    expect(site.guides.map((g) => g.slug).sort()).toEqual([
-      'architecture',
-      'bun-apis',
-      'migration-from-nest',
-      'roadmap',
-    ]);
     for (const guide of site.guides) {
       expect(guide.html).toContain('<h2 id=');
       expect(guide.headings.length).toBeGreaterThan(0);

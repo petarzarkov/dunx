@@ -32,12 +32,54 @@ const packageDirs = (): string[] =>
 const guideFiles = (): string[] =>
   [...new Bun.Glob('*.md').scanSync({ cwd: DOCS_DIR })].sort();
 
-const linkTargets = (guides: string[], packages: string[]): LinkTargets => ({
-  guides: new Map(
-    guides.map((file) => [file, `#/guide/${slugify(basename(file, '.md'))}`]),
-  ),
-  packages: new Map(packages.map((dir) => [dir, `#/api/${dir}`])),
-});
+/**
+ * The hand-written tour, ordered by the numeric prefix on each filename. The
+ * prefix is how the order is stated and is stripped from the slug, so renaming
+ * `05-controllers.md` to `06-controllers.md` moves the page without changing its
+ * URL... which is the point: the URL should survive a reordering.
+ */
+const tourFiles = (): string[] =>
+  [...new Bun.Glob('guide/*.md').scanSync({ cwd: DOCS_DIR })].sort();
+
+/** `docs/guide/03-providers.md` -> slug `providers`, order `3`. */
+const tourSlug = (file: string): { slug: string; order: number } => {
+  const base = basename(file, '.md');
+  const match = /^(\d+)-(.+)$/.exec(base);
+  return match?.[1] !== undefined && match[2] !== undefined
+    ? { slug: slugify(match[2]), order: Number(match[1]) }
+    : { slug: slugify(base), order: 0 };
+};
+
+/**
+ * A guide is reachable by more than one spelling, so each gets every key a
+ * source document might plausibly link it by. A tour page written as
+ * `./03-providers.md` from a sibling, as `guide/03-providers.md` from the repo
+ * root, or as `docs/guide/03-providers.md` from a package README all have to
+ * land on the same `#/guide/providers`.
+ */
+const linkTargets = (
+  reference: string[],
+  tour: string[],
+  packages: string[],
+): LinkTargets => {
+  const guides = new Map<string, string>();
+
+  for (const file of reference) {
+    guides.set(file, `#/guide/${slugify(basename(file, '.md'))}`);
+  }
+
+  for (const file of tour) {
+    const href = `#/guide/${tourSlug(file).slug}`;
+    guides.set(file, href);
+    guides.set(basename(file), href);
+    guides.set(`docs/${file}`, href);
+  }
+
+  return {
+    guides,
+    packages: new Map(packages.map((dir) => [dir, `#/api/${dir}`])),
+  };
+};
 
 const emptyCoverage = (): CoverageModel => ({
   generatedAt: new Date().toISOString(),
@@ -49,7 +91,7 @@ const emptyCoverage = (): CoverageModel => ({
 
 const dirs = packageDirs();
 const dirNames = dirs.map((dir) => basename(dir));
-const targets = linkTargets(guideFiles(), dirNames);
+const targets = linkTargets(guideFiles(), tourFiles(), dirNames);
 
 const render = (markdown: string): string =>
   markdown === '' ? '' : renderDoc(markdown, targets).html;
@@ -74,15 +116,31 @@ const packages: PackageDoc[] = dirs.map((packageDir) => {
   });
 });
 
-const guides = guideFiles().map((file) =>
+const tour = tourFiles().map((file) => {
+  const { slug, order } = tourSlug(file);
+  return buildGuide(
+    slug,
+    `docs/${file}`,
+    read(join(DOCS_DIR, file)),
+    targets,
+    slug,
+    'guide',
+    order,
+  );
+});
+
+const reference = guideFiles().map((file) =>
   buildGuide(
     slugify(basename(file, '.md')),
     `docs/${file}`,
     read(join(DOCS_DIR, file)),
     targets,
     basename(file, '.md'),
+    'reference',
   ),
 );
+
+const guides = [...tour, ...reference];
 
 const site: SiteModel = {
   generatedAt: new Date().toISOString(),
