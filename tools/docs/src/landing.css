@@ -476,3 +476,9 @@
     grid-template-columns: minmax(5rem, 7rem) minmax(0, 1fr) 4rem;
   }
 }
+
+/* The speed panel sits between the hero and the stat band, so it carries its own
+   vertical rhythm rather than inheriting the section stack's. */
+.speed-lead {
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+}

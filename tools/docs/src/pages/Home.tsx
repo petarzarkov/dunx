@@ -224,13 +224,18 @@ const Packages = (): React.JSX.Element => (
 export const Home = (): React.JSX.Element => (
   <Box className="landing">
     <Hero />
+    {/* First content section on purpose: "how much faster" is what a reader came
+        for, and burying it under the feature grid answered a question nobody had
+        asked yet. */}
+    <div className="speed-lead">
+      <SpeedPanel />
+    </div>
     <Stats />
     <div className="landing-sections">
       <Features />
       <Container size="lg" component="section">
         <NoDecorators />
       </Container>
-      <SpeedPanel />
       <ShowMeTheCode />
       <RequestFlow />
       <Container size="lg" component="section">
