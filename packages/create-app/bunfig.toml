@@ -1,0 +1,6 @@
+# `templates/` holds a working app, test file included — it is a copy of
+# examples/minimal and has to stay one. Without this, `bun test` in this package
+# tries to run the template's test against dependencies the template does not
+# have installed here.
+[test]
+root = "src"

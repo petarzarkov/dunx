@@ -261,6 +261,41 @@ const readWorkspaceVersions = (): Map<string, string> => {
 };
 
 /**
+ * The last thing between a `workspace:` range and a published tarball.
+ *
+ * `npm publish` copies these ranges verbatim, so a package shipped with
+ * `"@dunx/core": "workspace:*"` fails to install for every consumer. The rewrite
+ * above is the mechanism that prevents it — this asserts the mechanism actually
+ * ran, because it only runs on the `publishPackage` path, and the first publish
+ * of a package has to be done by hand (OIDC trusted publishing cannot attach to a
+ * package that does not exist yet). That manual path is exactly where this would
+ * otherwise slip through, and it now spans five packages rather than one since
+ * `@dunx/core` and `@dunx/http` became peers.
+ */
+export const assertNoWorkspaceRanges = (pkg: {
+  name?: string;
+  [field: string]: unknown;
+}): void => {
+  const offenders: string[] = [];
+  for (const field of DEPENDENCY_FIELDS) {
+    const deps = pkg[field] as Record<string, string> | undefined;
+    if (!deps) continue;
+    for (const [name, range] of Object.entries(deps)) {
+      if (range.startsWith(WORKSPACE_PROTOCOL)) {
+        offenders.push(`${field}.${name} = "${range}"`);
+      }
+    }
+  }
+  if (offenders.length > 0) {
+    throw new Error(
+      `Refusing to publish ${pkg.name ?? 'package'}: unresolved workspace ` +
+        `ranges would ship and break every consumer install — ` +
+        offenders.join(', '),
+    );
+  }
+};
+
+/**
  * `npm publish` leaves `workspace:` ranges untouched in the packed tarball (unlike
  * `bun publish`), so swap them for concrete ranges, publish, then put the source
  * package.json back exactly as it was — version bump included.
@@ -297,12 +332,14 @@ const withResolvedWorkspaceDeps = (pkgDir: string, publish: () => void) => {
   }
 
   if (!resolvedAny) {
+    assertNoWorkspaceRanges(pkg);
     publish();
     return;
   }
 
   writeFileSync(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
   try {
+    assertNoWorkspaceRanges(pkg);
     publish();
   } finally {
     writeFileSync(pkgJsonPath, original);

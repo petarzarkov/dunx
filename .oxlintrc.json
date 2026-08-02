@@ -29,7 +29,8 @@
     "**/*.json",
     "dist",
     ".claude/worktrees",
-    "packages/openapi/src/ui-bundle.ts"
+    "packages/openapi/src/ui-bundle.ts",
+    "packages/create-app/templates"
   ],
   "rules": {
     "constructor-super": "error",

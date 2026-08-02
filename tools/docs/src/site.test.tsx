@@ -41,6 +41,7 @@ describe('the generated model', () => {
     expect(site.packages.map((pkg) => pkg.name).sort()).toEqual([
       '@dunx/auth',
       '@dunx/core',
+      '@dunx/create-app',
       '@dunx/http',
       '@dunx/infra',
       '@dunx/openapi',

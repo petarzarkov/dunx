@@ -381,17 +381,18 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 ## Packages Overview
 
-| Package           | Contains                                                                                                             |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `@dunx/core`      | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                    |
-| `@dunx/transform` | Load-time constructor-dependency transform (only native dep)                                                         |
-| `@dunx/http`      | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation                                 |
-| `@dunx/infra`     | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger`                                                        |
-| `@dunx/openapi`   | OpenAPI 3.1 from the routes' own zod schemas, plus `tools/openapi-ui`'s explorer inlined (zod is a `peerDependency`) |
-| `@dunx/auth`      | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                       |
-| `@dunx/testing`   | `createTestApp` / `createTestServer` — overrides replaced in place, real server on port 0                            |
+| Package            | Contains                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `@dunx/core`       | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                    |
+| `@dunx/transform`  | Load-time constructor-dependency transform (only native dep)                                                         |
+| `@dunx/http`       | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation                                 |
+| `@dunx/infra`      | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger`                                                        |
+| `@dunx/openapi`    | OpenAPI 3.1 from the routes' own zod schemas, plus `tools/openapi-ui`'s explorer inlined (zod is a `peerDependency`) |
+| `@dunx/auth`       | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                       |
+| `@dunx/testing`    | `createTestApp` / `createTestServer` — overrides replaced in place, real server on port 0                            |
+| `@dunx/create-app` | `bun create dunx-app my-api` — scaffolds the `minimal` template, with versions resolved at run time                  |
 
-Seven packages, deliberately few. Merging is nearly free because the runtime weight is
+Eight packages, deliberately few. Merging is nearly free because the runtime weight is
 almost nil — `@dunx/core` has **zero dependencies**, and ESM tree-shaking drops what
 is not imported. `@dunx/transform` stays separate because it is the only package with a
 native dependency (`oxc-parser`) and is build-time only; merging it would put a Rust
@@ -412,8 +413,6 @@ depends on `@dunx/infra` **not at all** — `DrizzleSource` and `RedisStore` res
 structurally what `DbConnection` and `RedisConnection` provide, which also removes a
 `bun run --filter '*'` build-order race. Reasoning in docs/ARCHITECTURE.md,
 "Authentication".
-
-Planned, in roadmap order: `@dunx/create-app`.
 
 ## Examples
 

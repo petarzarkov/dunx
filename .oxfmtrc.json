@@ -12,6 +12,7 @@
     ".env*",
     "README.md",
     ".claude/worktrees",
-    "packages/openapi/src/ui-bundle.ts"
+    "packages/openapi/src/ui-bundle.ts",
+    "packages/create-app/templates"
   ]
 }

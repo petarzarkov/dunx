@@ -51,6 +51,14 @@
   "dependencies": {
     "oxc-parser": "0.142.0"
   },
+  "peerDependencies": {
+    "@types/bun": ">=1.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/bun": {
+      "optional": true
+    }
+  },
   "engines": {
     "bun": ">=1.3.0"
   }

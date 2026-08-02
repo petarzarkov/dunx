@@ -95,6 +95,19 @@
       "name": "@dunx/core",
       "version": "0.0.0",
     },
+    "packages/create-app": {
+      "name": "@dunx/create-app",
+      "version": "0.0.0",
+      "bin": {
+        "create-dunx-app": "./dist/cli.js",
+      },
+      "peerDependencies": {
+        "@types/bun": ">=1.3.0",
+      },
+      "optionalPeers": [
+        "@types/bun",
+      ],
+    },
     "packages/http": {
       "name": "@dunx/http",
       "version": "0.0.0",
@@ -105,6 +118,9 @@
         "@dunx/core": "workspace:*",
         "@types/bun": ">=1.3.0",
       },
+      "optionalPeers": [
+        "@types/bun",
+      ],
     },
     "packages/infra": {
       "name": "@dunx/infra",
@@ -120,11 +136,13 @@
       },
       "peerDependencies": {
         "@dunx/core": "workspace:*",
+        "@types/bun": ">=1.3.0",
         "bullmq": "^6.0.5",
         "drizzle-orm": "^0.45.2",
         "ioredis": ">=5.0.0",
       },
       "optionalPeers": [
+        "@types/bun",
         "bullmq",
         "drizzle-orm",
         "ioredis",
@@ -172,6 +190,12 @@
       "dependencies": {
         "oxc-parser": "0.142.0",
       },
+      "peerDependencies": {
+        "@types/bun": ">=1.3.0",
+      },
+      "optionalPeers": [
+        "@types/bun",
+      ],
     },
     "tools/bench": {
       "name": "@dunx/bench",
@@ -321,6 +345,8 @@
     "@dunx/bench": ["@dunx/bench@workspace:tools/bench"],
 
     "@dunx/core": ["@dunx/core@workspace:packages/core"],
+
+    "@dunx/create-app": ["@dunx/create-app@workspace:packages/create-app"],
 
     "@dunx/docs": ["@dunx/docs@workspace:tools/docs"],
 

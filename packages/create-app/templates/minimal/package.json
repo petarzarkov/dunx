@@ -1,0 +1,24 @@
+{
+  "name": "__DUNX_APP_NAME__",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/core": "__DUNX_VERSION__",
+    "@dunx/http": "__DUNX_VERSION__",
+    "@dunx/transform": "__DUNX_VERSION__"
+  },
+  "devDependencies": {
+    "@dunx/testing": "__DUNX_VERSION__",
+    "@types/bun": ">=1.3.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

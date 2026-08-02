@@ -1,0 +1,7 @@
+# The one line that makes constructor injection work. The compiler plugin records
+# each class's constructor parameter types so the container can resolve them.
+# Without it, providers are built with no arguments and boot fails saying so.
+preload = ["@dunx/transform/preload"]
+
+[test]
+preload = ["@dunx/transform/preload"]
