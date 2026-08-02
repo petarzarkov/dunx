@@ -47,6 +47,36 @@ const guideFiles = (): string[] =>
 const tourFiles = (): string[] =>
   [...new Bun.Glob('guide/*.md').scanSync({ cwd: DOCS_DIR })].sort();
 
+/**
+ * Which nav heading each guide sits under, keyed by **slug rather than by the
+ * numeric prefix**. Coupling a section to a number range would mean renumbering a
+ * page silently moved it to another section, and the prefix exists to state order,
+ * not membership. A page missing here lands in the last section, so adding one is
+ * never a build failure.
+ */
+const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
+  ['Getting started', ['introduction', 'first-steps']],
+  ['Fundamentals', ['providers', 'modules', 'controllers', 'validation']],
+  ['Techniques', ['middleware-and-guards', 'websockets', 'openapi', 'testing']],
+  [
+    'Infrastructure',
+    [
+      'configuration',
+      'logging',
+      'database',
+      'queues',
+      'authentication',
+      'files-and-images',
+    ],
+  ],
+  ['Going live', ['deployment']],
+];
+
+const sectionOf = (slug: string): string => {
+  const found = SECTIONS.find(([, slugs]) => slugs.includes(slug));
+  return found?.[0] ?? SECTIONS[SECTIONS.length - 1]?.[0] ?? '';
+};
+
 /** `docs/guide/03-providers.md` -> slug `providers`, order `3`. */
 const tourSlug = (file: string): { slug: string; order: number } => {
   const base = basename(file, '.md');
@@ -134,6 +164,7 @@ const tour = tourFiles().map((file) => {
     slug,
     'guide',
     order,
+    sectionOf(slug),
   );
 });
 

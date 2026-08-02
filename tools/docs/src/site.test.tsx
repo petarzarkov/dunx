@@ -99,6 +99,38 @@ describe('the generated model', () => {
     );
   });
 
+  test('every tour page carries a section, and sections are contiguous', () => {
+    const tour = site.guides.filter((g) => g.category === 'guide');
+    for (const page of tour) expect(page.section).not.toBe('');
+
+    // The nav groups by walking the ordered list, so a section appearing twice
+    // would render as two headings with the same name.
+    const seen = new Set<string>();
+    let previous = '';
+    for (const page of tour) {
+      if (page.section === previous) continue;
+      expect(seen.has(page.section)).toBe(false);
+      seen.add(page.section);
+      previous = page.section;
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  test('the nav renders a heading per section', () => {
+    mount('#/guide/providers');
+    // A guide page has two navigation landmarks: the sidebar and the page's own
+    // prev/next links. The sidebar is the first, since AppShell renders it before
+    // the main content.
+    const nav = screen.getAllByRole('navigation')[0];
+    if (!nav) throw new Error('no navigation landmark');
+    const sections = new Set(
+      site.guides.filter((g) => g.category === 'guide').map((g) => g.section),
+    );
+    for (const section of sections) {
+      expect(within(nav).getAllByText(section).length).toBeGreaterThan(0);
+    }
+  });
+
   test('the guides carry rendered html and headings', () => {
     for (const guide of site.guides) {
       expect(guide.html).toContain('<h2 id=');

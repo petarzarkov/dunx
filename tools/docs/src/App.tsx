@@ -13,6 +13,7 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { Fragment } from 'react';
 import { spotlight } from '@mantine/spotlight';
 import { Footer } from './components/Footer';
 import { LogoMark, Wordmark } from './components/Logo';
@@ -42,6 +43,22 @@ const ColorSchemeToggle = (): React.JSX.Element => {
   );
 };
 
+/**
+ * The tour, grouped in the order the generator assigned. Built by walking the pages
+ * rather than from a list of section names, so a section only appears when it has a
+ * page in it and nothing has to be kept in sync with the generator.
+ */
+const guideSections = (): [string, (typeof site.guides)[number][]][] => {
+  const groups: [string, (typeof site.guides)[number][]][] = [];
+  for (const guide of site.guides) {
+    if (guide.category !== 'guide') continue;
+    const last = groups.at(-1);
+    if (last?.[0] === guide.section) last[1].push(guide);
+    else groups.push([guide.section, [guide]]);
+  }
+  return groups;
+};
+
 const Navigation = ({
   route,
   onNavigate,
@@ -68,21 +85,31 @@ const Navigation = ({
       onClick={onNavigate}
     />
 
-    <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
-      Guide
-    </Text>
-    {site.guides
-      .filter((guide) => guide.category === 'guide')
-      .map((guide) => (
-        <NavLink
-          key={guide.slug}
-          component="a"
-          href={href(RouteKind.Guide, guide.slug)}
-          label={guide.title}
-          active={route.kind === RouteKind.Guide && route.slug === guide.slug}
-          onClick={onNavigate}
-        />
-      ))}
+    {guideSections().map(([section, pages]) => (
+      <Fragment key={section}>
+        <Text
+          size="xs"
+          fw={700}
+          tt="uppercase"
+          c="dimmed"
+          mt="md"
+          mb={4}
+          px="xs"
+        >
+          {section}
+        </Text>
+        {pages.map((guide) => (
+          <NavLink
+            key={guide.slug}
+            component="a"
+            href={href(RouteKind.Guide, guide.slug)}
+            label={guide.title}
+            active={route.kind === RouteKind.Guide && route.slug === guide.slug}
+            onClick={onNavigate}
+          />
+        ))}
+      </Fragment>
+    ))}
 
     {/* The repo's own documents. Written for someone changing dunx rather than
         someone using it, which is why they are a separate group. */}

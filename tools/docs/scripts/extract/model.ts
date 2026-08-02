@@ -70,6 +70,14 @@ export type GuideCategory = 'guide' | 'reference';
 export interface GuidePage {
   readonly slug: string;
   readonly category: GuideCategory;
+  /**
+   * Nav heading this page sits under. Seventeen pages in one flat list tells a
+   * reader nothing about which they need now and which can wait, which is the
+   * work Nest's Overview / Fundamentals / Techniques split is doing.
+   *
+   * Empty for reference pages, which are one short group already.
+   */
+  readonly section: string;
   /** Position within the category. Reference pages sort alphabetically. */
   readonly order: number;
   readonly title: string;

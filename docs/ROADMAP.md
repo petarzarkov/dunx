@@ -204,7 +204,6 @@ Feedback goes in as a new file rather than into conversation.
 | Item                                                                          | Shape                                                             |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | [design-polish](./roadmap/design-polish.md)                                   | Feature. Landing page rebuilt; not yet striking.                  |
-| [docs-guide-sections](./roadmap/docs-guide-sections.md)                       | Feature. 17 guides in one flat list.                              |
 | [docs-bundle-splitting](./roadmap/docs-bundle-splitting.md)                   | Performance. 127 KB of guides on every page load.                 |
 | [openapi-ui-subpath](./roadmap/openapi-ui-subpath.md)                         | Performance. ~5 ms of cold start for a page most apps never open. |
 | [async-local-storage-cost](./roadmap/async-local-storage-cost.md)             | Measured. +0.91 us, and `enterWith` segfaults Bun.                |
