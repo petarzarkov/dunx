@@ -235,3 +235,38 @@ export const toolchainInfo = (
   subjects,
   buildSeconds: Math.round(seconds * 10) / 10,
 });
+
+/**
+ * Python, probed the way Node is rather than compiled the way Go is: it is an
+ * interpreter, so there is no artifact and no build time to keep out of the
+ * startup column.
+ *
+ * Django has to be importable, not merely present on disk - a Python that cannot
+ * `import django` would start, fail its first request and be dropped by the
+ * equivalence check with a confusing message instead of a clear skip.
+ *
+ * `BENCH_PYTHONPATH` exists because Django is commonly not installed
+ * system-wide; point it at a directory holding an extracted wheel and nothing
+ * has to be installed at all.
+ */
+export const probePython = async (): Promise<{
+  binary: string;
+  version: string | null;
+  env: Record<string, string>;
+}> => {
+  const binary = process.env['BENCH_PYTHON'] ?? 'python3';
+  const extra = process.env['BENCH_PYTHONPATH'];
+  const env = extra === undefined ? {} : { PYTHONPATH: extra };
+
+  const probed = await capture(
+    [binary, '-c', 'import django; print(django.get_version())'],
+    undefined,
+    env,
+  );
+
+  return {
+    binary,
+    version: probed.ok ? (probed.text.trim().split('\n')[0] ?? null) : null,
+    env,
+  };
+};

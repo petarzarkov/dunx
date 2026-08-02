@@ -35,6 +35,7 @@ const RUNTIME_LABEL: Readonly<Record<BenchRuntime, string>> = {
   go: 'Go',
   rust: 'Rust',
   jvm: 'JVM',
+  python: 'Python',
 };
 
 /**

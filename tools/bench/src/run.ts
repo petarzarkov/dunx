@@ -1,11 +1,12 @@
 import { buildNodeEntries } from './build.js';
-import { repoRoot } from './paths.js';
+import { repoRoot, root } from './paths.js';
 import { describeSubjects, readMachine } from './machine.js';
 import { spread } from './stats.js';
 import { bunCommand, startSubject, verifySubject } from './subject-process.js';
 import {
   compileSubject,
   isNativeRuntime,
+  probePython,
   probeToolchain,
   toolchainInfo,
   type NativeRuntime,
@@ -123,6 +124,12 @@ const prepare = async (
   for (const runtime of wanted)
     statuses.set(runtime, await probeToolchain(runtime));
 
+  // Probed only when something asks for it, so a run without Django costs no
+  // process spawn.
+  const python = chosen.some((subject) => subject.runtime === 'python')
+    ? await probePython()
+    : null;
+
   const built = new Map<NativeRuntime, { ids: string[]; seconds: number }>();
   const skipped = new Map<NativeRuntime, string[]>();
 
@@ -136,6 +143,25 @@ const prepare = async (
       const entry = nodeEntries.get(subject.id);
       if (!nodeAvailable || entry === undefined) continue;
       exec.set(subject.id, [nodeBinary, entry]);
+      runnable.push(subject);
+      continue;
+    }
+    if (subject.runtime === 'python') {
+      if (python === null || python.version === null) {
+        note(
+          `No importable Django for "${python?.binary ?? 'python3'}" - skipping ` +
+            `${subject.label}. Set BENCH_PYTHON, or BENCH_PYTHONPATH at a ` +
+            'directory holding an extracted Django wheel.',
+        );
+        continue;
+      }
+      // The subject process inherits `process.env`, and Python reads
+      // `PYTHONPATH`, not `BENCH_PYTHONPATH`. Mapped here rather than threaded
+      // through `exec`, which carries argv only.
+      const path = python.env['PYTHONPATH'];
+      if (path !== undefined) process.env['PYTHONPATH'] = path;
+
+      exec.set(subject.id, [python.binary, `${root}/${subject.entry}`]);
       runnable.push(subject);
       continue;
     }

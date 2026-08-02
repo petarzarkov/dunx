@@ -220,6 +220,10 @@ body {
   background: var(--mantine-color-red-filled);
 }
 
+.bench-fill[data-runtime='python'] {
+  background: var(--mantine-color-yellow-filled);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bench-fill {
     animation: none;
@@ -253,6 +257,10 @@ body {
 
 .bench-swatch[data-runtime='rust'] {
   background: var(--mantine-color-orange-filled);
+}
+
+.bench-swatch[data-runtime='python'] {
+  background: var(--mantine-color-yellow-filled);
 }
 
 .bench-swatch[data-runtime='jvm'] {

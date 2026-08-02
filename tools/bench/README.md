@@ -74,6 +74,7 @@ And one thing per subject:
 | `gin`             | Go      | Gin, the Go framework Elysia's landing page compares itself against.           |
 | `axum`            | Rust    | Axum on tokio and hyper, no tower layers.                                      |
 | `spring`          | JVM     | Spring Boot on its default stack: Spring MVC, Tomcat, Jackson.                 |
+| `django`          | Python  | Django on gunicorn with one worker, `DEBUG` off and no middleware.             |
 
 Each subject is a single file under `servers/`, small enough to read in full. If a
 number looks wrong, read the file - that is the whole implementation.
@@ -843,6 +844,19 @@ none of them.
 | Go 1.22+                 | `nethttp`, `gin`         | `PATH`, or `$BENCH_GO`           |
 | Rust / Cargo             | `axum`                   | `PATH`, or `$BENCH_CARGO`        |
 | JDK 21+ **and** Maven    | `spring`                 | `PATH`, or `$BENCH_JAVA` and `$BENCH_MVN` |
+| Python 3.10+ with Django | `django`                 | `PATH`, or `$BENCH_PYTHON`       |
+
+Django has to be **importable**, not merely on disk: the probe runs
+`import django` and skips the subject with a clear line if that fails, rather than
+letting it start and be rejected later by the equivalence check. If Django is not
+installed system-wide, `$BENCH_PYTHONPATH` can point at a directory holding an
+extracted wheel - Django is pure Python, so nothing needs building or installing:
+
+```bash
+curl -sfLO https://files.pythonhosted.org/.../Django-5.1.4-py3-none-any.whl
+python3 -c "import zipfile; zipfile.ZipFile('Django-5.1.4-py3-none-any.whl').extractall('pylib')"
+BENCH_PYTHONPATH=$PWD/pylib bun run start --subjects django
+```
 
 Nothing here is downloaded or installed for you - `bun run setup` fetches oha and
 that is all. The first build of each is slow (Go and Maven resolve dependencies

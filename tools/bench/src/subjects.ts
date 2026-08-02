@@ -198,4 +198,20 @@ export const subjects: readonly Subject[] = [
       'Packaged before the run. The startup column times `java -jar`, not `mvn package` - and unlike the compiled subjects that startup includes class loading and JIT-free first execution, which is a real cost and not an artefact.',
     ],
   },
+  {
+    id: 'django',
+    label: 'Django (Python)',
+    runtime: 'python',
+    entry: 'servers/python/app.py',
+    preload: [],
+    versionOf: 'django',
+    validator: 'hand-written checks',
+    notes: [
+      'Django on `wsgiref.simple_server` from the standard library, one process and one thread, for the same reason Go and tokio are pinned to one core. Not `runserver`, which reloads, threads and logs every request.',
+      'DEBUG off and MIDDLEWARE empty: the default stack adds sessions, auth, messages and CSRF, none of which the other subjects carry.',
+      "Validation is hand-written rather than DRF. DRF is a separate framework and this row would then measure DRF; Django's own forms validate form-encoded input, not JSON.",
+      '**A WSGI server, and that is the honest caveat on this row.** Every other subject here speaks HTTP natively or through an event loop. `wsgiref` is a synchronous reference implementation, not a production server - a real deployment puts gunicorn or uvicorn in front with several workers, which this suite deliberately does not do to anyone.',
+      'Interpreted, so there is nothing to compile and no build time to report.',
+    ],
+  },
 ];

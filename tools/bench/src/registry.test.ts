@@ -86,8 +86,19 @@ describe('toolchains', () => {
     }
   });
 
-  test('every native subject belongs to a toolchain that exists', () => {
-    const known: readonly string[] = ['bun', 'node', ...NATIVE_RUNTIMES];
+  /*
+   * `python` sits with `bun` and `node` rather than in `NATIVE_RUNTIMES`: those
+   * three are interpreters the harness probes and launches directly, while a
+   * native runtime is one with an artifact to compile and a build time to keep
+   * out of the startup column. Django has neither.
+   */
+  test('every subject has a runtime the harness can launch', () => {
+    const known: readonly string[] = [
+      'bun',
+      'node',
+      'python',
+      ...NATIVE_RUNTIMES,
+    ];
     for (const subject of subjects) expect(known).toContain(subject.runtime);
   });
 });

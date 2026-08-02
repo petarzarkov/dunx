@@ -5,7 +5,7 @@ export type HttpMethod = 'GET' | 'POST';
  * probes for each one and skips its subjects when it is absent, so a checkout
  * with only Bun and Node still produces a report - see `src/toolchains.ts`.
  */
-export type Runtime = 'bun' | 'node' | 'go' | 'rust' | 'jvm';
+export type Runtime = 'bun' | 'node' | 'go' | 'rust' | 'jvm' | 'python';
 
 export interface Scenario {
   readonly id: string;
