@@ -61,6 +61,7 @@ export class OpenApiExplorer {
   /** Every schema that degraded. Readable straight after `HttpFactory.create()`. */
   readonly warnings: readonly string[];
   readonly #base: OpenApiDocument;
+  readonly #absolutePaths: ReadonlySet<string>;
   readonly #jsonPath: string;
   readonly #documents = new Map<string, OpenApiDocument>();
   readonly #json = new Map<string, string>();
@@ -68,6 +69,7 @@ export class OpenApiExplorer {
 
   constructor(generated: GeneratedDocument, jsonPath: string) {
     this.#base = generated.document;
+    this.#absolutePaths = generated.absolutePaths;
     this.warnings = generated.warnings;
     this.#jsonPath = jsonPath;
   }
@@ -75,7 +77,7 @@ export class OpenApiExplorer {
   document(prefix = ''): OpenApiDocument {
     const cached = this.#documents.get(prefix);
     if (cached !== undefined) return cached;
-    const document = withPrefix(this.#base, prefix);
+    const document = withPrefix(this.#base, prefix, this.#absolutePaths);
     this.#documents.set(prefix, document);
     return document;
   }

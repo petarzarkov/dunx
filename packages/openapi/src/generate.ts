@@ -63,6 +63,14 @@ export interface GeneratedDocument {
   readonly document: OpenApiDocument;
   /** Everything that degraded. Empty on a document that says all it could. */
   readonly warnings: readonly string[];
+  /**
+   * Paths that came from a contributor rather than from route discovery.
+   *
+   * These are already the URL the app serves: a contributor describes endpoints
+   * dunx does not route, so they do not move when `setGlobalPrefix()` moves the
+   * controllers. Applying the mount prefix to them produced `/api/api/auth/...`.
+   */
+  readonly absolutePaths: ReadonlySet<string>;
 }
 
 const METHOD_KEYS: Readonly<Record<HttpMethod, OperationKey>> = Object.freeze({
@@ -167,7 +175,11 @@ export const generateDocument = async (
       : []),
   ];
 
-  return { document: merged.document, warnings };
+  return {
+    document: merged.document,
+    warnings,
+    absolutePaths: merged.absolutePaths,
+  };
 };
 
 /**
@@ -182,8 +194,14 @@ export const generateDocument = async (
 const mergeContributions = async (
   document: OpenApiDocument,
   contributors: readonly DocumentContributor[],
-): Promise<{ document: OpenApiDocument; warnings: string[] }> => {
-  if (contributors.length === 0) return { document, warnings: [] };
+): Promise<{
+  document: OpenApiDocument;
+  warnings: string[];
+  absolutePaths: ReadonlySet<string>;
+}> => {
+  const absolutePaths = new Set<string>();
+  if (contributors.length === 0)
+    return { document, warnings: [], absolutePaths };
 
   const warnings: string[] = [];
   const paths: Record<string, PathItemObject> = { ...document.paths };
@@ -216,6 +234,7 @@ const mergeContributions = async (
       }
       // Foreign JSON, cast at the one boundary where it enters the document.
       paths[path] = item as PathItemObject;
+      absolutePaths.add(path);
     }
 
     for (const [name, schema] of Object.entries(fragment.schemas ?? {})) {
@@ -241,5 +260,6 @@ const mergeContributions = async (
       components: { ...document.components, schemas },
     },
     warnings,
+    absolutePaths,
   };
 };

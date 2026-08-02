@@ -23,7 +23,11 @@ export interface OpenApiCapableAuth {
 }
 
 export interface AuthDocumentOptions {
-  /** Where the handler is mounted. Matches `AuthOptions.basePath`. */
+  /**
+   * Where the handler is mounted. Matches `AuthOptions.basePath`, including the
+   * global prefix if there is one: these paths go into the document as-is and
+   * are not moved again by `setGlobalPrefix()`.
+   */
   readonly basePath: string;
   /** Tag every contributed operation carries. Default `auth`. */
   readonly tag?: string;
