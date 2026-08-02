@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { join, resolve } from 'node:path';
 import { parseSync } from 'oxc-parser';
-import { renderDoc, rewriteHref, slugify } from './content';
+import { renderDoc, rewriteHref, siteMarkdown, slugify } from './content';
 import type { Comment, Program } from './extract/ast';
 import { extractPackage, sourceFiles } from './extract/index';
 import { createDocFinder, parseJsdoc } from './extract/jsdoc';
@@ -247,6 +247,83 @@ describe('markdown content', () => {
 
   test('slugify strips backticks and punctuation', () => {
     expect(slugify('`Bun.serve()` adapter')).toBe('bun-serve-adapter');
+  });
+});
+
+describe('siteMarkdown', () => {
+  test('drops the repo-plumbing sections and keeps everything else', () => {
+    const out = siteMarkdown(
+      [
+        '# @dunx/thing',
+        '',
+        'Lead paragraph.',
+        '',
+        '## Install',
+        '',
+        '```bash',
+        'bun add @dunx/thing',
+        '```',
+        '',
+        '## Usage',
+        '',
+        'Kept.',
+        '',
+        '### Setup',
+        '',
+        'Also kept.',
+        '',
+        '## Install it as a devDependency',
+        '',
+        'Dropped by the same prefix.',
+        '',
+        '## License',
+        '',
+        'MIT',
+        '',
+      ].join('\n'),
+    );
+
+    expect(out).toContain('Lead paragraph.');
+    expect(out).toContain('## Usage');
+    expect(out).toContain('### Setup');
+    expect(out).toContain('Also kept.');
+    expect(out).not.toContain('bun add @dunx/thing');
+    expect(out).not.toContain('devDependency');
+    expect(out).not.toContain('MIT');
+  });
+
+  test('a heading inside a fenced block is not a heading', () => {
+    const out = siteMarkdown(
+      [
+        '## Setup',
+        '',
+        '```toml',
+        '# bunfig.toml',
+        '## Install',
+        '```',
+        '',
+      ].join('\n'),
+    );
+    expect(out).toContain('# bunfig.toml');
+    expect(out).toContain('## Install');
+  });
+
+  test('the centered title-and-badges block goes', () => {
+    const out = siteMarkdown(
+      [
+        '<div align="center">',
+        '',
+        '# dunx',
+        '',
+        '[![CI](https://example.test/ci.svg)](https://example.test)',
+        '',
+        '</div>',
+        '',
+        'Real prose.',
+        '',
+      ].join('\n'),
+    );
+    expect(out.trim()).toBe('Real prose.');
   });
 });
 

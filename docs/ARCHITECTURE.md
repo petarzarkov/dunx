@@ -828,8 +828,47 @@ constrain what builds its website.
 
 ## Documentation site (`tools/docs`)
 
-React + Mantine over `Bun.build`, static output, deployed to GitHub Pages. It replaced the
+React + Mantine over **Vite**, static output, deployed to GitHub Pages. It replaced the
 coverage report as the Pages root; coverage is now a page inside it.
+
+**The bundler was `Bun.build` and was moved back to Vite, by measuring rather than
+by preference.** The original swap traded ~25% more gzipped JS for a 41 ms build
+against Vite 5's 1.7 s. Vite 8 ships Rolldown, which removed the speed argument,
+and the size argument had grown as Mantine and `@mantine/charts`/recharts entered
+the graph. Same site, same content, both bundlers, gzip -9:
+
+| Bundler           | JS raw    | JS gzip      | CSS raw  | CSS gzip | Build   |
+| ----------------- | --------- | ------------ | -------- | -------- | ------- |
+| `Bun.build`       | 1829.6 KB | **506.5 KB** | 312.4 KB | 35.0 KB  | ~0.15 s |
+| Vite 8 (Rolldown) | 1558.1 KB | **426.8 KB** | 212.5 KB | 31.2 KB  | ~0.30 s |
+
+83.5 KB less over the wire, for 150 ms nobody waits on — a docs site is built in
+CI and read over a network. What the move costs, and what has to move with it if
+it is ever reversed:
+
+- Text imports are Vite's `?raw`, not `with { type: 'text' }`. `src/env.d.ts`
+  declares `*?raw` locally rather than pulling `vite/client` in, which would mean
+  overriding the root tsconfig's `types`. `happydom.ts` registers a `Bun.plugin`
+  teaching the test runner the same suffix — the runner is still `bun test`.
+- `public/` copying and the `dist/` clean are Vite's; `scripts/build.ts` is gone.
+
+**The site carries a projection of the benchmark report, not the report.**
+`results/latest.json` holds every run's samples, each scenario's expected body and
+each subject's entry file — evidence for the harness, and ~48 KB of JSON that
+reaches no pixel. `scripts/extract/bench.ts` narrows it to what renders, which is
+10.6 KB. `BenchReport` in `model.ts` stays the harness's mirror; `BenchModel` is
+the site's shape, and a field surviving the projection means something renders it.
+
+**A README is rendered minus its repo-plumbing sections.** A package page showed
+`## Install`, `## License` and the monorepo's own build instructions, which are
+for someone working in this repository and not for someone reading the docs.
+`siteMarkdown` in `scripts/content.ts` drops a `##` section whose slug matches
+`EXCLUDED_SECTIONS` with a `-` word boundary — so `## Install it as a
+devDependency` goes with `## Install` — plus the centered title-and-badges block
+every README opens with. The list is published in `tools/docs/README.md`, and an
+author decides which side a section falls on by naming it. Guides under `docs/`
+are exempt: they _are_ repository documentation, and dropping sections from them
+would lose real content.
 
 **The API reference is extracted, not written.** `tools/docs/scripts/extract/`
 parses every `packages/*/src/**/*.ts` with **`oxc-parser`** — the parser
@@ -856,7 +895,13 @@ one entry per overload set.
 Two details worth not re-deriving:
 
 - **Routing is hash-based** (`#/api/core`). GitHub Pages serves static files
-  with no SPA fallback, so a path router 404s on every deep link.
+  with no SPA fallback, so a path router 404s on every deep link. A symbol is
+  `#/api/core?h=symbol-ConsoleLogger`, and three things have to hold together
+  for that to land: the search action has to emit the `?h=`, the package page
+  has to open its API tab in response to it (`Tabs` is `keepMounted={false}`, so
+  the card does not exist on the readme tab), and the scroll has to keep looking
+  across frames because the card mounts a commit after the route changes. All
+  three were wrong at once, which is why a search hit opened the package readme.
 - **The frozen-object-plus-union `enum` replacement declares one name twice**, as
   a value and as a type. The extractor merges both declarations into one entry;
   keying by name alone would document half the construct.

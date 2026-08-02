@@ -53,6 +53,92 @@ export const rewriteHref = (href: string, targets: LinkTargets): string => {
   return `${REPO_BLOB}/${base}${suffix}`;
 };
 
+/**
+ * Sections a README carries for someone working **in this repository**, which a
+ * reader of the docs site is not. Matched on the `##` heading's slug with a `-`
+ * word boundary, so `## Install it as a devDependency` goes with `## Install`.
+ *
+ * The line is: drop a section that documents the repository rather than the
+ * package — how to install from source, how to contribute, what the licence is,
+ * how the monorepo is laid out — or that the site already generates for itself,
+ * which is only the package index. Everything else reaches the page, and an
+ * author decides which side a section falls on purely by naming it. The list is
+ * published in `tools/docs/README.md` so it is predictable without reading this
+ * file.
+ */
+export const EXCLUDED_SECTIONS: readonly string[] = [
+  'adding-a-new-package',
+  'building',
+  'commit-convention',
+  'contributing',
+  'development',
+  'install',
+  'installation',
+  'licence',
+  'license',
+  'packages',
+  'project-structure',
+  'scripts',
+  'versioning',
+];
+
+const isExcluded = (heading: string): boolean => {
+  const slug = slugify(heading);
+  return EXCLUDED_SECTIONS.some(
+    (name) => slug === name || slug.startsWith(`${name}-`),
+  );
+};
+
+const FENCE = /^ {0,3}(?:```|~~~)/;
+const ATX = /^ {0,3}(#{1,2})\s+(.+?)\s*#*\s*$/;
+/** The centered title-and-badges block every README opens with. The site
+ * renders its own title, and a row of shields is not documentation. */
+const CENTERED_OPEN = /^ {0,3}<div align="center">/;
+const CENTERED_CLOSE = /^ {0,3}<\/div>/;
+
+/**
+ * The part of a README the site renders. Applied to READMEs only — the guides
+ * under `docs/` *are* repository documentation, so nothing is dropped from
+ * them.
+ *
+ * Line-oriented rather than run over the produced HTML, so heading ids and link
+ * rewriting only ever see kept content — and fenced code is tracked, because
+ * `packages/compiler/README.md` opens a block with `# bunfig.toml` in it.
+ */
+export const siteMarkdown = (markdown: string): string => {
+  const kept: string[] = [];
+  let fenced = false;
+  let dropping = false;
+  let centered = false;
+
+  for (const line of markdown.split('\n')) {
+    if (FENCE.test(line)) fenced = !fenced;
+
+    if (!fenced) {
+      if (centered) {
+        centered = !CENTERED_CLOSE.test(line);
+        continue;
+      }
+      if (CENTERED_OPEN.test(line)) {
+        centered = true;
+        continue;
+      }
+
+      const heading = ATX.exec(line);
+      if (heading) {
+        dropping = heading[1]?.length === 2 && isExcluded(heading[2] ?? '');
+      }
+    }
+
+    if (!dropping) kept.push(line);
+  }
+
+  return `${kept
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()}\n`;
+};
+
 const HEADING = /<h([1-6])>([\s\S]*?)<\/h\1>/g;
 const ANCHOR = /<a href="([^"]*)"/g;
 /** Every page renders its own title, so the document's opening `# Heading`

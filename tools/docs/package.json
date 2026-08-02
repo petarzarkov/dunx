@@ -5,10 +5,10 @@
   "description": "The dunx documentation site. Private tooling, never published.",
   "type": "module",
   "scripts": {
-    "build": "bun run generate && bun ./scripts/build.ts",
-    "dev": "bun run generate && bun --hot ./index.html",
+    "build": "bun run generate && vite build",
+    "dev": "bun run generate && vite",
     "generate": "bun ./scripts/generate.ts",
-    "preview": "bun ./scripts/build.ts && bunx serve dist",
+    "preview": "vite preview",
     "test": "bun test --bail",
     "typecheck": "bun run generate && tsc --noEmit"
   },
@@ -26,6 +26,8 @@
     "@happy-dom/global-registrator": "^20.11.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2"
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^6.0.5",
+    "vite": "^8.2.0"
   }
 }

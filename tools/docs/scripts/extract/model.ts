@@ -135,7 +135,14 @@ export interface BenchConfig {
   readonly startupSamples: number;
 }
 
-export interface BenchSubject {
+export interface BenchSpread {
+  readonly median: number;
+  readonly min: number;
+  readonly max: number;
+  readonly stddev: number;
+}
+
+export interface ReportSubject {
   readonly id: string;
   readonly label: string;
   readonly runtime: BenchRuntime;
@@ -147,7 +154,7 @@ export interface BenchSubject {
   readonly versionOf: string | null;
 }
 
-export interface BenchScenario {
+export interface ReportScenario {
   readonly id: string;
   readonly title: string;
   readonly description: string;
@@ -160,14 +167,7 @@ export interface BenchScenario {
   readonly expectMime: string;
 }
 
-export interface BenchSpread {
-  readonly median: number;
-  readonly min: number;
-  readonly max: number;
-  readonly stddev: number;
-}
-
-export interface BenchResult {
+export interface ReportResult {
   readonly subject: string;
   readonly scenario: string;
   readonly rps: BenchSpread;
@@ -177,10 +177,67 @@ export interface BenchResult {
   readonly totalNon2xx: number;
 }
 
-export interface BenchStartup {
+export interface ReportStartup {
   readonly subject: string;
   readonly samplesMs: readonly number[];
   readonly medianMs: number;
+}
+
+export interface BenchReport {
+  readonly schemaVersion: number;
+  readonly generatedAt: string;
+  readonly machine: BenchMachine;
+  readonly loadGenerator: BenchLoadGenerator;
+  readonly config: BenchConfig;
+  readonly subjects: readonly ReportSubject[];
+  readonly scenarios: readonly ReportScenario[];
+  readonly results: readonly ReportResult[];
+  readonly startup: readonly ReportStartup[];
+}
+
+/**
+ * What the *site* carries, which is strictly what it renders.
+ *
+ * The report holds the harness's evidence — every run's samples, the request
+ * bodies and expected responses each scenario asserts, each subject's entry
+ * file and preloads. None of that reaches a pixel, and shipping it verbatim put
+ * ~48 KB of JSON in the bundle where 19 KB says the same thing. `projectBench`
+ * in `scripts/extract/bench.ts` performs the narrowing, and the flattening is
+ * deliberate: a field that survives it is a field something renders.
+ */
+export interface BenchSubject {
+  readonly id: string;
+  readonly label: string;
+  readonly runtime: BenchRuntime;
+  readonly version: string;
+  readonly validator: string;
+  readonly notes: readonly string[];
+}
+
+export interface BenchScenario {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly method: string;
+  readonly path: string;
+}
+
+export interface BenchResult {
+  readonly subject: string;
+  readonly scenario: string;
+  readonly rps: number;
+  readonly rpsStddev: number;
+  readonly p50Ms: number;
+  readonly p99Ms: number;
+  /** Non-2xx responses plus transport errors. Anything but 0 invalidates the row. */
+  readonly bad: number;
+}
+
+export interface BenchStartup {
+  readonly subject: string;
+  readonly medianMs: number;
+  readonly minMs: number;
+  readonly maxMs: number;
 }
 
 export interface BenchModel {

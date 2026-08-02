@@ -157,10 +157,13 @@ Rule 1 governs what dunx _ships_, not what builds its website or measures it. Th
 is why `tools/bench` may devDepend on express and fastify, which Rule 1 bans
 everywhere else.
 
-`tools/docs` deliberately does **not** use Vite: `bun build ./index.html` does the
-same job in 41 ms against Vite's 1.7 s, and `bun ./index.html` is the dev server
-with HMR. The cost is ~25% more gzipped JS, which is the right trade for a docs
-site — measured, and recorded in ARCHITECTURE.md.
+`tools/docs` builds with **Vite**, and used to build with `Bun.build`. The original
+decision bought build speed — 41 ms against Vite 5's 1.7 s — and paid ~25% more
+gzipped JS for it. **Both halves of that stopped being true and it was reversed
+by re-measuring**: Vite 8 is Rolldown, so the same site builds in ~0.30 s against
+`Bun.build`'s ~0.15 s, a difference that means nothing in CI, while tree shaking
+puts the gzipped JS at 416.9 KB against 506.5 KB. Re-measure before reversing it
+again; the numbers are in ARCHITECTURE.md, "Documentation site".
 
 ## Decorators — standard only
 

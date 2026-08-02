@@ -1,14 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { buildGuide, renderDoc, slugify, type LinkTargets } from './content';
-import { extractPackage, type Manifest } from './extract/index';
 import {
-  BENCH_SCHEMA_VERSION,
-  type BenchModel,
-  type CoverageModel,
-  type PackageDoc,
-  type SiteModel,
-} from './extract/model';
+  buildGuide,
+  renderDoc,
+  siteMarkdown,
+  slugify,
+  type LinkTargets,
+} from './content';
+import { readBench } from './extract/bench';
+import { extractPackage, type Manifest } from './extract/index';
+import type { CoverageModel, PackageDoc, SiteModel } from './extract/model';
 
 const TOOL_ROOT = resolve(import.meta.dir, '..');
 const REPO_ROOT = resolve(TOOL_ROOT, '../..');
@@ -46,36 +47,18 @@ const emptyCoverage = (): CoverageModel => ({
   untested: [],
 });
 
-/**
- * `results/` is gitignored bar the one published run, and a benchmark takes
- * minutes to produce, so a clean checkout can legitimately have no report. That
- * is not a build failure: the page says so and the rest of the site is
- * unaffected. A report from a future schema is treated the same way rather than
- * rendered through a mismatched reader.
- */
-const readBench = (): BenchModel | null => {
-  if (!existsSync(BENCH_RESULTS)) {
-    console.warn('docs: no benchmark run at tools/bench/results/latest.json');
-    return null;
-  }
-
-  const model = JSON.parse(readFileSync(BENCH_RESULTS, 'utf8')) as BenchModel;
-  if (model.schemaVersion !== BENCH_SCHEMA_VERSION) {
-    console.warn(
-      `docs: benchmark schemaVersion ${model.schemaVersion}, expected ${BENCH_SCHEMA_VERSION} — skipping`,
-    );
-    return null;
-  }
-
-  return model;
-};
-
 const dirs = packageDirs();
 const dirNames = dirs.map((dir) => basename(dir));
 const targets = linkTargets(guideFiles(), dirNames);
 
 const render = (markdown: string): string =>
   markdown === '' ? '' : renderDoc(markdown, targets).html;
+
+/** A README, minus the sections that document the repo rather than the package. */
+const renderReadme = (file: string): string => {
+  const markdown = read(file);
+  return markdown === '' ? '' : render(siteMarkdown(markdown));
+};
 
 const packages: PackageDoc[] = dirs.map((packageDir) => {
   const manifest = JSON.parse(
@@ -86,7 +69,7 @@ const packages: PackageDoc[] = dirs.map((packageDir) => {
     repoRoot: REPO_ROOT,
     packageDir,
     manifest,
-    readme: render(read(join(packageDir, 'README.md'))),
+    readme: renderReadme(join(packageDir, 'README.md')),
     render,
   });
 });
@@ -106,10 +89,10 @@ const site: SiteModel = {
   repoUrl: REPO_URL,
   packages,
   guides,
-  home: render(read(join(REPO_ROOT, 'README.md'))),
+  home: renderReadme(join(REPO_ROOT, 'README.md')),
 };
 
-const bench = readBench();
+const bench = readBench(BENCH_RESULTS);
 
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, 'site.json'), JSON.stringify(site));

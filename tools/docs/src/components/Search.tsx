@@ -1,7 +1,7 @@
 import { Spotlight, type SpotlightActionData } from '@mantine/spotlight';
 import { useMemo } from 'react';
 import { site } from '../data';
-import { href, navigate, RouteKind } from '../router';
+import { href, navigate, RouteKind, symbolHref } from '../router';
 
 /**
  * One flat action list over everything the build produced: the benchmarks
@@ -59,7 +59,7 @@ const buildActions = (): SpotlightActionData[] => {
         label: symbol.name,
         description: `${symbol.kind} · ${pkg.name}`,
         group: 'API',
-        onClick: () => navigate(href(RouteKind.Api, pkg.dir)),
+        onClick: () => navigate(symbolHref(pkg.dir, symbol.name)),
       });
     }
   }

@@ -11,11 +11,12 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { DocSymbol } from '../../scripts/extract/model';
 import { Prose } from '../components/Prose';
 import { SymbolCard } from '../components/SymbolCard';
 import { packageByDir, site } from '../data';
+import { anchoredSymbol } from '../router';
 import { NotFound } from './NotFound';
 
 const KINDS = ['all', 'class', 'function', 'interface', 'type', 'variable'];
@@ -29,21 +30,33 @@ const matches = (symbol: DocSymbol, query: string): boolean => {
   );
 };
 
-const ApiReference = ({ dir }: { dir: string }): React.JSX.Element => {
+const ApiReference = ({
+  dir,
+  linked,
+}: {
+  dir: string;
+  linked: string | null;
+}): React.JSX.Element => {
   const pkg = packageByDir(dir);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
   const [showInternal, setShowInternal] = useState(false);
 
+  /**
+   * A linked symbol passes every filter. The reader asked for that one by name,
+   * so a stale kind filter, a leftover query, or its being internal must not be
+   * what decides whether the page they were sent to contains it.
+   */
   const symbols = useMemo(() => {
     const all = pkg?.symbols ?? [];
     return all.filter(
       (symbol) =>
-        (showInternal || symbol.subpaths.length > 0) &&
-        (kind === 'all' || symbol.kind === kind) &&
-        matches(symbol, query),
+        symbol.name === linked ||
+        ((showInternal || symbol.subpaths.length > 0) &&
+          (kind === 'all' || symbol.kind === kind) &&
+          matches(symbol, query)),
     );
-  }, [pkg, query, kind, showInternal]);
+  }, [pkg, query, kind, showInternal, linked]);
 
   if (!pkg) return <NotFound what={`package "${dir}"`} />;
 
@@ -87,6 +100,7 @@ const ApiReference = ({ dir }: { dir: string }): React.JSX.Element => {
           key={`${symbol.file}#${symbol.name}`}
           symbol={symbol}
           repoUrl={site.repoUrl}
+          linked={symbol.name === linked}
         />
       ))}
 
@@ -97,8 +111,27 @@ const ApiReference = ({ dir }: { dir: string }): React.JSX.Element => {
   );
 };
 
-export const PackagePage = ({ dir }: { dir: string }): React.JSX.Element => {
+export const PackagePage = ({
+  dir,
+  anchor,
+}: {
+  dir: string;
+  anchor: string | null;
+}): React.JSX.Element => {
   const pkg = packageByDir(dir);
+  const linked = anchoredSymbol(anchor);
+  /**
+   * A `?h=symbol-…` route has to open the API tab, or the card it names is
+   * never mounted and the reader lands on the readme instead. Set on mount for
+   * a cold load, and again on the effect for a hash change that keeps this page
+   * instance alive.
+   */
+  const [tab, setTab] = useState<string | null>(linked ? 'api' : 'readme');
+
+  useEffect(() => {
+    if (linked) setTab('api');
+  }, [linked]);
+
   if (!pkg) return <NotFound what={`package "${dir}"`} />;
 
   return (
@@ -119,7 +152,7 @@ export const PackagePage = ({ dir }: { dir: string }): React.JSX.Element => {
           </Group>
         </Stack>
 
-        <Tabs defaultValue="readme" keepMounted={false}>
+        <Tabs value={tab} onChange={setTab} keepMounted={false}>
           <Tabs.List>
             <Tabs.Tab value="readme">Readme</Tabs.Tab>
             <Tabs.Tab value="api">
@@ -139,7 +172,7 @@ export const PackagePage = ({ dir }: { dir: string }): React.JSX.Element => {
           </Tabs.Panel>
 
           <Tabs.Panel value="api" pt="md">
-            <ApiReference dir={dir} />
+            <ApiReference dir={dir} linked={linked} />
           </Tabs.Panel>
         </Tabs>
       </Stack>
