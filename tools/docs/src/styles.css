@@ -187,14 +187,31 @@ body {
   background: var(--mantine-color-default-border);
 }
 
+/* Grows from nothing to whatever width the inline style set. The keyframe
+   declares only `from`, so the implicit `to` is the computed width and the
+   number stays the one the adjacent cell prints. Animating width rather than
+   scaleX keeps the pill ends round throughout. */
+@keyframes bench-grow {
+  from {
+    width: 0;
+  }
+}
+
 .bench-fill {
   height: 100%;
   border-radius: 999px;
   background: var(--mantine-color-indigo-filled);
+  animation: bench-grow 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .bench-fill[data-runtime='node'] {
   background: var(--mantine-color-teal-filled);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bench-fill {
+    animation: none;
+  }
 }
 
 /* Where the fastest rival framework landed, on the same scale as the fill. */

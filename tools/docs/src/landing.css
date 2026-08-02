@@ -270,6 +270,19 @@
   .feature:hover {
     transform: none;
   }
+
+  /* The reveal attribute still lands, so everything must be at its final
+     opacity here rather than merely transitioning to it instantly. */
+  .onion-layer,
+  .onion-core {
+    transition: none;
+  }
+
+  .onion:not([data-revealed='true']) .onion-layer,
+  .onion:not([data-revealed='true']) .onion-core {
+    opacity: 1;
+    translate: none;
+  }
 }
 
 /* Vertical tablist for the code tour. */
@@ -325,48 +338,99 @@
 }
 
 /* The request lifecycle: a rail with a dot per step, numbered on the right. */
-.flow-step {
-  display: grid;
-  grid-template-columns: 1.25rem 1fr auto;
-  gap: 0 0.9rem;
-  position: relative;
+/* The request lifecycle, drawn as nesting rather than as a list. Each layer is
+   inset from its parent and the ones that call `next()` carry a return row
+   below their child, so "middleware wraps next()" is visible in the shape
+   instead of only asserted in the prose beside it. */
+.onion {
+  --onion-inset: clamp(0.55rem, 1.6vw, 1.15rem);
+  display: flow-root;
 }
 
-.flow-rail {
+.onion-layer {
   position: relative;
+  margin-left: var(--onion-inset);
+  padding: 0.7rem 0.85rem 0.55rem;
+  border: 1px solid var(--edge);
+  border-radius: 0.7rem;
+  /* Each layer inwards picks up more of the accent, so depth reads as colour
+     as well as inset. `--depth` is set per layer from its index. */
+  border-color: color-mix(
+    in srgb,
+    var(--accent-a) calc(8% * var(--depth, 0)),
+    var(--edge)
+  );
+  background: color-mix(
+    in srgb,
+    var(--accent-a) calc(0.9% * var(--depth, 0)),
+    transparent
+  );
+}
+
+.onion-layer:first-child {
+  margin-left: 0;
+}
+
+.onion-layer[data-native='true'] {
+  border-color: color-mix(in srgb, var(--accent-c) 42%, var(--edge));
+}
+
+.onion-head {
   display: flex;
-  justify-content: center;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-/* The connecting line, drawn on the rail and stopped short of the last dot. */
-.flow-step:not(:last-child) .flow-rail::after {
-  content: '';
-  position: absolute;
-  top: 0.75rem;
-  bottom: -0.25rem;
-  width: 1px;
-  background: var(--edge);
+.onion-detail {
+  margin: 0.3rem 0 0.6rem;
+  max-width: 68ch;
 }
 
-.flow-dot {
-  position: relative;
-  z-index: 1;
-  margin-top: 0.4rem;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 999px;
-  background: var(--mantine-primary-color-filled);
-}
-
-.flow-dot[data-native='true'] {
-  background: var(--mantine-color-cyan-filled);
-}
-
-.flow-index {
+.onion-arrow {
   font-family: var(--mantine-font-family-monospace);
-  font-size: 0.72rem;
-  color: var(--mantine-color-dimmed);
-  opacity: 0.6;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--accent-a);
+  opacity: 0.75;
+}
+
+.onion-return {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed color-mix(in srgb, var(--accent-a) 28%, var(--edge));
+}
+
+.onion-return .onion-arrow {
+  color: var(--accent-c);
+}
+
+.onion-core {
+  margin-left: var(--onion-inset);
+  padding: 0.85rem;
+  border-radius: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--accent-a) 55%, var(--edge));
+  background: color-mix(in srgb, var(--accent-a) 8%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-a) 7%, transparent);
+}
+
+/* One-shot entrance. The layers stagger inwards, which traces the same path a
+   request takes through them. */
+.onion-layer,
+.onion-core {
+  transition:
+    opacity 0.5s ease,
+    translate 0.5s ease;
+  transition-delay: calc(60ms * var(--depth, 0));
+}
+
+.onion:not([data-revealed='true']) .onion-layer,
+.onion:not([data-revealed='true']) .onion-core {
+  opacity: 0;
+  translate: 0 0.6rem;
 }
 
 /* Block, not flex. Mantine's Container centres with `margin-inline: auto`, and
@@ -379,6 +443,59 @@
 
 .landing-sections > * + * {
   margin-top: 4.5rem;
+}
+
+/* Carries the hero's accent down the page. A hairline above each section that
+   fades out to both sides, so the three accent stops recur without a second
+   full-strength gradient competing with the headline. */
+.landing-sections > * + *::before {
+  content: '';
+  display: block;
+  height: 1px;
+  margin: 0 auto 4.5rem;
+  width: min(1140px, 92vw);
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--accent-a) 40%, transparent) 22%,
+    color-mix(in srgb, var(--accent-b) 45%, transparent) 50%,
+    color-mix(in srgb, var(--accent-c) 40%, transparent) 78%,
+    transparent
+  );
+}
+
+/* The band paints its own full-bleed background, so a rule above it would sit
+   on the join rather than in the gutter. */
+.landing-sections > .stat-band + *::before,
+.landing-sections > .stat-band::before {
+  display: none;
+}
+
+/* Light mode needs more of everything. The glow and grid opacities were picked
+   against a near-black background; on white the same values read as smudges,
+   and the -5 accent shades lose contrast against the page. */
+[data-mantine-color-scheme='light'] .landing {
+  --accent-a: var(--mantine-color-indigo-6);
+  --accent-b: var(--mantine-color-violet-6);
+  --accent-c: var(--mantine-color-cyan-7);
+}
+
+[data-mantine-color-scheme='light'] .hero::before {
+  opacity: 0.8;
+}
+
+[data-mantine-color-scheme='light'] .hero-glow {
+  opacity: 0.4;
+  filter: blur(84px);
+}
+
+[data-mantine-color-scheme='light'] .gradient-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--mantine-color-indigo-7),
+    var(--mantine-color-violet-7) 42%,
+    var(--mantine-color-cyan-8)
+  );
 }
 
 /* The "N times faster" panel. Headlines beside the bars on a wide screen, stacked
