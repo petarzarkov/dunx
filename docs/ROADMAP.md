@@ -274,6 +274,7 @@ Feedback goes in as a new file rather than into conversation.
 | [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Three upstream proposals. Nothing left to adopt.                     |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                          |
 | [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                            |
+| [mcp-server](./roadmap/mcp-server.md)                                               | Feature. Requested. Ask the framework about itself.                  |
 | [queue-publisher-bare-stderr](./roadmap/queue-publisher-bare-stderr.md)             | Bug. Bypasses the bound Logger on a publish failure.                 |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file.        |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                       |
