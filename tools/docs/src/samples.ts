@@ -228,3 +228,139 @@ app.get(Logger).info(\`listening on \${url}\`);
 await app.closed;`,
   },
 ];
+
+/** The hero's editor frame. */
+export const HERO_FILES: readonly Sample[] = [
+  {
+    id: 'hero-service',
+    label: 'users.service.ts',
+    file: 'users.service.ts',
+    blurb: '',
+    code: `export class UsersRepository {
+  constructor(private readonly db: DbConnection) {}
+}
+
+export class UsersService {
+  constructor(private readonly repo: UsersRepository) {}
+
+  findAll() {
+    return this.repo.all();
+  }
+}`,
+  },
+  {
+    id: 'hero-controller',
+    label: 'users.controller.ts',
+    file: 'users.controller.ts',
+    blurb: '',
+    code: `@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Get('/')
+  list() {
+    return this.users.findAll();
+  }
+}`,
+  },
+  {
+    id: 'hero-main',
+    label: 'main.ts',
+    file: 'main.ts',
+    blurb: '',
+    code: `import { HttpFactory } from '@dunx/http';
+
+const app = await HttpFactory.create(AppModule);
+
+await app.listen(3000);`,
+  },
+  {
+    id: 'hero-bunfig',
+    label: 'bunfig.toml',
+    file: 'bunfig.toml',
+    blurb: '',
+    code: `preload = ["@dunx/transform/preload"]`,
+  },
+];
+
+/** Short shell and config snippets used by the start steps and the examples. */
+export const SNIPPETS: readonly Sample[] = [
+  {
+    id: 'step-install',
+    label: 'bash',
+    file: 'bash',
+    blurb: '',
+    code: 'bun add @dunx/core @dunx/http @dunx/transform',
+  },
+  {
+    id: 'step-preload',
+    label: 'toml',
+    file: 'bunfig.toml',
+    blurb: '',
+    code: '# bunfig.toml\npreload = ["@dunx/transform/preload"]',
+  },
+  {
+    id: 'step-boot',
+    label: 'ts',
+    file: 'main.ts',
+    blurb: '',
+    code: 'await (await HttpFactory.create(AppModule)).listen(3000);',
+  },
+  {
+    id: 'run-start',
+    label: 'bash',
+    file: 'bash',
+    blurb: '',
+    code: 'bun run start',
+  },
+  { id: 'run-test', label: 'bash', file: 'bash', blurb: '', code: 'bun test' },
+];
+
+/** The NestJS-versus-dunx comparison, and the line that turns the transform on. */
+export const COMPARISON: readonly Sample[] = [
+  {
+    id: 'cmp-nest',
+    label: 'NestJS',
+    file: 'nest.ts',
+    blurb: '',
+    code: `@Injectable()
+export class UsersService {
+  constructor(
+    @Inject(UsersRepository)
+    private readonly repo: UsersRepository,
+  ) {}
+}`,
+  },
+  {
+    id: 'cmp-dunx',
+    label: 'dunx',
+    file: 'dunx.ts',
+    blurb: '',
+    code: `export class UsersService {
+  constructor(private readonly repo: UsersRepository) {}
+}`,
+  },
+  {
+    id: 'cmp-preload',
+    label: 'bunfig.toml',
+    file: 'bunfig.toml',
+    blurb: '',
+    code: `preload = ["@dunx/transform/preload"]`,
+  },
+];
+
+/** Everything the generator pre-highlights, in one place. */
+export const ALL_SAMPLES: readonly Sample[] = [
+  ...SAMPLES,
+  ...HERO_FILES,
+  ...SNIPPETS,
+  ...COMPARISON,
+];
+
+/** shiki language, inferred from the filename the sample is labelled with. */
+export const langOf = (file: string): string => {
+  if (file.endsWith('.toml')) return 'toml';
+  if (file.endsWith('.json')) return 'json';
+  if (file === 'bash' || file === 'sh') return 'bash';
+  return 'ts';
+};

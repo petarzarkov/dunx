@@ -1,3 +1,4 @@
+import { highlightFences } from './highlight';
 import type { GuidePage } from './extract/model';
 
 const REPO_BLOB = 'https://github.com/petarzarkov/dunx/blob/main';
@@ -157,7 +158,11 @@ export const renderDoc = (
   const headings: { id: string; text: string }[] = [];
   const seen = new Map<string, number>();
 
-  let html = Bun.markdown.html(markdown).replace(LEADING_H1, '');
+  // Highlighted here, before the link rewriting below, so the rewriter never
+  // walks shiki's per-token markup looking for hrefs.
+  let html = highlightFences(
+    Bun.markdown.html(markdown).replace(LEADING_H1, ''),
+  );
 
   html = html.replace(HEADING, (_match, level: string, inner: string) => {
     const text = decode(inner);

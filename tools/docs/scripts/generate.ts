@@ -8,6 +8,8 @@ import {
   type LinkTargets,
 } from './content';
 import { readBench } from './extract/bench';
+import { highlight, paletteCss, startHighlighter } from './highlight';
+import { ALL_SAMPLES, langOf } from '../src/samples';
 import { extractPackage, type Manifest } from './extract/index';
 import type { CoverageModel, PackageDoc, SiteModel } from './extract/model';
 
@@ -93,6 +95,8 @@ const dirs = packageDirs();
 const dirNames = dirs.map((dir) => basename(dir));
 const targets = linkTargets(guideFiles(), tourFiles(), dirNames);
 
+await startHighlighter();
+
 const render = (markdown: string): string =>
   markdown === '' ? '' : renderDoc(markdown, targets).html;
 
@@ -142,6 +146,16 @@ const reference = guideFiles().map((file) =>
 
 const guides = [...tour, ...reference];
 
+/**
+ * The landing page's samples, highlighted here so the browser still downloads no
+ * highlighter. Keyed by id; `<Highlighted>` looks them up.
+ */
+const samples: Record<string, string> = {};
+for (const sample of ALL_SAMPLES) {
+  samples[sample.id] = highlight(sample.code, langOf(sample.file));
+}
+writeFileSync(join(OUT_DIR, 'samples.json'), `${JSON.stringify(samples)}\n`);
+
 const site: SiteModel = {
   generatedAt: new Date().toISOString(),
   repoUrl: REPO_URL,
@@ -155,6 +169,8 @@ const bench = readBench(BENCH_RESULTS);
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, 'site.json'), JSON.stringify(site));
 writeFileSync(join(OUT_DIR, 'bench.json'), JSON.stringify(bench));
+// Last: every highlight() call above has interned its colours by now.
+writeFileSync(join(OUT_DIR, 'shiki.css'), `${paletteCss()}\n`);
 
 // Coverage is produced by scripts/coverage-report.ts, which runs after the test
 // suite - later than this in CI. Seed an empty model so the site always builds.

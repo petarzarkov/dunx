@@ -12,48 +12,14 @@ import {
 import { decimal, scenarioHeadlines, startupHeadline } from '../bench';
 import { bench, site } from '../data';
 import { href, RouteKind } from '../router';
+import { HERO_FILES } from '../samples';
 import { EditorWindow, type EditorFile } from './EditorWindow';
 
-const FILES: readonly EditorFile[] = [
-  {
-    name: 'users.service.ts',
-    code: `export class UsersRepository {
-  constructor(private readonly db: DbConnection) {}
-}
-
-export class UsersService {
-  constructor(private readonly repo: UsersRepository) {}
-
-  findAll() {
-    return this.repo.all();
-  }
-}`,
-  },
-  {
-    name: 'users.controller.ts',
-    code: `@Controller('users')
-export class UsersController {
-  constructor(private readonly users: UsersService) {}
-
-  @Get('/')
-  list() {
-    return this.users.findAll();
-  }
-}`,
-  },
-  {
-    name: 'main.ts',
-    code: `import { HttpFactory } from '@dunx/http';
-
-const app = await HttpFactory.create(AppModule);
-
-await app.listen(3000);`,
-  },
-  {
-    name: 'bunfig.toml',
-    code: `preload = ["@dunx/transform/preload"]`,
-  },
-];
+const FILES: readonly EditorFile[] = HERO_FILES.map((sample) => ({
+  name: sample.label,
+  code: sample.code,
+  id: sample.id,
+}));
 
 const INSTALL = 'bun add @dunx/core @dunx/http @dunx/transform';
 

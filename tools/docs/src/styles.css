@@ -278,3 +278,51 @@ body {
     display: none;
   }
 }
+
+/* shiki emits the light colour inline and the dark one as a custom property, so
+   switching schemes is a CSS rule and not a re-render. Mantine stamps
+   `data-mantine-color-scheme` on <html>, which is what selects between them. */
+.shiki,
+.shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+
+[data-mantine-color-scheme='dark'] .shiki,
+[data-mantine-color-scheme='dark'] .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+
+/* One frame for every code block on the site, whether it came from markdown or
+   from a React sample. */
+.prose .shiki,
+.win .shiki,
+.code-pane .shiki {
+  margin: 0;
+  padding: 0.9rem 1.05rem;
+  overflow-x: auto;
+  border-radius: var(--mantine-radius-md);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.prose .shiki {
+  margin: 1rem 0;
+  border: 1px solid var(--mantine-color-default-border);
+}
+
+/* The frame already draws the border and the label bar. */
+.win .shiki,
+.code-pane .shiki {
+  border: 0;
+  border-radius: 0;
+}
+
+.shiki code {
+  display: block;
+  width: fit-content;
+  min-width: 100%;
+}

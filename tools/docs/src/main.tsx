@@ -6,6 +6,7 @@ import '@mantine/charts/styles.css';
 import '@mantine/spotlight/styles.css';
 import './styles.css';
 import './landing.css';
+import './generated/shiki.css';
 import { App } from './App';
 
 const theme = createTheme({

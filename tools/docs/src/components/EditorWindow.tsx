@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { Highlighted } from './Highlighted';
 
 export interface EditorFile {
   readonly name: string;
   readonly code: string;
+  /** Key into the generate-time highlighted map. */
+  readonly id: string;
 }
 
 /**
@@ -49,14 +52,13 @@ export const EditorWindow = ({
           ))}
         </div>
       </div>
-      <pre
-        className="win-body"
+      <div
         id={`panel-${label}`}
         role="tabpanel"
         aria-labelledby={`tab-${label}-${shown?.name ?? ''}`}
       >
-        <code>{shown?.code ?? ''}</code>
-      </pre>
+        <Highlighted id={shown?.id ?? ''} fallback={shown?.code ?? ''} />
+      </div>
     </div>
   );
 };

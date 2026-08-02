@@ -14,6 +14,7 @@ import {
 import { BenchSummary } from '../components/BenchSummary';
 import { Examples } from '../components/Examples';
 import { Features } from '../components/Features';
+import { Highlighted } from '../components/Highlighted';
 import { Hero } from '../components/Hero';
 import { Honesty } from '../components/Honesty';
 import { NoDecorators } from '../components/NoDecorators';
@@ -36,17 +37,20 @@ const INTEGRATIONS = [
 const STEPS = [
   {
     title: 'Install the packages',
-    body: 'The core, the HTTP layer and the compiler. Everything else is opt-in.',
+    body: 'The core, the HTTP layer and the transform. Everything else is opt-in.',
+    id: 'step-install',
     code: 'bun add @dunx/core @dunx/http @dunx/transform',
   },
   {
     title: 'Turn the transform on',
     body: 'One line, once per app. It is what lets constructors go unannotated.',
+    id: 'step-preload',
     code: '# bunfig.toml\npreload = ["@dunx/transform/preload"]',
   },
   {
     title: 'Boot the server',
     body: 'Bun.serve underneath, with request logging already on.',
+    id: 'step-boot',
     code: 'await (await HttpFactory.create(AppModule)).listen(3000);',
   },
 ];
@@ -115,9 +119,7 @@ const GetStarted = (): React.JSX.Element => (
               <Text size="sm" c="dimmed">
                 {step.body}
               </Text>
-              <pre className="win-body" style={{ padding: 0 }}>
-                <code>{step.code}</code>
-              </pre>
+              <Highlighted id={step.id} fallback={step.code} />
             </Stack>
           </Card>
         ))}

@@ -1,6 +1,7 @@
 import { Container, Grid, Paper, Stack, Text, Title } from '@mantine/core';
 import { useState } from 'react';
 import { SAMPLES } from '../samples';
+import { Highlighted } from './Highlighted';
 
 /**
  * The long tour. A vertical tablist rather than one sample after another: nine
@@ -69,9 +70,7 @@ export const ShowMeTheCode = (): React.JSX.Element => {
                     {shown.file}
                   </Text>
                 </div>
-                <pre className="win-body">
-                  <code>{shown.code}</code>
-                </pre>
+                <Highlighted id={shown.id} fallback={shown.code} />
               </Paper>
               <Text size="sm" c="dimmed">
                 {shown.blurb}

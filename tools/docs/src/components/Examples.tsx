@@ -10,12 +10,14 @@ import {
   Title,
 } from '@mantine/core';
 import { site } from '../data';
+import { Highlighted } from './Highlighted';
 
 interface Example {
   readonly dir: string;
   readonly title: string;
   readonly blurb: string;
   readonly run: string;
+  readonly runId: string;
   readonly tags: readonly string[];
 }
 
@@ -31,6 +33,7 @@ const EXAMPLES: readonly Example[] = [
     blurb:
       'Five files and nothing else - a service, a controller, a module, HttpFactory.create and the one preload line. Its whole value is being small enough to read in two minutes.',
     run: 'bun run start',
+    runId: 'run-start',
     tags: ['start here'],
   },
   {
@@ -39,6 +42,7 @@ const EXAMPLES: readonly Example[] = [
     blurb:
       'The same repository code against four configurations: SQLite in async and in synchronous mode, Postgres over drizzle-orm/bun-sql, and MySQL over drizzle-orm/mysql-proxy with Bun.SQL as the transport. Anything without a server running reports that it is skipping.',
     run: 'bun run start',
+    runId: 'run-start',
     tags: ['sqlite', 'postgres', 'mysql'],
   },
   {
@@ -47,6 +51,7 @@ const EXAMPLES: readonly Example[] = [
     blurb:
       'createTestApp with providers replaced in place, createTestServer on a real Bun.serve at port 0, RecordingLogger, and a guard exercised through the actual request path rather than called directly.',
     run: 'bun test',
+    runId: 'run-test',
     tags: ['@dunx/testing'],
   },
   {
@@ -55,6 +60,7 @@ const EXAMPLES: readonly Example[] = [
     blurb:
       'One long-running service that exercises everything at once - DI, config, logging, routes, websocket gateways, guards, database, redis, queues, files, images, auth and OpenAPI. This is the one to open in a browser.',
     run: 'bun run start',
+    runId: 'run-start',
     tags: ['everything'],
   },
 ];
@@ -105,12 +111,9 @@ export const Examples = (): React.JSX.Element => (
               <Text size="sm" c="dimmed">
                 {example.blurb}
               </Text>
-              <pre
-                className="win-body"
-                style={{ padding: 0, marginTop: 'auto' }}
-              >
-                <code>{example.run}</code>
-              </pre>
+              <div style={{ marginTop: 'auto' }}>
+                <Highlighted id={example.runId} fallback={example.run} />
+              </div>
             </Stack>
           </Card>
         ))}
