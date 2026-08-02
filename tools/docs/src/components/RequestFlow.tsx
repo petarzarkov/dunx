@@ -31,7 +31,7 @@ const STEPS: readonly Step[] = [
     who: 'Guards',
     what: 'accept or reject',
     detail:
-      'A guard returning false becomes a 403 before the handler is constructed. SessionGuard in @dunx/auth is the better-auth-backed one.',
+      'A guard is middleware that throws. `return next()` allows it through, `throw new HttpError(HttpStatusCode.FORBIDDEN)` refuses: there is no CanActivate and no boolean to return. Providers resolve eagerly at boot, so a guard prevents the handler being called, not constructed. SessionGuard in @dunx/auth is the better-auth-backed one.',
   },
   {
     who: 'Standard Schema',
