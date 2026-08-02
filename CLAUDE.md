@@ -519,8 +519,15 @@ New repeatable workflow → new skill. Do not grow this file instead.
   aside, a comma or a colon where one reads better, and a plain hyphen for a
   numeric range (`4-6%`). Two things to watch when replacing one: a dash that
   wraps to the start of a Markdown line becomes a **list bullet**, so join it to
-  the previous line instead; and a placeholder `'—'` in a table cell is just a
-  character, so `'-'` is the replacement.
+  the previous line instead; and a placeholder `'\u2014'` in a table cell is just
+  a character, so `'-'` is the replacement.
+
+  The one exception is **naming the character itself** - this rule, and
+  `scripts/no-em-dash.test.ts`, both have to. Everywhere else, including commit
+  messages, prefer the escape `\u2014` over the literal so the guard stays honest.
+  `scripts/no-em-dash.test.ts` enforces the rule across every tracked file, with
+  its exemptions listed and justified in the source.
+
 - Do not add a `Co-Authored-By` trailer, or any other attribution trailer, to a
   commit message. This overrides the default instruction to add one. The commit
   message describes the change; who or what typed it is not part of the record.
