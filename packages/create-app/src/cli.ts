@@ -12,6 +12,7 @@ Options:
   --name <name>       package name for the app (default: the directory name)
   --template <name>   ${TEMPLATES.join(' | ')} (default: minimal)
   --force             write into a directory that already has files in it
+  --yes, -y           accepted and ignored; nothing here ever prompts
   --help              print this
 `;
 
@@ -30,6 +31,10 @@ const { values, positionals } = parseArgs({
     name: { type: 'string' },
     template: { type: 'string' },
     force: { type: 'boolean', default: false },
+    // Declared and never read. The scaffolder is fully non-interactive, so there
+    // is nothing for `--yes` to confirm - but it is what a hand reaches for out of
+    // habit, and `parseArgs` answers an undeclared flag with a `TypeError`.
+    yes: { type: 'boolean', default: false, short: 'y' },
     help: { type: 'boolean', default: false, short: 'h' },
   },
 });
@@ -54,13 +59,19 @@ try {
     force: values.force === true,
   });
 
-  const where = relative(process.cwd(), result.directory) || '.';
-  console.log(`Created ${result.name} in ${where}/`);
+  // Empty when the target resolved to the directory the process is already in, in
+  // which case `in ./` and `cd .` are both noise to a reader standing there.
+  const where = relative(process.cwd(), result.directory);
+  console.log(
+    where === ''
+      ? `Created ${result.name} here`
+      : `Created ${result.name} in ${where}/`,
+  );
   console.log(
     `  ${result.files.length} files from the ${result.template} template\n`,
   );
   console.log('Next:');
-  console.log(`  cd ${where}`);
+  if (where !== '') console.log(`  cd ${where}`);
   console.log('  bun install');
   console.log('  bun run start');
 } catch (error) {

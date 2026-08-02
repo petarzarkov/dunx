@@ -51,17 +51,23 @@ async function toSource(distPath: string): Promise<string> {
 
 const entrypoints = new Set<string>();
 const binOutputs = new Set<string>();
+const exported = new Set<string>();
+
+const unprefixed = (distPath: string): string => distPath.replace(/^\.\//, '');
 
 for (const entry of Object.values(pkg.exports ?? {})) {
   const target = typeof entry === 'string' ? entry : entry.import;
-  if (target) entrypoints.add(await toSource(target));
+  if (target) {
+    entrypoints.add(await toSource(target));
+    exported.add(unprefixed(target));
+  }
 }
 
 const binPaths =
   typeof pkg.bin === 'string' ? [pkg.bin] : Object.values(pkg.bin ?? {});
 for (const target of binPaths) {
   entrypoints.add(await toSource(target));
-  binOutputs.add(join(CWD, target.replace(/^\.\//, '')));
+  binOutputs.add(join(CWD, unprefixed(target)));
 }
 
 if (entrypoints.size === 0) {
@@ -127,6 +133,20 @@ if (tsc.exitCode !== 0) {
 const testDecls = new Bun.Glob('**/*.{test,spec}.d.ts{,.map}');
 for await (const rel of testDecls.scan({ cwd: join(CWD, 'dist') })) {
   await rm(join(CWD, 'dist', rel));
+}
+
+// A `bin` script is spawned, never imported, so tsc's declaration for it has no
+// consumer at all - `@dunx/create-app`'s is literally `export {};`. Declarations
+// for internal modules are a different matter and must stay: `dist/index.d.ts`
+// re-exports from `./scaffold.js`, which resolves to `dist/scaffold.d.ts`, so
+// dropping that one breaks the published types. A path that is both a `bin` and an
+// `exports` target is public surface and is left alone.
+for (const target of binPaths) {
+  const rel = unprefixed(target);
+  if (exported.has(rel)) continue;
+  const base = join(CWD, rel.replace(/\.js$/, ''));
+  await rm(`${base}.d.ts`, { force: true });
+  await rm(`${base}.d.ts.map`, { force: true });
 }
 
 for (const bin of binOutputs) await chmod(bin, 0o755);

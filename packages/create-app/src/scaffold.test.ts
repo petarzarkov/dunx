@@ -94,6 +94,59 @@ describe('scaffold', () => {
     expect(await read(cwd, 'taken/keep.txt')).toBe('mine');
   });
 
+  test('scaffolds into a directory holding nothing but .git', async () => {
+    const cwd = workspace();
+    // What `git init` leaves behind. `git init && bunx @dunx/create-app .` is the
+    // documented way to start, so this must not be refused.
+    await Bun.write(
+      join(cwd, 'repo', '.git', 'HEAD'),
+      'ref: refs/heads/main\n',
+    );
+
+    const { files } = await scaffold({ target: 'repo', cwd });
+    expect(files).toContain('src/main.ts');
+    // The repo it scaffolded into is still a repo.
+    expect(await read(cwd, 'repo/.git/HEAD')).toBe('ref: refs/heads/main\n');
+  });
+
+  test.each(['.gitkeep', '.DS_Store', 'LICENSE'])(
+    'scaffolds into a directory holding nothing but %s',
+    async (entry) => {
+      const cwd = workspace();
+      await Bun.write(join(cwd, 'repo', entry), 'x');
+
+      const { files } = await scaffold({ target: 'repo', cwd });
+      expect(files).toContain('src/main.ts');
+    },
+  );
+
+  test('still refuses when a real file sits beside the ignored ones', async () => {
+    const cwd = workspace();
+    await Bun.write(
+      join(cwd, 'repo', '.git', 'HEAD'),
+      'ref: refs/heads/main\n',
+    );
+    await Bun.write(join(cwd, 'repo', 'src', 'existing.ts'), 'export {};');
+
+    await expect(scaffold({ target: 'repo', cwd })).rejects.toThrow(
+      ScaffoldError,
+    );
+  });
+
+  // `.gitignore` and `README.md` both come out of the template, so ignoring them
+  // would overwrite the user's copy without the --force that gates it.
+  test.each(['.gitignore', 'README.md'])(
+    'does not ignore %s, which the template writes',
+    async (entry) => {
+      const cwd = workspace();
+      await Bun.write(join(cwd, 'repo', entry), 'mine');
+
+      await expect(scaffold({ target: 'repo', cwd })).rejects.toThrow(
+        ScaffoldError,
+      );
+    },
+  );
+
   test('rejects a name npm would reject, before creating anything', async () => {
     const cwd = workspace();
     await expect(

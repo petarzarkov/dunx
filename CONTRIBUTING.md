@@ -232,8 +232,8 @@ These will fail CI or a review. Most are mechanically checked.
 - **`"type": "module"` in every package manifest.** Without it
   `verbatimModuleSyntax` raises `TS1287` against ESM syntax. ESM only: no CommonJS
   output, no second tsconfig per package.
-- **No file over 500 lines.** No lint rule catches this, reviewers do. Split before
-  you reach it.
+- **No file over 500 lines.** `max-lines` in `.oxlintrc.json` is an error, so
+  `lint:check` fails on the 501st line, tests included. Split before you reach it.
 - **Standard TC39 decorators only.** The root tsconfig deliberately does not set
   `experimentalDecorators` or `emitDecoratorMetadata`, and `reflect-metadata` and
   `tsyringe` are not dependencies. There are no parameter decorators in the TC39
@@ -338,15 +338,18 @@ hand.
 ones a given commit did not touch. Change detection decides _whether_ to release,
 never _what_ to release.
 
-This is a correctness requirement rather than tidiness. `version.ts` rewrites each
-`workspace:*` range to the dependency's exact version at publish time. With
-independent versions, `@dunx/http@0.2.0` would pin `@dunx/core@0.1.0` while a later
-`@dunx/infra@0.3.0` pinned `@dunx/core@0.2.0`, and an app using both would install
+This is a correctness requirement rather than tidiness. The publish path rewrites
+each `workspace:*` range to `^<version>` (`resolveWorkspaceRange` in
+`scripts/workspace-ranges.ts`, shared by `version.ts` and `first-publish.ts`). With
+independent versions, `@dunx/http@0.2.0` would name `@dunx/core@^0.1.0` while a later
+`@dunx/infra@0.3.0` named `@dunx/core@^0.2.0`, and an app using both would install
 **two copies of `@dunx/core`**. In this container a DI token _is_ a class object,
 so two copies means two distinct `Logger` classes and `app.get(Logger)` silently
 missing the binding another package registered. `Symbol.for('dunx.deps')` survives
-duplicate copies on purpose; class identity cannot. Caret ranges do not save it
-either: pre-1.0, `^0.1.0` excludes `0.2.0`.
+duplicate copies on purpose; class identity cannot. The caret does not save it
+either: pre-1.0, `^0.1.0` excludes `0.2.0`. What it does do is stop an **exact** peer
+pin from failing an install on a one-patch skew, which is why the published range is
+a caret and the versioning is still lockstep.
 
 The cost is that an untouched package still gets a version bump. For a pre-1.0
 framework whose packages move together, that is a feature: one number answers

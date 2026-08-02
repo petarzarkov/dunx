@@ -948,6 +948,18 @@ it is ever reversed:
   teaching the test runner the same suffix - the runner is still `bun test`.
 - `public/` copying and the `dist/` clean are Vite's; `scripts/build.ts` is gone.
 
+**Every `@mantine/*` is on one major, and it is 8.** `@mantine/charts` had drifted
+to 9.5.0 against core 8.3.18, which its own `peerDependencies` forbids (it pins
+`@mantine/core` and `@mantine/hooks` to an exact version). The fix was pinning
+`charts` back to `^8.3.6` rather than moving the whole site to Mantine 9, and the
+reason it works is that `charts@8.3.18` peers `recharts` at `>=2.13.3`, so the
+installed recharts 3.10.1 satisfies both majors. `BarChart` in 8 carries every
+prop `BenchChart.tsx` passes, and a headless-Chrome render of `#/benchmarks`
+produced 5 recharts surfaces with 55 bars and the focus colour on `@dunx/http`,
+so this is verified rather than assumed. `@mantine/code-highlight` went with it:
+highlighting happens at generate time now, and nothing under `tools/docs`
+imported it.
+
 **The site carries a projection of the benchmark report, not the report.**
 `results/latest.json` holds every run's samples, each scenario's expected body and
 each subject's entry file - evidence for the harness, and ~48 KB of JSON that
@@ -1640,12 +1652,15 @@ certainty.
 
 Two consequences worth keeping:
 
-- The range is `workspace:^`, not the `workspace:*` every other package uses.
-  `scripts/version.ts` publishes `workspace:*` as the **exact** version, so
-  `@dunx/testing@0.4.0` would demand `@dunx/core@0.4.0` and a consumer on 0.4.1
-  would get a nested second copy - the duplication being avoided. `workspace:^`
-  publishes as `^0.4.0`, which hoists across patches. The same hazard exists in the
-  other packages' `workspace:*` dependencies and deserves its own pass.
+- The range publishes as a **caret**, not as an exact version. An exact pin makes
+  `@dunx/testing@0.4.0` demand `@dunx/core@0.4.0` and nothing else, so a consumer on
+  0.4.1 gets a nested second copy - the duplication being avoided. **That pass has
+  since been taken for every package**: `workspace:*` no longer publishes as the
+  exact version, it publishes as `^<version>`, and the rule lives in one place
+  (`resolveWorkspaceRange` in `scripts/workspace-ranges.ts`) shared by `version.ts`
+  and `first-publish.ts`. The source form stayed `workspace:*` everywhere, which is
+  what `scripts/manifests.test.ts` asserts and what keeps a concrete version from
+  being left behind by an aborted publish.
 
   While dunx is pre-1.0 this is a partial fix, not a complete one: `^0.4.0` is
   `>=0.4.0 <0.5.0`, and `version.ts` only republishes packages whose own `src`
@@ -1691,13 +1706,13 @@ Every `@dunx/*` package shares one version and is published together, even when 
 release touches only one of them. Change detection decides _whether_ to release,
 never _what_.
 
-This is not tidiness. `scripts/version.ts` rewrites a `workspace:*` range to the
-dependency's **exact** version when it packs a tarball, because `npm publish` leaves
-the `workspace:` protocol untouched. With independent versions that produces:
+This is not tidiness. The publish path rewrites a `workspace:*` range to a concrete
+one when it packs a tarball, because `npm publish` leaves the `workspace:` protocol
+untouched. With independent versions that produces:
 
 ```
-@dunx/http@0.2.0   ->  "@dunx/core": "0.1.0"
-@dunx/infra@0.3.0  ->  "@dunx/core": "0.2.0"
+@dunx/http@0.2.0   ->  "@dunx/core": "^0.1.0"
+@dunx/infra@0.3.0  ->  "@dunx/core": "^0.2.0"
 ```
 
 An app installing both gets **two copies of `@dunx/core`**. In this container a
@@ -1712,8 +1727,18 @@ prevented instead.
 
 Two alternatives were considered and rejected:
 
-- **Caret ranges.** Pre-1.0 `^0.1.0` excludes `0.2.0`, so a minor bump of core still
-  fragments the graph. `^` only helps within a patch series.
+- **Caret ranges _instead of_ lockstep.** Pre-1.0 `^0.1.0` excludes `0.2.0`, so a
+  minor bump of core still fragments the graph. `^` only helps within a patch series.
+
+  Caret ranges **on top of** lockstep are a different question and are now what
+  ships: `workspace:*` publishes as `^<version>`. Every internal range is a
+  `peerDependency`, and an exact peer accepts exactly one version, so npm answers a
+  consumer one patch ahead with an `ERESOLVE` failure and bun with a warning plus a
+  nested copy. A caret is never worse than exact - exact excludes `0.2.1` too - and
+  under lockstep it can never be stale, because every package in a release names the
+  same version as the peer it declares. What the caret does _not_ do is survive
+  independent versions, which is exactly why lockstep stays.
+
 - **`@dunx/core` as a `peerDependency`.** This was rejected here and has since been
   **adopted** - the entry stays because the reason it was rejected is the useful part.
   Peers are the textbook answer and they resolve to one copy, but `bun run --filter
@@ -1726,9 +1751,10 @@ Two alternatives were considered and rejected:
   with `TS7016`, `bun run build` does not.
 
   **Peers are a second guarantee, not a replacement for lockstep.** A peer cannot be
-  duplicated by the installer; lockstep keeps the exact version `version.ts` writes
-  into that peer range coherent across the set. Independent versions on top of peers
-  is the remaining prize and needs a range policy settled first.
+  duplicated by the installer; lockstep keeps the version `version.ts` writes into
+  that peer range coherent across the set. Independent versions on top of peers is
+  the remaining prize, and the range policy it needs is the one thing a caret cannot
+  supply pre-1.0.
 
 The cost of lockstep is that an untouched package still takes a version. For a
 pre-1.0 framework whose packages move together anyway that is a feature: one number

@@ -13,17 +13,20 @@ peer cannot be duplicated by the installer, and lockstep keeps the exact version
 
 ## What independent versions still need
 
-`version.ts` rewrites `workspace:*` to an **exact** version. That is correct under
-lockstep and wrong under independent versions: `@dunx/http@0.3.0` pinning
-`@dunx/core@0.2.0` exactly would fight `@dunx/infra@0.4.0` pinning `0.3.0`, and a
-peer conflict is a hard install failure rather than the silent duplication that
-`dependencies` produced.
+**Half of this is now done, and it is the half that was a defect either way.** The
+publish path used to rewrite `workspace:*` to an **exact** version, which warned on
+any skew even under lockstep; it now writes `^<version>`, from one shared function
+(`resolveWorkspaceRange` in `scripts/workspace-ranges.ts`) that `version.ts` and
+`first-publish.ts` both call. The reasoning is in ARCHITECTURE.md, "Versioning is
+lockstep".
 
-So the decision is a **range policy**, and it is genuinely a decision:
+What that did **not** settle is the range policy independent versions need, because
+the caret is only sound while lockstep guarantees it is never stale:
 
-- A caret does not work pre-1.0. `^0.1.0` excludes `0.2.0`, so a minor bump of core
-  fragments the graph anyway. This is already recorded as rejected in
-  ARCHITECTURE.md.
+- A caret does not work pre-1.0. `^0.1.0` excludes `0.2.0`, so `@dunx/http@0.3.0`
+  naming `@dunx/core@^0.2.0` would fight `@dunx/infra@0.4.0` naming `^0.3.0`, and a
+  peer conflict is a hard install failure rather than the silent duplication that
+  `dependencies` produced. This is already recorded as rejected in ARCHITECTURE.md.
 - `>=x.y.z` works but promises forward compatibility across majors, which is a
   promise dunx cannot keep before 1.0.
 - Post-1.0 a caret is correct and this becomes easy.

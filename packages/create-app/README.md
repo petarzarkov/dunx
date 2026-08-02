@@ -23,11 +23,24 @@ bun run start     # http://localhost:3000/greetings
 | `--name <name>`     | the directory name | Package name for the generated app                 |
 | `--template <name>` | `minimal`          | Which template to write                            |
 | `--force`           | off                | Write into a directory that already has files      |
+| `--yes`, `-y`       |                    | Accepted and ignored; nothing here ever prompts    |
 | `--help`            |                    | Print usage                                        |
 
 The name is validated against npm's rules **before** anything is created, because
 an invalid one would otherwise surface as a confusing `bun install` failure inside
 a directory you just made.
+
+## Scaffolding into a repo you already made
+
+```bash
+mkdir my-api && cd my-api && git init
+bunx @dunx/create-app .
+```
+
+`.git`, `.gitkeep`, `.DS_Store` and `LICENSE` do not count as contents, so a fresh
+repo or a clone of an empty GitHub repository is a valid target without `--force`.
+Nothing else is ignored: `.gitignore` and `README.md` both come out of the template,
+and overwriting your copy of either is what `--force` is there to ask about.
 
 ## What it generates
 

@@ -18,6 +18,28 @@ export const VERSION_PLACEHOLDER = '__DUNX_VERSION__';
 /** npm renames a published `.gitignore` to `.npmignore`, so it ships prefixed. */
 const RENAMED = Object.freeze({ _gitignore: '.gitignore' });
 
+/**
+ * Entries that do not make a directory non-empty for scaffolding purposes.
+ *
+ * `.git` is the one that matters: `git init` then scaffold into the repo is the
+ * documented way to start, and refusing it blocks the flow outright. `.gitkeep`
+ * exists only so git can track an otherwise empty directory, so it *means* empty.
+ * `.DS_Store` appears from merely opening the folder in Finder. `LICENSE` is what
+ * GitHub's create-a-repository flow leaves in a fresh clone.
+ *
+ * The list is deliberately short, and the test for it is whether the template
+ * writes that name. It does not write any of these four, so ignoring them can
+ * never destroy anything. `.gitignore` and `README.md` are excluded for exactly
+ * that reason: the template writes both, and silently overwriting a user's copy
+ * is what `--force` exists to gate.
+ */
+const IGNORED_WHEN_EMPTY: ReadonlySet<string> = new Set([
+  '.DS_Store',
+  '.git',
+  '.gitkeep',
+  'LICENSE',
+]);
+
 export interface ScaffoldOptions {
   /** Directory to create. Relative paths resolve against `cwd`. */
   readonly target: string;
@@ -89,14 +111,20 @@ export const scaffold = async (
     );
   }
 
-  if (
-    existsSync(directory) &&
-    readdirSync(directory).length > 0 &&
-    options.force !== true
-  ) {
-    throw new ScaffoldError(
-      `${directory} is not empty. Pass --force to write into it anyway.`,
+  if (existsSync(directory) && options.force !== true) {
+    const blocking = readdirSync(directory).filter(
+      (entry) => !IGNORED_WHEN_EMPTY.has(entry),
     );
+    if (blocking.length > 0) {
+      // Naming what blocked it, because `.git` used to block it and the message
+      // gave no way to tell that from a directory of real work.
+      const shown = blocking.sort().slice(0, 3).join(', ');
+      const rest = blocking.length > 3 ? `, +${blocking.length - 3} more` : '';
+      throw new ScaffoldError(
+        `${directory} is not empty (${shown}${rest}). ` +
+          `Pass --force to write into it anyway.`,
+      );
+    }
   }
 
   const source = join(templatesRoot(), template);
