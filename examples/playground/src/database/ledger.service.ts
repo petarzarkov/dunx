@@ -4,23 +4,26 @@ import {
   DbConnection,
   runSeeds,
   SqliteConnection,
+  SyncDatabase,
   transaction,
+  transactionSync,
   type SeedReport,
 } from '@dunx/infra/db';
 import { count, desc, eq, sql, sum } from 'drizzle-orm';
-import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import * as schema from './schema.js';
 import { ledger, type Entry } from './schema.js';
 
 export class Ledger implements OnInit, OnShutdown {
   /**
-   * The annotation is drizzle's own class with the schema as its type argument.
-   * `@dunx/compiler` records the bare type name — a real runtime class, so a usable
-   * token — and ignores the type argument, so the schema types survive injection.
-   * `DbConnection` is the lifecycle and the driver underneath; drizzle has neither.
+   * `SyncDatabase` is drizzle's `BunSQLiteDatabase` under a name that says the
+   * connection was opened in synchronous mode — which is what makes
+   * `transactionSync` below reachable. `@dunx/compiler` records the bare type name
+   * (a real runtime class, so a usable token) and ignores the type argument, so the
+   * schema types survive injection. `DbConnection` is the lifecycle and the driver
+   * underneath; drizzle has neither.
    */
   constructor(
-    private readonly db: BunSQLiteDatabase<typeof schema>,
+    private readonly db: SyncDatabase<typeof schema>,
     private readonly connection: DbConnection,
     private readonly logger: Logger,
   ) {}
@@ -108,6 +111,27 @@ export class Ledger implements OnInit, OnShutdown {
     });
   }
 
+  /**
+   * The same two legs, with nothing to await. `transactionSync` is drizzle's own
+   * `db.transaction()` — correct here precisely because the callback cannot return
+   * a promise, which is the case its early commit breaks. The return type is
+   * `number`, not `Promise<number>`, so a controller calling this needs no `async`
+   * and the request never yields.
+   */
+  transferSync(from: string, to: string, amount: number, fail = false): number {
+    return transactionSync(this.db, (tx) => {
+      tx.insert(ledger).values({ memo: from, amount: -amount }).run();
+      if (fail) throw new Error('transfer failed after the first leg');
+      tx.insert(ledger).values({ memo: to, amount }).run();
+      return (
+        tx
+          .select({ total: sum(ledger.amount).mapWith(Number) })
+          .from(ledger)
+          .get()?.total ?? 0
+      );
+    });
+  }
+
   async demonstrate(): Promise<void> {
     const { db, logger } = this;
     logger.info(
@@ -145,7 +169,27 @@ export class Ledger implements OnInit, OnShutdown {
 
     await this.commits();
     await this.rollsBack();
+    this.rollsBackSynchronously();
     await this.seeds();
+  }
+
+  /**
+   * The same rollback with no promise anywhere — `transactionSync` throws where
+   * `transaction` rejects, so the recovery is `try`/`catch` rather than `.catch()`.
+   */
+  private rollsBackSynchronously(): void {
+    const before = this.rows();
+    try {
+      transactionSync(this.db, (tx) => {
+        tx.insert(ledger).values({ memo: 'discarded', amount: 999 }).run();
+        throw new Error('rolled back on purpose, synchronously');
+      });
+    } catch (error) {
+      this.logger.info(`sync transaction threw: ${(error as Error).message}`);
+    }
+    this.logger.info(
+      `rolled back sync transaction -> still ${before} rows, no promise allocated`,
+    );
   }
 
   /** The `await` inside is what proves the transaction is not autocommitting. */

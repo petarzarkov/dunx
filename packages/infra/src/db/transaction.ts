@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { BunSQLDatabase } from 'drizzle-orm/bun-sql';
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import type { SyncDatabase } from './sqlite/connection.js';
 
 /**
  * The handle drizzle hands a Postgres transaction callback. Derived from
@@ -9,6 +10,30 @@ import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
  */
 export type SqlTransaction<TSchema extends Record<string, unknown>> =
   Parameters<Parameters<BunSQLDatabase<TSchema>['transaction']>[0]>[0];
+
+/**
+ * The handle drizzle hands a `bun:sqlite` transaction callback — its own
+ * `SQLiteBunTransaction`, derived rather than restated. Nesting is
+ * `tx.transaction(...)`, which takes a savepoint.
+ */
+export type SyncTransaction<TSchema extends Record<string, unknown>> =
+  Parameters<Parameters<BunSQLiteDatabase<TSchema>['transaction']>[0]>[0];
+
+/**
+ * Anything that is not a promise. A `then` typed `undefined` is what excludes one:
+ * an ordinary object or array has no `then` at all and satisfies it, `Promise<T>`
+ * has a callable one and does not.
+ */
+type NotThenable =
+  | { then?: undefined }
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  | void;
 
 /** Per-handle transaction state. Off to the side, because drizzle owns the handle. */
 interface Scope {
@@ -134,3 +159,36 @@ export function transaction<TSchema extends Record<string, unknown>, T>(
   const callback = fn as (tx: SqlTransaction<TSchema>) => T | Promise<T>;
   return db.transaction(async (tx) => callback(tx));
 }
+
+/**
+ * Runs `fn` in a real `bun:sqlite` transaction and returns its value — not a
+ * promise, not a microtask, nothing to await. Commits on return, rolls back on
+ * throw, and nests as a savepoint via `tx.transaction(...)`.
+ *
+ * ### This is drizzle's own `db.transaction()`, and here that is correct
+ *
+ * The workaround `transaction()` above exists because drizzle's bun-sqlite
+ * transaction delegates to `bun:sqlite`'s, which commits the moment the callback
+ * **returns** — so a callback that returns a promise has already committed before
+ * its first `await` resumes. Everything about that failure is downstream of the
+ * callback being asynchronous. Take the promise away and the wrapper is exactly
+ * right, so this delegates instead of issuing `BEGIN`/`COMMIT` itself: one native
+ * transaction, no statement strings, no queue, no promise.
+ *
+ * The callback is held to that by `NotThenable`. An `async` callback, or one that
+ * returns `Promise.resolve(…)`, is a compile error naming the constraint rather
+ * than a rollback that silently does nothing. Verified against Bun 1.3.14: with a
+ * synchronous callback the row is gone after a throw; with an async one it is not.
+ *
+ * Both transactions may be used against the same `SyncDatabase`. A `transactionSync`
+ * opened while an async `transaction()` is suspended across an `await` takes a
+ * savepoint rather than failing, because `bun:sqlite` branches on
+ * `Database.inTransaction`, which the outer `BEGIN` has already set.
+ */
+export const transactionSync = <
+  TSchema extends Record<string, unknown>,
+  T extends NotThenable,
+>(
+  db: SyncDatabase<TSchema>,
+  fn: (tx: SyncTransaction<TSchema>) => T,
+): T => db.transaction(fn);

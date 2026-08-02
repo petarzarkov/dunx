@@ -13,14 +13,18 @@ to hide as the places it wins.
 bun run setup       # downloads oha into .bin/ (optional, but read "Load generator")
 bun run start       # full suite: 9 subjects x 4 scenarios
 bun run validation  # the validation-cost harness — see "Validation cost"
+bun run db-modes    # @dunx/infra/db async vs synchronous SQLite, end to end
 bun run start --help
 ```
 
-Two harnesses, and they answer different questions. `start` compares frameworks with
-the validator held constant. `validation` does the opposite: one framework at a time,
-one step of work at a time, and every validator swapped through the same Standard
-Schema seam — which is how the `validate` scenario's cost gets split into parsing,
-the validator, and dunx.
+Three harnesses, and they answer different questions. `start` compares frameworks
+with the validator held constant. `validation` does the opposite: one framework at a
+time, one step of work at a time, and every validator swapped through the same
+Standard Schema seam — which is how the `validate` scenario's cost gets split into
+parsing, the validator, and dunx. `db-modes` holds the framework, the SQL and the
+bytes on the wire constant and varies only whether the handler awaits its way to the
+row; it writes `results/db-modes.json`, and what it found is recorded in
+`docs/ARCHITECTURE.md` under "Synchronous SQLite mode".
 
 ## What is measured
 

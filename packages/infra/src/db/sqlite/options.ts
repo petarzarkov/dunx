@@ -9,7 +9,11 @@ import {
   type DialectName,
 } from '../dialect.js';
 import { DatabaseError } from '../errors.js';
-import { SqliteConnection } from './connection.js';
+import {
+  SqliteConnection,
+  SyncDatabase,
+  SyncSqliteConnection,
+} from './connection.js';
 
 export interface SqliteInit<TSchema extends Record<string, unknown>> {
   /**
@@ -63,22 +67,21 @@ const toPath = (filename: string | URL): string => {
   return stripped;
 };
 
-/** Configuration for the `bun:sqlite` backend. A class, so it is injectable. */
-export class SqliteOptions<
+/**
+ * Everything the two `bun:sqlite` modes share: the normalised init, the driver
+ * options, and opening the driver. Exported only because the emitted declarations
+ * name it — `SqliteOptions` and `SyncSqliteOptions` are what an app constructs.
+ *
+ * They are siblings rather than one class with a `mode` flag because the mode
+ * decides `TDb`, and `TDb` is what `DbModule.forRoot` infers the injection token
+ * from. A flag would leave that inference with a union to guess at.
+ */
+export abstract class SqliteSettings<
   TSchema extends Record<string, unknown>,
-> extends DbOptions<BunSQLiteDatabase<TSchema>> {
+  TDb,
+> extends DbOptions<TDb> {
   override readonly backend: BackendName = Backend.SQLITE;
   override readonly dialect: DialectName = Dialect.SQLITE;
-
-  /**
-   * drizzle's database classes are real runtime classes, not interfaces, so the
-   * class *is* the token. That is the whole trick behind injecting a
-   * schema-generic handle: `@dunx/compiler` records the bare type name from
-   * `db: BunSQLiteDatabase<typeof schema>` and ignores the type argument, so the
-   * token is the erased class while the schema types stay on the annotation.
-   */
-  override readonly token: AbstractCtor<BunSQLiteDatabase<TSchema>> =
-    BunSQLiteDatabase;
 
   readonly schema: TSchema;
   readonly filename: string;
@@ -112,12 +115,74 @@ export class SqliteOptions<
   }
 
   /**
-   * `async` only to satisfy the contract; opening a SQLite file does not block.
-   * The pragmas run before the returned handle is visible to anything.
+   * The open call and the pragmas, which run before the handle is visible to
+   * anything. Nothing here blocks — `open()` is a promise only because
+   * `DbOptions` has to describe `Bun.SQL`'s handshake as well.
    */
-  override async open(): Promise<SqliteConnection<TSchema>> {
+  protected openDriver(): BunSqlite {
     const driver = new BunSqlite(this.filename, this.toDriverOptions());
     for (const pragma of this.pragmas) driver.exec(`PRAGMA ${pragma}`);
-    return new SqliteConnection(driver, this.schema);
+    return driver;
+  }
+}
+
+/**
+ * Configuration for the `bun:sqlite` backend. A class, so it is injectable.
+ *
+ * This is the asynchronous mode and the default one: `transaction()` returns a
+ * promise and takes a callback that may await. `SyncSqliteOptions` is the other
+ * mode.
+ */
+export class SqliteOptions<
+  TSchema extends Record<string, unknown>,
+> extends SqliteSettings<TSchema, BunSQLiteDatabase<TSchema>> {
+  /**
+   * drizzle's database classes are real runtime classes, not interfaces, so the
+   * class *is* the token. That is the whole trick behind injecting a
+   * schema-generic handle: `@dunx/compiler` records the bare type name from
+   * `db: BunSQLiteDatabase<typeof schema>` and ignores the type argument, so the
+   * token is the erased class while the schema types stay on the annotation.
+   */
+  override readonly token: AbstractCtor<BunSQLiteDatabase<TSchema>> =
+    BunSQLiteDatabase;
+
+  /** `async` only to satisfy the contract; opening a SQLite file does not block. */
+  override async open(): Promise<SqliteConnection<TSchema>> {
+    return new SqliteConnection(this.openDriver(), this.schema);
+  }
+}
+
+/**
+ * The same configuration, opened in **synchronous mode**.
+ *
+ * Every init field is `SqliteOptions`'s. What changes is the handle: services are
+ * given a `SyncDatabase`, which is the only thing `transactionSync()` accepts, and
+ * which the container will not hand to a service that asked for the async one.
+ *
+ * ```ts
+ * DbModule.forRoot(new SyncSqliteOptions({ schema, filename: './dev.db' }));
+ * // constructor(private readonly db: SyncDatabase<typeof schema>) {}
+ * ```
+ *
+ * There is deliberately no `SyncSqlOptions`. `Bun.SQL` talks to a server over a
+ * socket, so no amount of API design makes a Postgres query return a row instead
+ * of a promise.
+ */
+export class SyncSqliteOptions<
+  TSchema extends Record<string, unknown>,
+> extends SqliteSettings<TSchema, SyncDatabase<TSchema>> {
+  override readonly token: AbstractCtor<SyncDatabase<TSchema>> = SyncDatabase;
+
+  /**
+   * What `open()` actually does. Exposed because in this mode there is nothing
+   * asynchronous left to hide: a test, or a script with no container, can open,
+   * query and close without a single `await`.
+   */
+  openSync(): SyncSqliteConnection<TSchema> {
+    return new SyncSqliteConnection(this.openDriver(), this.schema);
+  }
+
+  override async open(): Promise<SyncSqliteConnection<TSchema>> {
+    return this.openSync();
   }
 }
