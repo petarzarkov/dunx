@@ -1,6 +1,6 @@
 {
   "name": "@dunx/infra",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Database, Redis, queue, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, bullmq over Bun.RedisClient, plus Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger",
   "keywords": [
     "avif",
