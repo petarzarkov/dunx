@@ -87,7 +87,7 @@ bunx @better-auth/cli generate
 Put the result in the schema object you already hand `@dunx/infra/db`, and
 `drizzleDatabase(connection)` needs no schema argument — `@dunx/infra/db` builds its
 handle with `drizzle({ client, schema })`, and better-auth's adapter reads
-`db._.fullSchema` off it. `examples/playground/src/database/auth.schema.ts` is a
+`db._.fullSchema` off it. `examples/full/src/database/auth.schema.ts` is a
 generated schema in place.
 
 A framework carrying its own copy of a library's tables is a copy that rots against

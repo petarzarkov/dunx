@@ -1,0 +1,18 @@
+{
+  "name": "@dunx/example-databases",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Setting up @dunx/infra/db on SQLite (async and sync), Postgres and MySQL — the same repository code against three dialects",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/compiler": "workspace:*",
+    "@dunx/core": "workspace:*",
+    "@dunx/infra": "workspace:*",
+    "drizzle-orm": "^0.45.2"
+  }
+}
