@@ -49,7 +49,18 @@ describe('published manifests survive npm publish unaltered', () => {
     }
   });
 
-  it('never ships a workspace range in a consumer-visible field', async () => {
+  /**
+   * A concrete version here is not a style choice, it is a permanent pin.
+   * `version.ts` and `first-publish.ts` only rewrite ranges that still say
+   * `workspace:`, so an internal dependency written as `0.1.0` keeps that value
+   * through every future release.
+   *
+   * This happened: an aborted publish left `@dunx/infra` pinned to
+   * `@dunx/core@0.1.0` and it was committed, because the earlier version of this
+   * test only checked the shape of a workspace range when one was present and
+   * said nothing about one going missing.
+   */
+  it('keeps every internal dependency on workspace:*', async () => {
     for (const { name, json } of await manifests()) {
       for (const field of [
         'dependencies',
@@ -59,12 +70,10 @@ describe('published manifests survive npm publish unaltered', () => {
         const deps = json[field] as Record<string, string> | undefined;
         if (!deps) continue;
         for (const [dep, range] of Object.entries(deps)) {
-          // `workspace:*` is correct in the source tree and fatal in a tarball;
-          // scripts/version.ts and scripts/first-publish.ts rewrite it. This only
-          // asserts the source form stays the one those two know how to rewrite.
-          if (!range.startsWith('workspace:')) continue;
-          expect(`${name}.${field}.${dep}`).toBe(`${name}.${field}.${dep}`);
-          expect(range).toBe('workspace:*');
+          if (!dep.startsWith('@dunx/')) continue;
+          expect(`${name}.${field}.${dep}=${range}`).toBe(
+            `${name}.${field}.${dep}=workspace:*`,
+          );
         }
       }
     }

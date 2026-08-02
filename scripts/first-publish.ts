@@ -124,13 +124,18 @@ for (const dir of ORDER) {
       { stdout: 'inherit', stderr: 'inherit', stdin: 'inherit' },
     );
     if (proc.exitCode !== 0) {
-      console.error(`\nFAIL ${pkg.name} — stopping before the rest.`);
-      process.exit(1);
+      // `throw`, never `process.exit`: exit skips the `finally` below, which is
+      // how an aborted run once left a manifest holding a resolved version where
+      // `workspace:*` belongs — and that got committed.
+      throw new Error(`${pkg.name} failed to publish`);
     }
     publishedThisRun += 1;
     console.log(
       `${DRY ? 'would publish' : 'published'} ${pkg.name}@${VERSION}`,
     );
+  } catch (error) {
+    console.error(`\nFAIL ${pkg.name} — stopping before the rest.`);
+    throw error;
   } finally {
     // Restore the source manifest, keeping the new version.
     const restored = JSON.parse(original) as Manifest;
