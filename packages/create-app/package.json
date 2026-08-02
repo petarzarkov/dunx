@@ -1,7 +1,7 @@
 {
   "name": "@dunx/create-app",
   "version": "0.1.0",
-  "description": "Scaffold a new dunx application — bunx @dunx/create-app my-api",
+  "description": "Scaffold a new dunx application \u2014 bunx @dunx/create-app my-api",
   "keywords": [
     "bun",
     "create",
@@ -18,11 +18,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/petarzarkov/dunx",
+    "url": "git+https://github.com/petarzarkov/dunx.git",
     "directory": "packages/create-app"
   },
   "bin": {
-    "create-dunx-app": "./dist/cli.js"
+    "create-dunx-app": "dist/cli.js"
   },
   "files": [
     "LICENSE",

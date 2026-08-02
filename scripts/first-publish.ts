@@ -85,6 +85,9 @@ for (const dir of ORDER) {
   writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
   try {
     const flags = DRY ? '--dry-run' : '';
+    // stdio is inherited, not piped. npm's 2FA is a browser flow that prints a
+    // URL and then waits on the terminal — piping it makes the publish fail with
+    // EOTP no matter what the user does.
     // No --provenance: it requires GITHUB_ACTIONS and errors anywhere else.
     const proc = Bun.spawnSync(
       [
@@ -92,16 +95,14 @@ for (const dir of ORDER) {
         '-c',
         `cd ${join(root, dir)} && ${NPM} publish --access public ${flags}`,
       ],
-      { stdout: 'pipe', stderr: 'pipe' },
+      { stdout: 'inherit', stderr: 'inherit', stdin: 'inherit' },
     );
-    const out = `${proc.stdout.toString()}${proc.stderr.toString()}`;
     if (proc.exitCode !== 0) {
-      console.error(`FAIL ${pkg.name}\n${out}`);
+      console.error(`\nFAIL ${pkg.name} — stopping before the rest.`);
       process.exit(1);
     }
-    const size = /package size:\s*(\S+\s*\S*)/.exec(out)?.[1] ?? '?';
     console.log(
-      `${DRY ? 'would publish' : 'published'} ${pkg.name}@${VERSION} (${size})`,
+      `${DRY ? 'would publish' : 'published'} ${pkg.name}@${VERSION}`,
     );
   } finally {
     // Restore the source manifest, keeping the new version.
