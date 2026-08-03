@@ -1,6 +1,13 @@
 import { MantineProvider } from '@mantine/core';
 import { fireEvent, render } from '@testing-library/react';
-import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from 'bun:test';
 import { startupRows, throughputRows } from './bench';
 import { StartupChart, ThroughputChart } from './components/BenchChart';
 import { bench } from './data';
@@ -31,6 +38,38 @@ const isWrapper = (el: Element): boolean =>
   el.classList?.contains('recharts-wrapper') ?? false;
 
 const textWidth = (el: Element): number => (el.textContent?.length ?? 0) * 6;
+
+const original = {
+  rect: Object.getOwnPropertyDescriptor(
+    globalThis.Element.prototype,
+    'getBoundingClientRect',
+  ),
+  width: Object.getOwnPropertyDescriptor(
+    globalThis.HTMLElement.prototype,
+    'offsetWidth',
+  ),
+  height: Object.getOwnPropertyDescriptor(
+    globalThis.HTMLElement.prototype,
+    'offsetHeight',
+  ),
+  observer: globalThis.ResizeObserver,
+};
+
+const restore = (): void => {
+  const put = (
+    target: object,
+    key: string,
+    descriptor: PropertyDescriptor | undefined,
+  ): void => {
+    if (descriptor) Object.defineProperty(target, key, descriptor);
+    else delete (target as Record<string, unknown>)[key];
+  };
+
+  put(globalThis.Element.prototype, 'getBoundingClientRect', original.rect);
+  put(globalThis.HTMLElement.prototype, 'offsetWidth', original.width);
+  put(globalThis.HTMLElement.prototype, 'offsetHeight', original.height);
+  globalThis.ResizeObserver = original.observer;
+};
 
 const layout = (): void => {
   const rect = function (this: Element): DOMRect {
@@ -115,6 +154,15 @@ const hover = async (container: HTMLElement, y: number): Promise<Hover> => {
 };
 
 beforeAll(layout);
+
+/**
+ * Restored, because `bun test` shares one process across files: a permanent
+ * `getBoundingClientRect` that reports a text metric for every element leaks into
+ * every later suite. Left in place it broke `site.test.tsx`'s scroll assertion, and
+ * only under the full `bun run test` - the docs suite alone still passed, which is
+ * the worst kind of failure to leave behind.
+ */
+afterAll(restore);
 
 afterEach(() => {
   document.body.innerHTML = '';

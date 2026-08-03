@@ -5,14 +5,33 @@ export {
   type ShutdownSignal,
 } from './app.js';
 export { CircularDependencyError, AppError } from './errors.js';
+// The dependency record's reader, not just its key. `Symbol.for('dunx.deps')` is
+// the cross-copy contract, but a package that reads the symbol itself also has to
+// restate the prototype-chain lookup, the lazy thunk call, and the shape of an
+// `unresolved` entry - and would silently drop a field this ever gains.
+// `@dunx/mcp` is what made that concrete: it reports the container graph, so it
+// needs exactly what the container reads.
+export {
+  isUnresolved,
+  readDeps,
+  type DepEntry,
+  type UnresolvedDep,
+} from './deps.js';
 export { inject } from './inject.js';
 export type { OnInit, OnShutdown } from './lifecycle.js';
 // collectModules + readControllers are the adapter seam: an HTTP package needs to
 // walk the import graph and find which instances to scan. Injector, readModule and
 // the lifecycle type guards stay internal - nothing outside core consumes them, and
 // exporting Injector would freeze the container's shape as public API.
+//
+// `isModuleRef` and `findRootModule` are here because `@Module`'s marker is here.
+// Every tool that takes an entry path has to find the root module among a file's
+// exports, and a second implementation of that is a second set of conventions:
+// requiring `default`/`root` is what made both CLIs fail on a scaffolded app.
 export {
   collectModules,
+  findRootModule,
+  isModuleRef,
   Module,
   readControllers,
   type DynamicModule,
@@ -21,6 +40,7 @@ export {
   type ModuleRef,
   type ProviderEntry,
   type ResolvedModule,
+  type RootModuleResult,
 } from './module.js';
 export {
   provide,
@@ -31,7 +51,11 @@ export {
   type Resolved,
   type ValueProvider,
 } from './provider.js';
+// `describeToken` is how a token is named in an error, and anything reporting on
+// the container needs the same answer: a class token is its name, a `token()` is
+// its description. Restating it gets `[object Object]` for the second case.
 export {
+  describeToken,
   token,
   type AbstractCtor,
   type Ctor,

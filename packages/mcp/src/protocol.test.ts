@@ -99,6 +99,17 @@ describe('the protocol subset', () => {
   });
 
   /*
+   * `ping` is base protocol rather than part of any capability, so a server that
+   * declares only `tools` still has to answer it - a client sends it to check the
+   * connection is alive and reads a `-32601` as a dead server.
+   */
+  it('answers a ping with an empty result', async () => {
+    const answer = await ask('ping');
+    expect(answer['result']).toEqual({});
+    expect(answer).not.toHaveProperty('error');
+  });
+
+  /*
    * A request with no `id` is a notification, and the spec says not to answer one.
    * `notifications/initialized` is the one every client sends right after
    * initialize; replying to it puts a response with `id: null` on the wire, which
@@ -131,7 +142,9 @@ describe('the stdio framing', () => {
         `${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' })}\n` +
           `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })}\n`,
       ),
-      (line) => written.push(line),
+      (line) => {
+        written.push(line);
+      },
       TOOLS,
       INFO,
     );
@@ -162,7 +175,9 @@ describe('the stdio framing', () => {
           controller.close();
         },
       }),
-      (line) => written.push(line),
+      (line) => {
+        written.push(line);
+      },
       TOOLS,
       INFO,
     );
@@ -171,13 +186,35 @@ describe('the stdio framing', () => {
     expect(JSON.parse(written[0] ?? '{}')['id']).toBe(7);
   });
 
+  /*
+   * A client that writes its last message and closes without a trailing newline
+   * has still sent a complete request. Dropping it left the client waiting on an
+   * answer that was never coming.
+   */
+  it('answers a final message with no trailing newline', async () => {
+    const written: string[] = [];
+    await serve(
+      streamOf(JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' })),
+      (line) => {
+        written.push(line);
+      },
+      TOOLS,
+      INFO,
+    );
+
+    expect(written.length).toBe(1);
+    expect(JSON.parse(written[0] ?? '{}')['id']).toBe(9);
+  });
+
   it('ignores an unparseable line rather than dying', async () => {
     const written: string[] = [];
     await serve(
       streamOf(
         `not json\n${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`,
       ),
-      (line) => written.push(line),
+      (line) => {
+        written.push(line);
+      },
       TOOLS,
       INFO,
     );

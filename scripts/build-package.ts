@@ -143,7 +143,12 @@ if (tsc.exitCode !== 0) {
 // One tsconfig covers both typecheck and build, so tests are in scope for tsc
 // and it emits declarations for them. They have no runtime counterpart in dist
 // (Bun only builds the declared entrypoints), so drop them.
-const testDecls = new Bun.Glob('**/*.{test,spec}.d.ts{,.map}');
+//
+// `.fixture.` is in the pattern for the same reason: a fixture is test-only
+// support that no entrypoint imports, so tsc emits a declaration with no `.js`
+// beside it. `@dunx/mcp`'s fixture app is the case that found this - a published
+// package should not carry types for a test-only module.
+const testDecls = new Bun.Glob('**/*.{test,spec,fixture}.d.ts{,.map}');
 for await (const rel of testDecls.scan({ cwd: join(CWD, 'dist') })) {
   await rm(join(CWD, 'dist', rel));
 }

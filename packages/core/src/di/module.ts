@@ -147,3 +147,64 @@ export const readModule = (
 export const readControllers = (
   resolved: ResolvedModule,
 ): readonly Ctor<unknown>[] => resolved.options.controllers ?? [];
+
+/**
+ * Whether a value is something `collectModules` could be handed - a `@Module` class
+ * or a configured module from a static factory.
+ *
+ * `Object.hasOwn`, matching `declaredOptions`: a subclass of a module does not
+ * inherit its bindings, so it is not a module either.
+ */
+export const isModuleRef = (value: unknown): value is ModuleRef => {
+  if (typeof value === 'function') return Object.hasOwn(value, MODULE);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'module' in value &&
+    typeof value.module === 'function' &&
+    Object.hasOwn(value.module, MODULE)
+  );
+};
+
+export type RootModuleResult =
+  | { readonly kind: 'found'; readonly root: ModuleRef }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'ambiguous'; readonly names: readonly string[] };
+
+/**
+ * The root module among a loaded file's exports.
+ *
+ * Every tool that takes an entry path needs this and none of them can guess a
+ * name: `bunx dunx-openapi` and `bunx @dunx/mcp` both required `default` or `root`,
+ * while `@dunx/create-app`'s template - and every example in this repo - ends
+ * `export class AppModule {}` and nothing else. So the first thing anyone would try
+ * failed on a freshly scaffolded app. `@Module` leaves a marker, so the root can be
+ * *recognised* rather than named.
+ *
+ * `root` and `default` still win when present, so a file that also exports feature
+ * modules resolves to the one it nominated rather than reporting a tie. `named` is
+ * the explicit override for a file that nominates nothing and declares several.
+ */
+export const findRootModule = (
+  exports: Readonly<Record<string, unknown>>,
+  named?: string,
+): RootModuleResult => {
+  if (named !== undefined) {
+    const picked = exports[named];
+    return isModuleRef(picked)
+      ? { kind: 'found', root: picked }
+      : { kind: 'none' };
+  }
+
+  for (const key of ['root', 'default']) {
+    const value = exports[key];
+    if (isModuleRef(value)) return { kind: 'found', root: value };
+  }
+
+  const names = Object.keys(exports).filter((key) => isModuleRef(exports[key]));
+  const only = names[0];
+  if (names.length === 1 && only !== undefined) {
+    return { kind: 'found', root: exports[only] as ModuleRef };
+  }
+  return names.length === 0 ? { kind: 'none' } : { kind: 'ambiguous', names };
+};

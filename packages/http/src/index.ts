@@ -108,6 +108,9 @@ export {
   OnPong,
   OnUpgrade,
 } from './ws/decorators.js';
+// `discoverGateways` resolves every gateway through the container; `discoverGateway`
+// takes one instance, and `Object.create(Gateway.prototype)` satisfies it - which is
+// how a reader inspects gateways without booting the app.
 export {
   discoverGateway,
   discoverGateways,
@@ -117,7 +120,10 @@ export {
   type Invoke,
 } from './ws/discover.js';
 export { decode, encode, type Envelope } from './ws/envelope.js';
-export { HandlerKind, type HandlerMeta } from './ws/marker.js';
+// `isGateway` is the filter that pairs with `discoverGateway` when walking a
+// module's providers, exported for the same reason `guardsOf` and `metaOf` are: a
+// reader outside this package needs the same channel the runtime uses.
+export { HandlerKind, isGateway, type HandlerMeta } from './ws/marker.js';
 export { PubSub } from './ws/pubsub.js';
 // Multi-node fan-out. `PubSubRelay` is two methods, so `@dunx/infra`'s
 // RedisConnection satisfies it structurally; `RedisRelay` is Bun.RedisClient

@@ -1,6 +1,13 @@
 import { MantineProvider } from '@mantine/core';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'bun:test';
 import { App } from './App';
 
 /**
@@ -10,6 +17,11 @@ import { App } from './App';
  * pressed twice. These pin both halves of the fix: the toggle resolving `auto`,
  * and `index.html` setting the attribute before the first paint.
  */
+const realMatchMedia = Object.getOwnPropertyDescriptor(
+  globalThis.window,
+  'matchMedia',
+);
+
 const prefersDark = (dark: boolean): void => {
   Object.defineProperty(globalThis.window, 'matchMedia', {
     configurable: true,
@@ -48,6 +60,19 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.innerHTML = '';
+});
+
+/** `bun test` shares one process, so a stubbed `matchMedia` would leak onwards. */
+afterAll(() => {
+  if (realMatchMedia) {
+    Object.defineProperty(globalThis.window, 'matchMedia', realMatchMedia);
+  } else {
+    delete (globalThis.window as unknown as Record<string, unknown>)[
+      'matchMedia'
+    ];
+  }
+  window.localStorage.clear();
+  document.documentElement.removeAttribute('data-mantine-color-scheme');
 });
 
 describe('the colour scheme toggle', () => {

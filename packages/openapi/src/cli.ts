@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
+import { findRootModule, type ModuleRef } from '@dunx/core';
 import { describeRoutes } from './discover.js';
 import { generateDocument, type DocumentInfo } from './generate.js';
-import type { ModuleRef } from '@dunx/core';
 
 /**
  * Writes the OpenAPI document to a file, with no container, no server and no
@@ -26,6 +26,11 @@ import type { ModuleRef } from '@dunx/core';
  *   something a CLI can guess.
  * - **`default`** or **`root`** - a `ModuleRef`. Title and version then come from
  *   the nearest `package.json`.
+ * - **any single `@Module` export**, found by `findRootModule` reading the marker
+ *   `@Module` leaves. This is what makes the command work on an app scaffolded by
+ *   `@dunx/create-app`, whose template ends `export class AppModule {}` - a named
+ *   export and nothing else. Requiring `default`/`root` meant the first thing
+ *   anyone would try failed. `--export=<name>` settles a file declaring several.
  */
 interface OpenApiEntry extends Omit<DocumentInfo, 'title' | 'version'> {
   readonly root: ModuleRef;
@@ -33,23 +38,48 @@ interface OpenApiEntry extends Omit<DocumentInfo, 'title' | 'version'> {
   readonly version?: string;
 }
 
-type Exported =
-  | {
-      readonly openapi?:
-        | OpenApiEntry
-        | (() => OpenApiEntry | Promise<OpenApiEntry>);
-    }
-  | { readonly default?: ModuleRef; readonly root?: ModuleRef };
+interface Exported extends Record<string, unknown> {
+  readonly openapi?:
+    | OpenApiEntry
+    | (() => OpenApiEntry | Promise<OpenApiEntry>);
+}
 
 const usage = `Usage: bunx dunx-openapi <entry> [--out openapi.json]
 
-  <entry>   A module exporting \`openapi\`, or a root module as \`default\`/\`root\`.
-  --out     Where to write. Default openapi.json.
-  --stdout  Write the document to stdout instead of a file.`;
+  <entry>          A module exporting \`openapi\`, or one declaring your root
+                   module - it is found by its @Module marker, so a plain
+                   \`export class AppModule {}\` is enough.
+  --export=<name>  Which export to use, when the entry declares several modules.
+  --out            Where to write. Default openapi.json.
+  --stdout         Write the document to stdout instead of a file.`;
 
 const flag = (argv: readonly string[], name: string): string | undefined => {
   const at = argv.indexOf(`--${name}`);
   return at === -1 ? undefined : argv[at + 1];
+};
+
+/**
+ * `Bun.resolveSync` is the runtime's own resolver, so every specifier `import`
+ * accepts works. It follows Node resolution, which means a bare *relative* path
+ * throws - `src/app.module.ts` reads as a package named `src` - so an unresolved
+ * specifier is retried as explicitly relative. As-is first, so a real package still
+ * wins over a same-named directory.
+ *
+ * The previous `startsWith('.') ? cwd + entryPath : entryPath` failed on exactly
+ * that bare relative form. Deliberately duplicated in `@dunx/mcp`'s CLI rather than
+ * shared: what belongs in `@dunx/core` is the *contract* for finding a root module,
+ * which `findRootModule` now is. A path resolver is not a contract, and core is a DI
+ * container.
+ */
+const locate = (entry: string): string | undefined => {
+  for (const specifier of [entry, `./${entry}`]) {
+    try {
+      return Bun.resolveSync(specifier, process.cwd());
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
 };
 
 const packageInfo = async (): Promise<{ title: string; version: string }> => {
@@ -59,19 +89,25 @@ const packageInfo = async (): Promise<{ title: string; version: string }> => {
   return { title: json.name ?? 'API', version: json.version ?? '0.0.0' };
 };
 
+type Resolved =
+  | { readonly entry: OpenApiEntry }
+  | { readonly ambiguous: readonly string[] }
+  | undefined;
+
 const resolveEntry = async (
   loaded: Exported,
-): Promise<OpenApiEntry | undefined> => {
-  if ('openapi' in loaded && loaded.openapi !== undefined) {
+  named: string | undefined,
+): Promise<Resolved> => {
+  // `openapi` first and unconditionally: it is the only form that carries
+  // `contribute`, so an app that exports one has said more than a bare module can.
+  if (loaded.openapi !== undefined) {
     const value = loaded.openapi;
-    return typeof value === 'function' ? await value() : value;
+    return { entry: typeof value === 'function' ? await value() : value };
   }
-  if ('root' in loaded && loaded.root !== undefined)
-    return { root: loaded.root };
-  if ('default' in loaded && loaded.default !== undefined) {
-    return { root: loaded.default };
-  }
-  return undefined;
+
+  const found = findRootModule(loaded, named);
+  if (found.kind === 'found') return { entry: { root: found.root } };
+  return found.kind === 'ambiguous' ? { ambiguous: found.names } : undefined;
 };
 
 export const run = async (argv: readonly string[]): Promise<number> => {
@@ -81,22 +117,39 @@ export const run = async (argv: readonly string[]): Promise<number> => {
     return 1;
   }
 
-  const loaded = (await import(
-    entryPath.startsWith('.') ? `${process.cwd()}/${entryPath}` : entryPath
-  )) as Exported;
-
-  const entry = await resolveEntry(loaded);
-  if (entry === undefined) {
+  const path = locate(entryPath);
+  if (path === undefined) {
     console.error(
-      `${entryPath} exports no root module. Export \`openapi\`, or the module as ` +
-        '`default` or `root`.\n\n' +
-        usage,
+      `Cannot resolve ${entryPath} from ${process.cwd()}.\n\n${usage}`,
+    );
+    return 1;
+  }
+
+  const loaded = (await import(path)) as Exported;
+
+  const named = argv
+    .find((arg) => arg.startsWith('--export='))
+    ?.slice('--export='.length);
+
+  const resolved = await resolveEntry(loaded, named);
+  if (resolved === undefined) {
+    console.error(
+      `${entryPath} declares no module. Export \`openapi\`, or a class decorated ` +
+        `with @Module.\n\n${usage}`,
+    );
+    return 1;
+  }
+  if ('ambiguous' in resolved) {
+    console.error(
+      `${entryPath} exports ${resolved.ambiguous.length} modules ` +
+        `(${resolved.ambiguous.join(', ')}), so the root one is ambiguous. Pass ` +
+        `--export=<name>, or export it as \`default\`.\n\n${usage}`,
     );
     return 1;
   }
 
   const fallback = await packageInfo();
-  const { root, ...rest } = entry;
+  const { root, ...rest } = resolved.entry;
   const { document, warnings } = await generateDocument(describeRoutes(root), {
     ...fallback,
     ...rest,

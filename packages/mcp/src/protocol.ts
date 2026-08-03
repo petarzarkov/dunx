@@ -27,7 +27,8 @@ export interface ToolDefinition {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Record<string, unknown>;
-  readonly run: (args: Record<string, unknown>) => Promise<unknown> | unknown;
+  /** Sync or async - `unknown` covers a promise, and the caller awaits either. */
+  readonly run: (args: Record<string, unknown>) => unknown;
 }
 
 /** JSON-RPC error codes this server can raise. */
@@ -70,6 +71,14 @@ export const handle = async (
       serverInfo,
     });
   }
+
+  /**
+   * Part of the base protocol, not of any capability, so a server that declares
+   * only `tools` still has to answer it - a client uses it to check the connection
+   * is alive and reads `-32601` as a dead server. The result is defined as an empty
+   * object.
+   */
+  if (request.method === 'ping') return reply(request.id, {});
 
   if (request.method === 'tools/list') {
     return reply(request.id, {
@@ -128,12 +137,32 @@ export const handle = async (
  */
 export const serve = async (
   input: ReadableStream<Uint8Array>,
-  write: (line: string) => void,
+  /**
+   * Allowed to be async, and awaited, because a real sink's flush is: Bun's
+   * `FileSink.flush()` can return a promise, and not awaiting it risks the last
+   * answer sitting in this process while the client waits for it.
+   */
+  write: (line: string) => void | Promise<void>,
   tools: readonly ToolDefinition[],
   serverInfo: { name: string; version: string },
 ): Promise<void> => {
   const decoder = new TextDecoder();
   let buffer = '';
+
+  const dispatch = async (line: string): Promise<void> => {
+    if (line === '') return;
+    try {
+      const answer = await handle(
+        JSON.parse(line) as JsonRpcRequest,
+        tools,
+        serverInfo,
+      );
+      if (answer !== null) await write(answer);
+    } catch {
+      // Unparseable input has no id to answer against, so there is nothing to
+      // reply to and nowhere to log: stdout is the protocol channel.
+    }
+  };
 
   for await (const chunk of input) {
     buffer += decoder.decode(chunk, { stream: true });
@@ -143,19 +172,13 @@ export const serve = async (
       const line = buffer.slice(0, newline).trim();
       buffer = buffer.slice(newline + 1);
       newline = buffer.indexOf('\n');
-
-      if (line === '') continue;
-      try {
-        const answer = await handle(
-          JSON.parse(line) as JsonRpcRequest,
-          tools,
-          serverInfo,
-        );
-        if (answer !== null) write(answer);
-      } catch {
-        // Unparseable input has no id to answer against, so there is nothing to
-        // reply to and nowhere to log: stdout is the protocol channel.
-      }
+      await dispatch(line);
     }
   }
+
+  // A client that writes a final message and closes without a trailing newline
+  // has still sent a complete request. Without this it is silently dropped and
+  // the client waits for an answer that is never coming; an incomplete fragment
+  // fails to parse and is discarded exactly as it would be mid-stream.
+  await dispatch(buffer.trim());
 };

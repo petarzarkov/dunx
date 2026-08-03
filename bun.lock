@@ -157,11 +157,16 @@
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
+        "@dunx/openapi": "workspace:*",
       },
       "peerDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
+        "@dunx/openapi": "workspace:*",
       },
+      "optionalPeers": [
+        "@dunx/openapi",
+      ],
     },
     "packages/openapi": {
       "name": "@dunx/openapi",

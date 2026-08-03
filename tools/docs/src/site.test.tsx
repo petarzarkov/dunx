@@ -1,13 +1,6 @@
-import { MantineProvider } from '@mantine/core';
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { App } from './App';
+import { mount } from './harness';
 import {
   integer,
   NOISE_PCT,
@@ -17,16 +10,6 @@ import {
   throughputRows,
 } from './bench';
 import { bench, loadGuide, loadPackage, site } from './data';
-import { anchoredSymbol, parseRoute, symbolHref } from './router';
-
-const mount = (hash: string) => {
-  window.location.hash = hash;
-  return render(
-    <MantineProvider defaultColorScheme="light">
-      <App />
-    </MantineProvider>,
-  );
-};
 
 beforeEach(() => {
   window.location.hash = '';
@@ -371,89 +354,5 @@ describe('navigation', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       'Coverage',
     );
-  });
-});
-
-/**
- * Reported: search `Logger`, click the `ConsoleLogger` hit, and the page that
- * opens is `@dunx/core`'s readme with no mention of the symbol. Two causes -
- * the action navigated to the bare package route with no `?h=`, and the API tab
- * that holds the cards is not the one a package page opens on.
- */
-describe('a symbol search hit', () => {
-  const scrolled: string[] = [];
-
-  beforeEach(() => {
-    scrolled.length = 0;
-    Element.prototype.scrollIntoView = function scrollIntoView(
-      this: Element,
-    ): void {
-      scrolled.push(this.id);
-    };
-  });
-
-  test('routes to the symbol, not to the top of its package', () => {
-    expect(symbolHref('core', 'ConsoleLogger')).toBe(
-      '#/api/core?h=symbol-ConsoleLogger',
-    );
-    expect(parseRoute('#/api/core?h=symbol-ConsoleLogger')).toEqual({
-      kind: 'api',
-      slug: 'core',
-      anchor: 'symbol-ConsoleLogger',
-    });
-    expect(anchoredSymbol('symbol-ConsoleLogger')).toBe('ConsoleLogger');
-    expect(anchoredSymbol('always-bound-contracts')).toBe(null);
-  });
-
-  test('opens the API tab and marks the card on a cold load', async () => {
-    mount('#/api/core?h=symbol-ConsoleLogger');
-
-    const card = await waitFor(() => {
-      const found = document.getElementById('symbol-ConsoleLogger');
-      if (!found) throw new Error('symbol card not rendered');
-      return found;
-    });
-
-    expect(card.getAttribute('data-linked')).toBe('true');
-    expect(card.textContent).toContain('class ConsoleLogger extends Logger');
-    expect(document.querySelectorAll('[data-linked="true"]')).toHaveLength(1);
-  });
-
-  test('scrolls the card into view', async () => {
-    mount('#/api/core?h=symbol-ConsoleLogger');
-    await waitFor(() => {
-      if (!scrolled.includes('symbol-ConsoleLogger')) {
-        throw new Error(`scrolled: ${scrolled.join(',')}`);
-      }
-    });
-  });
-
-  test('reaches a symbol the filters would otherwise hide', async () => {
-    const internal = (await loadPackage('core'))?.symbols.find(
-      (symbol) => symbol.subpaths.length === 0,
-    );
-    if (!internal) throw new Error('no internal symbol in @dunx/core');
-
-    mount(`#/api/core?h=symbol-${internal.name}`);
-    await waitFor(() => {
-      if (!document.getElementById(`symbol-${internal.name}`)) {
-        throw new Error('internal symbol hidden behind the Internal switch');
-      }
-    });
-  });
-
-  test('lands on the symbol when the package page is already open', async () => {
-    mount('#/api/core');
-    await screen.findByRole('tab', { name: /API reference/i });
-    expect(document.getElementById('symbol-ConsoleLogger')).toBe(null);
-
-    window.location.hash = '#/api/core?h=symbol-ConsoleLogger';
-    fireEvent(window, new window.HashChangeEvent('hashchange'));
-
-    await waitFor(() => {
-      const card = document.getElementById('symbol-ConsoleLogger');
-      if (!card) throw new Error('symbol card not rendered after navigation');
-      expect(card.getAttribute('data-linked')).toBe('true');
-    });
   });
 });

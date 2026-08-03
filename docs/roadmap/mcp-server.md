@@ -1,6 +1,9 @@
-# An MCP server for dunx (`tools/mcp`)
+# An MCP server for dunx (`@dunx/mcp`)
 
-**Open. Requested, not yet designed.**
+**Shipped as `packages/mcp`.** Six read-only tools: `dunx_overview`, `dunx_routes`,
+`dunx_providers`, `dunx_gateways`, `dunx_modules`, `dunx_openapi`. What follows is the
+reasoning that produced it, kept because the decisions are still the load-bearing
+ones; the answers to the four open questions are recorded at the bottom.
 
 A Model Context Protocol server so an agent working in a dunx app can ask the
 framework about itself instead of grepping for the answer.
@@ -67,3 +70,47 @@ start. Open questions, in the order they need answering:
   stdio needs no dependency; a framework SDK would need justifying.
 - If it stays in `tools/`, it may depend on anything - that is what `tools/bench`
   depending on express is allowed for.
+
+## How the four questions resolved
+
+1. **Static, decided** - and it held. Every tool reads the graph and constructs
+   nothing. `discoverRoutes` and `discoverGateway` both take an instance, and
+   `Object.create(Class.prototype)` satisfies them: `instance.constructor` still
+   resolves to the class and every method is still reachable, so no constructor - or
+   dependency of one - has to exist.
+
+   What made this cheaper than expected is that **nothing had to be reimplemented to
+   get it**. The graph comes from `collectModules`, `readControllers`, `readDeps` and
+   `describeToken`; the routes and gateways from http's own discovery. The last three
+   were internal to their packages and are now exported, which is the honest fix: a
+   second reader of `Symbol.for('dunx.deps')` has to restate the prototype-chain
+   lookup, the lazy thunk call and the shape of an `unresolved` entry, and silently
+   drops any field that shape later gains. The first version of this package did
+   restate them, and rendered a `token()` binding as `[object Object]` as a result.
+
+2. **Transport: stdio**, as expected, and Bun-native throughout - `Bun.stdin.stream()`
+   in, a `Bun.stdout.writer()` `FileSink` out, flushed per message. `Bun.resolveSync`
+   locates the entry, which matters more than it sounds: it is the runtime's own
+   resolver, so every specifier `import` accepts works. It follows Node resolution, so
+   a bare _relative_ path throws - `src/app.module.ts` reads as a package named `src`
+   (measured) - and an unresolved specifier is retried as `./`-prefixed, as-is first
+   so a real package still wins.
+
+3. **Where the root module comes from**: a path argument plus the `default`/`root`
+   convention, matching `bunx dunx-openapi`. `scripts/gen-openapi.ts` in the template
+   should be settled the same way.
+
+4. **It ships**, as `@dunx/mcp`. That inverts the "tools are private" rule
+   deliberately: a published server is the version any dunx app can wire up, and a
+   private one under `tools/` would only ever serve this repo.
+
+   **The OpenAPI document is in**, as `dunx_openapi`, with `@dunx/openapi` an
+   _optional_ peer reached by `await import()`. That is what lets the other five tools
+   work in an app with no OpenAPI setup, and it is why `dunx_routes` reports _which_
+   inputs a route validates rather than their schemas: converting a schema to JSON
+   Schema is zod-specific work `@dunx/openapi` already does, and a second, worse
+   generator here would be the "never invent what a mature library solves" failure.
+
+   **The benchmark results are still out.** `tools/bench/results/latest.json`
+   describes this repo, not the app being read, so a tool exposing it would answer a
+   question nobody holding a dunx app is asking.

@@ -97,6 +97,65 @@ export const openapi = () => ({
   ]);
 });
 
+/*
+ * The shape `@dunx/create-app` scaffolds, and every example in this repo: a named
+ * export and nothing else. Requiring `default`/`root` meant `bunx dunx-openapi
+ * ./src/app.module.ts` failed on a freshly scaffolded app, which is the first thing
+ * anyone would try. `findRootModule` reads the marker `@Module` leaves instead.
+ */
+test('generates from a module exported only by name', async () => {
+  const dir = workspace();
+  const entry = await write(
+    dir,
+    'app.module.ts',
+    ENTRY.replace(
+      '@Module({ controllers: [UsersController] })\nclass AppModule {}',
+      '@Module({ controllers: [UsersController] })\nexport class AppModule {}',
+    ).replace('export default AppModule;\n', ''),
+  );
+  const out = join(dir, 'openapi.json');
+
+  expect(await run([entry, '--out', out])).toBe(0);
+  expect(Object.keys((await Bun.file(out).json()).paths)).toEqual(['/users']);
+});
+
+/* Bare relative paths resolved as a package name before, so they never loaded. */
+test('resolves a relative entry with no leading ./', async () => {
+  const dir = workspace();
+  await write(dir, 'app.module.ts', ENTRY);
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    expect(await run(['app.module.ts', '--out', 'openapi.json'])).toBe(0);
+    expect(
+      Object.keys((await Bun.file(join(dir, 'openapi.json')).json()).paths),
+    ).toEqual(['/users']);
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
+test('asks which module when the entry declares several', async () => {
+  const dir = workspace();
+  const entry = await write(
+    dir,
+    'many.ts',
+    `import { Module } from '@dunx/core';
+@Module({})
+export class FirstModule {}
+@Module({})
+export class SecondModule {}
+`,
+  );
+  const out = join(dir, 'out.json');
+
+  expect(await run([entry, '--out', out])).toBe(1);
+  expect(await Bun.file(out).exists()).toBe(false);
+  // Named, so the same entry works once the ambiguity is settled.
+  expect(await run([entry, '--export=SecondModule', '--out', out])).toBe(0);
+  expect(await Bun.file(out).exists()).toBe(true);
+});
+
 test('refuses an entry that exports no module, rather than writing an empty one', async () => {
   const dir = workspace();
   const entry = await write(dir, 'nothing.ts', 'export const unrelated = 1;\n');
