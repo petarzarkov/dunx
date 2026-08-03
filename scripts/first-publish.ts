@@ -8,7 +8,8 @@
  *   DRY=true bun scripts/first-publish.ts    # read it first
  *   bun scripts/first-publish.ts             # 2FA prompts in a browser
  *
- * `DUNX_VERSION` overrides the version, which defaults to 0.1.0. Publishing is
+ * `DUNX_VERSION` overrides the version, which otherwise matches the rest of the
+ * tree so a new package joins lockstep. Publishing is
  * idempotent per package only in the sense that npm refuses a version that
  * already exists - rerunning after a partial failure will fail on the packages
  * that already went up, which is safe but noisy. Set `DUNX_VERSION` or trim
@@ -24,10 +25,26 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   assertNoWorkspaceRanges,
+  readWorkspaceVersions,
   resolveWorkspaceDeps,
 } from './workspace-ranges.js';
+import { semver } from 'bun';
 
-const VERSION = process.env['DUNX_VERSION'] ?? '0.1.0';
+/**
+ * The version every package in this run takes.
+ *
+ * Derived from the tree rather than hardcoded. It used to default to `0.1.0`,
+ * which was right when it published the original eight and wrong for every
+ * package added after: publishing a new `@dunx/*` at 0.1.0 into a tree at 0.2.14
+ * breaks lockstep, and its `workspace:*` peers rewrite to `^0.1.0`, a range that
+ * matches nothing on npm. `DUNX_VERSION` still overrides.
+ */
+const sharedVersion = (packagesDir: string): string =>
+  [...readWorkspaceVersions(packagesDir).values()].reduce(
+    (highest, version) =>
+      semver.order(version, highest) === 1 ? version : highest,
+    '0.1.0',
+  );
 const DRY = process.env['DRY'] === 'true';
 const NPM = 'bunx npm@11.10.1';
 
@@ -41,9 +58,12 @@ const ORDER = [
   'openapi',
   'auth',
   'testing',
+  'mcp',
 ];
 
 const root = new URL('../packages', import.meta.url).pathname;
+
+const VERSION = process.env['DUNX_VERSION'] ?? sharedVersion(root);
 
 type Manifest = { name: string; version: string } & Record<string, unknown>;
 

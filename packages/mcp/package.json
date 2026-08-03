@@ -1,0 +1,65 @@
+{
+  "name": "@dunx/mcp",
+  "version": "0.0.0",
+  "description": "A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts",
+  "keywords": [
+    "agent",
+    "bun",
+    "dunx",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "homepage": "https://github.com/petarzarkov/dunx/tree/main/packages/mcp#readme",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Petar Zarkov",
+    "email": "pzarko1@gmail.com",
+    "url": "https://github.com/petarzarkov"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/petarzarkov/dunx.git",
+    "directory": "packages/mcp"
+  },
+  "bin": {
+    "dunx-mcp": "dist/cli.js"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun ../../scripts/build-package.ts",
+    "test": "bun test --bail",
+    "test:cov": "bun test --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@dunx/core": "workspace:*",
+    "@dunx/http": "workspace:*"
+  },
+  "peerDependencies": {
+    "@dunx/core": "workspace:*",
+    "@dunx/http": "workspace:*"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

@@ -44,6 +44,7 @@ describe('the generated model', () => {
       '@dunx/create-app',
       '@dunx/http',
       '@dunx/infra',
+      '@dunx/mcp',
       '@dunx/openapi',
       '@dunx/testing',
       '@dunx/transform',

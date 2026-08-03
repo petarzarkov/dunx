@@ -169,7 +169,7 @@ container with `NODE_ENV` unset, and neither `NO_COLOR` nor `FORCE_COLOR=0` help
 dunx now defaults `isDevelopment` to `Bun.enableANSIColors` - a default, not a patch,
 and the Bun-specific half by CLAUDE.md's own boundary. The portable gate is written up
 as a proposal against `@arkv/colors`' existing `isColorSupported()` in
-[arkv-integrations](./roadmap/arkv-integrations.md), together with a second defect it
+[architecture/logging.md](./architecture/logging.md), together with a second defect it
 turned up: `FORCE_COLOR=0` is tested for presence, so it forces colour _on_.
 
 **Documentation debt.** `packages/infra/README.md`'s `## db` section was rewritten
@@ -267,13 +267,13 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                | Shape                                                                |
-| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Landed. Gin, net/http, Axum, Spring. Needs one clean run to publish. |
-| [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.                     |
-| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                          |
-| [mcp-server](./roadmap/mcp-server.md)                                               | Feature. Requested. Ask the framework about itself.                  |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file.        |
+| Item                                                                                | Shape                                                         |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Done. Full 16-subject run published; kept for how to read it. |
+| [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.              |
+| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                   |
+| [mcp-server](./roadmap/mcp-server.md)                                               | Feature. Requested. Ask the framework about itself.           |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file. |
 
 ### From porting nestjs-template to dunx-template
 

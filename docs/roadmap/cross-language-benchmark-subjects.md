@@ -1,74 +1,50 @@
-# Publish the cross-language benchmark numbers
+# Cross-language benchmark subjects
 
-**Mostly delivered.** Gin, raw `net/http`, Axum and Spring Boot are subjects in
-`tools/bench`, opt-in per toolchain, skipped cleanly when it is absent, contract
-checked, compiled outside the startup timing and with the JVM warmed for 30 s.
-The design work and every caveat are recorded in `tools/bench/README.md`.
+**Done.** Gin, raw `net/http`, Axum, Spring Boot and Django are in the suite, and
+`results/latest.json` is a full 16-subject run with every toolchain present. Kept
+only for the reading it needs, which is the part that matters.
 
-**What is left is one clean run.** `results/latest.json` predates them, and every
-table in that README is generated from it rather than typed, so the rows do not
-appear until a full `bun run start` is taken on an idle machine and
-`bun src/readme-tables.ts` regenerates the sections. The run needs Go, Cargo and
-a JDK plus Maven present; without them the suite silently produces the old
-eleven-subject table, which is correct but is not the point.
+## What the run says
 
-## What the falsification test found, so the rerun is read properly
+Plaintext, median req/s, deviations under 3% except where noted, **zero errors on
+every subject in every scenario**:
 
-The item existed to embarrass the harness if the harness deserved it. It half
-did.
+| subject           | runtime | plaintext | validate |    startup |
+| ----------------- | ------- | --------: | -------: | ---------: |
+| `@dunx/http`      | Bun     |   137,539 |   75,769 |    54.8 ms |
+| `Bun.serve` (raw) | Bun     |   136,940 |   89,047 |    28.7 ms |
+| Elysia            | Bun     |   135,907 |   74,858 |    58.1 ms |
+| **Axum**          | Rust    |   118,999 | _83,333_ | **1.5 ms** |
+| **net/http**      | Go      |    75,510 |   46,748 |     3.9 ms |
+| **Gin**           | Go      |    71,274 |   47,553 |     4.9 ms |
+| **Spring Boot**   | JVM     |    46,956 |   31,394 | 1,276.5 ms |
+| **Django**        | Python  |     4,387 |    3,882 |   134.2 ms |
 
-- **The harness is not client-capped.** The obvious failure mode was that
-  `bun-serve`, `dunx` and `axum` all clustering near 130k req/s meant oha at 64
-  connections could not go faster. Rebuilding Axum on a multi-threaded tokio
-  runtime and driving it with one oha at the same 64 connections answered
-  ~503k req/s, so there is about 4x headroom and the top of the table is the
-  server's number. That check is now in the README under "Load generator".
-- **The framing is the problem, not the measurement.** Every subject is one
-  process on one thread, which is a fact about Bun and Node and a _decision_
-  imposed on Go, tokio and Tomcat. Under it, `@dunx/http` does come out ahead of
-  Gin and level with Axum on `plaintext` and `json`. Lift the pin and raw
-  `net/http` goes from ~73k to ~230k req/s and Axum from ~121k to ~503k at the
-  same connection count, while neither Bun subject can move at all. Axum already
-  wins `validate` even pinned.
+## How to read it, which is the whole point of adding these
 
-So the honest one-line reading of these rows is "per thread, Bun's HTTP server
-core is competitive with tokio and ahead of Go's" - and not one word more than
-that. The README says so at length; the numbers should not be published anywhere
-that paragraph does not travel with them.
+**`@dunx/http` came out 0.4% above raw `Bun.serve` on plaintext.** That is not a
+framework beating the API it calls; it is noise, at deviations of 1.6% and 1.4%. The
+harness has said "a figure at or above 100% is noise, not a win" since before these
+subjects existed, and this is that rule earning its place.
 
-## Django, added and measured but not published
+**Every subject is one process on one thread.** For Bun and Node that is a fact about
+the runtime. For Go, tokio and Tomcat it is a decision the harness imposes -
+`GOMAXPROCS(1)`, a `current_thread` runtime, `tomcat.threads.max=1`. Lift it and
+`net/http` goes to ~230,000 and Axum to ~503,000 at the same 64 connections, while
+neither Bun subject can move at all. **These rows flatter Bun by exactly the factor
+the reader is not shown**, which the bench README states on the row itself.
 
-`django` is in the subject registry and answers all four scenarios byte-identically.
-Opt in with `BENCH_PYTHON` or `BENCH_PYTHONPATH`; the probe requires `import django`
-to succeed, so a Python without it skips the row cleanly.
+Axum being _ahead_ of dunx on `validate` while behind on plaintext is the honest
+shape of it: pinned to one thread, Bun's HTTP core is competitive with tokio at
+trivial work and loses once there is real work per request.
 
-Measured standalone on this machine, 2 s per scenario, load average 1.2:
+**Django's `validate` deviation is 15.7%**, above the 3% noise floor, so that one
+figure should not be quoted as precise. And Django is on gunicorn with one worker:
+`wsgiref` measured 317 req/s with 32 dropped connections, which would have been a
+number about `wsgiref` rather than about Django.
 
-| scenario  | req/s |     p99 |
-| --------- | ----: | ------: |
-| plaintext | 4,562 | 15.0 ms |
-| json      | 4,390 | 14.9 ms |
-| params    | 4,347 | 15.4 ms |
-| validate  | 4,086 | 17.0 ms |
+## Left
 
-Startup 134.0 ms (median of 7), which is the row where Django is furthest behind:
-against `@dunx/http`'s ~53 ms and Axum's 1.5 ms, that is Python's import cost plus
-gunicorn's fork.
-
-**The server matters more than the framework here, and the first attempt proved
-it.** On `wsgiref.simple_server` - the standard library's reference WSGI
-implementation - the same app measured **317 req/s, p99 1.27 s, and 32 dropped
-connections** at the harness's 64. That is a number about `wsgiref` serialising
-connections, not about Django, and publishing it would have understated Django by a
-factor of fourteen. The subject uses gunicorn with one worker instead, which is what
-a Django deployment actually runs.
-
-## What is still needed to publish any of it
-
-One run on a machine with **all** the toolchains present. This one has Rust and
-Python but no Go, JDK or Maven, so a full run here would drop the `gin`, `nethttp`
-and `spring` rows from `results/latest.json` rather than add to them - worse than
-leaving the file alone, which is what was done.
-
-A single-subject run overwrites `results/latest.json` with just that subject. Worth
-knowing before running one against the committed file; it was reverted here.
+Nothing blocking. If the cross-language rows are ever put on the landing page rather
+than the benchmarks page, the one-thread caveat has to travel with them - without it
+the chart says something about Go and Rust that is not true.
