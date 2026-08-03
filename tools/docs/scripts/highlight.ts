@@ -110,12 +110,54 @@ export const highlight = (code: string, lang: string): string => {
 const FENCE =
   /<pre><code(?: class="language-([^"]+)")?>([\s\S]*?)<\/code><\/pre>/g;
 
+/** What the badge shows. Anything not here is upper-cased as-is. */
+const LABELS: Readonly<Record<string, string>> = {
+  ts: 'TS',
+  typescript: 'TS',
+  js: 'JS',
+  javascript: 'JS',
+  jsonc: 'JSON',
+  bash: 'SH',
+  sh: 'SH',
+  shell: 'SH',
+  dockerfile: 'DOCKER',
+  plaintext: '',
+};
+
+const escapeAttr = (text: string): string =>
+  text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
 /**
- * Replaces every fenced block Bun's markdown renderer produced. A block with no
- * language still goes through, so it picks up the same frame and background as
- * the rest instead of looking like a different component.
+ * Replaces every fenced block Bun's markdown renderer produced, wrapping it in a
+ * frame with the language, an optional filename and a copy button.
+ *
+ * **The filename rides in the language token**, as ```` ```ts:users.controller.ts ````.
+ * Bun's markdown renderer drops everything after the language word, so the
+ * conventional ` title="..." ` never reaches the HTML - measured, not assumed.
+ * A colon survives because it lands inside `class="language-..."`.
+ *
+ * A block with no language still gets the frame, so it does not read as a
+ * different component from the rest.
  */
 export const highlightFences = (html: string): string =>
-  html.replace(FENCE, (_match, lang: string | undefined, body: string) =>
-    highlight(unescape(body).replace(/\n$/, ''), lang ?? 'plaintext'),
-  );
+  html.replace(FENCE, (_match, info: string | undefined, body: string) => {
+    const [lang = 'plaintext', ...rest] = (info ?? 'plaintext').split(':');
+    const file = rest.join(':');
+    const label = LABELS[lang] ?? lang.toUpperCase();
+    const code = unescape(body).replace(/\n$/, '');
+
+    const left = file
+      ? `<span class="code-file">${escapeAttr(file)}</span>`
+      : '<span></span>';
+    const badge = label ? `<span class="code-lang">${label}</span>` : '';
+
+    return (
+      `<figure class="code-block">` +
+      `<figcaption class="code-bar">${left}<span class="code-actions">${badge}` +
+      // No `onclick`: the handler is delegated from `Prose`, so the markup stays
+      // inert HTML the generator can emit and the CSP has nothing to allow.
+      `<button type="button" class="code-copy" aria-label="Copy code">Copy</button>` +
+      `</span></figcaption>` +
+      `${highlight(code, lang)}</figure>`
+    );
+  });

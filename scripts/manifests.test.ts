@@ -50,7 +50,7 @@ describe('published manifests survive npm publish unaltered', () => {
   });
 
   /**
-   * The repo is Apache-2.0 and every LICENSE file in it is the Apache text, but
+   * The repo is MIT and every LICENSE file in it is the MIT text, but
    * all ten manifests said `MIT` - and 0.1.0 went to npm carrying that. A package's
    * declared licence is what tooling and consumers read, so it disagreeing with the
    * file shipped beside it is the one licence bug that actually misleads someone.
@@ -58,10 +58,10 @@ describe('published manifests survive npm publish unaltered', () => {
   it('declares the licence the LICENSE file actually is', async () => {
     const root = new URL('..', import.meta.url).pathname;
     const licence = await Bun.file(`${root}/LICENSE`).text();
-    expect(licence).toContain('Apache License');
+    expect(licence).toContain('MIT License');
 
     for (const { name, json } of await manifests()) {
-      expect(`${name}: ${String(json['license'])}`).toBe(`${name}: Apache-2.0`);
+      expect(`${name}: ${String(json['license'])}`).toBe(`${name}: MIT`);
     }
   });
 

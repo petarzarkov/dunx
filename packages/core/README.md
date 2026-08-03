@@ -201,4 +201,4 @@ must start clean, such as a detached background job.
 
 ## License
 
-[APACHE](../../LICENSE)
+[MIT](../../LICENSE)

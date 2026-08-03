@@ -1,5 +1,9 @@
+/* The prose fills its column and the layout bounds it, rather than a `ch` cap
+   leaving a third of a wide window empty - which is what the side-by-side against
+   the Nest docs showed. The guide container is capped at 1560px, and the sidebar
+   and contents rail take their share, so the text column lands near 1050px. */
 :root {
-  --prose-max: 78ch;
+  --prose-max: 100%;
 }
 
 body {
@@ -39,6 +43,43 @@ body {
   z-index: 2;
   padding: var(--mantine-spacing-sm) 0;
   background: var(--mantine-color-body);
+}
+
+.toc a {
+  position: relative;
+  padding-left: 0.9rem;
+}
+
+/* A dot per entry on a rule down the left, so the list reads as positions in the
+   page rather than as a flat set of links. */
+.toc a::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.36rem;
+  height: 0.36rem;
+  border-radius: 999px;
+  background: var(--mantine-color-default-border);
+}
+
+.toc a::after {
+  content: '';
+  position: absolute;
+  left: 0.16rem;
+  top: 1.1em;
+  bottom: -0.45em;
+  width: 1px;
+  background: var(--mantine-color-default-border);
+}
+
+.toc a:last-of-type::after {
+  display: none;
+}
+
+.toc a:hover::before,
+.toc a[aria-current='true']::before {
+  background: var(--mantine-primary-color-filled);
 }
 
 .toc {
@@ -374,4 +415,68 @@ body {
   display: block;
   width: fit-content;
   min-width: 100%;
+}
+
+/* A code block with a header, which is what a reader needs to copy one and to
+   know what language it is without reading it. The `<pre>` shiki emits is the
+   figure's second child; the bar is the first. */
+.code-block {
+  margin: 1rem 0;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+  background: var(--mantine-color-default);
+}
+
+.code-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.9rem;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  font-size: 0.78rem;
+  min-height: 2.1rem;
+}
+
+.code-file {
+  font-family: var(--mantine-font-family-monospace);
+  color: var(--mantine-color-text);
+}
+
+.code-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.code-lang {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--mantine-color-dimmed);
+}
+
+.code-copy {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: 5px;
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-dimmed);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.code-copy:hover {
+  color: var(--mantine-color-text);
+  border-color: var(--mantine-primary-color-filled);
+}
+
+/* The frame owns the border and the radius now, so the highlighted block inside
+   it must not draw a second one. */
+.code-block .shiki {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
 }

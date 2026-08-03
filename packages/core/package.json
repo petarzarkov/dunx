@@ -10,7 +10,7 @@
     "logger"
   ],
   "homepage": "https://github.com/petarzarkov/dunx/tree/main/packages/core#readme",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "author": {
     "name": "Petar Zarkov",
     "email": "pzarko1@gmail.com",

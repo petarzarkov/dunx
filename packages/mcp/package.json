@@ -1,6 +1,6 @@
 {
   "name": "@dunx/mcp",
-  "version": "0.0.0",
+  "version": "0.2.14",
   "description": "A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts",
   "keywords": [
     "agent",
@@ -10,7 +10,7 @@
     "model-context-protocol"
   ],
   "homepage": "https://github.com/petarzarkov/dunx/tree/main/packages/mcp#readme",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "author": {
     "name": "Petar Zarkov",
     "email": "pzarko1@gmail.com",

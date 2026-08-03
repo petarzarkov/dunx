@@ -58,7 +58,7 @@ export const Guide = ({ slug }: { slug: string }): React.JSX.Element => {
   if (!guide) return <NotFound what={`guide "${slug}"`} />;
 
   return (
-    <Container size="lg" py="xl">
+    <Container size={1560} py="xl">
       <Group align="flex-start" wrap="nowrap" gap="xl">
         <Stack gap="md" style={{ minWidth: 0, flex: 1 }}>
           <Title order={1}>{guide.title}</Title>

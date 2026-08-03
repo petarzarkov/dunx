@@ -278,7 +278,7 @@ describe('siteMarkdown', () => {
         '',
         '## License',
         '',
-        'Apache-2.0',
+        'MIT',
         '',
       ].join('\n'),
     );
@@ -289,7 +289,7 @@ describe('siteMarkdown', () => {
     expect(out).toContain('Also kept.');
     expect(out).not.toContain('bun add @dunx/thing');
     expect(out).not.toContain('devDependency');
-    expect(out).not.toContain('Apache-2.0');
+    expect(out).not.toContain('MIT');
   });
 
   test('a heading inside a fenced block is not a heading', () => {

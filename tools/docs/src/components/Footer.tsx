@@ -98,10 +98,36 @@ export const Footer = (): React.JSX.Element => (
           </Group>
         </Group>
 
-        <Text size="xs" c="dimmed">
-          Generated from the source on{' '}
-          {new Date(site.generatedAt).toUTCString()}.
-        </Text>
+        <Group justify="space-between" align="center" gap="md">
+          <Text size="xs" c="dimmed">
+            Copyright &copy; 2026 MIT by{' '}
+            <Anchor
+              href="https://petarzarkov.com/"
+              target="_blank"
+              rel="noreferrer"
+              size="xs"
+              c="dimmed"
+              underline="always"
+            >
+              Petar Zarkov
+            </Anchor>{' '}
+            &middot;{' '}
+            <Anchor
+              href="https://github.com/petarzarkov"
+              target="_blank"
+              rel="noreferrer"
+              size="xs"
+              c="dimmed"
+              underline="always"
+            >
+              @petarzarkov
+            </Anchor>
+          </Text>
+          <Text size="xs" c="dimmed">
+            Generated from the source on{' '}
+            {new Date(site.generatedAt).toUTCString()}.
+          </Text>
+        </Group>
       </Stack>
     </Container>
   </Box>

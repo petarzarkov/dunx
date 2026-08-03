@@ -202,7 +202,17 @@ const DocsFooter = (): React.JSX.Element => (
         <VisuallyHidden>dunx</VisuallyHidden>
       </Group>
       <Text size="xs" c="dimmed">
-        Apache-2.0 licensed. Nothing here reimplements what Bun already ships.
+        Copyright &copy; 2026 MIT by{' '}
+        <Anchor
+          href="https://petarzarkov.com/"
+          target="_blank"
+          rel="noreferrer"
+          size="xs"
+          c="dimmed"
+          underline="always"
+        >
+          Petar Zarkov
+        </Anchor>
       </Text>
       <Group gap="lg">
         <Anchor href={href(RouteKind.Bench)} size="sm" c="dimmed">
