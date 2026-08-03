@@ -28,7 +28,26 @@ interface Datum {
 
 const chartHeight = (count: number): number => Math.max(140, count * 34);
 
-/** Horizontal, because subject labels are long and a rotated axis is unreadable. */
+/**
+ * Horizontal, because subject labels are long and a rotated axis is unreadable.
+ *
+ * `orientation="vertical"` puts the category axis on Y, and two props exist to
+ * survive that. Mantine names its Y axes `left` and `right`, while recharts
+ * defaults every consumer of an axis to id `0` - so anything reading the Y axis
+ * by default reads an axis that is not there and gets an implicit numeric one
+ * instead:
+ *
+ * - `tooltipProps.axisId` - without it every hover resolved to index 0, so the
+ *   tooltip named the top bar wherever the pointer was and the cursor rectangle
+ *   covered the whole plot instead of one row.
+ * - `gridAxis="y"` - draws the grid off the X value axis, which has no id
+ *   mismatch. It is also the right grid for horizontal bars: lines perpendicular
+ *   to the bars are what lets a length be read against the scale. The Mantine
+ *   default, `"x"`, asks for horizontal lines off that same missing Y axis and
+ *   spaced them against nothing.
+ *
+ * `charts.test.tsx` pins both.
+ */
 const Bars = ({
   data,
   unit,
@@ -41,11 +60,12 @@ const Bars = ({
     data={[...data]}
     dataKey="subject"
     orientation="vertical"
-    gridAxis="x"
+    gridAxis="y"
     withLegend={false}
     withTooltip
     tickLine="none"
     barProps={{ radius: [0, 3, 3, 0] }}
+    tooltipProps={{ axisId: 'left' }}
     series={[{ name: 'value', label: unit }]}
     valueFormatter={(value) => integer(value)}
     yAxisProps={{ width: 150, tick: { fontSize: 11 } }}
