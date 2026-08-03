@@ -11,6 +11,30 @@
       name="description"
       content="Documentation and API reference for dunx, a Bun-native dependency injection framework."
     />
+    <!-- Mantine's `ColorSchemeScript`, inlined. `MantineProvider` sets
+         `data-mantine-color-scheme` on mount, which is after the first paint, so
+         without this the page renders light for a frame and then flips - and the
+         attribute is what every `[data-mantine-color-scheme='dark']` rule keys
+         off. It has to be a real `<script>` in the head rather than the React
+         component: by the time the tree renders, the paint being fixed has
+         happened. Keep `auto` and the storage key in step with main.tsx. -->
+    <script data-mantine-script>
+      try {
+        var stored = window.localStorage.getItem('mantine-color-scheme-value');
+        var scheme =
+          stored === 'light' || stored === 'dark' || stored === 'auto'
+            ? stored
+            : 'auto';
+        document.documentElement.setAttribute(
+          'data-mantine-color-scheme',
+          scheme !== 'auto'
+            ? scheme
+            : window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light',
+        );
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
