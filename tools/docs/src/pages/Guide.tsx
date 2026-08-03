@@ -30,26 +30,11 @@ const TableOfContents = ({
       {headings.map((heading) => (
         <Anchor
           key={heading.id}
-          onClick={(event) => {
-            // The href stays a real route so middle-click and copy-link work; the
-            // scroll happens here, where the page is already laid out. Scrolling
-            // from an effect on a cold load raced the code-block layout and left
-            // the viewport past the end of the document, showing nothing.
-            const target = document.getElementById(heading.id);
-            if (!target) return;
-            event.preventDefault();
-            target.scrollIntoView({ block: 'start' });
-          }}
-          // The page's own route, not `#id`. A bare fragment in a hash-routed
-          // site is read as a route, so every entry here used to navigate away
-          // from the page it belonged to.
-          //
-          // Deliberately without `?h=`: that path runs a scroll-retry loop in
-          // `router.ts` which lands on a blank viewport in headless Chrome, on
-          // guides and on package pages alike. The click below scrolls a
-          // laid-out page instead, which is reliable. See
-          // docs/roadmap/anchor-scroll-on-cold-load.md.
-          href={href(RouteKind.Guide, slug)}
+          // `?h=`, not a bare `#id`. A bare fragment in a hash-routed site is
+          // read as a route, so every entry here used to navigate away from the
+          // page it belonged to. `router.ts` reads `?h=` and scrolls, which also
+          // makes a copied contents link a working deep link.
+          href={`${href(RouteKind.Guide, slug)}?h=${heading.id}`}
           size="sm"
           c="dimmed"
           lineClamp={1}

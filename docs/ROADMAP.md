@@ -275,7 +275,6 @@ Feedback goes in as a new file rather than into conversation.
 | [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Done, as arkv#4. Awaiting a merge and a version bump.                |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                          |
 | [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                            |
-| [anchor-scroll-on-cold-load](./roadmap/anchor-scroll-on-cold-load.md)               | Suspected defect. Needs one minute in a real browser.                |
 | [mcp-server](./roadmap/mcp-server.md)                                               | Feature. Requested. Ask the framework about itself.                  |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file.        |
 | [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                       |
