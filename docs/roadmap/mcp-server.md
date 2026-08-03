@@ -27,10 +27,30 @@ An agent that can call those gets accurate answers instead of inferring from sou
 `tools/mcp`, **private and never published** like the other tools, at least to
 start. Open questions, in the order they need answering:
 
-1. **Does it boot the app or read it statically?** Static is far more useful: it
-   works with no services, cannot have side effects, and `describeRoutes` was
-   built for exactly that. Booting would add the resolved container but needs a
-   database.
+1. **Static, decided.** It reads the app; it does not boot it.
+
+   Booting is the tempting option because it gives the resolved container, and it
+   is the wrong one. `AppFactory.create` instantiates every provider and awaits
+   every async factory before returning - that is the no-lazy-resolution decision -
+   so booting an app to answer "what routes exist" opens database connections,
+   starts queue workers, binds sockets and runs every `onInit`. An agent asking a
+   question about the code would be running the code, with side effects, against
+   whatever environment happened to be configured.
+
+   Static costs nothing and needs nothing: `describeRoutes` walks prototypes with
+   `Object.create`, so no constructor runs, and it already works with no database
+   and no port - that is what `bunx dunx-openapi` is built on. It is also
+   idempotent, which matters for a tool an agent calls repeatedly.
+
+   The provider graph is reachable statically too, from the module records plus
+   `readDeps`, which is the same pair the container itself reads.
+
+   What static cannot give is runtime state: the actual value of a config field,
+   whether the database is reachable. An agent should not be asking a
+   code-inspection tool those. If one is ever genuinely needed, add it as a
+   separately named tool whose description says it boots the app, so the cost is
+   visible at the call site rather than hidden in every answer.
+
 2. **Transport.** stdio is the obvious default for a local agent.
 3. **Where does the app's root module come from?** The same question
    `scripts/gen-openapi.ts` in `dunx-template` runs into: a tool cannot guess an

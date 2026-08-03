@@ -37,3 +37,32 @@ The two compose: once the upstream gate lands, dunx's default is still the right
 and nothing here has to be undone. `packages/infra/src/logger/module.test.ts` asserts
 the entry is coloured **exactly when** `Bun.enableANSIColors` is true, which holds at
 a terminal and in a pipe and fails on the old default.
+
+## What else of `@arkv` dunx uses, and what it does not
+
+The workspace was read end to end against the question that matters: is dunx doing
+something worse than a package the owner already maintains? Nothing to adopt came
+back, and the two standing candidates both died on inspection.
+
+| package           | in dunx                                                                                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@arkv/logger`    | Used, bound to core's `Logger` contract by `@dunx/infra/logger`.                                                                                                                                                              |
+| `@arkv/colors`    | Used, through the logger.                                                                                                                                                                                                     |
+| `@arkv/timezones` | First choice for any date or zone handling. No such need has arisen.                                                                                                                                                          |
+| `@arkv/rng`       | **Not used, deliberately.** It is WASM-backed, and dunx needs ids rather than statistics: `Bun.randomUUIDv7` and `crypto.randomUUID` are native and measured at 0.04 us, so adopting it would trade a native call for weight. |
+| `@arkv/shared`    | Not used. Fifteen runtime symbols; dunx has a need for none of them.                                                                                                                                                          |
+
+**Backoff was the first candidate, and the premise was wrong.** It is implemented
+once in dunx, in the websocket relay's resubscribe, not twice - the queue does not
+retry, bullmq does. And there is nothing upstream to share with: `@arkv/shared`'s
+`retry` takes a constant delay with no multiplier, jitter, cap or signal, and a
+workspace-wide grep for `backoff|jitter|exponential|circuit` returns nothing.
+
+**Redaction was the second.** `sanitizeLogEntry` is real and good, and as of
+`@arkv/logger` 0.8.2 it is exported. dunx still does not consume it: `@dunx/core`
+having zero dependencies is load-bearing, and `ConsoleLogger` not sanitizing is
+precisely the reason to swap in `@dunx/infra/logger`.
+
+Three fixes did go the other way, which is the direction the rule points in - a
+colour-support gate, `FORCE_COLOR=0` no longer forcing colour _on_, and that
+sanitizer export. All three shipped in 0.8.2 rather than being patched here.

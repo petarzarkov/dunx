@@ -271,13 +271,9 @@ Feedback goes in as a new file rather than into conversation.
 | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Landed. Gin, net/http, Axum, Spring. Needs one clean run to publish. |
 | [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.                     |
-| [async-local-storage-cost](./roadmap/async-local-storage-cost.md)                   | Measured. +0.91 us, and `enterWith` segfaults Bun.                   |
-| [arkv-integrations](./roadmap/arkv-integrations.md)                                 | Done, as arkv#4. Awaiting a merge and a version bump.                |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                          |
-| [independent-versions](./roadmap/independent-versions.md)                           | Closed. One line, reopened by core 1.0.0.                            |
 | [mcp-server](./roadmap/mcp-server.md)                                               | Feature. Requested. Ask the framework about itself.                  |
 | [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file.        |
-| [relay-boot-subscribe](./roadmap/relay-boot-subscribe.md)                           | Delivered, with a boundary note worth keeping.                       |
 
 ### From porting nestjs-template to dunx-template
 
