@@ -270,10 +270,11 @@ Feedback goes in as a new file rather than into conversation.
 | Item                                                                        | Shape                                                                     |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | [dunx-dashboard](./roadmap/dunx-dashboard.md)                               | Feature, requested. Designed, not built. Absorbs `@dunx/queue-dashboard`. |
+| [api-surface-consistency](./roadmap/api-surface-consistency.md)             | Feedback. Three ways to declare a module, three to name a dependency.     |
 | [design-polish](./roadmap/design-polish.md)                                 | Feature. Landing page rebuilt; not yet striking.                          |
 | [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)       | Ongoing. Pagination and the queue dashboard page adopted.                 |
 | [http-options-before-container](./roadmap/http-options-before-container.md) | Missing feature, medium. The OpenAPI half is done.                        |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)               | Two upstream defects, both with a reproduction ready to file.             |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)               | Three upstream defects in bullmq's Bun adapter and `Bun.RedisClient`.     |
 
 Delivered and moved out of this folder rather than left here marked done:
 **cross-language benchmark subjects** (the 16-subject run and how to read it are in

@@ -1,10 +1,20 @@
-# A process that touched an unreachable Redis will not exit on SIGTERM
+# Defects in bullmq's Bun adapter and `Bun.RedisClient`
 
-**Open, and it is two upstream bugs, not one dunx bug.** The last investigation
-attributed it entirely to bullmq. That was half wrong: bisecting the stack a layer
-at a time found a leak in `Bun.RedisClient` on its own, and a second, separate one
-in bullmq's Bun adapter. Neither is reachable from userland. Both have a minimal
-reproduction below, ready to file.
+**Open, and it is three upstream bugs, not one dunx bug.** Two are the SIGTERM hang
+this file was opened for; the third is unrelated in symptom and shares their cause -
+`createBunRedisClient` does things ioredis's driver does automatically, and misses
+some of them.
+
+The first investigation attributed the hang entirely to bullmq. That was half wrong:
+bisecting the stack a layer at a time found a leak in `Bun.RedisClient` on its own,
+and a second, separate one in bullmq's Bun adapter. Neither is reachable from
+userland. All three have a minimal reproduction, ready to file.
+
+| #                                                                          | Symptom                                                 | Layer          |
+| -------------------------------------------------------------------------- | ------------------------------------------------------- | -------------- |
+| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | a pending connect outlives `close()`, process hangs     | Bun            |
+| [B](#leak-b---bullmq-disconnect-cannot-cancel-its-own-reconnect)           | `disconnect()` cannot cancel its own reconnect          | bullmq adapter |
+| [C](#defect-c---no-connection-is-ever-named-so-getworkers-is-always-empty) | `getWorkers()` always `[]`, dashboards say "No workers" | bullmq adapter |
 
 ## The measurement that separates them
 
@@ -87,6 +97,89 @@ A userland escape hatch exists but is a cast through `unknown` into a field bull
 does not export - `closing = true` plus `clearTimeout(reconnectTimer)`. That is a
 fork by another name and it would break on a patch release, so it is **not** in
 `@dunx/infra/queue`. Fix it upstream, or wait for it.
+
+## Defect C - no connection is ever named, so `getWorkers()` is always empty
+
+**Cosmetic, but permanently and visibly wrong**, and the first of these three that a
+user actually reports. Found from `dunx-template`: its Bull Board showed two queues
+with waiting jobs and **"No workers"** next to each, while a worker was consuming
+them.
+
+The workers were fine. Measured on the template, with one `bun src/worker.ts`:
+
+| Observation                               | Result                            |
+| ----------------------------------------- | --------------------------------- |
+| `notifications` before the worker started | 56 waiting, 0 completed           |
+| `notifications` ~8 s after it started     | **0 waiting, 56 completed**       |
+| `CLIENT LIST` while consuming             | 8 clients, two of them `bzpopmin` |
+| `name=` on every one of those 8 clients   | **`""`**                          |
+| `getWorkers()` / the board's worker count | **0**                             |
+
+So the blocking connections are there and draining jobs, and not one of them has a
+name.
+
+`getWorkers()` is name matching and nothing else. From
+`bullmq/dist/cjs/classes/queue-getters.js`:
+
+```js
+getWorkers() {
+  const unnamedWorkerClientName = `${this.clientName()}`;
+  const namedWorkerClientName = `${this.clientName()}:w:`;
+  const matcher = (name) => name &&
+    (name === unnamedWorkerClientName || name.startsWith(namedWorkerClientName));
+  return this.baseGetClients(matcher);   // -> backend.getClientList() -> CLIENT LIST
+}
+```
+
+With every name empty, `matcher` is false for every client, so the result is always
+`[]`.
+
+**It is not a Bun limitation.** `CLIENT SETNAME` works and is visible from another
+connection, which is exactly what `CLIENT LIST` needs:
+
+```ts
+const a = new Bun.RedisClient('redis://127.0.0.1:6379');
+await a.send('PING', []);
+await a.send('CLIENT', ['SETNAME', 'probe:test']); // -> 'OK'
+await a.send('CLIENT', ['GETNAME']); // -> 'probe:test'
+// and a second client's CLIENT LIST shows `name=probe:test`
+console.log(a.url); // -> undefined  (see below)
+```
+
+Both halves of the plumbing exist, too, which is what makes this a wiring bug rather
+than a missing feature:
+
+- `createBlockingConnection` in `bullmq/dist/cjs/utils/create-backend.js` computes the
+  right name - `` `${prefix}:${base64(queueName)}${workerName ? `:w:${workerName}` : ''}` `` -
+  and passes it as `duplicate({ connectionName })`.
+- `BunRedisAdapter.duplicate()` reads `opts.connectionName` onto the new adapter, and
+  its `onconnect` handler calls `clientSetName(this.connectionName)` before emitting
+  `'ready'`.
+- `onconnect` does fire, on an explicit `connect()` **and** on the implicit connect of
+  a first command (measured both).
+
+The name still never lands. The remaining suspect is which branch
+`createBlockingConnection` takes - `isRedisInstance(opts.connection)` decides between
+`.duplicate({ connectionName })` and `Object.assign({}, opts.connection, { connectionName })`,
+and the second would spread the adapter into a plain options bag and never call
+`duplicate` at all. Confirming that is the last step before filing, and it did not
+finish here because instantiating the adapter to test it hangs the process on leak A.
+
+Worth noting alongside: `Bun.RedisClient` exposes **no `url` property**
+(`a.url === undefined`, above), and `duplicate()` is `new BunRedisClient(this.raw.url)`.
+`@dunx/infra/queue`'s url-carrying subclass is what keeps that from silently
+connecting to Bun's default, and it is why the duplicate above reaches the right
+server at all.
+
+**Not worked around in `@dunx/infra/queue`.** Naming the connection from userland means
+reproducing bullmq's private client-name convention, base64 and suffix included, on a
+connection bullmq then duplicates internally - so the name would land on the wrong
+socket and break on a patch release. That is the same reasoning that keeps leak B's
+`closing = true` cast out of the package.
+
+Consumers should know the panel is wrong rather than have dunx guess: **"No workers"
+on a Bun-backed board means nothing about whether workers are running.** Job counts
+moving is the signal that works.
 
 ## What was fixed on the way, and is shipped
 
