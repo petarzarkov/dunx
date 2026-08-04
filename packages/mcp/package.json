@@ -1,6 +1,6 @@
 {
   "name": "@dunx/mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts",
   "keywords": [
     "agent",
