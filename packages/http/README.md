@@ -766,6 +766,101 @@ const name: HttpStatusName = 'CONFLICT'; // 'OK' | 'CREATED' | ...
 `HttpError.status` stays `number`, so an uncommon code the table omits (451, 507)
 still works.
 
+## Calling out: `@dunx/http/client`
+
+The outbound half, on a subpath because `HttpFactory` in the root barrel already
+means the inbound direction:
+
+```ts
+import { HttpFactory } from '@dunx/http'; // serving
+import { HttpModule, HttpService } from '@dunx/http/client'; // calling out
+```
+
+```ts
+@Module({
+  imports: [
+    HttpModule.forRootAsync({
+      useFactory: (config: AppConfigService) => ({
+        baseUrl: config.get('upstream').url,
+        timeoutMs: 5_000,
+        retry: { maxRetries: 3, retryDelayMs: 500 },
+      }),
+      inject: [AppConfigService],
+    }),
+  ],
+})
+export class UpstreamModule {}
+```
+
+```ts
+export class Rates {
+  constructor(private readonly http: HttpService) {}
+
+  async latest(base: string): Promise<Quote> {
+    return this.http.get<Quote>('/rates/{base}', {
+      pathParams: { base },
+      queryParams: { precision: 4 },
+    });
+  }
+}
+```
+
+`fetch` and nothing else underneath: it is a Web standard Bun implements natively,
+which is why `axios` and `node-fetch` are banned repo-wide and why there is no
+client dependency to justify. What the service adds is the part every caller
+otherwise rewrites slightly differently.
+
+| | |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| **Timeout** | `AbortSignal.timeout`, combined with a caller's own signal through `AbortSignal.any` |
+| **Retry** | Exponential backoff with jitter from `crypto.getRandomValues`, and `Bun.sleep` between attempts |
+| **`Retry-After`** | Honoured over the computed backoff, in seconds or as an HTTP date, still capped by the ceiling |
+| **URLs** | `buildUrl` and `interpolate` from `@arkv/shared`, so `{param}` and query building are not rewritten |
+| **Tracing** | The inbound request id is forwarded as `x-request-id`, so one trace spans both services |
+| **Bun-only** | `proxy`, `tls`, `unix`, `decompress` passed straight through to `fetch` |
+| **SSE** | `streamSse` yields each `data:` payload; deliberately never retried |
+
+### A failure is not your status
+
+A non-2xx throws `FetchError`, which is **not** an `HttpError`:
+
+```ts
+try {
+  return await this.http.get<User>(`/users/${id}`);
+} catch (error) {
+  if (error instanceof FetchError && error.status === 404) return null;
+  throw new HttpError(HttpStatusCode.BAD_GATEWAY, 'user service unavailable');
+}
+```
+
+An `HttpError` is the inbound contract - the error mapper reads its status and
+answers with it - so an upstream 401 arriving as `HttpError(401)` would tell *your*
+client they are unauthorized, when what happened is that your service could not
+authenticate upstream. Unhandled, a `FetchError` becomes a 500, which is honest;
+only the caller knows whether 404 means "gone" or "not my problem".
+
+A request that never got a response - DNS, refused connection, TLS, or the timeout -
+throws `FetchTransportError` instead, with `aborted` saying which. An abort is never
+retried: the budget for that call is already spent.
+
+### Several upstreams
+
+A named client binds its own options, so two can coexist alongside one default:
+
+```ts
+imports: [
+  HttpModule.forRoot({ baseUrl: internal }),
+  HttpModule.forRoot({ name: 'stripe', baseUrl: stripe, timeoutMs: 10_000 }),
+];
+
+class Payments {
+  readonly stripe = inject(httpClient('stripe'));
+}
+```
+
+`inject()` in a field initialiser rather than a constructor parameter, because a
+`Token` is not a constructor type.
+
 ## Notes
 
 - Routes are discovered at boot by walking each controller's prototype chain, so an

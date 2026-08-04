@@ -36,6 +36,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
     }
   },
   "publishConfig": {
@@ -46,6 +50,9 @@
     "test": "bun test --bail",
     "test:cov": "bun test --coverage",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arkv/shared": "^0.8.0"
   },
   "devDependencies": {
     "@dunx/core": "workspace:*"
