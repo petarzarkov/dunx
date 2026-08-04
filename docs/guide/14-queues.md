@@ -457,69 +457,38 @@ await worker.shutdown();
 dunx's own integration suite probes the server first and skips itself when nothing
 answers, so `bun test` passes on a machine with no Redis.
 
-## A dashboard, opt in
+## A dashboard: none yet
 
-`@dunx/queue-dashboard` mounts [bull-board](https://github.com/felixmosh/bull-board)
-over the same queues, so jobs, retries and failures are visible without a Redis
-client.
+There is **no queue dashboard in dunx right now**, and that is a deliberate gap
+rather than an oversight.
 
-```bash
-bun add @dunx/queue-dashboard @bull-board/api @bull-board/ui
-```
+`@dunx/queue-dashboard` existed for one release. It mounted
+[bull-board](https://github.com/felixmosh/bull-board) on `Bun.serve` through an
+`IServerAdapter` implementation, which worked - the real UI, its 2.7 MB of static
+assets streamed from `Bun.file`, and no template engine. It has been **removed** in
+favour of one dashboard covering the whole framework rather than the queues alone:
+routes, the provider graph, the queues and runtime health on one page. That design is
+in [dunx-dashboard](https://github.com/petarzarkov/dunx/blob/main/docs/roadmap/dunx-dashboard.md).
 
-```ts
-@Module({
-  imports: [
-    JobsModule,
-    QueueDashboardModule.forRootAsync({
-      useFactory: (publisher: JobPublisher, config: AppConfigService) => ({
-        path: '/queues',
-        queues: [publisher.queue(THUMBNAIL_QUEUE)],
-        uiConfig: { boardTitle: `${config.get('appName')} queues` },
-        authorize: (request) => isAdmin(request),
-      }),
-      inject: [JobPublisher, AppConfigService],
-    }),
-  ],
-})
-export class DashboardModule {}
-```
+Until it ships, the queue data is four calls on bullmq's own `Queue`, which
+`JobPublisher.queue(name)` hands you:
 
 ```ts
-// between create() and listen()
-app.use(QueueDashboardMiddleware);
+const queue = publisher.queue('emails');
+
+await queue.getJobCounts(); // waiting, active, completed, failed, delayed
+await queue.getJob(id); // one job: state, result, failedReason, attempts
+await (await queue.getJob(id))?.retry();
+await queue.drain(); // discard everything waiting
 ```
 
-`forRootAsync`, because `JobPublisher.queue(name)` opens the queue on first use, so
-it cannot be named in a static call.
-
-**`authorize` has no default.** Leave it out and the board is served to anyone who
-can reach the port - reasonable behind a private network, bad everywhere else, so it
-is stated either way. A rejected request gets **404, not 403**: a queue dashboard
-that announces itself to an unauthenticated caller has told them where to keep
-knocking.
-
-It is a function rather than a list of guards because `app.use` is global -
-middleware registered there runs for every route, and this is a check that runs for
-the board's paths only.
-
-Every dependency is an **optional peer**, and nothing is loaded until the first
-request reaches the board. An app that never mounts one installs none of them.
-
-### Why dunx writes the server adapter
-
-bull-board ships adapters for express, fastify, koa, hapi, hono and elysia, and dunx
-uses none of them: express is banned repo-wide, and hono or elysia would mean running
-a second HTTP framework inside your app to serve one page. So `BunServeAdapter`
-implements bull-board's own `IServerAdapter` over `Bun.serve` - the same division
-`createBunRedisClient` makes, where the library owns the abstraction and Bun owns the
-I/O. The 2.7 MB UI bundle streams from `Bun.file` rather than being read into memory,
-and the entry page needs no template engine: bull-board's `index.ejs` is five
-interpolations and no control flow, so it is one `String.replace` with
-`Bun.escapeHTML` rather than a 210 KB dependency. `ejs` remains an optional peer for
-the day that stops being true.
-
-`examples/full` mounts it at `/queues` over its `thumbnails` queue.
+Serving that as an admin-only JSON controller is about sixty lines and is what
+`dunx-template` did before the package existed. **`getWorkers()` is the one call not
+worth making**: bullmq matches workers by client name through `CLIENT LIST`, and its
+Bun adapter never names a connection, so it returns `[]` even while workers are
+draining jobs. Job counts moving is the signal that works. Recorded, with the
+measurement, in
+[queue-shutdown-sigterm](https://github.com/petarzarkov/dunx/blob/main/docs/roadmap/queue-shutdown-sigterm.md).
 
 ## Related
 

@@ -12,14 +12,11 @@
     "worker": "bun src/worker.ts"
   },
   "dependencies": {
-    "@bull-board/api": "^8.5.0",
-    "@bull-board/ui": "^8.5.0",
     "@dunx/auth": "workspace:*",
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/infra": "workspace:*",
     "@dunx/openapi": "workspace:*",
-    "@dunx/queue-dashboard": "workspace:*",
     "@dunx/transform": "workspace:*",
     "better-auth": "^1.6.25",
     "bullmq": "^6.0.5",

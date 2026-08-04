@@ -72,8 +72,8 @@ function, with fifteen lines of comment explaining why. That is the "hacky" file
 it is hacky for a good reason.
 
 **No dunx package benefits from the concatenation.** Every configurable module in the
-repo - `DbModule`, `RedisModule`, `QueueModule`, `OpenApiModule`, `LoggerModule`,
-`QueueDashboardModule` - is an **undecorated** class with static factories, so none of
+repo - `DbModule`, `RedisModule`, `QueueModule`, `OpenApiModule`, `LoggerModule` - is
+an **undecorated** class with static factories, so none of
 them has declared metadata to merge. The behaviour has no beneficiary and one known
 victim.
 

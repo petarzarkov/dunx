@@ -2,7 +2,6 @@ import { HttpFactory, RedisRelay, type HttpApp } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
 import { AppConfigService, RELAY_CHANNEL } from './config.js';
-import { QueueDashboardMiddleware } from '@dunx/queue-dashboard';
 import { RequestLoggerMiddleware } from './http/request-log.js';
 
 /**
@@ -47,8 +46,6 @@ export const createApp = async (): Promise<HttpApp> => {
   app.setGlobalPrefix('api');
   app.use(RequestLoggerMiddleware);
   // Global middleware, so it also runs in front of the unmatched-path fallback -
-  // which is where the board's paths land, since no controller declares them.
-  app.use(QueueDashboardMiddleware);
   app.set('trust proxy', true);
   app.enableCors({
     origin: config.get('corsOrigin'),

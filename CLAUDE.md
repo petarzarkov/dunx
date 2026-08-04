@@ -406,18 +406,17 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 ## Packages Overview
 
-| Package                 | Contains                                                                                                                         |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `@dunx/core`            | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                                |
-| `@dunx/transform`       | Load-time constructor-dependency transform (only native dep)                                                                     |
-| `@dunx/http`            | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation; an outbound `HttpClient` behind `./client` |
-| `@dunx/infra`           | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger` `/pagination`                                                      |
-| `@dunx/openapi`         | OpenAPI 3.1 from the routes' own zod schemas; `tools/openapi-ui`'s explorer inlined behind `./ui` (zod is a `peerDependency`)    |
-| `@dunx/auth`            | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                                   |
-| `@dunx/testing`         | `createTestApp` / `createTestServer` - overrides replaced in place, real server on port 0                                        |
-| `@dunx/create-app`      | `bunx @dunx/create-app my-api` - a `base` template plus composable feature folders, with versions resolved at run time           |
-| `@dunx/mcp`             | An MCP server over stdio that **reads** an app's routes, providers and modules. Never boots it                                   |
-| `@dunx/queue-dashboard` | **bull-board** mounted on `Bun.serve` as global middleware. Being absorbed by `@dunx/dashboard` - see the roadmap                |
+| Package            | Contains                                                                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `@dunx/core`       | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                                |
+| `@dunx/transform`  | Load-time constructor-dependency transform (only native dep)                                                                     |
+| `@dunx/http`       | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation; an outbound `HttpClient` behind `./client` |
+| `@dunx/infra`      | Subpaths `/db` `/redis` `/queue` `/files` `/images` `/logger` `/pagination`                                                      |
+| `@dunx/openapi`    | OpenAPI 3.1 from the routes' own zod schemas; `tools/openapi-ui`'s explorer inlined behind `./ui` (zod is a `peerDependency`)    |
+| `@dunx/auth`       | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                                   |
+| `@dunx/testing`    | `createTestApp` / `createTestServer` - overrides replaced in place, real server on port 0                                        |
+| `@dunx/create-app` | `bunx @dunx/create-app my-api` - a `base` template plus composable feature folders, with versions resolved at run time           |
+| `@dunx/mcp`        | An MCP server over stdio that **reads** an app's routes, providers and modules. Never boots it                                   |
 
 Ten packages, deliberately few. Merging is nearly free because the runtime weight is
 almost nil - `@dunx/core` has **zero dependencies**, and ESM tree-shaking drops what
@@ -425,28 +424,28 @@ is not imported. `@dunx/transform` stays separate because it is the only package
 native dependency (`oxc-parser`) and is build-time only; merging it would put a Rust
 parser in every production deploy.
 
-Four areas are integrations rather than dunx code, per Rule 1's second half:
+Three areas are integrations rather than dunx code, per Rule 1's second half:
 `@dunx/infra/db` is **drizzle** over `drizzle-orm/bun-sqlite` and `drizzle-orm/bun-sql`
 (`drizzle-orm` is an optional `peerDependency`), `@dunx/infra/logger` binds
 **`@arkv/logger`** to core's `Logger` contract (a `dependency`, since `@arkv` is
 first-party), `@dunx/auth` is **better-auth** (a required `peerDependency`) - the
 module, the mount, the guard and two Bun-native adapters, and nothing of the auth flow
-itself - and `@dunx/queue-dashboard` is **bull-board**, reached through an
-`IServerAdapter` over `Bun.serve`. None of them restates the library's own surface -
-see `packages/infra/README.md` and `packages/auth/README.md`.
+itself. None of them restates the library's own surface - see
+`packages/infra/README.md` and `packages/auth/README.md`.
 
-`@dunx/auth` and `@dunx/queue-dashboard` are their own packages, not
-`@dunx/infra/auth` and `@dunx/infra/queue-dashboard`: both need `@dunx/http`, and
-`@dunx/infra` must not depend on the web layer. Both depend on `@dunx/infra` **not at
-all** - `DrizzleSource`, `RedisStore` and `DashboardQueue` restate structurally what
-`DbConnection`, `RedisConnection` and a bullmq `Queue` provide, which also removes a
+`@dunx/auth` is its own package, not `@dunx/infra/auth`: it needs `@dunx/http`'s
+middleware and metadata types, and `@dunx/infra` must not depend on the web layer. It
+depends on `@dunx/infra` **not at all** - `DrizzleSource` and `RedisStore` restate
+structurally what `DbConnection` and `RedisConnection` provide, which also removes a
 `bun run --filter '*'` build-order race. Reasoning in docs/ARCHITECTURE.md,
 "Authentication".
 
 `@dunx/dashboard` is designed but not built: one page over routes, the provider graph,
-the queues and runtime health, replacing `@dunx/queue-dashboard`. It needs the readers
-now exported from `@dunx/mcp` moved down into `@dunx/core` and `@dunx/http` first. Read
-docs/roadmap/dunx-dashboard.md before touching either package.
+the queues and runtime health. It needs the readers now exported from `@dunx/mcp`
+moved down into `@dunx/core` and `@dunx/http` first. **`@dunx/queue-dashboard` was
+deleted** - it mounted bull-board for one release and is gone from this repo and from
+npm, so there is no queue UI at all until the dashboard ships. Do not reintroduce a
+queue-only package; read docs/roadmap/dunx-dashboard.md first.
 
 ## Examples
 

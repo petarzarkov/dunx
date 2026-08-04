@@ -1,7 +1,9 @@
 # `@dunx/dashboard` - one page for the whole framework, not just the queues
 
-**Requested, designed, not built.** Replaces `@dunx/queue-dashboard`, which mounts
-bull-board and therefore only ever answers questions about bullmq.
+**Requested, designed, not built - and now the only planned queue UI in dunx.**
+`@dunx/queue-dashboard` mounted bull-board for one release and has been **deleted**,
+from this repo and from npm, so this page is the whole plan rather than a replacement
+for something already working. Nothing serves queue data today.
 
 The observation behind it: an operator looking at a running dunx app has three
 separate surfaces over the same data and none of them is the one they want. The
@@ -89,9 +91,9 @@ are:
   queue counts, config keys, indicators. Server-rendered HTML with a few KB of
   vanilla JS for filtering covers all of it.
 
-So: no framework, no build step, no `tools/` addition. `@dunx/queue-dashboard`
-already established the precedent one notch down - it replaced `ejs` with a
-`String.replace` substitution renderer, measured against the real template, because
+So: no framework, no build step, no `tools/` addition. The deleted package established
+the precedent one notch down: it dropped `ejs` for a `String.replace` substitution
+renderer, verified against bull-board's real template character for character, because
 210 KB for five interpolations and no control flow is not worth it.
 
 Two consequences to accept deliberately:
@@ -111,79 +113,117 @@ Every panel also gets a **JSON sibling** (`/_dunx/routes.json`), which is the sa
 payload the MCP tool returns. Free, because the readers are shared, and it means the
 page is not the only way to get the data.
 
-## What it takes from `@dunx/queue-dashboard`, and what it drops
+## The mounting model, inherited from a deleted package
 
-The mounting model is right and survives intact. It was worked out against
-`Bun.serve` and is not obvious:
+`@dunx/queue-dashboard` existed for one release and **has been deleted** - from this
+repo and from npm. It mounted bull-board on `Bun.serve`, which worked; what was wrong
+was the unit. A queue-only dashboard is not a thing a framework should ship when the
+same page should be answering "what is this process doing" in full.
+
+So this package starts from nothing, and there is **no queue UI in dunx at all** until
+it lands. That is the accepted cost. What it must not do is relearn the four things
+that release established, because none of them is obvious and all were worked out
+against `Bun.serve`:
 
 - **A global middleware, not a controller.** Middleware registered with `app.use`
   runs in front of the unmatched-path fallback, which is where the dashboard's paths
-  land because the app declares none of them. Declaring them as dunx routes would
-  mean generating controllers.
+  land because the app declares none of them. Declaring them as dunx routes would mean
+  generating controllers for a route table handed over at runtime.
 - **`authorize` has no default.** Leaving it out serves the page to anyone who can
-  reach the port. That is fine behind a private network and bad everywhere else, so
-  it is stated either way rather than guessed.
+  reach the port. Fine behind a private network, bad everywhere else, so it is stated
+  either way rather than guessed.
 - **A rejected request gets 404, not 403.** A dashboard that announces itself to an
   unauthenticated caller has told them where to keep knocking.
-- **Everything is built on the first request**, memoised on the promise so two
-  concurrent first requests build one dashboard. An app that mounts it and never
-  opens it pays nothing.
-- **Anything not the dashboard's path falls through**, so the app's own routes and
-  its 404 behave exactly as before.
+- **It must be registered ahead of any session guard.** Measured in `dunx-template`:
+  with the middleware last in the chain, `SessionGuard` answered every dashboard
+  request `401` before `authorize` ran, which defeats the 404 contract entirely. That
+  works only because `authorize` receives the raw `Request` and can ask the auth
+  library itself rather than reading an `AuthContext` written earlier in the chain -
+  so **keep `authorize` self-sufficient**.
 
-Dropped with bull-board: `BunServeAdapter` (it exists only to implement
-bull-board's `IServerAdapter`), `render.ts` and the substitution renderer, the
-`@bull-board/api` and `@bull-board/ui` peers, the optional `ejs` peer, and the 2.7 MB
-of static assets streamed from `Bun.file`.
+Also worth carrying over: everything is built on the **first request**, memoised on
+the promise so two concurrent first requests build one dashboard, and anything not the
+dashboard's path **falls through** so the app's own routes and its 404 behave exactly
+as before.
 
-`DashboardQueue` - a bullmq queue restated structurally rather than imported, so the
-package depends on `@dunx/infra` not at all - is kept exactly as it is. That
-constraint does not change: serving a page needs the web layer, `@dunx/infra` must
-not depend on it, so a dependency either way would invert it.
+Gone with the package, and not to be resurrected: `BunServeAdapter` (it existed only
+to satisfy bull-board's interface), the substitution renderer, the `@bull-board/api`
+and `@bull-board/ui` peers, the optional `ejs` peer, and 2.7 MB of static assets.
+`DashboardQueue` - a bullmq queue restated structurally so the package depends on
+`@dunx/infra` not at all - is the one type worth reintroducing verbatim; that
+constraint has not changed.
 
-## Is a queues panel "inventing what a mature library already solves"?
+## The queues panel is now built from scratch
 
-This is the closest the design comes to Rule 1's second half, so it gets answered
-rather than waved at. bull-board **is** the mature library, and dunx would be
-rendering a queue UI that bull-board renders better.
+There is no bull-board underneath it any more, which makes the scope question sharper
+rather than softer. It is **four calls on bullmq's own `Queue`**:
 
-The answer is that this is a **scope decision, not a rebuild**. dunx's queues panel
-is deliberately less than bull-board: counts per queue, one job's state, result and
-failure, retry, drain. That is precisely the set `dunx-template`'s `QueuesController`
-already served as admin-only JSON, and it is four calls on bullmq's own `Queue` - no
-scheduler, no flows, no job logs, no repeatable-job editor. Nothing about expiry,
-retry semantics or backoff is being reimplemented; bullmq still owns all of it.
+| Shown            | Call                                                 |
+| ---------------- | ---------------------------------------------------- |
+| counts per queue | `getJobCounts()`                                     |
+| one job          | `getJob(id)` - state, result, failedReason, attempts |
+| retry            | `job.retry()`                                        |
+| drain            | `queue.drain()`                                      |
 
-What the panel buys that mounting bull-board cannot is the thing being built:
-bull-board owns its entire page, so it can never _be_ one panel next to routes and
-providers, sharing the navigation, the `authorize` check and the styling. That is
-the whole point of the package.
+That is deliberately less than bull-board: no scheduler, no flows, no job logs, no
+repeatable-job editor, no pagination through thousands of jobs. Nothing about expiry,
+retry semantics or backoff is reimplemented - bullmq still owns all of it. Anyone who
+needs that depth is better served mounting bull-board themselves, and the design
+should say so in the README rather than implying parity.
 
-Anyone who wants bull-board's depth is better served by bull-board, and the honest
-consequence is recorded below.
+**Do not call `getWorkers()`.** It always returns `[]` on Bun: bullmq matches workers
+by client name through `CLIENT LIST`, and its Bun adapter never names a connection, so
+a live worker draining jobs reports as absent. Measured, with the reproduction, in
+[queue-shutdown-sigterm](./queue-shutdown-sigterm.md), defect C. A "workers" column
+would be permanently and confidently wrong, so the panel should omit it and say why -
+job counts moving is the signal that works.
 
-## Migration
+## Answering Rule 1 now that there is no library underneath
 
-`@dunx/queue-dashboard` is published at 0.8.0 and has two live consumers in this
-repo: `examples/full/src/dashboard/dashboard.module.ts` and `create-app`'s
-`dashboard` feature template.
+With bull-board mounted, the queues panel was a _scope_ decision. Without it, this is
+dunx rendering a queue UI, and Rule 1's second half - never invent what a mature
+library already solves - has to be answered directly.
 
-1. Land the reader refactor above.
-2. Build `@dunx/dashboard` with the four panels, `QueueDashboardModule`'s mounting
-   model, and its own queues rendering.
-3. Move both consumers over. `create-app`'s feature keeps its name and its
-   `authorize: () => true` with the comment explaining why an example lets
-   everything through.
-4. `npm deprecate @dunx/queue-dashboard` pointing at `@dunx/dashboard`. It stays
-   installable - deprecating is not unpublishing - which is the answer for anyone
-   who wants bull-board's job lists and flows. **Say that in the deprecation
-   message** rather than implying the replacement is a superset, because it is not.
-5. `dunx-template` mounts it and deletes nothing further: its `QueuesController` is
-   already gone in favour of the queue dashboard, so this is a swap of one import.
+It holds, for a reason that is about the data and not the rendering: the four calls
+above are **reads and two commands on bullmq's own API**, not a reimplementation of
+anything bullmq does. The queue engine, the retry policy, the backoff, the locks and
+the scheduler all stay bullmq's. What dunx adds is a table, and a table over a
+library's public API is not a competing implementation of that library.
 
-Names: `DashboardModule.forRoot` / `.forRootAsync`, `DashboardMiddleware`,
-`DashboardOptions`, default path **`/_dunx`**. The underscore keeps it out of the way
-of an app's own routes; `/queues` was fine for a queue board and is wrong for this.
+What would violate the rule: a job scheduler UI, a flow editor, or anything that
+needed dunx to model queue state itself rather than ask for it. The panel stays on the
+four calls, and growing past them is the signal to stop and mount bull-board instead.
+
+## What replaces it in the meantime
+
+Nothing, in the framework. An app that needs the data today writes a controller over
+`JobPublisher.queue(name)` - about sixty lines, admin-gated - which is what
+`dunx-template` did before the package existed and what
+[14-queues.md](../guide/14-queues.md) now documents. That is a fair holding position:
+the data is four calls, and the thing that was actually worth having was the page.
+
+## Migration, and what is already cleaned up
+
+The deletion is complete on the dunx side:
+
+- `packages/queue-dashboard` removed, and unpublished from npm.
+- `examples/full` lost `src/dashboard/`, its `app.use(QueueDashboardMiddleware)`, and
+  the `@dunx/queue-dashboard` / `@bull-board/*` dependencies.
+- `create-app` lost the `dashboard` feature, its template folder, its compose test and
+  the `@bull-board/*` entries in `THIRD_PARTY`.
+- `scripts/first-publish.ts` lost the entry; the guide, README, CLAUDE.md and this
+  folder are updated.
+
+**`dunx-template` is the outstanding consumer.** It depends on
+`@dunx/queue-dashboard@^0.8.0`, mounts it at `/api/queues` and has an integration suite
+asserting the board renders - so `bun install` there now resolves a package that no
+longer exists on npm. It needs the dependency dropped and either a JSON controller
+back or nothing at `/api/queues` until this ships.
+
+Names when it is built: `DashboardModule.forRoot` / `.forRootAsync`,
+`DashboardMiddleware`, `DashboardOptions`, default path **`/_dunx`**. The underscore
+keeps it clear of an app's own routes; `/queues` was right for a queue board and is
+wrong for this.
 
 ## Security, and one new exposure
 

@@ -8,7 +8,6 @@ import {
 import { AccountsModule } from './auth/auth.module.js';
 import { CacheModule } from './cache/cache.module.js';
 import { ChatModule } from './chat/chat.module.js';
-import { DashboardModule } from './dashboard/dashboard.module.js';
 import { AppConfigService, validate } from './config.js';
 import { DatabaseModule } from './database/database.module.js';
 import { DocsModule } from './docs/docs.module.js';
@@ -83,7 +82,6 @@ const fileAndConsole = (path: string): Transport[] => [
     WiringModule,
     DocsModule,
     // After JobsModule, whose QueueModule.forRoot binds the publisher it reads.
-    DashboardModule,
   ],
   providers: [Tour],
 })

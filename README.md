@@ -41,7 +41,6 @@ and what is next.
 | [`@dunx/infra`](./packages/infra) | [![npm](https://img.shields.io/npm/v/%40dunx%2Finfra)](https://www.npmjs.com/package/%40dunx%2Finfra) [![dls](https://img.shields.io/npm/dt/%40dunx%2Finfra?label=dls)](https://www.npmjs.com/package/%40dunx%2Finfra) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Finfra?label=size)](https://www.npmjs.com/package/%40dunx%2Finfra) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-infra.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Database, Redis, queue, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, bullmq over Bun.RedisClient, plus Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger |
 | [`@dunx/mcp`](./packages/mcp) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fmcp)](https://www.npmjs.com/package/%40dunx%2Fmcp) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fmcp?label=dls)](https://www.npmjs.com/package/%40dunx%2Fmcp) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fmcp?label=size)](https://www.npmjs.com/package/%40dunx%2Fmcp) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-mcp.svg)](https://petarzarkov.github.io/dunx/#/coverage) | A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts |
 | [`@dunx/openapi`](./packages/openapi) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fopenapi)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fopenapi?label=dls)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fopenapi?label=size)](https://www.npmjs.com/package/%40dunx%2Fopenapi) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-openapi.svg)](https://petarzarkov.github.io/dunx/#/coverage) | OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate |
-| [`@dunx/queue-dashboard`](./packages/queue-dashboard) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fqueue-dashboard)](https://www.npmjs.com/package/%40dunx%2Fqueue-dashboard) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fqueue-dashboard?label=dls)](https://www.npmjs.com/package/%40dunx%2Fqueue-dashboard) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fqueue-dashboard?label=size)](https://www.npmjs.com/package/%40dunx%2Fqueue-dashboard) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-queue-dashboard.svg)](https://petarzarkov.github.io/dunx/#/coverage) | bull-board mounted on Bun.serve for a dunx app - an opt-in dashboard for @dunx/infra/queue |
 | [`@dunx/testing`](./packages/testing) | [![npm](https://img.shields.io/npm/v/%40dunx%2Ftesting)](https://www.npmjs.com/package/%40dunx%2Ftesting) [![dls](https://img.shields.io/npm/dt/%40dunx%2Ftesting?label=dls)](https://www.npmjs.com/package/%40dunx%2Ftesting) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Ftesting?label=size)](https://www.npmjs.com/package/%40dunx%2Ftesting) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-testing.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0 |
 | [`@dunx/transform`](./packages/transform) | [![npm](https://img.shields.io/npm/v/%40dunx%2Ftransform)](https://www.npmjs.com/package/%40dunx%2Ftransform) [![dls](https://img.shields.io/npm/dt/%40dunx%2Ftransform?label=dls)](https://www.npmjs.com/package/%40dunx%2Ftransform) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Ftransform?label=size)](https://www.npmjs.com/package/%40dunx%2Ftransform) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-transform.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Load-time transform that records constructor dependencies for the dunx container |
 
@@ -67,23 +66,22 @@ bun run --filter '@dunx/example-minimal' start
 
 ```
 dunx/
-├── packages/            # Published packages
-│   ├── auth             # Better Auth for dunx: its handler mounted on Bun.serve, a session guard reading @Public() and @Roles(), the caller in async context, and Bun.password hashing
-│   ├── core             # DI container, modules, lifecycle and the injectable Logger contract for the dunx framework
-│   ├── create-app       # Scaffold a new dunx application - bunx @dunx/create-app my-api
-│   ├── http             # Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways
-│   ├── infra            # Database, Redis, queue, storage, image and logging infrastructure for dunx
-│   ├── mcp              # A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts
-│   ├── openapi          # OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate
-│   ├── queue-dashboard  # bull-board mounted on Bun.serve for a dunx app - an opt-in dashboard for @dunx/infra/queue
-│   ├── testing          # Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0
-│   └── transform        # Load-time transform that records constructor dependencies for the dunx container
-├── examples/            # Private apps that consume the packages
-├── tools/               # Private workspaces, never published - docs site, benchmarks, API explorer
-├── docs/                # Architecture and design docs
-├── scripts/             # Monorepo-level scripts
-├── .github/workflows/   # CI/CD pipeline
-└── .husky/              # Git hooks
+├── packages/           # Published packages
+│   ├── auth            # Better Auth for dunx: its handler mounted on Bun.serve, a session guard reading @Public() and @Roles(), the caller in async context, and Bun.password hashing
+│   ├── core            # DI container, modules, lifecycle and the injectable Logger contract for the dunx framework
+│   ├── create-app      # Scaffold a new dunx application - bunx @dunx/create-app my-api
+│   ├── http            # Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways
+│   ├── infra           # Database, Redis, queue, storage, image and logging infrastructure for dunx
+│   ├── mcp             # A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts
+│   ├── openapi         # OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate
+│   ├── testing         # Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0
+│   └── transform       # Load-time transform that records constructor dependencies for the dunx container
+├── examples/           # Private apps that consume the packages
+├── tools/              # Private workspaces, never published - docs site, benchmarks, API explorer
+├── docs/               # Architecture and design docs
+├── scripts/            # Monorepo-level scripts
+├── .github/workflows/  # CI/CD pipeline
+└── .husky/             # Git hooks
 ```
 
 ## Development

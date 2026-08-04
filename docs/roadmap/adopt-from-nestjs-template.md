@@ -27,14 +27,15 @@ and rates it. Treat it as a source of proven patterns.
   that direction, where a `nextCursor` on the last page reads as "there is more" to
   any client checking for null; and the two enums became frozen objects, since
   `dunx/no-enum` rejects the one TS construct that cannot be erased.
-- **A queue dashboard page**, as `@dunx/queue-dashboard`. The template had judged
-  this unportable - Bull Board is Express-mounted React and `Bun.serve` is not
-  Express - and served the data as admin-only JSON instead. It turned out to be
-  portable after all: bull-board's `IServerAdapter` is a sink, so `BunServeAdapter`
-  implements it over `Bun.serve` in about a page of code. The same division
-  `createBunRedisClient` establishes: the library owns the abstraction, Bun owns the
-  I/O. That page is now being superseded in turn by
-  [dunx-dashboard](./dunx-dashboard.md), which makes queues one panel of four.
+- **A queue dashboard page** - attempted, then withdrawn. `@dunx/queue-dashboard`
+  mounted bull-board on `Bun.serve` for one release, which proved the thing the
+  template had judged impossible: bull-board's `IServerAdapter` is a sink, so an
+  adapter over `Bun.serve` is about a page of code, and the real UI serves with its
+  static assets streamed from `Bun.file`. The **judgement about the page was wrong and
+  the judgement about the scope was right** - a queue-only dashboard is the wrong unit
+  for a framework, so the package is deleted and the capability folds into
+  [dunx-dashboard](./dunx-dashboard.md) as one panel of four. What survives is the
+  knowledge, recorded there: the mounting model, and that the adapter is cheap.
 
 ## Still to mine
 

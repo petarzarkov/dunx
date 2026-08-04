@@ -142,24 +142,6 @@ describe('a composed app', () => {
     ).not.toContain('OpenApiModule');
   });
 
-  /**
-   * The module alone serves nothing - the board is a global middleware, so a scaffold
-   * that imports it without registering it would look wired and answer 404.
-   */
-  test('registers the dashboard middleware when dashboard is selected', async () => {
-    const withBoard = await (
-      await compose(['dashboard'])
-    ).read('src/bootstrap.ts');
-    expect(withBoard).toContain(
-      "import { QueueDashboardMiddleware } from '@dunx/queue-dashboard'",
-    );
-    expect(withBoard).toContain('app.use(QueueDashboardMiddleware)');
-
-    expect(
-      await (await compose(['notes'])).read('src/bootstrap.ts'),
-    ).not.toContain('QueueDashboardMiddleware');
-  });
-
   test('installs the websocket relay only when websockets are selected', async () => {
     const withWs = await (
       await compose(['websockets'])

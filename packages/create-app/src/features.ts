@@ -252,24 +252,6 @@ export const FEATURES: readonly Feature[] = [
     service: 'Redis or Valkey',
   },
   {
-    name: 'dashboard',
-    source: 'dashboard',
-    summary:
-      'bull-board at /queues, over the queue the jobs feature publishes to.',
-    requires: ['jobs'],
-    module: {
-      klass: 'DashboardModule',
-      from: './dashboard/dashboard.module.js',
-    },
-    dependencies: [
-      '@dunx/queue-dashboard',
-      '@bull-board/api',
-      '@bull-board/ui',
-    ],
-    config: ['appName'],
-    service: 'Redis or Valkey',
-  },
-  {
     name: 'health',
     source: 'health',
     summary: 'One endpoint reporting which parts are live and which degraded.',

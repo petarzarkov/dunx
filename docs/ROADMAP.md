@@ -267,14 +267,14 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                        | Shape                                                                     |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [dunx-dashboard](./roadmap/dunx-dashboard.md)                               | Feature, requested. Designed, not built. Absorbs `@dunx/queue-dashboard`. |
-| [api-surface-consistency](./roadmap/api-surface-consistency.md)             | Feedback. Three ways to declare a module, three to name a dependency.     |
-| [design-polish](./roadmap/design-polish.md)                                 | Feature. Landing page rebuilt; not yet striking.                          |
-| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)       | Ongoing. Pagination and the queue dashboard page adopted.                 |
-| [http-options-before-container](./roadmap/http-options-before-container.md) | Missing feature, medium. The OpenAPI half is done.                        |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)               | Three upstream defects in bullmq's Bun adapter and `Bun.RedisClient`.     |
+| Item                                                                        | Shape                                                                 |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [dunx-dashboard](./roadmap/dunx-dashboard.md)                               | Feature, requested. Designed, not built. The only planned queue UI.   |
+| [api-surface-consistency](./roadmap/api-surface-consistency.md)             | Feedback. Three ways to declare a module, three to name a dependency. |
+| [design-polish](./roadmap/design-polish.md)                                 | Feature. Landing page rebuilt; not yet striking.                      |
+| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)       | Ongoing. Pagination and the queue dashboard page adopted.             |
+| [http-options-before-container](./roadmap/http-options-before-container.md) | Missing feature, medium. The OpenAPI half is done.                    |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)               | Three upstream defects in bullmq's Bun adapter and `Bun.RedisClient`. |
 
 Delivered and moved out of this folder rather than left here marked done:
 **cross-language benchmark subjects** (the 16-subject run and how to read it are in
@@ -290,8 +290,8 @@ produced 22 findings.
 
 Of those, the two the template had to work around itself are now closed in dunx and
 deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, and the
-**queue dashboard page** is `@dunx/queue-dashboard` rather than an admin-only JSON
-controller. `OpenApiModule.forRootAsync` closed the half of
+**queue dashboard page** was `@dunx/queue-dashboard`, since deleted - see
+[dunx-dashboard](./roadmap/dunx-dashboard.md). `OpenApiModule.forRootAsync` closed the half of
 [http-options-before-container](./roadmap/http-options-before-container.md) that
 `OpenApiModule` owned; the `HttpOptions` half is still open and the template still
 validates its config twice because of it.
