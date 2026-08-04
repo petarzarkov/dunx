@@ -72,7 +72,7 @@
     },
     "packages/auth": {
       "name": "@dunx/auth",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
@@ -93,11 +93,11 @@
     },
     "packages/core": {
       "name": "@dunx/core",
-      "version": "0.4.0",
+      "version": "0.5.0",
     },
     "packages/create-app": {
       "name": "@dunx/create-app",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "bin": {
         "create-dunx-app": "dist/cli.js",
       },
@@ -110,7 +110,7 @@
     },
     "packages/http": {
       "name": "@dunx/http",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@dunx/core": "workspace:*",
       },
@@ -124,7 +124,7 @@
     },
     "packages/infra": {
       "name": "@dunx/infra",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@arkv/logger": "^0.8.2",
       },
@@ -150,7 +150,7 @@
     },
     "packages/mcp": {
       "name": "@dunx/mcp",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "bin": {
         "dunx-mcp": "dist/cli.js",
       },
@@ -170,7 +170,7 @@
     },
     "packages/openapi": {
       "name": "@dunx/openapi",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "bin": {
         "dunx-openapi": "dist/cli.js",
       },
@@ -194,7 +194,7 @@
     },
     "packages/testing": {
       "name": "@dunx/testing",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
@@ -210,7 +210,7 @@
     },
     "packages/transform": {
       "name": "@dunx/transform",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "oxc-parser": "0.142.0",
       },
