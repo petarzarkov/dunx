@@ -26,6 +26,10 @@ export const useChunk = <T>(
     return () => {
       current = false;
     };
+    // `load` is deliberately not a dependency, which is the whole point of `key`:
+    // the loader is a new closure on every render, so including it would re-run
+    // this effect on every render and re-fetch the chunk forever.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   return value;

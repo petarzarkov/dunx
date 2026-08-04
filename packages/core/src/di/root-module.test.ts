@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { findRootModule, isModuleRef } from './module.js';
-import { Module } from './module.js';
+import { findRootModule, isModuleRef, Module } from './module.js';
 
 /**
  * Every tool that takes an entry path has to find the root module among a file's

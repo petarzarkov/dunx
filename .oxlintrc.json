@@ -1,23 +1,12 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn"],
+  "plugins": ["typescript", "unicorn", "import", "react"],
   "categories": {
     "correctness": "warn"
   },
   "options": {
     "typeAware": true,
     "typeCheck": true
-  },
-  "settings": {
-    "jsdoc": {
-      "ignorePrivate": false,
-      "ignoreInternal": false,
-      "ignoreReplacesDocs": true,
-      "overrideReplacesDocs": true,
-      "augmentsExtendsReplacesDocs": false,
-      "implementsReplacesDocs": false,
-      "exemptDestructuredRootsFromChecks": false
-    }
   },
   "ignorePatterns": [
     "**/*.js",
@@ -122,9 +111,20 @@
     "typescript/no-inferrable-types": "error",
     "typescript/prefer-for-of": "error",
     "typescript/prefer-function-type": "error",
-    "max-lines": ["error", { "max": 500 }],
+    "max-lines": [
+      "error",
+      {
+        "max": 500
+      }
+    ],
     "dunx/no-brand-prefix": "error",
-    "dunx/no-enum": "error"
+    "dunx/no-enum": "error",
+    "import/no-duplicates": "error",
+    "import/no-cycle": "error",
+    "import/no-self-import": "error",
+    "react/jsx-key": "error",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn"
   },
   "overrides": [
     {

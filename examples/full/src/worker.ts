@@ -1,7 +1,6 @@
-import { Logger, Module } from '@dunx/core';
+import { ConfigModule, Logger, Module } from '@dunx/core';
 import { WorkerFactory } from '@dunx/infra/queue';
 import { LoggerModule } from '@dunx/infra/logger';
-import { ConfigModule } from '@dunx/core';
 import { AppConfigService, validate } from './config.js';
 import { JobsModule } from './jobs/jobs.module.js';
 

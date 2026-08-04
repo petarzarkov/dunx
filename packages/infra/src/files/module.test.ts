@@ -1,6 +1,5 @@
-import { AppFactory, provide } from '@dunx/core';
+import { AppFactory, Module, provide } from '@dunx/core';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { Module } from '@dunx/core';
 import { join } from 'node:path';
 import { LocalStorage, LocalStorageOptions } from './local.js';
 import { FilesModule } from './module.js';
