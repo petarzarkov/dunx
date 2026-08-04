@@ -280,15 +280,15 @@ export class HttpService extends UrlHelper {
       );
     }
 
-    const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
 
     try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+      // Async iteration, not `getReader()`: it acquires the reader and releases it
+      // on completion, on `break`, and on the `return` below when `[DONE]` arrives -
+      // which is the case the manual form needed `releaseLock()` in a `finally` for.
+      for await (const chunk of response.body) {
+        buffer += decoder.decode(chunk, { stream: true });
 
         let newline = buffer.indexOf('\n');
         while (newline !== -1) {
@@ -303,7 +303,6 @@ export class HttpService extends UrlHelper {
         }
       }
     } finally {
-      reader.releaseLock();
       this.logger.debug(`SSE ${method} ${url.href} closed`, {
         elapsedMs: Date.now() - startedAt,
       });

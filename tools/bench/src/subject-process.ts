@@ -70,8 +70,13 @@ export const startSubject = async (
     await proc.exited;
   };
 
+  // The poll is bounded, so the bound belongs in the loop header rather than as a
+  // check buried at the bottom of the body: `for (;;)` read as "this may never
+  // stop" when in fact it always stops within READY_TIMEOUT_MS. The timeout is now
+  // the one thing that can follow the loop, which is also the only way out that
+  // does not return or throw from inside it.
   const deadline = startedAt + READY_TIMEOUT_MS;
-  for (;;) {
+  while (performance.now() <= deadline) {
     if (proc.exitCode !== null) {
       const stderr = await new Response(proc.stderr).text();
       throw new Error(
@@ -87,14 +92,13 @@ export const startSubject = async (
     } catch {
       // Connection refused while the process is still booting.
     }
-    if (performance.now() > deadline) {
-      await stop();
-      throw new Error(
-        `${subject.id} did not answer on ${baseUrl} within ${READY_TIMEOUT_MS}ms`,
-      );
-    }
     await Bun.sleep(1);
   }
+
+  await stop();
+  throw new Error(
+    `${subject.id} did not answer on ${baseUrl} within ${READY_TIMEOUT_MS}ms`,
+  );
 };
 
 const mimeOf = (contentType: string | null): string =>

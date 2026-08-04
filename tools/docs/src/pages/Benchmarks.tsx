@@ -182,10 +182,16 @@ const Losses = ({ model }: { model: BenchModel }): React.JSX.Element | null => {
           <List.Item>
             <b>Cold start</b> - {decimal(startup.focusMs, 1)} ms against{' '}
             {startup.baselineLabel}&apos;s {decimal(startup.baselineMs, 1)} ms,
-            roughly {decimal(startup.ratio, 1)}x. That is the compiler preload
-            parsing every loaded module plus eager DI resolution and route
-            discovery - paid once at boot, and a real cost on a short-lived
-            process.
+            roughly {decimal(startup.ratio, 1)}x - so about{' '}
+            {decimal(startup.focusMs - startup.baselineMs, 0)} ms of dunx&apos;s
+            own on top of a floor every Bun server pays. Decomposed in process
+            on the minimal app, that{' '}
+            {decimal(startup.focusMs - startup.baselineMs, 0)} ms is roughly a
+            third the compiler preload parsing the app&apos;s own files, a third
+            building the route table and binding the socket, and a third
+            importing <code>@dunx/core</code> and <code>@dunx/http</code>
+            plus resolving the container. Paid once at boot, and a real cost on
+            a short-lived process.
           </List.Item>
         )}
         <List.Item>

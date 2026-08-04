@@ -19,25 +19,25 @@ export const pump = async (
   sink: FileSink,
   source: ReadableStream<Uint8Array>,
 ): Promise<number> => {
-  const reader = source.getReader();
   let written = 0;
 
   try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      written += value.byteLength;
-      await sink.write(value);
+    // `for await` rather than `getReader()` and a `for (;;)` reading until
+    // `done`: a `ReadableStream` is async-iterable, and iterating it acquires the
+    // reader and releases it on completion, `break` **and** throw - all measured.
+    // The manual form was the same loop plus a `done` check and two
+    // `releaseLock()` calls that had to be kept in step by hand.
+    for await (const chunk of source) {
+      written += chunk.byteLength;
+      await sink.write(chunk);
     }
   } catch (error) {
-    reader.releaseLock();
     // Ends the sink in a failed state so a partial multipart upload is aborted
     // rather than committed.
     await sink.end(error instanceof Error ? error : undefined);
     throw error;
   }
 
-  reader.releaseLock();
   await sink.end();
   return written;
 };

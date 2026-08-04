@@ -146,6 +146,27 @@ export class Injector {
       return this.#instances.get(key) as T;
     }
 
+    /**
+     * The one loop here that genuinely cannot state its bound in the header, and
+     * the reason is worth writing down rather than leaving a reader to trust it.
+     *
+     * `get` is synchronous. When it reaches a factory that returned a promise it
+     * parks that promise in `#settling` and throws `PendingSignal`, because there
+     * is no way to await from inside a sync call. Awaiting the signalled token
+     * settles it into `#instances`, and then the whole `get` is retried - it has to
+     * be retried from the top, since the tokens resolved before the signal were
+     * discarded when the stack unwound.
+     *
+     * **It terminates**, and not by luck: every iteration awaits one token and
+     * settles it into `#instances`, `get` never signals a token already in there,
+     * and the number of registrations is finite. So the iteration count is at most
+     * the number of async factories on this token's dependency path.
+     *
+     * No counter guards it, deliberately. A bound could only fire if that invariant
+     * were already broken, which is error handling for a scenario the code makes
+     * impossible - and it would turn a real bug into a misleading "too many
+     * attempts" instead of the hang that points at the actual defect.
+     */
     for (;;) {
       try {
         return this.get(token);
