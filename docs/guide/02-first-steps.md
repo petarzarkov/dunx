@@ -20,14 +20,22 @@ Next:
 ```
 
 The generator takes the target directory as its only positional argument, plus
-four flags:
+these flags:
 
-| Flag                | Effect                                                     |
-| ------------------- | ---------------------------------------------------------- |
-| `--name <name>`     | Package name for the app. Defaults to the directory's base |
-| `--template <name>` | Currently only `minimal`, which is the default             |
-| `--force`           | Write into a directory that already has files in it        |
-| `--help`            | Print usage                                                |
+| Flag                | Effect                                                      |
+| ------------------- | ----------------------------------------------------------- |
+| `--name <name>`     | Package name for the app. Defaults to the directory's base  |
+| `--with <a,b,c>`    | Features to compose the app from. See **Choosing features** |
+| `--all`             | Every feature                                               |
+| `--list`            | Print the features and exit                                 |
+| `--template <name>` | `minimal`, which is what you get with no `--with`           |
+| `--force`           | Write into a directory that already has files in it         |
+| `--yes`, `-y`       | Take the default selection without prompting                |
+| `--help`            | Print usage                                                 |
+
+Run in a terminal with nothing but a directory name and it asks which features you
+want; answer with an empty line for the minimal template. Piped, or in CI, it never
+prompts.
 
 The package name is validated against npm's rules before anything is written, so
 `bunx @dunx/create-app My-API` fails immediately with a message telling you to
@@ -38,6 +46,63 @@ Every `@dunx/*` version in the generated manifest is resolved at run time from t
 version of `@dunx/create-app` doing the scaffolding. The packages version in
 lockstep, so the right version to install is whatever generated the app, and the
 template never goes stale between releases.
+
+## Choosing features
+
+The minimal template is five files and one route, which is the right place to read
+from and a thin place to start from. Anything more is composed:
+
+```bash
+bunx @dunx/create-app my-api --with users,openapi,http
+```
+
+```
+Created my-api in my-api/
+  28 files, 4 features: openapi, http, database, users
+  database came along as requirements
+```
+
+`bunx @dunx/create-app --list` prints the current set:
+
+| Feature      | What arrives                                                     | Pulls in            |
+| ------------ | ---------------------------------------------------------------- | ------------------- |
+| `notes`      | CRUD routes with zod validation. The smallest real feature       |                     |
+| `openapi`    | OpenAPI 3.1 from the routes' own schemas, plus the explorer page |                     |
+| `http`       | CORS, a request-logging middleware and error mapping             |                     |
+| `guards`     | `@Roles` and `@Public`, and a protected controller               |                     |
+| `database`   | drizzle over `bun:sqlite`, with a schema, seeds and migrations   |                     |
+| `users`      | A repository, a service and validated routes over the database   | `database`          |
+| `auth`       | better-auth mounted, with `SessionGuard` and an audit trail      | `database`          |
+| `cache`      | `Bun.RedisClient` behind a session store                         |                     |
+| `websockets` | A `@Gateway` with `@OnMessage`, `PubSub` and a Redis relay       |                     |
+| `images`     | `Bun.Image` resizing and format conversion behind a route        |                     |
+| `files`      | Uploads and downloads on `Bun.file`                              |                     |
+| `jobs`       | bullmq queues and a worker, over `Bun.RedisClient`               | `images`            |
+| `health`     | One endpoint reporting which parts are live and which degraded   | `cache`, `database` |
+
+Requirements come along automatically, and the order they are imported in is
+construction order, so a database is built before the feature that reads it and torn
+down after it. `cache`, `websockets` and `jobs` want a Redis or Valkey; each reports
+itself degraded rather than failing the boot, so the app still starts without one.
+
+### Where the code comes from
+
+Every feature directory is copied out of dunx's own
+[`examples/full`](https://github.com/petarzarkov/dunx/tree/main/examples/full) - the
+service CI builds, typechecks, tests and tours on every push. That is the point:
+starter code nobody runs rots, and a byte-for-byte parity test fails the moment a
+copy drifts from the example.
+
+What cannot be copied is the wiring. `app.module.ts`, `config.ts`, `bootstrap.ts` and
+`main.ts` name every feature at once in the full example, so those four are
+**generated** for the selection - the config carries only the variables your features
+actually read, and the manifest only the dependencies they need. CI scaffolds every
+feature alone, the whole set, and the combinations with something to get wrong, then
+typechecks each one.
+
+The `*.demo.ts` files are the full example's scripted walkthroughs, and they come
+along because their module registers them. They are executable documentation of the
+feature; delete one and its `providers` entry when you do not want it.
 
 ## What you got
 

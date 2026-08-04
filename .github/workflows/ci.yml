@@ -85,6 +85,15 @@ jobs:
       - name: Run the databases example
         run: bun run --filter '@dunx/example-databases' start
 
+      # `create-app` composes an app from feature directories copied out of
+      # examples/full, and generates the wiring around whichever were chosen. The
+      # copies are covered by the steps above and by a byte-for-byte parity test;
+      # the *generated* wiring is a different file per selection, so it is only
+      # covered by scaffolding and typechecking one. Every feature alone, the whole
+      # set, and the combinations with something to get wrong.
+      - name: Typecheck every scaffolded feature selection
+        run: bun run check:scaffolds
+
       # `bun run build` already built the site once, before the coverage model
       # and badges existed. Rebuild so the deployed artifact carries them.
       - name: Build the documentation site

@@ -35,6 +35,8 @@
     "docs:dev": "bun run --filter '@dunx/docs' dev",
     "gen:cov": "bun ./scripts/coverage-report.ts",
     "gen:readme": "bun ./scripts/update-readme.ts",
+    "sync:templates": "bun ./scripts/sync-templates.ts",
+    "check:scaffolds": "bun ./scripts/check-scaffolds.ts",
     "version": "bun ./scripts/version.ts",
     "version:dry-run": "DRY_RUN=true bun ./scripts/version.ts"
   },
