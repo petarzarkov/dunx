@@ -61,6 +61,46 @@ describe('the vendored features', () => {
   });
 
   /**
+   * The gap `check:scaffolds` cannot see. It typechecks a scaffold *inside*
+   * `examples/full`, whose `node_modules` already holds every package, so a feature
+   * whose declared dependencies are missing one still passes there - and then a real
+   * consumer's `bun install` produces an app that imports something absent from its
+   * own manifest. Six features were wrong when this was written.
+   */
+  test.each(FEATURES.map((feature) => [feature.name, feature] as const))(
+    '%s declares every package its directory imports',
+    async (_name, feature) => {
+      const always = new Set([
+        '@dunx/core',
+        '@dunx/http',
+        '@dunx/transform',
+        '@dunx/infra',
+        ...feature.dependencies,
+      ]);
+
+      const imported = new Set<string>();
+      for await (const file of new Glob('**/*.ts').scan({
+        cwd: join(EXAMPLE, feature.source),
+      })) {
+        const source = await Bun.file(
+          join(EXAMPLE, feature.source, file),
+        ).text();
+        for (const match of source.matchAll(/from ['"]([^.'"][^'"]*)['"]/g)) {
+          const specifier = match[1] ?? '';
+          if (specifier.startsWith('node:') || specifier === 'bun') continue;
+          imported.add(
+            specifier.startsWith('@')
+              ? specifier.split('/').slice(0, 2).join('/')
+              : (specifier.split('/')[0] ?? specifier),
+          );
+        }
+      }
+
+      expect([...imported].filter((pkg) => !always.has(pkg))).toEqual([]);
+    },
+  );
+
+  /**
    * The generated manifest pins its own third-party ranges rather than reading the
    * example's, because the example installs from the workspace. They still have to
    * agree, or a consumer gets a combination nothing exercises.

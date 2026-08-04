@@ -457,6 +457,66 @@ await worker.shutdown();
 dunx's own integration suite probes the server first and skips itself when nothing
 answers, so `bun test` passes on a machine with no Redis.
 
+## A dashboard, opt in
+
+`@dunx/queue-dashboard` mounts [bull-board](https://github.com/felixmosh/bull-board)
+over the same queues, so jobs, retries and failures are visible without a Redis
+client.
+
+```bash
+bun add @dunx/queue-dashboard @bull-board/api @bull-board/ui ejs
+```
+
+```ts
+@Module({
+  imports: [
+    JobsModule,
+    QueueDashboardModule.forRootAsync({
+      useFactory: (publisher: JobPublisher, config: AppConfigService) => ({
+        path: '/queues',
+        queues: [publisher.queue(THUMBNAIL_QUEUE)],
+        uiConfig: { boardTitle: `${config.get('appName')} queues` },
+        authorize: (request) => isAdmin(request),
+      }),
+      inject: [JobPublisher, AppConfigService],
+    }),
+  ],
+})
+export class DashboardModule {}
+```
+
+```ts
+// between create() and listen()
+app.use(QueueDashboardMiddleware);
+```
+
+`forRootAsync`, because `JobPublisher.queue(name)` opens the queue on first use, so
+it cannot be named in a static call.
+
+**`authorize` has no default.** Leave it out and the board is served to anyone who
+can reach the port - reasonable behind a private network, bad everywhere else, so it
+is stated either way. A rejected request gets **404, not 403**: a queue dashboard
+that announces itself to an unauthenticated caller has told them where to keep
+knocking.
+
+It is a function rather than a list of guards because `app.use` is global -
+middleware registered there runs for every route, and this is a check that runs for
+the board's paths only.
+
+Every dependency is an **optional peer**, and nothing is loaded until the first
+request reaches the board. An app that never mounts one installs none of them.
+
+### Why dunx writes the server adapter
+
+bull-board ships adapters for express, fastify, koa, hapi, hono and elysia, and dunx
+uses none of them: express is banned repo-wide, and hono or elysia would mean running
+a second HTTP framework inside your app to serve one page. So `BunServeAdapter`
+implements bull-board's own `IServerAdapter` over `Bun.serve` - the same division
+`createBunRedisClient` makes, where the library owns the abstraction and Bun owns the
+I/O. The 2.7 MB UI bundle streams from `Bun.file` rather than being read into memory.
+
+`examples/full` mounts it at `/queues` over its `thumbnails` queue.
+
 ## Related
 
 - [Configuration](./11-configuration.md) for `forRootAsync` and `AppConfigService`

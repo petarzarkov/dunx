@@ -25,7 +25,19 @@ export interface DashboardQueue {
 export interface QueueDashboardInit {
   /** Where the board is mounted. @default '/queues' */
   readonly path?: string;
-  readonly queues: readonly DashboardQueue[];
+  /**
+   * The queues to show, or a function returning them.
+   *
+   * **Prefer the function.** A bullmq `Queue` opens a connection when it is
+   * constructed, so naming the queues eagerly makes an app that mounts a dashboard
+   * pay for a broker connection at boot - measured: it broke `examples/full`'s
+   * "exits 0 with no redis" test, because `JobPublisher.queue()` in a factory
+   * connects there and then. A thunk is called when the board is first requested,
+   * which is the same point everything else here is loaded.
+   */
+  readonly queues:
+    | readonly DashboardQueue[]
+    | (() => readonly DashboardQueue[]);
   /** bull-board's own UI options - board title, logo, favicon. */
   readonly uiConfig?: Record<string, unknown>;
   /**
@@ -46,7 +58,8 @@ export interface QueueDashboardInit {
 
 export class QueueDashboardOptions {
   readonly path: string;
-  readonly queues: readonly DashboardQueue[];
+  /** Always a thunk internally, so the build path has one shape to handle. */
+  readonly queues: () => readonly DashboardQueue[];
   readonly uiConfig: Record<string, unknown>;
   readonly authorize:
     | ((request: Request) => boolean | Promise<boolean>)
@@ -55,7 +68,8 @@ export class QueueDashboardOptions {
   constructor(init: QueueDashboardInit) {
     const path = init.path ?? '/queues';
     this.path = path.endsWith('/') && path !== '/' ? path.slice(0, -1) : path;
-    this.queues = init.queues;
+    const { queues } = init;
+    this.queues = typeof queues === 'function' ? queues : () => queues;
     this.uiConfig = init.uiConfig ?? {};
     this.authorize = init.authorize;
   }
@@ -101,7 +115,7 @@ export class QueueDashboard {
 
       const adapter = new BunServeAdapter(this.options.path, render);
       createBullBoard({
-        queues: this.options.queues.map((queue) => new BullMQAdapter(queue)),
+        queues: this.options.queues().map((queue) => new BullMQAdapter(queue)),
         serverAdapter: adapter,
         options: { uiConfig: this.options.uiConfig },
       });

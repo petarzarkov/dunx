@@ -324,6 +324,45 @@ describe('paginate', () => {
     ).rejects.toThrow(/no "nope" column/);
   });
 
+  /**
+   * The shape `examples/full` actually has: an integer autoincrement primary key and
+   * no timestamp, so the sort key falls back to `id`. The cursor carries it as a
+   * string, and SQLite's column affinity converts it back - found by wiring the
+   * example up, since every case above uses a text id with a timestamp sort.
+   */
+  it('walks a table whose only key is an integer id', async () => {
+    const sqlite = new Database(':memory:');
+    sqlite.run('create table rows (id integer primary key autoincrement)');
+    const numeric = drizzle(sqlite);
+    const table = sqliteTable('rows', {
+      id: integer('id').primaryKey({ autoIncrement: true }),
+    });
+    numeric
+      .insert(table)
+      .values([{}, {}, {}, {}, {}] as never)
+      .run();
+
+    const seen: number[] = [];
+    let cursor: string | undefined;
+    for (let guard = 0; guard < 10; guard += 1) {
+      const result = await paginate<typeof table, { id: number }>({
+        db: numeric as never,
+        table,
+        options: {
+          take: 2,
+          order: PaginationOrder.ASC,
+          direction: PaginationDirection.FORWARD,
+          ...(cursor === undefined ? {} : { cursor }),
+        },
+      });
+      seen.push(...result.data.map((row) => row.id));
+      if (!result.meta.hasNextPage) break;
+      cursor = result.meta.nextCursor ?? undefined;
+    }
+
+    expect(seen).toEqual([1, 2, 3, 4, 5]);
+  });
+
   it('returns an empty page rather than failing on an empty table', async () => {
     seed([]);
     const empty = await page();

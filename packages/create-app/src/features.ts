@@ -145,7 +145,7 @@ export const FEATURES: readonly Feature[] = [
     summary: 'CRUD routes with zod validation. The smallest real feature.',
     requires: [],
     module: { klass: 'NotesModule', from: './notes/notes.module.js' },
-    dependencies: ['zod'],
+    dependencies: ['@dunx/openapi', 'zod'],
     config: [],
   },
   {
@@ -182,7 +182,7 @@ export const FEATURES: readonly Feature[] = [
     summary: 'drizzle over bun:sqlite, with a schema, seeds and migrations.',
     requires: [],
     module: { klass: 'DatabaseModule', from: './database/database.module.js' },
-    dependencies: ['@dunx/infra', 'drizzle-orm'],
+    dependencies: ['@dunx/infra', 'drizzle-orm', 'zod'],
     config: ['database'],
   },
   {
@@ -209,7 +209,7 @@ export const FEATURES: readonly Feature[] = [
     summary: 'Bun.RedisClient behind a session store, degrading when absent.',
     requires: [],
     module: { klass: 'CacheModule', from: './cache/cache.module.js' },
-    dependencies: ['@dunx/infra'],
+    dependencies: ['@dunx/infra', 'zod'],
     config: ['redis'],
     service: 'Redis or Valkey',
   },
@@ -229,7 +229,7 @@ export const FEATURES: readonly Feature[] = [
     summary: 'Bun.Image resizing and format conversion behind a route.',
     requires: [],
     module: { klass: 'PicturesModule', from: './pictures/pictures.module.js' },
-    dependencies: ['@dunx/infra'],
+    dependencies: ['@dunx/infra', 'zod'],
     config: ['images'],
   },
   {
@@ -238,7 +238,7 @@ export const FEATURES: readonly Feature[] = [
     summary: 'Uploads and downloads on Bun.file, with a workspace root.',
     requires: [],
     module: { klass: 'StorageModule', from: './storage/storage.module.js' },
-    dependencies: ['@dunx/infra'],
+    dependencies: ['@dunx/infra', 'zod'],
     config: [],
   },
   {
@@ -247,8 +247,27 @@ export const FEATURES: readonly Feature[] = [
     summary: 'bullmq queues and a worker, over Bun.RedisClient.',
     requires: ['images'],
     module: { klass: 'JobsModule', from: './jobs/jobs.module.js' },
-    dependencies: ['@dunx/infra', 'bullmq', 'ioredis'],
+    dependencies: ['@dunx/infra', 'bullmq', 'ioredis', 'zod'],
     config: ['redis'],
+    service: 'Redis or Valkey',
+  },
+  {
+    name: 'dashboard',
+    source: 'dashboard',
+    summary:
+      'bull-board at /queues, over the queue the jobs feature publishes to.',
+    requires: ['jobs'],
+    module: {
+      klass: 'DashboardModule',
+      from: './dashboard/dashboard.module.js',
+    },
+    dependencies: [
+      '@dunx/queue-dashboard',
+      '@bull-board/api',
+      '@bull-board/ui',
+      'ejs',
+    ],
+    config: ['appName'],
     service: 'Redis or Valkey',
   },
   {

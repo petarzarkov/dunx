@@ -596,6 +596,87 @@ one operation. `@dunx/core` shuts down in reverse construction order, and every
 repository depends on the drizzle handle which depends on the connection, so
 everything holding it has already drained by the time it closes.
 
+## Pagination
+
+`@dunx/infra/pagination` does keyset pagination, which is the kind that stays correct
+while rows are being written.
+
+```ts
+import { paginate, PAGINATION, type Page } from '@dunx/infra/pagination';
+
+const pageQuery = z.object({
+  take: z.coerce.number().int()
+    .min(PAGINATION.MIN_TAKE).max(PAGINATION.MAX_TAKE)
+    .default(PAGINATION.DEFAULT_TAKE),
+  order: z.enum(['asc', 'desc']).default(PAGINATION.DEFAULT_ORDER),
+  direction: z.enum(['forward', 'backward']).default(PAGINATION.DEFAULT_DIRECTION),
+  cursor: z.string().max(PAGINATION.MAX_CURSOR).optional(),
+});
+const paged = { query: pageQuery } as const;
+
+@Get('/page', paged)
+page(input: Input<typeof paged>): Promise<Page<Entry>> {
+  return paginate<typeof ledger, Entry>({
+    db: this.db,
+    table: ledger,
+    options: input.query,
+  });
+}
+```
+
+```json
+{
+  "data": [{ "id": 9, "memo": "newest" }],
+  "meta": {
+    "take": 20,
+    "hasNextPage": true,
+    "hasPreviousPage": false,
+    "nextCursor": "eyJzIjoiOSIsImkiOiI5In0",
+    "previousCursor": null
+  }
+}
+```
+
+Pass `meta.nextCursor` back as `?cursor=` to read forwards, and
+`meta.previousCursor` with `?direction=backward` to go the other way.
+
+### Why not `OFFSET`
+
+An offset scan re-reads and discards every row before the page, so page 500 costs 500
+pages of work. Worse, it is **wrong under writes**: insert a row while someone is
+paging and every later page shifts by one, so an item is served twice or skipped. A
+cursor names the last row seen, the database seeks straight to it, and a concurrent
+insert changes nothing about what has already been read.
+
+The cursor carries the sort value **and** the row id, and the query compares both.
+Without the id tie-break, rows sharing a timestamp are silently skipped or repeated -
+and rows sharing a timestamp is exactly what a bulk insert produces.
+
+### The schema you write it against
+
+`paginate` sorts by the first of `updatedAt`, `createdAt`, `id` your table has, or
+whatever `orderBy` names. It has to be unique together with the id column, which is
+what makes the seek deterministic.
+
+It takes anything with drizzle's `select()`, so both dialects and a transaction handle
+fit - it `await`s the query builder rather than calling `.all()`, because drizzle's
+builders are thenable on the synchronous `bun:sqlite` driver as well as the
+asynchronous `Bun.SQL` one.
+
+### What it deliberately does not do
+
+- **No zod schema is shipped.** `parsePageOptions` is a hand-written validator, since
+  route validation targets Standard Schema and shipping a schema would pick the
+  library for you. Declare your own, as above, and the parameters land in the OpenAPI
+  document.
+- **No total count.** `hasNextPage` comes from fetching one row more than asked and
+  dropping it, so there is no second `COUNT(*)`.
+- **No HTTP error.** A bad cursor throws `CursorError`; bad options throw
+  `PageOptionsError`. `@dunx/infra` must not depend on the web layer, so mapping them
+  to a 400 is yours.
+
+`examples/full` serves it at `GET /api/ledger/page`.
+
 ## No entity decorators
 
 They were tried on TypeScript 7.0.2, both routes, and both fail with `TS2339:

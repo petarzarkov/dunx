@@ -79,6 +79,7 @@ Created my-api in my-api/
 | `files`      | Uploads and downloads on `Bun.file`                              |                     |
 | `jobs`       | bullmq queues and a worker, over `Bun.RedisClient`               | `images`            |
 | `health`     | One endpoint reporting which parts are live and which degraded   | `cache`, `database` |
+| `dashboard`  | bull-board at `/queues`, over the queue `jobs` publishes to      | `jobs`              |
 
 Requirements come along automatically, and the order they are imported in is
 construction order, so a database is built before the feature that reads it and torn

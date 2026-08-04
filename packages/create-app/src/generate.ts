@@ -90,6 +90,9 @@ export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
   'better-auth': '^1.6.25',
   bullmq: '^6.0.5',
   ioredis: '^6.0.0',
+  '@bull-board/api': '^8.5.0',
+  '@bull-board/ui': '^8.5.0',
+  ejs: '^3.1.10',
 });
 
 const versionOf = (dep: string): string => THIRD_PARTY[dep] ?? 'latest';
@@ -217,8 +220,12 @@ export const bootstrap = (
   const websockets = has(features, 'websockets');
   const http = has(features, 'http');
 
+  const dashboard = has(features, 'dashboard');
   const imports = [
     `import { HttpFactory${websockets ? ', RedisRelay' : ''}, type HttpApp } from '@dunx/http';`,
+    ...(dashboard
+      ? ["import { QueueDashboardMiddleware } from '@dunx/queue-dashboard';"]
+      : []),
     ...(openapi ? ["import { OpenApiModule } from '@dunx/openapi';"] : []),
     "import { AppModule } from './app.module.js';",
     `import { ${[
@@ -259,6 +266,14 @@ export const bootstrap = (
    */
   const shaping = [
     "app.setGlobalPrefix('api');",
+    ...(dashboard
+      ? [
+          '// Global middleware, so it also runs in front of the unmatched-path',
+          "// fallback - which is where the board's paths land, since no controller",
+          '// declares them.',
+          'app.use(QueueDashboardMiddleware);',
+        ]
+      : []),
     ...(http
       ? [
           'app.use(RequestLoggerMiddleware);',

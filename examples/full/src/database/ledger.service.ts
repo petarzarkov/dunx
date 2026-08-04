@@ -9,6 +9,7 @@ import {
   transactionSync,
   type SeedReport,
 } from '@dunx/infra/db';
+import { paginate, type Page, type PageOptions } from '@dunx/infra/pagination';
 import { count, desc, eq, sql, sum } from 'drizzle-orm';
 import * as schema from './schema.js';
 import { ledger, type Entry } from './schema.js';
@@ -51,6 +52,26 @@ export class Ledger implements OnInit, OnShutdown {
       .orderBy(desc(ledger.id))
       .limit(limit)
       .all();
+  }
+
+  /**
+   * The same rows, paginated by cursor instead of by `limit`.
+   *
+   * Keyset rather than `OFFSET`, which is what makes it correct while rows are being
+   * written: a cursor names the last row seen, so an insert between two requests
+   * cannot shift a page and serve the same entry twice. This table has no timestamp,
+   * so `paginate` falls back to the primary key - `id` is unique on its own, so no
+   * tie-break column is needed.
+   *
+   * `async` although bun-sqlite is synchronous, because `paginate` awaits the query
+   * builder - the one code path that serves both dialects.
+   */
+  page(options: PageOptions): Promise<Page<Entry>> {
+    return paginate<typeof ledger, Entry>({
+      db: this.db,
+      table: ledger,
+      options,
+    });
   }
 
   find(id: number): Entry | undefined {

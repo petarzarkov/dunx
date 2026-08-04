@@ -7,6 +7,7 @@ import {
   Post,
   type Input,
 } from '@dunx/http';
+import { PAGINATION, type Page } from '@dunx/infra/pagination';
 import { z } from 'zod';
 import { Ledger } from './ledger.service.js';
 import type { Entry } from './schema.js';
@@ -42,6 +43,34 @@ const listEntries = {
     limit: z.coerce.number().int().min(1).max(100).default(20),
   }),
 } as const;
+/**
+ * The page query, written as zod here rather than shipped by `@dunx/infra/pagination`.
+ * That package deliberately ships no schema - route validation targets Standard
+ * Schema, so the app picks the library - and stating it here is what puts the
+ * parameters in the OpenAPI document. `PAGINATION` supplies the bounds so they
+ * cannot drift from what `parsePageOptions` would enforce.
+ */
+const pageQuery = z
+  .object({
+    take: z.coerce
+      .number()
+      .int()
+      .min(PAGINATION.MIN_TAKE)
+      .max(PAGINATION.MAX_TAKE)
+      .default(PAGINATION.DEFAULT_TAKE),
+    order: z.enum(['asc', 'desc']).default(PAGINATION.DEFAULT_ORDER),
+    direction: z
+      .enum(['forward', 'backward'])
+      .default(PAGINATION.DEFAULT_DIRECTION),
+    cursor: z
+      .string()
+      .max(PAGINATION.MAX_CURSOR)
+      .optional()
+      .describe('Opaque cursor from meta.nextCursor. Omit for the first page.'),
+  })
+  .meta({ id: 'LedgerPageQuery', title: 'Keyset pagination over the ledger' });
+
+const pagedEntries = { query: pageQuery } as const;
 const oneEntry = { params: EntryIndex } as const;
 const createEntry = { body: CreateEntry } as const;
 const transfer = { body: Transfer } as const;
@@ -59,6 +88,16 @@ export class LedgerController {
       entries: this.ledger.list(input.query.limit),
       balance: this.ledger.balance(),
     };
+  }
+
+  /**
+   * The same rows as `GET /ledger`, walked by cursor. Declared **before** `/:id` for
+   * readability only - `Bun.serve` matches a static segment ahead of a parameter, so
+   * `/ledger/page` cannot be swallowed by `/ledger/:id`.
+   */
+  @Get('/page', pagedEntries)
+  page(input: Input<typeof pagedEntries>): Promise<Page<Entry>> {
+    return this.ledger.page(input.query);
   }
 
   @Get('/:id', oneEntry)

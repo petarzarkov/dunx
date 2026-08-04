@@ -36,9 +36,16 @@ export interface PageOptions {
   readonly take: number;
   readonly order: PaginationOrder;
   readonly direction: PaginationDirection;
-  /** Omit for the first page. */
-  readonly cursor?: string;
-  readonly search?: string;
+  /**
+   * Omit for the first page.
+   *
+   * `| undefined` is stated rather than left to the `?`, because under
+   * `exactOptionalPropertyTypes` those are different types and the common caller is
+   * a zod schema: `z.string().optional()` infers `cursor?: string | undefined`, so
+   * without this every route would have to strip the key before calling.
+   */
+  readonly cursor?: string | undefined;
+  readonly search?: string | undefined;
 }
 
 export class PageOptionsError extends AppError {
