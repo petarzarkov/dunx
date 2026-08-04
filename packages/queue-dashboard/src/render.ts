@@ -1,23 +1,16 @@
 import { AppError } from '@dunx/core';
 import type { Renderer } from './adapter.js';
 
-/**
- * Renders bull-board's entry template with `ejs`.
- *
- * `ejs` is bull-board's own choice of template engine - `index.ejs` in
- * `@bull-board/ui` is an ejs file and its shape is theirs to change - so this
- * satisfies it rather than substituting for it. Today that template is 27 lines
- * with five interpolations and no control flow, which is tempting to handle with a
- * string replace; the moment bull-board adds a conditional, a hand-rolled
- * substitution renders a broken page instead of failing, and dunx would be
- * maintaining a template engine it never meant to write.
- *
- * Loaded with `await import()` so it is only required when a dashboard is actually
- * mounted: it is an optional peer, like `@bull-board/api` and `@bull-board/ui`, and
- * an app that never calls `QueueDashboardModule.forRoot` installs none of them.
- */
 export class DashboardUnavailableError extends AppError {
   override readonly name = 'DashboardUnavailableError';
+}
+
+/**
+ * Raised when bull-board's entry template uses more of ejs than substitution covers.
+ * Loud on purpose: the alternative is serving a page with a stray `<% if %>` in it.
+ */
+export class TemplateSyntaxError extends AppError {
+  override readonly name = 'TemplateSyntaxError';
 }
 
 const missing = (packages: readonly string[], cause: unknown): AppError =>
@@ -26,6 +19,52 @@ const missing = (packages: readonly string[], cause: unknown): AppError =>
       `have. Install them with \`bun add ${packages.join(' ')}\`. (${String(cause)})`,
   );
 
+/** `<%= name %>` escapes, `<%- name %>` does not. Nothing else is supported. */
+const TAG = /<%(=|-)\s*([A-Za-z_$][\w$]*)\s*%>/g;
+
+/**
+ * Renders bull-board's entry template by substituting its interpolations. **The
+ * default, and it needs no dependency.**
+ *
+ * bull-board's `index.ejs` is 27 lines with five interpolations - `basePath`,
+ * `title`, `favIconDefault`, `favIconAlternative` and `uiConfig` - and **no control
+ * flow**: no conditionals, no loops, no includes. Measured, not assumed. Pulling in
+ * `ejs` at 210 KB to substitute five strings is a lot of dependency for one
+ * `String.replace`, so it is not a dependency at all.
+ *
+ * `<%=` escapes with `Bun.escapeHTML` - exactly the characters ejs escapes
+ * (`& < > " '`), and native. `<%-` is raw, which is what `uiConfig` needs: it is JSON
+ * going into a `<script type="application/json">`. `render.test.ts` renders the real
+ * template both ways and asserts they agree.
+ *
+ * **This assumes bull-board's template stays interpolation-only.** An interpolation
+ * whose name the entry handler does not supply still throws, so a *renamed* parameter
+ * is caught - but control flow added in a future bull-board release would be emitted
+ * into the page verbatim rather than rejected. If a dashboard ever renders with a
+ * stray `<%` in it, that is what happened, and {@link ejsRenderer} is the fix.
+ */
+export const substituteRenderer: Renderer = async (viewPath, params) => {
+  const template = await Bun.file(viewPath).text();
+
+  const rendered = template.replace(
+    TAG,
+    (_match, kind: string, name: string) => {
+      if (!(name in params)) {
+        throw new TemplateSyntaxError(
+          `bull-board's ${viewPath} interpolates "${name}", which its entry ` +
+            'handler did not supply. Install ejs and pass ejsRenderer, or upgrade ' +
+            '@dunx/queue-dashboard.',
+        );
+      }
+      const value = params[name];
+      const text = value === null || value === undefined ? '' : String(value);
+      return kind === '=' ? Bun.escapeHTML(text) : text;
+    },
+  );
+
+  return rendered;
+};
+
 interface Ejs {
   readonly renderFile: (
     path: string,
@@ -33,6 +72,14 @@ interface Ejs {
   ) => Promise<string>;
 }
 
+/**
+ * The full engine, for the day bull-board's template needs it.
+ *
+ * Not the default and not a required dependency: pass it as
+ * `QueueDashboardModule.forRoot({ render: await ejsRenderer() })` if
+ * {@link substituteRenderer} ever throws. `ejs` stays an **optional** peer, so an app
+ * that does not need it installs nothing.
+ */
 export const ejsRenderer = async (): Promise<Renderer> => {
   let ejs: Ejs;
   try {

@@ -34,16 +34,24 @@ export interface PaginateParams<TTable extends Table> {
   };
   readonly table: TTable;
   readonly options: PageOptions;
-  /** Base filter - a search or a status condition - ANDed with the cursor. */
-  readonly where?: SQL;
+  /**
+   * Base filter - a search or a status condition - ANDed with the cursor.
+   *
+   * `| undefined` on every optional here, stated rather than left to the `?`. Under
+   * `exactOptionalPropertyTypes` those are different types, and the natural caller
+   * builds this conditionally: `where: clauses.length === 0 ? undefined :
+   * and(...clauses)`. Without it every call site has to spread the key in instead,
+   * which is friction for nothing - the same lesson `PageOptions.cursor` taught.
+   */
+  readonly where?: SQL | undefined;
   /**
    * Column to sort by. Must be unique-per-row together with `id`, which is what
    * makes the seek deterministic. Defaults to the first of `updatedAt`,
    * `createdAt`, `id` the table actually has.
    */
-  readonly orderBy?: string;
+  readonly orderBy?: string | undefined;
   /** The tie-breaking unique column. @default 'id' */
-  readonly idColumn?: string;
+  readonly idColumn?: string | undefined;
 }
 
 const ORDER_PRECEDENCE = ['updatedAt', 'createdAt', 'id'] as const;

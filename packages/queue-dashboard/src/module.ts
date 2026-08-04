@@ -5,8 +5,8 @@ import {
   type DynamicModule,
   type FactoryProvider,
 } from '@dunx/core';
-import { BunServeAdapter } from './adapter.js';
-import { ejsRenderer, loadBullBoard } from './render.js';
+import { BunServeAdapter, type Renderer } from './adapter.js';
+import { loadBullBoard, substituteRenderer } from './render.js';
 
 /**
  * A bullmq `Queue`, restated structurally rather than imported.
@@ -54,6 +54,15 @@ export interface QueueDashboardInit {
    * one otherwise, so it has to be stated either way.
    */
   readonly authorize?: (request: Request) => boolean | Promise<boolean>;
+  /**
+   * Renders bull-board's entry template. Defaults to `substituteRenderer`, which
+   * needs no dependency.
+   *
+   * Pass `await ejsRenderer()` only if the default throws a `TemplateSyntaxError` -
+   * that means bull-board's template grew syntax substitution does not cover, and it
+   * is the one case `ejs` is worth installing for.
+   */
+  readonly render?: Renderer;
 }
 
 export class QueueDashboardOptions {
@@ -64,6 +73,7 @@ export class QueueDashboardOptions {
   readonly authorize:
     | ((request: Request) => boolean | Promise<boolean>)
     | undefined;
+  readonly render: Renderer;
 
   constructor(init: QueueDashboardInit) {
     const path = init.path ?? '/queues';
@@ -72,6 +82,7 @@ export class QueueDashboardOptions {
     this.queues = typeof queues === 'function' ? queues : () => queues;
     this.uiConfig = init.uiConfig ?? {};
     this.authorize = init.authorize;
+    this.render = init.render ?? substituteRenderer;
   }
 }
 
@@ -110,10 +121,12 @@ export class QueueDashboard {
     // Memoised on the promise, not the result, so two concurrent first requests
     // build one board rather than racing to build two.
     this.#adapter ??= (async (): Promise<BunServeAdapter> => {
-      const [{ createBullBoard, BullMQAdapter, uiPath }, render] =
-        await Promise.all([loadBullBoard(), ejsRenderer()]);
+      const { createBullBoard, BullMQAdapter, uiPath } = await loadBullBoard();
 
-      const adapter = new BunServeAdapter(this.options.path, render);
+      const adapter = new BunServeAdapter(
+        this.options.path,
+        this.options.render,
+      );
       createBullBoard({
         queues: this.options.queues().map((queue) => new BullMQAdapter(queue)),
         serverAdapter: adapter,

@@ -265,7 +265,6 @@ export const FEATURES: readonly Feature[] = [
       '@dunx/queue-dashboard',
       '@bull-board/api',
       '@bull-board/ui',
-      'ejs',
     ],
     config: ['appName'],
     service: 'Redis or Valkey',

@@ -92,7 +92,6 @@ export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
   ioredis: '^6.0.0',
   '@bull-board/api': '^8.5.0',
   '@bull-board/ui': '^8.5.0',
-  ejs: '^3.1.10',
 });
 
 const versionOf = (dep: string): string => THIRD_PARTY[dep] ?? 'latest';

@@ -12,5 +12,7 @@ export {
   DashboardUnavailableError,
   ejsRenderer,
   loadBullBoard,
+  substituteRenderer,
+  TemplateSyntaxError,
   type BullBoardModules,
 } from './render.js';

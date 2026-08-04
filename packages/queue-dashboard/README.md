@@ -4,7 +4,7 @@
 opt-in dashboard for the queues `@dunx/infra/queue` runs.
 
 ```bash
-bun add @dunx/queue-dashboard @bull-board/api @bull-board/ui ejs
+bun add @dunx/queue-dashboard @bull-board/api @bull-board/ui
 ```
 
 Every one of those is an **optional peer**: an app that never mounts a dashboard
@@ -79,10 +79,15 @@ an error handler and the UI config in, and the adapter answers requests from the
 
 - **Static assets** stream from `Bun.file`, so the 2.7 MB UI bundle is never read
   into memory, and are sent `immutable` since the filenames carry a content hash.
-- **The entry view** is rendered with `ejs`, which is bull-board's own choice of
-  engine. Today `index.ejs` is 27 lines with five interpolations and no control flow,
-  which is tempting to handle with a string replace - but the moment bull-board adds a
-  conditional, a hand-rolled substitution renders a broken page instead of failing.
+- **The entry view needs no template engine.** bull-board's `index.ejs` is 27 lines
+  with five interpolations and no control flow, so it is substituted with one
+  `String.replace` - `<%=` escaped through `Bun.escapeHTML`, `<%-` raw. `ejs` is 210 KB
+  for that, so it is not a dependency. `render.test.ts` renders the real template both
+  ways and asserts they agree, character for character, once ejs's `&#34;` and Bun's
+  `&quot;` are reconciled - the same character, spelled differently.
+
+  If a future bull-board release adds control flow, install `ejs` and pass
+  `render: await ejsRenderer()`. It stays an optional peer for exactly that.
 - **Path traversal** is stopped in two different places, measured rather than assumed:
   a literal `..` never reaches the adapter because `new URL()` resolves it away, and
   the percent-encoded form is refused by an explicit check.

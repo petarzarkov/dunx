@@ -464,7 +464,7 @@ over the same queues, so jobs, retries and failures are visible without a Redis
 client.
 
 ```bash
-bun add @dunx/queue-dashboard @bull-board/api @bull-board/ui ejs
+bun add @dunx/queue-dashboard @bull-board/api @bull-board/ui
 ```
 
 ```ts
@@ -513,7 +513,11 @@ uses none of them: express is banned repo-wide, and hono or elysia would mean ru
 a second HTTP framework inside your app to serve one page. So `BunServeAdapter`
 implements bull-board's own `IServerAdapter` over `Bun.serve` - the same division
 `createBunRedisClient` makes, where the library owns the abstraction and Bun owns the
-I/O. The 2.7 MB UI bundle streams from `Bun.file` rather than being read into memory.
+I/O. The 2.7 MB UI bundle streams from `Bun.file` rather than being read into memory,
+and the entry page needs no template engine: bull-board's `index.ejs` is five
+interpolations and no control flow, so it is one `String.replace` with
+`Bun.escapeHTML` rather than a 210 KB dependency. `ejs` remains an optional peer for
+the day that stops being true.
 
 `examples/full` mounts it at `/queues` over its `thumbnails` queue.
 
