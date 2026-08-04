@@ -133,4 +133,4 @@ and a token *is* a class object.
 Six read-only tools and the protocol subset they need. Still open: whether the
 benchmark results are worth exposing, which is a question about this repo rather than
 about an app being read. See
-[docs/roadmap/mcp-server.md](https://github.com/petarzarkov/dunx/blob/main/docs/roadmap/mcp-server.md).
+[docs/architecture/mcp.md](https://github.com/petarzarkov/dunx/blob/main/docs/architecture/mcp.md).

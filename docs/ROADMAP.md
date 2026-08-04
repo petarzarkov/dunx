@@ -267,13 +267,18 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                | Shape                                                         |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| [cross-language-benchmark-subjects](./roadmap/cross-language-benchmark-subjects.md) | Done. Full 16-subject run published; kept for how to read it. |
-| [design-polish](./roadmap/design-polish.md)                                         | Feature. Landing page rebuilt; not yet striking.              |
-| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)               | Ongoing. Better Auth OpenAPI merge adopted.                   |
-| [mcp-server](./roadmap/mcp-server.md)                                               | Feature. Requested. Ask the framework about itself.           |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                       | Two upstream defects, both with a reproduction ready to file. |
+| Item                                                                        | Shape                                                                     |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [dunx-dashboard](./roadmap/dunx-dashboard.md)                               | Feature, requested. Designed, not built. Absorbs `@dunx/queue-dashboard`. |
+| [design-polish](./roadmap/design-polish.md)                                 | Feature. Landing page rebuilt; not yet striking.                          |
+| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)       | Ongoing. Pagination and the queue dashboard page adopted.                 |
+| [http-options-before-container](./roadmap/http-options-before-container.md) | Missing feature, medium. The OpenAPI half is done.                        |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)               | Two upstream defects, both with a reproduction ready to file.             |
+
+Delivered and moved out of this folder rather than left here marked done:
+**cross-language benchmark subjects** (the 16-subject run and how to read it are in
+[architecture/benchmarks.md](./architecture/benchmarks.md)) and the **MCP server**
+(shipped as `@dunx/mcp`; the reasoning is in [architecture/mcp.md](./architecture/mcp.md)).
 
 ### From porting nestjs-template to dunx-template
 
@@ -282,9 +287,13 @@ npm**, which is the only way packaging faults surface. It runs: 52 unit and
 integration tests, 10 e2e, 90% line coverage, Docker builds and serves. It also
 produced 22 findings.
 
-| Item                                                        | Shape                                             |
-| ----------------------------------------------------------- | ------------------------------------------------- |
-| [openapi-forroot-async](./roadmap/openapi-forroot-async.md) | Missing feature, medium. `HttpOptions` half only. |
+Of those, the two the template had to work around itself are now closed in dunx and
+deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, and the
+**queue dashboard page** is `@dunx/queue-dashboard` rather than an admin-only JSON
+controller. `OpenApiModule.forRootAsync` closed the half of
+[http-options-before-container](./roadmap/http-options-before-container.md) that
+`OpenApiModule` owned; the `HttpOptions` half is still open and the template still
+validates its config twice because of it.
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;

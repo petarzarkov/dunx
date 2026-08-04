@@ -1,9 +1,14 @@
-# An MCP server for dunx (`@dunx/mcp`)
+# The MCP server (`@dunx/mcp`)
 
 **Shipped as `packages/mcp`.** Six read-only tools: `dunx_overview`, `dunx_routes`,
 `dunx_providers`, `dunx_gateways`, `dunx_modules`, `dunx_openapi`. What follows is the
 reasoning that produced it, kept because the decisions are still the load-bearing
-ones; the answers to the four open questions are recorded at the bottom.
+ones; the answers to the four questions it opened are recorded at the bottom.
+
+Two of those decisions are now load-bearing for a second consumer. The static-not-boot
+rule is the one [`@dunx/dashboard`](../roadmap/dunx-dashboard.md) deliberately inverts,
+and the readers behind these tools are the ones it needs - which is why they belong in
+`@dunx/core` and `@dunx/http` rather than here.
 
 A Model Context Protocol server so an agent working in a dunx app can ask the
 framework about itself instead of grepping for the answer.
@@ -25,10 +30,12 @@ already structured, it is just not reachable without booting the app:
 
 An agent that can call those gets accurate answers instead of inferring from source.
 
-## Shape to work out
+## The shape, and how it was worked out
 
-`tools/mcp`, **private and never published** like the other tools, at least to
-start. Open questions, in the order they need answering:
+It was scoped as `tools/mcp`, private and never published like the other tools. It
+shipped as `packages/mcp` instead, because an agent working in a consumer's app needs
+it installed there rather than in this repo. Four questions had to be answered first,
+in the order they gated each other:
 
 1. **Static, decided.** It reads the app; it does not boot it.
 
