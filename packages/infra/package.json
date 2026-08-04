@@ -77,6 +77,10 @@
     "./logger": {
       "types": "./dist/logger/index.d.ts",
       "import": "./dist/logger/index.js"
+    },
+    "./pagination": {
+      "types": "./dist/pagination/index.d.ts",
+      "import": "./dist/pagination/index.js"
     }
   },
   "publishConfig": {

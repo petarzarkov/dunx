@@ -408,7 +408,7 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 | `@dunx/create-app` | `bunx @dunx/create-app my-api` - scaffolds the `minimal` template, with versions resolved at run time                         |
 | `@dunx/mcp`        | An MCP server over stdio that **reads** an app's routes, providers and modules. Never boots it                                |
 
-Nine packages, deliberately few. Merging is nearly free because the runtime weight is
+Ten packages, deliberately few. Merging is nearly free because the runtime weight is
 almost nil - `@dunx/core` has **zero dependencies**, and ESM tree-shaking drops what
 is not imported. `@dunx/transform` stays separate because it is the only package with a
 native dependency (`oxc-parser`) and is build-time only; merging it would put a Rust

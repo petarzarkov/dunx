@@ -59,6 +59,7 @@ const ORDER = [
   'auth',
   'testing',
   'mcp',
+  'queue-dashboard',
 ];
 
 const root = new URL('../packages', import.meta.url).pathname;

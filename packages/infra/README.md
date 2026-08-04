@@ -13,7 +13,7 @@ one, and each of those libraries drives a Bun API underneath. `drizzle-orm` and
 `bullmq` are **optional peer dependencies**, so an app using only `/files`
 installs neither.
 
-## The six subpaths
+## The seven subpaths
 
 | Subpath              | What it is                                                      | Depth                                          |
 | -------------------- | --------------------------------------------------------------- | ---------------------------------------------- |
@@ -23,6 +23,7 @@ installs neither.
 | `@dunx/infra/files`  | One `Storage` contract over `Bun.file` and `Bun.S3Client`        | [Files and images](../../docs/guide/16-files-and-images.md) |
 | `@dunx/infra/images` | An immutable pipeline over `Bun.Image`                           | [Files and images](../../docs/guide/16-files-and-images.md) |
 | `@dunx/infra/logger` | **`@arkv/logger`** bound to core's `Logger` contract             | [Logging](../../docs/guide/12-logging.md)      |
+| `@dunx/infra/pagination` | Keyset pagination: cursor codec, options parser, drizzle query | this file                                  |
 
 Import from the barrel or from an area subpath. The subpaths exist so it is
 obvious what a file uses, and so tree-shaking is not something you have to reason
@@ -341,6 +342,78 @@ reuse-`@arkv` rule exists to prevent.
 **[Read the Logging guide](../../docs/guide/12-logging.md)** for the contract, the
 default `ConsoleLogger` and its buffering trade, request logging, transports and
 what all of it measures at.
+
+## pagination
+
+Keyset pagination, which is the kind that stays correct while rows are being
+written.
+
+```ts
+import {
+  paginate,
+  parsePageOptions,
+  PAGINATION,
+  CursorError,
+  type Page,
+} from '@dunx/infra/pagination';
+
+export class NotesService {
+  constructor(private readonly db: SyncSqliteConnection) {}
+
+  list(query: Record<string, unknown>): Promise<Page<Note>> {
+    return paginate<typeof notes, Note>({
+      db: this.db.client,
+      table: notes,
+      options: parsePageOptions(query),
+    });
+  }
+}
+```
+
+```json
+{
+  "data": [{ "id": "n_9", "title": "newest" }],
+  "meta": {
+    "take": 20,
+    "hasNextPage": true,
+    "hasPreviousPage": false,
+    "nextCursor": "eyJzIjoiMjAyNi0wMS0wMlQwMzowNDowNS4wMDBaIiwiaSI6Im5fOSJ9",
+    "previousCursor": null
+  }
+}
+```
+
+### Why keyset and not `OFFSET`
+
+An offset scan re-reads and discards every row before the page, so page 500 costs
+500 pages of work. Worse, it is wrong under writes: insert a row while someone is
+reading, and every later page shifts by one, so an item is served twice or skipped
+entirely. A cursor names the last row seen, the database seeks straight to it, and a
+concurrent insert changes nothing about what has already been read. There is a test
+for exactly that.
+
+The cursor carries the sort value **and** the row id, and the query compares both.
+Without the id tie-break, rows sharing a timestamp are the case that silently breaks
+- and rows sharing a timestamp is what a bulk insert produces.
+
+### What it does not do
+
+- **No `zod` schema.** `parsePageOptions` is a hand-written validator, because this
+  package has no validation dependency and route validation targets Standard Schema
+  - shipping a zod schema would pick the library for you. Build one from
+  `PAGINATION` if you want the OpenAPI document, the same way
+  `ConfigModule.forRoot({ validate })` leaves the choice open.
+- **No total count.** `hasNextPage` comes from fetching one row more than asked and
+  dropping it, so there is no second `COUNT(*)` over the same predicate. A total is a
+  separate query when you genuinely need one.
+- **No HTTP error.** A bad cursor throws `CursorError` and bad options throw
+  `PageOptionsError`, both `AppError`s - this package must not depend on the web
+  layer, so mapping them to a 400 is the caller's.
+
+`paginate` takes anything with drizzle's `select()`, so both dialects and a
+transaction handle fit. It `await`s the builder rather than calling `.all()`:
+drizzle's builders are thenable on the synchronous `bun:sqlite` driver as well as
+the asynchronous `Bun.SQL` one, measured, so one code path serves both.
 
 ## Verified against
 

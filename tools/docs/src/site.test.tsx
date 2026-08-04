@@ -29,6 +29,7 @@ describe('the generated model', () => {
       '@dunx/infra',
       '@dunx/mcp',
       '@dunx/openapi',
+      '@dunx/queue-dashboard',
       '@dunx/testing',
       '@dunx/transform',
     ]);
