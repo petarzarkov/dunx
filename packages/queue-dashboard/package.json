@@ -1,6 +1,6 @@
 {
   "name": "@dunx/queue-dashboard",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "bull-board mounted on Bun.serve for a dunx app - an opt-in dashboard for @dunx/infra/queue",
   "keywords": [
     "bull-board",

@@ -1,6 +1,6 @@
 {
   "name": "@dunx/transform",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Load-time transform that records constructor dependencies for the dunx container",
   "keywords": [
     "bun",
