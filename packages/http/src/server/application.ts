@@ -15,7 +15,12 @@ import type { PubSubRelay, RelayOptions, RelayPhase } from '../ws/relay.js';
 import type { SocketData, SocketOptions } from '../ws/socket.js';
 import { attachAddressSource, ClientAddress } from './client-address.js';
 import type { CorsOptions } from './cors.js';
-import { errorMapper, type ErrorMapper } from './errors.js';
+import {
+  errorMapper,
+  toErrorMapper,
+  type ErrorHandler,
+  type ErrorMapper,
+} from './errors.js';
 import type { Middleware } from './middleware.js';
 import {
   RequestLoggingMiddleware,
@@ -33,7 +38,18 @@ export interface HttpOptions extends AppOptions {
   readonly port?: number;
   /** Resolved from the container, so middleware can inject(). */
   readonly middleware?: readonly Ctor<Middleware>[];
-  readonly onError?: ErrorMapper;
+  /**
+   * Replaces the default mapper.
+   *
+   * A bare `ErrorMapper` function, or an `ErrorFilter` **class** - which is the one
+   * to prefer, because a class is resolved from the container and can therefore
+   * inject the `Logger` or the config a real filter needs. A mapper cannot; dunx's
+   * own default has to be curried over its logger for exactly that reason.
+   *
+   * A filter with dependencies needs them bindable, the same rule `middleware`
+   * entries follow; one with none self-binds and needs no `providers` entry.
+   */
+  readonly onError?: ErrorHandler;
   /**
    * One structured entry per request, on by default. `false` removes it; an
    * options object tunes what it records. See {@link RequestLoggingMiddleware}.
@@ -146,9 +162,17 @@ export class HttpApplication implements HttpApp {
       ...(options.requestLogging === false ? [] : [RequestLoggingMiddleware]),
       ...(options.middleware ?? []),
     ];
-    // The bound Logger, resolved only when the app did not bring its own mapper:
+    // The bound Logger, resolved only when the app did not bring its own handler:
     // a 500's stack belongs in the same stream as everything else.
-    this.#onError = options.onError ?? errorMapper(app.get(Logger));
+    //
+    // A filter class is resolved from the container here rather than per request, so
+    // a missing binding is a boot error like any other and the request path stays a
+    // method call. Its `catch` is looked up per call, which is what lets a filter be
+    // rebound in a test.
+    this.#onError =
+      options.onError === undefined
+        ? errorMapper(app.get(Logger))
+        : toErrorMapper(options.onError, (token) => app.get(token));
     this.#port = options.port ?? 3000;
     this.#websocket = websocket;
     this.#relay = options.relay;

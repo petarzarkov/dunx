@@ -128,6 +128,50 @@ This was already felt in the template: `EmailService` used `inject(httpClient('e
 for a single outbound client, which bought nothing over `HttpService` and cost the
 plain constructor. It now injects `HttpService` directly.
 
+## Shipped: `onError` accepts a class
+
+The first of these landed in `@dunx/http`. `HttpOptions.onError` now takes an
+`ErrorFilter` **class** as well as an `ErrorMapper` function, and the class is
+resolved from the container - so a filter injects whatever it needs:
+
+```ts
+export class AppErrorFilter extends ErrorFilter {
+  constructor(
+    private readonly logger: Logger,
+    private readonly config: AppConfigService,
+  ) {}
+
+  catch(error: unknown, req: Request): Response { ... }
+}
+
+HttpFactory.create(root, { onError: AppErrorFilter });
+```
+
+`ErrorFilter` is an `abstract class` with one `catch(error, req)` method, named for
+NestJS's `ExceptionFilter.catch` because that is the vocabulary it replaces. Details
+worth remembering:
+
+- **A function still works.** `isErrorFilter` discriminates on the prototype carrying
+  a `catch`, which a class declaration always has and neither an arrow function nor a
+  `function` expression ever does. Checking `prototype` alone would be wrong, since
+  `function mapper() {}` has an empty one.
+- **The filter is resolved at construction, its `catch` looked up per call**, so a
+  test can rebind the filter and a request still costs one method call.
+- **A dependency-free filter needs no `providers` entry**, because resolving a class
+  the container can construct self-binds it. One with dependencies needs those
+  bindable, exactly as a `middleware` entry does.
+- The existing default stays a curried `errorMapper(logger)`. It is internal, and
+  turning it into a provider class is a separate change with no consumer asking for
+  it.
+
+`packages/http/src/server/error-filter.test.ts` covers the discrimination, the
+resolution, both statuses through a filter, self-binding, and that a plain mapper is
+unaffected.
+
+**The template cannot adopt it until this is published** - it consumes `@dunx/http`
+from npm, so the conversion of its `errorMapper` to an `AppErrorFilter` injecting the
+bound `Logger` waits for a release.
+
 ## Violation 3 - `HttpOptions` cannot read config, so it is threaded by hand
 
 Already open as

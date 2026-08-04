@@ -52,8 +52,8 @@
   },
   "lint-staged": {
     "*.ts": [
-      "bun run lint",
-      "bun run format"
+      "oxlint --fix",
+      "oxfmt"
     ]
   }
 }

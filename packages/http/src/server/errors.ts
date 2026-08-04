@@ -1,4 +1,4 @@
-import { AppError, ConsoleLogger, type Logger } from '@dunx/core';
+import { AppError, ConsoleLogger, type Ctor, type Logger } from '@dunx/core';
 import { HttpStatusCode } from './status.js';
 
 export class HttpError extends AppError {
@@ -38,6 +38,87 @@ export class ValidationError extends HttpError {
 }
 
 export type ErrorMapper = (error: unknown, req: Request) => Response;
+
+/**
+ * The class form of {@link ErrorMapper}, and the one to reach for in an app.
+ *
+ * A mapper is a function, which means it cannot inject: the interesting ones need
+ * the app's config to decide how much of an error to reveal, or its `Logger` to
+ * record the ones that became a 500. dunx's own default proves the point - it is
+ * `errorMapper(logger)`, a curried factory, because currying was the only way to
+ * hand a function a dependency.
+ *
+ * A filter is resolved **from the container**, exactly as `HttpOptions.middleware`
+ * entries are, so it takes whatever it needs as constructor parameters:
+ *
+ * ```ts
+ * export class AppErrorFilter extends ErrorFilter {
+ *   constructor(
+ *     private readonly logger: Logger,
+ *     private readonly config: AppConfigService,
+ *   ) {}
+ *
+ *   catch(error: unknown, req: Request): Response {
+ *     ...
+ *   }
+ * }
+ *
+ * // It is a provider like any other, so it goes in a module:
+ * @Module({ providers: [AppErrorFilter] })
+ * // and then:
+ * HttpFactory.create(root, { onError: AppErrorFilter });
+ * ```
+ *
+ * `abstract class` rather than an interface, so it is a runtime value and therefore
+ * usable as an injection token - an app that wants to swap filters by binding one
+ * can. Extending it is optional: `onError` accepts any class with a matching
+ * `catch`, because the check is structural.
+ *
+ * The method is `catch` to match the vocabulary of the thing it replaces, NestJS's
+ * `ExceptionFilter.catch`. A filter that cannot handle an error should rethrow it,
+ * or delegate to `defaultErrorMapper`.
+ */
+export abstract class ErrorFilter {
+  abstract catch(error: unknown, req: Request): Response;
+}
+
+/**
+ * What `onError` accepts. A bare mapper still works and is the cheaper thing for a
+ * filter with no dependencies; a class is what an app that needs one uses.
+ */
+export type ErrorHandler = ErrorMapper | Ctor<ErrorFilter>;
+
+/**
+ * Whether `onError` was given a class rather than a mapper.
+ *
+ * Both are `typeof === 'function'`, so the discriminator is the prototype carrying
+ * a `catch`: a class declaration always has one, and neither an arrow function nor
+ * a `function` expression ever does. Checking `prototype` alone would be wrong -
+ * `function mapper() {}` has an empty one.
+ */
+export const isErrorFilter = (
+  handler: ErrorHandler,
+): handler is Ctor<ErrorFilter> =>
+  typeof handler === 'function' &&
+  // Narrowed through a structural shape rather than `Ctor`: a construct signature
+  // has no `prototype` in the type system, so `Partial<Ctor<T>>` cannot see it.
+  typeof (handler as { prototype?: { catch?: unknown } }).prototype?.catch ===
+    'function';
+
+/**
+ * Narrows an `ErrorHandler` to the mapper the request path actually calls.
+ *
+ * `resolve` is typed for this one token rather than generically: the only thing ever
+ * looked up here is the filter, and a `<T>(token: Ctor<T>) => T` signature makes
+ * every caller - a test included - satisfy a polymorphic contract it does not need.
+ */
+export const toErrorMapper = (
+  handler: ErrorHandler,
+  resolve: (token: Ctor<ErrorFilter>) => ErrorFilter,
+): ErrorMapper =>
+  isErrorFilter(handler)
+    ? (error, req) => resolve(handler).catch(error, req)
+    : handler;
 
 /**
  * The mapper `HttpFactory` installs unless `onError` replaces it, built from the

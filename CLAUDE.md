@@ -348,7 +348,17 @@ Every package manifest needs `"type": "module"`. Without it,
   keeps it typed.
 - `bun run lint` / `bun run format` fix in place; `lint:check` / `format:check`
   do not and are what CI runs.
-- Pre-commit hook runs lint-staged: lints then formats staged `.ts` files.
+- Pre-commit hook runs lint-staged: lints then formats staged `.ts` files. Its
+  entries are the **bare binaries** (`oxlint --fix`, `oxfmt`), not `bun run lint` /
+  `bun run format` - those end in `.`, and lint-staged _appends_ the staged paths, so
+  `oxlint --fix . <files>` linted the whole repo on every commit and failed on
+  unrelated pre-existing errors.
+- **Type-aware lint needs `dist/` built.** `oxlint` resolves a workspace import
+  through the package's `types` entry, so an unbuilt or stale `dist/` reads as
+  `TS2307: Cannot find module '@dunx/...'` or a missing export, in files nobody
+  touched. CI cannot hit this because it builds before linting (`ci.yml`, Build then
+  Lint); locally, `bun run build` first. If `lint:check` reports errors only in
+  packages you did not edit, that is this - not a real defect.
 - There is no ESLint or Biome - do not add them.
 - Correctness rules are **warn** by default; `.oxlintrc.json` promotes
   `typescript/no-explicit-any`, `no-unused-vars`, and `prefer-const` to **error**.
