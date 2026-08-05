@@ -4,13 +4,19 @@ import { Logger } from '../logger/logger.js';
 import { AppError } from './errors.js';
 import { Injector } from './injector.js';
 import { hasOnInit, hasOnShutdown } from './lifecycle.js';
-import { collectModules, readModule, type ModuleRef } from './module.js';
+import { type ModuleRef } from './module.js';
+import { buildScopes, type Binding } from './scope.js';
 import { provide, type Registration } from './provider.js';
 import { describeToken, isCtor, type InjectionToken } from './token.js';
 
 /**
- * The two contracts core guarantees are resolvable. Both are last-resort: a
- * module binding either one replaces it, and `@dunx/infra/logger` binds both.
+ * The two contracts core guarantees are resolvable, as bindings laid into the
+ * **global** scope before anything else.
+ *
+ * Under the flat container these were appended after every module so an app binding
+ * either one won. Module scoping does that job better and without a special case: the
+ * global scope is laid down first and a module's own bindings go over it, so an app
+ * that binds `Logger` shadows this automatically. `@dunx/infra/logger` binds both.
  */
 const defaults = (): readonly Registration[] => [
   provide(RequestContext, { useClass: AsyncRequestContext }),
@@ -42,6 +48,14 @@ export type ShutdownSignal = 'SIGTERM' | 'SIGINT' | 'SIGHUP' | 'SIGQUIT';
 export interface App {
   /** Resolves once shutdown has finished, whoever triggered it. */
   readonly closed: Promise<void>;
+  /**
+   * Shadowing and ambiguous-import notices from the scope graph, in boot order.
+   *
+   * Surfaced rather than logged: `@dunx/core` has no logger of its own to write them
+   * with, and the caller that does - `HttpFactory`, or an app's bootstrap - knows
+   * which level they belong at. Empty on a graph with no ambiguity.
+   */
+  readonly warnings: readonly string[];
   get<T>(token: InjectionToken<T>): T;
   shutdown(): Promise<void>;
   enableShutdownHooks(signals?: readonly ShutdownSignal[]): this;
@@ -49,20 +63,31 @@ export interface App {
 
 class Application implements App {
   readonly closed: Promise<void>;
+  /** Shadowing notices from the scope graph. Surfaced, not logged: core has no logger. */
+  readonly warnings: readonly string[];
   readonly #injector: Injector;
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
   #hooked = false;
 
-  constructor(injector: Injector) {
+  constructor(injector: Injector, warnings: readonly string[] = []) {
     this.#injector = injector;
+    this.warnings = warnings;
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
     });
   }
 
+  /**
+   * The root scope's view first, then any single module that declares the token.
+   *
+   * Deliberately more permissive than constructor injection: this is a bootstrap and
+   * debugging call, not a dependency edge, so requiring every caller to know which
+   * module owns a provider would make `exports` painful for no safety gain. Ambiguity
+   * is still an error rather than a guess.
+   */
   get<T>(token: InjectionToken<T>): T {
-    return this.#injector.get(token);
+    return this.#injector.find(token);
   }
 
   async shutdown(): Promise<void> {
@@ -115,37 +140,68 @@ export class AppFactory {
    * there is no separate init step, because dunx resolves eagerly.
    */
   static async create(root: ModuleRef, options: AppOptions = {}): Promise<App> {
-    const injector = new Injector();
+    const graph = buildScopes(root);
     const overrides = new Map<InjectionToken<unknown>, Registration>(
       (options.overrides ?? []).map((entry) => [entry.token, entry]),
     );
     const replaced = new Set<InjectionToken<unknown>>();
-    const substitute = (registration: Registration): Registration => {
-      const override = overrides.get(registration.token);
-      if (!override) return registration;
-      replaced.add(registration.token);
-      return override;
-    };
 
-    for (const module of collectModules(root)) {
-      for (const registration of readModule(module)) {
-        injector.register(substitute(registration), module.name);
+    /**
+     * An override replaces the binding in **every scope that holds it**, not in one.
+     *
+     * A test that stubs `Logger` should not have to know how many modules bind it, and
+     * making it name a scope would push container topology into every suite. Where two
+     * scopes genuinely bind a token differently and only one is meant, the test can
+     * resolve through the module it cares about instead.
+     */
+    for (const scope of graph.ordered) {
+      for (const [token, binding] of scope.own) {
+        const override = overrides.get(token);
+        if (!override) continue;
+        const substituted: Binding = {
+          provider: override.provider,
+          module: binding.module,
+        };
+        scope.own.set(token, substituted);
+        replaced.add(token);
+      }
+      // `visible` was flattened before this, so an imported binding that has just
+      // been substituted has to be re-pointed here too.
+      for (const [token] of scope.visible) {
+        const override = overrides.get(token);
+        if (!override) continue;
+        scope.visible.set(token, {
+          provider: override.provider,
+          module: scope.visible.get(token)?.module ?? '(override)',
+        });
+        replaced.add(token);
       }
     }
-    // After every module, so an app that binds either of these wins. Offered at
-    // all so `Logger` and `RequestContext` are injectable with no logging module
-    // imported - which is what lets @dunx/http log requests out of the box.
-    // Substituted too, so overriding `Logger` works in an app that binds none.
+
+    // Core's own contracts, into the global scope, unless a module claimed them.
     for (const registration of defaults()) {
-      injector.registerDefault(substitute(registration));
+      const substituted = overrides.get(registration.token);
+      if (substituted) replaced.add(registration.token);
+      const binding: Binding = {
+        provider: (substituted ?? registration).provider,
+        module: '(default)',
+      };
+      for (const scope of graph.ordered) {
+        if (scope.own.has(registration.token)) continue;
+        if (!scope.visible.has(registration.token)) {
+          scope.visible.set(registration.token, binding);
+        }
+      }
     }
-    // A class no module listed is still resolvable, because an unbound
-    // constructor self-binds. So an override for one does have a binding to
-    // replace, and refusing it contradicted the container about the same class
-    // in the same graph - while the collaborator nobody listed is exactly what
-    // a unit test stubs. A `token()` nobody bound stays an error: there is no
-    // self-binding behind it, so it really would be adding rather than
-    // replacing.
+
+    const injector = new Injector(graph);
+
+    // A class no module listed is still resolvable, because an unbound constructor
+    // self-binds. So an override for one does have a binding to replace, and refusing
+    // it contradicted the container about the same class in the same graph - while the
+    // collaborator nobody listed is exactly what a unit test stubs. A `token()` nobody
+    // bound stays an error: there is no self-binding behind it, so it really would be
+    // adding rather than replacing.
     for (const [token, registration] of overrides) {
       if (replaced.has(token) || !isCtor(token)) continue;
       injector.registerLazy(registration);
@@ -153,13 +209,13 @@ export class AppFactory {
     }
     assertEveryOverrideReplaced(overrides, replaced);
 
-    for (const token of injector.tokens) {
-      await injector.resolve(token);
+    for (const { scope, token } of injector.eager) {
+      await injector.resolve(token, scope);
     }
     for (const instance of injector.instances) {
       if (hasOnInit(instance)) await instance.onInit();
     }
 
-    return new Application(injector);
+    return new Application(injector, graph.warnings);
   }
 }

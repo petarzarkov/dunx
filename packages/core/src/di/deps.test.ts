@@ -308,6 +308,8 @@ describe('deferred resolution', () => {
       (reason: unknown) => reason,
     );
     expect(error).toBeInstanceOf(AppError);
-    expect((error as Error).message).toContain('No provider for Missing');
+    expect((error as Error).message).toContain(
+      'Cannot resolve Missing for Needs in module "Root"',
+    );
   });
 });

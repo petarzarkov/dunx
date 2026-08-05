@@ -49,9 +49,14 @@ export class ConfigModule {
   /**
    * Validates once at boot and binds the result to `ConfigService`.
    *
-   * The container is flat, so there is no `isGlobal` to pass - one registration
-   * is visible everywhere. And there is no `forRootAsync`: eager resolution
-   * settles an async `validate` before any constructor runs.
+   * **`global: true`**, because configuration is the one thing every module reads and
+   * making each of them import a config module would be ceremony with no boundary
+   * worth enforcing. That is also why there is no `isGlobal` option: it is not a
+   * choice. `ConfigInput` stays private - it is the raw environment, and nothing
+   * outside this module should read it.
+   *
+   * There is no `forRootAsync`: eager resolution settles an async `validate` before
+   * any constructor runs.
    */
   static forRoot<T extends object>(
     options: ConfigModuleOptions<T>,
@@ -59,6 +64,11 @@ export class ConfigModule {
     const Target = options.as ?? ConfigService;
     return {
       module: ConfigModule,
+      global: true,
+      exports:
+        options.as === undefined
+          ? [ConfigService]
+          : [ConfigService, options.as],
       providers: [
         provide(ConfigInput, { useValue: options.source ?? Bun.env }),
         provide(Target, {
