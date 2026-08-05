@@ -289,6 +289,14 @@ unreadable stack.
 
 ## Modules group registrations; they do not encapsulate
 
+> **Superseded, and kept because the reasoning is still the argument that has to be
+> answered.** This section describes the container as it is built today. The flat
+> container, the absent `exports` and the absent `@Global()` are being replaced by a
+> scope per module, per the **P0** in
+> [../roadmap/module-scoped-di.md](../roadmap/module-scoped-di.md). What that document
+> owes this one is an answer to every property claimed below, and it has a table doing
+> exactly that. Do not read the rest of this section as current intent.
+
 The syntax is Nest's. The semantics are not, and that distinction is the whole
 point - an earlier draft of this document argued for plain-object modules, but the
 argument was always about semantics and the object literal was never load-bearing.
