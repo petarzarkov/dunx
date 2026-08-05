@@ -399,6 +399,23 @@ reported "did the transform run?" instead of the real problem), and a module exp
 a token it neither declares nor can reach is caught where the mistake is rather than in
 some other module.
 
+### `exports` of a module reference is a structural test
+
+Re-exporting a module reference is what makes a facade module work, and the reference
+is almost always a `DynamicModule` from a static factory whose class carries **no**
+`@Module` decorator - `MailerModule` in the guide, and `DbModule`, `RedisModule`,
+`AuthModule`, every configured module in `@dunx/infra`. Classifying an `exports` entry
+with `isModuleRef`, which demands the marker, therefore rejected the exact case the
+feature exists for and reported it as an unresolvable token named `undefined`.
+
+`isModuleExport` is the classifier the export path uses instead: a function is a module
+only if decorated, an object is one if it has a `module` function property. The
+alternatives are disjoint, so nothing else can match - a `Token` is `{ description }`.
+`findRootModule` keeps the strict `isModuleRef`, because there recognising a root among
+a file's arbitrary exports is the whole job.
+
+Found by migrating `dunx-template`, which is what an acceptance app is for.
+
 ### Overrides replace in every scope
 
 `createTestApp({ overrides })` replaces a token's binding in **every** scope that holds

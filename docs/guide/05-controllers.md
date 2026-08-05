@@ -561,11 +561,10 @@ export const RateLimit = (perMinute: number) => meta(RATE_LIMIT, perMinute);
 `metaKey` mints a fresh unique symbol per call, so two libraries that both name a
 key `roles` never read each other's value.
 
-Global middleware is passed to `HttpFactory.create` or to `app.use()`, never to
-`@Module`. In a flat container with no module boundary, "module middleware" could
-only ever mean global middleware, so hanging it off a module would imply a scope
-that does not exist. `@UseGuards` is different, because a class and a method are
-real scopes that do exist.
+Middleware has three homes, and which one to use is decided by scope rather than by
+kind. App-wide goes to `HttpFactory.create` or `app.use()`. A feature's own goes to
+`@Module({ middleware })`, where it covers the routes that module's controllers
+declare and nothing else. One controller's or one route's goes to `@UseGuards`.
 
 ## The fast path
 

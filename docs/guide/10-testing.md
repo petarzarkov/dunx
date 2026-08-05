@@ -66,12 +66,16 @@ typechecks against the real thing, which a hand-built object literal would not.
 
 This is the part worth understanding, because it is what makes the harness safe.
 
-An override is **not** an extra module appended at the end that wins. The dunx
-container is flat and one token has exactly one binding, so a late binding would
-be a duplicate rather than a winner, and the duplicate-token check would reject it.
-Instead, `AppFactory.create` assembles the same flat registration list it always
-does and substitutes by token as it goes. The count per token never changes, so
-the duplicate check still runs unmodified and there is no bypass.
+An override is **not** an extra module appended at the end that wins. A module
+appended at the end would be its own scope, invisible to everything already wired,
+so it would win nothing. Instead, `AppFactory.create` builds the scope graph it
+always does and substitutes by token **in every scope that binds it**, before
+anything resolves.
+
+Every scope, not one: a test that stubs `Logger` should not have to know how many
+modules bind it, and making it name a scope would push container topology into every
+suite. Where two scopes genuinely bind a token differently and only one is meant,
+resolve through the module that matters instead of overriding.
 
 The consequence that matters:
 

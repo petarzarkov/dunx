@@ -321,16 +321,29 @@ are all optional resolves successfully when nothing bound it, so
 `app.get(QueueOptions)` on a container with no `QueueModule` returns defaults
 rather than throwing. Any presence check for a class-shaped token has that hole.
 
-An unbound token that is _not_ a class fails cleanly:
+A self-bind lands in **the scope that asked for it**, not in a global pool. Two
+modules that each inject an unlisted collaborator get one each, which keeps the hole
+local rather than leaking an accidental instance across features.
+
+An unbound token that is _not_ a class fails cleanly, and the message is answered
+from the whole graph:
 
 ```
-No provider for BuildStamp. Bind it with provide() in a module.
+Cannot resolve BuildStamp for ReleaseService in module "ReleaseModule". Nothing in
+the module graph declares it. Bind it with provide() in a module's providers, and
+export it if the consumer is in a different module.
 ```
 
 ## Scope: singletons, and only singletons
 
-Every provider is a singleton for the lifetime of the container. There is no
-`Scope.REQUEST`, no `Scope.TRANSIENT`, and no plan to add either.
+Every provider is a singleton **in the module that declares it**, for the lifetime
+of the container. An importer resolving it through `exports` gets that same
+instance - `DbConnection` exported by `DbModule` is one connection however many
+modules import it, which is the only behaviour that could be correct for a
+connection. Two modules that each _declare_ the same class get two instances, and
+that is rebinding rather than a bug.
+
+There is no `Scope.REQUEST`, no `Scope.TRANSIENT`, and no plan to add either.
 
 Request-scoped DI is a container's single biggest source of complexity and per-request
 cost, and it was measured and turned down. Per-request state is passed as an
@@ -439,23 +452,26 @@ provider, or by having one side depend on an event rather than an object.
 
 ## Duplicate bindings
 
-The container is flat and one token has exactly one binding. Two modules binding
-the same token throws, naming both:
+A token has one binding **per module**, so the only thing left to reject is the same
+token declared twice in one module:
 
 ```
-Duplicate binding for Options: bound by module "StoreModule" and module
-"StoreModule". The container is flat - one binding per token.
+Duplicate binding for Options in module "StoreModule": it is declared twice in the
+same module. A DynamicModule unions its options with the ones its class's @Module
+decorator declares, so a forRoot() in each place is two bindings.
 ```
 
-Last-wins would have been silent, and first-wins would depend on traversal order.
-Neither is something a reader could predict. Note that both names can be the same
-module, which happens when one module is imported twice with two different
-configurations; [Modules](./04-modules.md) covers why that is not deduplicated.
+Two _different_ modules binding one token is legal, and it is the point: that is
+per-module rebinding. It gives two instances, silently, because that is what was
+asked for. The two shapes that are more often a mistake than an intent - declaring
+what an import already exports, and importing one token from two modules that
+disagree - are legal and **warned** at boot. [Modules](./04-modules.md) has all
+four cases in one table.
 
 ## Overrides, for tests
 
 `AppFactory.create(root, { overrides })` replaces a binding **in place**, keyed by
-token, as the flat list is assembled:
+token, in every scope that holds it:
 
 ```ts
 import { createTestApp } from '@dunx/testing';
@@ -467,12 +483,14 @@ const app = await createTestApp({
 });
 ```
 
-Replacement, not addition, and the distinction matters three times over. A late
-binding appended at the end would be a duplicate rather than a winner, so the
-count per token never changes and the duplicate check still runs unmodified. The
-discarded provider is never instantiated, so its `useFactory` never runs and its
-`onInit` never fires, which is what makes overriding a database safe. And an
-override naming a token nobody binds is an error rather than a silent no-op:
+Every scope, so a test stubbing `Logger` does not have to know how many modules bind
+it. There is no `in:` option to name one: where two scopes bind a token differently
+and only one is meant, resolve through the module that matters instead.
+
+Replacement, not addition, and the distinction matters twice over. The discarded
+provider is never instantiated, so its `useFactory` never runs and its `onInit`
+never fires, which is what makes overriding a database safe. And an override naming
+a token nobody binds is an error rather than a silent no-op:
 
 ```
 Nothing to override for Clock: no module in the graph binds it. An override

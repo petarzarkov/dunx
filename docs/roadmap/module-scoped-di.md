@@ -1,9 +1,16 @@
 # Module-scoped DI, `exports`, and `@Global()`
 
-**P0, and the core of it is shipped** - scopes, `exports`, `global: true`,
-module-scoped middleware, the `AsyncModuleConfig` imports field, and the error
-messages, with all nine packages, both examples and the scaffolder migrated. What is
-left is at the bottom under "Still open".
+**Shipped in 1.0.0** - scopes, `exports`, `global: true`, module-scoped middleware, the
+`AsyncModuleConfig` imports field, and the error messages, with all nine packages, both
+examples and the scaffolder migrated. `dunx-template` followed, and found two defects
+that need a patch release; see "Still open" and "What the template migration actually
+found" at the bottom.
+
+**Delete this file once 1.0.1 is out and the template is on it.** What is worth keeping
+from it has already moved into
+[architecture/dependency-injection.md](../architecture/dependency-injection.md) and
+[architecture/http.md](../architecture/http.md); the rest is the argument, which is
+settled.
 
 **A deliberate reversal**, requested directly: "a truly DI and IoC framework needs to
 have this." The flat container and the absence of `exports` are dunx's largest
@@ -295,6 +302,11 @@ should not have to know how many scopes bind it, and the alternative - making th
 name a scope - pushes container topology into every suite. `in:` exists for the case
 where two scopes genuinely bind the same token differently and the test means one.
 
+**Shipped without `in:`.** The every-scope default covered every case in the suite, and
+a test that means one of two scopes can already resolve through the module it cares
+about. Adding a second targeting mechanism for a case nothing hit would have been API
+surface bought on speculation. Revisit if a real test needs it.
+
 "An override that replaced nothing is an error" gets more valuable here, not less: it is
 what catches an override aimed at a token that has moved behind an `exports` boundary.
 
@@ -407,20 +419,24 @@ Everything else in that plan is unaffected and still wanted.
 
 ## Still open
 
-The container, the packages, the examples and the scaffolder are done and green. What
-has not been done:
+Everything is done and green. What is left is one release.
 
-- **`dunx-template` has not been migrated.** It consumes `@dunx/*` from npm, so it needs
-  this released first. Its modules need `imports`/`exports`, and its `ThrottleGuard` and
-  `AuditContextMiddleware` are the two guards that should stop being app-level and
-  become their features' own `middleware` - which is the acceptance test for whether
-  module scoping paid off in a real app.
-- **`@dunx/mcp`'s readers do not report scope or visibility.** `providersOf` and
-  `modulesOf` still describe a flat graph, so an agent asking "what provides X" cannot
-  say which module owns it or whether it is exported. Straightforward now that
-  `ScopeGraph` is exported from core.
-- **The guide has no page on it.** `docs/guide/04-modules.md` describes the flat
-  container.
+- ~~`dunx-template` has not been migrated.~~ **Done, and it needs `@dunx/*` 1.0.1.**
+  Every module declares `imports`/`exports`; the five modules under `infra/` are
+  `global: true` with named export lists, because there is one database, one Redis
+  client, one bucket, one image pipeline and one queue connection per process and a
+  feature module cannot construct its own without opening a second. It surfaced two
+  framework defects, both fixed here and both requiring a patch release before the
+  template can build against npm: `ClientAddress` self-binding rather than being bound
+  by `HttpFactory`'s global wrapper, and `exports` rejecting a `DynamicModule` whose
+  class carries no decorator. See "What the template migration actually found".
+- ~~`@dunx/mcp`'s readers do not report scope or visibility.~~ **Done.** `providersOf`
+  and `modulesOf` report the declaring module, whether the token is exported, and
+  whether the module is global.
+- ~~The guide has no page on it.~~ **Done.** `docs/guide/04-modules.md` is the scope,
+  `exports`, `global` and module-middleware page; `07-middleware-and-guards.md` carries
+  the full request lifecycle and the Nest mapping, pinned by
+  `packages/http/src/server/lifecycle.test.ts`.
 - ~~The boot-time cost has not been measured.~~ **Measured, and it is a non-issue.**
   Building the container for `examples/full` - 16 modules, every feature - is a
   **median 1.7 ms** (min 1.5, max 19.3 on a cold first run), which covers the scope
@@ -429,3 +445,44 @@ has not been done:
   would be under a millisecond, so the flattening decision needs no defending. The
   ~53 ms in `tools/bench` is `HttpFactory` boot including the oxc parse, route discovery
   and document generation, and none of that moved.
+
+## What the template migration actually found
+
+The acceptance test was "can `dunx-template`'s `ThrottleGuard` and
+`AuditContextMiddleware` stop being app-level arrays". **They cannot, and the reason is
+worth more than the prediction was.**
+
+- `ThrottleGuard` rate-limits every route and is tuned per route by `@Throttle`
+  metadata. That is the global-guard-plus-metadata shape working as designed; splitting
+  it per feature would give every feature a rate limiter it could forget.
+- `AuditContextMiddleware` looked like the strongest candidate, because only the `user`
+  table carries audit triggers. But the writes to it include better-auth's own sign-up
+  route, and that controller lives inside `@dunx/auth`'s `AuthModule`, not inside the
+  app's `AccountsModule`. **There is no ancestor layer**, so scoping the stamp would
+  have silently stopped attributing sign-ups while the trigger still fired - with the
+  previous request's actor id. That is the first concrete cost the "out" decision on
+  open question 1 has paid, and it is still the right decision.
+
+What did move was something the design never named: `QueuesController` had a private
+`degrades()` helper wrapped around all five of its route bodies, turning an unreachable
+broker into a 503. That is a per-controller `@Catch` filter written by hand, it is the
+one thing `HttpOptions.middleware` could not express, and it is now
+`@Module({ middleware: [QueueUnavailableMiddleware] })` - covered by the existing
+"the queue routes answer 503 rather than hanging" test.
+
+**The generalisation: the first real use of module middleware was a filter, not a
+guard.** A guard that applies to one feature is rarer than it looks, because a global
+guard reading route metadata already covers it. An error translation that only makes
+sense for one feature's routes is common, and had nowhere to live.
+
+Two defects, both from the flat container's habits:
+
+1. **`ClientAddress` was self-bound.** Two modules injecting it was a boot error naming
+   the first. Now bound and exported by `HttpFactory`'s global wrapper alongside
+   `PubSub`.
+2. **`exports: [someDynamicModule]` was rejected** when the module's class carried no
+   `@Module` decorator, which is the shape every configured module uses. Boot died with
+   `exports undefined`. Fixed with a structural classifier.
+
+Neither is reachable from a single-module app, which is why the packages' own suites,
+the examples and the scaffolds were all green.

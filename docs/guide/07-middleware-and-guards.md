@@ -15,7 +15,10 @@ export type Next = () => Promise<Response>;
 That is the entire extension point. A guard is middleware that throws. An
 interceptor is middleware that wraps `next()`. A pipe is a schema on the route
 decorator, covered in [Validation](./06-validation.md). A filter is the error
-mapper, one function for the whole app.
+mapper, one class for the whole app.
+
+Where a layer comes from - the app, a module, a controller, a method - varies. What
+a layer _is_ does not.
 
 ## Writing one
 
@@ -65,10 +68,13 @@ which is what gives the middleware its dependencies. `app.use()` after
 into one closure per route when the server binds, so a later call could not take
 effect and being told is better than being ignored.
 
-Global middleware goes on `HttpFactory.create` or `app.use()`, never on `@Module`.
-The dunx container is flat and has no module boundary, so "module middleware"
-could only ever mean global middleware; hanging it off a module would imply a
-scope that does not exist.
+`HttpFactory.create` and `app.use()` are the **app-wide** list. A middleware that
+belongs to one feature goes on that feature's module instead - see
+[Module middleware](#module-middleware) below.
+
+Both are resolved as your root module sees them, which for a middleware class means
+"the single module that declares it". Listing a guard here does not oblige your root
+to import or re-export the feature module that provides it.
 
 ## Why `next()` is a function you call, not a hook you implement
 
@@ -96,22 +102,64 @@ Everything the handler logs in between carries `requestId`, `method`, `event` an
 `runWithContext` on an `AsyncLocalStorage`. There is no pair to correlate, because
 there is no pair.
 
-## Ordering
+## The request lifecycle
 
-Outermost first:
+Outermost first, and every numbered layer except the last two is the same
+`Middleware` interface:
 
-1. `RequestLoggingMiddleware`, unless `requestLogging: false`
-2. `HttpOptions.middleware`, in the order given
-3. anything `app.use()` appended, in call order
-4. class-level `@UseGuards(...)`, in the order written
-5. method-level `@UseGuards(...)`, in the order written
-6. the handler
+1. the **error filter**, which is the only thing that turns a throw into a response
+2. `RequestLoggingMiddleware`, unless `requestLogging: false`
+3. `HttpOptions.middleware`, in the order given
+4. anything `app.use()` appended, in call order
+5. the **declaring module's** `middleware`, in the order given
+6. class-level `@UseGuards(...)`, in the order written
+7. method-level `@UseGuards(...)`, in the order written
+8. **validation** of `params`, `query` and `body` against the route's schemas
+9. the handler
 
-Verified in `packages/http/src/server/guards.test.ts`: a global, a class-level and
-a method-level middleware that each push their name produce
-`['global', 'class', 'method']`.
+Then back out through 7, 6, 5, 4, 3, 2 - because a middleware that does work after
+`await next()` is what an interceptor would have been.
 
-The chain is folded at **boot**, not per request:
+`packages/http/src/server/lifecycle.test.ts` asserts exactly that list, in one
+request, in both directions:
+
+```
+global:in  use:in  module:in  controller-guard:in  method-guard:in
+  validate  handler
+method-guard:out  controller-guard:out  module:out  use:out  global:out  log
+```
+
+and asserts the refusal case: a guard that throws at layer 7 never reaches
+validation or the handler, every enclosing layer still unwinds, and the filter runs
+outside all of them.
+
+### If you are coming from Nest
+
+Nest documents nine numbered stages over five base classes. The mapping is not
+subtle, because the stages collapse rather than move:
+
+| Nest                                               | dunx                                            |
+| -------------------------------------------------- | ----------------------------------------------- |
+| Global middleware                                  | `HttpOptions.middleware` / `app.use()`          |
+| Module-bound middleware (`configure(consumer)`)    | `@Module({ middleware })`                       |
+| Global / controller / route **guards**             | the same list, and `@UseGuards`                 |
+| **Interceptors**, pre-controller                   | anything before `await next()`                  |
+| **Pipes**, including parameter pipes               | the route decorator's schemas                   |
+| Controller handler, then services                  | unchanged                                       |
+| **Interceptors**, post-request                     | anything after `await next()`                   |
+| **Exception filters**, route → controller → global | `onError`, one filter; or `try` around `next()` |
+
+Four things go away with it. There is no `forRoutes()` path-matching language,
+because a module already owns its controllers. There is no separate `guards`,
+`interceptors` and `pipes` array, because they were one mechanism wearing three
+names. There is no ancestor layer: importing a module never adds middleware to the
+importer's routes. And there is no per-controller or per-route filter, because a
+middleware wrapping `next()` in a `try` **is** a scoped filter, in the same class
+that decided to be there.
+
+### Ordering is folded at boot
+
+The chain is composed once per route when the server binds, not per request:
 
 ```ts
 export const compose = (
@@ -125,9 +173,10 @@ export const compose = (
   );
 ```
 
-One `reduceRight` per route when the server binds, and after that a request is a
-call into a closure. No array iteration, no metadata lookup, no container access
-on the request path.
+One `reduceRight` per route at `listen()`, and after that a request is a call into a
+closure. No array iteration, no metadata lookup, no container access on the request
+path - which is what makes a guard a `Map` lookup where Nest's `Reflector` is a
+per-request cost.
 
 A route with **no middleware and no CORS** skips even that and takes a direct
 dispatch path that allocates no async frame unless there is genuinely something to
@@ -247,13 +296,13 @@ class ReportsController {
 }
 ```
 
-`@UseGuards` hangs off a class or a method, which are real scopes that do exist,
-unlike a module. Guards compose rather than override, which is why they are not a
-`MetaKey`: a class-level guard and a method-level guard both run, in that order.
+`@UseGuards` hangs off a class or a method. Guards compose rather than override,
+which is why they are not a `MetaKey`: a class-level guard and a method-level guard
+both run, in that order.
 
-A `@UseGuards` class is resolved through the container (`app.get(guard)`), so a
-guard injects exactly like global middleware does, and **one instance is shared by
-every route that declares it**.
+A `@UseGuards` class is resolved from **the scope of the module that declares the
+controller**, so it can inject that module's private providers. One instance is
+shared by every route that declares it.
 
 ### Metadata alone decides nothing
 
@@ -289,6 +338,47 @@ is what makes `@Public()` do something rather than decorate, and it is why
 `@dunx/auth`'s `SessionGuard` can be installed globally at all: better-auth's own
 sign-in endpoints are `@Public()`, and a sign-in route that needed a session could
 never be reached.
+
+## Module middleware
+
+A guard that only ever made sense for one feature belongs to that feature's module:
+
+```ts
+@Module({
+  controllers: [ReportsController, ExportsController],
+  providers: [ReportsService, TenantPolicy, TenantGuard],
+  middleware: [TenantGuard],
+  exports: [ReportsService],
+})
+export class ReportsModule {}
+```
+
+`TenantGuard` runs in front of every route `ReportsController` and
+`ExportsController` declare, and in front of nothing else. It is resolved from
+`ReportsModule`'s scope, so it injects `TenantPolicy`, which is on neither the
+`exports` line nor visible anywhere outside this module. That combination - a guard
+for these routes, built from providers only these routes can see - is the reason
+module scoping exists.
+
+Three things it deliberately does not have:
+
+**No `forRoutes()`.** Nest needs a path-matching mini-language because
+`configure(consumer)` registers middleware against paths. A dunx module already owns
+its controllers, so the routes are already named. If a guard should cover half a
+module's routes, `@UseGuards` on the controller is the half.
+
+**No inheritance.** Importing `ReportsModule` does not put `TenantGuard` in front of
+the importer's routes. "Importing a module silently changed my request path" is a
+surprise worth not having, and the cost is one line in the module that actually
+wants the guard.
+
+**No separate `guards` array.** A guard is middleware that throws, so a second array
+would be Nest's split reintroduced at the exact moment the rest of the design is
+removing it.
+
+A guard that genuinely applies everywhere stays global.
+`@dunx/auth`'s `SessionGuard` is that case: it belongs in
+`HttpFactory.create(root, { middleware: [SessionGuard] })`, not in one module.
 
 ## The error mapper
 
@@ -354,15 +444,94 @@ const app = await HttpFactory.create(AppModule, {
 });
 ```
 
-There is no per-controller filter and no `@Catch`. One mapper, in one place, and
-falling through to `defaultErrorMapper` is the normal way to handle the rest.
+Falling through to `defaultErrorMapper` is the normal way to handle the rest.
 
-### Where the mapper sits
+### `ErrorFilter`, when the mapper needs dependencies
 
-Inside CORS and outside everything else. A mapped 500 still carries the CORS
-headers a browser needs in order to _show_ it, which is exactly the case where a
-missing header turns a readable error into a silent network failure in the
-console.
+A mapper is a function, so it cannot inject - and the interesting ones need the
+app's config to decide how much of an error to reveal, or its `Logger` to record the
+ones that became a 500. dunx's own default proves it: `errorMapper(logger)` is
+curried because currying was the only way to hand a function a dependency.
+
+`onError` also takes a **class**, resolved from the container like any middleware:
+
+```ts
+import { ErrorFilter } from '@dunx/http';
+
+export class AppErrorFilter extends ErrorFilter {
+  constructor(
+    private readonly logger: Logger,
+    private readonly config: AppConfigService,
+  ) {}
+
+  catch(error: unknown, req: Request): Response {
+    if (error instanceof TenantMissing) {
+      this.logger.warn('unknown tenant', { path: new URL(req.url).pathname });
+      return Response.json(
+        { error: 'Unknown tenant', status: 404 },
+        { status: 404 },
+      );
+    }
+    return defaultErrorMapper(error, req);
+  }
+}
+
+@Module({ providers: [AppErrorFilter] })
+export class AppModule {}
+
+const app = await HttpFactory.create(AppModule, { onError: AppErrorFilter });
+```
+
+`abstract class` rather than an interface, so it is a runtime value and therefore an
+injection token an app can rebind. Extending it is optional - the check is
+structural, so any class with a matching `catch` is accepted. The method is named
+`catch` to match the thing it replaces.
+
+### Scoping one, without a second concept
+
+There is no `@Catch`, no per-controller filter and no per-route filter, because
+middleware already is one:
+
+```ts
+export class ReportErrors implements Middleware {
+  async handle(
+    req: BunRequest,
+    ctx: RouteContext,
+    next: Next,
+  ): Promise<Response> {
+    try {
+      return await next();
+    } catch (error) {
+      if (error instanceof ReportUnavailable) {
+        return Response.json(
+          { error: 'Try again shortly', status: 503 },
+          { status: 503 },
+        );
+      }
+      throw error;
+    }
+  }
+}
+```
+
+Put it in `@Module({ middleware: [ReportErrors] })` and it is a module-scoped filter;
+put it in `@UseGuards(ReportErrors)` and it is a controller- or route-scoped one.
+Rethrowing hands the error on to the next layer out, and eventually to `onError` -
+which is Nest's route → controller → global cascade, expressed as the nesting it
+already was.
+
+### Where the app-wide filter sits
+
+Inside CORS and outside everything else, request logging included. A mapped 500
+still carries the CORS headers a browser needs in order to _show_ it, which is
+exactly the case where a missing header turns a readable error into a silent network
+failure in the console.
+
+Request logging is inside it, so a request that ends in a throw is still logged
+once. It records the error's own status - an `HttpError`'s `status`, or 500 for
+anything else - and rethrows, because the filter owns the response. A custom filter
+that maps an unexpected error to something other than a 500 is the one case where
+the logged status and the sent status differ; throw an `HttpError` and they agree.
 
 ## Request logging
 
@@ -474,7 +643,13 @@ your routes, because `HttpMethod` has no `OPTIONS` verb: only CORS mounts one.
   default and no throw; a guard that requires a key should say so itself.
 - **The same guard class declared at both class and method scope runs twice.**
   One instance, two positions in the chain. `@UseGuards` guarantees ordering, not
-  deduplication.
+  deduplication. The same holds for a class listed in `@Module({ middleware })`
+  and in `@UseGuards` on one of that module's controllers.
+- **Module middleware resolves from its module's scope first.** That is what lets
+  it inject private providers, so declare it in the same module's `providers`. A
+  class the module cannot see still resolves - the lookup is the permissive
+  `app.get` one - but then it is a shared instance built somewhere else, which is
+  probably not what the `middleware` line meant.
 - **`'trust proxy'` is off by default.** Turn it on with
   `app.set('trust proxy', true)` only behind a proxy that rewrites
   `X-Forwarded-For`; a direct client can send whatever it likes.

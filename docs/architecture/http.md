@@ -27,14 +27,27 @@ decorator inference limit, so it lands with Phase 3 rather than as a scan with n
 producer.
 
 Middleware is a **class** with `handle(req, ctx, next)`, resolved from the container
-so it gets constructor injection. Global middleware is passed to
-`HttpFactory.create` or `app.use()`, not to `@Module` - in a flat container with no
-module boundary, "module middleware" could only ever mean global middleware, so
-hanging it off a module would imply a scope that does not exist.
+so it gets constructor injection. It has three homes, one per scope it can belong
+to: `HttpFactory.create` / `app.use()` for app-wide, `@Module({ middleware })` for
+the routes that module's own controllers declare, and `@UseGuards(...)` for a class
+or a method.
 
-`@UseGuards(...)` is different, and the distinction is worth keeping straight: it
-hangs off a **class or a method**, which are real scopes that do exist. Ordering is
-global outermost, then class-level, then method-level, then the handler.
+Ordering is global outermost, then the declaring module's, then class-level, then
+method-level, then validation, then the handler - and back out through all of it.
+There is no ancestor layer: importing a module never changes the request path of the
+importer's routes. `packages/http/src/server/lifecycle.test.ts` pins the whole order
+in one request.
+
+### The framework's own services are bound, not self-bound
+
+`HttpFactory` wraps the app's root in a `global: true` module that binds and exports
+`PubSub`, `ClientAddress` and `RequestLoggingMiddleware`. Two of those could be left
+to self-binding under the flat container and cannot be under scoping: an unbound class
+self-binds into **whichever scope asks first**, so a second module injecting
+`ClientAddress` was a boot error naming the first module, and even with one consumer
+`listen()` could attach the live server to an instance nothing else held. They are
+framework services with no module for an app to import, which is exactly what the
+global scope is for. `packages/http/src/server/client-address.test.ts` pins it.
 
 Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in

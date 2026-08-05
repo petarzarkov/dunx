@@ -11,6 +11,7 @@ import {
   type ModuleRef,
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
+import { ClientAddress } from './client-address.js';
 import { buildWebSocket } from '../ws/adapter.js';
 import { discoverGateways } from '../ws/discover.js';
 import { PubSub } from '../ws/pubsub.js';
@@ -62,8 +63,15 @@ export class HttpFactory {
       inject: [Logger, RequestContext] as const,
     });
 
+    // `ClientAddress` belongs here for the same reason `PubSub` does: `listen()`
+    // hands one instance the live server, and `app.clientIp(req)` is documented as
+    // that instance. Left to self-binding it landed in whichever scope asked first,
+    // so a second module injecting it was a boot error naming the first - and the
+    // app's own `app.get(ClientAddress)` could then reach an instance no server was
+    // ever attached to.
+    const services = [PubSub, ClientAddress];
     const providers =
-      options.requestLogging === false ? [PubSub] : [PubSub, logging];
+      options.requestLogging === false ? services : [...services, logging];
     const scope: DynamicModule = {
       module: HttpModule,
       global: true,

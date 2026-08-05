@@ -224,13 +224,17 @@ Mutating `Bun.env` in a test leaks into every other test in the same process, an
 way to assert that `validate` rejects a bad value, since you cannot unset a
 variable that a developer happens to have exported in their shell.
 
-The raw source is bound too, under the `ConfigInput` token, so a factory can read
-what `validate` was handed.
+The raw source is bound too, under the `ConfigInput` token, but it is **not**
+exported: `validate` is what reads it, and everything downstream reads the shaped
+object instead.
 
 ## Two things that are not there, on purpose
 
-**No `isGlobal`.** The dunx container is flat. One registration is visible
-everywhere, so there is nothing for a global flag to turn on.
+**No `isGlobal`.** `ConfigModule.forRoot` is already `global: true`, and exports
+`ConfigService` plus whatever `as` names. Configuration is the one thing every
+module reads, so a flag to turn that on would only ever be turned on. `ConfigInput`
+stays private: it is the raw environment, and nothing outside the module should read
+it.
 
 **No `forRootAsync`.** Every other module has one; `ConfigModule` does not need
 one. `validate` may already return a promise, and the container settles every

@@ -12,9 +12,14 @@ export interface AddressSource {
 const sources = new WeakMap<ClientAddress, AddressSource>();
 
 /**
- * The client's address, honouring the `'trust proxy'` setting. Every class is
- * injectable, so `inject(ClientAddress)` in a middleware or controller needs no
- * registration; `app.clientIp(req)` is the same instance.
+ * The client's address, honouring the `'trust proxy'` setting.
+ *
+ * Bound and exported by `HttpFactory`'s global wrapper module, so injecting it in a
+ * middleware or controller needs no registration and `app.clientIp(req)` is the same
+ * instance. That binding is not optional under module scoping: an unbound class
+ * self-binds into whichever scope asks first, so a second module injecting it was a
+ * boot error naming the first, and `listen()` could attach the server to an instance
+ * nothing else held.
  */
 export class ClientAddress {
   of(req: BunRequest): string | undefined {

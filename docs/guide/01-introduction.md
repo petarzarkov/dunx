@@ -93,11 +93,12 @@ Decisions rather than gaps, each with its reasoning in
 decorators, so `@Inject()` has nowhere to come from. `inject()` in a field
 initializer covers what a constructor parameter cannot express.
 
-**No module encapsulation.** The container is flat and `imports` only traverses, so
-there is no `exports` list and no "provider is not exported from module X". This is
-the biggest departure from the frameworks dunx borrows its shape from, and the first
-thing you will notice. What you lose is per-module rebinding; the answer is two
-tokens. See [Modules](./04-modules.md).
+**No `@Global()` decorator, no `forRoutes()`.** Modules do encapsulate - each is a
+scope, `exports` is its public surface, and `global: true` publishes one app-wide -
+but each of those is a field on the one options object rather than a second
+spelling. A module's `middleware` covers the routes its own controllers declare, so
+there is no path-matching language and no ancestor layer. See
+[Modules](./04-modules.md).
 
 **No `forwardRef`.** Dependencies are recorded as a thunk and read at resolution, so
 a class declared later in the file, or across a circular import, resolves anyway.

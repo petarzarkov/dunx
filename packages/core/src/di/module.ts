@@ -102,6 +102,29 @@ export const Module =
 const isDynamic = (ref: ModuleRef): ref is DynamicModule =>
   typeof ref === 'object';
 
+/**
+ * Whether an `exports` entry is a module reference rather than an injection token.
+ *
+ * Deliberately **not** {@link isModuleRef}: that one demands the `@Module` marker,
+ * and a `DynamicModule` from a static factory usually names a class that carries no
+ * decorator at all - `MailerModule`, `DbModule`, `AuthModule`, every configured
+ * module in `@dunx/infra`. Requiring the marker here rejected exactly the facade
+ * re-export the feature exists for, and reported it as an unresolvable token named
+ * `undefined`.
+ *
+ * The structural test is enough because the alternatives are disjoint: a `Token` is
+ * `{ description }` with no `module`, and an abstract-class token is a function,
+ * which the decorated-class branch already answers.
+ */
+export const isModuleExport = (
+  entry: InjectionToken<unknown> | ModuleRef,
+): entry is ModuleRef => {
+  if (typeof entry === 'function') return Object.hasOwn(entry, MODULE);
+  return (
+    'module' in entry && typeof (entry as DynamicModule).module === 'function'
+  );
+};
+
 // hasOwn, so a subclass of a module does not silently inherit its bindings.
 const declaredOptions = (module: ModuleClass): ModuleOptions | undefined =>
   Object.hasOwn(module, MODULE)

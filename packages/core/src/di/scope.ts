@@ -1,7 +1,7 @@
 import { AppError } from './errors.js';
 import {
   collectModules,
-  isModuleRef,
+  isModuleExport,
   readModule,
   type ModuleRef,
   type ResolvedModule,
@@ -57,7 +57,7 @@ export interface ScopeGraph {
 
 const isToken = (
   entry: InjectionToken<unknown> | ModuleRef,
-): entry is InjectionToken<unknown> => !isModuleRef(entry);
+): entry is InjectionToken<unknown> => !isModuleExport(entry);
 
 /**
  * A module's own bindings, and the one duplicate check that survives module scoping:
