@@ -421,6 +421,11 @@ has not been done:
   `ScopeGraph` is exported from core.
 - **The guide has no page on it.** `docs/guide/04-modules.md` describes the flat
   container.
-- **The boot-time cost has not been measured.** A regression was accepted, but the
-  number is still unknown; `tools/bench`'s `startup` scenario against the recorded
-  ~53 ms is the check.
+- ~~The boot-time cost has not been measured.~~ **Measured, and it is a non-issue.**
+  Building the container for `examples/full` - 16 modules, every feature - is a
+  **median 1.7 ms** (min 1.5, max 19.3 on a cold first run), which covers the scope
+  graph, the export fixed point, the per-scope flattening and eager resolution of every
+  provider. A regression was accepted in advance; at this magnitude even doubling it
+  would be under a millisecond, so the flattening decision needs no defending. The
+  ~53 ms in `tools/bench` is `HttpFactory` boot including the oxc parse, route discovery
+  and document generation, and none of that moved.
