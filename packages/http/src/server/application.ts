@@ -6,6 +6,7 @@ import {
   type AppOptions,
   type Ctor,
   type InjectionToken,
+  type ModuleRef,
   type ShutdownSignal,
 } from '@dunx/core';
 import { joinPath, type DiscoveredRoute } from '../route/discover.js';
@@ -131,6 +132,15 @@ export interface HttpApp extends App {
 export class HttpApplication implements HttpApp {
   /** Forwarded from the container so an app can log scope warnings at boot. */
   readonly warnings: readonly string[];
+  /**
+   * The app's own root module, not this package's wrapper around it.
+   *
+   * Global middleware, guards and an error filter are all listed by the app, so they
+   * resolve as the app's root sees them. Resolving them from the wrapper would mean a
+   * guard could only inject what the app happened to *export*, which is a boundary the
+   * app never asked for - it wrote the list.
+   */
+  readonly #root: ModuleRef;
   readonly closed: Promise<void>;
   readonly gatewayPaths: readonly string[];
   readonly #app: App;
@@ -156,9 +166,11 @@ export class HttpApplication implements HttpApp {
     app: App,
     discovered: readonly DiscoveredRoute[],
     options: HttpOptions,
+    root: ModuleRef,
     websocket?: WebSocketRuntime,
   ) {
     this.#app = app;
+    this.#root = root;
     this.warnings = app.warnings;
     this.#discovered = discovered;
     this.#middleware = [
@@ -175,7 +187,7 @@ export class HttpApplication implements HttpApp {
     this.#onError =
       options.onError === undefined
         ? errorMapper(app.get(Logger))
-        : toErrorMapper(options.onError, (token) => app.get(token));
+        : toErrorMapper(options.onError, (token) => app.get(token, root));
     this.#port = options.port ?? 3000;
     this.#websocket = websocket;
     this.#relay = options.relay;
@@ -233,7 +245,9 @@ export class HttpApplication implements HttpApp {
     this.#assertNotStarted('listen()');
     this.#started = true;
 
-    const middleware = this.#middleware.map((entry) => this.#app.get(entry));
+    const middleware = this.#middleware.map((entry) =>
+      this.#app.get(entry, this.#root),
+    );
     const prefixed = this.#prefixed();
     // A `@UseGuards` class comes from the container too, so a guard injects exactly
     // like global middleware does.
@@ -242,7 +256,7 @@ export class HttpApplication implements HttpApp {
       middleware,
       this.#onError,
       this.#cors,
-      (guard) => this.#app.get(guard),
+      (guard) => this.#app.get(guard, this.#root),
     );
 
     const ws = this.#websocket;

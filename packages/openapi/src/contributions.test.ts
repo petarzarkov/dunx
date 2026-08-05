@@ -69,7 +69,16 @@ class Auth {
   };
 }
 
-@Module({ controllers: [UsersController], providers: [Auth] })
+/**
+ * `Auth` is exported because `OpenApiModule` wraps this module rather than being
+ * imported by it, and the contributor factory it configures runs in *its* scope. A
+ * wrapper's factory can only inject what the module it wraps exposes.
+ */
+@Module({
+  controllers: [UsersController],
+  providers: [Auth],
+  exports: [Auth],
+})
 class AppModule {}
 
 test('a contributor can inject through forRootAsync', async () => {

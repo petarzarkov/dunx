@@ -104,6 +104,8 @@ export class HttpFactory {
         ? buildWebSocket(gateways, options.websocket)
         : undefined;
 
-    return new HttpApplication(app, discovered, options, websocket);
+    // `root` is the app's own module, so global middleware and the error filter
+    // resolve as the app sees them rather than as this wrapper does.
+    return new HttpApplication(app, discovered, options, root, websocket);
   }
 }

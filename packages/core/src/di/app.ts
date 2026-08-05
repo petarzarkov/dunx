@@ -56,7 +56,16 @@ export interface App {
    * which level they belong at. Empty on a graph with no ambiguity.
    */
   readonly warnings: readonly string[];
-  get<T>(token: InjectionToken<T>): T;
+  /**
+   * Resolves a token, optionally **as a named module sees it**.
+   *
+   * Without `from` this is the permissive bootstrap lookup: the root scope's view,
+   * then any single module that declares the token. With `from` it is exactly what a
+   * provider in that module would get, which is what a framework wrapping an app
+   * needs - `@dunx/http` resolves global middleware as the *app's* root sees it, not
+   * as its own wrapper module does.
+   */
+  get<T>(token: InjectionToken<T>, from?: ModuleRef): T;
   shutdown(): Promise<void>;
   enableShutdownHooks(signals?: readonly ShutdownSignal[]): this;
 }
@@ -86,8 +95,17 @@ class Application implements App {
    * module owns a provider would make `exports` painful for no safety gain. Ambiguity
    * is still an error rather than a guess.
    */
-  get<T>(token: InjectionToken<T>): T {
-    return this.#injector.find(token);
+  get<T>(token: InjectionToken<T>, from?: ModuleRef): T {
+    if (from === undefined) return this.#injector.find(token);
+    const scope = this.#injector.graph.scopes.get(from);
+    if (!scope) {
+      throw new AppError(
+        `${describeToken(from as InjectionToken<unknown>)} is not a module in this ` +
+          'container, so it has no scope to resolve from. Pass a module reference the ' +
+          'graph was built with.',
+      );
+    }
+    return this.#injector.get(token, scope);
   }
 
   async shutdown(): Promise<void> {

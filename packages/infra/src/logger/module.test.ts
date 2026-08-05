@@ -232,14 +232,17 @@ describe('LoggerModule', () => {
       readonly level = LogLevel.WARN;
     }
 
+    @Module({ providers: [Settings], exports: [Settings] })
+    class SettingsModule {}
+
     @Module({
       imports: [
         LoggerModule.forRootAsync({
+          imports: [SettingsModule],
           useFactory: (settings: Settings) => ({ level: settings.level }),
           inject: [Settings] as const,
         }),
       ],
-      providers: [Settings],
     })
     class Root {}
 
