@@ -66,6 +66,7 @@ const namedModule = (
 
   return {
     module: HttpModule,
+    exports: [optionsToken, httpClient(name)],
     providers: [optionsProvider, serviceFrom(httpClient(name), optionsToken)],
   };
 };
@@ -97,6 +98,7 @@ export class HttpModule {
 
     return {
       module: HttpModule,
+      exports: [HttpClientOptions, HttpService],
       providers: [
         provide(HttpClientOptions, { useValue: options }),
         serviceFrom(HttpService, HttpClientOptions),
@@ -154,6 +156,7 @@ export class HttpModule {
 
     return {
       module: HttpModule,
+      exports: [HttpClientOptions, HttpService],
       providers: [
         provide(HttpClientOptions, { useFactory, inject } as FactoryProvider<
           HttpClientOptions,

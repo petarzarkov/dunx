@@ -54,6 +54,7 @@ export {
 } from './scope.js';
 export {
   provide,
+  type AsyncModuleConfig,
   type ClassProvider,
   type Deps,
   type FactoryProvider,

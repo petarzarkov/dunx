@@ -186,14 +186,27 @@ describe('QueueModule.forRootAsync', () => {
     }
     const settings = token<Config>('Settings');
 
+    /**
+     * `imports` on the factory config, which is the shape a scoped container needs:
+     * the factory is written here but the provider it produces lives in
+     * `QueueModule`'s scope, so the module the token comes from has to be named. A
+     * token from a `global: true` module - `ConfigService` being the common one -
+     * needs nothing.
+     */
+    @Module({
+      providers: [provide(settings, { useValue: new Config() })],
+      exports: [settings],
+    })
+    class SettingsModule {}
+
     @Module({
       imports: [
         QueueModule.forRootAsync({
+          imports: [SettingsModule],
           useFactory: (config: Config) => ({ url: config.redisUrl }),
           inject: [settings] as const,
         }),
       ],
-      providers: [provide(settings, { useValue: new Config() })],
     })
     class Root {}
 

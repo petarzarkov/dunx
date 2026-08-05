@@ -188,7 +188,12 @@ describe('named connections', () => {
     await app.shutdown();
   });
 
-  it('reports two registrations of one name instead of picking one', async () => {
+  /**
+   * Two registrations of one name used to be a duplicate-binding boot error. They are
+   * now two scopes, so the importer sees the same token from both and is **warned**
+   * rather than silently given whichever was reached first.
+   */
+  it('warns when one name is registered twice', async () => {
     @Module({
       imports: [
         RedisModule.forRoot({ url: unreachable, name: 'dupe' }),
@@ -197,9 +202,11 @@ describe('named connections', () => {
     })
     class Root {}
 
-    expect(await rejectionMessage(AppFactory.create(Root))).toContain(
-      'Duplicate binding',
+    const app = await AppFactory.create(Root);
+    expect(app.warnings.join('\n')).toMatch(
+      /imports .* from both "RedisModule" and "RedisModule"/,
     );
+    await app.shutdown();
   });
 });
 

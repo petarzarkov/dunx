@@ -129,6 +129,8 @@ export interface HttpApp extends App {
 }
 
 export class HttpApplication implements HttpApp {
+  /** Forwarded from the container so an app can log scope warnings at boot. */
+  readonly warnings: readonly string[];
   readonly closed: Promise<void>;
   readonly gatewayPaths: readonly string[];
   readonly #app: App;
@@ -157,6 +159,7 @@ export class HttpApplication implements HttpApp {
     websocket?: WebSocketRuntime,
   ) {
     this.#app = app;
+    this.warnings = app.warnings;
     this.#discovered = discovered;
     this.#middleware = [
       ...(options.requestLogging === false ? [] : [RequestLoggingMiddleware]),

@@ -160,9 +160,23 @@ class SecretsController {
   }
 }
 
+/**
+ * The database the factory injects lives in its own module and is exported, and the
+ * factory names that module through `imports`. Both are required now: the provider
+ * `forRootAsync` configures is registered in `AuthModule`'s scope, so a token only
+ * this file's module declares is not something `AuthModule` can see.
+ */
+@Module({
+  providers: [provide(Connection, { useFactory: () => new Connection() })],
+  exports: [Connection],
+})
+class DatabaseModule {}
+
 @Module({
   imports: [
+    DatabaseModule,
     AuthModule.forRootAsync({
+      imports: [DatabaseModule],
       useFactory: (connection: Connection) => ({
         secret: 'a-test-secret-of-at-least-32-characters',
         baseURL: 'http://localhost',
@@ -174,7 +188,6 @@ class SecretsController {
     }),
   ],
   controllers: [SecretsController],
-  providers: [provide(Connection, { useFactory: () => new Connection() })],
 })
 class TestApp {}
 

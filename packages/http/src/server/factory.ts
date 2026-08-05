@@ -26,6 +26,12 @@ export type { HttpApp, HttpOptions } from './application.js';
 // Bound around the user's root so `PubSub` is injectable without importing
 // anything. Its name is what a duplicate binding of PubSub would be reported
 // against, which is why it is a named class and not an object literal.
+//
+// `global: true` is what makes that "without importing anything" true under module
+// scoping. This module *imports* the root rather than being imported by it, and
+// visibility only flows from an import's exports to its importer - so without global
+// these bindings would be invisible to every module in the app, which is the opposite
+// of the intent. They are framework services with no module for an app to import.
 class HttpModule {}
 
 export class HttpFactory {
@@ -54,11 +60,16 @@ export class HttpFactory {
       inject: [Logger, RequestContext] as const,
     });
 
+    const providers =
+      options.requestLogging === false ? [PubSub] : [PubSub, logging];
     const scope: DynamicModule = {
       module: HttpModule,
+      global: true,
       imports: [root],
-      providers:
-        options.requestLogging === false ? [PubSub] : [PubSub, logging],
+      providers,
+      exports: providers.map((entry) =>
+        typeof entry === 'function' ? entry : entry.token,
+      ),
     };
     // Spread rather than passed through, because `exactOptionalPropertyTypes`
     // separates an absent `overrides` from one explicitly set to undefined.

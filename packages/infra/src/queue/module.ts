@@ -3,7 +3,7 @@ import {
   provide,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   type Registration,
 } from '@dunx/core';
 import { QueueConnection } from './connection.js';
@@ -17,6 +17,13 @@ import { JobPublisher } from './publisher.js';
  * because the publisher needs it - closes its sockets last, after every queue has
  * closed.
  */
+/**
+ * The public surface: `JobPublisher` is what an app publishes through,
+ * `QueueOptions` reports the redacted broker url, and `QueueConnection` is what a
+ * `WorkerFactory` in the same process needs.
+ */
+const surface = [QueueOptions, QueueConnection, JobPublisher];
+
 const bindings: readonly Registration[] = [
   provide(QueueConnection, {
     useFactory: (options: QueueOptions, logger: Logger) =>
@@ -45,6 +52,7 @@ export class QueueModule {
   static forRoot(init: QueueOptionsInit = {}): DynamicModule {
     return {
       module: QueueModule,
+      exports: surface,
       providers: [
         provide(QueueOptions, { useValue: new QueueOptions(init) }),
         ...bindings,
@@ -71,18 +79,22 @@ export class QueueModule {
     load: () => QueueOptionsInit | Promise<QueueOptionsInit>,
   ): DynamicModule;
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<QueueOptionsInit, D>,
+    config: AsyncModuleConfig<QueueOptionsInit, D>,
   ): DynamicModule;
   static forRootAsync(
     source:
       | (() => QueueOptionsInit | Promise<QueueOptionsInit>)
-      | FactoryProvider<QueueOptionsInit, Deps>,
+      | AsyncModuleConfig<QueueOptionsInit, Deps>,
   ): DynamicModule {
     const load = typeof source === 'function' ? source : source.useFactory;
     const inject = typeof source === 'function' ? [] : (source.inject ?? []);
 
     return {
       module: QueueModule,
+      ...(typeof source === 'function' || source.imports === undefined
+        ? {}
+        : { imports: source.imports }),
+      exports: surface,
       providers: [
         provide(QueueOptions, {
           useFactory: async (...deps: readonly unknown[]) =>

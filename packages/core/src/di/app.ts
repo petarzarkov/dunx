@@ -178,19 +178,37 @@ export class AppFactory {
       }
     }
 
-    // Core's own contracts, into the global scope, unless a module claimed them.
+    /**
+     * Core's two always-bound contracts, `Logger` and `RequestContext`.
+     *
+     * The documented rule is that **a module binding either one wins**, app-wide -
+     * that is what lets `@dunx/http`'s request logging use an app's real logger while
+     * still working in an app that imported no logging module at all. Module scoping
+     * would otherwise break it: a `Logger` bound in some feature module is invisible
+     * to `@dunx/infra`'s scopes, which import nothing of the app's.
+     *
+     * So these two are promoted rather than merely defaulted. Whichever module
+     * declares one, that binding is laid into every scope that has no view of its own;
+     * only if nobody declares it does core's fallback go in. `LoggerModule` is
+     * `global: true` and lands here through the ordinary path as well.
+     */
     for (const registration of defaults()) {
       const substituted = overrides.get(registration.token);
       if (substituted) replaced.add(registration.token);
-      const binding: Binding = {
-        provider: (substituted ?? registration).provider,
-        module: '(default)',
-      };
+
+      const declared = graph.ordered.find((scope) =>
+        scope.own.has(registration.token),
+      );
+      const binding: Binding = substituted
+        ? { provider: substituted.provider, module: '(override)' }
+        : (declared?.own.get(registration.token) ?? {
+            provider: registration.provider,
+            module: '(default)',
+          });
+
       for (const scope of graph.ordered) {
         if (scope.own.has(registration.token)) continue;
-        if (!scope.visible.has(registration.token)) {
-          scope.visible.set(registration.token, binding);
-        }
+        scope.visible.set(registration.token, binding);
       }
     }
 

@@ -72,6 +72,7 @@ const namedModule = (
 
   return {
     module: RedisModule,
+    exports: [optionsToken, redisConnection(name)],
     providers: [
       optionsProvider,
       connectionFrom(redisConnection(name), optionsToken),
@@ -92,6 +93,7 @@ export class RedisModule {
 
     return {
       module: RedisModule,
+      exports: [RedisOptions, RedisConnection],
       providers: [
         provide(RedisOptions, { useValue: options }),
         connectionFrom(RedisConnection, RedisOptions),
@@ -143,6 +145,7 @@ export class RedisModule {
 
     return {
       module: RedisModule,
+      exports: [RedisOptions, RedisConnection],
       providers: [
         provide(RedisOptions, { useFactory, inject }),
         connectionFrom(RedisConnection, RedisOptions),

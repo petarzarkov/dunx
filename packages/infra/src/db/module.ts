@@ -3,7 +3,7 @@ import {
   type AbstractCtor,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
 } from '@dunx/core';
 import { DbConnection, DbOptions } from './connection.js';
 
@@ -33,6 +33,10 @@ export class DbModule {
 
     return {
       module: DbModule,
+      // The drizzle handle is what repositories inject, `DbConnection` is what a
+      // health check or a migration runner needs, and `DbOptions` is how an app
+      // reports which backend it is on. All three are public; nothing here is not.
+      exports: [DbOptions, connection, options.token],
       providers: [
         provide(DbOptions, { useValue: options }),
         provide(connection, { useFactory: () => options.open() }),
@@ -62,13 +66,15 @@ export class DbModule {
    */
   static forRootAsync<TDb, const D extends Deps>(
     token: AbstractCtor<TDb>,
-    provider: FactoryProvider<DbOptions<TDb>, D>,
+    provider: AsyncModuleConfig<DbOptions<TDb>, D>,
   ): DynamicModule {
     const connection: AbstractCtor<DbConnection<TDb>> = DbConnection;
     const configured: AbstractCtor<DbOptions<TDb>> = DbOptions;
 
     return {
       module: DbModule,
+      ...(provider.imports === undefined ? {} : { imports: provider.imports }),
+      exports: [configured, connection, token],
       providers: [
         provide(configured, provider),
         provide(connection, {

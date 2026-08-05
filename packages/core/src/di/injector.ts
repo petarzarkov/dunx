@@ -218,7 +218,18 @@ export class Injector {
     const lazy = this.#lazy.get(token);
     if (lazy) return lazy;
 
-    if (isCtor(token)) {
+    /**
+     * Self-bind a class **only if no module declares it**.
+     *
+     * Without that condition, a class some module provides but does not export would
+     * silently be constructed fresh here rather than reported - and it fails later with
+     * whatever its constructor could not resolve, pointing at the wrong problem
+     * entirely. Measured: `AuthContext` is bound by a factory in `@dunx/auth`, and
+     * self-binding it produced "did @dunx/transform run?" instead of "AuthModule does
+     * not export it".
+     */
+    const declared = this.#graph.ordered.some((other) => other.own.has(token));
+    if (isCtor(token) && !declared) {
       const created: Binding = {
         provider: { kind: 'class', ctor: token },
         module: scope.name,

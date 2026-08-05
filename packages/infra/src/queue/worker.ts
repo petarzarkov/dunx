@@ -182,6 +182,8 @@ const selectJobs = (
 /** A worker process: a {@link QueueConsumer} plus the container it owns. */
 class WorkerApplication implements WorkerApp {
   readonly closed: Promise<void>;
+  /** Forwarded from the container, so a worker reports scope warnings too. */
+  readonly warnings: readonly string[];
   readonly #app: App;
   readonly #consumer: QueueConsumer;
   #resolveClosed: (() => void) | undefined;
@@ -189,6 +191,7 @@ class WorkerApplication implements WorkerApp {
   #hooked = false;
 
   constructor(app: App, consumer: QueueConsumer) {
+    this.warnings = app.warnings;
     this.#app = app;
     this.#consumer = consumer;
     this.closed = new Promise<void>((resolve) => {

@@ -207,26 +207,41 @@ describe('createTestApp()', () => {
     ).toContain('Nothing to override for Clock, Mailer:');
   });
 
-  it('still reports a duplicate binding - replacing is not a bypass', async () => {
-    @Module({ providers: [provide(Database, { useClass: RealDatabase })] })
+  /**
+   * Two modules binding one token is legal under module scoping, and an override
+   * replaces it in **both** - which is the behaviour a suite wants: a test stubbing
+   * `Database` should not have to know how many modules bind it.
+   *
+   * This used to assert a duplicate-binding error, which the flat container raised.
+   */
+  it('replaces an overridden token in every module that binds it', async () => {
+    class ReadsOne {
+      readonly db = inject(Database);
+    }
+    class ReadsTwo {
+      readonly db = inject(Database);
+    }
+
+    @Module({
+      providers: [provide(Database, { useClass: RealDatabase }), ReadsOne],
+      exports: [ReadsOne],
+    })
     class OneModule {}
 
-    @Module({ providers: [provide(Database, { useClass: RealDatabase })] })
+    @Module({
+      providers: [provide(Database, { useClass: RealDatabase }), ReadsTwo],
+      exports: [ReadsTwo],
+    })
     class TwoModule {}
 
-    // The override replaces both, so the count per token is unchanged and the
-    // container's own check is what fires.
-    expect(
-      await rejectionMessage(
-        createTestApp({
-          modules: [OneModule, TwoModule],
-          overrides: [provide(Database, { useClass: FakeDatabase })],
-        }),
-      ),
-    ).toBe(
-      'Duplicate binding for Database: bound by module "OneModule" and module ' +
-        '"TwoModule". The container is flat - one binding per token.',
-    );
+    const app = await createTestApp({
+      modules: [OneModule, TwoModule],
+      overrides: [provide(Database, { useClass: FakeDatabase })],
+    });
+
+    expect(app.get(ReadsOne).db).toBeInstanceOf(FakeDatabase);
+    expect(app.get(ReadsTwo).db).toBeInstanceOf(FakeDatabase);
+    await app.shutdown();
   });
 
   it('boots with no overrides at all', async () => {
