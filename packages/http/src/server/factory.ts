@@ -6,6 +6,7 @@ import {
   provide,
   readControllers,
   RequestContext,
+  type Ctor,
   type DynamicModule,
   type ModuleRef,
 } from '@dunx/core';
@@ -18,6 +19,7 @@ import {
   type HttpApp,
   type HttpOptions,
 } from './application.js';
+import type { Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
 import { assertNoCollisions } from './routes.js';
 
@@ -81,15 +83,32 @@ export class HttpFactory {
 
     const discovered: DiscoveredRoute[] = [];
     for (const module of modules) {
+      // The module's own middleware, applied to the routes its controllers declare
+      // and to nothing else. Carried on each route with the module it came from, so it
+      // resolves from that module's scope rather than the app's root.
+      const moduleMiddleware = module.options.middleware ?? [];
       for (const controller of readControllers(module)) {
-        const routes = discoverRoutes(app.get(controller) as object);
+        const routes = discoverRoutes(
+          app.get(controller, module.ref) as object,
+        );
         if (routes.length === 0) {
           throw new AppError(
             `${controller.name} is registered as a controller but declares no routes. ` +
               'Add a @Get/@Post/... method, or move it to providers.',
           );
         }
-        discovered.push(...routes);
+        discovered.push(
+          ...routes.map((route) => ({
+            ...route,
+            module: module.ref,
+            ...(moduleMiddleware.length === 0
+              ? {}
+              : {
+                  moduleMiddleware:
+                    moduleMiddleware as readonly Ctor<Middleware>[],
+                }),
+          })),
+        );
       }
     }
     // Eagerly, so a wiring error still surfaces from create() rather than waiting

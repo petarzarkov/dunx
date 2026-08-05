@@ -256,7 +256,9 @@ export class HttpApplication implements HttpApp {
       middleware,
       this.#onError,
       this.#cors,
-      (guard) => this.#app.get(guard, this.#root),
+      // A module's own middleware resolves from that module; anything the app listed
+      // globally resolves from the app's root.
+      (guard, from) => this.#app.get(guard, from ?? this.#root),
     );
 
     const ws = this.#websocket;
