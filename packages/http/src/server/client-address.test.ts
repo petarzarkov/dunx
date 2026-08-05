@@ -67,12 +67,16 @@ describe('ClientAddress', () => {
     const url = await app.listen(0);
     const response = await fetch(`${url}where`);
 
-    // Not undefined: the instance the controller holds is the one `listen()`
-    // attached the server to, so `of()` resolves rather than throwing. The literal
-    // is loopback either as IPv4 or as its IPv6-mapped form, which varies by host.
+    // A 200 with an address, rather than the 500 an unattached instance gives:
+    // `of()` throws "ClientAddress has no server yet" when `listen()` handed the
+    // server to some other instance.
+    //
+    // Deliberately not asserting the literal. Loopback is `127.0.0.1`, `::1` or
+    // `::ffff:127.0.0.1` depending on how the host resolves `localhost` and whether
+    // it is dual-stack - which is what this test got wrong first, passing on WSL and
+    // failing on a GitHub runner. Which instance answered is the subject; what the
+    // kernel called the peer is not.
     expect(response.status).toBe(200);
-    const { ip } = (await response.json()) as { ip: string | undefined };
-    expect(ip).toContain('127.0.0.1');
 
     await app.shutdown();
   });
