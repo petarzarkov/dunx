@@ -1,11 +1,13 @@
 import {
   collectModules,
   describeToken,
+  isModuleRef,
   isUnresolved,
   readControllers,
   readDeps,
   type Ctor,
   type DepEntry,
+  type InjectionToken,
   type ModuleRef,
   type ProviderEntry,
   type Registration,
@@ -46,6 +48,12 @@ export interface ProviderNode {
   /** The class a `class` binding constructs. Absent for value and factory. */
   readonly class?: string;
   readonly dependencies: readonly Dependency[];
+  /**
+   * Whether the declaring module exports this, and therefore whether anything outside
+   * it can inject it at all. A private provider is not a bug - it is the boundary - but
+   * an agent reading the graph has to be able to tell the difference.
+   */
+  readonly exported: boolean;
 }
 
 export interface ModuleNode {
@@ -54,6 +62,19 @@ export interface ModuleNode {
   readonly controllers: readonly string[];
   readonly providers: readonly string[];
   readonly gateways: readonly string[];
+  /**
+   * The tokens this module exposes to whatever imports it. Everything in `providers`
+   * and not here is private to the module.
+   *
+   * The most useful field in the whole reader now that the container is scoped: "why
+   * can't X see Y" is answerable from it, and it is the question an agent debugging a
+   * resolution error actually has.
+   */
+  readonly exports: readonly string[];
+  /** Whether the exports above are visible everywhere with no import. */
+  readonly global: boolean;
+  /** Middleware applied to this module's own routes, and to nothing else. */
+  readonly middleware: readonly string[];
 }
 
 const asDependency = (entry: DepEntry): Dependency =>
@@ -92,6 +113,10 @@ const nodeFor = (
     kind: provider.kind,
     role,
     module,
+    // Overwritten by `providersOf`, which is the only caller that knows the module's
+    // export list. Defaulting to false keeps a private provider from looking public
+    // if some other caller builds a node directly.
+    exported: false,
   } as const;
 
   if (provider.kind === 'class') {
@@ -116,14 +141,28 @@ const nodeFor = (
 };
 
 export const providersOf = (root: ModuleRef): readonly ProviderNode[] =>
-  collectModules(root).flatMap((module) => [
-    ...readControllers(module).map((controller) =>
-      nodeFor(controller, module.name, 'controller'),
-    ),
-    ...(module.options.providers ?? []).map((entry) =>
-      nodeFor(entry, module.name, 'provider'),
-    ),
-  ]);
+  collectModules(root).flatMap((module) => {
+    // A module reference in `exports` re-exports that module's surface rather than a
+    // token of this one's, so only the token entries answer "is this one exported".
+    const exported = new Set(
+      (module.options.exports ?? [])
+        .filter((entry) => !isModuleRef(entry))
+        .map((entry) => describeToken(entry as InjectionToken<unknown>)),
+    );
+    const mark = (node: ProviderNode): ProviderNode => ({
+      ...node,
+      exported: exported.has(node.token),
+    });
+
+    return [
+      ...readControllers(module).map((controller) =>
+        mark(nodeFor(controller, module.name, 'controller')),
+      ),
+      ...(module.options.providers ?? []).map((entry) =>
+        mark(nodeFor(entry, module.name, 'provider')),
+      ),
+    ];
+  });
 
 /** A module reference's name, whether it is a class or a configured module. */
 const refName = (ref: ModuleRef): string =>
@@ -146,6 +185,11 @@ const classesIn = (
 export const modulesOf = (root: ModuleRef): readonly ModuleNode[] =>
   collectModules(root).map((module) => ({
     name: module.name,
+    exports: (module.options.exports ?? []).map((entry) =>
+      isModuleRef(entry) ? refName(entry) : describeToken(entry),
+    ),
+    global: module.options.global === true,
+    middleware: (module.options.middleware ?? []).map((entry) => entry.name),
     imports: (module.options.imports ?? []).map(refName),
     controllers: readControllers(module).map((controller) => controller.name),
     providers: [
