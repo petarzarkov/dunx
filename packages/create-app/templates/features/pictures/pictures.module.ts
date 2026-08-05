@@ -1,5 +1,5 @@
 import { Module } from '@dunx/core';
-import { ImagesModule } from '@dunx/infra/images';
+import { Images, ImagesModule } from '@dunx/infra/images';
 import { AppConfigService } from '../config.js';
 import { ImagesController } from './images.controller.js';
 import { Thumbnails } from './thumbnails.service.js';
@@ -18,5 +18,8 @@ import { Thumbnails } from './thumbnails.service.js';
   ],
   controllers: [ImagesController],
   providers: [Thumbnails],
+  // `Thumbnails` is what the jobs feature resizes with, and `Images` is re-exported
+  // so an importer needs no direct knowledge of @dunx/infra/images.
+  exports: [Thumbnails, Images],
 })
 export class PicturesModule {}

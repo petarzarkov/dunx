@@ -6,5 +6,6 @@ import { RequestLog, RequestLoggerMiddleware } from './request-log.js';
 // declaring them here is for the reader, not for the resolver.
 @Module({
   providers: [RequestLog, RequestLoggerMiddleware, HttpDemo],
+  exports: [RequestLog, RequestLoggerMiddleware, HttpDemo],
 })
 export class HttpModule {}

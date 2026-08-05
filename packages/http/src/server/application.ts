@@ -245,6 +245,15 @@ export class HttpApplication implements HttpApp {
     this.#assertNotStarted('listen()');
     this.#started = true;
 
+    /**
+     * Global middleware resolves **permissively**, not from a named scope.
+     *
+     * It is the app's own list, and the class it names is usually declared by whichever
+     * feature module owns it - so the right instance is the one that module built, with
+     * that module's dependencies. Pinning the lookup to the app's root would instead
+     * demand the root re-export every guard it lists, which is a boundary nobody asked
+     * for. `app.get` finds the single module that declares it, and errors if two do.
+     */
     const middleware = this.#middleware.map((entry) =>
       this.#app.get(entry, this.#root),
     );
@@ -256,9 +265,11 @@ export class HttpApplication implements HttpApp {
       middleware,
       this.#onError,
       this.#cors,
-      // A module's own middleware resolves from that module; anything the app listed
-      // globally resolves from the app's root.
-      (guard, from) => this.#app.get(guard, from ?? this.#root),
+      // A module's own middleware resolves from that module, which `from` carries. A
+      // `@UseGuards` guard without one takes the same permissive lookup as global
+      // middleware.
+      (guard, from) =>
+        from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
     );
 
     const ws = this.#websocket;

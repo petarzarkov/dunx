@@ -105,7 +105,7 @@ class Application implements App {
           'graph was built with.',
       );
     }
-    return this.#injector.get(token, scope);
+    return this.#injector.find(token, scope);
   }
 
   async shutdown(): Promise<void> {

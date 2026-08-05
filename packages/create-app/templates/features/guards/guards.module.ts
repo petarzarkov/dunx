@@ -12,5 +12,6 @@ import { ReportsService } from './reports.service.js';
 @Module({
   controllers: [ReportsController],
   providers: [ReportsService, AuthGuard, RolesGuard, GuardsDemo],
+  exports: [AuthGuard, RolesGuard, GuardsDemo],
 })
 export class GuardsModule {}

@@ -1,5 +1,10 @@
 import { Module } from '@dunx/core';
-import { DbModule, SyncDatabase, SyncSqliteOptions } from '@dunx/infra/db';
+import {
+  DbConnection,
+  DbModule,
+  SyncDatabase,
+  SyncSqliteOptions,
+} from '@dunx/infra/db';
 import { AppConfigService } from '../config.js';
 import { LedgerController } from './ledger.controller.js';
 import { Ledger } from './ledger.service.js';
@@ -35,5 +40,12 @@ import * as schema from './schema.js';
   ],
   controllers: [LedgerController],
   providers: [Ledger],
+  /**
+   * The drizzle handle, re-exported so every feature module that imports this one can
+   * inject it. `DbModule` exports it to *this* module; naming it again is what passes
+   * it on, and it is why a repository declares `imports: [DatabaseModule]` rather than
+   * reaching into `@dunx/infra/db` itself.
+   */
+  exports: [SyncDatabase, DbConnection, Ledger],
 })
 export class DatabaseModule {}

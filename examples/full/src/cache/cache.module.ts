@@ -1,5 +1,5 @@
 import { Module } from '@dunx/core';
-import { RedisModule } from '@dunx/infra/redis';
+import { RedisConnection, RedisModule } from '@dunx/infra/redis';
 import { AppConfigService } from '../config.js';
 import { CacheController } from './cache.controller.js';
 import { Sessions } from './sessions.service.js';
@@ -32,5 +32,8 @@ import { Sessions } from './sessions.service.js';
   ],
   controllers: [CacheController],
   providers: [Sessions],
+  // Re-exported: the chat gateway fans out across processes through the same
+  // connection, so it imports this module rather than opening a second client.
+  exports: [RedisConnection, Sessions],
 })
 export class CacheModule {}

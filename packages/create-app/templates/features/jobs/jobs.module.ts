@@ -1,5 +1,5 @@
 import { Module } from '@dunx/core';
-import { QueueModule } from '@dunx/infra/queue';
+import { JobPublisher, QueueModule } from '@dunx/infra/queue';
 import { AppConfigService } from '../config.js';
 import { PicturesModule } from '../pictures/pictures.module.js';
 import { JobsController } from './jobs.controller.js';
@@ -31,5 +31,8 @@ import { ThumbnailJobs } from './thumbnail.jobs.js';
   ],
   controllers: [JobsController],
   providers: [ThumbnailJobs],
+  // The publisher, re-exported so a feature that enqueues does not import
+  // @dunx/infra/queue itself.
+  exports: [JobPublisher, ThumbnailJobs],
 })
 export class JobsModule {}

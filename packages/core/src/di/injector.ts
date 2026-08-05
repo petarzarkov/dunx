@@ -132,8 +132,12 @@ export class Injector {
    * name the owning module would push container topology into every suite. Two scopes
    * declaring it differently is an error rather than a guess.
    */
-  find<T>(token: InjectionToken<T>): T {
+  find<T>(token: InjectionToken<T>, preferred?: Scope): T {
     const key = token as InjectionToken<unknown>;
+    // A caller that named a scope gets that scope's answer when it has one. This is
+    // what lets `@dunx/http` say "resolve as the app's root sees it" without demanding
+    // the root re-export every guard it happens to list globally.
+    if (preferred?.visible.has(key) === true) return this.get(token, preferred);
     if (this.#graph.root.visible.has(key)) return this.get(token);
 
     const owners = this.#graph.ordered.filter((scope) => scope.own.has(key));
@@ -152,7 +156,12 @@ export class Injector {
     // Only self-bind once nothing declares it. Checking `isCtor` first would quietly
     // construct a *third* instance in the root scope while two modules each already
     // hold their own, which is the opposite of what the caller asked for.
-    return only === undefined ? this.get(token) : this.get(token, only);
+    //
+    // The self-bind lands in `preferred` when there is one - a global middleware class
+    // no module lists still has to see the app's providers, and the root of the graph
+    // may be a framework wrapper that sees none of them.
+    if (only !== undefined) return this.get(token, only);
+    return this.get(token, preferred);
   }
 
   async resolve<T>(token: InjectionToken<T>, from?: Scope): Promise<T> {
