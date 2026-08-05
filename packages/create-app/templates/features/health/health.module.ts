@@ -1,7 +1,6 @@
 import { Module } from '@dunx/core';
 import { CacheModule } from '../cache/cache.module.js';
 import { DatabaseModule } from '../database/database.module.js';
-import { JobsModule } from '../jobs/jobs.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { HealthController } from './health.controller.js';
 
@@ -9,7 +8,7 @@ import { HealthController } from './health.controller.js';
 // needs each one's public surface. That is the boundary doing its job - the imports
 // list is now an accurate statement of what this feature touches.
 @Module({
-  imports: [DatabaseModule, CacheModule, JobsModule, StorageModule],
+  imports: [DatabaseModule, CacheModule, StorageModule],
   controllers: [HealthController],
 })
 export class HealthModule {}

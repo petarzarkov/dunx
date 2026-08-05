@@ -217,7 +217,10 @@ export const FEATURES: readonly Feature[] = [
     name: 'websockets',
     source: 'chat',
     summary: 'A @Gateway with @OnMessage events, PubSub and a Redis relay.',
-    requires: [],
+    // `cache` joined this list for the same reason `files` joined health's: the gateway
+    // injects `RedisConnection` for cross-process fan-out, and a module now has to
+    // import the one that provides it. The summary already said "and a Redis relay".
+    requires: ['cache'],
     module: { klass: 'ChatModule', from: './chat/chat.module.js' },
     dependencies: ['@dunx/infra'],
     config: [],
@@ -255,7 +258,10 @@ export const FEATURES: readonly Feature[] = [
     name: 'health',
     source: 'health',
     summary: 'One endpoint reporting which parts are live and which degraded.',
-    requires: ['cache', 'database'],
+    // `files` joined this list when module scoping made the dependency explicit: the
+    // controller injects `Storage`, so the module has to import the one that provides
+    // it. Selecting health without files used to typecheck and fail at boot.
+    requires: ['cache', 'database', 'files'],
     module: { klass: 'HealthModule', from: './health/health.module.js' },
     dependencies: ['@dunx/infra'],
     config: ['appName'],
