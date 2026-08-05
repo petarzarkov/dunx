@@ -1,7 +1,12 @@
 # Module-scoped DI, `exports`, and `@Global()`
 
-**P0. A deliberate reversal**, requested directly: "a truly DI and IoC framework needs
-to have this." The flat container and the absence of `exports` are dunx's largest
+**P0, and the core of it is shipped** - scopes, `exports`, `global: true`,
+module-scoped middleware, the `AsyncModuleConfig` imports field, and the error
+messages, with all nine packages, both examples and the scaffolder migrated. What is
+left is at the bottom under "Still open".
+
+**A deliberate reversal**, requested directly: "a truly DI and IoC framework needs to
+have this." The flat container and the absence of `exports` are dunx's largest
 divergence from Nest, they are argued at length in
 [architecture/dependency-injection.md](../architecture/dependency-injection.md) under
 "Modules group registrations; they do not encapsulate", and **per-module subgraphs** is
@@ -399,3 +404,23 @@ Everything else in that plan is unaffected and still wanted.
    nothing else claims the token", which is nearly the same code. Confirm that
    `Logger`-in-global still loses to an app module that binds `Logger` locally, since
    local-wins now does that job.
+
+## Still open
+
+The container, the packages, the examples and the scaffolder are done and green. What
+has not been done:
+
+- **`dunx-template` has not been migrated.** It consumes `@dunx/*` from npm, so it needs
+  this released first. Its modules need `imports`/`exports`, and its `ThrottleGuard` and
+  `AuditContextMiddleware` are the two guards that should stop being app-level and
+  become their features' own `middleware` - which is the acceptance test for whether
+  module scoping paid off in a real app.
+- **`@dunx/mcp`'s readers do not report scope or visibility.** `providersOf` and
+  `modulesOf` still describe a flat graph, so an agent asking "what provides X" cannot
+  say which module owns it or whether it is exported. Straightforward now that
+  `ScopeGraph` is exported from core.
+- **The guide has no page on it.** `docs/guide/04-modules.md` describes the flat
+  container.
+- **The boot-time cost has not been measured.** A regression was accepted, but the
+  number is still unknown; `tools/bench`'s `startup` scenario against the recorded
+  ~53 ms is the check.
