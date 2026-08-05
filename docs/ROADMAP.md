@@ -269,7 +269,6 @@ Feedback goes in as a new file rather than into conversation.
 
 | Item                                                                            | Shape                                                                 |
 | ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [module-scoped-di](./roadmap/module-scoped-di.md)                               | Shipped in 1.0.0. Only the `dunx-template` migration is left.         |
 | [class-modules-and-opt-in-config](./roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. 395 lines of framework plumbing in app code.       |
 | [dunx-dashboard](./roadmap/dunx-dashboard.md)                                   | Feature, requested. Designed, not built. The only planned queue UI.   |
 | [design-polish](./roadmap/design-polish.md)                                     | Feature. Landing page rebuilt; not yet striking.                      |
@@ -279,8 +278,13 @@ Feedback goes in as a new file rather than into conversation.
 
 Delivered and moved out of this folder rather than left here marked done:
 **cross-language benchmark subjects** (the 16-subject run and how to read it are in
-[architecture/benchmarks.md](./architecture/benchmarks.md)) and the **MCP server**
-(shipped as `@dunx/mcp`; the reasoning is in [architecture/mcp.md](./architecture/mcp.md)).
+[architecture/benchmarks.md](./architecture/benchmarks.md)), the **MCP server**
+(shipped as `@dunx/mcp`; the reasoning is in [architecture/mcp.md](./architecture/mcp.md)),
+and **module-scoped DI** (shipped in 1.0.0, with `dunx-template` on 1.0.1; the scope
+model is in
+[architecture/dependency-injection.md](./architecture/dependency-injection.md) and what
+module middleware turned out to be for is in
+[architecture/http.md](./architecture/http.md)).
 
 ### From porting nestjs-template to dunx-template
 
@@ -571,11 +575,11 @@ compiler plugin, per-package example apps, a hand-rolled `Database` contract spa
 both drizzle adapters, and running the `Bun.SQL` suite over that driver's SQLite
 adapter.
 
-**Reversed by request:** _per-module subgraphs_ was on this list and
-[shipped in 1.0.0](./roadmap/module-scoped-di.md). The argument against it was real - a
-flat container has no "not exported from module X" error and needs no `forwardRef` -
-but it traded away
+**Reversed by request:** _per-module subgraphs_ was on this list and shipped in 1.0.0 -
+see [architecture/dependency-injection.md](./architecture/dependency-injection.md),
+"Modules encapsulate". The argument against it was real - a flat container has no "not
+exported from module X" error and needs no `forwardRef` - but it traded away
 module-scoped middleware and per-module rebinding, which a DI framework is expected to
-have. Nobody is consuming dunx yet, so the reversal costs no migration. **Request-scoped
+have. Nobody was consuming dunx yet, so the reversal cost no migration. **Request-scoped
 DI stays rejected** and is a different question: it is about a _lifetime_ per request,
 not a _visibility_ boundary per module.

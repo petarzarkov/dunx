@@ -263,8 +263,8 @@ a table of before and after, not prose. It is still worth writing because
 `dunx-template` has to be migrated regardless, and a step that cannot be written as a
 diff against the template is not specified well enough to ship.
 
-**Prerequisite:** [module-scoped-di](./module-scoped-di.md) is P0 and lands first. It
-changes what W1 means - see "How the P0 changes this plan" at the end.
+**Prerequisite: already met.** Module-scoped DI shipped in 1.0.0, and it changed what
+W1 means - see "What module scoping already settled" at the end.
 
 ### W1 - `HttpOptionsProvider` (keystone)
 
@@ -609,17 +609,21 @@ concludes it is the one place the app genuinely owns the knowledge.
    a written justification, on its first day of use. A default every real consumer
    overrides is the wrong default.
 
-## How the P0 changes this plan
+## What module scoping already settled
 
-[module-scoped-di](./module-scoped-di.md) lands first and moves the ground under two
-items:
+Module-scoped DI shipped in 1.0.0 and moved the ground under two items:
 
-- **W1's `middleware` field becomes global-only.** Under module scoping, a guard that
-  matters to one feature is declared by that feature's module and resolved from its
-  scope. So the options provider keeps only genuinely app-wide middleware -
-  `SessionGuard` in `dunx-template` stays; `ThrottleGuard` and
-  `AuditContextMiddleware` become their modules' business. The measure in W1 gets
-  _better_, because the array shrinks rather than moving.
+- **W1's `middleware` field is global-only.** A guard that matters to one feature is
+  declared by that feature's module and resolved from its scope, so the options
+  provider keeps only genuinely app-wide middleware.
+
+  **The array shrinks less than this predicted, and that is now measured rather than
+  guessed.** All three of `dunx-template`'s app-level entries stayed app-level:
+  `SessionGuard` as expected, and `ThrottleGuard` and `AuditContextMiddleware` for
+  reasons recorded in [architecture/http.md](../architecture/http.md), "What module
+  middleware is actually for". So W1 should be justified by the imperative-surface
+  argument alone, not by an expectation that the list gets short.
+
 - **W1b is unaffected and becomes more valuable.** `setGlobalPrefix`, `cors`,
   `trustProxy` and the shutdown timeout are app-wide by nature; none of them is
   something a module scopes. So the imperative surface is exactly the part module

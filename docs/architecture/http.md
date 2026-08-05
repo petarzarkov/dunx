@@ -38,6 +38,38 @@ There is no ancestor layer: importing a module never changes the request path of
 importer's routes. `packages/http/src/server/lifecycle.test.ts` pins the whole order
 in one request.
 
+### What module middleware is actually for, measured against a real app
+
+Module middleware was designed for the feature-scoped **guard**: a module providing a
+guard for its own routes, injecting providers it keeps private. Migrating
+`dunx-template` says that case is rarer than it looks, and that the design's own
+prediction about which of its guards would move was **wrong both times**:
+
+- `ThrottleGuard` rate-limits every route and is tuned per route by `@Throttle`
+  metadata. That is the global-guard-plus-metadata shape working as intended, and
+  splitting it per feature would give every feature a limiter it could forget.
+- `AuditContextMiddleware` looked like the strongest candidate, since only one table
+  carries audit triggers. But the writes to it include better-auth's own sign-up
+  route, whose controller lives inside `@dunx/auth`'s `AuthModule` rather than the
+  app's `AccountsModule`. With no ancestor layer, scoping the stamp would have
+  silently stopped attributing sign-ups while the trigger still fired, with the
+  previous request's actor id.
+
+That second one is the first concrete cost the "no ancestor layer" decision has paid,
+and it is still the right decision: the alternative surprise - importing a module
+changes the importer's request path - is worse and unbounded.
+
+What did move was something the design never named. The app's queue controller had a
+private `degrades()` helper wrapped around all five of its route bodies, translating
+an unreachable broker into a 503. That is a per-controller `@Catch` filter written by
+hand, it is the one thing `HttpOptions.middleware` could not express, and it is now
+one `@Module({ middleware })` line.
+
+**The generalisation: the first real use of module middleware was a filter, not a
+guard.** A guard that applies to exactly one feature is uncommon, because a global
+guard reading route metadata already covers it. An error translation that only makes
+sense for one feature's routes is common, and had nowhere to live.
+
 ### The framework's own services are bound, not self-bound
 
 `HttpFactory` wraps the app's root in a `global: true` module that binds and exports

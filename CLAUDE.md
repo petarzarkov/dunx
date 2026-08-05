@@ -235,13 +235,23 @@ Consequences to keep in mind when changing this area:
 
 See docs/ARCHITECTURE.md for the measurements behind all of this.
 
-**The container's shape is changing.** It is flat today - `imports` is traversal only,
-there is no `exports` and no visibility boundary - and
-docs/roadmap/module-scoped-di.md is the **P0** that replaces that with a scope per
-module, `exports`, `global: true` and module-scoped middleware. Everything above about
-the transform, the deps thunk and `inject()` survives it unchanged; what changes is
-_where_ a token resolves from. Read that doc before making any DI design decision, and
-do not add code that assumes one flat namespace.
+**The container is scoped, not flat.** Every module reference is a scope holding what
+it declares; `exports` is its public surface, `global: true` publishes those exports
+app-wide, and `@Module({ middleware })` covers the routes that module's own controllers
+declare. Everything above about the transform, the deps thunk and `inject()` is
+unchanged by it - what it changes is _where_ a token resolves from, and `exports`
+absent means **nothing** is exported. Read
+docs/architecture/dependency-injection.md, "Modules encapsulate", before any DI design
+decision, and never add code that assumes one flat namespace.
+
+Two consequences that bit real code and will bite again:
+
+- **A framework service must be bound by a module, not left to self-bind.** An unbound
+  class self-binds into whichever scope asks first, so a second consumer is a boot
+  error. That is why `HttpFactory`'s global wrapper binds `PubSub` and `ClientAddress`.
+- **A module that takes no options should be a decorated class, not a `forRoot()`.** A
+  scope is keyed on the module reference, and `forRoot()` returns a fresh object per
+  call - so two importers calling it build two scopes and two of everything in them.
 
 ## Always-bound contracts
 
