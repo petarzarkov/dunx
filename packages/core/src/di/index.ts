@@ -42,8 +42,19 @@ export {
   type ResolvedModule,
   type RootModuleResult,
 } from './module.js';
+// The scope graph, exported because anything that reports on the container needs it:
+// `@dunx/http` maps a controller to its module's middleware, and `@dunx/mcp` reports
+// which module declares a provider and whether it is exported.
+export {
+  buildScopes,
+  unresolvableMessage,
+  type Binding,
+  type Scope,
+  type ScopeGraph,
+} from './scope.js';
 export {
   provide,
+  type AsyncModuleConfig,
   type ClassProvider,
   type Deps,
   type FactoryProvider,

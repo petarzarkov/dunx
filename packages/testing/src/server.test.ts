@@ -231,7 +231,13 @@ class OpenController {
   }
 }
 
-@Module({ controllers: [OpenController], providers: [DenyGuard] })
+// Exported, because the harness composes these under a synthetic root and global
+// middleware resolves as that root sees it - the same rule production follows.
+@Module({
+  controllers: [OpenController],
+  providers: [DenyGuard],
+  exports: [DenyGuard],
+})
 class GlobalGuardModule {}
 
 @Controller('scoped')
@@ -243,7 +249,11 @@ class ScopedController {
   }
 }
 
-@Module({ controllers: [ScopedController], providers: [DenyGuard] })
+@Module({
+  controllers: [ScopedController],
+  providers: [DenyGuard],
+  exports: [DenyGuard],
+})
 class ScopedGuardModule {}
 
 const warnings = async (run: () => Promise<void>): Promise<string[]> => {

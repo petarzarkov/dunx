@@ -1,6 +1,6 @@
 import { AppError } from './errors.js';
 import type { Registration } from './provider.js';
-import type { Ctor } from './token.js';
+import type { Ctor, InjectionToken } from './token.js';
 
 // Symbol.for, not Symbol: two copies of @dunx/core in a dependency tree still
 // agree on the key. Same marker technique as route discovery - no accumulator.
@@ -12,13 +12,49 @@ export type ProviderEntry = Ctor<unknown> | Registration;
 export type ModuleClass = abstract new (...args: never[]) => object;
 
 export interface ModuleOptions {
-  // Traversal only. Importing a module registers its providers into the same flat
-  // container - it does not create a visibility boundary.
+  /**
+   * The modules this one may resolve from. A module sees its own providers plus
+   * whatever its imports `export`, and nothing else.
+   */
   readonly imports?: readonly ModuleRef[];
   // Registered exactly like providers. Kept separate so an HTTP adapter can find
   // which instances to scan for routes; core itself only constructs them.
   readonly controllers?: readonly Ctor<unknown>[];
   readonly providers?: readonly ProviderEntry[];
+  /**
+   * This module's public surface. A token listed here is resolvable by any module
+   * that imports this one; everything else stays private to it.
+   *
+   * A `ModuleRef` re-exports whatever that module exports, which is what makes a
+   * facade module possible - `InfraModule` importing and re-exporting `DbModule`
+   * means an importer of `InfraModule` sees the database without naming it.
+   *
+   * **Absent means nothing is exported.** A module with providers and no `exports`
+   * is fully private, which is the point of the boundary.
+   */
+  readonly exports?: readonly (InjectionToken<unknown> | ModuleRef)[];
+  /**
+   * Publishes this module's `exports` to every scope in the app, with no import
+   * needed. Its private providers stay private.
+   *
+   * A field rather than a separate `@Global()` decorator: dunx configures modules
+   * through one options object, and a `DynamicModule` would need the field anyway,
+   * so a decorator would be a second spelling for one idea.
+   */
+  readonly global?: boolean;
+  /**
+   * Middleware applied to the routes **this module's controllers declare**, and to
+   * nothing else. Resolved from this module's scope, so it can inject providers the
+   * module keeps private.
+   *
+   * There is no inheritance: importing a module never changes the request path of
+   * the importer's own routes. Middleware that really is app-wide stays app-wide.
+   *
+   * One field rather than `middleware` plus `guards`, because a guard here is
+   * middleware that throws - the same "one extension point, not five" decision the
+   * global chain rests on.
+   */
+  readonly middleware?: readonly Ctor<unknown>[];
 }
 
 /**
@@ -40,9 +76,15 @@ export type ModuleRef = ModuleClass | DynamicModule;
 /** A module reference flattened to the registrations it contributes. */
 export interface ResolvedModule {
   readonly module: ModuleClass;
-  /** Where the duplicate-binding error gets "bound by module X and module Y". */
+  /** Names the module in a duplicate-binding or visibility error. */
   readonly name: string;
   readonly options: ModuleOptions;
+  /**
+   * The reference this was resolved from, so the visibility graph can key on
+   * identity: two different configurations of one class are two scopes, and the
+   * class alone cannot tell them apart.
+   */
+  readonly ref: ModuleRef;
 }
 
 interface Marked {
@@ -77,10 +119,14 @@ const resolveRef = (ref: ModuleRef): ResolvedModule => {
     return {
       module: ref.module,
       name: ref.module.name,
+      ref,
       options: {
         imports: concat(declared?.imports, ref.imports),
         controllers: concat(declared?.controllers, ref.controllers),
         providers: concat(declared?.providers, ref.providers),
+        exports: concat(declared?.exports, ref.exports),
+        middleware: concat(declared?.middleware, ref.middleware),
+        global: declared?.global === true || ref.global === true,
       },
     };
   }
@@ -93,7 +139,7 @@ const resolveRef = (ref: ModuleRef): ResolvedModule => {
         `factory such as ${ref.name}.forRoot().`,
     );
   }
-  return { module: ref, name: ref.name, options };
+  return { module: ref, name: ref.name, ref, options };
 };
 
 /**

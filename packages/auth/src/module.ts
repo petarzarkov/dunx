@@ -3,7 +3,8 @@ import {
   type AbstractCtor,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
+  type ModuleRef,
   type Registration,
   RequestContext,
 } from '@dunx/core';
@@ -19,13 +20,24 @@ import {
   normalizeBasePath,
 } from './options.js';
 
-const build = (options: Registration, mountAt: string): DynamicModule => {
+const build = (
+  options: Registration,
+  mountAt: string,
+  imports?: readonly ModuleRef[],
+): DynamicModule => {
   // Instantiated to the token type rather than left as `typeof Auth`, which is what
   // lets the factory below hand back a plain better-auth instance with no cast.
   const auth: AbstractCtor<Auth> = Auth;
 
   return {
     module: AuthModule,
+    ...(imports === undefined ? {} : { imports }),
+    /**
+     * The public surface. `AuthOptions` is how an app reports where the handler is
+     * mounted, `Auth` is better-auth itself, `AuthContext` is the caller per request
+     * and `SessionGuard` is what an app lists in its middleware or `@UseGuards`.
+     */
+    exports: [AuthOptions, auth, AuthContext, SessionGuard],
     controllers: [mountHandler(mountAt)],
     // Every binding declares its own `inject`, so nothing here needs
     // `@dunx/transform`'s transform to have run - the same reason
@@ -117,11 +129,11 @@ export class AuthModule {
    * looking.
    */
   static forRootAsync<const D extends Deps>(
-    provider: FactoryProvider<BetterAuthOptions, D>,
+    provider: AsyncModuleConfig<BetterAuthOptions, D>,
     mountAt?: string,
   ): DynamicModule;
   static forRootAsync(
-    provider: FactoryProvider<BetterAuthOptions, Deps>,
+    provider: AsyncModuleConfig<BetterAuthOptions, Deps>,
     mountAt?: string,
   ): DynamicModule {
     const mounted = normalizeBasePath(mountAt ?? DEFAULT_BASE_PATH);
@@ -148,6 +160,7 @@ export class AuthModule {
         inject: provider.inject ?? [],
       }),
       mounted,
+      provider.imports,
     );
   }
 }

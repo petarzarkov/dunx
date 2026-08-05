@@ -1,7 +1,7 @@
 import {
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   provide,
 } from '@dunx/core';
 import { Images } from './images.js';
@@ -42,6 +42,7 @@ export class ImagesModule {
   static forRoot(config: ImagesConfig = {}): DynamicModule {
     return {
       module: ImagesModule,
+      exports: [ImagesOptions, Images],
       providers: [
         provide(ImagesOptions, {
           useFactory: async () =>
@@ -74,10 +75,12 @@ export class ImagesModule {
    * the point: `forRoot` already awaits a function.
    */
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<ImagesOptionsInput, D>,
+    config: AsyncModuleConfig<ImagesOptionsInput, D>,
   ): DynamicModule {
     return {
       module: ImagesModule,
+      ...(config.imports === undefined ? {} : { imports: config.imports }),
+      exports: [ImagesOptions, Images],
       providers: [
         provide(ImagesOptions, {
           useFactory: async (...deps) =>

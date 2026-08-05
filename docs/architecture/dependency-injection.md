@@ -287,108 +287,125 @@ A `building` set tracks in-flight construction and throws with the full cycle
 path. Without it, a field-initializer cycle is an unbounded recursion with an
 unreadable stack.
 
-## Modules group registrations; they do not encapsulate
+## Modules encapsulate: `exports`, `global`, and a scope each
 
-The syntax is Nest's. The semantics are not, and that distinction is the whole
-point - an earlier draft of this document argued for plain-object modules, but the
-argument was always about semantics and the object literal was never load-bearing.
+**This replaced a flat container, and the section that argued for one is worth reading
+in the history rather than here.** The short version of what changed and why: the flat
+container had no `exports`, no visibility boundary and therefore no "provider is not
+exported from module X" error, and it was defended on those grounds. What it could not
+express was **module-scoped middleware** - a module providing a guard for its own
+routes, resolved from its own scope - or per-module rebinding. A DI framework is
+expected to have both. Nobody was consuming dunx yet, so the reversal cost no
+migration.
 
-The container is flat. `imports` exists, but it is **traversal only** - it pulls a
-module's registrations into the same flat container. There is no `exports` list, no
-visibility boundary, and therefore no "provider is not exported from module X"
-error. `AppFactory.create(RootModule)` walks the import graph, imports before
-importers so dependencies register first, and visits each module once - which makes
-a diamond import register once rather than tripping the duplicate-binding check,
-and makes a circular import terminate instead of erroring. A module is a named list
-of registrations and a list of other modules to include.
+The model is three concepts.
 
-So the encapsulation Nest gives you is absent by design. It is also largely
-recoverable elsewhere: `inject(BillingService)` needs a value import of
-`BillingService`, so cross-domain coupling is already visible in the import graph
-and enforceable with a lint boundary rule at zero runtime cost. What is genuinely
-lost is per-module _rebinding_ - a `LOGGER` token bound differently in two
-features. Use two tokens. That is the price of the flat container.
+**A scope is a module.** Every module _reference_ in the graph gets its own set of
+bindings. Two different configurations of one class are two scopes, which is consistent
+with the per-reference deduplication `collectModules` already did.
 
-This is the largest deliberate divergence from Nest and the first thing users
-will notice. It should be loud in the README.
+**`exports` is visibility.** A module lists the tokens an importer may resolve;
+everything else stays private. It accepts a token or a `ModuleRef`, and a `ModuleRef`
+re-exports whatever that module exports - which is what lets `DatabaseModule` pass the
+drizzle handle on so a feature module imports _it_ rather than `@dunx/infra/db`.
 
-Two modules binding the same token is therefore a real hazard, and last-wins would
-be silent. `app.init()` collects every module's registrations into one flat list
-and **throws on a duplicate token**, naming both modules - the same rule as route
-collisions.
+**`global: true`** publishes a module's exports to every scope with no import needed.
+`ConfigModule` and `LoggerModule` are global because configuration and the `Logger`
+contract are read everywhere; `@dunx/http`'s own wrapper is global because it _imports_
+the app's root rather than being imported by it, so its `PubSub` would otherwise be
+invisible to the whole app.
 
-That leaves no room for overrides to be an extra module that wins, so
-`createTestApp({ modules, overrides })` does not append. It assembles the same flat
-list and **replaces in place**, keyed by token; an override naming a token nobody
-binds is itself an error. The count per token never changes, so the duplicate check
-still runs unmodified and there is no bypass. Replacement also means a discarded
-provider's factory never runs - which matters when it is the async `useFactory`
-that opens the real database.
+### Resolution, and why it is still one lookup
 
-Built, as `AppFactory.create(root, { overrides })` in core with `@dunx/testing`
-wrapping it. See "Test harness (`@dunx/testing`)" below for what that cost.
+For a token requested while constructing a provider in module `M`: `M`'s own
+providers, then the exports of what `M` imports, then the global scope. **Local shadows
+imported**, which is the rebinding this exists to allow.
 
-## Configured modules, and why there is no `forRootAsync`
+Visibility is **flattened once at boot** into one `Map` per scope. Walking an import
+chain per lookup would make every construction O(depth); computing the closure once
+keeps resolution the single `Map.get` it was when the container was flat and moves the
+cost to boot, which is the trade this architecture makes everywhere else. A boot-time
+regression was accepted deliberately for the encapsulation.
 
-A module that needs options exposes a static factory returning a `DynamicModule` -
-its own identity plus the registrations that configuration implies:
+Instance caches key on the **binding**, not the token, so two modules that each declare
+one class hold two instances.
 
-```ts
-export class RedisModule {
-  static forRoot(options: RedisOptions): DynamicModule {
-    return {
-      module: RedisModule,
-      providers: [
-        provide(RedisOptions, { useValue: options }),
-        RedisConnection,
-      ],
-    };
-  }
-}
+### What replaced the duplicate-binding check
 
-@Module({ imports: [RedisModule.forRoot({ url: 'redis://localhost' })] })
-export class AppModule {}
+It could not survive intact, because repetition across scopes is the feature. It split
+into three:
+
+- The same token twice **in one module** is still an error.
+- Two modules binding one token is legal and silent.
+- An importer seeing one token from two imports is legal, takes the **last**, and
+  **warns** - naming both modules. Only when the bindings actually differ, so a diamond
+  re-export stays silent. Warnings surface on `App.warnings` rather than being logged,
+  because core has no logger and the caller knows what level they belong at.
+
+Nest is silent here and it costs people hours, which is why the warning exists.
+
+### Circular imports still need no `forwardRef`
+
+That never came from flatness. It comes from the **deps thunk**: `@dunx/transform`
+writes `Symbol.for('dunx.deps')` as a function and `readDeps` calls it at resolution,
+so a circular ES import already resolves and scoping does not touch it.
+
+Three cycles, only one of them new:
+
+1. **Module import cycles** terminate as before - `collectModules` visits each reference
+   once.
+2. **Re-export cycles** are the new case: `A exports B` and `B exports A` makes each
+   export set depend on the other. It is not a real cycle, because an export set is a
+   union and union is monotonic, so the sets are computed to a **fixed point**.
+3. **Provider cycles** are still a boot error with the full path, and must stay one.
+   `forwardRef` in Nest largely exists to paper over exactly this.
+
+Resolution order comes from the **provider** graph, not the module graph, which is what
+lets a module cycle whose providers have no cycle resolve fine.
+
+### `app.get()` is deliberately more permissive
+
+Constructor injection is strict. `app.get(token)` tries the root scope's view, then any
+single module that declares the token, and errors on ambiguity; `app.get(token, Module)`
+_prefers_ that module's view and falls back to the same search. It is a bootstrap and
+debugging call rather than a dependency edge, and requiring every caller to know the
+owning module would make `exports` painful for no safety gain.
+
+### `forRootAsync` factories take `imports`
+
+A factory passed to `forRootAsync` is written at the call site but produces a provider
+in the **configured** module's scope - so one injecting `DbConnection` is asking a
+library module to resolve a token only the app can see. `AsyncModuleConfig` adds
+`imports` for that, which is the field Nest's `forRootAsync({ imports })` fills. A token
+from a global module needs nothing, which is why most factories carry no `imports` at
+all.
+
+### The error is the feature
+
+`exports` reintroduces the most complained-about error in the Nest ecosystem, so dunx
+answers it from the whole graph, which is known at boot:
+
+```
+Cannot resolve UsersRepository for ReportsService in module "ReportsModule".
+"UsersModule" declares it and "ReportsModule" imports that module, but it does not
+export UsersRepository. Add UsersRepository to that module's exports, or move the
+provider into "ReportsModule".
 ```
 
-The `module` field is the identity, so error messages still name a module and the
-traversal can tell two configurations of one module apart. Registrations from a
-configured module are **merged** with whatever the class's own `@Module` decorator
-declares, which lets a module have a static core plus configured extras. A class
-used only through its factory needs no decorator at all.
+Every branch is answerable: declared-but-not-exported, declared-but-not-imported,
+declared-nowhere. Two findings from the migration are baked in - a class token nothing
+_visible_ binds no longer silently self-binds when some module declares it (that
+reported "did the transform run?" instead of the real problem), and a module exporting
+a token it neither declares nor can reach is caught where the mistake is rather than in
+some other module.
 
-**Nest's `forRootAsync` has no counterpart, because it needs none.** Its whole
-purpose is to build options from other injected providers, asynchronously. dunx
-resolves eagerly and awaits every async factory before any constructor runs, so
-that is already just a provider:
+### Overrides replace in every scope
 
-```ts
-static forRootAsync(load: () => Promise<RedisOptions>): DynamicModule {
-  return {
-    module: RedisModule,
-    providers: [provide(RedisOptions, { useFactory: load }), RedisConnection],
-  };
-}
-```
-
-One mechanism, not two. The eager-resolution decision paid for itself here.
-
-### Deduplication is per-reference, not per-module
-
-A bare class is visited once however many modules import it - that is what makes a
-diamond import register once rather than tripping the duplicate-binding check. The
-same `DynamicModule` **object** imported twice is likewise visited once.
-
-Two _different_ configurations of one module are deliberately **not** deduped. They
-both register, and the existing duplicate-token check reports them by name:
-
-```
-Duplicate binding for Options: bound by module "StoreModule" and module "StoreModule".
-```
-
-Last-wins would have been silent, and "first wins" would depend on traversal order.
-Neither is something a reader could predict, so both configurations register and the
-conflict surfaces. This reuses the flat container's existing rule instead of adding
-a second one.
+`createTestApp({ overrides })` replaces a token's binding in **every** scope that holds
+it. A suite stubbing `Logger` should not have to know how many modules bind it, and
+making it name a scope would push container topology into every test. "An override that
+replaced nothing is an error" still holds, and matters more here: it catches an override
+aimed at a token that has moved behind a boundary.
 
 ## One extension point, not five
 

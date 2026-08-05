@@ -120,14 +120,22 @@ describe('FilesModule', () => {
   });
 
   it('lets the async factory inject its own dependencies', async () => {
+    // The factory's dependency comes from a module, named through `imports` - the
+    // provider it configures lives in FilesModule's scope, not this one's.
+    @Module({
+      providers: [provide(DataDir, { useValue: new DataDir(root) })],
+      exports: [DataDir],
+    })
+    class DataDirModule {}
+
     @Module({
       imports: [
         FilesModule.forRootAsync({
+          imports: [DataDirModule],
           useFactory: (dir: DataDir) => new LocalStorageOptions(dir.path),
           inject: [DataDir],
         }),
       ],
-      providers: [provide(DataDir, { useValue: new DataDir(root) })],
     })
     class AppModule {}
 

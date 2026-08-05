@@ -8,7 +8,7 @@ import {
 import {
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   Logger,
   type OnInit,
   type OnShutdown,
@@ -83,6 +83,19 @@ class LoggerLifecycle implements OnInit, OnShutdown {
 }
 
 /** Everything except the settings binding, which is what the two entrypoints differ on. */
+/**
+ * **`global: true`**, and this is the module that most needs it: `Logger` and
+ * `RequestContext` are what core guarantees resolvable everywhere, so binding them
+ * behind an import boundary would mean every feature module importing a logging
+ * module to get a logger. `@dunx/http` middleware injects `Logger` too and has no
+ * module of its own to import from.
+ *
+ * `BackingLogger` is exported as well, so `child()`, `flush()` and `close()` are
+ * reachable without widening the contract. `LoggerSettings` and `LoggerLifecycle`
+ * stay private - they are how this module was configured and how it shuts down.
+ */
+const surface = [Logger, RequestContext, BackingLogger];
+
 const bindings = (options: LoggerModuleOptions): readonly Registration[] => [
   // Core's contract, bound to the very store this logger reads. Without it
   // @dunx/http's request logging would write a requestId into core's default
@@ -135,6 +148,8 @@ export class LoggerModule {
   ): DynamicModule {
     return {
       module: LoggerModule,
+      global: true,
+      exports: surface,
       providers: [
         typeof config === 'function'
           ? provide(LoggerSettings, { useFactory: config })
@@ -163,11 +178,14 @@ export class LoggerModule {
    * the point: eager resolution settles an async factory either way.
    */
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<LoggerConfig, D>,
+    config: AsyncModuleConfig<LoggerConfig, D>,
     options: LoggerModuleOptions = {},
   ): DynamicModule {
     return {
       module: LoggerModule,
+      global: true,
+      ...(config.imports === undefined ? {} : { imports: config.imports }),
+      exports: surface,
       providers: [
         provide(LoggerSettings, config),
         ContextStore,

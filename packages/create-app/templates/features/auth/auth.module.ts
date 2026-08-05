@@ -4,6 +4,7 @@ import { Module } from '@dunx/core';
 import { DbConnection } from '@dunx/infra/db';
 import { admin, bearer } from 'better-auth/plugins';
 import { AppConfigService } from '../config.js';
+import { DatabaseModule } from '../database/database.module.js';
 import { AuthDemo } from './auth.demo.js';
 import { AuthTables } from './auth.tables.js';
 import { Audit } from './audit.service.js';
@@ -12,11 +13,17 @@ import { ProfileController } from './profile.controller.js';
 /** Named for the feature rather than the package, so `AuthModule` still means `@dunx/auth`'s. */
 @Module({
   imports: [
+    // The drizzle handle, for `AuthTables` and `Audit`.
+    DatabaseModule,
     // `forRootAsync` because the secret and the base URL come from the validated
     // config, and the database from the connection `DatabaseModule` already opened -
     // none of which a zero-argument factory could reach.
     AuthModule.forRootAsync(
       {
+        // `DbConnection` comes from DatabaseModule, and the provider this factory
+        // configures lives in AuthModule's scope - so the module it comes from has to
+        // be named. `AppConfigService` needs no naming: ConfigModule is global.
+        imports: [DatabaseModule],
         useFactory: (config: AppConfigService, connection: DbConnection) => ({
           secret: config.get('auth').secret,
           baseURL: `http://localhost:${config.get('port')}`,
@@ -50,5 +57,8 @@ import { ProfileController } from './profile.controller.js';
   ],
   controllers: [ProfileController],
   providers: [AuthTables, Audit, AuthDemo],
+  // `AuthTables` creates them on the app's own handle, so this module needs the
+  // drizzle handle as well as the connection the factory above used.
+  exports: [Audit, AuthDemo],
 })
 export class AccountsModule {}

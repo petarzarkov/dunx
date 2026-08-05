@@ -177,7 +177,12 @@ describe('forRootAsync', () => {
     readonly jsonPath = '/reference.json';
   }
 
-  @Module({ imports: [ThingsModule], providers: [DocsConfig] })
+  // Exported so the wrapping OpenApiModule's factory can inject it.
+  @Module({
+    imports: [ThingsModule],
+    providers: [DocsConfig],
+    exports: [DocsConfig],
+  })
   class ConfiguredModule {}
 
   const startAsync = (): Promise<TestServer> =>

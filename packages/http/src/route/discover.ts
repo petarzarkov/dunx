@@ -1,4 +1,4 @@
-import type { Ctor } from '@dunx/core';
+import type { Ctor, ModuleRef } from '@dunx/core';
 import type { Middleware } from '../server/middleware.js';
 import {
   prefixOf,
@@ -29,6 +29,17 @@ export interface DiscoveredRoute {
   readonly classMeta?: MetaRecord | undefined;
   /** Class-level `@UseGuards` first, then method-level. `buildRoutes` resolves them. */
   readonly guards?: readonly Ctor<Middleware>[] | undefined;
+  /**
+   * The module that declared this route's controller, and the middleware that module
+   * declared - applied to these routes and to nothing else.
+   *
+   * Filled by `HttpFactory`, which is the only place that knows the module graph.
+   * `module` is carried alongside so each entry resolves from **that module's scope**,
+   * which is the whole point: module middleware can inject providers the module keeps
+   * private.
+   */
+  readonly module?: ModuleRef | undefined;
+  readonly moduleMiddleware?: readonly Ctor<Middleware>[] | undefined;
 }
 
 export const joinPath = (prefix: string, path: string): string => {

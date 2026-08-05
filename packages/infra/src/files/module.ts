@@ -2,7 +2,7 @@ import {
   provide,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
 } from '@dunx/core';
 import { Storage, StorageOptions } from './storage.js';
 
@@ -28,6 +28,7 @@ export class FilesModule {
   static forRoot(options: StorageOptions): DynamicModule {
     return {
       module: FilesModule,
+      exports: [StorageOptions, Storage],
       providers: [provide(StorageOptions, { useValue: options }), storage],
     };
   }
@@ -45,10 +46,12 @@ export class FilesModule {
    * ```
    */
   static forRootAsync<const D extends Deps>(
-    options: FactoryProvider<StorageOptions, D>,
+    options: AsyncModuleConfig<StorageOptions, D>,
   ): DynamicModule {
     return {
       module: FilesModule,
+      ...(options.imports === undefined ? {} : { imports: options.imports }),
+      exports: [StorageOptions, Storage],
       providers: [provide(StorageOptions, options), storage],
     };
   }

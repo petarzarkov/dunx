@@ -42,5 +42,6 @@ import { WiringDemo } from './wiring.demo.js';
 
     WiringDemo,
   ],
+  exports: [WiringDemo],
 })
 export class WiringModule {}

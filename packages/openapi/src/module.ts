@@ -188,6 +188,10 @@ export class OpenApiModule {
     const configured: DynamicModule = {
       module: OpenApiModule,
       imports: [options.root],
+      // The generated document, so an app can read `warnings` or serve the JSON
+      // itself. This module wraps the app's root rather than being imported by it,
+      // so the export is what makes `app.get(OpenApiExplorer)` resolve.
+      exports: [OpenApiExplorer],
       controllers: [buildController(paths)],
       providers: [
         provide(OpenApiExplorer, {
@@ -238,6 +242,10 @@ export class OpenApiModule {
     const configured: DynamicModule = {
       module: OpenApiModule,
       imports: [options.root],
+      // The generated document, so an app can read `warnings` or serve the JSON
+      // itself. This module wraps the app's root rather than being imported by it,
+      // so the export is what makes `app.get(OpenApiExplorer)` resolve.
+      exports: [OpenApiExplorer],
       controllers: [buildController(paths)],
       providers: [
         provide(OpenApiExplorer, {

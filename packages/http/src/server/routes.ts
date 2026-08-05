@@ -1,4 +1,4 @@
-import { AppError, type Ctor } from '@dunx/core';
+import { AppError, type Ctor, type ModuleRef } from '@dunx/core';
 import type { BunRequest } from 'bun';
 import type { DiscoveredRoute } from '../route/discover.js';
 import type { HttpMethod } from '../route/marker.js';
@@ -18,7 +18,17 @@ import {
 import { HttpStatusCode } from './status.js';
 
 /** How a `@UseGuards` class becomes an instance. `listen()` passes `app.get`. */
-export type GuardResolver = (guard: Ctor<Middleware>) => Middleware;
+/**
+ * How a guard or a module's middleware becomes an instance.
+ *
+ * `from` names the module whose scope it resolves in - module middleware has to be
+ * built from the module that declared it, or it could not inject that module's private
+ * providers, which is the point of declaring it there.
+ */
+export type GuardResolver = (
+  guard: Ctor<Middleware>,
+  from?: ModuleRef,
+) => Middleware;
 
 const construct: GuardResolver = (guard) =>
   new (guard as new () => Middleware)();
@@ -270,10 +280,10 @@ export const buildRoutes = (
   // One instance per guard class for the whole table - what the container returns,
   // and what the default resolver has to match to be interchangeable with it.
   const instances = new Map<Ctor<Middleware>, Middleware>();
-  const guardOf = (guard: Ctor<Middleware>): Middleware => {
+  const guardOf = (guard: Ctor<Middleware>, from?: ModuleRef): Middleware => {
     const existing = instances.get(guard);
     if (existing) return existing;
-    const created = resolve(guard);
+    const created = resolve(guard, from);
     instances.set(guard, created);
     return created;
   };
@@ -283,8 +293,21 @@ export const buildRoutes = (
     // survives into the request path is one closure that reads no metadata.
     const read = buildInputReader(route.options);
     const status = statusFor(route);
-    // Global outermost, then the controller's guards, then the method's.
-    const chain = [...middleware, ...(route.guards ?? []).map(guardOf)];
+    /**
+     * Global outermost, then the declaring module's middleware, then the controller's
+     * guards, then the method's.
+     *
+     * There is no ancestor layer: a module's middleware applies to its own
+     * controllers, so importing a module never changes the request path of the
+     * importer's routes.
+     */
+    const chain = [
+      ...middleware,
+      ...(route.moduleMiddleware ?? []).map((entry) =>
+        guardOf(entry, route.module),
+      ),
+      ...(route.guards ?? []).map((guard) => guardOf(guard, route.module)),
+    ];
     const chained = compose(chain, buildContext(route), async (req) =>
       toResponse(await route.handler(await read(req)), status),
     );

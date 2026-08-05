@@ -235,6 +235,14 @@ Consequences to keep in mind when changing this area:
 
 See docs/ARCHITECTURE.md for the measurements behind all of this.
 
+**The container's shape is changing.** It is flat today - `imports` is traversal only,
+there is no `exports` and no visibility boundary - and
+docs/roadmap/module-scoped-di.md is the **P0** that replaces that with a scope per
+module, `exports`, `global: true` and module-scoped middleware. Everything above about
+the transform, the deps thunk and `inject()` survives it unchanged; what changes is
+_where_ a token resolves from. Read that doc before making any DI design decision, and
+do not add code that assumes one flat namespace.
+
 ## Always-bound contracts
 
 `AppFactory.create` offers a default binding for two tokens **after** every

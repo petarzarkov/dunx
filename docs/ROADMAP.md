@@ -267,14 +267,15 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                        | Shape                                                                 |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [dunx-dashboard](./roadmap/dunx-dashboard.md)                               | Feature, requested. Designed, not built. The only planned queue UI.   |
-| [api-surface-consistency](./roadmap/api-surface-consistency.md)             | Feedback. Three ways to declare a module, three to name a dependency. |
-| [design-polish](./roadmap/design-polish.md)                                 | Feature. Landing page rebuilt; not yet striking.                      |
-| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)       | Ongoing. Pagination and the queue dashboard page adopted.             |
-| [http-options-before-container](./roadmap/http-options-before-container.md) | Missing feature, medium. The OpenAPI half is done.                    |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)               | Three upstream defects in bullmq's Bun adapter and `Bun.RedisClient`. |
+| Item                                                                            | Shape                                                                 |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [module-scoped-di](./roadmap/module-scoped-di.md)                               | **P0.** Requested. Scopes, `exports`, `global`, module middleware.    |
+| [class-modules-and-opt-in-config](./roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. 395 lines of framework plumbing in app code.       |
+| [dunx-dashboard](./roadmap/dunx-dashboard.md)                                   | Feature, requested. Designed, not built. The only planned queue UI.   |
+| [design-polish](./roadmap/design-polish.md)                                     | Feature. Landing page rebuilt; not yet striking.                      |
+| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)           | Ongoing. Pagination and the queue dashboard page adopted.             |
+| [http-options-before-container](./roadmap/http-options-before-container.md)     | Absorbed as W1 of class-modules; kept for its analysis.               |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                   | Three upstream defects in bullmq's Bun adapter and `Bun.RedisClient`. |
 
 Delivered and moved out of this folder rather than left here marked done:
 **cross-language benchmark subjects** (the 16-subject run and how to read it are in
@@ -562,8 +563,16 @@ None open. Route input inference was the last one; its result is recorded in
 
 Recorded with measurements in [ARCHITECTURE.md](./ARCHITECTURE.md):
 `ctx.metadata`, the pending-array accumulator, `experimentalDecorators` /
-`emitDecoratorMetadata` / `reflect-metadata`, request-scoped DI, per-module
-subgraphs, a JavaScript router, entity decorators carrying drizzle's schema types,
-`@dunx/core` auto-registering the compiler plugin, per-package example apps, a
-hand-rolled `Database` contract spanning both drizzle adapters, and running the
-`Bun.SQL` suite over that driver's SQLite adapter.
+`emitDecoratorMetadata` / `reflect-metadata`, request-scoped DI, a JavaScript router,
+entity decorators carrying drizzle's schema types, `@dunx/core` auto-registering the
+compiler plugin, per-package example apps, a hand-rolled `Database` contract spanning
+both drizzle adapters, and running the `Bun.SQL` suite over that driver's SQLite
+adapter.
+
+**Reversed by request:** _per-module subgraphs_ was on this list and is now
+[P0](./roadmap/module-scoped-di.md). The argument against it was real - a flat container
+has no "not exported from module X" error and needs no `forwardRef` - but it traded away
+module-scoped middleware and per-module rebinding, which a DI framework is expected to
+have. Nobody is consuming dunx yet, so the reversal costs no migration. **Request-scoped
+DI stays rejected** and is a different question: it is about a _lifetime_ per request,
+not a _visibility_ boundary per module.

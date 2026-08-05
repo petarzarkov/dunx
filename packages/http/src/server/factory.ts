@@ -6,6 +6,7 @@ import {
   provide,
   readControllers,
   RequestContext,
+  type Ctor,
   type DynamicModule,
   type ModuleRef,
 } from '@dunx/core';
@@ -18,6 +19,7 @@ import {
   type HttpApp,
   type HttpOptions,
 } from './application.js';
+import type { Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
 import { assertNoCollisions } from './routes.js';
 
@@ -26,6 +28,12 @@ export type { HttpApp, HttpOptions } from './application.js';
 // Bound around the user's root so `PubSub` is injectable without importing
 // anything. Its name is what a duplicate binding of PubSub would be reported
 // against, which is why it is a named class and not an object literal.
+//
+// `global: true` is what makes that "without importing anything" true under module
+// scoping. This module *imports* the root rather than being imported by it, and
+// visibility only flows from an import's exports to its importer - so without global
+// these bindings would be invisible to every module in the app, which is the opposite
+// of the intent. They are framework services with no module for an app to import.
 class HttpModule {}
 
 export class HttpFactory {
@@ -54,11 +62,16 @@ export class HttpFactory {
       inject: [Logger, RequestContext] as const,
     });
 
+    const providers =
+      options.requestLogging === false ? [PubSub] : [PubSub, logging];
     const scope: DynamicModule = {
       module: HttpModule,
+      global: true,
       imports: [root],
-      providers:
-        options.requestLogging === false ? [PubSub] : [PubSub, logging],
+      providers,
+      exports: providers.map((entry) =>
+        typeof entry === 'function' ? entry : entry.token,
+      ),
     };
     // Spread rather than passed through, because `exactOptionalPropertyTypes`
     // separates an absent `overrides` from one explicitly set to undefined.
@@ -70,15 +83,32 @@ export class HttpFactory {
 
     const discovered: DiscoveredRoute[] = [];
     for (const module of modules) {
+      // The module's own middleware, applied to the routes its controllers declare
+      // and to nothing else. Carried on each route with the module it came from, so it
+      // resolves from that module's scope rather than the app's root.
+      const moduleMiddleware = module.options.middleware ?? [];
       for (const controller of readControllers(module)) {
-        const routes = discoverRoutes(app.get(controller) as object);
+        const routes = discoverRoutes(
+          app.get(controller, module.ref) as object,
+        );
         if (routes.length === 0) {
           throw new AppError(
             `${controller.name} is registered as a controller but declares no routes. ` +
               'Add a @Get/@Post/... method, or move it to providers.',
           );
         }
-        discovered.push(...routes);
+        discovered.push(
+          ...routes.map((route) => ({
+            ...route,
+            module: module.ref,
+            ...(moduleMiddleware.length === 0
+              ? {}
+              : {
+                  moduleMiddleware:
+                    moduleMiddleware as readonly Ctor<Middleware>[],
+                }),
+          })),
+        );
       }
     }
     // Eagerly, so a wiring error still surfaces from create() rather than waiting
@@ -93,6 +123,8 @@ export class HttpFactory {
         ? buildWebSocket(gateways, options.websocket)
         : undefined;
 
-    return new HttpApplication(app, discovered, options, websocket);
+    // `root` is the app's own module, so global middleware and the error filter
+    // resolve as the app sees them rather than as this wrapper does.
+    return new HttpApplication(app, discovered, options, root, websocket);
   }
 }

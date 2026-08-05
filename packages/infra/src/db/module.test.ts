@@ -187,15 +187,18 @@ describe('DbModule.forRoot', () => {
 
 describe('DbModule.forRootAsync', () => {
   it('takes the options from a factory that may inject', async () => {
+    @Module({ providers: [Config], exports: [Config] })
+    class ConfigModule {}
+
     @Module({
       imports: [
         DbModule.forRootAsync(BunSQLiteDatabase, {
+          imports: [ConfigModule],
           useFactory: (config: Config) =>
             new SqliteOptions({ schema, filename: config.filename }),
           inject: [Config],
         }),
       ],
-      providers: [Config],
     })
     class Root {}
 

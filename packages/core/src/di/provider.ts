@@ -1,3 +1,4 @@
+import type { ModuleRef } from './module.js';
 import type { Ctor, InjectionToken } from './token.js';
 
 export type Deps = readonly InjectionToken<unknown>[];
@@ -19,6 +20,27 @@ export interface FactoryProvider<T, D extends Deps> {
   // Factories cannot use inject() - after the first await the module-level
   // current injector is no longer theirs - so their dependencies are declared.
   readonly inject?: D;
+}
+
+/**
+ * What a `forRootAsync` takes: a factory, its dependencies, and **the modules those
+ * dependencies come from**.
+ *
+ * `imports` exists because of where the factory runs. It is written at the call site,
+ * inside the importing module, but the provider it produces is registered in the
+ * *configured* module's scope - so a factory injecting `DbConnection` is asking a
+ * library module to resolve a token only the app's module can see. Naming the module
+ * it comes from is what closes that, and it is the same field Nest's
+ * `forRootAsync({ imports })` fills.
+ *
+ * Not needed for a token from a `global: true` module. `ConfigService` is the common
+ * case and `ConfigModule` is global, which is why most factories need nothing here.
+ */
+export interface AsyncModuleConfig<T, D extends Deps> extends FactoryProvider<
+  T,
+  D
+> {
+  readonly imports?: readonly ModuleRef[];
 }
 
 export type ErasedProvider =

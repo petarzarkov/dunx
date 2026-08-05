@@ -55,11 +55,26 @@ class UsersService implements OnInit, OnShutdown {
   }
 }
 
+/**
+ * The graph every test below shares, and it is written the way an app has to be
+ * written now: a module states what it exposes.
+ *
+ * `Database` is declared by `InfraModule` and exported alongside the token it needs,
+ * so `UsersModule` can import both. Under the flat container none of these `exports`
+ * or `imports` existed and everything saw everything.
+ */
 const buildApp = (events: string[]) => {
-  @Module({ providers: [provide(EventsToken, { useValue: events })] })
+  @Module({
+    providers: [provide(EventsToken, { useValue: events }), Database],
+    exports: [EventsToken, Database],
+  })
   class InfraModule {}
 
-  @Module({ providers: [UsersService] })
+  @Module({
+    imports: [InfraModule],
+    providers: [UsersService],
+    exports: [UsersService],
+  })
   class UsersModule {}
 
   @Module({ imports: [InfraModule, UsersModule] })
@@ -264,23 +279,84 @@ describe('overrides', () => {
     );
   });
 
-  it('leaves the duplicate-binding check to fire, so there is no bypass', async () => {
-    @Module({ providers: [provide(EventsToken, { useValue: ['one'] })] })
+  /**
+   * Two modules binding one token is **legal** now, and was a boot error under the
+   * flat container. That is the per-module rebinding module scoping exists to allow,
+   * so what an override has to do is replace it in every scope rather than pick one.
+   */
+  it('replaces an overridden token in every scope that binds it', async () => {
+    @Module({
+      providers: [provide(EventsToken, { useValue: ['one'] })],
+      exports: [EventsToken],
+    })
     class OneModule {}
 
-    @Module({ providers: [provide(EventsToken, { useValue: ['two'] })] })
+    @Module({
+      providers: [provide(EventsToken, { useValue: ['two'] })],
+      exports: [EventsToken],
+    })
     class TwoModule {}
 
-    @Module({ imports: [OneModule, TwoModule] })
+    class ReadsOne {
+      readonly events = inject(EventsToken);
+    }
+    class ReadsTwo {
+      readonly events = inject(EventsToken);
+    }
+
+    @Module({
+      imports: [OneModule],
+      providers: [ReadsOne],
+      exports: [ReadsOne],
+    })
+    class OneConsumer {}
+
+    @Module({
+      imports: [TwoModule],
+      providers: [ReadsTwo],
+      exports: [ReadsTwo],
+    })
+    class TwoConsumer {}
+
+    @Module({ imports: [OneConsumer, TwoConsumer] })
     class RootModule {}
 
-    expect(
-      await rejectionMessage(
-        AppFactory.create(RootModule, {
-          overrides: [provide(EventsToken, { useValue: ['fake'] })],
-        }),
-      ),
-    ).toMatch(/^Duplicate binding for Events: bound by module "OneModule"/);
+    const app = await AppFactory.create(RootModule, {
+      overrides: [provide(EventsToken, { useValue: ['fake'] })],
+    });
+
+    expect(app.get(ReadsOne).events).toEqual(['fake']);
+    expect(app.get(ReadsTwo).events).toEqual(['fake']);
+  });
+
+  it('gives each module its own instance when both declare the same class', async () => {
+    class Counter {}
+
+    @Module({ providers: [Counter], exports: [Counter] })
+    class Left {}
+
+    @Module({ providers: [Counter], exports: [Counter] })
+    class Right {}
+
+    class UsesLeft {
+      readonly counter = inject(Counter);
+    }
+    class UsesRight {
+      readonly counter = inject(Counter);
+    }
+
+    @Module({ imports: [Left], providers: [UsesLeft], exports: [UsesLeft] })
+    class LeftFeature {}
+
+    @Module({ imports: [Right], providers: [UsesRight], exports: [UsesRight] })
+    class RightFeature {}
+
+    @Module({ imports: [LeftFeature, RightFeature] })
+    class RootModule {}
+
+    const app = await AppFactory.create(RootModule);
+    // The whole point: one class, two declaring modules, two instances.
+    expect(app.get(UsesLeft).counter).not.toBe(app.get(UsesRight).counter);
   });
 });
 

@@ -188,18 +188,21 @@ describe('provide()', () => {
     expect(app.get(Right).dsn).toBe(app.get(Left).dsn);
   });
 
-  it('throws naming both modules when two bind the same token', async () => {
-    @Module({ providers: [provide(DsnToken, { useValue: 'a' })] })
-    class AlphaModule {}
+  /**
+   * Still an error, and now the *only* duplicate check: the same token twice in one
+   * module. Across two modules it is legal, because that is per-module rebinding.
+   */
+  it('throws when one module binds the same token twice', async () => {
+    @Module({
+      providers: [
+        provide(DsnToken, { useValue: 'a' }),
+        provide(DsnToken, { useValue: 'b' }),
+      ],
+    })
+    class TwiceModule {}
 
-    @Module({ providers: [provide(DsnToken, { useValue: 'b' })] })
-    class BetaModule {}
-
-    @Module({ imports: [AlphaModule, BetaModule] })
-    class RootModule {}
-
-    expect(await rejectionMessage(AppFactory.create(RootModule))).toMatch(
-      /"AlphaModule" and module "BetaModule"/,
+    expect(await rejectionMessage(AppFactory.create(TwiceModule))).toMatch(
+      /Duplicate binding for Dsn in module "TwiceModule"/,
     );
   });
 
@@ -211,9 +214,11 @@ describe('provide()', () => {
     @Module({ providers: [NeedsDsn] })
     class DataModule {}
 
-    expect(await rejectionMessage(AppFactory.create(DataModule))).toMatch(
-      /No provider for Dsn/,
-    );
+    // The message names the consumer and the module, and says what to do - which is
+    // the whole reason `exports` is affordable: the error it introduces is a good one.
+    const message = await rejectionMessage(AppFactory.create(DataModule));
+    expect(message).toMatch(/Cannot resolve Dsn in module "DataModule"/);
+    expect(message).toMatch(/Nothing in the module graph declares it/);
   });
 });
 
