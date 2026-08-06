@@ -1,6 +1,6 @@
 ---
 name: new-package
-description: Add a workspace to the dunx monorepo - a published package under packages/ or a private app under examples/ - with correct manifest fields, tsconfig, exports-driven build entrypoints, README, and coverage badge. Use when creating @dunx/http, @dunx/testing, @dunx/create-app, examples/full, or when adding a public subpath export to an existing package.
+description: Add a workspace to the dunx monorepo - a published package under packages/, a published CLI under tools/, a private workspace under internal/, or an example under examples/ - with correct manifest fields, tsconfig, exports-driven build entrypoints, README, and coverage badge. Use when creating @dunx/http, @dunx/testing, @dunx/create-app, examples/full, or when adding a public subpath export to an existing package.
 ---
 
 # /new-package
@@ -8,11 +8,29 @@ description: Add a workspace to the dunx monorepo - a published package under pa
 `packages/core` is the reference. Copy its shape rather than composing a manifest
 from memory.
 
-## Published package - `packages/<name>/`
+## Pick the parent first
+
+| Parent      | For                                             | Published | Reference          |
+| ----------- | ----------------------------------------------- | --------- | ------------------ |
+| `packages/` | framework an app **imports**                    | yes       | `packages/core`    |
+| `tools/`    | a CLI a consumer **runs** (`bunx @dunx/<name>`) | yes       | `tools/mcp`        |
+| `internal/` | repo-only: site, harness, bundle, shared UI     | **no**    | `internal/ui`      |
+| `examples/` | an app that consumes the packages               | no        | `examples/minimal` |
+
+Two lists decide what publishes, and both must name a new **published** parent -
+they are the only places that know: `PUBLISHABLE_DIRS` in `scripts/version.ts` and
+`PUBLISHED_DIRS` in `scripts/update-readme.ts`. `private: true` is what actually
+stops a publish, so getting the parent wrong fails safe.
+
+A workspace with **no `build` script is skipped** by `scripts/build-all.ts`, which
+is how `internal/ui` ships as source with its `exports` pointing at `src/`.
+
+## Published package - `packages/<name>/` or `tools/<name>/`
 
 1. **`package.json`** - copy `packages/core/package.json` and change `name` to
    `@dunx/<name>`, `description`, `keywords`, `homepage`, and
-   `repository.directory`. Leave the rest alone. The fields that are not optional:
+   `repository.directory` - the last two carry the parent, so `tools/<name>`
+   rather than `packages/<name>` for a CLI. Leave the rest alone. The fields that are not optional:
    - `"type": "module"` - without it `verbatimModuleSyntax` raises `TS1287`
      against ESM syntax, and Node treats the shipped ESM as CommonJS
    - `main` + `types` → `dist/` paths, and an `exports` map with `types` and

@@ -237,7 +237,7 @@ fetch** - no CDN, no `src=`, no `<link>`. It is an API explorer, with a
 disclosure control per operation, an **Authorize** dialog, parameter and schema
 tables, colour-coded status codes, a filter box and a light/dark toggle.
 
-The explorer is a real frontend - Vite, React and Mantine, in `tools/openapi-ui` whose **built bundle** is what this package serves. Nothing about it is
+The explorer is a real frontend - Vite, React and Mantine, in `internal/openapi-ui` whose **built bundle** is what this package serves. Nothing about it is
 hand-written markup in a backend package any more, and nothing about it is
 fetched: `bun run build` writes the tree-shaken bundle into `src/ui-bundle.ts`,
 and `renderPage` inlines that string. 437 KiB, against `swagger-ui-dist`'s

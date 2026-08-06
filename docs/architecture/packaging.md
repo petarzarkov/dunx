@@ -21,7 +21,7 @@ Both halves run from the shared `scripts/build-package.ts`, so there is one
 implementation for every package.
 
 `tools/*` is outside all of this. Those workspaces are `"private": true`, never
-published, and build with whatever suits them - `tools/docs` is a React bundle,
+published, and build with whatever suits them - `internal/docs` is a React bundle,
 not a `Bun.build` package. The dependency rules constrain what dunx ships; they do not
 constrain what builds its website.
 

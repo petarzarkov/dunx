@@ -101,7 +101,7 @@ describe('request logging', () => {
     expect(typeof entry?.['requestId']).toBe('string');
     expect(typeof entry?.['elapsedMs']).toBe('number');
     // Bodies are off by default: reading one means cloning and buffering every
-    // payload, which measured at two thirds of the throughput on tools/bench's
+    // payload, which measured at two thirds of the throughput on internal/bench's
     // `validate` scenario.
     expect(entry?.['responseBody']).toBeUndefined();
   });

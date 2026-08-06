@@ -343,7 +343,7 @@ That guarantee is the whole design constraint, and it is what ruled out
 `page-ui.test.ts` proves it positively by running the real bundle in happy-dom and
 checking that boot issues zero fetches.
 
-The explorer itself is a real frontend, `tools/openapi-ui`, built with Vite and
+The explorer itself is a real frontend, `internal/openapi-ui`, built with Vite and
 Mantine. `packages/openapi`'s own `build` runs that build first and writes the
 tree-shaken bundle into `packages/openapi/src/ui-bundle.ts` as a string constant,
 which `renderPage` interpolates. The file is generated **and committed**, and
@@ -443,7 +443,7 @@ subpaths share is now one chunk rather than a copy in each.
 Two things were already done about the raw size, and both are recorded because
 they set the precedent: `@mantine/core/styles.css` is 234 KiB for a dozen
 components, so the build imports per-component CSS instead and pays a third of
-that (the list in `tools/openapi-ui/src/styles.ts` is load bearing: a missing file
+that (the list in `internal/openapi-ui/src/styles.ts` is load bearing: a missing file
 is an unstyled component, not a build error). And `Tooltip` and `ScrollArea` were
 dropped for `title=` and `overflow: auto`, which took 490 KiB to 437 KiB, because
 `Tooltip` drags in floating-ui.

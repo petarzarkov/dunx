@@ -12,7 +12,12 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(import.meta.dir, '..');
-const PACKAGES_DIR = join(ROOT, 'packages');
+/**
+ * Where a **published** workspace can live: `packages/` for the framework,
+ * `tools/` for the CLIs. `internal/` is deliberately absent - it is the private
+ * half and has nothing to put in a table of things people install.
+ */
+const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 const README_PATH = join(ROOT, 'README.md');
 
 interface PackageJson {
@@ -22,8 +27,8 @@ interface PackageJson {
   private?: boolean;
 }
 
-function readPkg(folder: string): PackageJson | null {
-  const pkgPath = join(PACKAGES_DIR, folder, 'package.json');
+function readPkg(parent: string, folder: string): PackageJson | null {
+  const pkgPath = join(ROOT, parent, folder, 'package.json');
   if (!existsSync(pkgPath)) return null;
   try {
     return JSON.parse(readFileSync(pkgPath, 'utf8')) as PackageJson;
@@ -33,20 +38,21 @@ function readPkg(folder: string): PackageJson | null {
 }
 
 interface PackageEntry {
+  parent: string;
   folder: string;
   pkg: PackageJson;
 }
 
 function discoverPackages(): PackageEntry[] {
-  return readdirSync(PACKAGES_DIR, {
-    withFileTypes: true,
-  })
-    .filter((d) => d.isDirectory())
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .flatMap((d) => {
-      const pkg = readPkg(d.name);
-      return pkg ? [{ folder: d.name, pkg }] : [];
-    });
+  return PUBLISHED_DIRS.flatMap((parent) =>
+    readdirSync(join(ROOT, parent), { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .flatMap((d) => {
+        const pkg = readPkg(parent, d.name);
+        return pkg ? [{ parent, folder: d.name, pkg }] : [];
+      }),
+  );
 }
 
 const DOCS_SITE = 'https://petarzarkov.github.io/dunx';
@@ -63,7 +69,7 @@ function npmBadges(name: string): string {
 
 /**
  * Badge svgs are generated per package by `bun run gen:cov` into
- * `tools/docs/public/badges/`, which the build copies to `/badges/` in the deployed
+ * `internal/docs/public/badges/`, which the build copies to `/badges/` in the deployed
  * documentation site.
  */
 function coverageBadge(folder: string): string {
@@ -76,8 +82,8 @@ function buildPackagesTable(entries: PackageEntry[]): string {
 
   const rows = entries
     .filter((e) => !e.pkg.private)
-    .map(({ folder, pkg }) => {
-      const link = `[\`${pkg.name}\`](./packages/${folder})`;
+    .map(({ parent, folder, pkg }) => {
+      const link = `[\`${pkg.name}\`](./${parent}/${folder})`;
       const badges = npmBadges(pkg.name);
       const cov = coverageBadge(folder);
       const desc = pkg.description ?? '';
@@ -95,55 +101,51 @@ interface TreeNode {
 }
 
 function buildProjectStructure(entries: PackageEntry[]): string {
-  const lastPkg = entries.length - 1;
-  const pkgNodes: TreeNode[] = entries.map(({ folder, pkg }, i) => ({
-    prefix: '│   ',
-    branch: i === lastPkg ? '└── ' : '├── ',
-    name: folder,
+  const describe = (pkg: PackageJson): string =>
     // Split on '. ' to avoid breaking "Day.js"
-    comment: pkg.description
-      ? (pkg.description.split('. ')[0] ?? pkg.name)
-      : pkg.name,
-  }));
+    pkg.description ? (pkg.description.split('. ')[0] ?? pkg.name) : pkg.name;
+
+  /** A published parent and the workspaces under it, as indented children. */
+  const childrenOf = (parent: string): TreeNode[] => {
+    const own = entries.filter((entry) => entry.parent === parent);
+    return own.map(({ folder, pkg }, i) => ({
+      prefix: '│   ',
+      branch: i === own.length - 1 ? '└── ' : '├── ',
+      name: folder,
+      comment: describe(pkg),
+    }));
+  };
 
   const topDefs: [string, string, string][] = [
-    ['├── ', 'packages/', 'Published packages'],
-    ['├── ', 'examples/', 'Private apps that consume the packages'],
+    ['├── ', 'packages/', 'The published framework'],
+    ['├── ', 'tools/', 'Published CLIs - the scaffolder and the MCP server'],
     [
       '├── ',
-      'tools/',
-      'Private workspaces, never published - docs site, benchmarks, API explorer',
+      'internal/',
+      'Private workspaces, never published - docs site, benchmarks, API explorer, shared UI',
     ],
+    ['├── ', 'examples/', 'Private apps that consume the packages'],
     ['├── ', 'docs/', 'Architecture and design docs'],
     ['├── ', 'scripts/', 'Monorepo-level scripts'],
     ['├── ', '.github/workflows/', 'CI/CD pipeline'],
     ['└── ', '.husky/', 'Git hooks'],
   ];
-  const topNodes: TreeNode[] = topDefs.map(([branch, name, comment]) => ({
-    prefix: '',
-    branch,
-    name,
-    comment,
-  }));
 
-  // Compute max key length across all nodes for alignment
-  const allNodes = [...topNodes, ...pkgNodes];
+  // Each published parent is followed by its own workspaces; the rest stand alone.
+  const rendered: TreeNode[] = topDefs.flatMap(([branch, name, comment]) => [
+    { prefix: '', branch, name, comment },
+    ...childrenOf(name.replace('/', '')),
+  ]);
+
   const maxKey = Math.max(
-    ...allNodes.map((n) => n.prefix.length + n.branch.length + n.name.length),
+    ...rendered.map((n) => n.prefix.length + n.branch.length + n.name.length),
   );
-
   const fmt = (n: TreeNode): string => {
     const key = `${n.prefix}${n.branch}${n.name}`;
     return `${key.padEnd(maxKey)}  # ${n.comment}`;
   };
 
-  const [pkgsNode, ...restTop] = topNodes;
-  if (!pkgsNode) {
-    throw new Error('No top-level nodes found');
-  }
-  const lines = [fmt(pkgsNode), ...pkgNodes.map(fmt), ...restTop.map(fmt)];
-
-  return ['```', 'dunx/', ...lines, '```'].join('\n');
+  return ['```', 'dunx/', ...rendered.map(fmt), '```'].join('\n');
 }
 
 /**
@@ -164,7 +166,7 @@ function replaceSection(
 const entries = discoverPackages();
 
 if (entries.length === 0) {
-  console.error('No packages found under packages/. Aborting.');
+  console.error('No packages found under packages/ or tools/. Aborting.');
   process.exit(1);
 }
 

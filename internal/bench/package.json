@@ -1,0 +1,57 @@
+{
+  "name": "@dunx/bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Benchmark harness comparing @dunx/http against other backend frameworks and runtimes",
+  "license": "MIT",
+  "author": {
+    "name": "Petar Zarkov",
+    "email": "pzarko1@gmail.com",
+    "url": "https://github.com/petarzarkov"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/petarzarkov/dunx",
+    "directory": "internal/bench"
+  },
+  "type": "module",
+  "scripts": {
+    "setup": "bun src/setup.ts",
+    "start": "bun src/index.ts",
+    "db-modes": "bun src/db-modes.ts",
+    "validation": "bun src/validation.ts",
+    "logging": "bun src/logging.ts",
+    "test": "bun test --bail",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p servers/nest"
+  },
+  "dependencies": {
+    "@dunx/core": "workspace:*",
+    "@dunx/http": "workspace:*",
+    "@dunx/infra": "workspace:*",
+    "@dunx/transform": "workspace:*",
+    "@hono/node-server": "^2.0.12",
+    "@hono/zod-validator": "^0.7.4",
+    "@sinclair/typebox": "^0.34.52",
+    "ajv": "^8.20.0",
+    "arktype": "^2.2.3",
+    "drizzle-orm": "^0.45.2",
+    "elysia": "^1.4.29",
+    "express": "^5.1.0",
+    "fastify": "^5.6.1",
+    "hono": "^4.10.6",
+    "valibot": "^1.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-express": "^11.1.28",
+    "@nestjs/platform-fastify": "^11.1.28",
+    "@types/express": "^5.0.5",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

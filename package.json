@@ -16,8 +16,9 @@
   },
   "workspaces": [
     "packages/*",
-    "examples/*",
-    "tools/*"
+    "tools/*",
+    "internal/*",
+    "examples/*"
   ],
   "type": "module",
   "scripts": {
@@ -25,7 +26,7 @@
     "install:clean": "find . -name node_modules -type d -prune -exec rm -rf {} + && rm -f bun.lock && bun install",
     "build": "bun scripts/build-all.ts",
     "test": "bun run --filter '*' test",
-    "test:cov": "bun test ./packages ./scripts --coverage --path-ignore-patterns='**/templates/**' && bun run gen:cov",
+    "test:cov": "bun test ./packages ./tools ./scripts --coverage --path-ignore-patterns='**/templates/**' && bun run gen:cov",
     "lint": "oxlint --fix .",
     "lint:check": "oxlint .",
     "format": "oxfmt --write .",

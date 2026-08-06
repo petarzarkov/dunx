@@ -118,7 +118,7 @@ on the first request that hits it. It costs boot time, measured below.
 `@dunx/http` sits on `Bun.serve`. The single most useful number the benchmark
 harness produces is the gap between the two, because that gap is dunx's own
 overhead and nothing else. From
-[`tools/bench/README.md`](../../tools/bench), run on an AMD Ryzen 9 5950X with 32
+[`internal/bench/README.md`](../../internal/bench), run on an AMD Ryzen 9 5950X with 32
 logical cores, Bun 1.3.14, oha 1.15.0, 64 connections, 3 s warmup, 5 measured runs
 of 5 s, dated 2026-08-02:
 

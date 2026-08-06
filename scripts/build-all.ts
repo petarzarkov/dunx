@@ -25,7 +25,7 @@ interface Workspace {
 const root = new URL('..', import.meta.url).pathname;
 
 const manifests = async (): Promise<Workspace[]> => {
-  const glob = new Glob('{packages,tools,examples}/*/package.json');
+  const glob = new Glob('{packages,tools,internal,examples}/*/package.json');
   const found: Workspace[] = [];
 
   for await (const rel of glob.scan({ cwd: root })) {

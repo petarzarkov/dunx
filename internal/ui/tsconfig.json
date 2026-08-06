@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    /* Consumed as source by two Vite bundles, so resolution is the bundler's and
+       imports stay extensionless - the same reason `internal/docs` and
+       `internal/openapi-ui` override it. There is no build step here: `exports`
+       points at `src/`, and each consumer compiles what it imports. */
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

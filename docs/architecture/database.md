@@ -127,7 +127,7 @@ in one constructor, immediately made true by the subclass, was the smaller cost.
 
 #### What it measures, which is less than the pitch
 
-`tools/bench`'s `bun run db-modes` runs the comparison end to end through a real
+`internal/bench`'s `bun run db-modes` runs the comparison end to end through a real
 `Bun.serve`, interleaved round-robin for the reason the validation harness records.
 Two scenarios per mode, `requestLogging: false` so every route stays on the direct
 dispatch path: a single indexed `SELECT`, and a transaction doing two `UPDATE`s and

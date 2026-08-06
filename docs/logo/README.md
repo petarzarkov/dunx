@@ -12,9 +12,9 @@ looked nice.
 
 | File                                                                                | Use it for                        | Colour                                    |
 | ----------------------------------------------------------------------------------- | --------------------------------- | ----------------------------------------- |
-| [`logo.svg`](../../tools/docs/public/logo/logo.svg)                                 | The full lockup, mark + wordmark  | Neutral is `currentColor`, accent is fixed |
-| [`logo-mark.svg`](../../tools/docs/public/logo/logo-mark.svg)                       | Square glyph, for inlining        | Neutral is `currentColor`, accent is fixed |
-| [`logo-mark-color.svg`](../../tools/docs/public/logo/logo-mark-color.svg)           | Favicon, README, anywhere foreign | All gradient, adapts to nothing            |
+| [`logo.svg`](../../internal/docs/public/logo/logo.svg)                                 | The full lockup, mark + wordmark  | Neutral is `currentColor`, accent is fixed |
+| [`logo-mark.svg`](../../internal/docs/public/logo/logo-mark.svg)                       | Square glyph, for inlining        | Neutral is `currentColor`, accent is fixed |
+| [`logo-mark-color.svg`](../../internal/docs/public/logo/logo-mark-color.svg)           | Favicon, README, anywhere foreign | All gradient, adapts to nothing            |
 
 **The rule that decides between them:** an `<img>` element cannot inherit
 `currentColor` - the SVG loads as its own document and the keyword resolves against
@@ -23,7 +23,7 @@ when the SVG is **inlined into the page**, and anything referenced by `src=` or
 pasted into a README must be `logo-mark-color.svg`.
 
 That is why the docs site draws the paths in
-[`Logo.tsx`](../../tools/docs/src/components/Logo.tsx) instead of loading the files:
+[`Logo.tsx`](../../internal/docs/src/components/Logo.tsx) instead of loading the files:
 the header has to follow the theme toggle. The geometry there is byte-identical to
 the files - change one, change both.
 

@@ -12,10 +12,10 @@
  */
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { FEATURES } from '../packages/create-app/src/features.js';
+import { FEATURES } from '../tools/create-app/src/features.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const TEMPLATES = join(ROOT, 'packages/create-app/templates');
+const TEMPLATES = join(ROOT, 'tools/create-app/templates');
 
 const copyDir = async (from: string, to: string): Promise<number> => {
   await rm(to, { recursive: true, force: true });

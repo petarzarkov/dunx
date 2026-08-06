@@ -3,7 +3,7 @@
 The documentation site and the API explorer: private workspaces, and the only place the
 dependency rules do not govern.
 
-## Documentation site (`tools/docs`)
+## Documentation site (`internal/docs`)
 
 React + Mantine over **Vite**, static output, deployed to GitHub Pages. It replaced the
 coverage report as the Pages root; coverage is now a page inside it.
@@ -38,7 +38,7 @@ installed recharts 3.10.1 satisfies both majors. `BarChart` in 8 carries every
 prop `BenchChart.tsx` passes, and a headless-Chrome render of `#/benchmarks`
 produced 5 recharts surfaces with 55 bars and the focus colour on `@dunx/http`,
 so this is verified rather than assumed. `@mantine/code-highlight` went with it:
-highlighting happens at generate time now, and nothing under `tools/docs`
+highlighting happens at generate time now, and nothing under `internal/docs`
 imported it.
 
 **The model is one file per route, and the landing page carries none of them.**
@@ -84,12 +84,12 @@ for someone working in this repository and not for someone reading the docs.
 `siteMarkdown` in `scripts/content.ts` drops a `##` section whose slug matches
 `EXCLUDED_SECTIONS` with a `-` word boundary - so `## Install it as a
 devDependency` goes with `## Install` - plus the centered title-and-badges block
-every README opens with. The list is published in `tools/docs/README.md`, and an
+every README opens with. The list is published in `internal/docs/README.md`, and an
 author decides which side a section falls on by naming it. Guides under `docs/`
 are exempt: they _are_ repository documentation, and dropping sections from them
 would lose real content.
 
-**The API reference is extracted, not written.** `tools/docs/scripts/extract/`
+**The API reference is extracted, not written.** `internal/docs/scripts/extract/`
 parses every `packages/*/src/**/*.ts` with **`oxc-parser`** - the parser
 `@dunx/transform` already depends on - and reads three things off each exported
 declaration:
@@ -107,7 +107,7 @@ declaration:
 TypeScript's own API was the alternative and was rejected: the only thing it
 adds is _inferred_ types for un-annotated declarations, which this codebase
 barely has, in exchange for running a full type checker over five packages at
-build time. What that costs is recorded in `tools/docs/README.md` along with the
+build time. What that costs is recorded in `internal/docs/README.md` along with the
 gaps it leaves - no cross-package type links, no namespace re-export expansion,
 one entry per overload set.
 
@@ -126,12 +126,12 @@ Two details worth not re-deriving:
   keying by name alone would document half the construct.
 
 `scripts/coverage-report.ts` writes into the site rather than publishing
-standalone: the model to `tools/docs/src/generated/coverage.json`, the badges to
-`tools/docs/public/badges/`, which the build copies to `/badges/`. CI therefore
+standalone: the model to `internal/docs/src/generated/coverage.json`, the badges to
+`internal/docs/public/badges/`, which the build copies to `/badges/`. CI therefore
 rebuilds the site after `test:cov`, because the first build (inside
 `bun run build`) predates the coverage data.
 
-## The API explorer (`tools/openapi-ui`)
+## The API explorer (`internal/openapi-ui`)
 
 `@dunx/openapi`'s page was hand-written HTML inside a backend package: a `<style>`
 block, `<details>` for the folding and ~90 lines of inlined DOM code. It had no
@@ -145,7 +145,7 @@ The page's guarantee is that it fetches **nothing** - no CDN, no `src=`, no
 `<link>`. `swagger-ui-dist` (11.7 MB unpacked) and `@scalar/api-reference` (11 MB)
 were rejected over exactly that, and the guarantee did not get cheaper because the
 UI got better. So the bundle is a string in `packages/openapi/src/ui-bundle.ts`,
-written by `tools/openapi-ui/scripts/build.ts` and interpolated into one
+written by `internal/openapi-ui/scripts/build.ts` and interpolated into one
 `<script>`. `</` is escaped at build time, not per request.
 
 `ui-bundle.ts` is **generated and committed**. `bun test ./packages` at the root
@@ -213,7 +213,7 @@ was only ever used in a value position, so `html.d.ts` never named it and
 `dist/ui-bundle.d.ts` - a 456 KB single-line declaration holding the literal type
 of a minified bundle - was 456 KB of tarball nobody's tsc read. Exporting `UI`
 from `./ui` would have made every consumer of the subpath parse it. The generator
-in `tools/openapi-ui/scripts/build.ts` now emits `export const UI: string`, and
+in `internal/openapi-ui/scripts/build.ts` now emits `export const UI: string`, and
 the widening annotation collapses that declaration from **456,550 B to 98 B**. The
 annotation is load bearing; removing it silently restores the 456 KB file.
 
@@ -241,7 +241,7 @@ is the right place for it. **`preact/compat` is therefore rejected rather than
 pending**: it would remove ~170 KiB from a cost nobody pays until they ask for it,
 in exchange for running Mantine on a compatibility shim.
 
-### Vite here, `bun build` in `tools/docs`
+### Vite here, `bun build` in `internal/docs`
 
 The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms and
 took Bun's ~25 % larger output, which is right for a site. Every byte here is

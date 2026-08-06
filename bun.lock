@@ -70,6 +70,94 @@
         "@dunx/testing": "workspace:*",
       },
     },
+    "internal/bench": {
+      "name": "@dunx/bench",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+        "@dunx/http": "workspace:*",
+        "@dunx/infra": "workspace:*",
+        "@dunx/transform": "workspace:*",
+        "@hono/node-server": "^2.0.12",
+        "@hono/zod-validator": "^0.7.4",
+        "@sinclair/typebox": "^0.34.52",
+        "ajv": "^8.20.0",
+        "arktype": "^2.2.3",
+        "drizzle-orm": "^0.45.2",
+        "elysia": "^1.4.29",
+        "express": "^5.1.0",
+        "fastify": "^5.6.1",
+        "hono": "^4.10.6",
+        "valibot": "^1.4.2",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@nestjs/common": "^11.1.28",
+        "@nestjs/core": "^11.1.28",
+        "@nestjs/platform-express": "^11.1.28",
+        "@nestjs/platform-fastify": "^11.1.28",
+        "@types/express": "^5.0.5",
+        "reflect-metadata": "^0.2.2",
+        "rxjs": "^7.8.2",
+      },
+    },
+    "internal/docs": {
+      "name": "@dunx/docs",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/ui": "workspace:*",
+        "@mantine/charts": "^8.3.6",
+        "@mantine/core": "^8.3.6",
+        "@mantine/hooks": "^8.3.6",
+        "@mantine/spotlight": "^8.3.6",
+        "oxc-parser": "0.142.0",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+        "recharts": "^3.10.1",
+        "shiki": "^4.4.1",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^20.11.1",
+        "@testing-library/react": "^16.3.2",
+        "@types/react": "^19.2.2",
+        "@types/react-dom": "^19.2.2",
+        "@vitejs/plugin-react": "^6.0.5",
+        "vite": "^8.2.0",
+      },
+    },
+    "internal/openapi-ui": {
+      "name": "@dunx/openapi-ui",
+      "version": "0.0.0",
+      "dependencies": {
+        "@dunx/ui": "workspace:*",
+        "@mantine/core": "^8.3.6",
+        "@mantine/hooks": "^8.3.6",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^20.11.1",
+        "@testing-library/react": "^16.3.2",
+        "@types/react": "^19.2.2",
+        "@types/react-dom": "^19.2.2",
+        "@vitejs/plugin-react": "^5.1.0",
+        "vite": "^7.2.0",
+      },
+    },
+    "internal/ui": {
+      "name": "@dunx/ui",
+      "version": "0.0.0",
+      "dependencies": {
+        "@mantine/core": "^8.3.6",
+        "@mantine/hooks": "^8.3.6",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.2",
+        "@types/react-dom": "^19.2.2",
+      },
+    },
     "packages/auth": {
       "name": "@dunx/auth",
       "version": "1.1.0",
@@ -95,19 +183,6 @@
       "name": "@dunx/core",
       "version": "1.1.0",
     },
-    "packages/create-app": {
-      "name": "@dunx/create-app",
-      "version": "1.1.0",
-      "bin": {
-        "create-dunx-app": "dist/cli.js",
-      },
-      "peerDependencies": {
-        "@types/bun": ">=1.3.0",
-      },
-      "optionalPeers": [
-        "@types/bun",
-      ],
-    },
     "packages/http": {
       "name": "@dunx/http",
       "version": "1.1.0",
@@ -129,7 +204,7 @@
       "name": "@dunx/infra",
       "version": "1.1.0",
       "dependencies": {
-        "@arkv/logger": "^0.9.0",
+        "@arkv/logger": "^0.10.0",
       },
       "devDependencies": {
         "@dunx/core": "workspace:*",
@@ -149,26 +224,6 @@
         "bullmq",
         "drizzle-orm",
         "ioredis",
-      ],
-    },
-    "packages/mcp": {
-      "name": "@dunx/mcp",
-      "version": "1.1.0",
-      "bin": {
-        "dunx-mcp": "dist/cli.js",
-      },
-      "devDependencies": {
-        "@dunx/core": "workspace:*",
-        "@dunx/http": "workspace:*",
-        "@dunx/openapi": "workspace:*",
-      },
-      "peerDependencies": {
-        "@dunx/core": "workspace:*",
-        "@dunx/http": "workspace:*",
-        "@dunx/openapi": "workspace:*",
-      },
-      "optionalPeers": [
-        "@dunx/openapi",
       ],
     },
     "packages/openapi": {
@@ -224,77 +279,38 @@
         "@types/bun",
       ],
     },
-    "tools/bench": {
-      "name": "@dunx/bench",
-      "version": "0.0.0",
-      "dependencies": {
+    "tools/create-app": {
+      "name": "@dunx/create-app",
+      "version": "1.1.0",
+      "bin": {
+        "create-dunx-app": "dist/cli.js",
+      },
+      "peerDependencies": {
+        "@types/bun": ">=1.3.0",
+      },
+      "optionalPeers": [
+        "@types/bun",
+      ],
+    },
+    "tools/mcp": {
+      "name": "@dunx/mcp",
+      "version": "1.1.0",
+      "bin": {
+        "dunx-mcp": "dist/cli.js",
+      },
+      "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
-        "@dunx/infra": "workspace:*",
-        "@dunx/transform": "workspace:*",
-        "@hono/node-server": "^2.0.12",
-        "@hono/zod-validator": "^0.7.4",
-        "@sinclair/typebox": "^0.34.52",
-        "ajv": "^8.20.0",
-        "arktype": "^2.2.3",
-        "drizzle-orm": "^0.45.2",
-        "elysia": "^1.4.29",
-        "express": "^5.1.0",
-        "fastify": "^5.6.1",
-        "hono": "^4.10.6",
-        "valibot": "^1.4.2",
-        "zod": "^4.4.3",
+        "@dunx/openapi": "workspace:*",
       },
-      "devDependencies": {
-        "@nestjs/common": "^11.1.28",
-        "@nestjs/core": "^11.1.28",
-        "@nestjs/platform-express": "^11.1.28",
-        "@nestjs/platform-fastify": "^11.1.28",
-        "@types/express": "^5.0.5",
-        "reflect-metadata": "^0.2.2",
-        "rxjs": "^7.8.2",
+      "peerDependencies": {
+        "@dunx/core": "workspace:*",
+        "@dunx/http": "workspace:*",
+        "@dunx/openapi": "workspace:*",
       },
-    },
-    "tools/docs": {
-      "name": "@dunx/docs",
-      "version": "0.0.0",
-      "dependencies": {
-        "@mantine/charts": "^8.3.6",
-        "@mantine/core": "^8.3.6",
-        "@mantine/hooks": "^8.3.6",
-        "@mantine/spotlight": "^8.3.6",
-        "oxc-parser": "0.142.0",
-        "react": "^19.2.0",
-        "react-dom": "^19.2.0",
-        "recharts": "^3.10.1",
-        "shiki": "^4.4.1",
-      },
-      "devDependencies": {
-        "@happy-dom/global-registrator": "^20.11.1",
-        "@testing-library/react": "^16.3.2",
-        "@types/react": "^19.2.2",
-        "@types/react-dom": "^19.2.2",
-        "@vitejs/plugin-react": "^6.0.5",
-        "vite": "^8.2.0",
-      },
-    },
-    "tools/openapi-ui": {
-      "name": "@dunx/openapi-ui",
-      "version": "0.0.0",
-      "dependencies": {
-        "@mantine/core": "^8.3.6",
-        "@mantine/hooks": "^8.3.6",
-        "react": "^19.2.0",
-        "react-dom": "^19.2.0",
-      },
-      "devDependencies": {
-        "@happy-dom/global-registrator": "^20.11.1",
-        "@testing-library/react": "^16.3.2",
-        "@types/react": "^19.2.2",
-        "@types/react-dom": "^19.2.2",
-        "@vitejs/plugin-react": "^5.1.0",
-        "vite": "^7.2.0",
-      },
+      "optionalPeers": [
+        "@dunx/openapi",
+      ],
     },
   },
   "packages": {
@@ -302,9 +318,9 @@
 
     "@ark/util": ["@ark/util@0.56.2", "", {}, "sha512-9kU2sUE38FZEGG7l3hamYMBieLYEJh2L1mrYD2eXpT+78EnQSV1bhjxJhnxGBMSTbtwpBSDNSK+K60WvaI/DTQ=="],
 
-    "@arkv/colors": ["@arkv/colors@0.7.5", "", {}, "sha512-qXkbfT+tb273kXDvps22p9nOl+Z2jcDwc/tAmQSNr9xOqZMlWeaAOm+oU+nx3DUFVuE3+mkX3Tq4tk/G0cCbBw=="],
+    "@arkv/colors": ["@arkv/colors@0.8.0", "", {}, "sha512-r4xt9tTUpeEgfOnKfVfdvP1QMgX4aMQtK1z12sGbB85hEqH6ijBiugZbKAo7HqfCaHtIXycX3diptQL+OfcimA=="],
 
-    "@arkv/logger": ["@arkv/logger@0.9.0", "", { "dependencies": { "@arkv/colors": "^0.7.5", "@arkv/shared": "^0.8.0" } }, "sha512-EQhg8xMk35z1q2SI6aQLnHQSTPnuvlMXVRYFOPsjSD7tjqrwZfpWVQfXLWsV88cTYML7YSq3xPKDfMH36UwZ/A=="],
+    "@arkv/logger": ["@arkv/logger@0.10.0", "", { "dependencies": { "@arkv/colors": "^0.8.0", "@arkv/shared": "^0.8.0" } }, "sha512-WoSQ4dGsVlMCi0hMmKzDRqRITGw/VhdpE47PaNNtTgSTCNdwFxONC0jXA3YTtRCYphkLd95zJAzh03KZ2AxJTg=="],
 
     "@arkv/shared": ["@arkv/shared@0.8.0", "", {}, "sha512-c9YTix/b35KTEmIl+qlyjm74SzqWEXXcvwr4rqhYPWr7ihirdSaydOFFNFQSyQYgefVOc4JEKdpb4gOhSsKcrA=="],
 
@@ -370,13 +386,13 @@
 
     "@dunx/auth": ["@dunx/auth@workspace:packages/auth"],
 
-    "@dunx/bench": ["@dunx/bench@workspace:tools/bench"],
+    "@dunx/bench": ["@dunx/bench@workspace:internal/bench"],
 
     "@dunx/core": ["@dunx/core@workspace:packages/core"],
 
-    "@dunx/create-app": ["@dunx/create-app@workspace:packages/create-app"],
+    "@dunx/create-app": ["@dunx/create-app@workspace:tools/create-app"],
 
-    "@dunx/docs": ["@dunx/docs@workspace:tools/docs"],
+    "@dunx/docs": ["@dunx/docs@workspace:internal/docs"],
 
     "@dunx/example-databases": ["@dunx/example-databases@workspace:examples/databases"],
 
@@ -390,15 +406,17 @@
 
     "@dunx/infra": ["@dunx/infra@workspace:packages/infra"],
 
-    "@dunx/mcp": ["@dunx/mcp@workspace:packages/mcp"],
+    "@dunx/mcp": ["@dunx/mcp@workspace:tools/mcp"],
 
     "@dunx/openapi": ["@dunx/openapi@workspace:packages/openapi"],
 
-    "@dunx/openapi-ui": ["@dunx/openapi-ui@workspace:tools/openapi-ui"],
+    "@dunx/openapi-ui": ["@dunx/openapi-ui@workspace:internal/openapi-ui"],
 
     "@dunx/testing": ["@dunx/testing@workspace:packages/testing"],
 
     "@dunx/transform": ["@dunx/transform@workspace:packages/transform"],
+
+    "@dunx/ui": ["@dunx/ui@workspace:internal/ui"],
 
     "@emnapi/core": ["@emnapi/core@1.11.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA=="],
 

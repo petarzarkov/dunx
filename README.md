@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="tools/docs/public/logo/logo-mark-color.svg" width="96" height="96" alt="" />
+<img src="internal/docs/public/logo/logo-mark-color.svg" width="96" height="96" alt="" />
 
 # dunx
 
@@ -36,13 +36,13 @@ and what is next.
 |---------|---------|----------|-------------|
 | [`@dunx/auth`](./packages/auth) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fauth)](https://www.npmjs.com/package/%40dunx%2Fauth) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fauth?label=dls)](https://www.npmjs.com/package/%40dunx%2Fauth) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fauth?label=size)](https://www.npmjs.com/package/%40dunx%2Fauth) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-auth.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Better Auth for dunx: its handler mounted on Bun.serve, a session guard reading @Public() and @Roles(), the caller in async context, and Bun.password hashing |
 | [`@dunx/core`](./packages/core) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fcore)](https://www.npmjs.com/package/%40dunx%2Fcore) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fcore?label=dls)](https://www.npmjs.com/package/%40dunx%2Fcore) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fcore?label=size)](https://www.npmjs.com/package/%40dunx%2Fcore) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-core.svg)](https://petarzarkov.github.io/dunx/#/coverage) | DI container, modules, lifecycle and the injectable Logger contract for the dunx framework |
-| [`@dunx/create-app`](./packages/create-app) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fcreate-app)](https://www.npmjs.com/package/%40dunx%2Fcreate-app) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fcreate-app?label=dls)](https://www.npmjs.com/package/%40dunx%2Fcreate-app) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fcreate-app?label=size)](https://www.npmjs.com/package/%40dunx%2Fcreate-app) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-create-app.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Scaffold a new dunx application - bunx @dunx/create-app my-api |
 | [`@dunx/http`](./packages/http) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fhttp)](https://www.npmjs.com/package/%40dunx%2Fhttp) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fhttp?label=dls)](https://www.npmjs.com/package/%40dunx%2Fhttp) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fhttp?label=size)](https://www.npmjs.com/package/%40dunx%2Fhttp) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-http.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways |
 | [`@dunx/infra`](./packages/infra) | [![npm](https://img.shields.io/npm/v/%40dunx%2Finfra)](https://www.npmjs.com/package/%40dunx%2Finfra) [![dls](https://img.shields.io/npm/dt/%40dunx%2Finfra?label=dls)](https://www.npmjs.com/package/%40dunx%2Finfra) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Finfra?label=size)](https://www.npmjs.com/package/%40dunx%2Finfra) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-infra.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Database, Redis, queue, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, bullmq over Bun.RedisClient, plus Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger |
-| [`@dunx/mcp`](./packages/mcp) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fmcp)](https://www.npmjs.com/package/%40dunx%2Fmcp) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fmcp?label=dls)](https://www.npmjs.com/package/%40dunx%2Fmcp) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fmcp?label=size)](https://www.npmjs.com/package/%40dunx%2Fmcp) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-mcp.svg)](https://petarzarkov.github.io/dunx/#/coverage) | A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts |
 | [`@dunx/openapi`](./packages/openapi) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fopenapi)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fopenapi?label=dls)](https://www.npmjs.com/package/%40dunx%2Fopenapi) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fopenapi?label=size)](https://www.npmjs.com/package/%40dunx%2Fopenapi) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-openapi.svg)](https://petarzarkov.github.io/dunx/#/coverage) | OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate |
 | [`@dunx/testing`](./packages/testing) | [![npm](https://img.shields.io/npm/v/%40dunx%2Ftesting)](https://www.npmjs.com/package/%40dunx%2Ftesting) [![dls](https://img.shields.io/npm/dt/%40dunx%2Ftesting?label=dls)](https://www.npmjs.com/package/%40dunx%2Ftesting) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Ftesting?label=size)](https://www.npmjs.com/package/%40dunx%2Ftesting) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-testing.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0 |
 | [`@dunx/transform`](./packages/transform) | [![npm](https://img.shields.io/npm/v/%40dunx%2Ftransform)](https://www.npmjs.com/package/%40dunx%2Ftransform) [![dls](https://img.shields.io/npm/dt/%40dunx%2Ftransform?label=dls)](https://www.npmjs.com/package/%40dunx%2Ftransform) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Ftransform?label=size)](https://www.npmjs.com/package/%40dunx%2Ftransform) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-transform.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Load-time transform that records constructor dependencies for the dunx container |
+| [`@dunx/create-app`](./tools/create-app) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fcreate-app)](https://www.npmjs.com/package/%40dunx%2Fcreate-app) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fcreate-app?label=dls)](https://www.npmjs.com/package/%40dunx%2Fcreate-app) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fcreate-app?label=size)](https://www.npmjs.com/package/%40dunx%2Fcreate-app) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-create-app.svg)](https://petarzarkov.github.io/dunx/#/coverage) | Scaffold a new dunx application - bunx @dunx/create-app my-api |
+| [`@dunx/mcp`](./tools/mcp) | [![npm](https://img.shields.io/npm/v/%40dunx%2Fmcp)](https://www.npmjs.com/package/%40dunx%2Fmcp) [![dls](https://img.shields.io/npm/dt/%40dunx%2Fmcp?label=dls)](https://www.npmjs.com/package/%40dunx%2Fmcp) [![size](https://img.shields.io/npm/unpacked-size/%40dunx%2Fmcp?label=size)](https://www.npmjs.com/package/%40dunx%2Fmcp) | [![cov](https://petarzarkov.github.io/dunx/badges/coverage-mcp.svg)](https://petarzarkov.github.io/dunx/#/coverage) | A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts |
 
 ## Examples
 
@@ -66,18 +66,19 @@ bun run --filter '@dunx/example-minimal' start
 
 ```
 dunx/
-├── packages/           # Published packages
+├── packages/           # The published framework
 │   ├── auth            # Better Auth for dunx: its handler mounted on Bun.serve, a session guard reading @Public() and @Roles(), the caller in async context, and Bun.password hashing
 │   ├── core            # DI container, modules, lifecycle and the injectable Logger contract for the dunx framework
-│   ├── create-app      # Scaffold a new dunx application - bunx @dunx/create-app my-api
 │   ├── http            # Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways
 │   ├── infra           # Database, Redis, queue, storage, image and logging infrastructure for dunx
-│   ├── mcp             # A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts
 │   ├── openapi         # OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate
 │   ├── testing         # Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0
 │   └── transform       # Load-time transform that records constructor dependencies for the dunx container
+├── tools/              # Published CLIs - the scaffolder and the MCP server
+│   ├── create-app      # Scaffold a new dunx application - bunx @dunx/create-app my-api
+│   └── mcp             # A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts
+├── internal/           # Private workspaces, never published - docs site, benchmarks, API explorer, shared UI
 ├── examples/           # Private apps that consume the packages
-├── tools/              # Private workspaces, never published - docs site, benchmarks, API explorer
 ├── docs/               # Architecture and design docs
 ├── scripts/            # Monorepo-level scripts
 ├── .github/workflows/  # CI/CD pipeline
@@ -114,9 +115,9 @@ bun run typecheck
 | `bun run build` | Build all packages (ESM + type declarations) |
 | `bun run test` | Run all tests |
 | `bun run test:cov` | Run all tests with coverage, then build the coverage report |
-| `bun run gen:cov` | Rebuild the coverage model and badges from existing coverage data, into `tools/docs` |
+| `bun run gen:cov` | Rebuild the coverage model and badges from existing coverage data, into `internal/docs` |
 | `bun run docs:dev` | Extract the API reference and serve the documentation site locally |
-| `bun run docs:build` | Build the documentation site to `tools/docs/dist` (the GitHub Pages artifact) |
+| `bun run docs:build` | Build the documentation site to `internal/docs/dist` (the GitHub Pages artifact) |
 | `bun run gen:readme` | Regenerate the Packages table and Project Structure block |
 | `bun run lint` | Lint and auto-fix with oxlint |
 | `bun run lint:check` | Lint without fixing (used by CI) |

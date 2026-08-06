@@ -129,17 +129,23 @@ export const assertNoWorkspaceRanges = (pkg: Manifest): void => {
 
 /** Every workspace package's current version, keyed by its published name. */
 export const readWorkspaceVersions = (
-  packagesDir: string,
+  ...packagesDirs: readonly string[]
 ): Map<string, string> => {
   const versions = new Map<string, string>();
 
-  for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const pkgJsonPath = join(packagesDir, entry.name, 'package.json');
-    if (!existsSync(pkgJsonPath)) continue;
-    const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as Manifest;
-    if (typeof pkg.name === 'string' && typeof pkg['version'] === 'string') {
-      versions.set(pkg.name, pkg['version']);
+  // Variadic because published workspaces live under more than one parent now:
+  // `packages/` for the framework and `tools/` for the CLIs. A `workspace:` range
+  // in a tool pointing at a package has to resolve, so both are read into one map.
+  for (const packagesDir of packagesDirs) {
+    if (!existsSync(packagesDir)) continue;
+    for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const pkgJsonPath = join(packagesDir, entry.name, 'package.json');
+      if (!existsSync(pkgJsonPath)) continue;
+      const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as Manifest;
+      if (typeof pkg.name === 'string' && typeof pkg['version'] === 'string') {
+        versions.set(pkg.name, pkg['version']);
+      }
     }
   }
 

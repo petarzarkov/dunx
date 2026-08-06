@@ -312,12 +312,12 @@ its test.
 
 ## `tools/` - private workspaces, never published
 
-### `tools/docs` - the documentation site - **built**
+### `internal/docs` - the documentation site - **built**
 
 React + Mantine bundled by `Bun.build`, static output, deployed to **GitHub Pages** as the Pages
 root. Coverage is a page inside it. Design and the parser decision:
 [architecture/tooling.md](./architecture/tooling.md), "Documentation site"; the extractor's own
-limits: `tools/docs/README.md`.
+limits: `internal/docs/README.md`.
 
 Nothing on the site is hand-written prose. The landing page is the root README,
 the guides are `docs/*.md` through `Bun.markdown.html`, each package page is its
@@ -327,9 +327,9 @@ README plus an **API reference extracted from the doc comments** by
 The three displacement consequences are handled:
 
 - `scripts/coverage-report.ts` no longer writes standalone HTML. It writes
-  `tools/docs/src/generated/coverage.json` and the badges into
-  `tools/docs/public/badges/`.
-- `ci.yml`'s Pages job uploads `./tools/docs/dist`, and a `Build the
+  `internal/docs/src/generated/coverage.json` and the badges into
+  `internal/docs/public/badges/`.
+- `ci.yml`'s Pages job uploads `./internal/docs/dist`, and a `Build the
 documentation site` step runs after `test:cov` so the artifact has the
   coverage data the earlier `bun run build` could not have had.
 - The README badges point at `/badges/coverage-<pkg>.svg` and link to
@@ -338,12 +338,12 @@ documentation site` step runs after `test:cov` so the artifact has the
 Still open: syntax highlighting in code blocks, the OpenAPI document
 `@dunx/openapi` produces as a page here, and per-package code splitting.
 
-### `tools/bench` - the benchmark harness - **built**
+### `internal/bench` - the benchmark harness - **built**
 
 Eight subjects (raw `Bun.serve`, `@dunx/http`, Elysia, Hono on both Bun and Node, raw
 `node:http`, Fastify, Express) across four identical workloads, plus cold-start.
 Methodology, machine and every deliberate handicap are in
-[`tools/bench/README.md`](../tools/bench/README.md); the measured findings are in
+[`internal/bench/README.md`](../internal/bench/README.md); the measured findings are in
 [architecture/benchmarks.md](./architecture/benchmarks.md), "Benchmark harness".
 
 It publishes the losses. dunx costs 6-21% against raw `Bun.serve` depending on the
@@ -360,7 +360,7 @@ Open follow-ups, none blocking:
   clearest optimisation target the harness has surfaced. Elysia compiles per-route
   handler code ahead of time; dunx builds a closure at boot but still runs a generic
   input reader per request.
-- `tools/docs` should read `results/latest.json`. The shape is documented and
+- `internal/docs` should read `results/latest.json`. The shape is documented and
   versioned by `schemaVersion` in the bench README; do not re-derive it.
 
 ## The phase plan
@@ -537,7 +537,7 @@ when the handler's return type already checks the answer for free. Nothing in
 The explorer renders those responses through **`SchemaView`, the same component the
 request body uses** - one property table with the required markers, formats,
 constraints and `$ref` resolution, not a second one. Every component in
-`tools/openapi-ui` costs bytes twice, in the JS and in the CSS list in
+`internal/openapi-ui` costs bytes twice, in the JS and in the CSS list in
 `src/styles.ts`, and the whole bundle is a committed string in
 `packages/openapi/src/ui-bundle.ts` that every consumer of the package downloads, so
 "reuse it" is a size decision before it is a taste one. The documented response and

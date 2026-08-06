@@ -1,0 +1,63 @@
+{
+  "name": "@dunx/create-app",
+  "version": "1.1.0",
+  "description": "Scaffold a new dunx application - bunx @dunx/create-app my-api",
+  "keywords": [
+    "bun",
+    "create",
+    "dunx",
+    "scaffold",
+    "starter"
+  ],
+  "homepage": "https://github.com/petarzarkov/dunx/tree/main/tools/create-app#readme",
+  "license": "MIT",
+  "author": {
+    "name": "Petar Zarkov",
+    "email": "pzarko1@gmail.com",
+    "url": "https://github.com/petarzarkov"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/petarzarkov/dunx.git",
+    "directory": "tools/create-app"
+  },
+  "bin": {
+    "create-dunx-app": "dist/cli.js"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist",
+    "templates"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun ../../scripts/build-package.ts",
+    "test": "bun test --bail",
+    "test:cov": "bun test --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@types/bun": ">=1.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/bun": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

@@ -17,7 +17,18 @@ import {
 const isDryRun = process.env['DRY_RUN'] === 'true';
 
 const ROOT_DIR = resolve(import.meta.dir, '..');
-const PACKAGES_DIR = join(ROOT_DIR, 'packages');
+/**
+ * Every directory that can hold a **published** workspace.
+ *
+ * `tools/` used to be private-only and is not any more: `@dunx/create-app` and
+ * `@dunx/mcp` are CLIs rather than framework packages, so they live there and still
+ * publish. `internal/` is the private half - the docs site, the benchmark harness,
+ * the OpenAPI explorer bundle and the shared frontend - and is deliberately absent
+ * from this list. A `private: true` manifest is still what actually decides, so a
+ * mistake in either direction is caught by the filter below rather than by this
+ * array.
+ */
+const PUBLISHABLE_DIRS = ['packages', 'tools'] as const;
 
 // Trusted publishing needs npm >= 11.5.1, and GitHub's ubuntu-latest image still
 // ships npm 10.x. `bunx` fetches this exact version and runs it on bun's own
@@ -31,26 +42,27 @@ const findPublishablePackages = (): {
   dir: string;
   packageJsonPath: string;
 }[] => {
-  const entries = readdirSync(PACKAGES_DIR, {
-    withFileTypes: true,
-  });
   const packages: {
     name: string;
     dir: string;
     packageJsonPath: string;
   }[] = [];
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const pkgJsonPath = join(PACKAGES_DIR, entry.name, 'package.json');
-    if (!existsSync(pkgJsonPath)) continue;
-    const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
-    if (pkg.private) continue;
-    packages.push({
-      name: pkg.name,
-      dir: join(PACKAGES_DIR, entry.name),
-      packageJsonPath: pkgJsonPath,
-    });
+  for (const parent of PUBLISHABLE_DIRS) {
+    const parentDir = join(ROOT_DIR, parent);
+    if (!existsSync(parentDir)) continue;
+    for (const entry of readdirSync(parentDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const pkgJsonPath = join(parentDir, entry.name, 'package.json');
+      if (!existsSync(pkgJsonPath)) continue;
+      const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
+      if (pkg.private) continue;
+      packages.push({
+        name: pkg.name,
+        dir: join(parentDir, entry.name),
+        packageJsonPath: pkgJsonPath,
+      });
+    }
   }
 
   return packages;
@@ -127,7 +139,9 @@ const withResolvedWorkspaceDeps = (pkgDir: string, publish: () => void) => {
   const pkgJsonPath = join(pkgDir, 'package.json');
   const original = readFileSync(pkgJsonPath, 'utf-8');
   const pkg = JSON.parse(original);
-  const versions = readWorkspaceVersions(PACKAGES_DIR);
+  const versions = readWorkspaceVersions(
+    ...PUBLISHABLE_DIRS.map((dir) => join(ROOT_DIR, dir)),
+  );
 
   const rewritten = resolveWorkspaceDeps(pkg, (name) => versions.get(name));
   for (const line of rewritten) console.log(`  ${line}`);

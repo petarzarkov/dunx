@@ -7,7 +7,7 @@ import type { OpenApiDocument } from './types.js';
  * the guarantee `html.test.ts` asserts and the reason `swagger-ui-dist` (11.7 MB,
  * and a CDN in practice) was never an option.
  *
- * The UI itself is a real frontend: `tools/openapi-ui`, Vite + Mantine, built and
+ * The UI itself is a real frontend: `internal/openapi-ui`, Vite + Mantine, built and
  * written into `ui-bundle.ts`. Serving the built output rather than hand-written
  * markup is what let the page grow disclosure controls, an auth dialog and a
  * schema renderer without any of that landing in a backend package.
@@ -44,7 +44,7 @@ export interface PageOptions {
   readonly warnings: readonly string[];
 }
 
-/** The id the bundle reads its model from. Shared with `tools/openapi-ui`. */
+/** The id the bundle reads its model from. Shared with `internal/openapi-ui`. */
 export const MODEL_ELEMENT_ID = 'dunx-openapi-model';
 
 export const renderShell = (

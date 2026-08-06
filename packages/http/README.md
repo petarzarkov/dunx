@@ -133,7 +133,7 @@ render as `a.0`):
 ### Which validator to use
 
 Any of them. This is measured rather than asserted - `bun run validation` in
-`tools/bench` runs the same dunx app and the same schema shape with only the library
+`internal/bench` runs the same dunx app and the same schema shape with only the library
 behind `~standard` changed, and reports what each one costs per request:
 
 | Validator                   | costs    | `~standard`             |
@@ -176,7 +176,7 @@ const PersonSchema: StandardSchemaV1<unknown, Static<typeof Person>> = {
 ```
 
 Full numbers, methodology and the ajv version:
-[`tools/bench/README.md`](../../tools/bench/README.md), "Validation cost".
+[`internal/bench/README.md`](../../internal/bench/README.md), "Validation cost".
 
 ## Route metadata and scoped middleware
 
@@ -349,7 +349,7 @@ request logging costs, and an app whose handlers never log pays it for nothing.
 
 `requestBody` and `responseBody` default to **`false`**. Turning either on means a
 `clone().text()` - a second copy of every payload, buffered and parsed, on the hot
-path. Measured in `tools/bench`, both on cost roughly two thirds of the throughput
+path. Measured in `internal/bench`, both on cost roughly two thirds of the throughput
 on the `validate` scenario. The response body is also the field most likely to
 carry a secret, so this is the right default twice over.
 
@@ -371,7 +371,7 @@ HttpFactory.create(AppModule, {
 });
 ```
 
-**Even at its cheapest, a log line is not free.** `tools/bench` carries `dunx` and
+**Even at its cheapest, a log line is not free.** `internal/bench` carries `dunx` and
 `dunx-logging` as separate subjects for exactly this reason: with logging off dunx
 runs at 81-100% of raw `Bun.serve` depending on the scenario, and with it on, 40-45%.
 The remainder is `JSON.stringify` plus a `write` per request inside an
@@ -403,7 +403,7 @@ tick for nothing.
 | `query` and/or `params`, sync validator   | no promise at all - read and validated inline |
 | `body` declared                          | one promise link, for `req.json()`        |
 
-Measured in `tools/bench`: `plaintext` 89.5% -> 97.2% of raw `Bun.serve` when this
+Measured in `internal/bench`: `plaintext` 89.5% -> 97.2% of raw `Bun.serve` when this
 covered only schema-less routes, and `validate` 84.0% -> 92.3% once it was extended
 to routes that read input. A handler that *does* return a promise, or a validator
 that does, is adopted rather than wrapped - nothing about this is conditional on

@@ -13,6 +13,6 @@
     "README.md",
     ".claude/worktrees",
     "packages/openapi/src/ui-bundle.ts",
-    "packages/create-app/templates"
+    "tools/create-app/templates"
   ]
 }

@@ -11,17 +11,35 @@ import { Glob } from 'bun';
  * npm **removed the bin entry entirely**, which would have published a CLI
  * package with no command.
  */
+/**
+ * Every published manifest, from **both** parents: `packages/` for the framework
+ * and `tools/` for the CLIs.
+ *
+ * Scanning only `packages/` was right until `@dunx/create-app` and `@dunx/mcp`
+ * moved, at which point the two packages most likely to have a `bin` quietly
+ * stopped being checked for one. `dir` is carried so the LICENSE assertion below
+ * looks beside the manifest rather than at a guessed path.
+ */
 const manifests = async (): Promise<
-  { name: string; json: Record<string, unknown> }[]
+  { name: string; dir: string; json: Record<string, unknown> }[]
 > => {
-  const root = new URL('../packages', import.meta.url).pathname;
-  const found: { name: string; json: Record<string, unknown> }[] = [];
-  for await (const rel of new Glob('*/package.json').scan({ cwd: root })) {
-    const json = (await Bun.file(`${root}/${rel}`).json()) as Record<
-      string,
-      unknown
-    >;
-    found.push({ name: String(json['name']), json });
+  const repo = new URL('..', import.meta.url).pathname;
+  const found: { name: string; dir: string; json: Record<string, unknown> }[] =
+    [];
+  for (const parent of ['packages', 'tools']) {
+    const root = `${repo}${parent}`;
+    for await (const rel of new Glob('*/package.json').scan({ cwd: root })) {
+      const json = (await Bun.file(`${root}/${rel}`).json()) as Record<
+        string,
+        unknown
+      >;
+      if (json['private'] === true) continue;
+      found.push({
+        name: String(json['name']),
+        dir: `${root}/${rel.slice(0, -'/package.json'.length)}`,
+        json,
+      });
+    }
   }
   return found.sort((a, b) => a.name.localeCompare(b.name));
 };
@@ -69,9 +87,8 @@ describe('published manifests survive npm publish unaltered', () => {
     const root = new URL('..', import.meta.url).pathname;
     const licence = await Bun.file(`${root}/LICENSE`).text();
 
-    for (const { name } of await manifests()) {
-      const dir = name.replace('@dunx/', '');
-      const shipped = await Bun.file(`${root}/packages/${dir}/LICENSE`).text();
+    for (const { name, dir } of await manifests()) {
+      const shipped = await Bun.file(`${dir}/LICENSE`).text();
       // `files` lists LICENSE, so a package missing or diverging from it would
       // publish with no licence text at all.
       expect(`${name}: ${shipped === licence}`).toBe(`${name}: true`);

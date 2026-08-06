@@ -2,10 +2,10 @@
 
 How subjects are made comparable, what the harness refuses to do, and why a result that cannot embarrass us is not a measurement.
 
-## Benchmark harness (`tools/bench`)
+## Benchmark harness (`internal/bench`)
 
 Full methodology, subject list and results table:
-[`tools/bench/README.md`](../../tools/bench/README.md). Recorded here are the decisions
+[`internal/bench/README.md`](../../internal/bench/README.md). Recorded here are the decisions
 and the measurements behind them.
 
 **The first thing the harness found was a regression dunx had shipped to itself.**

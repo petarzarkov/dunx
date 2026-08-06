@@ -2,9 +2,9 @@
 
 Reading the body costs about three times as much as validating it. Measured, with the harness that attributes it.
 
-## The cost of request validation (`tools/bench` validation harness)
+## The cost of request validation (`internal/bench` validation harness)
 
-`bun run validation` in `tools/bench` is a second harness, separate from
+`bun run validation` in `internal/bench` is a second harness, separate from
 `bun run start`, because the main suite deliberately cannot answer two questions: it
 holds the validator constant at zod so `validate` minus `json` reads as one
 framework's plumbing, which folds **the absolute cost of parsing and validating**

@@ -12,7 +12,7 @@ import { dirname, resolve } from 'node:path';
  *
  * Only relative targets are checked. An `http(s)` link is somebody else's uptime,
  * and a bare `#anchor` inside one document is checked on the site side, by
- * `tools/docs/src/links.test.tsx`, which knows what headings actually rendered.
+ * `internal/docs/src/links.test.tsx`, which knows what headings actually rendered.
  */
 const tracked = (): readonly string[] =>
   [...new Bun.Glob('**/*.md').scanSync({ cwd: process.cwd() })]

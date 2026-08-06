@@ -1,6 +1,6 @@
 # The MCP server (`@dunx/mcp`)
 
-**Shipped as `packages/mcp`.** Six read-only tools: `dunx_overview`, `dunx_routes`,
+**Shipped as `tools/mcp`.** Six read-only tools: `dunx_overview`, `dunx_routes`,
 `dunx_providers`, `dunx_gateways`, `dunx_modules`, `dunx_openapi`. What follows is the
 reasoning that produced it, kept because the decisions are still the load-bearing
 ones; the answers to the four questions it opened are recorded at the bottom.
@@ -25,7 +25,7 @@ already structured, it is just not reachable without booting the app:
   what it depends on, and which module bound it - which is exactly what a
   missing-binding error makes someone reconstruct by hand.
 - **The OpenAPI document.** Already derived from the same zod schemas.
-- **The measurements.** `tools/bench/results/latest.json` is committed and
+- **The measurements.** `internal/bench/results/latest.json` is committed and
   structured.
 
 An agent that can call those gets accurate answers instead of inferring from source.
@@ -33,7 +33,7 @@ An agent that can call those gets accurate answers instead of inferring from sou
 ## The shape, and how it was worked out
 
 It was scoped as `tools/mcp`, private and never published like the other tools. It
-shipped as `packages/mcp` instead, because an agent working in a consumer's app needs
+shipped as `tools/mcp` instead, because an agent working in a consumer's app needs
 it installed there rather than in this repo. Four questions had to be answered first,
 in the order they gated each other:
 
@@ -75,7 +75,7 @@ in the order they gated each other:
 - The dependency rules still apply to anything published. An MCP server over
   `Bun.serve` and
   stdio needs no dependency; a framework SDK would need justifying.
-- If it stays in `tools/`, it may depend on anything - that is what `tools/bench`
+- If it stays in `tools/`, it may depend on anything - that is what `internal/bench`
   depending on express is allowed for.
 
 ## How the four questions resolved
@@ -118,6 +118,6 @@ in the order they gated each other:
    Schema is zod-specific work `@dunx/openapi` already does, and a second, worse
    generator here would be the "never invent what a mature library solves" failure.
 
-   **The benchmark results are still out.** `tools/bench/results/latest.json`
+   **The benchmark results are still out.** `internal/bench/results/latest.json`
    describes this repo, not the app being read, so a tool exposing it would answer a
    question nobody holding a dunx app is asking.

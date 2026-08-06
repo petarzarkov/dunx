@@ -16,11 +16,11 @@ lands in a single `coverage/lcov.info`; running it per package overwrites that
 file with one package's data.
 
 `scripts/coverage-report.ts` then turns the lcov into two things, both **inside
-`tools/docs`** - the site is the Pages root, coverage is a page in it:
+`internal/docs`** - the site is the Pages root, coverage is a page in it:
 
-- `tools/docs/src/generated/coverage.json` - the model the Coverage page
+- `internal/docs/src/generated/coverage.json` - the model the Coverage page
   renders (per-package breakdown, uncovered line ranges, packages with no tests)
-- `tools/docs/public/badges/coverage.svg` plus a `coverage-<package>.svg` each,
+- `internal/docs/public/badges/coverage.svg` plus a `coverage-<package>.svg` each,
   which the build copies verbatim to `/badges/` in the built site
 
 Zero dependencies. It writes no HTML of its own any more; `bun run docs:build`
@@ -47,6 +47,6 @@ column to add.
 | Coverage page says "no coverage data" | The site was built before `gen:cov` ran. `bun run test:cov && bun run docs:build`.                                                                                           |
 | Badges 404 but the site loads         | They are at `/badges/coverage-<pkg>.svg` now, not the Pages root. Check `scripts/update-readme.ts`'s `DOCS_SITE`.                                                            |
 
-`ci.yml` publishes `tools/docs/dist/` to Pages from a separate `pages` job on
+`ci.yml` publishes `internal/docs/dist/` to Pages from a separate `pages` job on
 `main`: <https://petarzarkov.github.io/dunx>, with the report at
 <https://petarzarkov.github.io/dunx/#/coverage>.

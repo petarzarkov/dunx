@@ -6,23 +6,24 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import type { CoverageModel } from '../tools/docs/scripts/extract/model.js';
+import type { CoverageModel } from '../internal/docs/scripts/extract/model.js';
 
 /**
  * Turns the root `bun test --coverage` lcov into the model the documentation
  * site renders, plus the README's badge SVGs.
  *
  * The report used to be a standalone HTML page published as the GitHub Pages
- * root. `tools/docs` is the Pages root now, so this writes *into* it: the model
+ * root. `internal/docs` is the Pages root now, so this writes *into* it: the model
  * to `src/generated/`, the badges to `public/badges/` where the build copies them
  * verbatim into the deployed site.
  */
 
 const ROOT_DIR = resolve(import.meta.dir, '..');
-const PACKAGES_DIR = join(ROOT_DIR, 'packages');
+/** Every parent that holds a published workspace, so a tool gets a badge too. */
+const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 const COVERAGE_DIR = join(ROOT_DIR, 'coverage');
 const LCOV_PATH = join(COVERAGE_DIR, 'lcov.info');
-const DOCS_DIR = join(ROOT_DIR, 'tools', 'docs');
+const DOCS_DIR = join(ROOT_DIR, 'internal', 'docs');
 const MODEL_DIR = join(DOCS_DIR, 'src', 'generated');
 const BADGE_DIR = join(DOCS_DIR, 'public', 'badges');
 
@@ -163,14 +164,17 @@ const groupByPackage = (files: FileCoverage[]): PackageCoverage[] => {
 };
 
 const findUntestedPackages = (covered: Set<string>): string[] =>
-  readdirSync(PACKAGES_DIR, { withFileTypes: true })
-    .filter(
-      (entry) =>
-        entry.isDirectory() &&
-        !covered.has(entry.name) &&
-        existsSync(join(PACKAGES_DIR, entry.name, 'package.json')),
-    )
-    .map((entry) => entry.name);
+  PUBLISHED_DIRS.flatMap((parent) => {
+    const parentDir = join(ROOT_DIR, parent);
+    return readdirSync(parentDir, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          !covered.has(entry.name) &&
+          existsSync(join(parentDir, entry.name, 'package.json')),
+      )
+      .map((entry) => entry.name);
+  });
 
 /** `null` means the package has no test files at all, which is not the same as 0%. */
 const badge = (value: number | null): string => {

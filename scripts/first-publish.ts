@@ -39,8 +39,8 @@ import { semver } from 'bun';
  * breaks lockstep, and its `workspace:*` peers rewrite to `^0.1.0`, a range that
  * matches nothing on npm. `DUNX_VERSION` still overrides.
  */
-const sharedVersion = (packagesDir: string): string =>
-  [...readWorkspaceVersions(packagesDir).values()].reduce(
+const sharedVersion = (...packagesDirs: readonly string[]): string =>
+  [...readWorkspaceVersions(...packagesDirs).values()].reduce(
     (highest, version) =>
       semver.order(version, highest) === 1 ? version : highest,
     '0.1.0',
@@ -48,22 +48,29 @@ const sharedVersion = (packagesDir: string): string =>
 const DRY = process.env['DRY'] === 'true';
 const NPM = 'bunx npm@11.10.1';
 
-/** Dependency order: a package is published after everything it references. */
+/**
+ * Dependency order: a package is published after everything it references.
+ *
+ * Each entry is `<parent>/<dir>`, because published workspaces live under two
+ * parents: `packages/` for the framework and `tools/` for the CLIs.
+ */
 const ORDER = [
-  'core',
-  'transform',
-  'create-app',
-  'http',
-  'infra',
-  'openapi',
-  'auth',
-  'testing',
-  'mcp',
+  'packages/core',
+  'packages/transform',
+  'tools/create-app',
+  'packages/http',
+  'packages/infra',
+  'packages/openapi',
+  'packages/auth',
+  'packages/testing',
+  'tools/mcp',
 ];
 
-const root = new URL('../packages', import.meta.url).pathname;
+const root = new URL('..', import.meta.url).pathname;
 
-const VERSION = process.env['DUNX_VERSION'] ?? sharedVersion(root);
+const VERSION =
+  process.env['DUNX_VERSION'] ??
+  sharedVersion(join(root, 'packages'), join(root, 'tools'));
 
 type Manifest = { name: string; version: string } & Record<string, unknown>;
 

@@ -17,8 +17,8 @@
  */
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { featureNames } from '../packages/create-app/src/features.js';
-import { scaffold } from '../packages/create-app/src/scaffold.js';
+import { featureNames } from '../tools/create-app/src/features.js';
+import { scaffold } from '../tools/create-app/src/scaffold.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const HOST = join(ROOT, 'examples/full');

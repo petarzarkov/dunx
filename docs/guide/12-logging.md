@@ -118,7 +118,7 @@ worth the dependency.
 `ConsoleLogger` **batches `info` and below into one write per event-loop turn.**
 
 This landed because a `console.log` per entry is a `write(2)` per entry, and
-measured on `bun run logging` in `tools/bench`, that was the largest single
+measured on `bun run logging` in `internal/bench`, that was the largest single
 component of request logging: **1.84 µs**, more than the `JSON.stringify` that
 produced the line. Concatenating into one string and writing it once per
 event-loop turn costs **0.27 µs**.
@@ -458,7 +458,7 @@ interface RequestLoggingOptions {
 **Both body options default to `false`, and that default is a performance
 decision.** Reading a body means `req.clone().text()`: a second copy of every
 payload, buffered and parsed, on the hot path. Measured on the `validate` scenario
-in `tools/bench`, turning both on costs roughly **two thirds of the throughput**.
+in `internal/bench`, turning both on costs roughly **two thirds of the throughput**.
 It is also the field most likely to contain a password. Turn them on in
 development, where seeing the payload is the point.
 
@@ -514,7 +514,7 @@ then gets the response header and no scope.
 
 ## What it costs
 
-This repo publishes its losses. From `tools/bench/README.md`, `GET /json`, AMD
+This repo publishes its losses. From `internal/bench/README.md`, `GET /json`, AMD
 Ryzen 9 5950X, Bun 1.3.14, 64 connections:
 
 | Subject                        | req/s (median) | p50 ms | vs `Bun.serve` |

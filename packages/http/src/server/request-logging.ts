@@ -19,7 +19,7 @@ export interface RequestLoggingOptions {
    *
    * Reading it means `req.clone().text()` - a second copy of every payload,
    * buffered and parsed, on the hot path. Measured on the `validate` scenario in
-   * `tools/bench`, turning both body options on costs roughly two thirds of the
+   * `internal/bench`, turning both body options on costs roughly two thirds of the
    * throughput. It is also the field most likely to contain a password.
    *
    * Turn it on in development, where seeing the payload is the point.

@@ -144,7 +144,7 @@ argument for swapping in `@dunx/infra/logger`, which is one import.
 
 #### Entries at `info` and below are batched
 
-One `console.log` per entry is one `write(2)` per entry, and on `tools/bench`'s
+One `console.log` per entry is one `write(2)` per entry, and on `internal/bench`'s
 logging harness that was the single largest component of request logging - dearer
 than the `JSON.stringify` that produced the line. `ConsoleLogger` concatenates those
 entries and writes them **once per event-loop turn**, which takes the write below

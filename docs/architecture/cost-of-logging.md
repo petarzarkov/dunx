@@ -2,7 +2,7 @@
 
 Where the 5.38 microseconds go, why `write(2)` per entry was the largest single cost, and what batching trades away.
 
-## The cost of request logging (`tools/bench` logging harness)
+## The cost of request logging (`internal/bench` logging harness)
 
 `bun run logging` is the third harness, and it exists because `dunx-logging` in the
 main suite was **one number for at least eight different things**. It sat at 40-45%

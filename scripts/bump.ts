@@ -117,6 +117,30 @@ export const determineBumpType = (): 'major' | 'minor' | 'patch' => {
   }
 };
 
+/**
+ * Which published workspaces a list of changed files touches.
+ *
+ * Split out from the git call so the pattern is testable without a repository -
+ * it is the only thing here that can silently skip a release, and it did: pinned
+ * to `packages/` alone, a change under `tools/create-app/src` matched nothing and
+ * the run reported "no src changes detected".
+ *
+ * Both published parents count, and only the paths that can change what a consumer
+ * installs: `src/`, the manifest and the README. A test or a doc elsewhere in the
+ * workspace is deliberately not a release.
+ */
+export const changedSrcPackages = (files: readonly string[]): Set<string> => {
+  const dirs = new Set<string>();
+  for (const file of files) {
+    const match =
+      /^(?:packages|tools)\/([^/]+)\/(src\/|frontend\/src\/|package\.json|README\.md)/.exec(
+        file,
+      );
+    if (match?.[1]) dirs.add(match[1]);
+  }
+  return dirs;
+};
+
 /** `null` means "could not tell", which callers must read as "all of them". */
 export const getChangedSrcPackages = (): Set<string> | null => {
   try {
@@ -128,14 +152,7 @@ export const getChangedSrcPackages = (): Set<string> | null => {
 
     if (!out) return null;
 
-    const dirs = new Set<string>();
-    for (const file of out.split('\n')) {
-      const match = file.match(
-        /^packages\/([^/]+)\/(src\/|frontend\/src\/|package\.json|README\.md)/,
-      );
-      if (match && match[1]) dirs.add(match[1]);
-    }
-    return dirs;
+    return changedSrcPackages(out.split('\n'));
   } catch {
     return null;
   }

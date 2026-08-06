@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { bumpVersion } from './bump.js';
+import { bumpVersion, changedSrcPackages } from './bump.js';
 
 describe('bumpVersion()', () => {
   it('bumps a version whose components are all non-zero', () => {
@@ -34,5 +34,47 @@ describe('bumpVersion()', () => {
         `Invalid version: ${invalid}`,
       );
     }
+  });
+});
+
+describe('changedSrcPackages', () => {
+  /*
+   * The restructure that moved `@dunx/create-app` and `@dunx/mcp` out of
+   * `packages/` and into `tools/` left this pattern pinned to `packages/`, so a
+   * change to either reported "no src changes detected" and the release was
+   * skipped without failing. Nothing caught it, because the matcher was inline in
+   * a function that shells out to git.
+   */
+  it('matches both published parents', () => {
+    expect(
+      changedSrcPackages([
+        'packages/core/src/di/app.ts',
+        'tools/create-app/src/scaffold.ts',
+        'tools/mcp/package.json',
+      ]),
+    ).toEqual(new Set(['core', 'create-app', 'mcp']));
+  });
+
+  it('ignores the private parents entirely', () => {
+    expect(
+      changedSrcPackages([
+        'internal/docs/src/App.tsx',
+        'internal/ui/src/theme.ts',
+        'examples/full/src/main.ts',
+      ]),
+    ).toEqual(new Set());
+  });
+
+  /* A release is what a consumer installs, so a test or a doc is not one. */
+  it('only counts src, the manifest and the README', () => {
+    expect(
+      changedSrcPackages([
+        'packages/core/src/index.ts',
+        'packages/core/README.md',
+        'packages/http/package.json',
+        'packages/auth/tsconfig.json',
+        'docs/ROADMAP.md',
+      ]),
+    ).toEqual(new Set(['core', 'http']));
   });
 });

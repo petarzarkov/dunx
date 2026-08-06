@@ -179,7 +179,7 @@ Real but missing from `bun-types`: `psubscribe`, `punsubscribe`, `pubsub`, `scri
 
 ### `req.json()` is the cost of a validated request, and there is no native alternative
 
-Measured on `tools/bench`'s validation harness (`bun run validation`), four raw
+Measured on `internal/bench`'s validation harness (`bun run validation`), four raw
 `Bun.serve` routes answering identical bytes, one adding one step to the last:
 
 | Step                                     | µs/req | adds     |

@@ -408,7 +408,7 @@ with no promise allocated at all. In the benchmark suite that moved the `validat
 scenario from 84.0% of raw `Bun.serve` to over 92%, and put dunx ahead of Elysia
 on the one scenario where it used to be level.
 
-The full harness, its caveats and how to rerun it are in `tools/bench/README.md`.
+The full harness, its caveats and how to rerun it are in `internal/bench/README.md`.
 
 ## Sharp edges
 
