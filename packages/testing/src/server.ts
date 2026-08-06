@@ -122,9 +122,9 @@ const warnAboutGlobals = (
  * await server.close();
  * ```
  *
- * Request logging is **off** unless asked for: it is on by default in production
- * for good reasons, none of which apply to a suite that would print one JSON line
- * per assertion.
+ * Request logging and boot logging are both **off** unless asked for: they are on by
+ * default in production for good reasons, none of which apply to a suite that would
+ * print one JSON line per assertion and one route table per file.
  *
  * **An `HttpOptions` field not passed is absent, not inherited from production.**
  * `middleware` (where global guards live) and `onError` are the two that change
@@ -136,13 +136,17 @@ const warnAboutGlobals = (
 export const createTestServer = async (
   options: TestServerOptions,
 ): Promise<TestServer> => {
-  const { modules, overrides, prefix, requestLogging, ...http } = options;
+  const { modules, overrides, prefix, requestLogging, bootLogging, ...http } =
+    options;
 
   const root = testRoot(modules);
   const app = await HttpFactory.create(root, {
     ...http,
     ...appOptions(overrides),
     requestLogging: requestLogging ?? false,
+    // Off for the same reason: a suite that boots a server per file does not want a
+    // route table per file. A suite asserting on the table asks for it.
+    bootLogging: bootLogging ?? false,
     port: 0,
   });
   if (http.middleware === undefined)

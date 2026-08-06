@@ -300,6 +300,50 @@ this logger and flush before the process goes away. `true` takes the defaults:
 fatal for an uncaught exception, then `process.exit(1)`. Pass an options object to
 tune it. Worth having in a service meant to stay up.
 
+## What is logged at boot
+
+Two things, without being asked, and both because the alternative was silence.
+
+**The served table, once, at `listen()`.** One `info` entry naming every route on its
+final path and every gateway with the messages it claims:
+
+```json
+{
+  "level": "info",
+  "message": "Serving 32 route(s) and 1 gateway(s)",
+  "routes": ["GET /api/users", "POST /api/users", "..."],
+  "gateways": [
+    { "path": "/ws", "gateway": "EventsGateway", "events": ["chatMessage"] }
+  ]
+}
+```
+
+This is the answer to "is my route registered", and a service that logs nothing at
+boot cannot answer it from production. Nest emits a line per controller and a line
+per route to say the same thing; one structured entry is the same content in the
+shape a collector wants, and it is what `WorkerFactory` already does for the
+consuming side with `Consuming N job(s) on M queue(s)`.
+
+It is at `listen()` rather than `create()` because `setGlobalPrefix` runs in between,
+and a table listing unprefixed paths would name routes that do not exist.
+
+```ts
+HttpFactory.create(AppModule, { bootLogging: false }); // off
+```
+
+Separate from `requestLogging` rather than sharing its switch: one is per request and
+one is per process, so silencing the noisy one is not a reason to lose the quiet one.
+`@dunx/testing` defaults it off, for the same reason it defaults request logging off:
+a suite that boots a server per file does not want a route table per file.
+
+**Scope warnings, at `warn`, from `AppFactory.create`.** A module that declares what
+an import already exports to it, or imports one token from two modules that disagree,
+is legal and warned. They used to be surfaced on `app.warnings` and logged by nobody,
+on the reasoning that core had no logger - it has one, `Logger` is always bound, and
+the reasoning failed its first real test: the reference app never read the property,
+so a shadowed binding would have been silent in the app most likely to hit one. The
+list is still public for an app that would rather fail boot on it.
+
 ## Request logging
 
 `@dunx/http` installs `RequestLoggingMiddleware` **by default**, outermost in the

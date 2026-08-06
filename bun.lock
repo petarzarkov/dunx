@@ -129,7 +129,7 @@
       "name": "@dunx/infra",
       "version": "1.0.1",
       "dependencies": {
-        "@arkv/logger": "^0.8.2",
+        "@arkv/logger": "^0.9.0",
       },
       "devDependencies": {
         "@dunx/core": "workspace:*",
@@ -304,7 +304,7 @@
 
     "@arkv/colors": ["@arkv/colors@0.7.5", "", {}, "sha512-qXkbfT+tb273kXDvps22p9nOl+Z2jcDwc/tAmQSNr9xOqZMlWeaAOm+oU+nx3DUFVuE3+mkX3Tq4tk/G0cCbBw=="],
 
-    "@arkv/logger": ["@arkv/logger@0.8.2", "", { "dependencies": { "@arkv/colors": "^0.7.5", "@arkv/shared": "^0.8.0" } }, "sha512-/ITe1LfhTniV2Jw6vdqNaghnT1vphlMD+XqqID9SKRxoTU+QPgqzOPGvcO2gNjMGKVU/Y36HN2P8IHbqrtoweA=="],
+    "@arkv/logger": ["@arkv/logger@0.9.0", "", { "dependencies": { "@arkv/colors": "^0.7.5", "@arkv/shared": "^0.8.0" } }, "sha512-EQhg8xMk35z1q2SI6aQLnHQSTPnuvlMXVRYFOPsjSD7tjqrwZfpWVQfXLWsV88cTYML7YSq3xPKDfMH36UwZ/A=="],
 
     "@arkv/shared": ["@arkv/shared@0.8.0", "", {}, "sha512-c9YTix/b35KTEmIl+qlyjm74SzqWEXXcvwr4rqhYPWr7ihirdSaydOFFNFQSyQYgefVOc4JEKdpb4gOhSsKcrA=="],
 

@@ -31,12 +31,42 @@ done rather than one:
   the web, so it cannot use `Bun.*`; its own `@arkv/colors` already exports
   `isColorSupported()` and nothing in the logger calls it. That proposal, with the
   exact call site and a second defect it turned up (`FORCE_COLOR=0` is read as
-  presence, so it forces colour _on_), is in `docs/roadmap/arkv-integrations.md`.
+  presence, so it forces colour _on_), shipped upstream in `@arkv/logger` 0.8.2.
 
 The two compose: once the upstream gate lands, dunx's default is still the right one
 and nothing here has to be undone. `packages/infra/src/logger/module.test.ts` asserts
 the entry is coloured **exactly when** `Bun.enableANSIColors` is true, which holds at
 a terminal and in a pipe and fails on the old default.
+
+### The second colour defect, also upstream, also fixed there
+
+Reported from `dunx-template`'s own first two lines of output: the opening `{` of a
+warning came out red, and the closing `}` took whatever colour the last value had.
+
+`@arkv/logger`'s colouriser was a regex over the serialised JSON,
+`/(".*?":\s*)(.*?)(?=,|\n|$)/g`, and **a regex cannot tokenise JSON**. Two consequences,
+both visible in one line:
+
+- A comma inside a string value ended the value early. The rest of the message was
+  emitted **bare**, and the `","appId":` that followed was then matched as if it were
+  a key.
+- The lookahead has no `}`, so the last value's colour span ran to end of line and
+  swallowed the closing brace.
+
+The red `{` is the part worth recording, because the obvious explanation is wrong. It
+is not the terminal: **Bun wraps `console.error` output in red itself**, emitting
+`\u001b[0m\u001b[31m` before the line and `\u001b[0m` after. Every token the formatter
+colours overrides that wrapper; every character it leaves bare keeps it. So the fix is
+not only to tokenise but to colour the punctuation too, which nothing did before.
+
+The fix is a scanner over `safeStringify`'s output rather than a re-serialisation, so
+escapes are only ever _inserted_ and the stripped bytes stay byte-identical - which is
+what keeps a pretty line parseable, and gets every `JSON.stringify` edge case
+(dropped `undefined`, `toJSON`, non-finite numbers, the circular fallback) for free.
+
+**Upstream, in `~/repos/arkv/packages/logger/src/format.ts`,** per Rule 1: it needs no
+`Bun.*` API, it is a defect every `@arkv/logger` consumer has, and a local wrapper
+would have forked a package the owner maintains.
 
 ## What else of `@arkv` dunx uses, and what it does not
 

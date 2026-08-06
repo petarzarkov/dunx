@@ -60,6 +60,17 @@ export interface HttpOptions extends AppOptions {
    */
   readonly requestLogging?: boolean | RequestLoggingOptions;
   /**
+   * One entry at `listen()` naming every route and gateway the process serves. On
+   * by default, because it is the answer to "is my route registered" and a service
+   * that logs nothing at boot cannot answer it from production.
+   *
+   * `false` removes it. Separate from `requestLogging` rather than sharing its
+   * switch: one is per request and one is per process, and silencing the noisy one
+   * is not a reason to lose the quiet one. `@dunx/testing` defaults it off, for the
+   * same reason it defaults request logging off.
+   */
+  readonly bootLogging?: boolean;
+  /**
    * Bun's `websocket` options, plus where a throwing handler goes. Server-wide, so
    * they live here next to `middleware` rather than on a module: gateways
    * themselves are declared in `@Module({ providers })`.
@@ -154,6 +165,7 @@ export class HttpApplication implements HttpApp {
   readonly #relayChannel: string | undefined;
   readonly #relayResubscribe: RelayOptions['resubscribe'];
   readonly #notFound: 'guarded' | 'public';
+  readonly #bootLogging: boolean;
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -194,6 +206,7 @@ export class HttpApplication implements HttpApp {
     this.#relayChannel = options.relayChannel;
     this.#relayResubscribe = options.relayResubscribe;
     this.#notFound = options.notFound ?? 'guarded';
+    this.#bootLogging = options.bootLogging ?? true;
     this.gatewayPaths = websocket?.paths ?? [];
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
@@ -326,7 +339,50 @@ export class HttpApplication implements HttpApp {
         },
       });
     }
+    this.#logServed(prefixed, ws);
     return this.#server.url.href;
+  }
+
+  /**
+   * What the process serves, in one entry, once the table is final.
+   *
+   * Nest emits a line per controller and a line per route through `RoutesResolver`
+   * and `RouterExplorer`, plus one per websocket subscription. That is the useful
+   * information and the wrong shape: 30 lines a collector reads as 30 records, for
+   * one fact. This is the same content as one structured entry, which is what
+   * `WorkerFactory`'s "Consuming N job(s) on M queue(s)" already does for the
+   * consuming side.
+   *
+   * At `info`, deliberately. It is one line per process, it is the answer to "is my
+   * route registered", and a service that logs nothing at boot cannot answer that
+   * from production. `logLevel: 'warn'` silences it with everything else.
+   *
+   * Here rather than at `create()` because `setGlobalPrefix` runs in between, and a
+   * table listing unprefixed paths would name routes that do not exist.
+   */
+  #logServed(
+    routes: readonly DiscoveredRoute[],
+    ws: WebSocketRuntime | undefined,
+  ): void {
+    if (!this.#bootLogging) return;
+    const gateways = ws?.gateways ?? [];
+    const subject = [
+      `${routes.length} route(s)`,
+      ...(gateways.length === 0 ? [] : [`${gateways.length} gateway(s)`]),
+    ].join(' and ');
+
+    this.#app.get(Logger).info(`Serving ${subject}`, {
+      routes: routes.map((route) => `${route.method} ${route.path}`),
+      ...(gateways.length === 0
+        ? {}
+        : {
+            gateways: gateways.map((gateway) => ({
+              path: gateway.path,
+              gateway: gateway.name,
+              events: gateway.events,
+            })),
+          }),
+    });
   }
 
   // Not delegated to the core app: the server has to stop before providers tear

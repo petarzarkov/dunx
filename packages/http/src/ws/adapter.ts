@@ -38,6 +38,20 @@ export interface WebSocketRuntime {
   /** Merged into the HTTP route table by `listen()`, keyed by gateway path. */
   readonly routes: ReadonlyMap<string, UpgradeHandler>;
   readonly paths: readonly string[];
+  /**
+   * What `listen()` reports at boot: which gateway serves each path and which named
+   * messages it claims. Nest logs one line per subscription; this is the same
+   * information in one structured field, which is the shape the queue worker's
+   * "Consuming N job(s)" entry already set.
+   */
+  readonly gateways: readonly GatewaySummary[];
+}
+
+export interface GatewaySummary {
+  readonly name: string;
+  readonly path: string;
+  /** `@OnMessage('name')` events. A raw catch-all has no name to report. */
+  readonly events: readonly string[];
 }
 
 const defaultOnError: SocketErrorHandler = (error, socket) => {
@@ -205,5 +219,10 @@ export const buildWebSocket = (
       gateways.map((gateway) => [gateway.path, upgradeHandler(gateway)]),
     ),
     paths: [...byPath.keys()],
+    gateways: gateways.map((gateway) => ({
+      name: gateway.name,
+      path: gateway.path,
+      events: [...gateway.events.keys()],
+    })),
   };
 };

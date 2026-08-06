@@ -189,6 +189,9 @@ describe('request lifecycle', () => {
     const trail: string[] = [];
     const app = await build(trail, MethodGuard);
     const url = await app.listen(0);
+    // `listen()` logs the served route table, which this logger records too. The
+    // subject here is the request, so the trail starts at the request.
+    trail.length = 0;
 
     const response = await fetch(`${url}reports`);
     expect(response.status).toBe(200);
@@ -218,6 +221,7 @@ describe('request lifecycle', () => {
     const trail: string[] = [];
     const app = await build(trail, Refusing);
     const url = await app.listen(0);
+    trail.length = 0;
 
     const response = await fetch(`${url}reports`);
     expect(response.status).toBe(HttpStatusCode.FORBIDDEN);

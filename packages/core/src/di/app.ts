@@ -50,10 +50,15 @@ export interface App {
   readonly closed: Promise<void>;
   /**
    * Shadowing and ambiguous-import notices from the scope graph, in boot order.
+   * Empty on a graph with no ambiguity.
    *
-   * Surfaced rather than logged: `@dunx/core` has no logger of its own to write them
-   * with, and the caller that does - `HttpFactory`, or an app's bootstrap - knows
-   * which level they belong at. Empty on a graph with no ambiguity.
+   * **Also logged, at `warn`, by `create()`.** Surfacing them on a property and
+   * leaving the caller to print them was the original design, on the reasoning that
+   * core had no logger. It does - `Logger` is one of the two always-bound contracts -
+   * and the reasoning failed its first real test: `dunx-template` never read this
+   * property, so a shadowed binding would have been silent in the one app most likely
+   * to hit one. These exist so nobody loses hours; a property nobody reads cannot do
+   * that. The list stays public for an app that wants to fail boot on it instead.
    */
   readonly warnings: readonly string[];
   /**
@@ -252,6 +257,10 @@ export class AppFactory {
       if (hasOnInit(instance)) await instance.onInit();
     }
 
-    return new Application(injector, graph.warnings);
+    const app = new Application(injector, graph.warnings);
+    // After onInit, so an app that bound its own Logger writes these through it
+    // rather than through the default that was about to be replaced.
+    for (const warning of graph.warnings) app.get(Logger).warn(warning);
+    return app;
   }
 }
