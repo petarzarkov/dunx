@@ -26,6 +26,11 @@ export const createApp = async (): Promise<HttpApp> => {
       root: AppModule,
     }),
     {
+      // The dashboard polls four endpoints every five seconds and bull-board
+      // pulls a dozen assets, so logging its subtree buries everything else the
+      // service does. It is an operations page looking at the logs, not a thing
+      // the logs are about.
+      requestLogging: { ignorePrefix: ['/api/_dunx'] },
       websocket: { idleTimeout: 30 },
       // Multi-node websocket fan-out, on `Bun.RedisClient` and therefore on no
       // dependency at all. No url, so it resolves the same chain `RedisModule`

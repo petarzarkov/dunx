@@ -104,6 +104,18 @@ export {
   type ServeRoutes,
 } from './server/routes.js';
 export type { AppSettings } from './server/settings.js';
+// Static files, on `Bun.file` - which already streams, sets content-type, answers
+// a Range request and does it with sendfile(2). What is here is the traversal
+// check and the cache policy, which is all Nest's `serve-static` adds that Bun
+// does not already do. Registered by the app with `app.use(StaticFiles)`, never
+// by the module: position in the chain is the app's decision.
+export { StaticFiles } from './static/files.js';
+export { StaticModule } from './static/module.js';
+export {
+  normalizePrefix,
+  StaticOptions,
+  type StaticOptionsInit,
+} from './static/options.js';
 // One name, both meanings - the value for `HttpStatusCode.NOT_FOUND`, the type for
 // annotations. Exactly what an enum gives, without the enum.
 export { HttpStatusCode, type HttpStatusName } from './server/status.js';

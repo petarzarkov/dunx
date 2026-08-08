@@ -1,14 +1,16 @@
 import { useId } from 'react';
 
+import { ACCENT, ARCH, CROSS } from '../logo.js';
+
 /**
- * The mark is the wordmark's own last two letters: the `n` - an arch on two
- * legs - sheltering the `x`. Both cuts are drawn here rather than loaded from
- * `public/logo/`, because an `<img>` cannot inherit `currentColor`, and the
- * neutral stroke has to follow the colour scheme the header is painted in.
- * The geometry is byte-identical to those files; change one, change both.
+ * The in-page cut: the arch on `currentColor` so it follows the colour scheme the
+ * header is painted in, the cross on the accent gradient. An `<img>` could not do
+ * that, which is why the mark is drawn rather than loaded from a file.
+ *
+ * The geometry comes from `../logo.ts` - it used to be repeated here and in
+ * `public/logo/*.svg` with a comment asking whoever changed one to remember the
+ * other, which is not a mechanism.
  */
-const ARCH = 'M5.6 26.1V16.3a10.4 10.4 0 0 1 20.8 0v9.8';
-const CROSS = 'm11.4 13.1 9.2 9.2m0-9.2-9.2 9.2';
 
 /** `useId` returns delimiters that are not valid in a URL fragment. */
 const gradientId = (raw: string): string =>
@@ -16,9 +18,9 @@ const gradientId = (raw: string): string =>
 
 const Accent = ({ id }: { id: string }): React.JSX.Element => (
   <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stopColor="#22b8cf" />
-    <stop offset="0.5" stopColor="#4c6ef5" />
-    <stop offset="1" stopColor="#7950f2" />
+    <stop offset="0" stopColor={ACCENT.from} />
+    <stop offset="0.5" stopColor={ACCENT.via} />
+    <stop offset="1" stopColor={ACCENT.to} />
   </linearGradient>
 );
 

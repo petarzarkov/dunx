@@ -15,11 +15,15 @@ import { DashboardDemo } from './dashboard.demo.js';
  * `RedisConnection` satisfies `RedisProbe`. No adapter between them - `@dunx/dashboard`
  * depends on `@dunx/infra` not at all and restates both shapes structurally.
  *
- * `authorize` is a header check here because this example has no operator identity
- * to check against. In a real service it is the one line worth thinking about: it
- * gets the raw `Request` and runs **before** any guard, so it has to be
- * self-sufficient - asking better-auth directly rather than reading an
- * `AuthContext` a later middleware would have written.
+ * **There is deliberately no `authorize`**, so `bun start` opens the page with no
+ * header to set and the example is actually explorable. That is precisely what the
+ * package warns about at boot, and the warning is part of what this demonstrates:
+ * the page is routes plus config plus the provider graph on one screen, so a real
+ * service states an `authorize` either way rather than leaving it to a default.
+ *
+ * When you do write one, it gets the raw `Request` and runs **before** any guard,
+ * so it has to be self-sufficient - asking better-auth directly rather than reading
+ * an `AuthContext` a later middleware would have written.
  */
 @Module({
   imports: [
@@ -49,8 +53,6 @@ import { DashboardDemo } from './dashboard.demo.js';
         // including the database url and every auth secret - stays redacted.
         reveal: (key: string) => key === 'appName' || key === 'port',
         openApiPath: '/api/docs',
-        // authorize: (req) =>
-        //   req.headers.get('x-dashboard-key') === config.get('dashboardKey'),
       }),
       inject: [JobPublisher, RedisConnection, AppConfigService] as const,
     }),

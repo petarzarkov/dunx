@@ -93,7 +93,12 @@ export class DashboardMiddleware implements Middleware {
    * lets a process exit cleanly against an absent Redis.
    */
   #buildBoard(): Promise<Board> {
-    this.#board ??= buildBoard(this.#options, `${this.#options.path}/queues`);
+    // The favicon comes out of the same lazily-imported module as the page
+    // bundle, so bull-board wears the dunx mark without this file loading 400 KB
+    // to find out what it is.
+    this.#board ??= import('./ui.js').then(({ FAVICON }) =>
+      buildBoard(this.#options, `${this.#options.path}/queues`, FAVICON),
+    );
     return this.#board;
   }
 

@@ -116,9 +116,14 @@ describe('the docs page', () => {
    * React contains `.src=` in its own code - so the assertion moved from the
    * text to the *tags*, which is what actually decides whether a browser fetches.
    */
-  it('fetches nothing: no CDN, no src=, no <link>', () => {
+  it('fetches nothing: no CDN, no src=, no <link> that leaves the page', () => {
     expect(shell).not.toMatch(/\ssrc=/);
-    expect(shell).not.toMatch(/<link\b/);
+    // A `<link>` is allowed only for the favicon, and only as a `data:` URI -
+    // which is a tag the browser does not fetch. The guarantee is about network
+    // requests, not about the element.
+    for (const [, href] of shell.matchAll(/<link\b[^>]*href="([^"]*)"/g)) {
+      expect(href).toMatch(/^data:image\/svg\+xml,/);
+    }
     expect(shell).not.toMatch(
       /<(img|iframe|object|embed|source|track|video|audio)\b/,
     );
@@ -126,8 +131,9 @@ describe('the docs page', () => {
     // Counted by their closers - react-dom carries the literal `"<script>"` in
     // a string of its own, which the browser never sees as a tag.
     expect([...page.matchAll(/<\/script>/g)]).toHaveLength(2);
-    // The only href in the markup is the document this page describes.
-    expect([...shell.matchAll(/href="([^"]*)"/g)].map((m) => m[1])).toEqual([
+    // Every href is either the document this page describes or the inline icon.
+    const hrefs = [...shell.matchAll(/href="([^"]*)"/g)].map((m) => m[1] ?? '');
+    expect(hrefs.filter((href) => !href.startsWith('data:'))).toEqual([
       '/api/openapi.json',
     ]);
     // Nothing in the bundle's own CSS or code reaches off the origin either.

@@ -4,7 +4,6 @@ import {
   Anchor,
   Badge,
   Burger,
-  Container,
   Group,
   Loader,
   MantineProvider,
@@ -36,7 +35,12 @@ import { Overview } from './panels/Overview';
 import { Queues } from './panels/Queues';
 import { Routes } from './panels/Routes';
 import { usePoll, useOnce } from './poll';
-import { hrefFor, useRoute, type Panel as PanelName } from './router';
+import {
+  hrefFor,
+  isPlainClick,
+  useRoute,
+  type Panel as PanelName,
+} from './router';
 
 const NAV: readonly {
   panel: PanelName;
@@ -59,7 +63,7 @@ const NAV: readonly {
  */
 export const App = ({ meta }: { meta: Meta }): JSX.Element => {
   const api = useMemo(() => new Api(meta.basePath), [meta.basePath]);
-  const route = useRoute();
+  const { panel, navigate } = useRoute(meta.basePath);
   const [opened, { toggle, close }] = useDisclosure(false);
   const [live, setLive] = useState(meta.pollMs > 0);
   const interval = live ? meta.pollMs : 0;
@@ -91,7 +95,7 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
     }
     if (snapshot.data === undefined) return <Loader />;
 
-    switch (route.panel) {
+    switch (panel) {
       case 'routes':
         return (
           <Routes
@@ -145,11 +149,22 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
                 hiddenFrom="sm"
                 size="sm"
               />
-              <Group gap={10} wrap="nowrap" align="center">
-                <LogoMark size={26} />
-                <Wordmark height={19} />
-                <VisuallyHidden>dunx</VisuallyHidden>
-              </Group>
+              <Anchor
+                href={hrefFor('overview', meta.basePath)}
+                underline="never"
+                c="inherit"
+                onClick={(event) => {
+                  if (!isPlainClick(event)) return;
+                  event.preventDefault();
+                  navigate('overview');
+                }}
+              >
+                <Group gap={10} wrap="nowrap" align="center">
+                  <LogoMark size={26} />
+                  <Wordmark height={19} />
+                  <VisuallyHidden>dunx</VisuallyHidden>
+                </Group>
+              </Anchor>
               <Badge variant="light" color="gray">
                 {meta.title}
               </Badge>
@@ -203,13 +218,28 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
             <NavLink
               key={entry.panel}
               component="a"
-              href={hrefFor(entry.panel)}
+              // A real href, so middle-click and open-in-new-tab work and the page
+              // still navigates if the bundle fails. Only a plain left-click is
+              // taken over.
+              href={hrefFor(entry.panel, meta.basePath)}
               label={entry.label}
               leftSection={entry.icon}
-              active={route.panel === entry.panel}
-              onClick={close}
+              active={panel === entry.panel}
+              onClick={(event) => {
+                if (!isPlainClick(event)) return;
+                event.preventDefault();
+                navigate(entry.panel);
+                close();
+              }}
             />
           ))}
+          <NavLink
+            component="a"
+            href={meta.queuesPath}
+            label="bull-board"
+            description="Jobs, flows and metrics"
+            leftSection={<DatabaseIcon />}
+          />
           {meta.openApiPath !== undefined && (
             <NavLink
               component="a"
@@ -222,11 +252,11 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
           )}
         </AppShell.Navbar>
 
-        <AppShell.Main>
-          <Container size="xl" px={0}>
-            {body()}
-          </Container>
-        </AppShell.Main>
+        {/* No Container. The documentation site caps its width because a reading
+            measure matters for prose; every panel here is a wide table or a row of
+            counters, and a gutter on a 2560px monitor just makes the route table
+            scroll horizontally for no reason. */}
+        <AppShell.Main>{body()}</AppShell.Main>
       </AppShell>
     </MantineProvider>
   );

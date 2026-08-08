@@ -171,6 +171,7 @@ express and fastify, which Rule 1 bans everywhere else.
 consumed **as source** by `internal/docs`, `internal/openapi-ui` and
 `internal/dashboard-ui`, with no build step - its `exports` point at `src/`, and each
 consumer's bundler compiles what it imports.
+Mantine UI - LLM Documentation - https://mantine.dev/llms.txt
 
 Everything in it exists because two frontends had written it twice - `Prose`,
 `ColorSchemeToggle`, `statusColor`, `METHOD_COLOR`, `.prose`. Two consumers inline

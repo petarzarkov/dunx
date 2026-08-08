@@ -41,7 +41,11 @@ const embed = (model: unknown): string =>
 /** The id the bundle reads its meta from. Shared with `internal/dashboard-ui`. */
 export const META_ELEMENT_ID = 'dunx-dashboard-meta';
 
-export const renderShell = (options: DashboardOptions, ui: string): string => {
+export const renderShell = (
+  options: DashboardOptions,
+  ui: string,
+  favicon: string,
+): string => {
   const title = `${options.title} dashboard`;
 
   return (
@@ -52,6 +56,10 @@ export const renderShell = (options: DashboardOptions, ui: string): string => {
     '<meta name="robots" content="noindex, nofollow">' +
     '<meta name="referrer" content="no-referrer">' +
     `<title>${escape(title)}</title>` +
+    // A `data:` URI, so the tab icon costs no request either. Same mark as the
+    // documentation site and the API explorer - `@dunx/ui` declares it once and
+    // the bundle build emits it next to the script.
+    `<link rel="icon" type="image/svg+xml" href="${escape(favicon)}">` +
     `<style>${BOOT}</style></head><body><div id="root"></div>` +
     '<noscript><p class="no-js">This dashboard needs JavaScript. Every panel ' +
     `also answers as JSON under <code>${escape(options.path)}/api</code>.</p></noscript>` +

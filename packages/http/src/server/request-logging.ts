@@ -36,6 +36,23 @@ export interface RequestLoggingOptions {
    */
   readonly ignore?: readonly string[];
   /**
+   * Path **prefixes** to skip, for a whole mount rather than one path.
+   *
+   * `ignore` is an exact-match `Set` because that is one lookup on the hot path
+   * and a health check is one path. A mount is not: `@dunx/dashboard` at
+   * `/_dunx` polls four endpoints every five seconds and bull-board pulls a
+   * dozen assets, and listing them is both tedious and wrong the moment either
+   * grows an endpoint.
+   *
+   * Scanned only when non-empty, so an app that sets none pays nothing - the
+   * same guard `ignore` has. Keep the list short; it is a loop.
+   *
+   * ```ts
+   * requestLogging: { ignorePrefix: ['/_dunx'] }
+   * ```
+   */
+  readonly ignorePrefix?: readonly string[];
+  /**
    * Keep the request id and the async scope on an `ignore`d path. Default
    * **`false`**.
    *
@@ -137,6 +154,7 @@ export class RequestLoggingMiddleware implements Middleware {
   readonly #requestBody: boolean;
   readonly #responseBody: boolean;
   readonly #ignore: ReadonlySet<string>;
+  readonly #ignorePrefix: readonly string[];
   readonly #correlateIgnored: boolean;
   readonly #correlate: boolean;
 
@@ -149,8 +167,19 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#requestBody = options.requestBody ?? false;
     this.#responseBody = options.responseBody ?? false;
     this.#ignore = new Set(options.ignore ?? []);
+    this.#ignorePrefix = options.ignorePrefix ?? [];
     this.#correlateIgnored = options.correlateIgnored ?? false;
     this.#correlate = options.correlate ?? true;
+  }
+
+  /**
+   * Both guards check emptiness first, so an app configuring neither pays one
+   * `size` read and one `length` read rather than a lookup and a loop.
+   */
+  #ignored(path: string): boolean {
+    if (this.#ignore.size > 0 && this.#ignore.has(path)) return true;
+    if (this.#ignorePrefix.length === 0) return false;
+    return this.#ignorePrefix.some((prefix) => path.startsWith(prefix));
   }
 
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
@@ -163,7 +192,7 @@ export class RequestLoggingMiddleware implements Middleware {
     const mark = from === -1 ? -1 : url.indexOf('?', from);
     const path =
       from === -1 ? '/' : mark === -1 ? url.slice(from) : url.slice(from, mark);
-    if (this.#ignore.size > 0 && this.#ignore.has(path)) {
+    if (this.#ignored(path)) {
       return this.#correlateIgnored
         ? this.#correlated(req, ctx, path, next)
         : next();

@@ -127,6 +127,8 @@ it('documents every route the one app serves', () => {
 });
 
 it('serves a docs page that fetches nothing', () => {
+  // "2 inline scripts" still holds; the `<link>` the page now carries is the
+  // dunx mark as a `data:` URI, which is not a request.
   expect(tour.text).toMatch(
     /GET \/api\/docs -> 200 text\/html; charset=utf-8, \d+ bytes, 2 inline scripts, external requests: none/,
   );

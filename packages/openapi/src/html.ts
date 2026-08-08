@@ -51,6 +51,7 @@ export const renderShell = (
   document: OpenApiDocument,
   options: PageOptions,
   ui: string,
+  favicon: string,
 ): string => {
   const title = `${document.info.title} ${document.info.version}`;
 
@@ -58,6 +59,11 @@ export const renderShell = (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     `<title>${escape(title)}</title>` +
+    // A `data:` URI, so the tab icon costs no request either - the page's whole
+    // guarantee is that it fetches nothing. Same mark as the documentation site
+    // and the dashboard; `@dunx/ui` declares it once and the bundle build emits
+    // it next to the script.
+    `<link rel="icon" type="image/svg+xml" href="${escape(favicon)}">` +
     `<style>${BOOT}</style></head><body><div id="root"></div>` +
     '<noscript><p class="no-js">This API explorer needs JavaScript. ' +
     `The document itself is at <a href="${escape(options.jsonHref)}">` +

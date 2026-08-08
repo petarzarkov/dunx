@@ -80,9 +80,14 @@ export class DocsDemo {
     // markup, with both script bodies removed. Inside a <script> everything is
     // text, and minified React's own string table contains `src=` and `<script`.
     const shell = html.replace(/(<script[^>]*>)[\s\S]*?(<\/script>)/g, '$1$2');
+    // A `<link>` counts only if it would actually fetch. The page carries one
+    // for its favicon, as a `data:` URI, which the browser never requests.
+    const fetchedLink = [...shell.matchAll(/<link\b[^>]*href="([^"]*)"/g)].some(
+      ([, href]) => href !== undefined && !href.startsWith('data:'),
+    );
     const external =
       /\ssrc=/.test(shell) ||
-      /<link\b/.test(shell) ||
+      fetchedLink ||
       /url\(\s*["']?(https?:)?\/\//.test(html) ||
       html.includes('//cdn');
     logger.info(

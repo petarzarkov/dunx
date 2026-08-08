@@ -116,11 +116,14 @@ describe('a real server serving its own document', () => {
     expect(page).toContain('ThingsController_list');
     expect(page).toContain('Every thing');
     expect(page).toContain('"jsonHref":"/api/openapi.json"');
-    // The bundle is inlined: no `src=`, no `<link>`, nothing from a CDN. The
-    // assertion is on the tags rather than the text because minified React
-    // contains both `src=` and a `"<script>"` string of its own.
+    // The bundle is inlined: no `src=`, nothing from a CDN, and the one `<link>`
+    // is a `data:` favicon the browser does not fetch. The assertion is on the
+    // tags rather than the text because minified React contains both `src=` and a
+    // `"<script>"` string of its own.
     expect(page).not.toMatch(/<script[^>]*\ssrc=/);
-    expect(page).not.toMatch(/<link\b/);
+    for (const [, href] of page.matchAll(/<link\b[^>]*href="([^"]*)"/g)) {
+      expect(href).toMatch(/^data:image\/svg\+xml,/);
+    }
     expect(page).not.toContain('//cdn');
     expect(page).not.toMatch(/url\(\s*["']?(https?:)?\/\//);
   });

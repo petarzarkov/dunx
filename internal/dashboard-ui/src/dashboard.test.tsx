@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { ago, bytes, count, duration } from './format';
-import { hrefFor, parseHash } from './router';
+import { hrefFor, panelFor } from './router';
 import { readMeta } from './meta';
 
 /**
@@ -40,21 +40,27 @@ describe('format', () => {
 });
 
 describe('router', () => {
-  it('falls back to the overview for anything it does not know', () => {
-    expect(parseHash('')).toEqual({ panel: 'overview', queue: undefined });
-    expect(parseHash('#/nonsense')).toEqual({
-      panel: 'overview',
-      queue: undefined,
-    });
+  // Real paths, not a hash: the mount serves the page for any path under it, so
+  // `/admin/_dunx/routes` reloads and bookmarks like a real URL.
+  const base = '/admin/_dunx';
+
+  it('reads the panel out of the first segment after the mount', () => {
+    expect(panelFor(`${base}/routes`, base)).toBe('routes');
+    expect(panelFor(`${base}/graph/anything/else`, base)).toBe('graph');
   });
 
-  it('scopes the queues panel to one queue', () => {
-    expect(parseHash('#/queues/emails')).toEqual({
-      panel: 'queues',
-      queue: 'emails',
-    });
-    expect(hrefFor('queues', 'a queue')).toBe('#/queues/a%20queue');
-    expect(hrefFor('routes')).toBe('#/routes');
+  it('falls back to the overview rather than a 404', () => {
+    // The server already decided this path is the dashboard's; the page's job is
+    // to show something, not to argue.
+    expect(panelFor(base, base)).toBe('overview');
+    expect(panelFor(`${base}/`, base)).toBe('overview');
+    expect(panelFor(`${base}/nonsense`, base)).toBe('overview');
+  });
+
+  it('builds hrefs against the mount, never against the root', () => {
+    // An app behind a proxy at /admin/_dunx is the normal case.
+    expect(hrefFor('routes', base)).toBe('/admin/_dunx/routes');
+    expect(hrefFor('overview', base)).toBe('/admin/_dunx');
   });
 });
 

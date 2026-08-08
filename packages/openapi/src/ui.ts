@@ -1,6 +1,6 @@
 import { renderShell, type PageOptions } from './html.js';
 import type { OpenApiDocument } from './types.js';
-import { UI } from './ui-bundle.js';
+import { FAVICON, UI } from './ui-bundle.js';
 
 /**
  * The explorer, behind its own entrypoint.
@@ -19,7 +19,7 @@ import { UI } from './ui-bundle.js';
 export const renderPage = (
   document: OpenApiDocument,
   options: PageOptions,
-): string => renderShell(document, options, UI);
+): string => renderShell(document, options, UI, FAVICON);
 
-export { UI };
+export { FAVICON, UI };
 export { MODEL_ELEMENT_ID, renderShell, type PageOptions } from './html.js';

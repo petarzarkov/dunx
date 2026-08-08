@@ -36,7 +36,7 @@ interface BullBoardModules {
   readonly createBullBoard: (config: {
     queues: readonly QueueAdapter[];
     serverAdapter: unknown;
-    options?: { uiConfig?: { readOnlyMode?: boolean } };
+    options?: { uiConfig: BoardUiConfig };
   }) => unknown;
   readonly BullMQAdapter: new (queue: unknown) => QueueAdapter;
   readonly BunAdapter: new () => {
@@ -59,10 +59,16 @@ const load = async (): Promise<BullBoardModules | undefined> => {
       import('@bull-board/api/bullMQAdapter'),
       import('@bull-board/bun'),
     ]);
+    // `as unknown as` throughout, and deliberately. These are **optional peers**
+    // whose types are present when installed and absent when not, so this module
+    // has to describe the surface it uses rather than import theirs - and the
+    // structural distance between a hand-written description and bull-board's
+    // real generics is exactly what a direct assertion refuses.
     return {
       createBullBoard:
-        api.createBullBoard as BullBoardModules['createBullBoard'],
-      BullMQAdapter: bullmq.BullMQAdapter as BullBoardModules['BullMQAdapter'],
+        api.createBullBoard as unknown as BullBoardModules['createBullBoard'],
+      BullMQAdapter:
+        bullmq.BullMQAdapter as unknown as BullBoardModules['BullMQAdapter'],
       BunAdapter: bun.BunAdapter as unknown as BullBoardModules['BunAdapter'],
     };
   } catch {
@@ -122,9 +128,43 @@ export const boardNames = (
   return { names };
 };
 
+/**
+ * bull-board's own `uiConfig`, which is where its title and tab icon come from.
+ *
+ * Set rather than left at "Bull Dashboard", because the board is reached from
+ * inside this app's dashboard and a page that suddenly changes name and logo reads
+ * as having left the site. The mark is `@dunx/ui`'s single declaration of it,
+ * passed as a `data:` URI so bull-board fetches nothing for it either.
+ *
+ * `boardLogo` **and** `favIcon`: the first is the header, the second the tab, and
+ * setting only one leaves the page half-branded.
+ */
+interface BoardUiConfig {
+  readonly readOnlyMode: boolean;
+  readonly boardTitle: string;
+  /** The mark **in the board's own header**, beside the title. */
+  readonly boardLogo: { path: string; width?: number; height?: number };
+  /** The tab icon. Two cuts, because bull-board offers an SVG/PNG pair. */
+  readonly favIcon: { default: string; alternative: string };
+}
+
+const uiConfigFor = (
+  options: DashboardOptions,
+  favicon: string,
+): BoardUiConfig => ({
+  readOnlyMode: !options.commands,
+  boardTitle: `${options.title} queues`,
+  // Both, not just the tab: `boardLogo` is the mark in bull-board's own header,
+  // which is what actually makes the page look like part of this app rather than
+  // a different product someone linked to.
+  boardLogo: { path: favicon, width: 26, height: 26 },
+  favIcon: { default: favicon, alternative: favicon },
+});
+
 export const buildBoard = async (
   options: DashboardOptions,
   basePath: string,
+  favicon: string,
 ): Promise<Board> => {
   const { names, unavailable } = boardNames(options);
 
@@ -154,7 +194,7 @@ export const buildBoard = async (
     // than dunx refusing the POSTs itself. Enforcing it here would be a second
     // implementation of a switch the library already has, and one that disagreed
     // the moment bull-board grew an operation dunx had not heard of.
-    options: { uiConfig: { readOnlyMode: !options.commands } },
+    options: { uiConfig: uiConfigFor(options, favicon) },
   });
 
   return { routes: serverAdapter.getRoutes(), queues: names };

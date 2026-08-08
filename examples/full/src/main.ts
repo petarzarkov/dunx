@@ -24,9 +24,9 @@ async function bootstrap(): Promise<void> {
   logger.info(`docs      ${new URL('api/docs', url).href}`);
   logger.info(`openapi   ${new URL('api/openapi.json', url).href}`);
   logger.info(`health    ${new URL('api/health', url).href}`);
+  logger.info(`dashboard ${new URL('api/_dunx', url).href}`);
   logger.info(
-    `dashboard ${new URL('api/_dunx', url).href} ` +
-      `(send x-dashboard-key: ${config.get('dashboardKey')})`,
+    `queues    ${new URL('api/_dunx/queues', url).href} (bull-board)`,
   );
   logger.info('ctrl-c to stop');
 

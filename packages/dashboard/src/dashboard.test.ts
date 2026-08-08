@@ -164,7 +164,11 @@ describe('the mount', () => {
     const html = await response.text();
     expect(html).toContain('dunx-dashboard-meta');
     expect(html).not.toMatch(/<script[^>]+src=/);
-    expect(html).not.toContain('<link');
+    // The one `<link>` is the dunx mark as a `data:` URI - a tag the browser
+    // does not fetch. The guarantee is about requests, not about the element.
+    for (const [, href] of html.matchAll(/<link\b[^>]*href="([^"]*)"/g)) {
+      expect(href).toMatch(/^data:image\/svg\+xml,/);
+    }
     expect(html).toContain('noindex');
   });
 
@@ -270,9 +274,14 @@ describe('the queues handoff', () => {
     expect(response.headers.get('content-type')).toContain('text/html');
     const html = await response.text();
     // bull-board's markup, not dunx's - the whole point of the handoff.
-    expect(html).toContain('<title>Bull Dashboard</title>');
+    expect(html).toContain('<script id="__UI_CONFIG__"');
     // Rooted at the mount, so its own asset and API paths land back inside it.
     expect(html).toContain('<base href="/_dunx/queues/" />');
+    // Wearing dunx's name and mark rather than "Bull Dashboard": the board is
+    // reached from inside this page, and a tab that suddenly changes identity
+    // reads as having left the site.
+    expect(html).toContain('<title>dunx queues</title>');
+    expect(html).toContain('"favIcon":{"default":"data:image/svg+xml,');
   });
 
   it('serves bull-board’s static assets through the same mount', async () => {

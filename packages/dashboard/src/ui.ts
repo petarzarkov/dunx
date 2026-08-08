@@ -1,6 +1,6 @@
 import { renderShell } from './html.js';
 import type { DashboardOptions } from './options.js';
-import { UI } from './ui-bundle.js';
+import { FAVICON, UI } from './ui-bundle.js';
 
 /**
  * The page, behind its own entrypoint.
@@ -19,7 +19,7 @@ import { UI } from './ui-bundle.js';
  * `scripts/build-package.ts`, which derives entrypoints from `exports`.
  */
 export const renderPage = (options: DashboardOptions): string =>
-  renderShell(options, UI);
+  renderShell(options, UI, FAVICON);
 
-export { UI };
+export { FAVICON, UI };
 export { META_ELEMENT_ID, renderShell } from './html.js';

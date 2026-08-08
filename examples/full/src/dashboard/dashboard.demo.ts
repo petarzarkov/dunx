@@ -1,7 +1,5 @@
 import { Logger } from '@dunx/core';
 import type { QueuesReport, RuntimeReport, Snapshot } from '@dunx/dashboard';
-import { AppConfigService } from '../config.js';
-
 /**
  * What the ops page shows, narrated - and, more usefully, an assertion in CI that
  * every panel's endpoint answers against the real container rather than a fixture.
@@ -12,26 +10,21 @@ import { AppConfigService } from '../config.js';
  * no browser.
  */
 export class DashboardDemo {
-  constructor(
-    private readonly logger: Logger,
-    private readonly config: AppConfigService,
-  ) {}
+  constructor(private readonly logger: Logger) {}
 
   async demonstrate(url: string): Promise<void> {
     const base = new URL('api/_dunx', url).href;
-    const key = this.config.get('dashboardKey');
 
-    // Unauthorized first, because the contract is the interesting part: a 404,
-    // not a 403, so a prober cannot tell the mount is there.
-    const refused = await fetch(`${base}/api/snapshot`);
+    // This example mounts the dashboard with **no** `authorize`, so it is open -
+    // which is what the boot warning above is about, and what makes the page
+    // explorable with `bun start`. A real service passes one, and a caller it
+    // rejects gets 404 rather than 403 so a prober cannot tell the mount is there.
     this.logger.info(
-      `no key -> ${refused.status} (404, never 403: a 403 would confirm the mount)`,
+      'mounted with no authorize: open to anyone who can reach this port',
     );
 
     const read = async <T>(path: string): Promise<T> => {
-      const response = await fetch(`${base}${path}`, {
-        headers: { 'x-dashboard-key': key },
-      });
+      const response = await fetch(`${base}${path}`);
       return (await response.json()) as T;
     };
 
@@ -73,7 +66,7 @@ export class DashboardDemo {
         : `queues -> no board: ${queues.unavailable}`,
     );
 
-    const page = await fetch(base, { headers: { 'x-dashboard-key': key } });
+    const page = await fetch(base);
     const html = await page.text();
     this.logger.info(
       `GET ${base} -> ${page.status} ${page.headers.get('content-type')}, ` +
