@@ -21,6 +21,17 @@ const envSchema = z.object({
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
+  /**
+   * Consume the queues **in this process** instead of in `bun run worker`.
+   *
+   * Off by default, because the two-process shape is what this example is for: a
+   * worker is its own container, and pretending otherwise hides the thing worth
+   * seeing. On, it is one flag - which is the point of `WorkerFactory.attach`.
+   */
+  INLINE_WORKER: z
+    .string()
+    .optional()
+    .transform((value) => value === 'true' || value === '1'),
   /** better-auth signs session cookies with this. 32 characters is its own minimum. */
   AUTH_SECRET: z
     .string()
@@ -48,6 +59,7 @@ export interface AppConfig {
   readonly redis: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
   readonly auth: { readonly secret: string };
+  readonly inlineWorker: boolean;
 }
 
 /**
@@ -83,5 +95,6 @@ export const validate = (env: ConfigSource): AppConfig => {
     redis: { url: value.REDIS_URL },
     images: { quality: value.IMAGE_QUALITY },
     auth: { secret: value.AUTH_SECRET },
+    inlineWorker: value.INLINE_WORKER,
   };
 };

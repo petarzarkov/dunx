@@ -35,6 +35,7 @@ services first, then the database and the temp directory they were using.
 | `bun run dev`   | the same, under `bun --watch` - reloads on every save                |
 | `bun run worker`| consumes queued jobs - **a second process, on purpose**              |
 | `bun run dev:worker` | the same, under `bun --watch`                                   |
+| `INLINE_WORKER=true bun start` | consumes in the web process - one log stream |
 | `bun run tour`  | boots the same app, narrates every package, shuts down, exits 0      |
 
 The tour is what CI runs. It is the end-to-end check that the whole DI graph builds
@@ -86,6 +87,26 @@ which satisfies `PubSubRelay` structurally. With no Redis running it says it is
 skipping and the app still exits 0.
 
 ### The queue needs two processes
+
+### One process, if you want the logs together
+
+`INLINE_WORKER=true bun start` consumes the queues in the web process, through
+`WorkerFactory.attach`. The appeal is a single log stream: a handler's lines land
+next to the request that enqueued the job, with no second terminal.
+
+```bash
+INLINE_WORKER=true bun start
+curl -X POST localhost:3000/api/jobs/thumbnails -H 'content-type: application/json' -d '{}'
+# ... POST /api/jobs/thumbnails 201
+# ... rendered job 37          <- the handler, same process, same stream
+```
+
+Two things it costs, and they are why the default is the other way. A slow handler
+competes with every request for the same event loop, and the two tiers can no longer
+be scaled or restarted apart. The one thing to copy from here if you do use it is the
+**shutdown order**: `attach` cannot enforce it, so `main.ts` stops the consumer before
+the container tears down - a worker still running while providers close finds its
+database gone underneath it.
 
 A worker is its own container - its own connections, no HTTP server - so this is the
 one area the service cannot demonstrate alone. Run both:
