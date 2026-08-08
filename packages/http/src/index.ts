@@ -44,6 +44,18 @@ export type {
   StandardSchemaResult,
   StandardSchemaV1,
 } from './route/schema.js';
+// The route and gateway readers. `@dunx/core` owns the container half of the same
+// traversal (`providersOf`, `modulesOf`); this is the half that needs route
+// metadata and the gateway marker. Both were `@dunx/mcp`'s until `@dunx/dashboard`
+// became a second consumer.
+export {
+  gatewaysOf,
+  routesOf,
+  type GatewayHandler,
+  type GatewayNode,
+  type RouteInputs,
+  type RouteNode,
+} from './inspect.js';
 export { ClientAddress } from './server/client-address.js';
 export { buildContext, type RouteContext } from './server/context.js';
 export {

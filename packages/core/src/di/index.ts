@@ -28,12 +28,28 @@ export type { OnInit, OnShutdown } from './lifecycle.js';
 // Every tool that takes an entry path has to find the root module among a file's
 // exports, and a second implementation of that is a second set of conventions:
 // requiring `default`/`root` is what made both CLIs fail on a scaffolded app.
+// The graph readers. Here rather than in `@dunx/mcp`, which is where they were
+// written, because a second consumer exists: `@dunx/dashboard` reports the same
+// container from inside a running app, and a dashboard peer-depending on an MCP
+// server to borrow a traversal is upside down. `@dunx/mcp` re-exports them.
+export {
+  dependenciesOf,
+  modulesOf,
+  providersOf,
+  type Dependency,
+  type GraphOptions,
+  type ModuleNode,
+  type ProviderKind,
+  type ProviderNode,
+  type ProviderRole,
+} from './graph.js';
 export {
   collectModules,
   findRootModule,
   isModuleRef,
   Module,
   readControllers,
+  ROOT_MODULE,
   type DynamicModule,
   type ModuleClass,
   type ModuleOptions,

@@ -7,8 +7,9 @@ import {
   Text,
   Title,
 } from '@mantine/core';
+import { Prose } from '@dunx/ui';
 import { useChunk } from '../chunk';
-import { Prose } from '../components/Prose';
+
 import { guideBySlug, loadGuide, site } from '../data';
 import { href, RouteKind } from '../router';
 import { NotFound } from './NotFound';

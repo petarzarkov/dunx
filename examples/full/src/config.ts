@@ -21,6 +21,12 @@ const envSchema = z.object({
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
+  /**
+   * What `@dunx/dashboard`'s `authorize` compares the `x-dashboard-key` header
+   * against. It has a development default because this is an example; a real
+   * service has no business defaulting the key to its ops page.
+   */
+  DASHBOARD_KEY: z.string().default('let-me-in'),
   /** better-auth signs session cookies with this. 32 characters is its own minimum. */
   AUTH_SECRET: z
     .string()
@@ -48,6 +54,7 @@ export interface AppConfig {
   readonly redis: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
   readonly auth: { readonly secret: string };
+  readonly dashboardKey: string;
 }
 
 /**
@@ -83,5 +90,6 @@ export const validate = (env: ConfigSource): AppConfig => {
     redis: { url: value.REDIS_URL },
     images: { quality: value.IMAGE_QUALITY },
     auth: { secret: value.AUTH_SECRET },
+    dashboardKey: value.DASHBOARD_KEY,
   };
 };

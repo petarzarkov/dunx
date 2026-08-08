@@ -1,24 +1,27 @@
 import {
   collectModules,
+  dependenciesOf,
   readControllers,
   type Ctor,
+  type Dependency,
   type ModuleRef,
   type ProviderEntry,
 } from '@dunx/core';
-import {
-  discoverGateway,
-  discoverRoutes,
-  HIDDEN,
-  isGateway,
-  PUBLIC,
-  ROLES,
-  type DiscoveredRoute,
-  type RouteSchemas,
-  type StandardSchemaV1,
-} from '@dunx/http';
-import { dependenciesOf, type Dependency } from './graph.js';
+import { discoverRoutes, type DiscoveredRoute } from './route/discover.js';
+import { HIDDEN, PUBLIC, ROLES } from './route/metadata.js';
+import type { RouteSchemas, StandardSchemaV1 } from './route/schema.js';
+import { discoverGateway } from './ws/discover.js';
+import { isGateway } from './ws/marker.js';
 
 /**
+ * Routes and gateways read off the module graph, constructing nothing.
+ *
+ * The traversal itself is `@dunx/core`'s - `collectModules`, `readControllers`,
+ * `dependenciesOf`. What is here is the half that needs this package's own
+ * metadata: route markers, guards, `@Roles`/`@Public`, and the gateway marker.
+ * Two consumers read it, `@dunx/mcp` from outside a process that never boots and
+ * `@dunx/dashboard` from inside one that already has.
+ *
  * Routes read off the module graph. `discoverRoutes` walks a prototype chain, and
  * `Object.create(Controller.prototype)` is that chain with nothing behind it:
  * `instance.constructor` still resolves to the class and every method is still

@@ -1,0 +1,171 @@
+/**
+ * The rules more than one dunx frontend needs, in one file.
+ *
+ * `.prose` was written twice - a rich version in `internal/docs` and a thinner
+ * one in `internal/openapi-ui` - so the same markdown rendered differently
+ * depending on which page you opened it in. This is the docs version, which was
+ * the better of the two, and it is now the only one. A consumer imports
+ * `@dunx/ui/styles.css` and adds only what is genuinely its own.
+ *
+ * `--prose-max` is a variable rather than a value because the constraint differs
+ * per page: a documentation column wants a reading measure, a schema description
+ * inside a card wants the card.
+ */
+:root {
+  --prose-max: 100%;
+}
+
+.prose {
+  max-width: var(--prose-max);
+  line-height: 1.65;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin: 2rem 0 0.75rem;
+  line-height: 1.25;
+  scroll-margin-top: 5rem;
+}
+
+.prose h1 {
+  font-size: 1.9rem;
+}
+.prose h2 {
+  font-size: 1.45rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+.prose h3 {
+  font-size: 1.15rem;
+}
+
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote {
+  margin: 0.75rem 0;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.5rem;
+}
+
+.prose li {
+  margin: 0.25rem 0;
+}
+
+.prose a {
+  color: var(--mantine-primary-color-filled);
+  text-decoration: none;
+}
+
+.prose a:hover {
+  text-decoration: underline;
+}
+
+.prose code {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--mantine-color-default);
+  border: 1px solid var(--mantine-color-default-border);
+}
+
+.prose pre {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-default);
+  border: 1px solid var(--mantine-color-default-border);
+}
+
+.prose pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.prose blockquote {
+  padding-left: 1rem;
+  border-left: 3px solid var(--mantine-color-default-border);
+  color: var(--mantine-color-dimmed);
+}
+
+.prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 1rem 0;
+}
+
+.prose th,
+.prose td {
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  border: 1px solid var(--mantine-color-default-border);
+  vertical-align: top;
+}
+
+.prose th {
+  background: var(--mantine-color-default);
+}
+
+.prose img {
+  max-width: 100%;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--mantine-color-default-border);
+  margin: 2rem 0;
+}
+
+/* A JSON payload: preformatted, monospace, and allowed to scroll rather than
+   wrap, because a wrapped object loses the indentation that made it readable. */
+.dunx-json {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  white-space: pre;
+  margin: 0;
+  overflow-x: auto;
+}
+
+/* An input holding a URL, a header or a body. Mantine has no monospace prop on
+   Input, so this is the escape hatch, applied to the wrapper. */
+.dunx-monospace input,
+.dunx-monospace textarea {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.82rem;
+}
+
+/* An HTTP verb badge. Fixed width so a column of them has one left edge - the
+   thing that makes a route table scannable. */
+.dunx-verb {
+  font-family: var(--mantine-font-family-monospace);
+  min-width: 4.6rem;
+}
+
+/* A cell holding an identifier - a path, a token, a job id. Monospace, and it
+   may scroll on its own rather than widening the table past the viewport. */
+.dunx-mono {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.82rem;
+}

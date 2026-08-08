@@ -1,0 +1,62 @@
+import { metaOf } from './api/snapshot.js';
+import type { DashboardOptions } from './options.js';
+
+/**
+ * The page is a shell: a boot stylesheet, the mount's own metadata as JSON, and the
+ * bundle inlined. Nothing is fetched to start up - no CDN, no `src=`, no `<link>` -
+ * which is what lets the dashboard work on a host with no egress, and it is the
+ * same guarantee `@dunx/openapi`'s page makes.
+ *
+ * The bundle arrives as an **argument**, not an import, which is what keeps this
+ * module cheap: `./ui.js` is the entrypoint that pairs the two, and it is loaded
+ * lazily on the first page request. Importing it here would silently revert the
+ * split and put 400-odd KB in every app that mounts the module.
+ *
+ * Only the meta is embedded. Routes, queues and the runtime are **fetched**, unlike
+ * the explorer's model: a queue count embedded in the HTML would be stale before it
+ * painted, and the endpoints have to exist anyway so `curl` can reach them.
+ */
+const BOOT = `
+:root { color-scheme: light dark; }
+html, body { margin: 0; padding: 0; background: #fff; }
+@media (prefers-color-scheme: dark) { html, body { background: #242424; } }
+#root:empty::after {
+  content: 'Loading\\2026';
+  display: block; padding: 3rem 1.5rem; text-align: center; opacity: .6;
+  font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+.no-js { padding: 3rem 1.5rem; text-align: center;
+  font: 15px/1.6 ui-sans-serif, system-ui, sans-serif; }
+`;
+
+const escape = (value: string): string => Bun.escapeHTML(value);
+
+/**
+ * `<` is the only character that can end the data block early, and escaping it as
+ * `<` keeps the text valid JSON. The parser sees the same document either way.
+ */
+const embed = (model: unknown): string =>
+  JSON.stringify(model).replaceAll('<', '\\u003c');
+
+/** The id the bundle reads its meta from. Shared with `internal/dashboard-ui`. */
+export const META_ELEMENT_ID = 'dunx-dashboard-meta';
+
+export const renderShell = (options: DashboardOptions, ui: string): string => {
+  const title = `${options.title} dashboard`;
+
+  return (
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    // The page lists routes, providers and config keys. Nothing about it should
+    // reach a search index or a referrer log if it is ever exposed by mistake.
+    '<meta name="robots" content="noindex, nofollow">' +
+    '<meta name="referrer" content="no-referrer">' +
+    `<title>${escape(title)}</title>` +
+    `<style>${BOOT}</style></head><body><div id="root"></div>` +
+    '<noscript><p class="no-js">This dashboard needs JavaScript. Every panel ' +
+    `also answers as JSON under <code>${escape(options.path)}/api</code>.</p></noscript>` +
+    `<script type="application/json" id="${META_ELEMENT_ID}">` +
+    `${embed(metaOf(options))}</script>` +
+    `<script>${ui}</script></body></html>`
+  );
+};

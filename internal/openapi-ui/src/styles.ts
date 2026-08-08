@@ -37,4 +37,5 @@ import '@mantine/core/styles/Text.css';
 import '@mantine/core/styles/Title.css';
 import '@mantine/core/styles/UnstyledButton.css';
 import '@mantine/core/styles/VisuallyHidden.css';
+import '@dunx/ui/styles.css';
 import './app.css';

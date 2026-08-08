@@ -2,7 +2,7 @@
   "name": "@dunx/ui",
   "version": "0.0.0",
   "private": true,
-  "description": "The shared Mantine theme for the internal dunx frontends",
+  "description": "The shared Mantine theme and component library for the dunx frontends",
   "license": "MIT",
   "author": {
     "name": "Petar Zarkov",
@@ -15,10 +15,15 @@
     "directory": "internal/ui"
   },
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
   },
   "scripts": {
+    "test": "bun test --bail",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import '@mantine/core/styles.css';
 import '@mantine/charts/styles.css';
 import '@mantine/spotlight/styles.css';
+import '@dunx/ui/styles.css';
 import './styles.css';
 import './landing.css';
 import './generated/shiki.css';

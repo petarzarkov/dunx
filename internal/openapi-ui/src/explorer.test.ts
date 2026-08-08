@@ -4,7 +4,6 @@ import {
   entriesOf,
   groupByTag,
   matches,
-  statusColor,
   type OpenApiDocument,
   type SecuritySchemeObject,
 } from './model';
@@ -161,13 +160,5 @@ describe('reading the document', () => {
     expect(matches(entry!, 'A_GET')).toBe(true);
     expect(matches(entry!, '/a')).toBe(true);
     expect(matches(entry!, 'nope')).toBe(false);
-  });
-
-  it('colours a status by its class, never by its digits', () => {
-    expect(statusColor('200')).toBe('green');
-    expect(statusColor('301')).toBe('cyan');
-    expect(statusColor('404')).toBe('orange');
-    expect(statusColor('500')).toBe('red');
-    expect(statusColor('default')).toBe('gray');
   });
 });

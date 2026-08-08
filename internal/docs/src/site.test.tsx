@@ -25,6 +25,7 @@ describe('the generated model', () => {
       '@dunx/auth',
       '@dunx/core',
       '@dunx/create-app',
+      '@dunx/dashboard',
       '@dunx/http',
       '@dunx/infra',
       '@dunx/mcp',

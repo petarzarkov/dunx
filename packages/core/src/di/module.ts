@@ -1,6 +1,6 @@
 import { AppError } from './errors.js';
 import type { Registration } from './provider.js';
-import type { Ctor, InjectionToken } from './token.js';
+import { token, type Ctor, type InjectionToken, type Token } from './token.js';
 
 // Symbol.for, not Symbol: two copies of @dunx/core in a dependency tree still
 // agree on the key. Same marker technique as route discovery - no accumulator.
@@ -72,6 +72,22 @@ export interface DynamicModule extends ModuleOptions {
 
 /** Either a decorated class or a configured module. */
 export type ModuleRef = ModuleClass | DynamicModule;
+
+/**
+ * The reference `AppFactory.create` was handed, bound into the global scope so a
+ * provider can read the module graph it is itself part of.
+ *
+ * It exists for one shape of consumer: something mounted **inside** a running app
+ * that has to report on that app - `@dunx/dashboard` is the case that forced it.
+ * The graph readers all take a `ModuleRef`, and a middleware has no other way to
+ * name the root; passing it back in through an option would mean an app listing
+ * its own root module inside its own `imports`.
+ *
+ * Reading it is not booting anything: the readers walk prototypes and construct
+ * nothing, which is the guarantee `providersOf` and `routesOf` are built on.
+ */
+export const ROOT_MODULE: Token<ModuleRef> =
+  token<ModuleRef>('dunx.root-module');
 
 /** A module reference flattened to the registrations it contributes. */
 export interface ResolvedModule {

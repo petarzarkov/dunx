@@ -4,7 +4,7 @@ import { Logger } from '../logger/logger.js';
 import { AppError } from './errors.js';
 import { Injector } from './injector.js';
 import { hasOnInit, hasOnShutdown } from './lifecycle.js';
-import { type ModuleRef } from './module.js';
+import { ROOT_MODULE, type ModuleRef } from './module.js';
 import { buildScopes, type Binding } from './scope.js';
 import { provide, type Registration } from './provider.js';
 import { describeToken, isCtor, type InjectionToken } from './token.js';
@@ -18,12 +18,17 @@ import { describeToken, isCtor, type InjectionToken } from './token.js';
  * global scope is laid down first and a module's own bindings go over it, so an app
  * that binds `Logger` shadows this automatically. `@dunx/infra/logger` binds both.
  */
-const defaults = (): readonly Registration[] => [
+const defaults = (root: ModuleRef): readonly Registration[] => [
   provide(RequestContext, { useClass: AsyncRequestContext }),
   provide(Logger, {
     useFactory: (context: RequestContext) => new ConsoleLogger(context),
     inject: [RequestContext] as const,
   }),
+  // Not a contract with an alternative implementation - there is one root and this
+  // is it. It rides along here because this loop is the only place a binding can be
+  // laid into every scope, which is what a global middleware mounted by a feature
+  // module needs. See ROOT_MODULE.
+  provide(ROOT_MODULE, { useValue: root }),
 ];
 
 const assertEveryOverrideReplaced = (
@@ -215,7 +220,7 @@ export class AppFactory {
      * only if nobody declares it does core's fallback go in. `LoggerModule` is
      * `global: true` and lands here through the ordinary path as well.
      */
-    for (const registration of defaults()) {
+    for (const registration of defaults(root)) {
       const substituted = overrides.get(registration.token);
       if (substituted) replaced.add(registration.token);
 

@@ -3,6 +3,7 @@ import type { HttpApp } from '@dunx/http';
 import { AuthDemo } from '../auth/auth.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
+import { DashboardDemo } from '../dashboard/dashboard.demo.js';
 import { Ledger } from '../database/ledger.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
 import { GuardsDemo } from '../guards/guards.demo.js';
@@ -31,6 +32,7 @@ export class Tour {
     private readonly auth: AuthDemo,
     private readonly docs: DocsDemo,
     private readonly wiring: WiringDemo,
+    private readonly dashboard: DashboardDemo,
   ) {}
 
   async run(app: HttpApp, url: string): Promise<void> {
@@ -72,6 +74,9 @@ export class Tour {
 
     this.group('@dunx/openapi - security, from the guards own metadata');
     await this.docs.guarded(url);
+
+    this.group('@dunx/dashboard - one page over the running process');
+    await this.dashboard.demonstrate(url);
   }
 
   /** A header, so a reader can tell which area is talking. */

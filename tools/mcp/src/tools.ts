@@ -1,8 +1,24 @@
-import type { ModuleRef } from '@dunx/core';
-import { modulesOf, providersOf } from './graph.js';
+import {
+  modulesOf as modulesIn,
+  providersOf as providersIn,
+  type ModuleNode,
+  type ModuleRef,
+  type ProviderNode,
+} from '@dunx/core';
+import { gatewaysOf, isGateway, routesOf } from '@dunx/http';
 import { documentOf } from './openapi.js';
 import type { ToolDefinition } from './protocol.js';
-import { gatewaysOf, routesOf } from './routes.js';
+
+/**
+ * Core's graph readers take the gateway predicate as an argument - it cannot
+ * import `@dunx/http` - so both are curried with it once here. Without it a
+ * gateway would report as an ordinary provider and `dunx_gateways` would
+ * disagree with `dunx_modules` about the same class.
+ */
+const providersOf = (root: ModuleRef): readonly ProviderNode[] =>
+  providersIn(root, { isGateway });
+const modulesOf = (root: ModuleRef): readonly ModuleNode[] =>
+  modulesIn(root, { isGateway });
 
 /**
  * Everything here reads the app. Nothing boots it.

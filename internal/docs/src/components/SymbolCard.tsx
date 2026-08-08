@@ -10,9 +10,9 @@ import {
   Text,
   Title,
 } from '@mantine/core';
+import { Prose } from '@dunx/ui';
 import type { DocMember, DocSymbol } from '../../scripts/extract/model';
 import { symbolAnchor } from '../router';
-import { Prose } from './Prose';
 
 const KIND_COLOR: Record<string, string> = {
   class: 'violet',

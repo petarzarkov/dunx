@@ -1,4 +1,5 @@
 import { Badge, Box, Code, Group, Stack, Table, Text } from '@mantine/core';
+import { JsonBlock } from '@dunx/ui';
 import type { JSX } from 'react';
 import { refName, type JsonSchema } from '../model';
 
@@ -226,9 +227,7 @@ export const SchemaView = ({
           <Text size="xs" c="dimmed" mb={2}>
             Example
           </Text>
-          <Code block className="dunx-json">
-            {JSON.stringify(example, null, 2)}
-          </Code>
+          <JsonBlock value={example} />
         </Box>
       )}
     </Stack>

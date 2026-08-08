@@ -1,3 +1,4 @@
+import { DashboardMiddleware } from '@dunx/dashboard';
 import { HttpFactory, RedisRelay, type HttpApp } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
@@ -44,6 +45,12 @@ export const createApp = async (): Promise<HttpApp> => {
   // through the same validation as every other setting.
   const config = app.get(AppConfigService);
   app.setGlobalPrefix('api');
+  // The dashboard goes **first**, ahead of everything else the app registers.
+  // Its `authorize` answers 404 to a caller it does not recognise, and a guard
+  // running before it would answer 401 instead - which tells a prober the mount
+  // exists. That contract only holds because `authorize` takes the raw Request
+  // and asks nothing of an earlier middleware.
+  app.use(DashboardMiddleware);
   app.use(RequestLoggerMiddleware);
   // Global middleware, so it also runs in front of the unmatched-path fallback -
   app.set('trust proxy', true);

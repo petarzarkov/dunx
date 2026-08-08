@@ -9,6 +9,7 @@ import { AccountsModule } from './auth/auth.module.js';
 import { CacheModule } from './cache/cache.module.js';
 import { ChatModule } from './chat/chat.module.js';
 import { AppConfigService, validate } from './config.js';
+import { OpsModule } from './dashboard/dashboard.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { DocsModule } from './docs/docs.module.js';
 import { GuardsModule } from './guards/guards.module.js';
@@ -81,7 +82,9 @@ const fileAndConsole = (path: string): Transport[] => [
     HealthModule,
     WiringModule,
     DocsModule,
-    // After JobsModule, whose QueueModule.forRoot binds the publisher it reads.
+    // After JobsModule, whose QueueModule.forRoot binds the publisher it reads,
+    // and after CacheModule, whose RedisModule binds the connection it probes.
+    OpsModule,
   ],
   providers: [Tour],
 })

@@ -18,6 +18,7 @@
     "**/*.json",
     "dist",
     ".claude/worktrees",
+    "packages/dashboard/src/ui-bundle.ts",
     "packages/openapi/src/ui-bundle.ts",
     "tools/create-app/templates"
   ],

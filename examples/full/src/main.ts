@@ -24,6 +24,10 @@ async function bootstrap(): Promise<void> {
   logger.info(`docs      ${new URL('api/docs', url).href}`);
   logger.info(`openapi   ${new URL('api/openapi.json', url).href}`);
   logger.info(`health    ${new URL('api/health', url).href}`);
+  logger.info(
+    `dashboard ${new URL('api/_dunx', url).href} ` +
+      `(send x-dashboard-key: ${config.get('dashboardKey')})`,
+  );
   logger.info('ctrl-c to stop');
 
   // Nothing else to do: the server holds the process open, and the shutdown

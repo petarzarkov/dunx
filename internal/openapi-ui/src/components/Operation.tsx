@@ -10,18 +10,15 @@ import {
 } from '@mantine/core';
 import type { JSX } from 'react';
 import { authFor, type AuthState } from '../auth';
+import { LockIcon, MethodBadge, Prose, statusColor } from '@dunx/ui';
 import {
   isPublic,
   schemeNames,
-  statusColor,
-  METHOD_COLOR,
   type Entry,
   type JsonSchema,
   type PageModel,
   type SecuritySchemeObject,
 } from '../model';
-import { LockIcon } from './Icons';
-import { Prose } from './Prose';
 import { SchemaView, typeLabel } from './SchemaView';
 import { TryIt } from './TryIt';
 
@@ -181,13 +178,7 @@ export const Operation = ({
     <Accordion.Item value={value} data-operation={operation.operationId}>
       <Accordion.Control>
         <Group gap="sm" wrap="nowrap">
-          <Badge
-            className="dunx-verb"
-            color={METHOD_COLOR[method]}
-            variant="filled"
-          >
-            {method.toUpperCase()}
-          </Badge>
+          <MethodBadge method={method} variant="filled" />
           <Text ff="monospace" fz="sm" fw={600}>
             {path}
           </Text>

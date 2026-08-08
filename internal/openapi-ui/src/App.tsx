@@ -1,6 +1,5 @@
 import {
   Accordion,
-  ActionIcon,
   Alert,
   Anchor,
   Badge,
@@ -15,36 +14,14 @@ import {
   Text,
   TextInput,
   Title,
-  useMantineColorScheme,
 } from '@mantine/core';
-import { theme } from '@dunx/ui';
+import { ColorSchemeToggle, LockIcon, Prose, theme } from '@dunx/ui';
 import { useMemo, useState, type JSX } from 'react';
 import { configured, loadAuth, saveAuth, type AuthState } from './auth';
 import { AuthDialog } from './components/AuthDialog';
-import { LockIcon, MoonIcon, SunIcon } from './components/Icons';
 import { Operation } from './components/Operation';
-import { Prose } from './components/Prose';
 import { SchemaView } from './components/SchemaView';
 import { entriesOf, groupByTag, matches, type PageModel } from './model';
-
-const ColorSchemeToggle = (): JSX.Element => {
-  const { colorScheme, toggleColorScheme } = useMantineColorScheme({
-    keepTransitions: true,
-  });
-  const dark = colorScheme === 'dark';
-
-  return (
-    <ActionIcon
-      variant="default"
-      size="lg"
-      onClick={toggleColorScheme}
-      title={dark ? 'Light theme' : 'Dark theme'}
-      aria-label="Toggle colour scheme"
-    >
-      {dark ? <SunIcon /> : <MoonIcon />}
-    </ActionIcon>
-  );
-};
 
 const Explorer = ({ model }: { model: PageModel }): JSX.Element => {
   const { document, warnings } = model;
@@ -114,7 +91,7 @@ const Explorer = ({ model }: { model: PageModel }): JSX.Element => {
           </Group>
         </Group>
 
-        <Prose html={model.prose['info']} />
+        <Prose html={model.prose['info']} size="sm" />
 
         {warnings.length > 0 && (
           <Alert color="orange" title="Generated with warnings">
@@ -144,7 +121,7 @@ const Explorer = ({ model }: { model: PageModel }): JSX.Element => {
             <Title order={2} fz="1rem" tt="uppercase" c="dimmed" lts=".07em">
               {tag}
             </Title>
-            <Prose html={tagProse.get(tag)} />
+            <Prose html={tagProse.get(tag)} size="sm" />
             <Accordion variant="separated" chevronPosition="left" multiple>
               {entries.map((entry) => (
                 <Operation

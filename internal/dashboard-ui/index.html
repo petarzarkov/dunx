@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>dunx dashboard - dev</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- `bun run dev` has no backend behind it. The meta is a fixture and every
+         data endpoint is answered by `src/fixture.ts`, which the entry installs
+         over `fetch` when it detects the dev server. -->
+    <script type="application/json" id="dunx-dashboard-meta">
+      {
+        "title": "Fixture",
+        "basePath": "/_dunx",
+        "openApiPath": "/docs",
+        "pollMs": 5000,
+        "commands": true
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

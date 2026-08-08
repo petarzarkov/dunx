@@ -11,10 +11,11 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
+import { Prose } from '@dunx/ui';
 import { useEffect, useMemo, useState } from 'react';
 import type { DocSymbol, PackageBody } from '../../scripts/extract/model';
 import { useChunk } from '../chunk';
-import { Prose } from '../components/Prose';
+
 import { SymbolCard } from '../components/SymbolCard';
 import { loadPackage, packageByDir, site } from '../data';
 import { anchoredSymbol } from '../router';

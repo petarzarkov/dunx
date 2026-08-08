@@ -63,6 +63,8 @@ const ORDER = [
   'packages/openapi',
   'packages/auth',
   'packages/testing',
+  // After http, whose route readers it uses, and after core's.
+  'packages/dashboard',
   'tools/mcp',
 ];
 

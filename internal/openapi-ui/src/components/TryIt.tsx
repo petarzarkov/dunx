@@ -12,6 +12,7 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core';
+import { JsonBlock, SendIcon } from '@dunx/ui';
 import { useState, type JSX } from 'react';
 import type { AuthParts } from '../auth';
 import type { OperationKey, TryField } from '../model';
@@ -23,7 +24,6 @@ import {
   type Outcome,
   type RequestSpec,
 } from '../send';
-import { SendIcon } from './Icons';
 
 const Response = ({ outcome }: { outcome: Outcome }): JSX.Element => (
   <Stack gap="xs" mt="sm">
@@ -52,10 +52,11 @@ const Response = ({ outcome }: { outcome: Outcome }): JSX.Element => (
         <Tabs.Tab value="headers">Headers ({outcome.headers.length})</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="body" pt="xs">
-        <Box mah={360} style={{ overflow: 'auto' }}>
-          <Code block className="dunx-json" data-response-body>
-            {outcome.body === '' ? '(empty)' : outcome.body}
-          </Code>
+        <Box data-response-body>
+          <JsonBlock
+            value={outcome.body === '' ? '(empty)' : outcome.body}
+            maxHeight={360}
+          />
         </Box>
       </Tabs.Panel>
       <Tabs.Panel value="headers" pt="xs">

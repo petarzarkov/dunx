@@ -1,19 +1,14 @@
 import {
   collectModules,
-  describeToken,
   isModuleRef,
-  isUnresolved,
   readControllers,
-  readDeps,
-  type Ctor,
-  type DepEntry,
-  type InjectionToken,
   type ModuleRef,
   type ProviderEntry,
-  type Registration,
   type ResolvedModule,
-} from '@dunx/core';
-import { isGateway } from '@dunx/http';
+} from './module.js';
+import { isUnresolved, readDeps, type DepEntry } from './deps.js';
+import type { Registration } from './provider.js';
+import { describeToken, type Ctor, type InjectionToken } from './token.js';
 
 /**
  * The container graph, read through the same functions the container itself reads
@@ -21,10 +16,13 @@ import { isGateway } from '@dunx/http';
  * Nothing about the record's key, the laziness of its thunk, or the shape of an
  * `unresolved` entry is restated here - a second reader of those would drift.
  *
- * Nothing constructs anything. `AppFactory.create` instantiates every provider and
- * awaits every async factory before it returns, so booting an app to answer "what
- * is bound" would open database connections, start queue workers and bind sockets -
- * an agent asking a question about the code would be running the code.
+ * **Nothing constructs anything.** `AppFactory.create` instantiates every provider
+ * and awaits every async factory before it returns, so booting an app to answer
+ * "what is bound" would open database connections, start queue workers and bind
+ * sockets. `@dunx/mcp` needs that guarantee absolutely - it answers questions about
+ * an app it must never run - and `@dunx/dashboard` needs the traversal without
+ * peer-depending on an MCP server to borrow it. That second consumer is why this
+ * lives in core rather than in the tool that first needed it.
  */
 
 /** What a registration binds. `role` is why it was registered, not how. */
@@ -51,7 +49,7 @@ export interface ProviderNode {
   /**
    * Whether the declaring module exports this, and therefore whether anything outside
    * it can inject it at all. A private provider is not a bug - it is the boundary - but
-   * an agent reading the graph has to be able to tell the difference.
+   * a reader of the graph has to be able to tell the difference.
    */
   readonly exported: boolean;
 }
@@ -67,7 +65,7 @@ export interface ModuleNode {
    * and not here is private to the module.
    *
    * The most useful field in the whole reader now that the container is scoped: "why
-   * can't X see Y" is answerable from it, and it is the question an agent debugging a
+   * can't X see Y" is answerable from it, and it is the question someone debugging a
    * resolution error actually has.
    */
   readonly exports: readonly string[];
@@ -76,6 +74,22 @@ export interface ModuleNode {
   /** Middleware applied to this module's own routes, and to nothing else. */
   readonly middleware: readonly string[];
 }
+
+/**
+ * A websocket gateway is a `@Module({ providers })` entry like any other, told
+ * apart only by `@dunx/http`'s marker - and core does not know that package exists.
+ *
+ * So the predicate arrives as an argument rather than being imported. A caller
+ * that has `@dunx/http` passes its `isGateway`; one that does not gets every class
+ * reported as an ordinary provider, which is exactly right for an app with no HTTP
+ * layer. Making core read the symbol itself would put a web concept in the
+ * container and give the marker two definitions to drift apart.
+ */
+export interface GraphOptions {
+  readonly isGateway?: (ctor: Ctor<unknown>) => boolean;
+}
+
+const never = (): boolean => false;
 
 const asDependency = (entry: DepEntry): Dependency =>
   isUnresolved(entry)
@@ -106,6 +120,7 @@ const nodeFor = (
   entry: ProviderEntry,
   module: string,
   role: ProviderRole,
+  isGateway: (ctor: Ctor<unknown>) => boolean,
 ): ProviderNode => {
   const { token, provider } = registrationOf(entry);
   const base = {
@@ -140,8 +155,13 @@ const nodeFor = (
   };
 };
 
-export const providersOf = (root: ModuleRef): readonly ProviderNode[] =>
-  collectModules(root).flatMap((module) => {
+export const providersOf = (
+  root: ModuleRef,
+  options: GraphOptions = {},
+): readonly ProviderNode[] => {
+  const isGateway = options.isGateway ?? never;
+
+  return collectModules(root).flatMap((module) => {
     // A module reference in `exports` re-exports that module's surface rather than a
     // token of this one's, so only the token entries answer "is this one exported".
     const exported = new Set(
@@ -156,13 +176,14 @@ export const providersOf = (root: ModuleRef): readonly ProviderNode[] =>
 
     return [
       ...readControllers(module).map((controller) =>
-        mark(nodeFor(controller, module.name, 'controller')),
+        mark(nodeFor(controller, module.name, 'controller', isGateway)),
       ),
       ...(module.options.providers ?? []).map((entry) =>
-        mark(nodeFor(entry, module.name, 'provider')),
+        mark(nodeFor(entry, module.name, 'provider', isGateway)),
       ),
     ];
   });
+};
 
 /** A module reference's name, whether it is a class or a configured module. */
 const refName = (ref: ModuleRef): string =>
@@ -172,6 +193,7 @@ const refName = (ref: ModuleRef): string =>
 const classesIn = (
   module: ResolvedModule,
   gateways: boolean,
+  isGateway: (ctor: Ctor<unknown>) => boolean,
 ): readonly string[] =>
   (module.options.providers ?? [])
     .map(registrationOf)
@@ -182,8 +204,13 @@ const classesIn = (
     )
     .map((registration) => describeToken(registration.token));
 
-export const modulesOf = (root: ModuleRef): readonly ModuleNode[] =>
-  collectModules(root).map((module) => ({
+export const modulesOf = (
+  root: ModuleRef,
+  options: GraphOptions = {},
+): readonly ModuleNode[] => {
+  const isGateway = options.isGateway ?? never;
+
+  return collectModules(root).map((module) => ({
     name: module.name,
     exports: (module.options.exports ?? []).map((entry) =>
       isModuleRef(entry) ? refName(entry) : describeToken(entry),
@@ -193,11 +220,12 @@ export const modulesOf = (root: ModuleRef): readonly ModuleNode[] =>
     imports: (module.options.imports ?? []).map(refName),
     controllers: readControllers(module).map((controller) => controller.name),
     providers: [
-      ...classesIn(module, false),
+      ...classesIn(module, false, isGateway),
       ...(module.options.providers ?? [])
         .map(registrationOf)
         .filter((registration) => registration.provider.kind !== 'class')
         .map((registration) => describeToken(registration.token)),
     ],
-    gateways: classesIn(module, true),
+    gateways: classesIn(module, true, isGateway),
   }));
+};

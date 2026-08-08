@@ -12,8 +12,12 @@
     "worker": "bun src/worker.ts"
   },
   "dependencies": {
+    "@bull-board/api": "^8.6.0",
+    "@bull-board/bun": "^8.6.0",
+    "@bull-board/ui": "^8.6.0",
     "@dunx/auth": "workspace:*",
     "@dunx/core": "workspace:*",
+    "@dunx/dashboard": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/infra": "workspace:*",
     "@dunx/openapi": "workspace:*",

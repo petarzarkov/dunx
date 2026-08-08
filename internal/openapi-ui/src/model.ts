@@ -1,16 +1,21 @@
 import type { PageModel, TryField } from '../../../packages/openapi/src/model';
-import type {
-  JsonSchema,
-  OpenApiDocument,
-  OperationKey,
-  OperationObject,
-  SecuritySchemeObject,
+import {
+  OPERATION_ORDER,
+  type JsonSchema,
+  type OpenApiDocument,
+  type OperationKey,
+  type OperationObject,
+  type SecuritySchemeObject,
 } from '../../../packages/openapi/src/types';
 
 /**
  * The page model is written by `@dunx/openapi`, so its types come from that
- * package's source rather than a second declaration that could drift. They are
- * type-only imports: nothing of the backend reaches the bundle.
+ * package's source rather than a second declaration that could drift.
+ *
+ * `OPERATION_ORDER` is the one value among them, and it is imported for the same
+ * reason: this file used to declare its own identical `METHODS` array. It is five
+ * frozen strings in a module that is otherwise types, so nothing of the backend
+ * reaches the bundle either way.
  */
 export type {
   JsonSchema,
@@ -20,22 +25,6 @@ export type {
   PageModel,
   SecuritySchemeObject,
   TryField,
-};
-
-export const METHODS: readonly OperationKey[] = [
-  'get',
-  'post',
-  'put',
-  'patch',
-  'delete',
-];
-
-export const METHOD_COLOR: Readonly<Record<OperationKey, string>> = {
-  get: 'blue',
-  post: 'green',
-  put: 'orange',
-  patch: 'grape',
-  delete: 'red',
 };
 
 export interface Entry {
@@ -48,7 +37,7 @@ export interface Entry {
 export const entriesOf = (document: OpenApiDocument): readonly Entry[] => {
   const out: Entry[] = [];
   for (const [path, item] of Object.entries(document.paths)) {
-    for (const method of METHODS) {
+    for (const method of OPERATION_ORDER) {
       const operation = item[method];
       if (operation === undefined) continue;
       for (const tag of operation.tags ?? ['default']) {
@@ -81,16 +70,6 @@ export const matches = (entry: Entry, query: string): boolean => {
     entry.operation.operationId,
     entry.operation.summary ?? '',
   ].some((field) => field.toLowerCase().includes(needle));
-};
-
-/** The colour a status code reads as, so a 500 is never mistaken for a 200. */
-export const statusColor = (status: string): string => {
-  const code = Number.parseInt(status, 10);
-  if (Number.isNaN(code)) return 'gray';
-  if (code < 300) return 'green';
-  if (code < 400) return 'cyan';
-  if (code < 500) return 'orange';
-  return 'red';
 };
 
 export const COMPONENTS_PREFIX = '#/components/schemas/';

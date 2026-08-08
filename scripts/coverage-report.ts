@@ -129,11 +129,20 @@ const formatRanges = (lines: number[]): string => {
   return ranges.join(', ');
 };
 
+/**
+ * Both published parents, not just `packages/`. `tools/create-app` and `tools/mcp`
+ * moved out of `packages/` when it became misleading to call a scaffolder part of
+ * the framework, and this pattern did not move with them - so both reported as
+ * having no tests while their lcov entries sat in the file unread. The list of
+ * parents is already `PUBLISHED_DIRS`; this is the same question asked of a path.
+ */
+const PACKAGE_PATH = new RegExp(`^(?:${PUBLISHED_DIRS.join('|')})/([^/]+)/`);
+
 const groupByPackage = (files: FileCoverage[]): PackageCoverage[] => {
   const packages = new Map<string, PackageCoverage>();
 
   for (const file of files) {
-    const name = file.path.match(/^packages\/([^/]+)\//)?.[1];
+    const name = PACKAGE_PATH.exec(file.path)?.[1];
     if (!name) continue;
 
     let pkg = packages.get(name);
