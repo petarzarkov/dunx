@@ -13,9 +13,10 @@ import type { DashboardOptions } from './options.js';
  * writing a `BunServeAdapter` to satisfy its interface, which the deleted
  * `@dunx/queue-dashboard` did and which was a liability. **That reason expired:**
  * bull-board 8.6.0 ships `@bull-board/bun`, an official `BunAdapter`. So the
- * integration is now three calls and dunx owns none of the queue surface - which
- * also disposes of the `getWorkers()` problem: whatever bullmq can report on Bun is
- * bull-board's to report, and dunx is not in the business of papering over it.
+ * integration is now three calls and dunx owns none of the queue surface - which is
+ * also what surfaced the `getWorkers()` bug: bull-board asks the question dunx's own
+ * panel had decided not to, and the answer turned out to be wrong for a reason in
+ * `@dunx/infra/queue`. See `QueueConnection.#handleErrors`.
  *
  * All three packages are **optional peers**. An app with no queues installs none of
  * them and the board is simply absent, with the queues nav item explaining why.
@@ -80,6 +81,8 @@ export interface Board {
   /** Why there is no board, for the page to show. Absent when there is one. */
   readonly unavailable?: string;
   readonly routes?: BoardRoutes;
+  /** The entry route, so an unmatched client-side path serves the page. */
+  readonly entry?: (req: Request) => Response | Promise<Response>;
   /** The queue names the board was built with, for the nav. */
   readonly queues: readonly string[];
 }
@@ -197,7 +200,94 @@ export const buildBoard = async (
     options: { uiConfig: uiConfigFor(options, favicon) },
   });
 
-  return { routes: serverAdapter.getRoutes(), queues: names };
+  const routes = serverAdapter.getRoutes();
+  // bull-board is a single-page app with its own router, so a path it renders
+  // client-side - `/queue/emails?status=failed` - has no entry in the table. Its
+  // own base route is what serves that, exactly as the dashboard's mount serves
+  // its own panels.
+  const entry = routes[basePath]?.['GET'];
+  return {
+    routes,
+    queues: names,
+    ...(entry === undefined ? {} : { entry }),
+  };
+};
+
+/**
+ * Bun's route patterns, matched against a path.
+ *
+ * bull-board's table is not a list of literals - it carries `:queueName`,
+ * `:jobId`, `:queueStatus` and a `static/*` prefix, thirty-odd patterns in all.
+ * The first version of this did exact-match plus one wildcard and 404'd every
+ * job view and every per-queue API call, which is the bug that produced
+ * `{"error":"no such bull-board route"}` on a page bull-board itself renders.
+ *
+ * This **is** a small path matcher, and dunx bans writing one - for the app's
+ * routes, where `Bun.serve({ routes })` does it natively and better. It cannot
+ * here: the board is built on the first request for it, long after `listen()`
+ * folded the route table, so there is nothing to hand these to. The compensation
+ * is that it never sees an app's routes, only the table bull-board handed over.
+ */
+interface Pattern {
+  readonly segments: readonly string[];
+  readonly wildcard: boolean;
+  /** Literal segments, so a literal route beats a parameterised one. */
+  readonly literals: number;
+  readonly handlers: Record<
+    string,
+    (req: Request) => Response | Promise<Response>
+  >;
+}
+
+const compile = (routes: BoardRoutes): readonly Pattern[] =>
+  Object.entries(routes)
+    .map(([pattern, handlers]) => {
+      const raw = pattern.split('/').filter(Boolean);
+      const wildcard = raw.at(-1) === '*';
+      const segments = wildcard ? raw.slice(0, -1) : raw;
+      return {
+        segments,
+        wildcard,
+        literals: segments.filter((s) => !s.startsWith(':')).length,
+        handlers,
+      };
+    })
+    // Most literal first, then longest. `/api/queues` must win over
+    // `/api/queues/:queueName` for a path both could claim, and a wildcard is
+    // the last thing tried.
+    .sort(
+      (a, b) =>
+        b.literals - a.literals ||
+        b.segments.length - a.segments.length ||
+        Number(a.wildcard) - Number(b.wildcard),
+    );
+
+/**
+ * The params if it matches, `undefined` if it does not - an empty object is a
+ * match with no parameters, which is a different answer.
+ */
+const matchParams = (
+  pattern: Pattern,
+  path: readonly string[],
+): Record<string, string> | undefined => {
+  if (pattern.wildcard) {
+    if (path.length < pattern.segments.length) return undefined;
+  } else if (path.length !== pattern.segments.length) {
+    return undefined;
+  }
+
+  const params: Record<string, string> = {};
+  for (const [index, segment] of pattern.segments.entries()) {
+    const value = path[index] ?? '';
+    if (segment.startsWith(':')) {
+      // Decoded, because a queue name may legitimately carry a space or a slash
+      // and arrives percent-encoded. Bun does the same for its own params.
+      params[segment.slice(1)] = decodeURIComponent(value);
+    } else if (segment !== value) {
+      return undefined;
+    }
+  }
+  return params;
 };
 
 /**
@@ -209,17 +299,35 @@ export const buildBoard = async (
  * table it walks is the one bull-board handed over. Twenty lines here is the price
  * of not asking `HttpFactory` to accept a foreign route table at boot.
  */
+export interface BoardMatch {
+  readonly handler: (req: Request) => Response | Promise<Response>;
+  /**
+   * What `Bun.serve` would have put on `BunRequest.params`.
+   *
+   * bull-board's handlers read `request.params` - Bun populates it when *it*
+   * matches a route pattern, and nothing populates it when the dispatch is
+   * manual. Without this every parameterised route answered
+   * `{"error":{"key":"ERRORS.QUEUE_NOT_FOUND"}}`: the route was found, the queue
+   * name was not.
+   */
+  readonly params: Record<string, string>;
+}
+
 export const matchBoard = (
   routes: BoardRoutes,
   method: string,
   pathname: string,
-): ((req: Request) => Response | Promise<Response>) | undefined => {
+): BoardMatch | undefined => {
+  // The literal case is most of the traffic and costs one lookup.
   const exact = routes[pathname]?.[method];
-  if (exact) return exact;
+  if (exact) return { handler: exact, params: {} };
 
-  for (const [pattern, handlers] of Object.entries(routes)) {
-    if (!pattern.endsWith('/*')) continue;
-    if (pathname.startsWith(pattern.slice(0, -1))) return handlers[method];
+  const path = pathname.split('/').filter(Boolean);
+  for (const pattern of compile(routes)) {
+    const params = matchParams(pattern, path);
+    if (params === undefined) continue;
+    const handler = pattern.handlers[method];
+    if (handler) return { handler, params };
   }
   return undefined;
 };

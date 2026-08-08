@@ -32,7 +32,9 @@ services first, then the database and the temp directory they were using.
 | Command         | Does                                                                |
 | --------------- | -------------------------------------------------------------------- |
 | `bun start`     | serves on `PORT` (default 3000) and holds                            |
+| `bun run dev`   | the same, under `bun --watch` - reloads on every save                |
 | `bun run worker`| consumes queued jobs - **a second process, on purpose**              |
+| `bun run dev:worker` | the same, under `bun --watch`                                   |
 | `bun run tour`  | boots the same app, narrates every package, shuts down, exits 0      |
 
 The tour is what CI runs. It is the end-to-end check that the whole DI graph builds

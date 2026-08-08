@@ -5,6 +5,7 @@
   "description": "The smallest dunx app - a service, a controller, a module and HttpFactory.create",
   "type": "module",
   "scripts": {
+    "dev": "bun --watch src/main.ts",
     "start": "bun src/main.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"

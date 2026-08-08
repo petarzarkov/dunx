@@ -5,6 +5,7 @@
   "description": "Testing a dunx app with @dunx/testing - overrides that replace in place, a real Bun.serve on port 0, and RecordingLogger",
   "type": "module",
   "scripts": {
+    "dev": "bun --watch src/main.ts",
     "start": "bun src/main.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"

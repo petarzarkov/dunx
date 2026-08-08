@@ -5,6 +5,8 @@
   "description": "The dunx example app - one long-running service exercising DI, config, logging, HTTP routes, websocket gateways, guards, db, redis, files, images and OpenAPI",
   "type": "module",
   "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "dev:worker": "bun --watch src/worker.ts",
     "start": "bun src/main.ts",
     "test": "bun test",
     "tour": "bun src/tour.ts",

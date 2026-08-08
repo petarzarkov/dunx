@@ -83,11 +83,31 @@ export class QueueConnection implements OnShutdown {
       this.#logger.warn('the queue connection reported an error', error);
     });
 
-    const derived = adapter as { duplicate?: () => IRedisClient };
+    /**
+     * **The arguments are forwarded, and that is load bearing.**
+     *
+     * This wrapper used to call `duplicate.call(adapter)` with none, which looked
+     * harmless and silently broke `Queue.getWorkers()` for every dunx app.
+     * bullmq's Bun adapter takes the connection's name only through
+     * `duplicate({ connectionName })` - its constructor ignores the option - and
+     * `getWorkers()` finds workers by matching that name in `CLIENT LIST`. Dropping
+     * the options meant no `CLIENT SETNAME`, so a live worker draining jobs
+     * reported as absent and bull-board showed "No workers" forever.
+     *
+     * Measured both ways against a real Redis: with the arguments dropped,
+     * `CLIENT LIST` carries no named connection and `getWorkers()` is `0`; with
+     * them forwarded, the name appears and it is `1`. This was long believed to be
+     * an unfixable gap in bullmq's Bun adapter. It was ours.
+     */
+    // `unknown[]` rather than `readonly unknown[]`: `Function.apply` declares a
+    // mutable array and will not take a readonly one.
+    const derived = adapter as {
+      duplicate?: (...args: unknown[]) => IRedisClient;
+    };
     const duplicate = derived.duplicate;
     if (typeof duplicate === 'function') {
-      derived.duplicate = (): IRedisClient =>
-        this.#handleErrors(duplicate.call(adapter));
+      derived.duplicate = (...args: unknown[]): IRedisClient =>
+        this.#handleErrors(duplicate.apply(adapter, args));
     }
     return adapter;
   }

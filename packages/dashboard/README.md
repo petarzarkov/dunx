@@ -138,12 +138,9 @@ one thing that had ever justified hand-rolling it was that mounting bull-board o
 `@dunx/queue-dashboard` did, and which was a liability. **bull-board 8.6.0 ships
 `@bull-board/bun`**, so that reason is gone and the integration is three calls.
 
-It also disposes of the question that started all this: `Queue.getWorkers()` returns
-`[]` on Bun, because bullmq matches workers by client name through `CLIENT LIST` and
-its Bun adapter never names a connection. Whatever bullmq can report on Bun is
-bull-board's to report. dunx is not in the business of papering over it, and a
-dashboard that quietly worked around a library's limitation would be a worse place
-to find out about it.
+It also settled the question that started all this - see **Workers do show up**
+below. The hand-rolled panel had planned to omit a worker column and explain why;
+mounting bull-board asked the question honestly and exposed the real cause.
 
 ```bash
 bun add @bull-board/api @bull-board/ui @bull-board/bun

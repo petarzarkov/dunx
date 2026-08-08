@@ -553,8 +553,15 @@ are decisions rather than details, and all three are load bearing:
 `@bull-board/bun`). A queue table was written here and deleted - it was a worse
 bull-board, which is Rule 1's second half exactly. The only thing that had justified
 hand-rolling it was needing a `Bun.serve` adapter; bull-board 8.6.0 ships one, so
-that reason expired. **Do not re-add a queue panel.** It also settles the
-`getWorkers()` question - always `[]` on Bun - as bull-board's, not dunx's.
+that reason expired. **Do not re-add a queue panel.**
+
+It also settled the `getWorkers()` question, in the opposite direction to the one
+everyone assumed. It is **not** always `[]` on Bun: `QueueConnection` wrapped
+`duplicate` and called it with no arguments, dropping the `{ connectionName }`
+bullmq's Bun adapter takes the name through, so `CLIENT SETNAME` never ran. One
+line in `@dunx/infra/queue`. The lesson is the one Rule 1 keeps teaching: mounting
+the library asked the question honestly, where the hand-rolled panel had designed
+around the missing data.
 
 dunx contributes the two things bull-board cannot know: it sits behind the same
 `authorize`, and `commands: false` maps onto bull-board's own `readOnlyMode` rather

@@ -295,8 +295,23 @@ describe('the queues handoff', () => {
     expect((await get('/_dunx/queues', false)).status).toBe(404);
   });
 
-  it('404s a path bull-board does not recognise', async () => {
-    expect((await get('/_dunx/queues/nope/nope')).status).toBe(404);
+  it('serves the board for its own client-side routes', async () => {
+    // `/queue/emails?status=failed` is rendered by bull-board's router, not its
+    // server, so it has no entry in the route table. Answering 404 there - which
+    // this did - broke every link the board itself renders.
+    const response = await get('/_dunx/queues/queue/emails?status=completed');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+  });
+
+  it('404s a write to a path nothing declares', async () => {
+    // The SPA fallback is GET-only: a POST to a route bull-board does not have
+    // is a real 404, not a page.
+    const response = await fetch(`${base}/_dunx/queues/nope/nope`, {
+      method: 'POST',
+      headers: { 'x-admin': AUTHORIZED },
+    });
+    expect(response.status).toBe(404);
   });
 });
 

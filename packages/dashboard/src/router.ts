@@ -104,15 +104,29 @@ export const handleDashboard = async (
     if (board.routes === undefined) {
       return fail(503, board.unavailable ?? 'no queue board');
     }
-    const handler = matchBoard(
+    const match = matchBoard(
       board.routes,
       method,
       new URL(request.url).pathname,
     );
-    // bull-board's own 404, not the app's: a path under its mount that it does
-    // not recognise is its business.
-    if (handler === undefined) return fail(404, 'no such bull-board route');
-    return handler(request);
+    if (match !== undefined) {
+      // bull-board reads `request.params`, which `Bun.serve` fills in when it
+      // does the matching. This dispatch is manual, so the field has to be put
+      // there or every `:queueName` route answers QUEUE_NOT_FOUND.
+      Object.defineProperty(request, 'params', {
+        value: match.params,
+        configurable: true,
+      });
+      return match.handler(request);
+    }
+
+    // Nothing in its table, so it is one of bull-board's own client-side routes -
+    // `/queue/emails?status=failed` is rendered by its router, not its server.
+    // Its entry route serves those, which is the same thing the dashboard's mount
+    // does for its own panels. Only for a GET: a write to a path nothing declares
+    // is a real 404.
+    if (method === 'GET' && board.entry) return board.entry(request);
+    return fail(404, 'no such bull-board route');
   }
 
   if (method !== 'GET') return fail(405, `${method} is not allowed here`);

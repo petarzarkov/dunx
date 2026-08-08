@@ -10,11 +10,11 @@ bisecting the stack a layer at a time found a leak in `Bun.RedisClient` on its o
 and a second, separate one in bullmq's Bun adapter. Neither is reachable from
 userland. All three have a minimal reproduction, ready to file.
 
-| #                                                                          | Symptom                                                 | Layer          |
-| -------------------------------------------------------------------------- | ------------------------------------------------------- | -------------- |
-| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | a pending connect outlives `close()`, process hangs     | Bun            |
-| [B](#leak-b---bullmq-disconnect-cannot-cancel-its-own-reconnect)           | `disconnect()` cannot cancel its own reconnect          | bullmq adapter |
-| [C](#defect-c---no-connection-is-ever-named-so-getworkers-is-always-empty) | `getWorkers()` always `[]`, dashboards say "No workers" | bullmq adapter |
+| #                                                                          | Symptom                                                                       | Layer          |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------- |
+| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | a pending connect outlives `close()`, process hangs                           | Bun            |
+| [B](#leak-b---bullmq-disconnect-cannot-cancel-its-own-reconnect)           | `disconnect()` cannot cancel its own reconnect                                | bullmq adapter |
+| [C](#defect-c---no-connection-is-ever-named-so-getworkers-is-always-empty) | ~~`getWorkers()` always `[]`~~ **fixed - was dunx's own `duplicate` wrapper** | dunx           |
 
 ## The measurement that separates them
 
@@ -99,6 +99,14 @@ fork by another name and it would break on a patch release, so it is **not** in
 `@dunx/infra/queue`. Fix it upstream, or wait for it.
 
 ## Defect C - no connection is ever named, so `getWorkers()` is always empty
+
+> **FIXED, and it was dunx's, not upstream's.** The diagnosis below is correct up to
+> the blame: no connection is named, dashboards say "No workers". The cause is that
+> `QueueConnection.#handleErrors` wrapped `duplicate` and called it with **no
+> arguments**, and bullmq's Bun adapter takes the connection name only through
+> `duplicate({ connectionName })`. Forwarding the arguments makes `CLIENT SETNAME`
+> run; measured against a real Redis, `CLIENT LIST` gains the named connection and
+> `getWorkers()` goes from 0 to 1. Nothing upstream had to change.
 
 **Cosmetic, but permanently and visibly wrong**, and the first of these three that a
 user actually reports. Found from `dunx-template`: its Bull Board showed two queues

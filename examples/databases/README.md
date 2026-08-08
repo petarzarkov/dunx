@@ -7,6 +7,8 @@ that differ are the only parts on screen.
 ```bash
 bun install
 bun run --filter '@dunx/example-databases' start
+# or, reloading on every save:
+bun run --filter '@dunx/example-databases' dev
 ```
 
 With nothing installed that prints two SQLite results and says it is skipping

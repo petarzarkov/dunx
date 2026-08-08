@@ -7,6 +7,8 @@ enough to see the shape. Read it top to bottom in two minutes, then go to
 ```bash
 bun install
 bun run --filter '@dunx/example-minimal' start
+# or, reloading on every save:
+bun run --filter '@dunx/example-minimal' dev
 curl localhost:3000/greetings/ada     # {"greeting":"hello, ada","served":1}
 ```
 

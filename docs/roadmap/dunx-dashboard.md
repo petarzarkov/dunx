@@ -194,10 +194,8 @@ found. That is Rule 1's second half working as intended, one iteration late. The
 section below is kept as the record of what was reasoned and why it was wrong to
 start from the assumption rather than checking the registry.
 
-**This also settles the `getWorkers()` question** rather than working around it. It
-is always `[]` on Bun, and that is bullmq's and bull-board's to surface - a dashboard
-that quietly papered over a library's limitation would be a worse place to find out
-about it.
+**This also settled the `getWorkers()` question** - by exposing that it was dunx's
+bug, not bullmq's. See the struck-through section below.
 
 The original two-command scope:
 
@@ -217,12 +215,16 @@ retry semantics or backoff is reimplemented - bullmq still owns all of it. Anyon
 needs that depth is better served mounting bull-board themselves, and the design
 should say so in the README rather than implying parity.
 
-**Do not call `getWorkers()`.** It always returns `[]` on Bun: bullmq matches workers
-by client name through `CLIENT LIST`, and its Bun adapter never names a connection, so
-a live worker draining jobs reports as absent. Measured, with the reproduction, in
-[queue-shutdown-sigterm](./queue-shutdown-sigterm.md), defect C. A "workers" column
-would be permanently and confidently wrong, so the panel should omit it and say why -
-job counts moving is the signal that works.
+**~~Do not call `getWorkers()`.~~ - [wrong, and it was ours]** This said the call
+always returns `[]` on Bun because bullmq's adapter never names a connection. The
+premise was right and the blame was not: `QueueConnection` wrapped `duplicate` and
+called it with **no arguments**, dropping the `{ connectionName }` the Bun adapter
+takes the name through, so `CLIENT SETNAME` never ran. Forwarding the arguments makes
+`getWorkers()` answer - 0 to 1, measured against a real Redis.
+
+Two things worth keeping from the mistake. Designing a panel _around_ missing data is
+how a bug survives a year: the plan here was to omit the column and explain why.
+Mounting bull-board asked the question honestly and the answer fell out in an hour.
 
 ## Answering Rule 1 now that there is no library underneath - **[moot]**
 

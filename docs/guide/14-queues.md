@@ -483,12 +483,13 @@ await queue.drain(); // discard everything waiting
 ```
 
 Serving that as an admin-only JSON controller is about sixty lines and is what
-`dunx-template` did before the package existed. **`getWorkers()` is the one call not
-worth making**: bullmq matches workers by client name through `CLIENT LIST`, and its
-Bun adapter never names a connection, so it returns `[]` even while workers are
-draining jobs. Job counts moving is the signal that works. Recorded, with the
-measurement, in
-[queue-shutdown-sigterm](https://github.com/petarzarkov/dunx/blob/main/docs/roadmap/queue-shutdown-sigterm.md).
+`dunx-template` did before the package existed. `getWorkers()` **works**, and was long
+believed not to: it reported `[]` on Bun even while workers drained jobs, because
+`QueueConnection` wrapped `duplicate` and called it with no arguments, dropping the
+`{ connectionName }` bullmq's Bun adapter names a connection through. One line, fixed;
+`CLIENT SETNAME` runs and the worker appears. Recorded, with the measurement, in
+[queue-shutdown-sigterm](https://github.com/petarzarkov/dunx/blob/main/docs/roadmap/queue-shutdown-sigterm.md),
+defect C.
 
 ## Related
 
