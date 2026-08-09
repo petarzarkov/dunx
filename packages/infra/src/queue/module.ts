@@ -1,14 +1,18 @@
 import {
+  AppRef,
   Logger,
   provide,
+  ROOT_MODULE,
   type Deps,
   type DynamicModule,
   type AsyncModuleConfig,
+  type ModuleRef,
   type Registration,
 } from '@dunx/core';
 import { QueueConnection } from './connection.js';
 import { QueueOptions, type QueueOptionsInit } from './options.js';
 import { JobPublisher } from './publisher.js';
+import { QueueRunner } from './runner.js';
 
 /**
  * `QueueConnection` is bound as a factory over `QueueOptions`, and `JobPublisher`
@@ -23,6 +27,38 @@ import { JobPublisher } from './publisher.js';
  * `WorkerFactory` in the same process needs.
  */
 const surface = [QueueOptions, QueueConnection, JobPublisher];
+
+/**
+ * Always bound, and it does nothing unless `consume` is set - the check is inside
+ * `onInit` rather than here because `forRootAsync` builds its options from a
+ * factory, so the flag is not knowable when the providers are declared. An idle
+ * runner costs one object.
+ *
+ * Bound **after** the publisher, so reverse-order teardown stops the workers before
+ * the connection they run on closes.
+ *
+ * `QueueConnection` is in the inject list even though the runner never touches it
+ * directly: it is what puts the runner after it in construction order, and
+ * therefore before it in teardown. An ordering expressed as a dependency is one the
+ * container enforces rather than one a comment asks for.
+ */
+const runner = (): Registration =>
+  provide(QueueRunner, {
+    useFactory: (
+      ref: AppRef,
+      root: ModuleRef,
+      options: QueueOptions,
+      logger: Logger,
+      _connection: QueueConnection,
+    ) => new QueueRunner(ref, root, options, logger),
+    inject: [
+      AppRef,
+      ROOT_MODULE,
+      QueueOptions,
+      Logger,
+      QueueConnection,
+    ] as const,
+  });
 
 const bindings: readonly Registration[] = [
   provide(QueueConnection, {
@@ -56,6 +92,7 @@ export class QueueModule {
       providers: [
         provide(QueueOptions, { useValue: new QueueOptions(init) }),
         ...bindings,
+        runner(),
       ],
     };
   }
@@ -102,6 +139,7 @@ export class QueueModule {
           inject,
         }),
         ...bindings,
+        runner(),
       ],
     };
   }

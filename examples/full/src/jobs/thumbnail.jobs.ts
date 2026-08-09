@@ -32,7 +32,10 @@ export class ThumbnailJobs {
     private readonly logger: Logger,
   ) {}
 
-  @JobHandler({ queue: THUMBNAIL_QUEUE, name: 'render' })
+  // `background: true` puts this queue's jobs in a forked child: a slow or
+  // crashing render cannot take the server with it, and its log lines still land
+  // in this process's stream.
+  @JobHandler({ queue: THUMBNAIL_QUEUE, name: 'render', background: true })
   async render(job: Job<RenderRequest>): Promise<RenderResult> {
     const encoded = await this.thumbnails.render({
       width: job.data.width,
@@ -45,8 +48,7 @@ export class ThumbnailJobs {
       height: encoded.height,
       bytes: encoded.bytes.byteLength,
     };
-    // Written by the worker process, so seeing this line is how you know the job
-    // did not run in the web process.
+    // Written in the child, and visible here: that is the point of the sandbox.
     this.logger.info(`rendered job ${job.id ?? '?'}`, result);
     return result;
   }

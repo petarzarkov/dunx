@@ -41,10 +41,9 @@ import { DashboardDemo } from './dashboard.demo.js';
         path: '/api/_dunx',
         title: config.get('appName'),
         queues,
-        // The thumbnail queue is drained by `bun run worker`, a separate process.
-        // Naming it here is free: nothing opens a connection until somebody
-        // actually opens the board, which is what lets this example still exit 0
-        // against an absent Redis.
+        // Naming it is free: nothing opens a connection until somebody actually
+        // opens the board, which is what lets this example still exit 0 against an
+        // absent Redis.
         queueNames: ['thumbnails'],
         redis,
         config,

@@ -31,11 +31,8 @@ services first, then the database and the temp directory they were using.
 
 | Command         | Does                                                                |
 | --------------- | -------------------------------------------------------------------- |
-| `bun start`     | serves on `PORT` (default 3000) and holds                            |
+| `bun start`     | serves on `PORT` (default 3000), **consumes its own queues**, holds  |
 | `bun run dev`   | the same, under `bun --watch` - reloads on every save                |
-| `bun run worker`| consumes queued jobs - **a second process, on purpose**              |
-| `bun run dev:worker` | the same, under `bun --watch`                                   |
-| `INLINE_WORKER=true bun start` | consumes in the web process - one log stream |
 | `bun run tour`  | boots the same app, narrates every package, shuts down, exits 0      |
 
 The tour is what CI runs. It is the end-to-end check that the whole DI graph builds
@@ -54,7 +51,7 @@ that check, because a service never exits.
 | `/api/cache`      | `@dunx/infra/redis` - `Bun.RedisClient`, degrading when nothing is up    |
 | `/api/reports`    | `@Public`, `@Roles` and `@UseGuards`                                    |
 | `/api/health`     | which of the above are actually working                                 |
-| `/api/jobs`       | `@dunx/infra/queue` - bullmq; publishes here, consumed by `bun run worker` |
+| `/api/jobs`       | `@dunx/infra/queue` - bullmq; published and consumed by this process       |
 | `/api/auth/*`     | `@dunx/auth` - better-auth mounted, with `Bun.password` hashing          |
 | `/api/wiring`     | `@dunx/core` - `token()`, `inject()` and the three `provide()` shapes    |
 | `/chat`           | a websocket gateway on the **same** `Bun.serve` as the routes            |
@@ -88,46 +85,59 @@ skipping and the app still exits 0.
 
 ### The queue needs two processes
 
-### One process, if you want the logs together
+### Where a handler runs
 
-`INLINE_WORKER=true bun start` consumes the queues in the web process, through
-`WorkerFactory.attach`. The appeal is a single log stream: a handler's lines land
-next to the request that enqueued the job, with no second terminal.
+`bun start` works the queues as well as serving them. There is no second command,
+and **nothing in `main.ts` says so** - `JobsModule` sets `consume: true` on its
+`QueueModule`, and the container starts the workers at `onInit` and stops them at
+`onShutdown`, before the database they use closes.
+
+A queue runs in a **forked child** when a handler asks for one:
+
+```ts
+@JobHandler({ queue: 'thumbnails', name: 'render', background: true })
+async render(job: Job<RenderRequest>): Promise<RenderResult> { ... }
+```
+
+The boot log says which each queue got:
+
+```
+Started [background] worker for queue: thumbnails
+  handlers: render: ThumbnailJobs.render
+  worker:   { isolation: process }
+```
+
+Leave `background` off and the queue runs on this event loop - `[foreground]`,
+cheapest, right for a handler that does nothing slow. A queue marked `background`
+with no `processor` configured is a boot error rather than a silent demotion.
+
+Enqueue one and watch a single stream:
 
 ```bash
-INLINE_WORKER=true bun start
 curl -X POST localhost:3000/api/jobs/thumbnails -H 'content-type: application/json' -d '{}'
-# ... POST /api/jobs/thumbnails 201
-# ... rendered job 37          <- the handler, same process, same stream
+# pid=79934  POST /api/jobs/thumbnails 201        <- the server
+# pid=80222  Sandboxed worker ready, 1 handler(s) <- the child, first job only
+# pid=80222  rendered job 58                      <- the handler, in the child, here
 ```
 
-Two things it costs, and they are why the default is the other way. A slow handler
-competes with every request for the same event loop, and the two tiers can no longer
-be scaled or restarted apart. The one thing to copy from here if you do use it is the
-**shutdown order**: `attach` cannot enforce it, so `main.ts` stops the consumer before
-the container tears down - a worker still running while providers close finds its
-database gone underneath it.
+Different pid, same stream. `job.log()` puts the same lines **on the job**, where
+bull-board shows them - the copy that outlives the process.
 
-A worker is its own container - its own connections, no HTTP server - so this is the
-one area the service cannot demonstrate alone. Run both:
+`src/jobs/jobs.processor.ts` is the file the child runs. Three lines, because
+`JobProcessor` does the rest.
 
 ```bash
-bun start          # publishes
-bun run worker     # consumes, in another terminal
-```
-
-```bash
-# Returns immediately with a job id and state "waiting".
+# Returns immediately with a job id. `bun start` is already consuming.
 curl -sX POST localhost:3000/api/jobs/thumbnails \
   -H 'content-type: application/json' -d '{"width":128,"format":"webp"}'
 
-# Poll it. `result` is whatever the handler returned, computed in the worker.
+# Poll it. `result` is whatever the handler returned, computed in the child.
 curl -s localhost:3000/api/jobs/thumbnails/1
 ```
 
 The handler in [src/jobs/thumbnail.jobs.ts](./src/jobs/thumbnail.jobs.ts) injects the
 same `Thumbnails` service the HTTP image routes use - one wiring, two entry points.
-`@JobHandler` is the whole registration; the worker finds it by walking prototypes,
+`@JobHandler` is the whole registration; the runner finds it by walking prototypes,
 the same discovery routes and gateways use.
 
 **With no Redis the queue routes answer 503 in single-digit milliseconds** rather than

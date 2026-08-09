@@ -6,12 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/main.ts",
-    "dev:worker": "bun --watch src/worker.ts",
     "start": "bun src/main.ts",
     "test": "bun test",
     "tour": "bun src/tour.ts",
-    "typecheck": "tsc --noEmit",
-    "worker": "bun src/worker.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@bull-board/api": "^8.6.0",

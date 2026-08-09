@@ -1,5 +1,6 @@
 export {
   AppFactory,
+  AppRef,
   type App,
   type AppOptions,
   type ShutdownSignal,

@@ -26,7 +26,7 @@ const oneJob = { params: z.object({ id: z.string().min(1) }) } as const;
 /**
  * The publish side. Nothing here consumes: `QueueModule.forRoot` binds
  * `JobPublisher` and no worker, so this process enqueues and returns immediately.
- * Run `bun run worker` to consume.
+ * Consumed by this same process - see `JobsModule`'s `consume: true`.
  */
 @Controller('jobs')
 export class JobsController {

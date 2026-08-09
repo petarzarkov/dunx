@@ -3,19 +3,17 @@ import type { HttpApp } from '@dunx/http';
 import { createApp } from './bootstrap.js';
 
 /**
- * The queue is the one area the full example cannot demonstrate in a single process:
- * a worker is its own container with its own connections, so `bun run worker` is a
- * second process and this suite spawns it.
+ * **No second process to spawn.** `JobsModule` sets `consume: true`, so building the
+ * app is enough: the container opens the workers at `onInit`, and the thumbnail
+ * queue's handler is marked `background`, so bullmq forks a child for each job.
+ * This suite used to start `bun run worker` and wait for it.
  *
  * Every assertion is skipped when Redis is unreachable, because `bun run test` has
  * to pass on a machine with nothing running - the same contract the cache routes
  * keep.
  */
-const APP_DIR = new URL('..', import.meta.url).pathname;
-
 let app: HttpApp;
 let base: string;
-let worker: Bun.Subprocess | undefined;
 let queueUp = false;
 
 const api = (path: string): URL => new URL(`api/${path}`, base);
@@ -32,22 +30,14 @@ beforeAll(async () => {
     body: JSON.stringify({ width: 32, format: 'png' }),
   });
   queueUp = probe.status === 201;
-
-  if (queueUp) {
-    worker = Bun.spawn(['bun', 'src/worker.ts'], {
-      cwd: APP_DIR,
-      env: { ...process.env, NODE_ENV: 'production' },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-    // The worker opens its own container and one bullmq Worker per queue.
-    await Bun.sleep(2500);
-  }
+  // The first job forks a child, which builds its own container - slower than an
+  // inline handler and worth waiting for before the first assertion.
+  if (queueUp) await Bun.sleep(2500);
 });
 
 afterAll(async () => {
-  worker?.kill('SIGTERM');
-  await worker?.exited;
+  // Stops the workers and the children with them; `onShutdown` ordering is the
+  // container's, not this file's.
   await app.shutdown();
 });
 
@@ -81,12 +71,10 @@ const settled = async (id: string): Promise<JobView> => {
     if (last.result !== null || last.state === 'failed') return last;
     await Bun.sleep(150);
   }
-  // Whatever went wrong, the worker's own output is the only place that says so.
-  const output = worker
-    ? await new Response(worker.stderr as ReadableStream).text()
-    : '(no worker spawned)';
+  // No subprocess to read stderr from any more: the handler runs in a child of
+  // this process and its output is already in this process's stream.
   throw new Error(
-    `job ${id} never produced a result. last=${JSON.stringify(last)}\nworker stderr:\n${output.slice(0, 2000)}`,
+    `job ${id} never produced a result. last=${JSON.stringify(last)}`,
   );
 };
 

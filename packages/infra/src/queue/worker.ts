@@ -11,7 +11,7 @@ import {
 import { Worker, type Job } from 'bullmq';
 import { QueueConnection } from './connection.js';
 import { JobDispatcher } from './dispatcher.js';
-import { describeJob, discoverJobs, type DiscoveredJob } from './discover.js';
+import { describeJob, selectJobs, type DiscoveredJob } from './discover.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueOptions } from './options.js';
 
@@ -22,6 +22,14 @@ export interface WorkerAppOptions {
    * gets its own process and its own concurrency.
    */
   readonly queues?: readonly string[];
+  /**
+   * Run a queue's jobs in a child rather than inline.
+   *
+   * There is no option for it here on purpose: a queue is sandboxed by marking a
+   * handler `@JobHandler({ background: true })`, and the file to fork into is
+   * `QueueModule.forRoot({ processor })`. Both live with the jobs, so an
+   * entrypoint says nothing about where a handler runs - which is the point.
+   */
 }
 
 /**
@@ -67,6 +75,16 @@ export class QueueConsumer {
     this.#logger = app.get(Logger);
   }
 
+  /**
+   * A queue is sandboxed when **any** handler on it is marked `background`.
+   *
+   * Per queue rather than per handler because bullmq opens one `Worker` per queue
+   * and a worker is either given a file path or a function - there is no halfway.
+   */
+  #isBackground(queue: string): boolean {
+    return this.jobs.some((job) => job.queue === queue && job.background);
+  }
+
   async start(): Promise<readonly string[]> {
     if (this.#started) {
       throw new QueueError(
@@ -76,6 +94,21 @@ export class QueueConsumer {
     }
     this.#started = true;
 
+    // Checked before anything opens, so a queue asking for a sandbox that was
+    // never configured is a boot error rather than a quiet demotion to the
+    // foreground - which would look identical until something crashed the server.
+    const unbacked = this.queues.filter(
+      (queue) => this.#isBackground(queue) && this.#processor() === undefined,
+    );
+    if (unbacked.length > 0) {
+      throw new QueueError(
+        QueueErrorCode.INVALID_STATE,
+        `${unbacked.join(', ')} has a @JobHandler({ background: true }) but no ` +
+          'processor file is configured. Pass QueueModule.forRoot({ processor }) ' +
+          'pointing at the file bullmq should fork into - see JobProcessor.',
+      );
+    }
+
     for (const queue of this.queues) {
       this.#workers.push(this.#open(queue));
     }
@@ -83,14 +116,26 @@ export class QueueConsumer {
     // against the first queue instead of once per queue.
     for (const worker of this.#workers) await worker.waitUntilReady();
 
-    this.#logger.info(
-      `Consuming ${this.jobs.length} job(s) on ${this.queues.length} queue(s)`,
-      {
+    // One entry per queue, naming where its handlers run and which they are.
+    // "Consuming N job(s)" alone could not answer the question a sandbox exists
+    // to raise: is this queue isolated from the server or not.
+    for (const queue of this.queues) {
+      const handlers = this.jobs.filter((job) => job.queue === queue);
+      const where = this.#isBackground(queue) ? 'background' : 'foreground';
+      this.#logger.info(`Started [${where}] worker for queue: ${queue}`, {
+        queue,
         url: this.#options.redactedUrl,
-        queues: this.queues,
-        jobs: this.jobs.map((job) => `${job.queue}/${job.name}`),
-      },
-    );
+        handlers: handlers
+          .map((job) => `${job.name}: ${job.provider}.${job.method}`)
+          .join(', '),
+        worker: {
+          isolation: where === 'foreground' ? 'inline' : this.#isolation(),
+          ...(this.#options.worker.concurrency === undefined
+            ? {}
+            : { concurrency: this.#options.worker.concurrency }),
+        },
+      });
+    }
     return this.queues;
   }
 
@@ -110,12 +155,34 @@ export class QueueConsumer {
     return this.#stopping;
   }
 
+  /**
+   * A **file path** where a sandbox is configured, a function otherwise - that one
+   * argument is the whole difference between a handler running on this event loop
+   * and one running in a child. bullmq imports the file in the child and calls its
+   * default export; nothing of `this` crosses over, which is why the child builds
+   * its own container (see `JobProcessor`).
+   */
+  #processor(): string | undefined {
+    return this.#options.processor;
+  }
+
+  #isolation(): 'process' | 'thread' {
+    return this.#options.isolation;
+  }
+
   #open(queue: string): Worker {
+    const background = this.#isBackground(queue);
+    const processor = this.#processor();
     const worker = new Worker(
       queue,
-      (job: Job) => this.#dispatcher.dispatch(job),
+      background && processor !== undefined
+        ? processor
+        : (job: Job) => this.#dispatcher.dispatch(job),
       {
         ...this.#options.worker,
+        ...(background
+          ? { useWorkerThreads: this.#isolation() === 'thread' }
+          : {}),
         connection: this.#connection.client(),
         prefix: this.#options.prefix,
       },
@@ -136,48 +203,6 @@ export class QueueConsumer {
     return worker;
   }
 }
-
-/**
- * The handlers this worker will run, or a boot error explaining why there are
- * none. Shared by `create` and `attach`; only `create` owns a container to tear
- * down when it throws.
- */
-const selectJobs = (
-  modules: readonly ResolvedModule[],
-  resolve: (token: InjectionToken<unknown>) => unknown,
-  wanted: readonly string[] | undefined,
-): readonly DiscoveredJob[] => {
-  const discovered = discoverJobs(modules, resolve);
-  const jobs = wanted
-    ? discovered.filter((job) => wanted.includes(job.queue))
-    : discovered;
-
-  if (jobs.length === 0) {
-    throw new QueueError(
-      QueueErrorCode.NO_HANDLERS,
-      wanted
-        ? `No handler consumes ${wanted.join(', ')}. A worker with nothing to ` +
-            'do would idle forever, so this is a boot error.'
-        : 'No job handlers were found. Decorate a method with @JobHandler and ' +
-            'declare its class in a module this root imports.',
-    );
-  }
-
-  // A typo in one name of several would otherwise start a process that quietly
-  // serves only the queues that were spelled right.
-  const missing = (wanted ?? []).filter(
-    (queue) => !jobs.some((job) => job.queue === queue),
-  );
-  if (missing.length > 0) {
-    throw new QueueError(
-      QueueErrorCode.NO_HANDLERS,
-      `No handler consumes ${missing.join(', ')}. Found handlers for ` +
-        `${[...new Set(discovered.map((job) => job.queue))].join(', ')}.`,
-    );
-  }
-
-  return jobs;
-};
 
 /** A worker process: a {@link QueueConsumer} plus the container it owns. */
 class WorkerApplication implements WorkerApp {

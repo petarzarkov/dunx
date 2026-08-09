@@ -61,6 +61,53 @@ export interface QueueOptionsInit {
    */
   readonly connection?: Bun.RedisOptions;
   /**
+   * The file bullmq forks into for a queue marked `background`.
+   *
+   * **Absolute.** bullmq resolves it in the child, not against the module that
+   * configured it, so a relative specifier resolves from the child's cwd and
+   * silently finds nothing:
+   *
+   * ```ts
+   * processor: new URL('./jobs.processor.ts', import.meta.url).pathname,
+   * ```
+   *
+   * Its default export is the processor, and `JobProcessor` builds one from a
+   * module in three lines. Only queues with a `background` handler use it.
+   */
+  readonly processor?: string;
+  /**
+   * `'process'` forks; `'thread'` uses a worker thread.
+   *
+   * **Use `'process'` unless the app is prebuilt.** Both carry the child's stdout
+   * back to the parent - measured on Bun 1.3.14, and worker threads did not always,
+   * so that half is fixed upstream. They differ on something dunx-specific: a fork
+   * is a fresh Bun process, so it reads `bunfig.toml` and `@dunx/transform/preload`
+   * runs over the `.ts` files it loads. A thread enters through bullmq's prebuilt
+   * `main-worker.js`, where the preload cannot match a `.ts` file - so nothing gets
+   * a dependency record and the first provider with a constructor parameter fails
+   * at boot, naming that parameter.
+   *
+   * `'thread'` is therefore for an app whose dependencies were recorded at **build**
+   * time - `Bun.build({ plugins: [depsPlugin] })`. It also isolates less: a thread
+   * shares the address space, so a handler that segfaults takes the whole process.
+   *
+   * @default 'process'
+   */
+  readonly isolation?: 'process' | 'thread';
+  /**
+   * Open workers in **this** process, rather than only binding the publish side.
+   *
+   * Off by default, and that is the safe way round: `QueueModule` is imported by
+   * anything that publishes, and a web process that started consuming because it
+   * wanted to enqueue would be a surprise with a database attached.
+   *
+   * On, the container owns the workers - started at `onInit`, stopped at
+   * `onShutdown`, which runs in reverse construction order and therefore **before**
+   * the connections the handlers use. That ordering is the reason this lives here
+   * rather than in an entrypoint: nothing an app writes by hand can guarantee it.
+   */
+  readonly consume?: boolean;
+  /**
    * Reject a handler that runs longer than this, so a job hung on an external
    * call fails and retries instead of holding its lock until the stall check
    * reclaims it.
@@ -82,6 +129,9 @@ export class QueueOptions {
   readonly connection: Bun.RedisOptions;
   readonly defaultJobOptions: JobsOptions | undefined;
   readonly jobTimeoutMs: number | undefined;
+  readonly processor: string | undefined;
+  readonly isolation: 'process' | 'thread';
+  readonly consume: boolean;
 
   constructor(init: QueueOptionsInit = {}) {
     this.url = assertUrl(init.url ?? defaultRedisUrl());
@@ -96,6 +146,9 @@ export class QueueOptions {
     };
     this.defaultJobOptions = init.defaultJobOptions;
     this.jobTimeoutMs = init.jobTimeoutMs;
+    this.processor = init.processor;
+    this.isolation = init.isolation ?? 'process';
+    this.consume = init.consume ?? false;
   }
 
   /** The URL with any password removed, for logs and error messages. */

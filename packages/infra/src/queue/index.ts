@@ -8,6 +8,7 @@ export {
   describeJob,
   discoverJobs,
   discoverJobsOn,
+  selectJobs,
   type DiscoveredJob,
   type JobHandlerFn,
 } from './discover.js';
@@ -20,6 +21,12 @@ export {
   type WorkerPassthrough,
 } from './options.js';
 export { JobPublisher } from './publisher.js';
+// The child half of a sandboxed worker: `export default new
+// JobProcessor(M).handle` is the whole file bullmq forks into.
+export { JobProcessor, type JobProcessorOptions } from './processor.js';
+// Consuming owned by the container: bound by `QueueModule.forRoot({ consume })`,
+// started at onInit and stopped at onShutdown, before the connections close.
+export { QueueRunner } from './runner.js';
 export {
   QueueConsumer,
   WorkerFactory,

@@ -29,6 +29,8 @@ const defaults = (root: ModuleRef): readonly Registration[] => [
   // laid into every scope, which is what a global middleware mounted by a feature
   // module needs. See ROOT_MODULE.
   provide(ROOT_MODULE, { useValue: root }),
+  // A holder, filled between resolution and onInit - see AppRef.
+  provide(AppRef, { useValue: new AppRef() }),
 ];
 
 const assertEveryOverrideReplaced = (
@@ -258,14 +260,52 @@ export class AppFactory {
     for (const { scope, token } of injector.eager) {
       await injector.resolve(token, scope);
     }
+    // Built before `onInit` rather than after, so `AppRef` is usable there. The
+    // constructor only wraps the injector, so there is nothing to be early for.
+    const app = new Application(injector, graph.warnings);
+    injector.find(AppRef).attach(app);
+
     for (const instance of injector.instances) {
       if (hasOnInit(instance)) await instance.onInit();
     }
 
-    const app = new Application(injector, graph.warnings);
     // After onInit, so an app that bound its own Logger writes these through it
     // rather than through the default that was about to be replaced.
     for (const warning of graph.warnings) app.get(Logger).warn(warning);
     return app;
+  }
+}
+
+/**
+ * The container, injectable - dunx's equivalent of Nest's `ModuleRef`.
+ *
+ * Almost nothing needs it: a provider states its dependencies and the container
+ * hands them over, which is the whole point. What needs it is the narrow case of a
+ * provider that must resolve a token **it cannot name at build time** - something
+ * that discovers other providers and calls into them. `@dunx/infra/queue`'s runner
+ * is the case that forced it: it finds `@JobHandler` methods anywhere in the graph
+ * and has to resolve each declaring class.
+ *
+ * **Only usable from `onInit` onwards.** The container is still resolving while
+ * constructors run, so `current` throws there rather than handing back a half-built
+ * graph. That is the whole reason this is a holder rather than the `App` itself.
+ */
+export class AppRef {
+  #app: App | undefined;
+
+  get current(): App {
+    if (this.#app === undefined) {
+      throw new AppError(
+        'AppRef was read during construction. The container is still resolving ' +
+          'at that point, so there is nothing to hand back. Read it in onInit(), ' +
+          'which runs once every provider exists.',
+      );
+    }
+    return this.#app;
+  }
+
+  /** Called once by `AppFactory.create`, between resolution and `onInit`. */
+  attach(app: App): void {
+    this.#app = app;
   }
 }

@@ -178,6 +178,32 @@ Everything in it exists because two frontends had written it twice - `Prose`,
 what they import, so anything added is paid for twice; read
 `internal/ui/README.md` before adding.
 
+### Rule 3 - a package's surface is classes
+
+**`packages/*` and `tools/*` are object-oriented. A class is the default unit, and
+a free function is the exception that has to earn itself.**
+
+- **Anything with state, configuration or a lifetime is a class.** `StaticFiles`,
+  `QueueConnection`, `JobDispatcher`, `DashboardMiddleware`, `JobProcessor`. Not a
+  closure over a config object, and not a factory returning a bound function.
+- **Anything a consumer injects is a class**, because that is what the container
+  and `@dunx/transform` resolve: an interface has no runtime value to record, so an
+  interface at an injection site is a boot error. This is why `QueueOptions`,
+  `RedisOptions`, `DashboardOptions` and `StaticOptions` are classes rather than
+  the interfaces they otherwise would be.
+- **A module is a class with static `forRoot`/`forRootAsync`.**
+- **No bag of exported helpers.** If two functions share a prefix and an argument,
+  they are a class and that argument is its constructor.
+
+The exception, and it is narrow: a **pure, stateless, argument-in-value-out**
+function that no one configures - `describeToken`, `normalizePrefix`,
+`joinPath`, `parseInfo`. Those stay functions because a class around them would be
+a namespace with a `new` in front of it. The moment one grows a field, it is a
+class.
+
+`internal/*` is exempt. React components are functions, hooks are functions, and a
+class component would be worse in every way.
+
 ### Rule 2 - one declaration, and it lives at the lowest common owner
 
 **This applies to code, types, constants and styles alike, and it is the rule most
