@@ -59,15 +59,32 @@ This matters more than it looks under an orchestrator. Kubernetes sends
 `SIGTERM` and then waits `terminationGracePeriodSeconds` before `SIGKILL`; a
 process that ignores the first signal loses whatever was in flight.
 
-One known defect, recorded in [ROADMAP.md](../ROADMAP.md): **a process that
-attempted a Redis operation against a server it could not reach does not exit on
-`SIGTERM`**. Two upstream leaks produce it, and neither is reachable from
-userland - a `Bun.RedisClient` whose TCP connect never completes keeps a handle
-past `close()`, and bullmq's Bun adapter cannot cancel its own reconnect timer
-once the connection has dropped. Serving is unaffected and a healthy Redis is
-unaffected; it is a shutdown defect only. If you deploy against a Redis that may
-be down at the time, set a grace period short enough that `SIGKILL` arrives
-promptly.
+**It then ends the process.** Draining is not the same as exiting: one handle
+that outlives teardown leaves a drained, idle process alive until `SIGKILL`, and
+that handle is often not yours. The real case is a Redis client - a
+`Bun.RedisClient` whose TCP connect never completed keeps a handle past
+`close()`, and bullmq's Bun adapter cannot cancel its own reconnect once the
+connection has dropped, so an app that touched an unreachable broker used to
+drain perfectly and then hang. Both leaks are upstream and neither is reachable
+from userland; they are recorded in
+[queue-shutdown-sigterm.md](../roadmap/queue-shutdown-sigterm.md).
+
+So once the drain finishes, dunx gives the process a moment to end on its own and
+exits it if it has not. The timer is `unref()`d, which is the whole point: it
+cannot itself hold the runtime open, so a process with nothing pending exits
+immediately and never waits: the pause is only ever spent on a process that would
+otherwise have hung. A forced exit always logs a line saying so, because it means
+something leaked and you want to know.
+
+You no longer need a short `terminationGracePeriodSeconds` to work around this.
+
+Pass `{ exitAfterMs: false }` to opt out, and pass it in **tests that fire a
+signal at their own process** - otherwise the forced exit lands in the middle of
+your test run:
+
+```ts
+app.enableShutdownHooks(['SIGTERM'], { exitAfterMs: false });
+```
 
 ## Configuration
 

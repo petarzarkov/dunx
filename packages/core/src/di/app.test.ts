@@ -380,8 +380,12 @@ describe('lifecycle', () => {
     const events: string[] = [];
     const app = await buildApp(events);
 
-    expect(app.enableShutdownHooks(['SIGHUP'])).toBe(app);
-    expect(app.enableShutdownHooks(['SIGHUP'])).toBe(app);
+    // `exitAfterMs: false` because this fires the signal at the test runner's own
+    // process. With the default, the drain arms a `process.exit(0)` that lands
+    // mid-suite and truncates the run while reporting success.
+    const opts = { exitAfterMs: false } as const;
+    expect(app.enableShutdownHooks(['SIGHUP'], opts)).toBe(app);
+    expect(app.enableShutdownHooks(['SIGHUP'], opts)).toBe(app);
     expect(process.listenerCount('SIGHUP')).toBe(1);
 
     process.emit('SIGHUP');

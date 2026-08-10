@@ -81,6 +81,22 @@ does have one (`LoggerModule`, `ImagesModule`, `RedisModule`, `FilesModule`,
 `onInit` runs in dependency order, `onShutdown` in reverse - so a service drains
 before the database it holds.
 
+`enableShutdownHooks()` drains on `SIGTERM`/`SIGINT` and then **ends the
+process**. Draining is not exiting: one handle that outlives teardown leaves a
+drained, idle process alive until `SIGKILL`, and it is usually a third party's
+handle rather than yours. The forced exit is an `unref()`d timer, so it cannot
+itself hold the runtime open - a process with nothing pending exits immediately
+and waits for nothing, and the pause is only ever spent on one that would have
+hung. It logs a line when it fires, because that means something leaked.
+
+`{ exitAfterMs: false }` opts out, for an app embedded in a process it does not
+own - and for **a test that fires a signal at its own process**, where the forced
+exit would otherwise land mid-run:
+
+```ts
+app.enableShutdownHooks(['SIGTERM'], { exitAfterMs: false });
+```
+
 `AppFactory.create(root, { overrides })` takes registrations that **replace** a
 binding for the same token, in place, in **every scope that holds it** - so a test
 stubbing `Logger` does not have to know how many modules bind it. An override for a

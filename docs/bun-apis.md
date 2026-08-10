@@ -459,3 +459,30 @@ records. Ask for **`'ansi-256'`** explicitly, which is well-formed everywhere.
 `Bun.enableANSIColors` is the honest capability check - it is `false` under
 `NO_COLOR` and for a non-TTY, and it cannot be faked in-process, so testing
 degradation needs a real subprocess with stdout piped.
+
+### `setTimeout(...).unref()` - the semantics a forced exit depends on
+
+Bun implements Node's timer `unref()`, and it behaves exactly as a graceful-shutdown
+guard needs. Probed on Bun 1.3.14:
+
+```
+armed unref timer; nothing else holding the loop
+exited naturally after 1ms                  <- callback never ran
+
+UNREF FIRED after 503ms while server held the loop
+exit=7                                      <- callback ran, process.exit took effect
+```
+
+Two properties, both load bearing for `ShutdownHooks`
+(`packages/core/src/di/shutdown-hooks.ts`):
+
+- An unref'd timer **cannot keep the process alive**. With nothing else pending the
+  runtime exits at once and the callback is never invoked, so arming one costs a
+  clean shutdown nothing at all.
+- It still **fires on schedule when something else holds the loop open**, and
+  `process.exit(code)` inside it takes effect.
+
+That combination is what lets a shutdown hook say "end the process, but only if it
+was not going to end anyway" without a race or a fixed delay. A ref'd timer would
+add its own delay to every clean exit, and polling would need a loop that is itself
+a handle.

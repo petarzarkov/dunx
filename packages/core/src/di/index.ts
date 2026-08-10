@@ -20,6 +20,11 @@ export {
 } from './deps.js';
 export { inject } from './inject.js';
 export type { OnInit, OnShutdown } from './lifecycle.js';
+// The hook installer itself, not just its options: @dunx/http and @dunx/infra each
+// own an application class with its own `enableShutdownHooks`, and three copies of
+// "drain, then make sure the process actually ends" is three chances to fix the
+// hang in one of them and not the others - which is how it got missed the first time.
+export { ShutdownHooks, type ShutdownHookOptions } from './shutdown-hooks.js';
 // collectModules + readControllers are the adapter seam: an HTTP package needs to
 // walk the import graph and find which instances to scan. Injector, readModule and
 // the lifecycle type guards stay internal - nothing outside core consumes them, and

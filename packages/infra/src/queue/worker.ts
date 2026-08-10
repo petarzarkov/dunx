@@ -2,10 +2,12 @@ import {
   AppFactory,
   collectModules,
   Logger,
+  ShutdownHooks,
   type App,
   type InjectionToken,
   type ModuleRef,
   type ResolvedModule,
+  type ShutdownHookOptions,
   type ShutdownSignal,
 } from '@dunx/core';
 import { Worker, type Job } from 'bullmq';
@@ -235,7 +237,7 @@ class WorkerApplication implements WorkerApp {
   readonly #consumer: QueueConsumer;
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
-  #hooked = false;
+  readonly #hooks = new ShutdownHooks();
 
   constructor(app: App, consumer: QueueConsumer) {
     this.warnings = app.warnings;
@@ -274,12 +276,9 @@ class WorkerApplication implements WorkerApp {
 
   enableShutdownHooks(
     signals: readonly ShutdownSignal[] = ['SIGTERM', 'SIGINT'],
+    options: ShutdownHookOptions = {},
   ): this {
-    if (this.#hooked) return this;
-    this.#hooked = true;
-    for (const signal of signals) {
-      process.once(signal, () => void this.shutdown());
-    }
+    this.#hooks.install(() => this.shutdown(), signals, options);
     return this;
   }
 }

@@ -2,11 +2,13 @@ import type { BunRequest, Server } from 'bun';
 import {
   AppError,
   Logger,
+  ShutdownHooks,
   type App,
   type AppOptions,
   type Ctor,
   type InjectionToken,
   type ModuleRef,
+  type ShutdownHookOptions,
   type ShutdownSignal,
 } from '@dunx/core';
 import { joinPath, type DiscoveredRoute } from '../route/discover.js';
@@ -172,7 +174,7 @@ export class HttpApplication implements HttpApp {
   #server: Server<SocketData> | undefined;
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
-  #hooked = false;
+  readonly #hooks = new ShutdownHooks();
 
   constructor(
     app: App,
@@ -404,12 +406,9 @@ export class HttpApplication implements HttpApp {
 
   enableShutdownHooks(
     signals: readonly ShutdownSignal[] = ['SIGTERM', 'SIGINT'],
+    options: ShutdownHookOptions = {},
   ): this {
-    if (this.#hooked) return this;
-    this.#hooked = true;
-    for (const signal of signals) {
-      process.once(signal, () => void this.shutdown());
-    }
+    this.#hooks.install(() => this.shutdown(), signals, options);
     return this;
   }
 

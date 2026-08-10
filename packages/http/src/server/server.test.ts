@@ -283,8 +283,11 @@ describe('HttpFactory', () => {
     await app.listen(0);
     const store = app.get(Store);
 
-    expect(app.enableShutdownHooks(['SIGHUP'])).toBe(app);
-    expect(app.enableShutdownHooks(['SIGHUP'])).toBe(app);
+    // See app.test.ts: firing a signal at the runner's own process must not arm the
+    // forced exit, or it lands mid-suite and truncates the run.
+    const opts = { exitAfterMs: false } as const;
+    expect(app.enableShutdownHooks(['SIGHUP'], opts)).toBe(app);
+    expect(app.enableShutdownHooks(['SIGHUP'], opts)).toBe(app);
     expect(process.listenerCount('SIGHUP')).toBe(1);
 
     process.emit('SIGHUP');

@@ -216,12 +216,27 @@ That fix also removed the accident that used to mask leak B on a refused port: t
 old duplicate connected to a healthy localhost, so the reconnect loop terminated.
 With the duplicate correctly aimed at the refused port, the loop no longer does.
 
+## Contained, on the dunx side
+
+**The symptom is handled; the two leaks are still open upstream.**
+`enableShutdownHooks()` no longer guarantees only a drain - once the drain
+finishes it ends the process, via an `unref()`d timer in `ShutdownHooks`
+(`packages/core/src/di/shutdown-hooks.ts`). An unref'd timer cannot hold the
+runtime open, so a process with nothing pending still exits immediately and the
+callback never runs; it fires only when something else is holding the loop, which
+after a completed teardown is by definition a handle dunx does not own. Verified
+on Bun 1.3.14 and recorded in [bun-apis.md](../bun-apis.md).
+
+That covers **any** leaked handle, not just these two, which is why it is the right
+layer: dunx cannot enumerate what a dependency leaks.
+
+What it does not do is make the leaks go away. A forced exit skips whatever that
+client would have done with a working connection, and it logs a line saying so.
+
 ## Options left
 
 - File leak A with Bun and leak B with bullmq. Both reproductions above are
   self-contained.
 - Re-measure the table on every Bun and bullmq bump; either fix alone shrinks it.
-- Document it as a deployment note, which
-  [17-deployment.md](../guide/17-deployment.md) already does: set a grace period
-  short enough that `SIGKILL` arrives promptly if a deploy can race Redis being
-  down.
+  When both land, the forced exit should stop firing for this cause - the warning
+  it logs is how you would notice.

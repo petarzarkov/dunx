@@ -7,6 +7,7 @@ import { hasOnInit, hasOnShutdown } from './lifecycle.js';
 import { ROOT_MODULE, type ModuleRef } from './module.js';
 import { buildScopes, type Binding } from './scope.js';
 import { provide, type Registration } from './provider.js';
+import { ShutdownHooks, type ShutdownHookOptions } from './shutdown-hooks.js';
 import { describeToken, isCtor, type InjectionToken } from './token.js';
 
 /**
@@ -79,7 +80,15 @@ export interface App {
    */
   get<T>(token: InjectionToken<T>, from?: ModuleRef): T;
   shutdown(): Promise<void>;
-  enableShutdownHooks(signals?: readonly ShutdownSignal[]): this;
+  /**
+   * Drains on a signal, then **ends the process**. `options.exitAfterMs: false`
+   * opts out, for an app embedded in a process it does not own. See
+   * {@link ShutdownHooks} for why the drain alone is not enough.
+   */
+  enableShutdownHooks(
+    signals?: readonly ShutdownSignal[],
+    options?: ShutdownHookOptions,
+  ): this;
 }
 
 class Application implements App {
@@ -89,7 +98,7 @@ class Application implements App {
   readonly #injector: Injector;
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
-  #hooked = false;
+  readonly #hooks = new ShutdownHooks();
 
   constructor(injector: Injector, warnings: readonly string[] = []) {
     this.#injector = injector;
@@ -132,23 +141,20 @@ class Application implements App {
 
   enableShutdownHooks(
     signals: readonly ShutdownSignal[] = ['SIGTERM', 'SIGINT'],
+    options: ShutdownHookOptions = {},
   ): this {
-    if (this.#hooked) return this;
-    this.#hooked = true;
-    for (const signal of signals) {
-      process.once(signal, () => void this.shutdown());
-    }
+    this.#hooks.install(() => this.shutdown(), signals, options);
     return this;
   }
 }
 
 export interface AppOptions {
   /**
-   * Replaces a binding **in place**, keyed by token, as the flat list is
-   * assembled. Not an extra module appended at the end: the container is flat and
-   * one token has exactly one binding, so a late binding would be a duplicate
-   * rather than a winner. The count per token never changes, which is why the
-   * duplicate-binding check still runs unmodified.
+   * Replaces a binding **in place**, keyed by token, in **every scope that holds
+   * one**. Not an extra module appended at the end: a module is a scope and its
+   * providers are private to it, so an appended module would be invisible to the
+   * scope the code under test resolves from rather than winning. Replacing in every
+   * scope is what lets a test stub `Logger` without knowing how many modules bind it.
    *
    * An override naming a token nobody binds is an error - a silent no-op there is
    * a test that asserts against the real provider it thought it had swapped.

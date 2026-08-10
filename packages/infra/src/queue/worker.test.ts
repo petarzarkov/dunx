@@ -249,8 +249,9 @@ describe('WorkerFactory.create rejects a worker that could not work', () => {
     const worker = await WorkerFactory.create(moduleWith([Reports]));
     const before = process.listenerCount('SIGHUP');
     try {
-      expect(worker.enableShutdownHooks(['SIGHUP'])).toBe(worker);
-      worker.enableShutdownHooks(['SIGHUP']);
+      const opts = { exitAfterMs: false } as const;
+      expect(worker.enableShutdownHooks(['SIGHUP'], opts)).toBe(worker);
+      worker.enableShutdownHooks(['SIGHUP'], opts);
       expect(process.listenerCount('SIGHUP')).toBe(before + 1);
     } finally {
       process.removeAllListeners('SIGHUP');
