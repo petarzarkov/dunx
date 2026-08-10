@@ -1,7 +1,10 @@
 import {
   AppFactory,
+  ConsoleLogger,
   inject,
+  Logger,
   Module,
+  provide,
   type Ctor,
   type ModuleRef,
 } from '@dunx/core';
@@ -190,6 +193,55 @@ describe('WorkerFactory.create rejects a worker that could not work', () => {
     expect(worker.queues).toEqual([REPORTS]);
     expect(worker.jobs.map((job) => job.name)).toEqual(['nightly']);
     expect(worker.get(QueueConnection).open).toBe(0);
+    await worker.shutdown();
+  });
+
+  /**
+   * Regression, and it hung CI rather than failing it.
+   *
+   * `new Worker()` starts reconnecting the moment it is constructed. `start()` used
+   * to let `waitUntilReady()`'s rejection propagate while leaving every worker it
+   * had already opened running, and against a refused port each retry emits `error`
+   * - which the bound Logger dutifully wrote. Measured on the `examples/full` tour
+   * against `redis://127.0.0.1:1`: **2,307,841 entries in 25 seconds**. That starves
+   * the event loop, so the caller's documented "a broker that is down degrades, it
+   * does not fail boot" path never finished and the process could not exit.
+   *
+   * The margin is deliberately enormous - the defect produced tens of thousands of
+   * entries in this window and the fix produces a handful - so the threshold is not
+   * a timing race.
+   */
+  it('closes the workers it opened when the broker is unreachable', async () => {
+    const opened: string[] = [];
+    // Port 1 is privileged and never bound, so this refuses rather than hanging.
+    const unreachable = 'redis://127.0.0.1:1';
+
+    // An own `error` property shadowing the prototype's, rather than a spread: a
+    // class's methods are on the prototype and not own-enumerable, so spreading a
+    // ConsoleLogger yields an object with no `warn` - and `QueueConnection` calls
+    // one the moment the socket fails.
+    const capturing = Object.assign(new ConsoleLogger(undefined, 'fatal'), {
+      error: (message: string) => {
+        if (message.startsWith('Worker error on')) opened.push(message);
+      },
+    });
+
+    @Module({
+      imports: [QueueModule.forRoot({ url: unreachable, prefix: ns })],
+      providers: [Emails, provide(Logger, { useValue: capturing })],
+    })
+    class Unreachable {}
+
+    const worker = await WorkerFactory.create(Unreachable);
+    const error = await worker.start().catch((thrown: unknown) => thrown);
+    expect(error).toBeInstanceOf(Error);
+
+    const settled = opened.length;
+    await Bun.sleep(300);
+    // Nothing is retrying, so the count barely moves. Before the fix this window
+    // alone added tens of thousands.
+    expect(opened.length - settled).toBeLessThan(25);
+
     await worker.shutdown();
   });
 

@@ -15,21 +15,37 @@ reasoning: architecture/packaging.md, "Versioning is lockstep".
 **Do not make versions independent again** without also solving the duplicate-core
 problem - see that section for the two alternatives and why each was rejected.
 
-CI runs `bun run version` on every push to `main` and
-publishes any package whose version changed. There is normally nothing to run by
-hand. This skill is for cutting a release deliberately, and for the failure modes.
+CI runs `bun run version` on every push to `main`, and it **publishes nothing unless
+the head commit is a release commit**. Ordinary merges run the checks and deploy the
+docs. This skill is for cutting a release deliberately, and for the failure modes.
 
 ## Cutting a release
 
 1. `/ci-check` - build, lint, typecheck, test. A failed build publishes nothing,
    but a passing build with broken `dist/` publishes broken.
 2. Run the `publish-guard` agent over the changed packages.
-3. `bun run version:dry-run` - read the computed bumps. Conventional commits:
-   `feat:` → minor, `fix:` → patch, `BREAKING CHANGE` → major.
-4. Push to `main`. CI does the rest.
+3. `bun run version:dry-run` - on a non-release commit this reports that it would
+   skip. It prints the computed bump, the commits it read, and the changed packages.
+4. Commit the release trigger and push to `main`:
+
+   | Subject                                   | Bump                                             |
+   | ----------------------------------------- | ------------------------------------------------ |
+   | `release: <summary>`                      | derived from every commit since the last release |
+   | `release(major\|minor\|patch): <summary>` | stated outright                                  |
+   | `release!: <summary>`                     | major                                            |
+
+   The trigger is matched on the **subject only**, so a body quoting the word does
+   not publish.
+
+The bump and the changed-package detection both span every commit back to the
+previous `chore(release): bump version to ...` marker. That marker is
+`RELEASE_COMMIT_PREFIX` in `scripts/bump.ts`, written by `pushVersionCommit` in
+`scripts/version.ts` - if you change one, change both, or every range becomes "all
+of history". CI's `fetch-depth: 0` is load-bearing for the same reason: a shallow
+checkout cannot see the marker and silently under-reports the bump to a patch.
 
 Force every package to publish regardless of computed bumps by putting
-`[force-publish]` in the commit message.
+`[force-publish]` in the commit message. That path bypasses the release gate.
 
 ## Constraints that are load-bearing
 

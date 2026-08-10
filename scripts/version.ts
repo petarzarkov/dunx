@@ -3,10 +3,16 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { semver } from 'bun';
 import {
+  bumpTypeFrom,
   bumpVersion,
+  commitsSinceLastRelease,
   determineBumpType,
   getChangedSrcPackages,
   getForcePublishTarget,
+  getReleaseTrigger,
+  lastReleaseSha,
+  RELEASE_COMMIT_PREFIX,
+  type ReleaseTrigger,
 } from './bump.js';
 import {
   assertNoWorkspaceRanges,
@@ -172,7 +178,7 @@ const pushVersionCommit = (bumpedFiles: string[]): void => {
     throw new Error(`No path in bumpedFiles: ${bumpedFiles.join(', ')}`);
   }
   const pkg = JSON.parse(readFileSync(path, 'utf-8'));
-  const commitMessage = `chore(release): bump version to ${pkg.version} [skip ci]`;
+  const commitMessage = `${RELEASE_COMMIT_PREFIX} ${pkg.version} [skip ci]`;
   execSync(`git commit -m "${commitMessage}" --no-verify`);
 
   const branch =
@@ -328,8 +334,14 @@ const runForcePublish = (
   }
 };
 
-const runVersionBump = (allPackages: PublishablePackage[]): void => {
-  const changedSrcPackages = getChangedSrcPackages();
+const runVersionBump = (
+  allPackages: PublishablePackage[],
+  trigger: ReleaseTrigger,
+): void => {
+  // One marker read, shared by both range queries below, so the bump and the change
+  // detection can never disagree about which commits this release covers.
+  const since = lastReleaseSha();
+  const changedSrcPackages = getChangedSrcPackages(since);
 
   if (changedSrcPackages !== null && changedSrcPackages.size === 0) {
     console.log('No src changes detected, skipping version bump.');
@@ -344,8 +356,16 @@ const runVersionBump = (allPackages: PublishablePackage[]): void => {
     console.log('Could not determine changed packages, processing all.');
   }
 
-  const bumpType = determineBumpType();
-  console.log(`Determined version bump type: ${bumpType}`);
+  // An explicit `release(minor):` wins outright. Otherwise every commit back to the
+  // last release votes, and the highest wins - so a `feat!:` batched behind three
+  // `fix:`es still produces a major.
+  const commits = commitsSinceLastRelease(since);
+  const bumpType = trigger.bump ?? bumpTypeFrom(commits);
+  console.log(
+    trigger.bump
+      ? `Version bump type: ${bumpType} (stated by the release commit)`
+      : `Version bump type: ${bumpType} (from ${commits.length} commit(s) since ${since ? since.slice(0, 7) : 'the start of history'})`,
+  );
 
   // **Lockstep: every @dunx package shares one version and ships together**, even
   // the ones this commit did not touch. Change detection above decides *whether*
@@ -421,9 +441,26 @@ void (async () => {
   try {
     if (forcePublish.force) {
       runForcePublish(allPublishablePackages, forcePublish.packages);
-    } else {
-      runVersionBump(allPublishablePackages);
+      return;
     }
+
+    // The gate. Publishing used to be a side effect of merging to main, which shipped
+    // 33 versions and six breaking changes in six days - churn that reads as
+    // instability to anyone deciding whether to depend on this. A release is now an
+    // explicit commit, and everything else on main just runs CI and deploys the docs.
+    const trigger = getReleaseTrigger();
+    if (!trigger.release) {
+      console.log(
+        'Not a release commit, skipping publish.\n' +
+          '  Release with a `release:` commit on main:\n' +
+          '    release: <summary>          bump derived from the commits since the last release\n' +
+          '    release(major|minor|patch): <summary>   bump stated outright\n' +
+          '    release!: <summary>         major',
+      );
+      process.exit(0);
+    }
+
+    runVersionBump(allPublishablePackages, trigger);
   } catch (error) {
     console.error('Failed to process packages:', error);
     process.exit(1);

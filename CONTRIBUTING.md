@@ -96,17 +96,28 @@ separate steps for the examples, the docs site, the `examples/full` tour and the
 
 ## Repo layout
 
-```
-packages/*     Published, scope @dunx, ESM only, one dist/ each
-examples/*     Private apps that consume the packages
-tools/*        Private workspaces, never published
-docs/          Architecture, roadmap, the guide
-scripts/       Repo-level scripts, bun-native TypeScript
-```
+Three parents, split by what a workspace **is** rather than by whether it ships.
 
-**`packages/*`** is the shipped surface: `core`, `transform`, `http`, `infra`,
-`openapi`, `auth`, `testing`, `create-app`. Eight, deliberately few. Each has one
-`tsconfig.json` extending the root, one `dist/`, and no build variants.
+**`packages/*`** is the framework a consumer imports: `core`, `transform`, `http`,
+`infra`, `openapi`, `auth`, `testing`, `dashboard`. Each has one `tsconfig.json`
+extending the root, one `dist/`, and no build variants.
+
+**`tools/*`** is published exactly like a package, but **run** rather than imported:
+`create-app` and `mcp`. They moved out of `packages/` once calling a scaffolder part
+of the framework became misleading.
+
+**`internal/*`** is the private half, never published: `docs` (the site), `bench`
+(the benchmark harness), `openapi-ui` and `dashboard-ui` (the two React bundles
+inlined into pages a backend serves), and `ui` (the theme and components those two
+share). They are **exempt from Rule 1**, which governs what dunx ships, not what
+measures it or builds its website - that is why `internal/bench` may devDepend on
+express and fastify while Rule 1 bans both everywhere else.
+
+Ten published workspaces in total, deliberately few. Two scripts decide which
+parents publish and they are the only places that do: `PUBLISHABLE_DIRS` in
+`scripts/version.ts` and `PUBLISHED_DIRS` in `scripts/update-readme.ts`. A
+`private: true` manifest is still what actually stops a publish, so a workspace in
+the wrong parent fails safe rather than leaking.
 
 **`examples/*`** is a ladder of the questions an evaluator asks in order, not one
 example per package.
@@ -123,20 +134,37 @@ Redis or S3 installed: a part whose backing service is absent prints that it is
 skipping and carries on. An example CI cannot run is an example nobody notices has
 rotted.
 
-**`tools/*`** are workspaces but `"private": true` and never published:
-`tools/bench` (the benchmark harness), `tools/docs` (the documentation site) and
-`tools/openapi-ui` (the explorer inlined into the page `@dunx/openapi` serves).
-They are **exempt from Rule 1**, which governs what dunx ships, not what measures
-it or builds its website. That is why `tools/bench` may devDepend on express and
-fastify while Rule 1 bans both everywhere else.
-
 **`docs/`** holds [ARCHITECTURE.md](docs/ARCHITECTURE.md) (the decisions and the
 measurements behind them), [ROADMAP.md](docs/ROADMAP.md) (what is built and what is
 next), [bun-apis.md](docs/bun-apis.md) (what has actually been probed on real Bun),
 [MIGRATION-FROM-NEST.md](docs/MIGRATION-FROM-NEST.md), and
-[docs/guide/](docs/guide/), a seventeen-page tour from introduction through
+[docs/guide/](docs/guide/), an eighteen-page tour from introduction through
 deployment. If you add a feature, the guide is usually where a user will look for
 it.
+
+## Project Structure
+
+```
+dunx/
+├── packages/           # The published framework
+│   ├── auth            # Better Auth for dunx: its handler mounted on Bun.serve, a session guard reading @Public() and @Roles(), the caller in async context, and Bun.password hashing
+│   ├── core            # DI container, modules, lifecycle and the injectable Logger contract for the dunx framework
+│   ├── dashboard       # An opt-in operations page for a running dunx app: routes, the provider graph, gateways, config and runtime health, with bull-board mounted for the queues
+│   ├── http            # Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways
+│   ├── infra           # Database, Redis, queue, storage, image and logging infrastructure for dunx
+│   ├── openapi         # OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate
+│   ├── testing         # Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0
+│   └── transform       # Load-time transform that records constructor dependencies for the dunx container
+├── tools/              # Published CLIs - the scaffolder and the MCP server
+│   ├── create-app      # Scaffold a new dunx application - bunx @dunx/create-app my-api
+│   └── mcp             # A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts
+├── internal/           # Private workspaces, never published - docs site, benchmarks, API explorer, shared UI
+├── examples/           # Private apps that consume the packages
+├── docs/               # Architecture and design docs
+├── scripts/            # Monorepo-level scripts
+├── .github/workflows/  # CI/CD pipeline
+└── .husky/             # Git hooks
+```
 
 ## Rule 1: native implementations only
 
@@ -319,18 +347,35 @@ type(scope)?: description
 ```
 
 Allowed types: `feat`, `fix`, `chore`, `docs`, `test`, `style`, `refactor`, `perf`,
-`build`, `ci`, `revert`, `security`, `sync`.
+`build`, `ci`, `revert`, `security`, `sync`, and `release`.
 
 The type drives the version bump: `feat:` is a minor, `fix:` and the rest are a
-patch, and a `!` marks a breaking change and a major. Preview what your commits
-would do with `bun run version:dry-run`.
+patch, and a `!` marks a breaking change and a major.
 
 Do not add a `Co-Authored-By` trailer or any other attribution trailer. The commit
 message describes the change; who or what typed it is not part of the record.
 
-Releases are automatic. On push to `main`, CI runs the full check set, then
-`bun run version` bumps and publishes via npm trusted publishing. Nothing to run by
-hand.
+### Releasing
+
+**Merging to `main` does not publish.** CI runs the full check set on every push and
+deploys the docs, but it publishes only when the head commit asks for it:
+
+| Subject                                   | Bump                                             |
+| ----------------------------------------- | ------------------------------------------------ |
+| `release: <summary>`                      | derived from every commit since the last release |
+| `release(major\|minor\|patch): <summary>` | stated outright                                  |
+| `release!: <summary>`                     | major                                            |
+
+So a batch of work lands as ordinary commits, and one `release:` commit ships it.
+The bump covers the whole range: a single `feat!:` batched behind three `fix:`es
+still produces a major.
+
+Preview exactly what would happen with `bun run version:dry-run` - on a non-release
+commit it tells you it would skip, and on a release commit it prints the computed
+bump, the commits it read and the packages it found changed.
+
+Force every package to publish regardless of the computed bump by putting
+`[force-publish]` in the commit message.
 
 ### Lockstep versioning
 

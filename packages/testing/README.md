@@ -29,18 +29,22 @@ await server.close();
 
 ## Overrides replace; they never append
 
-This is the whole design, and it follows from the container being flat.
+This is the whole design, and it follows from how `@dunx/core` applies an override:
+by **substitution into the binding that already exists**, never by appending a
+registration that has to out-rank the real one.
 
-`@dunx/core` collects every module's registrations into one list and **throws on a
-duplicate token**, naming both modules. So a test override cannot be an extra
-module appended at the end that wins - there is no "wins". It would be a duplicate.
+A module is a scope, and `providers` are private to it. So a test override cannot be
+an extra module appended at the end that wins - an appended module's providers are
+invisible to every scope that does not import it, which is exactly the scope the
+code under test resolves from.
 
-`createTestApp` therefore assembles the same flat list the app would have and
-substitutes by token as it goes. Three consequences worth relying on:
+`createTestApp` therefore builds the same scope graph the app would have and
+substitutes by token inside it. Three consequences worth relying on:
 
-- **The count per token never changes.** The duplicate-binding check runs
-  unmodified, so a test cannot paper over a wiring bug that boot would have caught.
-  Two modules binding one token still fails, with the override applied to both.
+- **An override replaces the binding in every scope that holds it.** A test stubbing
+  `Logger` does not have to know how many modules bind it, and does not have to name
+  a scope. Where two scopes genuinely bind one token differently and only one is
+  meant, resolve through the module you care about instead.
 - **An override naming a token nobody binds is an error**, not a silent no-op. A
   typo'd token would otherwise leave the suite asserting against the real provider
   it thought it had swapped, which is the failure mode this package exists to

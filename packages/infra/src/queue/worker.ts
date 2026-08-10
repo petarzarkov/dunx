@@ -112,9 +112,31 @@ export class QueueConsumer {
     for (const queue of this.queues) {
       this.#workers.push(this.#open(queue));
     }
-    // Serially rather than Promise.all, so an unreachable server is reported
-    // against the first queue instead of once per queue.
-    for (const worker of this.#workers) await worker.waitUntilReady();
+    try {
+      // Serially rather than Promise.all, so an unreachable server is reported
+      // against the first queue instead of once per queue.
+      for (const worker of this.#workers) await worker.waitUntilReady();
+    } catch (error) {
+      /**
+       * **A worker that never became ready is still a running worker**, and leaving
+       * it open is what turned "degrades, does not fail boot" into a hang.
+       *
+       * `new Worker()` starts reconnecting immediately, so after `waitUntilReady()`
+       * rejects, every retry emits `error` against a dead broker. Measured on the
+       * `examples/full` tour against `redis://127.0.0.1:1`: 2.3 million error events
+       * in 25 seconds. That starves the event loop, so the caller's degraded path
+       * never runs, and it keeps a handle open, so the process never exits.
+       *
+       * Force-closed because nothing can be mid-flight - readiness never arrived -
+       * and a graceful close would itself wait on the connection that just failed.
+       * `allSettled` so a close that rejects cannot mask the original error.
+       */
+      await Promise.allSettled(
+        this.#workers.map((worker) => worker.close(true)),
+      );
+      this.#workers.length = 0;
+      throw error;
+    }
 
     // One entry per queue, naming where its handlers run and which they are.
     // "Consuming N job(s)" alone could not answer the question a sandbox exists

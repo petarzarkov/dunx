@@ -40,7 +40,23 @@ async function bootstrap(): Promise<void> {
   await app.closed;
 }
 
-bootstrap().catch((error: unknown) => {
-  console.error('[full] failed to start', error);
-  process.exit(1);
-});
+bootstrap()
+  .then(() => {
+    /**
+     * The drain is complete by here - `app.closed` resolves after every `onShutdown`
+     * has run, in reverse dependency order. The explicit exit is for the handle dunx
+     * does not own.
+     *
+     * Against an **unreachable** broker, bullmq's Bun adapter cannot cancel its own
+     * pending reconnect, so a client survives `disconnect()` and holds the event loop
+     * open after a perfectly successful shutdown. That is leak B in
+     * docs/roadmap/queue-shutdown-sigterm.md - measured, upstream, and not fixable
+     * from here. Without this, `SIGTERM` drains everything and then hangs until
+     * `SIGKILL`, which is what guide 17-deployment.md's grace-period advice is about.
+     */
+    process.exit(0);
+  })
+  .catch((error: unknown) => {
+    console.error('[full] failed to start', error);
+    process.exit(1);
+  });

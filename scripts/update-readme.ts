@@ -1,7 +1,12 @@
 /**
- * Updates the "Packages" table and "Project Structure"
- * code block in the root README.md by reading every
- * packages/<name>/package.json in the workspace.
+ * Regenerates the two blocks that are derived from the workspace manifests:
+ * the "Packages" table in README.md, and the "Project Structure" tree in
+ * CONTRIBUTING.md.
+ *
+ * They live in different files on purpose. The README is read by someone deciding
+ * whether to install this, and a directory listing answers no question they have;
+ * the tree is orientation for someone about to change the repo, which is what
+ * CONTRIBUTING is for.
  *
  * Usage:
  *   bun ./scripts/update-readme.ts
@@ -19,6 +24,7 @@ const ROOT = join(import.meta.dir, '..');
  */
 const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 const README_PATH = join(ROOT, 'README.md');
+const CONTRIBUTING_PATH = join(ROOT, 'CONTRIBUTING.md');
 
 interface PackageJson {
   name: string;
@@ -170,17 +176,39 @@ if (entries.length === 0) {
   process.exit(1);
 }
 
-let readme = readFileSync(README_PATH, 'utf8');
+/** A section that silently fails to match would leave a stale block behind. */
+const replaceOrFail = (
+  content: string,
+  heading: string,
+  body: string,
+  file: string,
+): string => {
+  const next = replaceSection(content, heading, body);
+  if (next === content) {
+    console.error(`No "## ${heading}" section found in ${file}. Aborting.`);
+    process.exit(1);
+  }
+  return next;
+};
 
-readme = replaceSection(readme, 'Packages', buildPackagesTable(entries));
-
-readme = replaceSection(
-  readme,
-  'Project Structure',
-  buildProjectStructure(entries),
+const readme = replaceOrFail(
+  readFileSync(README_PATH, 'utf8'),
+  'Packages',
+  buildPackagesTable(entries),
+  'README.md',
 );
-
 writeFileSync(README_PATH, readme, 'utf8');
 
+const contributing = replaceOrFail(
+  readFileSync(CONTRIBUTING_PATH, 'utf8'),
+  'Project Structure',
+  buildProjectStructure(entries),
+  'CONTRIBUTING.md',
+);
+writeFileSync(CONTRIBUTING_PATH, contributing, 'utf8');
+
 const names = entries.map((e) => e.pkg.name).join(', ');
-console.log(`Updated README.md with ${entries.length} packages:\n  ${names}`);
+console.log(
+  `Updated README.md (packages table) and CONTRIBUTING.md (project structure) ` +
+    `with ${entries.length} packages:\n  ${names}`,
+);

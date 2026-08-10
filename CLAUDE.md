@@ -504,9 +504,28 @@ so `bunx tsc --noEmit` at the repo root typechecks the repo scripts.
 
 ## Versioning & Publishing
 
-CI runs `bun run version` on every push to `main` and publishes any package whose
-version changed, via npm trusted publishing (OIDC). Conventional commits drive the
-bump. Nothing to run by hand.
+**A release is an explicit commit, not a consequence of merging.** CI runs
+`bun run version` on every push to `main`, and it publishes nothing unless `HEAD` is
+a release commit:
+
+| Subject                                   | Bump                                             |
+| ----------------------------------------- | ------------------------------------------------ |
+| `release: <summary>`                      | derived from every commit since the last release |
+| `release(major\|minor\|patch): <summary>` | stated outright                                  |
+| `release!: <summary>`                     | major                                            |
+
+Everything else on `main` runs the checks and deploys the docs. Publishing on every
+push shipped 33 versions and six breaking changes in six days, which reads as churn
+to anyone deciding whether to depend on this.
+
+Because a release now covers a **range**, both the bump type and the changed-package
+detection span every commit back to the previous `chore(release):` marker, not just
+`HEAD`. Reading `HEAD` alone would make every batched release a patch, since the
+release commit is never itself a `feat`. Only the commit **subject** triggers a
+release, so a body quoting the word does not publish.
+
+Everything else - the OIDC constraints, the `ci.yml` filename pin, the npm version
+pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 Everything else - the OIDC constraints, the `ci.yml` filename pin, the npm version
 pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.

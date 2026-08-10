@@ -18,7 +18,25 @@ async function run(): Promise<void> {
   await app.shutdown();
 }
 
-run().catch((error: unknown) => {
-  console.error('[full] tour failed', error);
-  process.exit(1);
-});
+run()
+  .then(() => {
+    /**
+     * Shutdown has completed - every provider drained and every socket dunx owns
+     * was closed. The explicit exit is for the one it does not own.
+     *
+     * Against an **unreachable** broker, bullmq's Bun adapter cannot cancel its own
+     * pending reconnect, so a client survives `disconnect()` and holds the event
+     * loop open forever. That is leak B in
+     * docs/roadmap/queue-shutdown-sigterm.md - measured, upstream, and not fixable
+     * from here. It is why a real deployment sets a grace period short enough that
+     * `SIGKILL` arrives promptly (guide 17-deployment.md); this is that grace period.
+     *
+     * Without it, CI's `tour` step hangs forever rather than failing, because the
+     * tour has narrated everything correctly and simply will not exit.
+     */
+    process.exit(0);
+  })
+  .catch((error: unknown) => {
+    console.error('[full] tour failed', error);
+    process.exit(1);
+  });

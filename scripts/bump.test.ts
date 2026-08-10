@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { bumpVersion, changedSrcPackages } from './bump.js';
+import {
+  bumpTypeFrom,
+  bumpVersion,
+  changedSrcPackages,
+  parseReleaseTrigger,
+} from './bump.js';
 
 describe('bumpVersion()', () => {
   it('bumps a version whose components are all non-zero', () => {
@@ -76,5 +81,122 @@ describe('changedSrcPackages', () => {
         'docs/ROADMAP.md',
       ]),
     ).toEqual(new Set(['core', 'http']));
+  });
+});
+
+describe('parseReleaseTrigger', () => {
+  it('releases on a bare `release:` and lets the range decide the bump', () => {
+    expect(parseReleaseTrigger('release: ship the scoped container')).toEqual({
+      release: true,
+      bump: null,
+    });
+  });
+
+  it('takes the bump from the scope when it names one', () => {
+    expect(
+      parseReleaseTrigger('release(major): drop the flat container'),
+    ).toEqual({ release: true, bump: 'major' });
+    expect(parseReleaseTrigger('release(minor): add gateways')).toEqual({
+      release: true,
+      bump: 'minor',
+    });
+    expect(parseReleaseTrigger('release(patch): fix the input reader')).toEqual(
+      {
+        release: true,
+        bump: 'patch',
+      },
+    );
+  });
+
+  it('treats `release!:` as major', () => {
+    expect(parseReleaseTrigger('release!: module-scoped DI')).toEqual({
+      release: true,
+      bump: 'major',
+    });
+  });
+
+  /*
+   * Lockstep versioning means a package-named scope cannot mean "only this one".
+   * It is accepted as a label so a habit of writing one is not a silent no-release,
+   * and the range decides the bump.
+   */
+  it('accepts an unrecognised scope as a label and derives the bump', () => {
+    expect(parseReleaseTrigger('release(core): first cut')).toEqual({
+      release: true,
+      bump: null,
+    });
+  });
+
+  it('does not release on an ordinary commit', () => {
+    for (const subject of [
+      'feat(http): add websocket gateways',
+      'fix: resolve getWorkers()',
+      'chore(release): bump version to 1.2.1 [skip ci]',
+      'docs: rewrite the README',
+      'released: something',
+      'pre-release: something',
+      'release',
+      'release:',
+    ]) {
+      expect(parseReleaseTrigger(subject).release).toBe(false);
+    }
+  });
+
+  /*
+   * The body is where a revert, a changelog paste or a quoted commit puts the word.
+   * Matching it would publish on a commit that never asked to.
+   */
+  it('reads the subject only, never the body', () => {
+    const message =
+      'fix(core): correct the scope closure\n\nReverts "release: 1.2.0".';
+    expect(parseReleaseTrigger(message).release).toBe(false);
+  });
+});
+
+describe('bumpTypeFrom', () => {
+  it('defaults to patch', () => {
+    expect(bumpTypeFrom(['fix: a thing', 'docs: another'])).toBe('patch');
+    expect(bumpTypeFrom([])).toBe('patch');
+  });
+
+  it('takes minor from any feat in the range', () => {
+    expect(bumpTypeFrom(['fix: a thing', 'feat(http): gateways'])).toBe(
+      'minor',
+    );
+  });
+
+  /*
+   * The reason this is a range and not `HEAD`: a batched release's own commit is
+   * never a feat, so reading one commit made every batch a patch regardless of what
+   * it shipped. A breaking change anywhere outranks everything after it.
+   */
+  it('takes major from a breaking change anywhere in the range, whatever follows', () => {
+    expect(
+      bumpTypeFrom([
+        'fix: tidy up',
+        'feat(core)!: a DI scope per module',
+        'docs: note it',
+      ]),
+    ).toBe('major');
+  });
+
+  it('takes major from a BREAKING CHANGE body', () => {
+    expect(
+      bumpTypeFrom([
+        'feat(core): scopes\n\nBREAKING CHANGE: exports are required',
+      ]),
+    ).toBe('major');
+  });
+
+  /*
+   * Regression: the old check was `message.includes('!:')`, so an ordinary patch
+   * whose body quoted a breaking subject published a major.
+   */
+  it('does not take major from a body that merely quotes a breaking subject', () => {
+    expect(
+      bumpTypeFrom([
+        'fix(core): follow-up to the scope change\n\nSee "feat(core)!: a DI scope per module".',
+      ]),
+    ).toBe('patch');
   });
 });

@@ -112,6 +112,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # Runs on every push to main and publishes on almost none of them: the script
+      # self-skips unless HEAD is a `release:` commit. Publishing used to be a side
+      # effect of merging, which shipped 33 versions in six days. The bump now covers
+      # every commit back to the last release, which is why `fetch-depth: 0` above is
+      # load-bearing - a shallow checkout cannot see the previous release marker and
+      # would under-report the bump.
+      #
       # Authenticated by npm trusted publishing (OIDC) via the id-token permission
       # above - no NPM_TOKEN. Each package needs a trusted publisher configured on
       # npmjs.com pointing at this repo and at this workflow **filename**; renaming
@@ -121,7 +128,7 @@ jobs:
       # Live as of 0.1.0, which was published by hand because a package with no
       # versions on npm has no trusted-publisher settings page to configure yet.
       # Every release from here is this step.
-      - name: Version bump & publish
+      - name: Release (on a `release:` commit)
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: bun run version
         env:

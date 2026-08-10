@@ -51,10 +51,27 @@ const app = await AppFactory.create(UsersModule);
 app.enableShutdownHooks();
 ```
 
-The container is **flat**. `imports` is traversal only: it pulls a module's
-registrations into the same container rather than creating a visibility boundary.
-One binding per token, and a duplicate is a boot error naming both modules. What
-is lost is per-module rebinding; use two tokens.
+**Every module is a scope.** `providers` are private to the module that declares
+them, and `exports` is the list an importer may resolve - a module that exports
+nothing exports nothing. `exports` also accepts a `ModuleRef`, which re-exports
+whatever that module exports, so `DatabaseModule` can pass a handle on and a
+feature module imports _it_ rather than `@dunx/infra/db`. `global: true`
+publishes a module's exports to every scope with no import needed, which is what
+`ConfigModule` and `LoggerModule` use.
+
+For a token requested while constructing a provider in module `M`: `M`'s own
+providers, then the exports of what `M` imports, then the global scope. **Local
+shadows imported**, which is the per-module rebinding this exists to allow. The
+instance cache keys on the binding rather than the token, so two modules that
+each declare one class hold two instances.
+
+Visibility is flattened once at boot into one `Map` per scope, so resolution
+stays a single `Map.get` and the cost of the import walk lands on boot.
+
+The same token twice **in one module** is an error. Two modules binding one token
+is legal and silent. An importer seeing one token from two imports takes the
+**last** and **warns**, naming both - on `App.warnings` rather than in a log,
+because core has no logger and the caller knows what level it belongs at.
 
 Resolution is **eager**, and async factories are settled before any constructor
 runs - which is why there is no `forRootAsync` for asynchrony alone. Where a module
@@ -65,9 +82,10 @@ does have one (`LoggerModule`, `ImagesModule`, `RedisModule`, `FilesModule`,
 before the database it holds.
 
 `AppFactory.create(root, { overrides })` takes registrations that **replace** a
-module's binding for the same token, in place, as the flat list is assembled - so
-the duplicate check still runs, an override for a token nobody binds is an error,
-and the discarded provider is never instantiated (its `useFactory` never runs).
+binding for the same token, in place, in **every scope that holds it** - so a test
+stubbing `Logger` does not have to know how many modules bind it. An override for a
+token nobody binds is an error, and the discarded provider is never instantiated
+(its `useFactory` never runs).
 `@dunx/testing` is what consumes it; there is no reason to reach for it directly in
 application code.
 

@@ -188,12 +188,6 @@ service that starts once and stays up. Note also that the startup numbers were
 taken on an idle 32-core desktop, which is not what a constrained serverless CPU
 looks like.
 
-**You need per-module rebinding.** One token bound to two different
-implementations in two different features cannot be expressed. The container is
-flat and one token has exactly one binding. Two tokens is the answer, and if that
-answer is unacceptable for your architecture, an encapsulating module system is a
-real feature dunx does not have.
-
 **You need request-scoped or transient providers.** Not supported, rejected with
 measurements, and not coming back.
 
@@ -206,14 +200,14 @@ never a goal.
 path for either on Bun at all.
 
 **You want a mature ecosystem of third-party modules.** There is not one. dunx is
-eight packages in one repository. The established frameworks have a decade or more
+ten published workspaces in one repository. The established frameworks have a decade or more
 of community modules behind them and dunx has none.
 
 ## Where to go next
 
 [First steps](./02-first-steps.md) scaffolds an application and walks every
 generated file. [Providers](./03-providers.md) is the DI deep dive.
-[Modules](./04-modules.md) covers composition and the flat container.
+[Modules](./04-modules.md) covers composition, `exports` and module scoping.
 [Controllers](./05-controllers.md) covers routing, validation and errors.
 
 [ARCHITECTURE.md](../ARCHITECTURE.md) records what was measured, what was

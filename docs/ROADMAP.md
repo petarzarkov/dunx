@@ -10,20 +10,47 @@ other.
 
 ## Built
 
-| Package           | Contains                                                               |
-| ----------------- | ---------------------------------------------------------------------- |
-| `@dunx/core`      | DI container, modules, lifecycle, the `Logger` contract - zero deps    |
-| `@dunx/transform` | Load-time transform: constructor parameter types                       |
-| `@dunx/http`      | Routes, websocket gateways, middleware, guards, CORS, validation       |
-| `@dunx/infra`     | `/db` (drizzle) `/redis` `/files` `/images` `/logger` (`@arkv/logger`) |
-| `@dunx/openapi`   | OpenAPI 3.1 from route zod schemas, self-contained HTML                |
-| `@dunx/testing`   | Bindings replaced in place, a real `Bun.serve` on port 0               |
+| Package            | Contains                                                               |
+| ------------------ | ---------------------------------------------------------------------- |
+| `@dunx/core`       | DI container, modules, lifecycle, the `Logger` contract - zero deps    |
+| `@dunx/transform`  | Load-time transform: constructor parameter types                       |
+| `@dunx/http`       | Routes, websocket gateways, middleware, guards, CORS, validation       |
+| `@dunx/infra`      | `/db` (drizzle) `/redis` `/files` `/images` `/logger` (`@arkv/logger`) |
+| `@dunx/openapi`    | OpenAPI 3.1 from route zod schemas, self-contained HTML                |
+| `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0               |
+| `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing            |
+| `@dunx/dashboard`  | Opt-in ops page, one middleware, bull-board mounted for queues         |
+| `@dunx/create-app` | `bunx @dunx/create-app my-api` - base template plus feature folders    |
+| `@dunx/mcp`        | MCP server that reads an app's routes, providers and modules           |
 
 The two integrations are deliberate - never invent what a mature library already
 solves: `drizzle-orm` is an
 optional `peerDependency` and drives `bun:sqlite`/`Bun.SQL` through its own Bun
 adapters; `@arkv/logger` is a `dependency` and satisfies core's `Logger` contract
 structurally, with no adapter class in between.
+
+## Priority: the core three, until someone who is not the owner files an issue
+
+**The surface is far ahead of the adoption, and that is now the constraint.** Ten
+published workspaces, ~45k lines, and no confirmed external user. Every peripheral
+package is surface area that has to keep working across changes to the DI semantics,
+and each one is a reason for a reader to conclude this is a lot of unproven code from
+one person.
+
+So, until there is external demand:
+
+- **`@dunx/core`, `@dunx/transform` and `@dunx/http` take the work.** They are what
+  the pitch is about and what a reader evaluates. Correctness, docs and stability
+  there beat a new capability anywhere else.
+- **`auth`, `dashboard`, `mcp`, `infra/images`, `infra/files` are frozen to
+  maintenance.** They keep building, keep passing CI and get fixes; they do not get
+  features. A feature there needs an issue from someone who is not the owner.
+- **A new package needs a user first.** `@dunx/queue-dashboard` was built, found to be
+  a worse bull-board, and deleted - the cost of that round trip is the argument.
+
+This is a sequencing decision, not a judgement on the frozen packages. Revisit it the
+moment the constraint changes: an external issue, a real adopter, or a dependency
+that forces a hand.
 
 ## Reference implementations - do not design from scratch
 
@@ -77,9 +104,9 @@ throwing. The guard is a test in `packages/infra/src/logger/module.test.ts` asse
 the two `LOG_LEVELS` arrays are equal. Any future upstream level change must run it.
 
 **`@dunx/testing`.** Built to the specification in
-[ARCHITECTURE.md](./ARCHITECTURE.md) - overrides are substituted into the same flat
-list, keyed by token, so the duplicate-binding check still runs and a discarded
-provider's factory never executes. The substitution itself is core's
+[ARCHITECTURE.md](./ARCHITECTURE.md) - overrides are substituted into the scope graph
+the app would have built, keyed by token and applied in every scope that holds one, so
+a discarded provider's factory never executes. The substitution itself is core's
 (`AppFactory.create(root, { overrides })`), because `Injector` and `readModule` stay
 unexported; the decisions that went beyond the spec are recorded under "Test
 harness". The example app is written against it: `service.test.ts` drives the real
@@ -310,7 +337,7 @@ and `inject()` in field initialisers; no peer warnings on a clean install; and
 `bunx @dunx/create-app` scaffolds an app that boots, serves, typechecks and passes
 its test.
 
-## `tools/` - private workspaces, never published
+## `internal/` - private workspaces, never published
 
 ### `internal/docs` - the documentation site - **built**
 
