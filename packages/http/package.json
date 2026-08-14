@@ -1,6 +1,6 @@
 {
   "name": "@dunx/http",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways",
   "keywords": [
     "bun",
