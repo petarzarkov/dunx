@@ -212,15 +212,47 @@ describe('the type gate', () => {
   const uncompilable = (): void => {
     const asyncHandle: BunSQLiteDatabase<Schema> = db;
     // @ts-expect-error an async callback commits before its first await resumes
-    transactionSync(db, async () => 1);
+    const fromAsync: number = transactionSync(db, async () => 1);
     // @ts-expect-error so does one that returns a promise without being async
-    transactionSync(db, () => Promise.resolve(1));
+    const fromPromise: number = transactionSync(db, () => Promise.resolve(1));
     // @ts-expect-error the async mode's handle has no synchronous transaction
     transactionSync(asyncHandle, () => 1);
+    void fromAsync;
+    void fromPromise;
+  };
+
+  /**
+   * The regression. `NotThenable` was `{ then?: undefined } | string | number | …`,
+   * and `{ then?: undefined }` is a **weak type** - so TypeScript rejected any
+   * object with no property in common with it, which is every row. Returning a row
+   * from a transaction did not compile, and no test here caught it because all of
+   * them returned a `number`.
+   */
+  const rowsAreReturnable = (): void => {
+    const row = transactionSync(db, (tx) =>
+      tx.insert(entries).values({ name: 'returned' }).returning().get(),
+    );
+    const name: string = row.name;
+    const list: { id: number; name: string }[] = transactionSync(db, (tx) =>
+      tx.select().from(entries).all(),
+    );
+    const tuple: [number, string] = transactionSync(db, () => [1, 'a']);
+    void name;
+    void list;
+    void tuple;
   };
 
   it('is compile-time only, so nothing runs', () => {
     expect(uncompilable).toBeInstanceOf(Function);
+    expect(rowsAreReturnable).toBeInstanceOf(Function);
+  });
+
+  it('returns a row object at runtime, not only in the types', () => {
+    const row = transactionSync(db, (tx) =>
+      tx.insert(entries).values({ name: 'row-out' }).returning().get(),
+    );
+    expect(row).not.toBeInstanceOf(Promise);
+    expect(row.name).toBe('row-out');
   });
 });
 

@@ -20,20 +20,35 @@ export type SyncTransaction<TSchema extends Record<string, unknown>> =
   Parameters<Parameters<BunSQLiteDatabase<TSchema>['transaction']>[0]>[0];
 
 /**
- * Anything that is not a promise. A `then` typed `undefined` is what excludes one:
- * an ordinary object or array has no `then` at all and satisfies it, `Promise<T>`
- * has a callable one and does not.
+ * A callback's return type, unless it is a promise - in which case it becomes a
+ * branded tuple that nothing can be assigned to, so the mistake is a type error at
+ * the point the result is used and the message says what to do about it.
+ *
+ * ### Why this is not a constraint on the type parameter
+ *
+ * It was, and the constraint was `{ then?: undefined } | string | number | …`, on
+ * the reasoning that an ordinary object has no `then` at all and so satisfies the
+ * first member while `Promise<T>` does not.
+ *
+ * That is wrong, and in the direction that matters. `{ then?: undefined }` is a
+ * **weak type** - every property optional - so TypeScript's weak type detection
+ * rejects any object that has no property in common with it. Returning a row from
+ * a transaction, which is the single most common thing to want, did not compile:
+ *
+ *     transactionSync(db, (tx) => tx.insert(users).values(v).returning().get())
+ *     //  Type '{ id: string; … }' is not assignable to type 'NotThenable'.
+ *
+ * Only primitives got through, which is why every test in this package returned a
+ * `number` and the hole went unnoticed. The promise half of the guarantee is kept
+ * here, on the return type, where it costs objects nothing.
  */
-type NotThenable =
-  | { then?: undefined }
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined
-  | void;
+type NoPromise<T> =
+  T extends PromiseLike<unknown>
+    ? [
+        'transactionSync: the callback must be synchronous - use transaction() for an async one',
+        never,
+      ]
+    : T;
 
 /** Per-handle transaction state. Off to the side, because drizzle owns the handle. */
 interface Scope {
@@ -175,9 +190,9 @@ export function transaction<TSchema extends Record<string, unknown>, T>(
  * right, so this delegates instead of issuing `BEGIN`/`COMMIT` itself: one native
  * transaction, no statement strings, no queue, no promise.
  *
- * The callback is held to that by `NotThenable`. An `async` callback, or one that
- * returns `Promise.resolve(…)`, is a compile error naming the constraint rather
- * than a rollback that silently does nothing. Verified against Bun 1.3.14: with a
+ * The callback is held to that by `NoPromise`. An `async` callback, or one that
+ * returns `Promise.resolve(…)`, gets a return type nothing can be assigned to and
+ * whose first member says what to use instead. Verified against Bun 1.3.14: with a
  * synchronous callback the row is gone after a throw; with an async one it is not.
  *
  * Both transactions may be used against the same `SyncDatabase`. A `transactionSync`
@@ -185,10 +200,7 @@ export function transaction<TSchema extends Record<string, unknown>, T>(
  * savepoint rather than failing, because `bun:sqlite` branches on
  * `Database.inTransaction`, which the outer `BEGIN` has already set.
  */
-export const transactionSync = <
-  TSchema extends Record<string, unknown>,
-  T extends NotThenable,
->(
+export const transactionSync = <TSchema extends Record<string, unknown>, T>(
   db: SyncDatabase<TSchema>,
   fn: (tx: SyncTransaction<TSchema>) => T,
-): T => db.transaction(fn);
+): NoPromise<T> => db.transaction(fn) as NoPromise<T>;
