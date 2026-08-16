@@ -73,6 +73,18 @@ export interface ReleaseTrigger {
 
 const RELEASE_SUBJECT = /^release(?:\(([^)]*)\))?(!)?:\s*\S/;
 
+/**
+ * The prose a `release:` commit's subject carries, or `null` if it is not one.
+ *
+ * That sentence is the only human-written description of a release, so the
+ * changelog uses it as the section's summary rather than deriving one.
+ */
+export const releaseSummary = (message: string): string | null => {
+  const subject = message.split('\n', 1)[0]?.trim() ?? '';
+  if (!RELEASE_SUBJECT.test(subject)) return null;
+  return subject.slice(subject.indexOf(':') + 1).trim();
+};
+
 export const parseReleaseTrigger = (message: string): ReleaseTrigger => {
   const subject = message.split('\n', 1)[0]?.trim() ?? '';
   const match = RELEASE_SUBJECT.exec(subject);
@@ -201,22 +213,46 @@ export const lastReleaseSha = (): string | null => {
   }
 };
 
-/** Every commit message since the last release, newest first. */
-export const commitsSinceLastRelease = (sha: string | null): string[] => {
+/** One commit in a release range: what it says, and what to link it to. */
+export interface CommitRecord {
+  readonly sha: string;
+  readonly message: string;
+}
+
+/**
+ * Every commit since the last release, newest first, with its sha.
+ *
+ * The sha is here for the changelog, which links each entry back to the commit.
+ * `bumpTypeFrom` reads only the messages, so `commitsSinceLastRelease` below
+ * projects this rather than running a second `git log` with a second format
+ * string that could disagree about the range.
+ */
+export const commitLogSinceLastRelease = (
+  sha: string | null,
+): CommitRecord[] => {
   const range = sha ? `${sha}..HEAD` : 'HEAD';
   try {
-    // NUL-separated, because a commit body contains newlines and blank lines.
-    return execSync(`git log ${range} --pretty=format:%B%x00`, {
+    // NUL-separated records, because a commit body contains newlines and blank
+    // lines; the sha is split off by a unit separator, which a message cannot
+    // contain.
+    return execSync(`git log ${range} --pretty=format:%H%x1f%B%x00`, {
       stdio: 'pipe',
     })
       .toString()
       .split('\0')
-      .map((message) => message.trim())
-      .filter(Boolean);
+      .map((record) => {
+        const [sha = '', message = ''] = record.split('\x1f');
+        return { sha: sha.trim(), message: message.trim() };
+      })
+      .filter((commit) => commit.sha !== '' && commit.message !== '');
   } catch {
     return [];
   }
 };
+
+/** Every commit message since the last release, newest first. */
+export const commitsSinceLastRelease = (sha: string | null): string[] =>
+  commitLogSinceLastRelease(sha).map((commit) => commit.message);
 
 /**
  * Which published workspaces a list of changed files touches.

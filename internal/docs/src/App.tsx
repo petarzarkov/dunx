@@ -23,6 +23,7 @@ import { Guide } from './pages/Guide';
 import { Home } from './pages/Home';
 import { NotFound } from './pages/NotFound';
 import { PackagePage } from './pages/PackagePage';
+import { Releases } from './pages/Releases';
 import { href, RouteKind, useRoute, useScrollTo, type Route } from './router';
 
 /**
@@ -161,8 +162,15 @@ const Navigation = ({
     ))}
 
     <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
-      Quality
+      Project
     </Text>
+    <NavLink
+      component="a"
+      href={href(RouteKind.Releases)}
+      label="Releases"
+      active={route.kind === RouteKind.Releases}
+      onClick={onNavigate}
+    />
     <NavLink
       component="a"
       href={href(RouteKind.Coverage)}
@@ -200,6 +208,9 @@ const DocsFooter = (): React.JSX.Element => (
         <Anchor href={href(RouteKind.Bench)} size="sm" c="dimmed">
           Benchmarks
         </Anchor>
+        <Anchor href={href(RouteKind.Releases)} size="sm" c="dimmed">
+          Releases
+        </Anchor>
         <Anchor href={href(RouteKind.Coverage)} size="sm" c="dimmed">
           Coverage
         </Anchor>
@@ -223,6 +234,8 @@ const Page = ({ route }: { route: Route }): React.JSX.Element => {
       return <PackagePage dir={route.slug} anchor={route.anchor} />;
     case RouteKind.Coverage:
       return <Coverage />;
+    case RouteKind.Releases:
+      return <Releases />;
     default:
       return <NotFound what={`page "${route.slug}"`} />;
   }

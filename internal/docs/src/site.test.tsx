@@ -9,7 +9,7 @@ import {
   startupRows,
   throughputRows,
 } from './bench';
-import { bench, loadGuide, loadPackage, site } from './data';
+import { bench, loadGuide, loadPackage, loadReleases, site } from './data';
 
 beforeEach(() => {
   window.location.hash = '';
@@ -363,5 +363,63 @@ describe('navigation', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       'Coverage',
     );
+  });
+
+  test('the releases page renders the changelog the release script wrote', async () => {
+    mount('#/releases');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'Releases',
+    );
+
+    // The history is a chunk, so the frame is on screen a tick before it.
+    const releases = await loadReleases();
+    expect(releases?.length ?? 0).toBeGreaterThan(0);
+
+    const newest = releases?.[0];
+    if (!newest) throw new Error('no releases');
+    await waitFor(() => {
+      expect(screen.getAllByText(newest.version).length).toBeGreaterThan(0);
+    });
+  });
+});
+
+/*
+ * The release history comes from a file a script writes, so the parse is the part
+ * that can rot: a heading it stops matching turns the page blank rather than
+ * failing the build.
+ */
+describe('the release history', () => {
+  test('every release has a version, a date and a rendered body', async () => {
+    const releases = (await loadReleases()) ?? [];
+    expect(releases.length).toBeGreaterThan(0);
+
+    for (const release of releases) {
+      expect(release.version).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(release.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(release.anchor).toBe(release.version.replace(/\./g, '-'));
+      expect(release.html.trim()).not.toBe('');
+    }
+  });
+
+  test('newest first, and no version listed twice', async () => {
+    const releases = (await loadReleases()) ?? [];
+    const versions = releases.map((release) => release.version);
+    expect(new Set(versions).size).toBe(versions.length);
+
+    const dates = releases.map((release) => release.date);
+    expect([...dates].sort().reverse()).toEqual(dates);
+  });
+
+  /*
+   * Every release has its own "Features" heading, and `renderDoc` de-duplicates
+   * within one document rather than across the page. Without the version prefix
+   * the generator adds, thirty-five cards share a handful of ids.
+   */
+  test('heading ids are unique across the whole page', async () => {
+    const releases = (await loadReleases()) ?? [];
+    const ids = releases.flatMap((release) =>
+      [...release.html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

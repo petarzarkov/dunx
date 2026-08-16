@@ -94,18 +94,6 @@ jobs:
       - name: Typecheck every scaffolded feature selection
         run: bun run check:scaffolds
 
-      # `bun run build` already built the site once, before the coverage model
-      # and badges existed. Rebuild so the deployed artifact carries them.
-      - name: Build the documentation site
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        run: bun run docs:build
-
-      - name: Upload the documentation site
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./internal/docs/dist
-
       - name: Configure git identity
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
@@ -133,6 +121,21 @@ jobs:
         run: bun run version
         env:
           FORCE_PUBLISH: ${{ contains(github.event.head_commit.message, '[force-publish]') }}
+
+      # After the release, not before it. `bun run build` already built the site
+      # once, before the coverage model and the badges existed; the release step
+      # then writes the CHANGELOG.md the Releases page is generated from. Built
+      # ahead of it, the deployed artifact carried neither - and the release
+      # commit is `[skip ci]`, so nothing would rebuild until the next push.
+      - name: Build the documentation site
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        run: bun run docs:build
+
+      - name: Upload the documentation site
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./internal/docs/dist
 
   # Separate job so the `github-pages` environment (and any branch protection on it)
   # never gates the CI job itself - PR runs must not need it.

@@ -8,6 +8,7 @@ import type {
   GuideBody,
   PackageBody,
   PackageMeta,
+  ReleaseNote,
   SiteIndex,
 } from '../scripts/extract/model';
 
@@ -61,3 +62,15 @@ export const loadGuide = (slug: string): Promise<GuideBody | undefined> =>
 
 export const loadPackage = (dir: string): Promise<PackageBody | undefined> =>
   load(PACKAGE_BODIES, 'package', dir);
+
+/**
+ * The whole release history, in one chunk loaded when `#/releases` opens. It is
+ * the largest generated file and no other route reads a byte of it, so it is not
+ * in the index.
+ */
+const RELEASE_BODIES: Record<string, Chunk> = {
+  all: () => import('./generated/releases.json?raw'),
+};
+
+export const loadReleases = (): Promise<ReleaseNote[] | undefined> =>
+  load(RELEASE_BODIES, 'releases', 'all');

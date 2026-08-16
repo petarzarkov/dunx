@@ -122,6 +122,26 @@ export interface GuideBody {
   readonly html: string;
 }
 
+/**
+ * One release from the root `CHANGELOG.md`, which `scripts/version.ts` writes.
+ *
+ * The heading is parsed for the version and the date; the body is rendered by
+ * the same markdown pipeline every other page uses. Loaded per route rather than
+ * with the index, because the whole history is far larger than the nav needs.
+ */
+export interface ReleaseNote {
+  readonly version: string;
+  /** `YYYY-MM-DD`. */
+  readonly date: string;
+  /**
+   * The `?h=` target for this release, and the prefix on every heading id in
+   * its body. Assigned by the generator so the page never recomputes it -
+   * `slugify` lives next to the highlighter, which must not reach the browser.
+   */
+  readonly anchor: string;
+  readonly html: string;
+}
+
 export interface CoverageFile {
   readonly path: string;
   readonly lines: number;

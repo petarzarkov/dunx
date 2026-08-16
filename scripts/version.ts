@@ -5,20 +5,23 @@ import { semver } from 'bun';
 import {
   bumpTypeFrom,
   bumpVersion,
-  commitsSinceLastRelease,
+  commitLogSinceLastRelease,
   determineBumpType,
   getChangedSrcPackages,
   getForcePublishTarget,
   getReleaseTrigger,
   lastReleaseSha,
   RELEASE_COMMIT_PREFIX,
+  type CommitRecord,
   type ReleaseTrigger,
 } from './bump.js';
 import {
-  assertNoWorkspaceRanges,
-  readWorkspaceVersions,
-  resolveWorkspaceDeps,
-} from './workspace-ranges.js';
+  CHANGELOG_PATH,
+  parseChangelog,
+  prependRelease,
+  renderRelease,
+} from './changelog.js';
+import { isVersionPublished, publishPackage } from './publish.js';
 
 const isDryRun = process.env['DRY_RUN'] === 'true';
 
@@ -36,10 +39,14 @@ const ROOT_DIR = resolve(import.meta.dir, '..');
  */
 const PUBLISHABLE_DIRS = ['packages', 'tools'] as const;
 
-// Trusted publishing needs npm >= 11.5.1, and GitHub's ubuntu-latest image still
-// ships npm 10.x. `bunx` fetches this exact version and runs it on bun's own
-// runtime, so no Node install is needed anywhere in CI.
-const NPM = 'bunx npm@11.10.1';
+/** What `publish.ts` resolves a `workspace:` range against. */
+const WORKSPACE_ROOTS = PUBLISHABLE_DIRS.map((dir) => join(ROOT_DIR, dir));
+
+const REPO = process.env['GITHUB_REPOSITORY'] ?? 'petarzarkov/dunx';
+const REPO_URL = `https://github.com/${REPO}`;
+
+const publish = (pkgDir: string): void =>
+  publishPackage(pkgDir, WORKSPACE_ROOTS, REPO);
 
 const forcePublish = getForcePublishTarget();
 
@@ -81,7 +88,12 @@ const applyVersionBumps = (
     packageJsonPath: string;
   }[],
   bumpType: 'major' | 'minor' | 'patch',
-): { packageJsonPath: string; dir: string }[] => {
+): {
+  /** The one version every package was moved to, whether or not anything was
+   * written - a dry run needs it to name the changelog section it previews. */
+  version: string;
+  bumped: { packageJsonPath: string; dir: string }[];
+} => {
   const bumped: {
     packageJsonPath: string;
     dir: string;
@@ -132,46 +144,62 @@ const applyVersionBumps = (
     }
   }
 
-  return bumped;
+  return { version: shared, bumped };
 };
 
 /**
- * `npm publish` leaves `workspace:` ranges untouched in the packed tarball (unlike
- * `bun publish`), so swap them for concrete ranges, publish, then put the source
- * package.json back exactly as it was - version bump included. The range policy
- * itself is in `workspace-ranges.ts`, shared with `first-publish.ts`.
+ * The release's section, prepended to the root `CHANGELOG.md`.
+ *
+ * Written from the same commit range the bump was derived from, so the file can
+ * never describe a different set of commits than the version it names. Returns
+ * the path so the release commit can stage it.
+ *
+ * A section for this version already present means a previous run wrote it and
+ * failed before committing; re-running must not append a second copy.
  */
-const withResolvedWorkspaceDeps = (pkgDir: string, publish: () => void) => {
-  const pkgJsonPath = join(pkgDir, 'package.json');
-  const original = readFileSync(pkgJsonPath, 'utf-8');
-  const pkg = JSON.parse(original);
-  const versions = readWorkspaceVersions(
-    ...PUBLISHABLE_DIRS.map((dir) => join(ROOT_DIR, dir)),
-  );
+const writeChangelog = (
+  version: string,
+  commits: readonly CommitRecord[],
+): string => {
+  const path = join(ROOT_DIR, CHANGELOG_PATH);
+  const existing = existsSync(path) ? readFileSync(path, 'utf-8') : '';
 
-  const rewritten = resolveWorkspaceDeps(pkg, (name) => versions.get(name));
-  for (const line of rewritten) console.log(`  ${line}`);
-
-  if (rewritten.length === 0) {
-    assertNoWorkspaceRanges(pkg);
-    publish();
-    return;
+  if (parseChangelog(existing).some((release) => release.version === version)) {
+    console.log(
+      `${CHANGELOG_PATH} already has a ${version} section, leaving it.`,
+    );
+    return path;
   }
 
-  writeFileSync(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`);
-  try {
-    assertNoWorkspaceRanges(pkg);
-    publish();
-  } finally {
-    writeFileSync(pkgJsonPath, original);
+  const section = renderRelease({
+    version,
+    date: new Date().toISOString().slice(0, 10),
+    commits,
+    repoUrl: REPO_URL,
+  });
+
+  if (isDryRun) {
+    console.log(
+      `\n[DRY RUN] Would prepend to ${CHANGELOG_PATH}:\n\n${section}`,
+    );
+    return path;
   }
+
+  writeFileSync(path, prependRelease(existing, section));
+  console.log(`Wrote the ${version} section of ${CHANGELOG_PATH}`);
+  return path;
 };
 
-const pushVersionCommit = (bumpedFiles: string[]): void => {
+const pushVersionCommit = (
+  bumpedFiles: string[],
+  /** Anything else the release wrote. The version is still read from the first
+   * manifest, so these never lead the list. */
+  extraFiles: string[] = [],
+): void => {
   // bun.lock records every workspace's version, so a bump leaves it a release
   // behind and the next `bun install` anywhere rewrites it as an unrelated diff.
   execSync('bun install --lockfile-only', { stdio: 'inherit' });
-  execSync(`git add ${bumpedFiles.join(' ')} bun.lock`);
+  execSync(`git add ${[...bumpedFiles, ...extraFiles].join(' ')} bun.lock`);
 
   const path = bumpedFiles[0];
   if (!path) {
@@ -192,9 +220,8 @@ const pushVersionCommit = (bumpedFiles: string[]): void => {
   console.log(`Pushing to branch: ${branch}`);
   const token = process.env['GITHUB_TOKEN'];
   if (token) {
-    const repo = process.env['GITHUB_REPOSITORY'] ?? 'petarzarkov/dunx';
     execSync(
-      `git push https://x-access-token:${token}@github.com/${repo}.git HEAD:refs/heads/${branch}`,
+      `git push https://x-access-token:${token}@github.com/${REPO}.git HEAD:refs/heads/${branch}`,
     );
   } else {
     execSync(`git push origin HEAD:refs/heads/${branch}`);
@@ -203,60 +230,11 @@ const pushVersionCommit = (bumpedFiles: string[]): void => {
   console.log(`Successfully pushed version ${pkg.version}`);
 };
 
-/**
- * Publishes with npm rather than bun: authentication happens through npm's OIDC
- * trusted publishing, which `bun publish` does not implement (oven-sh/bun#15601).
- *
- * `--provenance` only works on a supported CI, so it is left off local runs.
- */
-const publishPackage = (pkgDir: string): void => {
-  const provenance = process.env['GITHUB_ACTIONS'] ? ' --provenance' : '';
-
-  withResolvedWorkspaceDeps(pkgDir, () => {
-    try {
-      execSync(`${NPM} publish --access public${provenance}`, {
-        cwd: pkgDir,
-        stdio: 'inherit',
-      });
-    } catch (error) {
-      // Trusted publishing needs the package to have a trusted publisher pointing
-      // at this repo + workflow, and the job needs `id-token: write`. npm answers
-      // a PUT it won't authorize with 404 rather than 401/403, so an unhelpful
-      // "404 Not Found" here is almost always missing/mismatched config.
-      console.error(
-        `\nPublish failed for ${basename(pkgDir)}. If this is a 404/E404, check the ` +
-          `npm trusted publisher for this package: it must point at ` +
-          `${process.env['GITHUB_REPOSITORY'] ?? 'petarzarkov/dunx'} and the workflow ` +
-          `file that runs this script. A package that has never been published ` +
-          `needs one manual publish before a trusted publisher can be attached.\n`,
-      );
-      throw error;
-    }
-  });
-};
-
 interface PublishablePackage {
   name: string;
   dir: string;
   packageJsonPath: string;
 }
-
-const isVersionPublished = (name: string, version: string): boolean => {
-  try {
-    const out = execSync(`${NPM} view ${name} versions --json`, {
-      stdio: 'pipe',
-    })
-      .toString()
-      .trim();
-    // npm returns a single quoted string when only one version exists,
-    // or a JSON array when multiple versions exist
-    const parsed: string | string[] = JSON.parse(out);
-    const versions = Array.isArray(parsed) ? parsed : [parsed];
-    return versions.includes(version);
-  } catch {
-    return false;
-  }
-};
 
 const runForcePublish = (
   packages: PublishablePackage[],
@@ -325,7 +303,7 @@ const runForcePublish = (
 
   for (const { name, dir, version } of toPublish) {
     console.log(`Publishing ${name}@${version}...`);
-    publishPackage(dir);
+    publish(dir);
   }
 
   if (bumpedFiles.length > 0) {
@@ -359,8 +337,9 @@ const runVersionBump = (
   // An explicit `release(minor):` wins outright. Otherwise every commit back to the
   // last release votes, and the highest wins - so a `feat!:` batched behind three
   // `fix:`es still produces a major.
-  const commits = commitsSinceLastRelease(since);
-  const bumpType = trigger.bump ?? bumpTypeFrom(commits);
+  const commits = commitLogSinceLastRelease(since);
+  const bumpType =
+    trigger.bump ?? bumpTypeFrom(commits.map((commit) => commit.message));
   console.log(
     trigger.bump
       ? `Version bump type: ${bumpType} (stated by the release commit)`
@@ -403,7 +382,12 @@ const runVersionBump = (
     );
   }
 
-  const bumpedPackages = applyVersionBumps(allPackages, bumpType);
+  const { version, bumped: bumpedPackages } = applyVersionBumps(
+    allPackages,
+    bumpType,
+  );
+
+  const changelogPath = writeChangelog(version, commits);
 
   if (isDryRun || bumpedPackages.length === 0) return;
 
@@ -420,11 +404,14 @@ const runVersionBump = (
       continue;
     }
     console.log(`Publishing ${basename(dir)}...`);
-    publishPackage(dir);
+    publish(dir);
   }
 
   console.log('Committing version changes...');
-  pushVersionCommit(bumpedPackages.map((p) => p.packageJsonPath));
+  pushVersionCommit(
+    bumpedPackages.map((p) => p.packageJsonPath),
+    [changelogPath],
+  );
 };
 
 // Guarded so importing this file cannot start a publish. The pure helpers moved to

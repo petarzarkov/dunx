@@ -18,6 +18,13 @@ const buildActions = (): SpotlightActionData[] => {
       group: 'Pages',
       onClick: () => navigate(href(RouteKind.Bench)),
     },
+    {
+      id: 'page-releases',
+      label: 'Releases',
+      description: 'Every version, and the commits it shipped',
+      group: 'Pages',
+      onClick: () => navigate(href(RouteKind.Releases)),
+    },
   ];
 
   for (const guide of site.guides) {

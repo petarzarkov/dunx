@@ -45,7 +45,29 @@ of history". CI's `fetch-depth: 0` is load-bearing for the same reason: a shallo
 checkout cannot see the marker and silently under-reports the bump to a patch.
 
 Force every package to publish regardless of computed bumps by putting
-`[force-publish]` in the commit message. That path bypasses the release gate.
+`[force-publish]` in the commit message. That path bypasses the release gate, and
+writes no changelog entry: it has no range to describe.
+
+## The changelog
+
+Each release prepends a section to the root `CHANGELOG.md`, from the same commit
+range the bump was derived from. `scripts/changelog.ts` owns the format in both
+directions - `renderRelease` writes a section, `parseChangelog` reads them back -
+and `internal/docs` renders them at `#/releases`. Nothing is hand-written.
+
+- The `release:` commit's own prose becomes the section's summary, so that subject
+  is the release note. A release whose whole range is that one commit still gets a
+  section.
+- Commits group by conventional type; an unrecognised one lands under "Other
+  changes" rather than being dropped.
+- The generator escapes `<` and replaces em and en dashes, so a subject written
+  before those rules existed cannot fail `no-em-dash.test.ts` or lose a type
+  parameter to raw HTML.
+- The docs site is built **after** the release step in `ci.yml`, so the deployed
+  artifact carries the section this release just wrote. The release commit is
+  `[skip ci]`, so building it earlier would leave the page a release behind.
+- Re-running a failed release does not duplicate a section: a version already
+  present is left alone.
 
 ## Constraints that are load-bearing
 
@@ -53,7 +75,7 @@ Force every package to publish regardless of computed bumps by putting
   on npmjs.com is pinned to the workflow **filename** `ci.yml`. Renaming that file
   silently breaks publishing for every package. `ci.yml` is the only workflow
   permitted to publish.
-- **npm is the one sanctioned non-bun tool**, only inside `scripts/version.ts`:
+- **npm is the one sanctioned non-bun tool**, only inside `scripts/publish.ts`:
   `bun publish` cannot authenticate via OIDC (oven-sh/bun#15601). It runs as
   `bunx npm@<pinned>` - the `NPM` constant, currently `bunx npm@11.10.1`. Bun
   executes npm on its own runtime, so CI needs no `setup-node`. The pin must stay
@@ -62,7 +84,7 @@ Force every package to publish regardless of computed bumps by putting
 - **`workspace:` ranges.** `npm publish` does not expand them, so the publish path
   rewrites them to concrete ranges around the publish and restores `package.json`
   afterwards. The policy is one function, `resolveWorkspaceRange` in
-  `scripts/workspace-ranges.ts`, shared by `version.ts` and `first-publish.ts`
+  `scripts/workspace-ranges.ts`, shared by `publish.ts` and `first-publish.ts`
   because a second copy of it is how the two would drift: **`workspace:*` publishes
   as `^<version>`**, not as an exact pin. Every internal range is a
   `peerDependency`, and an exact peer accepts one version and nothing else, so a
@@ -87,4 +109,5 @@ Force every package to publish regardless of computed bumps by putting
 ## Never
 
 Do not add `NPM_TOKEN`, a second publishing workflow, or `npm` calls outside
-`scripts/version.ts`.
+`scripts/publish.ts`. Do not hand-edit `CHANGELOG.md`: the next release rewrites
+the file around whatever is there, and the site renders what the script wrote.

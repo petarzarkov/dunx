@@ -17,10 +17,12 @@ import { readBench } from './extract/bench';
 import { highlight, paletteCss, startHighlighter } from './highlight';
 import { ALL_SAMPLES, langOf } from '../src/samples';
 import { extractPackage, type Manifest } from './extract/index';
+import { parseChangelog } from '../../../scripts/changelog.js';
 import type {
   CoverageModel,
   GuidePage,
   PackageDoc,
+  ReleaseNote,
   SiteIndex,
 } from './extract/model';
 
@@ -345,6 +347,29 @@ writeFileSync(
       packages.map((pkg) => pkg.dir),
     )};\n`,
 );
+
+/**
+ * The release history, from the `CHANGELOG.md` that `scripts/version.ts` writes.
+ *
+ * Each release's body goes through `render`, so an entry's links are rewritten
+ * the same way a guide's are. The ids `renderDoc` assigns are namespaced by
+ * version afterwards: it de-duplicates within one document, and every release
+ * has its own "Features" heading, so thirty-five of them on one page would
+ * otherwise share an id.
+ */
+const releases: ReleaseNote[] = parseChangelog(
+  read(join(REPO_ROOT, 'CHANGELOG.md')),
+).map(({ version, date, body }) => {
+  const anchor = slugify(version);
+  return {
+    version,
+    date,
+    anchor,
+    html: render(body, '#/releases').replace(/ id="/g, ` id="${anchor}-`),
+  };
+});
+
+writeFileSync(join(OUT_DIR, 'releases.json'), JSON.stringify(releases));
 
 const bench = readBench(BENCH_RESULTS);
 

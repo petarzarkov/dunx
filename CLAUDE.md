@@ -524,6 +524,12 @@ detection span every commit back to the previous `chore(release):` marker, not j
 release commit is never itself a `feat`. Only the commit **subject** triggers a
 release, so a body quoting the word does not publish.
 
+That same range writes the root **`CHANGELOG.md`**, one section per release, which
+`internal/docs` renders at `#/releases`. `scripts/changelog.ts` owns the format in
+both directions, so the writer and the site cannot drift; the `release:` commit's
+own prose becomes the section summary. Do not hand-edit the file, and do not add
+`changesets` - the range already answers what a changeset file would.
+
 Everything else - the OIDC constraints, the `ci.yml` filename pin, the npm version
 pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 

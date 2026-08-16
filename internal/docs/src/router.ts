@@ -6,6 +6,7 @@ export const RouteKind = Object.freeze({
   Guide: 'guide',
   Api: 'api',
   Coverage: 'coverage',
+  Releases: 'releases',
   NotFound: 'not-found',
 } as const);
 export type RouteKind = (typeof RouteKind)[keyof typeof RouteKind];
@@ -22,6 +23,7 @@ const KINDS: Record<string, RouteKind> = {
   guide: RouteKind.Guide,
   api: RouteKind.Api,
   coverage: RouteKind.Coverage,
+  releases: RouteKind.Releases,
 };
 
 export const parseRoute = (hash: string): Route => {

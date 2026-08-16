@@ -4,7 +4,29 @@ import {
   bumpVersion,
   changedSrcPackages,
   parseReleaseTrigger,
+  releaseSummary,
 } from './bump.js';
+
+describe('releaseSummary', () => {
+  it('takes the prose after the colon, whatever the scope', () => {
+    expect(releaseSummary('release: gate publishing')).toBe('gate publishing');
+    expect(releaseSummary('release(minor): gate publishing')).toBe(
+      'gate publishing',
+    );
+    expect(releaseSummary('release!: gate publishing')).toBe('gate publishing');
+  });
+
+  it('is null for anything that is not a release commit', () => {
+    expect(releaseSummary('feat: a thing')).toBeNull();
+    expect(releaseSummary('chore(release): bump version to 1.0.0')).toBeNull();
+  });
+
+  // The subject only, for the same reason `parseReleaseTrigger` reads it: a body
+  // quoting a release commit must not become the summary of an unrelated one.
+  it('reads the subject, not the body', () => {
+    expect(releaseSummary('feat: a thing\n\nrelease: not this')).toBeNull();
+  });
+});
 
 describe('bumpVersion()', () => {
   it('bumps a version whose components are all non-zero', () => {

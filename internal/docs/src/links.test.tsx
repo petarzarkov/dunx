@@ -1,5 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 import { loadGuide, loadPackage, site } from './data';
+import { RouteKind } from './router';
+
+/**
+ * Routes that are one page with no slug, so a link to one needs nothing checked
+ * beyond the kind. Taken from `RouteKind` rather than written out: the literal
+ * list held `bench`, which has never been a route - `RouteKind.Bench` is
+ * `benchmarks` - so a markdown link to the benchmarks page was reported as an
+ * offender and the entry protected nothing.
+ */
+const SLUGLESS: ReadonlySet<string> = new Set([
+  '',
+  RouteKind.Bench,
+  RouteKind.Coverage,
+  RouteKind.Releases,
+]);
 
 /**
  * Every internal link on the site, resolved against what the site actually
@@ -68,7 +83,7 @@ describe('internal links', () => {
         const [route = ''] = href.slice(2).split('?');
         const [kind = '', slug = ''] = route.split('/');
 
-        if (kind === '' || kind === 'bench' || kind === 'coverage') continue;
+        if (SLUGLESS.has(kind)) continue;
         if (kind === 'guide' && guideSlugs.has(slug)) continue;
         if (kind === 'api' && packageDirs.has(slug)) continue;
         offenders.push(`${page.slug}: ${href}`);
