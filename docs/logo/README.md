@@ -1,9 +1,13 @@
 # The dunx mark
 
-The mark is the wordmark's own last two letters: the **`n`** - an arch on two legs sheltering the **`x`**. Same 4-unit stroke, same round caps, same geometry as the
+The mark brackets the wordmark: a **`d`** bowl holding the **`x`**, the first letter
+of `dunx` and the last. Same 4-unit stroke, same round caps, same geometry as the
 letterforms, so the glyph and the wordmark are cut from one drawing rather than
 designed next to each other. The `x` carries the cyan → indigo → violet accent;
 everything else is neutral.
+
+The bowl was an `n` arch over the `x` until the same drawing turned 90 degrees
+clockwise read as the `d`. The path data is that rotation about (16, 16).
 
 ## Which file to use
 
@@ -22,10 +26,11 @@ that document's root, which is black. So the `currentColor` cuts are only correc
 when the SVG is **inlined into the page**, and anything referenced by `src=` or
 pasted into a README must be `logo-mark-color.svg`.
 
-That is why the docs site draws the paths in
-[`Logo.tsx`](../../internal/docs/src/components/Logo.tsx) instead of loading the files:
-the header has to follow the theme toggle. The geometry there is byte-identical to
-the files - change one, change both.
+So the docs site draws the paths in
+[`Logo.tsx`](../../internal/ui/src/components/Logo.tsx) instead of loading the files:
+the header has to follow the theme toggle. It reads `BOWL` and `CROSS` from
+[`logo.ts`](../../internal/ui/src/logo.ts), which is where the geometry is written;
+the three files above restate it and have to be edited alongside.
 
 ## Do not add a `prefers-color-scheme` block
 
@@ -52,13 +57,13 @@ A mark that dies at favicon size is not a logo.
 | Concept                     | Why not                                                                                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `(x)` - a constructor taking one parameter | The aptest idea of the six and the biggest loss. Three thin vertical elements across 16 device pixels degrade to `( : )`, and thickening the strokes closes the gaps. |
-| `dx` monogram               | Survives 16 px, but `dx` reads as "developer experience", and a rounded gradient tile with two letters is the most generic option available.  |
+| `dx` monogram               | Survives 16 px, but two letters set side by side in a rounded gradient tile is the most generic option available. The mark that won holds the `x` inside the `d` and carries no tile. |
 | The injection graph         | Reads as a git-merge icon at 512 px and as a smear at 16. A three-node graph does not have 16 px in it.                                       |
 | The unmarked centre         | Four blades converging on a missing `x`. The void **is** the concept and the void is what dies first - at 16 px it separates into four unrelated diamonds, and shrinking the void to fix that deletes the idea. |
 | Monolinear wordmark alone   | Chosen, but as the wordmark half. On its own it collapses to two bars at favicon size.                                                       |
 
-A solid dome was also cut before the final arch: it reads as a ghost or a "blocked"
-icon (`05-cuts-rejected.png`). The open arch that replaced it is hollow, two-legged
-and cool-toned, which is also what settles any question of it being derived from
-Bun's mark - that one is a solid, warm, faced shape, and this shares no fill, no
-palette and no closed silhouette with it. The arch is dunx's own `n`.
+A solid dome was also cut before the arch this was rotated from: it reads as a ghost
+or a "blocked" icon (`05-cuts-rejected.png`). What replaced it is hollow, open along
+one side and cool-toned, which is also what settles any question of it being derived
+from Bun's mark - that one is a solid, warm, faced shape, and this shares no fill, no
+palette and no closed silhouette with it.

@@ -6,11 +6,13 @@
  * is why the API explorer and the dashboard shipped with a blank tab icon. The
  * geometry is here now and everything else derives from it.
  *
- * The mark is the wordmark's own last two letters: the `n` - an arch on two legs -
- * sheltering the `x`.
+ * The mark brackets the wordmark: a `d` bowl holding the `x`, the first letter of
+ * `dunx` and the last. It was an `n` arch over the `x` until the same drawing
+ * turned 90 degrees clockwise read as the `d` - which is why the numbers are a
+ * rotation of the old ones about (16, 16) rather than a fresh set.
  */
-export const ARCH = 'M5.6 26.1V16.3a10.4 10.4 0 0 1 20.8 0v9.8';
-export const CROSS = 'm11.4 13.1 9.2 9.2m0-9.2-9.2 9.2';
+export const BOWL = 'M5.9 5.6H15.7a10.4 10.4 0 0 1 0 20.8H5.9';
+export const CROSS = 'm9.7 11.4 9.2 9.2m0-9.2-9.2 9.2';
 
 export const ACCENT = Object.freeze({
   from: '#22b8cf',
@@ -39,7 +41,7 @@ export const LOGO_MARK_SVG: string =
   `<stop offset="1" stop-color="${ACCENT.to}"/>` +
   '</linearGradient>' +
   '<g stroke="url(#dunx-c)" stroke-width="4" stroke-linecap="round">' +
-  `<path d="${ARCH}"/><path d="${CROSS}"/>` +
+  `<path d="${BOWL}"/><path d="${CROSS}"/>` +
   '</g></svg>';
 
 /**

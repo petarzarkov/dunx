@@ -2,7 +2,7 @@ export { theme } from './theme.js';
 // The mark, and the one place its geometry is declared. The build scripts for the
 // two inlined bundles emit `LOGO_FAVICON` into their generated modules, so the
 // pages a backend serves get a tab icon without fetching one.
-export { ACCENT, ARCH, CROSS, LOGO_FAVICON, LOGO_MARK_SVG } from './logo.js';
+export { ACCENT, BOWL, CROSS, LOGO_FAVICON, LOGO_MARK_SVG } from './logo.js';
 export {
   HEALTH_COLOR,
   JOB_STATE_COLOR,

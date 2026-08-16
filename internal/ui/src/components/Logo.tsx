@@ -1,9 +1,9 @@
 import { useId } from 'react';
 
-import { ACCENT, ARCH, CROSS } from '../logo.js';
+import { ACCENT, BOWL, CROSS } from '../logo.js';
 
 /**
- * The in-page cut: the arch on `currentColor` so it follows the colour scheme the
+ * The in-page cut: the bowl on `currentColor` so it follows the colour scheme the
  * header is painted in, the cross on the accent gradient. An `<img>` could not do
  * that, which is why the mark is drawn rather than loaded from a file.
  *
@@ -42,7 +42,7 @@ export const LogoMark = ({
     >
       <Accent id={id} />
       <g strokeWidth="4" strokeLinecap="round">
-        <path d={ARCH} stroke="currentColor" />
+        <path d={BOWL} stroke="currentColor" />
         <path d={CROSS} stroke={`url(#${id})`} />
       </g>
     </svg>
