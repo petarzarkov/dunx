@@ -615,8 +615,7 @@ queues page**, never at boot and never by the polling `/api/queues` endpoint, so
 app that never opens it holds no broker socket - which is what lets a process exit
 cleanly against an absent Redis.
 
-`@dunx/queue-dashboard` was deleted and must not come back; read
-docs/roadmap/dunx-dashboard.md.
+`@dunx/queue-dashboard` was deleted and must not come back.
 
 ## Examples
 
@@ -634,7 +633,7 @@ Package names are `@dunx/example-<dir>`, so `bun run --filter '@dunx/example-*'`
 addresses them all - which is how CI keeps them alive. **Every example must be in
 CI**; that is the whole test for whether a fifth one earns its place. Per-package
 examples were tried and reverted and that reversal still holds - see
-docs/ARCHITECTURE.md, Phase 1, which also records which candidates were rejected.
+docs/ROADMAP.md, Phase 1, which also records which candidates were rejected.
 
 A part needing an absent service (Redis, Postgres, MySQL, S3) prints that it is
 skipping and the app still exits 0.

@@ -1,7 +1,15 @@
 # Class modules with opt-in configuration, and nothing else
 
-**The next priority.** Requested directly, and it supersedes the earlier
-`api-surface-consistency` item, whose three findings are folded in below.
+**The next priority, and partly shipped.** Requested directly, and it supersedes
+the earlier `api-surface-consistency` item, whose three findings are folded in
+below.
+
+W3 and W4 are done, and every `*Options` in the framework is a class:
+`QueueOptions`, `RedisOptions`, `DashboardOptions`, `StaticOptions`,
+`SqliteOptions`, `AuthOptions`. **W1, W1b, W2 and W6 are open** - `HttpOptions` is
+still a plain object `HttpFactory.create` evaluates before the container exists,
+`AppError` still carries no `status`, and `redisConnection(name)` is still a token
+function rather than a subclass.
 
 The rule to reach:
 
@@ -365,6 +373,9 @@ change, so the mechanism exists; this is about who fills it.
 
 ### W3 - `AuthModule` configures better-auth, the app opts in
 
+**Shipped.** `AuthOptions` is a class, and `AuthModule.forRoot` / `forRootAsync`
+take it. The `plugins` and `betterAuth` escape hatches below are on it.
+
 **Current:** 75 lines restating better-auth's options, plus 50 more building a second
 instance for its schema.
 
@@ -416,6 +427,15 @@ library owns the abstraction - an app must still be able to reach it. Opt-in
 configuration is a shortcut over the library, never a wall in front of it.
 
 ### W4 - the shutdown timeout, which is smaller than it looks
+
+**Shipped.** `ShutdownHooks` in `@dunx/core` takes
+`enableShutdownHooks(signals, { exitAfterMs })`, defaulting to 1000 ms. The timer
+**is** `unref()`d, against the guess recorded below: an unref'd timer cannot hold
+the runtime open, so a process with nothing pending exits immediately and the
+callback never fires, and it fires only when a handle outside the container is
+still holding the loop. It logs before exiting, and `exitAfterMs: false` is the
+escape hatch for an app that does not own its process. The analysis below is kept
+for the reasoning it records.
 
 `force-exit.ts` is 60 lines in application code, and **most of it is already in the
 framework**: `App.enableShutdownHooks(signals)` registers the `SIGTERM`/`SIGINT`
@@ -564,9 +584,8 @@ documentation phase scheduled last gets skipped, and one scheduled first goes st
 - **Not a wall in front of a library.** Every opt-in configuration needs a documented
   way through to the underlying options. `AuthModule`'s `plugins` and `betterAuth`
   fields are not optional extras; they are what keeps Rule 1's second half true.
-- **Not a reason to defer the dashboard.** [dunx-dashboard](./dunx-dashboard.md) stays
-  open and is the larger piece of work; this is the higher priority because it changes
-  what every consumer writes on day one.
+- **Not a reason to defer other work.** This is the higher priority because it
+  changes what every consumer writes on day one.
 
 ## The measure
 

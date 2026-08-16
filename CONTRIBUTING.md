@@ -444,7 +444,7 @@ root and `[test]`, a `tsconfig.json` extending the root, a `typecheck` script,
 and a `test` script with at least one test in it, because `--filter` skips
 workspaces that lack the script and does not say so.
 
-Before adding a fifth example, read the Phase 1 section of ARCHITECTURE.md, which
+Before adding a fifth example, read the Phase 1 section of ROADMAP.md, which
 records which candidates were already rejected. Per-package examples were tried and
 reverted, and that reversal holds.
 

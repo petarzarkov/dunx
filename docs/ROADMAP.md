@@ -294,24 +294,31 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                            | Shape                                                                 |
-| ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [class-modules-and-opt-in-config](./roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. 395 lines of framework plumbing in app code.       |
-| [dunx-dashboard](./roadmap/dunx-dashboard.md)                                   | Feature, requested. Designed, not built. The only planned queue UI.   |
-| [design-polish](./roadmap/design-polish.md)                                     | Feature. Landing page rebuilt; not yet striking.                      |
-| [adopt-from-nestjs-template](./roadmap/adopt-from-nestjs-template.md)           | Ongoing. Pagination and the queue dashboard page adopted.             |
-| [http-options-before-container](./roadmap/http-options-before-container.md)     | Absorbed as W1 of class-modules; kept for its analysis.               |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                   | Three upstream defects in bullmq's Bun adapter and `Bun.RedisClient`. |
+| Item                                                                            | Shape                                                               |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [class-modules-and-opt-in-config](./roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.       |
+| [http-options-before-container](./roadmap/http-options-before-container.md)     | Absorbed as W1 of class-modules; kept for its analysis.             |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                   | Two upstream defects in bullmq's Bun adapter and `Bun.RedisClient`. |
 
 Delivered and moved out of this folder rather than left here marked done:
-**cross-language benchmark subjects** (the 16-subject run and how to read it are in
-[architecture/benchmarks.md](./architecture/benchmarks.md)), the **MCP server**
-(shipped as `@dunx/mcp`; the reasoning is in [architecture/mcp.md](./architecture/mcp.md)),
-and **module-scoped DI** (shipped in 1.0.0, with `dunx-template` on 1.0.1; the scope
-model is in
-[architecture/dependency-injection.md](./architecture/dependency-injection.md) and what
-module middleware turned out to be for is in
-[architecture/http.md](./architecture/http.md)).
+
+- **cross-language benchmark subjects** - the 16-subject run and how to read it are
+  in [architecture/benchmarks.md](./architecture/benchmarks.md).
+- **the MCP server** - shipped as `@dunx/mcp`; the reasoning is in
+  [architecture/mcp.md](./architecture/mcp.md).
+- **module-scoped DI** - shipped in 1.0.0, with `dunx-template` on 1.0.1. The scope
+  model is in
+  [architecture/dependency-injection.md](./architecture/dependency-injection.md), and
+  what module middleware turned out to be for is in
+  [architecture/http.md](./architecture/http.md).
+- **the dashboard** - shipped as `@dunx/dashboard`: one middleware over six panels,
+  with **bull-board mounted** for the queues rather than a queue table of dunx's own.
+- **adopting from nestjs-template** - keyset pagination landed as
+  `@dunx/infra/pagination` and the queue page became bull-board behind the dashboard's
+  `authorize`.
+- **the landing page** - the hero, the lifecycle drawing, the motion and the light
+  palette are built; what remains is judgement about the benchmark panel rather than
+  work.
 
 ### From porting nestjs-template to dunx-template
 
@@ -322,10 +329,11 @@ produced 22 findings.
 
 Of those, the two the template had to work around itself are now closed in dunx and
 deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, and the
-**queue dashboard page** was `@dunx/queue-dashboard`, since deleted - see
-[dunx-dashboard](./roadmap/dunx-dashboard.md). `OpenApiModule.forRootAsync` closed the half of
+**queue dashboard page** is bull-board, mounted by `@dunx/dashboard`.
+
+`OpenApiModule.forRootAsync` closed the half of
 [http-options-before-container](./roadmap/http-options-before-container.md) that
-`OpenApiModule` owned; the `HttpOptions` half is still open and the template still
+`OpenApiModule` owned. The `HttpOptions` half is still open and the template still
 validates its config twice because of it.
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
@@ -391,6 +399,12 @@ Open follow-ups, none blocking:
   versioned by `schemaVersion` in the bench README; do not re-derive it.
 
 ## The phase plan
+
+**All five phases are delivered.** Every package they name is in the Built table
+above and every exit criterion below is met and asserted by a test. The section is
+kept as the record of what each phase had to prove, and for the decisions taken
+inside it - Phase 1 is where the example ladder was settled and per-package
+examples rejected.
 
 Exit criteria are written as individually checkable statements on purpose.
 `/whats-next` reads this section to place the work and to fill in `HANDOFF.md`'s

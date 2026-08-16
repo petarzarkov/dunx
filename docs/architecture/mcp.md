@@ -5,10 +5,10 @@
 reasoning that produced it, kept because the decisions are still the load-bearing
 ones; the answers to the four questions it opened are recorded at the bottom.
 
-Two of those decisions are now load-bearing for a second consumer. The static-not-boot
-rule is the one [`@dunx/dashboard`](../roadmap/dunx-dashboard.md) inverts,
-and the readers behind these tools are the ones it needs, so they belong in
-`@dunx/core` and `@dunx/http` rather than here.
+Two of those decisions are now load-bearing for a second consumer. The
+static-not-boot rule is the one `@dunx/dashboard` inverts, and the readers behind
+these tools are the ones it needs, so they belong in `@dunx/core` and
+`@dunx/http` rather than here.
 
 A Model Context Protocol server so an agent working in a dunx app can ask the
 framework about itself instead of grepping for the answer.

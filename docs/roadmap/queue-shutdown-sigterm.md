@@ -1,9 +1,14 @@
 # Defects in bullmq's Bun adapter and `Bun.RedisClient`
 
-**Open, and it is three upstream bugs, not one dunx bug.** Two are the SIGTERM hang
-this file was opened for; the third is unrelated in symptom and shares their cause -
-`createBunRedisClient` does things ioredis's driver does automatically, and misses
-some of them.
+**Open upstream, mitigated here.** Three bugs, of which two are the SIGTERM hang
+this file was opened for; the third was dunx's own and is fixed.
+
+`@dunx/core`'s `ShutdownHooks` now bounds the symptom: after the drain completes an
+`unref()`d timer gives the process 1000 ms to exit on its own and then calls
+`process.exit`, logging first. A deployment therefore no longer pays its full
+termination grace on every rollout. **Leaks A and B are still live** and the
+reproductions below are still the thing to file; when they are fixed the default
+becomes zero.
 
 The first investigation attributed the hang entirely to bullmq. That was half wrong:
 bisecting the stack a layer at a time found a leak in `Bun.RedisClient` on its own,
