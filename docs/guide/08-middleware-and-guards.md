@@ -123,7 +123,7 @@ Outermost first, and every numbered layer except the last two is the same
 Then back out through 7, 6, 5, 4, 3, 2 - because a middleware that does work after
 `await next()` is what an interceptor would have been.
 
-`packages/http/src/server/lifecycle.test.ts` asserts exactly that list, in one
+`@dunx/http`'s own test suite asserts exactly that list, in one
 request, in both directions:
 
 ```

@@ -41,6 +41,23 @@ Set by path in the guard's `MODES` table, first match wins.
 A Reference page that wants to explain **why** links to the Explanation page.
 It does not explain in place.
 
+### Published or repo-only
+
+`docs/` holds user documentation and the maintainer's decision record. Only the
+first is on the site, and `PUBLISHED_REFERENCE` in
+[internal/docs/scripts/generate.ts](../../../internal/docs/scripts/generate.ts)
+is the list.
+
+On a **published** page, none of the following may appear:
+a private workspace (`internal/*`), a roadmap file, `CLAUDE.md`, a
+`packages/*/src/` path, a repo script, or a sentence addressed to whoever
+maintains dunx. `internal/docs/src/published-voice.test.ts` enforces it.
+
+Say `@dunx/http`'s lifecycle suite, not
+`packages/http/src/server/lifecycle.test.ts`. Cite a measurement when a reader
+would change their code over it; put the decomposition behind it in
+`docs/architecture/`, which the site does not publish.
+
 ## What the guard measures
 
 Three sentence shapes, budgeted per 100 prose lines because each is fine

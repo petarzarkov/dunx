@@ -648,6 +648,29 @@ valuable only because it is small - do not add to it.
 `scripts/no-slop.test.ts`.** It owns the mode map and the budgets; `/docs-pass`
 is how a file gets under them. This section is the summary, not the spec.
 
+### `docs/` has two audiences, and the site serves one of them
+
+`docs/guide/*` is written for someone using dunx. `docs/architecture/*`,
+`docs/roadmap/*`, `docs/ROADMAP.md` and `docs/bun-apis.md` are the maintainer's
+record of what was measured, what was rejected, and which upstream bugs were
+found. Both belong in the repo; only the first belongs on the site.
+
+**`PUBLISHED_REFERENCE` in `internal/docs/scripts/generate.ts` is the list**, and
+it is a list rather than a glob so a new architecture page is repo-only until
+someone decides otherwise. Today it publishes `MIGRATION-FROM-NEST.md` plus the
+two architecture pages that explain the shape of the public API. `rewriteHref`
+turns a link to any unpublished doc into an absolute GitHub link, so dropping one
+breaks nothing.
+
+Two guards hold the line: `internal/docs/src/published-voice.test.ts` fails if a
+**published** page cites a private workspace, a roadmap file, a `packages/*/src/`
+path or a repo script, and `site.test.tsx` freezes the published set so adding to
+it shows up in a diff.
+
+A guide states what an API does. A number belongs in it only when a reader would
+change their code over it; the microsecond decomposition behind that number goes
+in `docs/architecture/`, which the site does not publish.
+
 The rule these encode: **documentation states behaviour, and `docs/architecture/`
 is the only place that argues about it.** Three sentence shapes are budgeted per
 100 prose lines because each is fine occasionally and the defect is density:

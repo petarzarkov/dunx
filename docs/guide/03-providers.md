@@ -16,60 +16,31 @@ that works, where it stops working, and what to do at each of those edges.
 
 ## How constructor injection works
 
-`@dunx/transform` is a Bun plugin registered by one line in `bunfig.toml`. On load
-it parses each `.ts` file with `oxc-parser`, reads every class declaration's
-constructor parameter types, and appends one statement after the class:
+Add one line to `bunfig.toml`:
 
-```ts
-export class UsersService {
-  constructor(private readonly repo: UsersRepository) {}
-}
-Object.defineProperty(UsersService, Symbol.for('dunx.deps'), {
-  value: () => [UsersRepository],
-});
+```toml
+preload = ["@dunx/transform/preload"]
 ```
 
-That is the whole mechanism. The container reads the record and resolves the
-arguments before calling `new`.
+`@dunx/transform` reads each class's constructor parameter types as the file
+loads and records them on the class. The container resolves them before calling
+`new`. Nothing annotates the class, and nothing annotates the parameter.
 
-`Symbol.for`, not `Symbol`, so two copies of `@dunx/core` in one dependency tree
-still agree on the key. The same technique carries module options and route
-metadata.
+Three consequences you can rely on:
 
-`tsyringe` and every `@Inject()` parameter decorator are locked to
-`experimentalDecorators` permanently: TC39 standard decorators have no parameter
-decorators, so `constructor(@inject(X) x: X)` has no migration path. Reading the
-types at load time sidesteps that.
+- **Declaration order does not matter.** The record is evaluated at resolution
+  time, so a dependency declared later in the same file, or reached across a
+  circular import, resolves normally. There is no `forwardRef` in dunx.
+- **A genuine cycle is still an error.** `A` needing `B` while `B` needs `A`
+  fails at boot with the full path. See [Cycles](#cycles).
+- **An unrecoverable type is a boot error**, not a silent `undefined`. See
+  [When the type cannot be recovered](#when-the-type-cannot-be-recovered).
 
-### Why the record is a thunk
+A class with constructor parameters and no record means the preload never ran,
+and the container says so at boot with the snippet above.
 
-`value: () => [UsersRepository]`, not `value: [UsersRepository]`. The body is
-evaluated when the record is read, at resolution time, rather than when the module
-is defined.
-
-An eagerly evaluated array would be a temporal dead zone crash for a dependency
-declared later in the same file:
-
-```ts
-export class Orders {
-  constructor(private readonly pricing: Pricing) {}
-}
-
-// Declared after the class that depends on it. Fine: nothing reads the
-// record until the container resolves Orders.
-export class Pricing {}
-```
-
-and for a dependency reached across a circular import, where one of the two
-modules is necessarily still evaluating when the other's record is written.
-
-Deferring the body is what removes the need for a `forwardRef` escape hatch. There is no
-`forwardRef` in dunx and there is nothing to replace it with, because the problem
-it solves does not arise.
-
-Note that a genuine dependency _cycle_ is still an error. A thunk fixes the
-ordering of _declarations_; it cannot make `A` need `B` while `B` needs `A`. See
-[Cycles](#cycles) below.
+How the transform rewrites the source, and why the record is a thunk:
+[Dependency injection](../architecture/dependency-injection.md).
 
 ### Inheritance
 

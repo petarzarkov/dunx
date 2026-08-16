@@ -18,7 +18,7 @@ installs neither. `ioredis` is there for bullmq's sake rather than dunx's: see
 
 ## Read this before you deploy it
 
-One known defect, recorded in `docs/ROADMAP.md`.
+One known defect.
 
 **A process that attempted a queue operation against a Redis it could not reach
 does not exit on `SIGTERM`.** It is **two** upstream leaks, one in Bun and one in
@@ -43,8 +43,7 @@ was unreachable.
 
 It **serves correctly throughout**, answering 503 in single-digit milliseconds,
 so this is a shutdown defect rather than an availability one, and whatever
-supervises the process will `SIGKILL` it. Reproductions for both leaks are in
-`docs/roadmap/queue-shutdown-sigterm.md`.
+supervises the process will `SIGKILL` it.
 
 Earlier versions of this guide also told you to **pin ioredis 5**. That advice was
 wrong and has been withdrawn: ioredis 6 did not remove `ioredis/built/utils`, both of
@@ -497,10 +496,7 @@ even while workers drained jobs.
 
 `QueueConnection` wrapped `duplicate` and called it with no arguments, dropping
 the `{ connectionName }` bullmq's Bun adapter names a connection through. One
-line, fixed; `CLIENT SETNAME` runs and the worker appears. Recorded, with the
-measurement, in
-[queue-shutdown-sigterm](https://github.com/petarzarkov/dunx/blob/main/docs/roadmap/queue-shutdown-sigterm.md),
-defect C.
+line, fixed; `CLIENT SETNAME` runs and the worker appears..
 
 ## Related
 

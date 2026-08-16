@@ -299,9 +299,8 @@ Or edit the manifest so every `@dunx/*` range reads the same, and reinstall.
 }
 ```
 
-What is not here matters as much as what is. There is no `experimentalDecorators`
-and no `emitDecoratorMetadata`. dunx uses TC39 standard decorators, which need
-neither, and adding them changes decorator semantics under you.
+**Do not enable `experimentalDecorators` or `emitDecoratorMetadata`.** dunx uses
+TC39 standard decorators, and those flags change decorator semantics under you.
 
 `moduleResolution: nodenext` is why relative imports in the generated source carry
 a `.js` extension: `import { AppModule } from './app.module.js'`. The file on disk

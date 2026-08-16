@@ -266,8 +266,7 @@ at boot, nothing having bound that token.
 
 ### How to choose, and what it is actually worth
 
-Measured through a real `Bun.serve` with `bun run db-modes` in `internal/bench`,
-interleaved round-robin, `requestLogging: false` so every route stays on the
+Measured through a real `Bun.serve`, interleaved round-robin, `requestLogging: false` so every route stays on the
 direct dispatch path. AMD Ryzen 9 5950X, Bun 1.3.14, oha 1.15.0, 64 connections,
 11 rounds of 5 s, medians:
 

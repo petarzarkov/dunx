@@ -52,28 +52,36 @@ describe('the generated model', () => {
   });
 
   test('the guides are left whole - they are repo documentation', async () => {
-    // The section this used to look for on the architecture page moved when that
-    // document was split; whichever page owns it must still carry it entire.
-    const tooling = await loadGuide('architecture-tooling');
-    expect(tooling?.html).toContain('<h2 id="documentation-site');
+    // `siteMarkdown` strips repo-plumbing sections out of a package README. A
+    // guide is not a README and must arrive with every section it was written
+    // with, including the ones whose headings match that list.
+    const testing = await loadGuide('testing');
+    expect(testing?.html).toContain('<h2 id="sharp-edges');
   });
 
   /**
-   * `docs/ARCHITECTURE.md` was 2,689 lines. It is now an index over
-   * `docs/architecture/*.md`, and the four pages sharing a name with a guide -
-   * logging, database, queues, authentication - are why reference slugs carry
-   * their directory: a bare basename made them collide and one body file
-   * silently overwrote the other.
+   * The site publishes a list, not a glob: `docs/` also holds the maintainer's
+   * decision record, the roadmap and the Bun API notes, and shipping those put an
+   * engineering notebook in the reader's path. A page dropped from
+   * `PUBLISHED_REFERENCE` must leave no in-site link behind it - `rewriteHref`
+   * turns those into absolute GitHub links, and `links.test.tsx` proves it.
    */
-  test('every link on the architecture index resolves to a page', async () => {
-    const index = await loadGuide('architecture');
+  test('the notebook pages are not published', () => {
     const slugs = new Set(site.guides.map((guide) => guide.slug));
-    const linked = [
-      ...(index?.html ?? '').matchAll(/href="#\/guide\/([a-z0-9-]+)"/g),
-    ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
-
-    expect(linked.length).toBeGreaterThan(10);
-    for (const slug of linked) expect(slugs).toContain(slug);
+    for (const slug of [
+      'roadmap',
+      'bun-apis',
+      'architecture',
+      'architecture-benchmarks',
+      'architecture-packaging',
+      'architecture-cost-of-logging',
+      'architecture-constraints',
+      'architecture-tooling',
+    ]) {
+      expect(slugs).not.toContain(slug);
+    }
+    expect(slugs).toContain('architecture-dependency-injection');
+    expect(slugs).toContain('migration-from-nest');
   });
 
   test('no two guides share a slug', () => {
@@ -119,18 +127,18 @@ describe('the generated model', () => {
       .map((g) => g.slug)
       .sort();
 
-    // The top-level documents, plus one page per architecture subject. Asserted as
-    // "these four and some architecture pages" rather than a frozen list, so adding
-    // an architecture page is one file and no test edit.
+    // The published reference set is a list in `generate.ts`, not a glob, so this
+    // is a frozen list on purpose: adding a page to the site is a decision about
+    // the reader's main path and should show up in a diff here.
     expect(reference.filter((s) => !s.startsWith('architecture-'))).toEqual([
-      'architecture',
-      'bun-apis',
       'migration-from-nest',
-      'roadmap',
     ]);
-    expect(
-      reference.filter((s) => s.startsWith('architecture-')).length,
-    ).toBeGreaterThan(8);
+    // Two: the pages that explain the shape of the public API. The rest of
+    // `docs/architecture/` is a decision record and stays in the repository.
+    expect(reference.filter((s) => s.startsWith('architecture-'))).toEqual([
+      'architecture-dependency-injection',
+      'architecture-http',
+    ]);
 
     const tour = site.guides.filter((g) => g.category === 'guide');
     expect(tour.length).toBeGreaterThan(0);
@@ -211,7 +219,7 @@ describe('the benchmark model', () => {
     const text = document.body.textContent ?? '';
     expect(text).toContain(integer(dunx.rps));
     expect(text).toContain(bench.machine.cpuModel);
-    expect(text).toContain('Where dunx loses');
+    expect(text).toContain('How to read this');
   });
 
   test.if(bench !== null)('summarises on the landing page', () => {
@@ -302,9 +310,9 @@ describe('navigation', () => {
   });
 
   test('a guide route renders the markdown that Bun produced', async () => {
-    mount('#/guide/architecture');
+    mount('#/guide/migration-from-nest');
     const headings = screen.getAllByRole('heading', { level: 1 });
-    expect(headings[0]?.textContent).toContain('Architecture');
+    expect(headings[0]?.textContent).toContain('Migrating from NestJS');
     // The document's own `# Title` is dropped, so the page shows exactly one h1.
     expect(headings).toHaveLength(1);
     // The title comes from the index and the body from the guide's own chunk,

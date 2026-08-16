@@ -35,7 +35,7 @@ or a method.
 Ordering is global outermost, then the declaring module's, then class-level, then
 method-level, then validation, then the handler - and back out through all of it.
 There is no ancestor layer: importing a module never changes the request path of the
-importer's routes. `packages/http/src/server/lifecycle.test.ts` pins the whole order
+importer's routes. `@dunx/http`'s lifecycle suite pins the whole order
 in one request.
 
 ### What module middleware is actually for, measured against a real app
@@ -82,7 +82,7 @@ an instance nothing else held.
 
 They are framework services with no module for an app to import, which is
 exactly what the global scope is for.
-`packages/http/src/server/client-address.test.ts` pins it.
+`@dunx/http`'s client-address suite pins it.
 
 Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in
@@ -235,7 +235,7 @@ delivered it, forever.
 subscriptions on one channel is the other way to get every message twice.
 
 The guard is a test that asserts **exactly one** delivery per subscriber with
-relaying on - `packages/http/src/ws/relay.test.ts`, once over an in-memory bus and
+relaying on - the relay suite, once over an in-memory bus and
 once over real Redis with two `Bun.serve` instances and a client on each. Both fail
 with two frames if the origin check is removed, which was verified by removing it.
 

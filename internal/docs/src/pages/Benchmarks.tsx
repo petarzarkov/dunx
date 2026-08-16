@@ -157,128 +157,40 @@ const Scoreboard = ({ model }: { model: BenchModel }): React.JSX.Element => (
   </Card>
 );
 
-const Losses = ({ model }: { model: BenchModel }): React.JSX.Element | null => {
-  const scenarios = scenarioHeadlines(model);
-  const startup = startupHeadline(model);
-  const behind = scenarios.filter((scenario) => !scenario.focusLeadsRival);
-
-  if (behind.length === 0 && !startup) return null;
-
-  return (
-    <Card withBorder radius="md" padding="md">
-      <Title order={2} size="h4" mb="xs">
-        Where dunx loses
-      </Title>
-      <List size="sm" spacing={6}>
-        {behind.map((scenario) => (
-          <List.Item key={scenario.id}>
-            <b>{scenario.title}</b> - {scenario.rivalLabel} reaches{' '}
-            {decimal(scenario.rivalPct, 1)}% of raw <code>Bun.serve</code>, dunx{' '}
-            {decimal(scenario.focusPct, 1)}%. dunx places {scenario.focusRank}{' '}
-            of {scenario.subjectCount}.
-          </List.Item>
-        ))}
-        {startup && startup.ratio > 1 && (
-          <List.Item>
-            <b>Cold start</b> - {decimal(startup.focusMs, 1)} ms against{' '}
-            {startup.baselineLabel}&apos;s {decimal(startup.baselineMs, 1)} ms,
-            roughly {decimal(startup.ratio, 1)}x - so about{' '}
-            {decimal(startup.focusMs - startup.baselineMs, 0)} ms of dunx&apos;s
-            own on top of a floor every Bun server pays. Decomposed in process
-            on the minimal app, that{' '}
-            {decimal(startup.focusMs - startup.baselineMs, 0)} ms is roughly a
-            third the compiler preload parsing the app&apos;s own files, a third
-            building the route table and binding the socket, and a third
-            importing <code>@dunx/core</code> and <code>@dunx/http</code>
-            plus resolving the container. Paid once at boot, and a real cost on
-            a short-lived process.
-          </List.Item>
-        )}
-        <List.Item>
-          A gap under {NOISE_PCT} points is noise on this setup - that is why
-          the scoreboard above reads some of these as ties. The rest are wider
-          than that and are real.
-        </List.Item>
-      </List>
-    </Card>
-  );
-};
-
-const Caveats = ({ model }: { model: BenchModel }): React.JSX.Element => (
-  <Alert variant="light" color="yellow" title="How these were measured">
+/**
+ * The three facts a reader needs to read the tables honestly. The long-form
+ * methodology - the load generator's limitations, the handicaps in both
+ * directions, the self-regressions the harness caught - lives in the repository,
+ * not on a page someone opens to compare two frameworks.
+ */
+const Method = (): React.JSX.Element => (
+  <Alert variant="light" color="yellow" title="How to read this">
     <List size="sm" spacing={6}>
       <List.Item>
-        Load generator: <code>{model.loadGenerator.version}</code> (
-        {model.loadGenerator.id}).
-      </List.Item>
-      {model.loadGenerator.limitations.map((limitation) => (
-        <List.Item key={limitation}>{limitation}</List.Item>
-      ))}
-      <List.Item>
-        No database, cache, filesystem or upstream call is involved. In an
-        application that talks to Postgres, every difference on this page is
-        rounding error next to one query.
+        <b>Compare within a runtime first.</b> A Bun subject beating a Node one
+        is a statement about Bun rather than about the framework, so the colour
+        below encodes the runtime and the same Hono application is measured on
+        both.
       </List.Item>
       <List.Item>
-        Every subject validates with zod, including Fastify and Elysia, which
-        ship faster compiled validators. That holds the validator constant and
-        understates both of them on <code>validate</code>.
+        <b>A gap under {NOISE_PCT} points is noise</b> on this setup, and a
+        figure at or above 100% of raw <code>Bun.serve</code> is noise too: dunx
+        dispatches through that API and cannot outrun it.
       </List.Item>
       <List.Item>
-        Single process, single thread, no <code>reusePort</code>, no cluster.
-        Standard deviation is across whole runs, not within one.
-      </List.Item>
-      <List.Item>
-        Compare within a runtime first. A Bun subject beating a Node one is a
-        statement about Bun rather than about the framework. The same Hono
-        application is therefore measured on both, and the colour below encodes
-        the runtime.
+        <b>No database, cache or upstream call is involved</b>, and every
+        subject validates with zod. In an application that talks to Postgres,
+        every difference here is rounding error next to one query.
       </List.Item>
     </List>
     <Text size="sm" mt="sm">
-      The full methodology, including every handicap in both directions, is in{' '}
+      Full methodology, every subject&apos;s entry point and the harness itself:{' '}
       <Anchor href={`${site.repoUrl}/${BENCH_README}`} target="_blank">
-        internal/bench/README.md
+        internal/bench
       </Anchor>
       .
     </Text>
   </Alert>
-);
-
-const Subjects = ({ model }: { model: BenchModel }): React.JSX.Element => (
-  <Card withBorder radius="md" padding="md">
-    <Title order={2} size="h4" mb="xs">
-      Subjects, versions and handicaps
-    </Title>
-    <Table.ScrollContainer minWidth={720}>
-      <Table verticalSpacing="xs" fz="xs">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th w={140}>Subject</Table.Th>
-            <Table.Th w={70}>Runtime</Table.Th>
-            <Table.Th w={90}>Version</Table.Th>
-            <Table.Th w={150}>Validator</Table.Th>
-            <Table.Th>Notes</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {model.subjects.map((subject) => (
-            <Table.Tr key={subject.id}>
-              <Table.Td ff="monospace">{subject.label}</Table.Td>
-              <Table.Td>
-                <Badge size="xs" variant="light" color="gray">
-                  {subject.runtime}
-                </Badge>
-              </Table.Td>
-              <Table.Td ff="monospace">{subject.version}</Table.Td>
-              <Table.Td>{subject.validator}</Table.Td>
-              <Table.Td c="dimmed">{subject.notes.join(' ')}</Table.Td>
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
-    </Table.ScrollContainer>
-  </Card>
 );
 
 export const Benchmarks = (): React.JSX.Element => {
@@ -310,10 +222,9 @@ export const Benchmarks = (): React.JSX.Element => {
             <code>@dunx/http</code> against raw <code>Bun.serve</code>, Elysia,
             Hono, Fastify, Express and bare <code>node:http</code>. The number
             worth having is the gap to raw <code>Bun.serve</code>: dunx is a
-            layer on that exact API, so the gap is dunx&apos;s own overhead and
-            nothing else. Rows are ordered by measured throughput, losses
-            included, and request logging - which is on by default and which no
-            other subject does - is its own row rather than folded into the
+            layer on that exact API, so the gap is dunx&apos;s own overhead.
+            Rows are ordered by measured throughput, losses included, and
+            request logging gets its own row rather than being folded into the
             framework&apos;s number.
           </Text>
           <Text size="xs" c="dimmed" ff="monospace">
@@ -340,8 +251,7 @@ export const Benchmarks = (): React.JSX.Element => {
 
         <Headlines model={model} />
         <Scoreboard model={model} />
-        <Losses model={model} />
-        <Caveats model={model} />
+        <Method />
 
         <RuntimeLegend
           runtimes={model.subjects.map((subject) => subject.runtime)}
@@ -377,8 +287,6 @@ export const Benchmarks = (): React.JSX.Element => {
           <StartupChart rows={startupRows(model)} />
           <StartupTable rows={startupRows(model)} />
         </Stack>
-
-        <Subjects model={model} />
       </Stack>
     </Container>
   );

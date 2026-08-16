@@ -42,9 +42,27 @@ const Link = ({
 };
 
 /**
- * The landing page has no sidebar, so this is the only navigation on it - which
- * is why every package is listed here rather than a curated few.
+ * The landing page has no sidebar, so this is its only navigation. The packages
+ * are listed in full because that list is the API reference; the guides are not,
+ * because listing all 19 made the footer taller than the page above it.
+ *
+ * Resolved against the generated index rather than hard-coded, so a renamed page
+ * drops out of the footer instead of linking at a route that no longer exists.
  */
+const LEARN: readonly string[] = [
+  'first-steps',
+  'providers',
+  'modules',
+  'configuration',
+  'testing',
+  'migration-from-nest',
+];
+
+const learnLinks = (): { slug: string; title: string }[] =>
+  LEARN.map((slug) => site.guides.find((guide) => guide.slug === slug)).filter(
+    (guide): guide is (typeof site.guides)[number] => guide !== undefined,
+  );
+
 export const Footer = (): React.JSX.Element => (
   <Box component="footer" className="site-footer" py="xl" mt={0}>
     <Container size="lg">
@@ -86,14 +104,18 @@ export const Footer = (): React.JSX.Element => (
               ))}
             </Column>
 
-            <Column title="Guides">
-              {site.guides.map((guide) => (
+            <Column title="Learn">
+              {learnLinks().map((guide) => (
                 <Link
                   key={guide.slug}
                   to={href(RouteKind.Guide, guide.slug)}
                   label={guide.title}
                 />
               ))}
+              <Link
+                to={href(RouteKind.Guide, 'introduction')}
+                label="All guides"
+              />
             </Column>
           </Group>
         </Group>

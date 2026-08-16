@@ -52,8 +52,7 @@ export interface StandardSchemaV1<In = unknown, Out = In> {
 }
 ```
 
-That interface is **restated** in `packages/http/src/route/schema.ts` rather than
-imported. The spec is an interface and nothing else: `@standard-schema/spec` ships
+That interface is **restated** by `@dunx/http` rather than imported. The spec is an interface and nothing else: `@standard-schema/spec` ships
 declarations with no runtime, so restating it costs one file and keeps the package
 at zero dependencies. zod 4, Valibot and ArkType already satisfy the shape, so all
 three drop straight into a route's options with nothing adapting anything:
@@ -413,8 +412,6 @@ validator now reads and validates in 56 ns, allocating no promise.
 In the benchmark suite that moved the `validate` scenario from 84.0% of raw
 `Bun.serve` to over 92%, and put dunx ahead of Elysia on the one scenario where
 it used to be level.
-
-The full harness, its caveats and how to rerun it are in `internal/bench/README.md`.
 
 ## Sharp edges
 

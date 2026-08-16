@@ -381,7 +381,7 @@ frame has to survive a text channel, because Bun's buffer-mode subscription is n
 implemented. Anything that does not decode to that shape is ignored, so another
 application's traffic on a shared channel is inert rather than fatal.
 
-This is asserted rather than assumed. `packages/http/src/ws/relay.test.ts` checks
+This is asserted rather than assumed. `@dunx/http`'s relay suite checks
 **exactly one** delivery per subscriber with relaying on, once over an in-memory
 bus and once over real Redis with two `Bun.serve` instances and a client on each.
 Both fail with two frames if the origin check is removed, which was verified by

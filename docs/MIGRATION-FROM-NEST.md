@@ -177,7 +177,7 @@ they were separate registration points for the same nesting.
 Resolved, outermost first: the error filter, request logging, global middleware,
 `app.use()` middleware, the declaring module's middleware, controller guards, method
 guards, validation, the handler - then back out through all of it.
-`packages/http/src/server/lifecycle.test.ts` asserts that list in one request.
+`@dunx/http`'s lifecycle suite asserts that list in one request.
 
 What a migrating app stops writing:
 

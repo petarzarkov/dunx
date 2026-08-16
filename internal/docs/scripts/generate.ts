@@ -62,15 +62,33 @@ const packageDirs = (): string[] =>
   }).sort();
 
 /**
- * The reference documents: `docs/*.md` plus the architecture record, which is one
- * page per subject under `docs/architecture/`. Globbed rather than listed so
- * adding a page is one file and no registration.
+ * The reference documents the site publishes, listed rather than globbed.
+ *
+ * `docs/` holds two things with different audiences: pages written for someone
+ * evaluating or using dunx, and the maintainer's record of what was measured and
+ * rejected. Globbing shipped all of both, so the site carried the benchmark
+ * post-mortems, the packaging and lockstep-versioning rationale, the upstream Bun
+ * bug catalogue and the roadmap - an engineering notebook, in the reader's main
+ * path.
+ *
+ * Those pages stay in the repository, where they are read by whoever changes the
+ * code. `rewriteHref` turns a link to any of them into an absolute GitHub link,
+ * so unpublishing one breaks nothing.
+ *
+ * A new page under `docs/` is therefore repo-only until it is added here, which
+ * is the direction that fails safe.
  */
+const PUBLISHED_REFERENCE: readonly string[] = [
+  'MIGRATION-FROM-NEST.md',
+  // The two that explain the shape of the public API: no `@Injectable()`, no
+  // `forwardRef`, one `Middleware` interface. The rest of `docs/architecture/`
+  // is a decision record rather than documentation.
+  'architecture/dependency-injection.md',
+  'architecture/http.md',
+];
+
 const guideFiles = (): string[] =>
-  [
-    ...new Bun.Glob('*.md').scanSync({ cwd: DOCS_DIR }),
-    ...new Bun.Glob('architecture/*.md').scanSync({ cwd: DOCS_DIR }),
-  ].sort();
+  PUBLISHED_REFERENCE.filter((file) => existsSync(join(DOCS_DIR, file)));
 
 /**
  * The hand-written tour, ordered by the numeric prefix on each filename. The
@@ -126,27 +144,12 @@ const referenceSlug = (file: string): string =>
   slugify(file.replace(/\.md$/, '').replace(/\//g, '-'));
 
 /**
- * Reading order for the architecture record, which is one page per subject.
- *
- * Listed rather than globbed, because these have a genuine order - constraints
- * first, since every other page rests on the measurements - and a directory
- * listing would sort them alphabetically into nonsense. A page missing from here
- * sorts last rather than failing the build.
+ * Reading order for the architecture pages the site publishes. A page missing
+ * from here sorts last rather than failing the build.
  */
 const ARCHITECTURE_ORDER: readonly string[] = [
-  'architecture',
-  'architecture-constraints',
   'architecture-dependency-injection',
   'architecture-http',
-  'architecture-database',
-  'architecture-authentication',
-  'architecture-queues',
-  'architecture-logging',
-  'architecture-packaging',
-  'architecture-tooling',
-  'architecture-benchmarks',
-  'architecture-cost-of-validation',
-  'architecture-cost-of-logging',
 ];
 
 /** Architecture pages get their own nav heading; the rest stay under Reference. */
