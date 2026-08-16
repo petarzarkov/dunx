@@ -36,12 +36,10 @@ arguments before calling `new`.
 still agree on the key. The same technique carries module options and route
 metadata.
 
-The transform is the reason dunx can offer constructor injection at all without
-the legacy decorator dialect. `tsyringe` and every `@Inject()` parameter decorator are locked to
-`experimentalDecorators` permanently, because TC39 standard decorators have no
-parameter decorators and `constructor(@inject(X) x: X)` has no migration path.
-Reading the types at load time, from the source that still has them, sidesteps the
-question.
+`tsyringe` and every `@Inject()` parameter decorator are locked to
+`experimentalDecorators` permanently: TC39 standard decorators have no parameter
+decorators, so `constructor(@inject(X) x: X)` has no migration path. Reading the
+types at load time sidesteps that.
 
 ### Why the record is a thunk
 
@@ -124,13 +122,12 @@ Six cases are detected this way:
 | a class type parameter     | `class Box<T> { constructor(x: T) {} }` erases `T` |
 | a primitive or a union     | `number`, `string`, `A \| B` are not tokens        |
 
-This is strictly better than what `emitDecoratorMetadata` does, and that was
-measured rather than assumed. Given
+Measured against `emitDecoratorMetadata`: given
 `constructor(db: Db, cache: Cache, n: number)` the legacy metadata table yields
-`["Db", "Object", "Number"]`: an interface degrades to `Object` and a primitive to
-`Number`, indistinguishably. That is why a metadata-driven container needs `@Inject(TOKEN)` for
-everything that is not a class. The transform can see the difference in the
-source, so it names the parameter instead of degrading it.
+`["Db", "Object", "Number"]`. An interface degrades to `Object` and a primitive
+to `Number`, indistinguishably, so a metadata-driven container needs
+`@Inject(TOKEN)` for everything that is not a class. The transform reads the
+difference from source and names the parameter.
 
 The fix is one of two things. If the erased type is a contract implemented
 elsewhere, make it an `abstract class`, which is a runtime value and therefore a
@@ -157,8 +154,9 @@ export class Invoices {
 }
 ```
 
-That is exactly how `Logger` and `RequestContext` work in `@dunx/core`, and it is
-why [`examples/full`](../../examples/full) uses zero `token()` calls for services.
+`Logger` and `RequestContext` in `@dunx/core` are both abstract classes for this
+reason, and [`examples/full`](../../examples/full) uses zero `token()` calls for
+services.
 
 If there is genuinely no class worth writing, use `token()` and reach it with
 `inject()`. Both are below.
@@ -185,18 +183,19 @@ export class BuildInfo implements OnInit {
 }
 ```
 
-Both mechanisms in one class, which is supported and occasionally the right
-answer. Use `inject()` when there is no constructor parameter for the value to
-hang off, which in practice means a `Token<T>`: a token is a value, not a type, so
-it cannot be written as a parameter type and the transform has nothing to record.
+Both mechanisms may appear in one class. Use `inject()` when there is no
+constructor parameter for the value to hang off, which in practice means a
+`Token<T>`: a token is a value rather than a type, so it cannot be written as a
+parameter type and the transform has nothing to record.
 
-The window is narrow and the mechanism is worth knowing. Constructor arguments are
-resolved _before_ the injector is made ambient, because argument resolution
-recurses back through `get()` and must not see the class being built as its own
-scope. A module-level current injector is then set around the `new Klass()` call
-itself, so any `inject()` in a field initializer resolves against it. Field
-initializers run synchronously inside the constructor, so there is no async gap
-and no `AsyncLocalStorage` cost.
+The window is narrow. Constructor arguments resolve _before_ the injector is
+made ambient, since argument resolution recurses back through `get()` and must
+not see the class being built as its own scope. A module-level current injector
+is then set around the `new Klass()` call, so an `inject()` in a field
+initializer resolves against it.
+
+Field initializers run synchronously inside the constructor, so this costs no
+async gap and no `AsyncLocalStorage`.
 
 Calling it anywhere else throws:
 
@@ -206,9 +205,9 @@ initializer or constructor of a class the container builds.
 ```
 
 **A factory cannot use `inject()`.** After a factory's first `await`, the
-module-level current injector is no longer its own. Factory dependencies are
-declared instead, and that is what `inject: [...]` on a `useFactory` provider is
-for. It is a different thing from the `inject()` function despite the shared name.
+module-level current injector is no longer its own. Declare factory dependencies
+with `inject: [...]` on the provider instead. Despite the shared name, that
+option and the `inject()` function are separate mechanisms.
 
 Both paths go through the same `get()`, so cycle detection, duplicate-binding
 rejection and the async-factory retry apply identically whether a dependency
@@ -249,13 +248,12 @@ import { Module, provide } from '@dunx/core';
 export class WiringModule {}
 ```
 
-Three kinds, and that is the complete list.
+Three kinds, and the list is complete.
 
-`useValue` is checked against the token's type. This is the one place dunx's typing
-beats the object-literal form directly: `provide()` stays a _call_ rather than a
-`{ provide, useValue }` object literal because per-element type inference across a
-heterogeneous array requires one, which is precisely why the object-literal `useValue` is
-untyped.
+`useValue` is checked against the token's type. `provide()` stays a _call_ rather
+than a `{ provide, useValue }` object literal because per-element type inference
+across a heterogeneous array requires one. The object-literal form is untyped for
+want of it.
 
 `useFactory` takes its dependencies from `inject`, positionally, with no generics
 written by hand. The factory's parameters are typed from the tuple. A factory may
@@ -265,10 +263,9 @@ be `async`, and the container awaits it before any constructor that needs it run
 contract gets an implementation and how a test override swaps one without touching
 the module.
 
-**There is no `useExisting`.** Aliasing one token to another is
-`provide(Alias, { useFactory: (real) => real, inject: [Real] })`, which is the same
-thing without a fourth provider kind to document. `ConfigModule` uses exactly that
-to bind both `ConfigService` and your subclass to one instance.
+**There is no `useExisting`.** Alias one token to another with
+`provide(Alias, { useFactory: (real) => real, inject: [Real] })`. `ConfigModule`
+uses that to bind both `ConfigService` and your subclass to one instance.
 
 ## Tokens
 
@@ -321,9 +318,9 @@ are all optional resolves successfully when nothing bound it, so
 `app.get(QueueOptions)` on a container with no `QueueModule` returns defaults
 rather than throwing. Any presence check for a class-shaped token has that hole.
 
-A self-bind lands in **the scope that asked for it**, not in a global pool. Two
-modules that each inject an unlisted collaborator get one each, which keeps the hole
-local rather than leaking an accidental instance across features.
+A self-bind lands in **the scope that asked for it** rather than in a global
+pool. Two modules that each inject an unlisted collaborator get one each, so an
+accidental instance stays local instead of leaking across features.
 
 An unbound token that is _not_ a class fails cleanly, and the message is answered
 from the whole graph:
@@ -336,40 +333,41 @@ export it if the consumer is in a different module.
 
 ## Scope: singletons, and only singletons
 
-Every provider is a singleton **in the module that declares it**, for the lifetime
-of the container. An importer resolving it through `exports` gets that same
-instance - `DbConnection` exported by `DbModule` is one connection however many
-modules import it, which is the only behaviour that could be correct for a
-connection. Two modules that each _declare_ the same class get two instances, and
-that is rebinding rather than a bug.
+Every provider is a singleton **in the module that declares it**, for the
+lifetime of the container. An importer resolving it through `exports` gets that
+same instance, so `DbConnection` exported by `DbModule` is one connection however
+many modules import it. Two modules that each _declare_ the same class get two
+instances: that is rebinding.
 
 There is no `Scope.REQUEST`, no `Scope.TRANSIENT`, and no plan to add either.
+Request-scoped DI was measured and turned down as a container's largest source of
+complexity and per-request cost.
 
-Request-scoped DI is a container's single biggest source of complexity and per-request
-cost, and it was measured and turned down. Per-request state is passed as an
-explicit argument. Request-scoped _context_, meaning logging correlation and the
-like, is a separate `AsyncLocalStorage` concern behind `RequestContext` that never
-touches the container. That is what carries `requestId` through a request without
-a per-request provider graph.
+Per-request state travels as an explicit argument. Correlation data travels
+through `RequestContext`, an `AsyncLocalStorage` that never touches the
+container.
+
+Full lifetime, boot order, hooks and error propagation: [Lifecycle](./07-lifecycle.md).
 
 ## Eager resolution
 
 `AppFactory.create()` instantiates every provider and awaits every async factory
-before it returns. Wiring errors surface at boot, not at first request. There is
-no separate `init()`, because an app that exists is an app that booted.
+before it returns, so wiring errors surface at boot rather than at first request.
+There is no separate `init()`.
 
-This is also what lets `inject()` stay synchronous: by the time any constructor
-runs, every async provider is already resolved.
+That is also what keeps `inject()` synchronous: by the time any constructor runs,
+every async provider has resolved.
 
-The mechanism behind that is worth one paragraph, because it leaks into one rule
-you have to follow. There is no static graph to topologically sort, since
-`inject()` calls are only discovered by running field initializers. So
-construction is recursive and synchronous, and an async factory reached from
-inside a constructor parks its promise, throws a private signal to unwind, and the
-async caller awaits that token and _retries_ the construction. Each retry resolves
-at least one more async binding, so it terminates in at most one pass per async
-dependency, and a factory is never invoked twice because the promise is parked
-before the signal is thrown.
+The mechanism leaks into one rule you have to follow, so it is worth a paragraph.
+There is no static graph to topologically sort: `inject()` calls are discovered
+only by running field initializers.
+
+Construction is therefore recursive and synchronous. An async factory reached
+from inside a constructor parks its promise, throws a private signal to unwind,
+and the async caller awaits that token and _retries_ the construction. Each retry
+resolves at least one more async binding, so it terminates in at most one pass
+per async dependency. Parking the promise before throwing keeps any factory from
+running twice.
 
 **The rule that follows: field initializers must stay pure wiring.** A constructor
 aborted by that retry runs its already-evaluated field initializers again. An
@@ -417,9 +415,9 @@ Two things follow.
 `onInit` called by the time its own runs.
 
 `onShutdown` runs in exactly reverse order. A database connection constructed
-early is torn down last, after every repository that uses it. That is what makes
-`app.shutdown()` safe without a dependency-aware teardown pass: reversing
-construction completion order already is one.
+early is torn down last, after every repository that uses it. Reversing
+construction-completion order is already a dependency-aware teardown, so
+`app.shutdown()` needs no separate pass.
 
 For an HTTP application there is one step in front of that. `HttpApp.shutdown()`
 stops the `Bun.serve` server first, then closes `PubSub`, then delegates to the
@@ -461,12 +459,13 @@ same module. A DynamicModule unions its options with the ones its class's @Modul
 decorator declares, so a forRoot() in each place is two bindings.
 ```
 
-Two _different_ modules binding one token is legal, and it is the point: that is
-per-module rebinding. It gives two instances, silently, because that is what was
-asked for. The two shapes that are more often a mistake than an intent - declaring
-what an import already exports, and importing one token from two modules that
-disagree - are legal and **warned** at boot. [Modules](./04-modules.md) has all
-four cases in one table.
+Two _different_ modules binding one token is legal per-module rebinding, and
+gives two instances silently.
+
+Two other shapes are legal but **warned** at boot, being more often a mistake
+than an intent: declaring what an import already exports, and importing one token
+from two modules that disagree. [Modules](./04-modules.md) has all four cases in
+one table.
 
 ## Overrides, for tests
 
@@ -487,10 +486,11 @@ Every scope, so a test stubbing `Logger` does not have to know how many modules 
 it. There is no `in:` option to name one: where two scopes bind a token differently
 and only one is meant, resolve through the module that matters instead.
 
-Replacement, not addition, and the distinction matters twice over. The discarded
-provider is never instantiated, so its `useFactory` never runs and its `onInit`
-never fires, which is what makes overriding a database safe. And an override naming
-a token nobody binds is an error rather than a silent no-op:
+Replacement rather than addition, and the distinction matters twice over. The
+discarded provider is never instantiated, so its `useFactory` never runs and its
+`onInit` never fires. That is what makes overriding a database safe.
+
+An override naming a token nobody binds is an error rather than a silent no-op:
 
 ```
 Nothing to override for Clock: no module in the graph binds it. An override

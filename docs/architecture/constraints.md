@@ -27,12 +27,14 @@ the `routes` object at boot and hand it to Bun.
 
 **`server.upgrade(req)` works from inside a `routes` handler.** Bun's own types
 bless it - `Serve.RoutesWithUpgrade` allows `Response | undefined | void` when
-`websocket` is present. So a WebSocket gateway is mounted as a native `GET` route
-rather than needing a hand-written `fetch` fallback, which means **Bun's router does
-run on the upgrade path** and a gateway path may be a pattern (`/room/:room`, with
-`req.params.room` readable in `@OnUpgrade`). An earlier note claiming the opposite
-was wrong and is retired. With no `fetch` handler anywhere, an unclaimed path is
-Bun's native 404 and a plain `GET` on a gateway path is a 426.
+`websocket` is present. So a WebSocket gateway is mounted as a native `GET`
+route rather than needing a hand-written `fetch` fallback, which means **Bun's
+router does run on the upgrade path** and a gateway path may be a pattern
+(`/room/:room`, with `req.params.room` readable in `@OnUpgrade`).
+
+An earlier note claiming the opposite was wrong and is retired. With no `fetch`
+handler anywhere, an unclaimed path is Bun's native 404 and a plain `GET` on a
+gateway path is a 426.
 
 **Graceful `server.stop()` never resolves while a WebSocket is open.** `stop(true)`
 is required, and clients then observe close code 1006. An app with gateways must
@@ -207,13 +209,15 @@ nativeTx[config.behavior ?? 'deferred']();
 ```
 
 Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch - the row is
-still there. So `drizzle` being a mature library does not make this one safe, and
-`@dunx/infra/db` exports a standalone `transaction(db, fn)` that issues
+still there. So `drizzle` being a mature library does not make this one safe,
+and `@dunx/infra/db` exports a standalone `transaction(db, fn)` that issues
 `BEGIN`/`COMMIT`/`ROLLBACK` itself. There is one connection, so overlapping
-top-level transactions queue rather than nest a second `BEGIN`; a nested call is
-already inside the holder's turn and takes a savepoint instead. On Postgres the
-same function delegates to drizzle's own `transaction()`, which is genuinely async
-because `Bun.SQL`'s `begin()` reserves a connection for the duration.
+top-level transactions queue rather than nest a second `BEGIN`; a nested call
+is already inside the holder's turn and takes a savepoint instead.
+
+On Postgres the same function delegates to drizzle's own `transaction()`, which
+is genuinely async because `Bun.SQL`'s `begin()` reserves a connection for the
+duration.
 
 **A decorator cannot publish a type back onto the class it decorates.** Measured on
 TypeScript 7.0.2 - both routes fail with `TS2339: Property 'table' does not exist`:

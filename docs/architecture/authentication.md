@@ -43,7 +43,7 @@ install line should say so - and that `@dunx/compiler` becoming `@dunx/transform
 the precedent. **Declined.**
 
 That precedent does not carry. `compiler` was renamed because it **overstated** what
-the package is: it is a load-time transform, not a compiler, and the name promised a
+the package is: a load-time transform rather than a compiler, and the name promised a
 thing that did not exist. `auth` overstates nothing. It understates a coupling, which
 is a much milder fault and the ordinary one for an integration package.
 
@@ -52,7 +52,7 @@ Every dunx integration is named for the **capability**, never the vendor:
 `@dunx/infra/db` is drizzle and nothing else, `@dunx/infra/queue` is bullmq and
 nothing else, and neither is called `@dunx/drizzle` or `@dunx/bullmq`. Renaming auth
 alone would make it the single vendor-named package in the set - a _less_ coherent
-scheme, not a more legible one. The vendor belongs in the description, the README and
+scheme rather than a more legible one. The vendor belongs in the description, the README and
 the peer dependency, where it already is in all three cases.
 
 It also keeps the name from becoming a hostage. A capability name survives replacing
@@ -93,7 +93,7 @@ is an abstract class whose five members are **aliases of better-auth's own** -
 satisfies structurally. Same shape as `Logger` and `RequestContext` in `@dunx/core`,
 and it is what makes `constructor(private readonly auth: Auth)` work at all.
 
-It is generic over the options, which is the `BunSQLiteDatabase<typeof schema>` trick
+It is generic over the options, the `BunSQLiteDatabase<typeof schema>` trick
 again: the token is the erased class, the type argument rides on the annotation, so
 `Auth<typeof authOptions>` recovers the plugin-widened `api`. Measured: assigning
 `betterAuth(opts)` to `Auth<typeof opts>` typechecks, and **widening `Auth<O>` to
@@ -147,13 +147,13 @@ throws an `AuthError` naming both, instead of letting better-auth 404 silently.
 `AuthContext` owns an `AsyncLocalStorage<Principal>`; `SessionGuard` runs `next()`
 inside it. Two alternatives were rejected: request-scoped DI was measured and turned
 down (see **Rejected**), and attaching the principal to `req` reaches a route handler
-but nothing a route handler calls - which is the case that matters, since the caller is
+but nothing a route handler calls, and that is the case that matters, since the caller is
 usually wanted three constructor hops down.
 
-It is deliberately **not** a key in `@dunx/core`'s `RequestContext`. That store is the
+It is **not** a key in `@dunx/core`'s `RequestContext`. That store is the
 log record: every field in it is serialized into every line the request writes, so a
 session object there would be noise on each entry and a redaction hazard in the ones
-that matter. `userId` does go there - a well-known `RequestFields` key - which is why
+that matter. `userId` does go there, a well-known `RequestFields` key, so
 every log line inside a guarded request is already correlated to the user.
 
 ### `@Public()` skips the guard outright
@@ -167,14 +167,17 @@ it costs nothing anywhere else.
 
 ### `Bun.password` replaces better-auth's scrypt
 
-better-auth's default hasher is a **pure-JavaScript scrypt**; `AuthModule` substitutes
-native bcrypt through `Bun.password` whenever `emailAndPassword` is enabled and no
-`password` was supplied. Bun's own primitive rather than a library, and it is what
-`nestjs-template/src/auth/auth.config.ts` already does. Bun pre-hashes the input, so
-bcrypt's 72-byte cap is a non-issue even for a maximum-length multibyte password, and
-`verify` swallows Bun's `UnsupportedAlgorithm` throw so a hash from another algorithm
-is a clean 401 rather than a 500. The cost is recorded in the README: an existing
-scrypt-hashed user table needs password resets, or its own `password` implementation.
+better-auth's default hasher is a **pure-JavaScript scrypt**; `AuthModule`
+substitutes native bcrypt through `Bun.password` whenever `emailAndPassword` is
+enabled and no `password` was supplied. Bun's own primitive rather than a
+library, and it is what `nestjs-template/src/auth/auth.config.ts` already does.
+Bun pre-hashes the input, so bcrypt's 72-byte cap is a non-issue even for a
+maximum-length multibyte password, and `verify` swallows Bun's
+`UnsupportedAlgorithm` throw so a hash from another algorithm is a clean 401
+rather than a 500.
+
+The cost is recorded in the README: an existing scrypt-hashed user table needs
+password resets, or its own `password` implementation.
 
 ### `redisStorage` implements the atomic pair the reference could not
 
@@ -184,12 +187,12 @@ most clients cannot do them atomically. `Bun.RedisClient` can, through `GETDEL` 
 implemented rather than the three that are mandatory. Without them better-auth falls
 back to read-then-delete for single-use credentials, which is a race, and to a
 non-atomic rate-limit counter. `increment`'s TTL is applied only when `INCR` returns
-`1`, which is what makes the window fixed rather than sliding.
+`1`, keeping the window fixed rather than sliding.
 
-Redis being unreachable is deliberately not softened: a swallowed `null` from `get`
+Redis being unreachable is not softened: a swallowed `null` from `get`
 reads as "no session" and would sign every user out.
 
-### No schema, on purpose
+### No schema
 
 The four better-auth tables are better-auth's, they change with the plugins an app
 enables, and its own CLI generates them (`bunx @better-auth/cli generate`). A copy

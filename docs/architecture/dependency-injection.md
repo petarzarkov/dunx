@@ -21,7 +21,7 @@ out constructor injection - see below.
 An earlier draft of this document concluded that constructor injection was
 unavailable and that `inject()` in field initializers was the only option. That
 conclusion was wrong: it assumed the parameter types had to be recovered at
-runtime, which is the only thing decorators could have done. They can be read at
+runtime, the only thing decorators could have done. They can be read at
 **load time** instead, from the source that still has them.
 
 `@dunx/transform` is a Bun plugin. On load it parses each file with `oxc-parser`,
@@ -72,7 +72,7 @@ It would make DI **import-order dependent**. Bun's `onLoad` only affects modules
 loaded after registration, and static imports are evaluated depth-first in source
 order. `import { AppFactory } from '@dunx/core'` before
 `import { AppModule } from './app.module.js'` would work; the reverse order would
-silently skip the transform. That is precisely the "`reflect-metadata` must be the
+silently skip the transform, reproducing the "`reflect-metadata` must be the
 first import" fragility this framework exists to avoid, and no amount of
 documentation fixes an ordering rule.
 
@@ -89,7 +89,7 @@ TypeScript's parameter properties are compiled away (measured: a constructor wit
 two parameter properties has `length === 2`). So the container can tell the
 difference between "this class needs nothing" and "nobody told me what this class
 needs". No recorded dependencies plus a non-zero arity means the plugin never saw
-the file, and that is a boot error carrying the fix:
+the file, raising a boot error that carries the fix:
 
 ```
 UsersController declares 1 constructor parameter(s) but no dependencies were
@@ -108,8 +108,8 @@ record whose length equals the parameter count, so a present record is never emp
 Three properties follow, and each is strictly better than the
 `emitDecoratorMetadata` equivalent measured above:
 
-**Erased types are named, not degraded.** `emitDecoratorMetadata` turns an
-interface into `Object` and a primitive into `Number`, which is why Nest needs
+**Erased types are named rather than degraded.** `emitDecoratorMetadata` turns an
+interface into `Object` and a primitive into `Number`, so Nest needs
 `@Inject(TOKEN)` for both. The transform can see the difference in the source, so
 it records the parameter as `unresolved` along with its original text, and the
 container throws at boot naming it:
@@ -132,13 +132,13 @@ rather than `Object.hasOwn`, so a subclass that declares no constructor inherits
 its base's constructor _and_ its base's dependencies. A subclass that does declare
 one gets its own record, which shadows the base's.
 
-Two limits worth recording. The transform only rewrites **class declarations**: a
+Two limits. The transform only rewrites **class declarations**: a
 `ClassExpression`'s own name is bound inside the class body, so a statement
 appended after `const X = class Inner {}` could not reference `Inner`. And because
 a plugin sees one file at a time, it cannot tell a DI provider from a plain data
 class - `new HttpError(404, 'x')` also has constructor parameters. So it records
 metadata for every annotated class and lets the container raise the error only if
-something is actually resolved as a provider. That is why the error is a boot
+something is actually resolved as a provider, so the error is a boot
 error and not a build error.
 
 `inject()` remains available for a value with no constructor parameter to hang
@@ -162,7 +162,7 @@ eager, so an app that exists is an app that booted. `app.enableShutdownHooks()`
 registers `SIGTERM`/`SIGINT` handlers and `app.closed` resolves once shutdown has
 finished, whoever triggered it.
 
-### `token()` is the escape hatch, not the default
+### `token()` is the escape hatch rather than the default
 
 Anything that is a **runtime value** can be its own token, so most code needs no
 `token()` call at all. In order of preference:
@@ -200,7 +200,7 @@ class that is injected but never bound gets self-bound and constructed into a
 useless object rather than erroring. TypeScript blocks it in the `providers` array
 (a bare entry must be constructible), but not at the `inject()` call site.
 
-`@Module` is a marker, not a container. It writes its options onto the class as a
+`@Module` is a marker rather than a container. It writes its options onto the class as a
 `Symbol.for('dunx.module')` property - the same technique as route discovery, no
 accumulator - and the class is **never instantiated**. Reading it uses
 `Object.hasOwn`, so subclassing a module does not inherit its bindings; that
@@ -249,19 +249,22 @@ dependency arrived as a constructor parameter or an `inject()` call.
 ### Eager-only, no lazy resolution
 
 `AppFactory.create()` instantiates every provider and awaits async factories
-before the server binds. Wiring errors surface at boot, not at first request. This
+before the server binds. Wiring errors surface at boot rather than at first request. This
 is what lets `inject()` stay synchronous: by the time any constructor runs, every
 async provider is already resolved.
 
 There is no static graph to topologically sort - `inject()` calls are only
 discovered by running the field initializers. So construction is recursive and
 synchronous, and an async factory reached from inside a constructor parks its
-promise, throws a private signal to unwind, and the async caller awaits the token
-and **retries the construction**. Each retry resolves at least one more async
-binding, so it terminates in at most one pass per async dependency, and a factory
-is never invoked twice because the promise is parked before the signal is thrown.
-The cost is that a constructor aborted this way runs its already-evaluated field
-initializers again, which is why field initializers must stay pure wiring.
+promise, throws a private signal to unwind, and the async caller awaits the
+token and **retries the construction**. Each retry resolves at least one more
+async binding, so it terminates in at most one pass per async dependency, and a
+factory is never invoked twice because the promise is parked before the signal
+is thrown.
+
+The cost is that a constructor aborted this way runs its already-evaluated
+field initializers again, so field initializers must stay pure
+wiring.
 
 For the same reason a factory cannot use `inject()`: after its first `await` the
 module-level current injector is no longer its own. Factory dependencies are
@@ -306,7 +309,7 @@ with the per-reference deduplication `collectModules` already did.
 
 **`exports` is visibility.** A module lists the tokens an importer may resolve;
 everything else stays private. It accepts a token or a `ModuleRef`, and a `ModuleRef`
-re-exports whatever that module exports - which is what lets `DatabaseModule` pass the
+re-exports whatever that module exports, letting `DatabaseModule` pass the
 drizzle handle on so a feature module imports _it_ rather than `@dunx/infra/db`.
 
 **`global: true`** publishes a module's exports to every scope with no import needed.
@@ -319,15 +322,15 @@ invisible to the whole app.
 
 For a token requested while constructing a provider in module `M`: `M`'s own
 providers, then the exports of what `M` imports, then the global scope. **Local shadows
-imported**, which is the rebinding this exists to allow.
+imported**, the rebinding this exists to allow.
 
 Visibility is **flattened once at boot** into one `Map` per scope. Walking an import
 chain per lookup would make every construction O(depth); computing the closure once
 keeps resolution the single `Map.get` it was when the container was flat and moves the
-cost to boot, which is the trade this architecture makes everywhere else. A boot-time
-regression was accepted deliberately for the encapsulation.
+cost to boot, the trade this architecture makes everywhere else. A boot-time
+regression was accepted for the encapsulation.
 
-Instance caches key on the **binding**, not the token, so two modules that each declare
+Instance caches key on the **binding** rather than the token, so two modules that each declare
 one class hold two instances.
 
 ### What replaced the duplicate-binding check
@@ -342,7 +345,7 @@ into three:
   re-export stays silent. Warnings surface on `App.warnings` rather than being logged,
   because core has no logger and the caller knows what level they belong at.
 
-Nest is silent here and it costs people hours, which is why the warning exists.
+Nest is silent here and it costs people hours, so the warning exists.
 
 ### Circular imports still need no `forwardRef`
 
@@ -360,10 +363,10 @@ Three cycles, only one of them new:
 3. **Provider cycles** are still a boot error with the full path, and must stay one.
    `forwardRef` in Nest largely exists to paper over exactly this.
 
-Resolution order comes from the **provider** graph, not the module graph, which is what
+Resolution order comes from the **provider** graph rather than the module graph, which
 lets a module cycle whose providers have no cycle resolve fine.
 
-### `app.get()` is deliberately more permissive
+### `app.get()` is more permissive
 
 Constructor injection is strict. `app.get(token)` tries the root scope's view, then any
 single module that declares the token, and errors on ambiguity; `app.get(token, Module)`
@@ -376,8 +379,8 @@ owning module would make `exports` painful for no safety gain.
 A factory passed to `forRootAsync` is written at the call site but produces a provider
 in the **configured** module's scope - so one injecting `DbConnection` is asking a
 library module to resolve a token only the app can see. `AsyncModuleConfig` adds
-`imports` for that, which is the field Nest's `forRootAsync({ imports })` fills. A token
-from a global module needs nothing, which is why most factories carry no `imports` at
+`imports` for that, the field Nest's `forRootAsync({ imports })` fills. A token
+from a global module needs nothing, so most factories carry no `imports` at
 all.
 
 ### The error is the feature
@@ -414,7 +417,7 @@ alternatives are disjoint, so nothing else can match - a `Token` is `{ descripti
 `findRootModule` keeps the strict `isModuleRef`, because there recognising a root among
 a file's arbitrary exports is the whole job.
 
-Found by migrating `dunx-template`, which is what an acceptance app is for.
+Found by migrating `dunx-template`, the job an acceptance app exists for.
 
 ### Overrides replace in every scope
 
@@ -424,7 +427,7 @@ making it name a scope would push container topology into every test. "An overri
 replaced nothing is an error" still holds, and matters more here: it catches an override
 aimed at a token that has moved behind a boundary.
 
-## One extension point, not five
+## One extension point in place of five
 
 Nest has middleware, guards, interceptors, pipes, and filters. dunx has:
 

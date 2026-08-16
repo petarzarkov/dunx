@@ -52,10 +52,12 @@ and failed with `TS7016`.
 
 `scripts/build-all.ts` topologically sorts every workspace that has a `build`
 script, counting `dependencies`, `devDependencies` **and** `peerDependencies`,
-restricted to workspace packages. It emits **waves** rather than a flat queue
-(Kahn's algorithm, one round per iteration), so packages with no edge between them
-still build at the same time and the common case costs nothing. A cycle between
-workspaces is a hard error naming the packages involved.
+restricted to workspace packages.
+
+It emits **waves** rather than a flat queue (Kahn's algorithm, one round per
+iteration), so packages with no edge between them still build at the same time
+and the common case costs nothing. A cycle between workspaces is a hard error
+naming the packages involved.
 
 Per package, `build` is `bun ../../scripts/build-package.ts`, one implementation
 for all of them. It derives its entrypoints from the manifest's `exports` and `bin`
@@ -77,7 +79,7 @@ Run these before you push. CI runs the same set, in this order.
 | `bun run test`         | Every workspace's own suite, bailing on first failure                       |
 
 `bun run lint` and `bun run format` are the fixing variants. **CI runs the
-`:check` variants on purpose**: an auto-fixing CI step would let a violation pass
+`:check` variants**: an auto-fixing CI step would let a violation pass
 green and never reach the repo. Use the fixing ones locally, commit the result.
 
 A pre-commit hook runs lint-staged over staged `.ts` files, which lints then
@@ -85,14 +87,15 @@ formats them. It is not a substitute for running the full set once before you op
 the PR.
 
 Two notes on `test:cov`. It runs from the root so everything lands in a single
-`coverage/lcov.info`, and it carries
-`--path-ignore-patterns='**/templates/**'` so `packages/create-app`'s scaffolding
-templates are not treated as source. It deliberately does **not** cover
-`examples/`: the root has no transform preload, because one of core's tests asserts
-what happens in exactly that un-transformed state. Example suites run from their
-own workspaces, where each `bunfig.toml` supplies the preload. CI therefore has
-separate steps for the examples, the docs site, the `examples/full` tour and the
-`examples/databases` run.
+`coverage/lcov.info`, and it carries `--path-ignore-patterns='**/templates/**'`
+so `packages/create-app`'s scaffolding templates are not treated as source. It
+does **not** cover `examples/`: the root has no transform preload,
+because one of core's tests asserts what happens in exactly that un-transformed
+state.
+
+Example suites run from their own workspaces, where each `bunfig.toml` supplies
+the preload. CI therefore has separate steps for the examples, the docs site,
+the `examples/full` tour and the `examples/databases` run.
 
 ## Repo layout
 
@@ -106,20 +109,22 @@ extending the root, one `dist/`, and no build variants.
 `create-app` and `mcp`. They moved out of `packages/` once calling a scaffolder part
 of the framework became misleading.
 
-**`internal/*`** is the private half, never published: `docs` (the site), `bench`
-(the benchmark harness), `openapi-ui` and `dashboard-ui` (the two React bundles
-inlined into pages a backend serves), and `ui` (the theme and components those two
-share). They are **exempt from Rule 1**, which governs what dunx ships, not what
-measures it or builds its website - that is why `internal/bench` may devDepend on
-express and fastify while Rule 1 bans both everywhere else.
+**`internal/*`** is the private half, never published: `docs` (the site),
+`bench` (the benchmark harness), `openapi-ui` and `dashboard-ui` (the two React
+bundles inlined into pages a backend serves), and `ui` (the theme and
+components those two share).
 
-Ten published workspaces in total, deliberately few. Two scripts decide which
+They are **exempt from Rule 1**, which governs what dunx ships rather than what
+measures it or builds its website, so `internal/bench` may devDepend
+on express and fastify while Rule 1 bans both everywhere else.
+
+Ten published workspaces in total. Two scripts decide which
 parents publish and they are the only places that do: `PUBLISHABLE_DIRS` in
 `scripts/version.ts` and `PUBLISHED_DIRS` in `scripts/update-readme.ts`. A
 `private: true` manifest is still what actually stops a publish, so a workspace in
 the wrong parent fails safe rather than leaking.
 
-**`examples/*`** is a ladder of the questions an evaluator asks in order, not one
+**`examples/*`** is a ladder of the questions an evaluator asks in order rather than one
 example per package.
 
 | Example              | Answers                                                                                |
@@ -134,13 +139,14 @@ Redis or S3 installed: a part whose backing service is absent prints that it is
 skipping and carries on. An example CI cannot run is an example nobody notices has
 rotted.
 
-**`docs/`** holds [ARCHITECTURE.md](docs/ARCHITECTURE.md) (the decisions and the
-measurements behind them), [ROADMAP.md](docs/ROADMAP.md) (what is built and what is
-next), [bun-apis.md](docs/bun-apis.md) (what has actually been probed on real Bun),
-[MIGRATION-FROM-NEST.md](docs/MIGRATION-FROM-NEST.md), and
+**`docs/`** holds [ARCHITECTURE.md](docs/ARCHITECTURE.md) (the decisions and
+the measurements behind them), [ROADMAP.md](docs/ROADMAP.md) (what is built and
+what is next), [bun-apis.md](docs/bun-apis.md) (what has actually been probed
+on real Bun), [MIGRATION-FROM-NEST.md](docs/MIGRATION-FROM-NEST.md), and
 [docs/guide/](docs/guide/), an eighteen-page tour from introduction through
-deployment. If you add a feature, the guide is usually where a user will look for
-it.
+deployment.
+
+If you add a feature, the guide is usually where a user will look for it.
 
 ## Project Structure
 
@@ -169,7 +175,7 @@ dunx/
 ## Rule 1: native implementations only
 
 This is the rule that outranks everything else, and the one most likely to get a PR
-sent back. It has two halves that pull in opposite directions on purpose.
+sent back. It has two halves that pull in opposite directions.
 
 ### Never reimplement what Bun already does
 
@@ -247,12 +253,15 @@ These will fail CI or a review. Most are mechanically checked.
   `dunx/no-brand-prefix`.
 - **No em dash and no en dash. Anywhere.** Not in prose, code, comments, commit
   messages or generated output. `scripts/no-em-dash.test.ts` scans every tracked
-  **and untracked** file and fails the build over a single one. Use a spaced hyphen
-  for an aside, a comma or a colon where one reads better, and a plain hyphen for a
-  numeric range (`4-6%`). Watch two things when replacing one: a dash that wraps to
-  the start of a Markdown line turns into a list bullet, so join it to the previous
-  line instead, and a placeholder in a table cell is just a character, so `-` is the
-  replacement.
+  **and untracked** file and fails the build over a single one. Use a spaced
+  hyphen for an aside, a comma or a colon where one reads better, and a plain
+  hyphen for a numeric range (`4-6%`).
+
+Watch two things when replacing one: a dash that wraps to the start of a
+Markdown line turns into a list bullet, so join it to the previous line
+instead, and a placeholder in a table cell is just a character, so `-` is the
+replacement.
+
 - **Relative imports carry a `.js` extension.** `tsc` copies the specifier verbatim
   into the emitted `.d.ts`, and an extensionless one fails to resolve for consumers
   on `node16`/`nodenext`. `moduleResolution: nodenext` in the root tsconfig makes
@@ -262,17 +271,19 @@ These will fail CI or a review. Most are mechanically checked.
   output, no second tsconfig per package.
 - **No file over 500 lines.** `max-lines` in `.oxlintrc.json` is an error, so
   `lint:check` fails on the 501st line, tests included. Split before you reach it.
-- **Standard TC39 decorators only.** The root tsconfig deliberately does not set
+- **Standard TC39 decorators only.** The root tsconfig does not set
   `experimentalDecorators` or `emitDecoratorMetadata`, and `reflect-metadata` and
   `tsyringe` are not dependencies. There are no parameter decorators in the TC39
   proposal, so `@Inject()` does not exist and never will. The one carve-out is
   `tools/bench/servers/nest/`, which sets both flags because the NestJS benchmark
-  subject has to run NestJS's real programming model. It has its own tsconfig, it
-  is excluded from every other project, and the subject registry reaches it by
-  string path so no compiler crosses the boundary.
+  subject has to run NestJS's real programming model.
+
+It has its own tsconfig, it is excluded from every other project, and the
+subject registry reaches it by string path so no compiler crosses the boundary.
+
 - **No ESLint and no Biome.** The linter is oxlint (`.oxlintrc.json`) and the
   formatter is oxfmt (`.oxfmtrc.json`). Repo-local rules live in
-  `scripts/oxlint-plugin.js`, which is the one deliberately-not-TypeScript file in
+  `scripts/oxlint-plugin.js`, the one file in this repo that is not TypeScript, in
   the repo: oxlint loads a JS plugin by spawning Node rather than Bun, so a `.ts`
   file there dies with `ERR_UNKNOWN_FILE_EXTENSION`. `@ts-check` plus JSDoc keeps it
   typed.
@@ -306,19 +317,21 @@ your change moves a package's number down noticeably, expect to be asked about i
 
 This is the part of the repo most worth understanding, and it is not decoration.
 
-**Claims get measured, not asserted.** "Faster", "cheaper", "smaller" are
+**Claims get measured rather than asserted.** "Faster", "cheaper", "smaller" are
 hypotheses until there is a number attached, and the number has to come from a run
 anyone can repeat. If your PR claims a speedup, show the numbers: the command you
 ran, the machine, and the before and after.
 
-`tools/bench` is built so this is easy and so it cannot flatter dunx. It verifies
-that every subject returns the same status, the same body bytes and the same media
-type before it measures anything, spawns a fresh process per subject and scenario,
-warms up, then reports the **median across runs together with the standard
-deviation**, never a single run. It records the machine and every subject's
-version. Its README has a "Known methodology gaps" section, and a section titled
-"What these say, including where dunx loses". A result inside the standard
-deviation is read as "no measurable difference", not as a win.
+`tools/bench` is built so this is easy and so it cannot flatter dunx. It
+verifies that every subject returns the same status, the same body bytes and
+the same media type before it measures anything, spawns a fresh process per
+subject and scenario, warms up, then reports the **median across runs together
+with the standard deviation**, never a single run. It records the machine and
+every subject's version.
+
+Its README has a "Known methodology gaps" section, and a section titled "What
+these say, including where dunx loses". A result inside the standard deviation
+is read as "no measurable difference" rather than as a win.
 
 ```bash
 bun run --filter '@dunx/bench' setup    # optional: fetches the oha load generator
@@ -327,12 +340,14 @@ bun run --filter '@dunx/bench' start --help
 ```
 
 **`docs/ARCHITECTURE.md` records what was tried and rejected, along with the
-measurement that decided it.** That is what keeps the same argument from being had
-twice. Read the relevant section before proposing a design change in that area, and
-if you reverse a recorded decision, re-measure and update the record rather than
-quietly replacing it. There is precedent for reversal: `tools/docs` was moved off
-Vite onto `Bun.build` for build speed, then moved back onto Vite once a re-measure
-showed both halves of the original argument had stopped being true.
+measurement that decided it.** That keeps the same argument from being
+had twice. Read the relevant section before proposing a design change in that
+area, and if you reverse a recorded decision, re-measure and update the record
+rather than quietly replacing it.
+
+There is precedent for reversal: `tools/docs` was moved off Vite onto
+`Bun.build` for build speed, then moved back onto Vite once a re-measure showed
+both halves of the original argument had stopped being true.
 
 If an open question needs a real answer before an API can be fixed, write a small
 probe against real Bun, and put what it found in ARCHITECTURE.md or
@@ -383,18 +398,21 @@ Force every package to publish regardless of the computed bump by putting
 ones a given commit did not touch. Change detection decides _whether_ to release,
 never _what_ to release.
 
-This is a correctness requirement rather than tidiness. The publish path rewrites
-each `workspace:*` range to `^<version>` (`resolveWorkspaceRange` in
-`scripts/workspace-ranges.ts`, shared by `version.ts` and `first-publish.ts`). With
-independent versions, `@dunx/http@0.2.0` would name `@dunx/core@^0.1.0` while a later
-`@dunx/infra@0.3.0` named `@dunx/core@^0.2.0`, and an app using both would install
-**two copies of `@dunx/core`**. In this container a DI token _is_ a class object,
-so two copies means two distinct `Logger` classes and `app.get(Logger)` silently
-missing the binding another package registered. `Symbol.for('dunx.deps')` survives
-duplicate copies on purpose; class identity cannot. The caret does not save it
-either: pre-1.0, `^0.1.0` excludes `0.2.0`. What it does do is stop an **exact** peer
-pin from failing an install on a one-patch skew, which is why the published range is
-a caret and the versioning is still lockstep.
+This is a correctness requirement rather than tidiness. The publish path
+rewrites each `workspace:*` range to `^<version>` (`resolveWorkspaceRange` in
+`scripts/workspace-ranges.ts`, shared by `version.ts` and `first-publish.ts`).
+
+With independent versions, `@dunx/http@0.2.0` would name `@dunx/core@^0.1.0`
+while a later `@dunx/infra@0.3.0` named `@dunx/core@^0.2.0`, and an app using
+both would install **two copies of `@dunx/core`**. In this container a DI token
+_is_ a class object, so two copies means two distinct `Logger` classes and
+`app.get(Logger)` silently missing the binding another package registered.
+
+`Symbol.for('dunx.deps')` survives duplicate copies; class identity
+cannot. The caret does not save it either: pre-1.0, `^0.1.0` excludes `0.2.0`.
+What it does do is stop an **exact** peer pin from failing an install on a
+one-patch skew, so the published range is a caret and the versioning
+is still lockstep.
 
 The cost is that an untouched package still gets a version bump. For a pre-1.0
 framework whose packages move together, that is a feature: one number answers
@@ -403,24 +421,28 @@ framework whose packages move together, that is a feature: one number answers
 ## Adding a package or an example
 
 There is a checklist for this, and it is more exact than this page can be: the
-`/new-package` skill in `.claude/skills/new-package/`. Read it whether or not you
-use Claude Code. `packages/core` is the reference shape to copy from, and
-`scripts/manifests.test.ts` will fail on a manifest that would not survive npm
-publish unaltered: a `bin` path with a leading `./`, a `repository.url` npm would
-normalise, or an internal dependency not pinned to `workspace:*`.
+`/new-package` skill in `.claude/skills/new-package/`. Read it whether or not
+you use Claude Code.
 
-Two things worth knowing up front.
+`packages/core` is the reference shape to copy from, and
+`scripts/manifests.test.ts` will fail on a manifest that would not survive npm
+publish unaltered: a `bin` path with a leading `./`, a `repository.url` npm
+would normalise, or an internal dependency not pinned to `workspace:*`.
+
+Two things to know up front.
 
 A public subpath export is a build change. `scripts/build-package.ts` derives
 entrypoints from `exports` and `bin`, so adding the `exports` key **is** how you add
 the entrypoint, and `bun run build` should then produce the file in `dist/`.
 
-An example must be named **`@dunx/example-<dir>`**. CI reaches every example through
-`bun run --filter '@dunx/example-*'`, so an off-pattern name is an example that
-silently stops being checked. It also needs a `bunfig.toml` supplying the transform
-preload under both the root and `[test]`, a `tsconfig.json` extending the root, a
-`typecheck` script, and a `test` script with at least one test in it, because
-`--filter` skips workspaces that lack the script and does not say so.
+An example must be named **`@dunx/example-<dir>`**. CI reaches every example
+through `bun run --filter '@dunx/example-*'`, so an off-pattern name is an
+example that silently stops being checked.
+
+It also needs a `bunfig.toml` supplying the transform preload under both the
+root and `[test]`, a `tsconfig.json` extending the root, a `typecheck` script,
+and a `test` script with at least one test in it, because `--filter` skips
+workspaces that lack the script and does not say so.
 
 Before adding a fifth example, read the Phase 1 section of ARCHITECTURE.md, which
 records which candidates were already rejected. Per-package examples were tried and

@@ -58,7 +58,7 @@ are real runtime classes, so a class is usable as a token directly, and
 `@dunx/transform` records the bare type name while ignoring the type argument. One
 erased class is the token; the schema types stay on the annotation.
 
-`schema` is required, and that is why: it is the type argument that reaches
+`schema` is required for that reason: it is the type argument that reaches
 `BunSQLiteDatabase<typeof schema>` at every injection site. Pass `{}` if you only
 run `sql` templates.
 
@@ -71,9 +71,9 @@ run `sql` templates.
 | `BunSQLiteDatabase` / `BunSQLDatabase` / `SyncDatabase` | The drizzle handle a repository injects                    |
 
 The drizzle handle is bound through a factory that depends on `DbConnection`,
-which is what fixes the shutdown order. dunx tears down in reverse construction
-order, so the connection is constructed first and therefore closes last, after
-every repository has drained.
+which fixes the shutdown order. dunx tears down in reverse construction order, so
+the connection is constructed first and closes last, after every repository has
+drained.
 
 Every factory settles before the first constructor runs, so the connection is open
 and handshaked before any repository is built. There is no lazy connect and no
@@ -97,7 +97,7 @@ The token is a positional argument here, unlike `forRoot`. Which drizzle class t
 handle is bound under only becomes known once the factory has produced the
 options, which is too late to register a provider under it.
 
-See [Configuration](./11-configuration.md) for why the parameter is
+See [Configuration](./12-configuration.md) for why the parameter is
 `AppConfigService` rather than `ConfigService<AppConfig>`.
 
 ## Two backends, and they are not interchangeable
@@ -130,8 +130,7 @@ pooling, TLS and auth stay in sync with whatever Bun supports. `url` is required
 and `adapter` is dropped, because the URL scheme decides it.
 
 The dialect is resolved from the URL **at construction**, so a bad URL throws
-before any I/O. A non-Postgres URL throws with a message saying why, and the
-reason is worth knowing:
+before any I/O. A non-Postgres URL throws with a message saying why:
 
 > `drizzle-orm/bun-sql` builds a `PgDialect` **unconditionally**. Read from
 > drizzle-orm 0.45.2's `bun-sql/driver.js`, there is no branch on
@@ -164,9 +163,8 @@ query.
 { create: false })` still creates a missing file on Bun 1.3.14. Use `readOnly` if
 the file must already exist.
 
-`strict: true` is this package's default and it is deliberately not the driver's.
-Strict mode turns an unsupported binding into a `TypeError` instead of a silent
-`NULL`. It is also why `SqliteOptions` opens the `bun:sqlite` handle itself instead
+`strict: true` is this package's default and the driver's is not. Strict mode
+turns an unsupported binding into a `TypeError` instead of a silent `NULL`. It is also why `SqliteOptions` opens the `bun:sqlite` handle itself instead
 of letting `drizzle('./dev.db')` do it: drizzle's own path forwards only
 `readonly`/`create`/`readwrite` and hands back a **non-strict** handle.
 
@@ -205,11 +203,12 @@ consumes `schema` and `url` - the driver has no idea what `casing` means.
 ## Synchronous mode: `SyncSqliteOptions`
 
 `bun:sqlite` is synchronous underneath, and `@dunx/http` has a dispatch path that
-allocates no promise when a handler returns a plain value. So a request can in
-principle go parse, query, respond without ever yielding. Reads already could,
-because drizzle's bun-sqlite builders have `.all()`, `.get()` and `.run()`. What
-stopped a **write** was `transaction()`, which returns a promise, so any route that
-wrote anything went back to `async`.
+allocates no promise when a handler returns a plain value, so a request can go
+parse, query, respond without ever yielding.
+
+Reads already could, drizzle's bun-sqlite builders having `.all()`, `.get()` and
+`.run()`. A **write** was stopped by `transaction()`, which returns a promise, so
+any route that wrote anything went back to `async`.
 
 `SyncSqliteOptions` closes that. Every init field is `SqliteOptions`'s. Choosing it
 changes exactly two things: the token becomes `SyncDatabase`, and
@@ -261,9 +260,9 @@ drizzle built, so the type is true rather than claimed.
 
 The relationship is **one-way**. A `SyncDatabase` _is_ a `BunSQLiteDatabase`, so
 `transaction()`, `runSeeds` and repositories written before the mode existed all
-still take one. Synchronous mode is a superset, not a fork. What does not work is
-the reverse: a service annotating `SyncDatabase` under `SqliteOptions` fails to
-resolve at boot, because nothing bound that token.
+still take one. Synchronous mode is a superset rather than a fork. The reverse
+fails: a service annotating `SyncDatabase` under `SqliteOptions` does not resolve
+at boot, nothing having bound that token.
 
 ### How to choose, and what it is actually worth
 
@@ -282,10 +281,11 @@ direct dispatch path. AMD Ryzen 9 5950X, Bun 1.3.14, oha 1.15.0, 64 connections,
 **Synchronous mode is about 4-6% more req/s and 0.2-0.3 ms off p50**, reproduced
 across two independent runs (read +5.7% then +4.4%; write +4.2% then +4.3%).
 
-The rest of it, plainly: σ on the read rows is about 8% of the median, so a single
-round proves nothing and the per-round ranges overlap. The effect is real, in that
-it is consistent in direction across 18 rounds and both scenarios, but **it sits
-at the edge of this box's noise floor, not comfortably above it**. At roughly
+The rest of it, plainly: σ on the read rows is about 8% of the median, so a
+single round proves nothing and the per-round ranges overlap.
+
+The effect is real, being consistent in direction across 18 rounds and both
+scenarios, but **it sits at the edge of this box's noise floor**. At roughly
 57 µs of service time per request, the saving is about 3 µs: one async frame, one
 promise from drizzle's thenable builder, one promise adoption in the dispatch
 path.
@@ -302,7 +302,7 @@ So:
 - **Pick `SyncSqliteOptions`** if SQLite is the decision for good and you want a
   request path with no promise in it at all. Sync mode is SQLite forever.
 
-There is deliberately **no `SyncSqlOptions`, and there will not be one.**
+There is **no `SyncSqlOptions`, and there will not be one.**
 `Bun.SQL` talks to a server over a socket, and no amount of API design makes a
 Postgres query return a row instead of a promise. The asymmetry is structural:
 `SqlOptions` simply has no sync sibling, and `transactionSync` does not accept a
@@ -320,8 +320,8 @@ const rows = db.select().from(users).orderBy(users.id).limit(10).all();
 const one = db.select().from(users).where(eq(users.id, id)).get();
 ```
 
-`.get()` returns **`undefined`** when there is no row, which is drizzle's choice
-and worth knowing if you are coming from a wrapper that returned `null`.
+`.get()` returns **`undefined`** when there is no row. Wrappers that returned
+`null` are a common source of confusion here.
 
 Repository methods are still worth declaring `async` on `bun:sqlite` if you are on
 `SqliteOptions`: callers await them anyway, and moving that table to Postgres later
@@ -412,16 +412,18 @@ statement after it runs in autocommit, and a later throw rolls back nothing.
 Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch, and the row is
 still there.
 
-drizzle inherits the behaviour rather than fixing it, which is why `transaction()`
-issues `BEGIN`/`COMMIT`/`ROLLBACK` itself. There is only one connection, so two
+drizzle inherits the behaviour rather than fixing it, so `transaction()` issues
+`BEGIN`/`COMMIT`/`ROLLBACK` itself. There is only one connection, so two
 overlapping top-level transactions would issue a nested `BEGIN`; they queue
 instead. A nested call is already inside the holder's turn and takes a savepoint,
 so it must not queue behind itself.
 
-On **Postgres** the same function delegates to drizzle's `db.transaction()`, which
-is genuinely async, because `Bun.SQL`'s `begin()` reserves a connection for the
-duration. The handle the callback receives there is drizzle's `PgTransaction`
-(exported as `SqlTransaction<TSchema>`), not the database, because the pooled outer
+On **Postgres** the same function delegates to drizzle's `db.transaction()`,
+which is genuinely async: `Bun.SQL`'s `begin()` reserves a connection for the
+duration.
+
+The callback there receives drizzle's `PgTransaction` (exported as
+`SqlTransaction<TSchema>`) rather than the database, since the pooled outer
 handle would take a different connection and sit outside the transaction. Nesting
 on Postgres is therefore `tx.transaction(...)`, drizzle's own savepoint.
 
@@ -441,8 +443,8 @@ const total = transactionSync(this.db, (tx) => {
 });
 ```
 
-It returns the value, not a promise, and throws where `transaction()` rejects, so
-recovery is `try`/`catch`.
+It returns the value rather than a promise, and throws where `transaction()`
+rejects, so recovery is `try`/`catch`.
 
 The callback is held to being synchronous **at compile time**. Its return type is
 constrained to a non-thenable, so an `async` callback, or one returning
@@ -450,8 +452,8 @@ constrained to a non-thenable, so an `async` callback, or one returning
 rollback that silently does nothing. Verified against Bun 1.3.14: with a
 synchronous callback the row is gone after a throw; with an async one it is not.
 
-One consequence of that constraint worth knowing: `NotThenable`'s object branch is
-a weak type, so TypeScript rejects an object or array sharing no property with
+One consequence of that constraint: `NotThenable`'s object branch is a weak type,
+so TypeScript rejects an object or array sharing no property with
 `{ then?: undefined }`. Returning a scalar, as above, is what it currently
 accepts.
 
@@ -474,8 +476,8 @@ ships, and a second journal that could disagree with the first.
 
 ## Seeding
 
-What drizzle-kit has no concept of is **data**, which is what `runSeeds` is for,
-and why its journal table is separate from drizzle's.
+drizzle-kit has no concept of **data**. `runSeeds` covers that, with its own
+journal table separate from drizzle's.
 
 ```ts
 import { runSeeds } from '@dunx/infra/db';
@@ -504,9 +506,9 @@ export function seed(db: BunSQLiteDatabase<typeof schema>): void {
 | `table`   | `'dunx_seeds'`                   | The journal table                     |
 | `pattern` | `'*.seeder.{ts,js}'`             | Bun runs TypeScript; a build emits JS |
 
-Rules worth knowing:
+Rules:
 
-- **Order is the numeric prefix**, not the filename, so `0010_x` runs after
+- **Order is the numeric prefix** rather than the filename, so `0010_x` runs after
   `0009_x`. A file without a prefix is an error, and so are two files sharing a
   number. The whole value of a journal is that the order is identical everywhere,
   and a tie would be settled by whatever order `Bun.Glob` happened to scan in.
@@ -529,8 +531,8 @@ for, since a body that names tables is dialect-specific anyway.
 
 ## MySQL
 
-There is no MySQL backend in `@dunx/infra/db`, and that is a documented gap with a
-worked route around it.
+There is no MySQL backend in `@dunx/infra/db`, a documented gap with a worked
+route around it.
 
 drizzle 0.45.2 has **no Bun-native MySQL driver.** Its only Bun entrypoints are
 `bun-sql`, which is Postgres by construction, and `bun-sqlite`. Its MySQL drivers
@@ -542,24 +544,25 @@ transport left as a callback, and `Bun.SQL` supplying the transport. drizzle own
 the SQL generation and the schema, Bun owns every byte of I/O, and nothing pulls in
 `mysql2`.
 
-A working `DbOptions` for it is in **`examples/databases/src/mysql/driver.ts`**,
-about forty lines, needing **no change to the package**, which is the strongest
-available evidence that `DbOptions.open()` is the right seam. Verified end to end
-against MySQL 8 on Bun 1.3.14: inserts, selects, `where`, ordering, updates,
-deletes, aggregates, `$returningId()` single and multi-row, inner and left joins,
-`placeholder()` prepared statements, and the `mysql-proxy` migrator.
+A working `DbOptions` for it is in **`examples/databases/src/mysql/driver.ts`**:
+about forty lines, needing **no change to the package**.
+
+Verified end to end against MySQL 8 on Bun 1.3.14: inserts, selects, `where`,
+ordering, updates, deletes, aggregates, `$returningId()` single and multi-row,
+inner and left joins, `placeholder()` prepared statements, and the `mysql-proxy`
+migrator.
 
 Four details the adapter has to get right, each measured:
 
 - **`.values()` is mandatory for `method === 'all'`.** drizzle's `mapResultRow`
   indexes rows **positionally**, and `Bun.SQL`'s default object rows lose columns
   on a join: selecting `users.id, users.name, posts.id, posts.name` returns two
-  keys, not four, because the later names overwrite the earlier ones. A manual
+  keys rather than four, the later names overwriting the earlier ones. A manual
   object-to-array conversion would be silently wrong.
 - **`method === 'execute'` covers SELECTs too**, whenever the query carries no
   fields. Return the rows when the result array is non-empty, or
   ``db.execute(sql`...`)`` silently yields nothing.
-- **`insertId` and `affectedRows` go in `rows[0]`**, not at the top level, despite
+- **`insertId` and `affectedRows` go in `rows[0]`** rather than at the top level, despite
   `RemoteCallback`'s declared type. `mysql-proxy/session.js` reads
   `data[0].insertId`, and Bun's own property is `lastInsertRowid`.
 - **Name the `adapter`.** In the **options-object** form on Bun 1.3.14,
@@ -598,8 +601,8 @@ everything holding it has already drained by the time it closes.
 
 ## Pagination
 
-`@dunx/infra/pagination` does keyset pagination, which is the kind that stays correct
-while rows are being written.
+`@dunx/infra/pagination` does keyset pagination, which stays correct while rows
+are being written.
 
 ```ts
 import { paginate, PAGINATION, type Page } from '@dunx/infra/pagination';
@@ -649,8 +652,8 @@ cursor names the last row seen, the database seeks straight to it, and a concurr
 insert changes nothing about what has already been read.
 
 The cursor carries the sort value **and** the row id, and the query compares both.
-Without the id tie-break, rows sharing a timestamp are silently skipped or repeated -
-and rows sharing a timestamp is exactly what a bulk insert produces.
+Without the id tie-break, rows sharing a timestamp are silently skipped or
+repeated, and a bulk insert produces exactly that.
 
 ### The schema you write it against
 
@@ -663,7 +666,7 @@ fit - it `await`s the query builder rather than calling `.all()`, because drizzl
 builders are thenable on the synchronous `bun:sqlite` driver as well as the
 asynchronous `Bun.SQL` one.
 
-### What it deliberately does not do
+### What it does not do
 
 - **No zod schema is shipped.** `parsePageOptions` is a hand-written validator, since
   route validation targets Standard Schema and shipping a schema would pick the
@@ -691,16 +694,18 @@ class UserB {}
 UserB.table; // decorator's return type is C & { table }
 ```
 
-TC39 decorators are **type-transparent** in TypeScript: the decorator's return type
-does not become the declaration's type. And drizzle's whole value is the table
-object's _type_ carrying column types into every query, so a decorator could build
-a working table at runtime while every query degraded to `unknown`. Recovering the
-types would mean hand-writing a mapped type mirroring drizzle's `BuildColumns`, a
-second source of truth that drifts from the first.
+TC39 decorators are **type-transparent** in TypeScript: the decorator's return
+type does not become the declaration's type.
+
+drizzle's whole value is the table object's _type_ carrying column types into
+every query, so a decorator could build a working table at runtime while every
+query degraded to `unknown`. Recovering the types would mean hand-writing a
+mapped type mirroring drizzle's `BuildColumns`, a second source of truth that
+drifts from the first.
 
 ## Related
 
-- [Configuration](./11-configuration.md) for `forRootAsync` and `AppConfigService`
-- [Authentication](./15-authentication.md), where `drizzleDatabase(connection)`
+- [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
+- [Authentication](./16-authentication.md), where `drizzleDatabase(connection)`
   hands better-auth the connection this module already opened
 - [Providers](./03-providers.md) for factory providers and resolution order

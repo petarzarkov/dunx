@@ -230,8 +230,8 @@ const Caveats = ({ model }: { model: BenchModel }): React.JSX.Element => (
       </List.Item>
       <List.Item>
         Compare within a runtime first. A Bun subject beating a Node one is a
-        statement about Bun, not about the framework - which is why the same
-        Hono application is measured on both, and why the colour below encodes
+        statement about Bun rather than about the framework. The same Hono
+        application is therefore measured on both, and the colour below encodes
         the runtime.
       </List.Item>
     </List>

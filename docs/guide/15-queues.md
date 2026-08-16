@@ -13,7 +13,7 @@ bun add bullmq ioredis
 ```
 
 Both are **optional peer dependencies**, so an app using only `@dunx/infra/files`
-installs neither. `ioredis` is there for bullmq's sake, not dunx's: see
+installs neither. `ioredis` is there for bullmq's sake rather than dunx's: see
 [the ioredis boundary](#the-ioredis-boundary) below.
 
 ## Read this before you deploy it
@@ -39,9 +39,11 @@ pending.
 
 An app that imports `QueueModule` without publishing is unaffected, and so is a
 healthy deployment. What hangs is a process that served a queue route while Redis
-was unreachable. It **serves correctly throughout**, answering 503 in single-digit
-milliseconds, so this is a shutdown defect, not an availability one. The process
-will be `SIGKILL`ed by whatever supervises it. Reproductions for both leaks are in
+was unreachable.
+
+It **serves correctly throughout**, answering 503 in single-digit milliseconds,
+so this is a shutdown defect rather than an availability one, and whatever
+supervises the process will `SIGKILL` it. Reproductions for both leaks are in
 `docs/roadmap/queue-shutdown-sigterm.md`.
 
 Earlier versions of this guide also told you to **pin ioredis 5**. That advice was
@@ -133,7 +135,7 @@ QueueModule.forRootAsync({
 
 With no `url` it follows the same chain `@dunx/infra/redis` does: `$VALKEY_URL`,
 then `$REDIS_URL`, then `valkey://localhost:6379`. The URL is validated when the
-module is configured, not on first connect.
+module is configured rather than on first connect.
 
 ### Options
 
@@ -146,7 +148,7 @@ module is configured, not on first connect.
 | `connection`        | `{ connectionTimeout: 5000, maxRetries: 0 }`                | Forwarded to every `Bun.RedisClient`                      |
 | `jobTimeoutMs`      | none                                                        | Not a bullmq feature. See below                           |
 
-`worker` and `defaultJobOptions` are **passthroughs on purpose**. `concurrency`,
+`worker` and `defaultJobOptions` are **passthroughs**. `concurrency`,
 `limiter`, `lockDuration`, `stalledInterval`, `attempts`, `backoff`,
 `removeOnComplete` and the rest are bullmq's own options, documented by bullmq.
 Restating them here would only produce a staler copy.
@@ -177,12 +179,13 @@ above, which survive `maxRetries: 0` entirely.
 
 bullmq does not keep the client it is handed. A `Worker`'s blocking connection is
 `connection.duplicate()`, and every reconnect rebuilds one, both with
-`new (this.raw.constructor)(this.raw.url)`. That drops the options - so
-`maxRetries: 0` would have applied to the first socket only - and, because
-`Bun.RedisClient` has **no `url` property** on Bun 1.3.14, it dropped the url too:
-the replacement resolved Bun's default (`$VALKEY_URL`, `$REDIS_URL`,
-`valkey://localhost:6379`), so a worker pointed at a remote Redis would block-poll
-localhost and never see a job.
+`new (this.raw.constructor)(this.raw.url)`.
+
+That drops the options, so `maxRetries: 0` would have applied to the first socket
+only. `Bun.RedisClient` also has **no `url` property** on Bun 1.3.14, so it
+dropped the url too: the replacement resolved Bun's default (`$VALKEY_URL`,
+`$REDIS_URL`, `valkey://localhost:6379`), and a worker pointed at a remote Redis
+would block-poll localhost and never see a job.
 
 `@dunx/infra/queue` hands bullmq a `Bun.RedisClient` **subclass** that carries the
 url and reapplies the options, so every one of those reconstructions comes out the
@@ -219,7 +222,7 @@ export class Signups {
 `upsertJobScheduler`, `getJobCounts`, `drain` and everything else already on it.
 There is no wrapper to outgrow.
 
-A queue is opened on **first use**, not declared up front: a queue is a key prefix,
+A queue is opened on **first use** rather than declared up front. A queue is a key prefix,
 not a resource to reserve, so there is nothing a registration step could validate
 and nothing gained by holding a socket for a queue nobody publishes to.
 `publisher.opened` reports the names opened so far, and `onShutdown` closes each
@@ -275,7 +278,7 @@ in a test with no server running:
 | A name in `queues` no handler claims | `ERR_QUEUE_NO_HANDLERS`, naming both what is missing and what was found |
 | Two handlers on one `(queue, name)`  | `ERR_QUEUE_DUPLICATE_HANDLER`                                           |
 
-The `QueueModule` check reads the **module graph**, not the container, on purpose:
+The `QueueModule` check reads the **module graph** rather than the container:
 `QueueOptions` is a class whose constructor argument is optional, so an unbound
 container would self-bind it and hand back defaults. A worker silently pointed at
 `localhost` is worse than one that will not boot.
@@ -314,7 +317,7 @@ await consumer.start();
 `root` is the same module ref the app was built from. The handlers are found by
 inspecting it, and resolved out of the container that is already running.
 
-It returns a **`QueueConsumer`**, which is the consuming half of
+It returns a **`QueueConsumer`**, the consuming half of
 `WorkerFactory.create` with no `App` of its own: `jobs`, `queues`, `start()` and
 `stop()`. `create` now wraps the same class, so the two paths share their
 behaviour rather than merely resembling each other.
@@ -407,7 +410,7 @@ Three findings shaped the code:
   the entry disappears.
 
   It is optional in the same sense `bullmq` is - needed if and only if you use
-  `/queue` - which is why `bun add bullmq ioredis` installs the pair. Any version
+  `/queue`, so `bun add bullmq ioredis` installs the pair. Any version
   from 5.0.0 works, because that is the range bullmq itself declares and dunx has
   no opinion beyond it.
 
@@ -435,7 +438,7 @@ connection it may block on. Sharing would only add a duplicate.
 
 ### The subpath is the only way in
 
-`@dunx/infra/queue` is deliberately **not re-exported from the package barrel**,
+`@dunx/infra/queue` is **not re-exported from the package barrel**,
 unlike every other area. `src/index.ts` re-exporting it would put bullmq's static
 `ioredis` import behind `import '@dunx/infra'` for every consumer, queue or no
 queue.
@@ -457,20 +460,25 @@ await worker.shutdown();
 dunx's own integration suite probes the server first and skips itself when nothing
 answers, so `bun test` passes on a machine with no Redis.
 
-## A dashboard: none yet
+## A dashboard
 
-There is **no queue dashboard in dunx right now**, and that is a deliberate gap
-rather than an oversight.
+`@dunx/dashboard` mounts [bull-board](https://github.com/felixmosh/bull-board) at
+`{path}/queues`, behind the same `authorize` callback as every other panel:
 
-`@dunx/queue-dashboard` existed for one release. It mounted
-[bull-board](https://github.com/felixmosh/bull-board) on `Bun.serve` through an
-`IServerAdapter` implementation, which worked - the real UI, its 2.7 MB of static
-assets streamed from `Bun.file`, and no template engine. It has been **removed** in
-favour of one dashboard covering the whole framework rather than the queues alone:
-routes, the provider graph, the queues and runtime health on one page. That design is
-in [dunx-dashboard](https://github.com/petarzarkov/dunx/blob/main/docs/roadmap/dunx-dashboard.md).
+```ts
+app.use(DashboardMiddleware);
+```
 
-Until it ships, the queue data is four calls on bullmq's own `Queue`, which
+dunx renders no queue UI of its own. `@dunx/queue-dashboard` existed for one
+release and was deleted; bull-board 8.6.0 ships a `Bun.serve` adapter, which
+removed the only reason to hand-roll one. `commands: false` maps onto
+bull-board's `readOnlyMode`.
+
+The board is built on the **first request for the queues page**, never at boot, so
+an app that never opens it holds no broker socket and exits cleanly against an
+absent Redis.
+
+For your own panel, the queue data is four calls on bullmq's own `Queue`, which
 `JobPublisher.queue(name)` hands you:
 
 ```ts
@@ -482,18 +490,21 @@ await (await queue.getJob(id))?.retry();
 await queue.drain(); // discard everything waiting
 ```
 
-Serving that as an admin-only JSON controller is about sixty lines and is what
-`dunx-template` did before the package existed. `getWorkers()` **works**, and was long
-believed not to: it reported `[]` on Bun even while workers drained jobs, because
-`QueueConnection` wrapped `duplicate` and called it with no arguments, dropping the
-`{ connectionName }` bullmq's Bun adapter names a connection through. One line, fixed;
-`CLIENT SETNAME` runs and the worker appears. Recorded, with the measurement, in
+Serving that as an admin-only JSON controller takes about sixty lines.
+
+`getWorkers()` **works**, and was long believed not to. It reported `[]` on Bun
+even while workers drained jobs.
+
+`QueueConnection` wrapped `duplicate` and called it with no arguments, dropping
+the `{ connectionName }` bullmq's Bun adapter names a connection through. One
+line, fixed; `CLIENT SETNAME` runs and the worker appears. Recorded, with the
+measurement, in
 [queue-shutdown-sigterm](https://github.com/petarzarkov/dunx/blob/main/docs/roadmap/queue-shutdown-sigterm.md),
 defect C.
 
 ## Related
 
-- [Configuration](./11-configuration.md) for `forRootAsync` and `AppConfigService`
-- [Logging](./12-logging.md), which the worker uses for job completion and failure
+- [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
+- [Logging](./13-logging.md), which the worker uses for job completion and failure
 - `examples/full`, whose `src/worker.ts` is the worked example this page is drawn
   from

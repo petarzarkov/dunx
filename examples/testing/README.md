@@ -8,7 +8,7 @@ bun install
 bun run --filter '@dunx/example-testing' test
 ```
 
-The app itself is deliberately thin - [`src/weather`](./src/weather) calls an
+The app itself is thin: [`src/weather`](./src/weather) calls an
 external forecast API, [`src/reports`](./src/reports) is behind an API-key guard.
 Both exist to have something worth substituting.
 
@@ -47,7 +47,7 @@ because there is no "wins". Three consequences the tests assert:
 - **The discarded provider is never constructed.** Its constructor never runs, its
   `onInit` never fires, and overriding a database opens no connection. The test
   binds a class whose constructor throws and then overrides it; the suite passes.
-- **An override naming a token nobody binds is an error**, not a silent no-op - the
+- **An override naming a token nobody binds is an error** rather than a silent no-op - the
   failure mode where a typo leaves you asserting against the real provider.
 - **The duplicate-binding check still runs**, so a test cannot paper over a wiring
   bug that boot would have caught.
@@ -70,7 +70,7 @@ The `Logger` contract is seven levels of three overloads each, so every suite th
 wants a quiet app would otherwise hand-write the same thirty lines. It records; it
 does not interpret - no level filtering, no error promotion.
 
-## A real server, not a fake dispatcher
+## A real server in place of a fake dispatcher
 
 ```ts
 const server = await createTestServer({ modules: [WeatherModule], prefix: 'api' });
@@ -97,7 +97,7 @@ const raw = await server.request('avatars/7.png'); // the Response itself
 
 ## Testing a guard
 
-Test it through the server, not by calling `handle()`. What a guard reads -
+Test it through the server rather than by calling `handle()`. What a guard reads -
 `@Public()`, `@Roles()` - is route metadata that only exists once routes have been
 discovered, so a direct call tests a different thing.
 

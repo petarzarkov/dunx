@@ -35,7 +35,7 @@ registration that has to out-rank the real one.
 
 A module is a scope, and `providers` are private to it. So a test override cannot be
 an extra module appended at the end that wins - an appended module's providers are
-invisible to every scope that does not import it, which is exactly the scope the
+invisible to every scope that does not import it, being the scope the
 code under test resolves from.
 
 `createTestApp` therefore builds the same scope graph the app would have and
@@ -45,9 +45,9 @@ substitutes by token inside it. Three consequences worth relying on:
   `Logger` does not have to know how many modules bind it, and does not have to name
   a scope. Where two scopes genuinely bind one token differently and only one is
   meant, resolve through the module you care about instead.
-- **An override naming a token nobody binds is an error**, not a silent no-op. A
+- **An override naming a token nobody binds is an error** rather than a silent no-op. A
   typo'd token would otherwise leave the suite asserting against the real provider
-  it thought it had swapped, which is the failure mode this package exists to
+  it thought it had swapped, the failure mode this package exists to
   prevent.
 - **The discarded provider is never instantiated.** Its `useFactory` never runs and
   its `onInit` never fires. Overriding the database does not open a connection to
@@ -73,19 +73,24 @@ applies there as well.
 synthetic root, so no fixture module has to be written by hand. Anything a module
 ref can be works - a class, or a `DynamicModule` from a `forRoot`.
 
-`TestServer` is a `TestClient` plus `app` (the real `HttpApp`, for `app.get(...)`)
-and `close()`. `createTestServer` passes `HttpOptions` through, with two
-differences: `port` is always 0, and **`requestLogging` defaults to `false`** - it
-is on by default in production for good reasons, none of which apply to a suite
-that would otherwise print one JSON line per assertion. Pass
-`requestLogging: true` to test the logging itself.
+`TestServer` is a `TestClient` plus `app` (the real `HttpApp`, for
+`app.get(...)`) and `close()`.
 
-Everything else is **absent unless passed**, and `middleware` and `onError` decide
-what the application is: forget them and the fixture has no global guards and the
-default error mapper, and answers 200 where production answers 401. Export one
-`httpOptions(config)` and spread it into both `main.ts` and every suite. Omitting
-`middleware` in a graph that declares a `Middleware` no `@UseGuards` attaches warns
-on `console.warn`; `middleware: []` says the omission is deliberate.
+`createTestServer` passes `HttpOptions` through, with two differences: `port`
+is always 0, and **`requestLogging` defaults to `false`** - it is on by default
+in production for good reasons, none of which apply to a suite that would
+otherwise print one JSON line per assertion. Pass `requestLogging: true` to
+test the logging itself.
+
+Everything else is **absent unless passed**, and `middleware` and `onError`
+decide what the application is: forget them and the fixture has no global
+guards and the default error mapper, and answers 200 where production answers
+401. Export one `httpOptions(config)` and spread it into both `main.ts` and
+every suite.
+
+Omitting `middleware` in a graph that declares a `Middleware` no `@UseGuards`
+attaches warns on `console.warn`; `middleware: []` says the omission is
+deliberate.
 
 ### The client
 
@@ -121,7 +126,7 @@ It records; it does not interpret. No level filtering, no error promotion, no
 merging of extras - those are `@arkv/logger`'s behaviour, and asserting against a
 reimplementation of them would prove nothing.
 
-## Deliberately not here
+## Not here
 
 - **A fluent assertion DSL** (`expect(res).toHaveStatus(200)`, supertest-style
   chaining). `status` and a parsed `body` read fine through `expect` already, and a
@@ -137,7 +142,7 @@ reimplementation of them would prove nothing.
   dunx wrote, and not the parts Bun owns - route matching, params, method
   dispatch, upgrades. The real server is cheaper than the lie.
 - **Database fixtures, transactional rollback, seeding.** That is drizzle's
-  surface, not this package's. `@dunx/infra/db` binds an in-memory `bun:sqlite`
+  surface rather than this package's. `@dunx/infra/db` binds an in-memory `bun:sqlite`
   with the same driver as production, which is a better fixture than a mock.
 - **A websocket client.** Bun implements `WebSocket` natively, and a gateway test
   is `new WebSocket(server.url.replace('http', 'ws') + '/chat')`. Wrapping that

@@ -55,12 +55,13 @@ OpenApiModule.forRootAsync({
 });
 ```
 
-`root` stays outside the factory because it is a module reference: the graph has to
-exist before the container that would run the factory does. The mount paths do not
-have that problem, because the controller declares its two routes with **path
-thunks** and route discovery runs after every provider has settled - so by the time
-anything reads a path, the factory that produced it has returned. That is what
-`RoutePath` in `@dunx/http` is for.
+`root` stays outside the factory because it is a module reference: the graph must
+exist before the container that would run the factory does.
+
+The mount paths escape that. The controller declares its two routes with **path
+thunks**, and route discovery runs after every provider has settled, so the
+factory that produced a path has returned before anything reads it. `RoutePath`
+in `@dunx/http` is the type.
 
 zod is an **optional** `peerDependency`. Install it and schemas convert; do not,
 and the document still generates with warnings where the schemas would have been.
@@ -109,14 +110,13 @@ await Bun.write('openapi.json', JSON.stringify(document, null, 2));
   declares exactly the tags they carry. Deriving it separately from the class names
   let a document declare tags nothing used and use tags it never declared, which
   puts a viewer's sidebar at odds with its own operation list.
-- Path parameters are driven by the **path**, not by the schema. OpenAPI requires
+- Path parameters are driven by the **path** rather than the schema. OpenAPI requires
   every path parameter to appear in the template, so a schema property that is not
   a path token is not a path parameter. A token with no matching schema property
   is documented as a required `string`.
 - Query parameters are expanded one per property, with `required` taken from the
   schema's own `required` list. A `$ref` cannot be split into `parameters`
-  entries, which is why a query schema's root object is read rather than
-  referenced.
+  entries, so a query schema's root object is read rather than referenced.
 - Ordering is deterministic. Paths sort by code unit rather than `localeCompare`,
   because a generated document has to come out byte-identical on every machine and
   collation is locale dependent: ICU sorts `/reports/{id}` before
@@ -152,9 +152,9 @@ export const oneUser = {
 ```
 
 One contract for both directions, so a named response schema hoists into
-`components/schemas` and the operation `$ref`s it exactly as a request body does -
-which is what makes the document usable for client codegen, and what makes a
-`.meta({ id })` on a response-only schema mean something.
+`components/schemas` and the operation `$ref`s it exactly as a request body does.
+That is what the document needs for client codegen, and what gives
+`.meta({ id })` on a response-only schema its meaning.
 
 Two consequences of it being the same contract rather than a second channel:
 
@@ -203,22 +203,24 @@ export class NotesController {
 | `tags`        | `string[]` | Overrides the tag derived from the class name. |
 | `deprecated`  | `boolean`  | Only `true` is emitted.                        |
 
-It works at class scope and at method scope, and the two **compose per field**: the
-operation above is tagged `notes` from the class, described from the class, and
-summarised and deprecated from the method. The method wins only on a field they both
-set. So class tags plus per-method summaries - the most common annotation pattern
-there is - needs no repetition, and dropping the class `tags` from a method does not
-silently fall back to the class-name default.
+It works at class scope and at method scope, and the two **compose per field**.
+The operation above is tagged and described from the class, then summarised and
+deprecated from the method; the method wins only on a field they both set.
+
+Class tags plus per-method summaries therefore needs no repetition, and dropping
+the class `tags` from a method does not silently fall back to the class-name
+default.
 
 `@ApiDoc` is otherwise a thin wrapper over `@dunx/http`'s generic route-metadata
-channel: `metaKey` mints a unique symbol and `meta` writes it. There is no parallel
-registry and no second discovery pass. See
-[Middleware and guards](./07-middleware-and-guards.md#route-metadata) for the
-mechanism, and note where documentation differs from it: `RouteContext.get` resolves
-a key handler-first-then-class, which **replaces** the class's value, and that is
-right for `@Roles` and wrong for a value made of independent fields. Composing the
-two needs the class's own record, which is why a `DiscoveredRoute` carries
-`classMeta` next to the merged `meta`.
+channel: `metaKey` mints a unique symbol and `meta` writes it. No parallel
+registry, no second discovery pass. See
+[Middleware and guards](./08-middleware-and-guards.md#route-metadata).
+
+Documentation differs from that mechanism in one place. `RouteContext.get`
+resolves a key handler-first-then-class, **replacing** the class's value, which
+suits `@Roles` and breaks a value made of independent fields. Composing the two
+needs the class's own record, so a `DiscoveredRoute` carries `classMeta` next to
+the merged `meta`.
 
 ## Security comes from the guards' own metadata
 
@@ -249,7 +251,7 @@ decision, and one no generator can see. If that gap matters, install the guard.
 
 zod emits nested definitions under `$defs`. OpenAPI calls that slot
 `components/schemas`. Hoisting and rewriting `#/$defs/Tag` to
-`#/components/schemas/Tag` is the whole difference between the two, which is why
+`#/components/schemas/Tag` is the whole difference between the two, and
 `.meta({ id })` is the only annotation this package asks for:
 
 ```ts
@@ -269,8 +271,8 @@ export const CreateUser = z
   `{ "$ref": "#/components/schemas/CreateUser" }`. The `Tag` definition it
   referenced comes along with it.
 - `title` lands inline on the schema, as a human label.
-- A schema with no `id` is **inlined** where it is used, which is the right answer
-  for a one-off body.
+- A schema with no `id` is **inlined** where it is used, which suits a one-off
+  body.
 - A **self-referential** schema is hoisted whether or not it has an `id`. zod emits
   a cyclic ref as `#`, meaning "this schema", which is true where zod emitted it
   and false once it is one entry among many; hoisting is what gives the ref a place
@@ -349,15 +351,15 @@ tree-shaken bundle into `packages/openapi/src/ui-bundle.ts` as a string constant
 which `renderPage` interpolates. The file is generated **and committed**, and
 regenerated by the package build so it cannot go stale.
 
-`renderPage` lives at **`@dunx/openapi/ui`**, not in the barrel, and
+`renderPage` lives at **`@dunx/openapi/ui`** rather than in the barrel, and
 `OpenApiExplorer.page()` reaches it with `await import()` on the first request for
 the page. Importing `@dunx/openapi` therefore does not load the explorer. See
 [The honest cost](#the-honest-cost).
 
 What the page does that a static rendering cannot:
 
-- **Sends requests.** Every operation is executable, which is the usual reason
-  people reach for swagger-ui in the first place.
+- **Sends requests.** Every operation is executable, the usual reason people
+  reach for swagger-ui.
 - **Credentials once.** An **Authorize** dialog reads
   `components.securitySchemes` and offers a field per scheme, applied to every
   operation that declares it and kept in the tab's `sessionStorage`.
@@ -406,12 +408,13 @@ There was a load-time cost as well as a byte cost, and it was the one that
 mattered: cold start is dunx's weakest published number, and this was ~5 ms of it
 for a page most services never open.
 
-**`@dunx/openapi/ui` is what that cost now sits behind.** `html.ts` exports
-`renderShell(document, options, ui)`, which takes the script to inline rather than
-importing it; `src/ui.ts` is the entrypoint that pairs it with `UI`; and
-`OpenApiExplorer.page()` does `await import('./ui.js')` on the first request for a
-given mount prefix, caching the rendered string as it always did. Measured on this
-machine over `packages/openapi/dist`:
+**`@dunx/openapi/ui` now holds that cost.** `html.ts` exports
+`renderShell(document, options, ui)`, taking the script to inline rather than
+importing it. `src/ui.ts` pairs it with `UI`, and `OpenApiExplorer.page()` does
+`await import('./ui.js')` on the first request for a given mount prefix, caching
+the rendered string.
+
+Measured on this machine over `packages/openapi/dist`:
 
 |                 |   inlined | behind `./ui` |
 | --------------- | --------: | ------------: |
@@ -431,28 +434,28 @@ the minified bundle: 456,550 B of declaration, shipped in every tarball. The
 generator now emits `export const UI: string`, and that one annotation takes the
 file to 98 B.
 
-The mechanism needed **`splitting: true`** in `scripts/build-package.ts`. That was
-verified rather than assumed: with splitting off, `Bun.build` inlines a relative
+The mechanism needed **`splitting: true`** in `scripts/build-package.ts`,
+verified rather than assumed. With splitting off, `Bun.build` inlines a relative
 dynamic import into the importing entry, so the subpath alone would have been a
-no-op. A 200 KB module behind `await import()` produced a 200,980 B entry with
-`splitting: false` and a 350 B entry plus a chunk with it on. Splitting is shared
-by every package and turned out to be an improvement for the multi-entry ones -
-`@dunx/infra` went from 127.7 KB to 71.7 KB of dist JS, because a module two
-subpaths share is now one chunk rather than a copy in each.
+no-op: a 200 KB module behind `await import()` produced a 200,980 B entry with
+`splitting: false`, and a 350 B entry plus a chunk with it on.
 
-Two things were already done about the raw size, and both are recorded because
-they set the precedent: `@mantine/core/styles.css` is 234 KiB for a dozen
-components, so the build imports per-component CSS instead and pays a third of
-that (the list in `internal/openapi-ui/src/styles.ts` is load bearing: a missing file
-is an unstyled component, not a build error). And `Tooltip` and `ScrollArea` were
-dropped for `title=` and `overflow: auto`, which took 490 KiB to 437 KiB, because
-`Tooltip` drags in floating-ui.
+Splitting is shared by every package and improved the multi-entry ones.
+`@dunx/infra` went from 127.7 KB to 71.7 KB of dist JS, a module two subpaths
+share becoming one chunk rather than a copy in each.
+
+Two earlier reductions set the precedent. `@mantine/core/styles.css` is 234 KiB
+for a dozen components, so the build imports per-component CSS and pays a third
+of that. The list in `internal/openapi-ui/src/styles.ts` is load bearing: a
+missing file yields an unstyled component rather than a build error.
+
+`Tooltip` and `ScrollArea` were then dropped for `title=` and `overflow: auto`,
+taking 490 KiB to 437 KiB, `Tooltip` having dragged in floating-ui.
 
 437 KiB is about 3x smaller than swagger-ui's own bundle and normal for a modern
-web app. With the boot cost gone, it is paid by the person looking at the page,
-which is the right place for it - so `preact/compat`, which would remove about
-170 KiB at the cost of running Mantine on a compatibility shim, is no longer worth
-the risk.
+web app. With the boot cost gone, only the person opening the page pays it, so
+`preact/compat` and its 170 KiB saving no longer justify running Mantine on a
+compatibility shim.
 
 If none of that is acceptable, do not mount the page. `OpenApiModule` still serves
 `/openapi.json`, and pointing your own swagger-ui or Scalar at it is one route.
@@ -466,19 +469,19 @@ pre-rendered prose, the samples and the fields without loading dunx's explorer.
 - **A non-object schema for `query` or `params` documents nothing** and produces
   a warning: a query string is a set of named parameters, and there is nothing to
   expand.
-- **A response schema is documentation, not enforcement.** `options.response` is
+- **A response schema documents and never enforces.** `options.response` is
   never validated, so a handler that returns something else produces a document
   that lies. The handler's return type is what keeps the two honest.
 - **A schema used in both directions converts twice**, with `io: 'input'` for the
   request and `io: 'output'` for the response. If the two views differ - anything
   with a `.default()` - one `.meta({ id })` cannot name both, and the store keeps
   the first and warns.
-- **`x-required-roles` is an extension**, not standard OpenAPI. It is there so a
+- **`x-required-roles` is an extension** rather than standard OpenAPI, so a
   reader can see the roles without parsing the description sentence.
 - **A class-level `@Roles` documents every route on that class**, whether or not
   a guard reads it there.
 - **The document describes the mounted paths**, `setGlobalPrefix` included, but
   gateway paths are not in it: OpenAPI has no representation for a WebSocket
-  upgrade. See [WebSockets](./08-websockets.md).
+  upgrade. See [WebSockets](./09-websockets.md).
 
-Next: [Testing](./10-testing.md).
+Next: [Testing](./11-testing.md).

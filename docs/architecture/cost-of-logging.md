@@ -32,7 +32,7 @@ structural changes are worth ~3.3 µs and batching ~1.9 µs. Separately, the pip
 harness never drained was worth 2.68 µs on top of that with an unbatched writer, and
 that was never dunx's cost at all.
 
-### The harness was measuring the pipe, not the framework
+### The harness was measuring the pipe rather than the framework
 
 Before anything else: `startSubject` spawned every subject with `stdout: 'pipe'` and
 **nothing ever read it**. 64 KiB in, the pipe is full, and the server parks on every
@@ -65,7 +65,7 @@ floor is about ±0.5 µs, so three of these steps are not resolvable at all.
 | building and serialising the line                | +2.05 µs |
 | the write, batched                               | −0.62 µs |
 
-Three suspicions were wrong and are worth recording as wrong:
+Three suspicions were wrong, recorded here as wrong:
 
 - **`crypto.randomUUID()` is free.** 0.04 µs, an order of magnitude under the noise
   floor, and 90 ns in a hot loop. A per-process prefix plus a counter would save
@@ -105,7 +105,7 @@ Things that were measured and did **not** work, all in a real `Bun.serve` handle
 | batch into an array, flush on a **microtask**  | +1.48 µs    |
 | concatenate, flush on a **macrotask**          | +0.27 µs    |
 
-**`Bun.stdout.writer()` is the Bun-native API and it lost**, which is the one place
+**`Bun.stdout.writer()` is the Bun-native API and it lost**, the one place
 this work preferred a library to the platform primitive. A `FileSink.write()`
 encodes into its own
 buffer on every call, so it pays per entry exactly what it was meant to save; a JS
@@ -128,7 +128,7 @@ things bound it, and they are asserted in `packages/core/src/logger/console.test
   flush everything queued behind them, so the entries you go looking for after a
   crash - and everything that led up to them - were never held back. This is what
   makes the trade acceptable rather than merely fast.
-- The window is **one event-loop turn**, not a timer interval.
+- The window is **one event-loop turn** rather than a timer interval.
 - `flush()` is public, `onShutdown()` calls it so the container flushes on a
   graceful stop, and `process.on('exit')` catches the rest.
 - `new ConsoleLogger(context, level, false)` opts out entirely.
@@ -136,17 +136,19 @@ things bound it, and they are asserted in `packages/core/src/logger/console.test
 ### The other two changes
 
 **`request-logging.ts` has no `async` function left in it.** `#body` and
-`#responseFields` were `async` and, with both body options off - the default - they
-returned `{}` immediately, so every request paid two async frames and two `await`s on
-values that were never promises. They now return `Promise<unknown> | undefined`,
-where `undefined` means there is nothing to read and the caller stays synchronous,
-and the scope callback passed to `runWithContext` is a plain function using `.then`
-rather than an `async` arrow. This is the same fault the input reader had, found the
-same way, and an isolated probe puts an `async` scope callback at 0.44 µs over a
-synchronous one. The pathname and the query string now come out of **one** pair of
+`#responseFields` were `async` and, with both body options off - the default -
+they returned `{}` immediately, so every request paid two async frames and two
+`await`s on values that were never promises. They now return `Promise<unknown>
+| undefined`, where `undefined` means there is nothing to read and the caller
+stays synchronous, and the scope callback passed to `runWithContext` is a plain
+function using `.then` rather than an `async` arrow.
+
+This is the same fault the input reader had, found the same way, and an
+isolated probe puts an `async` scope callback at 0.44 µs over a synchronous
+one. The pathname and the query string now come out of **one** pair of
 `indexOf` calls instead of scanning `req.url` twice.
 
-**`ConsoleLogger` has a fast path for `logger.info(string, object)`**, which is the
+**`ConsoleLogger` has a fast path for `logger.info(string, object)`**, the
 shape every framework call has. The general path spends two array allocations (the
 rest parameter, then `[message, ...rest]`), a third object and an `Object.assign` to
 reach an entry the fast path builds as one literal. The timestamp is cached by
@@ -168,16 +170,16 @@ Covered above - `crypto.randomUUID()` measured at 0.04 µs, and a counter-based 
 would trade an unmeasurable saving for leaking request volume in a header that is
 returned to the caller.
 
-### An inbound `x-request-id` is validated, not trusted
+### An inbound `x-request-id` is validated rather than trusted
 
 It used to be `req.headers.get(REQUEST_ID_HEADER) ?? crypto.randomUUID()`, so
 `curl -H 'x-request-id: MY-OWN-ID'` was echoed on the response and written into
 every line the request produced. That is a caller-supplied string on a trust
 boundary: it can carry a newline, be a megabyte long, or be set to somebody else's
-trace id on purpose. `nestjs-template` ran `isUuid()` on it first, and that is what
-was adopted - the accepted shape is exactly the shape this middleware mints.
+trace id knowingly. `nestjs-template` ran `isUuid()` on it first, and that is what
+was adopted, the accepted shape matching what this middleware mints.
 
-Any UUID version passes; the check is the layout, not the version nibble, because
+Any UUID version passes; the check reads the layout rather than the version nibble, because
 an upstream service minting v7 is not a threat model. The order matters more than
 the regex: `inbound !== null` first, then `length === 36`, then the pattern. The
 common request carries no header at all and pays one comparison. Measured in
@@ -187,45 +189,51 @@ can resolve, and below the `crypto.randomUUID()` call that follows it either way
 
 ### `ignore` skips everything, and `correlateIgnored` buys back the half worth having
 
-`ignore` returns `next()` before anything else happens, which is what makes it free
-and also means an ignored path has no `x-request-id` and no `AsyncLocalStorage`
-scope - so a health check's own log lines were uncorrelated, and guide 12 claimed
-the id was "always set on the response". Splitting `ignore` into two lists was
-rejected: the cost is not the path list, it is the work, and a second list would
-still not say which work. `correlateIgnored: boolean` names the work instead. On an
-ignored path it pays for the header read, the id, the scope and one `Headers.set` -
-the four rows above that sum to ~2.2 µs of the ~5.4 the full path costs - and never
-for the entry, which is the expensive half. Default `false`, so the shipped hot path
-is unchanged.
+`ignore` returns `next()` before anything else happens, which makes it
+free and also means an ignored path has no `x-request-id` and no
+`AsyncLocalStorage` scope - so a health check's own log lines were
+uncorrelated, and guide 12 claimed the id was "always set on the response".
+Splitting `ignore` into two lists was rejected: the cost is not the path list,
+it is the work, and a second list would still not say which work.
+`correlateIgnored: boolean` names the work instead.
+
+On an ignored path it pays for the header read, the id, the scope and one
+`Headers.set` - the four rows above that sum to ~2.2 µs of the ~5.4 the full
+path costs, and never for the entry, the expensive half. Default
+`false`, so the shipped hot path is unchanged.
 
 ### The 500's stack goes through the bound `Logger`
 
-`defaultErrorMapper` wrote it with `console.error`. In a JSON-only service that is
-one structured entry from request logging plus a multi-line, Bun-formatted dump
-that a collector reads as several broken records, and a custom `onError` was the
-only way to suppress it. `errorMapper(logger)` is now the real implementation and
-`HttpApplication` builds the default from `app.get(Logger)`, so the stack lands in
-the same stream and the same shape as everything else. `defaultErrorMapper` remains
-as `errorMapper(new ConsoleLogger())` for `buildRoutes`/`buildFallback` called
-directly, which have no container to ask.
+`defaultErrorMapper` wrote it with `console.error`. In a JSON-only service that
+is one structured entry from request logging plus a multi-line, Bun-formatted
+dump that a collector reads as several broken records, and a custom `onError`
+was the only way to suppress it. `errorMapper(logger)` is now the real
+implementation and `HttpApplication` builds the default from `app.get(Logger)`,
+so the stack lands in the same stream and the same shape as everything else.
+
+`defaultErrorMapper` remains as `errorMapper(new ConsoleLogger())` for
+`buildRoutes`/`buildFallback` called directly, which have no container to ask.
 
 The `Error` is passed as its own argument rather than as `{ err: error }` inside the
 fields object, because `JSON.stringify(new Error('x'))` is `{}` - a field would drop
 the stack, while every `Logger` implementation picks an `Error` argument out and
 serialises it. This is the same class of bug as the `err` field in request
-logging's own entry, which is why the mapper's line is worth keeping alongside it.
+logging's own entry, so the mapper's line earns its place alongside it.
 
 ### What still costs
 
-The remaining ~5.4 µs over `requestLogging: false` is **~1.3 µs of `req.headers`,
-~0.9 µs of `AsyncLocalStorage`, ~2.1 µs of entry construction and
-`JSON.stringify`**, and ~0.7 µs of reading `req.url`. The first two are the contract:
-an inbound `x-request-id` has to be honoured and a handler's own log lines have to
-carry the id. The third is the one with room left, and the obvious move - hand-rolling
-a serialiser instead of `JSON.stringify` - is a JavaScript reimplementation of a
-platform primitive with string escaping to get wrong. One real
-saving is available and blocked on a contract: `RequestContext.getContext()` returns
-a copy, and `ConsoleLogger` then spreads that copy into the entry, so the request
-fields are copied twice per line. Removing one copy means either changing what
-`getContext()` returns - which `@arkv/logger`'s `ContextStore` also implements - or
-changing the order of the keys in every log line.
+The remaining ~5.4 µs over `requestLogging: false` is **~1.3 µs of
+`req.headers`, ~0.9 µs of `AsyncLocalStorage`, ~2.1 µs of entry construction
+and `JSON.stringify`**, and ~0.7 µs of reading `req.url`. The first two are the
+contract: an inbound `x-request-id` has to be honoured and a handler's own log
+lines have to carry the id. The third is the one with room left, and the
+obvious move - hand-rolling a serialiser instead of `JSON.stringify` - is a
+JavaScript reimplementation of a platform primitive with string escaping to get
+wrong.
+
+One real saving is available and blocked on a contract:
+`RequestContext.getContext()` returns a copy, and `ConsoleLogger` then spreads
+that copy into the entry, so the request fields are copied twice per line.
+Removing one copy means either changing what `getContext()` returns - which
+`@arkv/logger`'s `ContextStore` also implements - or changing the order of the
+keys in every log line.

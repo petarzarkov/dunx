@@ -57,7 +57,7 @@ the move is a change to one module and to no repository. Compare
 differ by two lines and the bodies are the same.
 
 The mode is not a runtime flag, and cannot be: it decides which class the drizzle
-handle is bound under, and that is what `DbModule.forRoot` infers the injection
+handle is bound under, and `DbModule.forRoot` infers the injection
 token from. It is also enforced - a service annotating `SyncDatabase` will not
 resolve in an app that bound `BunSQLiteDatabase`.
 
@@ -73,11 +73,11 @@ than delegating to drizzle, because drizzle delegates to `bun:sqlite`'s wrapper,
 which commits as soon as the callback *returns its promise* - so every statement
 after the first `await` runs in autocommit and a later throw rolls back nothing.
 
-`transactionSync()` **does** delegate, and that is correct: the whole failure is
+`transactionSync()` **does** delegate, correctly: the whole failure is
 downstream of a callback that returns a promise, and this one cannot. An `async`
 callback is a compile error naming the constraint.
 
-One wart worth knowing: `transactionSync`'s return type is constrained to
+One wart: `transactionSync`'s return type is constrained to
 "not a promise", and that constraint's object branch is a TypeScript *weak type* -
 so returning an object or an array from the callback is rejected even though it is
 not thenable. Return a scalar, or use the async `transaction()`.
@@ -109,12 +109,14 @@ about forty lines.** [`mysql/driver.ts`](./src/mysql/driver.ts) is the whole of 
 and `@dunx/infra` needed no change to accept it - `DbOptions.open()` is where a
 backend lives, so adding one is a new class rather than an edit to a dispatch table.
 
-The reasoning: drizzle 0.45.2's only Bun entrypoints are `bun-sql` (Postgres, it
-builds a `PgDialect` unconditionally) and `bun-sqlite`. Its MySQL drivers are
-`mysql2` and `mysql-proxy`. `mysql2` is a JavaScript reimplementation of a wire
-protocol Bun already speaks. `mysql-proxy` is drizzle's MySQL dialect with the
-transport left as a callback - so `Bun.SQL` supplies the transport, drizzle owns
-the SQL, and nothing pulls in `mysql2`.
+The reasoning: drizzle 0.45.2's only Bun entrypoints are `bun-sql` (Postgres,
+it builds a `PgDialect` unconditionally) and `bun-sqlite`. Its MySQL drivers
+are `mysql2` and `mysql-proxy`. `mysql2` is a JavaScript reimplementation of a
+wire protocol Bun already speaks.
+
+`mysql-proxy` is drizzle's MySQL dialect with the transport left as a callback,
+so `Bun.SQL` supplies the transport, drizzle owns the SQL, and nothing pulls in
+`mysql2`.
 
 ```ts
 const db = drizzle(async (query, params, method) => {
@@ -135,7 +137,7 @@ Three details in that, all load-bearing and all found by running it:
 2. **`execute` has two shapes.** drizzle passes `'execute'` whenever the query
    carries no fields, which includes `db.execute(sql\`SELECT …\`)`. Without the
    `result.length > 0` branch those rows are discarded.
-3. **`insertId` goes in `rows[0]`**, not at the top level, despite what
+3. **`insertId` goes in `rows[0]`** rather than at the top level, despite what
    `RemoteCallback`'s type says - `session.js` reads `data[0].insertId`. Following
    the declared signature breaks `$returningId()`. Bun's own property is
    `lastInsertRowid`.
@@ -164,13 +166,14 @@ decoding is drizzle's, so `boolean` 1 arrives as `true` and `timestamp` as a `Da
 
 Both measured on Bun 1.3.14, both recorded in [docs/bun-apis.md](../../docs/bun-apis.md).
 
-**`POSTGRES_URL` in the environment overrides an explicitly passed `url`.** In the
-options-object form only - `new Bun.SQL({ url: 'mysql://…' })` with `POSTGRES_URL`
-set silently becomes `adapter: 'postgres'` and dials the wrong server, failing with
-a bare "Connection closed". `PGURL` and `TLS_POSTGRES_DATABASE_URL` do it too;
-`DATABASE_URL` and `MYSQL_URL` do not. Unaffected forms: `new Bun.SQL(urlString)`,
-`new Bun.SQL(new URL(url))`, and naming `adapter` explicitly. This example does the
-last two.
+**`POSTGRES_URL` in the environment overrides an explicitly passed `url`.** In
+the options-object form only - `new Bun.SQL({ url: 'mysql://…' })` with
+`POSTGRES_URL` set silently becomes `adapter: 'postgres'` and dials the wrong
+server, failing with a bare "Connection closed". `PGURL` and
+`TLS_POSTGRES_DATABASE_URL` do it too; `DATABASE_URL` and `MYSQL_URL` do not.
+
+Unaffected forms: `new Bun.SQL(urlString)`, `new Bun.SQL(new URL(url))`, and
+naming `adapter` explicitly. This example does the last two.
 
 **An in-flight MySQL query does not hold the event loop open.** A script with
 nothing else pending exits **silently with code 0** in the middle of a query - no
@@ -180,7 +183,7 @@ duration for exactly this reason. Postgres and `bun:sqlite` are unaffected.
 
 ## Migrations
 
-None of the three run migrations here, and that is deliberate. Schema changes are
+None of the three run migrations here. Schema changes are
 `drizzle-kit generate` plus the dialect's own migrator - which own the SQL, the
 journal and the snapshot folder - and a `:memory:` database has nowhere to keep any
 of that. Each service creates its table in `onInit` instead, which runs after the

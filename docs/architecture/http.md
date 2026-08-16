@@ -72,14 +72,17 @@ sense for one feature's routes is common, and had nowhere to live.
 
 ### The framework's own services are bound, not self-bound
 
-`HttpFactory` wraps the app's root in a `global: true` module that binds and exports
-`PubSub`, `ClientAddress` and `RequestLoggingMiddleware`. Two of those could be left
-to self-binding under the flat container and cannot be under scoping: an unbound class
-self-binds into **whichever scope asks first**, so a second module injecting
-`ClientAddress` was a boot error naming the first module, and even with one consumer
-`listen()` could attach the live server to an instance nothing else held. They are
-framework services with no module for an app to import, which is exactly what the
-global scope is for. `packages/http/src/server/client-address.test.ts` pins it.
+`HttpFactory` wraps the app's root in a `global: true` module that binds and
+exports `PubSub`, `ClientAddress` and `RequestLoggingMiddleware`. Two of those
+could be left to self-binding under the flat container and cannot be under
+scoping: an unbound class self-binds into **whichever scope asks first**, so a
+second module injecting `ClientAddress` was a boot error naming the first
+module, and even with one consumer `listen()` could attach the live server to
+an instance nothing else held.
+
+They are framework services with no module for an app to import, which is
+exactly what the global scope is for.
+`packages/http/src/server/client-address.test.ts` pins it.
 
 Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in
@@ -138,16 +141,17 @@ normalise, so it is the one thing that breaks a ported client - as a 404 that re
 like a missing route. It stays a 404, and the reason is where the two candidate
 implementations would have to live.
 
-`joinPath` already normalises the **declared** side, so `@Get('sub/')` is `/t/sub`
-and both spellings are never live at once. The inbound side is Bun's: by the time
-anything in dunx can see that nothing matched, it is inside the `fetch` fallback,
-which holds middleware and the error mapper and **no route patterns**. Stripping the
-slash and re-dispatching there means matching `/t/7/` against `/t/:id` in
-JavaScript, which is the router this repo will not write. Registering `/t/` as a
-second entry in the `Bun.serve` table was the other option - native, and free per
-request - and was rejected as blast radius: it doubles a table that collision
-detection, gateway-path checking and the CORS `OPTIONS` mounting all walk, to buy
-an alias a proxy rewrite can supply.
+`joinPath` already normalises the **declared** side, so `@Get('sub/')` is
+`/t/sub` and both spellings are never live at once. The inbound side is Bun's:
+by the time anything in dunx can see that nothing matched, it is inside the
+`fetch` fallback, which holds middleware and the error mapper and **no route
+patterns**. Stripping the slash and re-dispatching there means matching `/t/7/`
+against `/t/:id` in JavaScript, which is the router this repo will not write.
+
+Registering `/t/` as a second entry in the `Bun.serve` table was the other
+option - native, and free per request - and was rejected as blast radius: it
+doubles a table that collision detection, gateway-path checking and the CORS
+`OPTIONS` mounting all walk, to buy an alias a proxy rewrite can supply.
 
 So it is documented in guide 05 and pinned by a test in `server.test.ts`, which is
 what makes it a decision rather than an oversight.

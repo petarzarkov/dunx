@@ -28,7 +28,7 @@ these flags:
 | `--with <a,b,c>`    | Features to compose the app from. See **Choosing features** |
 | `--all`             | Every feature                                               |
 | `--list`            | Print the features and exit                                 |
-| `--template <name>` | `minimal`, which is what you get with no `--with`           |
+| `--template <name>` | `minimal`, the default with no `--with`                     |
 | `--force`           | Write into a directory that already has files in it         |
 | `--yes`, `-y`       | Take the default selection without prompting                |
 | `--help`            | Print usage                                                 |
@@ -49,8 +49,8 @@ template never goes stale between releases.
 
 ## Choosing features
 
-The minimal template is five files and one route, which is the right place to read
-from and a thin place to start from. Anything more is composed:
+The minimal template is five files and one route: small enough to read, thin
+enough to start from. Anything more is composed:
 
 ```bash
 bunx @dunx/create-app my-api --with users,openapi,http
@@ -90,16 +90,17 @@ itself degraded rather than failing the boot, so the app still starts without on
 
 Every feature directory is copied out of dunx's own
 [`examples/full`](https://github.com/petarzarkov/dunx/tree/main/examples/full) - the
-service CI builds, typechecks, tests and tours on every push. That is the point:
-starter code nobody runs rots, and a byte-for-byte parity test fails the moment a
-copy drifts from the example.
+service CI builds, typechecks, tests and tours on every push. Starter code nobody
+runs rots, so a byte-for-byte parity test fails the moment a copy drifts from the
+example.
 
-What cannot be copied is the wiring. `app.module.ts`, `config.ts`, `bootstrap.ts` and
+The wiring cannot be copied. `app.module.ts`, `config.ts`, `bootstrap.ts` and
 `main.ts` name every feature at once in the full example, so those four are
-**generated** for the selection - the config carries only the variables your features
-actually read, and the manifest only the dependencies they need. CI scaffolds every
-feature alone, the whole set, and the combinations with something to get wrong, then
-typechecks each one.
+**generated** for the selection. The config carries only the variables your
+features read, and the manifest only the dependencies they need.
+
+CI scaffolds every feature alone, the whole set, and the combinations with
+something to get wrong, then typechecks each one.
 
 The `*.demo.ts` files are the full example's scripted walkthroughs, and they come
 along because their module registers them. They are executable documentation of the
@@ -134,8 +135,7 @@ preload = ["@dunx/transform/preload"]
 preload = ["@dunx/transform/preload"]
 ```
 
-This is the only setup dunx asks for, and it is worth understanding rather than
-copying.
+The only setup dunx asks for. Read it rather than copying it.
 
 `@dunx/transform/preload` registers a Bun plugin. On load, the plugin parses each
 `.ts` and `.tsx` file with `oxc-parser`, reads every class declaration's
@@ -183,16 +183,16 @@ bound with `useValue` is never constructed; and the transform only ever writes a
 record whose length equals the parameter count, so a present record is never
 empty.
 
-You may be wondering why `@dunx/core` does not just register the plugin when it is
-imported. Two reasons, and both are fatal. It would make DI import-order
-dependent, because Bun's `onLoad` only affects modules loaded after registration
-and static imports evaluate depth-first in source order, so
-`import { AppFactory } from '@dunx/core'` before your module would work and the
-reverse order would silently skip the transform. That is precisely the
-"`reflect-metadata` must be the first import" fragility dunx exists to avoid. It
-would also cost `@dunx/core` its empty dependency list, since every production
-deploy would then carry a Rust parser to run code that was already transformed at
-build time.
+`@dunx/core` does not register the plugin on import, for two reasons, both fatal.
+
+It would make DI import-order dependent. Bun's `onLoad` only affects modules
+loaded after registration, and static imports evaluate depth-first in source
+order, so `import { AppFactory } from '@dunx/core'` before your module would work
+while the reverse order silently skipped the transform. That is the
+"`reflect-metadata` must be the first import" fragility dunx exists to avoid.
+
+It would also cost `@dunx/core` its empty dependency list. Every production
+deploy would carry a Rust parser to run code already transformed at build time.
 
 Two other places accept the same plugin object if `bunfig.toml` does not suit you:
 
@@ -235,7 +235,7 @@ file at all.
 }
 ```
 
-`"type": "module"` is required, not stylistic. Every dunx package is ESM only, and
+`"type": "module"` is required. Every dunx package is ESM only, and
 without it `verbatimModuleSyntax` raises `TS1287` against ESM syntax.
 
 `@dunx/transform` is a runtime dependency rather than a dev dependency because the
@@ -341,11 +341,12 @@ app that exists is an app that booted.
 own list to change that. On a signal, the server stops first, then every provider
 with an `onShutdown` method runs in reverse construction order.
 
-`app.listen(3000)` builds the `Bun.serve` route table and binds. This is the point
-of no return: `setGlobalPrefix`, `use`, `set` and `enableCors` all throw after it,
-because the route table and the middleware chain are folded into one closure per
-route when the server binds, so a late call could only ever be a silent no-op. It
-returns the URL, with a trailing slash, which is why the log line concatenates
+`app.listen(3000)` builds the `Bun.serve` route table and binds. This is the
+point of no return: `setGlobalPrefix`, `use`, `set` and `enableCors` all throw
+afterwards, since the route table and the middleware chain are folded into one
+closure per route when the server binds.
+
+It returns the URL with a trailing slash, so the log line concatenates
 `greetings` directly.
 
 `await app.closed` holds the process. The promise resolves once shutdown has
@@ -400,17 +401,17 @@ A plain class. No decorator, no registration boilerplate. Listing it in a module
 `providers` is what makes it injectable.
 
 `Logger` in the constructor is the entire dependency injection story. Nothing in
-this app bound `Logger`, and it still resolves: `AppFactory.create` offers a
+this app bound `Logger` and it still resolves: `AppFactory.create` offers a
 default binding for `Logger` and `RequestContext` after every module's, so a
 module that binds either one wins and an app that binds neither still gets one.
-The default is `ConsoleLogger`, which writes one JSON line per entry and reaches
-for no dependency. It does not sanitize, mask or rotate, which is what makes
-swapping in `@dunx/infra/logger` worth doing later.
 
-`Logger` is an `abstract class` rather than an interface, and that is deliberate.
-The transform records constructor parameter _types_, and an interface has no
-runtime value to record, so an interface in that position would be a boot error at
-the injection site.
+The default is `ConsoleLogger`, which writes one JSON line per entry and reaches
+for no dependency. It performs no sanitizing, masking or rotation, so swapping in
+`@dunx/infra/logger` earns its place later.
+
+`Logger` is an `abstract class` rather than an interface. The transform records
+constructor parameter _types_, and an interface has no runtime value to record,
+so an interface in that position would be a boot error at the injection site.
 
 `implements OnInit` is structural. The container checks for an `onInit` method by
 shape, so the `implements` clause is only there to make TypeScript check the
@@ -607,11 +608,12 @@ recursively, so `AuditService` is built before `GreetingsService` regardless of
 where it appears in the list. What order does control is teardown, and
 [Modules](./04-modules.md) covers that.
 
-Forget to list `AuditService` and it still works, because every class is
-injectable by default and an unbound constructor self-binds. That convenience has
-a sharp edge worth knowing about now: it means a typo in a module's `providers`
-list is not caught, and it means an abstract class that is injected but never
-bound gets constructed into a useless object rather than erroring.
+Forget to list `AuditService` and it still works: every class is injectable by
+default and an unbound constructor self-binds.
+
+That convenience has two sharp edges. A typo in a module's `providers` list goes
+uncaught, and an abstract class that is injected but never bound gets constructed
+into a useless object rather than erroring.
 [Providers](./03-providers.md) covers both.
 
 ## Next

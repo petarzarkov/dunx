@@ -83,7 +83,7 @@ curl -H 'x-ops-key: …' $APP/_dunx/api/queues     # names only; the board is at
 ```
 
 These are the endpoints the page itself uses, and they are supported rather than an
-implementation detail - which is what makes the dashboard usable on a box with no
+implementation detail, which makes the dashboard usable on a box with no
 browser. Their types are exported (`Snapshot`, `RuntimeReport`, `RedisReport`,
 `QueuesReport`), so a `fetch` of them is typed. Anything *about* a queue is
 bull-board's own API, under `{path}/queues`.
@@ -97,7 +97,7 @@ because "fine behind a private network" is a real answer and guessing is not.
 
 Four things follow, and none is obvious:
 
-- **A rejected request gets 404, not 403.** A dashboard that announces itself to an
+- **A rejected request gets 404 rather than 403.** A dashboard that announces itself to an
   unauthenticated caller has told them where to keep knocking.
 - **Register it ahead of any session guard.** With the middleware last in the chain,
   a `SessionGuard` answers every dashboard request `401` before `authorize` runs,
@@ -131,12 +131,15 @@ not per click by whoever reached it.
 the repeatable-job editor, per-queue metrics, redis stats, retry/promote/clean, all
 of it, and none of it dunx's to maintain.
 
-This package briefly shipped its own queue table, and that was the wrong call under
-the framework's first rule: never invent what a mature library already solves. The
-one thing that had ever justified hand-rolling it was that mounting bull-board on
-`Bun.serve` meant writing a server adapter - which the deleted
-`@dunx/queue-dashboard` did, and which was a liability. **bull-board 8.6.0 ships
-`@bull-board/bun`**, so that reason is gone and the integration is three calls.
+This package briefly shipped its own queue table, and that was the wrong call
+under the framework's first rule: never invent what a mature library already
+solves.
+
+The one thing that had ever justified hand-rolling it was that mounting
+bull-board on `Bun.serve` meant writing a server adapter - which the deleted
+`@dunx/queue-dashboard` did, and which was a liability. **bull-board 8.6.0
+ships `@bull-board/bun`**, so that reason is gone and the integration is three
+calls.
 
 It also settled the question that started all this - see **Workers do show up**
 below. The hand-rolled panel had planned to omit a worker column and explain why;
@@ -157,7 +160,7 @@ Two things dunx does contribute, and they are the two bull-board cannot know:
   refusing its POSTs. It already has the switch; a second implementation would
   disagree the moment bull-board grew an operation dunx had not heard of.
 
-One caveat worth knowing: **bull-board's page loads a webfont from Google Fonts.**
+One caveat: **bull-board's page loads a webfont from Google Fonts.**
 dunx's own page fetches nothing, and that guarantee does not extend across the
 handoff.
 
@@ -175,7 +178,7 @@ queueNames: ['thumbnails'],
 This is free. The board - and therefore any connection to the broker - is built on
 the **first request for `{path}/queues`**, never at boot and never by the polling
 `/api/queues` endpoint, which reads names straight off the options. An app that
-mounts the dashboard and never opens the board holds no socket for it, which is what
+mounts the dashboard and never opens the board holds no socket for it, which
 lets a process still exit cleanly against an absent Redis.
 
 ## Options

@@ -72,9 +72,9 @@ so it would win nothing. Instead, `AppFactory.create` builds the scope graph it
 always does and substitutes by token **in every scope that binds it**, before
 anything resolves.
 
-Every scope, not one: a test that stubs `Logger` should not have to know how many
-modules bind it, and making it name a scope would push container topology into every
-suite. Where two scopes genuinely bind a token differently and only one is meant,
+Every scope, so a test that stubs `Logger` never has to know how many modules
+bind it; making it name a scope would push container topology into every suite.
+Where two scopes genuinely bind a token differently and only one is meant,
 resolve through the module that matters instead of overriding.
 
 The consequence that matters:
@@ -113,9 +113,9 @@ win" model, the real database provider is still in the list, still gets
 instantiated, and still opens a connection that nothing under test uses.
 
 The seam lives in `@dunx/core` as `AppFactory.create(root, { overrides })` rather
-than in the testing package, and it is deliberately not a test-shaped API. It is
-"compose this graph with these bindings replaced", which is also how a deployment
-variant would be expressed. `HttpOptions extends AppOptions`, so
+than in the testing package, and it is not a test-shaped API. It says "compose
+this graph with these bindings replaced", which is also how a deployment variant
+would be expressed. `HttpOptions extends AppOptions`, so
 `HttpFactory.create` inherits it without a second mechanism.
 
 ### An unmatched override is an error
@@ -144,8 +144,8 @@ The full message:
 
 A silent no-op here is the worst possible failure, because it leaves a suite
 asserting against the real provider it believed it had swapped, and it passes. The
-check names **every** unmatched token, not just the first, so a renamed class does
-not turn into three rounds of the same error.
+check names **every** unmatched token rather than the first, so a renamed class
+does not turn into three rounds of the same error.
 
 The most common way to hit it is a token whose module you forgot to list in
 `modules`. The second most common is a second copy of `@dunx/core` in the
@@ -159,8 +159,8 @@ resolvable. They are offered by `registerDefault` **after** every module, so in 
 typical app nothing in the module graph binds them at all, and an override of
 `Logger` would have been "nothing to override".
 
-The defaults are built as a `Registration[]` and run through the same substitution,
-which is what makes silencing the logger possible:
+The defaults are built as a `Registration[]` and run through the same
+substitution, so the logger can be silenced:
 
 ```ts
 test('RecordingLogger keeps entries instead of writing them', async () => {
@@ -205,8 +205,7 @@ thirty lines.
 It **interprets nothing**: no level filtering, no error promotion, no merging of
 extras. Those are the backing logger's behaviour, and asserting against a
 reimplementation of them would prove nothing about the logger you actually ship.
-The one exception is `log()`, which records as `info` because the contract says
-that is what it is.
+The one exception is `log()`, which records as `info` per the contract.
 
 ## `createTestServer`: a real server on port 0
 
@@ -239,11 +238,13 @@ client's URLs carry it.
 
 ### Pass the same `HttpOptions` production passes
 
-Every one of those fields is **absent unless you pass it**, and two of them decide
-what the application _is_: `middleware` is where global guards live, and `onError`
-is the error mapper. A suite that forgets them gets a server with no global guards
-and the default mapper, which boots fine and answers 200 where production answers 401. That is a fixture quietly testing a different application, and it has cost
-real time to find by hand.
+Every one of those fields is **absent unless you pass it**, and two of them
+decide what the application _is_: `middleware` holds the global guards, `onError`
+the error mapper.
+
+A suite that forgets them gets a server with no global guards and the default
+mapper. It boots fine and answers 200 where production answers 401, which is a
+fixture quietly testing a different application.
 
 So define the options once, export them, and give the same function to `main.ts`
 and to every suite:
@@ -276,10 +277,13 @@ whole object is safe.
 
 **Forgetting is loud.** If the graph declares a `Middleware` implementation that no
 `@UseGuards` attaches - the shape of a global guard - and no `middleware` was
-passed, `createTestServer` writes one line to `console.warn` naming the class. Pass
-`middleware: []` to say the omission is deliberate and the warning goes away. It is
-`console.warn` rather than the bound `Logger` on purpose: a suite asserting on a
-`RecordingLogger` should not find an entry the application never wrote.
+passed, `createTestServer` writes one line to `console.warn` naming the class.
+Pass `middleware: []` to declare the omission intentional and the warning goes
+away.
+
+It writes to `console.warn` rather than the bound `Logger` so that a suite
+asserting on a `RecordingLogger` does not find an entry the application never
+wrote.
 
 `TestServer` is a `TestClient` plus two things:
 
@@ -306,12 +310,13 @@ const { status, body } = await server.json('echo', {
 
 Because **the routing under test is Bun's.**
 
-dunx deliberately does not write a JavaScript router. `Bun.serve({ routes })` does
-the path matching, the `:param` extraction, the per-method dispatch and the
-method-miss 404. A fake dispatcher could only exercise the parts of the request
-path that dunx wrote, and would silently agree with itself about the parts it did
-not. A test that passes against a fake and fails against Bun has taught you
-nothing except that the fake is wrong.
+dunx writes no JavaScript router. `Bun.serve({ routes })` does the path matching,
+the `:param` extraction, the per-method dispatch and the method-miss 404.
+
+A fake dispatcher could only exercise the parts of the request path dunx wrote,
+and would silently agree with itself about the rest. A test that passes against a
+fake and fails against Bun has taught you nothing except that the fake is
+wrong.
 
 The specific things only a real server proves:
 
@@ -403,12 +408,12 @@ test('@Public() opts a route out of the guard', async () => {
 });
 ```
 
-The guard has dependencies like anything else, which is exactly why it is worth a
-test: the key store is injected, so the suite binds a known set of keys instead of
-reaching for the real one. And because the guard is resolved from the container,
-the override reaches it with no special handling.
+The guard has dependencies like anything else, which makes it worth a test: the
+key store is injected, so the suite binds a known set of keys instead
+of reaching for the real one. The guard resolves from the container, so the
+override reaches it with no special handling.
 
-Guards are covered in [Middleware and guards](./07-middleware-and-guards.md).
+Guards are covered in [Middleware and guards](./08-middleware-and-guards.md).
 
 ## Configuration the harness does not cover
 
@@ -459,15 +464,15 @@ const app = await createTestApp({ modules: [BillingModule, FixedTime] });
   server.
 - **`createTestApp` needs `shutdown()` too** if any provider implements
   `onShutdown`, or holds a connection.
-- **Overrides are keyed by token identity**, not by name. Two classes called
-  `Clock` are two tokens.
+- **Overrides are keyed by token identity** rather than by name. Two classes
+  called `Clock` are two tokens.
 - **The harness is not an assertion DSL** and will not become one. `json()`
   returns values that `expect` already reads well, so a failure points at your
   assertion rather than at a matcher this package would have had to define.
 - **`prefix` accepts `string | undefined`** where the other options do not, so a
   suite that runs one fixture prefixed and unprefixed can pass a variable without
   a conditional spread at the call site.
-- **An omitted `HttpOptions` field is absent, not defaulted** to whatever
+- **An omitted `HttpOptions` field is absent** rather than defaulted to whatever
   production uses. `middleware` and `onError` are the two that change what the app
   does; share one `httpOptions(config)` between `main.ts` and the suites.
 

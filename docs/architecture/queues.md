@@ -21,11 +21,14 @@ reimplementing a Bun primitive. The measurement changed the answer for the bette
 **bullmq 6 ships `createBunRedisClient`, an `IRedisClient` adapter over
 `Bun.RedisClient`.** bullmq accepts either a connection description it builds a
 client from, or an already-built client implementing that interface - so
-`QueueConnection` builds `Bun.RedisClient` instances and hands them over wrapped.
+`QueueConnection` builds `Bun.RedisClient` instances and hands them over
+wrapped.
+
 Every byte of queue traffic goes through Bun's client. dunx neither imports nor
-constructs ioredis, and there is no shared socket with `@dunx/infra/redis`: a queue
-gets one client per bullmq object, because a `Worker` blocks on `BZPOPMIN` and bullmq
-duplicates whatever it is given to get a connection it may block on.
+constructs ioredis, and there is no shared socket with `@dunx/infra/redis`: a
+queue gets one client per bullmq object, because a `Worker` blocks on
+`BZPOPMIN` and bullmq duplicates whatever it is given to get a connection it
+may block on.
 
 Verified on bullmq 6.0.5 + Bun 1.3.14 + Redis 8.4.0, over that adapter, in 0.5 s:
 concurrency 5 honoured across 20 jobs, `attempts: 2` with fixed backoff retrying a
@@ -52,14 +55,14 @@ Three findings that shaped the code:
   unhandled `error`. Shutdown would fail on its last step. The adapter gets a no-op
   `error` listener at construction.
 
-`@dunx/infra/queue` is deliberately **not re-exported from the package barrel**,
+`@dunx/infra/queue` is **not re-exported from the package barrel**,
 unlike every other area. `src/index.ts` re-exporting it would put bullmq's static
 `ioredis` import behind `import '@dunx/infra'` for every consumer, queue or no
 queue. The subpath is the only way in.
 
 ### Not pinning ioredis 5, because the reason to had three false premises
 
-An earlier note here and in `docs/guide/14-queues.md` told readers to **pin ioredis
+An earlier note here and in `docs/guide/15-queues.md` told readers to **pin ioredis
 5**, on the grounds that bullmq's CJS build imports `ioredis/built/utils`, that
 ioredis 6 removed it, and that only the ESM build was safe. Re-measured on bullmq
 6.0.5 + ioredis 5.8.2 and 6.0.0 + Bun 1.3.14, **all three are wrong**:
@@ -72,14 +75,14 @@ ioredis 6 removed it, and that only the ESM build was safe. Re-measured on bullm
   build.
 - **The CJS build is the one Bun runs.** bullmq 6.0.5 declares no `exports` map and
   no `"type": "module"`, so the bare specifier resolves to `main`. The imported
-  namespace carries `__esModule` and a `default` holding `Queue`, which is the CJS
+  namespace carries `__esModule` and a `default` holding `Queue`, the CJS
   shape. The suite has been exercising the "unsafe" path all along and passing.
 
 So the pin would have frozen a superseded major to avoid a failure that does not
 happen. It is not applied, and the advice is removed from the guide and from
 `bun-apis.md`.
 
-What the error actually reports is **ioredis absent**, and that is not fixable from
+What the error actually reports is **ioredis absent**, which is not fixable from
 this side. `bullmq/dist/{cjs,esm}/classes/queue.js` both fail without it, because
 everything routes through `utils/index`; only `classes/bun-redis-client.js` loads
 standalone, and it is useless without `Queue` and `Worker`. So the barrel is not at
@@ -89,19 +92,21 @@ ioredis, and cannot be made to be.**
 `ioredis` nonetheless stays an **optional** peer, because it is optional in exactly
 the sense `bullmq` is: needed if and only if `/queue` is used. Requiring it would
 put ioredis in the install of every consumer of `/db`, `/files`, `/images`,
-`/logger` and `/redis`, which is the outcome the ban exists to prevent. npm cannot
+`/logger` and `/redis`, the outcome the ban exists to prevent. npm cannot
 express "optional, but in lockstep with bullmq", so `packages/infra/src/index.test.ts`
 does: one test asserts both peers carry `optional: true`, and guide 14 says
 `bun add bullmq ioredis`.
 
-The range is **bullmq's, not dunx's**. dunx never imports ioredis, so it has no
-opinion that could be better informed than the library that does, and the peer
-therefore mirrors bullmq's own `>=5.0.0` rather than narrowing to the major CI
-happens to resolve. The second test in that file asserts the two ranges are equal,
-so bullmq changing its requirement fails here instead of leaving dunx advertising a
-stale one - the same guard shape as the `LOG_LEVELS` test. The `devDependency` was
-`^6.0.0` against a `>=5.0.0` peer; it now matches the peer, as `bullmq`'s and
-`drizzle-orm`'s already did.
+The range is **bullmq's rather than dunx's**. dunx never imports ioredis, so it
+has no opinion that could be better informed than the library that does, and
+the peer therefore mirrors bullmq's own `>=5.0.0` rather than narrowing to the
+major CI happens to resolve. The second test in that file asserts the two
+ranges are equal, so bullmq changing its requirement fails here instead of
+leaving dunx advertising a stale one - the same guard shape as the `LOG_LEVELS`
+test.
+
+The `devDependency` was `^6.0.0` against a `>=5.0.0` peer; it now matches the
+peer, as `bullmq`'s and `drizzle-orm`'s already did.
 
 ### Job discovery
 
@@ -142,7 +147,7 @@ makes a wiring mistake - no `QueueModule`, no handlers, a misspelled name in
 `queues` - fail before anything consumes, and what lets `worker.jobs` be asserted in
 a test with no server running.
 
-The "no `QueueModule`" check reads the **module graph**, not the container, and the
+The "no `QueueModule`" check reads the **module graph** rather than the container, and the
 reason generalises past queues: **every class self-binds, so a class whose
 constructor arguments are all optional resolves successfully when nothing bound it.**
 `app.get(QueueOptions)` on a container with no `QueueModule` returns defaults - a
@@ -154,10 +159,10 @@ do not.
 same reason `/db` returns drizzle's database class: the library is the interface, and
 a wrapper would be a surface to outgrow.
 
-### The one behaviour that is dunx's, not bullmq's
+### The one behaviour that is dunx's rather than bullmq's
 
 `jobTimeoutMs`. bullmq has `lockDuration` and stall detection, which answer _did the
-worker die_, not _is this handler stuck_ - a handler hung on an external call renews
+worker die_ rather than _is this handler stuck_ - a handler hung on an external call renews
 its lock and never finishes. The dispatcher races the handler against a timer and
 clears it in a `finally`, since an uncleared timer would hold the loop open for its
 full duration after a fast job. Off by default.

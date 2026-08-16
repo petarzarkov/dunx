@@ -81,8 +81,7 @@ export const Features = (): React.JSX.Element => {
             What is actually different
           </Title>
           <Text c="dimmed" maw={640}>
-            Every claim here is checkable somewhere else on this site, and the
-            one that costs something says what it costs.
+            Each claim links to the page that measures it.
           </Text>
         </Stack>
 
@@ -91,27 +90,26 @@ export const Features = (): React.JSX.Element => {
             <code>@dunx/transform</code> reads constructor parameter types at
             load time and records them as a thunk, so a dependency declared
             later in the file - or across a circular import - resolves with no{' '}
-            <code>forwardRef</code>. An erased type is a boot error naming the
-            parameter, not a silent <code>undefined</code>.
+            <code>forwardRef</code>. An erased type fails at boot and names the
+            parameter.
           </Feature>
 
           <Feature icon={PATHS.bolt} title="A core with zero dependencies">
             The container, modules, lifecycle, configuration and the{' '}
             <code>Logger</code> and <code>RequestContext</code> contracts, with
-            nothing behind them. That is what lets <code>@dunx/http</code> log
-            every request in an app that imported no logging module at all.
+            nothing behind them. <code>@dunx/http</code> logs every request in
+            an app that imported no logging module.
           </Feature>
 
           <Feature icon={PATHS.log} title="One log line per request">
             On by default, outermost in the chain, carrying request and response
             in a single entry - 4xx at <code>warn</code>, 5xx at{' '}
-            <code>error</code>, unmatched paths included. Where that usually
-            takes a middleware plus an interceptor, middleware here wraps{' '}
-            <code>next()</code> and sees both halves.
+            <code>error</code>, unmatched paths included. Middleware wraps{' '}
+            <code>next()</code>, so one class sees both halves.
             {plaintext?.loggingPct != null && (
               <>
                 {' '}
-                It is not free and the benchmark gives it its own row:{' '}
+                It has its own benchmark row:{' '}
                 <b>{decimal(plaintext.loggingPct, 1)}%</b> of the baseline with
                 it on against <b>{decimal(plaintext.focusPct, 1)}%</b> with it
                 off.
@@ -122,8 +120,8 @@ export const Features = (): React.JSX.Element => {
           <Feature icon={PATHS.layers} title="Bun-native all the way down">
             No <code>express</code>, no <code>ws</code>, no <code>ioredis</code>
             , no <code>pg</code>, no <code>sharp</code>, no <code>dotenv</code>.
-            Routing is <code>Bun.serve</code>&apos;s own router - path params
-            and per-method dispatch in Zig, not a JavaScript router.
+            Routing is <code>Bun.serve</code>&apos;s own router: path params and
+            per-method dispatch in Zig.
             <Group gap={5} mt="xs">
               {BUN_APIS.map((api) => (
                 <Code key={api}>{api}</Code>
@@ -141,14 +139,13 @@ export const Features = (): React.JSX.Element => {
           <Feature icon={PATHS.flask} title="Tests against a real server">
             <code>createTestApp</code> replaces providers in place;{' '}
             <code>createTestServer</code> boots a real <code>Bun.serve</code> on
-            port 0. No mocked HTTP layer, because the routing being tested is
-            Bun&apos;s.
+            port 0. The routing under test is Bun&apos;s own.
           </Feature>
         </SimpleGrid>
 
         <Text size="sm" c="dimmed">
-          {site.packages.length} packages, deliberately few - merging is nearly
-          free because ESM tree-shaking drops what is not imported.
+          {site.packages.length} packages. ESM tree-shaking drops what is not
+          imported, so importing one costs nothing for the rest.
         </Text>
       </Stack>
     </Container>

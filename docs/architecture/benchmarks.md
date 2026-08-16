@@ -20,12 +20,12 @@ Three causes, in order of cost:
 - **`response.clone().text()` on every JSON response**, and `req.clone().text()` on
   every JSON request body. Two clone-and-buffer passes over every payload, on the
   hot path, to fill fields most responses never need read. Both are now **off by
-  default** - which is the right default for privacy and log volume independently of
+  default**, correct for privacy and log volume independently of
   speed, since the response body is also the field most likely to carry a secret.
 - **`new URL(req.url)` per request**, parsing scheme, host, port, query and hash to
   reach a pathname. Replaced with an `indexOf` slice; the query string is parsed
   only when there is one.
-- What remains is `JSON.stringify` plus a `write` per line, which is the irreducible
+- What remains is `JSON.stringify` plus a `write` per line, the irreducible
   price of logging and is why `dunx-logging` is its own subject rather than folded
   into the framework's number.
 
@@ -49,14 +49,16 @@ single largest cost in production, and nobody would have known without a harness
 that compares against the floor. `Bun.serve` as a subject is what made the
 regression legible - a 9.6% row is impossible to rationalise.
 
-**The load generator is native, and that was measured rather than assumed.** The
-harness supports two: [oha](https://github.com/hatoo/oha) (Rust, via `bun run
-setup`) and a fallback driver written on Bun's `fetch` across worker threads. Against
-the same raw `Bun.serve` process at 64 connections, oha extracts **135k req/s** and
-the JavaScript driver plateaus at **80k**, collapsing to **23k** at 256 connections
-as thirty worker threads contend on Bun's connection pool. The JS driver would have
-understated every Bun subject by roughly 40% and compressed the whole ranking. This
-is "native, not a JavaScript reimplementation" holding in a place where it
+**The load generator is native, and that was measured rather than assumed.**
+The harness supports two: [oha](https://github.com/hatoo/oha) (Rust, via `bun
+run setup`) and a fallback driver written on Bun's `fetch` across worker
+threads. Against the same raw `Bun.serve` process at 64 connections, oha
+extracts **135k req/s** and the JavaScript driver plateaus at **80k**,
+collapsing to **23k** at 256 connections as thirty worker threads contend on
+Bun's connection pool. The JS driver would have understated every Bun subject
+by roughly 40% and compressed the whole ranking.
+
+This is "native over JavaScript reimplementation" holding in a place where it
 is easy to check: `oxc-parser` over a JS AST library is the same call.
 
 **oha has headroom over the fastest subject, and that was checked too.** One
@@ -65,11 +67,11 @@ driven by four oha instances give **~385k req/s in total**. A generator with 3x
 headroom is not what the numbers are measuring. Without this check the whole table
 would be unfalsifiable.
 
-**`bombardier` and `wrk` are deliberately unsupported.** Each is one adapter next to
+**`bombardier` and `wrk` are unsupported.** Each is one adapter next to
 `src/loadgen/oha.ts`, but an untested output parser producing plausible-looking wrong
 numbers is worse than an honest "not supported".
 
-**The `Bun.serve` baseline uses route handlers, not static `Response` objects.**
+**The `Bun.serve` baseline uses route handlers rather than static `Response` objects.**
 `Bun.serve({ routes })` accepts a `Response` instance and serves it from a
 precomputed buffer, which beats any framework for reasons unrelated to frameworks.
 Using it would have inflated the ceiling `@dunx/http` is measured against.
@@ -80,7 +82,7 @@ which ship faster compiled validators. Holding the validator constant is what ma
 understates Fastify and Elysia, and the JSON report records each subject's validator
 so the handicap is visible rather than implied.
 
-**Latency histograms, not reservoir sampling.** The fallback driver buckets latencies
+**Latency histograms in place of reservoir sampling.** The fallback driver buckets latencies
 at 1 µs up to 100 ms and merges `Uint32Array`s across workers. The alternative -
 sampling a subset - needs an RNG, and a sampled p99 is a p99 with an error bar nobody
 reads. It also keeps `Math.random` out of a number that matters, per the `@arkv/rng`
@@ -95,7 +97,7 @@ What the harness found, in one line each:
   per-route handler code ahead of time.
 - It **boots in ~53 ms against raw `Bun.serve`'s ~27 ms** - the compiler's oxc parse
   plus eager DI resolution and route discovery. That is the trade this architecture
-  makes on purpose: paid once at boot, never per request. It is a real cost on a
+  makes knowingly: paid once at boot, never per request. It is a real cost on a
   short-lived process.
 - **Bun is worth ~2.3x on its own.** The same Hono app scores 101,667 req/s on
   `Bun.serve` and 43,706 on `node:http`, a larger gap than any two frameworks on the
@@ -119,22 +121,24 @@ Plaintext and validate are median req/s, deviations under 3% except where noted,
 | **Spring Boot**   | JVM     |    46,956 |   31,394 | 1,276.5 ms |
 | **Django**        | Python  |     4,387 |    3,882 |   134.2 ms |
 
-Reading it correctly is the whole point of having added these rows.
+These rows exist to be read that way.
 
 **`@dunx/http` came out 0.4% above raw `Bun.serve` on plaintext.** That is not a
 framework beating the API it calls; it is noise, at deviations of 1.6% and 1.4%. The
-harness has said "a figure at or above 100% is noise, not a win" since before these
+harness has called "a figure at or above 100%" noise since before these
 subjects existed, and this is that rule earning its place.
 
-**Every subject is one process on one thread.** For Bun and Node that is a fact about
-the runtime. For Go, tokio and Tomcat it is a decision the harness imposes -
-`GOMAXPROCS(1)`, a `current_thread` runtime, `tomcat.threads.max=1`. Lift it and
-`net/http` goes to ~230,000 and Axum to ~503,000 at the same 64 connections, while
-neither Bun subject can move at all. **These rows flatter Bun by exactly the factor
-the reader is not shown**, which the bench README states on the row itself. If the
-cross-language rows are ever put on the landing page rather than the benchmarks page,
-that caveat has to travel with them - without it the chart says something about Go
-and Rust that is not true.
+**Every subject is one process on one thread.** For Bun and Node that is a fact
+about the runtime. For Go, tokio and Tomcat it is a decision the harness
+imposes - `GOMAXPROCS(1)`, a `current_thread` runtime, `tomcat.threads.max=1`.
+Lift it and `net/http` goes to ~230,000 and Axum to ~503,000 at the same 64
+connections, while neither Bun subject can move at all. **These rows flatter
+Bun by exactly the factor the reader is not shown**, which the bench README
+states on the row itself.
+
+If the cross-language rows are ever put on the landing page rather than the
+benchmarks page, that caveat has to travel with them - without it the chart
+says something about Go and Rust that is not true.
 
 Axum being _ahead_ of dunx on `validate` while behind on plaintext is the honest
 shape of it: pinned to one thread, Bun's HTTP core is competitive with tokio at

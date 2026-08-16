@@ -24,8 +24,7 @@ resolve it. That is the boundary, and everything else on this page follows from 
 The decorator writes its options onto the class as a
 `Symbol.for('dunx.module')` property and returns the class. The class is never
 instantiated. It has no constructor to inject into, no lifecycle hooks, and no
-runtime behaviour at all: it exists so that a module has a name, which is what
-error messages use.
+runtime behaviour at all. It exists to give a module a name for error messages.
 
 A class handed to `AppFactory.create` or to `imports` without the decorator is a
 boot error:
@@ -37,10 +36,9 @@ or import a configured one from a static factory such as UsersModule.forRoot().
 
 Options are read with `Object.hasOwn`, so **subclassing a module does not inherit
 its bindings**. `class TestUsersModule extends UsersModule {}` throws the message
-above rather than quietly registering `UsersModule`'s providers. Note that this is
-the opposite of the rule constructor dependencies use, where a subclass
-deliberately does inherit; the reasoning for both is in
-[Providers](./03-providers.md).
+above rather than quietly registering `UsersModule`'s providers. Constructor
+dependencies follow the opposite rule, where a subclass does inherit;
+[Providers](./03-providers.md) covers both.
 
 ## The five lists
 
@@ -56,8 +54,8 @@ plus one flag, `global: true`, which publishes this module's `exports` app-wide.
 
 `controllers` and `providers` are registered **identically**. Core constructs both
 the same way; the split exists so an HTTP adapter can ask which instances to scan.
-A class in `controllers` that declares no routes is a boot error telling you to
-move it to `providers`, which is the only behavioural consequence.
+The only behavioural consequence: a class in `controllers` that declares no
+routes is a boot error telling you to move it to `providers`.
 
 An entry in either list is a bare class, which binds it to itself, or a
 `Registration` from `provide()`. See [Providers](./03-providers.md) for the shapes
@@ -74,9 +72,9 @@ For a provider declared by module `M`, asking for a token:
 5. Otherwise it is a boot error, and the message names the fix.
 
 **Local shadows imported.** If `M` declares a token an import also exports, `M`'s
-binding wins. That is per-module rebinding, and it is the reason the scope boundary
-exists at all: a `Clock` bound one way in billing and another way in reporting is two
-lines, not two tokens.
+binding wins. This per-module rebinding is why the scope boundary exists: a
+`Clock` bound one way in billing and another way in reporting costs two lines and
+one token.
 
 Visibility is flattened **once, at boot**, into one map per module. An import chain is
 never walked per lookup, so resolution stays the single `Map.get` it was before scopes
@@ -86,11 +84,10 @@ in a median 1.7 ms.
 ## `exports` is the public surface
 
 **Absent means nothing is exported.** A module with providers and no `exports` is
-fully private. That is not a default to work around; it is what makes the boundary
-worth having.
+fully private.
 
-`exports` accepts a token or a **module reference**. A module reference re-exports
-whatever that module exports, which is what makes a facade work:
+`exports` accepts a token or a **module reference**. A module reference
+re-exports whatever that module exports, which is how a facade works:
 
 ```ts
 @Module({
@@ -124,9 +121,10 @@ with no import needed. Its private providers stay private.
 export class ClockModule {}
 ```
 
-It is a **field, not a `@Global()` decorator**. A `DynamicModule` would need the field
-anyway, so a decorator would be a second spelling for one idea. `ConfigModule.forRoot`
-sets it, because configuration is the one thing every module reads.
+A **field**, with no `@Global()` decorator beside it. A `DynamicModule` would
+need the field anyway, so a decorator would be a second spelling for one idea.
+`ConfigModule.forRoot` sets it, configuration being the one thing every module
+reads.
 
 Global is the weakest source: an import beats it, and a local declaration beats both.
 
@@ -171,7 +169,7 @@ importer's routes. Middleware that really is app-wide stays app-wide, in
 `HttpFactory.create(root, { middleware })`.
 
 One field rather than `middleware` plus `guards`, because a guard here is middleware
-that throws. [Middleware and guards](./07-middleware-and-guards.md) has the full chain.
+that throws. [Middleware and guards](./08-middleware-and-guards.md) has the full chain.
 
 ## Two modules binding one token
 
@@ -231,8 +229,8 @@ two modules both import `SharedModule`, gives one scope that both see. A cycle i
 the import graph terminates instead of recursing, and is legal - a module cycle is
 not a provider cycle, and only the second is an error.
 
-**Deduplication is per reference, not per module identity.** A bare class is one
-reference however many modules import it, and the same `DynamicModule` _object_
+**Deduplication is per reference rather than per module identity.** A bare class
+is one reference however many modules import it, and the same `DynamicModule` _object_
 imported twice is likewise one reference. Two _different_ configurations of the
 same module are two objects, and each gets **its own scope**:
 
@@ -246,18 +244,17 @@ same module are two objects, and each gets **its own scope**:
 class Root {}
 ```
 
-Two scopes, two `Options` bindings, two `Store` instances - which is what makes
-configuring one module twice for two consumers possible at all. Under the flat
-container it was a duplicate-binding error. The importer above sees `Store` exported
-from both, so it is warned that the last one wins:
+Two scopes, two `Options` bindings, two `Store` instances. Under the flat
+container this was a duplicate-binding error. The importer above sees `Store`
+exported from both, so it is warned that the last one wins:
 
 ```
 Module "Root" imports Store from both "StoreModule" and "StoreModule". The last
 import wins, so these are two separate instances. Import one, or declare it here.
 ```
 
-Two configurations meant for two different consumers should be imported by those
-consumers, not by one module that can only see one of them.
+Import each configuration from the consumer that needs it. One module importing
+both can only see one of them.
 
 **A `DynamicModule` unions its options with its own class's decorator.** If
 `Root.forRoot()` returns `{ module: Root, providers: [...] }` and `Root` is also
@@ -337,9 +334,8 @@ export class MailerModule {
 export class AppModule {}
 ```
 
-`exports: [Mailer]` is not optional decoration. `MailerOptions` stays private, which
-is right - an importer has no business resolving another module's options - and
-`Mailer` is the whole point of importing it.
+`exports: [Mailer]` is required for an importer to resolve it. `MailerOptions`
+stays private; an importer has no business resolving another module's options.
 
 The `module` field is the identity. It is what error messages name and what lets
 traversal tell two configurations of one module apart. Registrations from a
@@ -425,8 +421,8 @@ The `useFactory` may be `async`. By the time any repository's constructor runs,
 the connection is open and its options applied. That guarantee is what removes the
 second mechanism.
 
-One shipped variant takes an extra first argument, and the reason is worth knowing
-if you write your own:
+One shipped variant takes an extra first argument. Check it before writing your
+own:
 
 ```ts
 DbModule.forRootAsync(SyncDatabase, {
@@ -495,7 +491,7 @@ export class AppModule {}
 
 Four things to take from it.
 
-**One validation function, not a schema DSL.** `validate` receives the raw source
+**One validation function in place of a schema DSL.** `validate` receives the raw source
 and returns the shaped, typed object. Whatever it throws is what boot fails with,
 so throw something whose message names the wrong keys. zod is
 `validate: (env) => schema.parse(env)`. A hand-written function works identically
@@ -521,11 +517,13 @@ export class AppConfigService extends ConfigService<AppConfig> {}
 
 Without it, `inject: [ConfigService]` resolves to
 `ConfigService<Record<string, unknown>>` and a factory annotating
-`ConfigService<AppConfig>` is rejected, because parameters are contravariant and
-the token carries no type argument to recover. A subclass is a distinct runtime
-value, so it is both a precise token and a usable constructor annotation.
-`ConfigService` stays bound to the same instance through an alias provider, so
-library code that only knows the base contract still injects.
+`ConfigService<AppConfig>` is rejected: parameters are contravariant and the
+token carries no type argument to recover.
+
+A subclass is a distinct runtime value, so it serves as both a precise token and
+a usable constructor annotation. `ConfigService` stays bound to the same instance
+through an alias provider, so library code that knows only the base contract
+still injects.
 
 There is no `isGlobal` to pass, because `ConfigModule.forRoot` already sets
 `global: true` and exports both `ConfigService` and whatever `as` names.
@@ -543,10 +541,10 @@ in order to bind `PubSub` and, unless you turned it off,
 application that imported nothing.
 
 The wrapper is invisible to the boundary. Global middleware, `@UseGuards` classes
-and an error filter are all resolved as **your** root sees them, not as the wrapper
-does, so listing a guard in `HttpFactory.create` never obliges your root to re-export
-it. Anything named there is found in the one module that declares it, and two modules
-declaring it is the error - which is exactly what `app.get()` does.
+and an error filter all resolve as **your** root sees them, so listing a guard in
+`HttpFactory.create` never obliges your root to re-export it. Anything named
+there is found in the one module that declares it, and two modules declaring it
+is an error. `app.get()` resolves the same way.
 
 The same technique is available to you. `OpenApiModule.forRoot({ root: AppModule, ... })`
 wraps the root it documents, so `create()` is still handed one module reference and

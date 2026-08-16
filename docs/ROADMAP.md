@@ -166,7 +166,7 @@ rewritten to match; the full measurement is in
 to _pin ioredis 5_ rested on three claims and re-measurement broke all three: ioredis
 6.0.0 still ships `built/utils`, both of bullmq's builds import it, and the CJS build
 is the one Bun actually runs. No pin. The advice is withdrawn from
-`docs/guide/14-queues.md` and `bun-apis.md`, where it had been published to users.
+`docs/guide/15-queues.md` and `bun-apis.md`, where it had been published to users.
 The companion finding - `/queue` cannot be imported without ioredis while the manifest
 calls it optional - is not a contradiction once stated properly: `ioredis` is optional
 in exactly the sense `bullmq` is, needed if and only if `/queue` is, and there is no
@@ -278,7 +278,7 @@ leaves a request in flight on purpose, which fails **every** run without the dra
 never log. The request entry is unchanged either way - the five correlation fields go
 onto it directly instead of being read back out of the store - so what is traded is
 only the lines _between_, which then carry no `requestId`. Measured delta in
-`docs/guide/12-logging.md`.
+`docs/guide/13-logging.md`.
 
 **Two bullmq connection bugs, found while chasing the SIGTERM hang and fixed.**
 bullmq rebuilds a connection with `new (this.raw.constructor)(this.raw.url)` for a

@@ -17,7 +17,7 @@ bun add @dunx/auth better-auth
 
 `drizzle-orm` **is** an optional peer, needed only by `@dunx/auth/drizzle` - which is
 its own subpath precisely so that a Prisma, Kysely or MongoDB app never loads it.
-`dist/index.js` contains no reference to drizzle, which is the test a peer has to
+`dist/index.js` contains no reference to drizzle, the test a peer has to
 pass to be called optional.
 
 There is no dunx sign-in flow, no dunx session table, no dunx password reset and no
@@ -136,7 +136,7 @@ plugin's `Authorization: Bearer <token>` both work, and then reads the metadata
 `@dunx/http` already had:
 
 - **`@Public()`** - skipped outright. No session lookup, no rejection, no role check.
-  That is what makes the guard safe to install globally: `AuthHandler` is `@Public()`,
+  The guard is safe to install globally for that reason: `AuthHandler` is `@Public()`,
   and a sign-in endpoint that required a session could never be reached.
 - **`@Roles('admin', 'editor')`** - a 403 unless the caller holds one of them.
   `@dunx/openapi` already reads the same key for its security schemes.
@@ -175,7 +175,7 @@ implements natively, and it is already how `@dunx/core` carries request state.
 It is a **second** store rather than a key in `RequestContext`, because that one is
 the log record - every field in it is serialized into every line the request writes,
 so a session object there would be noise on each entry and a redaction hazard in the
-ones that matter. What does go there is `userId`, which is why every log line inside a
+ones that matter. `userId` does go there, so every log line inside a
 guarded request is already correlated to the user.
 
 ### Plugin types
@@ -225,7 +225,7 @@ AuthModule.forRootAsync({
 Sessions, verification values and rate-limit counters then live in Redis instead of
 costing a database round trip per request.
 
-All five methods are implemented, not the three that are mandatory. `getAndDelete` and
+All five methods are implemented, beyond the three that are mandatory. `getAndDelete` and
 `increment` are optional in better-auth's interface because most clients cannot do
 them atomically - `Bun.RedisClient` can, through `GETDEL` and `INCR`. Without them
 better-auth falls back to read-then-delete for single-use credentials, which is a

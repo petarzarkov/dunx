@@ -46,27 +46,25 @@ router, and writing one is a standing prohibition rather than a backlog item.
 
 Four consequences you will actually notice.
 
-**An unmatched method is a 404, not a 405.** That is Bun's native behaviour and
-dunx does not paper over it.
+**An unmatched method returns 404 where most frameworks return 405.** Bun's
+native behaviour, unmodified.
 
 **Paths are matched exactly, so a trailing slash is a different path.** `GET /t`
 is a 200 and `GET /t/` is a 404, and the same goes for `/t/sub/` and `POST /t/`.
-Most frameworks normalise it, so this is the one thing that breaks a
-client ported from any of them - and it breaks as a 404 that reads like a missing
-route rather than like a slash.
+Most frameworks normalise this, so it is the common break in a ported client, and
+it breaks as a 404 that reads like a missing route.
 
-dunx will not normalise it. The declared side already is: `@Get('/')` inside
-`@Controller('t')` is `/t`, never `/t/`, so there is no case where both spellings
-are live at once. What is left is the inbound URL, and the only place dunx could
-touch that is the `fetch` fallback below - which runs after Bun has matched
-nothing and therefore has no patterns to try `/t/7/` against. Matching it there
-would mean shipping a second, JavaScript router beside Bun's, which is the one
-thing this package will not do.
+The declared side is already normalised: `@Get('/')` inside `@Controller('t')` is
+`/t`, never `/t/`, so both spellings are never live at once. Route discovery
+strips it too, so `@Get('sub/')` is `/t/sub`.
 
-So: send the path without the trailing slash. Declaring the other spelling is not
-an option either - route discovery strips it, so `@Get('sub/')` is `/t/sub` - and
-for a caller you do not control the normalisation belongs in front of dunx, where
-a reverse-proxy rewrite is one line.
+Send the path without the trailing slash. For a caller you do not control, put
+the normalisation in front of dunx, where a reverse-proxy rewrite is one line.
+
+The inbound URL is the only remaining half, and dunx could only touch it in the
+`fetch` fallback below. That runs after Bun has matched nothing, so it holds no
+patterns to try `/t/7/` against. Matching there would mean a second JavaScript
+router beside Bun's.
 
 **CORS preflight cannot be inferred.** Since a method miss is a native 404, there
 is no fall-through for an `OPTIONS` request to land in. `enableCors()` therefore
@@ -85,12 +83,14 @@ LegacyController.show. Bun would keep only one of them.
 The check runs twice: at `create()` on the discovered paths, and again at
 `listen()` on the final prefixed ones.
 
-There is exactly one `fetch` handler in a dunx application, and it is not a
-router. Bun answers an unmatched path itself, so nothing in the middleware chain
-would ever see a 404, which makes it invisible to request logging, metrics and
-tracing. `listen()` installs a fallback that runs the global middleware and
-returns `{"error":"NOT_FOUND","status":404}`. It runs only after Bun has decided
-that nothing matched, so Bun still does every bit of the matching.
+A dunx application has exactly one `fetch` handler, and it does no routing. Bun
+answers an unmatched path itself, so without the fallback nothing in the
+middleware chain would see a 404, leaving it invisible to request logging,
+metrics and tracing.
+
+`listen()` installs a fallback that runs the global middleware and returns
+`{"error":"NOT_FOUND","status":404}`. It runs only after Bun has decided nothing
+matched, so Bun still does every bit of the matching.
 
 ## How routes are found
 
@@ -143,12 +143,13 @@ The controller prefix and the method path are joined and normalised: duplicate
 slashes collapse and a trailing slash is stripped, so `@Controller('users/')` plus
 `@Get('/')` is `/users`.
 
-The path may also be a **thunk** (`RoutePath` is `string | (() => string)`), read at
-route discovery rather than at decoration. That exists for one situation: a path that
-comes out of validated configuration is not known when a decorator's arguments are
-evaluated, but discovery runs after every provider has settled, so it is known by
-then. `OpenApiModule.forRootAsync` is the caller - it mounts its page where
-`ConfigService` says. A thunk has to answer the same path every time it is called.
+The path may also be a **thunk** (`RoutePath` is `string | (() => string)`), read
+at route discovery rather than at decoration.
+
+It covers one situation: a path coming out of validated configuration is unknown
+when a decorator's arguments are evaluated, and discovery runs after every
+provider has settled. `OpenApiModule.forRootAsync` is the caller, mounting its
+page where `ConfigService` says. A thunk must answer the same path every call.
 
 There is no `@Options` and no `@Head`. `HttpMethod` is
 `'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'`, and `OPTIONS` is reserved for the
@@ -211,20 +212,21 @@ export interface RouteSchemas {
 | `input.params` | `req.params`, then validated             | `params` declared |
 
 Validation targets the **Standard Schema** spec (`~standard.validate`), restated
-in `@dunx/http`'s own types rather than depended on, because the spec is an
-interface and `@standard-schema/spec` ships nothing but declarations. So zod 4,
-Valibot and ArkType all drop straight in, and `@dunx/http` keeps zero
-dependencies. Anything with a `~standard` property qualifies, including a
+in `@dunx/http`'s own types rather than depended on: the spec is an interface and
+`@standard-schema/spec` ships nothing but declarations.
+
+zod 4, Valibot and ArkType therefore drop straight in while `@dunx/http` keeps
+zero dependencies. Anything with a `~standard` property qualifies, including a
 hand-written object and a bridged compiled checker.
 
-A `~standard.validate` may return a promise, and the reader handles that, but none
-of zod, Valibot or ArkType ever does. That is measured, and it is what lets a
-`query`-only or `params`-only route validate without allocating a promise at all.
+A `~standard.validate` may return a promise and the reader handles that, though
+none of zod, Valibot or ArkType ever does. Measured, and it lets a `query`-only
+or `params`-only route validate without allocating a promise.
 
 ### Why `Input<typeof opts>` has to be written out
 
-This is the one piece of ceremony dunx could not remove, and the reason is a
-TypeScript limit rather than a design choice.
+A TypeScript limit rather than a design choice, and the one piece of ceremony
+dunx could not remove.
 
 A standard method decorator is
 `(value: V, ctx: ClassMethodDecoratorContext) => V | void`. It can _reject_ a
@@ -318,12 +320,11 @@ and `issues`, if you want to remap it in your own error mapper.
 | `undefined` or `null` | **204**, no body                           |
 | anything else         | `Response.json(value)` at the status below |
 
-There is no `res` and nothing to forget to send. A `Response` returned directly is
-never second-guessed, which is what you reach for to stream, to redirect, or to
-set an unusual content type.
+There is no `res` and nothing to forget to send. Return a `Response` directly to
+stream, to redirect, or to set an unusual content type; it is never
+second-guessed.
 
-`undefined` and `null` becoming 204 rather than `Response.json(null)` is
-deliberate: a body claiming to be no body is worse than no body.
+`undefined` and `null` become 204 rather than `Response.json(null)`.
 
 A handler may be synchronous or return a promise. Both work, and the synchronous
 case is genuinely faster; see [The fast path](#the-fast-path).
@@ -347,8 +348,8 @@ const createNote = {
 const enqueue = { body: Job, status: HttpStatusCode.ACCEPTED } as const;
 ```
 
-`HttpStatusCode` is a frozen object plus an indexed-access union, not an enum, so
-`HttpStatusCode.CREATED` is both a value and a narrow type and it erases cleanly.
+`HttpStatusCode` is a frozen object plus an indexed-access union rather than an
+enum, so `HttpStatusCode.CREATED` is both a value and a narrow type, and erases.
 `HttpStatusName` gives you the names.
 
 A thrown `HttpError` still goes through the error mapper, so `status` only sets
@@ -385,12 +386,11 @@ The last line is the one that matters for security. An unrecognised throw is a
 500 with a fixed body. Your message, your stack and your database error text do
 not reach the client.
 
-The stack does reach **the log**, and it goes through the same `Logger` everything
-else does - `@arkv/logger` in a service that imported `@dunx/infra/logger`, core's
-`ConsoleLogger` otherwise. So it is one entry, one line, sanitized like the rest.
-It used to be a `console.error`, which in a JSON-only service meant one structured
-line plus a multi-line Bun-formatted dump that a collector reads as several broken
-records. An `HttpError` is not logged by the mapper at all: its status is the whole
+The stack does reach **the log**, through the same `Logger` everything else uses:
+`@arkv/logger` in a service that imported `@dunx/infra/logger`, core's
+`ConsoleLogger` otherwise. One entry, one line, sanitized like the rest.
+
+An `HttpError` is not logged by the mapper at all. Its status is the whole
 record, and request logging has already written the 4xx line.
 
 Replace the whole mapper with `HttpOptions.onError`:
@@ -466,13 +466,12 @@ middleware chain are folded into one closure per route when the server binds, so
 this call could not take effect.
 ```
 
-That is a deliberate trade. The alternative is a silent no-op, which is a worse
-failure mode than an error.
+A trade against the alternative, which is a silent no-op.
 
 `setGlobalPrefix` moves controller routes only. A WebSocket gateway path is the
-exact path it declared. And the collision check re-runs on the prefixed paths,
-though a uniform prefix cannot introduce a collision the unprefixed paths did not
-already have, which is why the early check at `create()` is complete.
+exact path it declared. The collision check re-runs on the prefixed paths, though
+a uniform prefix cannot introduce a collision the unprefixed paths lacked, so the
+early check at `create()` is already complete.
 
 `set` is typed against the `AppSettings` interface rather than being a string bag,
 so a typo is a compile error rather than a setting that silently never applies.
@@ -482,9 +481,9 @@ rewrites the header, because a direct client can send whatever it likes.
 
 ## Middleware, guards and metadata
 
-One extension point, not five. Comparable frameworks have middleware, guards, interceptors, pipes
-and filters; dunx has a `Middleware` interface, and the other four are things you
-already have:
+One extension point in place of five. Comparable frameworks have middleware,
+guards, interceptors, pipes and filters; dunx has a `Middleware` interface, and
+the other four fall out of it:
 
 ```ts
 export interface Middleware {
@@ -501,9 +500,9 @@ iteration. Order is global outermost, then class-level `@UseGuards`, then
 method-level, then the handler.
 
 `ctx` names the route and carries whatever its decorators declared, resolved once
-at discovery with the handler's metadata merged over the class's. So
-`ctx.get(key)` is a `Map` lookup, not a prototype walk, and a method-level
-`@Public()` overrides a class-level `@Roles()`:
+at discovery with the handler's metadata merged over the class's. `ctx.get(key)`
+is therefore a `Map` lookup, and a method-level `@Public()` overrides a
+class-level `@Roles()`:
 
 ```ts
 import {
@@ -572,35 +571,35 @@ A route with **no middleware and no CORS** is dispatched by a handler in which
 nothing is `async`. It returns a `Response` rather than a `Promise<Response>`
 wherever it has nothing to wait for, and Bun accepts either.
 
-This is not a micro-optimisation footnote; it is most of what closed the gap to
-Elysia. The general path is
+This is most of what closed the gap to Elysia. The general path is
 `async (req) => toResponse(await handler(await read(req)))` inside an `async`
-try/catch, which is four awaits across two async frames on values that are usually
-not thenable at all. Emitting the synchronous shape was worth about 6 points of
-raw `Bun.serve` throughput on the `params` scenario, and a further 5 on `validate`
-once it was extended to cover routes that read input.
+try/catch: four awaits across two async frames, on values that are usually not
+thenable.
 
-A route with no declared schemas awaits nothing. A route with only `query` or
-`params` awaits nothing either, because every Standard Schema validator worth
-using is synchronous. Even a `body` route, which really does have to wait for
-`req.json()`, pays one promise link instead of six async frames. A handler or a
-validator that _does_ return a promise still works: it is adopted rather than
-awaited by a wrapper.
+Emitting the synchronous shape was worth about 6 points of raw `Bun.serve`
+throughput on the `params` scenario, and a further 5 on `validate` once it
+covered routes that read input.
 
-**Adding middleware opts a route back into the async path**, because middleware is
-`async` by contract. That includes the request logging middleware, which is on by
-default. Measured, a bare `next()`-only middleware costs 0.05 µs, and the 6 points
-the direct path is worth on `params` do not reappear as a cost, because the request
-is already paying for everything else. So this is worth knowing about and is not
-worth contorting an application over.
+A route with no declared schemas awaits nothing. Nor does one with only `query`
+or `params`, every Standard Schema validator worth using being synchronous. Even
+a `body` route, which must wait for `req.json()`, pays one promise link in place
+of six async frames. A handler or validator returning a promise still works and
+is adopted rather than awaited.
 
-What remains of dunx's own per-request cost is dispatch, not validation. A dunx
-route whose handler does its own parsing costs about 1.17 µs over the identical
-raw `Bun.serve` handler, and the declared-input reader now adds nothing measurable
-on top of doing the same work by hand. Removing that last microsecond means
-generating per-route source and `eval`-ing it, which is Elysia's approach; at
-1.3 µs on a request whose parse alone is 2.9 µs, it is not the next thing worth
-doing.
+**Adding middleware opts a route back into the async path**, middleware being
+`async` by contract. That includes request logging, which is on by default. A
+bare `next()`-only middleware measures 0.05 µs, and the 6 points the direct path
+wins on `params` do not reappear as a cost, since the request is already paying
+for everything else.
+
+What remains of dunx's own per-request cost is dispatch. A dunx route whose
+handler does its own parsing costs about 1.17 µs over the identical raw
+`Bun.serve` handler, and the declared-input reader adds nothing measurable on top
+of doing the same work by hand.
+
+Removing that last microsecond means generating per-route source and `eval`-ing
+it, which is Elysia's approach. At 1.3 µs on a request whose parse alone is
+2.9 µs, it is not the next thing worth doing.
 
 ## Request logging
 

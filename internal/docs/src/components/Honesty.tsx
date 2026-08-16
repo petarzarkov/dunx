@@ -39,18 +39,18 @@ const losses = (): Loss[] => {
   if (plaintext?.loggingPct != null) {
     list.push({
       title: 'Request logging is not free',
-      body: `The same app reaches ${decimal(plaintext.loggingPct, 1)}% of the baseline with logging on against ${decimal(plaintext.focusPct, 1)}% with it off - one JSON.stringify and one write per request, inside an AsyncLocalStorage scope. It is on by default because an app that logs nothing is the worse default. One flag removes it.`,
+      body: `The same app reaches ${decimal(plaintext.loggingPct, 1)}% of the baseline with logging on against ${decimal(plaintext.focusPct, 1)}% with it off - one JSON.stringify and one write per request, inside an AsyncLocalStorage scope. It is on by default; requestLogging: false removes it.`,
     });
   }
 
   list.push({
     title: 'Validation costs more than the validator',
-    body: 'Reading the body costs roughly three times as much as validating it - about 3 µs for req.json() against about 1 µs for zod. Switching validators moves the smaller number. That is worth knowing before optimising the wrong half.',
+    body: 'Reading the body costs roughly three times as much as validating it - about 3 µs for req.json() against about 1 µs for zod. Switching validators moves the smaller number.',
   });
 
   list.push({
     title: 'The transform has to be preloaded',
-    body: 'A class with constructor parameters and no recorded dependencies is a boot error naming the missing preload, not a silent undefined. That is deliberate, but it does mean one line of bunfig.toml stands between a fresh clone and a running app.',
+    body: 'A class with constructor parameters and no recorded dependencies fails at boot, naming the missing preload. One line of bunfig.toml stands between a fresh clone and a running app.',
   });
 
   return list;
@@ -65,10 +65,9 @@ export const Honesty = (): React.JSX.Element => (
         </Title>
         <Text c="dimmed" maw={640}>
           The benchmark publishes the standard deviation and the scenarios dunx
-          does not win, and so does this page. A figure at or above 100% of{' '}
-          <code>Bun.serve</code> is noise, not a win - <code>@dunx/http</code>{' '}
-          dispatches <i>through</i> it and cannot be faster than the API it
-          calls.
+          does not win, and so does this page. Treat any figure at or above 100%
+          of <code>Bun.serve</code> as noise: <code>@dunx/http</code> dispatches{' '}
+          <i>through</i> it and cannot outrun the API it calls.
         </Text>
       </Stack>
 

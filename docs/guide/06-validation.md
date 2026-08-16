@@ -31,10 +31,10 @@ No `await req.json()`, no `Response.json()`, no status: the body arrives parsed
 and validated, `input.body.name` is a `string`, and a POST answers 201. A request
 that fails the schema never reaches the handler.
 
-## Standard Schema is the contract, not zod
+## Standard Schema is the contract
 
 `@dunx/http` has **no validator dependency**. Its `peerDependencies` are
-`@dunx/core` and (optionally) `@types/bun`, and that is the whole list. What a
+`@dunx/core` and (optionally) `@types/bun`, and the list ends there. What a
 route's `body`, `query` and `params` accept is anything implementing
 [Standard Schema v1](https://standardschema.dev): an object carrying a
 `~standard` property.
@@ -98,8 +98,8 @@ export interface RouteSchemas {
 **Declaring a schema is what makes the matching field appear.** Omit `query` and
 the framework never parses a query string; omit `body` and it never reads the
 request stream. There is no "validate everything by default" mode and no global
-pipe to turn off, because there is nothing to turn off: an undeclared source is
-untouched code, not skipped code.
+pipe to turn off. An undeclared source is untouched code rather than skipped
+code.
 
 `response` is the exception that proves the rule, and the one key here the request
 path never reads:
@@ -111,13 +111,14 @@ export const oneUser = {
 } as const satisfies RouteSchemas;
 ```
 
-It is the same Standard Schema contract as the request side, so
-[`@dunx/openapi`](./09-openapi.md) hoists a named response schema into
-`components/schemas` exactly as it hoists a body. But it **documents the response;
-it does not enforce it.** Running a validation pass over every response body would
-be a per-request cost paid for a documentation feature, and the handler's own
-return type already checks the answer at compile time and for free. `response`
-does not appear in `Input<O>` either: nothing about it reaches the handler.
+The same Standard Schema contract as the request side, so
+[`@dunx/openapi`](./10-openapi.md) hoists a named response schema into
+`components/schemas` exactly as it hoists a body.
+
+It **documents the response and does not enforce it.** Validating every response
+body would be a per-request cost paid for a documentation feature, and the
+handler's own return type already checks the answer at compile time. `response`
+does not appear in `Input<O>`: nothing about it reaches the handler.
 
 Write the options object next to the schemas and hand the same value to both the
 decorator and the annotation:
@@ -139,7 +140,7 @@ export const listUsers = { query: ListUsers } as const satisfies RouteSchemas;
 `as const` is load bearing. Without it `{ body: CreateNote, status: 201 }` widens
 to `RouteSchemas` and `Input<typeof opts>` degrades to a bare `{ req }`, taking
 the type check with it. `satisfies RouteSchemas` checks the object without
-widening it, which is why the pair is written that way rather than with a type
+widening it, so the pair is written that way rather than with a type
 annotation.
 
 ### Path params
@@ -175,10 +176,12 @@ becomes a 400 rather than a surprise.
 
 The query string is sliced out of `req.url` by hand rather than through
 `new URL(req.url)`. Constructing a `URL` resolves scheme, host, port, path and
-fragment to hand back one `searchParams` object, and it measured at about
-1,040 ns of the roughly 1,520 ns a three-pair query route cost, which is more than
-the entire body reader. The fragment is still stripped, even though a client is not
-supposed to send one, so a hostile request target cannot change what a schema sees.
+fragment to hand back one `searchParams` object, measuring about 1,040 ns of the
+roughly 1,520 ns a three-pair query route cost. That is more than the entire body
+reader.
+
+The fragment is still stripped, though a client is not supposed to send one, so a
+hostile request target cannot change what a schema sees.
 
 ### Bodies
 
@@ -199,8 +202,8 @@ about to reject `undefined` with a better message anyway.
 ## Coercion
 
 Path params and query values arrive as **strings**, always. HTTP has no other
-representation for them. Coercion is the schema's job, not the framework's, and
-with zod it is one call:
+representation for them. Coercion belongs to the schema, and with zod it is one
+call:
 
 ```ts
 export const UserIndex = z.object({ id: z.coerce.number().int().min(1) });
@@ -248,9 +251,9 @@ unannotated parameter          -> TS7006: Parameter 'input' implicitly has an 'a
 annotated with the wrong type  -> TS1241 + TS1270, naming the mismatched property
 ```
 
-So the guarantee is a _check_, not an inference. Get the annotation wrong and the
-compiler names the property that does not line up; leave it off and `strict` mode
-rejects the implicit `any`. What it is never allowed to be is silently wrong.
+The guarantee is therefore a _check_ rather than an inference. Get the annotation
+wrong and the compiler names the property that does not line up; leave it off and
+`strict` mode rejects the implicit `any`. It is never silently wrong.
 
 The saving grace is that **no type is written twice**. `Input<O>` is a type-level
 function over the options object:
@@ -306,14 +309,13 @@ The message is whatever the validator produced, passed through unaltered: dunx
 does not rewrite, translate or truncate it, because the library that rejected the
 value is the one that knows why.
 
-Three things worth knowing about that shape:
+Three properties of that shape:
 
 - **`error` names the source.** `Invalid body`, `Invalid query` or
   `Invalid params`, so a caller can tell a bad payload from a bad page size.
 - **The issues survive into the response.** A caller cannot fix what it cannot
-  see. This is the one place the framework deliberately echoes detail about the
-  request back to the caller, on the reasoning that a 400 is by definition the
-  caller's own input.
+  see. This is the one place the framework echoes request detail back to the
+  caller, a 400 being by definition the caller's own input.
 - **`path` is flattened to dots**, and absent when the root itself failed.
   Standard Schema lets a vendor report a path as bare keys (zod) or as
   `{ key }` objects (Valibot); both are normalised here to a single string.
@@ -327,13 +329,13 @@ Two other failures are not validation failures and do not carry issues:
 application/json, application/x-www-form-urlencoded, multipart/form-data or text/*.`
 
 Replace all of it by passing `onError` to `HttpFactory.create`; see
-[Middleware and guards](./07-middleware-and-guards.md#the-error-mapper).
+[Middleware and guards](./08-middleware-and-guards.md#the-error-mapper).
 
 ## Vendor-specific features sit behind a vendor check
 
-Standard Schema **validates**. It deliberately says nothing about describing,
-serialising or converting a schema, so there is no vendor-neutral way to turn one
-into JSON Schema. `@dunx/openapi` needs exactly that, and resolves it with the one
+Standard Schema **validates**, and says nothing about describing, serialising or
+converting a schema, so there is no vendor-neutral way to turn one into JSON
+Schema. `@dunx/openapi` needs exactly that, and resolves it with the one
 piece of vendor information the interface does carry:
 
 ```ts
@@ -352,11 +354,12 @@ documented as permissive.
 ```
 
 Warnings are readable off `app.get(OpenApiExplorer).warnings` straight after
-`HttpFactory.create()`, so a degraded document is visible at boot rather than at
-the moment somebody notices an empty request body in the explorer. zod is an
-**optional** `peerDependency` of `@dunx/openapi`: a consumer on Valibot never
-loads it, and a consumer without it installed gets warnings rather than a
-module-resolution crash. Details in [OpenAPI](./09-openapi.md).
+`HttpFactory.create()`, so a degraded document shows up at boot rather than when
+somebody notices an empty request body in the explorer.
+
+zod is an **optional** `peerDependency` of `@dunx/openapi`. A consumer on Valibot
+never loads it, and a consumer without it installed gets warnings rather than a
+module-resolution crash. Details in [OpenAPI](./10-openapi.md).
 
 The rule generalises: validation stays library-agnostic because a standard exists;
 anything the standard does not cover is gated on `~standard.vendor` and degrades
@@ -382,7 +385,7 @@ the roughly 30% throughput drop between a JSON route and a validating one, 77% i
 `req.json()` and 23% is the validator. No framework can remove the parse, and no
 choice of validator affects it.
 
-Which is why there is no throughput argument for steering anyone off zod:
+There is no throughput argument for steering anyone off zod:
 
 | Validator                   |    costs | `~standard` |
 | --------------------------- | -------: | ----------- |
@@ -398,15 +401,18 @@ TypeBox's compiled checker is indistinguishable from not validating at all on a
 payload this size. Saving 0.9 µs on a 13 µs request is 7%, against giving up zod's
 ecosystem, error messages and `z.toJSONSchema`. Pick on API and error quality.
 
-The number that _was_ worth chasing was the framework's own. A route with a
-declared `body` used to go through six `async` frames, exactly one of which
+The framework's own overhead was the number worth chasing. A route with a
+declared `body` used to cross six `async` frames, exactly one of which
 (`req.json()`) ever had anything to wait for, and the reader's plumbing cost
-2.05 µs, nearly twice what zod itself cost. Rebuilding it to adopt promises rather
-than await them took the plumbing from 597 ns to 146 ns with a no-op schema, and a
-`params`-only route with a synchronous validator now reads and validates in 56 ns
-with no promise allocated at all. In the benchmark suite that moved the `validate`
-scenario from 84.0% of raw `Bun.serve` to over 92%, and put dunx ahead of Elysia
-on the one scenario where it used to be level.
+2.05 µs, nearly twice what zod itself cost.
+
+Rebuilding it to adopt promises rather than await them took the plumbing from
+597 ns to 146 ns with a no-op schema. A `params`-only route with a synchronous
+validator now reads and validates in 56 ns, allocating no promise.
+
+In the benchmark suite that moved the `validate` scenario from 84.0% of raw
+`Bun.serve` to over 92%, and put dunx ahead of Elysia on the one scenario where
+it used to be level.
 
 The full harness, its caveats and how to rerun it are in `internal/bench/README.md`.
 
@@ -415,9 +421,9 @@ The full harness, its caveats and how to rerun it are in `internal/bench/README.
 - **`as const` is not optional.** Drop it and the handler's `input` silently
   becomes `{ req }`. `satisfies RouteSchemas` is what catches a typo in a key
   name without re-widening the object.
-- **A `params` schema replaces `req.params` on `input`, not on `req`.**
+- **A `params` schema replaces `req.params` on `input` only.**
   `input.req.params` is still the raw string record.
-- **The framework validates input, not output.** A handler's return value is
+- **The framework validates input and never output.** A handler's return value is
   serialised as it is, `response` schemas included: they document the answer for
   `@dunx/openapi` and nothing checks them at runtime. If a response shape matters,
   the annotation on the handler is what enforces it.
@@ -430,4 +436,4 @@ The full harness, its caveats and how to rerun it are in `internal/bench/README.
   `req.clone().text()`, a second buffered copy of every payload. Turning both body
   options on costs roughly two thirds of the throughput on the `validate`
   scenario, and the request body is the field most likely to contain a password.
-  See [Middleware and guards](./07-middleware-and-guards.md#request-logging).
+  See [Middleware and guards](./08-middleware-and-guards.md#request-logging).

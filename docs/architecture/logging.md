@@ -13,8 +13,8 @@ Neither `NO_COLOR=1` nor `FORCE_COLOR=0` suppressed it.
 The cause is upstream and it is not an edge case. `@arkv/logger` picks the pretty
 formatter from `isDevelopment`, which defaults to `process.env.NODE_ENV !== 'production'`,
 and **nothing on the colour path asks whether the output is a terminal** - not the
-logger, not `ConsoleTransport`, not the formatter. So the zero-argument
-`LoggerModule.forRoot()` in a container with `NODE_ENV` unset hit it, not just an app
+logger, `ConsoleTransport` and the formatter alike. So the zero-argument
+`LoggerModule.forRoot()` in a container with `NODE_ENV` unset hit it, beyond just an app
 that passed `isDevelopment: true`.
 
 This split cleanly along the boundary CLAUDE.md already draws, so both halves were
@@ -53,7 +53,7 @@ both visible in one line:
 - The lookahead has no `}`, so the last value's colour span ran to end of line and
   swallowed the closing brace.
 
-The red `{` is the part worth recording, because the obvious explanation is wrong. It
+The red `{` is the part to record, the obvious explanation being wrong. It
 is not the terminal: **Bun wraps `console.error` output in red itself**, emitting
 `\u001b[0m\u001b[31m` before the line and `\u001b[0m` after. Every token the formatter
 colours overrides that wrapper; every character it leaves bare keeps it. So the fix is
@@ -74,16 +74,16 @@ The workspace was read end to end against the question that matters: is dunx doi
 something worse than a package the owner already maintains? Nothing to adopt came
 back, and the two standing candidates both died on inspection.
 
-| package           | in dunx                                                                                                                                                                                                                       |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@arkv/logger`    | Used, bound to core's `Logger` contract by `@dunx/infra/logger`.                                                                                                                                                              |
-| `@arkv/colors`    | Used, through the logger.                                                                                                                                                                                                     |
-| `@arkv/timezones` | First choice for any date or zone handling. No such need has arisen.                                                                                                                                                          |
-| `@arkv/rng`       | **Not used, deliberately.** It is WASM-backed, and dunx needs ids rather than statistics: `Bun.randomUUIDv7` and `crypto.randomUUID` are native and measured at 0.04 us, so adopting it would trade a native call for weight. |
-| `@arkv/shared`    | Not used. Fifteen runtime symbols; dunx has a need for none of them.                                                                                                                                                          |
+| package           | in dunx                                                                                                                                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@arkv/logger`    | Used, bound to core's `Logger` contract by `@dunx/infra/logger`.                                                                                                                                                |
+| `@arkv/colors`    | Used, through the logger.                                                                                                                                                                                       |
+| `@arkv/timezones` | First choice for any date or zone handling. No such need has arisen.                                                                                                                                            |
+| `@arkv/rng`       | **Not used.** It is WASM-backed, and dunx needs ids rather than statistics: `Bun.randomUUIDv7` and `crypto.randomUUID` are native and measured at 0.04 us, so adopting it would trade a native call for weight. |
+| `@arkv/shared`    | Not used. Fifteen runtime symbols; dunx has a need for none of them.                                                                                                                                            |
 
 **Backoff was the first candidate, and the premise was wrong.** It is implemented
-once in dunx, in the websocket relay's resubscribe, not twice - the queue does not
+once in dunx, in the websocket relay's resubscribe - the queue does not
 retry, bullmq does. And there is nothing upstream to share with: `@arkv/shared`'s
 `retry` takes a constant delay with no multiplier, jitter, cap or signal, and a
 workspace-wide grep for `backoff|jitter|exponential|circuit` returns nothing.
@@ -93,6 +93,6 @@ workspace-wide grep for `backoff|jitter|exponential|circuit` returns nothing.
 having zero dependencies is load-bearing, and `ConsoleLogger` not sanitizing is
 precisely the reason to swap in `@dunx/infra/logger`.
 
-Three fixes did go the other way, which is the direction the rule points in - a
+Three fixes did go the other way, the direction the rule points in - a
 colour-support gate, `FORCE_COLOR=0` no longer forcing colour _on_, and that
 sanitizer export. All three shipped in 0.8.2 rather than being patched here.

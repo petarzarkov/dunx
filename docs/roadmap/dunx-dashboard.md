@@ -252,7 +252,7 @@ four calls, and growing past them is the signal to stop and mount bull-board ins
 Nothing, in the framework. An app that needs the data today writes a controller over
 `JobPublisher.queue(name)` - about sixty lines, admin-gated - which is what
 `dunx-template` did before the package existed and what
-[14-queues.md](../guide/14-queues.md) now documents. That is a fair holding position:
+[15-queues.md](../guide/15-queues.md) now documents. That is a fair holding position:
 the data is four calls, and the thing that was actually worth having was the page.
 
 ## Migration, and what is already cleaned up

@@ -40,12 +40,14 @@ const app = await HttpFactory.create(AppModule);
 await app.listen(3000);
 ```
 
-Note what is absent. There is no `@Injectable()` on the service, no `@Inject()` in
-the constructor, no `reflect-metadata` import, and no `experimentalDecorators` in
-the tsconfig. Being listed in a module's `providers` is what makes a class
-injectable, and the constructor parameter's type is read at load time by
-`@dunx/transform`. [Providers](./03-providers.md) explains how, and what happens
-when the type cannot be recovered.
+Note what is absent: no `@Injectable()` on the service, no `@Inject()` in the
+constructor, no `reflect-metadata` import, no `experimentalDecorators` in the
+tsconfig.
+
+Listing a class in a module's `providers` makes it injectable, and
+`@dunx/transform` reads the constructor parameter's type at load time.
+[Providers](./03-providers.md) explains how, and what happens when the type
+cannot be recovered.
 
 ## What it is built on
 
@@ -62,7 +64,7 @@ dotenv.
 One exception, and it is the parser. Bun cannot tell you a TypeScript
 constructor's parameter types, so `@dunx/transform` reads them with
 [oxc-parser](https://github.com/oxc-project/oxc), a Rust parser over N-API. It is
-build-time only, which is why it is a separate package: merging it into the core
+build-time only, and a separate package for that reason: merging it into the core
 would put a Rust parser in every production deploy.
 
 **Libraries do the hard parts.** Where Bun has no primitive, dunx integrates
@@ -154,21 +156,23 @@ process.
 
 Two more numbers worth having before you commit to anything:
 
-**Request logging is on by default and it is not free.** `@dunx/http` installs
+**Request logging is on by default and costs throughput.** `@dunx/http` installs
 `RequestLoggingMiddleware` outermost, writing one structured entry per request.
-With it on, `plaintext` runs at 77,658 req/s against 135,442 with it off, so 56.1%
-of raw `Bun.serve` instead of 97.8%. The remaining cost decomposes to about 1.3 µs
-of reading `req.headers`, 0.9 µs of the `AsyncLocalStorage` scope, 2.1 µs of
-building and serialising the entry, and 0.7 µs of reading `req.url`. Turn it off
-with `HttpFactory.create(root, { requestLogging: false })` and sample at the edge
-if you need the throughput, but know what you gave up.
+With it on, `plaintext` runs at 77,658 req/s against 135,442 with it off: 56.1%
+of raw `Bun.serve` against 97.8%.
+
+The cost decomposes to about 1.3 µs reading `req.headers`, 0.9 µs for the
+`AsyncLocalStorage` scope, 2.1 µs building and serialising the entry, and 0.7 µs
+reading `req.url`. Turn it off with
+`HttpFactory.create(root, { requestLogging: false })` and sample at the edge.
 
 **Parsing a body costs about three times what validating it costs.** Measured
 against raw `Bun.serve`: putting a body on the wire and never reading it adds
-0.27 µs, `await req.json()` adds 3.10 µs, and zod on top adds 0.94 µs. Every
-Standard Schema validator measured, including Valibot, ArkType, TypeBox and ajv,
-came in under the parse. So there is no throughput argument for choosing between
-them. Pick on API, error quality and ecosystem.
+0.27 µs, `await req.json()` adds 3.10 µs, and zod on top adds 0.94 µs.
+
+Every Standard Schema validator measured, including Valibot, ArkType, TypeBox and
+ajv, came in under the parse, so no throughput argument separates them. Pick on
+API, error quality and ecosystem.
 
 The harness does not measure absolute capacity, concurrency beyond one process,
 anything with I/O, memory, behaviour under sustained load, TLS, HTTP/2, websockets

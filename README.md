@@ -103,11 +103,12 @@ Median req/s, 64 connections, 5 runs. `@dunx/http` is a layer over
 That is **3.3-4.7x NestJS on Fastify**, and 85-100% of raw `Bun.serve` depending on
 the scenario. Boot is **55 ms** against NestJS+Fastify's 287 ms.
 
-The harness runs Go, Rust and JVM subjects alongside these, and the NestJS subject is
-real NestJS with real `reflect-metadata` rather than a strawman. It also states what
-it cannot measure: the load generator shares a machine with the subject, and the
-closed-loop design is subject to coordinated omission. Reproduce it with
-`bun run --filter '@dunx/bench' start`; the methodology is in
+The harness runs Go, Rust and JVM subjects alongside these, and the NestJS
+subject is real NestJS with real `reflect-metadata` rather than a strawman. It
+also states what it cannot measure: the load generator shares a machine with
+the subject, and the closed-loop design is subject to coordinated omission.
+
+Reproduce it with `bun run --filter '@dunx/bench' start`; the methodology is in
 [internal/bench/README.md](internal/bench/README.md).
 
 ## Documentation

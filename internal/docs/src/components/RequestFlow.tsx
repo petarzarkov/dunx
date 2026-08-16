@@ -33,7 +33,7 @@ const LAYERS: readonly Layer[] = [
     what: 'runs, outermost first',
     wraps: 'can rewrite the response',
     detail:
-      'CORS and anything the app added. This nesting is the whole point: middleware wraps next(), which is why one middleware sees both halves and dunx needs no separate interceptor for the second.',
+      'CORS and anything the app added. Middleware wraps next(), so one middleware sees the request and the response. There is no separate interceptor stage.',
   },
   {
     who: 'Guards',
@@ -79,9 +79,9 @@ export const RequestFlow = (): React.JSX.Element => {
           </Title>
           <Text c="dimmed" maw={660}>
             Each layer wraps the one inside it. The ones that call{' '}
-            <code>next()</code> see the response coming back out, which is why a
-            single middleware can log both halves. Two of these layers are the
-            runtime rather than the framework, which is the point.
+            <code>next()</code> see the response coming back out, so a single
+            middleware can log both halves. Two of these layers are the runtime
+            rather than the framework.
           </Text>
         </Stack>
 

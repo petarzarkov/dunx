@@ -90,7 +90,10 @@ const tourFiles = (): string[] =>
  */
 const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
   ['Getting started', ['introduction', 'first-steps']],
-  ['Fundamentals', ['providers', 'modules', 'controllers', 'validation']],
+  [
+    'Fundamentals',
+    ['providers', 'modules', 'controllers', 'validation', 'lifecycle'],
+  ],
   ['Techniques', ['middleware-and-guards', 'websockets', 'openapi', 'testing']],
   [
     'Infrastructure',

@@ -1,6 +1,6 @@
 # Logging
 
-dunx logs every HTTP request out of the box, in an app that imported no logging
+dunx logs every HTTP request by default, in an app that imported no logging
 module at all, and it does that without `@dunx/core` taking a single dependency.
 This page explains how, what it costs, and what you get by swapping the default
 out.
@@ -41,8 +41,8 @@ export class Notes {
 
 ### Levels
 
-`LogLevel` is a frozen object plus an indexed-access union, not a TypeScript
-`enum`. One exported name serves as both the value and the type:
+`LogLevel` is a frozen object plus an indexed-access union rather than a
+TypeScript `enum`. One exported name serves as both the value and the type:
 
 ```ts
 import { LogLevel } from '@dunx/core';
@@ -107,11 +107,11 @@ separate them:
 }
 ```
 
-**What it deliberately does not do:** sanitize, mask, rotate, colour, or handle a
-cyclic object. `JSON.stringify` is used directly, because a cycle in a log entry
-would be the logger's fault and the replacement that handles cycles is one import
-away. That missing list is exactly what makes swapping in `@dunx/infra/logger`
-worth the dependency.
+**What it does not do:** sanitize, mask, rotate, colour, or handle a cyclic
+object. It calls `JSON.stringify` directly; a cycle in a log entry would be the
+logger's fault, and the replacement that handles cycles is one import away.
+
+That missing list is what `@dunx/infra/logger` buys.
 
 ### Buffering, and the durability trade
 
@@ -132,7 +132,7 @@ Three things bound it:
 - **`warn`, `error` and `fatal` are never buffered.** They go out immediately and
   **flush everything queued ahead of them**, so the entries you go looking for
   after a crash are the ones that were never held back.
-- The window is **one event-loop turn**, not a timer interval.
+- The window is **one event-loop turn** rather than a timer interval.
 - `flush()` is public, `onShutdown()` calls it, and so does `process.on('exit')`.
 
 Opt out entirely if you would rather have the syscall:
@@ -167,12 +167,13 @@ export abstract class RequestContext {
 `requestId`, `userId`, `method`, `event`, `context`, `flow` - and permits anything
 else.
 
-`AsyncRequestContext` is the default implementation, over `AsyncLocalStorage`. One
-detail is not what the built-in does on its own: **nested scopes merge.**
-`AsyncLocalStorage.run` replaces the store outright, which would drop the
-`requestId` an outer scope established. `runWithContext` merges instead, into a
-fresh object, so an `updateContext` inside a nested scope does not leak back out.
-Pass `{ inherit: false }` to get the replacing behaviour deliberately.
+`AsyncRequestContext` is the default implementation, over `AsyncLocalStorage`,
+with one departure from the built-in: **nested scopes merge.**
+
+`AsyncLocalStorage.run` replaces the store outright, dropping the `requestId` an
+outer scope established. `runWithContext` merges into a fresh object instead, so
+an `updateContext` inside a nested scope does not leak back out. Pass
+`{ inherit: false }` for the replacing behaviour.
 
 ```ts
 export class Importer {
@@ -228,10 +229,10 @@ request logging would write a `requestId` into core's default store while
 | `BackingLogger`  | The `@arkv/logger` instance, typed as the implementation |
 | `Logger`         | The same instance, typed as core's contract              |
 
-`BackingLogger` is how you reach the three things the contract deliberately does
-not carry: `child(bindings)`, `flush()` and `close()`. Core's `Logger` covers the
-six levels and nothing else, on purpose, so an app that wants a child logger asks
-for the implementation by name rather than every app getting a wider contract.
+`BackingLogger` reaches the three things the contract omits: `child(bindings)`,
+`flush()` and `close()`. Core's `Logger` covers the six levels and nothing else,
+so an app wanting a child logger asks for the implementation by name instead of
+every app carrying a wider contract.
 
 ### Reading the level off config
 
@@ -257,7 +258,7 @@ LoggerModule.forRootAsync(
 );
 ```
 
-See [Configuration](./11-configuration.md) for why the parameter is
+See [Configuration](./12-configuration.md) for why the parameter is
 `AppConfigService` and not `ConfigService<AppConfig>`.
 
 ### Transports
@@ -336,13 +337,15 @@ one is per process, so silencing the noisy one is not a reason to lose the quiet
 `@dunx/testing` defaults it off, for the same reason it defaults request logging off:
 a suite that boots a server per file does not want a route table per file.
 
-**Scope warnings, at `warn`, from `AppFactory.create`.** A module that declares what
-an import already exports to it, or imports one token from two modules that disagree,
-is legal and warned. They used to be surfaced on `app.warnings` and logged by nobody,
-on the reasoning that core had no logger - it has one, `Logger` is always bound, and
-the reasoning failed its first real test: the reference app never read the property,
-so a shadowed binding would have been silent in the app most likely to hit one. The
-list is still public for an app that would rather fail boot on it.
+**Scope warnings, at `warn`, from `AppFactory.create`.** A module that declares
+what an import already exports to it, or imports one token from two modules that
+disagree, is legal and warned.
+
+They used to sit on `app.warnings` and be logged by nobody, on the reasoning that
+core had no logger. It has one, `Logger` is always bound, and the reference app
+never read the property, so a shadowed binding would have been silent in the app
+most likely to hit one. The list is still public for an app that would rather
+fail boot on it.
 
 ## Request logging
 
@@ -358,7 +361,7 @@ HttpFactory.create(AppModule, {
 });
 ```
 
-### One entry per request, not two
+### One entry per request
 
 The entry carries the request and its response together:
 
@@ -399,20 +402,19 @@ nothing.
 **Every global middleware runs on a miss, guards included.** A miss matched no
 route, so it carries no route metadata, and a guard reading none of it refuses: an
 app with a global `SessionGuard` answers an anonymous request for a nonexistent
-path with that guard's status, not a 404. There is no `@Public()` to put on a path
-that does not exist.
+path with that guard's status rather than a 404. There is no `@Public()` to put
+on a path that does not exist.
 
-That is the default because the alternative leaks: if a miss answers 404 while
-every real path answers 401, the difference enumerates your surface. If you would
-rather have the conventional 404:
+The alternative leaks: if a miss answers 404 while every real path answers 401,
+the difference enumerates your surface. For the conventional 404:
 
 ```ts
 await HttpFactory.create(AppModule, { notFound: 'public' });
 ```
 
-The miss then reports itself as `@Public()`, so a guard honouring that flag passes
-it through. Either way it is still logged and still gets a request id, which is the
-reason the fallback runs the middleware at all.
+The miss then reports itself as `@Public()`, so a guard honouring that flag
+passes it through. Either way it is logged and gets a request id, so the fallback
+runs the middleware for both.
 
 A guard can decide for itself under either setting. `UNMATCHED` is set on a miss
 and no real route ever sets it:
@@ -429,14 +431,15 @@ Everything the handler logs in between carries `requestId`, `method`, `event` an
 
 ### `x-request-id`
 
-An inbound `x-request-id` header is honoured, so a trace survives across services -
-**but only if it is a UUID.** It is a caller-supplied string that ends up in every
-line the request writes, so `curl -H 'x-request-id: MY-OWN-ID'` is not echoed: a
-newline, a megabyte, or an id deliberately collided with somebody else's trace is
-dropped and a fresh `crypto.randomUUID()` used instead. Nothing tells the caller,
-because there is nothing a caller needs to do about it.
+An inbound `x-request-id` header is honoured, so a trace survives across
+services, **but only if it is a UUID.**
 
-Any UUID version is accepted; the check is the shape, not the version bits.
+It is a caller-supplied string that ends up in every line the request writes, so
+`curl -H 'x-request-id: MY-OWN-ID'` is not echoed. A newline, a megabyte, or an
+id collided with somebody else's trace is dropped and a fresh
+`crypto.randomUUID()` used instead. Nothing tells the caller.
+
+Any UUID version is accepted; the check reads the shape rather than the version bits.
 
 It is set on the response of every request the middleware handles - which is every
 request except an `ignore`d one, and one of those too if `correlateIgnored` is on.
@@ -458,9 +461,9 @@ interface RequestLoggingOptions {
 **Both body options default to `false`, and that default is a performance
 decision.** Reading a body means `req.clone().text()`: a second copy of every
 payload, buffered and parsed, on the hot path. Measured on the `validate` scenario
-in `internal/bench`, turning both on costs roughly **two thirds of the throughput**.
-It is also the field most likely to contain a password. Turn them on in
-development, where seeing the payload is the point.
+in `internal/bench`, turning both on costs roughly **two thirds of the
+throughput**. The request body is also the field most likely to contain a
+password. Turn them on in development.
 
 ### What `ignore` costs, and how to buy part of it back
 
@@ -468,13 +471,13 @@ development, where seeing the payload is the point.
 The middleware slices the pathname - it has to, to check the list - and then
 returns `next()` without touching anything else, so an ignored path has:
 
-- no entry, which is the point;
+- no entry;
 - no `x-request-id` on the response;
-- no `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated - no
+- no `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated: no
   `requestId`, no `event`, no `context`.
 
-That is what makes it free. "Do not log the health check, but do keep its request
-id" is `correlateIgnored`:
+Skipping all three is what makes it free. "Do not log the health check, but do
+keep its request id" is `correlateIgnored`:
 
 ```ts
 HttpFactory.create(AppModule, {
@@ -482,13 +485,13 @@ HttpFactory.create(AppModule, {
 });
 ```
 
-The path still writes no entry of its own. It gets an id - inbound if it was a
-UUID, minted otherwise - on the response, and everything the handler logs carries
-it. It is off by default because it is not free: that path then pays for reading
-the header, `crypto.randomUUID()`, the `runWithContext` scope and one
-`Headers.set`, which is **~2.2 µs** of the ~5.4 the full default path costs in the
-table below. What it never pays for is building and serialising the entry, which is
-the expensive half.
+The path still writes no entry of its own. It gets an id on the response, inbound
+if it was a UUID and minted otherwise, and everything the handler logs carries it.
+
+It is off by default because it costs something: the path pays for reading the
+header, `crypto.randomUUID()`, the `runWithContext` scope and one `Headers.set`.
+That is **~2.2 µs** of the ~5.4 the full default path costs in the table below.
+It never pays for building and serialising the entry, the expensive half.
 
 ### Turning the async scope off with `correlate: false`
 
@@ -560,10 +563,12 @@ Batching also makes a slow consumer far less able to stall the server, which is
 the last row's problem.
 
 Two micro-optimisations in `ConsoleLogger` fall out of the same measurements.
-`new Date().toISOString()` measured about 170 ns and the millisecond has usually
-not moved since the last entry, so one `Date.now()` guards a memoised stamp. And
-`logger.info('GET /json 200', fields)` is the shape every framework call has, so
-it is built directly rather than going through the general merge path, which
+
+`new Date().toISOString()` measured about 170 ns, and the millisecond has usually
+not moved since the last entry, so one `Date.now()` guards a memoised stamp.
+
+`logger.info('GET /json 200', fields)` is the shape every framework call takes,
+so it is built directly instead of going through the general merge path, which
 would cost two array allocations, a third object and an `Object.assign`.
 
 Nothing in `RequestLoggingMiddleware` is `async`. Reading the request or the
@@ -573,7 +578,7 @@ are adopted with `.then` rather than awaited. An `async` scope callback alone co
 
 ## Related
 
-- [Configuration](./11-configuration.md) for `AppConfigService` and `forRootAsync`
-- [Authentication](./15-authentication.md), which writes `userId` into
+- [Configuration](./12-configuration.md) for `AppConfigService` and `forRootAsync`
+- [Authentication](./16-authentication.md), which writes `userId` into
   `RequestContext` so every line after sign-in is correlated
 - [Providers](./03-providers.md) for how the default bindings are layered

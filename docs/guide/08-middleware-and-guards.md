@@ -62,30 +62,33 @@ const app = await HttpFactory.create(AppModule, {
 app.use(RequestLoggerMiddleware);
 ```
 
-Both take **classes**, not instances. The class is what the container resolves,
-which is what gives the middleware its dependencies. `app.use()` after
-`listen()` throws, and so does every other configuration call: the chain is folded
-into one closure per route when the server binds, so a later call could not take
-effect and being told is better than being ignored.
+Both take **classes** rather than instances, so the container resolves each one
+and supplies its dependencies.
+
+`app.use()` after `listen()` throws, as does every other configuration call. The
+chain is folded into one closure per route when the server binds, so a later call
+could not take effect.
 
 `HttpFactory.create` and `app.use()` are the **app-wide** list. A middleware that
 belongs to one feature goes on that feature's module instead - see
 [Module middleware](#module-middleware) below.
 
-Both are resolved as your root module sees them, which for a middleware class means
-"the single module that declares it". Listing a guard here does not oblige your root
-to import or re-export the feature module that provides it.
+Both resolve as your root module sees them, which for a middleware class means
+"the single module that declares it". Listing a guard here does not oblige your
+root to import or re-export the feature module that provides it.
 
-## Why `next()` is a function you call, not a hook you implement
+## `next()` is a function you call
 
 This is the design decision the rest of the page follows from.
 
 Because `handle` receives `next` and returns whatever it wants, **one class sees
 both halves of a request**. It can time the call, catch the error, rewrite the
-response, or refuse to call `next()` at all. Splitting that across two base
-classes: middleware runs before, an interceptor wraps the observable, and they
-are separate objects with no shared frame, so correlating the two halves means
-threading a request id through and reassembling the pair in a log aggregator.
+response, or refuse to call `next()` at all.
+
+Frameworks that split this across two base classes run middleware before and wrap
+an interceptor around the observable. They are separate objects with no shared
+frame, so correlating the two halves means threading a request id through and
+reassembling the pair in a log aggregator.
 
 The built-in request logger is the proof. It is one class, and it emits **one
 structured entry per request** carrying the request and the response together:
@@ -107,7 +110,7 @@ there is no pair.
 Outermost first, and every numbered layer except the last two is the same
 `Middleware` interface:
 
-1. the **error filter**, which is the only thing that turns a throw into a response
+1. the **error filter**, the only layer that turns a throw into a response
 2. `RequestLoggingMiddleware`, unless `requestLogging: false`
 3. `HttpOptions.middleware`, in the order given
 4. anything `app.use()` appended, in call order
@@ -149,17 +152,19 @@ subtle, because the stages collapse rather than move:
 | **Interceptors**, post-request                     | anything after `await next()`                   |
 | **Exception filters**, route → controller → global | `onError`, one filter; or `try` around `next()` |
 
-Four things go away with it. There is no `forRoutes()` path-matching language,
-because a module already owns its controllers. There is no separate `guards`,
-`interceptors` and `pipes` array, because they were one mechanism wearing three
-names. There is no ancestor layer: importing a module never adds middleware to the
-importer's routes. And there is no per-controller or per-route filter, because a
-middleware wrapping `next()` in a `try` **is** a scoped filter, in the same class
-that decided to be there.
+Four things go away with it:
+
+- No `forRoutes()` path-matching language. A module already owns its controllers.
+- No separate `guards`, `interceptors` and `pipes` arrays. They were one
+  mechanism wearing three names.
+- No ancestor layer. Importing a module never adds middleware to the importer's
+  routes.
+- No per-controller or per-route filter. A middleware wrapping `next()` in a
+  `try` **is** a scoped filter, in the same class that decided to be there.
 
 ### Ordering is folded at boot
 
-The chain is composed once per route when the server binds, not per request:
+The chain is composed once per route when the server binds:
 
 ```ts
 export const compose = (
@@ -173,17 +178,18 @@ export const compose = (
   );
 ```
 
-One `reduceRight` per route at `listen()`, and after that a request is a call into a
-closure. No array iteration, no metadata lookup, no container access on the request
-path - which is what makes a guard a `Map` lookup where Nest's `Reflector` is a
-per-request cost.
+One `reduceRight` per route at `listen()`, after which a request is a call into a
+closure. No array iteration, no metadata lookup, no container access on the
+request path, so a guard costs a `Map` lookup where Nest's `Reflector` costs a
+per-request reflection call.
 
-A route with **no middleware and no CORS** skips even that and takes a direct
-dispatch path that allocates no async frame unless there is genuinely something to
-wait for. Measured on the `plaintext` scenario, that took dunx from 89.5% to 97.2%
-of raw `Bun.serve`. The cost of giving it up is small and known: a bare
-`next()`-only middleware measures at +0.05 µs per request. Install the middleware
-you need and do not think about it further.
+A route with **no middleware and no CORS** skips even that, taking a direct
+dispatch path that allocates no async frame unless something genuinely has to be
+awaited. On the `plaintext` scenario that took dunx from 89.5% to 97.2% of raw
+`Bun.serve`.
+
+Giving it up costs a known 0.05 µs per request for a bare `next()`-only
+middleware. Install the middleware you need.
 
 ## `RouteContext`
 
@@ -202,12 +208,12 @@ export interface RouteContext {
 
 One frozen object per route, built when the table is built and closed over by the
 chain, so every request to that route sees the identical object. `get` is a `Map`
-lookup over a record that was already merged at discovery, not a prototype walk.
+lookup over a record already merged at discovery.
 
 ### Route metadata
 
 `metaKey` mints a unique symbol; `meta` writes a value onto a class or a method.
-Both are exported, and that is the whole mechanism:
+Both are exported, and together they are the whole mechanism:
 
 ```ts
 import { meta, metaKey, type MetaKey } from '@dunx/http';
@@ -218,11 +224,11 @@ export const Tenant = (name: string) => meta(TENANT, name);
 
 `@Roles(...)` and `@Public()` are wrappers over exactly this, and `ROLES` and
 `PUBLIC` are exported so your own guard can read what they set. `@ApiDoc` in
-`@dunx/openapi` is a third wrapper over the same channel, which is why
-documentation needs no parallel registry.
+`@dunx/openapi` is a third wrapper over the same channel, so documentation needs
+no parallel registry.
 
 A fresh `Symbol()` per `metaKey` call means two libraries that both name a key
-`roles` can never read each other's value. Identity is the symbol, not the string.
+`roles` can never read each other's value. The symbol carries the identity.
 
 Resolution is **handler first, then class**, the same direction as the familiar
 `getAllAndOverride`. A method-level `@Public()` beats a class-level `@Roles()`.
@@ -255,19 +261,20 @@ export class RolesGuard implements Middleware {
 }
 ```
 
-Refusing a request is `throw`. Allowing it is `return next()`. That is the
-difference from a boolean-returning guard, and it buys two things: the guard says
-_why_ in the same statement that rejects, and the rejection travels the ordinary
-error path so the mapper, the logger and CORS all treat it like any other failure.
-A `403` from a guard is `{"error":"Requires one of: admin","status":403}`, not a
-generic Forbidden.
+Refusing a request is `throw`. Allowing it is `return next()`. Against a
+boolean-returning guard that buys two things: the guard says _why_ in the same
+statement that rejects, and the rejection travels the ordinary error path, so the
+mapper, the logger and CORS all treat it like any other failure. A `403` from a
+guard is `{"error":"Requires one of: admin","status":403}`.
 
 **Nothing downstream runs.** `next()` was never called, so no further middleware
-executes, the input reader never reads the body, and the handler is never invoked.
-(The controller _instance_ already exists: dunx resolves the container eagerly at
+executes, the input reader never reads the body, and the handler is never
+invoked.
+
+The controller _instance_ already exists. dunx resolves the container eagerly at
 `HttpFactory.create()`, so every controller is constructed once at boot and the
-handler is a bound method closed over it. A guard prevents the call, not the
-construction, and there is no per-request instantiation to prevent.)
+handler is a bound method closed over it. A guard prevents the call; there is no
+per-request instantiation to prevent.
 
 ### Scoping a guard
 
@@ -297,8 +304,8 @@ class ReportsController {
 ```
 
 `@UseGuards` hangs off a class or a method. Guards compose rather than override,
-which is why they are not a `MetaKey`: a class-level guard and a method-level guard
-both run, in that order.
+so a class-level guard and a method-level guard both run, in that order. That
+composition is why they are not a `MetaKey`.
 
 A `@UseGuards` class is resolved from **the scope of the module that declares the
 controller**, so it can inject that module's private providers. One instance is
@@ -360,7 +367,7 @@ export class ReportsModule {}
 for these routes, built from providers only these routes can see - is the reason
 module scoping exists.
 
-Three things it deliberately does not have:
+Three things module middleware does not have:
 
 **No `forRoutes()`.** Nest needs a path-matching mini-language because
 `configure(consumer)` registers middleware against paths. A dunx module already owns
@@ -376,9 +383,9 @@ wants the guard.
 would be Nest's split reintroduced at the exact moment the rest of the design is
 removing it.
 
-A guard that genuinely applies everywhere stays global.
-`@dunx/auth`'s `SessionGuard` is that case: it belongs in
-`HttpFactory.create(root, { middleware: [SessionGuard] })`, not in one module.
+A guard that genuinely applies everywhere stays global. `@dunx/auth`'s
+`SessionGuard` is that case, and belongs in
+`HttpFactory.create(root, { middleware: [SessionGuard] })`.
 
 ## The error mapper
 
@@ -553,19 +560,20 @@ HttpFactory.create(AppModule, { requestLogging: { ignore: ['/health'] } }); // t
 | `ignore`        | `[]`    | Exact paths to skip, for a health check polled every second. |
 
 A 4xx logs at `warn`, a 5xx at `error`, everything else at `info`. Do not add a
-second "received request" line: the pair is precisely the thing being avoided.
+second "received request" line; the single paired entry is the point.
 
 Both body options are off for a measured reason. Turning them on costs roughly
 two thirds of the throughput on the `validate` benchmark scenario, and the request
 body is the field most likely to contain a password. Turn them on in development,
 where seeing the payload is the point.
 
-An inbound `x-request-id` is honoured so a trace survives across services - but
-only if it is a UUID, because it is caller-supplied and ends up in every line the
-request writes. Anything else is replaced by a fresh `crypto.randomUUID()`. Either
-way it comes back on the response header, unless the path is in `ignore` and
-`correlateIgnored` is off; see
-[Logging](./12-logging.md#what-ignore-costs-and-how-to-buy-part-of-it-back).
+An inbound `x-request-id` is honoured so a trace survives across services, but
+only if it is a UUID: it is caller-supplied and ends up in every line the request
+writes. Anything else is replaced by a fresh `crypto.randomUUID()`.
+
+Either way it comes back on the response header, unless the path is in `ignore`
+and `correlateIgnored` is off; see
+[Logging](./13-logging.md#what-ignore-costs-and-how-to-buy-part-of-it-back).
 
 ### The 404 is logged too
 
@@ -574,13 +582,13 @@ way it comes back on the response header, unless the path is in `ignore` and
 `fetch` fallback that puts the global middleware in front of a
 `{"error":"NOT_FOUND","status":404}`.
 
-That is **not** a JavaScript router. Bun still does all the matching; the fallback
-runs only once Bun has decided nothing matched. The context it gets says
-`(unmatched)` for the controller and `(none)` for the handler, which is more
-useful in a log line than an empty string, and the response says only
-`NOT_FOUND` rather than echoing the path, because an unmatched path is the one
-place where repeating the request tells a prober something about the surface it
-just failed to find.
+This is **no** JavaScript router. Bun still does all the matching, and the
+fallback runs only once Bun has decided nothing matched.
+
+The context it gets says `(unmatched)` for the controller and `(none)` for the
+handler, which reads better in a log line than an empty string. The response says
+only `NOT_FOUND` and never echoes the path: on an unmatched path, repeating the
+request tells a prober something about the surface it just failed to find.
 
 ## CORS
 
@@ -602,10 +610,10 @@ app.enableCors({
 | `credentials`    | `false`                                 |                                                |
 | `maxAge`         | unset                                   | Seconds the browser may cache the preflight.   |
 
-Four behaviours worth knowing:
+Four behaviours to expect:
 
 - **A disallowed origin gets no CORS headers at all**, rather than an explicit
-  denial. That is what makes the browser block it.
+  denial. The absent headers are what make the browser block it.
 - **`*` with `credentials` reflects the caller instead.** A browser rejects the
   pair outright, so the wildcard is quietly turned into the requesting origin.
 - **A non-wildcard origin appends `vary: Origin`**, because the response now
@@ -616,9 +624,9 @@ Four behaviours worth knowing:
 
 ### Why preflight is mounted per path
 
-With `routes` and no `fetch` handler, an `OPTIONS` against a GET-only route is a
-**404**, not a 405. Bun's native method miss cannot be intercepted, so a preflight
-cannot be inferred:
+With `routes` and no `fetch` handler, an `OPTIONS` against a GET-only route
+returns **404** where the specification suggests 405. Bun's native method miss
+cannot be intercepted, so a preflight cannot be inferred:
 
 ```
 OPTIONS, no fetch handler   -> 404
@@ -645,14 +653,13 @@ your routes, because `HttpMethod` has no `OPTIONS` verb: only CORS mounts one.
   One instance, two positions in the chain. `@UseGuards` guarantees ordering, not
   deduplication. The same holds for a class listed in `@Module({ middleware })`
   and in `@UseGuards` on one of that module's controllers.
-- **Module middleware resolves from its module's scope first.** That is what lets
-  it inject private providers, so declare it in the same module's `providers`. A
-  class the module cannot see still resolves - the lookup is the permissive
-  `app.get` one - but then it is a shared instance built somewhere else, which is
-  probably not what the `middleware` line meant.
+- **Module middleware resolves from its module's scope first**, so it can inject
+  private providers. Declare it in the same module's `providers`. A class the
+  module cannot see still resolves through the permissive `app.get` lookup, but
+  it is then a shared instance built somewhere else.
 - **`'trust proxy'` is off by default.** Turn it on with
   `app.set('trust proxy', true)` only behind a proxy that rewrites
   `X-Forwarded-For`; a direct client can send whatever it likes.
 
-Next: [WebSockets](./08-websockets.md), which are served by the same `Bun.serve`
+Next: [WebSockets](./09-websockets.md), which are served by the same `Bun.serve`
 call and the same container.

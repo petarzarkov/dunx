@@ -59,22 +59,23 @@ This matters more than it looks under an orchestrator. Kubernetes sends
 `SIGTERM` and then waits `terminationGracePeriodSeconds` before `SIGKILL`; a
 process that ignores the first signal loses whatever was in flight.
 
-**It then ends the process.** Draining is not the same as exiting: one handle
-that outlives teardown leaves a drained, idle process alive until `SIGKILL`, and
-that handle is often not yours. The real case is a Redis client - a
-`Bun.RedisClient` whose TCP connect never completed keeps a handle past
-`close()`, and bullmq's Bun adapter cannot cancel its own reconnect once the
-connection has dropped, so an app that touched an unreachable broker used to
-drain perfectly and then hang. Both leaks are upstream and neither is reachable
-from userland; they are recorded in
-[queue-shutdown-sigterm.md](../roadmap/queue-shutdown-sigterm.md).
+**It then ends the process.** Draining differs from exiting: one handle that
+outlives teardown leaves a drained, idle process alive until `SIGKILL`, and that
+handle is often not yours.
 
-So once the drain finishes, dunx gives the process a moment to end on its own and
-exits it if it has not. The timer is `unref()`d, which is the whole point: it
-cannot itself hold the runtime open, so a process with nothing pending exits
-immediately and never waits: the pause is only ever spent on a process that would
-otherwise have hung. A forced exit always logs a line saying so, because it means
-something leaked and you want to know.
+The real case is a Redis client. A `Bun.RedisClient` whose TCP connect never
+completed keeps a handle past `close()`, and bullmq's Bun adapter cannot cancel
+its own reconnect once the connection has dropped, so an app that touched an
+unreachable broker used to drain perfectly and then hang.
+
+Both leaks are upstream and neither is reachable from userland. They are recorded
+in [queue-shutdown-sigterm.md](../roadmap/queue-shutdown-sigterm.md).
+
+Once the drain finishes, dunx gives the process a moment to end on its own and
+exits it if it has not. The timer is `unref()`d, so it cannot itself hold the
+runtime open: a process with nothing pending exits immediately, and the pause is
+only ever spent on a process that would otherwise have hung. A forced exit always
+logs a line, since it means something leaked.
 
 You no longer need a short `terminationGracePeriodSeconds` to work around this.
 
@@ -94,9 +95,8 @@ variables instead and ship no `.env` at all.
 
 Validation happens once, at boot, through the single function you gave
 `ConfigModule.forRoot`. A missing or malformed variable fails the process before
-it serves anything, which is the behaviour you want from an orchestrator's
-perspective: a bad config becomes a failed rollout rather than a running service
-returning 500s. See [Configuration](./11-configuration.md).
+it serves anything, so a bad config becomes a failed rollout rather than a
+running service returning 500s. See [Configuration](./12-configuration.md).
 
 ## Container image
 
@@ -144,28 +144,30 @@ export class HealthController {
 
 Keep readiness separate from liveness if you have dependencies that can degrade.
 `examples/full` has a health controller that reports each area as live or
-degraded, which is the shape to copy: a cache being down should not restart the
-process, and a liveness probe that checks Redis will do exactly that.
+degraded. Copy that shape: a cache being down should not restart the process, and
+a liveness probe that checks Redis will do exactly that.
 
 ## Logging
 
 Request logging is on by default and writes one structured line per request,
-carrying the request and the response together. In a container that is what you
-want: stdout, one JSON object per line, collected by whatever is running.
+carrying the request and the response together: stdout, one JSON object per line,
+collected by whatever runs the container.
 
 `ConsoleLogger` batches `info` and below into a single write per event-loop turn.
 `warn`, `error` and `fatal` are never buffered and flush everything queued ahead
-of them, so ordering is preserved and the entries you go looking for after a
-crash are the ones that were never held back. A buffered `info` line can be lost
-if the process dies without unwinding - a `SIGKILL` or an OOM kill. If you need
-every line, construct the logger with buffering off:
+of them, so ordering holds and the entries you go looking for after a crash were
+never held back.
+
+A buffered `info` line can be lost if the process dies without unwinding, under a
+`SIGKILL` or an OOM kill. If you need every line, construct the logger with
+buffering off:
 
 ```ts
 provide(Logger, { useValue: new ConsoleLogger(context, LogLevel.INFO, false) });
 ```
 
 For redaction, rotation and file transports, bind `LoggerModule` from
-`@dunx/infra/logger`. See [Logging](./12-logging.md).
+`@dunx/infra/logger`. See [Logging](./13-logging.md).
 
 ## Horizontal scaling
 
@@ -175,7 +177,7 @@ balancer works with no changes. Two things need attention when you do:
 - **WebSocket fan-out is per process.** `socket.subscribe(topic)` joins a topic
   in the Bun runtime of that process only, so a publish reaches the clients
   connected to that instance. Attach the Redis relay to fan out across nodes -
-  see [WebSockets](./08-websockets.md).
+  see [WebSockets](./09-websockets.md).
 - **Queue workers are separate processes.** `QueueModule.forRoot` binds the
   publish side alone, so a web process that publishes never accidentally starts
   consuming. Run workers with their own entrypoint and `WorkerFactory`.

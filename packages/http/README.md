@@ -144,13 +144,17 @@ behind `~standard` changed, and reports what each one costs per request:
 | Valibot                     |  0.89 µs | built in                |
 | zod                         |  0.94 µs | built in                |
 
-**`await req.json()` on the same request costs 3.10 µs**, which is more than all of
-them put together. So validation is not where a slow endpoint's time goes, and
-swapping zod for a compiled validator buys about 7% of a small request - worth having
-if a profile points at it, not worth restructuring for. zod is what `@dunx/openapi`
-reads schemas from (via `z.toJSONSchema`), and it is the default for that reason
-rather than a performance one. Three fields, though: a deeply nested schema would very
-likely separate these engines much further.
+**`await req.json()` on the same request costs 3.10 µs**, which is more than
+all of them put together.
+
+So validation is not where a slow endpoint's time goes, and swapping zod for a
+compiled validator buys about 7% of a small request - worth having if a profile
+points at it, though not worth restructuring for. zod is what `@dunx/openapi`
+reads schemas from (via `z.toJSONSchema`), and it is the default for that
+reason rather than a performance one.
+
+Three fields, though: a deeply nested schema would very likely separate these
+engines much further.
 
 Two of the five ship no `~standard` property. Bridging one is small enough to inline -
 this is the whole of it:
@@ -181,7 +185,7 @@ Full numbers, methodology and the ajv version:
 ## Route metadata and scoped middleware
 
 A decorator annotates a route; a guard reads the annotation back. Metadata on its
-own enforces nothing - which is why `@Roles` needs a guard that looks at it, and
+own enforces nothing, so `@Roles` needs a guard that looks at it, and
 why one global guard plus `@Public()` is the combination worth learning.
 
 ```ts
@@ -317,7 +321,7 @@ Every request produces **one** structured entry, request and response together:
 }
 ```
 
-One entry, not two, is the point. The common arrangement logs on the way in from a middleware and on
+One entry per request, never two. The common arrangement logs on the way in from a middleware and on
 the way out from an interceptor, because they are different classes and the
 interceptor cannot see what the middleware saw. Here they are the same closure, so
 there is no pair to correlate by `requestId` to find out how a call ended. A 4xx
@@ -371,12 +375,14 @@ HttpFactory.create(AppModule, {
 });
 ```
 
-**Even at its cheapest, a log line is not free.** `internal/bench` carries `dunx` and
-`dunx-logging` as separate subjects for exactly this reason: with logging off dunx
-runs at 81-100% of raw `Bun.serve` depending on the scenario, and with it on, 40-45%.
+**Even at its cheapest, a log line is not free.** `internal/bench` carries
+`dunx` and `dunx-logging` as separate subjects for exactly this reason: with
+logging off dunx runs at 81-100% of raw `Bun.serve` depending on the scenario,
+and with it on, 40-45%.
+
 The remainder is `JSON.stringify` plus a `write` per request inside an
-`AsyncLocalStorage` scope. If you need the last of the throughput, turn it off and
-sample at the edge instead - but know what you gave up.
+`AsyncLocalStorage` scope. If you need the last of the throughput, turn it off
+and sample at the edge instead - but know what you gave up.
 
 ### Unmatched paths are logged too
 
@@ -392,10 +398,11 @@ fallback runs only after it has decided nothing matched.
 
 A route with **no middleware and no CORS** is dispatched by a handler in which
 nothing is `async`. It returns a `Response` rather than a `Promise<Response>`
-wherever it has nothing to wait for - Bun accepts either. The general path awaits the
-input reader, the handler and the response coercion, and for most shapes those awaits
-are on values that were never thenable, each costing an async frame and a microtask
-tick for nothing.
+wherever it has nothing to wait for - Bun accepts either.
+
+The general path awaits the input reader, the handler and the response
+coercion, and for most shapes those awaits are on values that were never
+thenable, each costing an async frame and a microtask tick for nothing.
 
 | Route shape                              | What it costs                             |
 | ---------------------------------------- | ----------------------------------------- |
@@ -448,25 +455,26 @@ could only ever be a silent no-op - the failure mode worth trading for an error.
 - **Port**: the `listen(port)` argument, else `HttpOptions.port`, else `3000`.
 - **Error mapper**: `HttpOptions.onError`; there is no imperative equivalent.
 - **Overrides**: `HttpOptions.overrides` is core's `AppOptions.overrides`, passed
-  straight through - bindings replaced in place, which is what `@dunx/testing`'s
+  straight through, bindings replaced in place, as `@dunx/testing`'s
   `createTestServer` uses.
 - **Repeated calls**: `setGlobalPrefix`, `set` and `enableCors` all replace, so the
   last call wins. `use()` appends.
 - **Collisions**: rejected at `create()`, and re-checked at `listen()` against the
   final prefixed paths. A uniform prefix cannot introduce a collision the
-  unprefixed paths did not already have, which is why the early check is complete.
+  unprefixed paths did not already have, so the early check is complete.
 
 ### CORS and preflight
 
-`Bun.serve({ routes })` answers a method miss with `404`, so a preflight can never
-be inferred - `enableCors()` mounts an explicit `OPTIONS` handler on every path,
-built at boot from the methods that path actually declares. `origin` takes a
-string, a list, or a predicate; anything not allowed gets **no** CORS headers at
-all, which is what makes the browser block it. `'*'` is the default, and because a
-browser rejects `*` alongside credentials, `credentials: true` reflects the
-caller's origin instead. `allowedHeaders` defaults to echoing
-`Access-Control-Request-Headers`. Headers are applied outside the error mapper, so
-a mapped `500` still carries them.
+`Bun.serve({ routes })` answers a method miss with `404`, so a preflight can
+never be inferred - `enableCors()` mounts an explicit `OPTIONS` handler on
+every path, built at boot from the methods that path actually declares.
+`origin` takes a string, a list, or a predicate; anything not allowed gets
+**no** CORS headers at all, and the absence is what makes the browser block it.
+
+`'*'` is the default, and because a browser rejects `*` alongside credentials,
+`credentials: true` reflects the caller's origin instead. `allowedHeaders`
+defaults to echoing `Access-Control-Request-Headers`. Headers are applied
+outside the error mapper, so a mapped `500` still carries them.
 
 ### Client IP
 
@@ -611,20 +619,21 @@ smallest one that works:
 { "event": "chat.say", "data": { "room": "general", "text": "hi" } }
 ```
 
-It is **opt-in**: a frame is only parsed for a gateway that declares at least one
-`@OnMessage(event)` handler. A gateway with only a raw `@OnMessage()` never sees
-JSON it did not ask for. Binary frames, invalid JSON, a non-object, a missing
-`event`, and an event no handler claims all fall through to the raw handler - and
-are ignored if there is none. Nothing is ever replied to the sender that a handler
-did not return.
+It is **opt-in**: a frame is only parsed for a gateway that declares at least
+one `@OnMessage(event)` handler. A gateway with only a raw `@OnMessage()` never
+sees JSON it did not ask for.
+
+Binary frames, invalid JSON, a non-object, a missing `event`, and an event no
+handler claims all fall through to the raw handler - and are ignored if there
+is none. Nothing is ever replied to the sender that a handler did not return.
 
 `encode(event, data)` and `decode(frame)` are exported, so a client can share them.
-A handler's payload parameter type is what you expect to receive, not a runtime
+A handler's payload parameter type states what you expect to receive, with no runtime
 guarantee: the frame's `data` is handed over as it arrived.
 
 ### Pub/sub
 
-Topics live in Bun, not in a JavaScript map. A socket joins one with
+Topics live in Bun rather than in a JavaScript map. A socket joins one with
 `socket.subscribe(topic)` and leaves with `socket.unsubscribe(topic)`; both are
 native methods on the socket you already hold.
 
@@ -675,12 +684,14 @@ the default logs.
 
 ### Shutdown with a live socket
 
-Measured: a graceful `server.stop()` waits for open connections, and a WebSocket
-does not close on its own - so it **never resolves** while a socket is open. An app
-with at least one gateway therefore force-stops (`stop(true)`) in `shutdown()`, and
-those clients see a `1006` close. An app with no gateways still stops gracefully.
-Bun also delivers an empty close `reason` to `@OnClose` once a socket has exchanged
-frames, whatever the client passed; the `code` is reliable.
+Measured: a graceful `server.stop()` waits for open connections, and a
+WebSocket does not close on its own - so it **never resolves** while a socket
+is open. An app with at least one gateway therefore force-stops (`stop(true)`)
+in `shutdown()`, and those clients see a `1006` close. An app with no gateways
+still stops gracefully.
+
+Bun also delivers an empty close `reason` to `@OnClose` once a socket has
+exchanged frames, whatever the client passed; the `code` is reliable.
 
 ### Multi-node fan-out
 
@@ -744,14 +755,14 @@ subscriptions on one channel is the other way to deliver everything twice.
 cross nodes goes through `PubSub`. `subscriberCount` is local too - Bun cannot count
 another node's sockets.
 
-`maxRetries` on `RedisRelay` defaults to `0`, and that is deliberate: a
+`maxRetries` on `RedisRelay` defaults to `0`: a
 `Bun.RedisClient` that never connects keeps a retry timer alive past `close()` and
 the process then never exits. Raise it when Redis is a hard requirement and you want
 Bun's reconnection.
 
 ## Status codes
 
-`HttpStatusCode` is a frozen object, not an `enum` - one name serving as both the
+`HttpStatusCode` is a frozen object rather than an `enum`, one name serving as both the
 value and the type, so it reads like an enum and erases like a constant:
 
 ```ts
@@ -806,7 +817,7 @@ export class Rates {
 ```
 
 `fetch` and nothing else underneath: it is a Web standard Bun implements natively,
-which is why `axios` and `node-fetch` are banned repo-wide and why there is no
+so `axios` and `node-fetch` are banned repo-wide and there is no
 client dependency to justify. What the service adds is the part every caller
 otherwise rewrites slightly differently.
 
@@ -818,7 +829,7 @@ otherwise rewrites slightly differently.
 | **URLs** | `buildUrl` and `interpolate` from `@arkv/shared`, so `{param}` and query building are not rewritten |
 | **Tracing** | The inbound request id is forwarded as `x-request-id`, so one trace spans both services |
 | **Bun-only** | `proxy`, `tls`, `unix`, `decompress` passed straight through to `fetch` |
-| **SSE** | `streamSse` yields each `data:` payload; deliberately never retried |
+| **SSE** | `streamSse` yields each `data:` payload; never retried |
 
 ### A failure is not your status
 

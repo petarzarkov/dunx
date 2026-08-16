@@ -6,7 +6,7 @@ Scaffolds a new [dunx](https://github.com/petarzarkov/dunx) application.
 bunx @dunx/create-app my-api
 ```
 
-> `bun create dunx-app` does **not** work, and deliberately is not advertised:
+> `bun create dunx-app` does **not** work and is not advertised:
 > `bun create <template>` resolves the unscoped npm package
 > `create-<template>`, which this package - being scoped - is not.
 
@@ -44,7 +44,7 @@ and overwriting your copy of either is what `--force` is there to ask about.
 
 ## What it generates
 
-The `minimal` template, which is the same app as
+The `minimal` template, the same app as
 [`examples/minimal`](https://github.com/petarzarkov/dunx/tree/main/examples/minimal) a service, a controller, a module, `HttpFactory.create`, one test against a real
 server, and the `bunfig.toml` preload line that makes constructor injection work.
 
@@ -52,14 +52,15 @@ Its `src/` is a **byte-for-byte copy** of that example, and a test in this packa
 fails if the two ever drift. The example is the one CI boots, so keeping them
 identical is what makes the template trustworthy rather than merely plausible.
 
-## Two details worth knowing
+## Two details
 
-**Versions are resolved at run time, not written into the template.** Every
+**Versions are resolved at run time rather than written into the template.** Every
 `@dunx/*` range in the template manifest is `__DUNX_VERSION__`, replaced with a
 caret range on this package's own version. dunx versions in lockstep - every
 package shares one number and ships together - so the version doing the
-scaffolding is by definition a set that works together. Writing versions into the
-template would go stale on the next release.
+scaffolding is by definition a set that works together.
+
+Writing versions into the template would go stale on the next release.
 
 Keep it that way when you add a package later. The packages peer-depend on each
 other by caret range, so mixing minors warns on install - and can leave two copies

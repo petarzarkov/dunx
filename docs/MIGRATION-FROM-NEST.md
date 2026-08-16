@@ -1,13 +1,67 @@
 # Migrating from NestJS
 
-A gap analysis between what a production NestJS application actually uses and
-what dunx provides. Read [ARCHITECTURE.md](./ARCHITECTURE.md) first - this
-document assumes its decisions and does not relitigate them.
+A gap analysis between what a production NestJS application uses and what dunx
+provides, written from the migrating application's point of view.
 
-This is a **living gap table**. It is also the roadmap's reality check: the
-phases in ROADMAP.md were written from the framework's point of view, and
-this document is written from a migrating application's point of view. Where the
-two disagree, this one names the cost.
+Status legend: **planned** = designed in ARCHITECTURE.md, unbuilt ·
+**undesigned** = no decision recorded anywhere.
+
+## Core DI
+
+| Nest surface                        | dunx                                                              | Status     |
+| ----------------------------------- | ----------------------------------------------------------------- | ---------- |
+| Constructor injection               | native, resolved from the parameter type                          | done       |
+| `@Injectable()`                     | delete it, every class is injectable                              | done       |
+| `@Module({ imports, providers })`   | [same shape, a scope per module](./guide/04-modules.md)           | done       |
+| `@Global()`                         | `global: true` on the same options object                         | done       |
+| `exports`                           | [`exports`, tokens or module references](./guide/04-modules.md)   | done       |
+| `{ provide, useClass/useValue }`    | [`provide()`](./guide/03-providers.md)                            | done       |
+| `useFactory` + `inject`             | [`provide(T, { useFactory, inject })`](./guide/07-lifecycle.md)   | done       |
+| `OnModuleInit` / `OnModuleDestroy`  | [`OnInit` / `OnShutdown`](./guide/07-lifecycle.md)                | done       |
+| `enableShutdownHooks`               | [same name, and it ends the process](./guide/07-lifecycle.md)     | done       |
+| `app.get(Token)` / `ModuleRef`      | [`app.get(Token)` / `AppRef`](./guide/07-lifecycle.md)            | done       |
+| `Module.forRoot(opts)`              | `DynamicModule` from a static factory                             | done       |
+| `@Optional()`                       | -                                                                 | undesigned |
+| `forwardRef()`                      | [not needed, the deps record is a thunk](./guide/07-lifecycle.md) | n/a        |
+| `Scope.REQUEST` / `Scope.TRANSIENT` | [one lifetime, and why](./guide/07-lifecycle.md)                  | n/a        |
+
+## HTTP
+
+| Nest surface                            | dunx                                                                    | Status       |
+| --------------------------------------- | ----------------------------------------------------------------------- | ------------ |
+| `@Controller` / `@Get` / `@Post` / …    | [same](./guide/05-controllers.md)                                       | done         |
+| Route params (`/:id`)                   | native `Bun.serve({ routes })`                                          | done         |
+| Exception filters                       | [`ErrorFilter` class, or a mapper](./guide/08-middleware-and-guards.md) | done         |
+| Global middleware                       | `HttpOptions.middleware`                                                | done         |
+| Module middleware (`forRoutes`)         | [`@Module({ middleware })`](./guide/08-middleware-and-guards.md)        | done         |
+| Per-controller / per-route middleware   | `@UseGuards`                                                            | done         |
+| `@SetMetadata` + `Reflector`            | `meta` / `metaKey` + `ctx.get`                                          | done         |
+| `@UseGuards` / `@Roles` / `@Public`     | same names                                                              | done         |
+| `@Body` / `@Query` / `@Param`           | [schemas on the route decorator](./guide/06-validation.md)              | done         |
+| `createParamDecorator` (`@CurrentUser`) | -                                                                       | undesigned   |
+| `setGlobalPrefix`                       | `app.setGlobalPrefix()`                                                 | done         |
+| `enableCors`                            | `app.enableCors()`                                                      | done         |
+| `app.getUrl()`                          | `listen()` returns the URL                                              | done         |
+| `app.use(expressMiddleware)`            | -                                                                       | out of scope |
+| `@HttpCode` / `@Header` / `@Redirect`   | `status` in the options, `Response`                                     | n/a          |
+
+## Ecosystem
+
+| Nest package                           | dunx                                                             | Status       |
+| -------------------------------------- | ---------------------------------------------------------------- | ------------ |
+| `nestjs-zod` / `ValidationPipe`        | [Standard Schema on route decorators](./guide/06-validation.md)  | done         |
+| `@nestjs/testing` (`overrideProvider`) | [`createTestApp({ modules, overrides })`](./guide/11-testing.md) | done         |
+| `@nestjs/swagger`                      | [`@dunx/openapi`](./guide/10-openapi.md)                         | done         |
+| `@nestjs/bullmq`                       | [`@dunx/infra/queue`](./guide/15-queues.md)                      | done         |
+| `@thallesp/nestjs-better-auth`         | [`@dunx/auth`](./guide/16-authentication.md)                     | done         |
+| `@nestjs/websockets` + socket.io       | [gateways on `Bun.serve`](./guide/09-websockets.md)              | done         |
+| `@nestjs/serve-static`                 | `StaticFiles` in `@dunx/http`                                    | done         |
+| `@bull-board/*`                        | bull-board mounted by `@dunx/dashboard`                          | done         |
+| `@nestjs/cache-manager`                | `@dunx/infra/redis`                                              | partial      |
+| `@nestjs/schedule` (`@Cron`)           | bullmq repeatable jobs                                           | undesigned   |
+| `@nestjs/throttler`                    | middleware                                                       | undesigned   |
+| `@nestjs/terminus`                     | -                                                                | undesigned   |
+| `@nestjs/platform-express` (`app.use`) | -                                                                | out of scope |
 
 ## The reference application
 
@@ -30,10 +84,6 @@ ready" means that app can move without redesign.
 | WebSocket decorators                                   | 6          |
 
 ## Constructor injection is native
-
-An earlier revision of this document opened with constructor injection as "the
-one unavoidable rewrite" and proposed a codemod for it. That is no longer true,
-and the codemod no longer exists.
 
 `@dunx/transform` reads constructor parameter types at load time and records them
 on the class, so the Nest shape works unchanged:
@@ -74,19 +124,17 @@ What still changes, per class:
 | `NestFactory.create`          | `HttpFactory.create`                      |
 | relative imports              | add the `.js` extension                   |
 
-One thing genuinely has no target API: custom parameter decorators. It is below.
+Custom parameter decorators have no target API. See
+[What is still missing](#what-is-still-missing).
 
-### One behaviour to know about
+### String tokens
 
 `@Inject('SOME_STRING')` has no equivalent. A dunx token is an object identity
-from `token<T>()`, not a name, so a string token has to become an exported
+from `token<T>()` rather than a name, so a string token becomes an exported
 constant that both sides import. This is the only case where the parameter type
-alone is not enough.
+alone is insufficient.
 
 ## What comes free
-
-Worth leading with in any migration guide, because it is a real reduction in
-concept count:
 
 - **`@Global()` disappears as a decorator**, becoming `global: true` on the same
   options object the module already has. Nest needs both spellings because
@@ -100,11 +148,10 @@ concept count:
 - **`forwardRef()` disappears.** Dependencies are recorded as a thunk evaluated at
   resolution time, so a circular import is not a temporal-dead-zone crash. A
   genuine cycle is a boot error naming the full path.
-- **An erased parameter is an error, not an `undefined`.** An interface or
-  primitive parameter is reported at boot with its own source text, instead of
-  quietly resolving to the wrong thing.
-- **Request-scoped providers disappear**, along with the reason to think about
-  provider scope at all.
+- **An erased parameter fails at boot**, reported with its own source text
+  instead of quietly resolving to the wrong thing.
+- **Provider scope disappears.** One lifetime, singleton per module scope:
+  [Lifecycle](./guide/07-lifecycle.md).
 - **Boot is eager**, so a wiring error is a boot error rather than a
   first-request 500.
 - **Guards, interceptors, pipes, and filters collapse into one `Middleware`
@@ -150,71 +197,6 @@ What a migrating app stops writing:
 The one thing it gains: **ordering is a list you can read**. Within a scope it is
 array order, and across scopes it is the table above, with no ancestor inheritance
 to collate across files.
-
-## Gap table
-
-Status legend: **planned** = designed in ARCHITECTURE.md, unbuilt ·
-**undesigned** = no decision recorded anywhere.
-
-### Core DI
-
-| Nest surface                       | dunx                                    | Status     |
-| ---------------------------------- | --------------------------------------- | ---------- |
-| Constructor injection              | native, resolved from parameter type    | done       |
-| `@Injectable()`                    | not needed                              | done       |
-| `@Module({ imports, providers })`  | same shape, a scope per module          | done       |
-| `@Global()`                        | `global: true`                          | done       |
-| `exports`                          | `exports`, tokens or module references  | done       |
-| `{ provide, useClass/useValue }`   | `provide()`                             | done       |
-| `useFactory` + `inject`            | `provide(T, { useFactory, inject })`    | done       |
-| `OnModuleInit` / `OnModuleDestroy` | `OnInit` / `OnShutdown`                 | done       |
-| `app.get(Token)`                   | `app.get(Token)`, permissive by design  | done       |
-| `Module.forRoot(opts)`             | `DynamicModule` from a static factory   | done       |
-| `@Optional()`                      | -                                       | undesigned |
-| `forwardRef()`                     | not needed - the deps record is a thunk | n/a        |
-| Request scope                      | rejected by design                      | n/a        |
-
-### HTTP
-
-| Nest surface                            | dunx                                | Status       |
-| --------------------------------------- | ----------------------------------- | ------------ |
-| `@Controller` / `@Get` / `@Post` / …    | same                                | done         |
-| Route params (`/:id`)                   | native `Bun.serve({ routes })`      | done         |
-| Exception filters                       | `ErrorFilter` class, or a mapper    | done         |
-| Global middleware                       | `HttpOptions.middleware`            | done         |
-| Module middleware (`forRoutes`)         | `@Module({ middleware })`           | done         |
-| Per-controller / per-route middleware   | `@UseGuards`                        | done         |
-| `@SetMetadata` + `Reflector`            | `meta` / `metaKey` + `ctx.get`      | done         |
-| `@UseGuards` / `@Roles` / `@Public`     | same names                          | done         |
-| `@Body` / `@Query` / `@Param`           | schemas on the route decorator      | done         |
-| `createParamDecorator` (`@CurrentUser`) | -                                   | undesigned   |
-| `setGlobalPrefix`                       | `app.setGlobalPrefix()`             | done         |
-| `enableCors`                            | `app.enableCors()`                  | done         |
-| `app.getUrl()`                          | `listen()` returns the URL          | done         |
-| `app.use(expressMiddleware)`            | -                                   | out of scope |
-| `@HttpCode` / `@Header` / `@Redirect`   | `status` in the options, `Response` | n/a          |
-
-### Ecosystem
-
-| Nest package                           | dunx                                    | Status       |
-| -------------------------------------- | --------------------------------------- | ------------ |
-| `nestjs-zod` / `ValidationPipe`        | Standard Schema on route decorators     | done         |
-| `@nestjs/testing` (`overrideProvider`) | `createTestApp({ modules, overrides })` | done         |
-| `@nestjs/swagger`                      | `@dunx/openapi`                         | done         |
-| `@nestjs/bullmq`                       | `@dunx/infra/queue`                     | done         |
-| `@thallesp/nestjs-better-auth`         | `@dunx/auth`                            | done         |
-| `@nestjs/websockets` + socket.io       | `@dunx/http` gateways on `Bun.serve`    | done         |
-| `@nestjs/cache-manager`                | `@dunx/infra/redis`                     | partial      |
-| `@bull-board/*`                        | -                                       | planned      |
-| `@nestjs/schedule` (`@Cron`)           | bullmq repeatable jobs                  | undesigned   |
-| `@nestjs/throttler`                    | middleware                              | undesigned   |
-| `@nestjs/terminus`                     | -                                       | undesigned   |
-| `@nestjs/serve-static`                 | -                                       | undesigned   |
-| `@nestjs/platform-express` (`app.use`) | -                                       | out of scope |
-
-`@bull-board/*` is planned rather than undesigned because `@dunx/queue-dashboard`
-existed for one release and was deleted; the replacement is one page over routes,
-providers, queues and health in `docs/roadmap/dunx-dashboard.md`.
 
 ## What is still missing
 
@@ -262,17 +244,16 @@ replaced, not adapted.
 `@dunx/ws` is plausible; a socket.io-protocol-compatible one is not, and the
 `@socket.io/redis-adapter` multi-node story would have to be rebuilt.
 
-These two are the honest gate on whether any given Nest app can move today.
+Check both before planning a migration. They gate whether an app can move today.
 
 ## The acceptance test
 
-`dunx-template` is the parity artifact this document once proposed as
-`examples/nest-parity`, and it is a running app rather than a plan: config module,
-async database factory, CRUD controllers, an auth guard reading `@Roles`, OpenAPI,
-queues and a health endpoint.
+`dunx-template` is a running parity app: config module, async database factory,
+CRUD controllers, an auth guard reading `@Roles`, OpenAPI, queues and a health
+endpoint.
 
-The question it now answers is the one module scoping introduced: which of its
-cross-cutting guards were only ever cross-cutting because there was nowhere else to
-put them. `SessionGuard` stays app-wide and should. A throttle on one feature's
-routes, or an audit stamp on one feature's writes, is a `@Module({ middleware })`
-line - and that migration is the test of whether the boundary paid for itself.
+It exercises the question module scoping introduced, which is which
+cross-cutting guards were only ever cross-cutting because Nest offered nowhere
+else to put them. `SessionGuard` stays app-wide. A throttle on one feature's
+routes, or an audit stamp on one feature's writes, becomes a
+`@Module({ middleware })` line.

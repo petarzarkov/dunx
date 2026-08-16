@@ -642,6 +642,39 @@ skipping and the app still exits 0.
 `examples/full` is the one that grows through the phases. `examples/minimal` is
 valuable only because it is small - do not add to it.
 
+## Documentation voice
+
+**Every `.md` under `docs/`, plus every published `README.md`, is gated by
+`scripts/no-slop.test.ts`.** It owns the mode map and the budgets; `/docs-pass`
+is how a file gets under them. This section is the summary, not the spec.
+
+The rule these encode: **documentation states behaviour, and `docs/architecture/`
+is the only place that argues about it.** Three sentence shapes are budgeted per
+100 prose lines because each is fine occasionally and the defect is density:
+
+| Shape          | Example                                      | Instead                          |
+| -------------- | -------------------------------------------- | -------------------------------- |
+| **antithesis** | "encodes the runtime, not the ranking"       | say what it does                 |
+| **closer**     | "which is why", "that is the point"          | delete the clause                |
+| **knowing**    | "deliberately", "by design", "the reason is" | delete, or move to architecture/ |
+
+Zero tolerance on marketing vocabulary (`seamless`, `robust`, `leverage`,
+`crucial`, `elegant`) and on sentences that announce another sentence ("In this
+guide...", "Let's look at...", "Congratulations!"). A paragraph-length cap covers
+walls of prose.
+
+**This file is exempt and it is the reason the rules exist.** The voice above was
+learned from CLAUDE.md and reproduced into every page written from it. When
+editing here, prefer the plain form even though nothing checks it.
+
+Two things that follow:
+
+- **A number, or no adjective.** "55 ms boot" over "fast boot". An unmeasured
+  claim on a docs page is a defect the same way an unmeasured claim in
+  ARCHITECTURE.md is.
+- **Assume a senior TypeScript reader.** Never explain DI, HTTP or decorators as
+  concepts; explain what dunx does differently.
+
 ## Repo Scripts
 
 - `bun run gen:readme` - regenerates the README Packages table and Project Structure block (`scripts/update-readme.ts`)
@@ -662,6 +695,7 @@ descriptions are in context until one is invoked, so this file stays cheap.
 | `/new-package`     | Adding a package, an example, or a public subpath export            |
 | `/release`         | Cutting a release, or a publish failed                              |
 | `/coverage-report` | Coverage numbers or badges are wrong                                |
+| `/docs-pass`       | Writing or revising a guide or README, or `no-slop.test.ts` fails   |
 
 New repeatable workflow → new skill. Do not grow this file instead.
 

@@ -58,7 +58,7 @@ package adds none of its own.
 
 `forRootAsync` when the configuration has to be loaded, or injected. The root
 existing before `LocalStorageOptions` names it is a real case, and creating it is
-async, which is the whole reason the factory may await:
+async, so the factory may await:
 
 ```ts
 FilesModule.forRootAsync({
@@ -71,7 +71,7 @@ FilesModule.forRootAsync({
 Both bind the same two tokens: `Storage`, and the `StorageOptions` that selected
 it. The module never branches on the backend, because the backend is whichever
 `StorageOptions` subclass got configured and `options.create()` is what builds it.
-Adding a backend is a subclass, not a branch.
+Adding a backend means writing a subclass.
 
 ### `LocalStorageOptions`
 
@@ -124,7 +124,7 @@ for await (const entry of storage.list({ prefix: 'reports', glob: '*.csv' })) {
 }
 ```
 
-Details worth knowing:
+Details:
 
 - **Local listings include dotfiles.** S3 has no notion of a hidden object, so
   neither does this.
@@ -152,8 +152,8 @@ disk. Configure S3StorageOptions, or serve the bytes through your own route.
 ```
 
 Signing is HMAC over the canonical request, so `S3Storage.presign()` is
-**synchronous and never touches the network**. That is why it returns a `string`
-rather than a promise.
+**synchronous and never touches the network**, returning a `string` rather than
+a promise.
 
 ```ts
 const url = storage.presign('invoices/2026-01.pdf', {
@@ -163,7 +163,7 @@ const url = storage.presign('invoices/2026-01.pdf', {
 });
 ```
 
-### Path traversal is rejected, not sanitised
+### Path traversal is rejected rather than sanitised
 
 Every key is resolved against the configured root, and one that lands outside it
 raises `PathTraversalError` **before any syscall**:
@@ -175,9 +175,9 @@ await storage.read('../../etc/passwd'); // PathTraversalError
 That covers `../`, an absolute key, an empty key, and the root itself. None of
 those name a file the caller is entitled to.
 
-The check is two checks, not one, and the order matters. A key is accepted or
-refused **identically on every platform**: `..\..\etc` is one legal filename to
-POSIX `resolve` but three segments to Windows, so `..` is checked as a segment on
+Two checks run, and the order matters. A key is accepted or refused
+**identically on every platform**: `..\..\etc` is one legal filename to POSIX
+`resolve` but three segments to Windows, so `..` is checked as a segment on
 **both separators** before the path is resolved at all. The boundary check then
 catches what segments cannot, which is an absolute key or a root-relative one that
 resolves out.
@@ -207,8 +207,8 @@ measured on Bun 1.3.14:
 - **`Bun.write(path, new Response(stream))` never settles** when the response body
   is itself a stream. `new Response('string')` settles normally.
 
-And a third, which is why a streaming local write does an empty `Bun.write`
-first: **`Bun.file(path).writer()` does not truncate and does not create parent
+A third forces a streaming local write to do an empty `Bun.write` first:
+**`Bun.file(path).writer()` does not truncate and does not create parent
 directories.** Writing `"bb"` over a 20-byte file leaves
 `bbAAAAAAAAAAAAAAAAAA`. The empty write does both jobs, then the sink streams in
 over the top.
@@ -219,8 +219,8 @@ Two places where a call costs more than it looks:
   instead of handing back a stream that fails on the consumer's first `read()`.
   On S3 that is one extra `HEAD`. The `GET` has not started; the returned stream
   is still lazy.
-- `Bun.file().stream()` is itself lazy: it opens on the first read. That is what
-  the `exists()` check compensates for.
+- `Bun.file().stream()` is itself lazy, opening on the first read, which the
+  `exists()` check compensates for.
 
 ## Images
 
@@ -319,8 +319,8 @@ configured `allowedFormats`.
 `gif`. `EncodableFormat` is the subset Bun has an **encoder** for: `jpeg`, `png`,
 `webp`, `heic`, `avif`. `bmp`, `tiff` and `gif` decode only.
 
-Both are frozen objects plus an indexed-access union, not enums, so one name
-serves as the value and the type.
+Both are frozen objects plus an indexed-access union rather than enums, so one
+name serves as the value and the type.
 
 ### The pipeline is immutable
 
@@ -350,9 +350,9 @@ const { bytes, format, mimeType, width, height } = await pipeline.encode();
 Two read-only properties are free: `pipeline.format` is the container the source
 bytes actually are, and `pipeline.outputFormat` is what a terminal will emit.
 
-Nothing decodes until a terminal is awaited. State is recorded as a **record, not
-a list**, because that is what the engine does: `Bun.Image` chainables overwrite,
-so calling `.resize()` twice keeps only the second.
+Nothing decodes until a terminal is awaited. State is recorded as a **record**
+rather than a list, matching the engine: `Bun.Image` chainables overwrite, so
+calling `.resize()` twice keeps only the second.
 
 ### Execution order is fixed
 
@@ -362,8 +362,7 @@ Regardless of the order you called them in, the pipeline runs:
 autoOrient -> rotate -> flip/flop -> resize -> modulate
 ```
 
-That is `Bun.Image`'s behaviour, not something dunx imposes, and knowing it saves
-a confusing afternoon.
+That ordering is `Bun.Image`'s own, and dunx does not reorder it.
 
 ### `metadata()` is not a validity check
 
@@ -468,7 +467,7 @@ names.
 
 ## Related
 
-- [Configuration](./11-configuration.md) for `forRootAsync` and `AppConfigService`
-- [Queues](./14-queues.md), since image work is the archetypal job to move off the
+- [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
+- [Queues](./15-queues.md), since image work is the archetypal job to move off the
   request path
 - `packages/infra/README.md` for the rest of `@dunx/infra`

@@ -17,12 +17,12 @@ installs neither.
 
 | Subpath              | What it is                                                      | Depth                                          |
 | -------------------- | --------------------------------------------------------------- | ---------------------------------------------- |
-| `@dunx/infra/db`     | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds | [Database](../../docs/guide/13-database.md)    |
+| `@dunx/infra/db`     | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds | [Database](../../docs/guide/14-database.md)    |
 | `@dunx/infra/redis`  | `Bun.RedisClient`, named connections, pub/sub                    | this file                                      |
-| `@dunx/infra/queue`  | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker   | [Queues](../../docs/guide/14-queues.md)        |
-| `@dunx/infra/files`  | One `Storage` contract over `Bun.file` and `Bun.S3Client`        | [Files and images](../../docs/guide/16-files-and-images.md) |
-| `@dunx/infra/images` | An immutable pipeline over `Bun.Image`                           | [Files and images](../../docs/guide/16-files-and-images.md) |
-| `@dunx/infra/logger` | **`@arkv/logger`** bound to core's `Logger` contract             | [Logging](../../docs/guide/12-logging.md)      |
+| `@dunx/infra/queue`  | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker   | [Queues](../../docs/guide/15-queues.md)        |
+| `@dunx/infra/files`  | One `Storage` contract over `Bun.file` and `Bun.S3Client`        | [Files and images](../../docs/guide/17-files-and-images.md) |
+| `@dunx/infra/images` | An immutable pipeline over `Bun.Image`                           | [Files and images](../../docs/guide/17-files-and-images.md) |
+| `@dunx/infra/logger` | **`@arkv/logger`** bound to core's `Logger` contract             | [Logging](../../docs/guide/13-logging.md)      |
 | `@dunx/infra/pagination` | Keyset pagination: cursor codec, options parser, drizzle query | this file                                  |
 
 Import from the barrel or from an area subpath. The subpaths exist so it is
@@ -33,7 +33,7 @@ The rule, so which barrel has a symbol is never a guess: **if an area is in the
 root barrel at all, all of it is** - `@dunx/infra/db` and `@dunx/infra` name the
 same set.
 
-`/queue` is the one area the barrel deliberately does **not** re-export. bullmq's
+`/queue` is the one area the barrel does **not** re-export. bullmq's
 own entry point statically imports `ioredis`, so exporting it from the root would
 make both a hard requirement of `import '@dunx/infra'`, including for an app that
 has no queue. Reach it at `@dunx/infra/queue`. `src/index.test.ts` holds both
@@ -41,13 +41,15 @@ halves of that to account.
 
 ## Two conventions that run through all six
 
-**Anything injectable by a constructor parameter is a runtime class here, never an
-interface**, because an `interface` erases and leaves nothing for
-`@dunx/transform` to record. It is an abstract class where dunx owns the contract
-(`Storage`, `DbConnection`, `ImagesOptions`, `Logger`) and the library's own class
-where it does not (`BunSQLiteDatabase`, `ContextStore`). The two `token()` exports,
-`redisConnection(name)` and `LoggerSettings`, name things no class can, so they are
-reached with `inject()` or a factory's `inject` list.
+**Anything injectable by a constructor parameter is a runtime class here, never
+an interface**, because an `interface` erases and leaves nothing for
+`@dunx/transform` to record. It is an abstract class where dunx owns the
+contract (`Storage`, `DbConnection`, `ImagesOptions`, `Logger`) and the
+library's own class where it does not (`BunSQLiteDatabase`, `ContextStore`).
+
+The two `token()` exports, `redisConnection(name)` and `LoggerSettings`, name
+things no class can, so they are reached with `inject()` or a factory's
+`inject` list.
 
 **A `forRootAsync` is never a second mechanism.** dunx resolves eagerly and settles
 every async factory before any constructor runs, so it is `forRoot` with a factory
@@ -56,7 +58,7 @@ do: inject.
 
 ## db
 
-drizzle is the database layer, not one option among several. What a repository
+drizzle is the database layer rather than one option among several. What a repository
 injects is drizzle's own database class, and every query is drizzle's query
 builder.
 
@@ -92,7 +94,7 @@ and a query logger are reachable without opening the handle by hand.
 Postgres is `SqlOptions`, synchronous SQLite is `SyncSqliteOptions`, and MySQL is
 `drizzle-orm/mysql-proxy` over `Bun.SQL`, worked through in
 `examples/databases/src/mysql/driver.ts`.
-**[Read the Database guide](../../docs/guide/13-database.md)** for all of it,
+**[Read the Database guide](../../docs/guide/14-database.md)** for all of it,
 including what synchronous mode actually measures at.
 
 ## redis
@@ -140,7 +142,7 @@ port and a healthy server are both clean. Same file.
 
 ### Named connections
 
-A named registration binds `redisConnection(name)` and deliberately does not also
+A named registration binds `redisConnection(name)` and does not also
 claim `RedisConnection`, so any number of them coexist with one default. The token
 is memoised, and because a token is not a constructor type it is reached with
 `inject()`:
@@ -179,13 +181,15 @@ optimisation: a `Bun.RedisClient` in subscriber mode rejects every data command
 with `ERR_REDIS_INVALID_STATE`, so sharing one socket would mean a single
 `subscribe()` silently broke every `get` and `set` in the process.
 
-Two limitations found by probing Bun 1.3.14, not from its docs. **`PSUBSCRIBE` is
-unusable**: passing a listener throws `ERR_INVALID_ARG_TYPE`, and passing patterns
-alone returns a promise that never settles, so there is no pattern subscription
-here and `send()` cannot rescue it. And **`exists()` is single-key**, because Bun
-coerces Redis's integer reply to a boolean; use `send('EXISTS', keys)` for a
-count. The rest, including which prototype methods are missing from `bun-types`,
-is in [docs/bun-apis.md](../../docs/bun-apis.md).
+Two limitations found by probing Bun 1.3.14 rather than reading its docs.
+**`PSUBSCRIBE` is unusable**: passing a listener throws `ERR_INVALID_ARG_TYPE`,
+and passing patterns alone returns a promise that never settles, so there is no
+pattern subscription here and `send()` cannot rescue it.
+
+And **`exists()` is single-key**, because Bun coerces Redis's integer reply to
+a boolean; use `send('EXISTS', keys)` for a count. The rest, including which
+prototype methods are missing from `bun-types`, is in
+[docs/bun-apis.md](../../docs/bun-apis.md).
 
 ## queue
 
@@ -217,7 +221,7 @@ and `JobPublisher`. Importing it opens no worker and consumes nothing. Consuming
 is `WorkerFactory.create(root)` in its own process, or `WorkerFactory.attach(app,
 root)` inside a container that already exists.
 
-**[Read the Queues guide](../../docs/guide/14-queues.md)** before deploying this.
+**[Read the Queues guide](../../docs/guide/15-queues.md)** before deploying this.
 It covers the publish/consume split, handler discovery, `jobTimeoutMs`, shutdown
 ordering, the ioredis boundary, and **a known shutdown defect** you should know about.
 
@@ -255,11 +259,12 @@ FilesModule.forRoot(
 ```
 
 Nine methods: `read`, `readBytes`, `readStream`, `write`, `exists`, `delete`,
-`list`, `stat`, `presign`. Path traversal raises `PathTraversalError` before any
-syscall, and nothing buffers a whole file to satisfy the contract.
-**[Read the Files and images guide](../../docs/guide/16-files-and-images.md)** for
-the traversal rules and their one known gap, listing behaviour, presigning, and
-why streaming has to go through a sink.
+`list`, `stat`, `presign`. Path traversal raises `PathTraversalError` before
+any syscall, and nothing buffers a whole file to satisfy the contract.
+
+**[Read the Files and images guide](../../docs/guide/17-files-and-images.md)**
+for the traversal rules and their one known gap, listing behaviour, presigning,
+and why streaming has to go through a sink.
 
 ## images
 
@@ -284,13 +289,14 @@ export class Thumbnails {
 }
 ```
 
-Two things to carry away. **The pipeline is immutable**, unlike `Bun.Image`, which
-mutates and returns `this`. And **`metadata()` is not a validity check**: it reads
-the header only, so a truncated file still reports its declared dimensions, and
-`verify()` is the one that decodes.
-**[Read the Files and images guide](../../docs/guide/16-files-and-images.md)** for
-the operations, terminals, error taxonomy, and the measured `Bun.Image` behaviour
-that is not in Bun's own docs.
+Two things to carry away. **The pipeline is immutable**, unlike `Bun.Image`,
+which mutates and returns `this`. And **`metadata()` is not a validity check**:
+it reads the header only, so a truncated file still reports its declared
+dimensions, and `verify()` is the one that decodes.
+
+**[Read the Files and images guide](../../docs/guide/17-files-and-images.md)**
+for the operations, terminals, error taxonomy, and the measured `Bun.Image`
+behaviour that is not in Bun's own docs.
 
 ## logger
 
@@ -318,7 +324,7 @@ export class Users {
 }
 ```
 
-Masking is upstream's sanitizer, not a dunx reimplementation of one. One
+Masking is upstream's sanitizer rather than a dunx reimplementation. One
 structured JSON line either way; `isDevelopment` (default
 `NODE_ENV !== 'production'`) only decides whether it is ANSI-coloured.
 
@@ -336,16 +342,16 @@ declares `logLevel` and all six levels with the same overloads, so it satisfies
 the abstract class structurally.
 
 Configuration is `@arkv/logger`'s own `LoggerConfig`, verbatim. Read its README
-for what each field does; a parallel table here is exactly the duplication the
+for what each field does; a parallel table here would be the duplication the
 reuse-`@arkv` rule exists to prevent.
 
-**[Read the Logging guide](../../docs/guide/12-logging.md)** for the contract, the
+**[Read the Logging guide](../../docs/guide/13-logging.md)** for the contract, the
 default `ConsoleLogger` and its buffering trade, request logging, transports and
 what all of it measures at.
 
 ## pagination
 
-Keyset pagination, which is the kind that stays correct while rows are being
+Keyset pagination, the kind that stays correct while rows are being
 written.
 
 ```ts
@@ -385,16 +391,18 @@ export class NotesService {
 
 ### Why keyset and not `OFFSET`
 
-An offset scan re-reads and discards every row before the page, so page 500 costs
-500 pages of work. Worse, it is wrong under writes: insert a row while someone is
-reading, and every later page shifts by one, so an item is served twice or skipped
-entirely. A cursor names the last row seen, the database seeks straight to it, and a
-concurrent insert changes nothing about what has already been read. There is a test
-for exactly that.
+An offset scan re-reads and discards every row before the page, so page 500
+costs 500 pages of work. Worse, it is wrong under writes: insert a row while
+someone is reading, and every later page shifts by one, so an item is served
+twice or skipped entirely.
+
+A cursor names the last row seen, the database seeks straight to it, and a
+concurrent insert changes nothing about what has already been read. There is a
+test for exactly that.
 
 The cursor carries the sort value **and** the row id, and the query compares both.
-Without the id tie-break, rows sharing a timestamp are the case that silently breaks
-- and rows sharing a timestamp is what a bulk insert produces.
+Without the id tie-break, rows sharing a timestamp are silently skipped or
+repeated, and a bulk insert produces exactly that.
 
 ### What it does not do
 

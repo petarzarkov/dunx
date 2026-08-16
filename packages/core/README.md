@@ -2,7 +2,7 @@
 
 The dependency injection container, modules, lifecycle, configuration, and the
 `Logger` and `RequestContext` contracts. **Zero dependencies** - that is a
-constraint, not a coincidence: it is what lets `@dunx/http` inject a logger
+constraint rather than a coincidence: it lets `@dunx/http` inject a logger
 without pulling a logging implementation in behind it.
 
 ## Install
@@ -31,7 +31,7 @@ preload = ["@dunx/transform/preload"]
 ```
 
 A parameter whose type is erased - an interface, a primitive, a union, a type-only
-import - becomes a **boot error naming that parameter**, not a silent `undefined`.
+import - becomes a **boot error naming that parameter** rather than a silent `undefined`.
 That is the wart `emitDecoratorMetadata` has and this does not.
 
 `inject()` in a field initializer is the escape hatch for a value with no
@@ -51,17 +51,18 @@ const app = await AppFactory.create(UsersModule);
 app.enableShutdownHooks();
 ```
 
-**Every module is a scope.** `providers` are private to the module that declares
-them, and `exports` is the list an importer may resolve - a module that exports
-nothing exports nothing. `exports` also accepts a `ModuleRef`, which re-exports
-whatever that module exports, so `DatabaseModule` can pass a handle on and a
-feature module imports _it_ rather than `@dunx/infra/db`. `global: true`
-publishes a module's exports to every scope with no import needed, which is what
-`ConfigModule` and `LoggerModule` use.
+**Every module is a scope.** `providers` are private to the module that
+declares them, and `exports` is the list an importer may resolve - a module
+that exports nothing exports nothing. `exports` also accepts a `ModuleRef`,
+which re-exports whatever that module exports, so `DatabaseModule` can pass a
+handle on and a feature module imports _it_ rather than `@dunx/infra/db`.
+
+`global: true` publishes a module's exports to every scope with no import
+needed, which `ConfigModule` and `LoggerModule` use.
 
 For a token requested while constructing a provider in module `M`: `M`'s own
 providers, then the exports of what `M` imports, then the global scope. **Local
-shadows imported**, which is the per-module rebinding this exists to allow. The
+shadows imported**, the per-module rebinding this exists to allow. The
 instance cache keys on the binding rather than the token, so two modules that
 each declare one class hold two instances.
 
@@ -74,7 +75,7 @@ is legal and silent. An importer seeing one token from two imports takes the
 because core has no logger and the caller knows what level it belongs at.
 
 Resolution is **eager**, and async factories are settled before any constructor
-runs - which is why there is no `forRootAsync` for asynchrony alone. Where a module
+runs, so there is no `forRootAsync` for asynchrony alone. Where a module
 does have one (`LoggerModule`, `ImagesModule`, `RedisModule`, `FilesModule`,
 `DbModule`) it is for the other thing a zero-argument function cannot do: **inject**.
 
@@ -84,10 +85,12 @@ before the database it holds.
 `enableShutdownHooks()` drains on `SIGTERM`/`SIGINT` and then **ends the
 process**. Draining is not exiting: one handle that outlives teardown leaves a
 drained, idle process alive until `SIGKILL`, and it is usually a third party's
-handle rather than yours. The forced exit is an `unref()`d timer, so it cannot
-itself hold the runtime open - a process with nothing pending exits immediately
-and waits for nothing, and the pause is only ever spent on one that would have
-hung. It logs a line when it fires, because that means something leaked.
+handle rather than yours.
+
+The forced exit is an `unref()`d timer, so it cannot itself hold the runtime
+open - a process with nothing pending exits immediately and waits for nothing,
+and the pause is only ever spent on one that would have hung. It logs a line
+when it fires, because that means something leaked.
 
 `{ exitAfterMs: false }` opts out, for an app embedded in a process it does not
 own - and for **a test that fires a signal at its own process**, where the forced
@@ -98,12 +101,12 @@ app.enableShutdownHooks(['SIGTERM'], { exitAfterMs: false });
 ```
 
 `AppFactory.create(root, { overrides })` takes registrations that **replace** a
-binding for the same token, in place, in **every scope that holds it** - so a test
-stubbing `Logger` does not have to know how many modules bind it. An override for a
-token nobody binds is an error, and the discarded provider is never instantiated
-(its `useFactory` never runs).
-`@dunx/testing` is what consumes it; there is no reason to reach for it directly in
-application code.
+binding for the same token, in place, in **every scope that holds it** - so a
+test stubbing `Logger` does not have to know how many modules bind it.
+
+An override for a token nobody binds is an error, and the discarded provider is
+never instantiated (its `useFactory` never runs). `@dunx/testing` is what
+consumes it; there is no reason to reach for it directly in application code.
 
 ## Configuration
 
@@ -152,11 +155,13 @@ Bun already loads `.env` and `.env.local`, so there is no loader here and no
 mutating the process environment.
 
 **Why the subclass.** `inject: [ConfigService]` resolves to
-`ConfigService<Record<string, unknown>>` - the token carries no type argument to
-recover, and parameters are contravariant, so a factory annotating
-`ConfigService<AppConfig>` is rejected. A subclass is a distinct runtime value, so
-it is both a precise token and a usable annotation. `ConfigService` stays bound to
-the same instance, so library code that only knows the base still resolves.
+`ConfigService<Record<string, unknown>>` - the token carries no type argument
+to recover, and parameters are contravariant, so a factory annotating
+`ConfigService<AppConfig>` is rejected.
+
+A subclass is a distinct runtime value, so it is both a precise token and a
+usable annotation. `ConfigService` stays bound to the same instance, so library
+code that only knows the base still resolves.
 
 ## Always-bound contracts
 
@@ -205,7 +210,7 @@ provide(Logger, {
 
 ### The contracts
 
-`Logger` is an `abstract class` rather than an interface on purpose: the compiler
+`Logger` is an `abstract class` rather than an interface: the compiler
 records constructor parameter *types*, and an interface has no runtime value to
 record, so it would be a boot error at the injection site.
 

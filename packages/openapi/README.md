@@ -49,7 +49,7 @@ document: they are routes.
 every other configurable module has the pair: reading the title, the version or the
 mount path off `ConfigService` is the one thing a plain `forRoot` cannot do.
 
-## zod is a peerDependency, and that is the point
+## zod is a peerDependency
 
 Bun ships no schema API, so validation is the one place dunx cannot satisfy its
 own native-only rule. The resolution is that the framework's contract is
@@ -111,7 +111,7 @@ themselves need no editing at all. Three details are not just the prefix:
 - **Two schemas with one `id`** keep the first and warn. Renaming would silently
   repoint a ref a caller had already read.
 
-`io: 'input'` is used, not the default `'output'`: a field with a `.default()` is
+`io: 'input'` is used in place of the default `'output'`: a field with a `.default()` is
 optional in a request and present in a handler, and `additionalProperties: false`
 is an output-side claim. `unrepresentable: 'any'` because a `Date` in one schema
 must not take the whole document down - zod throws otherwise.
@@ -147,10 +147,10 @@ and turns a hit into a warning.
 | `@Public()` / `@Roles()`          | `security` - see below                       |
 | `@ApiDoc()`                       | `summary`, `description`, `tags`, deprecation |
 
-Path parameters are driven by the path, not by the schema: OpenAPI requires every
+Path parameters are driven by the path rather than the schema: OpenAPI requires every
 path parameter to appear in the template, so a `params` property that is not a
 token in the path is not one. A token with no schema is documented as a string -
-which is what it is on the wire.
+which is how it arrives on the wire.
 
 The `400` is real and worth documenting. It is `defaultErrorMapper`'s output for a
 `ValidationError`, with the issue paths flattened by `buildInputReader`:
@@ -199,7 +199,7 @@ route asked for it. Roles are not scopes, so they are surfaced as
 `x-required-roles` and as a line in the description rather than being smuggled
 into a scheme's scope list.
 
-Two things this deliberately does not infer. Class-level `@Roles` is merged into
+Two things this does not infer. Class-level `@Roles` is merged into
 every route of the class - so it is documented on all of them, whether or not a
 `RolesGuard` is wired in front of each. And a guard installed as global
 middleware is invisible to a route, so "has a guard" is not a thing the document
@@ -227,7 +227,7 @@ class UsersController {
 The class's and the method's compose **per field**, the method winning where both
 spoke, so class tags plus per-method summaries needs no repetition. The document's
 top-level `tags` list is then derived from the tags the operations actually carry,
-which is what keeps a viewer's sidebar and its operation list in agreement.
+which keeps a viewer's sidebar and its operation list in agreement.
 
 ## The page
 
@@ -237,13 +237,16 @@ fetch** - no CDN, no `src=`, no `<link>`. It is an API explorer, with a
 disclosure control per operation, an **Authorize** dialog, parameter and schema
 tables, colour-coded status codes, a filter box and a light/dark toggle.
 
-The explorer is a real frontend - Vite, React and Mantine, in `internal/openapi-ui` whose **built bundle** is what this package serves. Nothing about it is
-hand-written markup in a backend package any more, and nothing about it is
-fetched: `bun run build` writes the tree-shaken bundle into `src/ui-bundle.ts`,
-and `renderPage` inlines that string. 437 KiB, against `swagger-ui-dist`'s
-11.7 MB unpacked and `@scalar/api-reference`'s 11 MB - neither of which is a
-dependency this package is willing to take, and both of which would end the
-no-external-requests guarantee that `html.test.ts` asserts.
+The explorer is a real frontend - Vite, React and Mantine, in
+`internal/openapi-ui` whose **built bundle** is what this package serves.
+
+None of it is hand-written markup in a backend package, and none of it is
+fetched. `bun run build` writes the tree-shaken bundle into `src/ui-bundle.ts`,
+and `renderPage` inlines that string.
+
+437 KiB, against `swagger-ui-dist`'s 11.7 MB unpacked and
+`@scalar/api-reference`'s 11 MB. Neither is a dependency this package will take,
+and both would end the no-external-requests guarantee `html.test.ts` asserts.
 
 **That bundle is behind `@dunx/openapi/ui`, and it is loaded on demand.** The
 barrel does not import it, and `OpenApiExplorer.page()` reaches it through a
@@ -251,13 +254,14 @@ dynamic import on the first request for the page, so a service that never opens
 `/docs` never parses a React app. Importing `@dunx/openapi` costs 19,807 B and
 about 5.7 ms rather than 479,596 B and about 10.9 ms.
 
-The document itself travels in a `<script type="application/json">`, so the page
-boots without a request. Two Bun APIs do the work a dependency usually would:
-`Bun.escapeHTML` escapes the shell, and `Bun.markdown.html` renders every
-description **on the server** - with `noHtmlBlocks`, `noHtmlSpans` and
-`tagFilter` on, so raw HTML in a schema's description is escaped rather than
-trusted, and no markdown parser lands in the bundle. `sampleFor` runs there too,
-for the same reason.
+The document itself travels in a `<script type="application/json">`, so the
+page boots without a request.
+
+Two Bun APIs do the work a dependency usually would: `Bun.escapeHTML` escapes
+the shell, and `Bun.markdown.html` renders every description **on the server**
+with `noHtmlBlocks`, `noHtmlSpans` and `tagFilter` on, so raw HTML in a
+schema's description is escaped rather than trusted, and no markdown parser
+lands in the bundle. `sampleFor` runs there too, for the same reason.
 
 ### Sending a route
 

@@ -29,17 +29,18 @@ it is ever reversed:
   teaching the test runner the same suffix - the runner is still `bun test`.
 - `public/` copying and the `dist/` clean are Vite's; `scripts/build.ts` is gone.
 
-**Every `@mantine/*` is on one major, and it is 8.** `@mantine/charts` had drifted
-to 9.5.0 against core 8.3.18, which its own `peerDependencies` forbids (it pins
-`@mantine/core` and `@mantine/hooks` to an exact version). The fix was pinning
-`charts` back to `^8.3.6` rather than moving the whole site to Mantine 9, and the
-reason it works is that `charts@8.3.18` peers `recharts` at `>=2.13.3`, so the
-installed recharts 3.10.1 satisfies both majors. `BarChart` in 8 carries every
-prop `BenchChart.tsx` passes, and a headless-Chrome render of `#/benchmarks`
-produced 5 recharts surfaces with 55 bars and the focus colour on `@dunx/http`,
-so this is verified rather than assumed. `@mantine/code-highlight` went with it:
-highlighting happens at generate time now, and nothing under `internal/docs`
-imported it.
+**Every `@mantine/*` is on one major, and it is 8.** `@mantine/charts` had
+drifted to 9.5.0 against core 8.3.18, which its own `peerDependencies` forbids
+(it pins `@mantine/core` and `@mantine/hooks` to an exact version). The fix was
+pinning `charts` back to `^8.3.6` rather than moving the whole site to Mantine
+9, and the reason it works is that `charts@8.3.18` peers `recharts` at
+`>=2.13.3`, so the installed recharts 3.10.1 satisfies both majors.
+
+`BarChart` in 8 carries every prop `BenchChart.tsx` passes, and a
+headless-Chrome render of `#/benchmarks` produced 5 recharts surfaces with 55
+bars and the focus colour on `@dunx/http`, so this is verified rather than
+assumed. `@mantine/code-highlight` went with it: highlighting happens at
+generate time now, and nothing under `internal/docs` imported it.
 
 **The model is one file per route, and the landing page carries none of them.**
 `site.json` was imported into the entry chunk, so `#/` downloaded all 21 guide
@@ -78,16 +79,18 @@ reaches no pixel. `scripts/extract/bench.ts` narrows it to what renders, which i
 10.6 KB. `BenchReport` in `model.ts` stays the harness's mirror; `BenchModel` is
 the site's shape, and a field surviving the projection means something renders it.
 
-**A README is rendered minus its repo-plumbing sections.** A package page showed
-`## Install`, `## License` and the monorepo's own build instructions, which are
-for someone working in this repository and not for someone reading the docs.
-`siteMarkdown` in `scripts/content.ts` drops a `##` section whose slug matches
-`EXCLUDED_SECTIONS` with a `-` word boundary - so `## Install it as a
-devDependency` goes with `## Install` - plus the centered title-and-badges block
-every README opens with. The list is published in `internal/docs/README.md`, and an
-author decides which side a section falls on by naming it. Guides under `docs/`
-are exempt: they _are_ repository documentation, and dropping sections from them
-would lose real content.
+**A README is rendered minus its repo-plumbing sections.** A package page
+showed `## Install`, `## License` and the monorepo's own build instructions,
+which are for someone working in this repository and not for someone reading
+the docs. `siteMarkdown` in `scripts/content.ts` drops a `##` section whose
+slug matches `EXCLUDED_SECTIONS` with a `-` word boundary - so `## Install it
+as a devDependency` goes with `## Install` - plus the centered title-and-badges
+block every README opens with.
+
+The list is published in `internal/docs/README.md`, and an author decides which
+side a section falls on by naming it. Guides under `docs/` are exempt: they
+_are_ repository documentation, and dropping sections from them would lose real
+content.
 
 **The API reference is extracted, not written.** `internal/docs/scripts/extract/`
 parses every `packages/*/src/**/*.ts` with **`oxc-parser`** - the parser
@@ -208,14 +211,16 @@ The whole of the explorer's boot cost is recovered. `dist/index.js` is 19,807 B
 plus a 13,132 B shared chunk against a 40,948 B pre-explorer baseline, and
 `dist/ui.js` carries the 447,850 B.
 
-The split turned up a **type-graph** cost that had been shipping unnoticed. `UI`
-was only ever used in a value position, so `html.d.ts` never named it and
-`dist/ui-bundle.d.ts` - a 456 KB single-line declaration holding the literal type
-of a minified bundle - was 456 KB of tarball nobody's tsc read. Exporting `UI`
-from `./ui` would have made every consumer of the subpath parse it. The generator
-in `internal/openapi-ui/scripts/build.ts` now emits `export const UI: string`, and
-the widening annotation collapses that declaration from **456,550 B to 98 B**. The
-annotation is load bearing; removing it silently restores the 456 KB file.
+The split turned up a **type-graph** cost that had been shipping unnoticed.
+`UI` was only ever used in a value position, so `html.d.ts` never named it and
+`dist/ui-bundle.d.ts` - a 456 KB single-line declaration holding the literal
+type of a minified bundle - was 456 KB of tarball nobody's tsc read. Exporting
+`UI` from `./ui` would have made every consumer of the subpath parse it.
+
+The generator in `internal/openapi-ui/scripts/build.ts` now emits `export const
+UI: string`, and the widening annotation collapses that declaration from
+**456,550 B to 98 B**. The annotation is load bearing; removing it silently
+restores the 456 KB file.
 
 **The dynamic import alone would have been a no-op**, and that was measured rather
 than assumed. `scripts/build-package.ts` set `splitting: false`, and with splitting
@@ -231,10 +236,12 @@ multi-entry ones rather than a risk: a module two subpaths share was previously
 duplicated into both entries, giving a consumer who imports both **two module
 instances**. Sharing a chunk fixes that and shrinks the output - `@dunx/infra`
 127.7 KB → 71.7 KB of dist JS, `@dunx/transform` 10.3 KB → 5.6 KB, `@dunx/auth`
-18.7 KB → 14.8 KB, `@dunx/create-app` 7.5 KB → 5.1 KB. Single-entry packages with
-no dynamic imports (`@dunx/core`, `@dunx/http`) emit byte-identical output. The
-`bin` chmod, the test-declaration sweep and the `bin`-declaration sweep are all
-keyed off entrypoints, not chunks, so none of them changed.
+18.7 KB → 14.8 KB, `@dunx/create-app` 7.5 KB → 5.1 KB.
+
+Single-entry packages with no dynamic imports (`@dunx/core`, `@dunx/http`) emit
+byte-identical output. The `bin` chmod, the test-declaration sweep and the
+`bin`-declaration sweep are all keyed off entrypoints, not chunks, so none of
+them changed.
 
 With the boot cost gone, 437 KiB is paid by the person looking at the page, which
 is the right place for it. **`preact/compat` is therefore rejected rather than

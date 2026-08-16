@@ -23,12 +23,14 @@ bunx @dunx/mcp ./src/app.module.ts
 }
 ```
 
-Point it at the file that declares your root module. There is no naming convention
-to satisfy - `@Module` leaves a marker, so a module exported only by name is found on
-its own, which is what `bunx @dunx/create-app` scaffolds. `default` and `root` win if
-present, and `--export=<name>` settles a file that declares several. The path is
-resolved with `Bun.resolveSync`, so anything `import` accepts works: a relative path
-with or without `./`, an absolute one, an extensionless specifier, or a package name.
+Point it at the file that declares your root module. No naming convention applies:
+`@Module` leaves a marker, so a module exported only by name is found on its own,
+which is what `bunx @dunx/create-app` scaffolds.
+
+`default` and `root` win if present, and `--export=<name>` settles a file that
+declares several. The path is resolved with `Bun.resolveSync`, so anything
+`import` accepts works: a relative path with or without `./`, an absolute one, an
+extensionless specifier, or a package name.
 
 ## The tools
 
@@ -73,8 +75,8 @@ whether it would boot, without returning the graph:
 `unresolvedDependencies` is listed rather than counted, because each entry is a boot
 error naming a parameter. A constructor parameter whose type was erased - an
 interface, a primitive, a union, a type-only import - is recorded by
-`@dunx/transform` as `unresolved`, and that is the wart `emitDecoratorMetadata` has
-and dunx does not. The `typeOnly` case is called out separately because it has a
+`@dunx/transform` as `unresolved`. `emitDecoratorMetadata` has that wart and dunx
+does not. The `typeOnly` case is called out separately because it has a
 one-line fix:
 
 ```json
@@ -120,17 +122,17 @@ optional peer, loaded only when `dunx_openapi` is called.
 This is the decision the package is built around.
 
 `AppFactory.create()` instantiates every provider and awaits every async factory
-before it returns - dunx has no lazy resolution, deliberately. So booting an app to
-answer "what routes exist" would open database connections, start queue workers, bind
-sockets and run every `onInit`. An agent asking a question about the code would be
-running the code, with side effects, against whatever environment happened to be
-configured.
+before it returns, dunx having no lazy resolution. Booting an app to answer "what
+routes exist" would open database connections, start queue workers, bind sockets
+and run every `onInit`, so an agent asking a question about the code would be
+running the code against whatever environment happened to be configured.
 
 Reading costs none of that. `discoverRoutes` and `discoverGateway` each walk a
-prototype chain, and `Object.create(Controller.prototype)` is that chain with nothing
-behind it: `instance.constructor` still resolves to the class, every method is still
-reachable, and no constructor - or dependency of one - has to exist. The container
-graph comes from the same functions the container itself reads it with:
+prototype chain, and `Object.create(Controller.prototype)` is that chain with
+nothing behind it: `instance.constructor` still resolves to the class, every
+method stays reachable, and no constructor has to exist.
+
+The container graph comes from the same functions the container reads it with:
 `collectModules`, `readControllers`, `readDeps` and `describeToken`.
 
 **What that rules out is runtime state.** The value of a config field, or whether the
@@ -145,13 +147,13 @@ The questions it answers better than a search:
 - **"What is the unauthenticated surface?"** `dunx_routes` with `publicOnly`, which
   is `@Public()` resolved through class-level and method-level metadata rather than
   grepped for.
-- **"Why does boot fail?"** `dunx_providers` with `unresolvedOnly`, which is the set
-  of registrations that would throw, with the parameter named.
+- **"Why does boot fail?"** `dunx_providers` with `unresolvedOnly`, giving the
+  registrations that would throw, with the parameter named.
 - **"Who binds this token?"** `dunx_providers` with `token`, which reports the module
   and the binding kind - a `useFactory` and a bare class look nothing alike in source
   and identical here.
 - **"Which event does this websocket message land on?"** `dunx_gateways`, since
   `@OnMessage('say')` is a marker on a method and nothing in the path tells you.
 
-And the one it deliberately cannot answer: **"is Redis up?"** That needs the app
-running, and this never runs it.
+And the one it cannot answer: **"is Redis up?"** That needs the app running, and
+this never runs it.

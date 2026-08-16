@@ -14,7 +14,7 @@ import { validate, AppConfigService } from './config.js';
 export class AppModule {}
 ```
 
-## One validation function, not a schema DSL
+## One validation function in place of a schema DSL
 
 `ConfigModule.forRoot` takes exactly one required option:
 
@@ -31,11 +31,12 @@ Whatever it throws is what boot fails with, so throw something whose message say
 which keys are wrong.
 
 That is the whole contract. There is no `envFilePath`, no `load: [...]`, no
-`validationSchema`, no `expandVariables`. The reason is that a schema DSL can only
-ever express what its author anticipated, and a function expresses everything.
-Grouping flat variables into nested objects, deriving one value from two others,
-reading a secret out of a file, calling a secret manager: all of those are
-ordinary code inside `validate`, and none of them needs an option added to dunx.
+`validationSchema`, no `expandVariables`.
+
+A schema DSL can only express what its author anticipated; a function expresses
+everything. Grouping flat variables into nested objects, deriving one value from
+two others, reading a secret out of a file, calling a secret manager: each is
+ordinary code inside `validate`, and none needs an option added to dunx.
 
 With zod it is one line:
 
@@ -109,8 +110,8 @@ export const validate = (env: ConfigSource): AppConfig => {
 
 Two things worth copying from it. `.default()` is where a value comes from when
 the variable is unset, so a clean checkout boots with no `.env` at all. And the
-returned shape is nested even though the input is flat, which is why
-`config.get('log')` hands back a group rather than a lone string.
+returned shape is nested even though the input is flat, so `config.get('log')`
+hands back a group rather than a lone string.
 
 ## Reading it
 
@@ -136,17 +137,16 @@ export class Notifier {
 }
 ```
 
-- `get(key)` returns the value at that key, typed. A key that is not on `T` is a
-  compile error, not a runtime `undefined`.
-- `getOrThrow(key)` guards the **value** being present, not the key being
-  declared. A missing key is already a type error, so what this catches is a
-  declared-but-optional field that is `undefined` or `null` at run time. It throws
-  `ConfigError`.
+- `get(key)` returns the value at that key, typed. A key absent from `T` is a
+  compile error rather than a runtime `undefined`.
+- `getOrThrow(key)` guards the **value** being present. A missing key is already
+  a type error, so this catches a declared-but-optional field that is `undefined`
+  or `null` at run time. It throws `ConfigError`.
 - `values` is the whole validated object, for destructuring or passing on.
 
-There is deliberately no dotted-path lookup. The object is fully typed, and
-`config.values.db.host` already reads better than `config.get('db.host')` while
-also being checked.
+There is no dotted-path lookup. The object is fully typed, and
+`config.values.db.host` reads better than `config.get('db.host')` while staying
+checked.
 
 ## Why `as` exists
 
@@ -163,13 +163,14 @@ bare type name of a constructor parameter and discards the type argument, so
 `constructor(private readonly config: ConfigService<AppConfig>)` resolves the
 `ConfigService` token while the annotation keeps the precise type.
 
-The place it breaks is a **factory's `inject` array**, and this is the reason `as`
-is on the API at all. `inject: [ConfigService]` resolves to
-`ConfigService<Record<string, unknown>>`, because the token is a plain runtime
-value that carries no type argument to recover. A factory that annotates its
-parameter as `ConfigService<AppConfig>` is then **rejected**: parameters are
-contravariant, so a function demanding the narrower type is not assignable where
-one accepting the wider type is expected.
+It breaks in a **factory's `inject` array**, which is why `as` is on the API at
+all. `inject: [ConfigService]` resolves to
+`ConfigService<Record<string, unknown>>`, the token being a plain runtime value
+carrying no type argument to recover.
+
+A factory annotating its parameter as `ConfigService<AppConfig>` is then
+**rejected**: parameters are contravariant, so a function demanding the narrower
+type is not assignable where one accepting the wider type is expected.
 
 ```ts
 // Rejected. The token says Record<string, unknown>; the parameter demands AppConfig.
@@ -189,9 +190,9 @@ LoggerModule.forRootAsync({
 });
 ```
 
-A subclass is both a precise token and a usable annotation, which is exactly what
-the factory case needs. Since every `forRootAsync` in dunx exists so that options
-can be read off config, you will reach for `as` almost immediately.
+A subclass serves as both a precise token and a usable annotation, which is what
+the factory case needs. Every `forRootAsync` in dunx exists so options can be read
+off config, so `as` comes up almost immediately.
 
 `ConfigService` stays bound to the same instance when `as` is used, so either name
 injects. That matters for library code, which only knows the base contract.
@@ -228,7 +229,7 @@ The raw source is bound too, under the `ConfigInput` token, but it is **not**
 exported: `validate` is what reads it, and everything downstream reads the shaped
 object instead.
 
-## Two things that are not there, on purpose
+## Two things that are absent
 
 **No `isGlobal`.** `ConfigModule.forRoot` is already `global: true`, and exports
 `ConfigService` plus whatever `as` names. Configuration is the one thing every
@@ -236,13 +237,14 @@ module reads, so a flag to turn that on would only ever be turned on. `ConfigInp
 stays private: it is the raw environment, and nothing outside the module should read
 it.
 
-**No `forRootAsync`.** Every other module has one; `ConfigModule` does not need
-one. `validate` may already return a promise, and the container settles every
-factory before the first constructor runs, so an async validation is already
-finished by the time anything can read it. `forRootAsync` exists elsewhere for a
-different reason: to let a factory **inject**, which is the one thing a
-zero-argument function cannot do. `validate` has nothing to inject, since it runs
-before everything.
+**No `forRootAsync`.** Every other module has one; `ConfigModule` needs none.
+`validate` may already return a promise, and the container settles every factory
+before the first constructor runs, so an async validation has finished by the
+time anything can read it.
+
+`forRootAsync` exists elsewhere to let a factory **inject**, the one thing a
+zero-argument function cannot do. `validate` runs before everything and has
+nothing to inject.
 
 ## Where config is consumed
 
@@ -258,7 +260,7 @@ DbModule.forRootAsync(SyncDatabase, {
 });
 ```
 
-See [Logging](./12-logging.md), [Database](./13-database.md),
-[Queues](./14-queues.md), [Authentication](./15-authentication.md) and
-[Files and images](./16-files-and-images.md) for the rest, and
+See [Logging](./13-logging.md), [Database](./14-database.md),
+[Queues](./15-queues.md), [Authentication](./16-authentication.md) and
+[Files and images](./17-files-and-images.md) for the rest, and
 [Providers](./03-providers.md) for how a factory provider resolves in general.

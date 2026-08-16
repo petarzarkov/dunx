@@ -13,15 +13,17 @@ has two subjects - raw `Bun.serve` and a dunx app - each serving routes that add
 step at a time, and `$VALIDATOR` swaps the library behind `~standard` without
 changing anything else.
 
-**The first version of this harness measured each row to completion in turn, and that
-was wrong.** The differences it exists to report are 2-4%, and the machine's own
-throughput drifts by more than that over the minutes a run takes - so the drift landed
-on whichever row happened to be measured while it was happening. It produced
-`raw:parse` as _slower_ than `raw:noop`, which does strictly more work, and several
-negative validator costs. The runner now brings every unit up first and measures them
-**round-robin**, which spreads the drift across all rows equally; the ordering came out
-monotonic on the first attempt afterwards. Noise floor at this throughput is about
-**±0.3 µs**, and figures below it are reported rather than clamped.
+**The first version of this harness measured each row to completion in turn,
+and that was wrong.** The differences it exists to report are 2-4%, and the
+machine's own throughput drifts by more than that over the minutes a run takes -
+so the drift landed on whichever row happened to be measured while it was
+happening. It produced `raw:parse` as _slower_ than `raw:noop`, which does
+strictly more work, and several negative validator costs.
+
+The runner now brings every unit up first and measures them **round-robin**,
+which spreads the drift across all rows equally; the ordering came out
+monotonic on the first attempt afterwards. Noise floor at this throughput is
+about **±0.3 µs**, and figures below it are reported rather than clamped.
 
 ### Parsing costs 3x what validating costs
 
@@ -52,16 +54,19 @@ changed. Cost is that validator's own time, taken as the raw `Bun.serve` subject
 | Valibot                     |  0.89 µs | native      |
 | zod                         |  0.94 µs | native      |
 
-**zod, Valibot and ArkType are within noise of each other**, and both compiled options
-land at or under the noise floor - TypeBox's compiled checker is indistinguishable
-from not validating at all on a three-field payload. All five are under the 3.10 µs
-the parse costs, so **there is no throughput argument for steering a user off zod**: a
-0.9 µs saving on a request that takes 13 µs is 7%, against giving up zod's ecosystem,
-error messages and `z.toJSONSchema` (which `@dunx/openapi` uses). The advice this
-produces is "pick on API, not on this table", and the table exists so that advice is
-checkable. It would very likely read differently on a deeply nested schema, where
-compiled straight-line code diverges from an interpreter far more than at this size -
-which is a limitation of the payload, and is recorded in the harness's README.
+**zod, Valibot and ArkType are within noise of each other**, and both compiled
+options land at or under the noise floor - TypeBox's compiled checker is
+indistinguishable from not validating at all on a three-field payload. All five
+are under the 3.10 µs the parse costs, so **there is no throughput argument for
+steering a user off zod**: a 0.9 µs saving on a request that takes 13 µs is 7%,
+against giving up zod's ecosystem, error messages and `z.toJSONSchema` (which
+`@dunx/openapi` uses).
+
+The advice this produces is "pick on API, not on this table", and the table
+exists so that advice is checkable. It would very likely read differently on a
+deeply nested schema, where compiled straight-line code diverges from an
+interpreter far more than at this size - which is a limitation of the payload,
+and is recorded in the harness's README.
 
 Neither TypeBox 0.34 nor ajv 8 exposes `~standard`. Both were bridged in about ten
 lines each in `servers/validation/schemas.ts` - a boolean `Check` plus their error
@@ -143,15 +148,17 @@ route:
 | after the reader change   |       2.64 µs |       83.0% |
 | after the dispatch change |       1.40 µs |       90.3% |
 
-In the main suite that is **`validate` 84.0% -> 92.3% of raw `Bun.serve`**, which also
-puts dunx **9 points ahead of Elysia** on the one scenario where it used to be level
-(Elysia is at 83.2% in the same run). The reader now costs _less_ than doing the same
-work by hand in a handler - the "framework does it" row comes out 0.19 µs **below**
-the hand-written one, inside the noise floor, which is the honest reading of "no longer
-costs anything". The microbenchmark agrees and can resolve it: the reader's plumbing
-went from **597 ns to 146 ns** with a no-op schema, a 4.1x improvement, and a
-`params`-only route with a synchronous validator reads and validates in **56 ns** with
-no promise allocated at all.
+In the main suite that is **`validate` 84.0% -> 92.3% of raw `Bun.serve`**,
+which also puts dunx **9 points ahead of Elysia** on the one scenario where it
+used to be level (Elysia is at 83.2% in the same run). The reader now costs
+_less_ than doing the same work by hand in a handler - the "framework does it"
+row comes out 0.19 µs **below** the hand-written one, inside the noise floor,
+which is the honest reading of "no longer costs anything".
+
+The microbenchmark agrees and can resolve it: the reader's plumbing went from
+**597 ns to 146 ns** with a no-op schema, a 4.1x improvement, and a
+`params`-only route with a synchronous validator reads and validates in **56
+ns** with no promise allocated at all.
 
 Nothing about the `json`, `params` or `plaintext` rows moved, which is the check that
 changes 1 and 2 are confined to routes that declare a schema.
@@ -169,15 +176,16 @@ avoidable: a hand-written body-only reader that builds `{ req, body }` as one li
 and calls `~standard.validate` inline measured **306 ns/request against the shipped
 reader's 394 ns** on the same microbenchmark - a real, repeatable 88 ns.
 
-Rejected. 88 ns is 0.6% of a 14 µs request, which is **below the noise floor of the
-HTTP harness** (run-to-run stddev is 1-3%), so the win cannot be demonstrated at the
-level anyone experiences it - and unlike the `forEach` change above, which is a
-comparable 140 ns, it does not pay for itself in simplicity. It would need one code
-path per declared combination to be consistent, and would duplicate the 415 and 400
-handling that `bodyFill` owns, where `forEach` replaced a `for…of` with fewer moving
-parts than it had before. That asymmetry is the rule this file is applying: a
-sub-noise-floor win is worth taking when the code gets simpler and not when it
-does not.
+Rejected. 88 ns is 0.6% of a 14 µs request, which is **below the noise floor of
+the HTTP harness** (run-to-run stddev is 1-3%), so the win cannot be
+demonstrated at the level anyone experiences it - and unlike the `forEach`
+change above, which is a comparable 140 ns, it does not pay for itself in
+simplicity. It would need one code path per declared combination to be
+consistent, and would duplicate the 415 and 400 handling that `bodyFill` owns,
+where `forEach` replaced a `for…of` with fewer moving parts than it had before.
+
+That asymmetry is the rule this file is applying: a sub-noise-floor win is
+worth taking when the code gets simpler and not when it does not.
 
 Also rejected: pre-seeding the draft with the declared keys set to `undefined` so the
 property stores do not transition the object's shape. It changes `Object.keys(input)`

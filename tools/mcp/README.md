@@ -62,14 +62,15 @@ the rest are unaffected.
 
 ## It reads the app. It never boots it.
 
-This is the decision the package is built around, so it is worth stating plainly.
+This is the decision the package is built around.
 
-`AppFactory.create()` instantiates every provider and awaits every async factory
-before it returns - dunx has no lazy resolution, deliberately. So booting an app to
-answer "what routes exist" would open database connections, start queue workers, bind
-sockets and run every `onInit`. An agent asking a question about the code would be
-running the code, with side effects, against whatever environment happened to be
-configured.
+`AppFactory.create()` instantiates every provider and awaits every async
+factory before it returns, dunx having no lazy resolution. So
+booting an app to answer "what routes exist" would open database connections,
+start queue workers, bind sockets and run every `onInit`.
+
+An agent asking a question about the code would be running the code, with side
+effects, against whatever environment happened to be configured.
 
 Reading costs none of that. `discoverRoutes` walks a prototype chain, and
 `Object.create(Controller.prototype)` is that chain with nothing behind it: every
@@ -99,12 +100,14 @@ is how a token ends up rendered as `[object Object]`.
 
 ## No dependencies
 
-The protocol here is newline-delimited JSON-RPC 2.0 with four methods -
-`initialize`, `ping`, `tools/list`, `tools/call` - and it is about eighty lines in
-`src/protocol.ts`. dunx's rule against reinventing mature libraries is aimed at ORMs,
-validators, auth flows and job queues, where the library is years of edge cases; a
-framing loop is not that, and hand-writing it is what lets `bunx @dunx/mcp` resolve
-nothing at all.
+The protocol here is newline-delimited JSON-RPC 2.0 with four methods:
+`initialize`, `ping`, `tools/list`, `tools/call`, about eighty lines in
+`src/protocol.ts`.
+
+dunx's rule against reinventing mature libraries aims at ORMs, validators, auth
+flows and job queues, where the library is years of edge cases. A framing loop is
+none of those, and hand-writing it lets `bunx @dunx/mcp` resolve nothing at
+all.
 
 `ping` is base protocol rather than part of any capability, so a server that declares
 only `tools` still has to answer it: a client sends it to check the connection is
@@ -117,13 +120,15 @@ instead. At that point the protocol surface stops being something worth hand-hol
 `@dunx/core` and `@dunx/http` are peer dependencies: this reads *your* app's module
 graph, so it has to be the same copy of them your app uses.
 
-**That failure is silent, so it is worth knowing the shape of it.** `metaKey` mints a
-fresh `Symbol(name)` per call - deliberately, so two libraries that both name a key
-`roles` can never read each other's value. `PUBLIC` and `ROLES` are therefore
-module-level singletons of `@dunx/http`, and a second copy of that package has
-*different symbols*. Nothing throws: `dunx_routes` just reports every route as
-`public: false` with `roles: null`. Encountered while testing this package against a
-fixture whose `node_modules` resolved a second copy.
+**That failure is silent, so learn its shape.** `metaKey` mints a fresh
+`Symbol(name)` per call, so two libraries that
+both name a key `roles` can never read each other's value. `PUBLIC` and `ROLES`
+are therefore module-level singletons of `@dunx/http`, and a second copy of
+that package has *different symbols*.
+
+Nothing throws: `dunx_routes` just reports every route as `public: false` with
+`roles: null`. Encountered while testing this package against a fixture whose
+`node_modules` resolved a second copy.
 
 The same applies to `@dunx/core`, where two copies means two different class objects
 and a token *is* a class object.

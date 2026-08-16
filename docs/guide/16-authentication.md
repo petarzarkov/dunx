@@ -69,8 +69,8 @@ AuthModule.forRoot({
 ```
 
 `const O` on `forRoot`'s type parameter is load-bearing: it keeps the literal
-`plugins` tuple, which is what `betterAuth()` infers the plugin endpoints from,
-and therefore what `Auth<typeof options>` resolves to at an injection site.
+`plugins` tuple that `betterAuth()` infers the plugin endpoints from, and
+therefore what `Auth<typeof options>` resolves to at an injection site.
 
 ### What it binds
 
@@ -85,7 +85,7 @@ Plus one controller: a prefixed `AuthHandler` serving every better-auth endpoint
 under `basePath`.
 
 `SessionGuard` is a provider rather than global middleware because whether it
-guards the whole app or one controller is the app's decision, not the module's.
+guards the whole app or one controller is the app's decision to make.
 
 ## Mounting on `Bun.serve`
 
@@ -238,7 +238,7 @@ export class ReportsController {}
 ### `@Public()`
 
 A `@Public()` route is **skipped outright**. No session lookup, no rejection, no
-role check. That is what makes global installation safe: better-auth's own
+role check. Global installation is safe for that reason: better-auth's own
 endpoints are `@Public()`, and a sign-in route that needed a session could never
 be reached.
 
@@ -264,8 +264,8 @@ roles in a single `role` column, comma-separated for more than one; a custom
 plugin may use an array. A user with no roles reads as `[]` rather than throwing,
 since an app may well not use roles at all.
 
-`@Public()` and `@Roles()` are `@dunx/http`'s own metadata, not auth-specific
-decorators. `SessionGuard` composes with what the routes already carry.
+`@Public()` and `@Roles()` are `@dunx/http`'s own metadata rather than
+auth-specific decorators. `SessionGuard` composes with what the routes already carry.
 
 ## `AuthContext`
 
@@ -301,11 +301,12 @@ const principal = this.auth.current<typeof authOptions>();
 `@dunx/core`'s `RequestContext`.
 
 `AsyncLocalStorage` at all, for the same reason core's `RequestContext` uses it:
-it is a Node built-in Bun implements natively, and it is the only mechanism that
-gets a value from middleware to a service three constructor hops away without
-passing it. Both alternatives were worse. Request-scoped DI was measured and
-rejected, and hanging the principal off `req` reaches a route handler but nothing
-a route handler calls, which is the case that matters.
+a Node built-in Bun implements natively, and the only mechanism that gets a value
+from middleware to a service three constructor hops away without passing it.
+
+Both alternatives were worse. Request-scoped DI was measured and rejected, and
+hanging the principal off `req` reaches a route handler but nothing a route
+handler calls.
 
 A **second** store rather than a key in `RequestContext`, because that store is
 the log record. Every field in it is serialized into every line the request
@@ -314,7 +315,7 @@ hazard in the ones that matter.
 
 What does go there is `userId`, a well-known `RequestFields` key, written by
 `run()`. So the log lines are correlated without carrying the principal. See
-[Logging](./12-logging.md).
+[Logging](./13-logging.md).
 
 ## `Bun.password` hashing
 
@@ -398,17 +399,17 @@ AuthModule.forRootAsync({
 });
 ```
 
-**All five methods are implemented, not the three that are mandatory.**
+**All five methods are implemented, beyond the three that are mandatory.**
 better-auth marks `getAndDelete` and `increment` optional because most clients
 cannot do them atomically. `Bun.RedisClient` can, through `GETDEL` and `INCR`.
 Without them, better-auth falls back to read-then-delete for single-use
 credentials, which is a race, and to a non-atomic rate-limit counter.
 
-`increment`'s TTL is applied only when `INCR` returns `1`, which is what makes the
-window fixed rather than sliding forever: a return of `1` is the signal that this
-call created the key.
+`increment`'s TTL is applied only when `INCR` returns `1`, keeping the window
+fixed rather than sliding forever. A return of `1` signals that this call created
+the key.
 
-Redis being unreachable is deliberately **not** softened. Bun's client connects
+Redis being unreachable is **not** softened. Bun's client connects
 lazily and queues, so a command against a down server rejects and better-auth's
 own error path is what should see it. A swallowed `null` from `get` would read as
 "no session" and sign every user out.
@@ -446,13 +447,15 @@ too, and a test double is six methods instead of a whole surface.
 
 Two reasons, and the second is the concrete one.
 
-**The web layer boundary.** `@dunx/auth` is not `@dunx/infra/auth`, because the
-guard is `@dunx/http` middleware and reads `@dunx/http`'s `PUBLIC` and `ROLES`
-metadata keys. `@dunx/infra` must not depend on the web layer: it is what a CLI
-script, a seeder or a queue worker imports, and none of those have an HTTP server.
-A package that pulled `@dunx/http` in behind `@dunx/infra/db` would put a route
-table in every one of them. So the dependency runs the other way, and `@dunx/auth`
-depends on `@dunx/infra` **not at all**.
+**The web layer boundary.** `@dunx/auth` is its own package because the guard is
+`@dunx/http` middleware and reads `@dunx/http`'s `PUBLIC` and `ROLES` metadata
+keys.
+
+`@dunx/infra` must not depend on the web layer: it is what a CLI script, a seeder
+or a queue worker imports, and none of those have an HTTP server. A package that
+pulled `@dunx/http` in behind `@dunx/infra/db` would put a route table in every
+one of them. The dependency runs the other way, and `@dunx/auth` depends on
+`@dunx/infra` **not at all**.
 
 **A build-order race.** `@dunx/infra` as a `devDependency` of `@dunx/auth` is not
 an edge `bun run --filter '*'` orders on, so `tsc --emitDeclarationOnly` in
@@ -460,7 +463,7 @@ an edge `bun run --filter '*'` orders on, so `tsc --emitDeclarationOnly` in
 Type-only imports would not have helped, because tsc needs the `.d.ts` either
 way. Restating **removed the edge** instead of sequencing it.
 
-## No schema, on purpose
+## No schema
 
 dunx ships **no** schema for better-auth's tables. They are better-auth's, they
 change with its plugins, and its own CLI generates them:
@@ -472,7 +475,7 @@ bunx @better-auth/cli generate
 A copy of them inside a framework is a copy that silently rots against the library
 that reads it.
 
-Two things learned while building the test fixture, worth knowing if you create
+Two things learned while building the test fixture, which apply if you create
 those tables by hand:
 
 - ``db.run(sql`...`)`` goes through `bun:sqlite`'s `prepare`, which compiles
@@ -484,7 +487,7 @@ those tables by hand:
 
 ## Related
 
-- [Database](./13-database.md) for the connection `drizzleDatabase` reuses
-- [Logging](./12-logging.md) for the `RequestContext` that carries `userId`
-- [Configuration](./11-configuration.md) for `forRootAsync` and `AppConfigService`
+- [Database](./14-database.md) for the connection `drizzleDatabase` reuses
+- [Logging](./13-logging.md) for the `RequestContext` that carries `userId`
+- [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
 - `packages/auth/README.md` for the full API surface

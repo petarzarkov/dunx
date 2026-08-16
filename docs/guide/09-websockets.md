@@ -78,9 +78,8 @@ Three consequences:
   both, since the two tables merge and one of them would be silently dropped.
 
 `app.gatewayPaths` lists every path this app upgrades on, exactly as mounted.
-Note that `setGlobalPrefix()` moves **routes, not gateways**: the prefix is
-applied to discovered controller routes, and a gateway path is what the decorator
-said it was.
+`setGlobalPrefix()` moves **routes only**. The prefix applies to discovered
+controller routes, and a gateway path stays what the decorator said.
 
 ## The lifecycle decorators
 
@@ -171,7 +170,7 @@ export interface Envelope {
 ```
 
 A client sends `{"event":"say","data":"hello"}`; the frame is routed to
-`@OnMessage('say')` and the handler receives the `data`, not the envelope. If the
+`@OnMessage('say')` and the handler receives the `data` alone. If the
 handler returns a value other than `undefined`, that value is sent back to the
 sender under the **same event name**:
 
@@ -182,7 +181,7 @@ say(text: string): { delivered: number } {
 }
 ```
 
-That is a reply to the caller, not a broadcast. Broadcasting is `PubSub`, below.
+That replies to the caller. Broadcasting is `PubSub`, below.
 
 Decoding is skipped entirely for a gateway that declares no named handlers. A
 gateway with only a raw `@OnMessage()` never parses anything:
@@ -238,8 +237,8 @@ export class Lobby {
 }
 ```
 
-Listing `PubSub` in your own `providers` is the container's duplicate-binding
-error, not a second instance.
+Listing `PubSub` in your own `providers` raises the container's duplicate-binding
+error.
 
 | Member                              | Does                                                                           |
 | ----------------------------------- | ------------------------------------------------------------------------------ |
@@ -273,9 +272,9 @@ export interface PubSubRelay {
 }
 ```
 
-The return types are `unknown` on purpose. Bun's `publish` resolves the subscriber
-count, `@dunx/infra`'s resolves nothing, and an in-memory bus resolves nothing at
-all. A returned promise is awaited by `subscribe` and watched for rejection by
+The return types are `unknown` because the implementations disagree: Bun's
+`publish` resolves the subscriber count, `@dunx/infra`'s resolves nothing, and an
+in-memory bus resolves nothing at all. A returned promise is awaited by `subscribe` and watched for rejection by
 `publish`; anything else is taken as having succeeded.
 
 `close?` is optional, and omitting it is how a relay says the connections are not
@@ -296,10 +295,11 @@ const app = await HttpFactory.create(AppModule, {
 `RedisRelay` is built on `Bun.RedisClient`, a Bun global, so it costs
 `@dunx/http` **zero dependencies**: the package still depends only on
 `@dunx/core`. With no `url` it resolves the same chain Bun's client does,
-`$VALKEY_URL`, then `$REDIS_URL`, then `redis://localhost:6379`. A URL with an
-unrecognised scheme is rejected at construction, because Bun accepts any string
-and only fails later with an opaque `Connection closed`, which an
-absence-tolerant relay would swallow and turn into silent single-node fan-out.
+`$VALKEY_URL`, then `$REDIS_URL`, then `redis://localhost:6379`.
+
+A URL with an unrecognised scheme is rejected at construction. Bun accepts any
+string and fails later with an opaque `Connection closed`, which an
+absence-tolerant relay would swallow into silent single-node fan-out.
 
 It opens **two** connections. A `Bun.RedisClient` in subscriber mode rejects every
 data command and throws synchronously doing it, so the subscription cannot share
@@ -308,9 +308,9 @@ makes.
 
 `maxRetries` defaults to **`0`**, and that default is not a preference. A
 `Bun.RedisClient` that never connects keeps an internal retry timer alive past
-`close()`, and the process then never exits. A relay is exactly the connection
-most likely to be absent, so the default has to be the one that lets the app boot,
-degrade, and still exit. Raise it when Redis is a hard requirement.
+`close()`, and the process then never exits. A relay is the connection most
+likely to be absent, so the default lets the app boot, degrade, and still exit.
+Raise it when Redis is a hard requirement.
 
 ### Reusing a connection you already have
 
@@ -330,7 +330,7 @@ await app.listen();
 `relayThrough` throws on a second call rather than replacing the relay: two
 subscriptions on one channel is another way to get every message twice.
 
-### One channel, not one per topic
+### One channel for every topic
 
 Every topic's frames travel on a single broker channel, `dunx:ws` by default.
 
@@ -342,8 +342,8 @@ client exposes no hook for pattern messages. Re-checked on Bun 1.3.14.
 
 The cost is stated plainly: **every node reads every relayed frame** and drops the
 ones for topics it has no local subscriber on, which is a `server.publish`
-returning `0`. Two applications sharing one Redis need two channels, which is what
-`relayChannel` is for.
+returning `0`. Two applications sharing one Redis need two channels; pass
+`relayChannel`.
 
 ### `origin`, and why a node does not fan out its own echo
 
@@ -444,12 +444,14 @@ await this.#server?.stop(this.#websocket !== undefined);
 Those clients observe close code **1006**. There is no way around it that does not
 hang, and an app that hangs on `SIGTERM` gets `SIGKILL` anyway.
 
-`PubSub.close()` runs **before** the container tears down, because a relay this app
-owns holds two Redis sockets and, with `maxRetries: 0`, nothing else will ever
-close them. It also drops the server reference, which is what makes a relay the
-_app_ owns safe to leave subscribed: `PubSubRelay` has no unsubscribe, so a frame
-may still arrive on a shared connection after this node stopped, and with no
-server there is nothing for it to fan out to.
+`PubSub.close()` runs **before** the container tears down. A relay this app owns
+holds two Redis sockets and, with `maxRetries: 0`, nothing else would ever close
+them.
+
+It also drops the server reference, which makes an app-owned relay safe to leave
+subscribed. `PubSubRelay` has no unsubscribe, so a frame may still arrive on a
+shared connection after this node stopped, and with no server there is nothing to
+fan it out to.
 
 `enableShutdownHooks()` wires `SIGTERM` and `SIGINT` to all of it.
 
@@ -466,8 +468,8 @@ server there is nothing for it to fan out to.
 - **A handler that throws does not close the socket.** It goes to
   `websocket.onError` and the connection stays up.
 - **Two gateways on one path, two handlers in one slot, and a gateway with no
-  handlers are all boot errors**, not runtime surprises.
+  handlers are all boot errors.**
 - **The event-name reply goes to the sender only.** Returning a value from
-  `@OnMessage('x')` is a reply, not a broadcast.
+  `@OnMessage('x')` replies; it does not broadcast.
 
-Next: [OpenAPI](./09-openapi.md).
+Next: [OpenAPI](./10-openapi.md).

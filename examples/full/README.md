@@ -76,12 +76,13 @@ curl -s localhost:3000/api/reports                                  # 401
 curl -s localhost:3000/api/reports -H 'authorization: Bearer viewer'  # 200
 ```
 
-`bun run tour` also boots a **second node** for `/chat` - a second `Bun.serve` and a
-second container in the same process - and relays a publish between the two through
-Redis, asserting one delivery per client. Node A relays with `@dunx/http`'s
-`RedisRelay`; node B relays through the app's own `@dunx/infra/redis` connection,
-which satisfies `PubSubRelay` structurally. With no Redis running it says it is
-skipping and the app still exits 0.
+`bun run tour` also boots a **second node** for `/chat` - a second `Bun.serve`
+and a second container in the same process - and relays a publish between the
+two through Redis, asserting one delivery per client.
+
+Node A relays with `@dunx/http`'s `RedisRelay`; node B relays through the app's
+own `@dunx/infra/redis` connection, which satisfies `PubSubRelay` structurally.
+With no Redis running it says it is skipping and the app still exits 0.
 
 ### The queue needs two processes
 
@@ -140,12 +141,15 @@ same `Thumbnails` service the HTTP image routes use - one wiring, two entry poin
 `@JobHandler` is the whole registration; the runner finds it by walking prototypes,
 the same discovery routes and gateways use.
 
-**With no Redis the queue routes answer 503 in single-digit milliseconds** rather than
-hanging. One caveat before deploying anything shaped like this: a process that
-*attempted* a queue operation while Redis was down will not exit on `SIGTERM`, because
-bullmq holds a connection whose retry timer outlives `close()`. Importing the module is
-not enough to trigger it, and a healthy Redis is unaffected. Measured, with the table
-in [docs/bun-apis.md](../../docs/bun-apis.md).
+**With no Redis the queue routes answer 503 in single-digit milliseconds**
+rather than hanging. One caveat before deploying anything shaped like this: a
+process that *attempted* a queue operation while Redis was down will not exit
+on `SIGTERM`, because bullmq holds a connection whose retry timer outlives
+`close()`.
+
+Importing the module is not enough to trigger it, and a healthy Redis is
+unaffected. Measured, with the table in
+[docs/bun-apis.md](../../docs/bun-apis.md).
 
 ## Configuration
 
