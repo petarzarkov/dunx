@@ -26,6 +26,7 @@ Node v24.18.0 where a comparison needed it. Numbers are from that machine.
 | [arkv-logger-context](./arkv-logger-context.md)        | build, additive        | `@arkv/logger` 0.11.0     | nothing                               |
 | [arkv-logger-transports](./arkv-logger-transports.md)  | build, additive        | `@arkv/logger` 0.11.0     | nothing                               |
 | [async-context](./async-context.md)                    | refused, 2 fixes found | `@dunx/http`, `@dunx/auth` | nothing                              |
+| [stats](./stats.md)                                    | collect, refuse exposition | `@dunx/http`, `@dunx/core` | memory reader moving to core     |
 | [bun-primitives](./bun-primitives.md)                  | 2 adopt, 3 reject      | various                   | nothing                               |
 | [rpc](./rpc.md)                                        | JSON-RPC later, gRPC no | `@dunx/http` `./rpc`      | MCP codec descending to `@dunx/http`  |
 | [brokers](./brokers.md)                                | neither now            | `@dunx/infra/amqp` first  | an external issue                     |
@@ -35,8 +36,7 @@ verified facts alone, in the format
 [architecture/constraints.md](../architecture/constraints.md) uses, ready to be
 appended there once the record is reviewed.
 
-One record is still being written and will be added here: the stats capability.
-The `@arkv/logger` serialization record is also outstanding, and it carries the
+The `@arkv/logger` serialization record is still outstanding, and it carries the
 whole of the logger performance question, since
 [arkv-logger-transports](./arkv-logger-transports.md) measured the write path at
 4 to 9 percent of a log call and entry assembly plus sanitization at 73 to 93
@@ -58,6 +58,14 @@ These are not features and do not wait on a roadmap decision.
    with `if (request.id === undefined) return null`, and a batch is an array
    with no `id`, so it is answered as a notification. The same file declares
    three of the five reserved error codes. See [rpc](./rpc.md).
+
+   **Correction to that record.** [rpc](./rpc.md) reads the absence of batch
+   handling as the defect, which would make implementing it the fix. MCP
+   **removed** JSON-RPC batching in 2025-06-18, listed first among that
+   revision's major changes, and `PROTOCOL_VERSION` in the same file is
+   `2025-06-18`. So a batch is not a request this server can answer and the fix
+   is to reject it with `-32600`. The defect is the silence, not the missing
+   feature: a client holding an outstanding id waits forever on it.
 3. **`@arkv/logger` loses buffered entries on SIGTERM.** A batched entry is lost
    on SIGTERM and SIGINT unless some handler is installed, and
    `captureGlobalErrors` installs none. Containers stop with SIGTERM. See
@@ -87,12 +95,24 @@ Verified here, not yet recorded there. Each record holds the reproducer.
 | `AsyncLocalStorage.enterWith` crashes the process at teardown, exit 132                   | async-context   |
 | `async_hooks.createHook` is a stub: callbacks never fire, `executionAsyncId()` is always 0 | async-context   |
 | `storage.run(scope, fn)` costs 17.7 ns, and loading ALS deoptimises nothing process wide   | async-context   |
+| `perf_hooks.createHistogram()` is a real native HDR histogram, `record()` at 10.7 ns      | stats           |
+| passing explicit bounds to `createHistogram` costs 8 to 19x the memory                    | stats           |
+| `monitorEventLoopDelay` is native and accurate, but misses a block in `enable()`'s turn    | stats           |
+| no GC hook exists: `supportedEntryTypes` is mark, measure, resource                       | stats           |
+| `v8.getHeapStatistics()` costs 1076 to 7606 us and two siblings throw `NotImplementedError` | stats         |
+| `Bun.unsafe.mimallocDump()` writes to fd 2 and returns undefined, so it is not a metric    | stats           |
 | `Bun.serve` speaks no HTTP/2 and `Response` carries no trailers                           | rpc             |
 | `node:http2` hosts a working gRPC server, trailers included                               | rpc             |
 | `http2.connect()` against an HTTP/1.1 origin leaks an uncatchable internal `TypeError`    | rpc             |
 | `Bun.RedisClient.send('EVAL', ...)` runs Lua atomically and returns tables as arrays      | throttle        |
 | `Bun.RedisClient.script()` exists at runtime but is undeclared in bun-types 1.3.14        | throttle        |
 | Bun ships no Kafka and no AMQP client, and NAN addons cannot load against JSC             | brokers         |
+
+One number to reconcile before either is copied across: `jsc.heapStats()` was
+measured at 2.2 ms by [bun-primitives](./bun-primitives.md) and 7.04 ms by
+[stats](./stats.md), on the same machine. It walks every live object, so the
+likely cause is how much each harness had allocated first. The verdict is the
+same at both figures, so nothing downstream turns on it.
 | Timers above 2^31-1 ms are clamped to 1 ms and fire at 17 ms                              | scheduler       |
 
 ## Suggested order
@@ -102,7 +122,7 @@ Grouped by what unblocks what, cheapest first inside each group.
 **First, the four defects above.** Each is small, none needs a design decision,
 and two of them gate work below.
 
-**Then the three moves Rule 2 already requires**, none of which add a feature:
+**Then the four moves Rule 2 already requires**, none of which add a feature:
 
 1. `OnDrain` in `@dunx/core`, run before `server.stop()`. Two consumers waiting:
    health, and the queue worker whose own comment at
@@ -113,6 +133,13 @@ and two of them gate work below.
 3. `ProbeState`, `ProbeResult`, `DashboardProbe` and `RedisProbe` from
    `@dunx/dashboard` down into `@dunx/http`, which health needs and the
    dashboard already peer-depends on.
+4. `MemoryReport` and the `process.memoryUsage()` reader from
+   `packages/dashboard/src/api/runtime.ts:63-71`, its only shipped call site,
+   down into `@dunx/core`, with `packages/dashboard/src/api/types.ts`
+   re-exporting so `internal/dashboard-ui`'s relative `import type` is unchanged.
+   Health and stats are the second and third consumers.
+   `internal/bench`'s own histogram must **not** move: it crosses a Worker
+   boundary as a `Uint32Array`. See [stats](./stats.md).
 
 **Then the cheap wins**, in this order:
 
