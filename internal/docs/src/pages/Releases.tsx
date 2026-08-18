@@ -12,6 +12,8 @@ import {
 import { Prose } from '@dunx/ui';
 import { useChunk } from '../chunk';
 import { loadReleases, site } from '../data';
+import { href, npmUrl, RouteKind } from '../router';
+import { NotFound } from './NotFound';
 
 const DATE = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
@@ -55,7 +57,7 @@ export const Releases = (): React.JSX.Element => {
               <Group justify="space-between" align="center" mb="sm">
                 <Title order={2} id={release.anchor} fz="h3">
                   <Anchor
-                    href={`#/releases?h=${release.anchor}`}
+                    href={href(RouteKind.Releases, release.version)}
                     c="inherit"
                     underline="never"
                   >
@@ -70,7 +72,7 @@ export const Releases = (): React.JSX.Element => {
                     variant="default"
                     size="sm"
                     component="a"
-                    href={`https://www.npmjs.com/package/@dunx/core/v/${release.version}`}
+                    href={npmUrl('@dunx/core', release.version)}
                     target="_blank"
                     style={{ cursor: 'pointer' }}
                   >
@@ -82,6 +84,91 @@ export const Releases = (): React.JSX.Element => {
             </Card>
           ))
         )}
+      </Stack>
+    </Container>
+  );
+};
+
+/** A git tag is `v2.0.1`; `ReleaseNote.version` is `2.0.1`. Both must land. */
+const stripTag = (slug: string): string => slug.replace(/^v/, '');
+
+/**
+ * One release, at `#/releases/<version>`, so a GitHub release note has a stable
+ * URL to point at. It reads the same chunk the index does, so the duplicated body
+ * costs no bytes.
+ */
+export const Release = ({ slug }: { slug: string }): React.JSX.Element => {
+  const releases = useChunk(loadReleases, 'releases');
+  const version = stripTag(slug);
+
+  // Before `NotFound`: the history is a chunk, and judging a version missing
+  // while it is still loading would show the panel on every first paint.
+  if (releases === undefined) {
+    return (
+      <Container size="md" py="xl">
+        <Skeleton height={320} radius="md" />
+      </Container>
+    );
+  }
+
+  const at = releases.findIndex((release) => release.version === version);
+  const release = releases[at];
+  if (!release) return <NotFound what={`release "${slug}"`} />;
+
+  // Newest first, so the entry after this one is the older release.
+  const newer = releases[at - 1];
+  const older = releases[at + 1];
+
+  return (
+    <Container size="md" py="xl">
+      <Stack gap="lg">
+        <Anchor href={href(RouteKind.Releases)} size="sm" c="dimmed">
+          All releases
+        </Anchor>
+
+        <Group justify="space-between" align="center">
+          <Title order={1}>{release.version}</Title>
+          <Text size="sm" c="dimmed">
+            {formatDate(release.date)}
+          </Text>
+        </Group>
+
+        <Group gap="xs">
+          {site.packages.map((pkg) => (
+            <Badge
+              key={pkg.dir}
+              variant="default"
+              size="sm"
+              component="a"
+              href={npmUrl(pkg.name, release.version)}
+              target="_blank"
+              style={{ cursor: 'pointer' }}
+            >
+              {pkg.name}
+            </Badge>
+          ))}
+        </Group>
+
+        <Card withBorder radius="md" padding="lg">
+          <Prose html={release.html} />
+        </Card>
+
+        <Group justify="space-between">
+          {older ? (
+            <Anchor href={href(RouteKind.Releases, older.version)} size="sm">
+              Previous: {older.version}
+            </Anchor>
+          ) : (
+            <span />
+          )}
+          {newer ? (
+            <Anchor href={href(RouteKind.Releases, newer.version)} size="sm">
+              Next: {newer.version}
+            </Anchor>
+          ) : (
+            <span />
+          )}
+        </Group>
       </Stack>
     </Container>
   );

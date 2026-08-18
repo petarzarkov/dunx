@@ -23,10 +23,7 @@ import { ShowMeTheCode } from '../components/ShowMeTheCode';
 import { SpeedPanel } from '../components/SpeedPanel';
 import { Stats } from '../components/Stats';
 import { site } from '../data';
-import { href, RouteKind } from '../router';
-
-const npmUrl = (name: string): string =>
-  `https://www.npmjs.com/package/${encodeURIComponent(name)}`;
+import { href, npmUrl, RouteKind } from '../router';
 
 const INTEGRATIONS = [
   { name: 'zod', role: 'validation' },

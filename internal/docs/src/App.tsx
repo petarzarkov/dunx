@@ -23,7 +23,7 @@ import { Guide } from './pages/Guide';
 import { Home } from './pages/Home';
 import { NotFound } from './pages/NotFound';
 import { PackagePage } from './pages/PackagePage';
-import { Releases } from './pages/Releases';
+import { Release, Releases } from './pages/Releases';
 import { href, RouteKind, useRoute, useScrollTo, type Route } from './router';
 
 /**
@@ -235,7 +235,9 @@ const Page = ({ route }: { route: Route }): React.JSX.Element => {
     case RouteKind.Coverage:
       return <Coverage />;
     case RouteKind.Releases:
-      return <Releases />;
+      // The slug is a version, and the parser already produced it. Without a
+      // slug this is the whole history.
+      return route.slug ? <Release slug={route.slug} /> : <Releases />;
     default:
       return <NotFound what={`page "${route.slug}"`} />;
   }

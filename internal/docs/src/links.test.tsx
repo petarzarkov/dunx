@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { loadGuide, loadPackage, site } from './data';
+import { loadGuide, loadPackage, loadReleases, site } from './data';
 import { RouteKind } from './router';
 
 /**
@@ -13,7 +13,6 @@ const SLUGLESS: ReadonlySet<string> = new Set([
   '',
   RouteKind.Bench,
   RouteKind.Coverage,
-  RouteKind.Releases,
 ]);
 
 /**
@@ -75,6 +74,9 @@ describe('internal links', () => {
   test('every in-site link points at a page that exists', async () => {
     const guideSlugs = new Set(site.guides.map((guide) => guide.slug));
     const packageDirs = new Set(site.packages.map((pkg) => pkg.dir));
+    const versions = new Set(
+      ((await loadReleases()) ?? []).map((release) => release.version),
+    );
     const offenders: string[] = [];
 
     for (const page of [...(await pages()), ...(await packagePages())]) {
@@ -86,6 +88,12 @@ describe('internal links', () => {
         if (SLUGLESS.has(kind)) continue;
         if (kind === 'guide' && guideSlugs.has(slug)) continue;
         if (kind === 'api' && packageDirs.has(slug)) continue;
+        // `releases` is both a page and a slugged route now, so it is checked
+        // rather than waved through: this catches a page citing a version that
+        // was never released.
+        if (kind === RouteKind.Releases && slug === '') continue;
+        if (kind === RouteKind.Releases && versions.has(slug.replace(/^v/, '')))
+          continue;
         offenders.push(`${page.slug}: ${href}`);
       }
     }
