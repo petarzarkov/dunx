@@ -66,6 +66,11 @@ const MODES: readonly (readonly [RegExp, Mode])[] = [
   // nothing else.
   [/^docs\/roadmap\//, Mode.Exempt],
   [/^docs\/ROADMAP\.md$/, Mode.Exempt],
+  // Measurement records behind a roadmap decision: probe output, comparison
+  // tables and the argument for a verdict. Superseded once the item lands or is
+  // refused, and exempt for the same reason `docs/architecture/` gets the widest
+  // budget - the prose is the evidence, not a description of an API.
+  [/^docs\/research\//, Mode.Exempt],
   // Private workspaces. `internal/bench/README.md` is a long argument about
   // methodology and is meant to be.
   [/^internal\//, Mode.Exempt],
