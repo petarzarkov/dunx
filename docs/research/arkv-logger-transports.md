@@ -65,40 +65,40 @@ TTY), on a 214-byte `jsonFormat`-shaped line. `N` is entries per turn; the four 
 columns are microseconds per entry at the call site. Entries per second is `1e6 / us`,
 so the N=100 column is given and the rest are derivable from any cell.
 
-| runtime | target | strategy | N=1 | N=10 | N=100 | N=1000 | entries/sec at N=100 | write(2)/entry at N=100 |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| node | pipe | console.log per entry | 1.901 | 1.844 | 1.626 | 1.992 | 614,925 | 1.000 |
-| node | pipe | stdout.write per entry | 1.205 | 1.179 | 1.253 | 1.278 | 798,304 | 1.000 |
-| node | pipe | batched stdout.write | 1.331 | 0.298 | 0.037 | 0.056 | 27,150,157 | 0.004 |
-| node | pipe | batched console.log | 1.720 | 0.268 | 0.067 | 0.053 | 14,945,047 | 0.005 |
-| bun | pipe | console.log per entry | 1.120 | 0.819 | 0.780 | 0.792 | 1,281,631 | 1.000 |
-| bun | pipe | stdout.write per entry | 0.817 | 0.640 | 0.804 | 1.039 | 1,243,600 | 1.000 |
-| bun | pipe | batched stdout.write | 0.864 | 0.323 | 0.428 | 0.665 | 2,335,932 | 0.010 |
-| bun | pipe | batched console.log | 0.962 | 0.308 | 0.479 | 0.260 | 2,085,536 | 0.021 |
-| node | file | console.log per entry | 2.977 | 2.959 | 2.674 | 3.026 | 373,967 | 1.000 |
-| node | file | stdout.write per entry | 2.255 | 2.393 | 3.045 | 2.392 | 328,457 | 1.000 |
-| node | file | batched stdout.write | 2.161 | 0.905 | 0.446 | 0.650 | 2,243,264 | 0.010 |
-| node | file | batched console.log | 2.684 | 0.594 | 0.559 | 0.637 | 1,789,883 | 0.010 |
-| bun | file | console.log per entry | 1.835 | 1.698 | 1.553 | 1.673 | 643,808 | 1.000 |
-| bun | file | stdout.write per entry | 1.810 | 1.497 | 1.627 | 1.953 | 614,623 | 1.000 |
-| bun | file | batched stdout.write | 1.735 | 0.623 | 0.446 | 0.504 | 2,242,035 | 0.010 |
-| bun | file | batched console.log | 1.815 | 0.467 | 0.408 | 0.389 | 2,449,247 | 0.020 |
-| node | tty | console.log per entry | 6.655 | 6.080 | 6.391 | 6.541 | 156,461 | 1.000 |
-| node | tty | stdout.write per entry | 5.531 | 5.105 | 5.261 | 4.258 | 190,081 | 1.000 |
-| node | tty | batched stdout.write | 5.303 | 4.739 | 4.224 | 4.275 | 236,756 | 0.011 |
-| node | tty | batched console.log | 6.676 | 4.623 | 4.715 | 5.119 | 212,076 | 0.011 |
-| bun | tty | console.log per entry | 5.244 | 3.749 | 4.719 | 5.831 | 211,923 | 1.000 |
-| bun | tty | stdout.write per entry | 4.181 | 4.900 | 3.860 | 4.167 | 259,083 | 1.000 |
-| bun | tty | batched stdout.write | 3.792 | 4.768 | 5.231 | 4.664 | 191,156 | 0.010 |
-| bun | tty | batched console.log | 4.891 | 5.303 | 4.996 | 4.015 | 200,149 | 0.020 |
-| node | /dev/null | console.log per entry | 1.524 | 1.372 | 1.166 | 1.156 | 857,383 | 1.000 |
-| node | /dev/null | stdout.write per entry | 1.040 | 0.953 | 0.861 | 0.843 | 1,161,228 | 1.000 |
-| node | /dev/null | batched stdout.write | 0.929 | 0.327 | 0.235 | 0.385 | 4,263,116 | 0.010 |
-| node | /dev/null | batched console.log | 1.353 | 0.309 | 0.216 | 0.379 | 4,637,266 | 0.010 |
-| bun | /dev/null | console.log per entry | 0.369 | 0.373 | 0.374 | 0.358 | 2,676,604 | 1.000 |
-| bun | /dev/null | stdout.write per entry | 0.320 | 0.596 | 0.315 | 0.365 | 3,175,474 | 1.000 |
-| bun | /dev/null | batched stdout.write | 0.318 | 0.169 | 0.078 | 0.261 | 12,834,812 | 0.010 |
-| bun | /dev/null | batched console.log | 0.379 | 0.136 | 0.084 | 0.104 | 11,919,377 | 0.020 |
+| runtime | target    | strategy               |   N=1 |  N=10 | N=100 | N=1000 | entries/sec at N=100 | write(2)/entry at N=100 |
+| ------- | --------- | ---------------------- | ----: | ----: | ----: | -----: | -------------------: | ----------------------: |
+| node    | pipe      | console.log per entry  | 1.901 | 1.844 | 1.626 |  1.992 |              614,925 |                   1.000 |
+| node    | pipe      | stdout.write per entry | 1.205 | 1.179 | 1.253 |  1.278 |              798,304 |                   1.000 |
+| node    | pipe      | batched stdout.write   | 1.331 | 0.298 | 0.037 |  0.056 |           27,150,157 |                   0.004 |
+| node    | pipe      | batched console.log    | 1.720 | 0.268 | 0.067 |  0.053 |           14,945,047 |                   0.005 |
+| bun     | pipe      | console.log per entry  | 1.120 | 0.819 | 0.780 |  0.792 |            1,281,631 |                   1.000 |
+| bun     | pipe      | stdout.write per entry | 0.817 | 0.640 | 0.804 |  1.039 |            1,243,600 |                   1.000 |
+| bun     | pipe      | batched stdout.write   | 0.864 | 0.323 | 0.428 |  0.665 |            2,335,932 |                   0.010 |
+| bun     | pipe      | batched console.log    | 0.962 | 0.308 | 0.479 |  0.260 |            2,085,536 |                   0.021 |
+| node    | file      | console.log per entry  | 2.977 | 2.959 | 2.674 |  3.026 |              373,967 |                   1.000 |
+| node    | file      | stdout.write per entry | 2.255 | 2.393 | 3.045 |  2.392 |              328,457 |                   1.000 |
+| node    | file      | batched stdout.write   | 2.161 | 0.905 | 0.446 |  0.650 |            2,243,264 |                   0.010 |
+| node    | file      | batched console.log    | 2.684 | 0.594 | 0.559 |  0.637 |            1,789,883 |                   0.010 |
+| bun     | file      | console.log per entry  | 1.835 | 1.698 | 1.553 |  1.673 |              643,808 |                   1.000 |
+| bun     | file      | stdout.write per entry | 1.810 | 1.497 | 1.627 |  1.953 |              614,623 |                   1.000 |
+| bun     | file      | batched stdout.write   | 1.735 | 0.623 | 0.446 |  0.504 |            2,242,035 |                   0.010 |
+| bun     | file      | batched console.log    | 1.815 | 0.467 | 0.408 |  0.389 |            2,449,247 |                   0.020 |
+| node    | tty       | console.log per entry  | 6.655 | 6.080 | 6.391 |  6.541 |              156,461 |                   1.000 |
+| node    | tty       | stdout.write per entry | 5.531 | 5.105 | 5.261 |  4.258 |              190,081 |                   1.000 |
+| node    | tty       | batched stdout.write   | 5.303 | 4.739 | 4.224 |  4.275 |              236,756 |                   0.011 |
+| node    | tty       | batched console.log    | 6.676 | 4.623 | 4.715 |  5.119 |              212,076 |                   0.011 |
+| bun     | tty       | console.log per entry  | 5.244 | 3.749 | 4.719 |  5.831 |              211,923 |                   1.000 |
+| bun     | tty       | stdout.write per entry | 4.181 | 4.900 | 3.860 |  4.167 |              259,083 |                   1.000 |
+| bun     | tty       | batched stdout.write   | 3.792 | 4.768 | 5.231 |  4.664 |              191,156 |                   0.010 |
+| bun     | tty       | batched console.log    | 4.891 | 5.303 | 4.996 |  4.015 |              200,149 |                   0.020 |
+| node    | /dev/null | console.log per entry  | 1.524 | 1.372 | 1.166 |  1.156 |              857,383 |                   1.000 |
+| node    | /dev/null | stdout.write per entry | 1.040 | 0.953 | 0.861 |  0.843 |            1,161,228 |                   1.000 |
+| node    | /dev/null | batched stdout.write   | 0.929 | 0.327 | 0.235 |  0.385 |            4,263,116 |                   0.010 |
+| node    | /dev/null | batched console.log    | 1.353 | 0.309 | 0.216 |  0.379 |            4,637,266 |                   0.010 |
+| bun     | /dev/null | console.log per entry  | 0.369 | 0.373 | 0.374 |  0.358 |            2,676,604 |                   1.000 |
+| bun     | /dev/null | stdout.write per entry | 0.320 | 0.596 | 0.315 |  0.365 |            3,175,474 |                   1.000 |
+| bun     | /dev/null | batched stdout.write   | 0.318 | 0.169 | 0.078 |  0.261 |           12,834,812 |                   0.010 |
+| bun     | /dev/null | batched console.log    | 0.379 | 0.136 | 0.084 |  0.104 |           11,919,377 |                   0.020 |
 
 Reading it, with the write removed entirely as the floor (0.004 to 0.041 microseconds
 across every runtime and target, so every number above is essentially all write):
@@ -124,12 +124,12 @@ across every runtime and target, so every number above is essentially all write)
 `logger.info('GET /v1/orders/8814 200', fields)` to /dev/null, 100 entries per turn,
 median of 5 reps over 20,000 entries, importing `dist/esm/index.js`:
 
-| subject | node us/entry | bun us/entry | write(2)/entry |
-| --- | ---: | ---: | ---: |
-| 0.10.0 `ConsoleTransport` | 9.517 | 8.362 | 1.000 |
-| prototype batched transport | 9.474 | 8.292 | 0.010 / 0.020 |
-| format, no write | 8.696 | 8.015 | 0.000 |
-| no format, no write | 6.920 | 7.801 | 0.000 |
+| subject                     | node us/entry | bun us/entry | write(2)/entry |
+| --------------------------- | ------------: | -----------: | -------------: |
+| 0.10.0 `ConsoleTransport`   |         9.517 |        8.362 |          1.000 |
+| prototype batched transport |         9.474 |        8.292 |  0.010 / 0.020 |
+| format, no write            |         8.696 |        8.015 |          0.000 |
+| no format, no write         |         6.920 |        7.801 |          0.000 |
 
 Direct decomposition (`decompose.mjs`, median of 5 x 50,000) agrees, in node / bun
 microseconds: `createLogEntry` 2.206 / 1.875, `sanitizeLogEntry` 3.161 / 4.291,
@@ -158,13 +158,13 @@ so the flush has to come from the `exit` hook.
 
 **Node 24.18.0 and Bun 1.3.14 gave identical results in all 92 cells.**
 
-| flush hook | normal | exit(0) | throw | rejection | SIGTERM | SIGTERM +handler | SIGTERM exit-only | SIGINT | SIGINT exit-only | SIGKILL |
-| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| `sync` on `exit` | YES | YES | YES | YES | lost | YES | YES | lost | YES | lost |
-| `async` on `exit` | **lost** | **lost** | YES | YES | lost | YES | **lost** | lost | **lost** | lost |
-| `sync` on `beforeExit` | YES | lost | YES | YES | lost | YES | n/a | lost | n/a | lost |
-| `async` on `beforeExit` | YES* | lost | YES | YES | lost | YES | n/a | lost | n/a | lost |
-| none | lost | lost | YES | YES | lost | YES | lost | lost | lost | lost |
+| flush hook              |  normal  | exit(0)  | throw | rejection | SIGTERM | SIGTERM +handler | SIGTERM exit-only | SIGINT | SIGINT exit-only | SIGKILL |
+| ----------------------- | :------: | :------: | :---: | :-------: | :-----: | :--------------: | :---------------: | :----: | :--------------: | :-----: |
+| `sync` on `exit`        |   YES    |   YES    |  YES  |    YES    |  lost   |       YES        |        YES        |  lost  |       YES        |  lost   |
+| `async` on `exit`       | **lost** | **lost** |  YES  |    YES    |  lost   |       YES        |     **lost**      |  lost  |     **lost**     |  lost   |
+| `sync` on `beforeExit`  |   YES    |   lost   |  YES  |    YES    |  lost   |       YES        |        n/a        |  lost  |       n/a        |  lost   |
+| `async` on `beforeExit` |   YES*   |   lost   |  YES  |    YES    |  lost   |       YES        |        n/a        |  lost  |       n/a        |  lost   |
+| none                    |   lost   |   lost   |  YES  |    YES    |  lost   |       YES        |       lost        |  lost  |       lost       |  lost   |
 
 Exit codes observed: 143 SIGTERM, 130 SIGINT, 137 SIGKILL, 1 uncaught throw. `*` the
 async `beforeExit` variant flushed and then **hung until the 10 s `timeout` killed it
@@ -334,21 +334,21 @@ So today the console answer is whatever the runtime does, and the runtimes disag
 From `stdio-truth.mjs`, 40,000 x 200-byte writes, syscalls read inside the loop and again
 after a full drain:
 
-| runtime | target | us/entry at call site | write(2)/entry | sync at call site | `write()===false` | queued bytes after loop |
-| --- | --- | ---: | ---: | :-: | ---: | ---: |
-| node | pipe, drained | 1.876 | 1.000 | yes | 0 | 0 |
-| node | **pipe, unread** | **0.361** | **0.008** | **no** | **39,353** | **7,936,000** |
-| node | file | 1.699 | 1.000 | yes | 0 | 0 |
-| node | tty | 5.232 | 1.000 | yes | 0 | 0 |
-| bun | pipe, drained | 0.778 | 1.000 | yes | 1 | 0 |
-| bun | **pipe, unread** | 1.260 | 1.000 | **yes** | 39,680 | **0** |
-| bun | file | 0.784 | 1.000 | yes | 0 | 0 |
-| bun | tty | 2.887 | 1.000 | yes | 0 | 0 |
+| runtime | target           | us/entry at call site | write(2)/entry | sync at call site | `write()===false` | queued bytes after loop |
+| ------- | ---------------- | --------------------: | -------------: | :---------------: | ----------------: | ----------------------: |
+| node    | pipe, drained    |                 1.876 |          1.000 |        yes        |                 0 |                       0 |
+| node    | **pipe, unread** |             **0.361** |      **0.008** |      **no**       |        **39,353** |           **7,936,000** |
+| node    | file             |                 1.699 |          1.000 |        yes        |                 0 |                       0 |
+| node    | tty              |                 5.232 |          1.000 |        yes        |                 0 |                       0 |
+| bun     | pipe, drained    |                 0.778 |          1.000 |        yes        |                 1 |                       0 |
+| bun     | **pipe, unread** |                 1.260 |          1.000 |      **yes**      |            39,680 |                   **0** |
+| bun     | file             |                 0.784 |          1.000 |        yes        |                 0 |                       0 |
+| bun     | tty              |                 2.887 |          1.000 |        yes        |                 0 |                       0 |
 
 **Node's `process.stdout` is synchronous for a file, a TTY and a pipe with room** - one
 `write(2)` per entry, matching its documentation for Linux. On a **full** pipe it stops
 being synchronous: after 323 writes it takes EAGAIN, libuv queues, `write()` returns false,
-and 7.6 MB accumulates in `writableLength` while the call site gets *faster*. **Bun stays
+and 7.6 MB accumulates in `writableLength` while the call site gets _faster_. **Bun stays
 synchronous and blocks instead**, holding `writableLength` at 0. Same `ConsoleTransport`
 source, two failure modes: unbounded memory growth on Node, a stalled loop on Bun.
 
@@ -419,16 +419,16 @@ writes is the mitigation arkv can deliver, and it is what the matrix measures.
 
 ## Cost
 
-| file | ~LOC | note |
-| --- | ---: | --- |
-| `src/buffered.ts` | 110 | `BufferedConsoleTransport` |
-| `src/buffered.test.ts` | 180 | new file: `transport.test.ts` is at 426 of 500 |
-| `src/stream.ts` + `.test.ts` | 55 + 90 | `StreamTransport` over `node:stream.Writable` |
-| `src/exit.ts` + `.test.ts` | 45 + 60 | `ExitFlush`, shared with `FileTransport` |
-| `src/errors.ts` | +25 | opt-in signal handlers (edit) |
-| `src/file.ts` | -8 | exit hook moves to `ExitFlush` (edit, stays under 310) |
-| `src/index.ts` | +5 | exports (edit) |
-| `src/types.ts` | +0 | doc comment only (edit) |
+| file                         |    ~LOC | note                                                   |
+| ---------------------------- | ------: | ------------------------------------------------------ |
+| `src/buffered.ts`            |     110 | `BufferedConsoleTransport`                             |
+| `src/buffered.test.ts`       |     180 | new file: `transport.test.ts` is at 426 of 500         |
+| `src/stream.ts` + `.test.ts` | 55 + 90 | `StreamTransport` over `node:stream.Writable`          |
+| `src/exit.ts` + `.test.ts`   | 45 + 60 | `ExitFlush`, shared with `FileTransport`               |
+| `src/errors.ts`              |     +25 | opt-in signal handlers (edit)                          |
+| `src/file.ts`                |      -8 | exit hook moves to `ExitFlush` (edit, stays under 310) |
+| `src/index.ts`               |      +5 | exports (edit)                                         |
+| `src/types.ts`               |      +0 | doc comment only (edit)                                |
 
 About 570 new lines across 6 new files, each well under the 500-line cap.
 **New dependencies: none. New optional peers: none.** `node:stream` is a built-in and

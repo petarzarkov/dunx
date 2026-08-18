@@ -52,9 +52,12 @@
     "typescript": "7.0.2"
   },
   "lint-staged": {
-    "*.ts": [
-      "oxlint --fix",
-      "oxfmt"
+    "*.{ts,tsx}": [
+      "oxlint --fix --no-error-on-unmatched-pattern",
+      "oxfmt --no-error-on-unmatched-pattern"
+    ],
+    "*.{js,json,md}": [
+      "oxfmt --no-error-on-unmatched-pattern"
     ]
   }
 }

@@ -158,14 +158,14 @@ or a Nest port.
 
 Measured weights, `bun pm view`:
 
-| Package | Version | Deps | Unpacked |
-| --- | --- | --- | --- |
-| `@grpc/grpc-js` | 1.14.4 | 2 direct, 33 installed | 2.51 MB |
-| `@grpc/proto-loader` | 0.8.1 | 4 (`lodash.camelcase`, `long`, `protobufjs`, `yargs`) | - |
-| `@connectrpc/connect` | 2.1.2 | **0**, peer `@bufbuild/protobuf` | 0.86 MB |
-| `@connectrpc/connect-node` | 2.1.2 | **0** | 213 KB |
-| `@bufbuild/protobuf` | 2.14.0 | **0** | 1.92 MB |
-| `@bufbuild/buf` | 1.72.0 | platform binary | **121 MB** on disk |
+| Package                    | Version | Deps                                                  | Unpacked           |
+| -------------------------- | ------- | ----------------------------------------------------- | ------------------ |
+| `@grpc/grpc-js`            | 1.14.4  | 2 direct, 33 installed                                | 2.51 MB            |
+| `@grpc/proto-loader`       | 0.8.1   | 4 (`lodash.camelcase`, `long`, `protobufjs`, `yargs`) | -                  |
+| `@connectrpc/connect`      | 2.1.2   | **0**, peer `@bufbuild/protobuf`                      | 0.86 MB            |
+| `@connectrpc/connect-node` | 2.1.2   | **0**                                                 | 213 KB             |
+| `@bufbuild/protobuf`       | 2.14.0  | **0**                                                 | 1.92 MB            |
+| `@bufbuild/buf`            | 1.72.0  | platform binary                                       | **121 MB** on disk |
 
 Connect wins Rule 1 twice over grpc-js: it runs on `Bun.serve`, preference 1, where
 grpc-js runs on `node:http2`, preference 2; and its dependency closure is empty, where
@@ -298,17 +298,17 @@ calls `many()`. Neither transport owns the dispatch.
 
 ### What the existing machinery already covers
 
-| Concern | Covered by |
-| --- | --- |
-| `params` by name | `z.object` through `StandardSchemaV1`. Free |
-| `params` by position | `z.tuple`, the same `validate` call. Free |
-| `params` absent | schema defaults. Free |
-| Body parsing, content type, 415 | `parserFor`, `input.ts:78-98`. Free |
-| Raw request inside a handler | `RequestContext`, always bound. Free |
-| Batch array dispatch | new code: the loop and `maxBatch` |
-| Notification, and 204 for an all-notification batch | new code |
-| Reserved error codes and the envelope | new code |
-| Method registry and decorator | new code |
+| Concern                                             | Covered by                                  |
+| --------------------------------------------------- | ------------------------------------------- |
+| `params` by name                                    | `z.object` through `StandardSchemaV1`. Free |
+| `params` by position                                | `z.tuple`, the same `validate` call. Free   |
+| `params` absent                                     | schema defaults. Free                       |
+| Body parsing, content type, 415                     | `parserFor`, `input.ts:78-98`. Free         |
+| Raw request inside a handler                        | `RequestContext`, always bound. Free        |
+| Batch array dispatch                                | new code: the loop and `maxBatch`           |
+| Notification, and 204 for an all-notification batch | new code                                    |
+| Reserved error codes and the envelope               | new code                                    |
+| Method registry and decorator                       | new code                                    |
 
 `params` by name against by position is the finding worth keeping: both are one
 `schema['~standard'].validate(value)` call on `request.params`, so the Standard Schema path
@@ -388,19 +388,19 @@ later without redesign, so leaving it out costs no future move.
 
 ### JSON-RPC in `@dunx/http/rpc`, if the trigger fires
 
-| Item | Cost |
-| --- | --- |
-| `rpc/codec.ts` | ~90 LOC, envelope, five codes, encoders, `RpcError` |
-| `rpc/marker.ts`, `rpc/decorators.ts`, `rpc/discover.ts` | ~190 LOC, mirroring `route/marker.ts` and `route/discover.ts:56-98` |
-| `rpc/registry.ts`, `rpc/dispatcher.ts` | ~200 LOC, the batch and notification loop |
-| `rpc/options.ts`, `rpc/module.ts`, `rpc/gateway.ts` | ~170 LOC |
-| Tests | ~450 LOC across 5 files, all under the 500-line cap |
-| `tools/mcp/src/protocol.ts` | net **minus** ~30 LOC, plus one deprecated alias |
-| New dependencies | **zero**, runtime and dev |
-| Docs | `docs/guide/json-rpc.md`, plus a section in `docs/architecture/http.md`, plus one entry in `PUBLISHED_REFERENCE` |
-| Examples | `examples/full` gains one `@RpcController`. `minimal` unchanged |
-| CI | no new job and no new service. `bun run gen:cov` rerun for the http badge |
-| Publish | minor on `@dunx/http`, minor on `@dunx/mcp`, `@dunx/testing` republished |
+| Item                                                    | Cost                                                                                                             |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `rpc/codec.ts`                                          | ~90 LOC, envelope, five codes, encoders, `RpcError`                                                              |
+| `rpc/marker.ts`, `rpc/decorators.ts`, `rpc/discover.ts` | ~190 LOC, mirroring `route/marker.ts` and `route/discover.ts:56-98`                                              |
+| `rpc/registry.ts`, `rpc/dispatcher.ts`                  | ~200 LOC, the batch and notification loop                                                                        |
+| `rpc/options.ts`, `rpc/module.ts`, `rpc/gateway.ts`     | ~170 LOC                                                                                                         |
+| Tests                                                   | ~450 LOC across 5 files, all under the 500-line cap                                                              |
+| `tools/mcp/src/protocol.ts`                             | net **minus** ~30 LOC, plus one deprecated alias                                                                 |
+| New dependencies                                        | **zero**, runtime and dev                                                                                        |
+| Docs                                                    | `docs/guide/json-rpc.md`, plus a section in `docs/architecture/http.md`, plus one entry in `PUBLISHED_REFERENCE` |
+| Examples                                                | `examples/full` gains one `@RpcController`. `minimal` unchanged                                                  |
+| CI                                                      | no new job and no new service. `bun run gen:cov` rerun for the http badge                                        |
+| Publish                                                 | minor on `@dunx/http`, minor on `@dunx/mcp`, `@dunx/testing` republished                                         |
 
 Roughly 1100 lines including tests, one new public subpath, no new dependency. The
 `@dunx/testing` republish is the existing `^0.4.0` constraint in ROADMAP, not a new cost.
@@ -409,16 +409,16 @@ Roughly 1100 lines including tests, one new public subpath, no new dependency. T
 
 The dunx side is the small half. What a consumer adopts is the cost.
 
-| Item | Cost |
-| --- | --- |
-| Consumer: protobuf toolchain | `@bufbuild/buf` 1.72.0 pulls a **121 MB** platform binary as a dev dependency |
-| Consumer: codegen | `buf generate` ran in **0.475 s** and emitted **71 lines** for a two-method service. It must run in CI, and the output is either committed or built. Plus `buf.yaml`, `buf.gen.yaml`, and a `proto/` tree in the `package foo.v1` layout buf lint expects |
-| Consumer: schema duplication | messages live in `.proto`, so every request type exists twice if the app also has zod DTOs. dunx has no answer to this and would not gain one |
-| Consumer: runtime peers | `@connectrpc/connect` plus `@bufbuild/protobuf`, 2.78 MB unpacked, 0 transitive. Or `@grpc/grpc-js`, 2.51 MB and 33 installed packages |
-| Consumer: deployment | until oven-sh/bun#14672 ships, either a second port or a proxy translating gRPC to Connect |
-| dunx: mount code | ~80 LOC for Connect on `Bun.serve`, or ~250 LOC for a grpc-js adapter with DI, lifecycle and a second bound port |
-| dunx: tests | ~300 LOC, needing generated fixtures committed under a `templates`-style exclusion so the root coverage run does not compile them |
-| dunx: docs and CI | one guide page, one architecture page, and a codegen step or committed fixtures. `internal/bench` would want a subject, a third server process in the harness |
+| Item                         | Cost                                                                                                                                                                                                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consumer: protobuf toolchain | `@bufbuild/buf` 1.72.0 pulls a **121 MB** platform binary as a dev dependency                                                                                                                                                                             |
+| Consumer: codegen            | `buf generate` ran in **0.475 s** and emitted **71 lines** for a two-method service. It must run in CI, and the output is either committed or built. Plus `buf.yaml`, `buf.gen.yaml`, and a `proto/` tree in the `package foo.v1` layout buf lint expects |
+| Consumer: schema duplication | messages live in `.proto`, so every request type exists twice if the app also has zod DTOs. dunx has no answer to this and would not gain one                                                                                                             |
+| Consumer: runtime peers      | `@connectrpc/connect` plus `@bufbuild/protobuf`, 2.78 MB unpacked, 0 transitive. Or `@grpc/grpc-js`, 2.51 MB and 33 installed packages                                                                                                                    |
+| Consumer: deployment         | until oven-sh/bun#14672 ships, either a second port or a proxy translating gRPC to Connect                                                                                                                                                                |
+| dunx: mount code             | ~80 LOC for Connect on `Bun.serve`, or ~250 LOC for a grpc-js adapter with DI, lifecycle and a second bound port                                                                                                                                          |
+| dunx: tests                  | ~300 LOC, needing generated fixtures committed under a `templates`-style exclusion so the root coverage run does not compile them                                                                                                                         |
+| dunx: docs and CI            | one guide page, one architecture page, and a codegen step or committed fixtures. `internal/bench` would want a subject, a third server process in the harness                                                                                             |
 
 The 121 MB binary is the number to weigh. A consumer comparing dunx with Nest pays the same
 toolchain cost for `@nestjs/microservices`, so it is not a dunx penalty, but it is why a

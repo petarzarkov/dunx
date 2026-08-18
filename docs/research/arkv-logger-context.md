@@ -63,9 +63,7 @@ export interface ContextScope extends ContextReader {
 
 /** Everything `Logger`'s second parameter accepts. */
 export type ContextSource =
-  | ContextReader
-  | (() => AsyncContext | undefined)
-  | AsyncContext;
+  ContextReader | (() => AsyncContext | undefined) | AsyncContext;
 
 const EMPTY: AsyncContext = Object.freeze({});
 
@@ -120,15 +118,15 @@ satisfying it, and the test below keeps them equal.
 
 ## What a consumer may pass
 
-| Passed                                          | Accepted directly | How it is read                     |
-| ----------------------------------------------- | ----------------- | ---------------------------------- |
-| `ContextStore`, `RequestScopedContext`           | yes               | `peekContext()`, zero copy         |
-| dunx's `RequestContext` / `AsyncRequestContext`  | yes               | `getContext()`, one copy           |
-| any class with `getContext()`                    | yes               | `peekContext()` if declared, else `getContext()` |
-| a plain object, read live                        | yes               | `peekContext()` over that object   |
-| a zero-argument function                         | yes               | called per entry                   |
-| a `Map`, `Headers`, a proxy                      | via the function  | `() => Object.fromEntries(map)`    |
-| nothing                                          | yes               | frozen `EMPTY`, no allocation      |
+| Passed                                          | Accepted directly | How it is read                                   |
+| ----------------------------------------------- | ----------------- | ------------------------------------------------ |
+| `ContextStore`, `RequestScopedContext`          | yes               | `peekContext()`, zero copy                       |
+| dunx's `RequestContext` / `AsyncRequestContext` | yes               | `getContext()`, one copy                         |
+| any class with `getContext()`                   | yes               | `peekContext()` if declared, else `getContext()` |
+| a plain object, read live                       | yes               | `peekContext()` over that object                 |
+| a zero-argument function                        | yes               | called per entry                                 |
+| a `Map`, `Headers`, a proxy                     | via the function  | `() => Object.fromEntries(map)`                  |
+| nothing                                         | yes               | frozen `EMPTY`, no allocation                    |
 
 A `Map` adapter is not worth shipping: the function arm covers `Map`, `Headers`, a getter on
 a framework request object and anything else in one expression, and a `MapContext` class
@@ -191,11 +189,11 @@ until then.
 Measured on Bun 1.3.14 inside a live scope holding four fields, N = 2,000,000 after 200,000
 warmup iterations:
 
-| Read pattern                       | ns/op |
-| ---------------------------------- | ----- |
-| `getContext()` twice (today)       | 83.4  |
-| `getContext()` once                | 35.7  |
-| `peekContext()` once, zero copy    | 8.8   |
+| Read pattern                    | ns/op |
+| ------------------------------- | ----- |
+| `getContext()` twice (today)    | 83.4  |
+| `getContext()` once             | 35.7  |
+| `peekContext()` once, zero copy | 8.8   |
 
 Collapsing the double read saves 47.7 ns per entry and the zero-copy read another 26.9 ns
 on top, for 74.6 ns in total. The first half is an internal reorder in `#writeLog` with no
@@ -305,7 +303,7 @@ leaving `context.test.ts` at 90 and both far under 500):
    `fields.requestId = 'r-1'`, then log, assert the entry carries it. Locks live
    reading rather than a construction-time snapshot.
 3. `reads a zero-argument function`, and `logs no context fields when the function
-   returns undefined`.
+returns undefined`.
 4. `prefers peekContext over getContext` - a reader counting both, asserting exactly
    one `peekContext` and zero `getContext` per entry. Then
    `falls back to getContext when peekContext is absent` on the same counter,
@@ -379,15 +377,15 @@ property the `LOG_LEVELS` test has and a `satisfies` would not.
 `@arkv/logger`, six files plus tests: about 290 lines added and 21 removed, no file
 anywhere near the 500-line cap.
 
-| File                      | Change                                                          | LOC     |
-| ------------------------- | --------------------------------------------------------------- | ------- |
-| `src/context-contract.ts` | new: two interfaces, the union, `asReader`, `readContextOnce`    | +50     |
-| `src/request-context.ts`  | new: `RequestScopedContext`                                      | +40     |
+| File                      | Change                                                            | LOC     |
+| ------------------------- | ----------------------------------------------------------------- | ------- |
+| `src/context-contract.ts` | new: two interfaces, the union, `asReader`, `readContextOnce`     | +50     |
+| `src/request-context.ts`  | new: `RequestScopedContext`                                       | +40     |
 | `src/context.ts`          | `implements ContextScope`, `peekContext()`, re-export the options | +8/-5   |
 | `src/logger.ts`           | field type, constructor normalizes, `#shouldLog` folds in         | +10/-16 |
-| `src/index.ts`            | five new exports                                                 | +6      |
+| `src/index.ts`            | five new exports                                                  | +6      |
 | `README.md`               | the contract, the accepted forms, the caveat, the Node stance     | +40     |
-| tests                     | +120 contract, +10 context, +8 exports                           | +138    |
+| tests                     | +120 contract, +10 context, +8 exports                            | +138    |
 
 Downstream: `@arkv/nestjs-context-logger` changes nothing in source and needs a forced
 republish so its pinned `^0.10.0` moves. `packages/nestjs-cms` changes nothing, having no

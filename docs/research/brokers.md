@@ -12,6 +12,7 @@ user first." The word Kafka appears nowhere in this repo (`grep -rniE 'kafka|rab
 `*.json` outside `node_modules` returns zero hits), so there is not even an internal user.
 
 Triggers, any one sufficient:
+
 1. An issue from someone who is not the owner, per `docs/ROADMAP.md:48`.
 2. Bun shipping a native Kafka client. `oven-sh/bun#19337` is open, filed 2025-04-28, unassigned, no maintainer
    response. If it lands, the shape becomes `@dunx/infra/kafka` over `Bun.Kafka` the way `@dunx/infra/redis` sits over
@@ -30,6 +31,7 @@ handler-discovery machinery.
 ## What Bun gives us
 
 **Bun has no native Kafka client. It has no native AMQP client either.** Four checks.
+
 ```
 $ bun probes/bun-surface.ts
 total own props on Bun: 113 / --- matches on Bun --- / --- end matches ---
@@ -66,14 +68,16 @@ Additions for `docs/bun-apis.md`, verified here and absent from it (`grep -ci` r
 ## Library decision
 
 ### Kafka candidates
-| Package | Version | Published | Unpacked | Deps | Module | Types | Native | Runs under Bun 1.3.14 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `@platformatic/kafka` | 2.9.0 | 2026-08-08 | 1.42 MB | 9 direct (`ajv`, `ajv-draft-04`, `avsc`, `debug`, `fastq`, `mnemonist`, `scule`, `@platformatic/dynamic-buffer`, `@platformatic/wasm-utils`); 22 installed, 13 MB | ESM only | bundled | JS + WASM, optional N-API addon | **Yes, fully** |
-| `kafkajs` | 2.2.4 | 2023-02-27 | 0.73 MB | 0 | CJS | bundled | pure JS | Yes, with a stderr defect |
-| `@confluentinc/kafka-javascript` | 1.10.0 | 2026-07-01 | 14.40 MB | 5 (`@mapbox/node-pre-gyp`, `bindings`, `js-yaml`, `nan`, `tar`) | CJS | bundled | NAN / V8 ABI | **No. Fails at the dynamic linker** |
-| `node-rdkafka` | 3.6.1 | 2025-12-03 | 14.77 MB | 2 (`bindings`, `nan`) | CJS | bundled | NAN / V8 ABI | No, same class |
+
+| Package                          | Version | Published  | Unpacked | Deps                                                                                                                                                              | Module   | Types   | Native                          | Runs under Bun 1.3.14               |
+| -------------------------------- | ------- | ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------- | ----------------------------------- |
+| `@platformatic/kafka`            | 2.9.0   | 2026-08-08 | 1.42 MB  | 9 direct (`ajv`, `ajv-draft-04`, `avsc`, `debug`, `fastq`, `mnemonist`, `scule`, `@platformatic/dynamic-buffer`, `@platformatic/wasm-utils`); 22 installed, 13 MB | ESM only | bundled | JS + WASM, optional N-API addon | **Yes, fully**                      |
+| `kafkajs`                        | 2.2.4   | 2023-02-27 | 0.73 MB  | 0                                                                                                                                                                 | CJS      | bundled | pure JS                         | Yes, with a stderr defect           |
+| `@confluentinc/kafka-javascript` | 1.10.0  | 2026-07-01 | 14.40 MB | 5 (`@mapbox/node-pre-gyp`, `bindings`, `js-yaml`, `nan`, `tar`)                                                                                                   | CJS      | bundled | NAN / V8 ABI                    | **No. Fails at the dynamic linker** |
+| `node-rdkafka`                   | 3.6.1   | 2025-12-03 | 14.77 MB | 2 (`bindings`, `nan`)                                                                                                                                             | CJS      | bundled | NAN / V8 ABI                    | No, same class                      |
 
 **The librdkafka route is disqualified, and the mechanism is worth stating once.**
+
 ```
 $ bun probes/confluent/conf.probe.ts
 bun: symbol lookup error: .../confluent-kafka-javascript.node:
@@ -92,6 +96,7 @@ JavaScriptCore does not have. Not a Rule 1 judgement call about native dependenc
 ago. Last commit to `master` 2024-05-16 with the message "Remove sponsorships"; last functional commit 2023-02-27. 355
 open issues. `2.3.0-beta.3` exists and has not been promoted. It does produce and consume under Bun, so the old
 `oven-sh/bun#6429` and `#6571` producer hangs are gone, but:
+
 ```
 $ bun probes/kjs/kjs.probe.ts
 TimeoutNegativeWarning: -1787033536055 is a negative number.
@@ -106,6 +111,7 @@ this.throttledUntil - Date.now()` at `:312`. Node clamps a negative `setTimeout`
 queue writes that trace. An unmaintained library polluting stderr on Bun specifically is not a base for a subpath.
 
 **`@platformatic/kafka` is the pick.** Full protocol coverage under Bun:
+
 ```
 $ bun probes/k-plat/kplat.probe.ts
 [253ms] topic created (3 partitions) / [271ms] produced offsets: [{"p":0,"off":"0"},{"p":2,"off":"0"}]
@@ -128,11 +134,13 @@ first clause, so `bun install` is quiet. It states no Bun support, so these prob
 is a defect dunx would own, below.
 
 ### RabbitMQ / AMQP candidates
-| Package | Version | Published | Unpacked | Deps | Module | Types | Native | Runs under Bun 1.3.14 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `rabbitmq-client` | 5.0.8 | 2025-12-01 | 197.70 KB | 0 | CJS (`main: ./lib/index.js`) | bundled `lib/*.d.ts`, no `types` field | pure JS | **Yes, fully** |
-| `amqplib` | 2.0.1 | 2026-05-10 | 0.55 MB | 0 (v2 dropped them) | CJS with `exports` map | bundled `index.d.ts`, plus `@types/amqplib` | pure JS | Yes, fully |
-| `amqp-connection-manager` | 5.0.0 | 2025-09-29 | 147.67 KB | 1 (`promise-breaker`) | CJS | bundled | pure JS | Not probed. A wrapper over `amqplib` |
+
+| Package                   | Version | Published  | Unpacked  | Deps                  | Module                       | Types                                       | Native  | Runs under Bun 1.3.14                |
+| ------------------------- | ------- | ---------- | --------- | --------------------- | ---------------------------- | ------------------------------------------- | ------- | ------------------------------------ |
+| `rabbitmq-client`         | 5.0.8   | 2025-12-01 | 197.70 KB | 0                     | CJS (`main: ./lib/index.js`) | bundled `lib/*.d.ts`, no `types` field      | pure JS | **Yes, fully**                       |
+| `amqplib`                 | 2.0.1   | 2026-05-10 | 0.55 MB   | 0 (v2 dropped them)   | CJS with `exports` map       | bundled `index.d.ts`, plus `@types/amqplib` | pure JS | Yes, fully                           |
+| `amqp-connection-manager` | 5.0.0   | 2025-09-29 | 147.67 KB | 1 (`promise-breaker`) | CJS                          | bundled                                     | pure JS | Not probed. A wrapper over `amqplib` |
+
 ```
 $ bun probes/amqp/rmq2.probe.ts   # rabbitmq-client
 [28ms] connection established / [71ms] consumer ready / [2027ms] handler got msg / [3041ms] closed
@@ -149,6 +157,7 @@ both clients at 1 KB, 64 KB, 128 KB, 1 MB and 8 MB, comparing declared against r
 
 **`rabbitmq-client` is the pick**, on 0 dependencies, 197.70 KB, typed without a `@types/*` package, and one behaviour
 `amqplib` leaves to the caller:
+
 ```
 $ bun probes/amqp/drain.probe.ts
 [349ms] SIGTERM point: started=3 finished=0 - now closing / [1553ms] handler done (finished=3)
@@ -161,14 +170,15 @@ example: RabbitMQ 4 refuses `transient_nonexcl_queues`, so `durable: false` fail
 `QueueDeclare`.
 
 ### Exit cleanliness, all four clients
+
 Three network conditions, with a `process.on('exit')` marker under `timeout -s KILL`:
 
-| Client | Healthy | Refused port | Black-holed IP (`10.255.255.1`) |
-| --- | --- | --- | --- |
-| `rabbitmq-client` | exit 0, 1560 ms | exit 0 | exit 0, 1571 ms |
-| `amqplib` | exit 0, 420 ms | exit 0, 84 ms | exit 0, 575 ms |
-| `@platformatic/kafka` | exit 0 | exit 0 | exit 0 |
-| `kafkajs` | exit 0 | exit 0 | exit 0 |
+| Client                | Healthy         | Refused port  | Black-holed IP (`10.255.255.1`) |
+| --------------------- | --------------- | ------------- | ------------------------------- |
+| `rabbitmq-client`     | exit 0, 1560 ms | exit 0        | exit 0, 1571 ms                 |
+| `amqplib`             | exit 0, 420 ms  | exit 0, 84 ms | exit 0, 575 ms                  |
+| `@platformatic/kafka` | exit 0          | exit 0        | exit 0                          |
+| `kafkajs`             | exit 0          | exit 0        | exit 0                          |
 
 Every one released the event loop. Compare `docs/roadmap/queue-shutdown-sigterm.md:29-33`, where a black-holed address
 hangs `Bun.RedisClient` itself and a refused port hangs the bullmq adapter forever. No leak of that class reproduced.
@@ -177,43 +187,72 @@ hangs `Bun.RedisClient` itself and a refused port hangs the bullmq adapter forev
 
 Two independent module trees. No shared handler type, no shared decorator, no shared transport token. Every injection
 site is a class, per Rule 3. TC39 method and class decorators only, no parameter decorators.
+
 ```ts
 // @dunx/infra/amqp
 export class AmqpOptions {
-  url = 'amqp://localhost:5672'; prefetch = 10; reconnect = true;
+  url = 'amqp://localhost:5672';
+  prefetch = 10;
+  reconnect = true;
 }
 export class AmqpMeta {
-  queue!: string; exchange?: string; routingKey?: string; prefetch?: number;
+  queue!: string;
+  exchange?: string;
+  routingKey?: string;
+  prefetch?: number;
 }
 export class AmqpModule {
   static forRoot(options?: Partial<AmqpOptions>): ModuleRef;
   static forRootAsync(options: AsyncOptions<AmqpOptions>): ModuleRef;
 }
 export class AmqpConnection implements OnShutdown {
-  constructor(private readonly options: AmqpOptions, private readonly logger: Logger) {}
+  constructor(
+    private readonly options: AmqpOptions,
+    private readonly logger: Logger,
+  ) {}
   connection(): Connection;
   async onShutdown(): Promise<void>;
 }
 export class AmqpPublisher implements OnShutdown {
-  constructor(private readonly conn: AmqpConnection, private readonly context: RequestContext) {}
-  async publish(exchange: string, key: string, body: unknown, options?: PublishOptions): Promise<void>;
+  constructor(
+    private readonly conn: AmqpConnection,
+    private readonly context: RequestContext,
+  ) {}
+  async publish(
+    exchange: string,
+    key: string,
+    body: unknown,
+    options?: PublishOptions,
+  ): Promise<void>;
   async onShutdown(): Promise<void>;
 }
 // Discovers @AmqpHandler methods, subscribes in onInit, drains in onShutdown.
 export class AmqpRunner implements OnInit, OnShutdown {
-  constructor(app: AppRef, root: ModuleRef, conn: AmqpConnection, log: Logger, ctx: RequestContext) {}
+  constructor(
+    app: AppRef,
+    root: ModuleRef,
+    conn: AmqpConnection,
+    log: Logger,
+    ctx: RequestContext,
+  ) {}
   async onInit(): Promise<void>;
   async onShutdown(): Promise<void>;
 }
 // A TC39 method decorator marking the function value, the same shape as
 // @JobHandler at packages/infra/src/queue/decorators.ts:16.
-export const AmqpHandler: (meta: AmqpMeta) => <T extends HandlerMethod>(value: T) => T;
+export const AmqpHandler: (
+  meta: AmqpMeta,
+) => <T extends HandlerMethod>(value: T) => T;
 
 @Injectable()
 export class OrdersConsumer {
   constructor(private readonly orders: OrdersService) {}
 
-  @AmqpHandler({ queue: 'orders.created', exchange: 'orders', routingKey: 'created' })
+  @AmqpHandler({
+    queue: 'orders.created',
+    exchange: 'orders',
+    routingKey: 'created',
+  })
   async onCreated(m: AmqpMessage<OrderCreated>): Promise<void> {
     await this.orders.record(m.body); // ack on return, nack with requeue on throw
   }
@@ -222,18 +261,32 @@ export class OrdersConsumer {
 
 `@dunx/infra/kafka` mirrors that skeleton (`KafkaConnection`, `KafkaRunner`, `KafkaModule.forRoot` / `forRootAsync`)
 and diverges where the broker does:
+
 ```ts
 export class KafkaOptions {
-  brokers: readonly string[] = ['localhost:9092']; clientId = 'dunx'; groupId?: string; autocommit = false;
+  brokers: readonly string[] = ['localhost:9092'];
+  clientId = 'dunx';
+  groupId?: string;
+  autocommit = false;
 }
 export class KafkaMeta {
-  topic!: string; groupId?: string; fromBeginning?: boolean;
+  topic!: string;
+  groupId?: string;
+  fromBeginning?: boolean;
 }
 export class KafkaProducer implements OnShutdown {
-  constructor(private readonly conn: KafkaConnection, private readonly context: RequestContext) {}
-  async send(topic: string, messages: readonly KafkaOutbound[]): Promise<readonly KafkaAck[]>;
+  constructor(
+    private readonly conn: KafkaConnection,
+    private readonly context: RequestContext,
+  ) {}
+  async send(
+    topic: string,
+    messages: readonly KafkaOutbound[],
+  ): Promise<readonly KafkaAck[]>;
 }
-export const KafkaHandler: (meta: KafkaMeta) => <T extends HandlerMethod>(value: T) => T;
+export const KafkaHandler: (
+  meta: KafkaMeta,
+) => <T extends HandlerMethod>(value: T) => T;
 
 @Injectable()
 export class EventsConsumer {
@@ -259,8 +312,10 @@ needs. A subpath is one manifest entry plus a build entrypoint, since `scripts/b
 from `exports`.
 
 ### One abstraction, two modules, or neither
+
 **Neither yet. When it happens, two, and never one.** Nest's `ClientProxy` with `@MessagePattern` and `@EventPattern`
 is the thing to avoid, and the probes give the reason in numbers rather than in principle.
+
 - **Ordering.** Two Kafka messages with keys `k1` and `k2` landed on partitions 2 and 0 and were consumed `k2` then
   `k1`, inverting production order (probe output above). One AMQP queue delivered `n=1` then `n=2` in order. A shared
   abstraction must promise one of these and lie about the other.
@@ -277,6 +332,7 @@ Request/response over a broker, which `@MessagePattern` implies, is worse: Kafka
 id the framework invents, and that is an RPC framework, not a broker binding.
 
 ### What dunx contributes, and it is a short list
+
 1. `forRoot` / `forRootAsync` reading brokers, credentials and prefetch off `ConfigService`.
 2. Handler discovery, so a consumer is an injectable class with a decorated method rather than a callback registered
    in a bootstrap file.
@@ -295,15 +351,15 @@ Items 1 to 5 are wiring. That is a legitimate and small contribution, and it is 
 yet: wiring is worth building when someone waits for it. `packages/infra/src/queue/` already holds the mechanism item
 2 needs, and a broker consumer is the same shape:
 
-| Piece | Location | Broker reuse |
-| --- | --- | --- |
-| `Symbol.for('dunx.job.handler')` | `queue/marker.ts:6` | Same pattern, different key |
-| `markJobHandler` / `jobMetaOf` | `marker.ts:40-45` | Generic over `object`, reusable verbatim |
-| `JobHandler` decorator | `decorators.ts:16-21` | TC39 method decorator marking the function value, ignores `context`. Copy the shape |
-| `eachJobHandler` prototype walk | `discover.ts:23-46` | Reusable verbatim, most-derived wins |
-| `discoverJobsOn`, `declaresJobHandler`, `classOf` | `discover.ts:54-83` | Binds to instances; checks the prototype without constructing; skips value and factory providers |
-| `assertNoDuplicateJobs`, `discoverJobs`, `selectJobs` | `discover.ts:89-198` | Duplicate boot error, the provider and controller walk, filter plus misspelled-name boot error |
-| `QueueRunner` | `queue/runner.ts` | Template for a container-owned consumer: `AppRef` + `ROOT_MODULE`, discovery in `onInit`, degrade rather than fail on an unreachable broker (`runner.ts:100-108`) |
+| Piece                                                 | Location              | Broker reuse                                                                                                                                                      |
+| ----------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Symbol.for('dunx.job.handler')`                      | `queue/marker.ts:6`   | Same pattern, different key                                                                                                                                       |
+| `markJobHandler` / `jobMetaOf`                        | `marker.ts:40-45`     | Generic over `object`, reusable verbatim                                                                                                                          |
+| `JobHandler` decorator                                | `decorators.ts:16-21` | TC39 method decorator marking the function value, ignores `context`. Copy the shape                                                                               |
+| `eachJobHandler` prototype walk                       | `discover.ts:23-46`   | Reusable verbatim, most-derived wins                                                                                                                              |
+| `discoverJobsOn`, `declaresJobHandler`, `classOf`     | `discover.ts:54-83`   | Binds to instances; checks the prototype without constructing; skips value and factory providers                                                                  |
+| `assertNoDuplicateJobs`, `discoverJobs`, `selectJobs` | `discover.ts:89-198`  | Duplicate boot error, the provider and controller walk, filter plus misspelled-name boot error                                                                    |
+| `QueueRunner`                                         | `queue/runner.ts`     | Template for a container-owned consumer: `AppRef` + `ROOT_MODULE`, discovery in `onInit`, degrade rather than fail on an unreachable broker (`runner.ts:100-108`) |
 
 The generic half depends only on `@dunx/core`'s `collectModules` (`packages/core/src/di/module.ts:194-217`),
 `readControllers` (`module.ts:232-234`) and `ProviderEntry`. `packages/core/src/di/index.ts:28-31` already names those
@@ -349,6 +405,7 @@ four exist in `@dunx/infra/queue` and a second one repeats the `@dunx/queue-dash
 
 **1. `@platformatic/kafka` does not drain on close, and the commit after close throws.** Measured, and the
 highest-value finding here:
+
 ```
 $ bun probes/k-plat/drain2.probe.ts close-first
 [1151ms] closing before awaiting in-flight
@@ -358,6 +415,7 @@ $ bun probes/k-plat/drain2.probe.ts drain-first
 [1391ms] awaiting in-flight handler before close
 [2102ms] committed off=0 / in-flight settled: committed=1
 ```
+
 `stream.close()` resolves while a handler is mid-flight; the handler's `commit()` then throws `PLT_KFK_NETWORK` from
 `checkNotClosed` (`clients/base/base.js:233`), the offset is never committed, and the message is redelivered. Awaiting
 in-flight work first commits cleanly. So `KafkaRunner.onShutdown` must stop pulling, await in-flight handlers, let
@@ -405,6 +463,7 @@ This is the part most likely to break something that works today, and it must la
 tests green before either subpath is written.
 
 **New peer dependencies**, optional, per Rule 1's second half:
+
 ```json
 {
   "peerDependencies": {

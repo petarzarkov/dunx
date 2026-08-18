@@ -146,15 +146,15 @@ controls (`noInline`, `optimizeNextInvocation`, `numberOfDFGCompiles`),
 is `undefined`, so the TC39 proposal is not reachable. `node:async_hooks` exports
 eight names, and only three carry behaviour:
 
-| Name                             | What it actually is on Bun 1.3.14                              |
-| -------------------------------- | -------------------------------------------------------------- |
-| `AsyncLocalStorage`              | Working. Prototype: `run`, `getStore`, `enterWith`, `exit`, `disable`, plus internal `_enable`, `_propagate` |
-| `AsyncLocalStorage.snapshot()`   | Working. Returns a function that replays the captured store outside its scope |
-| `AsyncLocalStorage.bind(fn)`     | Working. Same capture, wrapped around one function             |
-| `AsyncResource`                  | Constructs, `runInAsyncScope` runs the callback, `asyncId()` returns `0` |
-| `createHook`                     | Stub. `enable()` and `disable()` exist; no callback ever fires  |
-| `executionAsyncId`, `triggerAsyncId` | Always `0`                                                  |
-| `executionAsyncResource`, `asyncWrapProviders` | An empty-shaped object, and 58 constant names |
+| Name                                           | What it actually is on Bun 1.3.14                                                                            |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `AsyncLocalStorage`                            | Working. Prototype: `run`, `getStore`, `enterWith`, `exit`, `disable`, plus internal `_enable`, `_propagate` |
+| `AsyncLocalStorage.snapshot()`                 | Working. Returns a function that replays the captured store outside its scope                                |
+| `AsyncLocalStorage.bind(fn)`                   | Working. Same capture, wrapped around one function                                                           |
+| `AsyncResource`                                | Constructs, `runInAsyncScope` runs the callback, `asyncId()` returns `0`                                     |
+| `createHook`                                   | Stub. `enable()` and `disable()` exist; no callback ever fires                                               |
+| `executionAsyncId`, `triggerAsyncId`           | Always `0`                                                                                                   |
+| `executionAsyncResource`, `asyncWrapProviders` | An empty-shaped object, and 58 constant names                                                                |
 
 The shortlist for an alternative mechanism is `AsyncLocalStorage`, its
 `snapshot`/`bind` statics, or a parameter. There is no third primitive.
