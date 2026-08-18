@@ -66,10 +66,21 @@ These are not features and do not wait on a roadmap decision.
    `2025-06-18`. So a batch is not a request this server can answer and the fix
    is to reject it with `-32600`. The defect is the silence, not the missing
    feature: a client holding an outstanding id waits forever on it.
-3. **`@arkv/logger` loses buffered entries on SIGTERM.** A batched entry is lost
-   on SIGTERM and SIGINT unless some handler is installed, and
-   `captureGlobalErrors` installs none. Containers stop with SIGTERM. See
-   [arkv-logger-transports](./arkv-logger-transports.md).
+3. ~~**`@arkv/logger` loses buffered entries on SIGTERM.**~~ **Not a defect.**
+   [arkv-logger-transports](./arkv-logger-transports.md) reports that a batched
+   entry is lost on SIGTERM unless some handler is installed and that
+   `captureGlobalErrors` installs none, which is true. It is also documented and
+   deliberate: `packages/logger/README.md` states that installing a SIGINT or
+   SIGTERM listener suppresses default termination, which is the host's decision
+   and not a logger's, and tells the caller to call `logger.close()` from its own
+   shutdown hook.
+
+   dunx already does. `packages/infra/src/logger/module.ts:79-82` calls
+   `logger.close()` from `onShutdown`, and `enableShutdownHooks` owns the signal at
+   the application level, where the process is owned. So the chain closes: SIGTERM,
+   `App.shutdown()`, `onShutdown`, `close()`, transports flush. The gap is only for
+   someone using `@arkv/logger` standalone with `bufferBytes > 0` and no shutdown
+   hook, which the README tells them to write.
 4. **`ContextStore` is nominal, so `AsyncRequestContext` cannot be passed to
    `Logger`.** Its `private readonly asyncLocalStorage` field makes the class
    nominal, and `tsc` reports
