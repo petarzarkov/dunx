@@ -11,6 +11,7 @@ verified below. So the scheduler is `Bun.cron` plus dunx's four contributions, w
 found, how it is injected, and when it stops.
 
 Three decisions follow, and they are the plan:
+
 1. **No cron library.** `Bun.cron.parse` is the parser. `croner` and `cron-parser` are both refused
    under Rule 1's first half.
 2. **In-process and single-node, stated outright.** bullmq's `upsertJobScheduler` is the multi-node
@@ -44,17 +45,19 @@ container is shared, and `bun.d.ts:7671-7674` records a Windows 48-trigger cap p
 headless-registration failure. dunx uses the **in-process overload only**.
 
 Probed on 1.3.14:
-| Probe | Result |
-| --- | --- |
-| 6-field expression | throws `too many fields. Bun.cron uses 5 fields (minute hour day month weekday) - seconds are not supported` |
-| `@hourly`, `MON-FRI`, `JAN`, nicknames | parse, return UTC `Date`; `@secondly` throws |
-| `0 0 30 2 *` | `parse` returns `null`; `Bun.cron(...)` throws `has no future occurrences` |
-| `60 * * * *`, `* * * *`, `""`, `@bogus` | each throws synchronously, with distinct messages |
-| handle | prototype carries `cron`/`ref`/`stop`/`unref`; `Symbol.dispose` is a function; all three chain; double `stop()` is safe |
-| `.unref()` / default `ref` | exits at once with a job pending (exit 0) / still alive after 6 s (exit 124) |
-| `this` in handler | bound to the `CronJob`; `this.cron` reads the expression back |
+
+| Probe                                   | Result                                                                                                                  |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 6-field expression                      | throws `too many fields. Bun.cron uses 5 fields (minute hour day month weekday) - seconds are not supported`            |
+| `@hourly`, `MON-FRI`, `JAN`, nicknames  | parse, return UTC `Date`; `@secondly` throws                                                                            |
+| `0 0 30 2 *`                            | `parse` returns `null`; `Bun.cron(...)` throws `has no future occurrences`                                              |
+| `60 * * * *`, `* * * *`, `""`, `@bogus` | each throws synchronously, with distinct messages                                                                       |
+| handle                                  | prototype carries `cron`/`ref`/`stop`/`unref`; `Symbol.dispose` is a function; all three chain; double `stop()` is safe |
+| `.unref()` / default `ref`              | exits at once with a job pending (exit 0) / still alive after 6 s (exit 124)                                            |
+| `this` in handler                       | bound to the `CronJob`; `this.cron` reads the expression back                                                           |
 
 Firing, over a 245 s run with three jobs on `* * * * *`:
+
 - First fire landed at **boundary + 5 ms**.
 - **No-overlap confirmed.** A handler doing `await Bun.sleep(70_000)` ran **2** times where a stacking
   implementation would have run 4.
@@ -90,10 +93,11 @@ step can therefore put two fires inside one minute, so tests must not assert bou
 **No cron parsing dependency. `Bun.cron.parse` is the parser.** Rule 1's first half is unambiguous once
 the API is confirmed present, and a cron parser sits at preference level 1, a `Bun.*` API. Measured with
 `bun pm view`, so the rejection rests on facts and not the rule alone:
-| Candidate | Version | Deps | Size | Published | Verdict |
-| --- | --- | --- | --- | --- | --- |
-| `croner` | 10.0.1 | 0 | 154.69 KB | 2026-02-01 | refused: pure-JS reimplementation of `Bun.cron` |
-| `cron-parser` | 5.10.0 | 1 (`luxon@^3.7.2`) | 154.36 KB | 2026-08-14 | refused twice: reimplementation, plus luxon duplicates `@arkv/timezones`' remit |
+
+| Candidate     | Version | Deps               | Size      | Published  | Verdict                                                                         |
+| ------------- | ------- | ------------------ | --------- | ---------- | ------------------------------------------------------------------------------- |
+| `croner`      | 10.0.1  | 0                  | 154.69 KB | 2026-02-01 | refused: pure-JS reimplementation of `Bun.cron`                                 |
+| `cron-parser` | 5.10.0  | 1 (`luxon@^3.7.2`) | 154.36 KB | 2026-08-14 | refused twice: reimplementation, plus luxon duplicates `@arkv/timezones`' remit |
 
 Both are healthy, ESM and typed. Neither is admissible when `Bun.cron.parse` answers the same question
 in the runtime. The third option, "60 lines dunx owns", falls to the same clause: a five-field matcher
@@ -143,31 +147,49 @@ marker on the function object has neither problem and is already the repo's tech
 ```ts
 // marker.ts
 const SCHEDULE = Symbol.for('dunx.schedule');
-export const ScheduleKind = Object.freeze({ CRON: 'cron', INTERVAL: 'interval', TIMEOUT: 'timeout' } as const);
+export const ScheduleKind = Object.freeze({
+  CRON: 'cron',
+  INTERVAL: 'interval',
+  TIMEOUT: 'timeout',
+} as const);
 export type ScheduleKind = (typeof ScheduleKind)[keyof typeof ScheduleKind];
-export const Overlap = Object.freeze({ SKIP: 'skip', CONCURRENT: 'concurrent' } as const);
+export const Overlap = Object.freeze({
+  SKIP: 'skip',
+  CONCURRENT: 'concurrent',
+} as const);
 export type Overlap = (typeof Overlap)[keyof typeof Overlap];
 export interface ScheduleMeta {
   readonly kind: ScheduleKind;
-  readonly at: string | number;  // cron expression for CRON, ms for INTERVAL and TIMEOUT
-  readonly name?: string;        // registry key, defaults to `ClassName.methodName`
-  readonly tz?: string;          // IANA zone id, CRON only, needs a Bun that honours it
+  readonly at: string | number; // cron expression for CRON, ms for INTERVAL and TIMEOUT
+  readonly name?: string; // registry key, defaults to `ClassName.methodName`
+  readonly tz?: string; // IANA zone id, CRON only, needs a Bun that honours it
   readonly overlap?: Overlap;
-  readonly enabled?: boolean;    // arm at boot, default true
+  readonly enabled?: boolean; // arm at boot, default true
 }
 
 // decorators.ts - all three share one shape
 type HandlerMethod = (...args: never[]) => unknown;
 export const Cron =
   (expression: string, options: CronDecoratorOptions = {}) =>
-  <T extends HandlerMethod>(value: T): T => { markSchedule(value, /* ... */); return value; };
-export const Interval: (ms: number, o?: TimerDecoratorOptions) => <T extends HandlerMethod>(v: T) => T;
-export const Timeout: (ms: number, o?: TimerDecoratorOptions) => <T extends HandlerMethod>(v: T) => T;
+  <T extends HandlerMethod>(value: T): T => {
+    markSchedule(value /* ... */);
+    return value;
+  };
+export const Interval: (
+  ms: number,
+  o?: TimerDecoratorOptions,
+) => <T extends HandlerMethod>(v: T) => T;
+export const Timeout: (
+  ms: number,
+  o?: TimerDecoratorOptions,
+) => <T extends HandlerMethod>(v: T) => T;
 
 export class ReportsService {
   constructor(private readonly reports: ReportsRepository) {}
   @Cron('0 3 * * *', { tz: 'Europe/Sofia' })
-  async nightly(): Promise<void> { await this.reports.rebuild(); }
+  async nightly(): Promise<void> {
+    await this.reports.rebuild();
+  }
   @Interval(30_000, { name: 'health', overlap: Overlap.SKIP })
   async probe(): Promise<void> {}
   @Timeout(5_000)
@@ -181,8 +203,8 @@ site, matching `packages/infra/src/queue/options.ts:125-160`. So is `ScheduleEnt
 
 ```ts
 export interface ScheduleOptionsInit {
-  readonly enabled?: boolean;   // arm discovered schedules at boot, default true
-  readonly tz?: string;         // default zone for a @Cron with no tz, default 'UTC'
+  readonly enabled?: boolean; // arm discovered schedules at boot, default true
+  readonly tz?: string; // default zone for a @Cron with no tz, default 'UTC'
   readonly keepAlive?: boolean; // hold the event loop open, default true, matching Bun.cron
   readonly overlap?: Overlap;
 }
@@ -191,26 +213,37 @@ export class ScheduleOptions {
   readonly tz: string;
   readonly keepAlive: boolean;
   readonly overlap: Overlap;
-  constructor(init: ScheduleOptionsInit = {}) { /* assertZone(this.tz) */ }
+  constructor(init: ScheduleOptionsInit = {}) {
+    /* assertZone(this.tz) */
+  }
 }
 export class ScheduleRegistry {
   constructor(options: ScheduleOptions, logger: Logger) {}
   add(meta: ScheduleMeta, handler: () => unknown): ScheduleEntry; // throws DUPLICATE_SCHEDULE
-  remove(name: string): boolean;                                  // false if not held
+  remove(name: string): boolean; // false if not held
   list(): readonly ScheduleEntry[];
   get(name: string): ScheduleEntry | undefined;
-  trigger(name: string): Promise<unknown>;  // invoke off-schedule, honouring `overlap`
+  trigger(name: string): Promise<unknown>; // invoke off-schedule, honouring `overlap`
 }
 export class ScheduleModule {
   static forRoot(init?: ScheduleOptionsInit): DynamicModule;
-  static forRootAsync(load: () => ScheduleOptionsInit | Promise<ScheduleOptionsInit>): DynamicModule;
-  static forRootAsync<const D extends Deps>(c: AsyncModuleConfig<ScheduleOptionsInit, D>): DynamicModule;
+  static forRootAsync(
+    load: () => ScheduleOptionsInit | Promise<ScheduleOptionsInit>,
+  ): DynamicModule;
+  static forRootAsync<const D extends Deps>(
+    c: AsyncModuleConfig<ScheduleOptionsInit, D>,
+  ): DynamicModule;
 }
 // not exported; copies QueueRunner's shape (packages/infra/src/queue/runner.ts:33-123)
 class ScheduleRunner implements OnInit, OnShutdown {
-  constructor(ref: AppRef, root: ModuleRef, options: ScheduleOptions,
-    registry: ScheduleRegistry, logger: Logger) {}
-  async onInit(): Promise<void> {}     // discover, then arm
+  constructor(
+    ref: AppRef,
+    root: ModuleRef,
+    options: ScheduleOptions,
+    registry: ScheduleRegistry,
+    logger: Logger,
+  ) {}
+  async onInit(): Promise<void> {} // discover, then arm
   async onShutdown(): Promise<void> {} // stop every handle, await in-flight
 }
 ```
@@ -230,7 +263,7 @@ zero-argument `forRoot` cannot do.
 
 **Overlap policy.** Default `Overlap.SKIP`, which `Bun.cron` does for free: it computes the next fire
 only after the handler's returned promise settles, so returning the promise from the wrapper gives skip
-semantics with no bookkeeping. `Overlap.CONCURRENT` is the wrapper *not* returning the promise, so Bun
+semantics with no bookkeeping. `Overlap.CONCURRENT` is the wrapper _not_ returning the promise, so Bun
 reschedules immediately. There is no `queue` mode: an overrun that must not be dropped is a job, and
 that is `@JobHandler` plus bullmq. `@Interval` and `@Timeout` track their own runs, a chained
 `setTimeout` having no equivalent guarantee. A skipped run logs at `warn` with the name and the elapsed
@@ -289,11 +322,16 @@ exported there already as the adapter seam (`packages/core/src/di/index.ts:28-31
 ```ts
 // packages/core/src/di/discover.ts
 type Read<M> = (value: unknown) => M | undefined;
-export const eachMarkedMethod: <M>(start: object | null, read: Read<M>) => readonly [string, M][];
-export const classOf: (entry: ProviderEntry) =>
-  { token: InjectionToken<unknown>; ctor: Ctor<unknown> } | undefined;
+export const eachMarkedMethod: <M>(
+  start: object | null,
+  read: Read<M>,
+) => readonly [string, M][];
+export const classOf: (
+  entry: ProviderEntry,
+) => { token: InjectionToken<unknown>; ctor: Ctor<unknown> } | undefined;
 export const discoverMarked: <M>(
-  modules: readonly ResolvedModule[], read: Read<M>,
+  modules: readonly ResolvedModule[],
+  read: Read<M>,
   resolve: (token: InjectionToken<unknown>) => unknown,
 ) => readonly { instance: object; method: string; meta: M }[];
 ```
@@ -328,7 +366,7 @@ point uses `ScheduleModule.forRoot({ enabled: false })` and calls `registry.add`
   the decorator's doc comment rather than a footnote. The multi-node answer is `@JobHandler` plus
   `queue.upsertJobScheduler` on the bullmq `Queue` that `JobPublisher.queue(name)` already returns.
   `docs/architecture/queues.md:158-160` refuses wrappers around bullmq's own surface, so a `@Cron({
-  queue })` overload would restate bullmq's repeat options as a staler copy and would make one decorator
+queue })` overload would restate bullmq's repeat options as a staler copy and would make one decorator
   mean two things with different failure modes: runs-on-every-replica against
   needs-Redis-and-survives-restart. A distributed lock is leader election, and dunx does not invent one
   either.
@@ -336,7 +374,7 @@ point uses `ScheduleModule.forRoot({ enabled: false })` and calls `registry.add`
   with a `TimeoutOverflowWarning`. A silent hot loop is worse than a boot error naming the method and
   pointing at `@Cron`.
 - **`tz` on a Bun that ignores it.** `capability.ts` compares `Bun.cron.parse('0 12 * * *',
-  fixedInstant, { tz: 'Asia/Kolkata' })` against the `{ tz: 'UTC' }` answer. Equal means the option is a
+fixedInstant, { tz: 'Asia/Kolkata' })` against the `{ tz: 'UTC' }` answer. Equal means the option is a
   no-op, and a `@Cron` carrying a non-UTC `tz` is then a boot error rather than a job running at the
   wrong hour. The probe reads behaviour, not `Bun.version`, so it survives the 1.4 change with no
   version table.
@@ -366,7 +404,7 @@ point uses `ScheduleModule.forRoot({ enabled: false })` and calls `registry.add`
    better served by `false`. Decide after measuring against `examples/full`'s shutdown path, where
    `docs/bun-apis.md:463-500` already records the `unref` semantics.
 6. **The `isTimezoneCode` guard is optional.** Without it dunx uses `getZone(id as TimezoneCode) !==
-   null`. No offset or DST API should go upstream for this feature.
+null`. No offset or DST API should go upstream for this feature.
 
 ## Cost
 

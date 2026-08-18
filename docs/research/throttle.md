@@ -69,26 +69,26 @@ after  flush -> [1,0,3,398] (reload path worked, new sha 286c024c)
 **The event-loop hold is narrower than the ROADMAP entry implies, and a command-only client is
 on the safe side of it.** Each run under `timeout 12`:
 
-| Case | Exit |
-| --- | --- |
-| connect, EVAL, `close()` / never connected / failed connect / never closed | 0 in 21-49 ms |
-| `subscribe()` then `close()` | **124, hung 12 s** |
-| `autoReconnect: true` against absent server, `close()` mid-retry | **124, hung 10 s** |
+| Case                                                                       | Exit               |
+| -------------------------------------------------------------------------- | ------------------ |
+| connect, EVAL, `close()` / never connected / failed connect / never closed | 0 in 21-49 ms      |
+| `subscribe()` then `close()`                                               | **124, hung 12 s** |
+| `autoReconnect: true` against absent server, `close()` mid-retry           | **124, hung 10 s** |
 
 A throttle store never subscribes, so it avoids row 2. Row 3 is reachable: the store must not open
 its own connection with a reconnect budget at boot. **Costs measured** across `probes/{gcra-memory,memory-cost,response-headers,final,lua-algos}.ts`,
 `Bun.nanoseconds()` over 1M iterations after a 20k warm-up.
 
-| Operation | Cost |
-| --- | --- |
-| In-memory GCRA `take`, 1 key / 1k keys / 100k keys | 0.040 / 0.054 / **0.159 us** |
-| `Date.now()` / template key build | 0.063 / 0.035 us |
-| `Response.json` + 2 header sets, minus `Response.json` alone | 1.329 - 0.577 = 0.752 us |
-| **Full in-memory request path, 100k identities** | **~0.30 us** |
-| 100k entries in memory / as Redis keys | 16.1 MB (163 B each) / 6.6 MB (66 B each) |
-| Full-`Map` sweep of 100k expired / incremental, budget 1000 | **59.9 ms stall** / 1.2 ms |
-| EVALSHA sequential round trip / 1000 concurrent | 273 us / 9.1 us amortised |
-| EVAL full source / EVALSHA fixed-window / GCRA / `INCR` floor | 19.0 / 11.2 / 9.9 / 2.5 us pipelined |
+| Operation                                                     | Cost                                      |
+| ------------------------------------------------------------- | ----------------------------------------- |
+| In-memory GCRA `take`, 1 key / 1k keys / 100k keys            | 0.040 / 0.054 / **0.159 us**              |
+| `Date.now()` / template key build                             | 0.063 / 0.035 us                          |
+| `Response.json` + 2 header sets, minus `Response.json` alone  | 1.329 - 0.577 = 0.752 us                  |
+| **Full in-memory request path, 100k identities**              | **~0.30 us**                              |
+| 100k entries in memory / as Redis keys                        | 16.1 MB (163 B each) / 6.6 MB (66 B each) |
+| Full-`Map` sweep of 100k expired / incremental, budget 1000   | **59.9 ms stall** / 1.2 ms                |
+| EVALSHA sequential round trip / 1000 concurrent               | 273 us / 9.1 us amortised                 |
+| EVAL full source / EVALSHA fixed-window / GCRA / `INCR` floor | 19.0 / 11.2 / 9.9 / 2.5 us pipelined      |
 
 Two rows drive design: the two response headers cost more than the meter does, and a naive
 full-`Map` sweep stalls for 59.9 ms. End to end the in-memory path is below the noise floor: a
@@ -136,12 +136,12 @@ Algorithm: **GCRA** (generic cell rate algorithm, a leaky bucket as a meter). On
 one number, the theoretical arrival time. All four candidates were implemented and run against
 Valkey in `probes/lua-algos.ts`:
 
-| Algorithm | State per identity | Accuracy |
-| --- | --- | --- |
-| Fixed window | count + expiry | admits 2x limit across a boundary |
-| Sliding window log | one timestamp per request, O(limit) | exact |
-| Sliding window counter | 2 counters, 2 keys | ~0.1% error, no 2x burst |
-| **GCRA** | **1 number, 1 key** | exact, ms-precision `Retry-After` |
+| Algorithm              | State per identity                  | Accuracy                          |
+| ---------------------- | ----------------------------------- | --------------------------------- |
+| Fixed window           | count + expiry                      | admits 2x limit across a boundary |
+| Sliding window log     | one timestamp per request, O(limit) | exact                             |
+| Sliding window counter | 2 counters, 2 keys                  | ~0.1% error, no 2x burst          |
+| **GCRA**               | **1 number, 1 key**                 | exact, ms-precision `Retry-After` |
 
 GCRA is the only one whose atomic step is a single compare-and-set on one value, so the Redis
 script and the `Map` implementation run identical arithmetic and cannot disagree. Sliding window
@@ -256,9 +256,9 @@ ThrottleModule.forRoot({
 });
 
 @Controller('/notes')
-@Throttle({ long: { limit: 100, windowMs: 60_000 } })   // class-level: this controller
+@Throttle({ long: { limit: 100, windowMs: 60_000 } }) // class-level: this controller
 export class NotesController {
-  @Get('/') @SkipThrottle('short') list() {}            // route-level: keeps `long`
+  @Get('/') @SkipThrottle('short') list() {} // route-level: keeps `long`
   @Post('/x') @Throttle({ short: { limit: 1, windowMs: 5_000 } }) run() {}
 }
 ```
@@ -320,16 +320,16 @@ older triple prefixed `X-RateLimit-`.
 
 All under `packages/http/src/throttle/`, one `*.test.ts` per file:
 
-| File | Purpose |
-| --- | --- |
-| `policy.ts` | `ThrottlePolicy`, `ThrottleDecision`, the GCRA arithmetic both stores share |
-| `store.ts` | `ThrottleStore` abstract class, `ThrottleBroker` restatement |
-| `memory.ts` | `MemoryThrottleStore`: one `Map`, incremental sweep |
-| `redis.ts` | `RedisThrottleStore`: the Lua script, `SCRIPT LOAD`, `NOSCRIPT` reload |
-| `options.ts` | `ThrottleOptions` class, `ThrottleOptionsInit`, defaults |
-| `decorators.ts` | `THROTTLE`, `SKIP_THROTTLE`, `Throttle`, `SkipThrottle` |
-| `guard.ts` | `ThrottleGuard`: key, take, headers, 429 |
-| `module.ts` | `ThrottleModule.forRoot` / `forRootAsync` |
+| File            | Purpose                                                                     |
+| --------------- | --------------------------------------------------------------------------- |
+| `policy.ts`     | `ThrottlePolicy`, `ThrottleDecision`, the GCRA arithmetic both stores share |
+| `store.ts`      | `ThrottleStore` abstract class, `ThrottleBroker` restatement                |
+| `memory.ts`     | `MemoryThrottleStore`: one `Map`, incremental sweep                         |
+| `redis.ts`      | `RedisThrottleStore`: the Lua script, `SCRIPT LOAD`, `NOSCRIPT` reload      |
+| `options.ts`    | `ThrottleOptions` class, `ThrottleOptionsInit`, defaults                    |
+| `decorators.ts` | `THROTTLE`, `SKIP_THROTTLE`, `Throttle`, `SkipThrottle`                     |
+| `guard.ts`      | `ThrottleGuard`: key, take, headers, 429                                    |
+| `module.ts`     | `ThrottleModule.forRoot` / `forRootAsync`                                   |
 
 **Exports map and manifest: no change.** Everything is re-exported from
 `packages/http/src/index.ts`, alongside `RequestLoggingMiddleware`, `RedisRelay` and
@@ -378,7 +378,7 @@ framework does not ship, in the same change.
 3. **GCRA's `remaining` is derived, not counted.** The first Lua draft returned `remaining: 4`
    on a denied request (`probes/lua-algos.ts`, `[0,198,4]`); the corrected in-memory version
    returns 0. Both stores must be tested against one table of expected `[allowed, remaining,
-   resetMs, retryAfterMs]`.
+resetMs, retryAfterMs]`.
 4. **Redis and memory can disagree on clock.** The Lua script takes `now` from the caller, not
    `redis.call('TIME')`, which keeps it deterministic and replica-safe but means two app nodes
    with 500 ms of skew meter differently. Unmeasured: how much skew matters at a 1 s window.
@@ -388,14 +388,14 @@ framework does not ship, in the same change.
 
 ## Cost
 
-| Item | Estimate |
-| --- | --- |
-| New source files | 8 in `packages/http/src/throttle/`, plus 8 tests |
-| Source LOC | ~430 total, largest file ~90 (`guard.ts`); test LOC ~600 |
-| Edits to existing files | `packages/http/src/index.ts` (re-exports); `server/client-address.ts` + `server/settings.ts` for spike 1 |
-| New dependencies | none, in any position |
-| Manifest changes | none |
-| Docs pages | one new `docs/guide/` page; `docs/architecture/http.md` gains a throttling section; `docs/bun-apis.md` gains the undeclared `script()` and the narrowed loop-hold table; `docs/MIGRATION-FROM-NEST.md:62` moves off `undesigned`; `docs/guide/05-controllers.md:556` retargets its `metaKey` example |
-| Example changes | `examples/full` only. A global IP guard plus one `@Throttle` route. It already skips cleanly when Redis is absent, which the memory-store default fits |
-| CI impact | no new job. Redis-backed tests skip on an absent broker like the existing ones; guard and memory-store tests need no service |
-| README | `packages/http/README.md` gains a section; `bun run gen:readme` regenerates the root table unchanged, since no workspace is added |
+| Item                    | Estimate                                                                                                                                                                                                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New source files        | 8 in `packages/http/src/throttle/`, plus 8 tests                                                                                                                                                                                                                                                     |
+| Source LOC              | ~430 total, largest file ~90 (`guard.ts`); test LOC ~600                                                                                                                                                                                                                                             |
+| Edits to existing files | `packages/http/src/index.ts` (re-exports); `server/client-address.ts` + `server/settings.ts` for spike 1                                                                                                                                                                                             |
+| New dependencies        | none, in any position                                                                                                                                                                                                                                                                                |
+| Manifest changes        | none                                                                                                                                                                                                                                                                                                 |
+| Docs pages              | one new `docs/guide/` page; `docs/architecture/http.md` gains a throttling section; `docs/bun-apis.md` gains the undeclared `script()` and the narrowed loop-hold table; `docs/MIGRATION-FROM-NEST.md:62` moves off `undesigned`; `docs/guide/05-controllers.md:556` retargets its `metaKey` example |
+| Example changes         | `examples/full` only. A global IP guard plus one `@Throttle` route. It already skips cleanly when Redis is absent, which the memory-store default fits                                                                                                                                               |
+| CI impact               | no new job. Redis-backed tests skip on an absent broker like the existing ones; guard and memory-store tests need no service                                                                                                                                                                         |
+| README                  | `packages/http/README.md` gains a section; `bun run gen:readme` regenerates the root table unchanged, since no workspace is added                                                                                                                                                                    |

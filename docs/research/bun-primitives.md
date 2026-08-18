@@ -12,6 +12,7 @@ using it emits one record per line and can print source that sat beside the thro
 **Evidence** - `probes/a-error-inspect.ts`, `a-inspect-behaviour.ts`,
 `a-inspect-cost.ts` (run from `packages/infra`, `@arkv/logger` 0.10.0),
 `a-cycle-cost.ts`, `a-fallback-cost.ts`. Behaviour table in the last section.
+
 ```
 bun probes/a-error-inspect.ts
 --- Bun.inspect(new Error(...)) : 333 bytes, 7 lines ---
@@ -34,6 +35,7 @@ JSON.stringify(flat)             n=5000  median    0.104us
 JSON.stringify(cyclic) caught    n= 500  median 1424.489us
 Bun.inspect(cyclic)              n= 500  median    0.936us
 ```
+
 **Where it applies** - `packages/core/src/logger/console.ts:144`
 (`JSON.stringify(this.#entry(...))`) in its `catch` branch only.
 `probes/a-fallback-cost.ts` puts that shape at 0.449 us on a clean entry against today's
@@ -56,6 +58,7 @@ a memory metric.
 
 **Evidence** - `probes/b-unsafe-jsc.ts`, `b-cost.ts`, `b-unsafe-calls.ts`. Per-call
 cost table in the last section.
+
 ```
 bun probes/b-unsafe-jsc.ts
 Bun.unsafe.arrayBufferToString  ->  function(len=1)
@@ -67,6 +70,7 @@ jsc.memoryUsage()      => {"current":36536320,"peak":36536320,"currentCommit":44
 jsc.heapSize() => 175406   Bun.gc(false) => 175406   jsc.heapStats() => 13,745 bytes
 jsc.percentAvailableMemoryInUse() => null   process.resourceUsage().maxRSS => 35680 KiB
 ```
+
 `Object.getOwnPropertyNames` finds nothing else on `Bun.unsafe`, so there are no
 non-enumerable members. `bun:jsc` exports 37 names: `callerSourceOrigin codeCoverageForFile default describe describeArray deserialize drainMicrotasks edenGC estimateShallowMemoryUsageOf fullGC gcAndSweep generateHeapSnapshotForDebugging getProtectedObjects getRandomSeed heapSize heapStats isRope jscDescribe jscDescribeArray memoryUsage noFTL noInline noOSRExitFuzzing numberOfDFGCompiles optimizeNextInvocation percentAvailableMemoryInUse profile releaseWeakRefs reoptimizationRetryCount samplingProfilerStackTraces serialize setRandomSeed setTimeZone setTimezone startRemoteDebugger startSamplingProfiler totalCompileTime`.
 Unsafe in production: `Bun.generateHeapSnapshot()` (11-15 ms stop-the-world),
@@ -90,6 +94,7 @@ which is exactly the bug class `ShutdownHooks` exists for.
 
 **Evidence** - `probes/c-fixture.ts` and `c-driver.ts`, 16 spawned subprocesses;
 `c-additive.ts`. Full path table in the last section.
+
 ```
 bun probes/c-driver.ts
 === drain === exitCode=0 in 35ms
@@ -101,6 +106,7 @@ bun probes/c-driver.ts
 === resurrect === beforeExit #1 / resurrected work ran / ... / beforeExitFired=3
 === async-exit === beforeExit #1 / exit  <- no MICROTASK/TIMER/queueMicrotask line
 ```
+
 `c-additive.ts`: handlers are additive, `listenerCount exit = 2`, both ran in
 registration order, `getMaxListeners()` is 10, and `process.exitCode` assigned inside
 an `exit` handler takes effect, so a framework handler masks nothing.
@@ -122,6 +128,7 @@ stringify in 0.191 us once per process, and dunx's one boot entry
 
 **Evidence** - `probes/d/entry.ts`, `d/preload.ts`, `d/main.test.ts`, `d/compiled.ts`,
 `d-cost.ts`.
+
 ```
 --- direct entry ---     Bun.main=/.../probes/d/entry.ts  (same from an imported module)
 --- with --preload ---   Bun.main=/.../probes/d/entry.ts  <- set before the preload runs
@@ -134,6 +141,7 @@ bun probes/d-cost.ts      (n=20000 each)
 Bun.main 0.047us | Bun.version 0.028us | Bun.revision 0.040us | execPath 0.047us
 Bun.env.NODE_ENV 0.046us | JSON.stringify(the 7 fields) 0.191us
 ```
+
 Under `bun test` `Bun.main` is the current test file's path and changes per file, so it
 is not the application entry there. Under `--compile` it is the virtual
 `/$bunfs/root/<binary>` and needs `process.execPath` beside it to name a real file.
@@ -144,12 +152,14 @@ is not the application entry there. Under `--compile` it is the virtual
 `ConsoleLogger` already stamps `pid` and `timestamp` on every entry
 (`packages/core/src/logger/console.ts:174-175`), so neither is a field to add.
 Proposed, message unchanged and six fields added:
+
 ```
 Serving 12 route(s) and 1 gateway(s)
   runtime "bun 1.3.14" (Bun.version) | revision "0d9b296af" (Bun.revision.slice(0, 9))
   main "/app/src/main.ts" (Bun.main) | execPath "/app/api" (differs under --compile)
   env "production" (Bun.env.NODE_ENV) | version "2.0.1" (the app's, if it passes one)
 ```
+
 **Cost** - about 8 lines inside `#logServed`, plus the app's own version as an optional `HttpApplicationOptions` field if it is wanted; that field is published API and the rest is not. `bootLogging: false` already silences it.
 
 ## E. Bun.sleep and Bun.sleepSync
@@ -161,6 +171,7 @@ at 1 ms and above all four primitives are within 0.03 ms of each other.
 
 **Evidence** - `probes/e-sleep.ts`, `e-order.ts`, `e-flush.ts`. Overshoot table in the
 last section. The one real difference is at 0 ms, and it is semantic:
+
 ```
 bun probes/e-order.ts
 ordering: queueMicrotask -> Promise.resolve -> setImmediate -> Bun.sleep(0) resolved -> setTimeout(0) callback
@@ -175,6 +186,7 @@ bun probes/e-sleep.ts  median [overshoot]
 5ms: Bun.sleep 5.5411ms | setTimeout promise 5.5179ms | sleepSync 5.4863ms | Atomics.wait 5.4905ms
 sleepSync(-1) threw: argument to sleepSync must not be negative, got -1; sleep(-1) accepted
 ```
+
 **Where it applies** - one candidate: `internal/docs/src/charts.test.tsx:124-125`,
 `new Promise((resolve) => setTimeout(resolve, 20))`, which is `await Bun.sleep(20)`.
 Everything else shaped like a sleep is a timeout guard or a race and must stay a
@@ -211,6 +223,7 @@ In `packages/*/src` there is **no `await next()` at all**: `request-logging.ts:2
 and `dashboard/src/middleware.ts:69` `return next()`. The two `await next()` sites are
 sample code, `examples/full/src/http/request-log.ts:29` and
 `tools/create-app/templates/features/http/request-log.ts:29`.
+
 ```
 bun probes/f-peek-semantics.ts
 Bun.peek own props: [ "length", "name", "status" ]   typeof Bun.peek.status: function
@@ -234,6 +247,7 @@ chain x5  async+await next()      50000  0.724us  2.565us
 chain x5  pass-through            50000  0.207us  0.592us
 chain x5  peek fast path          50000  0.186us  1.703us
 ```
+
 Three traps, spelled out in the last section: a pending promise is returned as itself,
 a non-promise thenable reports `fulfilled`, and peeking a rejection does not mark it
 handled.
@@ -251,6 +265,7 @@ pass-through shape, 0.10 us per layer, and `Bun.peek` removes none of it. JSC's
 One adjacent shape survives. `directOr` at `packages/http/src/server/routes.ts:239-253`
 already branches on `value instanceof Promise`; adding `Bun.peek.status` covers a
 handler declared `async` that executes no `await`.
+
 ```
 bun probes/f-directOr.ts                                       (n=30000 each)
 async no-await   today 1.190us / peek 0.908us   sync handler today 1.032us / peek 1.004us
@@ -260,6 +275,7 @@ today (.then)   43711 47447 45401 44142 15570   median 44142 req/s
 peek fast path  42756 46106 50456 20803 17782   median 42756 req/s
 delta -3.14%  |  round-to-round spread: today 72.22%, peek 76.42%
 ```
+
 0.282 us on the `async no-await` shape, 0.181 us **worse** on the `async with await`
 shape, which is the commoner one. End to end that is not resolvable here: `oha` is
 absent and `bun run setup` would modify the repo, and a 72% round-to-round spread
@@ -331,16 +347,16 @@ Memory readings and what each costs:
 | `jsc.percentAvailableMemoryInUse()`   | 0.035 us | **returns `null`** on Linux                        |
 | `jsc.estimateShallowMemoryUsageOf(v)` | 0.043 us | bytes for one object                               |
 | `process.resourceUsage()`             | 0.456 us | `.maxRSS` in KiB                                   |
-| `jsc.heapSize()`                      | 2.155 us | JS heap bytes, same number as `Bun.gc(false)`       |
-| `Bun.gc(false)`                       | 3.412 us | does not collect, returns the heap size             |
+| `jsc.heapSize()`                      | 2.155 us | JS heap bytes, same number as `Bun.gc(false)`      |
+| `Bun.gc(false)`                       | 3.412 us | does not collect, returns the heap size            |
 | `process.memoryUsage.rss()`           | 4.224 us | one number                                         |
-| `process.memoryUsage()`               | 4.315 us | `rss heapTotal heapUsed external arrayBuffers`      |
-| `jsc.memoryUsage()`                   | 5.114 us | `current peak currentCommit peakCommit pageFaults`  |
+| `process.memoryUsage()`               | 4.315 us | `rss heapTotal heapUsed external arrayBuffers`     |
+| `jsc.memoryUsage()`                   | 5.114 us | `current peak currentCommit peakCommit pageFaults` |
 | `jsc.edenGC()`                        | 1898 us  | synchronous                                        |
-| `jsc.heapStats()`                     | 2209 us  | 13,745 bytes of object type counts                  |
+| `jsc.heapStats()`                     | 2209 us  | 13,745 bytes of object type counts                 |
 | `Bun.gc(true)`                        | 2365 us  | synchronous full GC                                |
 | `jsc.gcAndSweep()`                    | 2600 us  | synchronous                                        |
-| `Bun.generateHeapSnapshot()`          | 11-15 ms | 0.15-0.17 MiB of JSON; `'v8'` returns a string      |
+| `Bun.generateHeapSnapshot()`          | 11-15 ms | 0.15-0.17 MiB of JSON; `'v8'` returns a string     |
 
 `bun:jsc` exports 37 names on 1.3.14, including the JSC test hooks `noFTL`, `noInline`,
 `optimizeNextInvocation`, `drainMicrotasks` and `startSamplingProfiler`, which change
@@ -376,11 +392,11 @@ The absolute path of the entry script, read in 0.047 us, identical inside an imp
 module and inside a `--preload` file (it is set before the preload runs). Three
 contexts where it is not the application entry:
 
-| context               | `Bun.main`                                                     |
-| --------------------- | -------------------------------------------------------------- |
-| `bun test`            | the **current test file**'s path, so it changes per file        |
+| context               | `Bun.main`                                                           |
+| --------------------- | -------------------------------------------------------------------- |
+| `bun test`            | the **current test file**'s path, so it changes per file             |
 | `bun build --compile` | `/$bunfs/root/<binary>`, virtual; `process.execPath` is the real one |
-| `bun -e` / stdin      | `<cwd>/[eval]` / `<cwd>/[stdin]`                               |
+| `bun -e` / stdin      | `<cwd>/[eval]` / `<cwd>/[stdin]`                                     |
 
 `Bun.version` is 0.028 us, `Bun.revision` 0.040 us and 40 hex characters,
 `process.execPath` 0.047 us, `Bun.env.NODE_ENV` 0.046 us; six stringify in 0.191 us.

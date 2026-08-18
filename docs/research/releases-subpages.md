@@ -52,8 +52,8 @@ A `release:` commit to a rendered card, hop by hop:
    `breaking, feat, fix, perf, refactor, docs, other`
    (`scripts/changelog.ts:52-60`, `scripts/changelog.ts:150-178`). Each entry is
    `- **scope**: summary ([#pr](...)) ([\`sha7\`](...))`
-   (`scripts/changelog.ts:125-131`). `prependRelease` puts the section above the
-   existing ones so the site never sorts (`scripts/changelog.ts:186-197`).
+(`scripts/changelog.ts:125-131`). `prependRelease` puts the section above the
+existing ones so the site never sorts (`scripts/changelog.ts:186-197`).
 5. `parseChangelog` reads the same file back. The only line it matches is
    `/^## (\d+\.\d+\.\d+) - (\d{4}-\d{2}-\d{2})\s*$/` (`scripts/changelog.ts:38`);
    everything to the next heading is `body`. The parsed shape is
@@ -71,10 +71,10 @@ A `release:` commit to a rendered card, hop by hop:
 
    ```ts
    interface ReleaseNote {
-     readonly version: string;   // '2.0.1'
-     readonly date: string;      // 'YYYY-MM-DD'
-     readonly anchor: string;    // '2-0-1', also the prefix on every heading id
-     readonly html: string;      // rendered body, no heading line
+     readonly version: string; // '2.0.1'
+     readonly date: string; // 'YYYY-MM-DD'
+     readonly anchor: string; // '2-0-1', also the prefix on every heading id
+     readonly html: string; // rendered body, no heading line
    }
    ```
 
@@ -96,12 +96,12 @@ A `release:` commit to a rendered card, hop by hop:
 Measured on this checkout after a clean `bun run docs:build` (3.5 s wall, 724 ms
 of it Vite):
 
-| Artifact                                     | Raw       | Gzip      |
-| -------------------------------------------- | --------- | --------- |
-| `internal/docs/src/generated/releases.json`  | 40,520 B  | 11,236 B  |
-| `dist/assets/releases-BeHmC4RT.js`           | 41,430 B  | 11.01 kB  |
-| `internal/docs/src/generated/index.json`     | 52,378 B  | -         |
-| `dist/assets/index-C9mMkhLb.js` (entry)      | 964.94 kB | 274.45 kB |
+| Artifact                                    | Raw       | Gzip      |
+| ------------------------------------------- | --------- | --------- |
+| `internal/docs/src/generated/releases.json` | 40,520 B  | 11,236 B  |
+| `dist/assets/releases-BeHmC4RT.js`          | 41,430 B  | 11.01 kB  |
+| `internal/docs/src/generated/index.json`    | 52,378 B  | -         |
+| `dist/assets/index-C9mMkhLb.js` (entry)     | 964.94 kB | 274.45 kB |
 
 35 releases, `0.1.1` through `2.0.1`. Largest single note 14,597 bytes of JSON,
 average 1,157. `site.test.tsx:99` caps `index.json` at 120,000 characters.
@@ -267,6 +267,7 @@ line 29, import it from `../router` (the file already imports `href, RouteKind`
 from there at line 26). Reason: the deleted half of the Rule 2 move.
 
 **EDIT `internal/docs/src/pages/Releases.tsx`** - three changes:
+
 - the version `Anchor` at line 58 points at
   `href(RouteKind.Releases, release.version)` instead of
   `#/releases?h=${release.anchor}`; the `id={release.anchor}` at line 56 stays.
@@ -297,15 +298,15 @@ single Releases action (35 more spotlight entries would bury the guides), and
 
 ## Tests to change
 
-| Test file                                    | Affected | How                                                                                                                                                                                                                 |
-| -------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `internal/docs/src/site.test.tsx`            | yes      | 425 lines against a 500-line error cap. Move `describe('the release history')` (lines 386-425) and the navigation test at 368-383 into a new file, dropping `loadReleases` from the import at line 12. Leaves ~370.   |
-| `internal/docs/src/releases.test.tsx` (NEW)  | new      | The two moved blocks plus: the sub-page renders the version and body; `#/releases/v2.0.1` resolves the same as `#/releases/2.0.1`; `#/releases/9.9.9` renders the Not found heading; prev/next resolve to real versions. |
-| `internal/docs/src/links.test.tsx`           | optional | `SLUGLESS` at lines 12-17 holds `RouteKind.Releases`, so `#/releases/<anything>` passes unchecked at line 86. Nothing fails today: release bodies carry 174 hrefs, 0 internal, and no guide or README links a release. |
-| `internal/docs/src/symbol-anchor.test.tsx`   | no       | Drives `useScrollTo` for `#/api/<dir>?h=symbol-*` only. The sub-page adds no symbol anchor.                                                                                                                          |
-| `internal/docs/src/published-voice.test.ts`  | no       | Scans `generated/guides/*.json` only (line 13). Releases are not a guide.                                                                                                                                            |
-| `scripts/no-em-dash.test.ts`                 | yes      | Scans every tracked and untracked file. The new TSX and the README edit must carry no `\u2014` or `\u2013`.                                                                                                          |
-| `scripts/no-slop.test.ts`                    | no       | `[/^internal\//, Mode.Exempt]`. Both edited docs files are under `internal/`.                                                                                                                                        |
+| Test file                                   | Affected | How                                                                                                                                                                                                                      |
+| ------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `internal/docs/src/site.test.tsx`           | yes      | 425 lines against a 500-line error cap. Move `describe('the release history')` (lines 386-425) and the navigation test at 368-383 into a new file, dropping `loadReleases` from the import at line 12. Leaves ~370.      |
+| `internal/docs/src/releases.test.tsx` (NEW) | new      | The two moved blocks plus: the sub-page renders the version and body; `#/releases/v2.0.1` resolves the same as `#/releases/2.0.1`; `#/releases/9.9.9` renders the Not found heading; prev/next resolve to real versions. |
+| `internal/docs/src/links.test.tsx`          | optional | `SLUGLESS` at lines 12-17 holds `RouteKind.Releases`, so `#/releases/<anything>` passes unchecked at line 86. Nothing fails today: release bodies carry 174 hrefs, 0 internal, and no guide or README links a release.   |
+| `internal/docs/src/symbol-anchor.test.tsx`  | no       | Drives `useScrollTo` for `#/api/<dir>?h=symbol-*` only. The sub-page adds no symbol anchor.                                                                                                                              |
+| `internal/docs/src/published-voice.test.ts` | no       | Scans `generated/guides/*.json` only (line 13). Releases are not a guide.                                                                                                                                                |
+| `scripts/no-em-dash.test.ts`                | yes      | Scans every tracked and untracked file. The new TSX and the README edit must carry no `\u2014` or `\u2013`.                                                                                                              |
+| `scripts/no-slop.test.ts`                   | no       | `[/^internal\//, Mode.Exempt]`. Both edited docs files are under `internal/`.                                                                                                                                            |
 
 The optional `links.test.tsx` change, if taken, is the registration point the
 new route shape needs: build a `Set` of versions from `await loadReleases()`,
