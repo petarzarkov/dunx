@@ -100,7 +100,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@arkv/logger": "^0.10.1",
+    "@arkv/logger": "^0.10.2",
     "@arkv/timezones": "^0.0.2"
   },
   "devDependencies": {
