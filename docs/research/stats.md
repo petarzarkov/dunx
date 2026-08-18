@@ -67,12 +67,12 @@ process.cpuUsage()     0.630 us   Bun.unsafe.gcAggressionLevel()    0.017 us
 $ bun probes/stats/09b.ts -> v8.getHeapStatistics() 1075.997 us warm, 7605.660 us hot
 ```
 
-| Call | Cost | Shape | Use |
-| --- | --- | --- | --- |
-| `process.memoryUsage()` | 7.41 us | `{rss, heapTotal, heapUsed, external, arrayBuffers}` | **Yes.** The whole answer. |
-| `process.resourceUsage()` and `process.cpuUsage()` | 1.01 / 0.63 us | 16 fields (`maxRSS`, page faults, context switches) and `{user, system}` microseconds | **Yes.** Both 7-12x cheaper than `memoryUsage()`. |
-| `bun:jsc.heapStats()` | **7040 us** | 80 type counts, 13809 JSON bytes | **No.** 7.3-12.1 ms on a 50k-object heap; grows with it. |
-| `node:v8.getHeapStatistics()` | **1076-7606 us** | 14 V8-named fields | **No.** Milliseconds, and the names describe a heap Bun lacks. |
+| Call                                               | Cost             | Shape                                                                                 | Use                                                            |
+| -------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `process.memoryUsage()`                            | 7.41 us          | `{rss, heapTotal, heapUsed, external, arrayBuffers}`                                  | **Yes.** The whole answer.                                     |
+| `process.resourceUsage()` and `process.cpuUsage()` | 1.01 / 0.63 us   | 16 fields (`maxRSS`, page faults, context switches) and `{user, system}` microseconds | **Yes.** Both 7-12x cheaper than `memoryUsage()`.              |
+| `bun:jsc.heapStats()`                              | **7040 us**      | 80 type counts, 13809 JSON bytes                                                      | **No.** 7.3-12.1 ms on a 50k-object heap; grows with it.       |
+| `node:v8.getHeapStatistics()`                      | **1076-7606 us** | 14 V8-named fields                                                                    | **No.** Milliseconds, and the names describe a heap Bun lacks. |
 
 Also rejected, each for one measured reason: `process.memoryUsage.rss()` costs the same 6.55 us as
 the full object; `process.uptime()` counts from interpreter start, where
@@ -145,10 +145,10 @@ own=[] params={"id":"42"} route=undefined pattern=undefined
 Accuracy over a uniform 1..10000: p50 5003, p90 9007, p99 9903, all within 0.08%. Four
 behaviours a wrapper must handle, each measured:
 
-| Behaviour | Detail |
-| --- | --- |
-| `record(0)` and `record(-1)` throw | `RangeError [ERR_OUT_OF_RANGE]: value is out of range (must be >= 1)`. A sub-microsecond duration must clamp to 1. |
-| Empty-histogram sentinels | After `reset()`: `min` is `9223372036854776000`, `mean` is `NaN`, `max` is 0. Never serialise a `count === 0` histogram. |
+| Behaviour                                              | Detail                                                                                                                                                    |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `record(0)` and `record(-1)` throw                     | `RangeError [ERR_OUT_OF_RANGE]: value is out of range (must be >= 1)`. A sub-microsecond duration must clamp to 1.                                        |
+| Empty-histogram sentinels                              | After `reset()`: `min` is `9223372036854776000`, `mean` is `NaN`, `max` is 0. Never serialise a `count === 0` histogram.                                  |
 | `percentiles` holds BigInt, and there is no `toJSON()` | Keys `number`, values `bigint`; `JSON.stringify` throws, so use `percentile(n)`, which returns a `number`. Node's `Histogram.toJSON` is absent under Bun. |
 
 **`mean` costs 56.8 us and `stddev` 101 us per histogram** (2424 us for 24), so both stay out of
@@ -160,11 +160,11 @@ with no options, ~16 KiB per series, recording raw nanoseconds. `BunRequest` car
 
 ## Library decision
 
-| Candidate | Verdict |
-| --- | --- |
-| `node:perf_hooks` histogram, `monitorEventLoopDelay`, `server.pendingRequests` | **Use all three.** Bun-native; 10.7 ns at 0.01% error, no loop hold, 14.65 ns. |
-| `hdr-histogram-js` 3.0.1 | **No.** 0.68 MB unpacked, and its 3 dependencies include `pako`, a JavaScript zlib reimplementation Rule 1 bans. WASM, not N-API, for an algorithm already compiled into the runtime. |
-| `prom-client` 15.1.3 / `@opentelemetry/api` + `sdk-metrics` | **No dependency on either:** a recipe for prom-client, naming conventions from OTel. Hand-rolled bucket counters lose too, at 25.5 vs 10.8 ns and bucket edges instead of percentiles. |
+| Candidate                                                                      | Verdict                                                                                                                                                                                |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node:perf_hooks` histogram, `monitorEventLoopDelay`, `server.pendingRequests` | **Use all three.** Bun-native; 10.7 ns at 0.01% error, no loop hold, 14.65 ns.                                                                                                         |
+| `hdr-histogram-js` 3.0.1                                                       | **No.** 0.68 MB unpacked, and its 3 dependencies include `pako`, a JavaScript zlib reimplementation Rule 1 bans. WASM, not N-API, for an algorithm already compiled into the runtime.  |
+| `prom-client` 15.1.3 / `@opentelemetry/api` + `sdk-metrics`                    | **No dependency on either:** a recipe for prom-client, naming conventions from OTel. Hand-rolled bucket counters lose too, at 25.5 vs 10.8 ns and bucket edges instead of percentiles. |
 
 **prom-client owns exposition and is not a dunx dependency.** `bun pm view prom-client` gives
 15.1.3, Apache-2.0, 126.44 KB unpacked, 2 dependencies (`@opentelemetry/api`, `tdigest`). Pure
@@ -213,15 +213,22 @@ than injecting one.
  *  an empty native histogram reports min 9223372036854776000 and mean NaN. */
 export interface HistogramSnapshot {
   readonly count: number;
-  readonly min?: number; readonly max?: number; readonly p50?: number;
-  readonly p90?: number; readonly p95?: number; readonly p99?: number; readonly p999?: number;
+  readonly min?: number;
+  readonly max?: number;
+  readonly p50?: number;
+  readonly p90?: number;
+  readonly p95?: number;
+  readonly p99?: number;
+  readonly p999?: number;
 }
 
 /** `createHistogram()` with the sharp edges closed: a sub-microsecond observation clamps
  *  to 1 instead of throwing, and an empty histogram serialises without its sentinels. No
  *  options - explicit bounds cost 8-19x the memory and record slower. */
 export class Durations {
-  record(nanoseconds: number): void; reset(): void; snapshot(): HistogramSnapshot;
+  record(nanoseconds: number): void;
+  reset(): void;
+  snapshot(): HistogramSnapshot;
 }
 
 // src/stats/runtime.ts
@@ -244,7 +251,9 @@ export class RuntimeStats {
  *  the first scrape reports 1.6-7.9 ms for a 300 ms stall. */
 export class EventLoopLag implements OnInit, OnShutdown {
   constructor(options?: EventLoopLagOptions);
-  onInit(): void; onShutdown(): void; snapshot(): HistogramSnapshot;
+  onInit(): void;
+  onShutdown(): void;
+  snapshot(): HistogramSnapshot;
 }
 ```
 
@@ -261,8 +270,14 @@ nanoseconds and `slowestRequestId` the `x-request-id` of the slowest so far.
  *  global wrapper, like `PubSub` and `ClientAddress`: an unbound class self-binds into
  *  whichever scope asks first, so a second consumer would be a boot error. */
 export class RequestMetrics {
-  observe(ctx: RouteContext, status: number, durationNs: number, requestId?: string): void;
-  snapshot(): HttpStatsReport; reset(): void;
+  observe(
+    ctx: RouteContext,
+    status: number,
+    durationNs: number,
+    requestId?: string,
+  ): void;
+  snapshot(): HttpStatsReport;
+  reset(): void;
 }
 
 /** Installed only when `requestLogging: false`. With logging on - the default -
@@ -339,19 +354,19 @@ exemplar.
 `memory()` at `dashboard/src/api/runtime.ts:63-71` is simply deleted, replaced by
 `RuntimeStats.snapshot().memory`.
 
-| Declaration | From | To | Re-exported from |
-| --- | --- | --- | --- |
-| `MemoryReport` | `dashboard/src/api/types.ts:70-75` | `core/src/stats/runtime.ts` | `api/types.ts` keeps `export type { MemoryReport }`, so `internal/dashboard-ui`'s relative `import type` is unchanged |
-| `RuntimeReport` | `dashboard/src/api/types.ts:78-88` | Splits: the process half becomes core's; the dashboard's keeps `probes` and spreads core's into it | `api/types.ts` re-exports core's |
+| Declaration     | From                               | To                                                                                                 | Re-exported from                                                                                                      |
+| --------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `MemoryReport`  | `dashboard/src/api/types.ts:70-75` | `core/src/stats/runtime.ts`                                                                        | `api/types.ts` keeps `export type { MemoryReport }`, so `internal/dashboard-ui`'s relative `import type` is unchanged |
+| `RuntimeReport` | `dashboard/src/api/types.ts:78-88` | Splits: the process half becomes core's; the dashboard's keeps `probes` and spreads core's into it | `api/types.ts` re-exports core's                                                                                      |
 
 `core/src/index.ts` gains a fourth line, `export * from './stats/index.js'`.
 
-| Edited file | Change |
-| --- | --- |
-| `http/src/server/factory.ts:72` | `const services = [PubSub, ClientAddress]` becomes `[PubSub, ClientAddress, RequestMetrics]`, inside the `global: true` `HttpModule` wrapper (`:38`, `:75-83`); `HttpOptions` gains `metrics?: boolean`, default `false` |
-| `http/src/server/application.ts:317` | `attachServer(this.#app.get(RequestMetrics), this.#server)` beside `attachAddressSource`, mirroring `client-address.ts:46-51` - `server.pendingRequests` is readable only from the bound server |
-| `http/src/server/request-logging.ts` | `#succeeded` and `#failed` call `observe(ctx, status, Bun.nanoseconds() - started, requestId)`; three lines |
-| `dashboard/src/contracts.ts`, `options.ts`, `api/runtime.ts`, `router.ts:53-62` | `StatsSource` restating `RequestMetrics.snapshot()` structurally; `DashboardOptions.stats?`; `memory()` deleted and `runtimeReport` spreading core's snapshot; one `case 'stats':` in the existing `handleApi` switch |
+| Edited file                                                                     | Change                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `http/src/server/factory.ts:72`                                                 | `const services = [PubSub, ClientAddress]` becomes `[PubSub, ClientAddress, RequestMetrics]`, inside the `global: true` `HttpModule` wrapper (`:38`, `:75-83`); `HttpOptions` gains `metrics?: boolean`, default `false` |
+| `http/src/server/application.ts:317`                                            | `attachServer(this.#app.get(RequestMetrics), this.#server)` beside `attachAddressSource`, mirroring `client-address.ts:46-51` - `server.pendingRequests` is readable only from the bound server                          |
+| `http/src/server/request-logging.ts`                                            | `#succeeded` and `#failed` call `observe(ctx, status, Bun.nanoseconds() - started, requestId)`; three lines                                                                                                              |
+| `dashboard/src/contracts.ts`, `options.ts`, `api/runtime.ts`, `router.ts:53-62` | `StatsSource` restating `RequestMetrics.snapshot()` structurally; `DashboardOptions.stats?`; `memory()` deleted and `runtimeReport` spreading core's snapshot; one `case 'stats':` in the existing `handleApi` switch    |
 
 **Exports-map and manifest changes: none.** `@dunx/core` gets no subpath - the stats classes
 join the root export, and core keeps **zero dependencies** because `node:perf_hooks` and
