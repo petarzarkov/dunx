@@ -25,6 +25,7 @@ Node v24.18.0 where a comparison needed it. Numbers are from that machine.
 | [throttle](./throttle.md)                              | build                  | `@dunx/http`              | `ClientAddress` hop counting          |
 | [arkv-logger-context](./arkv-logger-context.md)        | build, additive        | `@arkv/logger` 0.11.0     | nothing                               |
 | [arkv-logger-transports](./arkv-logger-transports.md)  | build, additive        | `@arkv/logger` 0.11.0     | nothing                               |
+| [arkv-logger-serialization](./arkv-logger-serialization.md) | build the fused walk | `@arkv/logger`       | the equivalence gate                  |
 | [async-context](./async-context.md)                    | refused, 2 fixes found | `@dunx/http`, `@dunx/auth` | nothing                              |
 | [stats](./stats.md)                                    | collect, refuse exposition | `@dunx/http`, `@dunx/core` | memory reader moving to core     |
 | [bun-primitives](./bun-primitives.md)                  | 2 adopt, 3 reject      | various                   | nothing                               |
@@ -36,11 +37,12 @@ verified facts alone, in the format
 [architecture/constraints.md](../architecture/constraints.md) uses, ready to be
 appended there once the record is reviewed.
 
-The `@arkv/logger` serialization record is still outstanding, and it carries the
-whole of the logger performance question, since
-[arkv-logger-transports](./arkv-logger-transports.md) measured the write path at
-4 to 9 percent of a log call and entry assembly plus sanitization at 73 to 93
-percent.
+All twelve records are in. The serialization one carries the logger performance
+question, and it lands where
+[arkv-logger-transports](./arkv-logger-transports.md) pointed: the write is 4 to 9
+percent of a log call and entry assembly plus sanitization is the rest. A fused
+walk that redacts while serializing is 3.09x on Bun and 1.69x on Node, 44 of 44
+corpus payloads byte-identical.
 
 ## Defects found in shipped code
 
@@ -87,6 +89,18 @@ These are not features and do not wait on a roadmap decision.
    `TS2741: Property 'asyncLocalStorage' is missing in type 'AsyncRequestContext'`.
    Core's own contract implementation is rejected by the logger it exists to
    feed. See [arkv-logger-context](./arkv-logger-context.md).
+5. **`findNestedError` walks a typed array element by element.** It runs on the
+   caller's object before sanitization looking for an `Error`, and treated a typed
+   array as a plain object. No element of one can be an `Error`. A 64 KiB
+   `Uint8Array` cost 24 ms of blocked event loop per log call and a 1 MiB buffer
+   cost 1,415 ms, so `logger.info('upload', { body })` stalled a service for over a
+   second. One `ArrayBuffer.isView` guard. Found by
+   [arkv-logger-serialization](./arkv-logger-serialization.md), which was looking
+   for something else.
+6. **`shouldMask` lowercases the whole mask list once per key.** A twenty-key entry
+   did 160 `toLowerCase()` calls to produce eight distinct strings. Lowering once
+   per entry is 1.94x through the sanitizer. Not a correctness defect, listed here
+   because it sat in the same function as the one above.
 
 ## Findings for `docs/bun-apis.md`
 
