@@ -118,4 +118,29 @@ describe('boot logging', () => {
 
     await app.shutdown();
   });
+
+  /*
+   * The one entry a process writes before it serves anything, so it says what is
+   * running it. `pid` and `timestamp` are absent here because `ConsoleLogger`
+   * stamps both on every entry and naming them would print them twice.
+   */
+  test('names the runtime that is serving', async () => {
+    const recorder = new Recorder();
+    const app = await boot(recorder);
+    await app.listen(0);
+
+    const served = recorder.entries.find((entry) =>
+      entry.message.startsWith('Serving'),
+    );
+    expect(served?.fields['runtime']).toBe(`bun ${Bun.version}`);
+    expect(served?.fields['revision']).toBe(Bun.revision.slice(0, 9));
+    expect(served?.fields['execPath']).toBe(process.execPath);
+    // Under `bun test` this is the test file rather than an app entry, which is
+    // the documented caveat rather than something to work around.
+    expect(served?.fields['main']).toBe(Bun.main);
+    expect(served?.fields).not.toHaveProperty('pid');
+    expect(served?.fields).not.toHaveProperty('timestamp');
+
+    await app.shutdown();
+  });
 });

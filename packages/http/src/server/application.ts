@@ -2,6 +2,7 @@ import type { BunRequest, Server } from 'bun';
 import {
   AppError,
   Logger,
+  runtimeInfo,
   ShutdownHooks,
   type App,
   type AppOptions,
@@ -374,6 +375,9 @@ export class HttpApplication implements HttpApp {
     ].join(' and ');
 
     this.#app.get(Logger).info(`Serving ${subject}`, {
+      // The first entry this process writes, so it names what is running it.
+      // Under `bun test` `main` is the test file rather than the app entry.
+      ...runtimeInfo(),
       routes: routes.map((route) => `${route.method} ${route.path}`),
       ...(gateways.length === 0
         ? {}
