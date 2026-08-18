@@ -255,6 +255,7 @@
       "version": "2.0.1",
       "dependencies": {
         "@arkv/logger": "^0.10.1",
+        "@arkv/timezones": "^0.0.2",
       },
       "devDependencies": {
         "@dunx/core": "workspace:*",
@@ -373,6 +374,8 @@
     "@arkv/logger": ["@arkv/logger@0.10.1", "", { "dependencies": { "@arkv/colors": "^0.8.0", "@arkv/shared": "^0.8.0" } }, "sha512-odS4ubLTdq2GqPxdnS8guuo2iMdd1qTgXfGLgpmEFtCXzHDbuSUsFz5vvJ9RzCL5hT00WHQFvws8Ppg+AwFl9A=="],
 
     "@arkv/shared": ["@arkv/shared@0.8.0", "", {}, "sha512-c9YTix/b35KTEmIl+qlyjm74SzqWEXXcvwr4rqhYPWr7ihirdSaydOFFNFQSyQYgefVOc4JEKdpb4gOhSsKcrA=="],
+
+    "@arkv/timezones": ["@arkv/timezones@0.0.2", "", {}, "sha512-ILbV8qUeaUpBDjWNzeqSab5a26Ui9xFxksMhx0pXow5jSIZGSbDsZAhd7bNTrxCs4bb7kJ1/xT2kG/2TL3MtwQ=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 

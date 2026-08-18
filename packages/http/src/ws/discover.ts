@@ -1,10 +1,10 @@
 import {
   AppError,
+  classOf,
   markedMethods,
   type Ctor,
   type InjectionToken,
   type MarkedMethod,
-  type ProviderEntry,
   type ResolvedModule,
 } from '@dunx/core';
 import {
@@ -77,16 +77,6 @@ export const discoverGateway = (instance: object): DiscoveredGateway => {
  */
 export const findHandlerMethod = (ctor: Ctor<unknown>): string | undefined =>
   eachHandler(ctor.prototype as object | null)[0]?.name;
-
-/** The class a `providers` entry would construct, or nothing for value/factory. */
-const classOf = (
-  entry: ProviderEntry,
-): { token: InjectionToken<unknown>; ctor: Ctor<unknown> } | undefined => {
-  if (typeof entry === 'function') return { token: entry, ctor: entry };
-  return entry.provider.kind === 'class'
-    ? { token: entry.token, ctor: entry.provider.ctor }
-    : undefined;
-};
 
 /**
  * Gateways are declared in `@Module({ providers })` like any other injectable and

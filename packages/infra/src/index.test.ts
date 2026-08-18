@@ -6,8 +6,9 @@ import * as root from './index.js';
 import * as logger from './logger/index.js';
 import * as queue from './queue/index.js';
 import * as redis from './redis/index.js';
+import * as schedule from './schedule/index.js';
 
-const included = { db, files, images, logger, redis };
+const included = { db, files, images, logger, redis, schedule };
 
 /**
  * The root barrel used to be a partial re-export of five of the six areas as well

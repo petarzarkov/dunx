@@ -24,6 +24,7 @@ installs neither.
 | `@dunx/infra/images` | An immutable pipeline over `Bun.Image`                           | [Files and images](../../docs/guide/17-files-and-images.md) |
 | `@dunx/infra/logger` | **`@arkv/logger`** bound to core's `Logger` contract             | [Logging](../../docs/guide/13-logging.md)      |
 | `@dunx/infra/pagination` | Keyset pagination: cursor codec, options parser, drizzle query | this file                                  |
+| `@dunx/infra/schedule` | `Bun.cron` and Bun's timers: `@Cron`, `@Interval`, `@Timeout`, a registry | this file                        |
 
 Import from the barrel or from an area subpath. The subpaths exist so it is
 obvious what a file uses, and so tree-shaking is not something you have to reason
@@ -348,6 +349,89 @@ reuse-`@arkv` rule exists to prevent.
 **[Read the Logging guide](../../docs/guide/13-logging.md)** for the contract, the
 default `ConsoleLogger` and its buffering trade, request logging, transports and
 what all of it measures at.
+
+## schedule
+
+`@Cron`, `@Interval` and `@Timeout` on `Bun.cron` and Bun's timers. No cron
+library: `Bun.cron.parse` is the parser.
+
+```ts
+import {
+  Cron,
+  Interval,
+  Overlap,
+  ScheduleModule,
+  ScheduleRegistry,
+  Timeout,
+} from '@dunx/infra/schedule';
+
+export class ReportsService {
+  constructor(private readonly reports: ReportsRepository) {}
+
+  @Cron('0 3 * * *')
+  async nightly(): Promise<void> {
+    await this.reports.rebuild();
+  }
+
+  @Interval(30_000, { name: 'probe', overlap: Overlap.SKIP })
+  async probe(): Promise<void> {}
+
+  @Timeout(5_000)
+  warmCache(): void {}
+}
+
+@Module({ imports: [ScheduleModule.forRoot()], providers: [ReportsService] })
+export class AppModule {}
+```
+
+A schedule is declared in `@Module({ providers })`, or on a controller, like any
+other injectable, and found by its marker. There is no second registration and no
+class decorator, and an abstract base's marked methods are inherited by every
+subclass. The name defaults to `ClassName.methodName`; two schedules under one
+name is a boot error.
+
+**In-process and single-node.** Two replicas both run every schedule, because
+nothing here coordinates. A schedule that must fire once across a fleet is a job:
+that is bullmq's `upsertJobScheduler` through `@dunx/infra/queue`.
+
+`ScheduleRegistry` is exported, and `trigger(name)` runs a schedule off its
+cadence. `Bun.cron` fires at minute resolution, so `trigger` is also how a
+schedule is tested without waiting for a boundary.
+
+```ts
+const registry = app.get(ScheduleRegistry);
+await registry.trigger('ReportsService.nightly');
+registry.list(); // name, kind, at, tz, runs, running, lastError, nextRunAt
+registry.remove('probe');
+```
+
+**Overlap.** `Overlap.SKIP` is the default. A fire that lands while a run is going
+is skipped and logged at `warn` with the name and how long the run has been going.
+For a `@Cron` this is `Bun.cron`'s own guarantee, which computes the next fire only
+once the handler settles. There is no queue mode: an overrun that must not be
+dropped is a job.
+
+**Timezones, and a trap.** A `@Cron` takes `{ tz }`, validated against
+`@arkv/timezones` at decoration time so a typo is a boot error rather than a
+schedule that never fires at the hour it names.
+
+Bun 1.3.14 **silently ignores** `Bun.cron`'s `tz` option, and does not declare it
+in bun-types either. Asking for a named zone there is refused outright: it would
+otherwise run at the UTC hour with no error anywhere. `supportsTz()` is exported
+for an app that would rather fail its own boot on that.
+
+dunx always passes `{ tz: 'UTC' }` explicitly. That is correct on both sides of
+Bun's 1.4 change: 1.3.x ignores the option and is already UTC, and 1.4 honours it
+and pins UTC rather than drifting to the container's `TZ`.
+
+**`@Interval` and `@Timeout` are measured from `onInit`,** which is the latest hook
+there is and runs *before* `Bun.serve` binds. So `@Timeout(0)` fires before the
+socket is open. An app needing the later point uses
+`ScheduleModule.forRoot({ enabled: false })` and calls `registry.add` after
+`listen()`.
+
+A delay above 2,147,483,647 ms is a boot error. Bun clamps anything larger to 1 ms
+and fires it at about 17 ms, so it would be a hot loop rather than a long wait.
 
 ## pagination
 

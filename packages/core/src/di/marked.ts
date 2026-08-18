@@ -1,3 +1,6 @@
+import type { ProviderEntry } from './module.js';
+import type { Ctor, InjectionToken } from './token.js';
+
 /**
  * A method a decorator marked, found by walking a prototype chain.
  *
@@ -55,4 +58,26 @@ export const markedMethods = <M>(
   }
 
   return found;
+};
+
+/**
+ * The class a `providers` entry would construct, or nothing for a value or factory
+ * provider.
+ *
+ * A factory- or value-provided instance is not a discovery candidate: there is no
+ * prototype chain to read until it has been built, and building it to find out
+ * whether it was worth building is the ordering trap the marker technique exists to
+ * avoid.
+ *
+ * Here because three packages walk `providers` looking for marked methods -
+ * `@dunx/http` for routes and gateways, `@dunx/infra` for job handlers and
+ * schedules - and this was written identically in each, doc comment included.
+ */
+export const classOf = (
+  entry: ProviderEntry,
+): { token: InjectionToken<unknown>; ctor: Ctor<unknown> } | undefined => {
+  if (typeof entry === 'function') return { token: entry, ctor: entry };
+  return entry.provider.kind === 'class'
+    ? { token: entry.token, ctor: entry.provider.ctor }
+    : undefined;
 };
