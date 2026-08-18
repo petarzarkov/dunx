@@ -21,6 +21,7 @@ import {
   prependRelease,
   renderRelease,
 } from './changelog.js';
+import { createGitHubRelease, pushTag } from './github-release.js';
 import { isVersionPublished, publishPackage } from './publish.js';
 
 const isDryRun = process.env['DRY_RUN'] === 'true';
@@ -312,10 +313,10 @@ const runForcePublish = (
   }
 };
 
-const runVersionBump = (
+const runVersionBump = async (
   allPackages: PublishablePackage[],
   trigger: ReleaseTrigger,
-): void => {
+): Promise<void> => {
   // One marker read, shared by both range queries below, so the bump and the change
   // detection can never disagree about which commits this release covers.
   const since = lastReleaseSha();
@@ -412,6 +413,12 @@ const runVersionBump = (
     bumpedPackages.map((p) => p.packageJsonPath),
     [changelogPath],
   );
+
+  // After the commit, so the tag names it. Both steps are idempotent and neither
+  // throws: the packages are on npm by now, and a job that failed here would make
+  // a finished publish look broken.
+  pushTag(version, REPO);
+  await createGitHubRelease(version, REPO);
 };
 
 // Guarded so importing this file cannot start a publish. The pure helpers moved to
@@ -447,7 +454,7 @@ void (async () => {
       process.exit(0);
     }
 
-    runVersionBump(allPublishablePackages, trigger);
+    await runVersionBump(allPublishablePackages, trigger);
   } catch (error) {
     console.error('Failed to process packages:', error);
     process.exit(1);

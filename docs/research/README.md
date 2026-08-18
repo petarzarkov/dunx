@@ -122,7 +122,13 @@ Grouped by what unblocks what, cheapest first inside each group.
 **First, the four defects above.** Each is small, none needs a design decision,
 and two of them gate work below.
 
-**Then the four moves Rule 2 already requires**, none of which add a feature:
+**Then the moves Rule 2 requires.** Only the first two are done ahead of a
+consumer, because only they have one already. Rule 2's trigger is the second copy
+appearing: `providersOf` and `modulesOf` descended into `@dunx/core` the moment
+`@dunx/dashboard` was a second consumer, not before it. Moving a declaration
+earlier means guessing the shared shape, and reshaping a published export twice.
+So moves 3 and 4 land inside the features that need them, and are listed here to
+be remembered rather than done first.
 
 1. `OnDrain` in `@dunx/core`, run before `server.stop()`. Two consumers waiting:
    health, and the queue worker whose own comment at
@@ -130,10 +136,12 @@ and two of them gate work below.
    against".
 2. The marker-plus-prototype-scan walker into `@dunx/core`. `@Cron` would be its
    fourth copy.
-3. `ProbeState`, `ProbeResult`, `DashboardProbe` and `RedisProbe` from
-   `@dunx/dashboard` down into `@dunx/http`, which health needs and the
-   dashboard already peer-depends on.
-4. `MemoryReport` and the `process.memoryUsage()` reader from
+3. **With health, item 9.** `ProbeState`, `ProbeResult`, `DashboardProbe` and
+   `RedisProbe` from `@dunx/dashboard` down into `@dunx/http`, which health needs
+   and the dashboard already peer-depends on. `DashboardProbe` wants a better name
+   once two packages share it, and dashboard re-exports the old one.
+4. **With stats, or with health, whichever lands first.** `MemoryReport` and the
+   `process.memoryUsage()` reader from
    `packages/dashboard/src/api/runtime.ts:63-71`, its only shipped call site,
    down into `@dunx/core`, with `packages/dashboard/src/api/types.ts`
    re-exporting so `internal/dashboard-ui`'s relative `import type` is unchanged.
