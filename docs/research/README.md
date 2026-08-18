@@ -154,14 +154,27 @@ be remembered rather than done first.
 4. The releases sub-page. The router already parses the route; the change is one
    dispatch line, one component and one link.
 5. `Bun.main` and runtime identity in the boot log line. Under 0.30 us, once.
-6. The two async-context fixes: skip the merge in
-   `AsyncRequestContext.runWithContext` when no enclosing store exists (148.6 ns
-   to 47.2 ns), and fold the principal onto the one store instead of nesting a
-   second `AsyncLocalStorage` in `AuthContext` (363.7 ns to 26.0 ns). Patch
-   level, no public signature moved. `ContextStore` in
-   `~/repos/arkv/packages/logger` performs the same merge and replaces the
-   binding whenever `@dunx/infra/logger` is imported, so both fixes have to ship
-   upstream as well or the win is lost in any app with a logger.
+6. The first async-context fix: skip the merge in
+   `AsyncRequestContext.runWithContext` when no enclosing store exists, 148.6 ns
+   to 47.2 ns on every request. Patch level, no public signature moved.
+   `ContextStore` in `~/repos/arkv/packages/logger` performs the same merge and
+   replaces the binding whenever `@dunx/infra/logger` is imported, so it has to
+   ship upstream as well or the win is lost in any app with a logger.
+
+   **The second fix is refused.** [async-context](./async-context.md) proposes
+   folding the principal onto the one store instead of nesting a second
+   `AsyncLocalStorage` in `AuthContext`, worth 363.7 ns to 26.0 ns on an
+   authenticated request. `packages/auth/src/context.ts` documents why there are
+   two: `RequestContext` is the log record, every field in it is serialized into
+   every line the request writes, so a session object there is noise on each
+   entry and a redaction hazard in the ones that matter. Only `userId` goes in,
+   which is what correlates the lines without carrying the principal.
+
+   A symbol-keyed field would survive `getContext()`'s spread while staying
+   invisible to `JSON.stringify` and to any sanitizer walking string keys, so the
+   win is technically reachable. It is not taken: 337 ns on authenticated
+   requests is not worth cleverness on the path that decides who the caller is.
+   Revisit only with a measurement showing it matters.
 7. `@arkv/logger` 0.11.0: the context contract and the buffered transports. Both
    additive, both measured, and the context half fixes defect 4.
 

@@ -35,6 +35,24 @@ describe('AsyncRequestContext', () => {
     });
   });
 
+  /*
+   * The outermost scope of a request has no enclosing store, so it takes the
+   * one-spread path rather than merging with `undefined`. The copy is what that
+   * path exists to keep: without it the store would be the caller's own object and
+   * an `updateContext` inside would reach back out.
+   */
+  it('copies the fields even with no enclosing scope to merge', () => {
+    const context = new AsyncRequestContext();
+    const fields = { requestId: 'r1' };
+
+    context.runWithContext(fields, () => {
+      context.updateContext({ userId: 'u1' });
+      expect(context.getContext()).toEqual({ requestId: 'r1', userId: 'u1' });
+    });
+
+    expect(fields).toEqual({ requestId: 'r1' });
+  });
+
   it('merges a nested scope over the outer one', () => {
     const context = new AsyncRequestContext();
 
