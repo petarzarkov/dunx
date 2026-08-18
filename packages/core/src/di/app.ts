@@ -3,7 +3,7 @@ import { AsyncRequestContext, RequestContext } from '../logger/context.js';
 import { Logger } from '../logger/logger.js';
 import { AppError } from './errors.js';
 import { Injector } from './injector.js';
-import { hasOnInit, hasOnShutdown } from './lifecycle.js';
+import { hasOnDrain, hasOnInit, hasOnShutdown } from './lifecycle.js';
 import { ROOT_MODULE, type ModuleRef } from './module.js';
 import { buildScopes, type Binding } from './scope.js';
 import { provide, type Registration } from './provider.js';
@@ -79,6 +79,13 @@ export interface App {
    * as its own wrapper module does.
    */
   get<T>(token: InjectionToken<T>, from?: ModuleRef): T;
+  /**
+   * Runs every `onDrain` hook concurrently, once, while the app is still
+   * serving. `shutdown()` calls this first, so a process that never interleaves
+   * anything needs no separate call; `@dunx/http` calls it before stopping the
+   * server, which is the only point at which a readiness probe can still answer.
+   */
+  drain(): Promise<void>;
   shutdown(): Promise<void>;
   /**
    * Drains on a signal, then **ends the process**. `options.exitAfterMs: false`
@@ -98,6 +105,7 @@ class Application implements App {
   readonly #injector: Injector;
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
+  #draining: Promise<void> | undefined;
   readonly #hooks = new ShutdownHooks();
 
   constructor(injector: Injector, warnings: readonly string[] = []) {
@@ -129,8 +137,30 @@ class Application implements App {
     return this.#injector.find(token, scope);
   }
 
+  /**
+   * Runs every `onDrain` hook, concurrently, and only ever once.
+   *
+   * Separate from `shutdown()` because `@dunx/http` has to interleave: drain,
+   * then stop the server, then tear providers down. Memoized so the two paths
+   * cannot double-drain - `shutdown()` calls it too, which is what makes a
+   * process with no HTTP server drain at all.
+   */
+  async drain(): Promise<void> {
+    this.#draining ??= (async () => {
+      await Promise.all(
+        [...this.#injector.instances]
+          .filter(hasOnDrain)
+          // `onDrain` may be synchronous, and `Promise.all` over a bare `void` is
+          // what `await-thenable` objects to. The wrapper costs one microtask.
+          .map(async (instance) => instance.onDrain()),
+      );
+    })();
+    return this.#draining;
+  }
+
   async shutdown(): Promise<void> {
     this.#shuttingDown ??= (async () => {
+      await this.drain();
       for (const instance of [...this.#injector.instances].reverse()) {
         if (hasOnShutdown(instance)) await instance.onShutdown();
       }

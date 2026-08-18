@@ -265,6 +265,16 @@ class WorkerApplication implements WorkerApp {
   }
 
   /** Consumers first, then providers. The order is the whole point. */
+  /**
+   * The container's drain phase, delegated. `shutdown()` below already stops the
+   * consumer before tearing providers down, so the consumer stop is not moved in
+   * here: the ordering it depends on is tangled with two upstream defects tracked
+   * in `docs/roadmap/queue-shutdown-sigterm.md`.
+   */
+  drain(): Promise<void> {
+    return this.#app.drain();
+  }
+
   async shutdown(): Promise<void> {
     this.#shuttingDown ??= (async () => {
       await this.#consumer.stop();

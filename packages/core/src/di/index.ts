@@ -19,7 +19,7 @@ export {
   type UnresolvedDep,
 } from './deps.js';
 export { inject } from './inject.js';
-export type { OnInit, OnShutdown } from './lifecycle.js';
+export type { OnDrain, OnInit, OnShutdown } from './lifecycle.js';
 // The hook installer itself, not just its options: @dunx/http and @dunx/infra each
 // own an application class with its own `enableShutdownHooks`, and three copies of
 // "drain, then make sure the process actually ends" is three chances to fix the
