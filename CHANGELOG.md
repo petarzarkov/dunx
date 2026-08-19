@@ -4,6 +4,55 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 2.1.0 - 2026-08-19
+
+health checks, a Bun.cron scheduler, and graceful draining
+
+### Features
+
+- **http**: health checks, and the drain that makes readiness mean something ([`977d550`](https://github.com/petarzarkov/dunx/commit/977d550ec63a1ec7979cee2dc297714ef91df3fe))
+- **infra**: SchedulerModule on Bun.cron behind @dunx/infra/schedule ([`3b07ac3`](https://github.com/petarzarkov/dunx/commit/3b07ac3cbf4410ab9a4f01fc30fe5327dd0123c3))
+- **formatting**: enhance pre-push hook to enforce code formatting and prevent unformatted files from reaching CI ([`3e0d25f`](https://github.com/petarzarkov/dunx/commit/3e0d25f8f470ef658afffc458ded578a2360cd65))
+- **core**: name the runtime in the boot entry ([`fbb069e`](https://github.com/petarzarkov/dunx/commit/fbb069e0206ea348d6d854fe2a9e7cf88cae37db))
+- **release**: tag each release and create the GitHub release ([`e82c2e1`](https://github.com/petarzarkov/dunx/commit/e82c2e106f7c1f24ef37d1f9e8c24ef1856e85bf))
+- **docs**: a page per release at #/releases/&lt;version> ([`b9461f5`](https://github.com/petarzarkov/dunx/commit/b9461f521c726358d977eec42a869638d23e7c01))
+- **core**: add the OnDrain lifecycle phase ([`8ea2bf1`](https://github.com/petarzarkov/dunx/commit/8ea2bf108f2d390c0174eb972ee75b2cf749f9ce))
+- add Releases page to display package versions and release notes ([`1508f7e`](https://github.com/petarzarkov/dunx/commit/1508f7e75f59ac3f3e70c8177d702401c38d0328))
+
+### Fixes
+
+- **docs**: give the suite a timeout its own tests can meet ([`57bea24`](https://github.com/petarzarkov/dunx/commit/57bea2499eae22da747b6823867147c474f2133b))
+- **schedule,docs**: review follow-ups, and a flaky chart test ([`b1eb147`](https://github.com/petarzarkov/dunx/commit/b1eb147411935949325674e33a425f96b54e2af3))
+- **infra**: take @arkv/logger 0.10.2 for the typed-array stall ([`7d71007`](https://github.com/petarzarkov/dunx/commit/7d71007ef2fc8699220130d9821ae5b3e9da53aa))
+- **infra**: take @arkv/logger 0.10.1 for the context contract ([`9e48887`](https://github.com/petarzarkov/dunx/commit/9e488874653f852665a1677ecbcaff60ccb398a7))
+- **mcp**: answer malformed JSON-RPC instead of dropping it ([`8ce31a5`](https://github.com/petarzarkov/dunx/commit/8ce31a50e2caf9edaa9849fdb908a8480e9de64a))
+- **http**: count X-Forwarded-For hops from the right ([`1a4c03d`](https://github.com/petarzarkov/dunx/commit/1a4c03d766dbca8b5be616ec3377e0238c71608c))
+- **logo**: rotate the mark 90 degrees so it reads as the d ([`64c155e`](https://github.com/petarzarkov/dunx/commit/64c155e644c70e835c6e85359727f98a93bc6e42))
+- update page title for clarity and branding consistency ([`6d95c70`](https://github.com/petarzarkov/dunx/commit/6d95c703d635d82afdcd2bc5ca2637a0af4ebdac))
+
+### Performance
+
+- **core**: spread the request context once, not twice ([`b3a6cd2`](https://github.com/petarzarkov/dunx/commit/b3a6cd270ca7fbc68b0f36016376dc6e410fd63f))
+
+### Refactors
+
+- **docs**: improve formatting and clarity in release notes, RPC, scheduler, and throttle documentation ([`1091b13`](https://github.com/petarzarkov/dunx/commit/1091b1339cee64357c385997f1797099c1e3357a))
+- one prototype walker for every marked method ([`1dbfe9e`](https://github.com/petarzarkov/dunx/commit/1dbfe9ef85b6791df7f59194849ae215e2f01969))
+- **docs**: update references to package paths, improve clarity, and enhance structure ([`81f1ce9`](https://github.com/petarzarkov/dunx/commit/81f1ce94482e6f4fbe39a0dfafac104940247448))
+- improve documentation clarity and enforce voice rules ([`6022cc5`](https://github.com/petarzarkov/dunx/commit/6022cc53861e6f289a0ca707ba3f454d1fb1a3be))
+
+### Documentation
+
+- **research**: the serialization record, and two defects it turned up ([`64e4e16`](https://github.com/petarzarkov/dunx/commit/64e4e1626ea6f2062402876c713643df28d7b16b))
+- **research**: defect 3 is a documented decision, not a defect ([`544429f`](https://github.com/petarzarkov/dunx/commit/544429f4adf9cd584cdacdeb3e0be738f6c10033))
+- **research**: add the stats record and a fourth Rule 2 move ([`3333ed5`](https://github.com/petarzarkov/dunx/commit/3333ed50b920e1003f775445d7ad2d267b802093))
+- research ([`34e0f73`](https://github.com/petarzarkov/dunx/commit/34e0f735032321d3b8ea707d4679b6f619e0910b))
+
+### Other changes
+
+- Add Ko-fi username to FUNDING.yml ([`d4c1bfa`](https://github.com/petarzarkov/dunx/commit/d4c1bfaa4aed6f3d829da6bec73735a596bbe13f))
+- Refactor roadmap documentation and remove obsolete files ([`a7d12ca`](https://github.com/petarzarkov/dunx/commit/a7d12cac3a35e68bed064ecdf3ae9acdab6917b8))
+
 ## 2.0.1 - 2026-08-14
 
 infra fix NotThenable constraint and move to the return type as NoPromise&lt;T>
