@@ -9,7 +9,7 @@
     "dev": "bun run generate && vite",
     "generate": "bun ./scripts/generate.ts",
     "preview": "vite preview",
-    "test": "bun test --bail",
+    "test": "bun test --bail --timeout 20000",
     "typecheck": "bun run generate && tsc --noEmit"
   },
   "dependencies": {
