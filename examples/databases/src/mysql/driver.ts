@@ -94,6 +94,14 @@ export class MysqlConnection extends DbConnection<MySqlRemoteDatabase<Schema>> {
     this.db = drizzle(callbackFor(raw), { schema });
   }
 
+  /**
+   * `DbConnection.ping()` throws by default, so a custom connection has to say how
+   * a round trip is done for its dialect. This is what `DatabaseIndicator` calls.
+   */
+  override async ping(): Promise<void> {
+    await this.raw`select 1`;
+  }
+
   override async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;

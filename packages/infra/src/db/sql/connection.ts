@@ -34,6 +34,14 @@ export class SqlConnection<
     this.db = drizzle({ client: raw, schema, ...options });
   }
 
+  /**
+   * `SELECT 1` through `Bun.SQL`'s tagged template, which is the driver's own
+   * parameterised path rather than a string this builds.
+   */
+  override async ping(): Promise<void> {
+    await this.raw`select 1`;
+  }
+
   override async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;

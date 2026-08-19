@@ -181,3 +181,30 @@ export type {
   SocketErrorHandler,
   SocketOptions,
 } from './ws/socket.js';
+export {
+  HealthIndicator,
+  PingProbe,
+  QueryProbe,
+  type ProbeResult,
+  type ProbeState,
+} from './health/contracts.js';
+export { HealthController } from './health/controller.js';
+export {
+  DatabaseIndicator,
+  DiskIndicator,
+  DiskOptions,
+  MemoryIndicator,
+  MemoryOptions,
+  RedisIndicator,
+  type DiskOptionsInit,
+  type MemoryOptionsInit,
+} from './health/indicators.js';
+export { HealthModule } from './health/module.js';
+export { Readiness, ReadinessOptions } from './health/readiness.js';
+export {
+  HealthOptions,
+  HealthRegistry,
+  type HealthCheckReport,
+  type HealthOptionsInit,
+  type HealthReport,
+} from './health/registry.js';

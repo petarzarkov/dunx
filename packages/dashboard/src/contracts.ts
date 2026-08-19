@@ -79,14 +79,25 @@ export interface RedisProbe {
   send(command: string, args?: readonly string[]): Promise<unknown>;
 }
 
-/** The state a probe reports. `unknown` is not `down`; see `StatusDot`. */
-export type ProbeState = 'up' | 'down' | 'unknown';
+/**
+ * The state a probe reports, and its result. `unknown` is not `down`; see
+ * `StatusDot`.
+ *
+ * Declared in `@dunx/http` and re-exported here. They moved down when the health
+ * module became a second consumer: this package already peer-depends on
+ * `@dunx/http`, so the descent adds no edge, and two copies of a three-value union
+ * is how one of them gains a fourth value nobody else honours.
+ *
+ * `RedisProbe` below did **not** move with them. `@dunx/http`'s `PingProbe` is a
+ * `ping` and nothing else, while this needs `connected` and `send` for the `INFO`
+ * panel, so one shared contract would oblige a health check to supply two members
+ * it never calls.
+ */
+export type { ProbeResult, ProbeState } from '@dunx/http';
 
-export interface ProbeResult {
-  readonly state: ProbeState;
-  /** One line for the operator: a latency, a version, a failure message. */
-  readonly detail?: string;
-}
+// Imported as well as re-exported: `DashboardProbe` below names it, and a bare
+// re-export puts nothing in this file's scope.
+import type { ProbeResult } from '@dunx/http';
 
 /**
  * Anything else worth a light on the page - a third-party API, a disk, a leader
