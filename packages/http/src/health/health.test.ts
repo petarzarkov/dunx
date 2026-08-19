@@ -113,7 +113,7 @@ describe('the report', () => {
 });
 
 /*
- * The reason `OnDrain` was added to `@dunx/core`. Readiness has to start failing
+ * The reason `OnBeforeShutdown` was added to `@dunx/core`. Readiness has to start failing
  * while the port is still open, and liveness must not, or an orchestrator reads a
  * draining pod as one that needs killing.
  */
@@ -128,7 +128,7 @@ describe('draining', () => {
 
     expect((await health.readiness()).status).toBe('up');
 
-    await readiness.onDrain();
+    await readiness.onBeforeShutdown();
 
     const ready = await health.readiness();
     expect(ready.status).toBe('down');
@@ -156,7 +156,7 @@ describe('draining', () => {
     const readiness = new Readiness(new ReadinessOptions({ drainDelayMs: 60 }));
 
     const started = Bun.nanoseconds();
-    const draining = readiness.onDrain();
+    const draining = readiness.onBeforeShutdown();
     // Failing already, before the wait is over: that is the point of the window.
     expect(readiness.draining).toBe(true);
     await draining;
@@ -167,7 +167,7 @@ describe('draining', () => {
   test('a released hold does not undo a shutdown', async () => {
     const readiness = new Readiness(new ReadinessOptions());
 
-    await readiness.onDrain();
+    await readiness.onBeforeShutdown();
     readiness.release();
 
     expect(readiness.draining).toBe(true);

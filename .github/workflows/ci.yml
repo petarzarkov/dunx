@@ -121,6 +121,12 @@ jobs:
         run: bun run version
         env:
           FORCE_PUBLISH: ${{ contains(github.event.head_commit.message, '[force-publish]') }}
+          # Needed by `scripts/github-release.ts` to create the GitHub release.
+          # Actions does not put this in the environment on its own, and 2.1.0 is
+          # what proved it: the tag appeared and the release did not. The tag push
+          # falls back to the credential `actions/checkout` persists, so that half
+          # worked and hid the other half.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # After the release, not before it. `bun run build` already built the site
       # once, before the coverage model and the badges existed; the release step

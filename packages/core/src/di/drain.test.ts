@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { AppFactory } from './app.js';
 import { inject } from './inject.js';
-import type { OnDrain, OnShutdown } from './lifecycle.js';
+import type { OnBeforeShutdown, OnShutdown } from './lifecycle.js';
 import { Module } from './module.js';
 import { provide } from './provider.js';
 import { token } from './token.js';
@@ -15,22 +15,22 @@ const EventsToken = token<string[]>('Events');
  * had nowhere to run. `packages/infra/src/queue/worker.ts` says so in prose:
  * "`App` has no hook to register against".
  */
-describe('onDrain', () => {
+describe('onBeforeShutdown', () => {
   const withHooks = async (events: string[]) => {
-    class Slow implements OnDrain {
+    class Slow implements OnBeforeShutdown {
       readonly events = inject(EventsToken);
 
-      async onDrain(): Promise<void> {
+      async onBeforeShutdown(): Promise<void> {
         this.events.push('slow.drain.start');
         await Bun.sleep(40);
         this.events.push('slow.drain.end');
       }
     }
 
-    class Quick implements OnDrain, OnShutdown {
+    class Quick implements OnBeforeShutdown, OnShutdown {
       readonly events = inject(EventsToken);
 
-      async onDrain(): Promise<void> {
+      async onBeforeShutdown(): Promise<void> {
         this.events.push('quick.drain.start');
         await Bun.sleep(40);
         this.events.push('quick.drain.end');

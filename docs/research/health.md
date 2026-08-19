@@ -421,7 +421,7 @@ to the 8 existing files in the table above. **~520 LOC source, ~420 test**; noth
 near the 500-line cap, `indicators.ts` largest at ~170. **No new dependency**, in
 any package.
 
-**Docs.** Rewrite `## Health checks` in `docs/guide/18-deployment.md`, which currently
+**Docs.** Rewrite `## Health checks` in `docs/guide/19-deployment.md`, which currently
 tells the reader to hand-roll a controller, and extend `## Shutting down cleanly` with
 the drain window. Add `OnDrain` to `docs/guide/07-lifecycle.md`. Record the memory and
 disk measurements in `docs/bun-apis.md`, and the `heapStats()` cost plus the library

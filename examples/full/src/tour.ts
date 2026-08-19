@@ -29,7 +29,7 @@ run()
      * loop open forever. That is leak B in
      * docs/roadmap/queue-shutdown-sigterm.md - measured, upstream, and not fixable
      * from here. It is why a real deployment sets a grace period short enough that
-     * `SIGKILL` arrives promptly (guide 18-deployment.md); this is that grace period.
+     * `SIGKILL` arrives promptly (guide 19-deployment.md); this is that grace period.
      *
      * Without it, CI's `tour` step hangs forever rather than failing, because the
      * tour has narrated everything correctly and simply will not exit.

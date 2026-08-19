@@ -25,7 +25,7 @@ export { inject } from './inject.js';
 // `@JobHandler`. Three copies meant a fix to the dedup or the `Object.prototype`
 // stop landing in one of them.
 export { classOf, markedMethods, type MarkedMethod } from './marked.js';
-export type { OnDrain, OnInit, OnShutdown } from './lifecycle.js';
+export type { OnBeforeShutdown, OnInit, OnShutdown } from './lifecycle.js';
 // The hook installer itself, not just its options: @dunx/http and @dunx/infra each
 // own an application class with its own `enableShutdownHooks`, and three copies of
 // "drain, then make sure the process actually ends" is three chances to fix the

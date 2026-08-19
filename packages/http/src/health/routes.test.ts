@@ -16,7 +16,7 @@ class Db extends HealthIndicator {
  *
  * A load balancer stops routing when readiness fails, and it notices on its own
  * schedule. So readiness has to fail *while the port is still open* and stay open
- * long enough to be noticed. Before `OnDrain`, every hook ran after
+ * long enough to be noticed. Before `OnBeforeShutdown`, every hook ran after
  * `server.stop()` had resolved, so a probe answering from one answered on a closed
  * socket and traffic was still arriving when it went away.
  */

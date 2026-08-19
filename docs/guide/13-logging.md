@@ -576,6 +576,6 @@ are adopted with `.then` rather than awaited. An `async` scope callback alone co
 ## Related
 
 - [Configuration](./12-configuration.md) for `AppConfigService` and `forRootAsync`
-- [Authentication](./16-authentication.md), which writes `userId` into
+- [Authentication](./17-authentication.md), which writes `userId` into
   `RequestContext` so every line after sign-in is correlated
 - [Providers](./03-providers.md) for how the default bindings are layered

@@ -126,12 +126,48 @@ service tears down before the connection it was built on. It is idempotent:
 concurrent callers await the same drain, and `app.closed` resolves once it
 finishes.
 
-| Nest                        | dunx         |
-| --------------------------- | ------------ |
-| `OnModuleInit`              | `OnInit`     |
-| `OnModuleDestroy`           | `OnShutdown` |
-| `onApplicationBootstrap`    | `OnInit`     |
-| `beforeApplicationShutdown` | `OnShutdown` |
+| Nest                        | dunx               |
+| --------------------------- | ------------------ |
+| `OnModuleInit`              | `OnInit`           |
+| `OnModuleDestroy`           | `OnShutdown`       |
+| `onApplicationBootstrap`    | `OnInit`           |
+| `beforeApplicationShutdown` | `OnBeforeShutdown` |
+
+## `OnBeforeShutdown`
+
+Shutdown has two phases, and this is the first one. It runs **while the app is still
+serving**.
+
+```ts
+import type { OnBeforeShutdown } from '@dunx/core';
+
+export class Readiness implements OnBeforeShutdown {
+  async onBeforeShutdown() {
+    this.accepting = false;
+    await Bun.sleep(15_000);
+  }
+}
+```
+
+`onShutdown` is too late for anything that has to be observable from outside.
+`@dunx/http` stops the server before tearing providers down, so a hook that flips a
+readiness probe there answers on a closed port: a load balancer is still routing when
+the socket goes away.
+
+So `app.drain()` runs every `onBeforeShutdown` first, then the port closes, then
+`onShutdown` tears down. `shutdown()` calls the drain itself, which is what makes a
+process with no server drain at all.
+
+Every `onBeforeShutdown` runs **concurrently**, unlike `onShutdown`. These are
+independent waits and the phase should cost the slowest rather than their sum, where
+teardown follows dependencies and has to be sequential.
+
+`@dunx/http`'s `HealthModule` is built on this, and its `drainDelayMs` is the window
+above. A queue consumer that must stop accepting jobs before its database closes
+wants the same phase.
+
+Do not confuse it with `@OnDrain()`, a websocket handler decorator in `@dunx/http`
+that fires when socket backpressure clears. Different layer, unrelated.
 
 ### Signals
 

@@ -705,6 +705,6 @@ drifts from the first.
 ## Related
 
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
-- [Authentication](./16-authentication.md), where `drizzleDatabase(connection)`
+- [Authentication](./17-authentication.md), where `drizzleDatabase(connection)`
   hands better-auth the connection this module already opened
 - [Providers](./03-providers.md) for factory providers and resolution order

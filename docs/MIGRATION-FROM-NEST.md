@@ -53,7 +53,7 @@ Status legend: **planned** = designed in ARCHITECTURE.md, unbuilt ·
 | `@nestjs/testing` (`overrideProvider`) | [`createTestApp({ modules, overrides })`](./guide/11-testing.md) | done         |
 | `@nestjs/swagger`                      | [`@dunx/openapi`](./guide/10-openapi.md)                         | done         |
 | `@nestjs/bullmq`                       | [`@dunx/infra/queue`](./guide/15-queues.md)                      | done         |
-| `@thallesp/nestjs-better-auth`         | [`@dunx/auth`](./guide/16-authentication.md)                     | done         |
+| `@thallesp/nestjs-better-auth`         | [`@dunx/auth`](./guide/17-authentication.md)                     | done         |
 | `@nestjs/websockets` + socket.io       | [gateways on `Bun.serve`](./guide/09-websockets.md)              | done         |
 | `@nestjs/serve-static`                 | `StaticFiles` in `@dunx/http`                                    | done         |
 | `@bull-board/*`                        | bull-board mounted by `@dunx/dashboard`                          | done         |

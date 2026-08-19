@@ -261,6 +261,6 @@ DbModule.forRootAsync(SyncDatabase, {
 ```
 
 See [Logging](./13-logging.md), [Database](./14-database.md),
-[Queues](./15-queues.md), [Authentication](./16-authentication.md) and
-[Files and images](./17-files-and-images.md) for the rest, and
+[Queues](./15-queues.md), [Authentication](./17-authentication.md) and
+[Files and images](./18-files-and-images.md) for the rest, and
 [Providers](./03-providers.md) for how a factory provider resolves in general.

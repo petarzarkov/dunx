@@ -1,4 +1,4 @@
-import type { OnDrain } from '@dunx/core';
+import type { OnBeforeShutdown } from '@dunx/core';
 
 export interface ReadinessOptionsInit {
   /**
@@ -27,15 +27,15 @@ export class ReadinessOptions {
  * Whether this process wants traffic.
  *
  * Injectable, so a handler can pull the pod out of rotation for a migration and put
- * it back. `hold` and `release` are for that; `onDrain` is for shutdown and does not
+ * it back. `hold` and `release` are for that; `onBeforeShutdown` is for shutdown and does not
  * release.
  *
- * This is what `OnDrain` was added to `@dunx/core` for. `HttpApplication.shutdown()`
+ * This is what `OnBeforeShutdown` was added to `@dunx/core` for. `HttpApplication.shutdown()`
  * stopped the server before running any hook, so a readiness flip in `onShutdown`
  * answered on a closed port, which is the wrong order: a load balancer has to see
  * the probe fail while the port is still open.
  */
-export class Readiness implements OnDrain {
+export class Readiness implements OnBeforeShutdown {
   #reason: string | undefined;
   #draining = false;
 
@@ -67,7 +67,7 @@ export class Readiness implements OnDrain {
    * knows why it is waiting. `App.drain()` runs every hook under one `Promise.all`,
    * so this window overlaps a queue worker's own drain instead of being added to it.
    */
-  async onDrain(): Promise<void> {
+  async onBeforeShutdown(): Promise<void> {
     this.#draining = true;
     if (this.options.drainDelayMs > 0) {
       await Bun.sleep(this.options.drainDelayMs);

@@ -20,8 +20,8 @@ installs neither.
 | `@dunx/infra/db`     | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds | [Database](../../docs/guide/14-database.md)    |
 | `@dunx/infra/redis`  | `Bun.RedisClient`, named connections, pub/sub                    | this file                                      |
 | `@dunx/infra/queue`  | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker   | [Queues](../../docs/guide/15-queues.md)        |
-| `@dunx/infra/files`  | One `Storage` contract over `Bun.file` and `Bun.S3Client`        | [Files and images](../../docs/guide/17-files-and-images.md) |
-| `@dunx/infra/images` | An immutable pipeline over `Bun.Image`                           | [Files and images](../../docs/guide/17-files-and-images.md) |
+| `@dunx/infra/files`  | One `Storage` contract over `Bun.file` and `Bun.S3Client`        | [Files and images](../../docs/guide/18-files-and-images.md) |
+| `@dunx/infra/images` | An immutable pipeline over `Bun.Image`                           | [Files and images](../../docs/guide/18-files-and-images.md) |
 | `@dunx/infra/logger` | **`@arkv/logger`** bound to core's `Logger` contract             | [Logging](../../docs/guide/13-logging.md)      |
 | `@dunx/infra/pagination` | Keyset pagination: cursor codec, options parser, drizzle query | this file                                  |
 | `@dunx/infra/schedule` | `Bun.cron` and Bun's timers: `@Cron`, `@Interval`, `@OnceOnBoot`, a registry | this file                    |
@@ -263,7 +263,7 @@ Nine methods: `read`, `readBytes`, `readStream`, `write`, `exists`, `delete`,
 `list`, `stat`, `presign`. Path traversal raises `PathTraversalError` before
 any syscall, and nothing buffers a whole file to satisfy the contract.
 
-**[Read the Files and images guide](../../docs/guide/17-files-and-images.md)**
+**[Read the Files and images guide](../../docs/guide/18-files-and-images.md)**
 for the traversal rules and their one known gap, listing behaviour, presigning,
 and why streaming has to go through a sink.
 
@@ -295,7 +295,7 @@ which mutates and returns `this`. And **`metadata()` is not a validity check**:
 it reads the header only, so a truncated file still reports its declared
 dimensions, and `verify()` is the one that decodes.
 
-**[Read the Files and images guide](../../docs/guide/17-files-and-images.md)**
+**[Read the Files and images guide](../../docs/guide/18-files-and-images.md)**
 for the operations, terminals, error taxonomy, and the measured `Bun.Image`
 behaviour that is not in Bun's own docs.
 

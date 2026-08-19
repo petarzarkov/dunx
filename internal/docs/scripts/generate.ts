@@ -122,11 +122,12 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
       'logging',
       'database',
       'queues',
+      'scheduling',
       'authentication',
       'files-and-images',
     ],
   ],
-  ['Going live', ['deployment', 'agent-tooling']],
+  ['Going live', ['deployment', 'health-checks', 'agent-tooling']],
 ];
 
 const sectionOf = (slug: string): string => {

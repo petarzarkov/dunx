@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { Module, type OnDrain, type OnShutdown } from '@dunx/core';
+import { Module, type OnBeforeShutdown, type OnShutdown } from '@dunx/core';
 import { Controller, Get } from '../route/decorators.js';
 import { HttpFactory } from './factory.js';
 
@@ -8,7 +8,7 @@ import { HttpFactory } from './factory.js';
  * where it happens and is correct for teardown. It left nowhere for work that has
  * to be observable from outside: a readiness probe must start failing while the
  * port is still open, or a load balancer is still routing when the socket goes
- * away. `onDrain` is that phase, and this asserts a route still answers from it.
+ * away. `onBeforeShutdown` is that phase, and this asserts a route still answers from it.
  *
  * The opposite case is not asserted. A `fetch` after `stop()` can still succeed on
  * a pooled keep-alive connection, so "unreachable from `onShutdown`" measures Bun's
@@ -26,8 +26,8 @@ class PingController {
   }
 }
 
-class Lifecycle implements OnDrain, OnShutdown {
-  async onDrain(): Promise<void> {
+class Lifecycle implements OnBeforeShutdown, OnShutdown {
+  async onBeforeShutdown(): Promise<void> {
     order.push('drain');
     status = (await fetch(`${base}ping`)).status;
   }

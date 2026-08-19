@@ -39,7 +39,7 @@ const surface = [HealthOptions, HealthRegistry, Readiness];
 /**
  * Liveness and readiness, and the drain that makes readiness worth having.
  *
- * `Readiness` implements `OnDrain`, so readiness starts failing **before** the
+ * `Readiness` implements `OnBeforeShutdown`, so readiness starts failing **before** the
  * server stops accepting. Without that phase the flip was unexpressible: every
  * `onShutdown` hook runs after `server.stop()` has resolved, so a probe answering
  * from there answers on a closed port and the load balancer is still routing when

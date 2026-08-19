@@ -100,7 +100,17 @@ export const createGitHubRelease = async (
 ): Promise<void> => {
   const token = process.env['GITHUB_TOKEN'];
   if (!token) {
-    console.log('No GITHUB_TOKEN, skipping the GitHub release');
+    // Loud in CI, quiet locally. A local `bun run version` has no token and should
+    // not be nagged; a CI run without one is a misconfigured workflow, and 2.1.0
+    // shipped a tag with no release because this said the same mild thing in both
+    // cases. `pushTag` falls back to the credential `actions/checkout` persists, so
+    // the tag succeeds either way and the missing release is the only symptom.
+    console[process.env['GITHUB_ACTIONS'] ? 'error' : 'log'](
+      process.env['GITHUB_ACTIONS']
+        ? 'GITHUB_TOKEN is not set, so no GitHub release was created. Pass it in ' +
+            "the release step's `env:` - see .github/workflows/ci.yml."
+        : 'No GITHUB_TOKEN, skipping the GitHub release',
+    );
     return;
   }
 

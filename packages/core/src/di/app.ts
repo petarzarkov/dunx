@@ -3,7 +3,7 @@ import { AsyncRequestContext, RequestContext } from '../logger/context.js';
 import { Logger } from '../logger/logger.js';
 import { AppError } from './errors.js';
 import { Injector } from './injector.js';
-import { hasOnDrain, hasOnInit, hasOnShutdown } from './lifecycle.js';
+import { hasOnBeforeShutdown, hasOnInit, hasOnShutdown } from './lifecycle.js';
 import { ROOT_MODULE, type ModuleRef } from './module.js';
 import { buildScopes, type Binding } from './scope.js';
 import { provide, type Registration } from './provider.js';
@@ -80,7 +80,7 @@ export interface App {
    */
   get<T>(token: InjectionToken<T>, from?: ModuleRef): T;
   /**
-   * Runs every `onDrain` hook concurrently, once, while the app is still
+   * Runs every `onBeforeShutdown` hook concurrently, once, while the app is still
    * serving. `shutdown()` calls this first, so a process that never interleaves
    * anything needs no separate call; `@dunx/http` calls it before stopping the
    * server, which is the only point at which a readiness probe can still answer.
@@ -138,7 +138,7 @@ class Application implements App {
   }
 
   /**
-   * Runs every `onDrain` hook, concurrently, and only ever once.
+   * Runs every `onBeforeShutdown` hook, concurrently, and only ever once.
    *
    * Separate from `shutdown()` because `@dunx/http` has to interleave: drain,
    * then stop the server, then tear providers down. Memoized so the two paths
@@ -149,10 +149,10 @@ class Application implements App {
     this.#draining ??= (async () => {
       await Promise.all(
         [...this.#injector.instances]
-          .filter(hasOnDrain)
-          // `onDrain` may be synchronous, and `Promise.all` over a bare `void` is
+          .filter(hasOnBeforeShutdown)
+          // `onBeforeShutdown` may be synchronous, and `Promise.all` over a bare `void` is
           // what `await-thenable` objects to. The wrapper costs one microtask.
-          .map(async (instance) => instance.onDrain()),
+          .map(async (instance) => instance.onBeforeShutdown()),
       );
     })();
     return this.#draining;
