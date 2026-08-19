@@ -30,7 +30,7 @@ const providers = (optionsProvider: Registration) => [
 ];
 
 /**
- * Arms every `@Cron`, `@Interval` and `@Timeout` in the graph at boot.
+ * Arms every `@Cron`, `@Interval` and `@OnceOnBoot` in the graph at boot.
  *
  * In-process and single-node, stated outright. Two replicas both run every
  * schedule, because nothing here coordinates: a schedule that must fire once across

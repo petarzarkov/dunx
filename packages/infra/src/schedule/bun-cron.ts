@@ -2,35 +2,35 @@
  * `Bun.cron`'s options argument, which the runtime accepts and bun-types does not
  * declare.
  *
- * On 1.3.14 the declarations are `(schedule, handler): CronJob` and
- * `parse(expression, relativeDate?): Date | null`, with no third parameter on
- * either, while the runtime takes one and **ignores** it. Both halves matter: the
- * missing declaration is why this file exists, and the ignoring is why
- * `supportsTz()` probes rather than trusting the call to have worked.
+ * On 1.3.14 the declarations are `(schedule, handler): CronJob`,
+ * `(path, schedule, title): Promise<void>` and
+ * `parse(expression, relativeDate?): Date | null`. **None of the three has a third
+ * options parameter**, while the runtime takes one on the first and the last and
+ * ignores it. That is the whole reason for the casts below: there is no overload to
+ * satisfy, so a call passing `{ tz }` cannot typecheck without one.
  *
- * Narrowed here, once, rather than cast at every call site. Delete this file when
- * bun-types declares the option.
+ * What is *not* cast away is everything Bun does declare. `Bun.CronWithAutocomplete`
+ * carries the alias union (`@daily`, `@hourly`, month and weekday names) and
+ * `Bun.CronJob` is the handle, so both are used rather than restated: an earlier
+ * version of this file typed the schedule as `string` and the handle as a local
+ * interface, which threw the aliases and the chainable handle away for nothing.
+ *
+ * Delete this file when bun-types declares the option.
  */
 
 export interface CronCallOptions {
+  /** IANA zone id. Ignored by 1.3.14; see `capability.ts`. */
   readonly tz?: string;
 }
 
-/** The parts of `Bun.cron`'s handle this uses. */
-export interface CronHandle {
-  stop(): unknown;
-  ref(): unknown;
-  unref(): unknown;
-}
-
 type CronWithOptions = (
-  schedule: string,
+  schedule: Bun.CronWithAutocomplete,
   handler: () => unknown,
   options?: CronCallOptions,
-) => CronHandle;
+) => Bun.CronJob;
 
 type ParseWithOptions = (
-  expression: string,
+  expression: Bun.CronWithAutocomplete,
   relativeDate?: Date | number,
   options?: CronCallOptions,
 ) => Date | null;

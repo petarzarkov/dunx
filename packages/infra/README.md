@@ -24,7 +24,7 @@ installs neither.
 | `@dunx/infra/images` | An immutable pipeline over `Bun.Image`                           | [Files and images](../../docs/guide/17-files-and-images.md) |
 | `@dunx/infra/logger` | **`@arkv/logger`** bound to core's `Logger` contract             | [Logging](../../docs/guide/13-logging.md)      |
 | `@dunx/infra/pagination` | Keyset pagination: cursor codec, options parser, drizzle query | this file                                  |
-| `@dunx/infra/schedule` | `Bun.cron` and Bun's timers: `@Cron`, `@Interval`, `@Timeout`, a registry | this file                        |
+| `@dunx/infra/schedule` | `Bun.cron` and Bun's timers: `@Cron`, `@Interval`, `@OnceOnBoot`, a registry | this file                    |
 
 Import from the barrel or from an area subpath. The subpaths exist so it is
 obvious what a file uses, and so tree-shaking is not something you have to reason
@@ -352,17 +352,24 @@ what all of it measures at.
 
 ## schedule
 
-`@Cron`, `@Interval` and `@Timeout` on `Bun.cron` and Bun's timers. No cron
+`@Cron`, `@Interval` and `@OnceOnBoot` on `Bun.cron` and Bun's timers. No cron
 library: `Bun.cron.parse` is the parser.
+
+`@Cron` takes `Bun.CronWithAutocomplete`, so Bun's named schedules are accepted and
+offered by an editor: `@Cron('@daily')` alongside `@Cron('0 3 * * *')`. All seven
+(`@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, `@hourly`)
+parse on 1.3.14. `CronExpression` holds the same seven as values, for a config
+object that cannot carry a literal.
 
 ```ts
 import {
   Cron,
+  CronExpression,
   Interval,
+  OnceOnBoot,
   Overlap,
   ScheduleModule,
   ScheduleRegistry,
-  Timeout,
 } from '@dunx/infra/schedule';
 
 export class ReportsService {
@@ -376,7 +383,10 @@ export class ReportsService {
   @Interval(30_000, { name: 'probe', overlap: Overlap.SKIP })
   async probe(): Promise<void> {}
 
-  @Timeout(5_000)
+  @Cron(CronExpression.HOURLY)
+  async rollUp(): Promise<void> {}
+
+  @OnceOnBoot(5_000)
   warmCache(): void {}
 }
 
@@ -424,8 +434,8 @@ dunx always passes `{ tz: 'UTC' }` explicitly. That is correct on both sides of
 Bun's 1.4 change: 1.3.x ignores the option and is already UTC, and 1.4 honours it
 and pins UTC rather than drifting to the container's `TZ`.
 
-**`@Interval` and `@Timeout` are measured from `onInit`,** which is the latest hook
-there is and runs *before* `Bun.serve` binds. So `@Timeout(0)` fires before the
+**`@Interval` and `@OnceOnBoot` are measured from `onInit`,** which is the latest hook
+there is and runs *before* `Bun.serve` binds. So `@OnceOnBoot(0)` fires before the
 socket is open. An app needing the later point uses
 `ScheduleModule.forRoot({ enabled: false })` and calls `registry.add` after
 `listen()`.

@@ -1,10 +1,15 @@
-export { Cron, Interval, Timeout } from './decorators.js';
+export { Cron, Interval, OnceOnBoot } from './decorators.js';
 export type {
   CronDecoratorOptions,
   TimerDecoratorOptions,
 } from './decorators.js';
 export { ScheduleError, ScheduleErrorCode } from './errors.js';
-export { Overlap, ScheduleKind, type ScheduleMeta } from './marker.js';
+export {
+  CronExpression,
+  Overlap,
+  ScheduleKind,
+  type ScheduleMeta,
+} from './marker.js';
 export { ScheduleModule } from './module.js';
 export { ScheduleOptions, type ScheduleOptionsInit } from './options.js';
 export { ScheduleEntry, ScheduleRegistry } from './registry.js';

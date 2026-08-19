@@ -123,7 +123,9 @@ export {
 export * from './logger/index.js';
 export {
   Cron,
+  CronExpression,
   Interval,
+  OnceOnBoot,
   Overlap,
   ScheduleEntry,
   ScheduleError,
@@ -133,7 +135,6 @@ export {
   ScheduleOptions,
   ScheduleRegistry,
   supportsTz,
-  Timeout,
   type CronDecoratorOptions,
   type ScheduleMeta,
   type ScheduleOptionsInit,

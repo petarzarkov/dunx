@@ -62,6 +62,11 @@ const mark =
  * Five fields, minute resolution: `Bun.cron` rejects a sixth with "seconds are not
  * supported". Sub-minute work is `@Interval`.
  *
+ * The parameter is `Bun.CronWithAutocomplete`, so the named schedules Bun
+ * understands are accepted and offered by an editor: `@Cron('@daily')` alongside
+ * `@Cron('0 3 * * *')`. {@link CronExpression} holds the same seven as values, for
+ * a config object that cannot carry a literal.
+ *
  * There is no class decorator to go with it. The method's marker is the whole
  * record, and the runner finds it by walking the prototype chains of the classes
  * the modules already declare, so a handler needs no second registration and an
@@ -72,7 +77,7 @@ const mark =
  * that never runs.
  */
 export const Cron = (
-  expression: string,
+  expression: Bun.CronWithAutocomplete,
   options: CronDecoratorOptions = {},
 ) => {
   try {
@@ -102,15 +107,19 @@ export const Interval = (ms: number, options: TimerDecoratorOptions = {}) =>
 /**
  * Runs the method once, `ms` after the app is ready.
  *
+ * Named for when it runs rather than for the timer underneath it. "Timeout" said
+ * only that a timer was involved, and the interesting half is that "ready" here is
+ * earlier than it looks.
+ *
  * "Ready" is `onInit`, which is the latest hook there is and runs **before**
  * `Bun.serve` binds. So the delay is measured from container readiness rather than
- * from the first request, and `@Timeout(0)` fires before the socket is open. An app
+ * from the first request, and `@OnceOnBoot(0)` fires before the socket is open. An app
  * needing the later point uses `forRoot({ enabled: false })` and calls
  * `registry.add` after `listen()`.
  */
-export const Timeout = (ms: number, options: TimerDecoratorOptions = {}) =>
+export const OnceOnBoot = (ms: number, options: TimerDecoratorOptions = {}) =>
   mark({
-    kind: ScheduleKind.TIMEOUT,
-    at: assertDelay(ms, '@Timeout'),
+    kind: ScheduleKind.ONCE,
+    at: assertDelay(ms, '@OnceOnBoot'),
     ...options,
   });

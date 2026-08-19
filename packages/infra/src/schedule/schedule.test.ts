@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import { AppFactory, Logger, LogLevel, Module, provide } from '@dunx/core';
 import { supportsTz } from './capability.js';
-import { Cron, Interval, Timeout } from './decorators.js';
+import { Cron, Interval, OnceOnBoot } from './decorators.js';
 import { ScheduleErrorCode } from './errors.js';
-import { Overlap, ScheduleKind } from './marker.js';
+import { CronExpression, Overlap, ScheduleKind } from './marker.js';
 import { ScheduleModule } from './module.js';
 import { ScheduleRegistry } from './registry.js';
 
@@ -54,7 +54,7 @@ class Reports {
     });
   }
 
-  @Timeout(3_600_000)
+  @OnceOnBoot(3_600_000)
   warm(): void {
     this.ran.push('warm');
   }
@@ -256,6 +256,63 @@ describe('the registry at runtime', () => {
     for (const entry of registry.list()) {
       expect(entry.finished).toBe(true);
       expect(entry.nextRunAt).toBeUndefined();
+    }
+  });
+});
+
+/*
+ * `Bun.CronWithAutocomplete` carries the named schedules, so a literal is accepted
+ * and offered by an editor; `CronExpression` holds the same seven as values for a
+ * config object that cannot carry a literal. Both reach the same parser.
+ */
+describe('named schedules', () => {
+  it('accepts every alias Bun understands, as a literal and as a value', async () => {
+    class Aliased {
+      ran: string[] = [];
+
+      @Cron('@daily', { name: 'literal' })
+      nightly(): void {
+        this.ran.push('nightly');
+      }
+
+      @Cron(CronExpression.HOURLY, { name: 'value' })
+      hourly(): void {
+        this.ran.push('hourly');
+      }
+    }
+
+    @Module({
+      imports: [ScheduleModule.forRoot({ keepAlive: false })],
+      providers: [Aliased, provide(Logger, { useValue: new Quiet() })],
+      exports: [Logger],
+      global: true,
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const registry = app.get(ScheduleRegistry);
+
+    expect(registry.get('literal')?.at).toBe('@daily');
+    expect(registry.get('value')?.at).toBe('@hourly');
+    // Armed, so Bun parsed both: an expression it rejects is a boot error.
+    expect(registry.get('literal')?.nextRunAt).toBeInstanceOf(Date);
+    expect(registry.get('value')?.nextRunAt).toBeInstanceOf(Date);
+
+    await app.shutdown();
+  });
+
+  it('holds the seven Bun parses, and nothing it does not', () => {
+    expect(Object.values(CronExpression).sort()).toEqual([
+      '@annually',
+      '@daily',
+      '@hourly',
+      '@midnight',
+      '@monthly',
+      '@weekly',
+      '@yearly',
+    ]);
+    for (const expression of Object.values(CronExpression)) {
+      expect(Bun.cron.parse(expression, new Date(0))).toBeInstanceOf(Date);
     }
   });
 });

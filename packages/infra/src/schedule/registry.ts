@@ -1,5 +1,5 @@
 import type { Logger } from '@dunx/core';
-import { cron, parseCron, type CronHandle } from './bun-cron.js';
+import { cron, parseCron } from './bun-cron.js';
 import { ScheduleError, ScheduleErrorCode } from './errors.js';
 import { Overlap, ScheduleKind, type ScheduleMeta } from './marker.js';
 import { assertZoneUsable, type ScheduleOptions } from './options.js';
@@ -7,7 +7,7 @@ import { assertZoneUsable, type ScheduleOptions } from './options.js';
 interface Armed {
   readonly entry: ScheduleEntry;
   readonly run: () => unknown;
-  cron?: CronHandle | undefined;
+  cron?: Bun.CronJob | undefined;
   timer?: ReturnType<typeof setInterval> | undefined;
 }
 
@@ -25,7 +25,7 @@ export class ScheduleEntry {
   lastRunAt: Date | undefined;
   /** For a cron, the next fire `Bun.cron.parse` computes. Absent for a timer. */
   nextRunAt: Date | undefined;
-  /** Set once a `@Timeout` has fired, or a schedule has been disarmed. */
+  /** Set once an `@OnceOnBoot` has fired, or a schedule has been disarmed. */
   finished = false;
 
   constructor(
@@ -145,7 +145,7 @@ export class ScheduleRegistry {
     const { entry } = armed;
     if (entry.kind === ScheduleKind.CRON) {
       const handle = cron(
-        entry.at as string,
+        entry.at as Bun.CronWithAutocomplete,
         () => {
           const promise = this.#invoke(armed, 'cron');
           // Returned only under SKIP, which is what makes Bun compute the next
@@ -191,7 +191,7 @@ export class ScheduleRegistry {
     if (entry.kind !== ScheduleKind.CRON) return undefined;
     try {
       return (
-        parseCron(entry.at as string, new Date(), {
+        parseCron(entry.at as Bun.CronWithAutocomplete, new Date(), {
           tz: entry.tz ?? 'UTC',
         }) ?? undefined
       );

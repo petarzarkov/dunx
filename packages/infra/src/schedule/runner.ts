@@ -46,7 +46,7 @@ const declaresSchedule = (ctor: Ctor<unknown>): boolean =>
   markedMethods(ctor.prototype as object | null, scheduleMetaOf).length > 0;
 
 /**
- * Finds every `@Cron`, `@Interval` and `@Timeout` in the graph and arms it.
+ * Finds every `@Cron`, `@Interval` and `@OnceOnBoot` in the graph and arms it.
  *
  * `AppRef` rather than constructor injection for the handlers: which classes declare
  * a schedule is not knowable when this is built, so the tokens cannot be named in an

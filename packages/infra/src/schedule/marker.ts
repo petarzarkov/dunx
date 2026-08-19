@@ -7,10 +7,33 @@ const SCHEDULE = Symbol.for('dunx.schedule');
 export const ScheduleKind = Object.freeze({
   CRON: 'cron',
   INTERVAL: 'interval',
-  TIMEOUT: 'timeout',
+  ONCE: 'once',
 } as const);
 
 export type ScheduleKind = (typeof ScheduleKind)[keyof typeof ScheduleKind];
+
+/**
+ * The named schedules `Bun.cron` understands, as a frozen object rather than a TS
+ * `enum` - see CLAUDE.md.
+ *
+ * All seven parse at runtime, verified against 1.3.14. They are also in
+ * `Bun.CronWithAutocomplete`, which is what `@Cron` takes, so a literal
+ * `'@daily'` is accepted and offered by an editor without going through this. This
+ * exists for the case a literal cannot serve: a value to hold in a config object or
+ * pass through a variable.
+ */
+export const CronExpression = Object.freeze({
+  YEARLY: '@yearly',
+  ANNUALLY: '@annually',
+  MONTHLY: '@monthly',
+  WEEKLY: '@weekly',
+  DAILY: '@daily',
+  MIDNIGHT: '@midnight',
+  HOURLY: '@hourly',
+} as const);
+
+export type CronExpression =
+  (typeof CronExpression)[keyof typeof CronExpression];
 
 /**
  * What happens when a run is still going at the next fire.
@@ -28,7 +51,7 @@ export type Overlap = (typeof Overlap)[keyof typeof Overlap];
 
 export interface ScheduleMeta {
   readonly kind: ScheduleKind;
-  /** A cron expression for `CRON`, milliseconds for `INTERVAL` and `TIMEOUT`. */
+  /** A cron expression for `CRON`, milliseconds for `INTERVAL` and `ONCE`. */
   readonly at: string | number;
   /** Registry key. Defaults to `ClassName.methodName` at discovery. */
   readonly name?: string;
