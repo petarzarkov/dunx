@@ -4,6 +4,10 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 2.1.1 - 2026-08-19
+
+rename the drain hook, and document what 2.1.0 shipped
+
 ## 2.1.0 - 2026-08-19
 
 health checks, a Bun.cron scheduler, and graceful draining
