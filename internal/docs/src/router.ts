@@ -42,6 +42,18 @@ export const parseRoute = (hash: string): Route => {
 export const href = (kind: RouteKind, slug = ''): string =>
   kind === RouteKind.Home ? '#/' : `#/${kind}${slug ? `/${slug}` : ''}`;
 
+/**
+ * A package on npm, optionally pinned to one version.
+ *
+ * Here rather than in a page because three copies would otherwise exist: the
+ * unversioned form was local to `pages/Home.tsx` and the versioned one was
+ * hardcoded to `@dunx/core` inside `pages/Releases.tsx`.
+ */
+export const npmUrl = (name: string, version?: string): string =>
+  `https://www.npmjs.com/package/${encodeURIComponent(name)}${
+    version ? `/v/${version}` : ''
+  }`;
+
 const SYMBOL_PREFIX = 'symbol-';
 
 /** The DOM id `SymbolCard` renders, and the anchor a search hit navigates to. */

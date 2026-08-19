@@ -69,6 +69,30 @@ and `internal/docs` renders them at `#/releases`. Nothing is hand-written.
 - Re-running a failed release does not duplicate a section: a version already
   present is left alone.
 
+## The tag and the GitHub release
+
+After the version commit is pushed, `scripts/github-release.ts` tags `v<version>`
+and creates the GitHub release. Before this existed, `git tag -l` was empty across
+every release and the repo's Releases page held nothing.
+
+- The notes are **read back** from `CHANGELOG.md` by `parseChangelog`, not
+  re-rendered from the commit range. A second renderer is how the tag, the file and
+  the site would come to disagree about what shipped.
+- The body ends with a link to `#/releases/<version>`, which `internal/docs` serves
+  as a page per release. The URL is derived from `owner/repo`, so a fork points at
+  its own Pages site.
+- The API call is `fetch` against the REST API, not the `gh` CLI: nothing else in
+  `scripts/` needs `gh`, and `fetch` is native. It needs `contents: write`, which
+  `ci.yml`'s publishing job already had.
+- **Neither step throws and neither fails the job.** By the time they run the
+  packages are on npm, so a failure here would make a finished publish look broken.
+  Both are idempotent: an existing tag or release is left alone, so a rerun after a
+  partial failure is safe.
+- A missing `GITHUB_TOKEN` skips the release and says so, which is what a local
+  `bun run version` does.
+- `[force-publish]` gets no tag and no release. It bypasses the release gate and
+  writes no changelog section, so there is no range to describe.
+
 ## Constraints that are load-bearing
 
 - **Trusted publishing (OIDC), no `NPM_TOKEN`.** Each package's trusted publisher

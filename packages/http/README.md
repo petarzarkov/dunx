@@ -419,6 +419,84 @@ writing sync code.
 Adding middleware - including `requestLogging` - opts a route back into the async
 path, because middleware is `async` by contract.
 
+## Health checks and draining
+
+Two routes, `/health/live` and `/health/ready`, and the drain phase that makes the
+second one worth having.
+
+```ts
+import {
+  DatabaseIndicator,
+  HealthModule,
+  MemoryIndicator,
+  MemoryOptions,
+  RedisIndicator,
+} from '@dunx/http';
+
+HealthModule.forRootAsync({
+  useFactory: (db: DbConnection, redis: RedisConnection) => ({
+    readiness: [new DatabaseIndicator(db), new RedisIndicator(redis)],
+    liveness: [
+      new MemoryIndicator(new MemoryOptions({ maxRssBytes: 512 * 1024 ** 2 })),
+    ],
+    drainDelayMs: 15_000,
+  }),
+  inject: [DbConnection, RedisConnection],
+});
+```
+
+The report is one list, so finding the unhappy check is one place to look:
+
+```json
+{
+  "status": "up",
+  "draining": false,
+  "uptimeMs": 41233,
+  "checks": [{ "name": "database", "state": "up", "critical": true, "ms": 1 }]
+}
+```
+
+`up` is 200 and anything else is 503, which is what an orchestrator reads to stop
+routing without restarting.
+
+**Readiness fails before the port closes**, and that ordering is the feature.
+`Readiness` implements `@dunx/core`'s `OnDrain`, which runs while the server is
+still accepting. Every `onShutdown` hook runs after `server.stop()` has resolved, so
+a probe answering from one answers on a closed socket.
+
+`drainDelayMs` keeps readiness failing for a few probe intervals before the socket
+goes, because a load balancer notices on its own schedule.
+
+Liveness deliberately keeps passing while draining. A pod that is shutting down does
+not need restarting, and reporting `down` there invites a SIGKILL mid-drain.
+
+**Three states, not two.** A check that throws is `down`; one that outruns
+`timeoutMs` is `unknown`, because a probe that did not answer has told you nothing.
+`unknown` on a critical check fails readiness and on a non-critical one it does not.
+
+**`critical: false` reports without shedding traffic.** `MemoryIndicator` and
+`DiskIndicator` ship that way: a disk at 91% is worth seeing, and pulling the pod
+out of rotation does not help, since no other pod's disk is emptier. A memory
+ceiling belongs on liveness, where the orchestrator restarts the process.
+
+`Readiness` is injectable, so a handler can `hold('migrating')` and `release()` to
+take the pod out of rotation without shutting down. A `release()` does not undo a
+shutdown.
+
+There is no startup probe. The port already answers that: `create()` finishes every
+`onInit` before `listen()` binds, so connection refused *is* "not started yet".
+
+`MemoryIndicator` uses `process.memoryUsage()` at 5.96 us. `jsc.heapStats()` walks
+every live object at 2.2 ms and up, and `Bun.generateHeapSnapshot()` is hundreds of
+milliseconds, so neither belongs on a path scraped every two seconds.
+
+Bun ships no disk API, so `DiskIndicator` is `node:fs`'s **async** `statfs` at 167 us
+rather than `statfsSync` at 1.85 us. A stalled network mount blocks the loop for as
+long as it stalls, and a health check is what gets called while one is stalling.
+
+`routes: false` binds everything and mounts nothing, for an app answering on its own
+paths.
+
 ## App-level configuration
 
 `create()` boots the container and discovers routes; `listen()` is what builds the

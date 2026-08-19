@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { inject, Module, provide } from '@dunx/core';
-import type { BunRequest } from 'bun';
+import type { BunRequest, Server } from 'bun';
 import { Controller, Get } from '../route/decorators.js';
-import { ClientAddress } from './client-address.js';
+import { attachAddressSource, ClientAddress } from './client-address.js';
 import type { RouteContext } from './context.js';
 import { HttpFactory } from './factory.js';
 import type { Middleware, Next } from './middleware.js';
@@ -79,5 +79,84 @@ describe('ClientAddress', () => {
     expect(response.status).toBe(200);
 
     await app.shutdown();
+  });
+});
+
+const SOCKET = '10.0.0.254';
+
+/**
+ * A `ClientAddress` with no server behind it, so the hop arithmetic is the only
+ * thing under test. `requestIP` answers a fixed peer, which stands in for the
+ * proxy that opened the connection.
+ */
+const attached = (trustProxy: boolean | number): ClientAddress => {
+  const address = new ClientAddress();
+  attachAddressSource(address, {
+    server: {
+      requestIP: () => ({ address: SOCKET }),
+    } as unknown as Server<unknown>,
+    trustProxy,
+  });
+  return address;
+};
+
+const withForwarded = (value?: string): BunRequest =>
+  new Request(
+    'http://test/x',
+    value === undefined ? undefined : { headers: { 'x-forwarded-for': value } },
+  ) as BunRequest;
+
+/**
+ * `X-Forwarded-For` is appended to, so the entry a proxy adds is the peer it saw.
+ * The leftmost entry is whatever the original caller sent, which a caller may
+ * invent. Counting from the right is what makes the header worth reading: with one
+ * trusted proxy, only the last entry was written by something under our control.
+ */
+describe('ClientAddress hop counting', () => {
+  test('a forged leftmost entry does not win behind one proxy', () => {
+    // The attack: a client sends its own header, the proxy appends the address it
+    // actually saw. Reading `[0]` returns the forgery.
+    const req = withForwarded('1.2.3.4, 203.0.113.9');
+    expect(attached(true).of(req)).toBe('203.0.113.9');
+    expect(attached(true).of(req)).not.toBe('1.2.3.4');
+  });
+
+  test('one trusted hop reads the last entry', () => {
+    expect(attached(true).of(withForwarded('203.0.113.9'))).toBe('203.0.113.9');
+    expect(attached(1).of(withForwarded('203.0.113.9'))).toBe('203.0.113.9');
+  });
+
+  test('a hop count reaches past that many proxies', () => {
+    const req = withForwarded('203.0.113.9, 10.1.1.1, 10.1.1.2');
+    expect(attached(1).of(req)).toBe('10.1.1.2');
+    expect(attached(2).of(req)).toBe('10.1.1.1');
+    expect(attached(3).of(req)).toBe('203.0.113.9');
+  });
+
+  test('a count longer than the header stops at the leftmost entry', () => {
+    expect(attached(9).of(withForwarded('203.0.113.9, 10.1.1.1'))).toBe(
+      '203.0.113.9',
+    );
+  });
+
+  test('the header is ignored entirely when the setting is off', () => {
+    const req = withForwarded('1.2.3.4');
+    expect(attached(false).of(req)).toBe(SOCKET);
+    expect(attached(0).of(req)).toBe(SOCKET);
+  });
+
+  test('falls back to the socket when the header is absent or empty', () => {
+    expect(attached(true).of(withForwarded())).toBe(SOCKET);
+    expect(attached(true).of(withForwarded('   '))).toBe(SOCKET);
+    expect(attached(true).of(withForwarded(' , ,'))).toBe(SOCKET);
+  });
+
+  test('blank entries are dropped rather than counted as a hop', () => {
+    expect(attached(1).of(withForwarded('203.0.113.9, , 10.1.1.1'))).toBe(
+      '10.1.1.1',
+    );
+    expect(attached(2).of(withForwarded('203.0.113.9, , 10.1.1.1'))).toBe(
+      '203.0.113.9',
+    );
   });
 });

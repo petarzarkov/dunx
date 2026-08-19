@@ -279,8 +279,10 @@ it('answers a preflight and denies an unknown origin', () => {
 });
 
 it('honours trust proxy and refuses a hook after listen()', () => {
+  // The header is `203.0.113.7, 10.0.0.1` and one hop is trusted, so the answer
+  // is the entry the proxy appended. `203.0.113.7` is whatever the caller typed.
   expect(tour.text).toContain(
-    'set("trust proxy", true): X-Forwarded-For sent -> 203.0.113.7',
+    'set("trust proxy", true): X-Forwarded-For sent -> 10.0.0.1',
   );
   expect(tour.text).toContain(
     'setGlobalPrefix() after listen() threw: setGlobalPrefix() must be called before listen().',

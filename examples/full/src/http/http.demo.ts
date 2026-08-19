@@ -34,6 +34,11 @@ const postNote = (url: string, text: unknown): Promise<Response> =>
     body: JSON.stringify({ text }),
   });
 
+/**
+ * `203.0.113.7` stands in for whatever the caller put in the header itself, and
+ * `10.0.0.1` for the entry the one proxy in front of this app appended. With
+ * `trust proxy` set to one hop, only the second is worth anything.
+ */
 const whoami = async (url: string, forwarded: boolean): Promise<string> => {
   const response = await fetch(new URL('api/notes/whoami', url), {
     headers: forwarded ? { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' } : {},
@@ -89,6 +94,8 @@ export class HttpDemo {
       `OPTIONS from https://evil.test -> ${denied.status} ${describeCors(denied)}`,
     );
 
+    // One trusted hop, so the last entry wins and the caller's own leftmost
+    // entry is ignored. Reaching past the proxy takes set('trust proxy', 2).
     logger.info(
       `set("trust proxy", true): X-Forwarded-For sent -> ${await whoami(url, true)}`,
     );

@@ -218,11 +218,17 @@ src/
   chunk.ts             # useChunk: a per-route body as it arrives
   bench.ts             # ranking, baseline percentages, verdicts, scoreboard
   components/          # Prose, SymbolCard, Search, CodeBlock, NoDecorators, Bench*
-  pages/               # Benchmarks, Home, Guide, PackagePage, Coverage, NotFound
+  pages/               # Benchmarks, Home, Guide, PackagePage, Coverage, Releases, NotFound
 ```
 
 Routing is hash-based (`#/api/core`) on purpose: GitHub Pages serves static
 files with no SPA fallback, so a path-based router would 404 on every deep link.
+
+`#/releases` is the whole history and `#/releases/<version>` is one release, which
+is what a GitHub release note links at. The version may carry the `v` a git tag
+uses. A version that is not in the history renders the Not found panel rather than
+redirecting, so a link published against a later release still says which one it
+wanted when it reaches an older deploy.
 
 ## Deep-linking a symbol
 

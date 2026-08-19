@@ -179,7 +179,11 @@ describe("set('trust proxy')", () => {
             headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' },
           })
         ).json();
-        expect(body).toEqual({ ip: '203.0.113.7' });
+        // One trusted hop, so the last entry: the only one a proxy under our
+        // control appended. `203.0.113.7` is whatever the caller sent, and
+        // reaching it takes `set('trust proxy', 2)`. Hop arithmetic has its own
+        // coverage in `client-address.test.ts`.
+        expect(body).toEqual({ ip: '10.0.0.1' });
       },
     );
 

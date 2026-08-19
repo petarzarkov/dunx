@@ -19,7 +19,13 @@ export {
   type UnresolvedDep,
 } from './deps.js';
 export { inject } from './inject.js';
-export type { OnInit, OnShutdown } from './lifecycle.js';
+// The prototype-chain walk behind every discovery-by-marker feature. Core owns the
+// marker technique, so it owns reading it back: `@dunx/http` had written this walk
+// twice, for routes and for gateway handlers, and `@dunx/infra` a third time for
+// `@JobHandler`. Three copies meant a fix to the dedup or the `Object.prototype`
+// stop landing in one of them.
+export { classOf, markedMethods, type MarkedMethod } from './marked.js';
+export type { OnDrain, OnInit, OnShutdown } from './lifecycle.js';
 // The hook installer itself, not just its options: @dunx/http and @dunx/infra each
 // own an application class with its own `enableShutdownHooks`, and three copies of
 // "drain, then make sure the process actually ends" is three chances to fix the

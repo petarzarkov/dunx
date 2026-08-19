@@ -55,7 +55,13 @@ export class ShutdownHooks {
    * "already hooked" answer out of `enableShutdownHooks`.
    */
   install(
-    drain: () => Promise<void>,
+    /**
+     * The whole teardown, not the `OnDrain` phase inside it. Named `drain` until
+     * `OnDrain` arrived and made the word mean two things: that hook stops the
+     * process taking new work while it is still serving, and this callback is
+     * `shutdown()`, which runs it and then tears every provider down.
+     */
+    teardown: () => Promise<void>,
     signals: readonly ShutdownSignal[],
     options: ShutdownHookOptions = {},
   ): boolean {
@@ -66,13 +72,13 @@ export class ShutdownHooks {
 
     for (const signal of signals) {
       process.once(signal, () => {
-        void drain().then(
+        void teardown().then(
           () => this.#armExit(exitAfterMs, 0),
           (error: unknown) => {
             // `console.error`, not the bound `Logger`: a logger is itself a provider
             // that has just been torn down, and this is the last thing the process
             // does. Reported rather than swallowed, and the exit is still armed -
-            // a failed drain that then hangs is the worst of both.
+            // a failed teardown that then hangs is the worst of both.
             console.error('[dunx] shutdown failed', error);
             this.#armExit(exitAfterMs, 1);
           },

@@ -254,7 +254,8 @@
       "name": "@dunx/infra",
       "version": "2.0.1",
       "dependencies": {
-        "@arkv/logger": "^0.10.0",
+        "@arkv/logger": "^0.10.2",
+        "@arkv/timezones": "^0.0.2",
       },
       "devDependencies": {
         "@dunx/core": "workspace:*",
@@ -370,9 +371,11 @@
 
     "@arkv/colors": ["@arkv/colors@0.8.0", "", {}, "sha512-r4xt9tTUpeEgfOnKfVfdvP1QMgX4aMQtK1z12sGbB85hEqH6ijBiugZbKAo7HqfCaHtIXycX3diptQL+OfcimA=="],
 
-    "@arkv/logger": ["@arkv/logger@0.10.0", "", { "dependencies": { "@arkv/colors": "^0.8.0", "@arkv/shared": "^0.8.0" } }, "sha512-WoSQ4dGsVlMCi0hMmKzDRqRITGw/VhdpE47PaNNtTgSTCNdwFxONC0jXA3YTtRCYphkLd95zJAzh03KZ2AxJTg=="],
+    "@arkv/logger": ["@arkv/logger@0.10.2", "", { "dependencies": { "@arkv/colors": "^0.8.0", "@arkv/shared": "^0.8.0" } }, "sha512-VMkH1Bb1VhyHhMIyIpgsqfcEhQpqy/tvirFfiCuwPH2xfRom83WSGFCTvUdZE4OlJLGK3usmV81pKXObMnzDXg=="],
 
     "@arkv/shared": ["@arkv/shared@0.8.0", "", {}, "sha512-c9YTix/b35KTEmIl+qlyjm74SzqWEXXcvwr4rqhYPWr7ihirdSaydOFFNFQSyQYgefVOc4JEKdpb4gOhSsKcrA=="],
+
+    "@arkv/timezones": ["@arkv/timezones@0.0.2", "", {}, "sha512-ILbV8qUeaUpBDjWNzeqSab5a26Ui9xFxksMhx0pXow5jSIZGSbDsZAhd7bNTrxCs4bb7kJ1/xT2kG/2TL3MtwQ=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   handle,
   PROTOCOL_VERSION,
+  RpcError,
   serve,
   type ToolDefinition,
 } from './protocol.js';
@@ -206,7 +207,7 @@ describe('the stdio framing', () => {
     expect(JSON.parse(written[0] ?? '{}')['id']).toBe(9);
   });
 
-  it('ignores an unparseable line rather than dying', async () => {
+  it('answers an unparseable line and keeps reading the stream', async () => {
     const written: string[] = [];
     await serve(
       streamOf(
@@ -219,7 +220,95 @@ describe('the stdio framing', () => {
       INFO,
     );
 
+    expect(written.length).toBe(2);
+    const parseError = JSON.parse(written[0] ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    expect(parseError['id']).toBeNull();
+    expect((parseError['error'] as Record<string, unknown>)['code']).toBe(
+      RpcError.PARSE_ERROR,
+    );
+    // The line after the bad one is still answered.
+    expect(JSON.parse(written[1] ?? '{}')['id']).toBe(3);
+  });
+});
+
+/**
+ * MCP 2025-06-18 removes JSON-RPC batching, its first listed major change, so an
+ * array is not a request this server can answer. It used to fall through the
+ * notification check, because an array has no `id`, and the client was left
+ * waiting for a reply that was never coming.
+ *
+ * The other half is the two reserved codes that were never declared. A malformed
+ * request has to be answered, and JSON-RPC 2.0 puts `id: null` on an answer whose
+ * request had no readable id.
+ */
+describe('malformed input', () => {
+  const answer = async (request: unknown): Promise<Record<string, unknown>> => {
+    const line = await handle(request, TOOLS, INFO);
+    return JSON.parse(line ?? 'null') as Record<string, unknown>;
+  };
+
+  const errorOf = (
+    response: Record<string, unknown>,
+  ): Record<string, unknown> => response['error'] as Record<string, unknown>;
+
+  it('rejects a batch instead of dropping it', async () => {
+    const response = await answer([
+      { jsonrpc: '2.0', id: 1, method: 'ping' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+    ]);
+
+    expect(response).not.toBeNull();
+    expect(response['id']).toBeNull();
+    expect(errorOf(response)['code']).toBe(RpcError.INVALID_REQUEST);
+    expect(String(errorOf(response)['message'])).toMatch(/batch/i);
+  });
+
+  it('rejects an empty batch', async () => {
+    expect(errorOf(await answer([]))['code']).toBe(RpcError.INVALID_REQUEST);
+  });
+
+  it('rejects a request that is not an object', async () => {
+    for (const value of [42, 'ping', null, true]) {
+      const response = await answer(value);
+      expect(response['id']).toBeNull();
+      expect(errorOf(response)['code']).toBe(RpcError.INVALID_REQUEST);
+    }
+  });
+
+  it('rejects a request with no method, keeping a readable id', async () => {
+    const response = await answer({ jsonrpc: '2.0', id: 4 });
+    expect(response['id']).toBe(4);
+    expect(errorOf(response)['code']).toBe(RpcError.INVALID_REQUEST);
+  });
+
+  it('still answers nothing to a notification', async () => {
+    expect(await handle({ jsonrpc: '2.0', method: 'ping' }, TOOLS, INFO)).toBe(
+      null,
+    );
+  });
+
+  it('answers an unparseable line with a parse error', async () => {
+    const written: string[] = [];
+    await serve(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('not json\n'));
+          controller.close();
+        },
+      }),
+      (line) => {
+        written.push(line);
+      },
+      TOOLS,
+      INFO,
+    );
+
     expect(written.length).toBe(1);
-    expect(JSON.parse(written[0] ?? '{}')['id']).toBe(3);
+    const response = JSON.parse(written[0] ?? '{}') as Record<string, unknown>;
+    expect(response['id']).toBeNull();
+    expect(errorOf(response)['code']).toBe(RpcError.PARSE_ERROR);
   });
 });

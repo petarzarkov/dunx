@@ -52,6 +52,15 @@ export class SqliteConnection<
     this.raw.close();
   }
 
+  /**
+   * `SELECT 1` against the open handle. Synchronous underneath, like everything
+   * `bun:sqlite` does, and wrapped because `DbConnection` has to describe
+   * `Bun.SQL` too.
+   */
+  override async ping(): Promise<void> {
+    this.raw.query('select 1').get();
+  }
+
   override async close(): Promise<void> {
     this.closeSync();
   }

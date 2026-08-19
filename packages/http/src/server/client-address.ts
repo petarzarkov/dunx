@@ -3,8 +3,18 @@ import { AppError } from '@dunx/core';
 
 export interface AddressSource {
   readonly server: Server<unknown>;
-  readonly trustProxy: boolean;
+  readonly trustProxy: boolean | number;
 }
+
+/**
+ * How many entries at the right-hand end of `X-Forwarded-For` were written by a
+ * proxy under our control. `true` is one, which is the single-proxy deployment.
+ */
+const trustedHops = (setting: boolean | number): number => {
+  if (setting === true) return 1;
+  if (setting === false) return 0;
+  return Number.isFinite(setting) ? Math.max(0, Math.trunc(setting)) : 0;
+};
 
 // Kept off the class so `ClientAddress`'s public shape stays `of(req)`. Per
 // instance rather than module-level, because two apps in one process (every test
@@ -13,6 +23,12 @@ const sources = new WeakMap<ClientAddress, AddressSource>();
 
 /**
  * The client's address, honouring the `'trust proxy'` setting.
+ *
+ * With the setting on, the address is read from `X-Forwarded-For` counting from
+ * the right by the number of trusted hops, never from the left. A client can put
+ * anything in the header it sends; only the entries a proxy appended carry any
+ * weight, and there are exactly as many of those as there are proxies in front of
+ * this server.
  *
  * Bound and exported by `HttpFactory`'s global wrapper module, so injecting it in a
  * middleware or controller needs no registration and `app.clientIp(req)` is the same
@@ -31,12 +47,18 @@ export class ClientAddress {
       );
     }
 
-    if (source.trustProxy) {
-      const forwarded = req.headers
-        .get('x-forwarded-for')
-        ?.split(',')[0]
-        ?.trim();
-      if (forwarded) return forwarded;
+    const hops = trustedHops(source.trustProxy);
+    if (hops > 0) {
+      const entries = (req.headers.get('x-forwarded-for') ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0);
+      // Each proxy appends the peer it saw, so the last entry is the only one a
+      // single trusted proxy wrote. Reading `[0]` returned whatever the caller
+      // sent, which a caller may invent. A count longer than the header clamps
+      // to the leftmost entry rather than reaching past it.
+      const entry = entries[Math.max(0, entries.length - hops)];
+      if (entry) return entry;
     }
     return source.server.requestIP(req)?.address;
   }

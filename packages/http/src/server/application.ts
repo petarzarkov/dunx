@@ -2,6 +2,7 @@ import type { BunRequest, Server } from 'bun';
 import {
   AppError,
   Logger,
+  runtimeInfo,
   ShutdownHooks,
   type App,
   type AppOptions,
@@ -374,6 +375,9 @@ export class HttpApplication implements HttpApp {
     ].join(' and ');
 
     this.#app.get(Logger).info(`Serving ${subject}`, {
+      // The first entry this process writes, so it names what is running it.
+      // Under `bun test` `main` is the test file rather than the app entry.
+      ...runtimeInfo(),
       routes: routes.map((route) => `${route.method} ${route.path}`),
       ...(gateways.length === 0
         ? {}
@@ -391,8 +395,22 @@ export class HttpApplication implements HttpApp {
   // down, so the signal handler must land here. With a gateway the stop is forced -
   // a graceful stop waits for open connections and a WebSocket does not close on
   // its own, so it would hang. Those clients see a 1006 close.
+  /**
+   * Delegated unchanged: the drain is the container's phase, and `shutdown()`
+   * runs it. Public so an operator can start draining without committing to a
+   * shutdown, which is what a readiness probe wants during a rolling deploy.
+   */
+  drain(): Promise<void> {
+    return this.#app.drain();
+  }
+
   async shutdown(): Promise<void> {
     this.#shuttingDown ??= (async () => {
+      // While the port is still open and the routes still answer: a readiness
+      // probe has to start failing *before* the server stops, or a load balancer
+      // is still routing when the socket closes. `App.shutdown()` below calls
+      // this too and it is memoized, so nothing drains twice.
+      await this.#app.drain();
       await this.#server?.stop(this.#websocket !== undefined);
       this.#server = undefined;
       // Before the container: a relay this app owns holds two Redis sockets, and

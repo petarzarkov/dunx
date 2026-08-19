@@ -1,8 +1,10 @@
 import {
   AppError,
+  classOf,
+  markedMethods,
   type Ctor,
   type InjectionToken,
-  type ProviderEntry,
+  type MarkedMethod,
   type ResolvedModule,
 } from '@dunx/core';
 import {
@@ -42,30 +44,7 @@ export const normalizePath = (path: string): string => {
 /** Every marked method on a prototype chain, most-derived first, names deduped. */
 const eachHandler = (
   start: object | null,
-): readonly [string, HandlerMeta][] => {
-  const found: [string, HandlerMeta][] = [];
-  const seen = new Set<string>();
-
-  for (
-    let proto = start;
-    proto !== null && proto !== Object.prototype;
-    proto = Object.getPrototypeOf(proto) as object | null
-  ) {
-    for (const [name, descriptor] of Object.entries(
-      Object.getOwnPropertyDescriptors(proto),
-    )) {
-      if (name === 'constructor' || seen.has(name)) continue;
-
-      const meta = handlerMetaOf(descriptor.value);
-      if (!meta) continue;
-
-      seen.add(name);
-      found.push([name, meta]);
-    }
-  }
-
-  return found;
-};
+): readonly MarkedMethod<HandlerMeta>[] => markedMethods(start, handlerMetaOf);
 
 /**
  * Walks the prototype chain of a constructed gateway and collects every marked
@@ -81,7 +60,7 @@ export const discoverGateway = (instance: object): DiscoveredGateway => {
     name: klass.name,
     path: normalizePath(gatewayPathOf(klass)),
     handlers: eachHandler(Object.getPrototypeOf(instance) as object | null).map(
-      ([name, meta]) => ({
+      ({ name, meta }) => ({
         kind: meta.kind,
         event: meta.event,
         method: name,
@@ -97,17 +76,7 @@ export const discoverGateway = (instance: object): DiscoveredGateway => {
  * frame, so that becomes a boot error naming the method.
  */
 export const findHandlerMethod = (ctor: Ctor<unknown>): string | undefined =>
-  eachHandler(ctor.prototype as object | null)[0]?.[0];
-
-/** The class a `providers` entry would construct, or nothing for value/factory. */
-const classOf = (
-  entry: ProviderEntry,
-): { token: InjectionToken<unknown>; ctor: Ctor<unknown> } | undefined => {
-  if (typeof entry === 'function') return { token: entry, ctor: entry };
-  return entry.provider.kind === 'class'
-    ? { token: entry.token, ctor: entry.provider.ctor }
-    : undefined;
-};
+  eachHandler(ctor.prototype as object | null)[0]?.name;
 
 /**
  * Gateways are declared in `@Module({ providers })` like any other injectable and

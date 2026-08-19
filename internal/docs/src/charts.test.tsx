@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 import {
   afterAll,
   afterEach,
@@ -121,14 +121,22 @@ const layout = (): void => {
   } as unknown as typeof ResizeObserver;
 };
 
-const settle = (): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, 20));
-
+/**
+ * Waits for recharts to have drawn, rather than guessing how long it takes.
+ *
+ * This was a fixed 20 ms sleep, which passes on a quiet machine and does not on a
+ * loaded CI runner: the whole file renders real charts through a faked
+ * `ResizeObserver`, and one test timed out at the 5 s default while every
+ * assertion in it was correct. A sleep asserts against a guess; this asserts
+ * against the thing the tests then read.
+ */
 const draw = async (chart: React.JSX.Element): Promise<HTMLElement> => {
   const { container } = render(
     <MantineProvider defaultColorScheme="light">{chart}</MantineProvider>,
   );
-  await settle();
+  await waitFor(() => {
+    expect(container.querySelector('.recharts-surface')).not.toBeNull();
+  });
   return container;
 };
 
@@ -143,7 +151,10 @@ const hover = async (container: HTMLElement, y: number): Promise<Hover> => {
   if (!wrapper) throw new Error('the chart rendered no wrapper');
   fireEvent.mouseEnter(wrapper, { clientX: WIDTH / 2, clientY: y });
   fireEvent.mouseMove(wrapper, { clientX: WIDTH / 2, clientY: y });
-  await settle();
+  // The cursor is what every caller then measures, so it is what to wait for.
+  await waitFor(() => {
+    expect(container.querySelector('.recharts-tooltip-cursor')).not.toBeNull();
+  });
   const cursor = container.querySelector('.recharts-tooltip-cursor');
   return {
     tooltip:

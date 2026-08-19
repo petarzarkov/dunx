@@ -1,4 +1,5 @@
 import type { AbstractCtor, OnShutdown } from '@dunx/core';
+import { DatabaseError } from './errors.js';
 import type { Casing, Logger as QueryLogger } from 'drizzle-orm';
 import type { BackendName, DialectName } from './dialect.js';
 
@@ -70,6 +71,32 @@ export abstract class DbConnection<TDb = unknown> implements OnShutdown {
 
   /** Idempotent. */
   abstract close(): Promise<void>;
+
+  /**
+   * A round trip, for a health check. Throws if the connection is unusable.
+   *
+   * Here rather than in `@dunx/http`'s health module because a round trip is
+   * dialect-specific and this is what knows the dialect. It also keeps the
+   * `drizzle-orm` peer where it already is: an indicator building its own `sql`
+   * tag would put drizzle into the web layer. `@dunx/http`'s `QueryProbe` is
+   * satisfied by this method structurally, with no adapter, which is why neither
+   * package depends on the other.
+   *
+   * **Concrete rather than abstract, and that is a deliberate trade.** `abstract`
+   * would be the honest shape and it would break every connection an app has
+   * subclassed, for one method, in a package that versions in lockstep. So the base
+   * throws instead. The blast radius is what makes it acceptable: this is reached
+   * only by an app that opts into `DatabaseIndicator`, and it says exactly what to
+   * do rather than reporting a connection healthy without having checked.
+   */
+  async ping(): Promise<void> {
+    await Promise.resolve();
+    throw new DatabaseError(
+      `${this.constructor.name} does not implement ping(), so its health cannot be ` +
+        'checked. Override it with a round trip your dialect understands, such as ' +
+        'a `select 1`.',
+    );
+  }
 
   /**
    * Concrete, not abstract: the hook and the explicit call are one operation.
