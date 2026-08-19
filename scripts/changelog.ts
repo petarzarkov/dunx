@@ -1,5 +1,6 @@
 import {
   RELEASE_COMMIT_PREFIX,
+  releaseNotes,
   releaseSummary,
   type CommitRecord,
 } from './bump.js';
@@ -142,10 +143,14 @@ export interface ReleaseInput {
 /**
  * One release's markdown, heading included.
  *
- * The `release:` commit's own prose becomes the summary line, because that is
- * what it is: a sentence someone wrote to describe the release. A release whose
- * only commit is that one still produces a section, which is why the summary is
- * not just another entry.
+ * The `release:` commit's subject becomes the summary line and its **body** becomes
+ * the notes under it, because that is what they are: a sentence and then the prose
+ * someone wrote to describe the release. The grouped entries below are built from
+ * the other commits in the range.
+ *
+ * The body used to be dropped. That went unnoticed while releases spanned many
+ * commits, since the grouped entries carried the detail; 2.1.1 was squashed into one
+ * commit, so its range held no others and the section rendered as a single line.
  */
 export const renderRelease = ({
   version,
@@ -157,12 +162,17 @@ export const renderRelease = ({
     .map((commit) => releaseSummary(commit.message))
     .find((text): text is string => text !== null);
 
+  const notes = commits
+    .map((commit) => releaseNotes(commit.message))
+    .find((text): text is string => text !== null);
+
   const entries = commits
     .map(entryOf)
     .filter((entry): entry is Entry => entry !== null);
 
   const lines = [`## ${version} - ${date}`, ''];
   if (summary) lines.push(sanitize(summary), '');
+  if (notes) lines.push(sanitize(notes), '');
 
   for (const [key, heading] of GROUPS) {
     const group = entries.filter((entry) => entry.group === key);
@@ -172,7 +182,9 @@ export const renderRelease = ({
     lines.push('');
   }
 
-  if (!summary && entries.length === 0) lines.push('No recorded changes.', '');
+  if (!summary && !notes && entries.length === 0) {
+    lines.push('No recorded changes.', '');
+  }
 
   return lines.join('\n');
 };

@@ -183,3 +183,107 @@ describe('parseChangelog', () => {
     expect(releases[0]?.body).toBe('yes');
   });
 });
+
+/*
+ * 2.1.1 shipped with a one-line description. Its range held nothing but the release
+ * commit, so the grouped entries below the summary were empty, and the prose written
+ * in that commit's body was discarded. Both halves are asserted here.
+ */
+describe('the release commit body', () => {
+  const release = (subject: string, body: string): CommitRecord =>
+    commit('aaaaaaa', `${subject}\n\n${body}`);
+
+  it('renders under the summary', () => {
+    const section = renderRelease({
+      version: '2.1.2',
+      date: '2026-08-19',
+      commits: [
+        release(
+          'release: a short subject',
+          'The longer prose.\n\nA second paragraph.',
+        ),
+      ],
+      repoUrl: REPO,
+    });
+
+    expect(section).toContain('## 2.1.2 - 2026-08-19');
+    expect(section).toContain('a short subject');
+    expect(section).toContain('The longer prose.');
+    expect(section).toContain('A second paragraph.');
+  });
+
+  it('carries a release whose range holds only its own commit', () => {
+    const section = renderRelease({
+      version: '2.1.2',
+      date: '2026-08-19',
+      commits: [
+        release('release(patch): one commit', 'What it changed, in prose.'),
+      ],
+      repoUrl: REPO,
+    });
+
+    // The failure this replaces: a section with the subject and nothing else.
+    expect(section).toContain('What it changed, in prose.');
+    expect(section).not.toContain('No recorded changes.');
+  });
+
+  it('still groups the other commits when there are some', () => {
+    const section = renderRelease({
+      version: '2.1.2',
+      date: '2026-08-19',
+      commits: [
+        release('release: mixed', 'Prose about the release.'),
+        commit('bbbbbbb', 'feat(http): a new thing'),
+      ],
+      repoUrl: REPO,
+    });
+
+    expect(section).toContain('Prose about the release.');
+    expect(section).toContain('### Features');
+    expect(section).toContain('a new thing');
+    // Prose first, mechanical list after.
+    expect(section.indexOf('Prose about')).toBeLessThan(
+      section.indexOf('### Features'),
+    );
+  });
+
+  it('escapes the body the way it escapes the summary', () => {
+    const section = renderRelease({
+      version: '2.1.2',
+      date: '2026-08-19',
+      commits: [
+        release('release: escaping', 'A NoPromise<T> and an \u2014 em dash.'),
+      ],
+      repoUrl: REPO,
+    });
+
+    expect(section).toContain('NoPromise&lt;T>');
+    expect(section).not.toContain('\u2014');
+  });
+
+  it('is absent for a subject with no body, and for a plain commit', () => {
+    const bare = renderRelease({
+      version: '2.1.2',
+      date: '2026-08-19',
+      commits: [commit('aaaaaaa', 'release: subject only')],
+      repoUrl: REPO,
+    });
+
+    expect(bare).toContain('subject only');
+    expect(bare.trim().endsWith('subject only')).toBe(true);
+  });
+
+  /* A body on an ordinary commit is not release prose and must not be lifted. */
+  it('ignores the body of a commit that is not a release trigger', () => {
+    const section = renderRelease({
+      version: '2.1.2',
+      date: '2026-08-19',
+      commits: [
+        commit('bbbbbbb', 'feat(http): a thing\n\nSome implementation notes.'),
+      ],
+      repoUrl: REPO,
+    });
+
+    expect(section).not.toContain('Some implementation notes.');
+  });
+});

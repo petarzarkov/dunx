@@ -85,6 +85,31 @@ export const releaseSummary = (message: string): string | null => {
   return subject.slice(subject.indexOf(':') + 1).trim();
 };
 
+/**
+ * The prose under a `release:` subject, which is the release note someone sat down
+ * and wrote. `null` when the commit is not a release trigger or carries no body.
+ *
+ * The subject alone was the whole summary until 2.1.1, whose range held nothing but
+ * the release commit: the section came out as one line, because the grouped entries
+ * below it are built from the *other* commits in the range and there were none. A
+ * release squashed into a single commit is a normal way to work, so the body it
+ * carries is the only place its notes can come from.
+ *
+ * Avoid `#` and `##` headings in that body. They will render, but `##` is the level
+ * the release headings themselves use, so a reader scanning the file sees them at
+ * the same weight. `###` and below are fine.
+ */
+export const releaseNotes = (message: string): string | null => {
+  const subject = message.split('\n', 1)[0]?.trim() ?? '';
+  if (!RELEASE_SUBJECT.test(subject)) return null;
+
+  const at = message.indexOf('\n');
+  if (at === -1) return null;
+
+  const body = message.slice(at + 1).trim();
+  return body === '' ? null : body;
+};
+
 export const parseReleaseTrigger = (message: string): ReleaseTrigger => {
   const subject = message.split('\n', 1)[0]?.trim() ?? '';
   const match = RELEASE_SUBJECT.exec(subject);
