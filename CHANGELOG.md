@@ -8,6 +8,42 @@ release covers all of them.
 
 rename the drain hook, and document what 2.1.0 shipped
 
+**`OnDrain` is `OnBeforeShutdown`.** The name was already taken. `@dunx/http` has
+exported `@OnDrain()` as a **websocket handler** decorator since long before this
+lifecycle phase existed, where it means "backpressure relieved, safe to resume
+sending". Shipping a second, unrelated `OnDrain` in `@dunx/core` left one framework
+with two of them, and `import { OnDrain } from '@dunx/http'` gets the decorator, so
+`implements OnDrain` from that import is a confusing error rather than a hint.
+
+The newer name moves, being hours old against a decorator that is not. Everything
+else keeps the word, since none of it collides: `App.drain()`, `drainDelayMs`,
+`Readiness.draining`. The interface, its method and its guard are what changed.
+
+It also lines up with what it replaces. Nest's `beforeApplicationShutdown` runs
+before `onApplicationShutdown`, which is this split exactly, and the migration table
+in the lifecycle guide now says so rather than mapping it onto `OnShutdown`.
+
+Technically breaking, released as a patch. 2.1.0 is hours old, the phase it renames
+was new in it, and a major for a name correction is worse churn than the correction.
+
+**A GitHub release is created again.** 2.1.0 produced a `v2.1.0` tag and no release:
+Actions does not put `GITHUB_TOKEN` in the environment on its own and the release
+step's `env:` named only `FORCE_PUBLISH`. The tag hid it, because the tag push falls
+back to the credential `actions/checkout` persists, so half the feature worked. The
+skip is now loud under `GITHUB_ACTIONS` and quiet locally, since reporting both the
+same mild way is what let it through.
+
+**The guide covers what 2.1.0 added.** Scheduling and health checks were documented
+in their package READMEs and nowhere in the tour, so a reader following it never
+learned they exist. Two new pages, and the lifecycle guide gains the shutdown phase
+it was missing.
+
+That needed renumbering rather than appending: sections are ordered by the numeric
+prefix, and appending split Infrastructure around Going live, which
+`site.test.tsx` catches as non-contiguous. Scheduling is 16 and health checks is 20,
+so authentication, files-and-images, deployment and agent-tooling shift up one.
+Slugs strip the prefix, so no URL changes.
+
 ## 2.1.0 - 2026-08-19
 
 health checks, a Bun.cron scheduler, and graceful draining
