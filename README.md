@@ -62,12 +62,19 @@ await app.listen(3000);
 
 That is the whole programming model. Note what is **not** there: no `@Injectable()`,
 no `@Inject()`, no `reflect-metadata` import, no `experimentalDecorators` in your
-tsconfig, and no `Response.json()` to remember. One line in `bunfig.toml` turns the
+tsconfig, and no `Response.json()` to remember. Two lines in `bunfig.toml` turn the
 constructor types into wiring:
 
 ```toml
 preload = ["@dunx/transform/preload"]
+
+[test]
+preload = ["@dunx/transform/preload"]
 ```
+
+Bun's test runner reads its own `preload`, so the `[test]` entry is what keeps
+`bun test` working. Miss it and the app runs while the suite fails at the first
+provider with a constructor parameter.
 
 ## Three things that are different
 
@@ -85,6 +92,10 @@ frames from where the mistake was.
 **No `forwardRef`.** The dependency record is a thunk, evaluated at resolution rather
 than at class-definition time, so a circular import resolves on its own. Nothing to
 annotate, nothing to remember.
+
+One thing to add rather than delete: **every relative import ends in `.js`**, because
+`moduleResolution: nodenext` is what the scaffold sets. An extensionless specifier is a
+compile error, not a runtime surprise.
 
 ## Benchmarks
 
@@ -113,8 +124,8 @@ Reproduce it with `bun run --filter '@dunx/bench' start`; the methodology is in
 
 ## Documentation
 
-- **[The guide](https://petarzarkov.github.io/dunx)** - eighteen pages, introduction
-  through deployment
+- **[The guide](https://petarzarkov.github.io/dunx)** - twenty-one pages,
+  introduction through agent tooling
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and
   what does not
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - what was measured, what was rejected,

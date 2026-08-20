@@ -53,8 +53,8 @@ export interface StandardSchemaV1<In = unknown, Out = In> {
 ```
 
 That interface is **restated** by `@dunx/http` rather than imported. The spec is an interface and nothing else: `@standard-schema/spec` ships
-declarations with no runtime, so restating it costs one file and keeps the package
-at zero dependencies. zod 4, Valibot and ArkType already satisfy the shape, so all
+declarations with no runtime, so restating it costs one file and adds no dependency
+to the package. zod 4, Valibot and ArkType already satisfy the shape, so all
 three drop straight into a route's options with nothing adapting anything:
 
 ```ts

@@ -3,8 +3,71 @@
 A gap analysis between what a production NestJS application uses and what dunx
 provides, written from the migrating application's point of view.
 
-Status legend: **planned** = designed in ARCHITECTURE.md, unbuilt ·
-**undesigned** = no decision recorded anywhere.
+Status legend: **undesigned** = no decision recorded anywhere · **out of scope** =
+refused, with the reasoning below.
+
+## Read this part first: four things that fail at boot
+
+Everything else on this page is a mapping you can look up when you reach it. These
+four are what a migrating app hits in the first hour, and each one stops the process
+rather than degrading.
+
+**1. The `bunfig.toml` preload is not optional.**
+
+```toml
+preload = ["@dunx/transform/preload"]
+
+[test]
+preload = ["@dunx/transform/preload"]
+```
+
+Constructor injection needs no decorator because a load-time plugin records each
+class's parameter types instead. Without the plugin a class with constructor
+parameters has no record, and the container compares that against
+`Function.prototype.length` and fails at boot naming the class.
+
+- **Both entries are needed.** Bun's test runner reads its own `preload`, so missing
+  the second gives you a working app and a failing suite.
+- **It is a runtime dependency.** A `--production` install, or a `.dockerignore` that
+  drops `bunfig.toml`, breaks the deploy rather than the build.
+
+Deploying a **built** tree changes the answer. The plugin's filter is `/\.tsx?$/`, so
+it never sees emitted JavaScript and no preload setting makes it. Record the
+dependencies at build time instead, with `Bun.build({ plugins: [depsPlugin] })`. The
+boot error tells you which of the two situations you are in.
+
+**2. A constructor parameter must name something that exists at runtime.**
+
+An interface, a type alias, a primitive, a union, a class type parameter or a value
+imported with `import type` all erase, so there is no token to resolve.
+`emitDecoratorMetadata` degrades those to `Object` and hands you `undefined` three
+frames from the mistake. dunx fails at boot naming the parameter and its position.
+
+Replace the type with an abstract class, or bind it with `token()` and declare the
+parameter as that token. Every `*Options` in the framework is a class for this reason.
+The error tells the `import type` case apart from the others, because that one has a
+one-line fix.
+
+**3. A module is decorated or configured, never both.**
+
+A scope is keyed on the module **reference**, and `forRoot()` returns a fresh object
+on every call. So `@Module` on a class that also has a `static forRoot()` registers
+its contents twice, and two importers each calling `forRoot()` build two scopes with
+two instances of everything in them. Take one:
+
+| The module          | Spelling                                                |
+| ------------------- | ------------------------------------------------------- |
+| Has nothing to vary | `@Module({ ... })` on the class                         |
+| Takes options       | `static forRoot(opts): DynamicModule`, and no decorator |
+
+If two feature modules need the same binding, give it its own module with
+`global: true` rather than calling `forRoot()` twice.
+
+**4. Every relative import ends in `.js`.**
+
+Not `.ts`, not extensionless. `moduleResolution: nodenext` makes it a compile error
+rather than a consumer's problem, which is the good outcome, but it is the change with
+the most occurrences in a migrating codebase.
 
 ## Core DI
 
@@ -58,9 +121,9 @@ Status legend: **planned** = designed in ARCHITECTURE.md, unbuilt ·
 | `@nestjs/serve-static`                 | `StaticFiles` in `@dunx/http`                                    | done         |
 | `@bull-board/*`                        | bull-board mounted by `@dunx/dashboard`                          | done         |
 | `@nestjs/cache-manager`                | `@dunx/infra/redis`                                              | partial      |
-| `@nestjs/schedule` (`@Cron`)           | bullmq repeatable jobs                                           | undesigned   |
+| `@nestjs/schedule` (`@Cron`)           | [`@dunx/infra/schedule`](./guide/16-scheduling.md)               | done         |
 | `@nestjs/throttler`                    | middleware                                                       | undesigned   |
-| `@nestjs/terminus`                     | -                                                                | undesigned   |
+| `@nestjs/terminus`                     | [`HealthModule` in `@dunx/http`](./guide/20-health-checks.md)    | done         |
 | `@nestjs/platform-express` (`app.use`) | -                                                                | out of scope |
 
 ## The reference application
@@ -202,27 +265,38 @@ to collate across files.
 
 ### Custom param decorators
 
-`createParamDecorator` is a Nest extensibility point with **no successor
-designed**. The reference app has 14 usages across `@CurrentUser` and
-`@UuidParam`.
+`createParamDecorator` has no successor and will not get one: TC39 decorators have
+no parameter decorators, so there is nowhere for it to come from. The reference app
+has 14 usages across `@CurrentUser` and `@UuidParam`, and the two halves of that
+migrate differently.
 
-`@Body`/`@Query`/`@Param` are already answered - schemas move onto the route
-decorator (architecture/dependency-injection.md, "Params without parameter decorators"). Custom ones
-are not, because they read state a guard put there.
+`@UuidParam` and its relatives are **validation**, and are answered: the schema moves
+onto the route decorator, where it also coerces and documents. See
+[Validation](./guide/06-validation.md).
 
-The natural shape is that middleware writes onto a typed per-request context the
-handler receives:
+`@CurrentUser` and its relatives read **state a guard put there**, and the shape that
+replaced them is an injected service over `AsyncLocalStorage`. `@dunx/auth` ships one:
 
 ```ts
-@Get('/me', { auth: true })
-getMe(req: BunRequest, ctx: Ctx<{ user: User }>) {
-  return this.#users.findById(ctx.user.id);
+export class ProfileController {
+  constructor(private readonly auth: AuthContext) {}
+
+  @Get('/me')
+  me() {
+    return this.users.findById(this.auth.require().id);
+  }
 }
 ```
 
-This still needs a decision, and it shares a signature with validated input, so it
-belongs in ARCHITECTURE.md before any of it is written. Today the workaround is
-what a guard already has: put the value on `req` and read it in the handler.
+`current()` returns the caller or `undefined`; `require()` returns the caller or
+throws a 401. `SessionGuard` is what calls `run()` to establish it, and a job or a
+socket handler that resolved a session itself can call `run()` too.
+
+The gain over a parameter decorator is that it reaches **anything the handler calls,
+however deep**, rather than only the handler's own signature. The cost is that the
+caller is not in the method signature, so it does not appear in the handler's type.
+An app wanting its own `@CurrentUser` writes a one-method service over `AuthContext`
+and injects that.
 
 ### `@Optional()`
 
@@ -233,24 +307,34 @@ implementation.
 
 ## Out of scope
 
-**Express interop.** `app.use(expressMiddleware)`, `app.set('trust proxy')`, and
-mounting express-shaped handlers (Bull Board, ServeStatic) have no equivalent.
-`Bun.serve` is not a middleware stack, and building an express compatibility
-layer would contradict "dunx should stay a DI + structure framework that happens
-to serve HTTP." Applications depending on mounted express apps need those
-replaced, not adapted.
+**Express interop.** `app.use(expressMiddleware)` and mounting express-shaped
+handlers have no equivalent. Two of the things usually reached for through it do ship:
 
-**socket.io.** Bun has native WebSocket support with a different shape. A
-`@dunx/ws` is plausible; a socket.io-protocol-compatible one is not, and the
-`@socket.io/redis-adapter` multi-node story would have to be rebuilt.
+- `app.set('trust proxy', n)` is the one key `AppSettings` declares. It counts hops
+  from the right-hand end of `X-Forwarded-For`.
+- bull-board is mounted by `@dunx/dashboard`, not by an express adapter.
+  `Bun.serve` is not a middleware stack, and building an express compatibility
+  layer would contradict "dunx should stay a DI + structure framework that happens
+  to serve HTTP." Applications depending on mounted express apps need those
+  replaced, not adapted.
+
+**The socket.io protocol.** Gateways are neither out of scope nor a separate
+package: `@Gateway` ships in `@dunx/http` on Bun's native WebSocket support, and
+multi-node fan-out ships as a relay.
+
+What is out of scope is **protocol compatibility**. A socket.io client cannot talk to
+a dunx gateway, so anything depending on the socket.io wire format, its
+acknowledgement semantics or `@socket.io/redis-adapter` needs replacing rather than
+adapting. See [WebSockets](./guide/09-websockets.md).
 
 Check both before planning a migration. They gate whether an app can move today.
 
 ## The acceptance test
 
-`dunx-template` is a running parity app: config module, async database factory,
+The parity target is a running app with a config module, an async database factory,
 CRUD controllers, an auth guard reading `@Roles`, OpenAPI, queues and a health
-endpoint.
+endpoint. [`examples/full`](https://github.com/petarzarkov/dunx/tree/main/examples/full)
+is the version of that which CI keeps alive.
 
 It exercises the question module scoping introduced, which is which
 cross-cutting guards were only ever cross-cutting because Nest offered nowhere

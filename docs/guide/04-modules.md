@@ -57,9 +57,9 @@ the same way; the split exists so an HTTP adapter can ask which instances to sca
 The only behavioural consequence: a class in `controllers` that declares no
 routes is a boot error telling you to move it to `providers`.
 
-An entry in either list is a bare class, which binds it to itself, or a
-`Registration` from `provide()`. See [Providers](./03-providers.md) for the shapes
-of the latter.
+A `controllers` entry is a bare class. A `providers` entry is a bare class, which
+binds it to itself, or a `Registration` from `provide()` - `providers` is the only
+list whose type admits one. See [Providers](./03-providers.md) for the shapes.
 
 ## How a token resolves
 
@@ -68,8 +68,14 @@ For a provider declared by module `M`, asking for a token:
 1. `M`'s own `providers` and `controllers`.
 2. The `exports` of the modules `M` imports, transitively through re-exports.
 3. The global scope - the `exports` of every module marked `global: true`.
-4. If the token is a **class** nothing visible binds, it self-binds into `M`'s scope.
+4. If the token is a **class** and **no module in the graph declares it**, it
+   self-binds into `M`'s scope.
 5. Otherwise it is a boot error, and the message names the fix.
+
+Step 4 tests the whole graph, not what `M` can see. A class some other module
+declares but does not export to `M` is a boot error naming that module. Self-binding
+it instead would hand `M` a second instance of a provider somebody already
+configured, which is the bug the check exists to catch.
 
 **Local shadows imported.** If `M` declares a token an import also exports, `M`'s
 binding wins. This per-module rebinding is why the scope boundary exists: a
@@ -78,8 +84,8 @@ one token.
 
 Visibility is flattened **once, at boot**, into one map per module. An import chain is
 never walked per lookup, so resolution stays the single `Map.get` it was before scopes
-existed, and the whole graph for `examples/full` - 16 modules, every feature - builds
-in a median 1.7 ms.
+existed, and the whole graph for `examples/full`, which is every feature the
+framework has, builds in a median 1.7 ms.
 
 ## `exports` is the public surface
 
@@ -134,11 +140,15 @@ Global is the weakest source: an import beats it, and a local declaration beats 
 answers it from the whole graph, which it has at boot:
 
 ```
-Cannot resolve UsersRepository for ReportsService in module "ReportsModule".
-"UsersModule" declares it and "ReportsModule" imports that module, but it does not
-export UsersRepository. Add UsersRepository to that module's exports, or move the
-provider into "ReportsModule".
+Cannot resolve UsersRepository in module "ReportsModule". "UsersModule" declares it
+and "ReportsModule" imports that module, but it does not export UsersRepository. Add
+UsersRepository to that module's exports, or move the provider into "ReportsModule".
 ```
+
+A dependency declared through `token()` gets one clause more, naming the class that
+asked: `Cannot resolve Dsn for DataService in module "DataModule"`. A class token
+does not, because the container re-raises the original error for those rather than
+rewriting it.
 
 A token declared by a module you do **not** import says so instead, and names the
 `imports` line to add. A token nothing declares says that, rather than blaming the
@@ -394,8 +404,14 @@ some other module's export passes `imports: [ThatModule]`.
 
 So why does the name exist at all? Because reading options off `ConfigService` is
 the one thing a zero-argument options object cannot do, and `forRootAsync` is the
-conventional name for that. It ships on `LoggerModule`, `ImagesModule`,
-`RedisModule`, `FilesModule` and `DbModule`:
+conventional name for that.
+
+Every configured module in the framework has one:
+
+- `@dunx/infra`: `LoggerModule`, `DbModule`, `RedisModule`, `QueueModule`,
+  `ScheduleModule`, `FilesModule`, `ImagesModule`
+- `@dunx/http`: `HealthModule`, `HttpClientModule`, `StaticModule`
+- `AuthModule`, `OpenApiModule`, `DashboardModule`
 
 ```ts
 @Module({
@@ -536,9 +552,14 @@ before any constructor runs.
 
 `AppFactory.create(root)` takes a module class or a `DynamicModule`. So does
 `HttpFactory.create(root)`, which wraps your root in an internal module of its own
-in order to bind `PubSub` and, unless you turned it off,
+in order to bind `PubSub`, `ClientAddress` and, unless you turned it off,
 `RequestLoggingMiddleware`. That wrapper is why those are injectable in an
 application that imported nothing.
+
+`ClientAddress` is bound rather than left to self-bind because an unbound class
+self-binds into whichever scope asks first: `listen()` would attach the live server
+to one instance while a second module's middleware injected another, and
+`app.clientIp(req)` would throw on an instance that never got a server.
 
 The wrapper is invisible to the boundary. Global middleware, `@UseGuards` classes
 and an error filter all resolve as **your** root sees them, so listing a guard in

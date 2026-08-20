@@ -20,9 +20,9 @@ Node v24.18.0 where a comparison needed it. Numbers are from that machine.
 | Record                                                 | Verdict                | Owner                     | Blocked on                            |
 | ------------------------------------------------------ | ---------------------- | ------------------------- | ------------------------------------- |
 | [releases-subpages](./releases-subpages.md)            | build                  | `internal/docs`           | nothing                               |
-| [scheduler](./scheduler.md)                            | build                  | `@dunx/infra/schedule`    | discovery walker moving to core       |
-| [health](./health.md)                                  | build                  | `@dunx/http`              | `OnDrain` in `@dunx/core`             |
-| [throttle](./throttle.md)                              | build                  | `@dunx/http`              | `ClientAddress` hop counting          |
+| [scheduler](./scheduler.md)                            | **delivered**          | `@dunx/infra/schedule`    | nothing, shipped                      |
+| [health](./health.md)                                  | **delivered**          | `@dunx/http`              | nothing, shipped as `OnBeforeShutdown` |
+| [throttle](./throttle.md)                              | build                  | `@dunx/http`              | nothing, its blocker shipped          |
 | [arkv-logger-context](./arkv-logger-context.md)        | build, additive        | `@arkv/logger` 0.11.0     | nothing                               |
 | [arkv-logger-transports](./arkv-logger-transports.md)  | build, additive        | `@arkv/logger` 0.11.0     | nothing                               |
 | [arkv-logger-serialization](./arkv-logger-serialization.md) | build the fused walk | `@arkv/logger`       | the equivalence gate                  |
@@ -37,7 +37,8 @@ verified facts alone, in the format
 [architecture/constraints.md](../architecture/constraints.md) uses, ready to be
 appended there once the record is reviewed.
 
-All twelve records are in. The serialization one carries the logger performance
+All twelve records are in. Two of the six defects below have since been fixed and
+two of the verdicts have shipped; the rows say which. The serialization one carries the logger performance
 question, and it lands where
 [arkv-logger-transports](./arkv-logger-transports.md) pointed: the write is 4 to 9
 percent of a log call and entry assembly plus sanitization is the rest. A fused
@@ -48,26 +49,27 @@ corpus payloads byte-identical.
 
 These are not features and do not wait on a roadmap decision.
 
-1. **`ClientAddress` trusts the wrong end of `X-Forwarded-For`.**
-   `packages/http/src/server/client-address.ts:35-39` takes `.split(',')[0]`,
-   the leftmost entry, which is the one a client appends. Under
-   `trustProxy: true` a caller sets its own address, so logged client IPs are
-   spoofable and any IP-keyed limiter is bypassed by rotating one header. Under
-   `trustProxy: false` the whole fleet shares the proxy's address. The fix is a
-   hop count from the right, in `ClientAddress`. See
-   [throttle](./throttle.md), which found it and cannot ship without it.
-2. **`@dunx/mcp` drops JSON-RPC batches.** `tools/mcp/src/protocol.ts:65` opens
-   with `if (request.id === undefined) return null`, and a batch is an array
-   with no `id`, so it is answered as a notification. The same file declares
-   three of the five reserved error codes. See [rpc](./rpc.md).
+1. ~~**`ClientAddress` trusts the wrong end of `X-Forwarded-For`.**~~ **Fixed.**
+   It took `.split(',')[0]`, the leftmost entry, which is the one a client
+   appends, so a caller could set its own address and bypass any IP-keyed limiter
+   by rotating one header. `ClientAddress` now counts trusted hops from the right,
+   `true` meaning one proxy, and clamps a count longer than the header to the
+   leftmost entry. The setting is `app.set('trust proxy', n)`; the record below
+   still spells it `trustProxy`. This unblocked [throttle](./throttle.md), which
+   found it.
+2. ~~**`@dunx/mcp` drops JSON-RPC batches.**~~ **Fixed.** A batch is an array with
+   no `id`, so it fell through to the notification check and was answered with
+   silence while the client held an outstanding id. `protocol.ts` now has a
+   `rejection()` step ahead of that check which answers an array with `-32600`
+   and a message naming the protocol revision. See [rpc](./rpc.md).
 
-   **Correction to that record.** [rpc](./rpc.md) reads the absence of batch
-   handling as the defect, which would make implementing it the fix. MCP
-   **removed** JSON-RPC batching in 2025-06-18, listed first among that
-   revision's major changes, and `PROTOCOL_VERSION` in the same file is
-   `2025-06-18`. So a batch is not a request this server can answer and the fix
-   is to reject it with `-32600`. The defect is the silence, not the missing
-   feature: a client holding an outstanding id waits forever on it.
+   **Correction to that record, and it is what the fix followed.**
+   [rpc](./rpc.md) reads the absence of batch handling as the defect, which would
+   have made implementing it the fix. MCP **removed** JSON-RPC batching in
+   2025-06-18, listed first among that revision's major changes, and
+   `PROTOCOL_VERSION` in the same file is `2025-06-18`. A batch is therefore not a
+   request this server can answer, so the defect was the silence rather than the
+   missing feature.
 3. ~~**`@arkv/logger` loses buffered entries on SIGTERM.**~~ **Not a defect.**
    [arkv-logger-transports](./arkv-logger-transports.md) reports that a batched
    entry is lost on SIGTERM unless some handler is installed and that

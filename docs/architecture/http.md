@@ -177,8 +177,9 @@ Default: nothing. With no relay configured `PubSub` is byte-for-byte the code it
 before - one `server.publish` call and no branch that costs anything measurable.
 
 The Redis-backed implementation, `RedisRelay`, uses **`Bun.RedisClient` directly**.
-It is a Bun global, so this adds **zero dependencies** to `@dunx/http`, which still
-depends only on `@dunx/core`.
+It is a Bun global, so this adds **no dependency** to `@dunx/http`. The package
+carries one, `@arkv/shared`, for the outbound client behind `./client`; the relay path
+does not touch it.
 
 **The rejected alternative was putting it in `@dunx/infra/redis`**, where the
 connection handling, retry policy and error classification already exist. It was

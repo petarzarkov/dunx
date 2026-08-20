@@ -191,16 +191,81 @@ url and reapplies the options, so every one of those reconstructions comes out t
 same as the first. Nothing to configure; it is how `QueueConnection` builds a
 client.
 
-## Publish side and worker side are different processes
+## Publishing and consuming are separate decisions
 
-`QueueModule.forRoot()` binds three tokens: `QueueOptions`, `QueueConnection` and
-`JobPublisher`. That is the **publish** side, which is all a web process needs.
+`QueueModule.forRoot()` exports three tokens: `QueueOptions`, `QueueConnection` and
+`JobPublisher`. That is the **publish** side, which is all a web process needs. It
+also binds a fourth provider it does not export, `QueueRunner`, which is what opens
+workers when you ask it to.
 
-**Importing it opens no worker and consumes nothing.** A web process that
-publishes never consumes by accident. Consuming is a deliberate second step:
-either `WorkerFactory.create` in its own process, or `WorkerFactory.attach`
-inside a container that already exists. Either way, the two sides agree on
-exactly one thing: the module.
+**By default it consumes nothing.** `consume` is `false`, so a web process that
+publishes never starts a worker by accident. There are three ways to consume, and
+they agree on exactly one thing: the module.
+
+| How                                      | Where the workers live                       |
+| ---------------------------------------- | -------------------------------------------- |
+| `QueueModule.forRoot({ consume: true })` | the container that imported the module       |
+| `WorkerFactory.create(root)`             | a process of its own, with its own container |
+| `WorkerFactory.attach(app, root)`        | a container somebody else already built      |
+
+`consume: true` is the one to reach for first. `QueueRunner` implements `OnInit` and
+`OnShutdown`, so the workers start with the container and stop with it, before the
+connections the handlers use are closed. That ordering is why it lives in a module
+rather than in an entrypoint: nothing an app writes by hand can guarantee teardown
+runs in the right order.
+
+```ts
+@Module({
+  imports: [QueueModule.forRoot({ url, consume: true, processor })],
+  providers: [ThumbnailJobs],
+})
+export class JobsModule {}
+```
+
+A broker that is down degrades rather than failing boot: the runner logs at `error`
+that the process is serving but consuming nothing. A sandbox child sets
+`DUNX_JOB_WORKER`, and the runner refuses to open workers when it sees it, so a
+processor file may import a `consume: true` module without forking forever.
+
+### Isolation is per handler, and per queue in effect
+
+`@JobHandler({ queue, name, background })` marks one handler. `background: true`
+makes bullmq fork the file named by `QueueModule.forRoot({ processor })` instead of
+calling a function in this process, which is what keeps a CPU-bound handler off the
+loop serving requests.
+
+Two things about it are easy to get wrong.
+
+- **`processor` must be an absolute path.** bullmq resolves it in the child. A
+  `background` queue with no `processor` configured is a boot error at `start()`.
+- **`background` is declared per handler but takes effect per queue.** bullmq opens
+  one `Worker` per queue and takes either a file path or a function, so one marked
+  handler sandboxes every handler on that queue.
+
+`isolation` is **not** a `@JobHandler` option. It is
+`QueueModule.forRoot({ isolation })`, and it defaults to `'process'`. Keep it there:
+
+- A fork is a fresh Bun process. It reads `bunfig.toml`, so the transform preload
+  runs and constructor injection works in the child.
+- `'thread'` enters through bullmq's own prebuilt worker entry, where a preload
+  cannot match a `.ts` file. The first provider with a constructor parameter then
+  fails at boot.
+
+`'thread'` is usable only against a tree whose dependencies were recorded at build
+time.
+
+The file itself default-exports the processor's `handle`:
+
+```ts
+// src/jobs.processor.ts - the file bullmq forks
+import { JobProcessor } from '@dunx/infra/queue';
+import { JobsProcessorModule } from './jobs.processor.module.js';
+
+export default new JobProcessor(JobsProcessorModule).handle;
+```
+
+`handle` is an arrow property rather than a method, because bullmq calls the export
+bare. The child builds its container on the first job and reuses it.
 
 ### Publishing
 
@@ -349,12 +414,14 @@ the container and its `shutdown()` runs `consumer.stop()` before
 
 Which to reach for:
 
+- **`consume: true`** when one process is the whole deployment, which is most
+  deployments. The container owns start and stop ordering, and a `background`
+  handler still gets its own process per burst.
 - **A separate worker process** when the two halves should scale, fail and deploy
-  independently, or when a slow handler must not compete with request latency.
-  `examples/full` does this, and it is why that example has a `bun run worker`.
-- **`attach`** when one process is the whole deployment: a small service, a
-  single container, or a job whose handler is cheap enough that the isolation is
-  not worth a second process.
+  independently.
+- **`attach`** when a container already exists and you are adding consumption to it
+  after the fact. It is the only one of the three where you have to sequence
+  teardown yourself.
 
 ## `jobTimeoutMs`
 
@@ -502,5 +569,6 @@ line, fixed; `CLIENT SETNAME` runs and the worker appears..
 
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
 - [Logging](./13-logging.md), which the worker uses for job completion and failure
-- `examples/full`, whose `src/worker.ts` is the worked example this page is drawn
-  from
+- `examples/full`, whose `src/jobs/` is the worked example this page is drawn from.
+  It sets `consume: true` and ships a `jobs.processor.ts`, so it spawns no worker
+  process of its own

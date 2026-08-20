@@ -475,9 +475,14 @@ early check at `create()` is already complete.
 
 `set` is typed against the `AppSettings` interface rather than being a string bag,
 so a typo is a compile error rather than a setting that silently never applies.
-There is one key today: `'trust proxy'`, which makes `ClientAddress` read
-`X-Forwarded-For` instead of the socket. Only turn it on behind a proxy that
-rewrites the header, because a direct client can send whatever it likes.
+There is one key today: `'trust proxy'`, typed `boolean | number`.
+
+- The value is how many proxies sit in front of the server, `true` meaning one.
+- The address is taken that many entries from the **right-hand** end of
+  `X-Forwarded-For`. A direct client can put anything in the header it sends, so only
+  the entries a proxy appended carry weight.
+- A count higher than the number of proxies you run hands the caller its own choice
+  of address.
 
 ## Middleware, guards and metadata
 

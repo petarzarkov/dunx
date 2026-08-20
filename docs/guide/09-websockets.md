@@ -127,6 +127,8 @@ a socket yet, so the thing to run is a plain function call in `@OnUpgrade`.
 export interface SocketData<T = unknown> {
   readonly path: string;
   readonly context: T;
+  /** Minted per connection at the upgrade, with `crypto.randomUUID()`. */
+  readonly id: string;
 }
 
 export type Socket<T = unknown> = ServerWebSocket<SocketData<T>>;
@@ -292,9 +294,10 @@ const app = await HttpFactory.create(AppModule, {
 });
 ```
 
-`RedisRelay` is built on `Bun.RedisClient`, a Bun global, so it costs
-`@dunx/http` **zero dependencies**: the package still depends only on
-`@dunx/core`. With no `url` it resolves the same chain Bun's client does,
+`RedisRelay` is built on `Bun.RedisClient`, a Bun global, so the relay itself costs
+`@dunx/http` **no new dependency**. The package's one runtime dependency is
+`@arkv/shared`, which the outbound HTTP client behind `./client` uses; nothing in the
+gateway or the relay path reaches for it. With no `url` it resolves the same chain Bun's client does,
 `$VALKEY_URL`, then `$REDIS_URL`, then `redis://localhost:6379`.
 
 A URL with an unrecognised scheme is rejected at construction. Bun accepts any

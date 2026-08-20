@@ -129,23 +129,43 @@ the image.
 
 ## Health checks
 
-Give the orchestrator a route that answers without touching anything that can be
-slow:
+`HealthModule` from `@dunx/http` serves `/api/health/live` and `/api/health/ready`.
+Do not hand-roll a controller for this; the part worth having is the drain, and a
+controller cannot express it.
 
 ```ts
-@Controller('health')
-export class HealthController {
-  @Get('/')
-  live(): { status: string } {
-    return { status: 'ok' };
-  }
-}
+HealthModule.forRootAsync({
+  useFactory: (db: DbConnection, redis: RedisConnection) => ({
+    readiness: [
+      new DatabaseIndicator(db),
+      new RedisIndicator(redis, { critical: false }),
+    ],
+    drainDelayMs: 15_000,
+  }),
+  inject: [DbConnection, RedisConnection],
+});
 ```
 
-Keep readiness separate from liveness if you have dependencies that can degrade.
-`examples/full` has a health controller that reports each area as live or
-degraded. Copy that shape: a cache being down should not restart the process, and
-a liveness probe that checks Redis will do exactly that.
+Two settings decide whether a rollout drops requests.
+
+**`critical`** is what separates readiness from liveness. A `critical: false`
+indicator reports `degraded` without failing the probe, so an absent Redis degrades a
+route rather than restarting the process. Be sparing with `critical: true`: it should
+name only what makes the process useless, which in most services is the database
+alone. A liveness probe that checks Redis will restart a healthy process on a cache
+blip.
+
+**`drainDelayMs`** holds readiness failing before the port closes.
+
+`Readiness` implements `OnBeforeShutdown`, which runs while the server is still
+accepting. The probe can therefore answer "not ready" on an open socket for as long as
+the load balancer needs to notice. An `onShutdown` hook runs after the server has
+stopped, so a probe answering from there answers on a closed socket.
+
+Liveness keeps passing throughout: a pod that is shutting down does not need killing.
+
+Set `drainDelayMs` to at least your ingress's deregistration interval. The probes are
+hidden from the OpenAPI document, so they will not appear in a generated client.
 
 ## Logging
 
