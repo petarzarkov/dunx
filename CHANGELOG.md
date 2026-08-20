@@ -4,6 +4,39 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 2.2.0 - 2026-08-20
+
+a throttle, websocket middleware, sync paginate, and a teardown that finishes
+
+Re-triggers the 2.2.0 release, and fixes the reason it did not happen the first time.
+
+Merging the release pull request produced a green CI run that published nothing.
+getReleaseTrigger reads HEAD's subject, and GitHub had made HEAD a merge commit
+whose subject is 'Merge pull request #3 from ...' - the release(minor) line it was
+looking for was on the first line of the _body_, where the parser deliberately does
+not look. A release pull request could therefore never release, and the only symptom
+was a successful run and an unchanged npm.
+
+mergeSubject reads that one line, and only when the commit really has two parents.
+The subject-only rule is otherwise untouched, which is the point: a body is where a
+revert or a changelog paste puts the word, so scanning it generally would publish by
+accident. It takes the parent count as an argument rather than shelling out, so it is
+a pure function the tests drive without a repository to merge in.
+
+The five items 2.2.0 carries are described on d6b6b19 and in the changelog it
+generates.
+
+Co-Authored-By: Claude Opus 5 (1M context) &lt;noreply@anthropic.com>
+
+### Fixes
+
+- **release**: put the release commit's body in the changelog ([`dd9b0b1`](https://github.com/petarzarkov/dunx/commit/dd9b0b1dd2989e458f59842ef51bc63895b2185c))
+
+### Documentation
+
+- rewrite the guides against the 2.1.1 source ([`55c3674`](https://github.com/petarzarkov/dunx/commit/55c3674e6ce250e38bff17d86e30b9511ff7dcae))
+- **changelog**: update changelog for 2.1.1 release, rename OnDrain to OnBeforeShutdown ([`63ac16c`](https://github.com/petarzarkov/dunx/commit/63ac16ce1e94e1176c06876a86a8cfca602e8f40))
+
 ## 2.1.1 - 2026-08-19
 
 rename the drain hook, and document what 2.1.0 shipped
