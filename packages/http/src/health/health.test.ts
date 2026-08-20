@@ -44,6 +44,33 @@ describe('the report', () => {
     expect(report.checks[1]?.detail).toBe('1 ms');
   });
 
+  /**
+   * The uptime is a duration, so it comes off a monotonic clock. It used to come off
+   * `Date.now()`, which meant any backwards adjustment of the wall clock - NTP, a
+   * suspend and resume, a VM resyncing with its host - produced a negative uptime.
+   * A probe was caught answering `uptimeMs: -242` under WSL2.
+   */
+  test('survives the wall clock stepping backwards', async () => {
+    const health = registry([indicator('a', () => ({ state: 'up' }))]);
+    const realNow = Date.now;
+    Date.now = () => realNow() - 60_000;
+
+    try {
+      const report = await health.liveness();
+      expect(report.uptimeMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test('reports uptime as a whole number of milliseconds', async () => {
+    const report = await registry([
+      indicator('a', () => ({ state: 'up' })),
+    ]).liveness();
+
+    expect(Number.isInteger(report.uptimeMs)).toBe(true);
+  });
+
   test('a throwing check is down, carrying its message', async () => {
     const report = await registry([
       indicator('boom', () => {
