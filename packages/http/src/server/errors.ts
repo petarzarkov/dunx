@@ -1,15 +1,31 @@
 import { AppError, ConsoleLogger, type Ctor, type Logger } from '@dunx/core';
 import { HttpStatusCode } from './status.js';
 
+export interface HttpErrorOptions extends ErrorOptions {
+  /**
+   * Headers the error response carries. `Retry-After` on a 429,
+   * `WWW-Authenticate` on a 401, `Allow` on a 405 - each of them part of the
+   * status rather than an extra, and none of them expressible by a throw before
+   * this existed.
+   *
+   * {@link errorMapper} copies them onto the response. An app that replaces the
+   * mapper has to read them itself, which is the same contract `status` and
+   * `message` already have.
+   */
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
 export class HttpError extends AppError {
   override name = 'HttpError';
+  readonly headers: Readonly<Record<string, string>> | undefined;
 
   constructor(
     readonly status: number,
     message: string,
-    options?: ErrorOptions,
+    options?: HttpErrorOptions,
   ) {
     super(message, options);
+    this.headers = options?.headers;
   }
 }
 
@@ -140,13 +156,19 @@ export const errorMapper =
     if (error instanceof ValidationError) {
       return Response.json(
         { error: error.message, status: error.status, issues: error.issues },
-        { status: error.status },
+        {
+          status: error.status,
+          ...(error.headers && { headers: error.headers }),
+        },
       );
     }
     if (error instanceof HttpError) {
       return Response.json(
         { error: error.message, status: error.status },
-        { status: error.status },
+        {
+          status: error.status,
+          ...(error.headers && { headers: error.headers }),
+        },
       );
     }
     logger.error('Unhandled error', error);

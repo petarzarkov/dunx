@@ -39,6 +39,16 @@ Three consequences you can rely on:
 A class with constructor parameters and no record means the preload never ran,
 and the container says so at boot with the snippet above.
 
+It checks the entrypoint before choosing that snippet. The plugin's filter is
+`/\.tsx?$/`, so it never sees an emitted `.js` no matter how it is preloaded. When
+`Bun.main` ends in `.js`, `.cjs` or `.mjs` the message says the tree is prebuilt and
+prints the build-time fix instead:
+
+```
+import { depsPlugin } from '@dunx/transform';
+await Bun.build({ /* ... */ plugins: [depsPlugin] });
+```
+
 How the transform rewrites the source, and why the record is a thunk:
 [Dependency injection](../architecture/dependency-injection.md).
 
@@ -172,7 +182,8 @@ Calling it anywhere else throws:
 
 ```
 inject(Clock) was called outside of construction. inject() only works in a field
-initializer or constructor of a class the container builds.
+initializer or constructor of a class the container builds, because that is what
+decides which module scope the token resolves from.
 ```
 
 **A factory cannot use `inject()`.** After a factory's first `await`, the
@@ -322,9 +333,14 @@ Full lifetime, boot order, hooks and error propagation: [Lifecycle](./07-lifecyc
 
 ## Eager resolution
 
-`AppFactory.create()` instantiates every provider and awaits every async factory
-before it returns, so wiring errors surface at boot rather than at first request.
-There is no separate `init()`.
+`AppFactory.create()` instantiates every declared binding and awaits every async
+factory before it returns, so wiring errors surface at boot rather than at first
+request. There is no separate `init()`.
+
+Two kinds of provider sit outside that. A class that self-binds because no module
+declared it, and the `Logger` / `RequestContext` defaults the container promotes into
+every scope, are built on first `get`. A provider nothing ever asks for is therefore
+never constructed, and never gets an `onInit` or an `onShutdown`.
 
 That is also what keeps `inject()` synchronous: by the time any constructor runs,
 every async provider has resolved.
@@ -347,8 +363,10 @@ opening a socket in a field initializer is not.
 
 ## Lifecycle
 
-Two hooks, both structural. Implement the method and the container finds it; the
-`implements` clause only makes TypeScript check the signature.
+Three hooks, all structural. Implement the method and the container finds it; the
+`implements` clause only makes TypeScript check the signature. `OnInit` and
+`OnShutdown` are below; `OnBeforeShutdown` runs while the server is still accepting
+and is covered in [Lifecycle](./07-lifecycle.md).
 
 ```ts
 import type { OnInit, OnShutdown } from '@dunx/core';
@@ -390,10 +408,11 @@ early is torn down last, after every repository that uses it. Reversing
 construction-completion order is already a dependency-aware teardown, so
 `app.shutdown()` needs no separate pass.
 
-For an HTTP application there is one step in front of that. `HttpApp.shutdown()`
-stops the `Bun.serve` server first, then closes `PubSub`, then delegates to the
-container's teardown. Requests in flight finish against providers that are still
-alive.
+For an HTTP application there are three steps in front of that.
+`HttpApp.shutdown()` runs the container's `drain()`, then stops the `Bun.serve`
+server, then closes `PubSub`, then delegates to the container's teardown. Draining
+before the port closes is what lets a readiness probe fail while the server is still
+answering; requests in flight then finish against providers that are still alive.
 
 Beyond dependency order, the order tokens are _registered_ decides the rest, and
 that is a module-graph question. [Modules](./04-modules.md) covers it: imports
@@ -461,13 +480,19 @@ Replacement rather than addition, and the distinction matters twice over. The
 discarded provider is never instantiated, so its `useFactory` never runs and its
 `onInit` never fires. That is what makes overriding a database safe.
 
-An override naming a token nobody binds is an error rather than a silent no-op:
+An override naming a **non-class** token nobody binds is an error rather than a
+silent no-op:
 
 ```
-Nothing to override for Clock: no module in the graph binds it. An override
-replaces a binding - it cannot add one, because a token nobody bound is a token
-nothing under test resolves.
+Nothing to override for DSN: no module in the graph binds it, and it is not a class,
+so nothing self-binds it either. An override replaces a binding - it cannot add one,
+because a token nobody bound is a token nothing under test resolves.
 ```
+
+A **class** token nobody bound is accepted, and registered lazily. A class self-binds
+on demand anyway, so the override is replacing the binding that would otherwise have
+appeared rather than adding one. An abstract class counts as a class here: the check
+is `typeof token === 'function'`.
 
 `Logger` and `RequestContext` are substituted too, so overriding `Logger` works in
 an app that binds none. `@dunx/testing` ships a `RecordingLogger` for exactly

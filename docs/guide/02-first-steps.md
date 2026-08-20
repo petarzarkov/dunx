@@ -64,22 +64,21 @@ Created my-api in my-api/
 
 `bunx @dunx/create-app --list` prints the current set:
 
-| Feature      | What arrives                                                     | Pulls in            |
-| ------------ | ---------------------------------------------------------------- | ------------------- |
-| `notes`      | CRUD routes with zod validation. The smallest real feature       |                     |
-| `openapi`    | OpenAPI 3.1 from the routes' own schemas, plus the explorer page |                     |
-| `http`       | CORS, a request-logging middleware and error mapping             |                     |
-| `guards`     | `@Roles` and `@Public`, and a protected controller               |                     |
-| `database`   | drizzle over `bun:sqlite`, with a schema, seeds and migrations   |                     |
-| `users`      | A repository, a service and validated routes over the database   | `database`          |
-| `auth`       | better-auth mounted, with `SessionGuard` and an audit trail      | `database`          |
-| `cache`      | `Bun.RedisClient` behind a session store                         |                     |
-| `websockets` | A `@Gateway` with `@OnMessage`, `PubSub` and a Redis relay       |                     |
-| `images`     | `Bun.Image` resizing and format conversion behind a route        |                     |
-| `files`      | Uploads and downloads on `Bun.file`                              |                     |
-| `jobs`       | bullmq queues and a worker, over `Bun.RedisClient`               | `images`            |
-| `health`     | One endpoint reporting which parts are live and which degraded   | `cache`, `database` |
-| `dashboard`  | bull-board at `/queues`, over the queue `jobs` publishes to      | `jobs`              |
+| Feature      | What arrives                                                     | Pulls in                     |
+| ------------ | ---------------------------------------------------------------- | ---------------------------- |
+| `notes`      | CRUD routes with zod validation. The smallest real feature       |                              |
+| `openapi`    | OpenAPI 3.1 from the routes' own schemas, plus the explorer page |                              |
+| `http`       | CORS, a request-logging middleware and error mapping             |                              |
+| `guards`     | `@Roles` and `@Public`, and a protected controller               |                              |
+| `database`   | drizzle over `bun:sqlite`, with a schema, seeds and migrations   |                              |
+| `users`      | A repository, a service and validated routes over the database   | `database`                   |
+| `auth`       | better-auth mounted, with `SessionGuard` and an audit trail      | `database`                   |
+| `cache`      | `Bun.RedisClient` behind a session store                         |                              |
+| `websockets` | A `@Gateway` with `@OnMessage`, `PubSub` and a Redis relay       | `cache`                      |
+| `images`     | `Bun.Image` resizing and format conversion behind a route        |                              |
+| `files`      | Uploads and downloads on `Bun.file`                              |                              |
+| `jobs`       | bullmq queues and a job processor, over `Bun.RedisClient`        | `images`                     |
+| `health`     | Liveness and readiness probes, and which parts are degraded      | `cache`, `database`, `files` |
 
 Requirements come along automatically, and the order they are imported in is
 construction order, so a database is built before the feature that reads it and torn

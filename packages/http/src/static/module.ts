@@ -29,9 +29,43 @@ const files = (): Registration =>
  * default can know which. Anything outside the mount falls through untouched, so
  * the app's own routes and its 404 behave exactly as before.
  *
- * There is no `index.html` fallback and no SPA rewrite. Both are one route in the
- * app - `@Get('/*')` returning `Bun.file(...)` - and building them in would mean
+ * There is no `index.html` fallback and no SPA rewrite: building them in would mean
  * this middleware deciding what a 404 means for paths it does not own.
+ *
+ * An app that wants one writes a middleware **outside** this one, and the shape
+ * matters. An unmatched path is a **thrown** `HttpError(404)`, not a returned
+ * `Response` - see `buildFallback` - so reading `(await next()).status` never sees a
+ * miss, and `ctx.get(UNMATCHED)` is what does:
+ *
+ * ```ts
+ * export class SpaFallback implements Middleware {
+ *   async handle(req: BunRequest, ctx: RouteContext, next: Next) {
+ *     const missed = ctx.get(UNMATCHED) === true;
+ *     if (
+ *       !missed ||
+ *       req.method !== 'GET' ||
+ *       new URL(req.url).pathname.startsWith('/api') ||
+ *       !(req.headers.get('accept') ?? '').includes('text/html')
+ *     ) {
+ *       return next();
+ *     }
+ *     const index = Bun.file(`${root}/index.html`);
+ *     if (!(await index.exists())) return next();
+ *     // The document carries the hashed asset names, so a stale one points at
+ *     // bundles that no longer exist.
+ *     return new Response(index, {
+ *       headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
+ *     });
+ *   }
+ * }
+ * ```
+ *
+ * Two more things that shape where it goes in the chain. `notFound: 'guarded'` -
+ * the default - reports a miss with no route metadata, so a global session guard
+ * refuses it and the status is a 401 rather than a 404; an app serving a SPA wants
+ * `notFound: 'public'`. And the fallback answers **before** any middleware listed
+ * after the guard, so the rewrite has to sit ahead of the guard to see the miss at
+ * all.
  */
 @Module({})
 export class StaticModule {

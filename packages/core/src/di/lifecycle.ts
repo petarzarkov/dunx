@@ -48,3 +48,24 @@ export const hasOnShutdown = (value: unknown): value is OnShutdown =>
 export const hasOnBeforeShutdown = (
   value: unknown,
 ): value is OnBeforeShutdown => hasMethod(value, 'onBeforeShutdown');
+
+/**
+ * Every failure a teardown phase collected, as one error.
+ *
+ * A single failure is passed through unchanged, so the common case still reads like
+ * the error it is; several become an `AggregateError`, whose `errors` keeps every
+ * original reachable. The point of collecting them at all is that teardown does not
+ * stop at the first one: a provider that throws must not be able to keep the
+ * providers after it from releasing anything.
+ */
+export const teardownError = (failures: readonly unknown[]): unknown =>
+  failures.length === 1
+    ? failures[0]
+    : new AggregateError(
+        failures,
+        `${failures.length} providers failed to shut down`,
+      );
+
+/** The inverse, so a phase that collects from another does not nest aggregates. */
+export const teardownFailures = (error: unknown): readonly unknown[] =>
+  error instanceof AggregateError ? (error.errors as unknown[]) : [error];

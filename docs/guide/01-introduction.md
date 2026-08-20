@@ -121,14 +121,14 @@ harness produces is the gap between the two, because that gap is dunx's own
 overhead and nothing else.
 
 Run on an AMD Ryzen 9 5950X with 32 logical cores, Bun 1.3.14, oha 1.15.0, 64
-connections, 3 s warmup, 5 measured runs of 5 s, dated 2026-08-02:
+connections, 3 s warmup, 5 measured runs of 5 s, dated 2026-08-03:
 
-| Scenario    | raw `Bun.serve` | `@dunx/http` | dunx costs |          Elysia |
-| ----------- | --------------: | -----------: | ---------: | --------------: |
-| `plaintext` |   138,507 req/s |      135,442 |       2.2% | 132,503 (95.7%) |
-| `json`      |   130,055 req/s |      123,306 |       5.2% | 124,264 (95.5%) |
-| `params`    |   126,000 req/s |      123,263 |       2.2% | 124,507 (98.8%) |
-| `validate`  |    84,701 req/s |       78,311 |       7.5% |  70,831 (83.6%) |
+| Scenario    | raw `Bun.serve` | `@dunx/http` | % of raw |           Elysia |
+| ----------- | --------------: | -----------: | -------: | ---------------: |
+| `plaintext` |   136,940 req/s |      137,539 |   100.4% |  135,907 (99.2%) |
+| `json`      |   133,311 req/s |      119,912 |    90.0% |  127,524 (95.7%) |
+| `params`    |   128,930 req/s |      124,867 |    96.8% | 129,497 (100.4%) |
+| `validate`  |    89,047 req/s |       75,769 |    85.1% |   74,858 (84.1%) |
 
 Read that with the harness's own rules. A figure at or above 100% would be noise,
 not a win: dunx dispatches through `Bun.serve` and cannot serve a request faster
@@ -140,13 +140,13 @@ Startup is the clearest loss, and it is a real one:
 
 | Subject          | cold start to first served request (median of 7) |
 | ---------------- | -----------------------------------------------: |
-| raw `Bun.serve`  |                                          26.7 ms |
-| **`@dunx/http`** |                                      **53.1 ms** |
-| Elysia           |                                          58.2 ms |
-| raw `node:http`  |                                          72.8 ms |
-| Express          |                                         120.2 ms |
-| Fastify          |                                         146.1 ms |
-| NestJS (Express) |                                         270.7 ms |
+| raw `Bun.serve`  |                                          28.7 ms |
+| **`@dunx/http`** |                                      **54.8 ms** |
+| Elysia           |                                          58.1 ms |
+| raw `node:http`  |                                          69.7 ms |
+| Express          |                                         121.0 ms |
+| Fastify          |                                         148.2 ms |
+| NestJS (Express) |                                         269.0 ms |
 
 Roughly twice raw `Bun.serve`, from the `oxc-parser` preload plus eager DI
 resolution and route discovery. That is the trade this architecture makes on
@@ -157,8 +157,8 @@ Two more numbers worth having before you commit to anything:
 
 **Request logging is on by default and costs throughput.** `@dunx/http` installs
 `RequestLoggingMiddleware` outermost, writing one structured entry per request.
-With it on, `plaintext` runs at 77,658 req/s against 135,442 with it off: 56.1%
-of raw `Bun.serve` against 97.8%.
+With it on, `plaintext` runs at 78,060 req/s against 137,539 with it off: 57.0%
+of raw `Bun.serve` against 100.4%.
 
 The cost decomposes to about 1.3 µs reading `req.headers`, 0.9 µs for the
 `AsyncLocalStorage` scope, 2.1 µs building and serialising the entry, and 0.7 µs
@@ -186,7 +186,7 @@ or class-based controllers, and that gap is the whole reason dunx exists. If you
 would not use the DI, you are paying its boot cost and its concepts for nothing.
 
 **Boot time is the number that matters.** A short-lived process, a serverless
-function billed per invocation, or a CLI will feel the ~53 ms. dunx is built for a
+function billed per invocation, or a CLI will feel the ~55 ms. dunx is built for a
 service that starts once and stays up. Note also that the startup numbers were
 taken on an idle 32-core desktop, which is not what a constrained serverless CPU
 looks like.
@@ -199,8 +199,13 @@ compatibility layer, and `Bun.serve`, `bun:sqlite`, `Bun.RedisClient`,
 `Bun.password` and `Bun.S3Client` are load-bearing throughout. Portability was
 never a goal.
 
-**You want MySQL or MariaDB through the ORM integration.** There is no drizzle
-path for either on Bun at all.
+**You want MySQL or MariaDB with nothing to assemble.** The database module
+ships two backends: `bun:sqlite`, and `Bun.SQL` for Postgres. `drizzle-orm/bun-sql`
+builds a Postgres dialect unconditionally, so a MySQL URL is rejected at
+construction with a message saying so. MySQL and MariaDB do run, through
+`drizzle-orm/mysql-proxy` over `Bun.SQL`, but the backend is a `DbOptions` subclass
+you write. [`examples/databases`](https://github.com/petarzarkov/dunx/tree/main/examples/databases)
+ships a working one.
 
 **You want a mature ecosystem of third-party modules.** There is not one. dunx is
 ten published workspaces in one repository. The established frameworks have a decade or more

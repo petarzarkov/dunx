@@ -3,6 +3,8 @@ import {
   collectModules,
   Logger,
   ShutdownHooks,
+  teardownError,
+  teardownFailures,
   type App,
   type InjectionToken,
   type ModuleRef,
@@ -275,11 +277,32 @@ class WorkerApplication implements WorkerApp {
     return this.#app.drain();
   }
 
+  /**
+   * Consumers first, then providers - and **every step runs**.
+   *
+   * A worker that could not stop its consumer used to skip the container teardown
+   * entirely and leave `closed` pending, so the process hung on a Redis that had
+   * already gone. Each failure is collected and thrown once the phase is over.
+   */
   async shutdown(): Promise<void> {
     this.#shuttingDown ??= (async () => {
-      await this.#consumer.stop();
-      await this.#app.shutdown();
-      this.#resolveClosed?.();
+      const failures: unknown[] = [];
+      try {
+        await this.#consumer.stop();
+      } catch (error) {
+        this.#app
+          .get(Logger)
+          .error('The queue consumer could not be stopped', error);
+        failures.push(error);
+      }
+      try {
+        await this.#app.shutdown();
+      } catch (error) {
+        failures.push(...teardownFailures(error));
+      } finally {
+        this.#resolveClosed?.();
+      }
+      if (failures.length > 0) throw teardownError(failures);
     })();
     return this.#shuttingDown;
   }

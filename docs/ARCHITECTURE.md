@@ -18,10 +18,10 @@ that contradicts it is a decision made without measuring.
 
 ## The framework
 
-| Page                                                           | What it settles                                                                                         |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [Dependency injection](./architecture/dependency-injection.md) | The decorator dialect, recording constructor types without metadata, and why modules do not encapsulate |
-| [The HTTP layer](./architecture/http.md)                       | The `Bun.serve` adapter, route discovery, and multi-node websocket fan-out                              |
+| Page                                                           | What it settles                                                                                     |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [Dependency injection](./architecture/dependency-injection.md) | The decorator dialect, recording constructor types without metadata, and the scope each module gets |
+| [The HTTP layer](./architecture/http.md)                       | The `Bun.serve` adapter, route discovery, and multi-node websocket fan-out                          |
 
 ## The integrations
 
@@ -42,6 +42,7 @@ mature library already solves.** None of them restates the library's own surface
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | [Building and releasing](./architecture/packaging.md) | The topological build, why versioning is lockstep, and what the scaffolder resolves |
 | [The tools](./architecture/tooling.md)                | The documentation site and the API explorer                                         |
+| [The MCP server](./architecture/mcp.md)               | What an agent may read out of an app, and why it never boots one                    |
 
 ## What was measured
 

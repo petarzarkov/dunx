@@ -74,6 +74,7 @@ export {
   ValidationError,
   type ErrorHandler,
   type ErrorMapper,
+  type HttpErrorOptions,
   type InputSource,
   type ValidationIssue,
 } from './server/errors.js';
@@ -116,6 +117,30 @@ export {
   StaticOptions,
   type StaticOptionsInit,
 } from './static/options.js';
+// A fixed-window rate limit. Here rather than in `@dunx/infra` because it is a
+// `Middleware` reading a `MetaKey` off a `RouteContext`, and `@dunx/infra` must not
+// depend on the web layer - the same boundary that made `@dunx/auth` its own
+// package. `RedisThrottleStore` takes its client structurally, so this costs the
+// package no dependency, exactly as `RedisRelay` does.
+export {
+  SKIP_THROTTLE,
+  SkipThrottle,
+  THROTTLE,
+  Throttle,
+  type ThrottleLimit,
+} from './throttle/decorators.js';
+export { ThrottleGuard } from './throttle/guard.js';
+export { ThrottleModule } from './throttle/module.js';
+export {
+  ThrottleOptions,
+  type ThrottleOptionsInit,
+} from './throttle/options.js';
+export {
+  MemoryThrottleStore,
+  RedisThrottleStore,
+  ThrottleStore,
+  type ThrottleRedis,
+} from './throttle/store.js';
 // One name, both meanings - the value for `HttpStatusCode.NOT_FOUND`, the type for
 // annotations. Exactly what an enum gives, without the enum.
 export { HttpStatusCode, type HttpStatusName } from './server/status.js';
@@ -148,6 +173,23 @@ export {
   type Invoke,
 } from './ws/discover.js';
 export { decode, encode, type Envelope } from './ws/envelope.js';
+// The socket half of the middleware chain. One interface with one method wrapping
+// `next()`, the same shape the HTTP `Middleware` has - and `SocketLoggingMiddleware`
+// is its `RequestLoggingMiddleware`, at `debug` because a gateway can take a frame
+// per connection per tick.
+export {
+  composeSocket,
+  observe,
+  type SocketContext,
+  type SocketDispatch,
+  type SocketFrame,
+  type SocketMiddleware,
+  type SocketNext,
+} from './ws/middleware.js';
+export {
+  SocketLoggingMiddleware,
+  type SocketLoggingOptions,
+} from './ws/logging.js';
 // `isGateway` is the filter that pairs with `discoverGateway` when walking a
 // module's providers, exported for the same reason `guardsOf` and `metaOf` are: a
 // reader outside this package needs the same channel the runtime uses.

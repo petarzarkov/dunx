@@ -1,6 +1,6 @@
 # Lifecycle
 
-One lifetime, two hooks, eager boot. All of it is `@dunx/core` and none of it
+One lifetime, three hooks, eager boot. All of it is `@dunx/core` and none of it
 needs `@dunx/http`.
 
 ## Provider lifetime
@@ -35,11 +35,15 @@ never touches the container:
 
 ```ts
 export class OrdersService {
-  constructor(private readonly context: RequestContext) {}
+  constructor(
+    private readonly context: RequestContext,
+    private readonly logger: Logger,
+  ) {}
 
   place(order: Order) {
     // requestId was set by RequestLoggingMiddleware, on the way in
-    this.log.info('placing', { requestId: this.context.get('requestId') });
+    const { requestId } = this.context.getContext();
+    this.logger.info('placing', { requestId });
   }
 }
 ```
@@ -84,13 +88,19 @@ constructed.
 ```ts
 provide(DbConnection, {
   useFactory: async (config: AppConfigService) =>
-    DbConnection.open(config.get('DATABASE_URL')),
-  inject: [ConfigService],
+    DbConnection.open(config.get('databaseUrl')),
+  inject: [AppConfigService],
 });
 ```
 
 A rejected factory rejects `AppFactory.create()`. Nothing partially built is
 returned, and `onInit` never runs.
+
+`inject` lists `AppConfigService`, the subclass, rather than `ConfigService`. A
+factory parameter annotated `ConfigService<AppConfig>` against `inject: [ConfigService]`
+is rejected: parameters are contravariant and the token carries no type argument.
+[Configuration](./12-configuration.md) covers the `as` option that declares the
+subclass.
 
 ## `OnInit`
 
@@ -211,10 +221,21 @@ CircularDependencyError: Circular dependency: UsersService -> AuditService -> Us
 | Cycle                                       | `CircularDependencyError` with the path                          |
 | Rejected `useFactory`                       | rejects `AppFactory.create()`                                    |
 | Throwing `onInit`                           | rejects `AppFactory.create()`                                    |
-| Throwing `onShutdown` via signal            | logged to `console.error`, exit code 1, drain continues          |
+| Throwing `onShutdown` via signal            | logged, exit code 1, **remaining teardown skipped**              |
 
 Every one of these is a rejected `create()` except the last. An app that boots
 has resolved everything it declares.
+
+The last row is the one to design around. The teardown loop is unguarded, so the
+first `onShutdown` that throws aborts it.
+
+- Every provider after it in the reverse order keeps its resources.
+- `app.closed` never resolves.
+- `ShutdownHooks` catches the rejection, logs `[dunx] shutdown failed` and arms exit
+  code 1. Its exit timer is what still ends the process.
+
+Put a `try` inside any `onShutdown` whose failure should not strand the ones behind
+it.
 
 ## Overrides in tests
 
@@ -230,8 +251,10 @@ const app = await createTestApp({
 The discarded provider is never constructed, so an async `useFactory` that would
 have opened the real database does not run.
 
-An override naming a token nothing binds throws. A silent no-op there produces a
-test asserting against the provider it believed it had swapped.
+An override naming a non-class token nothing binds throws. A silent no-op there
+produces a test asserting against the provider it believed it had swapped. A class
+token nobody bound is accepted instead, and bound lazily, because a class self-binds
+on demand anyway.
 
 Full harness, including `createTestServer` and `RecordingLogger`:
 [Testing](./11-testing.md).
@@ -240,11 +263,13 @@ Full harness, including `createTestServer` and `RecordingLogger`:
 
 ```ts
 app.get(UsersService); // root scope view, then any single declarer
-app.get(UsersService, OrdersModule); // resolved from one module's scope
+app.get(UsersService, OrdersModule); // prefers OrdersModule's view
 ```
 
-`app.get` is more permissive than constructor injection on purpose, being a
-wiring and debugging call. Two scopes binding the token differently is an error
-rather than a guess.
+`app.get` is more permissive than constructor injection, being a wiring and
+debugging call. With a module argument it prefers that module's view, then falls back
+to the root scope's, then to the single module that declares the token, and finally
+self-binds a class into the module named. Two scopes binding the token differently is
+an error rather than a guess, and a module that is not in the graph at all throws.
 
 `AppRef` is the injectable form, and is dunx's `ModuleRef`.

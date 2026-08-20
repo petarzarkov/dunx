@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { like } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { CursorError, decodeCursor, encodeCursor } from './cursor.js';
@@ -209,7 +210,7 @@ describe('parsePageOptions', () => {
 
 describe('paginate', () => {
   it('returns the first page newest-first, with no previous cursor', async () => {
-    const first = await page();
+    const first = page();
     expect(first.data.map((row) => row.id)).toEqual(['e', 'd']);
     expect(first.meta.hasNextPage).toBe(true);
     expect(first.meta.hasPreviousPage).toBe(false);
@@ -222,7 +223,7 @@ describe('paginate', () => {
     const seen: string[] = [];
     let cursor: string | undefined;
     for (let guard = 0; guard < 10; guard += 1) {
-      const result = await page(cursor === undefined ? {} : { cursor });
+      const result = page(cursor === undefined ? {} : { cursor });
       seen.push(...result.data.map((row) => row.id));
       if (!result.meta.hasNextPage) break;
       cursor = result.meta.nextCursor ?? undefined;
@@ -231,11 +232,11 @@ describe('paginate', () => {
   });
 
   it('walks backwards to the page it came from', async () => {
-    const first = await page();
-    const second = await page({ cursor: first.meta.nextCursor ?? undefined });
+    const first = page();
+    const second = page({ cursor: first.meta.nextCursor ?? undefined });
     expect(second.data.map((row) => row.id)).toEqual(['c', 'b']);
 
-    const back = await page({
+    const back = page({
       cursor: second.meta.previousCursor ?? undefined,
       direction: PaginationDirection.BACKWARD,
     });
@@ -245,9 +246,9 @@ describe('paginate', () => {
   });
 
   it('honours ascending order', async () => {
-    const first = await page({ order: PaginationOrder.ASC });
+    const first = page({ order: PaginationOrder.ASC });
     expect(first.data.map((row) => row.id)).toEqual(['a', 'b']);
-    const next = await page({
+    const next = page({
       order: PaginationOrder.ASC,
       cursor: first.meta.nextCursor ?? undefined,
     });
@@ -255,7 +256,7 @@ describe('paginate', () => {
   });
 
   it('reports the last page and mints no next cursor on it', async () => {
-    const last = await page({ take: 5 });
+    const last = page({ take: 5 });
     expect(last.data).toHaveLength(5);
     expect(last.meta.hasNextPage).toBe(false);
     // A next cursor here would be a token that returns nothing.
@@ -277,7 +278,7 @@ describe('paginate', () => {
     const seen: string[] = [];
     let cursor: string | undefined;
     for (let guard = 0; guard < 10; guard += 1) {
-      const result = await page(cursor === undefined ? {} : { cursor });
+      const result = page(cursor === undefined ? {} : { cursor });
       seen.push(...result.data.map((row) => row.id));
       if (!result.meta.hasNextPage) break;
       cursor = result.meta.nextCursor ?? undefined;
@@ -288,29 +289,33 @@ describe('paginate', () => {
 
   /** A row inserted mid-walk must not shift a page, which is offset's failure. */
   it('is unaffected by an insert between pages', async () => {
-    const first = await page();
+    const first = page();
     db.insert(notes)
       .values({ id: 'z', title: 'inserted', createdAt: new Date(9000) })
       .run();
 
-    const second = await page({ cursor: first.meta.nextCursor ?? undefined });
+    const second = page({ cursor: first.meta.nextCursor ?? undefined });
     // 'z' sorts newest, so it belongs before the cursor and must not appear here,
     // and nothing already read is repeated.
     expect(second.data.map((row) => row.id)).toEqual(['c', 'b']);
   });
 
   it('ANDs a base filter with the cursor', async () => {
-    const filtered = await page({ take: 10 }, like(notes.title, '%a%'));
+    const filtered = page({ take: 10 }, like(notes.title, '%a%'));
     expect(filtered.data.map((row) => row.id)).toEqual(['a']);
   });
 
   it('sorts by an explicit column', async () => {
-    const byId = await page({ take: 5, order: PaginationOrder.ASC });
+    const byId = page({ take: 5, order: PaginationOrder.ASC });
     expect(byId.data.map((row) => row.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
   });
 
-  it('says so when the tie-break column is missing', async () => {
-    await expect(
+  /**
+   * Thrown rather than rejected, on both channels: it is a `TypeError` about the
+   * call and the synchronous overload has nowhere to reject from.
+   */
+  it('says so when the tie-break column is missing', () => {
+    expect(() =>
       paginate({
         db: db as never,
         table: notes,
@@ -321,7 +326,7 @@ describe('paginate', () => {
         },
         idColumn: 'nope',
       }),
-    ).rejects.toThrow(/no "nope" column/);
+    ).toThrow(/no "nope" column/);
   });
 
   /**
@@ -345,7 +350,7 @@ describe('paginate', () => {
     const seen: number[] = [];
     let cursor: string | undefined;
     for (let guard = 0; guard < 10; guard += 1) {
-      const result = await paginate<typeof table, { id: number }>({
+      const result = paginate<typeof table, { id: number }>({
         db: numeric as never,
         table,
         options: {
@@ -365,10 +370,83 @@ describe('paginate', () => {
 
   it('returns an empty page rather than failing on an empty table', async () => {
     seed([]);
-    const empty = await page();
+    const empty = page();
     expect(empty.data).toEqual([]);
     expect(empty.meta.hasNextPage).toBe(false);
     expect(empty.meta.nextCursor).toBeNull();
     expect(empty.meta.previousCursor).toBeNull();
+  });
+});
+
+/**
+ * The return type follows `db`, and so does the value: a synchronous driver is
+ * answered synchronously, which is what lets a repository over
+ * `drizzle-orm/bun-sqlite` keep `list` off the async channel.
+ */
+describe('paginate, on a synchronous driver', () => {
+  const options = {
+    take: 2,
+    order: PaginationOrder.DESC,
+    direction: PaginationDirection.FORWARD,
+  } as const;
+
+  it('answers without a promise', () => {
+    const result = paginate<typeof notes, Note>({ db, table: notes, options });
+    expect(result).not.toBeInstanceOf(Promise);
+    expect(result.data.map((row) => row.id)).toEqual(['e', 'd']);
+    expect(result.meta.hasNextPage).toBe(true);
+  });
+
+  it('walks every page without an await', () => {
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let guard = 0; guard < 10; guard += 1) {
+      const result = paginate<typeof notes, Note>({
+        db,
+        table: notes,
+        options: { ...options, ...(cursor === undefined ? {} : { cursor }) },
+      });
+      seen.push(...result.data.map((row) => row.id));
+      if (!result.meta.hasNextPage) break;
+      cursor = result.meta.nextCursor ?? undefined;
+    }
+    expect(seen).toEqual(['e', 'd', 'c', 'b', 'a']);
+  });
+
+  /**
+   * `Bun.SQL`'s builder is thenable and has no `all()`, so it takes the
+   * asynchronous overload - and an asynchronous SQLite driver, whose `all()`
+   * answers a promise, takes it too. Both are covered by adopting the value rather
+   * than trusting the shape.
+   */
+  it('still awaits a driver that answers a promise', async () => {
+    const thenable = {
+      select: () => ({
+        from: (table: typeof notes) => ({
+          where: (condition: SQL | undefined) => ({
+            orderBy: (...columns: SQL[]) => ({
+              limit: (rows: number) =>
+                Promise.resolve(
+                  db
+                    .select()
+                    .from(table)
+                    .where(condition)
+                    .orderBy(...columns)
+                    .limit(rows)
+                    .all() as unknown[],
+                ),
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const pending = paginate<typeof notes, Note>({
+      db: thenable,
+      table: notes,
+      options,
+    });
+    expect(pending).toBeInstanceOf(Promise);
+    expect((await pending).data.map((row) => row.id)).toEqual(['e', 'd']);
   });
 });

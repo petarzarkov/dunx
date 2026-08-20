@@ -657,9 +657,10 @@ your routes, because `HttpMethod` has no `OPTIONS` verb: only CORS mounts one.
   private providers. Declare it in the same module's `providers`. A class the
   module cannot see still resolves through the permissive `app.get` lookup, but
   it is then a shared instance built somewhere else.
-- **`'trust proxy'` is off by default.** Turn it on with
-  `app.set('trust proxy', true)` only behind a proxy that rewrites
-  `X-Forwarded-For`; a direct client can send whatever it likes.
+- **`'trust proxy'` is off by default, and it is a hop count.**
+  `app.set('trust proxy', n)` says how many proxies are in front of you, `true`
+  meaning one, and the address is read that many entries from the **right** of
+  `X-Forwarded-For`. Over-counting lets a caller choose its own address.
 
 Next: [WebSockets](./09-websockets.md), which are served by the same `Bun.serve`
 call and the same container.

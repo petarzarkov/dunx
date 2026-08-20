@@ -10,18 +10,18 @@ other.
 
 ## Built
 
-| Package            | Contains                                                               |
-| ------------------ | ---------------------------------------------------------------------- |
-| `@dunx/core`       | DI container, modules, lifecycle, the `Logger` contract - zero deps    |
-| `@dunx/transform`  | Load-time transform: constructor parameter types                       |
-| `@dunx/http`       | Routes, websocket gateways, middleware, guards, CORS, validation       |
-| `@dunx/infra`      | `/db` (drizzle) `/redis` `/files` `/images` `/logger` (`@arkv/logger`) |
-| `@dunx/openapi`    | OpenAPI 3.1 from route zod schemas, self-contained HTML                |
-| `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0               |
-| `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing            |
-| `@dunx/dashboard`  | Opt-in ops page, one middleware, bull-board mounted for queues         |
-| `@dunx/create-app` | `bunx @dunx/create-app my-api` - base template plus feature folders    |
-| `@dunx/mcp`        | MCP server that reads an app's routes, providers and modules           |
+| Package            | Contains                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| `@dunx/core`       | DI container, modules, lifecycle, the `Logger` contract - zero deps                         |
+| `@dunx/transform`  | Load-time transform: constructor parameter types                                            |
+| `@dunx/http`       | Routes, websocket gateways, middleware, guards, CORS, validation, health probes, `./client` |
+| `@dunx/infra`      | `/db` (drizzle) `/redis` `/queue` `/schedule` `/files` `/images` `/logger` `/pagination`    |
+| `@dunx/openapi`    | OpenAPI 3.1 from route zod schemas, self-contained HTML                                     |
+| `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0                                    |
+| `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing                                 |
+| `@dunx/dashboard`  | Opt-in ops page, one middleware, bull-board mounted for queues                              |
+| `@dunx/create-app` | `bunx @dunx/create-app my-api` - base template plus feature folders                         |
+| `@dunx/mcp`        | MCP server that reads an app's routes, providers and modules                                |
 
 The two integrations are deliberate - never invent what a mature library already
 solves: `drizzle-orm` is an

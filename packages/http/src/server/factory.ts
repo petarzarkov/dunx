@@ -14,6 +14,8 @@ import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
 import { ClientAddress } from './client-address.js';
 import { buildWebSocket } from '../ws/adapter.js';
 import { discoverGateways } from '../ws/discover.js';
+import { SocketLoggingMiddleware } from '../ws/logging.js';
+import type { SocketMiddleware } from '../ws/middleware.js';
 import { PubSub } from '../ws/pubsub.js';
 import {
   HttpApplication,
@@ -69,9 +71,26 @@ export class HttpFactory {
     // so a second module injecting it was a boot error naming the first - and the
     // app's own `app.get(ClientAddress)` could then reach an instance no server was
     // ever attached to.
+    // Bound for the same reason: its constructor takes an options object as well
+    // as two injectables, so it cannot self-bind.
+    const socketLogging = provide(SocketLoggingMiddleware, {
+      useFactory: (logger: Logger, context: RequestContext) =>
+        new SocketLoggingMiddleware(
+          logger,
+          context,
+          typeof options.socketLogging === 'object'
+            ? options.socketLogging
+            : {},
+        ),
+      inject: [Logger, RequestContext] as const,
+    });
+
     const services = [PubSub, ClientAddress];
-    const providers =
-      options.requestLogging === false ? services : [...services, logging];
+    const providers = [
+      ...services,
+      ...(options.requestLogging === false ? [] : [logging]),
+      ...(options.socketLogging === false ? [] : [socketLogging]),
+    ];
     const scope: DynamicModule = {
       module: HttpModule,
       global: true,
@@ -126,13 +145,42 @@ export class HttpFactory {
     const gateways = discoverGateways(modules, (token) => app.get(token));
     // Handler collisions and two gateways on one path are boot errors too, and the
     // websocket object is built once here rather than per connection.
+    //
+    // The socket middleware chain is resolved here and not at `listen()`, because
+    // `buildWebSocket` folds it into one closure per slot - the same trade the HTTP
+    // route table makes, moved a phase earlier because the handler object is.
     const websocket =
       gateways.length > 0
-        ? buildWebSocket(gateways, options.websocket)
+        ? buildWebSocket(
+            gateways,
+            options.websocket,
+            HttpFactory.#socketMiddleware(app, root, options),
+          )
         : undefined;
 
     // `root` is the app's own module, so global middleware and the error filter
     // resolve as the app sees them rather than as this wrapper does.
     return new HttpApplication(app, discovered, options, root, websocket);
+  }
+
+  /**
+   * Logging outermost, then whatever the app declared - the order the HTTP chain
+   * already uses, so a frame a guard refuses is still logged with the failure.
+   *
+   * Resolved permissively, like global HTTP middleware: the class is usually
+   * declared by whichever feature module owns it, and pinning the lookup to the
+   * root would make the app re-export every observer it lists.
+   */
+  static #socketMiddleware(
+    app: { get<T>(token: Ctor<T>, from?: ModuleRef): T },
+    root: ModuleRef,
+    options: HttpOptions,
+  ): readonly SocketMiddleware[] {
+    const declared = options.socketMiddleware ?? [];
+    const entries: readonly Ctor<SocketMiddleware>[] =
+      options.socketLogging === false
+        ? declared
+        : [SocketLoggingMiddleware, ...declared];
+    return entries.map((entry) => app.get(entry, root));
   }
 }

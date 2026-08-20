@@ -63,10 +63,11 @@ export class Ledger implements OnInit, OnShutdown {
    * so `paginate` falls back to the primary key - `id` is unique on its own, so no
    * tie-break column is needed.
    *
-   * `async` although bun-sqlite is synchronous, because `paginate` awaits the query
-   * builder - the one code path that serves both dialects.
+   * Synchronous, because `paginate`'s return type follows its `db`: a
+   * `drizzle-orm/bun-sqlite` handle answers `all()` rather than a promise, so this
+   * method needs no `async` and neither does its caller.
    */
-  page(options: PageOptions): Promise<Page<Entry>> {
+  page(options: PageOptions): Page<Entry> {
     return paginate<typeof ledger, Entry>({
       db: this.db,
       table: ledger,

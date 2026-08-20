@@ -8,6 +8,12 @@ import type { ServerWebSocket, WebSocketHandler } from 'bun';
 export interface SocketData<T = unknown> {
   readonly path: string;
   readonly context: T;
+  /**
+   * This connection, for as long as it lasts. Minted at the upgrade, because Bun's
+   * socket carries no identity of its own and a log line for a frame is only
+   * joinable to the connect and the disconnect around it if something does.
+   */
+  readonly id: string;
 }
 
 /**
@@ -38,6 +44,12 @@ export type SocketOptions = Readonly<
     | 'sendPings'
   >
 > & {
-  /** Where a throwing or rejecting handler goes. @default console.error */
+  /**
+   * Where a throwing or rejecting handler goes. @default console.error
+   *
+   * The default is **not** installed when `socketMiddleware` is non-empty: a
+   * middleware wraps the handler, so it already saw the failure and a second
+   * report on the console would be a duplicate.
+   */
   readonly onError?: SocketErrorHandler;
 };
