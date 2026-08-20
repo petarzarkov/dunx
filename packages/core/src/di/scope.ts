@@ -3,6 +3,7 @@ import {
   collectModules,
   isModuleExport,
   readModule,
+  type ModuleClass,
   type ModuleRef,
   type ResolvedModule,
 } from './module.js';
@@ -72,9 +73,10 @@ const ownBindings = (
     if (own.has(registration.token)) {
       throw new AppError(
         `Duplicate binding for ${describeToken(registration.token)} in module ` +
-          `"${resolved.name}": it is declared twice in the same module. A ` +
-          "DynamicModule unions its options with the ones its class's @Module " +
-          'decorator declares, so a forRoot() in each place is two bindings.',
+          `"${resolved.name}": it is declared twice in the same providers list. A ` +
+          "DynamicModule's own binding replaces the one its class's @Module " +
+          'decorator declares, so this is two entries on the same side rather than ' +
+          'a decorator and a forRoot() disagreeing.',
       );
     }
     own.set(registration.token, {
@@ -160,6 +162,55 @@ const assertExportsResolve = (
 };
 
 /**
+ * One module class registered twice, each registration binding the same token.
+ *
+ * `forRoot()` returns a fresh object per call, and a scope is keyed on the
+ * reference - so two calls are two scopes with two of everything in them. Two
+ * database connections, two schedule registries, two auth instances: each one
+ * resolves, nothing errors, and half the app talks to the wrong copy.
+ *
+ * A warning rather than an error, because two registrations that bind **different**
+ * tokens are a supported shape - `RedisModule.forRoot()` alongside
+ * `RedisModule.forRoot({ name: 'cache' })` is two connections on purpose, and it is
+ * silent here because the named one binds named tokens.
+ */
+const duplicateConfigurations = (
+  modules: readonly ResolvedModule[],
+  own: Map<ModuleRef, Map<InjectionToken<unknown>, Binding>>,
+): readonly string[] => {
+  const byClass = new Map<ModuleClass, ResolvedModule[]>();
+  for (const resolved of modules) {
+    const group = byClass.get(resolved.module);
+    if (group) group.push(resolved);
+    else byClass.set(resolved.module, [resolved]);
+  }
+
+  const warnings: string[] = [];
+  for (const [klass, group] of byClass) {
+    if (group.length < 2) continue;
+    const counts = new Map<InjectionToken<unknown>, number>();
+    for (const resolved of group) {
+      for (const token of own.get(resolved.ref)?.keys() ?? []) {
+        counts.set(token, (counts.get(token) ?? 0) + 1);
+      }
+    }
+    const shared = [...counts]
+      .filter(([, seen]) => seen > 1)
+      .map(([token]) => describeToken(token));
+    if (shared.length === 0) continue;
+    warnings.push(
+      `${klass.name} is registered ${group.length} times, and each registration ` +
+        `binds ${shared.join(', ')} again. A configured module is keyed on the ` +
+        'object forRoot() returned, and it returns a new one per call - so these ' +
+        'are separate scopes holding separate instances. Call it once and share ' +
+        'the result, or mark the module global: true so one registration reaches ' +
+        'every scope.',
+    );
+  }
+  return warnings;
+};
+
+/**
  * Builds one scope per module reference, with visibility flattened.
  *
  * Order of assembly inside `visible` is the resolution order: the global scope is
@@ -185,7 +236,7 @@ export const buildScopes = (root: ModuleRef): ScopeGraph => {
     }
   }
 
-  const warnings: string[] = [];
+  const warnings: string[] = [...duplicateConfigurations(modules, own)];
   const scopes = new Map<ModuleRef, Scope>();
   const ordered: Scope[] = [];
 

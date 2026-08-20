@@ -163,6 +163,26 @@ const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
  * matched. It puts the global middleware in front of a 404 in the framework's
  * own error shape.
  *
+ * **The miss is a `throw`, not a returned `Response`.** `miss` raises
+ * `HttpError(404)` and `compose` propagates it, so a middleware written as
+ * `const response = await next(); if (response.status === 404) ...` never reaches
+ * its own second line on an unmatched path - the rewrite it was written for is the
+ * one case it cannot see. A middleware that means to act on a miss has to catch:
+ *
+ * ```ts
+ * try {
+ *   return await next();
+ * } catch (error) {
+ *   if (!(error instanceof HttpError) || error.status !== 404) throw error;
+ *   return rewritten();
+ * }
+ * ```
+ *
+ * `ctx.get(UNMATCHED)` is the other half, and the cheaper one: it is set here and
+ * by no real route, so a middleware can tell "nothing matched this path" from "a
+ * handler answered 404 for a record that does not exist" **before** calling
+ * `next()` at all. Only the second of those is a `Response` to inspect.
+ *
  * Composed per request rather than at boot, because the context names the path
  * that missed. That allocation is on the 404 path only.
  */

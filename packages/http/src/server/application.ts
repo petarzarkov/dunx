@@ -4,6 +4,8 @@ import {
   Logger,
   runtimeInfo,
   ShutdownHooks,
+  teardownError,
+  teardownFailures as toFailures,
   type App,
   type AppOptions,
   type Ctor,
@@ -15,6 +17,8 @@ import {
 import { joinPath, type DiscoveredRoute } from '../route/discover.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import { PubSub } from '../ws/pubsub.js';
+import type { SocketLoggingOptions } from '../ws/logging.js';
+import type { SocketMiddleware } from '../ws/middleware.js';
 import type { PubSubRelay, RelayOptions, RelayPhase } from '../ws/relay.js';
 import type { SocketData, SocketOptions } from '../ws/socket.js';
 import { attachAddressSource, ClientAddress } from './client-address.js';
@@ -79,6 +83,29 @@ export interface HttpOptions extends AppOptions {
    * themselves are declared in `@Module({ providers })`.
    */
   readonly websocket?: SocketOptions;
+  /**
+   * The socket half of `middleware`, resolved from the container the same way.
+   *
+   * Each entry wraps every dispatched gateway handler - open, each named message,
+   * the catch-all, close, drain, ping and pong - the way an HTTP middleware wraps a
+   * route. `socketLogging`'s middleware runs outermost, ahead of anything here.
+   */
+  readonly socketMiddleware?: readonly Ctor<SocketMiddleware>[];
+  /**
+   * One structured entry per socket frame, on by default at **`debug`**. `false`
+   * removes it; an options object tunes the level per event. See
+   * {@link SocketLoggingMiddleware}.
+   *
+   * `debug` rather than request logging's `info`, because a gateway can take a
+   * frame per connection per tick. The default `ConsoleLogger` threshold is
+   * `info`, so this writes nothing until an app lowers its level or names a louder
+   * one here.
+   *
+   * Installing it also takes `SocketOptions.onError`'s `console.error` default out
+   * of the way: a middleware wraps the handler, so the failure is already reported
+   * through the `Logger` with the gateway and the event on it.
+   */
+  readonly socketLogging?: boolean | SocketLoggingOptions;
   /**
    * Multi-node websocket fan-out. Absent - the default - means `PubSub` publishes
    * to this process only, which is exactly Bun's native pub/sub and costs nothing.
@@ -404,20 +431,39 @@ export class HttpApplication implements HttpApp {
     return this.#app.drain();
   }
 
+  /**
+   * The four phases, in order, and **none of them is skipped because an earlier
+   * one failed**. A drain hook that threw used to abort this before `server.stop()`
+   * had run, so the port stayed open and `closed` never resolved; each failure is
+   * collected now and thrown once the whole teardown is over.
+   */
   async shutdown(): Promise<void> {
     this.#shuttingDown ??= (async () => {
+      const failures: unknown[] = [];
+      const step = async (run: () => Promise<unknown>): Promise<void> => {
+        try {
+          await run();
+        } catch (error) {
+          failures.push(...toFailures(error));
+        }
+      };
+
       // While the port is still open and the routes still answer: a readiness
       // probe has to start failing *before* the server stops, or a load balancer
       // is still routing when the socket closes. `App.shutdown()` below calls
       // this too and it is memoized, so nothing drains twice.
-      await this.#app.drain();
-      await this.#server?.stop(this.#websocket !== undefined);
+      await step(() => this.#app.drain());
+      await step(async () => this.#server?.stop(this.#websocket !== undefined));
       this.#server = undefined;
       // Before the container: a relay this app owns holds two Redis sockets, and
       // `maxRetries: 0` means nothing else will ever close them.
-      await this.#app.get(PubSub).close();
-      await this.#app.shutdown();
-      this.#resolveClosed?.();
+      await step(() => this.#app.get(PubSub).close());
+      try {
+        await step(() => this.#app.shutdown());
+      } finally {
+        this.#resolveClosed?.();
+      }
+      if (failures.length > 0) throw teardownError(failures);
     })();
     return this.#shuttingDown;
   }

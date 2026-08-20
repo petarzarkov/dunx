@@ -147,24 +147,106 @@ const declaredOptions = (module: ModuleClass): ModuleOptions | undefined =>
     ? (module as ModuleClass & Marked)[MODULE]
     : undefined;
 
-const concat = <T>(
-  left: readonly T[] | undefined,
-  right: readonly T[] | undefined,
-): readonly T[] => [...(left ?? []), ...(right ?? [])];
+/**
+ * A declared list and a configured one, joined **without duplicating**: an entry
+ * present in both appears once, at the configured position.
+ *
+ * This is what makes `@Module` and a `static forRoot()` on the same class safe to
+ * combine. A plain concatenation registered the decorator's entries a second time -
+ * two scopes of one module, two of everything in them - so the rule used to be
+ * "decorated or configured, never both", and every module that needed a static core
+ * plus a configured extra had to put the static half in the factory too.
+ */
+const union = <T>(
+  declared: readonly T[] | undefined,
+  configured: readonly T[] | undefined,
+): readonly T[] => {
+  if (declared === undefined || declared.length === 0) return configured ?? [];
+  if (configured === undefined || configured.length === 0) return declared;
+  const claimed = new Set(configured);
+  return [...declared.filter((entry) => !claimed.has(entry)), ...configured];
+};
+
+const tokenOf = (entry: ProviderEntry): InjectionToken<unknown> =>
+  typeof entry === 'function' ? entry : entry.token;
+
+/**
+ * The same join for providers, keyed on the **token** rather than the entry.
+ *
+ * `forRoot()`'s binding wins, which is what makes a decorator a place to put the
+ * default: `@Module({ providers: [provide(Options, { useValue: defaults })] })`
+ * plus a `forRoot(init)` that binds `Options` is one module with a default and an
+ * override, instead of a duplicate-binding error.
+ */
+const unionProviders = (
+  declared: readonly ProviderEntry[] | undefined,
+  configured: readonly ProviderEntry[] | undefined,
+): readonly ProviderEntry[] => {
+  if (declared === undefined || declared.length === 0) return configured ?? [];
+  if (configured === undefined || configured.length === 0) return declared;
+  const claimed = new Set(configured.map(tokenOf));
+  return [
+    ...declared.filter((entry) => !claimed.has(tokenOf(entry))),
+    ...configured,
+  ];
+};
+
+/**
+ * An `exports` entry naming a module **class** becomes the configured module of
+ * that class this module imports.
+ *
+ * Re-exporting a configured import used to mean hoisting it to a module-level
+ * `const` so the same object could appear in `imports` and in `exports` - and
+ * writing the class instead was not an error at the call site, it was an
+ * unresolvable-token failure blamed on this module. The class is the name a reader
+ * would reach for, so it resolves to what was imported under it.
+ */
+type ExportEntry = InjectionToken<unknown> | ModuleRef;
+
+const resolveModuleExports = (
+  exports: readonly ExportEntry[] | undefined,
+  imports: readonly ModuleRef[] | undefined,
+  providers: readonly ProviderEntry[],
+): readonly ExportEntry[] | undefined => {
+  if (exports === undefined || imports === undefined) return exports;
+  if (exports.length === 0 || imports.length === 0) return exports;
+  const own = new Set(providers.map(tokenOf));
+
+  return exports.map((entry) => {
+    if (typeof entry !== 'function') return entry;
+    // An abstract-class token this module declares is a token, however module-like
+    // it looks - so a provider always wins over the rewrite.
+    if (own.has(entry as InjectionToken<unknown>)) return entry;
+    // A class imported bare is already the reference the scope is keyed on. Only a
+    // configured import is reached under a different object than its class.
+    return (
+      imports.find(
+        (imported) => isDynamic(imported) && imported.module === entry,
+      ) ?? entry
+    );
+  });
+};
 
 const resolveRef = (ref: ModuleRef): ResolvedModule => {
   if (isDynamic(ref)) {
     const declared = declaredOptions(ref.module);
+    const imports = union(declared?.imports, ref.imports);
+    const providers = unionProviders(declared?.providers, ref.providers);
     return {
       module: ref.module,
       name: ref.module.name,
       ref,
       options: {
-        imports: concat(declared?.imports, ref.imports),
-        controllers: concat(declared?.controllers, ref.controllers),
-        providers: concat(declared?.providers, ref.providers),
-        exports: concat(declared?.exports, ref.exports),
-        middleware: concat(declared?.middleware, ref.middleware),
+        imports,
+        controllers: union(declared?.controllers, ref.controllers),
+        providers,
+        exports:
+          resolveModuleExports(
+            union(declared?.exports, ref.exports),
+            imports,
+            providers,
+          ) ?? [],
+        middleware: union(declared?.middleware, ref.middleware),
         global: declared?.global === true || ref.global === true,
       },
     };
@@ -178,7 +260,20 @@ const resolveRef = (ref: ModuleRef): ResolvedModule => {
         `factory such as ${ref.name}.forRoot().`,
     );
   }
-  return { module: ref, name: ref.name, ref, options };
+  const resolvedExports = resolveModuleExports(
+    options.exports,
+    options.imports,
+    options.providers ?? [],
+  );
+  return {
+    module: ref,
+    name: ref.name,
+    ref,
+    options:
+      resolvedExports === options.exports || resolvedExports === undefined
+        ? options
+        : { ...options, exports: resolvedExports },
+  };
 };
 
 /**

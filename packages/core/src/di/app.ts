@@ -3,7 +3,13 @@ import { AsyncRequestContext, RequestContext } from '../logger/context.js';
 import { Logger } from '../logger/logger.js';
 import { AppError } from './errors.js';
 import { Injector } from './injector.js';
-import { hasOnBeforeShutdown, hasOnInit, hasOnShutdown } from './lifecycle.js';
+import {
+  hasOnBeforeShutdown,
+  hasOnInit,
+  hasOnShutdown,
+  teardownError,
+  teardownFailures,
+} from './lifecycle.js';
 import { ROOT_MODULE, type ModuleRef } from './module.js';
 import { buildScopes, type Binding } from './scope.js';
 import { provide, type Registration } from './provider.js';
@@ -144,29 +150,92 @@ class Application implements App {
    * then stop the server, then tear providers down. Memoized so the two paths
    * cannot double-drain - `shutdown()` calls it too, which is what makes a
    * process with no HTTP server drain at all.
+   *
+   * **`allSettled`, not `all`.** One rejecting hook used to reject the whole
+   * drain, which then aborted `shutdown()` at its own `await this.drain()` before
+   * a single `onShutdown` had run - so one bad hook leaked every resource in the
+   * app. Each failure is logged against the provider that raised it and the
+   * aggregate is thrown once the phase is over, so a caller can still see it.
    */
   async drain(): Promise<void> {
     this.#draining ??= (async () => {
-      await Promise.all(
-        [...this.#injector.instances]
-          .filter(hasOnBeforeShutdown)
-          // `onBeforeShutdown` may be synchronous, and `Promise.all` over a bare `void` is
-          // what `await-thenable` objects to. The wrapper costs one microtask.
-          .map(async (instance) => instance.onBeforeShutdown()),
+      const hooks = [...this.#injector.instances].filter(hasOnBeforeShutdown);
+      const settled = await Promise.allSettled(
+        // `onBeforeShutdown` may be synchronous, and `allSettled` over a bare `void`
+        // is what `await-thenable` objects to. The wrapper costs one microtask.
+        hooks.map(async (instance) => instance.onBeforeShutdown()),
       );
+
+      const failures: unknown[] = [];
+      for (const [index, result] of settled.entries()) {
+        if (result.status !== 'rejected') continue;
+        this.#report('onBeforeShutdown', hooks[index], result.reason);
+        failures.push(result.reason);
+      }
+      if (failures.length > 0) throw teardownError(failures);
     })();
     return this.#draining;
   }
 
+  /**
+   * Every `onShutdown`, in reverse resolution order, and **every one of them
+   * runs**.
+   *
+   * A throwing hook used to abort the loop, which left every provider after it
+   * holding its resources and left `closed` pending forever - a shutdown that ends
+   * in `SIGKILL` rather than an exit. Each failure is collected, the drain's
+   * failures are collected rather than allowed to abort this, `closed` resolves in
+   * a `finally`, and the aggregate is thrown last so a caller still observes it.
+   */
   async shutdown(): Promise<void> {
     this.#shuttingDown ??= (async () => {
-      await this.drain();
-      for (const instance of [...this.#injector.instances].reverse()) {
-        if (hasOnShutdown(instance)) await instance.onShutdown();
+      const failures: unknown[] = [];
+      try {
+        await this.drain();
+      } catch (error) {
+        failures.push(...teardownFailures(error));
       }
-      this.#resolveClosed?.();
+
+      try {
+        for (const instance of [...this.#injector.instances].reverse()) {
+          if (!hasOnShutdown(instance)) continue;
+          try {
+            await instance.onShutdown();
+          } catch (error) {
+            this.#report('onShutdown', instance, error);
+            failures.push(error);
+          }
+        }
+      } finally {
+        this.#resolveClosed?.();
+      }
+
+      if (failures.length > 0) throw teardownError(failures);
     })();
     return this.#shuttingDown;
+  }
+
+  /**
+   * One line per failed hook, naming the provider.
+   *
+   * The aggregate that comes out at the end of the phase is what a caller sees; a
+   * process being torn down by a signal has no caller, and without this the only
+   * record of a failed teardown would be whichever error happened to be first.
+   *
+   * The `Logger` lookup is guarded because this runs during teardown: a container
+   * whose logger failed to build, or a phase reached after it was torn down, must
+   * not turn a reported failure into a second unreported one.
+   */
+  #report(phase: string, instance: unknown, error: unknown): void {
+    const name = (instance as { constructor?: { name?: string } })?.constructor
+      ?.name;
+    try {
+      this.#injector
+        .find(Logger)
+        .error(`${name ?? 'A provider'}.${phase}() failed`, error);
+    } catch {
+      console.error(`[dunx] ${name ?? 'A provider'}.${phase}() failed`, error);
+    }
   }
 
   enableShutdownHooks(

@@ -96,7 +96,7 @@ export class LedgerController {
    * `/ledger/page` cannot be swallowed by `/ledger/:id`.
    */
   @Get('/page', pagedEntries)
-  page(input: Input<typeof pagedEntries>): Promise<Page<Entry>> {
+  page(input: Input<typeof pagedEntries>): Page<Entry> {
     return this.ledger.page(input.query);
   }
 
