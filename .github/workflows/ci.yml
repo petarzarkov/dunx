@@ -127,6 +127,12 @@ jobs:
           # falls back to the credential `actions/checkout` persists, so that half
           # worked and hid the other half.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Husky's pre-push hook refuses any push oxfmt would change, and what gets
+          # pushed here is this script's own generated commit. CI already ran
+          # format:check over the source, so the hook can only produce a false
+          # negative - which it did on 2.2.0, blocking a release that had already
+          # reached npm and leaving main a version behind the registry.
+          HUSKY: '0'
 
       # After the release, not before it. `bun run build` already built the site
       # once, before the coverage model and the badges existed; the release step

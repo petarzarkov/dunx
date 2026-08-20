@@ -187,6 +187,13 @@ const writeChangelog = (
   }
 
   writeFileSync(path, prependRelease(existing, section));
+  // The section quotes a human-written commit body verbatim, so its markdown is
+  // whatever that author typed. oxfmt has opinions - it rewrites `*emphasis*` to
+  // `_emphasis_` - and the pre-push hook refuses to push anything oxfmt would
+  // change. A release commit body containing `*a word*` therefore published to npm
+  // and then deadlocked its own push, leaving main on the previous version while
+  // the registry had moved on. Normalising here means the prose cannot do that.
+  execSync(`bunx oxfmt --write ${JSON.stringify(path)}`, { stdio: 'ignore' });
   console.log(`Wrote the ${version} section of ${CHANGELOG_PATH}`);
   return path;
 };
@@ -221,8 +228,15 @@ const pushVersionCommit = (
   console.log(`Pushing to branch: ${branch}`);
   const token = process.env['GITHUB_TOKEN'];
   if (token) {
+    // The token goes through a credential helper reading the environment, never
+    // into the command. `execSync` puts the whole command in the message of the
+    // error it throws, so an interpolated token was printed in full by any push
+    // failure - masked in Actions logs, but not on the terminal of anyone running
+    // this locally.
     execSync(
-      `git push https://x-access-token:${token}@github.com/${REPO}.git HEAD:refs/heads/${branch}`,
+      `git -c credential.helper='!f() { echo username=x-access-token; echo password=$GITHUB_TOKEN; }; f' ` +
+        `push https://github.com/${REPO}.git HEAD:refs/heads/${branch}`,
+      { env: { ...process.env, GITHUB_TOKEN: token } },
     );
   } else {
     execSync(`git push origin HEAD:refs/heads/${branch}`);
