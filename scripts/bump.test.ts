@@ -3,6 +3,7 @@ import {
   bumpTypeFrom,
   bumpVersion,
   changedSrcPackages,
+  mergeSubject,
   parseReleaseTrigger,
   releaseSummary,
 } from './bump.js';
@@ -103,6 +104,52 @@ describe('changedSrcPackages', () => {
         'docs/ROADMAP.md',
       ]),
     ).toEqual(new Set(['core', 'http']));
+  });
+});
+
+describe('mergeSubject', () => {
+  /**
+   * The shape GitHub actually writes. Before this existed, merging a release pull
+   * request produced a green CI run that published nothing: the merge subject carries
+   * no trigger and the title is one line further down.
+   */
+  const githubMerge = [
+    'Merge pull request #3 from petarzarkov/feat/some-branch',
+    '',
+    'release(minor): a throttle and a teardown that finishes',
+  ].join('\n');
+
+  it('reads the pull request title a merge folded into the body', () => {
+    expect(mergeSubject(githubMerge, 2)).toBe(
+      'release(minor): a throttle and a teardown that finishes',
+    );
+  });
+
+  it('ignores the body of an ordinary commit', () => {
+    expect(mergeSubject(githubMerge, 1)).toBeNull();
+  });
+
+  it('reads no deeper than the first non-empty line', () => {
+    const pasted = [
+      'Merge pull request #4 from petarzarkov/feat/other',
+      '',
+      'chore: tidy the scaffold',
+      '',
+      'release(major): a changelog paste that must not publish',
+    ].join('\n');
+    expect(mergeSubject(pasted, 2)).toBe('chore: tidy the scaffold');
+  });
+
+  it('is null when a merge carries no body', () => {
+    expect(mergeSubject('Merge branch main into feat/x', 2)).toBeNull();
+  });
+
+  it('feeds parseReleaseTrigger the bump the title stated', () => {
+    const title = mergeSubject(githubMerge, 2) ?? '';
+    expect(parseReleaseTrigger(title)).toEqual({
+      release: true,
+      bump: 'minor',
+    });
   });
 });
 

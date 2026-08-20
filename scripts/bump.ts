@@ -30,6 +30,33 @@ const lastCommitMessage = (): string =>
     .toString()
     .trim();
 
+/** How many parents HEAD has. Two or more means a merge. */
+const headParentCount = (): number =>
+  execSync('git log -1 --pretty=format:%P', { stdio: 'pipe' })
+    .toString()
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+/**
+ * The pull request title GitHub folded into a merge commit's body, or `null` when the
+ * commit is not a merge. The first non-empty body line and nothing deeper, so a
+ * changelog paste further down still cannot trigger a release.
+ *
+ * `parentCount` is passed in rather than read here, so this stays a pure function the
+ * tests can drive without a repository to merge in.
+ */
+export const mergeSubject = (
+  message: string,
+  parentCount: number,
+): string | null => {
+  if (parentCount < 2) return null;
+  const [, ...body] = message.split('\n');
+  return (
+    body.map((line) => line.trim()).find((line) => line.length > 0) ?? null
+  );
+};
+
 export const getForcePublishTarget = (): {
   force: boolean;
   packages: string[] | null;
@@ -64,6 +91,13 @@ export const getForcePublishTarget = (): {
  *
  * Only the **subject** is matched. A body that quotes the word would otherwise
  * publish, and the body is where a revert or a changelog paste puts it.
+ *
+ * A merge commit is the one exception, and it is not a loosening of that rule.
+ * GitHub writes `Merge pull request #n from branch` as the subject and puts the pull
+ * request's *title* on the first line of the body, so merging a release pull request
+ * could never release: CI read the merge subject, found no trigger and skipped, and
+ * the only symptom was a green run that published nothing. `mergeSubject` reads that
+ * one line, and only when the commit really has two parents.
  */
 export interface ReleaseTrigger {
   readonly release: boolean;
@@ -213,7 +247,12 @@ export const determineBumpType = (): BumpType => {
 /** Does this commit ask for a release? Reads the checked-out `HEAD`. */
 export const getReleaseTrigger = (): ReleaseTrigger => {
   try {
-    return parseReleaseTrigger(lastCommitMessage());
+    const message = lastCommitMessage();
+    const fromSubject = parseReleaseTrigger(message);
+    if (fromSubject.release) return fromSubject;
+
+    const merged = mergeSubject(message, headParentCount());
+    return merged === null ? fromSubject : parseReleaseTrigger(merged);
   } catch {
     return { release: false, bump: null };
   }
