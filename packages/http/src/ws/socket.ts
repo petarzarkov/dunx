@@ -50,6 +50,11 @@ export type SocketOptions = Readonly<
    * The default is **not** installed when `socketMiddleware` is non-empty: a
    * middleware wraps the handler, so it already saw the failure and a second
    * report on the console would be a duplicate.
+   *
+   * Seeing a failure and reporting it are not the same thing, so a middleware that
+   * reports says so with `SocketMiddleware.reportsErrors`. Middleware that sets it
+   * nowhere, and no `onError` here, is a boot warning: the fallback is gone and
+   * nothing replaced it.
    */
   readonly onError?: SocketErrorHandler;
 };

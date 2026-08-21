@@ -63,6 +63,21 @@ export type SocketNext = () => unknown;
  * which is an HTTP request answered by the gateway's own route.
  */
 export interface SocketMiddleware {
+  /**
+   * That a failure passing through here is reported somewhere. Default
+   * **`false`**.
+   *
+   * `SocketOptions.onError`'s `console.error` fallback is not installed while any
+   * socket middleware exists, because a middleware wraps the handler and would
+   * report the same failure a second time. Whether it does is something only the
+   * middleware knows: one that ignores a throw turns error reporting off for the
+   * whole server, and nothing about the wiring says so.
+   *
+   * Setting it is how a middleware says it does report. Leaving it unset with no
+   * `websocket.onError` beside it is what `HttpFactory.create` warns about at
+   * boot.
+   */
+  readonly reportsErrors?: boolean;
   handle(frame: SocketFrame, ctx: SocketContext, next: SocketNext): unknown;
 }
 

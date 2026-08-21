@@ -76,6 +76,8 @@ const elapsedMs = (started: number): number =>
  * pipeline entirely, and installing this takes that fallback out of the way.
  */
 export class SocketLoggingMiddleware implements SocketMiddleware {
+  /** A throwing handler reaches the `Logger` here, at `errorLevel`. */
+  readonly reportsErrors = true;
   readonly #level: LogLevel;
   readonly #errorLevel: LogLevel;
   readonly #events: Readonly<Record<string, LogLevel | false>>;
