@@ -4,6 +4,23 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 2.2.1 - 2026-08-21
+
+### Features
+
+- **http**: warn when socket middleware silences error reporting ([`835c74d`](https://github.com/petarzarkov/dunx/commit/835c74d308c40504ef768b6c7cf92524eed22e31))
+
+### Fixes
+
+- **http**: put the request id on a mapped failure ([`e8c40e1`](https://github.com/petarzarkov/dunx/commit/e8c40e1da098834019b19ea0a6c9cb770d5dd2a9))
+- **health**: take uptime from a monotonic clock ([`a2c285b`](https://github.com/petarzarkov/dunx/commit/a2c285b058d675e06d600b607df0194290a8a359))
+- **release**: stop the pipeline deadlocking on its own generated commit ([`a984d34`](https://github.com/petarzarkov/dunx/commit/a984d34e7e8c2d526699c2890accde7031f8b26a))
+
+### Documentation
+
+- split the preflight paragraph under the prose budget ([`3d01f05`](https://github.com/petarzarkov/dunx/commit/3d01f050415c6bda5a315ba7eb7d00101c78977b))
+- correct two claims the code does not make ([`0f2ab40`](https://github.com/petarzarkov/dunx/commit/0f2ab4028f64d7457a1f53909c0e37c18e6ec051))
+
 ## 2.2.0 - 2026-08-20
 
 a throttle, websocket middleware, sync paginate, and a teardown that finishes
