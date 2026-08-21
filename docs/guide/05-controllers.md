@@ -46,8 +46,21 @@ router, and writing one is a standing prohibition rather than a backlog item.
 
 Four consequences you will actually notice.
 
-**An unmatched method returns 404 where most frameworks return 405.** Bun's
-native behaviour, unmodified.
+**An unmatched method returns 404 where most frameworks return 405.** Bun answers a
+method miss natively only when nothing else can claim the request. dunx always
+installs the `fetch` fallback described below, so a method miss reaches it, runs the
+whole global middleware chain and comes back as the framework's 404 - the same shape
+as an unmatched path. Measured:
+
+```
+GET     /thing   200   the route
+OPTIONS /thing   ->    the fallback
+POST    /thing   ->    the fallback
+GET     /nope    ->    the fallback
+```
+
+The status is 404 either way; what differs is that your middleware sees it, so
+request logging, throttling and CORS all get a look at a method miss.
 
 **Paths are matched exactly, so a trailing slash is a different path.** `GET /t`
 is a 200 and `GET /t/` is a 404, and the same goes for `/t/sub/` and `POST /t/`.
@@ -66,10 +79,12 @@ The inbound URL is the only remaining half, and dunx could only touch it in the
 patterns to try `/t/7/` against. Matching there would mean a second JavaScript
 router beside Bun's.
 
-**CORS preflight cannot be inferred.** Since a method miss is a native 404, there
-is no fall-through for an `OPTIONS` request to land in. `enableCors()` therefore
-mounts an explicit `OPTIONS` handler on every path, built at boot from the verbs
-that path actually declares. It cannot collide with one of yours, because there is
+**CORS preflight is mounted, not inferred.** An `OPTIONS` request does reach the
+fallback. Answering preflight there would mean reconstructing which verbs the path
+declares, after Bun has already failed to match it.
+
+`enableCors()` mounts an explicit `OPTIONS` handler on every path instead, built at
+boot from the verbs that path declares. It cannot collide with one of yours: there is
 no `OPTIONS` verb decorator.
 
 **A route collision is a boot error.** Bun silently lets one route win, so dunx

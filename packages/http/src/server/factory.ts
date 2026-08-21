@@ -158,6 +158,12 @@ export class HttpFactory {
           )
         : undefined;
 
+    // Boot warnings go out here for the same reason the container's own do: they
+    // are about the wiring, and the app that wired it is about to start serving.
+    for (const warning of websocket?.warnings ?? []) {
+      app.get(Logger).warn(warning);
+    }
+
     // `root` is the app's own module, so global middleware and the error filter
     // resolve as the app sees them rather than as this wrapper does.
     return new HttpApplication(app, discovered, options, root, websocket);

@@ -56,6 +56,11 @@ export interface WebSocketRuntime {
    * "Consuming N job(s)" entry already set.
    */
   readonly gateways: readonly GatewaySummary[];
+  /**
+   * What `HttpFactory.create` logs at boot, the way the container logs its own
+   * scope warnings. Empty for a server that reports socket errors, or says it does.
+   */
+  readonly warnings: readonly string[];
 }
 
 export interface GatewaySummary {
@@ -71,6 +76,20 @@ const defaultOnError: SocketErrorHandler = (error, socket) => {
 
 /** The failure already went through the chain, which is where it was recorded. */
 const reportedByMiddleware: SocketErrorHandler = () => undefined;
+
+/**
+ * Dropping the fallback is right for middleware that reports, and it is the
+ * middleware's word that says so. Without it the wiring reads the same either way,
+ * and an observer that ignores a throw takes a wrong report down to no report:
+ * that is how it was found, in an app that had added socket logging and then had
+ * to add a reporter after noticing failures had gone quiet.
+ */
+const unreported = (middleware: readonly SocketMiddleware[]): string =>
+  'Socket middleware is installed and none of it sets reportsErrors, so a ' +
+  'throwing gateway handler is reported nowhere: the console fallback is off ' +
+  'whenever middleware wraps the handler. Set reportsErrors on the one that ' +
+  'records a failure, or pass websocket.onError. Installed: ' +
+  `${middleware.map((entry) => entry.constructor.name).join(', ')}.`;
 
 const runtimeOf = (socket: Socket): GatewayRuntime =>
   (socket.data as Routed)[RUNTIME];
@@ -242,6 +261,9 @@ export const buildWebSocket = (
   const onError =
     options.onError ??
     (middleware.length === 0 ? defaultOnError : reportedByMiddleware);
+  const reports =
+    options.onError !== undefined ||
+    middleware.some((entry) => entry.reportsErrors === true);
   // The rest is exactly the set of keys Bun's WebSocketHandler accepts.
   const { onError: _onError, ...socketOptions } = options;
 
@@ -385,6 +407,7 @@ export const buildWebSocket = (
       gateways.map((gateway) => [gateway.path, upgradeHandler(gateway)]),
     ),
     paths: [...byPath.keys()],
+    warnings: middleware.length > 0 && !reports ? [unreported(middleware)] : [],
     gateways: gateways.map((gateway) => ({
       name: gateway.name,
       path: gateway.path,

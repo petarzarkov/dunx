@@ -20,6 +20,7 @@ export interface HealthCheckReport {
 export interface HealthReport {
   readonly status: ProbeState;
   readonly draining: boolean;
+  /** Measured on a monotonic clock, so it never goes backwards. */
   readonly uptimeMs: number;
   readonly checks: readonly HealthCheckReport[];
 }
@@ -99,7 +100,15 @@ export interface HealthOptionsInit {
 
 /** Runs the indicators and shapes the report. Never throws. */
 export class HealthRegistry {
-  readonly #startedAt = Date.now();
+  /**
+   * `performance.now()`, not `Date.now()`. A duration taken from the wall clock is
+   * wrong whenever the wall clock is adjusted: an NTP correction, a suspend and
+   * resume, or a VM resyncing with its host all step it, and a backwards step made
+   * this report a *negative* uptime. That is not hypothetical - it was caught by a
+   * probe answering `uptimeMs: -242` under WSL2, where the guest clock is resynced
+   * routinely, which also made `uptimeMs >= 0` a flaky assertion.
+   */
+  readonly #startedAt = performance.now();
 
   constructor(
     private readonly options: HealthOptions,
@@ -128,7 +137,9 @@ export class HealthRegistry {
     return {
       status: worst(checks),
       draining: this.readiness_.draining,
-      uptimeMs: Date.now() - this.#startedAt,
+      // Rounded, because a monotonic clock is fractional and a millisecond count
+      // with seventeen decimal places reads like a bug in the probe.
+      uptimeMs: Math.round(performance.now() - this.#startedAt),
       checks,
     };
   }

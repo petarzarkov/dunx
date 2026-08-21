@@ -83,8 +83,8 @@ export {
   type HttpApp,
   type HttpOptions,
 } from './server/factory.js';
+export { REQUEST_ID_HEADER } from './server/request-id.js';
 export {
-  REQUEST_ID_HEADER,
   RequestLoggingMiddleware,
   type RequestLoggingOptions,
 } from './server/request-logging.js';
