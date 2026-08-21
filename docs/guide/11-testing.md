@@ -21,7 +21,7 @@ Use it when the thing under test is a service, which is most of the time.
 
 ```ts
 import { describe, expect, test } from 'bun:test';
-import { provide } from '@dunx/core';
+import { provide, token } from '@dunx/core';
 import { createTestApp } from '@dunx/testing';
 
 class FixedForecast extends ForecastClient {
@@ -118,34 +118,56 @@ this graph with these bindings replaced", which is also how a deployment variant
 would be expressed. `HttpOptions extends AppOptions`, so
 `HttpFactory.create` inherits it without a second mechanism.
 
-### An unmatched override is an error
+### An unmatched override is an error - unless it is a class
 
 ```ts
 test('an override naming a token nobody binds is an error', async () => {
-  class NotBoundAnywhere {}
+  const Clock = token<Date>('Clock');
 
   const message = await createTestApp({
     modules: [WeatherModule],
-    overrides: [provide(NotBoundAnywhere, { useValue: {} })],
+    overrides: [provide(Clock, { useValue: new Date(0) })],
   }).then(
     () => 'it resolved',
     (error: unknown) => (error as Error).message,
   );
 
-  expect(message).toContain('Nothing to override for NotBoundAnywhere');
+  expect(message).toContain('Nothing to override for Clock');
 });
 ```
 
-The full message:
+The full message, and the second clause is the important one:
 
-> Nothing to override for NotBoundAnywhere: no module in the graph binds it. An
-> override replaces a binding - it cannot add one, because a token nobody bound is
-> a token nothing under test resolves.
+> Nothing to override for Clock: no module in the graph binds it, **and it is not a
+> class, so nothing self-binds it either**. An override replaces a binding - it
+> cannot add one, because a token nobody bound is a token nothing under test
+> resolves.
 
 A silent no-op here is the worst possible failure, because it leaves a suite
 asserting against the real provider it believed it had swapped, and it passes. The
-check names **every** unmatched token rather than the first, so a renamed class
-does not turn into three rounds of the same error.
+check names **every** unmatched token rather than the first, so a renamed token does
+not turn into three rounds of the same error.
+
+**A class is deliberately exempt, and that is a real gap in the safety net.** A class
+self-binds: it needs no declaration to be resolvable, so an override for one is
+replacing the binding that _would_ have happened on demand, and registering it
+eagerly would construct a stub for a collaborator the graph under test never reaches.
+That is why `Injector.registerLazy` exists.
+
+The cost is that a **typo'd class override is accepted in silence** - there is no
+binding for it to fail to match, and nothing under test asks for it, so it simply
+never fires. Measured:
+
+```
+override a declared class      -> resolves, replacement used
+override a class nobody binds  -> resolves, no error
+override a token() nobody binds -> throws "Nothing to override"
+```
+
+So the check protects `token()` bindings and cannot protect class ones. If a class
+override appears not to work, the first thing to suspect is the class itself: two
+copies of a package means two class objects, and the one you imported in the suite is
+not the one the module bound.
 
 The most common way to hit it is a token whose module you forgot to list in
 `modules`. The second most common is a second copy of `@dunx/core` in the
