@@ -7,9 +7,8 @@ import type { BunRequest } from 'bun';
 import type { RouteContext } from './context.js';
 import { HttpError } from './errors.js';
 import type { Middleware, Next } from './middleware.js';
+import { REQUEST_ID_HEADER, RequestIds } from './request-id.js';
 import { HttpStatusCode } from './status.js';
-
-export const REQUEST_ID_HEADER = 'x-request-id';
 
 export interface RequestLoggingOptions {
   /** Bodies past this many characters are logged as a size. Default 2048. `0` omits them. */
@@ -87,24 +86,6 @@ export interface RequestLoggingOptions {
    */
   readonly correlate?: boolean;
 }
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * An inbound id is honoured so a trace survives across services - but only if it
- * is a UUID, which is what this middleware would have minted. It is a
- * caller-supplied string that ends up in every line the request writes, so a
- * newline, a megabyte, or a deliberate collision with somebody else's trace is
- * replaced by a fresh one rather than trusted. A production template validated it the
- * same way.
- *
- * The length check first: it is what keeps garbage away from the regex, and the
- * common case has no header at all.
- */
-const traceId = (inbound: string | null): string =>
-  inbound !== null && inbound.length === 36 && UUID.test(inbound)
-    ? inbound
-    : crypto.randomUUID();
 
 const parse = (text: string, limit: number): unknown => {
   if (limit === 0) return undefined;
@@ -199,7 +180,7 @@ export class RequestLoggingMiddleware implements Middleware {
     }
 
     const started = Bun.nanoseconds();
-    const requestId = traceId(req.headers.get(REQUEST_ID_HEADER));
+    const requestId = RequestIds.assign(req);
     const scope: ScopeFields = {
       requestId,
       method: ctx.method,
@@ -285,7 +266,7 @@ export class RequestLoggingMiddleware implements Middleware {
     path: string,
     next: Next,
   ): Promise<Response> {
-    const requestId = traceId(req.headers.get(REQUEST_ID_HEADER));
+    const requestId = RequestIds.assign(req);
     const stamp = (response: Response): Response => {
       response.headers.set(REQUEST_ID_HEADER, requestId);
       return response;
