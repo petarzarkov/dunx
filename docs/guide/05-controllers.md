@@ -80,11 +80,12 @@ patterns to try `/t/7/` against. Matching there would mean a second JavaScript
 router beside Bun's.
 
 **CORS preflight is mounted, not inferred.** An `OPTIONS` request does reach the
-fallback, but answering preflight from there would mean reconstructing which verbs
-the path declares after Bun has already failed to match it. `enableCors()` mounts an
-explicit `OPTIONS` handler on every path instead, built at boot from the verbs that
-path actually declares. It cannot collide with one of yours, because there is no
-`OPTIONS` verb decorator.
+fallback. Answering preflight there would mean reconstructing which verbs the path
+declares, after Bun has already failed to match it.
+
+`enableCors()` mounts an explicit `OPTIONS` handler on every path instead, built at
+boot from the verbs that path declares. It cannot collide with one of yours: there is
+no `OPTIONS` verb decorator.
 
 **A route collision is a boot error.** Bun silently lets one route win, so dunx
 rejects a duplicate method-and-path pair before it can, naming both handlers:
