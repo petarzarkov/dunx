@@ -78,7 +78,7 @@ jobs:
       # own workspaces. An example whose backing service is absent (Redis, Postgres,
       # MySQL, S3) reports that it is skipping and still exits 0.
       - name: Test the examples
-        run: bun run --filter '@dunx/example-*' test
+        run: bun run --parallel --filter '@dunx/example-*' test
 
       # `start` is a long-running service now, so it can never exit 0. `tour`
       # boots the same app, narrates every package and exits - which is the

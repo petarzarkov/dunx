@@ -309,6 +309,35 @@ would merely drop.
 `@dunx/http`'s `StaticFiles` exists for the cache policy, so `{ dir }` does not
 replace it as it stands. The two gaps above are what a swap is waiting on.
 
+### OpenTelemetry on 1.4 - `require` only, and it never sees `Bun.serve`
+
+The 1.4 notes say OTel's http and fs instrumentation export spans, with shimmer and
+require-in-the-middle patching bundled code. Probed with `@opentelemetry/sdk-node`
+(73 packages), `instrumentation-http` and an `InMemorySpanExporter`, everything under
+`bun --preload`:
+
+| Entry path                                   | Spans                                         |
+| -------------------------------------------- | --------------------------------------------- |
+| `require('node:http')` server and `http.get` | 2 - a server span and a client span           |
+| `import('node:http')`, identical requests    | none, and `http.get.__wrapped` is `undefined` |
+| `Bun.serve` inbound                          | none                                          |
+| global `fetch` outbound                      | none                                          |
+
+`require-in-the-middle` hooks `require`, and an ESM import of a `node:` builtin does
+not go through it, so a preloaded SDK patches nothing unless the file that imports
+`node:http` is CJS. The same process instruments a CJS `require` and misses the ESM
+import beside it.
+
+The API half works. `startActiveSpan` holds context across an `await`, and a child
+started after it carries the parent's trace id and span id -
+`@opentelemetry/context-async-hooks` over `AsyncLocalStorage`.
+
+For dunx none of it arrives for free. Requests come in on `Bun.serve`, go out through
+`fetch`, reach Redis through `Bun.RedisClient` and Postgres through `Bun.SQL`. The
+auto-instrumentation sees none of those four. Tracing here would be spans dunx emits
+against `@opentelemetry/api` at the seams it already owns: the request middleware, the
+job processor, the Redis wrapper.
+
 ### `Bun.serve({ websocket })` and `ServerWebSocket`
 
 - **`ServerWebSocket`**: `send`, `sendText`, `sendBinary`, `publish`, `publishText`,
