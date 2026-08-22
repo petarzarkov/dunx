@@ -4,6 +4,95 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 2.5.0 - 2026-08-22
+
+response compression, W3C trace context, and compile-time response shapes
+
+Three additions to `@dunx/http`, none of them on by default, and one of
+them a type-level check that costs nothing at runtime.
+
+**Response compression.** `Bun.serve` does no content encoding at all, so
+`@dunx/http` had no answer for it. `Compression` is a middleware the app
+registers itself with `app.use(Compression)`, so an app that does not want
+it has no branch in the request path to skip. It picks the sync encoder for
+a body it can buffer and `CompressionStream` for one it cannot, which is
+what lets a small response carry an accurate `content-length` while an SSE
+feed still streams. `zstd` and `gzip` are offered and negotiated by
+q-value; `vary`, weak `ETag`s, `no-transform`, 204/205/304 and 206 are all
+handled the way the RFCs ask.
+
+Two codings were measured and refused. Brotli encodes a 6.4 KB body in
+6,344 us against gzip's 23, and the `level` that would fix that is accepted
+and ignored. `deflate` is worse: `Bun.deflateSync` emits raw DEFLATE where
+`CompressionStream('deflate')` emits zlib, which is what the header means,
+so offering it would have flipped wire format at the buffering threshold.
+Both are recorded in docs/bun-apis.md.
+
+**W3C Trace Context.** `requestId` already spans two dunx services but
+cannot span one that is not dunx. `requestLogging: { trace: true }` adopts
+an inbound `traceparent`, puts `traceId`, `spanId` and `parentSpanId` on
+every line the request writes, and `@dunx/http/client` forwards the trace
+to whatever the app calls. One header parsed and one written: no exporter,
+no sampler, no collector, no dependency. Off by default, at 360 ns per
+request when on.
+
+Not an OpenTelemetry integration, and that was measured too. Bun 1.4's OTel
+support patches `node:http` through `require` only, and produces no spans
+for `Bun.serve` or `fetch`, so an SDK here would be 73 packages watching
+none of the traffic.
+
+**Response shapes, checked at compile time.** The verb decorators now hold
+a handler's return type against its own `response` entry for the success
+status, so a handler answering with a shape the document does not describe
+is a compile error in the controller rather than a surprise for whoever
+read the document. It found one already: `User` documented a `tags` array
+the table has no column for. Nothing is validated at runtime, so the
+request path is unchanged.
+
+**Two changes are breaking, despite the minor bump.** `@dunx/infra`'s root
+barrel no longer re-exports `/db`, because `export *` put a static
+`drizzle-orm` import in the root chunk graph and made an optional peer a
+hard requirement of `import '@dunx/infra'` for every consumer. Import those
+symbols from `@dunx/infra/db`, which was already the used path. And
+`engines.bun` is now `>=1.4.0` across every package: compression needs
+`Bun.zstdCompressSync` and `Bun.cron` only honours `{ tz }` from 1.4.
+
+Packages also stopped shipping source maps. `sourcemap: 'linked'` embedded
+full `sourcesContent`, so each one published its own TypeScript inside the
+`.map` and the maps were 50-64% of the tarball by byte.
+
+Also in this release: `bun run --parallel` for the multi-workspace scripts,
+so `test` and `typecheck` prefix every line with its package; and a
+recorded spike showing `Bun.WebView` drives the dashboard headlessly on
+Linux with no display and no dependency, which is the browser assertion
+happy-dom structurally cannot make.
+
+### Breaking changes
+
+- **infra**: keep /db out of the root barrel, so drizzle-orm stays optional ([`ee0b929`](https://github.com/petarzarkov/dunx/commit/ee0b92932d8b72dcd067712c76ced22ff7ac4fbd))
+
+### Features
+
+- **validation**: enforce response shape checks at compile time across routes ([`4cbac38`](https://github.com/petarzarkov/dunx/commit/4cbac382e67ec295aff43ea78cb4e750392ce55a))
+- **http**: W3C Trace Context, adopted inbound and forwarded outbound ([`e8e3146`](https://github.com/petarzarkov/dunx/commit/e8e3146275ec37e2cc2c442f352529f1ac20e65e))
+- **http**: opt-in response compression on Bun's own compressors ([`11ae3f2`](https://github.com/petarzarkov/dunx/commit/11ae3f2b79137a7402d13f2b34937c45162e53ea))
+
+### Fixes
+
+- **http**: withdraw the deflate coding before it ships ([`12ceaf9`](https://github.com/petarzarkov/dunx/commit/12ceaf9c521f5eb7415e6b07e6ef7dab7ca02dfa))
+
+### Documentation
+
+- **openapi**: swagger-ui-dist is a dependency, not an optional peer ([`f5ac14e`](https://github.com/petarzarkov/dunx/commit/f5ac14ef751e435da9249c5cc86fc5ccc4e9e25e))
+- **architecture**: Bun.WebView drives the dashboard headlessly, measured ([`8c84686`](https://github.com/petarzarkov/dunx/commit/8c8468691e7512e13d737d7366e9b7d1c114f9cc))
+
+### Other changes
+
+- require Bun >= 1.4.0 ([`2d8c6b4`](https://github.com/petarzarkov/dunx/commit/2d8c6b41bf1466a1cf83f7a08700a6828d88ca28))
+- stop shipping source maps ([`0f81d4b`](https://github.com/petarzarkov/dunx/commit/0f81d4b7dbc5824937cbbf15f7b15d6062801e36))
+- **create-app**: re-sync the vendored users template ([`a60667f`](https://github.com/petarzarkov/dunx/commit/a60667f2760077d510476187a8183a0ffd42daa2))
+- run multi-workspace scripts with bun run --parallel ([`4d877e8`](https://github.com/petarzarkov/dunx/commit/4d877e8f24860647de8fb52393781e5dd5c057be))
+
 ## 2.4.0 - 2026-08-22
 
 bun --watch works, health probes documented, schemas named
