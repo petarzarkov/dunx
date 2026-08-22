@@ -4,6 +4,10 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 2.3.1 - 2026-08-22
+
+enhance Swagger UI integration by adding favicon and improving asset handling
+
 ## 2.3.0 - 2026-08-22
 
 remove inlined OpenAPI explorer and integrate swagger-ui-dist
