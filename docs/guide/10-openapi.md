@@ -172,6 +172,45 @@ A status the route does not otherwise mention is documented from this key alone,
 a `404` a handler throws is in the document without a second annotation. The
 declared success status keeps its own description and gains the `content`.
 
+### Names in the explorer
+
+A hoisted schema gets a `title` equal to its `components/schemas` key, unless it
+declared one of its own.
+
+That is what an explorer labels a **nested** schema by. Swagger UI renders a model as
+`title || displayName || name`: a `$ref` at the root of a response supplies those
+fallbacks from the ref, but the same `$ref` inside `items` supplies neither, so
+`array<User>` read as `array<object>` before the title was there.
+
+Put prose in `description`. A sentence in `title` is what a reader sees instead of
+the type name, and the Schemas list becomes unbrowsable.
+
+### A plain JSON Schema
+
+`response` also takes a JSON Schema object, which needs no conversion:
+
+```ts
+const Pong = Object.freeze({
+  $id: 'Pong',
+  type: 'object',
+  properties: { pong: { type: 'boolean' } },
+  required: ['pong'],
+});
+
+@Get('/ping', { response: { 200: Pong } })
+```
+
+`$id` hoists it into `components/schemas` and leaves a `$ref`, the way
+`.meta({ id })` does for a zod schema, and is stripped from the definition. Without
+one it is inlined.
+
+This is the response side only. `body`, `query` and `params` are parsed, so they
+need a validator.
+
+`@dunx/http` documents `/health/live` and `/health/ready` this way: it has no
+validator dependency, and `HEALTH_REPORT_SCHEMA` is exported, so an app mounting the
+probes on its own paths can reference the same definition.
+
 ## `@ApiDoc`
 
 Schemas describe shape. They cannot describe intent, grouping or deprecation, so

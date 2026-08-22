@@ -815,6 +815,34 @@ server parks on every further write. Subjects now write to `/dev/null`, and
 event-loop turn - which also makes a slow consumer far less able to stall the
 server. `warn` and above are never batched.
 
+### What logging a body costs
+
+Generated from `results/logging-bodies.json`; reproduce with
+`bun run logging:bodies`. Same round-robin, but on the `validate`
+scenario - a `POST` with a body. The ladder above is a `GET`, so the body options
+are unreachable from it, which is why their cost lived in a doc comment rather than in
+this harness for as long as it did.
+
+| Setting | req/s | µs/req | vs the default |
+| ------- | ----: | -----: | -------------: |
+| `requestLogging: false` | 78,110 | 12.80 | −4.45 µs |
+| the shipped default, both body options off | 57,970 | 17.25 | - |
+| `requestBody: true`, route declares a schema | 52,294 | 19.12 | +1.87 µs |
+| `responseBody: true` | 50,494 | 19.80 | +2.55 µs |
+| both bodies, schema route | 49,917 | 20.03 | +2.78 µs |
+| `requestBody: true`, no schema - `req.clone()` | 21,711 | 46.06 | +28.81 µs |
+
+**The two request-body rows differ by one `Request.clone()` and nothing else.** A
+route that declares a `body` schema has its body buffered by the input reader, and
+the logger reads that text; a route that declares none leaves the logger to clone the
+request, and cloning one whose body is an unread network stream is what the cost has
+always been. Not the second parse, which measures at 0.32 µs.
+
+So `requestBody: true` is cheap on a validated route and expensive on an
+unvalidated one, and that is the number to quote rather than a single figure.
+`responseBody` needs no equivalent: a response is already a materialised string by
+the time anything clones it.
+
 ## Output
 
 The stdout table is for humans. `results/latest.json` (or `--out <path>`) is for

@@ -2,7 +2,7 @@ import type { BunRequest } from 'bun';
 import type { Middleware, Next, RouteContext } from '@dunx/http';
 
 /** The observable side effect: whatever the middleware saw is readable after. */
-export class RequestLog {
+export class RequestTrail {
   readonly entries: string[] = [];
 }
 
@@ -11,15 +11,14 @@ export class RequestLog {
  * what lets it inject. Chains are folded into one closure per route at boot, and
  * `ctx` is the route it was folded into: names, method, path, and its metadata.
  *
- * **This does not log.** `@dunx/http` already installs
- * `RequestLoggingMiddleware` by default - one structured entry per request,
- * with `requestId` propagated through `RequestContext` - so an app writing its
- * own would be logging everything twice. What is left here is the part a
- * framework cannot supply: an app-specific side effect, kept because the tour
- * asserts on it and because it is the smallest possible example of the seam.
+ * **This does not log**, which is what the name says now and did not before.
+ * `@dunx/http` installs `RequestLoggingMiddleware` itself - one structured entry
+ * per request, tuned through `requestLogging` in bootstrap.ts - so an app writing
+ * its own would write everything twice. What is left here is the part a framework
+ * cannot supply: an app-specific side effect on a response the middleware can see.
  */
-export class RequestLoggerMiddleware implements Middleware {
-  constructor(private readonly log: RequestLog) {}
+export class RequestTrailMiddleware implements Middleware {
+  constructor(private readonly trail: RequestTrail) {}
 
   async handle(
     req: BunRequest,
@@ -27,11 +26,11 @@ export class RequestLoggerMiddleware implements Middleware {
     next: Next,
   ): Promise<Response> {
     const response = await next();
-    this.log.entries.push(
+    this.trail.entries.push(
       `${req.method} ${new URL(req.url).pathname} -> ${response.status} ` +
         `(${ctx.controller}.${ctx.handler})`,
     );
-    response.headers.set('x-handled-by', 'request-logger');
+    response.headers.set('x-handled-by', 'request-trail');
     return response;
   }
 }

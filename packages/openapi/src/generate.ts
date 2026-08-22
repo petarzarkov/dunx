@@ -6,7 +6,7 @@ import {
   pathTemplate,
   SECURITY_SCHEME,
 } from './operations.js';
-import { danglingRefs, SchemaStore } from './refs.js';
+import { danglingRefs, SchemaStore, titledAs } from './refs.js';
 import {
   OPERATION_ORDER,
   type ComponentsObject,
@@ -244,7 +244,7 @@ const mergeContributions = async (
         );
         continue;
       }
-      schemas[name] = schema as JsonSchema;
+      schemas[name] = titledAs(name, schema as JsonSchema);
     }
 
     for (const tag of fragment.tags ?? []) {

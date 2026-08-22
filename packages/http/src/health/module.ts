@@ -6,7 +6,7 @@ import {
   type FactoryProvider,
   type ProviderEntry,
 } from '@dunx/core';
-import { HealthController } from './controller.js';
+import { HealthController, HiddenHealthController } from './controller.js';
 import { Readiness, ReadinessOptions } from './readiness.js';
 import {
   HealthOptions,
@@ -36,6 +36,10 @@ const wiring = (
 
 const surface = [HealthOptions, HealthRegistry, Readiness];
 
+/** Same routes either way; the subclass is the one carrying `@ApiHidden()`. */
+const controllerFor = (documented: boolean) =>
+  documented ? HealthController : HiddenHealthController;
+
 /**
  * Liveness and readiness, and the drain that makes readiness worth having.
  *
@@ -54,7 +58,9 @@ export class HealthModule {
     const options = new HealthOptions(init);
     return {
       module: HealthModule,
-      ...(options.routes ? { controllers: [HealthController] } : {}),
+      ...(options.routes
+        ? { controllers: [controllerFor(options.documented)] }
+        : {}),
       exports: surface,
       providers: wiring([provide(HealthOptions, { useValue: options })]),
     };
@@ -74,21 +80,24 @@ export class HealthModule {
    * });
    * ```
    *
-   * `routes` is read from the init here too, but the controller is mounted from the
-   * static shape rather than from the awaited options: a route table is folded into
-   * one closure per route when the server binds, so it cannot wait on a factory.
-   * Pass `routes: false` and mount your own if that matters.
+   * `routes` and `documented` are read from the init here too, but the controller is
+   * mounted from the static shape rather than from the awaited options: a route
+   * table is folded into one closure per route when the server binds, so it cannot
+   * wait on a factory. Pass `routes: false` and mount your own if that matters.
    */
   static forRootAsync<const D extends Deps>(
     config: FactoryProvider<HealthOptionsInit, D> & {
       readonly imports?: DynamicModule['imports'];
       readonly routes?: boolean;
+      readonly documented?: boolean;
     },
   ): DynamicModule {
     return {
       module: HealthModule,
       ...(config.imports ? { imports: config.imports } : {}),
-      ...((config.routes ?? true) ? { controllers: [HealthController] } : {}),
+      ...((config.routes ?? true)
+        ? { controllers: [controllerFor(config.documented ?? true)] }
+        : {}),
       exports: surface,
       providers: wiring([
         provide(HealthOptions, {

@@ -80,6 +80,27 @@ export const danglingRefs = (document: OpenApiDocument): readonly string[] => {
  * missing one body is worth more than no document at all - so every degradation
  * lands here instead.
  */
+/**
+ * A component's own name as its `title`, unless it declared one.
+ *
+ * That is the only thing an explorer can label a **nested** schema by. Swagger UI
+ * 5.32.14 renders a model as `schema.title || displayName || name` - verified in
+ * `swagger-ui-bundle.js`, in all three of its model components. A root `$ref`
+ * supplies those two fallbacks from the ref itself, but a schema reached through
+ * `items` supplies neither, so `array<User>` rendered as `array<object>` while the
+ * same `User` at the root of a response rendered as `User`. `title` is the one field
+ * that reaches both positions.
+ *
+ * This is not the sentence-in-`title` mistake that put prose in the Schemas list.
+ * The title here **is** the name, identical to the key, so that list reads exactly
+ * as it did; prose still belongs in `description`.
+ *
+ * Applied to a contributed schema too, so better-auth's `Session` labels the same
+ * way a generated `User` does.
+ */
+export const titledAs = (name: string, schema: JsonSchema): JsonSchema =>
+  schema['title'] === undefined ? { title: name, ...schema } : schema;
+
 export class SchemaStore {
   readonly #schemas = new Map<string, JsonSchema>();
   readonly #warnings: string[] = [];
@@ -98,12 +119,13 @@ export class SchemaStore {
    * warns: renaming would silently repoint refs a caller had already read.
    */
   add(name: string, schema: JsonSchema): string {
+    const titled = titledAs(name, schema);
     const existing = this.#schemas.get(name);
     if (existing === undefined) {
-      this.#schemas.set(name, schema);
+      this.#schemas.set(name, titled);
       return name;
     }
-    if (!Bun.deepEquals(existing, schema)) {
+    if (!Bun.deepEquals(existing, titled)) {
       this.warn(
         `Two different schemas are both named "${name}". The first one won. ` +
           'Give one of them a different .meta({ id }).',

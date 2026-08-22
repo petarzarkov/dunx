@@ -133,6 +133,38 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
       map: 'authorization: { enabled: true },',
       env: [],
     },
+    throttle: {
+      schema: [
+        '/** The app-wide limit. Generous, so a per-route `@Throttle` is the interesting half. */',
+        'THROTTLE_LIMIT: z.coerce.number().int().min(1).default(1000),',
+        'THROTTLE_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),',
+      ],
+      field:
+        'readonly throttle: { readonly limit: number; readonly windowSeconds: number };',
+      map: 'throttle: { limit: value.THROTTLE_LIMIT, windowSeconds: value.THROTTLE_WINDOW_SECONDS },',
+      env: [
+        { name: 'THROTTLE_LIMIT', value: '1000' },
+        { name: 'THROTTLE_WINDOW_SECONDS', value: '60' },
+      ],
+    },
+    schedule: {
+      schema: [
+        '/** A `@Cron` that names no zone of its own runs in this one. */',
+        "SCHEDULE_TZ: z.string().default('UTC'),",
+      ],
+      field: 'readonly schedule: { readonly tz: string };',
+      map: 'schedule: { tz: value.SCHEDULE_TZ },',
+      env: [{ name: 'SCHEDULE_TZ', value: 'UTC' }],
+    },
+    upstream: {
+      schema: [
+        '/** Per-call budget for the outbound client. */',
+        'UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(1).default(5000),',
+      ],
+      field: 'readonly upstream: { readonly timeoutMs: number };',
+      map: 'upstream: { timeoutMs: value.UPSTREAM_TIMEOUT_MS },',
+      env: [{ name: 'UPSTREAM_TIMEOUT_MS', value: '5000' }],
+    },
   });
 
 /** Always present, whatever is selected: the port and the logger need them. */
@@ -155,17 +187,16 @@ export const FEATURES: readonly Feature[] = [
       'OpenAPI 3.1 from the routes own schemas, plus the Swagger UI page.',
     requires: [],
     module: { klass: 'DocsModule', from: './docs/docs.module.js' },
-    // `swagger-ui-dist` is what the page is: an optional peer of
-    // `@dunx/openapi`, needed if and only if the explorer is mounted. The
-    // `notes` feature declares `@dunx/openapi` too and does not need it, because
-    // it only writes `@ApiDoc` metadata.
-    dependencies: ['@dunx/openapi', 'swagger-ui-dist', 'zod'],
+    // No `swagger-ui-dist` here: it is a hard dependency of `@dunx/openapi`, so
+    // it arrives transitively and a scaffolded app never names it.
+    dependencies: ['@dunx/openapi', 'zod'],
     config: [],
   },
   {
     name: 'http',
     source: 'http',
-    summary: 'CORS, a request-logging middleware and error mapping.',
+    summary:
+      'CORS, a middleware of your own on the response, and error mapping.',
     requires: [],
     module: { klass: 'HttpModule', from: './http/http.module.js' },
     dependencies: [],
@@ -262,14 +293,63 @@ export const FEATURES: readonly Feature[] = [
   {
     name: 'health',
     source: 'health',
-    summary: 'One endpoint reporting which parts are live and which degraded.',
-    // `files` joined this list when module scoping made the dependency explicit: the
-    // controller injects `Storage`, so the module has to import the one that provides
-    // it. Selecting health without files used to typecheck and fail at boot.
+    summary:
+      "`HealthModule`'s liveness and readiness probes, wired to this app's own indicators.",
+    // Each one supplies an indicator: `cache` the Redis connection, `database` the
+    // connection and the `Ledger` the custom check queries, `files` the `Workspace`
+    // whose directory the disk check measures. Selecting health without them used
+    // to typecheck and fail at boot.
     requires: ['cache', 'database', 'files'],
-    module: { klass: 'HealthModule', from: './health/health.module.js' },
+    module: { klass: 'ProbesModule', from: './health/health.module.js' },
     dependencies: ['@dunx/infra'],
     config: ['appName'],
+  },
+  {
+    name: 'throttle',
+    source: 'throttle',
+    summary:
+      'A fixed-window rate limit, with the counter in Redis and per-route overrides.',
+    // `cache` for the `RedisConnection` the shared counter writes to. The
+    // in-process default needs nothing, but it is per replica, so the example
+    // shows the one that survives a second pod.
+    requires: ['cache'],
+    module: { klass: 'LimitsModule', from: './throttle/throttle.module.js' },
+    dependencies: ['@dunx/infra'],
+    config: ['appName', 'throttle'],
+    service: 'Redis or Valkey',
+  },
+  {
+    name: 'schedule',
+    source: 'schedule',
+    summary:
+      '@Cron, @Interval and @OnceOnBoot on Bun.cron, armed at boot and triggerable.',
+    requires: [],
+    module: {
+      klass: 'MaintenanceModule',
+      from: './schedule/schedule.module.js',
+    },
+    dependencies: ['@dunx/infra'],
+    config: ['schedule'],
+  },
+  {
+    name: 'assets',
+    source: 'assets',
+    summary:
+      'A static directory on Bun.file, with a short max-age and an immutable rule.',
+    requires: [],
+    module: { klass: 'AssetsModule', from: './assets/assets.module.js' },
+    dependencies: [],
+    config: [],
+  },
+  {
+    name: 'client',
+    source: 'upstream',
+    summary:
+      'The outbound half of @dunx/http: retry, backoff and a typed FetchError.',
+    requires: [],
+    module: { klass: 'UpstreamModule', from: './upstream/upstream.module.js' },
+    dependencies: [],
+    config: ['appName', 'upstream'],
   },
 ];
 

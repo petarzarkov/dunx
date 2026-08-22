@@ -1,88 +1,14 @@
 import { describe, expect, it } from 'bun:test';
-import { Logger, Module, RequestContext } from '@dunx/core';
-import { Controller, Get, Post } from '../route/decorators.js';
-import type { Input, RouteSchemas } from '../route/schema.js';
+import { Logger, RequestContext } from '@dunx/core';
 import { HttpError } from './errors.js';
-import { HttpFactory, type HttpApp } from './factory.js';
 import type { Middleware } from './middleware.js';
-
-/**
- * Captures both streams: warn and above go to stderr by design. One `console.log`
- * may carry several entries - `ConsoleLogger` batches everything at `info` and
- * below into one write per event-loop turn - so each call is split back apart.
- * `withApp` shuts the app down inside `run`, and that flushes what is pending.
- */
-const captured = async (
-  run: () => Promise<void>,
-): Promise<Record<string, unknown>[]> => {
-  const lines: string[] = [];
-  const { log, error } = console;
-  const record = (...args: unknown[]): void => {
-    lines.push(...args.map(String).join(' ').split('\n'));
-  };
-  console.log = record;
-  console.error = record;
-  try {
-    await run();
-  } finally {
-    console.log = log;
-    console.error = error;
-  }
-  return lines
-    .filter((line) => line.startsWith('{'))
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-};
-
-@Controller('things')
-class ThingsController {
-  @Get('/')
-  list(): readonly string[] {
-    return ['one'];
-  }
-
-  @Post('/')
-  create(input: Input<RouteSchemas>): Promise<unknown> {
-    return input.req.json();
-  }
-
-  @Get('/boom')
-  boom(): never {
-    throw new HttpError(418, 'teapot');
-  }
-
-  @Get('/broken')
-  broken(): never {
-    throw new Error('unhandled');
-  }
-
-  /** Proves the handler's own entries inherit the request scope. */
-  @Get('/inner')
-  inner(): { ok: true } {
-    logger?.info('from the handler');
-    return { ok: true };
-  }
-}
-
-// Set from the container inside the test that needs it.
-let logger: Logger | undefined;
+import {
+  captured,
+  handlerLogger,
+  withApp,
+} from './request-logging.fixture.test.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-@Module({ controllers: [ThingsController] })
-class ThingsModule {}
-
-const withApp = async (
-  run: (app: HttpApp, url: string) => Promise<void>,
-  options: Parameters<typeof HttpFactory.create>[1] = {},
-): Promise<void> => {
-  const app = await HttpFactory.create(ThingsModule, options);
-  const url = await app.listen(0);
-  try {
-    await run(app, url);
-  } finally {
-    await app.shutdown();
-  }
-};
 
 describe('request logging', () => {
   it('is on with no logging module imported at all', async () => {
@@ -247,9 +173,9 @@ describe('request logging', () => {
   it('puts the handler’s own entries in the same request scope', async () => {
     const entries = await captured(async () => {
       await withApp(async (app, url) => {
-        logger = app.get(Logger);
+        handlerLogger.current = app.get(Logger);
         await fetch(new URL('things/inner', url));
-        logger = undefined;
+        handlerLogger.current = undefined;
       });
     });
 
@@ -326,10 +252,10 @@ describe('request logging', () => {
     const entries = await captured(async () => {
       await withApp(
         async (app, url) => {
-          logger = app.get(Logger);
+          handlerLogger.current = app.get(Logger);
           const response = await fetch(new URL('things/inner', url));
           seen.header = response.headers.get('x-request-id') ?? undefined;
-          logger = undefined;
+          handlerLogger.current = undefined;
         },
         {
           requestLogging: {
@@ -374,7 +300,7 @@ describe('request logging', () => {
     const entries = await captured(async () => {
       await withApp(
         async (app, url) => {
-          logger = app.get(Logger);
+          handlerLogger.current = app.get(Logger);
           const response = await fetch(new URL('things/inner', url));
           seen.header = response.headers.get('x-request-id') ?? undefined;
         },

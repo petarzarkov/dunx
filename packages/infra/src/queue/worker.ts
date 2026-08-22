@@ -37,6 +37,30 @@ export interface WorkerAppOptions {
 }
 
 /**
+ * `FORCE_COLOR` for a forked child, when this process has colour and nothing has
+ * already decided for it.
+ *
+ * bullmq forks a sandboxed processor with `stdio: 'pipe'` and copies its output
+ * into ours, so the child's stdout is a pipe and every colour check inside it
+ * answers for that pipe rather than for the terminal the lines end up on -
+ * `Bun.enableANSIColors`, which `LoggerModule` defaults `isDevelopment` from, and
+ * `@arkv/colors`, which `prettyFormat` asks before it emits an escape. A worker's
+ * lines came out as plain JSON in a stream where every other line was coloured.
+ *
+ * `FORCE_COLOR` is what carries the answer across a fork, and both of those read
+ * it. Absent when either variable is already set: it crosses in `process.env`
+ * unchanged, and it is the consumer's answer rather than a terminal check.
+ */
+export const childColourEnv = (
+  env: Record<string, string | undefined>,
+  colours: boolean,
+): Record<string, string | undefined> | undefined => {
+  if (!colours) return undefined;
+  if ('NO_COLOR' in env || env['FORCE_COLOR'] !== undefined) return undefined;
+  return { ...env, FORCE_COLOR: '1' };
+};
+
+/**
  * What a worker process holds. `create` discovers and validates; `start` is what
  * opens the connections - so a wiring mistake fails before anything consumes.
  */
@@ -199,6 +223,14 @@ export class QueueConsumer {
   #open(queue: string): Worker {
     const background = this.#isBackground(queue);
     const processor = this.#processor();
+    const forked = background && this.#isolation() === 'process';
+    // Nothing is added when the consumer passed fork options of their own: theirs
+    // carry an `env` this would have to merge into, and a guess there is worse
+    // than a child that logs the way it does today.
+    const env =
+      forked && this.#options.worker.workerForkOptions === undefined
+        ? childColourEnv(process.env, Bun.enableANSIColors)
+        : undefined;
     const worker = new Worker(
       queue,
       background && processor !== undefined
@@ -206,9 +238,8 @@ export class QueueConsumer {
         : (job: Job) => this.#dispatcher.dispatch(job),
       {
         ...this.#options.worker,
-        ...(background
-          ? { useWorkerThreads: this.#isolation() === 'thread' }
-          : {}),
+        ...(background ? { useWorkerThreads: !forked } : {}),
+        ...(env === undefined ? {} : { workerForkOptions: { env } }),
         connection: this.#connection.client(),
         prefix: this.#options.prefix,
       },

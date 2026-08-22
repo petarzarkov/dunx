@@ -1,4 +1,5 @@
 import type { BunRequest } from 'bun';
+import { RawBody } from './raw-body.js';
 import type {
   RouteInput,
   RouteSchemas,
@@ -158,7 +159,19 @@ const bodyFill =
     // Both handlers on one `then`, so the parse costs a single promise link. A
     // `ValidationError` from the success handler is deliberately not visible to the
     // rejection handler - only an unreadable or mangled body is a parse failure.
-    return parse(draft.req).then(
+    // `req.json()` is the fast path and stays the default. When the request logger
+    // has asked for the text, the body goes through `text()` instead so it can be
+    // recorded on the way past - which costs +0.38 us and saves the ~20 us
+    // `Request.clone()` it replaces. See `raw-body.ts`.
+    const read =
+      parse === asJson && RawBody.wanted(draft.req)
+        ? draft.req.text().then((text) => {
+            RawBody.record(draft.req, text);
+            return JSON.parse(text) as unknown;
+          })
+        : parse(draft.req);
+
+    return read.then(
       (value) => fillWith(draft, 'body', schema, value),
       (error: unknown) => {
         // A body the caller mangled is a 400. Only an unreadable stream would be ours.

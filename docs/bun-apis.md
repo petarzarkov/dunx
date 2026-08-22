@@ -616,3 +616,106 @@ That combination is what lets a shutdown hook say "end the process, but only if 
 was not going to end anyway" without a race or a fixed delay. A ref'd timer would
 add its own delay to every clean exit, and polling would need a loop that is itself
 a handle.
+
+### Decorators - a compound assignment to a private field is a `SyntaxError`
+
+**Bun 1.4.0 refuses to parse a class that has both a decorated member and a
+read-modify-write on a private field.** The whole file fails, at load, before
+anything runs:
+
+```
+this.#n += 1   in a decorated class   SyntaxError: Left side of assignment is not a reference.
+this.#n++      in a decorated class   SyntaxError: Postfix ++ operator applied to value that is not a reference.
+this.#n ??= 1  in a decorated class   SyntaxError: Left side of assignment is not a reference.
+this.#n -= 1   in a decorated class   SyntaxError: Left side of assignment is not a reference.
+this.#n ||= 1  in a decorated class   SyntaxError: Left side of assignment is not a reference.
+
+this.#n = 5             in a decorated class     OK
+this.#n = this.#n + 1   in a decorated class     OK
+this.#n += 1            with no decorator        OK
+this.n += 1             public field, decorated  OK
+```
+
+Three things about the shape of it:
+
+- **The class is what is poisoned, not the decorated method.** A compound assignment
+  in the constructor, or in an undecorated private method, fails just the same. Only
+  the presence of a decorator anywhere in the class matters.
+- **Only the read-modify-write forms.** Plain `=` is fine, so `this.#n = this.#n + 1`
+  is the workaround and it is a mechanical rewrite.
+- Nothing to do with `@dunx/transform`. Reproduced in `/tmp` with no preload, no
+  `bunfig.toml` and a two-line local decorator.
+
+This one is worth knowing rather than filing and forgetting, because dunx makes it
+easy to hit: **every controller, gateway, `@JobHandler` and scheduled service is a
+decorated class**, and `#count++` is the obvious way to keep a counter in one.
+
+It also sits under an idiom already in shipped code. `this.#x ??= ...` is how six
+classes do lazy init - `DashboardMiddleware`, `RedisRelay`, `QueueProcessor`,
+`QueueWorker`, `Workspace`, `Application`. None of them is decorated today, so none
+is broken; adding one decorator to any of them turns the file into a parse error
+with a message that names neither the field nor the decorator.
+
+Found while writing `examples/full/src/schedule/maintenance.service.ts`, whose
+`@Cron`/`@Interval`/`@OnceOnBoot` handlers each incremented a private counter.
+
+### A runtime `onLoad` plugin drops the file it loads - unless Bun reads it
+
+**`bun --watch` and `bun --hot` do not restart on a change to any file a runtime
+`onLoad` plugin read with `Bun.file`.** Since `@dunx/transform/preload` handles every
+`.ts` and `.tsx`, this made `bun run dev` restart on a change to the **entrypoint
+only**, in every dunx app.
+
+**Fixed.** `plugin.ts` reads the source through Bun's own loader instead:
+
+```ts
+const module = await import(`${path}?`, { with: { type: 'text' } });
+return module.default;
+```
+
+The file then enters the module graph, so Bun watches it. The `?` is required:
+without it the specifier still ends in `.ts` and re-enters the same plugin. From
+https://github.com/oven-sh/bun/issues/4689.
+
+Measured on Bun 1.4.0, same entry, same directory, same file edited - the only
+variable is how the plugin reads:
+
+```
+no preload at all                             RESTARTED
+onLoad filter that never matches              RESTARTED
+onLoad reading with Bun.file, source verbatim no restart   <- no transform at all
+onLoad reading with Bun.file, transformed     no restart
+onLoad returning { ..., watchFiles: [path] }  no restart
+onLoad returning undefined                    TypeError: onLoad() expects an object returned
+onLoad reading with import(..., type: text)   RESTARTED   <- the fix
+
+--watch / --hot, edit an imported file, before the fix   nothing
+--watch / --hot, edit the entrypoint, before the fix     RESTARTED
+```
+
+What the shape of it says:
+
+- **The transform was never the cause.** A plugin that read a file with `Bun.file`
+  and returned it byte for byte broke the watcher identically. What mattered was
+  reading it behind Bun's back.
+- **The three obvious repairs are all dead ends.** A runtime `onLoad` must return an
+  object, so returning `undefined` to decline is a `TypeError`; `watchFiles` on the
+  result is accepted and ignored; and `filter` is a path regex, so it cannot skip a
+  file whose contents decide whether the transform applies.
+- **The fix is free.** `examples/full` boots in 353-365 ms reading through `import`
+  against 354-374 ms with `Bun.file`, at 135 MB RSS either way - the same within
+  noise across three runs each.
+- The entrypoint restarting was the tell: Bun watches the file it was handed before
+  any plugin is involved, and nothing after that.
+
+Two smaller behaviours measured while chasing it, both still true: `--hot` is no
+different from `--watch` here, and an **mtime-only `touch` does not restart Bun** -
+it needs a write event, so rewriting a file with byte-identical content does restart
+it while `touch` does not.
+
+`packages/transform/src/watch.test.ts` guards it by spawning a real watch and editing
+a real import. Verified to fail - it times out - if the read goes back to `Bun.file`.
+
+Found from a report that editing a `@JobHandler` did nothing. The handler runs in a
+forked child, which made the child look like the cause; it was not, and no imported
+file of any kind restarted.

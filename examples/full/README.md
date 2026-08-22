@@ -22,7 +22,9 @@ listed, typed and callable from the browser.
 | ------------------------ | ----------------------------------------------- |
 | `/api/docs`              | the API reference, self-contained, no CDN       |
 | `/api/openapi.json`      | the OpenAPI 3.1 document it renders             |
-| `/api/health`            | which areas are live and which are degraded     |
+| `/assets/`               | a static directory, on `Bun.file`               |
+| `/api/health/live`       | liveness - is this process working              |
+| `/api/health/ready`      | readiness - should it receive traffic           |
 
 It stays up until you stop it. `ctrl-c` drains in reverse construction order: the
 services first, then the database and the temp directory they were using.
@@ -50,7 +52,10 @@ that check, because a service never exits.
 | `/api/images`     | `@dunx/infra/images` - `Bun.Image` resize and re-encode                  |
 | `/api/cache`      | `@dunx/infra/redis` - `Bun.RedisClient`, degrading when nothing is up    |
 | `/api/reports`    | `@Public`, `@Roles` and `@UseGuards`                                    |
-| `/api/health`     | which of the above are actually working                                 |
+| `/api/health/*`   | `HealthModule` - liveness, readiness, and a drain before the port closes |
+| `/api/limits`     | `@Throttle`, `@SkipThrottle` and a Redis-backed counter                 |
+| `/api/upstream`   | `@dunx/http/client` - the outbound half, with retry and a 404           |
+| `/assets/*`       | `StaticFiles` - two cache policies and a traversal refusal              |
 | `/api/jobs`       | `@dunx/infra/queue` - bullmq; published and consumed by this process       |
 | `/api/auth/*`     | `@dunx/auth` - better-auth mounted, with `Bun.password` hashing          |
 | `/api/wiring`     | `@dunx/core` - `token()`, `inject()` and the three `provide()` shapes    |
@@ -74,7 +79,27 @@ curl -s 'localhost:3000/api/images/render?width=128&format=webp' -o thumb.webp
 # The guard is on ReportsController, not global, so only these need credentials.
 curl -s localhost:3000/api/reports                                  # 401
 curl -s localhost:3000/api/reports -H 'authorization: Bearer viewer'  # 200
+
+# Four checks, run concurrently, each bounded by timeoutMs. `redis` is the only
+# one that may be down, and it is the only non-critical one.
+curl -s localhost:3000/api/health/ready
+curl -s localhost:3000/api/health/live
+
+# Three per minute, per subject. The fourth answers 429 with retry-after.
+for i in 1 2 3 4; do
+  curl -s -o /dev/null -w '%{http_code} ' -H 'x-api-key: me' \
+    localhost:3000/api/limits/burst
+done
+
+# max-age=60 on a name that can change, immutable on a content-addressed one.
+curl -sI localhost:3000/assets/site.css        | grep -i cache-control
+curl -sI localhost:3000/assets/app.a1b2c3d4.js | grep -i cache-control
 ```
+
+`ctrl-c` shows the ordering that makes readiness worth having: `/api/health/ready`
+starts answering `503` while the port is still open, waits `drainDelayMs`, and only
+then does the socket close. `/api/health/live` keeps answering `200` throughout, so
+nothing decides to restart a pod that is already leaving.
 
 `bun run tour` also boots a **second node** for `/chat` - a second `Bun.serve`
 and a second container in the same process - and relays a publish between the
@@ -166,6 +191,9 @@ loads `.env` and `.env.local` itself, so there is no loader and no `dotenv`.
 | `REDIS_URL`     | Bun's own default chain | absent is fine - the cache routes say so  |
 | `CORS_ORIGIN`   | `https://example.com`   | the allowed origin                        |
 | `IMAGE_QUALITY` | `82`                    | encoder quality                           |
+| `THROTTLE_LIMIT` | `1000`                 | app-wide requests per window, per subject |
+| `SCHEDULE_TZ`   | `UTC`                   | zone for a `@Cron` that names none        |
+| `UPSTREAM_TIMEOUT_MS` | `5000`            | per-call budget for outbound requests     |
 
 A clean checkout boots with none of them set.
 
@@ -174,23 +202,49 @@ A clean checkout boots with none of them set.
 `bun start` works with nothing installed. The database is `:memory:` and storage is
 a temp directory, so both are always live. Redis is the one area that can be down,
 and when it is, `/api/cache/*` answers **503 with the connection error's own
-message** and `/api/health` reports it `degraded`. A cache that is not running is
-not a reason for the service to refuse to start.
+message** while `/api/health/ready` still answers `200 up`. A cache that is not
+running is not a reason for the service to refuse to start, or to be pulled out of
+rotation.
+
+That is `critical: false` on one indicator, not a special case:
+[src/health/indicators.ts](./src/health/indicators.ts) subclasses `RedisIndicator`
+to flip it. `database` and `ledger` stay critical, so a broken database does shed
+traffic.
 
 ```bash
 REDIS_URL=redis://127.0.0.1:1 bun run tour   # still exits 0
 ```
 
+## Scheduled work
+
+`@Cron`, `@Interval` and `@OnceOnBoot` in
+[src/schedule/maintenance.service.ts](./src/schedule/maintenance.service.ts), armed at
+boot by `ScheduleModule`. The runner finds them by walking the prototype chains of
+the classes the modules already declare, so none needs a second registration.
+
+In-process and single-node: two replicas both run every schedule, because nothing in
+`@dunx/infra/schedule` coordinates. Work that must happen once across a fleet is a
+job, which is `@JobHandler` and bullmq.
+
+`ScheduleRegistry.trigger(name)` runs one off its own cadence, which is how the tour
+exercises a 03:00 cron without waiting for 03:00.
+
+`keepAlive: false` here, unlike the default: `Bun.cron` holds the event loop open, and
+`bun run tour` has to exit.
+
 ## Logging
 
-[src/http/request-log.ts](./src/http/request-log.ts) is the middleware, ported from
-the usual `RequestMiddleware` + `HttpLoggingInterceptor` pair. dunx
-has no interceptors and does not need them: middleware wraps `next()`, so one class
-owns both halves.
+`@dunx/http` writes the entry, and `requestLogging` in
+[src/bootstrap.ts](./src/bootstrap.ts) is all this app configures - the bodies come
+from `LOG_REQUEST_BODY` and `LOG_RESPONSE_BODY`, and `/api/_dunx` is skipped.
+Nothing here writes a request line by hand;
+[src/http/request-trail.ts](./src/http/request-trail.ts) is a middleware of the
+app's own that records a trail and sets a header.
 
-**One entry per request, not two.** The two-component version logs on the way in and again
-on the way out because the two halves are different classes. Here they are the same
-closure, so the request and its response go out together:
+**One entry per request, not two.** The usual `RequestMiddleware` +
+`HttpLoggingInterceptor` pair logs on the way in and again on the way out, because
+the two halves are different classes. dunx has no interceptors and needs none:
+middleware wraps `next()`, so the request and its response go out together:
 
 ```json
 {

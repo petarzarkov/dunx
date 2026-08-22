@@ -33,8 +33,15 @@ export class AppModule {}
 `GET /health/live` answers "is this process working". `GET /health/ready` answers
 "should it receive traffic". `up` is `200` and anything else is `503`.
 
-Both are `@Public()` and `@ApiHidden()`: a probe carries no credentials, and these are
-for the orchestrator rather than for an API consumer.
+Both are `@Public()`: a probe carries no credentials.
+
+Both are documented, under a `Health` tag, with the report shape as
+`components/schemas/HealthReport` on both the 200 and the 503. `documented: false`
+mounts a variant carrying `@ApiHidden()`, which serves the same two routes and
+leaves them out of the OpenAPI document.
+
+`HEALTH_REPORT_SCHEMA` is exported, so an app answering on its own paths can
+reference the same definition.
 
 ## The report
 
@@ -154,8 +161,11 @@ HealthModule.forRoot({
   timeoutMs: 2000,
   drainDelayMs: 0,
   routes: true,
+  documented: true,
 });
 ```
 
 `routes: false` binds `HealthRegistry` and `Readiness` and mounts nothing, for an app
 that answers on its own paths.
+
+`documented: false` mounts the routes and hides them from `@dunx/openapi`.

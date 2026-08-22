@@ -4,6 +4,34 @@ Where the default path's microseconds go, why `write(2)` per entry is the larges
 
 ## Re-measured on Bun 1.4.0, 2026-08-22
 
+### The body options, which this harness could not reach until it had a POST ladder
+
+`requestBody: true` was documented as costing "roughly two thirds of the throughput"
+and **no harness row could reproduce that**, because every row here runs `GET /json`
+and a `GET` has no body. `bun run logging:bodies` adds a ladder on `POST /validate`;
+`internal/bench/README.md` renders it.
+
+| Setting                              | µs/req | vs the default |
+| ------------------------------------ | -----: | -------------: |
+| `requestLogging: false`              |  12.80 |       -4.45 µs |
+| the shipped default, both bodies off |  17.25 |              - |
+| `requestBody: true`, schema route    |  19.12 |       +1.87 µs |
+| `responseBody: true`                 |  19.80 |       +2.55 µs |
+| both bodies, schema route            |  20.03 |       +2.78 µs |
+| `requestBody: true`, **no** schema   |  46.06 |      +28.81 µs |
+
+The two request-body rows differ by one `Request.clone()`. Decomposed on raw
+`Bun.serve`, cloning a request whose body is an unread network stream costs ~8 µs
+before either half is read and ~20 µs once one is; the second buffer and the second
+`JSON.parse` are 0.32 µs together, and putting the body in the entry is 0.27 µs.
+
+**So the expensive part was never the parsing, which is where everyone looks.** A
+route declaring a `body` schema now has its buffered text handed to the logger
+through `RawBody`, and only an unvalidated route still clones. The old figure was
+right about the old code and only ever described the unvalidated case.
+
+### The default path, re-measured
+
 Everything below this section was measured on Bun 1.3.14 and is kept, because most of
 it is the record of what a **dunx** code change was worth rather than what Bun does.
 Re-running `bun run logging` on 1.4 moved three of its conclusions.

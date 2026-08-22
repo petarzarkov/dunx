@@ -1,7 +1,7 @@
 import { Logger } from '@dunx/core';
 import type { HttpApp } from '@dunx/http';
 import { AppConfigService } from '../config.js';
-import { RequestLog } from './request-log.js';
+import { RequestTrail } from './request-trail.js';
 
 const CORS_HEADERS = [
   'access-control-allow-origin',
@@ -49,7 +49,7 @@ const whoami = async (url: string, forwarded: boolean): Promise<string> => {
 
 export class HttpDemo {
   constructor(
-    private readonly log: RequestLog,
+    private readonly trail: RequestTrail,
     private readonly config: AppConfigService,
     private readonly logger: Logger,
   ) {}
@@ -70,10 +70,12 @@ export class HttpDemo {
 
     const created = await postNote(url, 'ship it');
     logger.info(
-      `use(RequestLoggerMiddleware): POST /api/notes -> ${created.status}, ` +
+      `use(RequestTrailMiddleware): POST /api/notes -> ${created.status}, ` +
         `x-handled-by: ${created.headers.get('x-handled-by')}`,
     );
-    logger.info(`RequestLog -> ${JSON.stringify(this.log.entries.slice(-2))}`);
+    logger.info(
+      `RequestTrail -> ${JSON.stringify(this.trail.entries.slice(-2))}`,
+    );
 
     const rejected = await postNote(url, 7);
     logger.info(

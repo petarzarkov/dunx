@@ -359,6 +359,7 @@ describe('schemas that need more than a prefix rewrite', () => {
       'Two different schemas are both named "Clash"',
     );
     expect(result.document.components.schemas['Clash']).toEqual({
+      title: 'Clash',
       type: 'object',
       properties: { a: { type: 'string' } },
       required: ['a'],
@@ -390,7 +391,10 @@ describe('contributed paths', () => {
     expect(document.paths['/api/auth/session'] as unknown).toEqual({
       get: { summary: 'Session' },
     });
+    // Titled from its key, the same as a generated schema, so a contributed model
+    // labels correctly where it appears nested.
     expect(document.components.schemas?.['Session']).toEqual({
+      title: 'Session',
       type: 'object',
     });
     expect(document.tags?.some((tag) => tag.name === 'auth')).toBe(true);

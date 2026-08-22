@@ -1,3 +1,4 @@
+import { Auth } from '@dunx/auth';
 import { ConfigModule, Module } from '@dunx/core';
 import {
   ConsoleTransport,
@@ -13,10 +14,14 @@ import { OpsModule } from './dashboard/dashboard.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { DocsModule } from './docs/docs.module.js';
 import { GuardsModule } from './guards/guards.module.js';
-import { HealthModule } from './health/health.module.js';
+import { AssetsModule } from './assets/assets.module.js';
+import { ProbesModule } from './health/health.module.js';
 import { HttpModule } from './http/http.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { NotesModule } from './notes/notes.module.js';
+import { MaintenanceModule } from './schedule/schedule.module.js';
+import { LimitsModule } from './throttle/throttle.module.js';
+import { UpstreamModule } from './upstream/upstream.module.js';
 import { PicturesModule } from './pictures/pictures.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { Tour } from './tour/tour.service.js';
@@ -75,11 +80,17 @@ const fileAndConsole = (path: string): Transport[] => [
     NotesModule,
     ChatModule,
     JobsModule,
+    // After CacheModule, whose RedisModule binds the connection the shared
+    // throttle counter writes to.
+    LimitsModule,
+    MaintenanceModule,
+    AssetsModule,
+    UpstreamModule,
     GuardsModule,
     // After DatabaseModule, so better-auth reuses the connection it opened - and so
     // the auth tables are created after the ledger's, both at onInit.
     AccountsModule,
-    HealthModule,
+    ProbesModule,
     WiringModule,
     DocsModule,
     // After JobsModule, whose QueueModule.forRoot binds the publisher it reads,
@@ -87,5 +98,8 @@ const fileAndConsole = (path: string): Transport[] => [
     OpsModule,
   ],
   providers: [Tour],
+  // `OpenApiModule` wraps this module rather than being imported by it, so its
+  // factory resolves from here: `Auth` is exported for `betterAuthDocument`.
+  exports: [Auth],
 })
 export class AppModule {}

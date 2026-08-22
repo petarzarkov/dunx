@@ -6,9 +6,14 @@ import { ChatDemo } from '../chat/chat.demo.js';
 import { DashboardDemo } from '../dashboard/dashboard.demo.js';
 import { Ledger } from '../database/ledger.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
+import { AssetsDemo } from '../assets/assets.demo.js';
 import { GuardsDemo } from '../guards/guards.demo.js';
+import { HealthDemo } from '../health/health.demo.js';
 import { HttpDemo } from '../http/http.demo.js';
 import { Thumbnails } from '../pictures/thumbnails.service.js';
+import { ScheduleDemo } from '../schedule/schedule.demo.js';
+import { ThrottleDemo } from '../throttle/throttle.demo.js';
+import { UpstreamDemo } from '../upstream/upstream.demo.js';
 import { Uploads } from '../storage/uploads.service.js';
 import { UsersDemo } from '../users/users.demo.js';
 import { WiringDemo } from '../wiring/wiring.demo.js';
@@ -29,6 +34,11 @@ export class Tour {
     private readonly http: HttpDemo,
     private readonly chat: ChatDemo,
     private readonly guards: GuardsDemo,
+    private readonly health: HealthDemo,
+    private readonly throttle: ThrottleDemo,
+    private readonly schedule: ScheduleDemo,
+    private readonly assets: AssetsDemo,
+    private readonly upstream: UpstreamDemo,
     private readonly auth: AuthDemo,
     private readonly docs: DocsDemo,
     private readonly wiring: WiringDemo,
@@ -65,6 +75,21 @@ export class Tour {
 
     this.group('@dunx/http - @Public, @Roles and @UseGuards');
     await this.guards.demonstrate(url);
+
+    this.group('@dunx/http - liveness, readiness and a hold on rotation');
+    await this.health.demonstrate(url);
+
+    this.group('@dunx/http - @Throttle, @SkipThrottle and a Redis counter');
+    await this.throttle.demonstrate(url);
+
+    this.group('@dunx/http - StaticFiles over Bun.file');
+    await this.assets.demonstrate(url);
+
+    this.group('@dunx/http/client - the outbound half, with retry');
+    await this.upstream.demonstrate(url);
+
+    this.group('@dunx/infra/schedule - @Cron, @Interval and @OnceOnBoot');
+    await this.schedule.demonstrate();
 
     this.group('@dunx/auth - better-auth mounted, SessionGuard, AuthContext');
     await this.auth.demonstrate(url);

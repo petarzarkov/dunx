@@ -77,6 +77,36 @@ export const metaOf = (schema: StandardSchemaV1): SchemaMeta | undefined => {
 export const vendorOf = (schema: StandardSchemaV1): string =>
   schema['~standard'].vendor;
 
+/**
+ * Whether this is a Standard Schema at all, rather than a hand-written JSON Schema.
+ *
+ * `~standard` is the interface's own marker, so its absence is the discriminator -
+ * and it is checked rather than assumed because `RouteSchemas.response` accepts
+ * either. Everything that is parsed (`body`, `query`, `params`) still requires a
+ * validator; only a documented response may be raw.
+ */
+export const isStandardSchema = (
+  schema: StandardSchemaV1 | JsonSchema,
+): schema is StandardSchemaV1 =>
+  typeof schema === 'object' && schema !== null && '~standard' in schema;
+
+/**
+ * A JSON Schema is already the output format, so this only decides where it lands.
+ *
+ * `$id` hoists it into `components/schemas` under that name and leaves a `$ref`,
+ * which is what `.meta({ id })` does for a zod schema - so one shape documented on
+ * four routes is one definition rather than four copies. The key is stripped from
+ * the hoisted body: it named the schema, it does not describe it.
+ */
+export const passThrough = (
+  schema: JsonSchema,
+  store: SchemaStore,
+): Converted => {
+  const { $id: id, ...rest } = schema;
+  if (typeof id !== 'string' || id === '') return { schema };
+  return { schema: refTo(store.add(id, rest)) };
+};
+
 const permissive = (vendor: string): JsonSchema => ({
   description:
     `Not documented: "${vendor}" schemas cannot be converted to JSON Schema, ` +

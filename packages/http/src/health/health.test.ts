@@ -8,6 +8,7 @@ import {
   RedisIndicator,
 } from './indicators.js';
 import { Readiness, ReadinessOptions } from './readiness.js';
+import { HEALTH_REPORT_SCHEMA } from './report-schema.js';
 import { HealthOptions, HealthRegistry } from './registry.js';
 
 const indicator = (
@@ -252,5 +253,68 @@ describe('the shipped indicators', () => {
     expect(report.checks[0]?.state).toBe('down');
     // Not critical, so a bad path does not shed traffic either.
     expect(report.status).toBe('up');
+  });
+});
+
+/**
+ * The schema restates the `HealthReport` interfaces, because a type is erased and a
+ * document needs the shape at runtime. This is what keeps the two from drifting:
+ * it compares the schema against a report the registry actually produced.
+ */
+describe('the documented report schema', () => {
+  const report = async () => {
+    const registry = new HealthRegistry(
+      new HealthOptions({
+        readiness: [
+          new MemoryIndicator(new MemoryOptions({ maxRssBytes: 2 ** 40 })),
+        ],
+      }),
+      new Readiness(new ReadinessOptions()),
+    );
+    return registry.readiness();
+  };
+
+  const properties = HEALTH_REPORT_SCHEMA['properties'] as Record<
+    string,
+    unknown
+  >;
+
+  test('describes every key a real report carries, and no others', async () => {
+    expect(Object.keys(properties).sort()).toEqual(
+      Object.keys(await report()).sort(),
+    );
+  });
+
+  test('requires every key that is always present', async () => {
+    const produced = await report();
+    expect(HEALTH_REPORT_SCHEMA['required']).toEqual([
+      'status',
+      'draining',
+      'uptimeMs',
+      'checks',
+    ]);
+    for (const key of HEALTH_REPORT_SCHEMA['required'] as string[]) {
+      expect(produced).toHaveProperty(key);
+    }
+  });
+
+  test('describes every key a check carries', async () => {
+    const checks = properties['checks'] as { items: Record<string, unknown> };
+    const described = Object.keys(
+      checks.items['properties'] as Record<string, unknown>,
+    );
+    const [check] = (await report()).checks;
+
+    expect(check).toBeDefined();
+    // `detail` is optional on the interface and the indicator above sets it, so
+    // every key of a produced check has to be described.
+    for (const key of Object.keys(check ?? {})) {
+      expect(described).toContain(key);
+    }
+  });
+
+  test('names the three states the contract has', () => {
+    const status = properties['status'] as { enum: readonly string[] };
+    expect([...status.enum].sort()).toEqual(['down', 'unknown', 'up']);
   });
 });

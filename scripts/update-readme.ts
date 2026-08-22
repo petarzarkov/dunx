@@ -11,6 +11,7 @@
  * Usage:
  *   bun ./scripts/update-readme.ts
  *   bun run gen:readme
+ *   bun run gen:readme --check     # fail if either block is stale, write nothing
  */
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -155,18 +156,39 @@ function buildProjectStructure(entries: PackageEntry[]): string {
 }
 
 /**
- * Replace the body of a markdown section.
- * Matches everything between the section header
- * and the next `## ` header (or end of file).
+ * Everything between a `## ` header and the next one, or the end of the file.
  */
+const sectionPattern = (heading: string): RegExp =>
+  new RegExp(
+    `(## ${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n)([\\s\\S]*?)(?=\\n## |$)`,
+  );
+
+/**
+ * Replace the body of a markdown section, or report that there is no such section.
+ *
+ * **The distinction is the whole point of this returning a discriminated result.**
+ * The first version compared the rewritten string against the original and aborted
+ * when they were equal, which conflated "this heading does not exist" with "this
+ * block was already correct" - so the script failed on every run where there was
+ * nothing to do, which is most of them. It worked once after a real change and
+ * errored from then on, and neither CI nor a test ran it, so nothing said so.
+ */
+type SectionResult =
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'unchanged'; readonly content: string }
+  | { readonly kind: 'rewritten'; readonly content: string };
+
 function replaceSection(
   content: string,
   heading: string,
   newBody: string,
-): string {
-  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`(## ${escaped}\\n)([\\s\\S]*?)(?=\\n## |$)`);
-  return content.replace(pattern, `$1\n${newBody}\n`);
+): SectionResult {
+  const pattern = sectionPattern(heading);
+  if (!pattern.test(content)) return { kind: 'missing' };
+  const next = content.replace(pattern, `$1\n${newBody}\n`);
+  return next === content
+    ? { kind: 'unchanged', content }
+    : { kind: 'rewritten', content: next };
 }
 
 const entries = discoverPackages();
@@ -176,39 +198,83 @@ if (entries.length === 0) {
   process.exit(1);
 }
 
-/** A section that silently fails to match would leave a stale block behind. */
-const replaceOrFail = (
-  content: string,
-  heading: string,
-  body: string,
-  file: string,
-): string => {
-  const next = replaceSection(content, heading, body);
-  if (next === content) {
-    console.error(`No "## ${heading}" section found in ${file}. Aborting.`);
-    process.exit(1);
+const check = process.argv.includes('--check');
+
+interface Target {
+  readonly file: string;
+  readonly path: string;
+  readonly heading: string;
+  readonly body: string;
+}
+
+const targets: readonly Target[] = [
+  {
+    file: 'README.md',
+    path: README_PATH,
+    heading: 'Packages',
+    body: buildPackagesTable(entries),
+  },
+  {
+    file: 'CONTRIBUTING.md',
+    path: CONTRIBUTING_PATH,
+    heading: 'Project Structure',
+    body: buildProjectStructure(entries),
+  },
+];
+
+/**
+ * Both files are resolved before either is written.
+ *
+ * The previous version wrote README.md and then aborted on CONTRIBUTING.md, which
+ * left the repo half-regenerated - the state most likely to get committed without
+ * anyone noticing, because the file someone was looking at did change.
+ */
+const resolved: { readonly target: Target; readonly result: SectionResult }[] =
+  targets.map((target) => ({
+    target,
+    result: replaceSection(
+      readFileSync(target.path, 'utf8'),
+      target.heading,
+      target.body,
+    ),
+  }));
+
+const missing = resolved.filter(({ result }) => result.kind === 'missing');
+if (missing.length > 0) {
+  for (const { target } of missing) {
+    console.error(
+      `No "## ${target.heading}" section found in ${target.file}. Aborting.`,
+    );
   }
-  return next;
-};
+  process.exit(1);
+}
 
-const readme = replaceOrFail(
-  readFileSync(README_PATH, 'utf8'),
-  'Packages',
-  buildPackagesTable(entries),
-  'README.md',
-);
-writeFileSync(README_PATH, readme, 'utf8');
+const stale = resolved.filter(({ result }) => result.kind === 'rewritten');
 
-const contributing = replaceOrFail(
-  readFileSync(CONTRIBUTING_PATH, 'utf8'),
-  'Project Structure',
-  buildProjectStructure(entries),
-  'CONTRIBUTING.md',
-);
-writeFileSync(CONTRIBUTING_PATH, contributing, 'utf8');
+if (check) {
+  if (stale.length === 0) {
+    console.log(
+      `Both generated blocks are current (${entries.length} packages).`,
+    );
+    process.exit(0);
+  }
+  for (const { target } of stale) {
+    console.error(
+      `${target.file} has a stale "## ${target.heading}" block. Run \`bun run gen:readme\`.`,
+    );
+  }
+  process.exit(1);
+}
+
+for (const { target, result } of resolved) {
+  if (result.kind === 'rewritten')
+    writeFileSync(target.path, result.content, 'utf8');
+}
 
 const names = entries.map((e) => e.pkg.name).join(', ');
 console.log(
-  `Updated README.md (packages table) and CONTRIBUTING.md (project structure) ` +
-    `with ${entries.length} packages:\n  ${names}`,
+  stale.length === 0
+    ? `Already current: ${entries.length} packages, nothing to rewrite.`
+    : `Updated ${stale.map(({ target }) => target.file).join(' and ')} ` +
+        `with ${entries.length} packages:\n  ${names}`,
 );

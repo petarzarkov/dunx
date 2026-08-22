@@ -37,6 +37,7 @@ export class ThumbnailJobs {
   // in this process's stream.
   @JobHandler({ queue: THUMBNAIL_QUEUE, name: 'render', background: true })
   async render(job: Job<RenderRequest>): Promise<RenderResult> {
+    const started = Bun.nanoseconds();
     const encoded = await this.thumbnails.render({
       width: job.data.width,
       fit: ImageFit.INSIDE,
@@ -48,8 +49,13 @@ export class ThumbnailJobs {
       height: encoded.height,
       bytes: encoded.bytes.byteLength,
     };
+    const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
     // Written in the child, and visible here: that is the point of the sandbox.
-    this.logger.info(`rendered job ${job.id ?? '?'}`, result);
+    this.logger.info(
+      `rendered job ${job.id ?? '?'} in ${elapsedMs.toFixed(2)} ms`,
+      result,
+    );
+
     return result;
   }
 }

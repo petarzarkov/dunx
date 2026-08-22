@@ -158,9 +158,12 @@ describe('the docs page', () => {
    * bar for loading *other* documents over a page that serves exactly one.
    */
   it('uses BaseLayout and only the bundle preset', () => {
-    expect(page).toContain("layout:'BaseLayout'");
+    expect(page).toContain('"layout":"BaseLayout"');
     expect(page).not.toContain('StandaloneLayout');
     expect(page).not.toContain('SwaggerUIStandalonePreset');
+    // `presets` has to be source, not JSON: it names a property of the bundle's
+    // own global, which does not exist until that script has run.
+    expect(page).toContain('presets:[SwaggerUIBundle.presets.apis]');
   });
 
   it('caches the assets immutably, keyed by the installed version', () => {
@@ -184,9 +187,10 @@ describe('the docs page', () => {
   it('embeds the whole document, so Swagger UI fetches none of it', () => {
     expect(embedded()).toEqual(document);
     // `spec`, never `url`: a fetched document costs a round trip and breaks if
-    // the JSON route is guarded differently from the page.
-    expect(page).toContain('spec:JSON.parse(');
-    expect(page).not.toMatch(/\burl:\s*['"]/);
+    // the JSON route is guarded differently from the page. Assigned *after* the
+    // options object so no caller-supplied key can displace it.
+    expect(page).toContain('options.spec=JSON.parse(');
+    expect(page).not.toMatch(/"url":/);
   });
 
   it('escapes the one character that could end the data block', () => {

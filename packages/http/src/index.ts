@@ -38,6 +38,7 @@ export {
 export type {
   InferOutput,
   Input,
+  JsonSchema,
   RouteInput,
   RouteSchemas,
   StandardSchemaIssue,
@@ -230,7 +231,10 @@ export {
   type ProbeResult,
   type ProbeState,
 } from './health/contracts.js';
-export { HealthController } from './health/controller.js';
+export {
+  HealthController,
+  HiddenHealthController,
+} from './health/controller.js';
 export {
   DatabaseIndicator,
   DiskIndicator,
@@ -242,6 +246,7 @@ export {
   type MemoryOptionsInit,
 } from './health/indicators.js';
 export { HealthModule } from './health/module.js';
+export { HEALTH_REPORT_SCHEMA } from './health/report-schema.js';
 export { Readiness, ReadinessOptions } from './health/readiness.js';
 export {
   HealthOptions,

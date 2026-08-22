@@ -22,7 +22,8 @@
     "validation": "bun src/validation.ts",
     "logging": "bun src/logging.ts",
     "test": "bun test --bail",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p servers/nest"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p servers/nest",
+    "logging:bodies": "bun src/logging.ts --scenario validate --out results/logging-bodies.json"
   },
   "dependencies": {
     "@dunx/core": "workspace:*",

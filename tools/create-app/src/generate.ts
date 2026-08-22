@@ -86,7 +86,6 @@ export const manifest = (features: readonly Feature[]): string => {
  */
 export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
   zod: '^4.4.3',
-  'swagger-ui-dist': '^5.32.14',
   'drizzle-orm': '^0.45.2',
   'better-auth': '^1.6.25',
   bullmq: '^6.0.5',
@@ -100,7 +99,11 @@ export const appModule = (
   features: readonly Feature[],
 ): string => {
   const needsLogger = true;
+  // `OpenApiModule` wraps this module rather than being imported by it, so its
+  // factory resolves `Auth` from here - see `bootstrap`.
+  const documentsAuth = has(features, 'openapi') && has(features, 'auth');
   const imports = [
+    ...(documentsAuth ? ["import { Auth } from '@dunx/auth';"] : []),
     "import { ConfigModule, Module } from '@dunx/core';",
     ...(needsLogger
       ? ["import { LoggerModule } from '@dunx/infra/logger';"]
@@ -139,7 +142,14 @@ export const appModule = (
 @Module({
   imports: [
 ${moduleImports.map((line) => `    ${line}`).join('\n')}
-  ],
+  ],${
+    documentsAuth
+      ? `
+  // Better Auth serves its own routes, so the document is the only place they
+  // appear - and \`betterAuthDocument\` needs the instance.
+  exports: [Auth],`
+      : ''
+  }
 })
 export class AppModule {}
 `;
@@ -217,9 +227,23 @@ export const bootstrap = (
   const openapi = has(features, 'openapi');
   const websockets = has(features, 'websockets');
   const http = has(features, 'http');
+  const documentsAuth = openapi && has(features, 'auth');
+  // Both bind a middleware class that the **app** registers rather than the module:
+  // position in the chain is the app's decision, so it is generated here.
+  const assets = has(features, 'assets');
+  const throttle = has(features, 'throttle');
 
   const imports = [
-    `import { HttpFactory${websockets ? ', RedisRelay' : ''}, type HttpApp } from '@dunx/http';`,
+    ...(documentsAuth
+      ? ["import { Auth, betterAuthDocument } from '@dunx/auth';"]
+      : []),
+    `import { ${[
+      'HttpFactory',
+      ...(websockets ? ['RedisRelay'] : []),
+      ...(assets ? ['StaticFiles'] : []),
+      ...(throttle ? ['ThrottleGuard'] : []),
+      'type HttpApp',
+    ].join(', ')} } from '@dunx/http';`,
     ...(openapi ? ["import { OpenApiModule } from '@dunx/openapi';"] : []),
     "import { AppModule } from './app.module.js';",
     `import { ${[
@@ -227,17 +251,35 @@ export const bootstrap = (
       ...(websockets ? ['RELAY_CHANNEL'] : []),
     ].join(', ')} } from './config.js';`,
     ...(http
-      ? ["import { RequestLoggerMiddleware } from './http/request-log.js';"]
+      ? ["import { RequestTrailMiddleware } from './http/request-trail.js';"]
       : []),
   ].filter((line) => !line.includes('{  }'));
 
-  const root = openapi
-    ? `OpenApiModule.forRoot({
+  /**
+   * `forRootAsync` once Better Auth is in: it answers `/api/auth/*` from its own
+   * handler, so route discovery sees none of it and `contribute` is what puts its
+   * paths in the document. The factory needs the instance, and there is no
+   * container while the module graph is still being described.
+   */
+  const root = documentsAuth
+    ? `OpenApiModule.forRootAsync({
+      root: AppModule,
+      inject: [Auth] as const,
+      useFactory: (auth: Auth) => ({
+        title: '__DUNX_APP_NAME__',
+        version: '0.1.0',
+        contribute: [
+          betterAuthDocument(auth, { basePath: '/api/auth', tag: 'Auth' }),
+        ],
+      }),
+    })`
+    : openapi
+      ? `OpenApiModule.forRoot({
       title: '__DUNX_APP_NAME__',
       version: '0.1.0',
       root: AppModule,
     })`
-    : 'AppModule';
+      : 'AppModule';
 
   const options = websockets
     ? [
@@ -260,9 +302,13 @@ export const bootstrap = (
    */
   const shaping = [
     "app.setGlobalPrefix('api');",
+    // Assets first, and outside the prefix: a page pulling twenty hashed bundles
+    // must not spend a caller's request budget, and middleware never gets the
+    // prefix because it is not a discovered route.
+    ...(assets ? ['app.use(StaticFiles);'] : []),
     ...(http
       ? [
-          'app.use(RequestLoggerMiddleware);',
+          'app.use(RequestTrailMiddleware);',
           "app.set('trust proxy', true);",
           'app.enableCors({',
           "  origin: app.get(AppConfigService).get('corsOrigin'),",
@@ -271,6 +317,9 @@ export const bootstrap = (
           '});',
         ]
       : []),
+    // After anything that establishes who is calling, because the subject the
+    // limit counts by is what that decides.
+    ...(throttle ? ['app.use(ThrottleGuard);'] : []),
   ];
 
   return `${HEADER(name)}${imports.join('\n')}

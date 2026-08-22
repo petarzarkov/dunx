@@ -29,8 +29,33 @@ export {
 // The page shell, which is a Swagger UI boot script and nothing else. `renderShell`
 // is exported so a page of your own can reuse the document embedding and the asset
 // hrefs; `SwaggerAssets` is what resolves the consumer's `swagger-ui-dist`.
-export { DOCUMENT_ELEMENT_ID, renderShell, type PageOptions } from './html.js';
-export { ASSET_CACHE_CONTROL, SwaggerAssets } from './swagger.js';
+export {
+  DOCUMENT_ELEMENT_ID,
+  MOUNT_ELEMENT_ID,
+  renderShell,
+  type PageOptions,
+} from './html.js';
+export {
+  ASSET_CACHE_CONTROL,
+  contentTypeOf,
+  isSwaggerAsset,
+  SwaggerAssets,
+  type SwaggerAsset,
+} from './swagger.js';
+// Every Swagger UI parameter, typed. `RawJs` is the seam for the seven that are
+// functions and therefore cannot cross from a server-rendered page as values.
+export {
+  DEFAULT_UI_OPTIONS,
+  renderUiOptions,
+  SYNTAX_THEMES,
+  type DocExpansion,
+  type ModelRendering,
+  type RawJs,
+  type SubmitMethod,
+  type SwaggerUiOptions,
+  type SyntaxHighlightOptions,
+  type SyntaxTheme,
+} from './ui-options.js';
 export {
   OpenApiExplorer,
   OpenApiModule,

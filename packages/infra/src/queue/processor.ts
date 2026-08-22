@@ -137,9 +137,11 @@ export class JobProcessor {
       app.get(QueueOptions).jobTimeoutMs,
     );
 
+    // No `pid`: `@arkv/logger` puts it on every entry itself, and a second one in
+    // the metadata comes back out as `reservedFieldConflicts` on the only line a
+    // child writes about itself.
     app.get(Logger).info(`Sandboxed worker ready, ${jobs.length} handler(s)`, {
       queues: dispatcher.queues,
-      pid: process.pid,
     });
 
     // Without this the container never tears down and whatever it opened is closed

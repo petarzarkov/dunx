@@ -33,6 +33,9 @@ const SELECTIONS: readonly (readonly string[])[] = [
   featureNames,
   ['notes', 'openapi', 'http'],
   ['users', 'auth'],
+  // The one pair with a contribution in both directions: `betterAuthDocument` is
+  // wired only when both are chosen, and it needs `AppModule` to export `Auth`.
+  ['auth', 'openapi'],
   ['websockets', 'cache'],
   ['jobs', 'health'],
 ];

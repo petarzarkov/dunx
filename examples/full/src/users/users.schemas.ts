@@ -12,11 +12,13 @@ import { z } from 'zod';
  * use site instead of referenced once.
  *
  * **Prose goes in `description`, not `title`.** In JSON Schema `title` is a short
- * display name, and Swagger UI labels a schema by it when there is one - falling
- * back to the `components/schemas` key otherwise. A sentence in `title` therefore
- * makes the whole Schemas list read as prose: `User` shows up as "A stored user"
- * and is impossible to find. The key is already the name. Verified against Swagger
- * UI 5.32.14.
+ * display name, and Swagger UI labels a schema by it. A sentence there makes the
+ * whole Schemas list read as prose: `User` shows up as "A stored user" and is
+ * impossible to find.
+ *
+ * Leaving `title` out is right, and not because it is unused: `@dunx/openapi` fills
+ * it in with the component name when a schema is hoisted, which is what makes the
+ * item of `array<User>` read as `User` rather than as `object`.
  *
  * One more ordering trap: `.strict()` **after** `.meta()` discards the metadata, so
  * the schema is inlined despite declaring an id. Put `.meta()` last.

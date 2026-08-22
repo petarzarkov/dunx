@@ -1,5 +1,10 @@
 import { HttpStatusCode, type DiscoveredRoute } from '@dunx/http';
-import { convertObject, convertSchema } from './convert.js';
+import {
+  convertObject,
+  convertSchema,
+  isStandardSchema,
+  passThrough,
+} from './convert.js';
 import { apiDocFor, isPublic, rolesOf } from './metadata.js';
 import { refTo, type SchemaStore } from './refs.js';
 import type {
@@ -31,10 +36,10 @@ export const VALIDATION_ERROR = 'ValidationError';
  * rather than left for a caller to discover from a failing request.
  */
 /**
- * No `title`. Swagger UI labels a schema by its `title` when there is one and by
- * its `components/schemas` key otherwise, so a prose title makes the Schemas list
- * read as sentences instead of type names. The key is already the name; the prose
- * belongs in `description`. Verified against Swagger UI 5.32.14.
+ * No `title` here: `SchemaStore.add` supplies one from the component name, so this
+ * gets `title: 'ValidationError'` and stating it again would be the one place that
+ * could drift. Prose belongs in `description` - a sentence in `title` makes the
+ * Schemas list read as sentences instead of type names. See `titledAs`.
  */
 const validationErrorSchema: JsonSchema = Object.freeze({
   type: 'object',
@@ -191,12 +196,17 @@ const responsesFor = async (
   }
 
   for (const [code, schema] of Object.entries(options?.response ?? {})) {
-    const converted = await convertSchema(
-      schema,
-      `${operationId}Response${code}`,
-      store,
-      'output',
-    );
+    // A hand-written JSON Schema is already the output format, so it is passed
+    // through rather than converted - which is what lets a package with no
+    // validator dependency document what it answers with.
+    const converted = isStandardSchema(schema)
+      ? await convertSchema(
+          schema,
+          `${operationId}Response${code}`,
+          store,
+          'output',
+        )
+      : passThrough(schema, store);
     responses[code] = {
       description: responses[code]?.description ?? statusText(Number(code)),
       content: { 'application/json': { schema: converted.schema } },

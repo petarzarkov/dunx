@@ -5,8 +5,15 @@
  * a field missing here is a field dunx does not produce.
  */
 
-/** A JSON Schema, as JSON. OpenAPI 3.1 embeds draft 2020-12 verbatim. */
-export type JsonSchema = Readonly<Record<string, unknown>>;
+// Declared by `@dunx/http`, because `RouteSchemas.response` accepts one and that
+// package cannot import this one. Re-exported so every reference in here stays
+// `JsonSchema` and there is still exactly one declaration.
+export type { JsonSchema } from '@dunx/http';
+
+// Imported as well as re-exported: the objects below name it, and a bare re-export
+// puts nothing in this file's scope - the same pair `@dunx/dashboard` needs for
+// `ProbeResult`.
+import type { JsonSchema } from '@dunx/http';
 
 export interface ServerObject {
   readonly url: string;

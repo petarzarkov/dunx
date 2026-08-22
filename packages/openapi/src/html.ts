@@ -1,5 +1,6 @@
 import type { SwaggerAssets } from './swagger.js';
 import type { OpenApiDocument } from './types.js';
+import { renderUiOptions, type SwaggerUiOptions } from './ui-options.js';
 
 /**
  * The page is a Swagger UI shell: its stylesheet, its bundle, the document
@@ -58,30 +59,40 @@ export interface PageOptions {
   readonly warnings: readonly string[];
   /** Where the page itself is mounted, which is where its assets hang off. */
   readonly mountedAt: string;
+  /** Everything Swagger UI takes, plus the favicon and title dunx owns. */
+  readonly ui?: SwaggerUiOptions;
 }
 
 /** The id the page reads its document from. */
 export const DOCUMENT_ELEMENT_ID = 'dunx-openapi-document';
+
+/** The element Swagger UI mounts into. */
+export const MOUNT_ELEMENT_ID = 'swagger-ui';
 
 export const renderShell = (
   document: OpenApiDocument,
   options: PageOptions,
   assets: SwaggerAssets,
 ): string => {
-  const title = `${document.info.title} ${document.info.version}`;
+  const ui = options.ui ?? {};
+  const title = ui.title ?? `${document.info.title} ${document.info.version}`;
   const style = assets.href(options.mountedAt, 'swagger-ui.css');
   const script = assets.href(options.mountedAt, 'swagger-ui-bundle.js');
-  const icon = assets.href(options.mountedAt, 'favicon-32x32.png');
+  // Swagger UI's own mark, from the same install. Without a favicon of some kind a
+  // browser asks for `/favicon.ico` and every consumer logs a 404 against their own
+  // app, which is why the default is a real file rather than nothing.
+  const icon =
+    ui.favicon === undefined
+      ? assets.href(options.mountedAt, 'favicon-32x32.png')
+      : ui.favicon;
 
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     `<title>${escape(title)}</title>` +
     `<link rel="stylesheet" href="${escape(style)}">` +
-    // Swagger UI's own mark, from the same install. Without it a browser asks for
-    // `/favicon.ico` and every consumer logs a 404 against their own app.
-    `<link rel="icon" type="image/png" sizes="32x32" href="${escape(icon)}">` +
-    `<style>${BOOT}</style></head><body><div id="swagger-ui"></div>` +
+    (icon === false ? '' : `<link rel="icon" href="${escape(icon)}">`) +
+    `<style>${BOOT}</style></head><body><div id="${MOUNT_ELEMENT_ID}"></div>` +
     '<noscript><p class="no-js">This API explorer needs JavaScript. ' +
     `The document itself is at <a href="${escape(options.jsonHref)}">` +
     `${escape(options.jsonHref)}</a>.</p></noscript>` +
@@ -90,18 +101,16 @@ export const renderShell = (
     `<script src="${escape(script)}"></script>` +
     // `defer` is not enough on its own: the bundle defines `SwaggerUIBundle` as a
     // global, so this has to run after it and a plain trailing script does.
+    // The options object carries `spec` last so a caller cannot replace the
+    // embedded document with a `url` by accident, and `layout` defaults to
+    // `BaseLayout`: the standalone one needs a second ~1 MiB preset file and all it
+    // adds is a URL bar for loading other documents.
     '<script>(function(){' +
     `var node=document.getElementById(${embed(DOCUMENT_ELEMENT_ID)});` +
-    'window.ui=SwaggerUIBundle({' +
-    'spec:JSON.parse(node.textContent),' +
-    "dom_id:'#swagger-ui'," +
-    'deepLinking:true,' +
-    'presets:[SwaggerUIBundle.presets.apis],' +
-    'plugins:[SwaggerUIBundle.plugins.DownloadUrl],' +
-    // The standalone preset is a second 1 MiB file and all it adds is the
-    // petstore URL bar, which is wrong for a document served by this app.
-    "layout:'BaseLayout'" +
-    '});})();</script>' +
+    `var options=${renderUiOptions({ layout: 'BaseLayout', ...ui }, MOUNT_ELEMENT_ID)};` +
+    'options.spec=JSON.parse(node.textContent);' +
+    'window.ui=SwaggerUIBundle(options);' +
+    '})();</script>' +
     '</body></html>'
   );
 };

@@ -30,6 +30,7 @@ import {
   SwaggerAssets,
 } from './swagger.js';
 import type { OpenApiDocument } from './types.js';
+import type { SwaggerUiOptions } from './ui-options.js';
 
 /** Everything about the document itself, which is everything a factory can produce. */
 export interface OpenApiInfo extends DocumentInfo {
@@ -37,6 +38,12 @@ export interface OpenApiInfo extends DocumentInfo {
   readonly path?: string;
   /** Where the document is mounted. Default `/openapi.json`. */
   readonly jsonPath?: string;
+  /**
+   * Everything Swagger UI takes, plus the `favicon` and `title` dunx owns.
+   * `@dunx/openapi` sets `deepLinking: true`, `layout: 'BaseLayout'` and
+   * `validatorUrl: null` under whatever you pass; see {@link SwaggerUiOptions}.
+   */
+  readonly ui?: SwaggerUiOptions;
 }
 
 export interface OpenApiOptions extends OpenApiInfo {
@@ -72,16 +79,23 @@ export class OpenApiExplorer {
   readonly #absolutePaths: ReadonlySet<string>;
   readonly #jsonPath: string;
   readonly #uiPath: string;
+  readonly #ui: SwaggerUiOptions;
   readonly #documents = new Map<string, OpenApiDocument>();
   readonly #json = new Map<string, string>();
   readonly #pages = new Map<string, string>();
 
-  constructor(generated: GeneratedDocument, jsonPath: string, uiPath: string) {
+  constructor(
+    generated: GeneratedDocument,
+    jsonPath: string,
+    uiPath: string,
+    ui: SwaggerUiOptions = {},
+  ) {
     this.#base = generated.document;
     this.#absolutePaths = generated.absolutePaths;
     this.warnings = generated.warnings;
     this.#jsonPath = jsonPath;
     this.#uiPath = uiPath;
+    this.#ui = ui;
   }
 
   document(prefix = ''): OpenApiDocument {
@@ -118,6 +132,7 @@ export class OpenApiExplorer {
         jsonHref: joinPath(prefix, this.#jsonPath),
         warnings: this.warnings,
         mountedAt: joinPath(prefix, this.#uiPath),
+        ui: this.#ui,
       },
       await SwaggerAssets.resolve(),
     );
@@ -149,16 +164,20 @@ export class OpenApiExplorer {
 interface DocPaths {
   json: string;
   ui: string;
+  /** Swagger UI configuration, mutated in place by `forRootAsync`'s factory. */
+  uiOptions: SwaggerUiOptions;
 }
 
 const DEFAULT_PATHS: Readonly<DocPaths> = Object.freeze({
   json: '/openapi.json',
   ui: '/docs',
+  uiOptions: Object.freeze({}),
 });
 
 const pathsFrom = (info: OpenApiInfo): DocPaths => ({
   json: info.jsonPath ?? DEFAULT_PATHS.json,
   ui: info.path ?? DEFAULT_PATHS.ui,
+  uiOptions: info.ui ?? DEFAULT_PATHS.uiOptions,
 });
 
 /**
@@ -265,6 +284,7 @@ export class OpenApiModule {
               await generateDocument(describeRoutes(configured), options),
               paths.json,
               paths.ui,
+              paths.uiOptions,
             ),
         }),
       ],
@@ -319,6 +339,7 @@ export class OpenApiModule {
               await generateDocument(describeRoutes(configured), info),
               paths.json,
               paths.ui,
+              paths.uiOptions,
             );
           },
           inject: options.inject ?? ([] as unknown as D),

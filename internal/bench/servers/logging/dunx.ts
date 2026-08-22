@@ -124,6 +124,20 @@ const validate = {
   status: 200,
 } as const satisfies RouteSchemas;
 
+/**
+ * `body-request-unvalidated` drops the body schema from `/validate` and has the
+ * handler read the stream itself, which is what an unvalidated route looks like.
+ *
+ * That is the whole difference between the two request-body rows: with a schema the
+ * input reader buffers the body and `RawBody` hands the text to the logger, and
+ * without one the logger has to `req.clone()`. Same path, same bytes on the wire,
+ * so the two rows differ by exactly the clone.
+ */
+const UNVALIDATED = variant === 'body-request-unvalidated';
+const validateOptions = (
+  UNVALIDATED ? { status: 200 } : validate
+) as typeof validate;
+
 @Controller()
 class BenchController {
   constructor(private readonly greeter: Greeter) {}
@@ -143,9 +157,15 @@ class BenchController {
     return { id: input.req.params['id'] };
   }
 
-  @Post('/validate', validate)
-  validate(input: Input<typeof validate>): { name: string; age: number } {
-    return echo(input.body);
+  @Post('/validate', validateOptions)
+  validate(
+    input: Input<typeof validate>,
+  ): { name: string; age: number } | Promise<{ name: string; age: number }> {
+    if (!UNVALIDATED) return echo(input.body);
+    // No schema declared, so nothing parsed this body but the handler.
+    return input.req
+      .json()
+      .then((value) => echo(value as Parameters<typeof echo>[0]));
   }
 }
 
@@ -188,7 +208,13 @@ const app = await HttpFactory.create(AppModule, {
       ? false
       : variant === 'uncorrelated'
         ? { correlate: false }
-        : {},
+        : variant === 'body-request' || variant === 'body-request-unvalidated'
+          ? { requestBody: true }
+          : variant === 'body-response'
+            ? { responseBody: true }
+            : variant === 'body-both'
+              ? { requestBody: true, responseBody: true }
+              : {},
   middleware: stepped ? [StepMiddleware] : [],
 });
 await app.listen();

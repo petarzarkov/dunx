@@ -32,6 +32,12 @@ export const loggingVariants = Object.freeze([
   'unbatched',
   'default',
   'uncorrelated',
+  // The body options, which the `json` ladder above cannot reach: they need a
+  // request with a body, so these only run under `--scenario validate`.
+  'body-request',
+  'body-request-unvalidated',
+  'body-response',
+  'body-both',
 ] as const);
 export type LoggingVariant = (typeof loggingVariants)[number];
 

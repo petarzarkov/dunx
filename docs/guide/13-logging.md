@@ -457,11 +457,24 @@ interface RequestLoggingOptions {
 }
 ```
 
-**Both body options default to `false`, and that default is a performance
-decision.** Reading a body means `req.clone().text()`: a second copy of every
-payload, buffered and parsed, on the hot path. Measured on the `validate` scenario
-turning both on costs roughly **two thirds of the throughput**. The request body is also the field most likely to contain a
-password. Turn them on in development.
+**Both body options default to `false`**, and the request body is the field most
+likely to contain a password. Turn them on in development.
+
+What `requestBody` costs depends on whether the route declares a `body` schema, and
+by a factor of fifteen:
+
+| Setting                            | µs/req | vs the default |
+| ---------------------------------- | -----: | -------------: |
+| the default, both bodies off       |  17.25 |              - |
+| `requestBody: true`, schema route  |  19.12 |       +1.87 µs |
+| `responseBody: true`               |  19.80 |       +2.55 µs |
+| both bodies, schema route          |  20.03 |       +2.78 µs |
+| `requestBody: true`, **no** schema |  46.06 |      +28.81 µs |
+
+A route that declares a body schema has already had the body buffered to validate
+it, so logging it reads that text and copies nothing. A route that declares none
+leaves the middleware to `req.clone()`, and cloning a request whose body is an
+unread network stream is the whole difference.
 
 ### What `ignore` costs, and how to buy part of it back
 

@@ -15,12 +15,28 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(LogLevel).default(LogLevel.INFO),
   /** Unset means console only. Set it to also append JSON to a rotating file. */
   LOG_FILE: z.string().optional(),
+  /**
+   * Whether the request entry carries the bodies. On here because this is a
+   * walkthrough and seeing the payload is the point; both default to `false` in
+   * `@dunx/http`, which is what a production service wants - reading a body is
+   * `req.clone().text()`, and the two together cost about two thirds of the
+   * throughput on `internal/bench`'s `validate` scenario.
+   */
+  LOG_REQUEST_BODY: z.stringbool().default(true),
+  LOG_RESPONSE_BODY: z.stringbool().default(true),
   CORS_ORIGIN: z.string().default('https://example.com'),
   /** `:memory:` needs no server and leaves nothing behind, so restarts are clean. */
   DATABASE_FILE: z.string().default(':memory:'),
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
+  /** The app-wide rate limit. Generous, so per-route `@Throttle` is the interesting half. */
+  THROTTLE_LIMIT: z.coerce.number().int().min(1).default(1000),
+  THROTTLE_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
+  /** A `@Cron` with no zone of its own runs in this one. */
+  SCHEDULE_TZ: z.string().default('UTC'),
+  /** Per-call budget for the outbound client. */
+  UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(1).default(5000),
   /** better-auth signs session cookies with this. 32 characters is its own minimum. */
   AUTH_SECRET: z
     .string()
@@ -43,11 +59,16 @@ export interface AppConfig {
   readonly log: {
     readonly level: LogLevel;
     readonly file: string | undefined;
+    readonly requestBody: boolean;
+    readonly responseBody: boolean;
   };
   readonly database: { readonly file: string };
   readonly redis: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
   readonly auth: { readonly secret: string };
+  readonly throttle: { readonly limit: number; readonly windowSeconds: number };
+  readonly schedule: { readonly tz: string };
+  readonly upstream: { readonly timeoutMs: number };
 }
 
 /**
@@ -78,10 +99,21 @@ export const validate = (env: ConfigSource): AppConfig => {
     port: value.PORT,
     corsOrigin: value.CORS_ORIGIN,
     seedUsers: ['ada', 'grace'],
-    log: { level: value.LOG_LEVEL, file: value.LOG_FILE },
+    log: {
+      level: value.LOG_LEVEL,
+      file: value.LOG_FILE,
+      requestBody: value.LOG_REQUEST_BODY,
+      responseBody: value.LOG_RESPONSE_BODY,
+    },
     database: { file: value.DATABASE_FILE },
     redis: { url: value.REDIS_URL },
     images: { quality: value.IMAGE_QUALITY },
     auth: { secret: value.AUTH_SECRET },
+    throttle: {
+      limit: value.THROTTLE_LIMIT,
+      windowSeconds: value.THROTTLE_WINDOW_SECONDS,
+    },
+    schedule: { tz: value.SCHEDULE_TZ },
+    upstream: { timeoutMs: value.UPSTREAM_TIMEOUT_MS },
   };
 };

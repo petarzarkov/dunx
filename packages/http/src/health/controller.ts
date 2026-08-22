@@ -1,7 +1,16 @@
 import { inject } from '@dunx/core';
 import { Controller, Get } from '../route/decorators.js';
 import { ApiHidden, Public } from '../route/metadata.js';
+import { HEALTH_REPORT_SCHEMA } from './report-schema.js';
 import { HealthRegistry, type HealthReport } from './registry.js';
+
+/**
+ * Both statuses, on both routes. A probe answers the same body either way - the
+ * status is the machine-readable half and the report is why.
+ */
+const probeResponses = {
+  response: { 200: HEALTH_REPORT_SCHEMA, 503: HEALTH_REPORT_SCHEMA },
+} as const;
 
 const answer = (report: HealthReport): Response =>
   // 503 rather than 500: the process is working and declining traffic, which is
@@ -13,12 +22,11 @@ const answer = (report: HealthReport): Response =>
  * finishes every `onInit` before `listen()` binds, so a connection refused *is* "not
  * started yet" and a third endpoint would restate it.
  *
- * `@Public()` because a probe has no credentials, and `@ApiHidden()` because these
- * are for the orchestrator rather than for an API consumer. Both are the existing
- * route metadata; there is nothing health-specific about either.
+ * `@Public()` because a probe has no credentials. Both routes are documented, under
+ * the `Health` tag; `HealthModule.forRoot({ documented: false })` mounts
+ * {@link HiddenHealthController} instead.
  */
 @Controller('health')
-@ApiHidden()
 export class HealthController {
   /**
    * `inject()` in a field initializer rather than a constructor parameter, because
@@ -36,15 +44,28 @@ export class HealthController {
    * killing, and reporting `down` invites a SIGKILL mid-drain.
    */
   @Public()
-  @Get('/live')
+  @Get('/live', probeResponses)
   async live(): Promise<Response> {
     return answer(await this.#health.liveness());
   }
 
   /** Should the process receive traffic. Fails from the moment the drain starts. */
   @Public()
-  @Get('/ready')
+  @Get('/ready', probeResponses)
   async ready(): Promise<Response> {
     return answer(await this.#health.readiness());
   }
 }
+
+/**
+ * The same two routes, kept out of the OpenAPI document.
+ *
+ * A subclass rather than a flag read when the module is registered, because
+ * `@ApiHidden()` writes to the class and a class is shared by every app in the
+ * process: `examples/full` boots a second container to demonstrate the websocket
+ * relay, so setting the flag at `forRoot` time would leak into the other one. The
+ * prefix and both handlers resolve through the prototype chain, so this is the
+ * whole implementation.
+ */
+@ApiHidden()
+export class HiddenHealthController extends HealthController {}

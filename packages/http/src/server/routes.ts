@@ -148,6 +148,8 @@ const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
     handler: '(none)',
     method: req.method as HttpMethod,
     path: new URL(req.url).pathname,
+    // Nothing matched, so no schema read this body and nothing recorded it.
+    parsesBody: false,
     get: <T>(key: MetaKey<T>): T | undefined => {
       if (key.id === UNMATCHED.id) return true as T;
       if (key.id === PUBLIC.id && isPublic) return true as T;

@@ -85,7 +85,7 @@ it('validates zod schemas and wraps the return', () => {
     'GET /api/users?limit=1&q=ad -> 200 [{"id":1,"name":"ada"}] (query coerced by zod)',
   );
   expect(tour.text).toContain(
-    'POST /api/notes -> 201, x-handled-by: request-logger',
+    'POST /api/notes -> 201, x-handled-by: request-trail',
   );
 });
 
@@ -114,7 +114,6 @@ it('documents every route the one app serves', () => {
     '/api/files/object',
     '/api/images/render',
     '/api/cache/{id}',
-    '/api/health',
     '/api/reports/{id}',
     '/api/users/{id}',
   ]) {
@@ -127,8 +126,32 @@ it('documents every route the one app serves', () => {
   expect(tour.text).toContain(
     'POST /api/users 400 -> {"schema":{"$ref":"#/components/schemas/ValidationError"}}',
   );
-  // Every $ref resolves, and nothing degraded.
-  expect(tour.text).toContain('unresolved $refs: 0, warnings: []');
+  // Every $ref resolves.
+  expect(tour.text).toContain('unresolved $refs: 0');
+});
+
+/**
+ * **A real name collision, kept because it is instructive.** This app declares
+ * `.meta({ id: 'User' })` for its own users table, and `betterAuthDocument`
+ * contributes better-auth's `User` under the same name. Two different schemas, one
+ * `components/schemas` key.
+ *
+ * dunx neither merges them nor renames one: `SchemaStore.add` keeps the **generated**
+ * schema - the app's own - and warns, because renaming would silently repoint a
+ * `$ref` a caller had already read. That precedence is the thing worth pinning: an
+ * app's own document wins over a contributor's.
+ *
+ * The fix on a consumer's side is to name one of them differently. This example does
+ * not, so the warning stays and this test is what stops it becoming background noise.
+ */
+it('keeps the app schema when a contributor claims the same name', () => {
+  // Quote-free fragments on purpose: the warning reaches the log line through two
+  // rounds of JSON encoding, so any assertion carrying a quote is asserting on the
+  // escaping rather than on the message.
+  expect(tour.text).toContain('A contributor redefined the schema');
+  expect(tour.text).toContain('The generated one was kept.');
+  // The app's shape, not better-auth's: three properties from `users.schemas.ts`.
+  expect(tour.text).toContain('"200":{"$ref":"#/components/schemas/User"}');
 });
 
 it('serves a Swagger UI shell whose assets resolve on this origin', () => {
@@ -261,6 +284,105 @@ it('exits 0 with no redis at all', async () => {
     'the app booted anyway and fan-out stayed local - that is the degraded path',
   );
   expect(run.text).toMatch(/the websocket relay could not (subscribe|publish)/);
+  // `CacheIndicator` overrides `critical` to false, so a cache that is down is
+  // reported and does not shed traffic. This is that override, observed.
+  expect(run.text).toMatch(/redis=down/);
+  expect(run.text).toMatch(/GET \/api\/health\/ready -> 200 up/);
+  expect(run.text).toContain(
+    'non-critical and down: redis - readiness is still up',
+  );
+});
+
+it('probes liveness and readiness, and takes the pod out by hand', () => {
+  // Liveness is a memory ceiling and nothing else: it answers "restart me",
+  // which a database being unreachable is not an answer to.
+  expect(tour.text).toMatch(
+    /GET \/api\/health\/live -> 200 up, \d+ ms up, memory=up/,
+  );
+  // Readiness is the four checks `IndicatorsModule` declares, in order.
+  expect(tour.text).toMatch(
+    /GET \/api\/health\/ready -> 200 up, \d+ ms up, database=up ledger=up redis=\w+ disk=up/,
+  );
+  // hold() fails readiness while liveness keeps passing - a pod that is being
+  // migrated does not need killing.
+  expect(tour.text).toContain(
+    'readiness.hold("migrating") -> ready 503 migrating, live still 200',
+  );
+  expect(tour.text).toContain('readiness.release() -> ready 200');
+});
+
+it('lights the same indicators on the ops page, each once', () => {
+  // `IndicatorsModule` declares them and both readers take that list, so the
+  // dashboard names every check `/api/health/ready` runs. `redis` appears once:
+  // `DashboardOptions.redis` already contributes it, which is why
+  // `AppIndicators.dashboardProbes` drops `CacheIndicator`.
+  expect(tour.text).toMatch(/probes: redis=\w+ database=up ledger=up disk=up/);
+});
+
+it('documents the probes under one Health tag', () => {
+  // Documented by default. `tagOf` strips the `Controller` suffix, so both
+  // operations land under `Health` rather than under `HealthController`.
+  expect(tour.text).toContain('"/api/health/live"');
+  expect(tour.text).toContain('"/api/health/ready"');
+});
+
+it('refuses the fourth request and exempts what opted out', () => {
+  // Redis when it answers, memory when it does not, and the limit works either
+  // way - which is what keeps this section meaningful on a machine with no Redis.
+  expect(tour.text).toMatch(
+    /rate limit counting in (redis at \S+, shared by every replica|memory: \S+ is unreachable)/,
+  );
+  expect(tour.text).toContain(
+    '@Throttle({ limit: 3, windowSeconds: 60 }) x4 -> 200, 200, 200, 429',
+  );
+  // The headers a client needs to back off, not just the status.
+  expect(tour.text).toContain('ratelimit-remaining per attempt -> 2, 1, 0, 0');
+  expect(tour.text).toMatch(/the 4th carries retry-after: \d+s/);
+  expect(tour.text).toContain(
+    '@SkipThrottle() x6 -> 200, 200, 200, 200, 200, 200 (not counted at all)',
+  );
+  // The window belongs to the subject, which is what `subject` decides.
+  expect(tour.text).toContain('same route, different x-api-key -> 200');
+});
+
+it('serves static assets with two cache policies', () => {
+  expect(tour.text).toContain('cache-control: public, max-age=60');
+  // Only a content-addressed name gets the forever promise.
+  expect(tour.text).toMatch(
+    /app\.a1b2c3d4\.js -> 200 text\/javascript.*immutable/,
+  );
+  expect(tour.text).toContain(
+    'GET /assets/../../package.json -> 404 (never leaves the root)',
+  );
+  // Anything outside the mount falls through untouched.
+  expect(tour.text).toContain('GET /api/notes -> 200 (outside /assets');
+});
+
+it('retries an outbound 503, and does not retry a 404 or an abort', () => {
+  expect(tour.text).toContain(
+    'two 503s then a 200 -> attempts 1, 2 (retry), 3 (retry), recovered after 3',
+  );
+  // A FetchError rather than an HttpError, so an upstream status is not passed on.
+  expect(tour.text).toContain('404 -> FetchError status 404');
+  expect(tour.text).toContain(
+    'timeoutMs: 25 against a 300 ms route -> FetchTransportError',
+  );
+});
+
+it('arms three schedules and triggers two off their cadence', () => {
+  expect(tour.text).toContain('once     maintenance.warm at 0');
+  expect(tour.text).toContain('interval maintenance.sweep at 600000');
+  expect(tour.text).toMatch(
+    /cron {5}maintenance\.compact at 0 3 \* \* \* - next \d{4}-/,
+  );
+  // @OnceOnBoot(0) fires before listen() resolves.
+  expect(tour.text).toContain('@OnceOnBoot fired at boot -> warmed=true');
+  expect(tour.text).toContain(
+    'trigger() x2 -> 1 compaction, 1 sweep, neither waited for a clock',
+  );
+  expect(tour.text).toContain(
+    'runs recorded on the entry -> 1, lastError none',
+  );
 });
 
 it('serves HTTP and WebSocket from one Bun.serve', () => {
@@ -311,9 +433,9 @@ it('honours trust proxy and refuses a hook after listen()', () => {
 
 it('tells middleware which route it was folded into', () => {
   // One entry per request, so the route it was folded into is a field on that
-  // entry rather than a second line. RequestLog is the in-memory proof.
+  // entry rather than a second line. RequestTrail is the in-memory proof.
   expect(tour.text).toContain(
-    'RequestLog -> ["GET /api/notes -> 200 (NotesController.list)"',
+    'RequestTrail -> ["GET /api/notes -> 200 (NotesController.list)"',
   );
 });
 

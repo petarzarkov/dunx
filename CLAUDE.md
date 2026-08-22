@@ -52,6 +52,23 @@ The rule for those:
 - They go in **`peerDependencies`** (with `peerDependenciesMeta.optional` where the
   feature is opt-in), **never `dependencies`**. The consumer installs and owns the
   version; dunx does not bundle it.
+
+  **One carve-out, and the test is whether the consumer has a version opinion.**
+  `swagger-ui-dist` is a `dependency` of `@dunx/openapi`. Every other integration is
+  a library the consumer _writes code against_ - zod schemas, drizzle tables,
+  better-auth config - so the version is theirs to hold. Nobody imports
+  `swagger-ui-dist`, calls it, or types against it: it is two files dunx serves, and
+  a peer would mean `bun add swagger-ui-dist` for a decision the consumer does not
+  actually have. `@nestjs/swagger` ships it as a pinned dependency for the same
+  reason. The cost, stated: 12 MB in every install of `@dunx/openapi`, including one
+  that only wants `openapi.json`. If a second asset bundle ever wants this, weigh it
+  against that sentence rather than citing this line.
+
+  `swagger-ui` (not `-dist`) was measured and rejected: **177 MB across 149 packages
+  against 12 MB across 2**, delivering byte-identical `swagger-ui-bundle.js` and
+  `swagger-ui.css` (same sha256). Its `main` requires react, redux and immutable, so
+  a backend install would carry a React tree to serve a static page.
+
 - Where the library offers a **Bun-native driver, that driver is mandatory** -
   `drizzle-orm/bun-sqlite` and `drizzle-orm/bun-sql`, not `pg` or `better-sqlite3`.
   This is how both halves hold at once: the library owns the abstraction, Bun owns
@@ -633,8 +650,42 @@ cleanly against an absent Redis.
 
 ## Examples
 
-Four, and they are a **ladder of questions an evaluator asks in order** - not one
-per package. `@dunx/http` has no example of its own; it is in all four.
+### Rule 4 - a feature is not shipped until an example uses it
+
+**Adding or changing a capability in `packages/*` or `tools/*` includes updating
+`examples/full` in the same change.** Not as a follow-up, and not "worth an example
+later": the example is the only place a feature is exercised end to end against a
+real `Bun.serve`, and CI runs it, so a package with no example has no test that its
+public shape is usable.
+
+Four features shipped without one and it went unnoticed for weeks - `ThrottleModule`,
+`ScheduleModule`, `StaticModule` and the whole `@dunx/http/client` subpath. All four
+worked; nothing proved it. Writing the examples then found a real Bun parse bug
+(docs/bun-apis.md, decorators and private fields) that every scheduled service in
+every consumer's app would have hit.
+
+What "updating the example" means, concretely:
+
+- **A new capability**: a feature folder in `examples/full/src/`, a `*.demo.ts`
+  narrated by `Tour`, and assertions in `service.test.ts` (the routes) or
+  `tour.test.ts` (the narration). Both, when it has an HTTP surface and a story.
+- **A changed capability**: the example moves with it. A renamed option, a new
+  default or a removed decorator that leaves the example still passing means the
+  example was not exercising it.
+- **A new option worth knowing about**: set it in the example, or say in the review
+  why it is not worth a line.
+- **Do not add to `examples/minimal`.** It is valuable because it is five files.
+- **`examples/full/src/<dir>` is vendored by `@dunx/create-app`** when
+  `tools/create-app/src/features.ts` names it, and `features.test.ts` compares the
+  two byte for byte. So after touching a vendored folder, run
+  `bun run sync:templates`. A folder no feature names is example-only, which is
+  fine - `dashboard`, `wiring`, `tour`, `throttle`, `schedule`, `assets` and
+  `upstream` are.
+
+The guide under `docs/guide/` is documentation, not a substitute: prose cannot fail.
+
+Four examples, and they are a **ladder of questions an evaluator asks in order** - not
+one per package. `@dunx/http` has no example of its own; it is in all four.
 
 | Workspace            | Answers                                                    |
 | -------------------- | ---------------------------------------------------------- |
@@ -713,7 +764,7 @@ Two things that follow:
 
 ## Repo Scripts
 
-- `bun run gen:readme` - regenerates the README Packages table and Project Structure block (`scripts/update-readme.ts`)
+- `bun run gen:readme` - regenerates the README Packages table and Project Structure block (`scripts/update-readme.ts`). `--check` writes nothing and fails on drift; CI runs that, because nothing ran this at all until it silently broke
 - `bun run gen:cov` - rebuilds the coverage model and badges **into `internal/docs`** (`scripts/coverage-report.ts`)
 - `bun run docs:dev` / `bun run docs:build` - the documentation site in `internal/docs`. Its API reference is extracted from the packages' doc comments by `oxc-parser`; see `internal/docs/README.md`
 - `bun run version:dry-run` - previews version bumps without writing
@@ -812,3 +863,6 @@ New repeatable workflow → new skill. Do not grow this file instead.
 ## Do
 
 - When a bug/issue/BC is reported - write a test that reproduces the issue, then do the fix and rerun the test to verify it's been addressed
+- When adding or changing a feature in `packages/*` or `tools/*` - update
+  `examples/full` in the same change, per Rule 4 under Examples. A capability with
+  no example is untested end to end

@@ -51,6 +51,15 @@ interface Unit {
   readonly label: string;
   readonly adds: string;
   readonly stdout: StdoutSink;
+  /**
+   * Skipped unless the chosen scenario sends a request body.
+   *
+   * The default `json` scenario is a `GET`, so the body options are unreachable
+   * from it - which is why their cost went unmeasured by this harness for so long
+   * and lived as a claim in a doc comment instead. Run
+   * `bun run logging --scenario validate` to reach them.
+   */
+  readonly needsBody?: true;
 }
 
 /**
@@ -164,6 +173,38 @@ const units: readonly Unit[] = [
     label: 'unbatched, into a pipe nobody reads',
     adds: 'what the main suite measured before either fix',
     stdout: 'blocked',
+  },
+  {
+    id: 'body-request',
+    variant: 'body-request',
+    label: '`requestBody: true`, route declares a schema',
+    adds: 'the body in the entry, from the text the reader buffered',
+    stdout: 'null',
+    needsBody: true,
+  },
+  {
+    id: 'body-request-unvalidated',
+    variant: 'body-request-unvalidated',
+    label: '`requestBody: true`, no schema - `req.clone()`',
+    adds: 'the clone, which is the whole cost',
+    stdout: 'null',
+    needsBody: true,
+  },
+  {
+    id: 'body-response',
+    variant: 'body-response',
+    label: '`responseBody: true`',
+    adds: 'a `Response.clone()`, which is not the same price',
+    stdout: 'null',
+    needsBody: true,
+  },
+  {
+    id: 'body-both',
+    variant: 'body-both',
+    label: 'both bodies, schema route',
+    adds: 'the response body on top of the request one',
+    stdout: 'null',
+    needsBody: true,
   },
 ];
 
@@ -287,9 +328,20 @@ const machine = await readMachine('node');
  * a few percent and the machine drifts by more than that over a run, so measuring
  * each unit to completion in turn maps the drift onto row identity.
  */
+const chosenUnits = units.filter(
+  (unit) => unit.needsBody !== true || scenario.body !== undefined,
+);
+const skipped = units.length - chosenUnits.length;
+if (skipped > 0) {
+  note(
+    `skipping ${skipped} body unit(s): the "${scenario.id}" scenario sends no ` +
+      'request body. Use --scenario validate to measure them.',
+  );
+}
+
 const live: Live[] = [];
 try {
-  for (const unit of units) {
+  for (const unit of chosenUnits) {
     live.push(await bring(unit, scenario));
     note(`up   ${unit.id}`);
   }

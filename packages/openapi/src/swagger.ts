@@ -15,10 +15,15 @@ import { dirname } from 'node:path';
  * bundle was: inlining 1.7 MiB into every page response would send it again on
  * every load. See `SwaggerAssets.href`.
  *
- * Resolved **lazily**, on the first request that needs it, so `swagger-ui-dist`
- * stays an optional peer: an app that serves only `/openapi.json` never touches it
- * and does not have to install it. Async because that resolution reads a manifest
- * through `Bun.file`, and it is cached, so only the first request pays.
+ * **A `dependency`, not a peer**, which is the one place this package departs from
+ * CLAUDE.md's "sanctioned integrations go in peerDependencies" rule. The reasoning
+ * is recorded there; the short version is that a consumer never imports this, never
+ * calls it and has no version opinion about it - it is an asset bundle, and
+ * `@nestjs/swagger` ships it the same way.
+ *
+ * Still resolved **lazily**, on the first request for the page, so an app that
+ * serves only `/openapi.json` never reads it. Async because that resolution reads a
+ * manifest through `Bun.file`, and it is cached, so only the first request pays.
  */
 /**
  * The files served out of `swagger-ui-dist`, and their content types.
@@ -77,11 +82,12 @@ export class SwaggerAssets {
         import.meta.dir,
       );
     } catch {
+      // A hard dependency, so this is a broken install rather than a missing
+      // opt-in. Say that, instead of telling someone to add what they already have.
       throw new Error(
-        'The API explorer needs swagger-ui-dist, which is an optional peer ' +
-          'dependency of @dunx/openapi and is not installed. Run ' +
-          '`bun add swagger-ui-dist`, or serve only the document and drop the ' +
-          'page. The JSON route needs nothing extra.',
+        'swagger-ui-dist did not resolve from @dunx/openapi. It is a dependency ' +
+          'of this package, so this is a broken or partial install rather than ' +
+          'something to add: try `bun install`.',
       );
     }
 

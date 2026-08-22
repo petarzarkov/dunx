@@ -185,6 +185,7 @@ describe('schemas that need more than a prefix rewrite', () => {
       'Two different schemas are both named "Clash"',
     );
     expect(result.document.components.schemas['Clash']).toEqual({
+      title: 'Clash',
       type: 'object',
       properties: { a: { type: 'string' } },
       required: ['a'],

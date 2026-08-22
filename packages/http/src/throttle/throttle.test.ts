@@ -297,6 +297,7 @@ const contextOf = (overrides: Partial<Record<'unmatched', boolean>> = {}) => {
     handler: 'list',
     method: 'GET',
     path: '/things',
+    parsesBody: false,
     get: <T>(key: MetaKey<T>): T | undefined =>
       key.id === UNMATCHED.id && overrides.unmatched === true
         ? (true as T)

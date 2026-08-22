@@ -36,6 +36,15 @@ export type InferOutput<S> =
   S extends StandardSchemaV1<unknown, infer Out> ? Out : never;
 
 /**
+ * A JSON Schema, as JSON. OpenAPI 3.1 embeds draft 2020-12 verbatim.
+ *
+ * Declared here rather than in `@dunx/openapi` because {@link RouteSchemas} names
+ * it and that package depends on this one, so this is the lowest common owner.
+ * `@dunx/openapi` re-exports it.
+ */
+export type JsonSchema = Readonly<Record<string, unknown>>;
+
+/**
  * The second argument to `@Get`/`@Post`/... Declaring a schema is what makes the
  * matching `input` field appear, get parsed, and get validated; omitting one
  * means the framework never touches it.
@@ -64,8 +73,20 @@ export interface RouteSchemas {
    * cost paid for a documentation feature, which is the wrong trade - the
    * handler's own return type is what checks the answer, at compile time and for
    * free. Nothing in the request path reads this key.
+   *
+   * A plain {@link JsonSchema} is accepted here too, and only here: a JSON Schema
+   * needs no conversion, so documenting a response costs no validator. `$id` names
+   * it, hoisting it into `components/schemas` the way `.meta({ id })` does for a
+   * zod schema. `body`, `query` and `params` still take a Standard Schema, because
+   * those are parsed.
+   *
+   * ```ts
+   * response: {
+   *   200: Object.freeze({ $id: 'Pong', type: 'object' }),
+   * }
+   * ```
    */
-  readonly response?: Readonly<Record<number, StandardSchemaV1>>;
+  readonly response?: Readonly<Record<number, StandardSchemaV1 | JsonSchema>>;
 }
 
 /**

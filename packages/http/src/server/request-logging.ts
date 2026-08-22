@@ -7,6 +7,7 @@ import type { BunRequest } from 'bun';
 import type { RouteContext } from './context.js';
 import { HttpError } from './errors.js';
 import type { Middleware, Next } from './middleware.js';
+import { RawBody } from './raw-body.js';
 import { REQUEST_ID_HEADER, RequestIds } from './request-id.js';
 import { HttpStatusCode } from './status.js';
 
@@ -16,15 +17,35 @@ export interface RequestLoggingOptions {
   /**
    * Log the request body. Default **`false`**.
    *
-   * Reading it means `req.clone().text()` - a second copy of every payload,
-   * buffered and parsed, on the hot path. Measured on the `validate` scenario in
-   * `internal/bench`, turning both body options on costs roughly two thirds of the
-   * throughput. It is also the field most likely to contain a password.
+   * **What it costs depends on whether the route declares a `body` schema**, and by
+   * a factor of fifteen. `bun run logging:bodies` in `internal/bench`, round-robin
+   * over 3 runs against `POST /validate`:
    *
-   * Turn it on in development, where seeing the payload is the point.
+   * | setting                                  | us/req | vs the default |
+   * | ---------------------------------------- | -----: | -------------: |
+   * | `requestLogging: false`                  |  12.80 |      -4.45 us |
+   * | the shipped default, both bodies off     |  17.25 |              - |
+   * | **`requestBody: true`, schema route**    | **19.12** |  **+1.87 us** |
+   * | `responseBody: true`                     |  19.80 |      +2.55 us |
+   * | both bodies, schema route                |  20.03 |      +2.78 us |
+   * | **`requestBody: true`, no schema**       | **46.06** | **+28.81 us** |
+   *
+   * A route with a schema has already had its body buffered by the input reader, so
+   * the logger reads that text and nothing is cloned. A route without one leaves the
+   * logger to `req.clone()`, and cloning a request whose body is an unread network
+   * stream is the entire cost - not the second `JSON.parse`, which is 0.32 us.
+   * `raw-body.ts` has that decomposition.
+   *
+   * It is the field most likely to contain a password. Turn it on in development,
+   * where seeing the payload is the point.
    */
   readonly requestBody?: boolean;
-  /** Log the response body. Default **`false`** - same clone-and-buffer cost. */
+  /**
+   * Log the response body. Default **`false`**, +2.55 us - see the table above.
+   *
+   * No equivalent trick here and none needed: a response is already a materialised
+   * string by the time this clones it, which is why it was never the expensive half.
+   */
   readonly responseBody?: boolean;
   /**
    * Paths to skip entirely - a health check polled every second, say.
@@ -197,6 +218,7 @@ export class RequestLoggingMiddleware implements Middleware {
       ? this.context.runWithContext(scope, () =>
           this.#begin(
             req,
+            ctx,
             url,
             mark,
             path,
@@ -206,11 +228,12 @@ export class RequestLoggingMiddleware implements Middleware {
             undefined,
           ),
         )
-      : this.#begin(req, url, mark, path, requestId, started, next, scope);
+      : this.#begin(req, ctx, url, mark, path, requestId, started, next, scope);
   }
 
   #begin(
     req: BunRequest,
+    ctx: RouteContext,
     url: string,
     mark: number,
     path: string,
@@ -225,7 +248,7 @@ export class RequestLoggingMiddleware implements Middleware {
         new URLSearchParams(url.slice(mark + 1)),
       );
     }
-    const body = this.#body(req);
+    const body = this.#body(req, ctx);
     if (body === undefined) {
       request['userAgent'] = req.headers.get('user-agent');
       return this.#dispatch(
@@ -251,6 +274,24 @@ export class RequestLoggingMiddleware implements Middleware {
         scope,
       );
     });
+  }
+
+  /**
+   * The body text the reader buffered, turned into the entry's `body` field at log
+   * time rather than before the handler.
+   *
+   * Runs `parse` on the same text the clone path would have produced, so the cap,
+   * the `[N bytes]` form and the raw-string fallback for a non-JSON body are all
+   * the behaviour they always were. Nothing here when the body was not logged, or
+   * when the route read no body at all.
+   */
+  #shared(req: BunRequest, request: RequestFields): void {
+    if (!this.#requestBody) return;
+    if (request['body'] !== undefined) return;
+    const text = RawBody.read(req);
+    if (text === undefined) return;
+    const value = parse(text, this.#limit);
+    if (value !== undefined) request['body'] = value;
   }
 
   /**
@@ -334,6 +375,7 @@ export class RequestLoggingMiddleware implements Middleware {
     error: unknown,
     scope: ScopeFields | undefined,
   ): void {
+    this.#shared(req, request);
     const status =
       error instanceof HttpError
         ? error.status
@@ -362,6 +404,7 @@ export class RequestLoggingMiddleware implements Middleware {
     response: Response,
     scope: ScopeFields | undefined,
   ): Response | Promise<Response> {
+    this.#shared(req, request);
     const body = this.#responseFields(response);
     if (body === undefined) {
       this.logger.info(`${req.method} ${path} ${response.status}`, {
@@ -387,14 +430,25 @@ export class RequestLoggingMiddleware implements Middleware {
   }
 
   /**
-   * `undefined` - the default - means there is nothing to read, and the caller
-   * stays on the synchronous path. Clones when there is, so the handler's own
-   * stream is never the one that was consumed.
+   * `undefined` means nothing to read **here**, which is now two different things:
+   * the body is not being logged at all, or it is being logged from `RawBody`
+   * instead. Either way the caller stays on the synchronous path.
+   *
+   * When it does clone, it clones - so the handler's own stream is never the one
+   * that was consumed. Reading `req` without cloning makes the handler's
+   * `req.json()` throw `Body already used`, verified on Bun.
    */
-  #body(req: BunRequest): Promise<unknown> | undefined {
+  #body(req: BunRequest, ctx: RouteContext): Promise<unknown> | undefined {
     if (!this.#requestBody) return undefined;
     if (req.method === 'GET' || req.method === 'HEAD') return undefined;
     if (!(req.headers.get('content-type') ?? '').includes('application/json')) {
+      return undefined;
+    }
+    // The route declares a body schema, so the reader is about to buffer this body
+    // anyway. Asking it for the text costs +0.38 us and replaces a ~20 us clone -
+    // which is the entire cost of this option. `raw-body.ts` has the numbers.
+    if (ctx.parsesBody) {
+      RawBody.want(req);
       return undefined;
     }
     return req

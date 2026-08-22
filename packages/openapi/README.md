@@ -248,14 +248,22 @@ which keeps a viewer's sidebar and its operation list in agreement.
 
 `GET /docs` is **Swagger UI**, mounted over the document this package generates.
 
-```bash
-bun add swagger-ui-dist
-```
+`swagger-ui-dist` is a **`dependency`**, so there is nothing to install: it arrives
+with this package. It is still resolved on the first request for the page rather than
+at boot, so an app serving only `/openapi.json` never reads it.
 
-It is an optional `peerDependency`: needed if and only if the page is served, and
-resolved on the first request for it rather than at boot. An app that serves only
-`/openapi.json` installs nothing and boots fine without it. A missing install
-fails that one route with a message naming the install command.
+That makes it the one integration in dunx that is not a peer, and the test it passes
+is that **you have no version opinion about it**. zod, drizzle and better-auth are
+libraries your code is written against, so their versions are yours to hold; nobody
+imports `swagger-ui-dist` or types against it.
+
+`@nestjs/swagger` pins it as a dependency for the same reason. The cost is 12 MB in
+every install of this package, including one that only generates `openapi.json`
+through the `dunx-openapi` CLI.
+
+`swagger-ui` (without `-dist`) was measured and rejected: **177 MB across 149
+packages against 12 MB across 2**, for byte-identical `swagger-ui-bundle.js` and
+`swagger-ui.css`. Its `main` requires react, redux and immutable.
 
 dunx used to ship its own explorer here - a React and Mantine app in
 `internal/openapi-ui`, built by Vite and inlined into the page as a 434 KiB
@@ -285,11 +293,77 @@ now asserts: two same-origin relative URLs, no CDN, no `unpkg`, no `jsdelivr`. T
 document itself is still embedded rather than fetched, so Swagger UI boots without
 a round trip and without depending on the JSON route being reachable.
 
-Two details worth knowing before you install it. `swagger-ui-dist` depends on
-`@scarf/scarf`, which reports installs; it honours `SCARF_ANALYTICS=false`. And the
-page uses `BaseLayout` with only the bundle preset, not the `StandaloneLayout` from
-Swagger's own initializer - that needs a second ~1 MiB file and renders a URL bar
-for loading other documents over a page that serves exactly one.
+`swagger-ui-dist` depends on `@scarf/scarf`, whose `postinstall` reports installs.
+**On Bun it does not run.** Bun executes lifecycle scripts only for packages in
+`trustedDependencies` and dunx declares none.
+
+Checked rather than assumed: `@scarf/scarf` writes a log into `os.tmpdir()` when it
+runs, and after a clean install that file is not there. Add it to your own
+`trustedDependencies` and it will run; it honours `SCARF_ANALYTICS=false`.
+
+## Configuring the page
+
+`ui` takes **every** Swagger UI configuration parameter, typed:
+
+```ts
+OpenApiModule.forRoot({
+  title: 'Payments',
+  version: '2.0.0',
+  root: AppModule,
+  ui: {
+    favicon: '/brand.svg',
+    title: 'Payments API',
+    docExpansion: 'none',
+    filter: true,
+    tryItOutEnabled: true,
+    persistAuthorization: true,
+    operationsSorter: 'alpha',
+    syntaxHighlight: { theme: 'nord' },
+  },
+});
+```
+
+`favicon` and `title` are dunx's; the rest are forwarded verbatim. Three defaults are
+applied under whatever you pass:
+
+| Option         | dunx default   | Swagger UI's default                       |
+| -------------- | -------------- | ------------------------------------------ |
+| `deepLinking`  | `true`         | `false`                                    |
+| `layout`       | `'BaseLayout'` | `'StandaloneLayout'` in its own initializer |
+| `validatorUrl` | `null`         | `https://validator.swagger.io/validator`   |
+
+**`validatorUrl` is the one worth knowing about.** Swagger UI's default posts your
+document to a third party to render a validity badge. dunx disables it. Set it back
+explicitly if you want that.
+
+`favicon` defaults to Swagger UI's own `favicon-32x32.png`, served from the same
+install. Pass a URL, a `data:` URI, or `false` for no icon at all - a page with no
+favicon makes the browser ask for `/favicon.ico`, which your app then logs as a 404.
+
+### The seven options that are functions
+
+`requestInterceptor`, `responseInterceptor`, `modelPropertyMacro`,
+`parameterMacro`, `onComplete`, `plugins` and `presets` are functions in Swagger UI,
+and **this page is rendered on a server**. A closure has nowhere to travel, and
+`.toString()`-ing one would work until it captured something and then fail silently.
+
+So those take the **source** of an expression, written into the boot script verbatim:
+
+```ts
+ui: {
+  requestInterceptor: '(req) => { req.headers["x-tenant"] = "acme"; return req; }',
+  onComplete: '() => console.info("ready")',
+}
+```
+
+It is not escaped, so only put source you wrote there. `operationsSorter` and
+`tagsSorter` accept Swagger UI's `'alpha'` and `'method'` shorthands as data, which
+covers the usual case without any of this; anything else is treated as a comparator's
+source.
+
+The page uses `BaseLayout` rather than the `StandaloneLayout` from Swagger's own
+initializer, which needs a second ~1 MiB preset file and renders a URL bar for
+loading other documents over a page that serves exactly one.
 
 **That bundle is behind `@dunx/openapi/ui`, and it is loaded on demand.** The
 barrel does not import it, and `OpenApiExplorer.page()` reaches it through a

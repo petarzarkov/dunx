@@ -180,3 +180,40 @@ The integration suite asserts that order rather than just the outcome: a provide
 injected into the handler records `container:shutdown` in its `onShutdown`, and the
 test requires the sequence `slow:started`, `slow:finished`, `container:shutdown`,
 plus zero open sockets afterwards.
+
+### A forked child's colour, which is the parent's question
+
+bullmq forks a sandboxed processor with `stdio: 'pipe'` and pipes the child's
+stdout into the parent's (`classes/child.js`), so the child's stdout is a pipe and
+the terminal the lines actually reach belongs to the parent. Everything on the
+colour path asks the child's own stream: `Bun.enableANSIColors`, which
+`LoggerModule` defaults `isDevelopment` from, and `@arkv/colors`' `isColorSupported`,
+which `prettyFormat` asks before it emits an escape. Both answer `false`, so a
+worker's lines came out as plain JSON in a stream where every other line was
+coloured.
+
+Measured on Bun 1.4.0, `examples/full` under a pty:
+
+```
+before   parent pid 1151453  COLOURED   Started [background] worker for queue: ...
+         child  pid 1151468  plain      Sandboxed worker ready, 1 handler(s)
+after    parent pid 1148355  COLOURED   Started [background] worker for queue: ...
+         child  pid 1148371  COLOURED   Sandboxed worker ready, 1 handler(s)
+```
+
+`childColourEnv` in `worker.ts` is the fix: `FORCE_COLOR=1` in `workerForkOptions.env`
+when this process has colour, since that is the one variable both checks read and
+the only thing that crosses a fork. Nothing is added when `NO_COLOR` or
+`FORCE_COLOR` is already set - it crosses in `process.env` unchanged and is the
+consumer's answer rather than a terminal check - and nothing is added when the
+consumer passed `workerForkOptions` of their own, which would have to be merged
+into.
+
+`isolation: 'thread'` needs none of this: Bun ignores the `stdout`/`stderr` options
+bullmq passes `new Worker`, so a thread writes to the process's real stdout.
+
+The child's own line dropped `pid` from its metadata in the same change.
+`@arkv/logger` puts `pid` on every entry itself and keeps a caller's clashing field
+under `reservedFieldConflicts`, so `Sandboxed worker ready` was carrying
+`"reservedFieldConflicts":{"pid":706198}` next to the `pid` it duplicated. Core's
+`ConsoleLogger` emits `pid` too, so nothing is lost under either binding.

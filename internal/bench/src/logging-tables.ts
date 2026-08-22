@@ -80,6 +80,65 @@ const asideTable = (report: LoggingReport): string => {
   ].join('\n');
 };
 
+/**
+ * The body options, from their own run. They need a request with a body, so they
+ * cannot appear in the `json` ladder above - `bun run logging:bodies` records them
+ * against `POST /validate` and writes a second file.
+ */
+const BODY_LADDER = [
+  ['off', null],
+  ['default', 'the shipped default, both body options off'],
+  ['body-request', null],
+  ['body-response', null],
+  ['body-both', null],
+  ['body-request-unvalidated', null],
+] as const;
+
+const bodySection = async (): Promise<string> => {
+  const file = Bun.file(`${resultsDir}/logging-bodies.json`);
+  if (!(await file.exists())) return '';
+  const report = (await file.json()) as LoggingReport;
+
+  const base = find(report, 'default');
+  if (base === undefined) return '';
+  const against = micros(base.rps.median);
+
+  const rows = BODY_LADDER.map(([id, override]) => {
+    const unit = find(report, id);
+    if (unit === undefined) return '';
+    const cost = micros(unit.rps.median);
+    return (
+      `| ${override ?? unit.label} | ${int(unit.rps.median)} | ` +
+      `${cost.toFixed(2)} | ${id === 'default' ? '-' : signed(cost - against)} |`
+    );
+  }).filter((line) => line !== '');
+
+  return `
+### What logging a body costs
+
+Generated from \`results/logging-bodies.json\`; reproduce with
+\`bun run logging:bodies\`. Same round-robin, but on the \`${report.scenario}\`
+scenario - a \`POST\` with a body. The ladder above is a \`GET\`, so the body options
+are unreachable from it, which is why their cost lived in a doc comment rather than in
+this harness for as long as it did.
+
+| Setting | req/s | µs/req | vs the default |
+| ------- | ----: | -----: | -------------: |
+${rows.join('\n')}
+
+**The two request-body rows differ by one \`Request.clone()\` and nothing else.** A
+route that declares a \`body\` schema has its body buffered by the input reader, and
+the logger reads that text; a route that declares none leaves the logger to clone the
+request, and cloning one whose body is an unread network stream is what the cost has
+always been. Not the second parse, which measures at 0.32 µs.
+
+So \`requestBody: true\` is cheap on a validated route and expensive on an
+unvalidated one, and that is the number to quote rather than a single figure.
+\`responseBody\` needs no equivalent: a response is already a materialised string by
+the time anything clones it.
+`;
+};
+
 export const loggingSection = async (): Promise<string | null> => {
   const file = Bun.file(`${resultsDir}/logging.json`);
   if (!(await file.exists())) return null;
@@ -124,5 +183,5 @@ server parks on every further write. Subjects now write to \`/dev/null\`, and
 \`ConsoleLogger\` batches everything at \`info\` and below into one write per
 event-loop turn - which also makes a slow consumer far less able to stall the
 server. \`warn\` and above are never batched.
-`;
+${await bodySection()}`;
 };

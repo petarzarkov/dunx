@@ -90,3 +90,22 @@ test('routes: false binds the registry and mounts nothing', async () => {
 
   await app.shutdown();
 });
+
+test('documented: false still serves both probes', async () => {
+  @Module({
+    imports: [
+      HealthModule.forRoot({ readiness: [new Db()], documented: false }),
+    ],
+  })
+  class Root {}
+
+  const app = await HttpFactory.create(Root, { requestLogging: false });
+  const url = await app.listen(0);
+
+  // The subclass carries `@ApiHidden()` and inherits the prefix and both
+  // handlers, so what is served is identical - only the document changes.
+  expect((await fetch(`${url}health/live`)).status).toBe(200);
+  expect((await fetch(`${url}health/ready`)).status).toBe(200);
+
+  await app.shutdown();
+});

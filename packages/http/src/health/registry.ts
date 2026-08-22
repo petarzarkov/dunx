@@ -74,6 +74,8 @@ export class HealthOptions {
   readonly timeoutMs: number;
   /** Mount `/health/live` and `/health/ready`. Default `true`. */
   readonly routes: boolean;
+  /** Include the two routes in the OpenAPI document. Default `true`. */
+  readonly documented: boolean;
   /** How long to fail readiness before the server stops accepting. Default `0`. */
   readonly drainDelayMs: number;
 
@@ -82,6 +84,7 @@ export class HealthOptions {
     this.readiness = init.readiness ?? [];
     this.timeoutMs = init.timeoutMs ?? 2000;
     this.routes = init.routes ?? true;
+    this.documented = init.documented ?? true;
     this.drainDelayMs = Math.max(0, init.drainDelayMs ?? 0);
   }
 }
@@ -94,6 +97,12 @@ export interface HealthOptionsInit {
   /** Per-indicator budget. Default `2000`. */
   readonly timeoutMs?: number;
   readonly routes?: boolean;
+  /**
+   * `false` mounts `HiddenHealthController`, so the probes are served and left out
+   * of the document. They are documented by default: the paths and the report are
+   * worth finding in the reference, and an orchestrator reads neither.
+   */
+  readonly documented?: boolean;
   /** Passed through to {@link ReadinessOptions}. */
   readonly drainDelayMs?: number;
 }

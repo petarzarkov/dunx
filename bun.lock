@@ -43,7 +43,6 @@
         "bullmq": "^6.0.5",
         "drizzle-orm": "^0.45.2",
         "ioredis": "^6.0.0",
-        "swagger-ui-dist": "^5.32.14",
         "zod": "^4.4.3",
       },
       "devDependencies": {
@@ -265,23 +264,23 @@
       "bin": {
         "dunx-openapi": "dist/cli.js",
       },
+      "dependencies": {
+        "swagger-ui-dist": "^5.32.14",
+      },
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
         "@dunx/testing": "workspace:*",
-        "swagger-ui-dist": "^5.32.14",
         "zod": "^4.4.3",
       },
       "peerDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
         "@types/bun": ">=1.3.0",
-        "swagger-ui-dist": "^5",
         "zod": "^4",
       },
       "optionalPeers": [
         "@types/bun",
-        "swagger-ui-dist",
         "zod",
       ],
     },

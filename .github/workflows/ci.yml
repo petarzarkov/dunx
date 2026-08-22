@@ -54,6 +54,14 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      # The README packages table and CONTRIBUTING's project tree are generated
+      # from the workspace manifests and committed. Nothing ran `gen:readme` in CI,
+      # so when it broke - it conflated "already current" with "section missing" and
+      # failed on every no-op run - the only signal was somebody trying to use it.
+      # `--check` writes nothing and fails on drift.
+      - name: Check the generated README blocks
+        run: bun run gen:readme --check
+
       - name: Test
         run: bun run test:cov
 

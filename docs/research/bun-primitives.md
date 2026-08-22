@@ -221,8 +221,8 @@ outermost, and `routes.ts:317` gates the `directOr` fast path on `chain.length =
 In `packages/*/src` there is **no `await next()` at all**: `request-logging.ts:293`,
 `:302` and `:320` use `.then()`, and `static/files.ts:90-101`, `auth/src/guard.ts:66`
 and `dashboard/src/middleware.ts:69` `return next()`. The two `await next()` sites are
-sample code, `examples/full/src/http/request-log.ts:29` and
-`tools/create-app/templates/features/http/request-log.ts:29`.
+sample code, `examples/full/src/http/request-trail.ts:28` and
+`tools/create-app/templates/features/http/request-trail.ts:28`.
 
 ```
 bun probes/f-peek-semantics.ts

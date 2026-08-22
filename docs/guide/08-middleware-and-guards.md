@@ -29,12 +29,12 @@ constructor injection with no annotation:
 import type { BunRequest } from 'bun';
 import type { Middleware, Next, RouteContext } from '@dunx/http';
 
-export class RequestLog {
+export class RequestTrail {
   readonly entries: string[] = [];
 }
 
-export class RequestLoggerMiddleware implements Middleware {
-  constructor(private readonly log: RequestLog) {}
+export class RequestTrailMiddleware implements Middleware {
+  constructor(private readonly trail: RequestTrail) {}
 
   async handle(
     req: BunRequest,
@@ -42,11 +42,11 @@ export class RequestLoggerMiddleware implements Middleware {
     next: Next,
   ): Promise<Response> {
     const response = await next();
-    this.log.entries.push(
+    this.trail.entries.push(
       `${req.method} ${new URL(req.url).pathname} -> ${response.status} ` +
         `(${ctx.controller}.${ctx.handler})`,
     );
-    response.headers.set('x-handled-by', 'request-logger');
+    response.headers.set('x-handled-by', 'request-trail');
     return response;
   }
 }
@@ -56,10 +56,10 @@ Install it globally, either at boot or before `listen()`:
 
 ```ts
 const app = await HttpFactory.create(AppModule, {
-  middleware: [RequestLoggerMiddleware],
+  middleware: [RequestTrailMiddleware],
 });
 // or, equivalently, appended after the ones above:
-app.use(RequestLoggerMiddleware);
+app.use(RequestTrailMiddleware);
 ```
 
 Both take **classes** rather than instances, so the container resolves each one

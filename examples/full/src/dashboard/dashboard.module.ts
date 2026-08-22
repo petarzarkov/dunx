@@ -4,6 +4,8 @@ import { JobPublisher } from '@dunx/infra/queue';
 import { RedisConnection } from '@dunx/infra/redis';
 import { AppConfigService } from '../config.js';
 import { CacheModule } from '../cache/cache.module.js';
+import { AppIndicators } from '../health/indicators.js';
+import { IndicatorsModule } from '../health/health.module.js';
 import { JobsModule } from '../jobs/jobs.module.js';
 import { DashboardDemo } from './dashboard.demo.js';
 
@@ -30,11 +32,12 @@ import { DashboardDemo } from './dashboard.demo.js';
     DashboardModule.forRootAsync({
       // The dynamic module is its own scope, so the modules exporting what the
       // factory injects go here rather than on OpsModule below.
-      imports: [JobsModule, CacheModule],
+      imports: [JobsModule, CacheModule, IndicatorsModule],
       useFactory: (
         queues: JobPublisher,
         redis: RedisConnection,
         config: AppConfigService,
+        indicators: AppIndicators,
       ) => ({
         // Spelled out, because `app.setGlobalPrefix('api')` prefixes discovered
         // routes and the dashboard is a middleware rather than one of those.
@@ -46,6 +49,10 @@ import { DashboardDemo } from './dashboard.demo.js';
         // absent Redis.
         queueNames: ['thumbnails'],
         redis,
+        // The same checks `/api/health/ready` runs, declared once in
+        // `IndicatorsModule`. A `HealthIndicator` satisfies `DashboardProbe` as
+        // written, so there is no adapter between the two.
+        probes: indicators.dashboardProbes,
         config,
         // Keys only, except the two that are safe to read and genuinely useful
         // when someone asks "which environment is this". Everything else -
@@ -53,7 +60,12 @@ import { DashboardDemo } from './dashboard.demo.js';
         reveal: (key: string) => key === 'appName' || key === 'port',
         openApiPath: '/api/docs',
       }),
-      inject: [JobPublisher, RedisConnection, AppConfigService] as const,
+      inject: [
+        JobPublisher,
+        RedisConnection,
+        AppConfigService,
+        AppIndicators,
+      ] as const,
     }),
   ],
   providers: [DashboardDemo],

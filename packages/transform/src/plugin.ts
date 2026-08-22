@@ -2,6 +2,34 @@ import type { BunPlugin } from 'bun';
 import { transform } from './deps.js';
 
 /**
+ * The source, read **through Bun's own loader** rather than with `Bun.file`.
+ *
+ * This is what keeps `bun --watch` and `bun --hot` working. A file that a runtime
+ * `onLoad` reads behind Bun's back never enters the module graph, so it is never
+ * watched: with `Bun.file` here, editing any imported file did nothing and only the
+ * entrypoint still restarted. Measured both ways, and the transform was never the
+ * cause - a plugin handing the source back byte for byte broke it identically.
+ *
+ * The three obvious repairs are all unavailable: `onLoad` may not decline (returning
+ * `undefined` is a `TypeError`), `watchFiles` on the result is accepted and ignored,
+ * and `filter` is a path regex so it cannot skip files whose contents decide.
+ * Reading through `import` is the one that works, and it comes from
+ * https://github.com/oven-sh/bun/issues/4689.
+ *
+ * The `?` matters: without it the specifier ends in `.ts` and re-enters this very
+ * plugin. With it, the filter does not match and Bun loads the bytes itself.
+ *
+ * Everything in docs/bun-apis.md, "A runtime `onLoad` plugin drops the file it
+ * loads from `--watch`".
+ */
+const read = async (path: string): Promise<string> => {
+  const module = (await import(`${path}?`, { with: { type: 'text' } })) as {
+    default: string;
+  };
+  return module.default;
+};
+
+/**
  * Rewrites TypeScript as it is loaded so the container can read constructor
  * dependencies. Usable in three places, all the same object:
  *
@@ -18,7 +46,7 @@ export const depsPlugin: BunPlugin = {
     // A runtime plugin's onLoad must always return a result - there is no
     // "decline and fall through", so untransformed files are handed back as-is.
     build.onLoad({ filter: /\.tsx?$/ }, async ({ path }) => {
-      const source = await Bun.file(path).text();
+      const source = await read(path);
       const loader = path.endsWith('.tsx') ? 'tsx' : 'ts';
 
       if (path.includes('/node_modules/')) return { contents: source, loader };
