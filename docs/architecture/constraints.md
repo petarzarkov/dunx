@@ -244,3 +244,53 @@ annotation but not _infer_ it. Decorators observe; they do not type. Note the
 contrast with `@Controller`, `@Get`, `@Module`, `@Gateway` and `@Roles`, which all
 work fine - they only _record_ metadata read back at boot, and publish nothing to
 the type system.
+
+## `Bun.WebView` drives the dashboard headlessly, on Bun 1.4.0
+
+**The claim: a real browser can assert what happy-dom cannot** - that
+`@dunx/dashboard`'s inlined bundle executes, and that the CSS list in
+`internal/dashboard-ui/src/styles.ts` is complete enough for the page to paint.
+`internal/dashboard-ui`'s suite renders components through happy-dom, which has no
+layout and no cascade, so a missing stylesheet passes it.
+
+Probed against the real `examples/full` app, its dashboard mounted at
+`/api/_dunx`, with the display unset so the run matches a CI runner:
+
+```
+env -u DISPLAY bun --preload @dunx/transform/preload probe.ts
+
+{"nodes":227,"styleTags":8,"bodyBg":"rgb(36, 36, 36)",
+ "bodyFont":"-apple-system, BlinkMacSystemF","mantineVars":"#242424",
+ "text":"dunx DUNX-FULL up 307ms live 5s Overview Routes Gateways Modules &
+ providers Queues & Redis Configuration bull-board Jobs, flows and metrics
+ API explorer What a","errors":[]}
+title: "dunx-full dashboard"
+screenshot bytes: 67832
+```
+
+What each number rules out. 227 nodes means the inlined bundle ran, since the
+served shell is a handful of elements. 8 `<style>` tags and a computed
+`background-color` of `rgb(36, 36, 36)` matching `--mantine-color-body: #242424`
+mean the cascade resolved, which is the assertion happy-dom cannot make at all. The
+panel text and a 67 KB screenshot cover the render.
+
+Three things worth knowing before building on it:
+
+- **No display is needed and none is used.** The same probe produces a
+  byte-identical 3,510-byte screenshot of a trivial page with `DISPLAY=:0` and with
+  it unset, so the windowed path is not being taken.
+- **It drives an installed Chrome on Linux**, found at `/usr/bin/google-chrome`.
+  There is nothing to `bun add`, and no browser download step, but the runner has
+  to have one. macOS uses the system WebKit instead.
+- **`navigate()` resolves before React has rendered.** The probe polls
+  `document.querySelectorAll('*').length` until it passes 50 rather than sleeping
+  for a fixed interval.
+
+The surface is `navigate`, `evaluate`, `screenshot`, `cdp`, `click`, `type`,
+`press`, `scroll`, `scrollTo`, `resize`, `goBack`, `goForward`, `reload`, `close`,
+`url`, `title`, `loading`, `onNavigated`, `onNavigationFailed`.
+
+**Playwright was not measured, because this answered the question first.** It is
+permitted here - `internal/*` is exempt from Rule 1 - and would be the fallback if
+a test needed more than the list above. `Bun.WebView` costs no dependency and no
+browser download, so it is what a dashboard smoke test should be written against.
