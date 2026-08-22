@@ -8,7 +8,7 @@ import * as queue from './queue/index.js';
 import * as redis from './redis/index.js';
 import * as schedule from './schedule/index.js';
 
-const included = { db, files, images, logger, redis, schedule };
+const included = { files, images, logger, redis, schedule };
 
 /**
  * The root barrel used to be a partial re-export of five of the six areas as well
@@ -37,13 +37,17 @@ describe('@dunx/infra root barrel', () => {
   });
 
   /**
-   * The single exception, and the reason it is one: bullmq's own entry point
-   * imports `ioredis` statically, so a queue symbol here would make ioredis a hard
-   * requirement of `import '@dunx/infra'` for every consumer, queue or no. If that
-   * ever stops being true, this is the test that says the exception can go.
+   * The two exceptions, and the reason they are exceptions: each reaches an
+   * optional peer through a static import, so one symbol from either here would
+   * make that peer a hard requirement of `import '@dunx/infra'` for every
+   * consumer. bullmq's entry point imports `ioredis`; `/db` imports `drizzle-orm`.
+   * If either ever stops being true, this is the test that says so.
    */
-  it('keeps /queue out, so the root needs no bullmq', () => {
-    expect(names.filter((name) => name in queue)).toEqual([]);
+  it.each([
+    ['queue', queue, 'bullmq'],
+    ['db', db, 'drizzle-orm'],
+  ])('keeps /%s out, so the root needs no %s', (_area, area) => {
+    expect(names.filter((name) => name in area)).toEqual([]);
   });
 });
 

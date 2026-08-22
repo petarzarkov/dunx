@@ -31,13 +31,15 @@ obvious what a file uses, and so tree-shaking is not something you have to reaso
 about.
 
 The rule, so which barrel has a symbol is never a guess: **if an area is in the
-root barrel at all, all of it is** - `@dunx/infra/db` and `@dunx/infra` name the
-same set.
+root barrel at all, all of it is.**
 
-`/queue` is the one area the barrel does **not** re-export. bullmq's
-own entry point statically imports `ioredis`, so exporting it from the root would
-make both a hard requirement of `import '@dunx/infra'`, including for an app that
-has no queue. Reach it at `@dunx/infra/queue`. `src/index.test.ts` holds both
+`/db` and `/queue` are the two areas the barrel does **not** re-export. Each
+reaches an optional peer through a static import: `/db` imports `drizzle-orm`, and
+bullmq's own entry point imports `ioredis`.
+
+Exporting either from the root would make that peer a hard requirement of
+`import '@dunx/infra'`, including for an app with no database and no queue. Reach
+them at `@dunx/infra/db` and `@dunx/infra/queue`. `src/index.test.ts` holds both
 halves of that to account.
 
 ## Two conventions that run through all six
