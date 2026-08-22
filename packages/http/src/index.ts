@@ -118,6 +118,20 @@ export {
   StaticOptions,
   type StaticOptionsInit,
 } from './static/options.js';
+// Response compression, on `Bun.zstdCompressSync`/`gzipSync` for a known length and
+// `CompressionStream` for a stream. Not installed by default and not installed by
+// the module either: the app calls `app.use(Compression)`, so an app that does not
+// want it has no branch to skip. Brotli is not offered - Bun encodes it at 6,344 us
+// against gzip's 23 for the same body, and ignores the `level` that would fix that.
+export { Compression } from './compression/compression.js';
+export { CompressionModule } from './compression/module.js';
+export { negotiate } from './compression/negotiate.js';
+export {
+  CompressionEncoding,
+  CompressionOptions,
+  isCompressibleType,
+  type CompressionOptionsInit,
+} from './compression/options.js';
 // A fixed-window rate limit. Here rather than in `@dunx/infra` because it is a
 // `Middleware` reading a `MetaKey` off a `RouteContext`, and `@dunx/infra` must not
 // depend on the web layer - the same boundary that made `@dunx/auth` its own

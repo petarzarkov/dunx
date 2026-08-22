@@ -3,6 +3,7 @@ import type { HttpApp } from '@dunx/http';
 import { AuthDemo } from '../auth/auth.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
+import { CompressionDemo } from '../http/compression.demo.js';
 import { DashboardDemo } from '../dashboard/dashboard.demo.js';
 import { Ledger } from '../database/ledger.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
@@ -32,6 +33,7 @@ export class Tour {
     private readonly sessions: Sessions,
     private readonly users: UsersDemo,
     private readonly http: HttpDemo,
+    private readonly compression: CompressionDemo,
     private readonly chat: ChatDemo,
     private readonly guards: GuardsDemo,
     private readonly health: HealthDemo,
@@ -66,6 +68,9 @@ export class Tour {
 
     this.group('@dunx/http - app-level configuration');
     await this.http.demonstrate(app, url);
+
+    this.group("@dunx/http - Compression, on Bun's own zstd and gzip");
+    await this.compression.demonstrate(url);
 
     this.group('@dunx/http - @Gateway("/chat"), same Bun.serve as the routes');
     await this.chat.demonstrate(app, url);

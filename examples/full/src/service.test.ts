@@ -16,6 +16,8 @@ import { Maintenance } from './schedule/maintenance.service.js';
  */
 let app: HttpApp;
 let client: TestClient;
+/** Kept alongside `client` so a test can set its own `accept-encoding`. */
+let baseUrl = '';
 
 /** Every route sits under the global prefix `createApp()` set. */
 const json = <T>(path: string, init?: JsonInit) =>
@@ -32,7 +34,8 @@ const post = (body: unknown, headers?: Record<string, string>): JsonInit => ({
 beforeAll(async () => {
   app = await createApp();
   // Port 0: the suite must not collide with a `bun start` already on 3000.
-  client = testClient(await app.listen(0));
+  baseUrl = await app.listen(0);
+  client = testClient(baseUrl);
 });
 
 afterAll(async () => {
@@ -372,4 +375,67 @@ it('documents the routes Better Auth serves', async () => {
   expect(document.paths['/api/auth/sign-in/email']).toBeDefined();
   expect(document.paths['/api/auth/get-session']).toBeDefined();
   expect(document.tags?.map((tag) => tag.name)).toContain('Auth');
+});
+
+/**
+ * `Compression` is registered by `bootstrap.ts`, so these run against the same
+ * chain that serves. `fetch` decodes the body itself but leaves
+ * `content-encoding` and the encoded `content-length` in place, so one request
+ * shows both what went over the wire and what arrived.
+ */
+const encoded = async (
+  path: string,
+  accept: string,
+): Promise<{
+  encoding: string | null;
+  wire: number;
+  body: string;
+  vary: string | null;
+}> => {
+  const response = await fetch(new URL(`api/${path}`, baseUrl), {
+    headers: { 'accept-encoding': accept },
+  });
+  const body = await response.text();
+  const wire = response.headers.get('content-length');
+  return {
+    encoding: response.headers.get('content-encoding'),
+    wire: wire === null ? body.length : Number(wire),
+    body,
+    vary: response.headers.get('vary'),
+  };
+};
+
+it('encodes a large document with the coding the client accepts', async () => {
+  const zstd = await encoded('openapi.json', 'zstd');
+  expect(zstd.encoding).toBe('zstd');
+  expect(zstd.wire).toBeLessThan(zstd.body.length);
+  // Decoded by fetch, so the document survived the round trip intact.
+  expect(JSON.parse(zstd.body).openapi).toBe('3.1.0');
+
+  const gzip = await encoded('openapi.json', 'gzip');
+  expect(gzip.encoding).toBe('gzip');
+  expect(gzip.wire).toBeLessThan(gzip.body.length);
+});
+
+it('breaks a q-value tie with the server preference order', async () => {
+  // Both offered at q=1, and the app offers ['zstd', 'gzip'].
+  expect((await encoded('openapi.json', 'gzip, zstd')).encoding).toBe('zstd');
+  // An explicit q-value outranks that order.
+  expect(
+    (await encoded('openapi.json', 'zstd;q=0.1, gzip;q=0.9')).encoding,
+  ).toBe('gzip');
+});
+
+it('sends an unencoded body to a client that accepts no coding it offers', async () => {
+  const plain = await encoded('openapi.json', 'identity');
+  expect(plain.encoding).toBeNull();
+  // Varied on anyway, or a shared cache would hand these bytes to a client that
+  // asked for zstd.
+  expect(plain.vary).toContain('accept-encoding');
+});
+
+it('leaves a body under the threshold alone', async () => {
+  const small = await encoded('notes/whoami', 'gzip, zstd');
+  expect(small.body.length).toBeLessThan(1024);
+  expect(small.encoding).toBeNull();
 });

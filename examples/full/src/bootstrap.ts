@@ -1,6 +1,7 @@
 import { betterAuthDocument, Auth } from '@dunx/auth';
 import { DashboardMiddleware } from '@dunx/dashboard';
 import {
+  Compression,
   HttpFactory,
   RedisRelay,
   StaticFiles,
@@ -112,6 +113,11 @@ export const createApp = async (): Promise<HttpApp> => {
   // exists. That contract only holds because `authorize` takes the raw Request
   // and asks nothing of an earlier middleware.
   app.use(DashboardMiddleware);
+  // Outside the assets mount and every route, so one registration covers both.
+  // Inside the dashboard, which answers its own requests and never calls next():
+  // an ops page is not worth the CPU. Request logging is installed by the
+  // framework ahead of all of these, so the status it records is the real one.
+  app.use(Compression);
   // Static assets before the rate limit and outside the global prefix: a page
   // pulling twenty hashed bundles must not spend a caller's request budget.
   app.use(StaticFiles);
