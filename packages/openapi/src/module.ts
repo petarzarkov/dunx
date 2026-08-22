@@ -117,11 +117,11 @@ export class OpenApiExplorer {
   /**
    * The page, built on the first request for a given mount prefix and cached.
    *
-   * `SwaggerAssets.resolve()` happens here rather than at boot, which is what keeps
-   * `swagger-ui-dist` an optional peer: an app serving only `/openapi.json` never
-   * calls this and never has to install it. A missing install therefore surfaces as
-   * this route failing with an install command in the message, not as a boot error
-   * for everyone.
+   * `SwaggerAssets.resolve()` happens here rather than at boot. `swagger-ui-dist`
+   * is a **dependency** of this package, so it is always installed; resolving it
+   * lazily means an app serving only `/openapi.json` never pays the lookup, and a
+   * broken install surfaces as this route failing rather than as a boot error for
+   * everyone.
    */
   async page(prefix = ''): Promise<string> {
     const cached = this.#pages.get(prefix);
