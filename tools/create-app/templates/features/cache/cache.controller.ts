@@ -12,14 +12,17 @@ import { Sessions } from './sessions.service.js';
 
 const SessionKey = z
   .object({ id: z.string().min(1).max(80) })
-  .meta({ id: 'SessionKey', title: 'A session id' });
+  .meta({ id: 'SessionKey', description: 'A session id' });
 
 const StoreSession = z
   .object({
     data: z.record(z.string(), z.unknown()),
     ttl: z.coerce.number().int().min(1).max(3600).default(60),
   })
-  .meta({ id: 'StoreSession', title: 'Session payload and its lifetime' });
+  .meta({
+    id: 'StoreSession',
+    description: 'Session payload and its lifetime',
+  });
 
 const oneSession = { params: SessionKey } as const;
 const putSession = { params: SessionKey, body: StoreSession } as const;

@@ -17,8 +17,13 @@ const Enqueue = z
     width: z.coerce.number().int().min(1).max(1024).default(128),
     format: z.enum(EncodableFormat).default(EncodableFormat.WEBP),
   })
-  .meta({ id: 'EnqueueRender', title: 'A thumbnail to render off the request' })
-  .strict();
+  // `.strict()` **after** `.meta()` discards the metadata - `meta()` then returns
+  // null and the schema is inlined despite declaring an id. Order matters.
+  .strict()
+  .meta({
+    id: 'EnqueueRender',
+    description: 'A thumbnail to render off the request',
+  });
 
 const enqueue = { body: Enqueue } as const;
 const oneJob = { params: z.object({ id: z.string().min(1) }) } as const;

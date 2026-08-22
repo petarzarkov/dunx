@@ -30,9 +30,14 @@ export const VALIDATION_ERROR = 'ValidationError';
  * response shape every schema-declaring route can produce, so it is documented
  * rather than left for a caller to discover from a failing request.
  */
+/**
+ * No `title`. Swagger UI labels a schema by its `title` when there is one and by
+ * its `components/schemas` key otherwise, so a prose title makes the Schemas list
+ * read as sentences instead of type names. The key is already the name; the prose
+ * belongs in `description`. Verified against Swagger UI 5.32.14.
+ */
 const validationErrorSchema: JsonSchema = Object.freeze({
   type: 'object',
-  title: 'Validation error',
   description:
     'A declared body, query or params schema rejected the request. Always a 400.',
   properties: {

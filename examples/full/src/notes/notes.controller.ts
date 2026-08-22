@@ -13,7 +13,7 @@ import { NotesService } from './notes.service.js';
 
 const CreateNote = z
   .object({ text: z.string().min(1) })
-  .meta({ id: 'CreateNote', title: 'Add a note' });
+  .meta({ id: 'CreateNote', description: 'Add a note' });
 
 // An explicit status, unlike the users controller which takes the POST default.
 const createNote = {

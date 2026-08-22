@@ -16,13 +16,14 @@ import { z } from 'zod';
  * by `Storage` itself rather than by a pattern here, which is the behaviour worth
  * seeing: try `?key=../../etc/passwd`.
  */
-const FileKey = z
-  .object({ key: z.string().min(1).max(200) })
-  .meta({ id: 'FileKey', title: 'An object key inside the storage root' });
+const FileKey = z.object({ key: z.string().min(1).max(200) }).meta({
+  id: 'FileKey',
+  description: 'An object key inside the storage root',
+});
 
 const WriteFile = z
   .object({ content: z.string().max(64 * 1024) })
-  .meta({ id: 'WriteFile', title: 'Text to store under the key' });
+  .meta({ id: 'WriteFile', description: 'Text to store under the key' });
 
 const listFiles = {
   query: z.object({

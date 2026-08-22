@@ -98,7 +98,22 @@ z.toJSONSchema(CreateUser);
 
 Every `$defs` entry is hoisted into `components/schemas` and every
 `#/$defs/Tag` is rewritten to `#/components/schemas/Tag`. The definitions
-themselves need no editing at all. Three details are not just the prefix:
+themselves need no editing at all.
+
+**Put prose in `description`, not `title`.** In JSON Schema `title` is a short
+display name, and Swagger UI labels a schema by it when there is one, falling back
+to the `components/schemas` key.
+
+So `.meta({ id: 'User', title: 'A stored user' })` puts `User` in the document and
+lists it as "A stored user", which is unfindable. Use
+`.meta({ id: 'User', description: 'A stored user' })` instead; the key is already
+the name. Verified against Swagger UI 5.32.14.
+
+**`.meta()` goes last.** `.strict()` after it discards the metadata - `meta()` then
+returns `null` - so the schema is inlined despite declaring an id, with nothing
+reporting it.
+
+Three details are not just the prefix:
 
 - **The root is not in `$defs`.** zod inlines the schema you passed and only
   extracts what it *references*. A body schema with an `id` is therefore hoisted

@@ -11,13 +11,16 @@ const Resize = z
     format: z.enum(EncodableFormat).default(EncodableFormat.PNG),
     quality: z.coerce.number().int().min(1).max(100).optional(),
   })
-  .meta({ id: 'Resize', title: 'How to render the generated source image' });
+  .meta({
+    id: 'Resize',
+    description: 'How to render the generated source image',
+  });
 
 const render = { query: Resize } as const;
 const describe = {
   body: z
     .object({ base64: z.string().min(1) })
-    .meta({ id: 'InlineImage', title: 'Any image, base64-encoded' }),
+    .meta({ id: 'InlineImage', description: 'Any image, base64-encoded' }),
 } as const;
 
 /**

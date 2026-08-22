@@ -14,14 +14,14 @@ import type { Entry } from './schema.js';
 
 const EntryIndex = z
   .object({ id: z.coerce.number().int().min(1) })
-  .meta({ id: 'EntryIndex', title: 'A ledger entry id in the path' });
+  .meta({ id: 'EntryIndex', description: 'A ledger entry id in the path' });
 
 const CreateEntry = z
   .object({
     memo: z.string().min(1).max(80),
     amount: z.number().int(),
   })
-  .meta({ id: 'CreateEntry', title: 'A single ledger movement' });
+  .meta({ id: 'CreateEntry', description: 'A single ledger movement' });
 
 /** Both legs succeed or neither does - the rollback is the point of the route. */
 const Transfer = z
@@ -36,7 +36,7 @@ const Transfer = z
      */
     fail: z.boolean().default(false),
   })
-  .meta({ id: 'Transfer', title: 'Move an amount between two memos' });
+  .meta({ id: 'Transfer', description: 'Move an amount between two memos' });
 
 const listEntries = {
   query: z.object({
@@ -68,7 +68,10 @@ const pageQuery = z
       .optional()
       .describe('Opaque cursor from meta.nextCursor. Omit for the first page.'),
   })
-  .meta({ id: 'LedgerPageQuery', title: 'Keyset pagination over the ledger' });
+  .meta({
+    id: 'LedgerPageQuery',
+    description: 'Keyset pagination over the ledger',
+  });
 
 const pagedEntries = { query: pageQuery } as const;
 const oneEntry = { params: EntryIndex } as const;

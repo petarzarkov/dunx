@@ -12,12 +12,21 @@ import { z } from 'zod';
 import { AuthGuard, RolesGuard } from './auth.guard.js';
 import { ReportsService } from './reports.service.js';
 
+const CreateReport = z
+  .object({ title: z.string().min(1) })
+  .meta({ id: 'CreateReport', description: 'A report to file' });
+
+const RenameReport = z.object({ title: z.string().min(1) }).meta({
+  id: 'RenameReport',
+  description: 'A new title for an existing report',
+});
+
 const renameReport = {
   params: z.object({ id: z.coerce.number().int() }),
-  body: z.object({ title: z.string().min(1) }),
+  body: RenameReport,
 } as const;
 
-const createReport = { body: z.object({ title: z.string().min(1) }) } as const;
+const createReport = { body: CreateReport } as const;
 
 // `@UseGuards(AuthGuard)` at class scope rather than as global middleware: every
 // other route in this app is meant to be reachable without credentials, and a

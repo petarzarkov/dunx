@@ -91,13 +91,18 @@ it('validates zod schemas and wraps the return', () => {
 
 it('generates a JSON Schema from the same zod schema', () => {
   // `.meta({ id })` names the $defs entry - the slot OpenAPI calls
-  // components/schemas - and `.meta({ title })` lands inline.
+  // components/schemas - and `.meta({ description })` lands inline beside it.
+  //
+  // The prose goes in `description`, never `title`: Swagger UI labels a schema by
+  // its `title` when there is one and by its `components/schemas` key otherwise,
+  // so a prose title makes the Schemas list read as sentences rather than type
+  // names. Verified against Swagger UI 5.32.14.
   expect(tour.text).toContain(
     '"$defs":{"Tag":{"type":"object","properties":{"label":{"type":"string",' +
       '"minLength":1}},"required":["label"],"additionalProperties":false,' +
-      '"title":"A label attached to a user"}}',
+      '"description":"A label attached to a user"}}',
   );
-  expect(tour.text).toContain('"title":"Create a user"');
+  expect(tour.text).toContain('"description":"Create a user"');
 });
 
 it('documents every route the one app serves', () => {

@@ -8,31 +8,43 @@ import { z } from 'zod';
  * still depends on no validator.
  *
  * `.meta({ id })` names the definition zod emits under `$defs`, which is the slot
- * OpenAPI calls `components/schemas`. `.meta({ title })` lands inline. See
- * `UsersDemo` for the generated document.
+ * OpenAPI calls `components/schemas`. Without an id the schema is inlined at every
+ * use site instead of referenced once.
+ *
+ * **Prose goes in `description`, not `title`.** In JSON Schema `title` is a short
+ * display name, and Swagger UI labels a schema by it when there is one - falling
+ * back to the `components/schemas` key otherwise. A sentence in `title` therefore
+ * makes the whole Schemas list read as prose: `User` shows up as "A stored user"
+ * and is impossible to find. The key is already the name. Verified against Swagger
+ * UI 5.32.14.
+ *
+ * One more ordering trap: `.strict()` **after** `.meta()` discards the metadata, so
+ * the schema is inlined despite declaring an id. Put `.meta()` last.
+ *
+ * See `UsersDemo` for the generated document.
  */
 export const Tag = z
   .object({ label: z.string().min(1) })
-  .meta({ id: 'Tag', title: 'A label attached to a user' });
+  .meta({ id: 'Tag', description: 'A label attached to a user' });
 
 export const CreateUser = z
   .object({
     name: z.string().min(1).max(40),
     tags: z.array(Tag).default([]),
   })
-  .meta({ id: 'CreateUser', title: 'Create a user' });
+  .meta({ id: 'CreateUser', description: 'Create a user' });
 
 /** Path params arrive as strings; `z.coerce` is where `:id` becomes a number. */
 export const UserIndex = z
   .object({ id: z.coerce.number().int().min(1) })
-  .meta({ id: 'UserIndex', title: 'A user id in the path' });
+  .meta({ id: 'UserIndex', description: 'A user id in the path' });
 
 export const ListUsers = z
   .object({
     q: z.string().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(50).default(10),
   })
-  .meta({ id: 'ListUsers', title: 'Filter and page the user list' });
+  .meta({ id: 'ListUsers', description: 'Filter and page the user list' });
 
 /**
  * The response side. Same Standard Schema contract as a request, so it hoists into
@@ -45,11 +57,11 @@ export const User = z
     name: z.string(),
     tags: z.array(z.string()),
   })
-  .meta({ id: 'User', title: 'A stored user' });
+  .meta({ id: 'User', description: 'A stored user' });
 
 export const NotFound = z
   .object({ error: z.string(), status: z.literal(404) })
-  .meta({ id: 'NotFound', title: 'Nothing at that id' });
+  .meta({ id: 'NotFound', description: 'Nothing at that id' });
 
 // Declaring a schema is what makes the matching `input` field exist, get parsed
 // and get validated. `satisfies` keeps the literal types `Input<>` reads.
