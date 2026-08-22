@@ -118,13 +118,31 @@ describe('a real server serving its own document', () => {
     expect(page).toContain('ThingsController_list');
     expect(page).toContain('Every thing');
     expect(page).toContain('href="/api/openapi.json"');
-    // Both assets are prefixed, and both actually answer.
-    for (const file of ['swagger-ui-bundle.js', 'swagger-ui.css']) {
+    // Three assets are linked from the page and prefixed.
+    for (const file of [
+      'swagger-ui-bundle.js',
+      'swagger-ui.css',
+      'favicon-32x32.png',
+    ]) {
       expect(page).toContain(`/api/docs/${file}?v=`);
+    }
+    // Four answer. `swagger-ui.css.map` is not linked from the page - the CSS
+    // asks for it with a `sourceMappingURL`, resolved relative to the CSS URL,
+    // which is why it has to live under the same prefix.
+    for (const file of [
+      'swagger-ui-bundle.js',
+      'swagger-ui.css',
+      'swagger-ui.css.map',
+      'favicon-32x32.png',
+    ]) {
       const asset = await prefixed.request(`api/docs/${file}`);
       expect(asset.status).toBe(200);
       expect(asset.headers.get('cache-control')).toContain('immutable');
-      expect(Number(asset.headers.get('content-length'))).toBeGreaterThan(1000);
+      expect(Number(asset.headers.get('content-length'))).toBeGreaterThan(500);
+    }
+    // A name off the allow-list is a 404, not a read out of node_modules.
+    for (const name of ['swagger-ui-es-bundle.js', 'package.json']) {
+      expect((await prefixed.request(`api/docs/${name}`)).status).toBe(404);
     }
     // Nothing leaves the origin.
     for (const [, url] of page.matchAll(

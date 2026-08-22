@@ -23,7 +23,12 @@ import {
 } from './generate.js';
 import { renderShell } from './html.js';
 import { mountPrefix, withPrefix } from './mount.js';
-import { ASSET_CACHE_CONTROL, SwaggerAssets } from './swagger.js';
+import {
+  ASSET_CACHE_CONTROL,
+  contentTypeOf,
+  isSwaggerAsset,
+  SwaggerAssets,
+} from './swagger.js';
 import type { OpenApiDocument } from './types.js';
 
 /** Everything about the document itself, which is everything a factory can produce. */
@@ -120,19 +125,22 @@ export class OpenApiExplorer {
     return html;
   }
 
-  /** One of Swagger UI's two files, as a `Bun.file` response. */
-  async asset(
-    file: 'swagger-ui-bundle.js' | 'swagger-ui.css',
-  ): Promise<Response> {
+  /**
+   * One allow-listed Swagger UI file, straight off disk.
+   *
+   * A name that is not on the list is a 404 rather than a read, which is what makes
+   * one wildcard route safe over a directory that also holds four other builds and
+   * 4 MB of sourcemaps.
+   */
+  async asset(name: string): Promise<Response> {
+    if (!isSwaggerAsset(name)) {
+      return new Response('Not found', { status: 404 });
+    }
     const assets = await SwaggerAssets.resolve();
-    const path = file === 'swagger-ui.css' ? assets.style : assets.script;
-    return new Response(Bun.file(path), {
+    return new Response(Bun.file(assets.pathOf(name)), {
       headers: {
         'cache-control': ASSET_CACHE_CONTROL,
-        'content-type':
-          file === 'swagger-ui.css'
-            ? 'text/css; charset=utf-8'
-            : 'text/javascript; charset=utf-8',
+        'content-type': contentTypeOf(name),
       },
     });
   }
@@ -193,15 +201,14 @@ const buildController = (paths: DocPaths) => {
     }
 
     /**
-     * Swagger UI's two files, served from the consumer's `swagger-ui-dist`
-     * install as siblings of the page.
+     * Swagger UI's files, served from the consumer's `swagger-ui-dist` install as
+     * siblings of the page.
      *
-     * Two declared routes rather than one wildcard or a `{ dir }` route: a
-     * wildcard over `node_modules` would serve every file in that package,
-     * sourcemaps included, and Bun 1.4's directory routes cannot set
-     * `cache-control` and answer any HTTP method with the file body
-     * (docs/bun-apis.md). Naming the two files that exist is the whole
-     * allow-list.
+     * One wildcard rather than a route per file, because the allow-list lives in
+     * `ASSETS` in `swagger.ts` and four handlers differing only by a string literal
+     * would be that list written twice. Not a `{ dir }` route either: Bun 1.4's
+     * directory routes cannot set `cache-control` and serve the file body for any
+     * HTTP method, including `OPTIONS` (docs/bun-apis.md).
      *
      * `@ApiHidden` because these are the only routes in this controller that are
      * not API. The document deliberately describes its own `/docs` and
@@ -210,16 +217,12 @@ const buildController = (paths: DocPaths) => {
      */
     @ApiHidden()
     @Public()
-    @Get(() => joinPath(paths.ui, '/swagger-ui-bundle.js'))
-    script(): Promise<Response> {
-      return this.#explorer.asset('swagger-ui-bundle.js');
-    }
-
-    @ApiHidden()
-    @Public()
-    @Get(() => joinPath(paths.ui, '/swagger-ui.css'))
-    style(): Promise<Response> {
-      return this.#explorer.asset('swagger-ui.css');
+    @Get(() => joinPath(paths.ui, '/*'))
+    asset(input: Input<RouteSchemas>): Promise<Response> {
+      const { pathname } = new URL(input.req.url);
+      return this.#explorer.asset(
+        pathname.slice(pathname.lastIndexOf('/') + 1),
+      );
     }
 
     #prefix(input: Input<RouteSchemas>, declared: string): string {

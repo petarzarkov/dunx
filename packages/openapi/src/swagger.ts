@@ -20,15 +20,46 @@ import { dirname } from 'node:path';
  * and does not have to install it. Async because that resolution reads a manifest
  * through `Bun.file`, and it is cached, so only the first request pays.
  */
+/**
+ * The files served out of `swagger-ui-dist`, and their content types.
+ *
+ * **This map is the allow-list**, which is why the route that serves them can be a
+ * single wildcard: `node_modules/swagger-ui-dist` also holds four other builds and
+ * 4 MB of sourcemaps, and a wildcard that read the filesystem directly would serve
+ * all of it.
+ *
+ * `swagger-ui.css.map` is here because `swagger-ui.css` ends with a
+ * `sourceMappingURL` comment pointing at it. Without it every consumer with
+ * devtools open logs a 404 against their own app. `swagger-ui-bundle.js` carries no
+ * such comment, so its 1.9 MB map is not served.
+ */
+const ASSETS = Object.freeze({
+  'swagger-ui-bundle.js': 'text/javascript; charset=utf-8',
+  'swagger-ui.css': 'text/css; charset=utf-8',
+  'swagger-ui.css.map': 'application/json; charset=utf-8',
+  'favicon-32x32.png': 'image/png',
+} as const);
+
+export type SwaggerAsset = keyof typeof ASSETS;
+
+export const isSwaggerAsset = (name: string): name is SwaggerAsset =>
+  Object.hasOwn(ASSETS, name);
+
+export const contentTypeOf = (asset: SwaggerAsset): string => ASSETS[asset];
+
 export class SwaggerAssets {
   static #cached: SwaggerAssets | undefined;
 
   private constructor(
     /** The installed version, used to make `immutable` caching honest. */
     readonly version: string,
-    readonly script: string,
-    readonly style: string,
+    readonly directory: string,
   ) {}
+
+  /** The absolute path of one allow-listed file. */
+  pathOf(asset: SwaggerAsset): string {
+    return `${this.directory}/${asset}`;
+  }
 
   /**
    * `swagger-ui-dist` has no `exports` map, so its `package.json` is reachable and
@@ -59,11 +90,7 @@ export class SwaggerAssets {
       version?: string;
     };
 
-    SwaggerAssets.#cached = new SwaggerAssets(
-      version ?? '0',
-      `${root}/swagger-ui-bundle.js`,
-      `${root}/swagger-ui.css`,
-    );
+    SwaggerAssets.#cached = new SwaggerAssets(version ?? '0', root);
     return SwaggerAssets.#cached;
   }
 
@@ -76,11 +103,8 @@ export class SwaggerAssets {
    * same constraint: `immutable` is only honest for a name that changes with the
    * bytes.
    */
-  href(
-    mounted: string,
-    file: 'swagger-ui-bundle.js' | 'swagger-ui.css',
-  ): string {
-    return `${mounted}/${file}?v=${encodeURIComponent(this.version)}`;
+  href(mounted: string, asset: SwaggerAsset): string {
+    return `${mounted}/${asset}?v=${encodeURIComponent(this.version)}`;
   }
 
   /** Only for tests, which need to observe the absent-package path. */

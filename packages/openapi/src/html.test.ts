@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { DOCUMENT_ELEMENT_ID, renderShell } from './html.js';
-import { SwaggerAssets } from './swagger.js';
+import { contentTypeOf, isSwaggerAsset, SwaggerAssets } from './swagger.js';
 import type { OpenApiDocument } from './index.js';
 
 const document: OpenApiDocument = {
@@ -127,8 +127,12 @@ describe('the docs page', () => {
    * the page does fetch, and what has to be pinned is that it only ever fetches from
    * this origin.
    */
-  it('fetches only its own two assets, and only from this origin', () => {
+  it('fetches only its own assets, and only from this origin', () => {
     expect(fetched().toSorted()).toEqual([
+      // The favicon is served rather than a `data:` URI because it comes out of
+      // the same install. Without it a browser asks for `/favicon.ico` and the
+      // consumer's own app logs the 404.
+      `/api/docs/favicon-32x32.png?v=${assets.version}`,
       `/api/docs/swagger-ui-bundle.js?v=${assets.version}`,
       `/api/docs/swagger-ui.css?v=${assets.version}`,
     ]);
@@ -201,11 +205,48 @@ describe('the docs page', () => {
 });
 
 describe('SwaggerAssets', () => {
-  it('resolves the installed swagger-ui-dist and both of its files', async () => {
-    expect(await Bun.file(assets.script).exists()).toBe(true);
-    expect(await Bun.file(assets.style).exists()).toBe(true);
-    expect(assets.script.endsWith('/swagger-ui-bundle.js')).toBe(true);
-    expect(assets.style.endsWith('/swagger-ui.css')).toBe(true);
+  it('resolves the installed swagger-ui-dist and every allow-listed file', async () => {
+    for (const name of [
+      'swagger-ui-bundle.js',
+      'swagger-ui.css',
+      'swagger-ui.css.map',
+      'favicon-32x32.png',
+    ] as const) {
+      expect(isSwaggerAsset(name)).toBe(true);
+      expect(await Bun.file(assets.pathOf(name)).exists()).toBe(true);
+      expect(contentTypeOf(name).length).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * The allow-list is what makes one wildcard route safe. `swagger-ui-dist` also
+   * holds four other builds and 4 MB of sourcemaps in the same directory.
+   */
+  it('refuses anything not on the allow-list', () => {
+    for (const name of [
+      'swagger-ui-es-bundle.js',
+      'swagger-ui-bundle.js.map',
+      'package.json',
+      '../../../etc/passwd',
+      '',
+    ]) {
+      expect(isSwaggerAsset(name)).toBe(false);
+    }
+  });
+
+  /**
+   * `swagger-ui.css` ends with a `sourceMappingURL` pointing at its map, so the map
+   * has to be served or every consumer with devtools open logs a 404 against their
+   * own app. The JS bundle carries no such comment, so its 1.9 MB map is not served.
+   */
+  it('serves the css map, because the css asks for it', async () => {
+    const css = await Bun.file(assets.pathOf('swagger-ui.css')).text();
+    expect(css).toContain('sourceMappingURL=swagger-ui.css.map');
+    expect(isSwaggerAsset('swagger-ui.css.map')).toBe(true);
+
+    const js = await Bun.file(assets.pathOf('swagger-ui-bundle.js')).text();
+    expect(js).not.toContain('sourceMappingURL');
+    expect(isSwaggerAsset('swagger-ui-bundle.js.map')).toBe(false);
   });
 
   it('is resolved once and cached', async () => {

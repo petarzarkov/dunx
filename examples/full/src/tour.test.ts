@@ -130,12 +130,18 @@ it('serves a Swagger UI shell whose assets resolve on this origin', () => {
   expect(tour.text).toMatch(
     /GET \/api\/docs -> 200 text\/html; charset=utf-8, \d+ bytes of Swagger UI shell/,
   );
-  // Two assets, and the count that matters is the second one: `swagger-ui-dist`
-  // is served from the app rather than a CDN, which is the whole point of
-  // resolving it out of the consumer's own install.
-  expect(tour.text).toMatch(/requests 2 asset\(s\), 0 off-origin/);
-  // Both answer, under the global prefix, with an immutable cache header.
-  for (const file of ['swagger-ui.css', 'swagger-ui-bundle.js']) {
+  // Three assets, and the count that matters is the second number: every one is
+  // served from the app rather than a CDN, which is the whole point of resolving
+  // `swagger-ui-dist` out of the consumer's own install.
+  expect(tour.text).toMatch(/requests 3 asset\(s\), 0 off-origin/);
+  // All three answer, under the global prefix, with an immutable cache header.
+  // The favicon is one of them: without it the browser asks for `/favicon.ico`
+  // and the app logs a 404 of its own.
+  for (const file of [
+    'swagger-ui.css',
+    'swagger-ui-bundle.js',
+    'favicon-32x32.png',
+  ]) {
     expect(tour.text).toContain(`/api/docs/${file} -> 200`);
   }
   expect(tour.text).toContain(

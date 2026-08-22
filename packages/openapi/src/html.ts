@@ -16,10 +16,24 @@ import type { OpenApiDocument } from './types.js';
  * would have it request the JSON route itself, which costs a round trip and makes
  * the page depend on that route staying reachable and unguarded; `spec` hands it the
  * bytes the server already has.
+ *
+ * **`color-scheme: light` is load bearing, and getting it wrong is what a first
+ * draft of this file did.** Swagger UI ships one stylesheet and it is light-only.
+ * Declaring `light dark` - which the old dunx explorer correctly did, because it had
+ * a dark theme - tells the browser to paint dark defaults under it, and the result
+ * on a dark-preference machine is a page with a black canvas, dark grey text on
+ * black, and white bands wherever Swagger UI happens to set a background
+ * explicitly. There is no dark Swagger UI to opt into.
+ *
+ * The `box-sizing` rules and the `#fafafa` background are Swagger UI's own
+ * `index.css`, which is not part of `swagger-ui.css` and which its dist `index.html`
+ * loads separately. Its layout assumes them.
  */
 const BOOT = `
-:root { color-scheme: light dark; }
-html, body { margin: 0; padding: 0; }
+:root { color-scheme: light; }
+html { box-sizing: border-box; }
+*, *:before, *:after { box-sizing: inherit; }
+html, body { margin: 0; padding: 0; background: #fafafa; }
 #swagger-ui:empty::after {
   content: 'Loading the API explorer\\2026';
   display: block; padding: 3rem 1.5rem; text-align: center; opacity: .6;
@@ -57,12 +71,16 @@ export const renderShell = (
   const title = `${document.info.title} ${document.info.version}`;
   const style = assets.href(options.mountedAt, 'swagger-ui.css');
   const script = assets.href(options.mountedAt, 'swagger-ui-bundle.js');
+  const icon = assets.href(options.mountedAt, 'favicon-32x32.png');
 
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     `<title>${escape(title)}</title>` +
     `<link rel="stylesheet" href="${escape(style)}">` +
+    // Swagger UI's own mark, from the same install. Without it a browser asks for
+    // `/favicon.ico` and every consumer logs a 404 against their own app.
+    `<link rel="icon" type="image/png" sizes="32x32" href="${escape(icon)}">` +
     `<style>${BOOT}</style></head><body><div id="swagger-ui"></div>` +
     '<noscript><p class="no-js">This API explorer needs JavaScript. ' +
     `The document itself is at <a href="${escape(options.jsonHref)}">` +
