@@ -4,6 +4,19 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 2.3.0 - 2026-08-22
+
+remove inlined OpenAPI explorer and integrate swagger-ui-dist
+
+- Deleted the inlined OpenAPI explorer from `packages/openapi/src/ui.ts`.
+- Updated `tools/create-app/src/features.ts` to include `swagger-ui-dist` as a dependency for the OpenAPI feature.
+- Modified `tools/create-app/src/generate.ts` to add `swagger-ui-dist` to the third-party dependencies.
+- Adjusted `tools/create-app/templates/features/docs/docs.demo.ts` to log requests for assets served from `swagger-ui-dist`.
+- Created a new `docs/roadmap/bun-1.4-adoption.md` to document the impact of upgrading to Bun 1.4.
+- Added a new FastAPI example in `internal/bench/servers/python/fastapi_app.py` for benchmarking.
+- Introduced `packages/openapi/src/swagger.ts` to handle the resolution and serving of Swagger UI assets.
+- new benchmarks measured on bun 1.4
+
 ## 2.2.1 - 2026-08-21
 
 ### Features
