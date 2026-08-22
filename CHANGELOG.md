@@ -4,6 +4,119 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 2.4.0 - 2026-08-22
+
+bun --watch works, health probes documented, schemas named
+
+### bun --watch and bun --hot restart on any source change
+
+`@dunx/transform`'s plugin read source with `Bun.file`, which loads it behind Bun's
+back, so every file the plugin handled dropped out of Bun's watch list. Since the
+plugin handles every `.ts`, `bun run dev` restarted only on a change to the
+entrypoint, in every dunx app. The plugin now reads through Bun's own loader:
+
+    await import(`${path}?`, { with: { type: 'text' } })
+
+The `?` is required, or the specifier still ends in `.ts` and re-enters the plugin.
+
+The transform was never the cause: a plugin returning the source byte for byte broke
+the watcher identically. Three other repairs are unavailable, and all three were
+measured before this one was found. A runtime `onLoad` may not decline (returning
+`undefined` is a `TypeError`), `watchFiles` on the result is accepted and ignored,
+and `filter` is a path regex that cannot skip a file whose contents decide.
+
+Free: `examples/full` boots in 353 to 365 ms reading through `import` against 354 to
+374 ms with `Bun.file`, at 135 MB RSS either way. `watch.test.ts` guards it by
+spawning a real watch and editing a real import, and fails if the read regresses.
+Found via oven-sh/bun#4689.
+
+### Every hoisted schema carries a title
+
+A `components/schemas` entry now gets a `title` equal to its own key, unless it
+declares one. Swagger UI labels a model `title || displayName || name`, and a `$ref`
+reached through `items` supplies neither fallback, so `array&lt;User>` rendered as
+`array&lt;object>` while the same `User` at the root of a response read as `User`.
+Contributed schemas are titled too, so better-auth's `Session` reads like a
+generated `User`.
+
+This does not undo the refactor below it. That one moved _prose_ out of `title`,
+because a sentence there is what a reader sees instead of the type name. The title
+added here is the name, identical to the component key, so the Schemas list reads as
+type names either way and `description` still holds the prose.
+
+### response takes a plain JSON Schema
+
+`RouteSchemas.response` accepts a JSON Schema object as well as a Standard Schema,
+because a JSON Schema needs no conversion. `$id` hoists it into `components/schemas`
+and leaves a `$ref`; without one it is inlined. Documenting a response no longer
+costs a validator dependency.
+
+Responses only. `body`, `query` and `params` are parsed, so they still need a
+validator.
+
+`JsonSchema` moved to `@dunx/http`, which is the lowest common owner now that
+`RouteSchemas` names it. `@dunx/openapi` re-exports it, so no import changes.
+
+### Health probes are in the document
+
+`/health/live` and `/health/ready` appear under a `Health` tag, with the report as
+`components/schemas/HealthReport` on both the 200 and the 503.
+`HealthModule.forRoot({ documented: false })` mounts `HiddenHealthController`
+instead: the same two routes, served and undocumented.
+
+`HEALTH_REPORT_SCHEMA` is exported, so an app answering on its own paths can
+reference the same definition. It restates the `HealthReport` interfaces, and
+`health.test.ts` compares it against a report the registry produced so the two
+cannot drift.
+
+### Swagger UI options
+
+`OpenApiModule`'s `ui` takes every Swagger UI parameter, typed, with `RawJs` for the
+seven that are functions and therefore cannot cross from a server-rendered page as
+values.
+
+`swagger-ui-dist` is a `dependency` of `@dunx/openapi` rather than an optional peer,
+so it installs without being named. It costs 12 MB in every install of the package,
+including one that only serves `openapi.json`.
+
+### Request bodies in the request log
+
+`requestLogging: { requestBody: true }` includes the body. On a route that declares a
+body schema the reader is buffering it anyway, so this costs 1.87 us; on a route with
+no schema it reads the raw text rather than cloning the request, at 28.81 us.
+
+### Examples, and Rule 4
+
+`examples/full` uses `HealthModule` rather than a hand-rolled controller, with its
+indicators declared once and read by both the probes and the dashboard's `probes`
+panel.
+
+Four features had shipped with no example, and now have one: `ThrottleModule`
+(2.2.0), `ScheduleModule` and `StaticModule` (2.1.0), and `@dunx/http/client`.
+All four are scaffoldable, taking `bunx @dunx/create-app` from 13 features to 17.
+
+CLAUDE.md gained Rule 4: a feature is not shipped until an example uses it. Writing
+these examples found a Bun parse bug that every scheduled service would have hit,
+recorded in `docs/bun-apis.md`: a class with a decorated member cannot contain a
+read-modify-write on a private field, so `#count += 1` next to a `@Cron` is a
+`SyntaxError` naming neither.
+
+Worker logs also keep their colour across the sandbox fork, which bullmq gives a
+piped stdout.
+
+### Upgrading
+
+Two things change generated output, so re-record any golden-file test of your
+OpenAPI document:
+
+- every `components/schemas` entry gains a `title`
+- `/health/live` and `/health/ready` are documented unless you pass
+  `documented: false`
+
+### Refactors
+
+- update schema metadata to use 'description' instead of 'title' ([`d44bd14`](https://github.com/petarzarkov/dunx/commit/d44bd146a7df43a215f668ed1edc8ada1bcfc742))
+
 ## 2.3.1 - 2026-08-22
 
 enhance Swagger UI integration by adding favicon and improving asset handling

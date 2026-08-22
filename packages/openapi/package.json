@@ -1,6 +1,6 @@
 {
   "name": "@dunx/openapi",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "OpenAPI 3.1 documents for dunx controllers, generated from the schemas the routes already validate, with Swagger UI mounted over them",
   "keywords": [
     "bun",

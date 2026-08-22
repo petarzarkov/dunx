@@ -1,6 +1,6 @@
 {
   "name": "@dunx/auth",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "Better Auth for dunx: its handler mounted on Bun.serve, a session guard reading @Public() and @Roles(), the caller in async context, and Bun.password hashing",
   "keywords": [
     "auth",
