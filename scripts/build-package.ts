@@ -106,7 +106,11 @@ const result = await Bun.build({
   // with no dynamic imports (`@dunx/core`, `@dunx/http`) emit byte-identical
   // output.
   splitting: true,
-  sourcemap: 'linked',
+  // No source maps. `sourcemap: 'linked'` embedded full `sourcesContent`, so every
+  // package shipped its own TypeScript inside the `.map` and the maps were 50-64%
+  // of the tarball by byte - `@dunx/http`'s was 317 KB against 114 KB of JS. `files`
+  // excludes `src/`, so publishing the sources through the back door was not the
+  // intent.
 });
 
 if (!result.success) {
