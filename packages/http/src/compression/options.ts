@@ -9,11 +9,19 @@
  * belongs on a build artefact compressed once, not on a response encoded per
  * request. Note also that the `CompressionStream` format is spelled `brotli`
  * while the HTTP token is `br`, so the two never lined up anyway.
+ *
+ * **`deflate` is absent for a second and worse reason: Bun's two encoders disagree
+ * about what it means.** `Bun.deflateSync` emits raw DEFLATE (first bytes
+ * `cb 48`), while `CompressionStream('deflate')` emits zlib (`78 9c`), which is
+ * what `Content-Encoding: deflate` is defined as. No option reconciles them -
+ * `library`, `windowBits` and `level` all leave `deflateSync` raw - so offering
+ * the coding would flip wire format at the buffering threshold and serve bytes a
+ * strict client rejects. `gzip` is taken by everything that would have accepted
+ * `deflate`. Measured on Bun 1.4.0; see docs/bun-apis.md.
  */
 export const CompressionEncoding = Object.freeze({
   ZSTD: 'zstd',
   GZIP: 'gzip',
-  DEFLATE: 'deflate',
 } as const);
 export type CompressionEncoding =
   (typeof CompressionEncoding)[keyof typeof CompressionEncoding];
@@ -50,6 +58,19 @@ export const isCompressibleType = (contentType: string | null): boolean => {
   if (type.startsWith('text/')) return true;
   if (type.endsWith('+json') || type.endsWith('+xml')) return true;
   return COMPRESSIBLE.has(type);
+};
+
+/** Whether this runtime has both encoders for a coding: the sync one and the stream. */
+const encodable = (encoding: CompressionEncoding): boolean => {
+  const sync =
+    encoding === CompressionEncoding.ZSTD ? Bun.zstdCompressSync : Bun.gzipSync;
+  if (typeof sync !== 'function') return false;
+  try {
+    new CompressionStream(encoding);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export interface CompressionOptionsInit {
@@ -95,6 +116,16 @@ export class CompressionOptions {
       CompressionEncoding.ZSTD,
       CompressionEncoding.GZIP,
     ];
+    // `engines.bun` allows 1.3, where `zstd` may be missing from either encoder.
+    // Checked once here so an unsupported runtime is a boot error naming the
+    // coding, rather than a TypeError on the first request that negotiates it.
+    const missing = this.encodings.filter((encoding) => !encodable(encoding));
+    if (missing.length > 0) {
+      throw new Error(
+        `Bun ${Bun.version} cannot encode ${missing.join(', ')}. ` +
+          'Pass `encodings` without it, or upgrade Bun.',
+      );
+    }
     this.threshold = init.threshold ?? 1024;
     this.filter = init.filter ?? isCompressibleType;
   }

@@ -338,6 +338,31 @@ auto-instrumentation sees none of those four. Tracing here would be spans dunx e
 against `@opentelemetry/api` at the seams it already owns: the request middleware, the
 job processor, the Redis wrapper.
 
+### `Bun.deflateSync` and `CompressionStream('deflate')` disagree on the format
+
+`Content-Encoding: deflate` means zlib (RFC 1950). Bun's two encoders produce
+different bytes for it, and only one of them is that:
+
+| Encoder                            | First bytes | Format      |
+| ---------------------------------- | ----------- | ----------- |
+| `Bun.deflateSync(data)`            | `cb 48`     | raw DEFLATE |
+| `new CompressionStream('deflate')` | `78 9c`     | zlib        |
+| `node:zlib`'s `deflateSync`        | `78 9c`     | zlib        |
+
+`DecompressionStream('deflate')` decodes the stream output and throws
+`inflate failed` on the sync one. Nothing reconciles them: `{ library: 'zlib' }`,
+`{ windowBits: 15 }`, `{ windowBits: -15 }` and `{ level: 6 }` all leave
+`deflateSync` raw.
+
+`@dunx/http`'s `Compression` therefore offers `zstd` and `gzip` only. It picks the
+sync encoder for a body it can buffer and `CompressionStream` for one it cannot, so
+offering `deflate` would have changed the wire format at the buffering threshold
+and served bytes a strict client rejects. `gzip` is accepted by everything that
+would have taken `deflate`.
+
+`Bun.gzipSync` and `CompressionStream('gzip')` agree, and so do the two zstd
+encoders; this is `deflate` alone.
+
 ### `Bun.serve({ websocket })` and `ServerWebSocket`
 
 - **`ServerWebSocket`**: `send`, `sendText`, `sendBinary`, `publish`, `publishText`,

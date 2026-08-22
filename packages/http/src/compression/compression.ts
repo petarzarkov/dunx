@@ -123,8 +123,6 @@ const encodeSync = (
       return Bun.zstdCompressSync(data);
     case CompressionEncoding.GZIP:
       return Bun.gzipSync(data);
-    case CompressionEncoding.DEFLATE:
-      return Bun.deflateSync(data);
   }
 };
 

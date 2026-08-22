@@ -78,6 +78,32 @@ describe('negotiate', () => {
   });
 });
 
+describe('the codings offered', () => {
+  /**
+   * `deflate` was offered and withdrawn before it shipped. `Bun.deflateSync`
+   * emits raw DEFLATE and `CompressionStream('deflate')` emits zlib, which is
+   * what the header means - so the buffered and streaming paths disagreed and
+   * the format flipped at the 1 MiB threshold. Measured on Bun 1.4.0.
+   */
+  it('is zstd and gzip, and nothing Bun encodes two ways', () => {
+    expect(Object.values(CompressionEncoding)).toEqual(['zstd', 'gzip']);
+  });
+
+  it('sends nothing to a client that only takes deflate', async () => {
+    const res = await run(request('deflate'), json());
+    expect(res.headers.get('content-encoding')).toBeNull();
+  });
+
+  it('refuses a coding this runtime cannot encode', () => {
+    expect(
+      () =>
+        new CompressionOptions({
+          encodings: ['br' as unknown as (typeof CompressionEncoding)['GZIP']],
+        }),
+    ).toThrow(/cannot encode br/);
+  });
+});
+
 describe('isCompressibleType', () => {
   it('accepts text, json and the structured suffixes', () => {
     expect(isCompressibleType('text/html; charset=utf-8')).toBe(true);
