@@ -85,6 +85,16 @@ export {
   type HttpOptions,
 } from './server/factory.js';
 export { REQUEST_ID_HEADER } from './server/request-id.js';
+// W3C Trace Context, off unless `requestLogging: { trace: true }` asks for it.
+// One header parsed and one written - no exporter, no sampler, no dependency.
+// What it buys is that `traceId` on a log line here is the same `traceId` the
+// service upstream logged, which is the part a collector cannot supply.
+export {
+  TRACEPARENT_HEADER,
+  TRACESTATE_HEADER,
+  TraceContext,
+  type Trace,
+} from './server/trace-context.js';
 export {
   RequestLoggingMiddleware,
   type RequestLoggingOptions,

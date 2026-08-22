@@ -9,6 +9,7 @@ import { HttpError } from './errors.js';
 import type { Middleware, Next } from './middleware.js';
 import { RawBody } from './raw-body.js';
 import { REQUEST_ID_HEADER, RequestIds } from './request-id.js';
+import { TraceContext } from './trace-context.js';
 import { HttpStatusCode } from './status.js';
 
 export interface RequestLoggingOptions {
@@ -106,6 +107,20 @@ export interface RequestLoggingOptions {
    * is for.
    */
   readonly correlate?: boolean;
+  /**
+   * Adopt W3C Trace Context, so `traceId`, `spanId` and `parentSpanId` join
+   * `requestId` on every line the request writes. Default **`false`**.
+   *
+   * On, an inbound `traceparent` is honoured and this service becomes a child
+   * span of the caller's; off, nothing reads the header and nothing is minted.
+   * It costs a header read and 8 random bytes per request, which is not worth
+   * paying in a service with nothing to correlate against - and `requestId`
+   * already spans two dunx services on its own.
+   *
+   * `@dunx/http/client` sends the adopted trace upstream, so turning this on at
+   * both ends is what makes one trace cover both.
+   */
+  readonly trace?: boolean;
 }
 
 const parse = (text: string, limit: number): unknown => {
@@ -159,6 +174,7 @@ export class RequestLoggingMiddleware implements Middleware {
   readonly #ignorePrefix: readonly string[];
   readonly #correlateIgnored: boolean;
   readonly #correlate: boolean;
+  readonly #trace: boolean;
 
   constructor(
     private readonly logger: Logger,
@@ -172,6 +188,7 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#ignorePrefix = options.ignorePrefix ?? [];
     this.#correlateIgnored = options.correlateIgnored ?? false;
     this.#correlate = options.correlate ?? true;
+    this.#trace = options.trace ?? false;
   }
 
   /**
@@ -209,6 +226,14 @@ export class RequestLoggingMiddleware implements Middleware {
       flow: 'http',
       context: `${ctx.controller}.${ctx.handler}`,
     };
+    if (this.#trace) {
+      const trace = TraceContext.adopt(req, requestId);
+      scope.traceId = trace.traceId;
+      scope.spanId = trace.spanId;
+      if (trace.parentSpanId !== undefined) {
+        scope.parentSpanId = trace.parentSpanId;
+      }
+    }
 
     // The same five fields either way. Under `correlate` they go into the store,
     // which the logger reads back for every line the request writes; without it

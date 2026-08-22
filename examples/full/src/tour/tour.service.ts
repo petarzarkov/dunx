@@ -4,6 +4,7 @@ import { AuthDemo } from '../auth/auth.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
 import { CompressionDemo } from '../http/compression.demo.js';
+import { TraceDemo } from '../http/trace.demo.js';
 import { DashboardDemo } from '../dashboard/dashboard.demo.js';
 import { Ledger } from '../database/ledger.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
@@ -34,6 +35,7 @@ export class Tour {
     private readonly users: UsersDemo,
     private readonly http: HttpDemo,
     private readonly compression: CompressionDemo,
+    private readonly trace: TraceDemo,
     private readonly chat: ChatDemo,
     private readonly guards: GuardsDemo,
     private readonly health: HealthDemo,
@@ -71,6 +73,9 @@ export class Tour {
 
     this.group("@dunx/http - Compression, on Bun's own zstd and gzip");
     await this.compression.demonstrate(url);
+
+    this.group('@dunx/http - W3C Trace Context, adopted and propagated');
+    await this.trace.demonstrate(url);
 
     this.group('@dunx/http - @Gateway("/chat"), same Bun.serve as the routes');
     await this.chat.demonstrate(app, url);

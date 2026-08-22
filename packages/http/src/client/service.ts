@@ -1,4 +1,5 @@
 import { Logger, RequestContext } from '@dunx/core';
+import { TRACEPARENT_HEADER, TraceContext } from '../server/trace-context.js';
 import { UrlHelper, type ParamsType } from '@arkv/shared';
 import type { HttpMethod } from '../route/marker.js';
 import { FetchError, FetchTransportError } from './errors.js';
@@ -396,6 +397,13 @@ export class HttpService extends UrlHelper {
         ? undefined
         : this.requestContext.getContext().requestId;
 
+    // Both read the same store. A trace is only there when the inbound side
+    // adopted one, so with `requestLogging: { trace: true }` off this is a
+    // property read and nothing is sent.
+    const trace = this.options.propagateTrace
+      ? this.requestContext.getContext()
+      : undefined;
+
     const headers: Record<string, string> = {
       accept,
       ...(serialised === '' ? {} : { 'content-type': 'application/json' }),
@@ -403,6 +411,15 @@ export class HttpService extends UrlHelper {
       ...(requestId === undefined || this.options.requestIdHeader === undefined
         ? {}
         : { [this.options.requestIdHeader]: requestId }),
+      ...(typeof trace?.traceId === 'string' && typeof trace.spanId === 'string'
+        ? {
+            [TRACEPARENT_HEADER]: TraceContext.header({
+              traceId: trace.traceId,
+              spanId: trace.spanId,
+              flags: '01',
+            }),
+          }
+        : {}),
       ...config.headerFactory?.({
         timestamp: Math.floor(Date.now() / 1000),
         method: config.method,

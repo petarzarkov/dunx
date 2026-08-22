@@ -25,6 +25,17 @@ export interface HttpClientOptionsInit {
    * @default true
    */
   readonly propagateRequestId?: boolean | string;
+  /**
+   * Forward W3C Trace Context upstream as `traceparent`, so the callee's spans
+   * join this request's trace.
+   *
+   * Read from `RequestContext`, so it only carries when a trace is in scope -
+   * which means `requestLogging: { trace: true }` on the inbound side. With that
+   * off there is nothing to send and this costs one property read.
+   *
+   * @default true
+   */
+  readonly propagateTrace?: boolean;
   /** Bound as its own token, so a second client can be injected by name. */
   readonly name?: string;
   /**
@@ -54,6 +65,7 @@ export class HttpClientOptions {
   readonly headers: Readonly<Record<string, string>>;
   readonly retry: RetryOptions<unknown>;
   readonly requestIdHeader: string | undefined;
+  readonly propagateTrace: boolean;
   readonly name: string | undefined;
   readonly fetchOptions: Readonly<Record<string, unknown>>;
 
@@ -64,6 +76,7 @@ export class HttpClientOptions {
     this.headers = init.headers ?? {};
     this.retry = init.retry ?? {};
     this.name = init.name;
+    this.propagateTrace = init.propagateTrace ?? true;
 
     const propagate = init.propagateRequestId ?? true;
     this.requestIdHeader =

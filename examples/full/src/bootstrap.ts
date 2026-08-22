@@ -87,6 +87,12 @@ export const createApp = async (): Promise<HttpApp> => {
         // service does. It is an operations page looking at the logs, not a thing
         // the logs are about.
         ignorePrefix: ['/api/_dunx'],
+        // Off by default in the framework: adopting a trace costs ~360 ns per
+        // request and buys nothing in a service with nothing to correlate
+        // against. On here, so `traceId`, `spanId` and `parentSpanId` join
+        // `requestId` on every line, and `@dunx/http/client` forwards the trace
+        // to whatever this app calls.
+        trace: true,
       },
       websocket: { idleTimeout: 30 },
       // Multi-node websocket fan-out, on `Bun.RedisClient` and therefore on no

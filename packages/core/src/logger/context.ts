@@ -6,6 +6,14 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  */
 export interface RequestFields {
   requestId?: string;
+  /**
+   * W3C Trace Context, when `@dunx/http` was asked to adopt it. 32 hex digits for
+   * `traceId` and 16 for the two span ids, so a log pipeline can join these lines
+   * to spans emitted by anything else that speaks the same standard.
+   */
+  traceId?: string;
+  spanId?: string;
+  parentSpanId?: string;
   userId?: string;
   method?: string;
   event?: string;

@@ -1,6 +1,8 @@
 import { Module } from '@dunx/core';
 import { CompressionModule } from '@dunx/http';
 import { CompressionDemo } from './compression.demo.js';
+import { TraceController } from './trace.controller.js';
+import { TraceDemo } from './trace.demo.js';
 import { HttpDemo } from './http.demo.js';
 import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
 
@@ -18,7 +20,20 @@ import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
     // 18 bytes and a short JSON response comes out larger.
     CompressionModule.forRoot({ threshold: 1024 }),
   ],
-  providers: [RequestTrail, RequestTrailMiddleware, HttpDemo, CompressionDemo],
-  exports: [RequestTrail, RequestTrailMiddleware, HttpDemo, CompressionDemo],
+  controllers: [TraceController],
+  providers: [
+    RequestTrail,
+    RequestTrailMiddleware,
+    HttpDemo,
+    CompressionDemo,
+    TraceDemo,
+  ],
+  exports: [
+    RequestTrail,
+    RequestTrailMiddleware,
+    HttpDemo,
+    CompressionDemo,
+    TraceDemo,
+  ],
 })
 export class HttpModule {}
