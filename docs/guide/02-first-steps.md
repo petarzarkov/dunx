@@ -225,11 +225,11 @@ file at all.
   },
   "devDependencies": {
     "@dunx/testing": "^0.1.0",
-    "@types/bun": ">=1.3.0",
+    "@types/bun": ">=1.4.0",
     "typescript": "^5.7.0"
   },
   "engines": {
-    "bun": ">=1.3.0"
+    "bun": ">=1.4.0"
   }
 }
 ```
