@@ -83,21 +83,26 @@ describe('documented response bodies', () => {
     status: HttpStatusCode.NO_CONTENT,
   } as const satisfies RouteSchemas;
 
+  type Person = z.infer<typeof SanitizedUser>;
+  const ada: Person = { id: 1, name: 'Ada' };
+
   @Controller('people')
   class PeopleController {
+    // The bodies conform because the decorators hold them to the `response`
+    // entry for each route's success status - a `null` here is a TS1241.
     @Get('/', listPeople)
-    list(_input: Input<typeof listPeople>): null {
-      return null;
+    list(_input: Input<typeof listPeople>): readonly Person[] {
+      return [ada];
     }
 
     @Get('/:id', showUser)
-    one(_input: Input<typeof showUser>): null {
-      return null;
+    one(_input: Input<typeof showUser>): Person {
+      return ada;
     }
 
     @Post('/', createPerson)
-    create(_input: Input<typeof createPerson>): null {
-      return null;
+    create(_input: Input<typeof createPerson>): Person {
+      return ada;
     }
 
     @Delete('/:id', removePerson)
@@ -189,8 +194,8 @@ describe('documented response bodies', () => {
     @Controller('paged')
     class PagedController {
       @Get('/', paged)
-      list(_input: Input<typeof paged>): null {
-        return null;
+      list(_input: Input<typeof paged>): { take: number } {
+        return { take: 10 };
       }
     }
 

@@ -114,10 +114,25 @@ The same Standard Schema contract as the request side, so
 [`@dunx/openapi`](./10-openapi.md) hoists a named response schema into
 `components/schemas` exactly as it hoists a body.
 
-It **documents the response and does not enforce it.** Validating every response
-body would be a per-request cost paid for a documentation feature, and the
-handler's own return type already checks the answer at compile time. `response`
-does not appear in `Input<O>`: nothing about it reaches the handler.
+It is **checked at compile time, not at runtime.** Validating every response body
+would be a per-request cost paid for a documentation feature. The verb decorator
+holds the handler's return type to the entry for the route's success status
+instead, so this does not compile:
+
+```ts
+@Get('/:id', oneUser)
+one(input: Input<typeof oneUser>): { id: number } {
+  //                                ^ TS1241: property 'name' is missing
+}
+```
+
+Four things that follow. Only the success status is checked, since a 404 body
+leaves through a thrown `HttpError` that no return type describes. A `Response` is
+always allowed. A `readonly User[]` satisfies a schema inferring `User[]`, because
+mutability does not survive serialisation. And returning nothing is a 204, so it
+fails against a declared 200 body.
+
+`response` does not appear in `Input<O>`: nothing about it reaches the handler.
 
 Write the options object next to the schemas and hand the same value to both the
 decorator and the annotation:

@@ -1,4 +1,8 @@
-import { HttpStatusCode, type DiscoveredRoute } from '@dunx/http';
+import {
+  defaultStatusFor,
+  HttpStatusCode,
+  type DiscoveredRoute,
+} from '@dunx/http';
 import {
   convertObject,
   convertSchema,
@@ -95,10 +99,9 @@ export const pathParams = (path: string): readonly string[] =>
     .filter((segment) => segment.startsWith(':'))
     .map((segment) => segment.slice(1));
 
-/** The same rule `buildRoutes` applies: an explicit status, else 201 for POST. */
+/** The same rule `buildRoutes` applies, read from the same function. */
 export const statusOf = (route: DiscoveredRoute): number =>
-  route.options?.status ??
-  (route.method === 'POST' ? HttpStatusCode.CREATED : HttpStatusCode.OK);
+  route.options?.status ?? defaultStatusFor(route.method);
 
 const statusText = (status: number): string => {
   const name = Object.entries(HttpStatusCode).find(

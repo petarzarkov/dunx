@@ -50,14 +50,19 @@ export const ListUsers = z
 
 /**
  * The response side. Same Standard Schema contract as a request, so it hoists into
- * `components/schemas` the same way - but it is **never validated**: it documents
- * what comes back, and the handler's return type is what checks it.
+ * `components/schemas` the same way - and it is **never validated at runtime**:
+ * the verb decorator holds the handler's return type to it instead, so a route
+ * declaring this cannot answer with anything else and still compile.
+ *
+ * That check is what caught this schema declaring a `tags: string[]` the `users`
+ * table has no column for. Every user response advertised an array no handler
+ * returned. `tags` stays on {@link CreateUser}, the request side, where it is
+ * read - a documented response is a view of the row, and this one is the row.
  */
 export const User = z
   .object({
     id: z.number().int(),
     name: z.string(),
-    tags: z.array(z.string()),
   })
   .meta({ id: 'User', description: 'A stored user' });
 

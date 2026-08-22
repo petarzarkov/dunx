@@ -172,6 +172,69 @@ create(input: Input<typeof createNote>): Note {
 Verified that the wrong return type on that exact shape fails with
 `Type 'string' is not assignable to type 'number'`.
 
+**The same decorator can check the _return_ type against `options.response`.**
+Measured with `tsc` under the root's flags, on a `Returns<O, M>` constraint keyed
+to the route's success status:
+
+```
+matches the declared success schema        -> compiles
+a promise of it                            -> compiles
+a wider object                             -> compiles
+readonly T[] against a schema inferring T[] -> compiles
+Response, or a promise of one               -> compiles
+missing a required property                -> TS1241 + TS1270, naming it
+the declared 404 shape on the success path  -> TS1241 + TS1270
+null or undefined against a declared body   -> TS1241 + TS1270
+```
+
+Four results worth keeping:
+
+- **Keying on the success status rather than the union of every declared status is
+  what catches the realistic mistake.** A route declaring
+  `{ 200: User, 404: Problem }` and returning the `Problem` shape on the success
+  path answers 200 with an error body; against a union of both it compiles.
+  `DefaultStatus<M>` in `route/marker.ts` is what makes that reachable at the type
+  level, which is why the verb factory takes `<const M extends HttpMethod>` - a
+  widened `HttpMethod` cannot tell a POST's 201 from a GET's 200.
+- **`readonly T[]` had to be admitted.** `z.array()` infers a mutable `T[]`, and
+  `readonly T[]` is not assignable to it, so a repository returning
+  `readonly User[]` failed against a document it satisfies. `Serialised<T>` rewrites
+  every array in the declared shape to `readonly`, which the mutable one still
+  satisfies. Only arrays need it: TypeScript already ignores a property's `readonly`
+  modifier when checking assignability, so the object branch exists to reach nested
+  arrays, and a function is returned untouched because mapping over one discards its
+  call signature.
+- **`infer R extends ResponseMap` is load bearing.** Without the constraint the
+  narrowed `O` in the branch is `{ response: R } & O`, whose `response` no longer
+  satisfies `RouteSchemas`, and the nested `SuccessStatus<O, M>` fails with
+  `TS2344`. Measured both ways.
+- **A plain `JsonSchema` entry turns the check off for that route**, becoming
+  `unknown`, which absorbs any return type. There is no type to infer from JSON, and
+  that is the deliberate escape hatch for a response no schema value describes.
+  Options widened by a missing `as const` do the same thing.
+
+It found a real defect on the first run: `examples/full` documented `User` with a
+`tags: string[]` the `users` table has no column for, so every user response
+advertised an array no handler returned.
+
+**Deriving the response schema from the return type is the direction that stays
+closed.** `@dunx/transform` is `oxc-parser`: a single-file syntax parser with no
+program and no checker. It reads a return type's syntax fine, but
+`Promise<UserDto>` is a name that needs cross-file resolution, generics and mapped
+types to become a schema - a type checker, which is what `@nestjs/swagger`'s plugin
+runs during `nest build`.
+
+A class return type gives a runtime value whose field annotations are erased, and
+the two things Nest leans on for that (`emitDecoratorMetadata`, parameter
+decorators) are both banned here.
+
+Probed: the one extractable case is a return type whose syntax names a runtime
+value, as `z.infer<typeof User>` does, where `TSTypeQuery.exprName` is the schema.
+It was rejected anyway. `Promise<z.infer<typeof User>[]>` silently yields `User`,
+losing the array, and fixing that means implementing `[]`, `Array<>`, `Partial<>`
+and `Pick<>` as operations over a runtime schema value. It also only helps someone
+who already holds the schema value they could have written into `response`.
+
 **`drizzle-orm/bun-sql` is Postgres, not `Bun.SQL`.** `Bun.SQL` speaks four
 dialects - `postgres`, `mysql`, `mariadb`, `sqlite`, quoted from its own rejection
 message. Its drizzle adapter speaks one. Read from `bun-sql/driver.js` in

@@ -11,7 +11,13 @@ export {
   joinPath,
   type DiscoveredRoute,
 } from './route/discover.js';
-export type { HttpMethod, RouteMeta, RoutePath } from './route/marker.js';
+export {
+  defaultStatusFor,
+  type DefaultStatus,
+  type HttpMethod,
+  type RouteMeta,
+  type RoutePath,
+} from './route/marker.js';
 // Route metadata and scoped middleware. `meta`/`metaKey` are the whole mechanism;
 // `@Roles` and `@Public` are wrappers over it, and ROLES/PUBLIC are exported so a
 // user's own guard can read what they set.
@@ -39,6 +45,8 @@ export type {
   InferOutput,
   Input,
   JsonSchema,
+  ResponseMap,
+  Returns,
   RouteInput,
   RouteSchemas,
   StandardSchemaIssue,

@@ -435,9 +435,12 @@ pre-rendered prose, the samples and the fields.
 - **A non-object schema for `query` or `params` documents nothing** and produces
   a warning: a query string is a set of named parameters, and there is nothing to
   expand.
-- **A response schema documents and never enforces.** `options.response` is
-  never validated, so a handler that returns something else produces a document
-  that lies. The handler's return type is what keeps the two honest.
+- **A response schema is checked by the compiler, never at runtime.** The verb
+  decorator constrains the handler's return type to `response[<success status>]`,
+  so a handler answering with another shape is a `TS1241` naming the mismatched
+  property. Nothing validates a response body per request. Declaring a plain
+  JSON Schema instead of a Standard Schema turns the check off for that route:
+  there is no type to infer from it.
 - **A schema used in both directions converts twice**, with `io: 'input'` for the
   request and `io: 'output'` for the response. If the two views differ - anything
   with a `.default()` - one `.meta({ id })` cannot name both, and the store keeps

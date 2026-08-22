@@ -359,6 +359,18 @@ it('documents every route it serves, with nothing unresolved', async () => {
   }
   expect(Object.keys(document.components.schemas)).toContain('CreateEntry');
 
+  // The documented response and the handler that fills it cannot disagree: the
+  // verb decorator holds `UsersController.one` to `oneUser.response[200]`, so a
+  // property here that no handler returns is a compile error in the controller.
+  // It found one - `User` used to document a `tags` array the table has no column
+  // for.
+  expect(
+    Object.keys(
+      (document.components.schemas['User'] as { properties: object })
+        .properties,
+    ),
+  ).toEqual(['id', 'name']);
+
   const page = await raw('docs');
   expect(page.status).toBe(200);
   expect(page.headers.get('content-type')).toContain('text/html');

@@ -1,7 +1,7 @@
 import { AppError, type Ctor, type ModuleRef } from '@dunx/core';
 import type { BunRequest } from 'bun';
 import type { DiscoveredRoute } from '../route/discover.js';
-import type { HttpMethod } from '../route/marker.js';
+import { defaultStatusFor, type HttpMethod } from '../route/marker.js';
 import { PUBLIC, UNMATCHED, type MetaKey } from '../route/metadata.js';
 import type { RouteInput } from '../route/schema.js';
 import type { UpgradeHandler } from '../ws/adapter.js';
@@ -64,10 +64,8 @@ const toResponse = (value: unknown, status: number): Response => {
   return Response.json(value, { status });
 };
 
-/** The usual rule: an explicit `status`, else 201 for POST, else 200. */
 const statusFor = (route: DiscoveredRoute): number =>
-  route.options?.status ??
-  (route.method === 'POST' ? HttpStatusCode.CREATED : HttpStatusCode.OK);
+  route.options?.status ?? defaultStatusFor(route.method);
 
 /**
  * Bun silently lets one route win on a collision, so a duplicate method+path is a

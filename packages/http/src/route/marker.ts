@@ -2,12 +2,30 @@
 // marker goes on the method function itself - nothing accumulates at class
 // definition time, so there is no ordering dependence and no cross-file leak.
 // See docs/architecture/http.md, "Route discovery".
+import { HttpStatusCode } from '../server/status.js';
 import type { RouteSchemas } from './schema.js';
 
 const ROUTE = Symbol.for('dunx.route');
 const CONTROLLER = Symbol.for('dunx.controller');
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+/**
+ * The success status a route answers with when `options.status` is absent.
+ * `buildRoutes` and `@dunx/openapi`'s `statusOf` both read it, so the rule is
+ * stated once rather than in each of them.
+ */
+export const defaultStatusFor = (method: HttpMethod): number =>
+  method === 'POST' ? HttpStatusCode.CREATED : HttpStatusCode.OK;
+
+/**
+ * The type-level twin of {@link defaultStatusFor}, derived from the same constants
+ * so the two cannot drift. `Returns` needs it to know which `response` entry a
+ * handler is being held to.
+ */
+export type DefaultStatus<M extends HttpMethod> = M extends 'POST'
+  ? typeof HttpStatusCode.CREATED
+  : typeof HttpStatusCode.OK;
 
 /**
  * A literal path, or a thunk read at **discovery** rather than at decoration.
