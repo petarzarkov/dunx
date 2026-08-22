@@ -149,7 +149,7 @@ The handshake is awaited inside `open()` rather than deferred to the first query
 | `schema`       | required     | The type argument that reaches every injection site           |
 | `filename`     | `':memory:'` | A path, or a `sqlite:`/`file:` URL, whose scheme is stripped  |
 | `readOnly`     | `false`      | Opens `SQLITE_OPEN_READONLY`, suppresses `create`             |
-| `create`       | `true`       | See the caveat below                                          |
+| `create`       | `true`       | `false` throws on a missing file on Bun 1.4; see below        |
 | `strict`       | `true`       | **Not the driver's default.** See below                       |
 | `safeIntegers` | `false`      | Return integers as `bigint` rather than truncating to 53 bits |
 | `pragmas`      | `[]`         | Run once after opening, each prefixed with `PRAGMA`           |
@@ -159,9 +159,11 @@ The handshake is awaited inside `open()` rather than deferred to the first query
 `pragmas` is the only place `journal_mode = WAL` can be set before the first
 query.
 
-`create: false` **does not currently stop file creation**: `new Database(path,
-{ create: false })` still creates a missing file on Bun 1.3.14. Use `readOnly` if
-the file must already exist.
+`create: false` behaves differently across Bun versions. On 1.4 it throws
+`bad parameter or other API misuse` when the file is missing, which is what the
+option is for. On 1.3.14 it created the file anyway. `readOnly` refuses a missing
+file on both, with `unable to open database file`, so it is the portable way to
+require an existing database.
 
 `strict: true` is this package's default and the driver's is not. Strict mode
 turns an unsupported binding into a `TypeError` instead of a silent `NULL`. It is also why `SqliteOptions` opens the `bun:sqlite` handle itself instead

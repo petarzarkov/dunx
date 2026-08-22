@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { MODEL_ELEMENT_ID } from './html.js';
-import { buildModel } from './model.js';
-import { renderPage } from './ui.js';
-import type { OpenApiDocument, PageModel } from './index.js';
+import { DOCUMENT_ELEMENT_ID, renderShell } from './html.js';
+import { SwaggerAssets } from './swagger.js';
+import type { OpenApiDocument } from './index.js';
 
 const document: OpenApiDocument = {
   openapi: '3.1.0',
@@ -83,69 +82,93 @@ const document: OpenApiDocument = {
 const options = {
   jsonHref: '/api/openapi.json',
   warnings: ['one schema degraded'],
+  mountedAt: '/api/docs',
 };
-const page = renderPage(document, options);
 
-/** The `<script type="application/json">` the bundle boots from. */
-const embedded = (): PageModel => {
-  const open = `<script type="application/json" id="${MODEL_ELEMENT_ID}">`;
+const assets = await SwaggerAssets.resolve();
+const page = renderShell(document, options, assets);
+
+/** The `<script type="application/json">` Swagger UI is handed. */
+const embedded = (): OpenApiDocument => {
+  const open = `<script type="application/json" id="${DOCUMENT_ELEMENT_ID}">`;
   const from = page.indexOf(open) + open.length;
   return JSON.parse(page.slice(from, page.indexOf('</script>', from)));
 };
 
 /**
- * The page without either script body - the markup a browser actually parses as
+ * The page without any script body - the markup a browser actually parses as
  * markup. Everything inside a `<script>` is text to the HTML parser, so an
- * `href="` or a `src=` in minified React is not a resource, and asserting over
- * it would only be asserting about somebody else's string table.
+ * `href="` inside a boot script is not a resource.
  */
 const shell = page.replace(/(<script[^>]*>)[\s\S]*?(<\/script>)/g, '$1$2');
 
+/** Every URL a browser would actually fetch from this page. */
+const fetched = (): string[] => [
+  ...[...shell.matchAll(/<script\b[^>]*\ssrc="([^"]*)"/g)].map(
+    (m) => m[1] ?? '',
+  ),
+  ...[...shell.matchAll(/<link\b[^>]*\shref="([^"]*)"/g)].map(
+    (m) => m[1] ?? '',
+  ),
+];
+
 describe('the docs page', () => {
-  it('is a self-contained HTML document', () => {
+  it('is an HTML document with Swagger UI mount point', () => {
     expect(page.startsWith('<!doctype html>')).toBe(true);
     expect(page).toContain('</html>');
     expect(page).toContain('<style>');
-    expect(page).toContain('<div id="root"></div>');
+    expect(page).toContain('<div id="swagger-ui"></div>');
   });
 
   /**
-   * The guarantee is unchanged; the proof had to change with the page. The old
-   * page was hand-written HTML, so `not.toContain('src=')` over the whole string
-   * was both sound and cheap. The page now inlines a built bundle, and minified
-   * React contains `.src=` in its own code - so the assertion moved from the
-   * text to the *tags*, which is what actually decides whether a browser fetches.
+   * **The guarantee changed with the page and this is the assertion that says how.**
+   * dunx used to inline its own explorer, so the page fetched nothing at all. Swagger
+   * UI is 3.7x the size gzipped, so it is served as two assets instead - which means
+   * the page does fetch, and what has to be pinned is that it only ever fetches from
+   * this origin.
    */
-  it('fetches nothing: no CDN, no src=, no <link> that leaves the page', () => {
-    expect(shell).not.toMatch(/\ssrc=/);
-    // A `<link>` is allowed only for the favicon, and only as a `data:` URI -
-    // which is a tag the browser does not fetch. The guarantee is about network
-    // requests, not about the element.
-    for (const [, href] of shell.matchAll(/<link\b[^>]*href="([^"]*)"/g)) {
-      expect(href).toMatch(/^data:image\/svg\+xml,/);
-    }
+  it('fetches only its own two assets, and only from this origin', () => {
+    expect(fetched().toSorted()).toEqual([
+      `/api/docs/swagger-ui-bundle.js?v=${assets.version}`,
+      `/api/docs/swagger-ui.css?v=${assets.version}`,
+    ]);
+    // Every one is relative, so nothing can resolve to another host.
+    for (const url of fetched()) expect(url.startsWith('/')).toBe(true);
     expect(shell).not.toMatch(
       /<(img|iframe|object|embed|source|track|video|audio)\b/,
     );
-    // Two scripts: the model as data, and the explorer. Neither is fetched.
-    // Counted by their closers - react-dom carries the literal `"<script>"` in
-    // a string of its own, which the browser never sees as a tag.
-    expect([...page.matchAll(/<\/script>/g)]).toHaveLength(2);
-    // Every href is either the document this page describes or the inline icon.
-    const hrefs = [...shell.matchAll(/href="([^"]*)"/g)].map((m) => m[1] ?? '');
-    expect(hrefs.filter((href) => !href.startsWith('data:'))).toEqual([
-      '/api/openapi.json',
-    ]);
-    // Nothing in the bundle's own CSS or code reaches off the origin either.
     expect(page).not.toMatch(/url\(\s*["']?(https?:)?\/\//);
     expect(page).not.toContain('@import');
     expect(page).not.toContain('//cdn');
     expect(page).not.toContain('unpkg.com');
     expect(page).not.toContain('jsdelivr');
     expect(page).not.toContain('fonts.googleapis');
+    // The petstore URL ships in swagger-initializer.js, which is the file this
+    // page deliberately does not use. Its presence would mean the wrong layout.
+    expect(page).not.toContain('petstore.swagger.io');
   });
 
-  it('closes neither script tag early', () => {
+  /**
+   * `StandaloneLayout` is the default in Swagger UI's own initializer and it is
+   * wrong here twice: it needs a second ~1 MiB preset file, and it renders a URL
+   * bar for loading *other* documents over a page that serves exactly one.
+   */
+  it('uses BaseLayout and only the bundle preset', () => {
+    expect(page).toContain("layout:'BaseLayout'");
+    expect(page).not.toContain('StandaloneLayout');
+    expect(page).not.toContain('SwaggerUIStandalonePreset');
+  });
+
+  it('caches the assets immutably, keyed by the installed version', () => {
+    expect(assets.href('/api/docs', 'swagger-ui.css')).toBe(
+      `/api/docs/swagger-ui.css?v=${assets.version}`,
+    );
+    // The version in the query is what makes `immutable` honest and what busts
+    // the cache on an upgrade.
+    expect(assets.version).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('closes no script tag early', () => {
     for (const part of page.split('<script').slice(1)) {
       const body = part.slice(part.indexOf('>') + 1);
       expect(body.slice(0, body.indexOf('</script>'))).not.toContain(
@@ -154,19 +177,20 @@ describe('the docs page', () => {
     }
   });
 
-  it('carries the whole document, so the explorer fetches none of it', () => {
-    const model = embedded();
-    expect(model.document).toEqual(document);
-    expect(model.jsonHref).toBe('/api/openapi.json');
-    expect(model.warnings).toEqual(['one schema degraded']);
+  it('embeds the whole document, so Swagger UI fetches none of it', () => {
+    expect(embedded()).toEqual(document);
+    // `spec`, never `url`: a fetched document costs a round trip and breaks if
+    // the JSON route is guarded differently from the page.
+    expect(page).toContain('spec:JSON.parse(');
+    expect(page).not.toMatch(/\burl:\s*['"]/);
   });
 
   it('escapes the one character that could end the data block', () => {
     // `<script>alert(1)</script>` lives in a description. Written raw it would
-    // close the block; `<` is the same text to any JSON parser.
+    // close the block; `\u003c` is the same text to any JSON parser.
     expect(page).not.toContain('<script>alert(1)');
-    expect(embedded().prose['op:UsersController_create']).toContain(
-      '&lt;script&gt;alert(1)&lt;/script&gt;',
+    expect(embedded().paths['/users']?.post?.description).toContain(
+      '<script>alert(1)</script>',
     );
   });
 
@@ -176,47 +200,15 @@ describe('the docs page', () => {
   });
 });
 
-describe('the model the page embeds', () => {
-  const model = buildModel(document, options);
-
-  it('renders descriptions as markdown without trusting their HTML', () => {
-    expect(model.prose['info']).toContain('<strong>one</strong>');
-    expect(model.prose['op:UsersController_create']).toContain(
-      '<p>Creates one.</p>',
-    );
-    expect(model.prose['tag:Users']).toContain('People, mostly.');
+describe('SwaggerAssets', () => {
+  it('resolves the installed swagger-ui-dist and both of its files', async () => {
+    expect(await Bun.file(assets.script).exists()).toBe(true);
+    expect(await Bun.file(assets.style).exists()).toBe(true);
+    expect(assets.script.endsWith('/swagger-ui-bundle.js')).toBe(true);
+    expect(assets.style.endsWith('/swagger-ui.css')).toBe(true);
   });
 
-  it('pre-fills the body from the schema, so sending is one click', () => {
-    // Derived from CreateUser, refs resolved against components/schemas.
-    const sample = model.samples['UsersController_create'] ?? '';
-    expect(JSON.parse(sample)).toEqual({
-      name: 'string',
-      age: 18,
-      tags: ['string'],
-    });
-    // A GET with no request body gets no sample rather than an empty one.
-    expect(model.samples['UsersController_list']).toBeUndefined();
-  });
-
-  it('gives every parameter a field tagged with where it goes', () => {
-    expect(model.fields['UsersController_list']).toEqual([
-      { name: 'limit', in: 'query', required: false, placeholder: '0' },
-    ]);
-    // `/users/{id}` declares no `parameters` at all. Without a field derived
-    // from the template the request would go out with a literal "{id}" in it.
-    expect(model.fields['UsersController_one']).toEqual([
-      { name: 'id', in: 'path', required: true, placeholder: 'string' },
-    ]);
-  });
-
-  it('leaves security, roles and their absence for the UI to read', () => {
-    const create = document.paths['/users']?.post;
-    expect(create?.security).toEqual([{ bearer: [] }]);
-    expect(create?.['x-required-roles']).toEqual(['admin']);
-    expect(document.paths['/users/{id}']?.get?.security).toEqual([]);
-    expect(model.document.components.securitySchemes).toEqual({
-      bearer: { type: 'http', scheme: 'bearer' },
-    });
+  it('is resolved once and cached', async () => {
+    expect(await SwaggerAssets.resolve()).toBe(assets);
   });
 });

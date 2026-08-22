@@ -6,7 +6,7 @@ import type { ProbeState } from '../contracts.js';
  * Everything the page reads, declared once.
  *
  * `internal/dashboard-ui` imports these by relative path from this file, exactly
- * as `internal/openapi-ui` imports `PageModel` from `@dunx/openapi`'s source - so
+ * the way `internal/dashboard-ui` imports these from this package's source - so
  * the wire format has one declaration and the frontend cannot drift from the
  * handler that fills it. The node types are re-exported rather than restated for
  * the same reason: they are `@dunx/core`'s and `@dunx/http`'s, and a copy shaped

@@ -69,12 +69,12 @@ An expression `Bun.cron` cannot parse fails the boot.
 A `@Cron` takes `{ tz }`, and a zone id the IANA database does not hold is a boot
 error.
 
-**Bun 1.3.14 ignores the option.** It does not declare it either, and a zone it
-ignores would run at the UTC hour with no error anywhere. So dunx refuses a named
-zone on a runtime that ignores it, rather than accepting one and getting it wrong.
+**Bun 1.4 honours the option; Bun 1.3 ignores it.** A zone a runtime ignores would
+run at the UTC hour with no error anywhere, so dunx refuses a named zone on such a
+runtime rather than accepting one and getting it wrong.
 
 ```ts
-// Boot error on Bun 1.3.14. Works on a Bun that honours the option.
+// Works on Bun 1.4. Boot error on Bun 1.3, which would run this at 09:00 UTC.
 @Cron('0 9 * * *', { tz: 'America/New_York' })
 ```
 
@@ -82,7 +82,9 @@ Detection asks the parser for two answers and compares them, so a backport or a 
 is read correctly. `supportsTz()` is exported if you would rather fail your own boot
 on it.
 
-Schedules always run in UTC unless a zone is named, on every Bun version.
+Schedules always run in UTC unless a zone is named, on every Bun version. Bun 1.4
+changed `Bun.cron`'s own default from UTC to the container's local zone; dunx passes
+`tz` on every call, so a schedule does not move when `TZ` does.
 
 ## Overlap
 

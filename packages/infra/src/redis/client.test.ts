@@ -1,7 +1,7 @@
 import { AppFactory, type App } from '@dunx/core';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { RedisConnection } from './connection.js';
-import { RedisError, RedisErrorCode } from './errors.js';
+import { isServerError, RedisError, RedisErrorCode } from './errors.js';
 import { RedisModule } from './module.js';
 import { defaultRedisUrl } from './options.js';
 
@@ -238,18 +238,33 @@ describe.if(live)('Redis against a live server', () => {
 
     it('reports an unknown command with the command name attached', async () => {
       const error = await failure(() => redis.send('NOPECMD'));
-      expect(error.code).toBe(RedisErrorCode.INVALID_RESPONSE);
+      expect(isServerError(error)).toBe(true);
       expect(error.command).toBe('NOPECMD');
       expect(error.message).toContain('unknown command');
     });
 
-    it('reports WRONGTYPE under INVALID_RESPONSE', async () => {
+    it('reports WRONGTYPE as a server error', async () => {
       const k = key('wrongtype');
       await redis.rpush(k, 'a');
       const error = await failure(() => redis.get(k));
-      expect(error.code).toBe(RedisErrorCode.INVALID_RESPONSE);
+      expect(isServerError(error)).toBe(true);
       expect(error.command).toBe('GET');
       expect(error.message).toContain('WRONGTYPE');
+    });
+
+    /**
+     * Bun 1.4 moved server-side errors from `ERR_REDIS_INVALID_RESPONSE` to
+     * `ERR_REDIS_SERVER_ERROR`. `isServerError` spans both, and this pins which
+     * one the running Bun actually emits so a third code shows up as a failure
+     * rather than passing under the union.
+     */
+    it('carries the code this Bun emits for a server error', async () => {
+      const error = await failure(() => redis.send('NOPECMD'));
+      expect(error.code).toBe(
+        Bun.semver.satisfies(Bun.version, '>=1.4.0')
+          ? RedisErrorCode.SERVER_ERROR
+          : RedisErrorCode.INVALID_RESPONSE,
+      );
     });
   });
 

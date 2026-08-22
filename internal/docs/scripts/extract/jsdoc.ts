@@ -39,12 +39,10 @@ export const parseJsdoc = (
 
   return {
     summary: renderMarkdown(dedent(summary)),
-    tags: tags.map(
-      (tag): DocTag => ({
-        name: tag.name,
-        text: renderMarkdown(dedent(tag.lines)),
-      }),
-    ),
+    tags: tags.map((tag): DocTag => ({
+      name: tag.name,
+      text: renderMarkdown(dedent(tag.lines)),
+    })),
   };
 };
 

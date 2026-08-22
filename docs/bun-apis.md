@@ -63,7 +63,37 @@ Use the links in the table to jump to the associated documentation.
 | Parsing & Formatting             | [`Bun.semver`](/docs/runtime/semver), [`Bun.TOML.parse`](/docs/runtime/toml), [`Bun.markdown`](/docs/runtime/markdown), [`Bun.color`](/docs/runtime/color), [`Bun.Image`](/docs/runtime/image)                                                                                                                                             |
 | Low-level / Internals            | `Bun.mmap`, `Bun.gc`, `Bun.generateHeapSnapshot`, [`bun:jsc`](https://bun.com/reference/bun/jsc)                                                                                                                                                                                                                                           |
 
-## Verified on this machine - Bun 1.3.14
+## Re-probed on Bun 1.4.0 (rev 34cbb9a40)
+
+Everything below this heading was first measured on 1.3.14. Re-running the probes on
+1.4 moved five entries and added three; the rest still reproduce. **Fixed** means the
+probe that used to fail now passes, not that the note was wrong.
+
+| Finding                                                           | On 1.4                                                            |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `Bun.color(hex, 'ansi')` emits a raw newline at index 10          | **fixed** - `FORCE_COLOR=1` gives `\u001b[92m`, an SGR-16 code    |
+| `AsyncLocalStorage.enterWith()` segfaults after any `await`       | **fixed** - and still not worth adopting, see below               |
+| `Bun.SQL`'s SQLite adapter silently stores `NULL` for a `Date`    | **fixed** - rejects, matching `bun:sqlite`                        |
+| A connect that never completes outlives `close()`                 | **fixed** - exits one `connectionTimeout` after the attempt       |
+| `Bun.cron`'s `{ tz }` is silently ignored, and undeclared         | **honoured**, declared as `Bun.CronOptions`, default zone flipped |
+| A server-side Redis error arrives as `ERR_REDIS_INVALID_RESPONSE` | **renamed** to `ERR_REDIS_SERVER_ERROR`                           |
+| `Bun.write(path, stream)` writes `[object ReadableStream]`        | reproduces                                                        |
+| `Bun.write(path, new Response(stream))` never settles             | reproduces                                                        |
+| `Bun.file(path).writer()` does not truncate                       | reproduces                                                        |
+| `bun:sqlite`'s `db.transaction()` cannot roll back an async body  | reproduces                                                        |
+| `prepare()` compiles one statement and drops the rest             | reproduces                                                        |
+| `Bun.SQL.prototype` is `undefined`, `instanceof` throws           | reproduces                                                        |
+| Subscriber mode leaks past `close()` without `unsubscribe()`      | reproduces                                                        |
+| A failed `subscribe()` leaks past `close()`                       | reproduces                                                        |
+
+The whole 1.4 API surface the release notes claim is present and reachable: `Bun.Image`,
+`Bun.WebView`, `Bun.markdown` (`html`, `ansi`, `render`, `react`), `Bun.cron`,
+`Bun.Terminal`, `Bun.JSON5`, `Bun.JSONL`, `Bun.JSONC`, `Bun.XML`, `Bun.TOML.stringify`,
+`Bun.Archive`, `Bun.sliceAnsi`, `Bun.wrapAnsi`, plus `CompressionStream`,
+`DecompressionStream`, `URLPattern` and `Response.prototype.textStream` as globals.
+`Bun.JSONC` has `parse` only, and `Bun.Archive` has `write` only.
+
+### Verified on this machine - Bun 1.3.14
 
 Probed rather than assumed, because the table above is not exhaustive and a few
 entries in it are wrong about what is reachable. Extend this section whenever you
@@ -118,21 +148,24 @@ options - read the runtime, not the signature.
 
 ### `Bun.RedisClient` - quirks found by probing
 
-`Bun.RedisClient.prototype` carries ~250 methods. Most work. These do not behave as
-documented, and each cost real debugging time:
+`Bun.RedisClient.prototype` carries 213 methods on 1.4.0, and an instance has **no own
+properties at all**. Most of the prototype works. These do not behave as documented,
+and each cost real debugging time. Everything in this table still reproduces on 1.4
+unless the row says otherwise:
 
-| Behaviour                                              | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `psubscribe` is unusable                               | Present on the prototype, absent from `bun-types`. With a listener it throws `ERR_INVALID_ARG_TYPE`; with a pattern alone it now resolves in under a millisecond, but the client exposes no hook for pattern messages (`onmessage`, `onpmessage` and `onMessage` are all `undefined`), so there is nowhere for a delivery to go. **Re-measured on Bun 1.3.14: the pattern-only promise does settle - an earlier note here said it hung a probe for 120s, which is no longer true.** Still unusable, for the missing listener rather than the hang.                                                                                                                                                                                                                           |
-| `exists()` is lossy                                    | Bun coerces Redis's integer reply to `boolean`, so `exists('a', 'missing')` returns `true`. Use `send('EXISTS', keys)` when you need the count.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Bad URLs are accepted                                  | `new Bun.RedisClient('not-a-url')` succeeds, then fails at connect as an opaque `Connection closed`. Validate URLs yourself.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `enableOfflineQueue: false` breaks lazy connect        | The first command is rejected with "offline queue is disabled" even against a healthy server unless you `connect()` first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| A failed connection leaks a retry timer past `close()` | With `maxRetries > 0`, a client that never connects keeps an internal timer alive after `close()` and **the process never exits**. Measured: `maxRetries=1` hung until killed at 6s; `maxRetries=0` exited 0. Reproduced in plain Bun with no framework involved, so nothing in userland can clear it. Use `maxRetries: 0` or `autoReconnect: false` for a connection that may be absent.                                                                                                                                                                                                                                                                                                                                                                                    |
-| Subscriber mode throws **synchronously**               | A client in subscriber mode rejects data commands with `ERR_REDIS_INVALID_STATE`, thrown synchronously - `.then(ok, err)` does not catch it. Subscriptions need their own connection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Subscriber mode also leaks past `close()`              | Separate from the retry-timer leak above, and it happens with `maxRetries: 0` against a **healthy** server. A client that ever entered subscriber mode keeps the event loop alive after `close()`, so the process never exits. Measured: subscribe then `close()` hung until killed at 10s; publish-only on the same client exited 0. `await client.unsubscribe()` before `close()` fixes it - with a channel or with no arguments, both work. Any long-lived subscriber must leave subscriber mode on shutdown; `bun test` hides this, because the runner exits the process itself.                                                                                                                                                                                         |
-| A **failed** `subscribe()` leaks past `close()` too    | The same hazard from the other end, and `maxRetries: 0` does not save you. `subscribe()` against a server that cannot be reached rejects with `Max reconnection attempts reached` and then holds the event loop open after `close()`; `unsubscribe()` cannot rescue it, because the client is not in subscriber mode and rejects with `can only be called while in subscriber mode`. A failed `publish()` on the same url releases cleanly, so it is specific to `subscribe()`. Fix: `await client.connect()` **before** `subscribe()`. Connect fails first, releases cleanly, and reports `Connection closed`.                                                                                                                                                              |
-| A connect that never completes leaks past `close()`    | A third member of the same family, and the one with **no workaround at all**. Against an address that neither accepts nor refuses the connection (a dropped SYN - `10.255.255.1:6379`), one `send()` rejects on `connectionTimeout` and the process then never exits. Unmoved by `maxRetries: 0`, `autoReconnect: false`, `enableOfflineQueue: false` (which rejects in 10 ms without waiting and hangs anyway, so it is the socket and not the command queue), a shorter `connectionTimeout`, closing twice, closing while the connect is still pending, or waiting six seconds after `close()`. A **refused** connection is clean, and so is construct-and-close with no attempt, so the handle is the pending connect itself. See docs/roadmap/queue-shutdown-sigterm.md. |
-| There is no `url` property                             | `new Bun.RedisClient(url).url` is `undefined`, and the instance has no own properties at all. Anything that reconstructs a client from one it was handed - bullmq's Bun adapter does, for a worker's blocking `duplicate()` and for every reconnect - silently falls back to Bun's default url resolution and connects to a **different server**. Measured and worked around in `@dunx/infra/queue`, which hands bullmq a `Bun.RedisClient` subclass carrying the url.                                                                                                                                                                                                                                                                                                       |
+| Behaviour                                              | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `psubscribe` is unusable                               | Present on the prototype, absent from `bun-types`. With a listener it throws `ERR_INVALID_ARG_TYPE`; with a pattern alone it now resolves in under a millisecond, but the client exposes no hook for pattern messages (`onmessage`, `onpmessage` and `onMessage` are all `undefined`), so there is nowhere for a delivery to go. **Re-measured on Bun 1.3.14: the pattern-only promise does settle - an earlier note here said it hung a probe for 120s, which is no longer true.** Still unusable, for the missing listener rather than the hang.                                                                                                                                                                                                                                                                                                                       |
+| A server error's `code` changed name in 1.4            | An error Redis itself returned - `WRONGTYPE`, `ERR unknown command`, a wrong argument count - carries `ERR_REDIS_SERVER_ERROR` on 1.4 and carried `ERR_REDIS_INVALID_RESPONSE` on 1.3. The rename is the right way round, since the response parsed fine and the command did not. `@dunx/infra/redis` exports `isServerError()`, which spans both, because `@types/bun` is a `>=1.3.0` peer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `exists()` is lossy                                    | Bun coerces Redis's integer reply to `boolean`, so `exists('a', 'missing')` returns `true`. Use `send('EXISTS', keys)` when you need the count.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Bad URLs are accepted                                  | `new Bun.RedisClient('not-a-url')` succeeds, then fails at connect as an opaque `Connection closed`. Validate URLs yourself.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `enableOfflineQueue: false` breaks lazy connect        | The first command is rejected with "offline queue is disabled" even against a healthy server unless you `connect()` first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| A failed connection leaks a retry timer past `close()` | With `maxRetries > 0`, a client that never connects keeps an internal timer alive after `close()` and **the process never exits**. Measured: `maxRetries=1` hung until killed at 6s; `maxRetries=0` exited 0. Reproduced in plain Bun with no framework involved, so nothing in userland can clear it. Use `maxRetries: 0` or `autoReconnect: false` for a connection that may be absent.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Subscriber mode throws **synchronously**               | A client in subscriber mode rejects data commands with `ERR_REDIS_INVALID_STATE`, thrown synchronously - `.then(ok, err)` does not catch it. Subscriptions need their own connection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Subscriber mode also leaks past `close()`              | Separate from the retry-timer leak above, and it happens with `maxRetries: 0` against a **healthy** server. A client that ever entered subscriber mode keeps the event loop alive after `close()`, so the process never exits. Measured: subscribe then `close()` hung until killed at 10s; publish-only on the same client exited 0. `await client.unsubscribe()` before `close()` fixes it - with a channel or with no arguments, both work. Any long-lived subscriber must leave subscriber mode on shutdown; `bun test` hides this, because the runner exits the process itself.                                                                                                                                                                                                                                                                                     |
+| A **failed** `subscribe()` leaks past `close()` too    | The same hazard from the other end, and `maxRetries: 0` does not save you. `subscribe()` against a server that cannot be reached rejects with `Max reconnection attempts reached` and then holds the event loop open after `close()`; `unsubscribe()` cannot rescue it, because the client is not in subscriber mode and rejects with `can only be called while in subscriber mode`. A failed `publish()` on the same url releases cleanly, so it is specific to `subscribe()`. Fix: `await client.connect()` **before** `subscribe()`. Connect fails first, releases cleanly, and reports `Connection closed`.                                                                                                                                                                                                                                                          |
+| A connect that never completes leaks past `close()`    | **Fixed in Bun 1.4.0**, which exits 0 one `connectionTimeout` after the attempt. On 1.3.14: a third member of the same family, and the one with **no workaround at all**. Against an address that neither accepts nor refuses the connection (a dropped SYN - `10.255.255.1:6379`), one `send()` rejects on `connectionTimeout` and the process then never exits. Unmoved by `maxRetries: 0`, `autoReconnect: false`, `enableOfflineQueue: false` (which rejects in 10 ms without waiting and hangs anyway, so it is the socket and not the command queue), a shorter `connectionTimeout`, closing twice, closing while the connect is still pending, or waiting six seconds after `close()`. A **refused** connection is clean, and so is construct-and-close with no attempt, so the handle is the pending connect itself. See docs/roadmap/queue-shutdown-sigterm.md. |
+| There is no `url` property                             | `new Bun.RedisClient(url).url` is `undefined`, and the instance has no own properties at all. Anything that reconstructs a client from one it was handed - bullmq's Bun adapter does, for a worker's blocking `duplicate()` and for every reconnect - silently falls back to Bun's default url resolution and connects to a **different server**. Measured and worked around in `@dunx/infra/queue`, which hands bullmq a `Bun.RedisClient` subclass carrying the url.                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 #### The SIGTERM hang is two leaks, and only one of them is bullmq's
 
@@ -210,6 +243,72 @@ hand-rolled JSON parser
 would be a JavaScript reimplementation of a JSC primitive, which the first half
 rules out. Recorded here so the ceiling is known rather than rediscovered.
 
+### `Bun.cron` - 1.4 honours `{ tz }` and changed the default zone
+
+Two changes in one release, and the second is the one that moves a running schedule.
+
+| Behaviour                               | 1.3.14               | 1.4.0                                    |
+| --------------------------------------- | -------------------- | ---------------------------------------- |
+| `{ tz }` on `cron()` and `cron.parse()` | accepted and ignored | honoured                                 |
+| Declared in `bun-types`                 | no                   | yes, as `Bun.CronOptions`                |
+| An unknown zone id                      | silently ignored     | throws `Bun.cron: unknown time zone 'x'` |
+| The default zone with no `tz`           | UTC                  | **the container's local zone**           |
+
+Measured for `'0 12 * * *'` relative to `2026-01-15T00:00:00Z`:
+
+```
+tz: 'UTC'           -> 2026-01-15T12:00:00.000Z
+tz: 'Asia/Kolkata'  -> 2026-01-15T06:30:00.000Z    (UTC+05:30, honoured)
+no tz               -> 2026-01-15T10:00:00.000Z    (machine is UTC+02:00)
+```
+
+**The default flip is a silent behaviour change for any caller that omitted `tz`.** A
+nightly job written as `'0 3 * * *'` fired at 03:00 UTC on 1.3 and fires at 03:00
+local on 1.4, so a container with `TZ` set moves it. `@dunx/infra/schedule` passes
+`tz` on every call and defaults it to `'UTC'`, so no dunx schedule moves; a direct
+`Bun.cron` caller has to pass it.
+
+Consequence for the code: `packages/infra/src/schedule/bun-cron.ts` existed only to
+cast around the missing declaration and said "delete this file when bun-types declares
+the option". It is deleted; the call sites use `Bun.cron` and `Bun.cron.parse`
+directly. `supportsTz()` stays, because the probe is what tells a 1.3 runtime from a
+1.4 one without reading `Bun.version`.
+
+### `Bun.serve` directory routes - `{ dir }`, new in 1.4
+
+`{ dir: './public' }` as a route value serves a directory natively. What it does is
+more than the docs claim and less than a static-file middleware needs, so both halves
+matter before adopting it. Probed against a wildcard route (`'/assets/*'`):
+
+| Behaviour                       | Result                                  |
+| ------------------------------- | --------------------------------------- |
+| `Content-Type` from extension   | yes, with `charset=utf-8`               |
+| Weak `ETag`, `Last-Modified`    | yes, both                               |
+| `If-None-Match`                 | 304                                     |
+| `If-Modified-Since`             | 304                                     |
+| `Range`                         | 206, and `accept-ranges: bytes`         |
+| Directory with a trailing slash | serves `index.html`                     |
+| Directory without one           | 301 to the trailing-slash URL           |
+| Missing file                    | 404                                     |
+| `..`, `%2e%2e%2f`, `..%2F`      | 404 on all three - traversal is handled |
+
+Three things it does not do, and the first is the one that decides an adoption:
+
+| Gap                                           | Detail                                                                                                                                                                                                            |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No `cache-control`, and no way to set one** | `DirectoryRouteOptions` is `{ dir, statCache }` and nothing else. A `headers` key is accepted and **silently ignored**. Since Bun answers the route itself, a dunx middleware never sees the response to add one. |
+| **Every HTTP method is served**               | `GET`, `HEAD`, `POST`, `PUT`, `DELETE`, `PATCH` and `OPTIONS` all return **200 with the file body**. So `DELETE /assets/app.js` answers with the script, and `OPTIONS` cannot carry CORS preflight headers.       |
+| No `x-content-type-options: nosniff`          | Not set, and not settable for the same reason as `cache-control`.                                                                                                                                                 |
+
+One more shape worth knowing: `index` is **half-implemented**. It is type-checked at
+`Bun.serve` (`index: false` throws `The "index" property must be of type string`),
+undeclared in `bun-types`, and then ignored - `{ dir, index: 'a.txt' }` still serves
+`index.html`. A validated-but-inert option is worse than an unknown one, which Bun
+would merely drop.
+
+`@dunx/http`'s `StaticFiles` exists for the cache policy, so `{ dir }` does not
+replace it as it stands. The two gaps above are what a swap is waiting on.
+
 ### `Bun.serve({ websocket })` and `ServerWebSocket`
 
 - **`ServerWebSocket`**: `send`, `sendText`, `sendBinary`, `publish`, `publishText`,
@@ -240,6 +339,8 @@ should be used instead of a JavaScript topic registry.
 ### `Bun.file` / `Bun.write` - three data-loss traps
 
 All three reproduced independently, not just reported:
+
+All three still reproduce on Bun 1.4.0.
 
 | Behaviour                                                             | Detail                                                                                                                                |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -327,54 +428,77 @@ Fully typed in `bun-types` (`bun.d.ts` ~8180-8408), just undocumented on the sit
   yourself for async work.
 - `Statement.all/get/run/values/iterate` are own properties of the instance, not on
   `Statement.prototype`.
+- **`{ create: false }` throws on a missing file from 1.4, and created one on 1.3.**
+  1.4 raises `bad parameter or other API misuse`; 1.3.14 created the file, making the
+  option inert. `{ readonly: true }` refuses on both, with `unable to open database
+file`, so it is the portable way to require an existing database.
 - **`prepare()` compiles one statement and silently drops the rest.** A multi-statement
   string - four `CREATE TABLE`s separated by semicolons - creates the first table only,
   with no error. That reaches through drizzle: `db.run(sql\`…\`)`goes via`prepare`, so
 a DDL block has to be one statement per call. `db.exec()`/ the raw handle's`exec()`
   is the one that takes several.
-- **A raw `Date` binding fails, but the two adapters fail _differently_.** `bun:sqlite`
-  throws `Binding expected string, TypedArray, boolean, number, bigint or null`.
-  `Bun.SQL`'s SQLite adapter **accepts it silently and stores `NULL`** - no error, no
-  strict switch. Measured:
+- **A raw `Date` binding fails, and on 1.4 both adapters fail the same way.**
 
   ```
-  Bun.SQL sqlite ->  ACCEPTED, stored: null
-  bun:sqlite     ->  REJECTED: Binding expected string, TypedArray, boolean, ...
+                    1.3.14                         1.4.0
+  Bun.SQL sqlite    ACCEPTED, stored: null         REJECTED: Binding expected string, ...
+  bun:sqlite        REJECTED: Binding expected ... REJECTED: Binding expected string, ...
   ```
 
-  The silent one is the dangerous one: a timestamp column quietly loses every row.
-  Convert to ISO 8601 for SQLite; Postgres takes a native binding.
+  The 1.3 behaviour was the dangerous one: a timestamp column quietly lost every row
+  with no error and no strict switch. 1.4 rejects instead, which turns a silent data
+  loss into a thrown error. Convert to ISO 8601 for SQLite either way; Postgres takes
+  a native binding. **An app that shipped against 1.3 and relied on the silence now
+  throws** - that is a fix, but it is a behaviour change on upgrade.
 
 - **`Bun.SQL` cannot be used with `instanceof`.** `s instanceof Bun.SQL` throws
   `TypeError: instanceof called on an object with an invalid prototype property`,
   which follows from `prototype` being `undefined` above. Narrow on
   `options.adapter`, or hold the client on a class you own.
 
-#### `AsyncLocalStorage.enterWith()` segfaults after any `await`
+#### `AsyncLocalStorage.enterWith()` works on 1.4, and is still the wrong call
 
-Measured on 1.3.14. Three lines are enough:
+On 1.3.14 three lines were enough to crash the process:
 
 ```ts
 import { AsyncLocalStorage } from 'node:async_hooks';
 const als = new AsyncLocalStorage<number>();
 als.enterWith(1);
-await Promise.resolve(); // panic(main thread): Segmentation fault
+await Promise.resolve(); // 1.3.14: panic(main thread): Segmentation fault
 ```
 
-| form                                 | result                               |
-| ------------------------------------ | ------------------------------------ |
-| `enterWith` with no `await` after it | fine, at any iteration count         |
-| `enterWith` then any `await`         | **segfault**, on the first call      |
-| `run()` with an async callback       | fine, measured to 300,000 iterations |
+**Bun 1.4 runs that and reads back `1`.** The note here used to say a working
+`enterWith` would be worth adopting, "against a measured `run()` cost of +0.91 us".
+Re-measured now that it works, over 200,000 iterations of the shape a request-logging
+middleware would use - enter a scope carrying five fields, await, read one back:
 
-`enterWith` is the cheaper primitive on paper - it sets the store for the current
-execution instead of wrapping a callback, so it should skip an async frame. It
-cannot be used at all. dunx's `AsyncRequestContext` and `@arkv/logger` both use
-`run()`, which is not a preference between two working options but the only one
-that works.
+| form                              | per scope |
+| --------------------------------- | --------- |
+| `run(fresh, async cb)`            | 0.168 us  |
+| `enterWith(fresh)` then the await | 0.151 us  |
+| no store at all, the floor        | 0.097 us  |
 
-Worth re-checking on a Bun upgrade: a working `enterWith` would remove an async
-frame from every logged request, against a measured `run()` cost of +0.91 us.
+**The saving is 0.017 us**, a fifth of what the store costs and about 2% of the
++0.91 us the earlier note was aiming at. That number was the whole case for the swap,
+and it does not survive contact.
+
+The semantics settle it independently: `enterWith` cannot restore the enclosing store
+on the way out. An `enterWith` inside a scope leaves the outer scope reading the inner
+value forever, where `run()` restores it. `RequestContext.runWithContext` is specified
+to merge and not leak back out, so it cannot be built on `enterWith` at any price:
+
+```
+run():       outer -> nested run()       -> outer sees "outer"
+run():       outer -> nested enterWith() -> outer sees "clobbered"
+```
+
+So `AsyncRequestContext` and `@arkv/logger` keep `run()`, now as a choice between two
+working primitives rather than for lack of an alternative.
+
+The prize the earlier note was aiming at is also gone independently. `bun run logging`
+on 1.4 prices the whole `AsyncLocalStorage` scope in request logging at **+0.24 us**,
+down from +0.91 us, inside that harness's own +/-0.5 us floor. **Do not reopen this on
+the segfault being fixed; both measurements were taken after the fix.**
 
 #### `POSTGRES_URL` in the environment silently overrides an explicit `url`
 
@@ -440,21 +564,27 @@ Three details the adapter has to get right, all found by running it:
 handle over the reserved socket. The whole adapter is
 `examples/databases/src/mysql/driver.ts`.
 
-### `Bun.color` - `'ansi'` is not a fixed encoding, and can emit a raw newline
+### `Bun.color` - `'ansi'` is not a fixed encoding; the raw newline is fixed in 1.4
 
 `Bun.color(hex, 'ansi')` returns whatever the _current terminal_ is judged to
-support, not a stable format. Under `FORCE_COLOR=1` it degrades to `ansi-16`, which
-writes the colour **index as a raw byte** rather than decimal digits. Index 10 is
-`\n`:
+support, not a stable format. That part is unchanged, and it is still why a log
+formatter should name the encoding it wants.
+
+On 1.3.14 the instability was also a corruption. Under `FORCE_COLOR=1` it degraded to
+`ansi-16` and wrote the colour **index as a raw byte** rather than decimal digits;
+index 10 is `\n`, so a coloured structured-log line silently became **two** records:
 
 ```
-FORCE_COLOR=1  Bun.color('#00ff00', 'ansi')      -> "\u001b[38;5;\nm"   contains LF: true
-               Bun.color('#00ff00', 'ansi-256')  -> "\u001b[38;5;46m"   contains LF: false
-NO_COLOR=1     Bun.color('#00ff00', 'ansi')      -> ""   (Bun.enableANSIColors === false)
+1.3.14  FORCE_COLOR=1  Bun.color('#00ff00', 'ansi')  -> "\u001b[38;5;\nm"   contains LF: true
+1.4.0   FORCE_COLOR=1  Bun.color('#00ff00', 'ansi')  -> "\u001b[92m"        contains LF: false
+        FORCE_COLOR=1  Bun.color('#00ff00', 'ansi-256') -> "\u001b[38;5;46m"
+NO_COLOR=1             Bun.color('#00ff00', 'ansi')  -> ""   (Bun.enableANSIColors === false)
 ```
 
-So a coloured structured-log line built with `'ansi'` silently becomes **two**
-records. Ask for **`'ansi-256'`** explicitly, which is well-formed everywhere.
+1.4 emits a well-formed SGR-16 code, so the data-loss half is gone. Asking for
+**`'ansi-256'`** explicitly is still the advice, because it pins the encoding rather
+than letting the terminal pick one - but it is now a determinism argument, not a
+corruption one.
 
 `Bun.enableANSIColors` is the honest capability check - it is `false` under
 `NO_COLOR` and for a non-TTY, and it cannot be faked in-process, so testing

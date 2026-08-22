@@ -54,6 +54,7 @@ export {
 export {
   defaultRedisUrl,
   isConnectionError,
+  isServerError,
   type MessageListener,
   REDIS_PROTOCOLS,
   type RedisArg,

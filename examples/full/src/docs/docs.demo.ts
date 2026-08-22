@@ -75,26 +75,45 @@ export class DocsDemo {
 
     const page = await fetch(new URL('api/docs', url));
     const html = await page.text();
-    // Two inline scripts: the document as JSON, and the explorer bundle. What
-    // still has to hold is that nothing is *fetched* - so the check is on the
-    // markup, with both script bodies removed. Inside a <script> everything is
-    // text, and minified React's own string table contains `src=` and `<script`.
-    const shell = html.replace(/(<script[^>]*>)[\s\S]*?(<\/script>)/g, '$1$2');
-    // A `<link>` counts only if it would actually fetch. The page carries one
-    // for its favicon, as a `data:` URI, which the browser never requests.
-    const fetchedLink = [...shell.matchAll(/<link\b[^>]*href="([^"]*)"/g)].some(
-      ([, href]) => href !== undefined && !href.startsWith('data:'),
-    );
-    const external =
-      /\ssrc=/.test(shell) ||
-      fetchedLink ||
-      /url\(\s*["']?(https?:)?\/\//.test(html) ||
-      html.includes('//cdn');
     logger.info(
       `GET /api/docs -> ${page.status} ${page.headers.get('content-type')}, ` +
-        `${html.length} bytes, ${(html.match(/<\/script>/g) ?? []).length} inline scripts, ` +
-        `external requests: ${external ? 'some' : 'none'}`,
+        `${html.length} bytes of Swagger UI shell`,
     );
+
+    /**
+     * **The page fetches, and this is the check that it only fetches from here.**
+     * The explorer used to be dunx's own bundle inlined into the page, so the
+     * assertion was that nothing was requested at all. It is now `swagger-ui-dist`,
+     * 3.7x the size gzipped, served as two assets - so the guarantee is narrower and
+     * has to be stated as what it is: same-origin only, no CDN.
+     *
+     * Script bodies are stripped first. Inside a `<script>` everything is text, so a
+     * `src=` in the boot script is not a resource.
+     */
+    const shell = html.replace(/(<script[^>]*>)[\s\S]*?(<\/script>)/g, '$1$2');
+    const requested = [
+      ...shell.matchAll(/<(?:script|link)\b[^>]*\s(?:src|href)="([^"]*)"/g),
+    ]
+      .map(([, href]) => href ?? '')
+      .filter((href) => !href.startsWith('data:'));
+    const offOrigin = requested.filter((href) => /^[a-z]+:|^\/\//i.test(href));
+    logger.info(
+      `  requests ${requested.length} asset(s), ${offOrigin.length} off-origin: ` +
+        JSON.stringify(requested),
+    );
+
+    // Every one of them has to actually answer, which is the half a unit test
+    // cannot show: these resolve out of the consumer's own swagger-ui-dist
+    // install, through this app's global prefix.
+    for (const href of requested) {
+      const asset = await fetch(new URL(href.replace(/^\//, ''), url));
+      logger.info(
+        `  ${href.split('?')[0]} -> ${asset.status} ` +
+          `${asset.headers.get('content-type')}, ` +
+          `${Number(asset.headers.get('content-length') ?? 0).toLocaleString('en-US')} bytes, ` +
+          `cache-control: ${asset.headers.get('cache-control')}`,
+      );
+    }
   }
 
   /**

@@ -126,11 +126,20 @@ it('documents every route the one app serves', () => {
   expect(tour.text).toContain('unresolved $refs: 0, warnings: []');
 });
 
-it('serves a docs page that fetches nothing', () => {
-  // "2 inline scripts" still holds; the `<link>` the page now carries is the
-  // dunx mark as a `data:` URI, which is not a request.
+it('serves a Swagger UI shell whose assets resolve on this origin', () => {
   expect(tour.text).toMatch(
-    /GET \/api\/docs -> 200 text\/html; charset=utf-8, \d+ bytes, 2 inline scripts, external requests: none/,
+    /GET \/api\/docs -> 200 text\/html; charset=utf-8, \d+ bytes of Swagger UI shell/,
+  );
+  // Two assets, and the count that matters is the second one: `swagger-ui-dist`
+  // is served from the app rather than a CDN, which is the whole point of
+  // resolving it out of the consumer's own install.
+  expect(tour.text).toMatch(/requests 2 asset\(s\), 0 off-origin/);
+  // Both answer, under the global prefix, with an immutable cache header.
+  for (const file of ['swagger-ui.css', 'swagger-ui-bundle.js']) {
+    expect(tour.text).toContain(`/api/docs/${file} -> 200`);
+  }
+  expect(tour.text).toContain(
+    'cache-control: public, max-age=31536000, immutable',
   );
 });
 

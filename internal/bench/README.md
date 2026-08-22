@@ -11,7 +11,7 @@ to hide as the places it wins.
 
 ```bash
 bun run setup       # downloads oha into .bin/ (optional, but read "Load generator")
-bun run start       # full suite: 15 subjects x 4 scenarios, minus any whose toolchain is absent
+bun run start       # full suite: 17 subjects x 4 scenarios, minus any whose toolchain is absent
 bun run validation  # the validation-cost harness - see "Validation cost"
 bun run db-modes    # @dunx/infra/db async vs synchronous SQLite, end to end
 bun run start --help
@@ -75,6 +75,7 @@ And one thing per subject:
 | `axum`            | Rust    | Axum on tokio and hyper, no tower layers.                                      |
 | `spring`          | JVM     | Spring Boot on its default stack: Spring MVC, Tomcat, Jackson.                 |
 | `django`          | Python  | Django on gunicorn with one worker, `DEBUG` off and no middleware.             |
+| `fastapi`         | Python  | FastAPI on uvicorn with one worker, async ASGI, validating with pydantic.      |
 
 Each subject is a single file under `servers/`, small enough to read in full. If a
 number looks wrong, read the file - that is the whole implementation.
@@ -127,6 +128,34 @@ anyone had guessed - the response-body capture cloned and buffered every payload
 on the hot path. That is now off by default, and the remaining gap between the two
 rows is `JSON.stringify` plus a `write` per request, which is the irreducible
 price of a log line.
+
+#### Reading the Python rows fairly
+
+Two subjects, and they answer different questions.
+
+**`fastapi` is the closest thing in this suite to a like-for-like comparison with
+`@dunx/http`.** Both are async, both take a schema and carry its types into the
+handler, and both are the framework people reach for when they want that. So
+`validate` is the scenario to read it on: dunx validates with zod through Standard
+Schema, Elysia with TypeBox, FastAPI with pydantic, and that is three ecosystems
+doing one job. The other three scenarios are dispatch and serialisation, where
+FastAPI is carrying an ASGI stack the Bun subjects do not have.
+
+**`django` is the batteries-included synchronous comparison**, and its handler
+blocks its worker for the request's whole duration. One gunicorn worker against one
+core is the fair shape here and it is not how Django is deployed; a real deployment
+runs several workers. Read it as one worker against one worker.
+
+Neither row is pinned the way Go, tokio and Tomcat are, because neither needed it:
+one gunicorn worker and one uvicorn worker are already one thread each. Both are
+interpreted, so there is no artifact and no build time to keep out of the startup
+column - and both pay interpreter startup plus imports in it, which is a real cost
+and not an artefact.
+
+**Neither is running its fastest available configuration, and that is deliberate.**
+`uvicorn[standard]` would bring uvloop and httptools; this measures plain asyncio,
+which is what `pip install fastapi uvicorn` gives. Naming the floor is more useful
+than tuning one subject that nothing else in the suite is tuned against.
 
 #### Reading the Go, Rust and JVM rows fairly
 
@@ -251,12 +280,18 @@ These are choices that move the numbers. They are listed here rather than buried
    for each scenario, so the measured window is against a JIT-warm server. A subject
    may declare a floor it needs regardless of `--warmup`; `spring` declares 30 s,
    because 3 s does not warm a JVM. The floor is in the report and above the table.
-5. **Multiple runs.** Default 5 measured runs of 5 s each. The report gives the
-   **median** and the **standard deviation** across runs, never a single run.
-6. **Startup is measured separately**, by spawning and killing the subject N times
-   (default 7) and timing spawn to first successful response. For the compiled
-   subjects that is the artifact, never the build - see "Reading the Go, Rust and
-   JVM rows fairly".
+5. **Measured rounds are interleaved across every subject.** One scenario at a
+   time: all subjects are brought up and warmed, then each measured round visits
+   every one of them in turn, then all are torn down. Default 5 rounds of 5 s. The
+   report gives the **median** and the **standard deviation** across rounds, never a
+   single round. See "Interleaving, and the drift it removes" for why this is not
+   subject-at-a-time.
+6. **Startup is measured separately**, before any load, by spawning and killing the
+   subject N times (default 7) and timing spawn to first successful response. It
+   cannot be interleaved - it is one process at a time by definition - and running
+   it first means no measured round shares the machine with a cold start. For the
+   compiled subjects that is the artifact, never the build - see "Reading the Go,
+   Rust and JVM rows fairly".
 7. **The machine is recorded** - CPU model, logical cores, RAM, kernel, arch, Bun
    version, Node version - along with every subject's package version, in both the
    stdout table and the JSON.
@@ -335,18 +370,87 @@ for smoke-testing the harness. It is not usable for the dunx-vs-`Bun.serve` gap,
 which is the number this harness exists to produce. **Install oha for anything you
 intend to quote.**
 
-## Cross-language rows are not in the tables below yet
+## Which cross-language rows are in the tables below
 
-`nethttp`, `gin`, `axum` and `spring` are implemented, pass the contract check and
-run, but the published `results/latest.json` predates them. Regenerating it needs
-an idle machine, and every table in this file is generated from that one file
-rather than typed, so the rows appear the next time a clean full run is taken.
-Reproduce them meanwhile with `bun run start --subjects bun-serve,dunx,nethttp,gin,axum,spring`.
+`nethttp`, `gin`, `axum` and `spring` are implemented and pass the contract check.
+Whether a row appears depends on the toolchain being installed on the machine that
+took the run, because a missing one is a skip rather than a failure.
+
+The published `results/latest.json` was taken on 2026-08-22 with Rust present and Go,
+the JDK and Django absent, so **`axum` is in the tables and `nethttp`, `gin`, `spring`
+and `django` are not**. Every table here is generated from that one file rather than
+typed, so the missing rows appear the next time a full run is taken on a machine that
+has the toolchains. Reproduce them meanwhile with
+`bun run start --subjects bun-serve,dunx,nethttp,gin,spring`.
 
 What a clean run should be read for, in this order: whether the load generator has
 headroom over the fastest row (see "Load generator"), then whether the JavaScript
 rows sit above Gin and Axum - and if they do, "Reading the Go, Rust and JVM rows
 fairly" is the paragraph that says what that does and does not mean.
+
+## Interleaving, and the drift it removes
+
+This suite used to measure each subject to completion in turn, and the numbers it
+produced were noisier than their own `stddev` column claimed.
+
+**The measurement that found it.** Two full runs of the **same** code on the same
+idle machine under Bun 1.4.0, subject-at-a-time, diffed per scenario:
+
+| Subject          | plaintext | json   | params | validate |
+| ---------------- | --------- | ------ | ------ | -------- |
+| `bun-serve`      | +2.2%     | +3.0%  | +5.8%  | +6.0%    |
+| `@dunx/http`     | +3.9%     | +10.1% | +1.8%  | +4.9%    |
+| Elysia           | +7.9%     | +7.3%  | +8.7%  | +6.8%    |
+| Hono (Bun)       | +1.8%     | -0.0%  | -1.4%  | -2.1%    |
+| `node:http` raw  | +4.8%     | -0.1%  | +1.5%  | -3.7%    |
+
+Median +3.9%, worst +10.1%, and **15 of 20 cells moved the same direction**. A
+symmetric spread around zero would be sampling noise; a one-directional shift is the
+machine being in a different state for the second run. The within-round `stddev` was
+1% to 3% throughout, so five rounds of five seconds were already agreeing with each
+other - the variance was *between* runs, not inside them, and no amount of extra
+duration addresses that.
+
+Subject-at-a-time also maps that drift onto **subject identity**, which is worse than
+making the absolute numbers noisy. A full run takes tens of minutes, so `bun-serve`
+was measured first and `django` some forty minutes later, and their ratio was
+published as though the two numbers were simultaneous. The gap this harness exists to
+report - `@dunx/http` against raw `Bun.serve` - is 0.1% to 8%, entirely inside the
+drift.
+
+So the measured rounds are now **interleaved**: per scenario, every subject is brought
+up and warmed, then each round visits all of them in turn. The three other harnesses
+here did this from the start, and `src/validation.ts` gives the reason for differences
+"often 2-4%" - the first attempt at that one had `raw:parse` come out faster than
+`raw:noop`, which does strictly more work. This is that argument reaching the suite
+whose differences got small enough to need it.
+
+**It works, and here is the check.** Two interleaved full runs, same code, same
+machine, against the two sequential ones above:
+
+| | sequential | interleaved |
+| --------------------------------- | ---------- | ----------- |
+| cells moving the **same** direction | 15/20 (75%) | **23/68 (34%)** |
+| median signed delta               | **+3.9%**  | **-0.6%**   |
+| median absolute delta             | 3.9%       | **1.2%**    |
+| worst absolute delta              | 10.1%      | 8.0%        |
+
+The systematic bias is what mattered and it is gone: a median signed delta near zero
+with a roughly even direction split is sampling noise, where +3.9% with three quarters
+of cells moving together was drift. On the published ratio - each subject as a
+percentage of `bun-serve` - the two runs disagree by a **median of 0.6 percentage
+points and at worst 4.8**. So a three-point gap is now readable, where before nothing
+under ten was.
+
+Read a single run's ratio as +/- 1 point, and anything under about 3 points as a tie.
+
+What it costs, stated because it is a real trade: every subject in the run holds a
+live process and a listening socket while any one of them is measured. They are idle,
+so they take memory and file descriptors rather than CPU, and on this machine that is
+17 servers against 62 GiB. On a small box, run fewer subjects with `--subjects`.
+
+**Numbers taken before this change are not comparable with numbers taken after it**,
+and the ones in this file are from after.
 
 ## Results
 
@@ -355,9 +459,9 @@ transcribed by hand.
 
 ```
 AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
-linux 7.0.0-28-generic x64 | bun 1.3.14 | node v20.20.2 | oha oha 1.15.0
-64 connections | 3s warmup | 5 x 5s measured | 2026-08-02
-dunx-logging 0.0.0 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1
+linux 7.0.0-28-generic x64 | bun 1.4.0 | node v20.20.2 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 5s measured | 2026-08-22
+dunx-logging 2.2.1 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1 | gin v1.12.0 | axum 0.8.9 | spring 4.1.0 | django 6.1 | fastapi 0.141.1
 ```
 
 Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
@@ -366,81 +470,111 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 138,507 | 1,950 | 0.435 | 0.875 | 100.0% |
-| **@dunx/http** | **135,442** | 1,007 | 0.449 | 0.907 | **97.8%** |
-| Elysia | 132,503 | 2,836 | 0.457 | 0.927 | 95.7% |
-| Hono (Bun) | 105,194 | 1,424 | 0.579 | 1.160 | 75.9% |
-| @dunx/http (+ request logging) | 77,658 | 541 | 0.786 | 1.548 | 56.1% |
-| node:http (raw) | 51,481 | 2,531 | 1.169 | 2.313 | 37.2% |
-| Fastify (Node) | 48,547 | 204 | 1.288 | 2.519 | 35.1% |
-| Hono (Node) | 46,165 | 1,524 | 1.346 | 2.612 | 33.3% |
-| NestJS (Fastify) | 38,946 | 459 | 1.604 | 2.001 | 28.1% |
-| Express (Node) | 12,484 | 294 | 4.874 | 6.903 | 9.0% |
-| NestJS (Express) | 9,918 | 74 | 6.141 | 8.921 | 7.2% |
+| Bun.serve (raw) | 131,805 | 1,663 | 0.460 | 0.927 | 100.0% |
+| **@dunx/http** | **130,843** | 649 | 0.466 | 0.940 | **99.3%** |
+| Elysia | 130,565 | 1,045 | 0.467 | 0.946 | 99.1% |
+| Hono (Bun) | 124,947 | 4,261 | 0.489 | 0.989 | 94.8% |
+| Axum (Rust) | 121,925 | 963 | 0.515 | 0.654 | 92.5% |
+| @dunx/http (+ request logging) | 79,903 | 1,894 | 0.764 | 1.516 | 60.6% |
+| net/http (Go) | 74,290 | 614 | 0.859 | 1.881 | 56.4% |
+| Gin (Go) | 73,402 | 503 | 0.868 | 1.962 | 55.7% |
+| Spring Boot (JVM) | 45,176 | 771 | 1.372 | 1.811 | 34.3% |
+| node:http (raw) | 40,970 | 1,678 | 1.555 | 1.989 | 31.1% |
+| Fastify (Node) | 39,215 | 781 | 1.590 | 1.990 | 29.8% |
+| Hono (Node) | 38,167 | 1,203 | 1.629 | 2.086 | 29.0% |
+| NestJS (Fastify) | 33,140 | 273 | 1.873 | 2.415 | 25.1% |
+| Express (Node) | 11,967 | 119 | 5.038 | 7.183 | 9.1% |
+| NestJS (Express) | 9,222 | 162 | 6.479 | 9.397 | 7.0% |
+| FastAPI (Python) | 7,171 | 12 | 8.909 | 9.118 | 5.4% |
+| Django (Python) | 4,587 | 98 | 13.844 | 15.076 | 3.5% |
 
 **JSON** - `GET /json`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 130,055 | 3,970 | 0.458 | 0.924 | 100.0% |
-| Elysia | 124,264 | 2,972 | 0.481 | 0.972 | 95.5% |
-| **@dunx/http** | **123,306** | 1,887 | 0.492 | 0.992 | **94.8%** |
-| Hono (Bun) | 92,529 | 916 | 0.660 | 1.320 | 71.1% |
-| @dunx/http (+ request logging) | 70,743 | 2,553 | 0.860 | 1.647 | 54.4% |
-| node:http (raw) | 50,383 | 623 | 1.238 | 2.458 | 38.7% |
-| Fastify (Node) | 45,405 | 1,756 | 1.377 | 2.644 | 34.9% |
-| Hono (Node) | 39,978 | 736 | 1.542 | 2.457 | 30.7% |
-| NestJS (Fastify) | 37,576 | 313 | 1.674 | 1.932 | 28.9% |
-| Express (Node) | 12,640 | 162 | 4.773 | 6.980 | 9.7% |
-| NestJS (Express) | 9,580 | 56 | 6.384 | 9.030 | 7.4% |
+| Bun.serve (raw) | 127,439 | 4,240 | 0.481 | 0.969 | 100.0% |
+| **@dunx/http** | **123,022** | 1,651 | 0.496 | 0.996 | **96.5%** |
+| Elysia | 121,831 | 3,021 | 0.500 | 1.006 | 95.6% |
+| Axum (Rust) | 119,941 | 1,353 | 0.519 | 0.736 | 94.1% |
+| Hono (Bun) | 109,381 | 3,876 | 0.555 | 1.116 | 85.8% |
+| @dunx/http (+ request logging) | 78,583 | 1,604 | 0.775 | 1.541 | 61.7% |
+| net/http (Go) | 72,013 | 704 | 0.885 | 1.938 | 56.5% |
+| Gin (Go) | 71,272 | 1,320 | 0.893 | 2.029 | 55.9% |
+| Spring Boot (JVM) | 51,476 | 1,191 | 1.223 | 1.564 | 40.4% |
+| node:http (raw) | 39,828 | 448 | 1.565 | 1.975 | 31.3% |
+| Fastify (Node) | 38,135 | 701 | 1.621 | 1.900 | 29.9% |
+| Hono (Node) | 31,797 | 890 | 1.950 | 2.418 | 25.0% |
+| NestJS (Fastify) | 31,068 | 516 | 2.056 | 2.462 | 24.4% |
+| Express (Node) | 11,614 | 90 | 5.159 | 7.340 | 9.1% |
+| NestJS (Express) | 8,983 | 67 | 6.628 | 9.712 | 7.0% |
+| FastAPI (Python) | 7,186 | 66 | 8.845 | 9.735 | 5.6% |
+| Django (Python) | 4,294 | 90 | 14.584 | 16.579 | 3.4% |
 
 **Path parameter** - `GET /params/42`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 126,000 | 3,339 | 0.485 | 0.985 | 100.0% |
-| Elysia | 124,507 | 5,157 | 0.473 | 0.988 | 98.8% |
-| **@dunx/http** | **123,263** | 1,851 | 0.494 | 0.993 | **97.8%** |
-| Hono (Bun) | 82,991 | 2,199 | 0.756 | 1.471 | 65.9% |
-| @dunx/http (+ request logging) | 69,156 | 1,658 | 0.862 | 1.666 | 54.9% |
-| node:http (raw) | 49,387 | 2,342 | 1.253 | 2.488 | 39.2% |
-| Fastify (Node) | 42,289 | 2,196 | 1.523 | 1.808 | 33.6% |
-| Hono (Node) | 36,539 | 1,323 | 1.746 | 2.005 | 29.0% |
-| NestJS (Fastify) | 35,534 | 570 | 1.759 | 3.451 | 28.2% |
-| Express (Node) | 11,904 | 51 | 5.134 | 7.260 | 9.4% |
-| NestJS (Express) | 9,243 | 42 | 6.643 | 9.256 | 7.3% |
+| Bun.serve (raw) | 122,963 | 4,056 | 0.496 | 1.006 | 100.0% |
+| Elysia | 119,472 | 1,544 | 0.503 | 1.020 | 97.2% |
+| **@dunx/http** | **115,506** | 3,078 | 0.513 | 1.054 | **93.9%** |
+| Axum (Rust) | 112,675 | 6,833 | 0.547 | 0.704 | 91.6% |
+| Hono (Bun) | 102,299 | 1,102 | 0.596 | 1.198 | 83.2% |
+| @dunx/http (+ request logging) | 71,358 | 3,379 | 0.828 | 1.619 | 58.0% |
+| net/http (Go) | 70,862 | 363 | 0.898 | 1.953 | 57.6% |
+| Gin (Go) | 69,659 | 950 | 0.909 | 2.063 | 56.7% |
+| Spring Boot (JVM) | 40,361 | 1,686 | 1.521 | 2.027 | 32.8% |
+| node:http (raw) | 38,129 | 974 | 1.609 | 2.277 | 31.0% |
+| Fastify (Node) | 35,221 | 1,228 | 1.797 | 2.279 | 28.6% |
+| Hono (Node) | 30,743 | 747 | 2.047 | 2.755 | 25.0% |
+| NestJS (Fastify) | 28,529 | 1,043 | 2.173 | 2.708 | 23.2% |
+| Express (Node) | 11,340 | 186 | 5.258 | 7.680 | 9.2% |
+| NestJS (Express) | 8,658 | 72 | 6.854 | 10.380 | 7.0% |
+| FastAPI (Python) | 6,624 | 50 | 9.565 | 10.774 | 5.4% |
+| Django (Python) | 4,172 | 100 | 15.216 | 17.295 | 3.4% |
 
 **Body validation** - `POST /validate`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 84,701 | 3,196 | 0.734 | 1.458 | 100.0% |
-| **@dunx/http** | **78,311** | 1,385 | 0.774 | 1.538 | **92.5%** |
-| Elysia | 70,831 | 1,775 | 0.842 | 1.662 | 83.6% |
-| @dunx/http (+ request logging) | 56,872 | 2,628 | 1.087 | 1.583 | 67.1% |
-| Hono (Bun) | 51,793 | 705 | 1.178 | 2.329 | 61.1% |
-| node:http (raw) | 33,538 | 1,001 | 1.852 | 3.687 | 39.6% |
-| Hono (Node) | 21,447 | 535 | 2.883 | 5.677 | 25.3% |
-| Fastify (Node) | 19,019 | 79 | 3.164 | 6.220 | 22.5% |
-| NestJS (Fastify) | 16,008 | 162 | 3.791 | 6.284 | 18.9% |
-| Express (Node) | 9,190 | 62 | 6.626 | 9.432 | 10.9% |
-| NestJS (Express) | 7,626 | 25 | 8.053 | 11.447 | 9.0% |
+| Axum (Rust) | 86,327 | 1,577 | 0.733 | 0.879 | 100.8% |
+| Bun.serve (raw) | 85,605 | 2,135 | 0.709 | 1.417 | 100.0% |
+| **@dunx/http** | **79,596** | 1,888 | 0.766 | 1.527 | **93.0%** |
+| Elysia | 75,330 | 879 | 0.792 | 1.586 | 88.0% |
+| Hono (Bun) | 60,458 | 2,579 | 0.993 | 1.957 | 70.6% |
+| @dunx/http (+ request logging) | 57,561 | 1,051 | 1.063 | 2.040 | 67.2% |
+| Gin (Go) | 48,008 | 639 | 1.329 | 2.985 | 56.1% |
+| net/http (Go) | 46,360 | 882 | 1.373 | 3.053 | 54.2% |
+| Spring Boot (JVM) | 30,020 | 398 | 2.098 | 2.520 | 35.1% |
+| node:http (raw) | 28,736 | 868 | 2.163 | 4.213 | 33.6% |
+| Hono (Node) | 18,582 | 198 | 3.388 | 4.714 | 21.7% |
+| Fastify (Node) | 17,669 | 227 | 3.288 | 6.526 | 20.6% |
+| NestJS (Fastify) | 14,786 | 372 | 4.002 | 7.121 | 17.3% |
+| Express (Node) | 8,855 | 118 | 6.719 | 9.903 | 10.3% |
+| NestJS (Express) | 7,107 | 57 | 8.305 | 12.209 | 8.3% |
+| FastAPI (Python) | 4,380 | 27 | 14.467 | 16.287 | 5.1% |
+| Django (Python) | 4,015 | 78 | 16.093 | 17.449 | 4.7% |
 
 **Startup** - cold process to first served request, 7 samples
 
 | Subject | median ms | min ms | max ms |
 | ------- | --------: | -----: | -----: |
-| Bun.serve (raw) | 26.7 | 26.2 | 28.9 |
-| Hono (Bun) | 32.1 | 30.6 | 37.0 |
-| **@dunx/http** | **53.1** | 52.4 | 54.6 |
-| @dunx/http (+ request logging) | 53.6 | 52.9 | 55.9 |
-| Elysia | 58.2 | 57.3 | 61.5 |
-| node:http (raw) | 72.8 | 65.4 | 80.3 |
-| Hono (Node) | 94.2 | 89.8 | 95.9 |
-| Express (Node) | 120.2 | 114.6 | 122.4 |
-| Fastify (Node) | 146.1 | 139.6 | 165.8 |
-| NestJS (Express) | 270.7 | 266.5 | 283.4 |
-| NestJS (Fastify) | 285.5 | 278.8 | 290.0 |
+| Axum (Rust) | 1.6 | 1.5 | 1.8 |
+| net/http (Go) | 3.9 | 3.8 | 4.2 |
+| Gin (Go) | 5.0 | 3.9 | 5.4 |
+| Bun.serve (raw) | 18.6 | 18.1 | 19.8 |
+| Hono (Bun) | 23.3 | 21.8 | 24.3 |
+| **@dunx/http** | **39.6** | 39.3 | 41.7 |
+| @dunx/http (+ request logging) | 40.7 | 39.6 | 43.3 |
+| Elysia | 46.5 | 45.0 | 48.7 |
+| node:http (raw) | 71.1 | 65.8 | 83.7 |
+| Hono (Node) | 99.7 | 93.1 | 113.3 |
+| Express (Node) | 122.2 | 114.9 | 130.3 |
+| Django (Python) | 134.3 | 132.8 | 140.7 |
+| Fastify (Node) | 150.8 | 141.5 | 157.8 |
+| FastAPI (Python) | 244.3 | 242.9 | 247.1 |
+| NestJS (Express) | 273.7 | 265.1 | 280.2 |
+| NestJS (Fastify) | 320.2 | 288.8 | 328.1 |
+| Spring Boot (JVM) | 1285.9 | 1259.1 | 1303.8 |
 
 ### What these say, including where dunx loses
 
@@ -448,10 +582,10 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Scenario | Bun.serve | @dunx/http | dunx costs |
 | -------- | --------: | ---------: | ---------: |
-| `plaintext` | 138,507 | 135,442 | −2.2% |
-| `json` | 130,055 | 123,306 | −5.2% |
-| `params` | 126,000 | 123,263 | −2.2% |
-| `validate` | 84,701 | 78,311 | −7.5% |
+| `plaintext` | 131,805 | 130,843 | −0.7% |
+| `json` | 127,439 | 123,022 | −3.5% |
+| `params` | 122,963 | 115,506 | −6.1% |
+| `validate` | 85,605 | 79,596 | −7.0% |
 
 **A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
 *through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
@@ -462,7 +596,8 @@ the two land within each other's standard deviation - which they now do on
 **`dunx-logging` is the same app with `requestLogging` left at its default**, and
 the gap to `dunx` is one structured line per request: reading `req.headers`, an
 `AsyncLocalStorage` scope, building the entry, `JSON.stringify`, and the write.
-Nothing else in this table logs anything, which is why the two rows exist separately see "Why dunx appears twice". A third harness decomposes that gap step by step; see
+Nothing else in this table logs anything, which is why the two rows exist separately
+- see "Why dunx appears twice". A third harness decomposes that gap step by step; see
 "Request logging cost" below.
 
 **Validation is still the largest absolute cost**, but most of it is not the
@@ -635,8 +770,8 @@ same app on the same `json` route, in its own process, with one more
 piece of the default logging path switched on than the row above it.
 
 ```
-AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.3.14 | oha oha 1.15.0
-64 connections | 3s warmup | 5 x 4s measured | 2026-08-02
+AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.0 | oha oha 1.15.0
+64 connections | 3s warmup | 3 x 4s measured | 2026-08-22
 ```
 
 **Measured round-robin across all rows**, for the reason the validation harness
@@ -645,17 +780,17 @@ over a run. Read anything under about **±0.5 µs** as unresolvable.
 
 | Step | req/s | µs/req | this step adds | total |
 | ---- | ----: | -----: | -------------: | ----: |
-| `requestLogging: false` | 115,307 | 8.67 | - | - |
-| one middleware that only calls `next()` | 114,650 | 8.72 | +0.05 µs | +0.05 µs |
-| + the pathname sliced out of `req.url` | 105,844 | 9.45 | +0.73 µs | +0.78 µs |
-| + `x-request-id` and `user-agent` read | 93,148 | 10.74 | +1.29 µs | +2.06 µs |
-| + `crypto.randomUUID()` | 92,793 | 10.78 | +0.04 µs | +2.10 µs |
-| + `runWithContext` around the handler | 85,556 | 11.69 | +0.91 µs | +3.02 µs |
-| + `x-request-id` set on the response | 85,806 | 11.65 | −0.03 µs | +2.98 µs |
-| + the real middleware, `Logger` discards | 80,290 | 12.45 | +0.80 µs | +3.78 µs |
-| + `new Date().toISOString()` | 79,218 | 12.62 | +0.17 µs | +3.95 µs |
-| + the entry and `JSON.stringify`, string dropped | 68,180 | 14.67 | +2.04 µs | +5.99 µs |
-| batched instead - **the shipped default** | 71,151 | 14.05 | −0.61 µs | +5.38 µs |
+| `requestLogging: false` | 125,312 | 7.98 | - | - |
+| one middleware that only calls `next()` | 116,537 | 8.58 | +0.60 µs | +0.60 µs |
+| + the pathname sliced out of `req.url` | 107,411 | 9.31 | +0.73 µs | +1.33 µs |
+| + `x-request-id` and `user-agent` read | 97,232 | 10.28 | +0.97 µs | +2.30 µs |
+| + `crypto.randomUUID()` | 100,161 | 9.98 | −0.30 µs | +2.00 µs |
+| + `runWithContext` around the handler | 97,814 | 10.22 | +0.24 µs | +2.24 µs |
+| + `x-request-id` set on the response | 95,558 | 10.46 | +0.24 µs | +2.48 µs |
+| + the real middleware, `Logger` discards | 92,200 | 10.85 | +0.38 µs | +2.87 µs |
+| + `new Date().toISOString()` | 90,465 | 11.05 | +0.21 µs | +3.07 µs |
+| + the entry and `JSON.stringify`, string dropped | 77,950 | 12.83 | +1.77 µs | +4.85 µs |
+| batched instead - **the shipped default** | 78,377 | 12.76 | −0.07 µs | +4.78 µs |
 
 Reading it: the middleware chain, `crypto.randomUUID()` and setting
 `x-request-id` on the response are each at or below what this harness can resolve.
@@ -667,10 +802,10 @@ write.
 
 | Write | req/s | µs/req |
 | ----- | ----: | -----: |
-| batched, `/dev/null` | 71,151 | 14.05 |
-| one `console.log` per entry, `/dev/null` | 62,851 | 15.91 |
-| batched, into a pipe nobody reads | 65,746 | 15.21 |
-| one per entry, into a pipe nobody reads | 53,796 | 18.59 |
+| batched, `/dev/null` | 78,377 | 12.76 |
+| one `console.log` per entry, `/dev/null` | 65,960 | 15.16 |
+| batched, into a pipe nobody reads | 77,030 | 12.98 |
+| one per entry, into a pipe nobody reads | 58,232 | 17.17 |
 
 The last row is what this harness was reporting before either fix, and neither of
 its two costs is a property of `@dunx/http`. Subjects were spawned with
@@ -844,19 +979,31 @@ none of them.
 | Go 1.22+                 | `nethttp`, `gin`         | `PATH`, or `$BENCH_GO`           |
 | Rust / Cargo             | `axum`                   | `PATH`, or `$BENCH_CARGO`        |
 | JDK 21+ **and** Maven    | `spring`                 | `PATH`, or `$BENCH_JAVA` and `$BENCH_MVN` |
-| Python 3.10+ with Django | `django`                 | `PATH`, or `$BENCH_PYTHON`       |
+| Python 3.10+, Django, gunicorn | `django`           | `PATH`, or `$BENCH_PYTHON`       |
+| Python 3.10+, FastAPI, uvicorn | `fastapi`          | `PATH`, or `$BENCH_PYTHON`       |
 
-Django has to be **importable**, not merely on disk: the probe runs
-`import django` and skips the subject with a clear line if that fails, rather than
-letting it start and be rejected later by the equivalence check. If Django is not
-installed system-wide, `$BENCH_PYTHONPATH` can point at a directory holding an
-extracted wheel - Django is pure Python, so nothing needs building or installing:
+Each package has to be **importable**, not merely on disk: the probe runs
+`import <name>` and skips that subject with a clear line if it fails, rather than
+letting it start and be rejected later by the equivalence check. **The two Python
+subjects are probed separately**, so a machine with Django and no FastAPI runs one
+and skips the other.
+
+If the packages are not installed system-wide, `$BENCH_PYTHONPATH` can point at a
+directory holding them and nothing needs installing. Both subjects also need a
+server - gunicorn for Django, uvicorn for FastAPI - so the shortest route is pip
+with `--target`:
 
 ```bash
-curl -sfLO https://files.pythonhosted.org/.../Django-5.1.4-py3-none-any.whl
-python3 -c "import zipfile; zipfile.ZipFile('Django-5.1.4-py3-none-any.whl').extractall('pylib')"
-BENCH_PYTHONPATH=$PWD/pylib bun run start --subjects django
+python3 -m pip install --target pylib django gunicorn 'fastapi[standard]' uvicorn
+BENCH_PYTHONPATH=$PWD/pylib bun run start --subjects django,fastapi
 ```
+
+Two traps found installing it this way. `pydantic`'s `EmailStr` needs
+`email-validator`, which is `pydantic[email]` and is not pulled in by `fastapi`
+alone; without it the module fails to import and the subject skips. And uvicorn's
+default `ws="auto"` imports `websockets` eagerly, so a system copy old enough to
+lack `ServerProtocol` kills the process at startup - `servers/python/fastapi_app.py`
+passes `ws="none"`, which this suite wants anyway.
 
 Nothing here is downloaded or installed for you - `bun run setup` fetches oha and
 that is all. The first build of each is slow (Go and Maven resolve dependencies

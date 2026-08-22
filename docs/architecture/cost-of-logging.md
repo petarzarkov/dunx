@@ -1,8 +1,40 @@
 # The cost of request logging
 
-Where the 5.38 microseconds go, why `write(2)` per entry was the largest single cost, and what batching trades away.
+Where the default path's microseconds go, why `write(2)` per entry is the largest single cost, and what batching trades away.
 
-## The cost of request logging (`internal/bench` logging harness)
+## Re-measured on Bun 1.4.0, 2026-08-22
+
+Everything below this section was measured on Bun 1.3.14 and is kept, because most of
+it is the record of what a **dunx** code change was worth rather than what Bun does.
+Re-running `bun run logging` on 1.4 moved three of its conclusions.
+
+| Figure                                              | 1.3.14   | 1.4.0    |
+| --------------------------------------------------- | -------- | -------- |
+| the whole default path, over logging off            | +5.38 µs | +4.78 µs |
+| first touch of `req.headers`                        | +1.29 µs | +0.97 µs |
+| the `AsyncLocalStorage` scope                       | +0.91 µs | +0.24 µs |
+| building and serialising the entry                  | +2.05 µs | +1.77 µs |
+| batching, against a `console.log` per entry         | -0.62 µs | -2.40 µs |
+| `dunx-logging` as a fraction of `bun-serve`, `json` | 52.9%    | 59.3%    |
+
+Three things changed:
+
+- **The `AsyncLocalStorage` scope stopped being expensive.** It was the third-largest
+  item and one of the three things named below as what actually costs. At +0.24 µs it
+  is inside the ±0.5 µs floor. `requestLogging: { correlate: false }` therefore buys
+  nothing measurable, which is recorded in `docs/guide/13-logging.md`.
+- **Batching became the largest single saving on the path**, worth 2.40 µs against
+  4.78 µs total, and 4.19 µs when the consumer is slow. The section below argues that
+  a `write(2)` per entry was the worst of it; on 1.4 that is more true, not less.
+- **The step-to-step ladder is at the harness floor.** Six of eleven steps land inside
+  ±0.5 µs and one reads **negative** (`crypto.randomUUID()` at -0.30 µs). Read the
+  total; a single row is not a measurement.
+
+The two things that did not change: the **first touch of `req.headers`** is still the
+largest non-entry step, and **building and serialising the entry** is still the
+largest step overall before the write.
+
+## The cost of request logging on Bun 1.3.14 (`internal/bench` logging harness)
 
 `bun run logging` is the third harness, and it exists because `dunx-logging` in the
 main suite was **one number for at least eight different things**. It sat at 40-45%

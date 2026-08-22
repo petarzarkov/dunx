@@ -8,7 +8,12 @@ export {
   type ScanResult,
   type SetOptions,
 } from './connection.js';
-export { isConnectionError, RedisError, RedisErrorCode } from './errors.js';
+export {
+  isConnectionError,
+  isServerError,
+  RedisError,
+  RedisErrorCode,
+} from './errors.js';
 export { RedisModule, redisConnection } from './module.js';
 export {
   defaultRedisUrl,

@@ -4,12 +4,14 @@ import { AppError } from '@dunx/core';
  * The `code` values `Bun.RedisClient` puts on the errors it throws, plus one of
  * ours for URL validation. Frozen object rather than an `enum` - see CLAUDE.md.
  *
- * `INVALID_RESPONSE` is the surprising one: Bun uses it for errors the *server*
- * returned, so `WRONGTYPE` and `ERR unknown command` both arrive under it. The
- * response was well-formed; the command was not.
+ * An error the *server* returned - `WRONGTYPE`, `ERR unknown command`, a wrong
+ * argument count - arrives as `SERVER_ERROR` on Bun 1.4 and as
+ * `INVALID_RESPONSE` on 1.3. Both are listed because `@types/bun` is a `>=1.3.0`
+ * peer, and `serverError()` is the check to write instead of either constant.
  */
 export const RedisErrorCode = Object.freeze({
   CONNECTION_CLOSED: 'ERR_REDIS_CONNECTION_CLOSED',
+  SERVER_ERROR: 'ERR_REDIS_SERVER_ERROR',
   INVALID_RESPONSE: 'ERR_REDIS_INVALID_RESPONSE',
   INVALID_STATE: 'ERR_REDIS_INVALID_STATE',
   INVALID_ARG_TYPE: 'ERR_INVALID_ARG_TYPE',
@@ -60,3 +62,9 @@ export const toRedisError = (command: string, cause: unknown): RedisError => {
 export const isConnectionError = (error: unknown): boolean =>
   error instanceof RedisError &&
   error.code === RedisErrorCode.CONNECTION_CLOSED;
+
+/** True when Redis itself rejected the command, on either Bun 1.3 or 1.4. */
+export const isServerError = (error: unknown): boolean =>
+  error instanceof RedisError &&
+  (error.code === RedisErrorCode.SERVER_ERROR ||
+    error.code === RedisErrorCode.INVALID_RESPONSE);

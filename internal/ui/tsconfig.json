@@ -4,7 +4,7 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     /* Consumed as source by two Vite bundles, so resolution is the bundler's and
        imports stay extensionless - the same reason `internal/docs` and
-       `internal/openapi-ui` override it. There is no build step here: `exports`
+       `internal/dashboard-ui` override it. There is no build step here: `exports`
        points at `src/`, and each consumer compiles what it imports. */
     "module": "preserve",
     "moduleResolution": "bundler",

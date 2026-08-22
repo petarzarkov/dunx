@@ -7,6 +7,7 @@ import {
   type ModuleRef,
 } from '@dunx/core';
 import {
+  ApiHidden,
   Controller,
   Get,
   joinPath,
@@ -20,7 +21,9 @@ import {
   type DocumentInfo,
   type GeneratedDocument,
 } from './generate.js';
+import { renderShell } from './html.js';
 import { mountPrefix, withPrefix } from './mount.js';
+import { ASSET_CACHE_CONTROL, SwaggerAssets } from './swagger.js';
 import type { OpenApiDocument } from './types.js';
 
 /** Everything about the document itself, which is everything a factory can produce. */
@@ -63,15 +66,17 @@ export class OpenApiExplorer {
   readonly #base: OpenApiDocument;
   readonly #absolutePaths: ReadonlySet<string>;
   readonly #jsonPath: string;
+  readonly #uiPath: string;
   readonly #documents = new Map<string, OpenApiDocument>();
   readonly #json = new Map<string, string>();
   readonly #pages = new Map<string, string>();
 
-  constructor(generated: GeneratedDocument, jsonPath: string) {
+  constructor(generated: GeneratedDocument, jsonPath: string, uiPath: string) {
     this.#base = generated.document;
     this.#absolutePaths = generated.absolutePaths;
     this.warnings = generated.warnings;
     this.#jsonPath = jsonPath;
+    this.#uiPath = uiPath;
   }
 
   document(prefix = ''): OpenApiDocument {
@@ -91,21 +96,45 @@ export class OpenApiExplorer {
   }
 
   /**
-   * Async because the explorer is loaded on demand. `./ui.js` pulls in ~456 KB of
-   * inlined bundle and about 5 ms of parse, and a service that never opens the
-   * page should not pay either at boot. The first request for a given prefix pays
-   * it; the cache answers every one after that.
+   * The page, built on the first request for a given mount prefix and cached.
+   *
+   * `SwaggerAssets.resolve()` happens here rather than at boot, which is what keeps
+   * `swagger-ui-dist` an optional peer: an app serving only `/openapi.json` never
+   * calls this and never has to install it. A missing install therefore surfaces as
+   * this route failing with an install command in the message, not as a boot error
+   * for everyone.
    */
   async page(prefix = ''): Promise<string> {
     const cached = this.#pages.get(prefix);
     if (cached !== undefined) return cached;
-    const { renderPage } = await import('./ui.js');
-    const html = renderPage(this.document(prefix), {
-      jsonHref: joinPath(prefix, this.#jsonPath),
-      warnings: this.warnings,
-    });
+    const html = renderShell(
+      this.document(prefix),
+      {
+        jsonHref: joinPath(prefix, this.#jsonPath),
+        warnings: this.warnings,
+        mountedAt: joinPath(prefix, this.#uiPath),
+      },
+      await SwaggerAssets.resolve(),
+    );
     this.#pages.set(prefix, html);
     return html;
+  }
+
+  /** One of Swagger UI's two files, as a `Bun.file` response. */
+  async asset(
+    file: 'swagger-ui-bundle.js' | 'swagger-ui.css',
+  ): Promise<Response> {
+    const assets = await SwaggerAssets.resolve();
+    const path = file === 'swagger-ui.css' ? assets.style : assets.script;
+    return new Response(Bun.file(path), {
+      headers: {
+        'cache-control': ASSET_CACHE_CONTROL,
+        'content-type':
+          file === 'swagger-ui.css'
+            ? 'text/css; charset=utf-8'
+            : 'text/javascript; charset=utf-8',
+      },
+    });
   }
 }
 
@@ -163,6 +192,36 @@ const buildController = (paths: DocPaths) => {
       });
     }
 
+    /**
+     * Swagger UI's two files, served from the consumer's `swagger-ui-dist`
+     * install as siblings of the page.
+     *
+     * Two declared routes rather than one wildcard or a `{ dir }` route: a
+     * wildcard over `node_modules` would serve every file in that package,
+     * sourcemaps included, and Bun 1.4's directory routes cannot set
+     * `cache-control` and answer any HTTP method with the file body
+     * (docs/bun-apis.md). Naming the two files that exist is the whole
+     * allow-list.
+     *
+     * `@ApiHidden` because these are the only routes in this controller that are
+     * not API. The document deliberately describes its own `/docs` and
+     * `/openapi.json` - they are endpoints someone calls - but a stylesheet in an
+     * OpenAPI document is noise.
+     */
+    @ApiHidden()
+    @Public()
+    @Get(() => joinPath(paths.ui, '/swagger-ui-bundle.js'))
+    script(): Promise<Response> {
+      return this.#explorer.asset('swagger-ui-bundle.js');
+    }
+
+    @ApiHidden()
+    @Public()
+    @Get(() => joinPath(paths.ui, '/swagger-ui.css'))
+    style(): Promise<Response> {
+      return this.#explorer.asset('swagger-ui.css');
+    }
+
     #prefix(input: Input<RouteSchemas>, declared: string): string {
       return mountPrefix(new URL(input.req.url).pathname, declared);
     }
@@ -202,6 +261,7 @@ export class OpenApiModule {
             new OpenApiExplorer(
               await generateDocument(describeRoutes(configured), options),
               paths.json,
+              paths.ui,
             ),
         }),
       ],
@@ -255,6 +315,7 @@ export class OpenApiModule {
             return new OpenApiExplorer(
               await generateDocument(describeRoutes(configured), info),
               paths.json,
+              paths.ui,
             );
           },
           inject: options.inject ?? ([] as unknown as D),

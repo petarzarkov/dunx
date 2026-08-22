@@ -488,14 +488,16 @@ if it was a UUID and minted otherwise, and everything the handler logs carries i
 
 It is off by default because it costs something: the path pays for reading the
 header, `crypto.randomUUID()`, the `runWithContext` scope and one `Headers.set`.
-That is **~2.2 µs** of the ~5.4 the full default path costs in the table below.
+That is **~2.5 µs** of the 4.78 the full default path costs in the table below.
 It never pays for building and serialising the entry, the expensive half.
 
 ### Turning the async scope off with `correlate: false`
 
-The `runWithContext` scope is the single most expensive thing request logging does
-that is not the entry itself - **+0.91 µs**, 17% of the 5.38 the whole default path
-costs. An app whose handlers never log pays it for nothing.
+The `runWithContext` scope used to be the most expensive thing request logging did
+that was not the entry itself, at +0.91 µs on Bun 1.3.14. **Bun 1.4 made it too
+cheap to measure:** +0.24 µs as a step, and turning it off moves the whole default
+path from 4.78 µs to 4.48 µs. Both figures are inside the harness's ±0.5 µs
+resolution, so the honest reading is that this option now buys nothing measurable.
 
 ```ts
 HttpFactory.create(AppModule, { requestLogging: { correlate: false } });
@@ -508,53 +510,67 @@ response header still goes out. What is lost is everything _else_ the request lo
 those lines carry no `requestId`, and `updateContext` in a handler has nothing to
 update.
 
-It is not the default because correlation is most of what a request id is for.
-Reach for it when handlers do not log, or when the app already threads correlation
-through explicitly. With `ignore` and `correlateIgnored` it wins: an ignored path
-then gets the response header and no scope.
+It is not the default because correlation is most of what a request id is for, and
+on Bun 1.4 there is no throughput argument on the other side either.
+
+The option stays for an app that already threads correlation through explicitly, and
+for `ignore` with `correlateIgnored`, where an ignored path gets the response header
+and no scope. Do not reach for it expecting a speedup; re-measure on your own Bun
+first.
 
 ## What it costs
 
-`GET /json`, AMD Ryzen 9 5950X, Bun 1.3.14, 64 connections:
+`GET /json`, AMD Ryzen 9 5950X, Bun 1.4.0, 64 connections:
 
 | Subject                        | req/s (median) | p50 ms | vs `Bun.serve` |
 | ------------------------------ | -------------: | -----: | -------------: |
-| `Bun.serve` (raw)              |        130,055 |  0.458 |         100.0% |
-| `@dunx/http`                   |        123,306 |  0.492 |          94.8% |
-| `@dunx/http` + request logging |         70,743 |  0.860 |          54.4% |
+| `Bun.serve` (raw)              |        124,234 |  0.484 |         100.0% |
+| `@dunx/http`                   |        114,283 |  0.519 |          92.0% |
+| `@dunx/http` + request logging |         73,675 |  0.807 |          59.3% |
 
-Structured logging of every request roughly halves peak throughput. That is not a
-dunx tax; it is the cost of the work itself, and the breakdown says where it goes.
+Structured logging of every request costs about 40% of peak throughput. That is not
+a dunx tax; it is the cost of the work itself, and the breakdown says where it goes.
 Each row below is the same app on the same route with one more piece of the
 default path switched on. Read anything under about **±0.5 µs** as unresolvable:
 
 | Step                                            | µs/req | this step adds |
 | ----------------------------------------------- | -----: | -------------: |
-| `requestLogging: false`                         |   8.67 |              - |
-| one middleware that only calls `next()`         |   8.72 |       +0.05 µs |
-| the pathname sliced out of `req.url`            |   9.45 |       +0.73 µs |
-| `x-request-id` and `user-agent` read            |  10.74 |       +1.29 µs |
-| `crypto.randomUUID()`                           |  10.78 |       +0.04 µs |
-| `runWithContext` around the handler             |  11.69 |       +0.91 µs |
-| `x-request-id` set on the response              |  11.65 |       -0.03 µs |
-| the real middleware, `Logger` discards          |  12.45 |       +0.80 µs |
-| `new Date().toISOString()`                      |  12.62 |       +0.17 µs |
-| the entry and `JSON.stringify`, string dropped  |  14.67 |       +2.04 µs |
-| **batched write instead - the shipped default** |  14.05 |       -0.61 µs |
+| `requestLogging: false`                         |   7.98 |              - |
+| one middleware that only calls `next()`         |   8.58 |       +0.60 µs |
+| the pathname sliced out of `req.url`            |   9.31 |       +0.73 µs |
+| `x-request-id` and `user-agent` read            |  10.28 |       +0.97 µs |
+| `crypto.randomUUID()`                           |   9.98 |       -0.30 µs |
+| `runWithContext` around the handler             |  10.22 |       +0.24 µs |
+| `x-request-id` set on the response              |  10.46 |       +0.24 µs |
+| the real middleware, `Logger` discards          |  10.85 |       +0.38 µs |
+| `new Date().toISOString()`                      |  11.05 |       +0.21 µs |
+| the entry and `JSON.stringify`, string dropped  |  12.83 |       +1.77 µs |
+| **batched write instead - the shipped default** |  12.76 |       -2.40 µs |
 
-Reading it: the middleware chain, `crypto.randomUUID()` and setting the response
-header are each at or below what the harness can resolve. What costs is the
-**first touch of `req.headers`**, the `AsyncLocalStorage` scope, and **building
-and serialising the entry**.
+The whole default path is **+4.78 µs**, and two steps account for most of it: the
+**first touch of `req.headers`** and **building and serialising the entry**. Six of
+the eleven steps land inside the ±0.5 µs resolution, and one of them is negative -
+`crypto.randomUUID()` reads as -0.30 µs, which is the clearest available evidence
+that a single step at this scale is at the harness's floor. Read the total, not the
+row.
+
+The `AsyncLocalStorage` scope is one of those six now. On Bun 1.3.14 it measured
++0.91 µs and was the third-largest item here; on 1.4 it is +0.24 µs, which the
+harness cannot separate from zero. That changes what `correlate: false` is worth -
+see below.
 
 The write, isolated:
 
 | Write                                    | µs/req |
 | ---------------------------------------- | -----: |
-| batched, `/dev/null`                     |  14.05 |
-| one `console.log` per entry, `/dev/null` |  15.91 |
-| batched, into a pipe nobody reads        |  15.21 |
-| one per entry, into a pipe nobody reads  |  18.59 |
+| batched, `/dev/null`                     |  12.76 |
+| one `console.log` per entry, `/dev/null` |  15.16 |
+| batched, into a pipe nobody reads        |  12.98 |
+| one per entry, into a pipe nobody reads  |  17.17 |
+
+**Batching is now the largest single saving on the path**, worth 2.40 µs against a
+`console.log` per entry and 4.19 µs when the consumer is slow, against a 4.78 µs
+total. A `write(2)` per entry would cost more than everything else combined.
 
 Batching also makes a slow consumer far less able to stall the server, which is
 the last row's problem.

@@ -99,33 +99,50 @@ describe('a real server serving its own document', () => {
   });
 
   /**
-   * The explorer is behind `@dunx/openapi/ui` and reaches the page through a
-   * dynamic import, so this is the assertion that the lazy load actually resolves
-   * over a real server rather than only in a unit test that imported it eagerly.
+   * The page is now a Swagger UI shell rather than an inlined bundle, so what this
+   * asserts over a real server is that its two assets resolve **through the mount
+   * prefix**. That is the part a unit test cannot check: `setGlobalPrefix('api')`
+   * moves the page, and an asset href computed from the declared path rather than
+   * the served one would 404 for every consumer who sets a prefix.
    */
-  it('serves an HTML page that fetches nothing', async () => {
+  it('serves a shell whose assets resolve under the prefix', async () => {
     const response = await prefixed.request('api/docs');
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
 
     const page = await response.text();
     expect(page.startsWith('<!doctype html>')).toBe(true);
-    // The lazily imported bundle, not an empty `<script>`.
-    expect(page.length).toBeGreaterThan(400_000);
-    // The document travels in the page, so the explorer boots without a fetch.
+    // A shell, not a bundle. The old inlined page was over 400 KB.
+    expect(page.length).toBeLessThan(50_000);
+    // The document travels in the page, so Swagger UI boots without a fetch.
     expect(page).toContain('ThingsController_list');
     expect(page).toContain('Every thing');
-    expect(page).toContain('"jsonHref":"/api/openapi.json"');
-    // The bundle is inlined: no `src=`, nothing from a CDN, and the one `<link>`
-    // is a `data:` favicon the browser does not fetch. The assertion is on the
-    // tags rather than the text because minified React contains both `src=` and a
-    // `"<script>"` string of its own.
-    expect(page).not.toMatch(/<script[^>]*\ssrc=/);
-    for (const [, href] of page.matchAll(/<link\b[^>]*href="([^"]*)"/g)) {
-      expect(href).toMatch(/^data:image\/svg\+xml,/);
+    expect(page).toContain('href="/api/openapi.json"');
+    // Both assets are prefixed, and both actually answer.
+    for (const file of ['swagger-ui-bundle.js', 'swagger-ui.css']) {
+      expect(page).toContain(`/api/docs/${file}?v=`);
+      const asset = await prefixed.request(`api/docs/${file}`);
+      expect(asset.status).toBe(200);
+      expect(asset.headers.get('cache-control')).toContain('immutable');
+      expect(Number(asset.headers.get('content-length'))).toBeGreaterThan(1000);
+    }
+    // Nothing leaves the origin.
+    for (const [, url] of page.matchAll(
+      /<(?:script|link)\b[^>]*\s(?:src|href)="([^"]*)"/g,
+    )) {
+      expect(url?.startsWith('/')).toBe(true);
     }
     expect(page).not.toContain('//cdn');
-    expect(page).not.toMatch(/url\(\s*["']?(https?:)?\/\//);
+    expect(page).not.toContain('petstore.swagger.io');
+  });
+
+  /** The assets are routed but are not API, so the document must not list them. */
+  it('keeps the assets out of the document', async () => {
+    const { body: document } =
+      await prefixed.json<OpenApiDocument>('api/openapi.json');
+    for (const path of Object.keys(document.paths)) {
+      expect(path).not.toContain('swagger-ui');
+    }
   });
 
   it('moves with the global prefix rather than sitting beside it', async () => {

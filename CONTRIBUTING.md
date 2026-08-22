@@ -110,7 +110,7 @@ extending the root, one `dist/`, and no build variants.
 of the framework became misleading.
 
 **`internal/*`** is the private half, never published: `docs` (the site),
-`bench` (the benchmark harness), `openapi-ui` and `dashboard-ui` (the two React
+`bench` (the benchmark harness), `dashboard-ui` (the React
 bundles inlined into pages a backend serves), and `ui` (the theme and
 components those two share).
 
@@ -157,8 +157,8 @@ dunx/
 │   ├── core            # DI container, modules, lifecycle and the injectable Logger contract for the dunx framework
 │   ├── dashboard       # An opt-in operations page for a running dunx app: routes, the provider graph, gateways, config and runtime health, with bull-board mounted for the queues
 │   ├── http            # Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways
-│   ├── infra           # Database, Redis, queue, storage, image and logging infrastructure for dunx
-│   ├── openapi         # OpenAPI 3.1 documents and a dependency-free docs page for dunx controllers, generated from the schemas the routes already validate
+│   ├── infra           # Database, Redis, queue, schedule, storage, image and logging infrastructure for dunx
+│   ├── openapi         # OpenAPI 3.1 documents for dunx controllers, generated from the schemas the routes already validate, with Swagger UI mounted over them
 │   ├── testing         # Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0
 │   └── transform       # Load-time transform that records constructor dependencies for the dunx container
 ├── tools/              # Published CLIs - the scaffolder and the MCP server

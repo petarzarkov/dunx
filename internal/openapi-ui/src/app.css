@@ -1,4 +1,0 @@
-/* Only what the explorer alone needs. `.prose`, `.dunx-json`, `.dunx-verb` and
-   `.dunx-monospace` are in `@dunx/ui/styles.css`, imported by `styles.ts` -
-   they were duplicated here and in `internal/docs`, so the same markdown and the
-   same JSON rendered differently depending on which page you opened. */

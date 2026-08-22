@@ -23,11 +23,13 @@ other.
 | `@dunx/create-app` | `bunx @dunx/create-app my-api` - base template plus feature folders                         |
 | `@dunx/mcp`        | MCP server that reads an app's routes, providers and modules                                |
 
-The two integrations are deliberate - never invent what a mature library already
-solves: `drizzle-orm` is an
-optional `peerDependency` and drives `bun:sqlite`/`Bun.SQL` through its own Bun
-adapters; `@arkv/logger` is a `dependency` and satisfies core's `Logger` contract
-structurally, with no adapter class in between.
+Five of those are a library wired in rather than dunx code - never invent what a
+mature library already solves. `drizzle-orm` is an optional `peerDependency` and
+drives `bun:sqlite`/`Bun.SQL` through its own Bun adapters; `bullmq` is one too and
+reaches Redis through `createBunRedisClient`; `swagger-ui-dist` is the `/docs` page
+and is optional too; `better-auth` is a required peer of `@dunx/auth`; `@arkv/logger`
+is a `dependency` and satisfies core's `Logger` contract structurally, with no
+adapter class in between.
 
 ## Priority: the core three, until someone who is not the owner files an issue
 
@@ -126,11 +128,11 @@ carrying a copy. The source form stays `workspace:*`, which `manifests.test.ts` 
 asserts. While core is pre-1.0 that still needs `@dunx/testing` republished whenever
 core or http takes a **minor** bump, since `^0.4.0` does not admit `0.5.0`.
 
-What remains: **`@dunx/create-app`**, the other half of Phase 4. Nothing in the
-harness blocks it. Two smaller omissions, both deliberate and recorded in
-`packages/testing/README.md` so they are not re-litigated by accident - no websocket
-helper (Bun's native `WebSocket` against `server.url` is already the whole test) and
-no `providers` key on the options (a fixture class goes in a two-line `@Module`).
+`@dunx/create-app`, the other half of Phase 4, shipped too. Two smaller omissions
+remain by choice, both recorded in `packages/testing/README.md` so they are not
+re-litigated by accident - no websocket helper (Bun's native `WebSocket` against
+`server.url` is already the whole test) and no `providers` key on the options (a
+fixture class goes in a two-line `@Module`).
 
 **Drizzle as the database layer.** Built, tested, and now documented as _the_
 driver rather than an option. The hand-rolled `Database` contract, `Repository` and
@@ -199,12 +201,6 @@ as a proposal against `@arkv/colors`' existing `isColorSupported()` in
 [architecture/logging.md](./architecture/logging.md), together with a second defect it
 turned up: `FORCE_COLOR=0` is tested for presence, so it forces colour _on_.
 
-**Documentation debt.** `packages/infra/README.md`'s `## db` section was rewritten
-against the drizzle API, and its `## logger` section added. `ARCHITECTURE.md` gained
-the hardcoded-`PgDialect` and drizzle-`transaction()` measurements and the database
-design section. Manifest descriptions, `CLAUDE.md`'s package table and the root
-README now name the `Logger` contract and `/logger`.
-
 **Better Auth is `@dunx/auth`, a sixth package.** Not `@dunx/infra/auth`: the guard is
 `@dunx/http` middleware reading `@dunx/http`'s `PUBLIC`/`ROLES` keys, and `@dunx/infra`
 must not depend on the web layer - the coupling refused earlier for a request logger in
@@ -255,12 +251,6 @@ before `subscribe()`. Both were already latent in `@dunx/infra/redis`, which now
 does each and has a spawn-based test - the only kind that can observe a held-open
 event loop - guarding it.
 
-**Documentation debt.** `packages/infra/README.md`'s `## db` section was rewritten
-against the drizzle API, and its `## logger` section added. `ARCHITECTURE.md` gained
-the hardcoded-`PgDialect` and drizzle-`transaction()` measurements and the database
-design section. Manifest descriptions, `CLAUDE.md`'s package table and the root
-README now name the `Logger` contract and `/logger`.
-
 **The suite that exited 1 with zero failures - fixed.** It was
 `packages/openapi/src/page-ui.test.ts`, roughly one run in forty, and the cause was a
 teardown race: `GlobalRegistrator.unregister()` deletes the globals **first** and
@@ -294,11 +284,11 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                            | Shape                                                               |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [class-modules-and-opt-in-config](./roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.       |
-| [http-options-before-container](./roadmap/http-options-before-container.md)     | Absorbed as W1 of class-modules; kept for its analysis.             |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                   | Two upstream defects in bullmq's Bun adapter and `Bun.RedisClient`. |
+| Item                                                                            | Shape                                                                        |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [class-modules-and-opt-in-config](./roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.                |
+| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq's Bun adapter. Bun 1.4 fixed the other.  |
+| [bun-1.4-adoption](./roadmap/bun-1.4-adoption.md)                               | Five adopt items, one rejected on measurement, four defects closed for free. |
 
 Delivered and moved out of this folder rather than left here marked done:
 
@@ -331,10 +321,11 @@ Of those, the two the template had to work around itself are now closed in dunx 
 deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, and the
 **queue dashboard page** is bull-board, mounted by `@dunx/dashboard`.
 
-`OpenApiModule.forRootAsync` closed the half of
-[http-options-before-container](./roadmap/http-options-before-container.md) that
-`OpenApiModule` owned. The `HttpOptions` half is still open and the template still
-validates its config twice because of it.
+`OpenApiModule.forRootAsync` closed the half of the options-before-container problem
+that `OpenApiModule` owned. The `HttpOptions` half is still open - it is
+[class-modules W1](./roadmap/class-modules-and-opt-in-config.md#w1---httpoptionsprovider-keystone),
+which absorbed the analysis when that item stopped being a file of its own - and the
+template still validates its config twice because of it.
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;
@@ -349,7 +340,7 @@ its test.
 
 ### `internal/docs` - the documentation site - **built**
 
-React + Mantine bundled by `Bun.build`, static output, deployed to **GitHub Pages** as the Pages
+React + Mantine bundled by **Vite**, static output, deployed to **GitHub Pages** as the Pages
 root. Coverage is a page inside it. Design and the parser decision:
 [architecture/tooling.md](./architecture/tooling.md), "Documentation site"; the extractor's own
 limits: `internal/docs/README.md`.
@@ -370,33 +361,49 @@ documentation site` step runs after `test:cov` so the artifact has the
 - The README badges point at `/badges/coverage-<pkg>.svg` and link to
   `/#/coverage`; `scripts/update-readme.ts` generates them.
 
-Still open: syntax highlighting in code blocks, the OpenAPI document
-`@dunx/openapi` produces as a page here, and per-package code splitting.
+Still open: the OpenAPI document `@dunx/openapi` produces as a page here, and
+per-package code splitting. Syntax highlighting shipped - shiki, pre-highlighted by
+the generator, so the browser downloads no highlighter.
 
 ### `internal/bench` - the benchmark harness - **built**
 
-Eight subjects (raw `Bun.serve`, `@dunx/http`, Elysia, Hono on both Bun and Node, raw
-`node:http`, Fastify, Express) across four identical workloads, plus cold-start.
+Seventeen subjects across four identical workloads, plus cold-start: raw `Bun.serve`,
+`@dunx/http` with and without request logging, Elysia, Hono on both Bun and Node,
+NestJS on both Express and Fastify, raw `node:http`, Fastify, Express, and five
+cross-language ceilings (Go `net/http`, Gin, Rust Axum, Spring Boot, Django), plus
+**FastAPI** on uvicorn - the closest thing in the suite to what dunx is for, since
+both validate from a schema. A subject whose toolchain is absent skips; the published
+`results/latest.json` has all seventeen.
 Methodology, machine and every deliberate handicap are in
 [`internal/bench/README.md`](../internal/bench/README.md); the measured findings are in
 [architecture/benchmarks.md](./architecture/benchmarks.md), "Benchmark harness".
 
-It publishes the losses. dunx costs 6-21% against raw `Bun.serve` depending on the
-scenario, loses to Elysia on all four, and boots in roughly twice raw `Bun.serve`'s
-time. Those numbers are in the README table, not a footnote.
+It publishes the losses. On Bun 1.4 dunx costs 0.7% to 7.0% against raw `Bun.serve`
+depending on the scenario, and boots in roughly twice its time, 39.6 ms against
+18.6 ms. Those numbers are in the README table, not a footnote, and a ratio is read as
+plus or minus one point - the harness's measured reproducibility across two full
+runs.
 
 Open follow-ups, none blocking:
 
 - Pin the generator and the subject to disjoint CPU sets. Not needed on 32 cores;
   needed on a smaller machine.
+- **Gin at ~56% of `bun-serve` against Axum at ~92% does not add up**, and it
+  reproduces across runs rather than being noise. Two single-threaded compiled
+  subjects should not sit 1.7x apart on plain dispatch. First suspect is how
+  `GOMAXPROCS(1)` handicaps the Go subjects, per the falsification rule in
+  [architecture/benchmarks.md](./architecture/benchmarks.md). Until it is understood,
+  the Go and Rust rows are not quotable.
 - Open-loop latency via oha's `-q` plus `--latency-correction`, which would remove
   the coordinated-omission caveat the closed-loop numbers currently carry.
-- The `params` gap against Elysia (85.8% vs 95.5% of the `Bun.serve` baseline) is the
-  clearest optimisation target the harness has surfaced. Elysia compiles per-route
-  handler code ahead of time; dunx builds a closure at boot but still runs a generic
-  input reader per request.
-- `internal/docs` should read `results/latest.json`. The shape is documented and
-  versioned by `schemaVersion` in the bench README; do not re-derive it.
+- ~~The `params` gap against Elysia.~~ **Withdrawn: the numbers were wrong.** They
+  matched no committed run - the 2026-08-03 baseline already had dunx at 96.8% on
+  `params`, and on Bun 1.4 it is 99.9% against Elysia's 98.2%. Elysia's ahead-of-time
+  handler compilation against dunx's generic per-request input reader is still a real
+  difference in approach, and the harness has never shown it costing anything. Reopen
+  it with a measurement, not with these figures.
+  `internal/docs` reading `results/latest.json` is done - `scripts/extract/bench.ts`
+  does it, and a missing run is a generator error rather than a stale table.
 
 ## The phase plan
 
@@ -575,17 +582,13 @@ a per-response validation pass paid for a documentation feature is the wrong tra
 when the handler's return type already checks the answer for free. Nothing in
 `@dunx/http`'s request path reads the key.
 
-The explorer renders those responses through **`SchemaView`, the same component the
-request body uses** - one property table with the required markers, formats,
-constraints and `$ref` resolution, not a second one. Every component in
-`internal/openapi-ui` costs bytes twice, in the JS and in the CSS list in
-`src/styles.ts`, and the whole bundle is a committed string in
-`packages/openapi/src/ui-bundle.ts` that every consumer of the package downloads, so
-"reuse it" is a size decision before it is a taste one. The documented response and
-the try-it-out result stay **separate**: the `Responses` section is the contract and
-the panel under the `Send it` divider is one real request, and merging them would let
-a 500 from a local run read as the specification. `src/operation.test.tsx` holds all
-of that down.
+The rendering half of that is no longer dunx's. `internal/openapi-ui` rendered
+responses through a `SchemaView` shared with the request body, and it is deleted:
+`@dunx/openapi` mounts **`swagger-ui-dist`**, which renders both. The response
+schemas above are what the document carries, and Swagger UI decides how they look.
+See [architecture/tooling.md](./architecture/tooling.md), "The API explorer: built,
+measured, then replaced by Swagger UI", for what that cost - 3.7x the gzipped bytes -
+and why it was still right.
 
 **`OpenApiModule.forRootAsync`** exists for the reason every other configurable
 module has the pair. Its interesting half was the mount paths: a decorator's

@@ -278,6 +278,25 @@ W1 means - see "What module scoping already settled" at the end.
 
 Above. Everything else is independent of each other but easier after this.
 
+**The shape of the problem, absorbed from what used to be its own roadmap file.**
+`HttpOptions` is an argument to `HttpFactory.create`, which is the call that _builds_
+the container, so `requestLogging`, `onError` and `middleware` cannot read validated
+config. Middleware is registered by class, never by instance, so NestJS's
+`app.useGlobalInterceptors(new X(config))` after `app.get(ConfigService)` has no
+counterpart. `dunx-template` works around it by calling `validateConfig(Bun.env)` a
+second time in `main.ts` before `create()` - pure, so it cannot disagree with itself,
+but config is validated twice and the second call is invisible to the container.
+
+The fix needs a decision either way: a post-create hook that can still install
+middleware, or accepting that anything needing config is resolved from the container
+by a middleware taking it as a constructor dependency.
+
+The `OpenApiModule` half of that file is **done**. `forRootAsync({ root, useFactory,
+inject })` produces `title`, `version`, `description`, `servers`, `path` and
+`jsonPath` from a factory that may inject, and the mount paths work because `@Get`
+takes a `RoutePath` thunk resolved at route discovery, which runs after every
+provider has settled.
+
 **Hard part:** `relay: new RedisRelay({...})` is an _instance_ the app constructs.
 Under a provider it becomes a bound provider, which is better - but `RedisRelay`
 currently takes connection options the app assembles from config, so it wants the same

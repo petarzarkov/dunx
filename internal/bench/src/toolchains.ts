@@ -241,32 +241,55 @@ export const toolchainInfo = (
  * interpreter, so there is no artifact and no build time to keep out of the
  * startup column.
  *
- * Django has to be importable, not merely present on disk - a Python that cannot
- * `import django` would start, fail its first request and be dropped by the
- * equivalence check with a confusing message instead of a clear skip.
+ * Each package has to be importable, not merely present on disk - a Python that
+ * cannot `import django` would start, fail its first request and be dropped by
+ * the equivalence check with a confusing message instead of a clear skip.
  *
- * `BENCH_PYTHONPATH` exists because Django is commonly not installed
- * system-wide; point it at a directory holding an extracted wheel and nothing
- * has to be installed at all.
+ * **Probed per package, not once.** There are two Python subjects and their
+ * dependencies are disjoint, so a machine with Django and no FastAPI has to run
+ * one and skip the other. A single answer for "is Python usable" would take both
+ * down together.
+ *
+ * `BENCH_PYTHONPATH` exists because neither is commonly installed system-wide;
+ * point it at a directory holding extracted wheels and nothing has to be
+ * installed at all.
  */
-export const probePython = async (): Promise<{
-  binary: string;
-  version: string | null;
-  env: Record<string, string>;
-}> => {
+export interface PythonProbe {
+  readonly binary: string;
+  /** Version per package name, `null` when it cannot be imported. */
+  readonly versions: ReadonlyMap<string, string | null>;
+  readonly env: Record<string, string>;
+}
+
+export const probePython = async (
+  packages: readonly string[],
+): Promise<PythonProbe> => {
   const binary = process.env['BENCH_PYTHON'] ?? 'python3';
   const extra = process.env['BENCH_PYTHONPATH'];
   const env = extra === undefined ? {} : { PYTHONPATH: extra };
 
-  const probed = await capture(
-    [binary, '-c', 'import django; print(django.get_version())'],
-    undefined,
-    env,
+  const versions = new Map<string, string | null>();
+  await Promise.all(
+    [...new Set(packages)].map(async (name) => {
+      // `importlib.metadata` rather than a per-package attribute: django has
+      // `get_version()`, fastapi has `__version__`, and the distribution
+      // metadata is the one thing both have. The import is still what decides
+      // usability, so it runs first and its failure is the skip.
+      const probed = await capture(
+        [
+          binary,
+          '-c',
+          `import ${name}, importlib.metadata as m; print(m.version(${JSON.stringify(name)}))`,
+        ],
+        undefined,
+        env,
+      );
+      versions.set(
+        name,
+        probed.ok ? (probed.text.trim().split('\n').at(-1) ?? null) : null,
+      );
+    }),
   );
 
-  return {
-    binary,
-    version: probed.ok ? (probed.text.trim().split('\n')[0] ?? null) : null,
-    env,
-  };
+  return { binary, versions, env };
 };

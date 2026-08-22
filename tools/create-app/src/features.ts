@@ -151,10 +151,15 @@ export const FEATURES: readonly Feature[] = [
   {
     name: 'openapi',
     source: 'docs',
-    summary: 'OpenAPI 3.1 from the routes own schemas, plus the explorer page.',
+    summary:
+      'OpenAPI 3.1 from the routes own schemas, plus the Swagger UI page.',
     requires: [],
     module: { klass: 'DocsModule', from: './docs/docs.module.js' },
-    dependencies: ['@dunx/openapi', 'zod'],
+    // `swagger-ui-dist` is what the page is: an optional peer of
+    // `@dunx/openapi`, needed if and only if the explorer is mounted. The
+    // `notes` feature declares `@dunx/openapi` too and does not need it, because
+    // it only writes `@ApiDoc` metadata.
+    dependencies: ['@dunx/openapi', 'swagger-ui-dist', 'zod'],
     config: [],
   },
   {

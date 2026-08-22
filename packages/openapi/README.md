@@ -231,22 +231,50 @@ which keeps a viewer's sidebar and its operation list in agreement.
 
 ## The page
 
-`GET /docs` is one self-contained HTML document: a boot `<style>`, the document
-as JSON, the API explorer inlined as a second `<script>`, and **nothing to
-fetch** - no CDN, no `src=`, no `<link>`. It is an API explorer, with a
-disclosure control per operation, an **Authorize** dialog, parameter and schema
-tables, colour-coded status codes, a filter box and a light/dark toggle.
+`GET /docs` is **Swagger UI**, mounted over the document this package generates.
 
-The explorer is a real frontend - Vite, React and Mantine, in
-`internal/openapi-ui` whose **built bundle** is what this package serves.
+```bash
+bun add swagger-ui-dist
+```
 
-None of it is hand-written markup in a backend package, and none of it is
-fetched. `bun run build` writes the tree-shaken bundle into `src/ui-bundle.ts`,
-and `renderPage` inlines that string.
+It is an optional `peerDependency`: needed if and only if the page is served, and
+resolved on the first request for it rather than at boot. An app that serves only
+`/openapi.json` installs nothing and boots fine without it. A missing install
+fails that one route with a message naming the install command.
 
-437 KiB, against `swagger-ui-dist`'s 11.7 MB unpacked and
-`@scalar/api-reference`'s 11 MB. Neither is a dependency this package will take,
-and both would end the no-external-requests guarantee `html.test.ts` asserts.
+dunx used to ship its own explorer here - a React and Mantine app in
+`internal/openapi-ui`, built by Vite and inlined into the page as a 434 KiB
+string. It is deleted. Swagger UI is the reference implementation for reading an
+OpenAPI document, and a hand-built alternative to a mature tool is the failure
+mode `@dunx/queue-dashboard` already demonstrated once.
+
+**What that trade cost, stated rather than glossed:** Swagger UI is 1.7 MiB
+against 434 KiB, or 443 KiB against 121 KiB gzipped - about **3.7x**. So the page
+no longer inlines it. Three routes are mounted instead of one:
+
+| Route                            | What it serves                                  |
+| -------------------------------- | ----------------------------------------------- |
+| `{path}`                         | A ~20 KiB shell with the document embedded       |
+| `{path}/swagger-ui-bundle.js`    | From your `swagger-ui-dist`, cached immutably    |
+| `{path}/swagger-ui.css`          | The same                                        |
+
+The two assets carry `cache-control: public, max-age=31536000, immutable` and the
+installed version as a `?v=`, which is what makes `immutable` honest and busts the
+cache on upgrade. They are `@ApiHidden()`, so they are routed but stay out of the
+document - `{path}` and the JSON route are in it, because those are endpoints
+someone calls.
+
+**The page fetches, and only from your origin.** That is weaker than the old
+guarantee, which was that it fetched nothing at all, and it is what `html.test.ts`
+now asserts: two same-origin relative URLs, no CDN, no `unpkg`, no `jsdelivr`. The
+document itself is still embedded rather than fetched, so Swagger UI boots without
+a round trip and without depending on the JSON route being reachable.
+
+Two details worth knowing before you install it. `swagger-ui-dist` depends on
+`@scarf/scarf`, which reports installs; it honours `SCARF_ANALYTICS=false`. And the
+page uses `BaseLayout` with only the bundle preset, not the `StandaloneLayout` from
+Swagger's own initializer - that needs a second ~1 MiB file and renders a URL bar
+for loading other documents over a page that serves exactly one.
 
 **That bundle is behind `@dunx/openapi/ui`, and it is loaded on demand.** The
 barrel does not import it, and `OpenApiExplorer.page()` reaches it through a

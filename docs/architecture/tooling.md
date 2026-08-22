@@ -134,142 +134,105 @@ standalone: the model to `internal/docs/src/generated/coverage.json`, the badges
 rebuilds the site after `test:cov`, because the first build (inside
 `bun run build`) predates the coverage data.
 
-## The API explorer (`internal/openapi-ui`)
+## The API explorer: built, measured, then replaced by Swagger UI
 
-`@dunx/openapi`'s page was hand-written HTML inside a backend package: a `<style>`
-block, `<details>` for the folding and ~90 lines of inlined DOM code. It had no
-auth handling, no disclosure affordance and printed schemas as
-`JSON.stringify(…, null, 2)`. Growing it further was the wrong direction, so the
-UI is now a frontend workspace whose built bundle the package serves.
+**`internal/openapi-ui` is deleted and `@dunx/openapi` mounts `swagger-ui-dist`.**
+This section is the record of the round trip, because most of what it measured is
+still true and one of its findings governs every package's build.
 
-### The bundle is inlined, and that is what constrains everything
+The page began as hand-written HTML inside a backend package: a `<style>` block,
+`<details>` for folding, and ~90 lines of inlined DOM code with no auth handling and
+schemas printed as `JSON.stringify(…, null, 2)`. Growing that was the wrong
+direction, so it became a Vite + React + Mantine workspace whose built bundle the
+package inlined.
 
-The page's guarantee is that it fetches **nothing** - no CDN, no `src=`, no
-`<link>`. `swagger-ui-dist` (11.7 MB unpacked) and `@scalar/api-reference` (11 MB)
-were rejected over exactly that, and the guarantee did not get cheaper because the
-UI got better. So the bundle is a string in `packages/openapi/src/ui-bundle.ts`,
-written by `internal/openapi-ui/scripts/build.ts` and interpolated into one
-`<script>`. `</` is escaped at build time, not per request.
+That worked, and it was still the wrong answer. Swagger UI is the reference
+implementation for reading an OpenAPI document, and building an alternative to a
+mature tool is the failure mode `@dunx/queue-dashboard` demonstrated once already.
+Rule 1's second half, arrived at the long way.
 
-`ui-bundle.ts` is **generated and committed**. `bun test ./packages` at the root
-and `tsc --noEmit` in a fresh clone both have to work without a Vite run, and the
-publish path must not depend on one. `packages/openapi`'s `build` runs the UI
-build first, so the committed copy cannot go stale.
+### What the explorer cost, and what swagger costs instead
 
-### What it costs - measured
+| Build                           | Raw         | gzip        |
+| ------------------------------- | ----------- | ----------- |
+| react + react-dom, nothing else | 188 KiB     | 60 KiB      |
+| + Mantine, `styles.css` barrel  | 517 KiB     | 128 KiB     |
+| + Mantine, per-component CSS    | 381 KiB     | 110 KiB     |
+| the explorer as shipped         | 434 KiB     | 121 KiB     |
+| **`swagger-ui-dist` 5.32.14**   | **1.7 MiB** | **443 KiB** |
 
-| Build                                     | Raw         | gzip        |
-| ----------------------------------------- | ----------- | ----------- |
-| react + react-dom, nothing else           | 188 KiB     | 60 KiB      |
-| + Mantine, `styles.css` barrel            | 517 KiB     | 128 KiB     |
-| + Mantine, per-component CSS              | 381 KiB     | 110 KiB     |
-| **shipped** (the explorer, per-component) | **437 KiB** | **123 KiB** |
+So the replacement is **3.7x larger gzipped**, and that is the honest cost of the
+decision rather than a footnote to it. Two things follow, and both are in the code:
 
-The served page went from **70 KiB to 458 KiB** (6.5x; 6.6 KiB to ~125 KiB
-gzipped). React is 188 KiB of it and is the floor - Mantine adds ~150 KiB of JS
-and ~80 KiB of CSS on top.
+- **It is not inlined.** 1.7 MiB in every page response would resend it on every
+  load. The two files are served as routes with `cache-control: immutable` and the
+  installed version in the query, so a browser fetches them once.
+- **It is an optional peer, resolved on the first request for the page.** An app
+  serving only `/openapi.json` neither installs nor loads it.
 
-Two decisions came out of measuring rather than guessing:
+Two measurements from the explorer era that are still the reason things are shaped
+as they are: **per-component Mantine CSS** beat the `styles.css` barrel 381 KiB to
+517 KiB, and dropping `Tooltip` and `ScrollArea` for `title=` and `overflow: auto`
+took 490 KiB to 434 KiB because `Tooltip` drags in floating-ui. Both applied to
+`internal/dashboard-ui`, which still exists and still follows them.
 
-- **Per-component CSS, not the barrel.** `@mantine/core/styles.css` is 234 KiB for
-  a dozen components; importing `styles/Accordion.css` and friends is a third of
-  that. The list in `src/styles.ts` is load-bearing - a missing file is an
-  unstyled component, not a build error.
-- **`Tooltip` and `ScrollArea` were dropped** for `title=` and `overflow: auto`,
-  which took 490 KiB to 437 KiB. `Tooltip` drags in floating-ui.
+### `splitting: true`, which outlived the thing that needed it
 
-437 KiB inlined is ~3x smaller than swagger-ui's own bundle and normal for a
-modern web app. What made it the one number worth revisiting was not the bytes but
-**where they were paid**: it landed in a package that otherwise ships ~40 KiB with
-zero runtime dependencies, and it landed at import, on every consumer, whether or
-not `/docs` was ever mounted.
+The explorer used to sit behind a `@dunx/openapi/ui` subpath reached with
+`await import()`, because inlining it put 456 KB into every consumer's
+`dist/index.js` whether or not `/docs` was mounted. That subpath is gone with the
+bundle: there is no large string to split out any more.
 
-### The explorer is behind `@dunx/openapi/ui`, and that needed `splitting: true`
-
-`html.ts` exports `renderShell(document, options, ui)` and takes the script to
-inline as an argument rather than importing it. `src/ui.ts` is the entrypoint that
-pairs it with `UI`, exported as `./ui` in the manifest, and
-`OpenApiExplorer.page()` does `await import('./ui.js')` on the first request for a
-given mount prefix. `page()` is async as a result, and so is the controller
-handler; the per-prefix cache is unchanged, so only the first request pays.
-
-|                 |  inlined | behind `./ui` | pre-explorer baseline |
-| --------------- | -------: | ------------: | --------------------: |
-| `dist/index.js` |  479,596 |    **19,807** |                40,948 |
-| import          | 10.88 ms |   **5.73 ms** |               ~6.1 ms |
-| RSS             | 42.5 MiB |  **37.0 MiB** |              37.0 MiB |
-
-Import and RSS are the median of 15 interleaved `bun` processes each, one import
-and out. The `inlined` column is a bundle rebuilt from the same source with the
-explorer imported statically (480,901 B), so both sides are measured in the same
-session rather than one being quoted from an earlier run; the real pre-split
-`dist/index.js` measured 9.64-11.64 ms over 5 runs, which agrees. The absolute
-figures move with machine load - a second 15-run pass gave 9.45 against 5.19 - so
-the number to hold onto is the **ratio, a stable ~1.8x**, and the RSS delta.
-
-The whole of the explorer's boot cost is recovered. `dist/index.js` is 19,807 B
-plus a 13,132 B shared chunk against a 40,948 B pre-explorer baseline, and
-`dist/ui.js` carries the 447,850 B.
-
-The split turned up a **type-graph** cost that had been shipping unnoticed.
-`UI` was only ever used in a value position, so `html.d.ts` never named it and
-`dist/ui-bundle.d.ts` - a 456 KB single-line declaration holding the literal
-type of a minified bundle - was 456 KB of tarball nobody's tsc read. Exporting
-`UI` from `./ui` would have made every consumer of the subpath parse it.
-
-The generator in `internal/openapi-ui/scripts/build.ts` now emits `export const
-UI: string`, and the widening annotation collapses that declaration from
-**456,550 B to 98 B**. The annotation is load bearing; removing it silently
-restores the 456 KB file.
-
-**The dynamic import alone would have been a no-op**, and that was measured rather
-than assumed. `scripts/build-package.ts` set `splitting: false`, and with splitting
-off `Bun.build` inlines a relative `await import()` into the importing entry: a
-200 KB module behind a dynamic import produced a **200,980 B** entry with
-`splitting: false` and a **350 B** entry plus a chunk with it on. Shipping the
-subpath without flipping the flag would have claimed a win it could not
+**The finding underneath it is not gone, and it still governs
+`scripts/build-package.ts`.** The dynamic import alone would have been a no-op.
+With `splitting: false`, `Bun.build` inlines a relative `await import()` into the
+importing entry: a 200 KB module behind a dynamic import produced a **200,980 B**
+entry with splitting off and a **350 B** entry plus a chunk with it on. Shipping
+the subpath without flipping the flag would have claimed a win it could not
 demonstrate.
 
-`splitting: true` is shared by all eight packages, because there is one build
-script and it stays that way. It turned out to be an improvement for the
-multi-entry ones rather than a risk: a module two subpaths share was previously
-duplicated into both entries, giving a consumer who imports both **two module
-instances**. Sharing a chunk fixes that and shrinks the output - `@dunx/infra`
-127.7 KB → 71.7 KB of dist JS, `@dunx/transform` 10.3 KB → 5.6 KB, `@dunx/auth`
-18.7 KB → 14.8 KB, `@dunx/create-app` 7.5 KB → 5.1 KB.
+`splitting: true` is shared by every package because there is one build script, and
+it turned out to be an improvement for the multi-entry ones rather than a risk: a
+module two subpaths share is emitted once as a chunk instead of duplicated into
+both.
 
-Single-entry packages with no dynamic imports (`@dunx/core`, `@dunx/http`) emit
-byte-identical output. The `bin` chmod, the test-declaration sweep and the
-`bin`-declaration sweep are all keyed off entrypoints, not chunks, so none of
-them changed.
+The other thing that era proved, and that a future contributor should not have to
+rediscover: a generated declaration holding the literal type of a minified bundle
+was **456,550 B** of tarball nobody's `tsc` read, and one `: string` annotation
+collapsed it to 98 B. If anything here is ever generated into a `.ts` constant
+again, annotate its type.
 
-With the boot cost gone, 437 KiB is paid by the person looking at the page, which
-is the right place for it. **`preact/compat` is therefore rejected rather than
-pending**: it would remove ~170 KiB from a cost nobody pays until they ask for it,
-in exchange for running Mantine on a compatibility shim.
+### Markdown and samples came back to the server, then left with the model
 
-### Vite here, `bun build` in `internal/docs`
+`Bun.markdown.html` rendered every description and `sampleFor` pre-computed every
+request body, both in a `model.ts` that fed the explorer a `PageModel`. Swagger UI
+takes a raw OpenAPI document and renders its own markdown and its own samples, so
+`model.ts` is deleted along with `buildModel`, `fieldsFor`, `PageModel` and
+`TryField` - all four of which were public API, which is why this is a major bump.
+
+What the page still does is embed the **document** rather than let Swagger UI fetch
+it with `url`. That costs a round trip and makes the page depend on the JSON route
+being reachable and guarded the same way, and the server already has the bytes.
+
+### The no-external-requests guarantee narrowed, and the test says so
+
+The old page fetched nothing at all, and the assertion had already had to move once
+
+- `expect(page).not.toContain('src=')` is sound over hand-written HTML and
+  meaningless over a minified React bundle that contains `.src=`, `href="` and the
+  literal string `"<script>"` in its own code, so it moved to the **tags**.
+
+It has now narrowed for real, and that is a genuine loss rather than a rephrasing:
+the page does fetch two assets. What `html.test.ts` pins is that both are
+**same-origin relative URLs** and that nothing reaches a CDN, `unpkg`, `jsdelivr` or
+Google Fonts. `examples/full` proves the other half over a real server with a global
+prefix, which a unit test cannot: both assets answer 200 under `/api/docs/`, with
+the immutable header, and the page requests nothing off-origin.
+
+### Vite in `internal/dashboard-ui`, `bun build` in `internal/docs`
 
 The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms and
-took Bun's ~25 % larger output, which is right for a site. Every byte here is
-inlined into a page a backend serves, so Rollup's tree-shaking wins and the ~1.8 s
-is paid once per package build.
-
-### Markdown and samples stay on the server
-
-`Bun.markdown.html` renders every description and `sampleFor` pre-computes every
-request body, both in `packages/openapi/src/model.ts`; the results travel in the
-model. Rendering markdown in the browser would have meant a parser in the bundle,
-and re-implementing `sampleFor` would have meant two of it. This is also what
-keeps the raw-HTML escaping (`noHtmlBlocks`, `noHtmlSpans`, `tagFilter`) in one
-place - the client only ever sees already-escaped HTML.
-
-### The no-external-requests test had to change shape
-
-`expect(page).not.toContain('src=')` was sound over hand-written HTML and is
-meaningless over a minified React bundle, which contains `.src=`, `href="` and the
-literal string `"<script>"` in its own code. The assertion moved to the **tags**:
-the page is stripped of both script bodies, and the remaining markup must carry no
-`src=`, no `<link>` and no off-origin `href`. The whole page is still checked for
-`url(http`, `@import` and CDN hosts. `page-ui.test.ts` then proves it positively -
-it runs the real bundle in happy-dom and asserts zero fetches during boot.
+took Bun's ~25 % larger output, which is right for a site. Both numbers have since
+been re-measured and reversed - see "Documentation site" above. The dashboard bundle
+is inlined into a page a backend serves, so Rollup's tree-shaking wins there and the
+~1.5 s is paid once per package build.

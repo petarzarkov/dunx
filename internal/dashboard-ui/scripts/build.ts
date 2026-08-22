@@ -7,11 +7,14 @@ import { LOGO_FAVICON } from '@dunx/ui';
  * Builds the dashboard page and writes it into `@dunx/dashboard` as a string
  * constant.
  *
- * Identical in shape to `internal/openapi-ui/scripts/build.ts`, and for the same
- * reasons: the package serves the bundle **inlined** - no `src=`, no `<link>`, no
- * CDN - so the artefact it needs is text rather than a file tree, and committing
- * the generated module keeps `bun test` and `tsc --noEmit` working in a fresh
- * clone with no Vite run and keeps Vite off the publish path.
+ * The package serves this bundle **inlined** - no `src=`, no `<link>`, no CDN - so
+ * the artefact it needs is text rather than a file tree, and committing the
+ * generated module keeps `bun test` and `tsc --noEmit` working in a fresh clone
+ * with no Vite run and keeps Vite off the publish path.
+ *
+ * The only build of this shape left. `internal/openapi-ui` was the other and was
+ * deleted, because `swagger-ui-dist` already did what it did; the dashboard's page
+ * has no equivalent to mount, since bull-board covers only the queue panel.
  *
  * `packages/dashboard`'s own `build` runs this first, so the committed copy cannot
  * go stale.
@@ -31,7 +34,10 @@ await build({
   build: {
     outDir: OUT,
     emptyOutDir: true,
-    minify: 'esbuild',
+    // Vite 8 made esbuild an optional peer it does not install, so
+    // `minify: 'esbuild'` throws `Failed to load transformWithEsbuild`. oxc is
+    // Rolldown's own minifier and needs no extra binary.
+    minify: 'oxc',
     cssMinify: true,
     modulePreload: false,
     chunkSizeWarningLimit: 4096,

@@ -86,6 +86,7 @@ export const manifest = (features: readonly Feature[]): string => {
  */
 export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
   zod: '^4.4.3',
+  'swagger-ui-dist': '^5.32.14',
   'drizzle-orm': '^0.45.2',
   'better-auth': '^1.6.25',
   bullmq: '^6.0.5',

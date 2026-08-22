@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { AppFactory, Logger, LogLevel, Module, provide } from '@dunx/core';
+
 import { supportsTz } from './capability.js';
 import { Cron, Interval, OnceOnBoot } from './decorators.js';
 import { ScheduleErrorCode } from './errors.js';
 import { CronExpression, Overlap, ScheduleKind } from './marker.js';
 import { ScheduleModule } from './module.js';
+import { ScheduleOptions } from './options.js';
 import { ScheduleRegistry } from './registry.js';
 
 /** Silent, so a suite asserting on schedules is not read through boot noise. */
@@ -336,5 +338,53 @@ describe('refusals', () => {
 
   it('allows UTC, which is what an ignoring runtime already does', () => {
     expect(() => ScheduleModule.forRoot({ tz: 'UTC' })).not.toThrow();
+  });
+
+  it('accepts a named zone on a Bun that honours the option', () => {
+    if (!supportsTz()) return;
+
+    expect(() =>
+      ScheduleModule.forRoot({ tz: 'America/New_York' }),
+    ).not.toThrow();
+  });
+});
+
+/**
+ * Bun 1.4 both honours `tz` and flips the default from UTC to the container's
+ * local zone. The registry passes `tz` explicitly on every arm, so the flip
+ * cannot reach a schedule - these assert the pinning rather than the option.
+ */
+describe('zones, on a Bun that honours tz', () => {
+  const at = (expression: string, tz: string): string | undefined =>
+    Bun.cron
+      .parse(expression, new Date('2026-01-15T00:00:00Z'), {
+        tz,
+      })
+      ?.toISOString();
+
+  it('resolves the same expression differently per zone', () => {
+    if (!supportsTz()) return;
+
+    expect(at('0 12 * * *', 'UTC')).toBe('2026-01-15T12:00:00.000Z');
+    // UTC+05:30, so an offset no rounding can hide.
+    expect(at('0 12 * * *', 'Asia/Kolkata')).toBe('2026-01-15T06:30:00.000Z');
+  });
+
+  it('pins UTC rather than inheriting the container zone', () => {
+    if (!supportsTz()) return;
+
+    const registry = new ScheduleRegistry(new ScheduleOptions({}), new Quiet());
+    registry.add(
+      { kind: ScheduleKind.CRON, at: '0 12 * * *' },
+      () => undefined,
+      'nightly',
+    );
+
+    const entry = registry.get('nightly');
+    expect(entry?.tz).toBe('UTC');
+    expect(entry?.nextRunAt?.toISOString().endsWith('12:00:00.000Z')).toBe(
+      true,
+    );
+    registry.stopAll();
   });
 });

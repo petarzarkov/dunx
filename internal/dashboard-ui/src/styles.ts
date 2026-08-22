@@ -3,7 +3,7 @@
  * Importing the barrel costs 234 KiB of CSS for a couple of dozen components;
  * importing only what is rendered costs a fraction of that, and every byte here is
  * inlined into the page `@dunx/dashboard` serves. Adding a component means adding
- * its file - the same discipline `internal/openapi-ui` keeps, and for the same
+ * its file - the discipline `internal/openapi-ui` kept too, and for the same
  * reason.
  */
 import '@mantine/core/styles/baseline.css';

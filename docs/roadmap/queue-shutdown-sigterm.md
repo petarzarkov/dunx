@@ -1,14 +1,37 @@
 # Defects in bullmq's Bun adapter and `Bun.RedisClient`
 
-**Open upstream, mitigated here.** Three bugs, of which two are the SIGTERM hang
-this file was opened for; the third was dunx's own and is fixed.
+**Leak A is fixed in Bun 1.4. Leak B is still live.** Three bugs, of which two were
+the SIGTERM hang this file was opened for; the third was dunx's own and is fixed.
 
-`@dunx/core`'s `ShutdownHooks` now bounds the symptom: after the drain completes an
+## Re-measured on Bun 1.4.0 (rev 34cbb9a40), bullmq 6.0.5
+
+The file's own instruction is to re-measure on every Bun and bullmq bump. Half the
+table moved.
+
+| Case                                                     | 1.3.14      | 1.4.0                  |
+| -------------------------------------------------------- | ----------- | ---------------------- |
+| Leak A repro verbatim (black-holed, plain `RedisClient`) | never exits | **exits 0 in 2008 ms** |
+| Leak B repro verbatim (refused, `createBunRedisClient`)  | never exits | exits 0 in 1081 ms     |
+| A real dunx app: `QueueModule` on a refused Redis        | never exits | **never exits**        |
+
+**Leak A is gone.** A pending connect no longer outlives `close()`; the process ends
+one `connectionTimeout` after the attempt, which is the correct behaviour and needs
+no workaround. The three-layer table's black-holed row is clean at the plain-client
+layer for the first time.
+
+**Leak B is not gone, and the verbatim repro no longer demonstrates it.** Two
+lines of raw adapter now happen to exit after a single reconnect attempt, so that
+snippet is no longer the test. The test is the last row: `AppFactory.create` with
+`QueueModule.forRoot({ url: <refused> })`, `enableShutdownHooks(['SIGTERM'], {
+exitAfterMs: false })`, SIGTERM to self - killed at 25 s. With the default
+`exitAfterMs` the forced exit fires and logs its warning, which is how you notice.
+So the reproduction to file upstream is the dunx app, not the snippet below.
+
+`@dunx/core`'s `ShutdownHooks` bounds the symptom: after the drain completes an
 `unref()`d timer gives the process 1000 ms to exit on its own and then calls
 `process.exit`, logging first. A deployment therefore no longer pays its full
-termination grace on every rollout. **Leaks A and B are still live** and the
-reproductions below are still the thing to file; when they are fixed the default
-becomes zero.
+termination grace on every rollout. **Leak B is still live**, so that mitigation
+stays; when it is fixed the default becomes zero.
 
 The first investigation attributed the hang entirely to bullmq. That was half wrong:
 bisecting the stack a layer at a time found a leak in `Bun.RedisClient` on its own,
@@ -17,14 +40,19 @@ userland. All three have a minimal reproduction, ready to file.
 
 | #                                                                          | Symptom                                                                       | Layer          |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------- |
-| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | a pending connect outlives `close()`, process hangs                           | Bun            |
+| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | ~~a pending connect outlives `close()`~~ **fixed in Bun 1.4**                 | Bun            |
 | [B](#leak-b---bullmq-disconnect-cannot-cancel-its-own-reconnect)           | `disconnect()` cannot cancel its own reconnect                                | bullmq adapter |
 | [C](#defect-c---no-connection-is-ever-named-so-getworkers-is-always-empty) | ~~`getWorkers()` always `[]`~~ **fixed - was dunx's own `duplicate` wrapper** | dunx           |
 
-## The measurement that separates them
+## The measurement that separated them
 
 Same process each time: construct a client, attempt one operation, tear down, then
-`SIGTERM` it and wait 12 s. `connectionTimeout: 2000, maxRetries: 0` throughout.
+see whether the process exits by itself. `connectionTimeout: 2000, maxRetries: 0`
+throughout. **`SIGTERM` is the wrong instrument here** and an earlier version of this
+table used it: the default disposition terminates the process whatever is holding the
+loop, so every cell reads "exits". Natural exit is the measurement.
+
+On Bun 1.3.14, where two independent leaks fell straight out of it:
 
 | server                                         | plain `Bun.RedisClient` | `createBunRedisClient` over it | a bullmq `Queue` on it |
 | ---------------------------------------------- | ----------------------- | ------------------------------ | ---------------------- |
@@ -32,8 +60,18 @@ Same process each time: construct a client, attempt one operation, tear down, th
 | refused (`127.0.0.1:6399`, nothing listening)  | exits 0 in ~100 ms      | **never exits**                | **never exits**        |
 | black-holed (`10.255.255.1:6379`, SYN dropped) | **never exits**         | **never exits**                | **never exits**        |
 
-Two independent leaks fall straight out of that table. The healthy row is clean at
-every layer, which is why this has never affected a normal deployment.
+On Bun 1.4.0, same three layers, same three servers - every cell exits:
+
+| server      | plain `Bun.RedisClient` | `createBunRedisClient` | a bullmq `Queue`   |
+| ----------- | ----------------------- | ---------------------- | ------------------ |
+| healthy     | exits 0 in 6 ms         | exits 0 in 80 ms       | exits 0 in 82 ms   |
+| refused     | exits 0 in 4 ms         | exits 1 in 83 ms       | exits 0 in 1079 ms |
+| black-holed | exits 0 in 2006 ms      | exits 1 in 2086 ms     | exits 0 in 3082 ms |
+
+The healthy row was always clean at every layer, which is why this never affected a
+normal deployment. The `exits 1` cells are an unhandled rejection out of the adapter,
+not a hang. **A green table here does not clear leak B** - the dunx app above still
+hangs, so what this rules out is the raw snippets as reproductions, not the defect.
 
 ## Leak A - Bun: a connect that never completes outlives `close()`
 
@@ -51,7 +89,8 @@ await client.send('PING', []).catch(() => undefined);
 client.close();
 ```
 
-Measured on Bun 1.3.14, and none of these change it: `maxRetries: 0`,
+**Fixed in Bun 1.4.0: this exits 0 after 2008 ms, one `connectionTimeout` after the
+attempt.** Measured on Bun 1.3.14, where none of these changed it: `maxRetries: 0`,
 `autoReconnect: false`, `enableOfflineQueue: false` (which rejects in 10 ms without
 waiting and still hangs, so it is the socket and not the command queue),
 `connectionTimeout: 500`, calling `close()` twice, calling `close()` while the
@@ -84,9 +123,13 @@ So once the connection has dropped - which is precisely when a reconnect is
 pending - nothing exposed on `IRedisClient` can cancel it, each attempt fails and
 reschedules, and the process never exits.
 
+**On Bun 1.4 this snippet exits, and the defect is still there.** It survives one
+reconnect attempt and stops; a `Queue`, which keeps more than one connection, does
+not. Use the dunx app from the re-measurement section as the reproduction.
+
 ```ts
 import { createBunRedisClient } from 'bullmq';
-// Nothing listens on 6399. Plain Bun.RedisClient exits cleanly here; this does not.
+// Nothing listens on 6399. Hung on 1.3.14; exits in ~1081 ms on 1.4.0.
 const raw = new Bun.RedisClient('redis://127.0.0.1:6399', {
   connectionTimeout: 2000,
   maxRetries: 0,
@@ -240,8 +283,9 @@ client would have done with a working connection, and it logs a line saying so.
 
 ## Options left
 
-- File leak A with Bun and leak B with bullmq. Both reproductions above are
-  self-contained.
-- Re-measure the table on every Bun and bullmq bump; either fix alone shrinks it.
-  When both land, the forced exit should stop firing for this cause - the warning
-  it logs is how you would notice.
+- **Leak A needs nothing: Bun 1.4 fixed it.** Do not file it.
+- File leak B with bullmq, using the **dunx app** from the re-measurement above
+  rather than the two-line snippet, which no longer hangs.
+- Re-measure on every Bun and bullmq bump, by natural exit rather than by `SIGTERM`.
+  When leak B lands, the forced exit stops firing for this cause - the warning it
+  logs is how you would notice.

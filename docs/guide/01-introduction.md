@@ -120,33 +120,40 @@ on the first request that hits it. It costs boot time, measured below.
 harness produces is the gap between the two, because that gap is dunx's own
 overhead and nothing else.
 
-Run on an AMD Ryzen 9 5950X with 32 logical cores, Bun 1.3.14, oha 1.15.0, 64
-connections, 3 s warmup, 5 measured runs of 5 s, dated 2026-08-03:
+Run on an AMD Ryzen 9 5950X with 32 logical cores, Bun 1.4.0, oha 1.15.0, 64
+connections, 3 s warmup, 5 measured rounds of 5 s, dated 2026-08-22:
 
-| Scenario    | raw `Bun.serve` | `@dunx/http` | % of raw |           Elysia |
-| ----------- | --------------: | -----------: | -------: | ---------------: |
-| `plaintext` |   136,940 req/s |      137,539 |   100.4% |  135,907 (99.2%) |
-| `json`      |   133,311 req/s |      119,912 |    90.0% |  127,524 (95.7%) |
-| `params`    |   128,930 req/s |      124,867 |    96.8% | 129,497 (100.4%) |
-| `validate`  |    89,047 req/s |       75,769 |    85.1% |   74,858 (84.1%) |
+| Scenario    | raw `Bun.serve` | `@dunx/http` | % of raw |          Elysia |
+| ----------- | --------------: | -----------: | -------: | --------------: |
+| `plaintext` |   131,805 req/s |      130,843 |    99.3% | 130,565 (99.1%) |
+| `json`      |   127,439 req/s |      123,022 |    96.5% | 121,831 (95.6%) |
+| `params`    |   122,963 req/s |      115,506 |    93.9% | 119,472 (97.2%) |
+| `validate`  |    85,605 req/s |       79,596 |    93.0% |  75,330 (88.0%) |
 
-Read that with the harness's own rules. A figure at or above 100% would be noise,
-not a win: dunx dispatches through `Bun.serve` and cannot serve a request faster
-than the API it calls. Two full runs of the same code on the same idle machine
-moved dunx's `vs bun-serve` figure by up to 3.2 points, so read a gap of 5 or more
-points as signal and a gap of 2 as nothing.
+So **dunx costs 1% to 7%** against the API it dispatches through, and is level with
+Elysia. Read a ratio as plus or minus one point and anything under three points as a
+tie: two full runs of the same code disagreed by a median of 0.6 points, which is
+what the harness's measured reproducibility works out to.
+
+A figure at or above 100% would be noise, not a win: dunx dispatches through
+`Bun.serve` and cannot serve a request faster than the API it calls.
 
 Startup is the clearest loss, and it is a real one:
 
 | Subject          | cold start to first served request (median of 7) |
 | ---------------- | -----------------------------------------------: |
-| raw `Bun.serve`  |                                          28.7 ms |
-| **`@dunx/http`** |                                      **54.8 ms** |
-| Elysia           |                                          58.1 ms |
-| raw `node:http`  |                                          69.7 ms |
-| Express          |                                         121.0 ms |
-| Fastify          |                                         148.2 ms |
-| NestJS (Express) |                                         269.0 ms |
+| raw `Bun.serve`  |                                          18.6 ms |
+| **`@dunx/http`** |                                      **39.6 ms** |
+| Elysia           |                                          46.5 ms |
+| raw `node:http`  |                                          71.1 ms |
+| Express          |                                         122.2 ms |
+| Fastify          |                                         150.8 ms |
+| NestJS (Express) |                                         273.7 ms |
+
+Both Bun figures roughly halved on Bun 1.4, from 54.8 ms and 28.7 ms, while every
+Node subject in the table stayed within 1% of its previous number. The ratio is what
+has not changed: dunx boots in about twice raw `Bun.serve`'s time, for the compiler's
+parse plus eager resolution of the whole graph.
 
 Roughly twice raw `Bun.serve`, from the `oxc-parser` preload plus eager DI
 resolution and route discovery. That is the trade this architecture makes on

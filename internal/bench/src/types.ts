@@ -30,6 +30,13 @@ export interface Subject {
   readonly validator: string;
   readonly notes: readonly string[];
   /**
+   * The importable package this subject needs, for a `python` subject only. Two
+   * Python subjects with disjoint dependencies have to skip independently, so
+   * the gate asks for this name rather than for one "is Python usable" answer.
+   * It doubles as what `versionOf` reads, since `node_modules` holds neither.
+   */
+  readonly requires?: string;
+  /**
    * Unmeasured warmup this subject needs regardless of `--warmup`. Three seconds
    * warms a JIT-free binary and a Bun process; it does not warm a JVM, and
    * reporting a cold JVM would be as dishonest as under-reporting anything else

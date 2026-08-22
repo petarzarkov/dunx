@@ -25,7 +25,7 @@ that contradicts it is a decision made without measuring.
 
 ## The integrations
 
-Three areas are a mature library wired in rather than dunx code, which is the second
+Five areas are a mature library wired in rather than dunx code, which is the second
 half of the principle above: **never reimplement what Bun does, never invent what a
 mature library already solves.** None of them restates the library's own surface.
 
@@ -36,12 +36,16 @@ mature library already solves.** None of them restates the library's own surface
 | [Queues](./architecture/queues.md)                 | bullmq, over `Bun.RedisClient`                 |
 | [Logging](./architecture/logging.md)               | `@arkv/logger`, and where a fix belongs        |
 
+The fifth is **swagger-ui-dist**, which `@dunx/openapi` mounts for its `/docs` page.
+It is written up with the tooling rather than here, because what it replaced was a
+frontend of dunx's own: [The tools](./architecture/tooling.md), "The API explorer".
+
 ## Shipping it
 
 | Page                                                  | What it settles                                                                     |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | [Building and releasing](./architecture/packaging.md) | The topological build, why versioning is lockstep, and what the scaffolder resolves |
-| [The tools](./architecture/tooling.md)                | The documentation site and the API explorer                                         |
+| [The tools](./architecture/tooling.md)                | The documentation site, and why the API explorer became swagger-ui-dist             |
 | [The MCP server](./architecture/mcp.md)               | What an agent may read out of an app, and why it never boots one                    |
 
 ## What was measured
@@ -49,17 +53,23 @@ mature library already solves.** None of them restates the library's own surface
 The harness exists to attribute costs, not to win. Its own README says these are a
 relative ranking on one machine.
 
-| Page                                                                   | Finding                                                                      |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [The benchmark harness](./architecture/benchmarks.md)                  | How subjects are made comparable, and what the harness refuses to do         |
-| [The cost of request validation](./architecture/cost-of-validation.md) | Reading the body costs roughly three times as much as validating it          |
-| [The cost of request logging](./architecture/cost-of-logging.md)       | Where the 5.38 us goes, and why one `write(2)` per entry was the worst of it |
+| Page                                                                   | Finding                                                                     |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [The benchmark harness](./architecture/benchmarks.md)                  | How subjects are made comparable, and what the harness refuses to do        |
+| [The cost of request validation](./architecture/cost-of-validation.md) | Reading the body costs roughly three times as much as validating it         |
+| [The cost of request logging](./architecture/cost-of-logging.md)       | Where the 4.78 us goes, and why one `write(2)` per entry is the worst of it |
 
 ## What is not here
 
 - **What to build next** is [ROADMAP.md](./ROADMAP.md), with one file per open item
   under [`docs/roadmap/`](./roadmap/). The phase plan used to be in this file and is
   now there, where the rest of the planning already was.
+- **Whether something can be built at all**, with the probe output behind the answer,
+  is [`docs/research/`](./research/) - one file per investigated capability, written to
+  be superseded. The pipeline is research, then roadmap, then here: a measurement
+  arrives in `research/`, an accepted item becomes a `roadmap/` file, and what survives
+  delivery lands in `architecture/`. [research/README.md](./research/README.md) holds
+  the verdict table.
 - **The rules a change has to satisfy** are in `CLAUDE.md` at the repo root. This
   file records decisions; that one constrains them.
 - **How to contribute** is [CONTRIBUTING.md](../CONTRIBUTING.md).

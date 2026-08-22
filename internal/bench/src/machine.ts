@@ -75,13 +75,23 @@ const manifestVersion = async (
 
 export const describeSubjects = async (
   list: readonly Subject[],
+  /** Python package versions from `probePython`, which reads the interpreter. */
+  pythonVersions?: ReadonlyMap<string, string | null>,
 ): Promise<readonly SubjectInfo[]> =>
   Promise.all(
     list.map(async (subject) => ({
       ...subject,
-      version:
-        subject.versionOf === null
-          ? 'n/a'
-          : await manifestVersion(subject, subject.versionOf),
+      version: await subjectVersion(subject, pythonVersions),
     })),
   );
+
+const subjectVersion = async (
+  subject: Subject,
+  pythonVersions?: ReadonlyMap<string, string | null>,
+): Promise<string> => {
+  if (subject.versionOf === null) return 'n/a';
+  if (subject.runtime === 'python') {
+    return pythonVersions?.get(subject.versionOf) ?? 'unknown';
+  }
+  return manifestVersion(subject, subject.versionOf);
+};

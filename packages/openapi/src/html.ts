@@ -1,26 +1,26 @@
-import { buildModel } from './model.js';
+import type { SwaggerAssets } from './swagger.js';
 import type { OpenApiDocument } from './types.js';
 
 /**
- * The page is a shell: a boot stylesheet, the model as JSON, and the explorer
- * bundle inlined. Nothing is fetched - no CDN, no `src=`, no `<link>` - which is
- * the guarantee `html.test.ts` asserts and the reason `swagger-ui-dist` (11.7 MB,
- * and a CDN in practice) was never an option.
+ * The page is a Swagger UI shell: its stylesheet, its bundle, the document
+ * embedded as JSON, and one call to `SwaggerUIBundle`.
  *
- * The UI itself is a real frontend: `internal/openapi-ui`, Vite + Mantine, built and
- * written into `ui-bundle.ts`. Serving the built output rather than hand-written
- * markup is what let the page grow disclosure controls, an auth dialog and a
- * schema renderer without any of that landing in a backend package.
+ * **The stylesheet and the script are same-origin `<link>` and `<script src>`,
+ * which is a change.** The old page inlined a bundle of dunx's own and fetched
+ * nothing at all. Swagger UI is 3.7x the size gzipped, so inlining it would resend
+ * 1.7 MiB on every page load; served as two assets with an immutable cache header
+ * it is fetched once. Nothing reaches a CDN or any other host either way, which is
+ * the half of that guarantee worth keeping and what `html.test.ts` asserts.
  *
- * That bundle arrives as an **argument**, not an import, which is what keeps this
- * module cheap: `./ui.js` is the entrypoint that pairs the two, and it is loaded
- * lazily. See `renderPage` there.
+ * The **document** is still embedded rather than fetched. Swagger UI's `url` option
+ * would have it request the JSON route itself, which costs a round trip and makes
+ * the page depend on that route staying reachable and unguarded; `spec` hands it the
+ * bytes the server already has.
  */
 const BOOT = `
 :root { color-scheme: light dark; }
-html, body { margin: 0; padding: 0; background: #fff; }
-@media (prefers-color-scheme: dark) { html, body { background: #242424; } }
-#root:empty::after {
+html, body { margin: 0; padding: 0; }
+#swagger-ui:empty::after {
   content: 'Loading the API explorer\\2026';
   display: block; padding: 3rem 1.5rem; text-align: center; opacity: .6;
   font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -35,41 +35,55 @@ const escape = (value: string): string => Bun.escapeHTML(value);
  * `<` is the only character that can end the data block early, and escaping it as
  * `<` keeps the text valid JSON. The parser sees the same document either way.
  */
-const embed = (model: unknown): string =>
-  JSON.stringify(model).replaceAll('<', '\\u003c');
+const embed = (value: unknown): string =>
+  JSON.stringify(value).replaceAll('<', '\\u003c');
 
 export interface PageOptions {
   /** Where the JSON document is served, so the page can link to it. */
   readonly jsonHref: string;
   readonly warnings: readonly string[];
+  /** Where the page itself is mounted, which is where its assets hang off. */
+  readonly mountedAt: string;
 }
 
-/** The id the bundle reads its model from. Shared with `internal/openapi-ui`. */
-export const MODEL_ELEMENT_ID = 'dunx-openapi-model';
+/** The id the page reads its document from. */
+export const DOCUMENT_ELEMENT_ID = 'dunx-openapi-document';
 
 export const renderShell = (
   document: OpenApiDocument,
   options: PageOptions,
-  ui: string,
-  favicon: string,
+  assets: SwaggerAssets,
 ): string => {
   const title = `${document.info.title} ${document.info.version}`;
+  const style = assets.href(options.mountedAt, 'swagger-ui.css');
+  const script = assets.href(options.mountedAt, 'swagger-ui-bundle.js');
 
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     `<title>${escape(title)}</title>` +
-    // A `data:` URI, so the tab icon costs no request either - the page's whole
-    // guarantee is that it fetches nothing. Same mark as the documentation site
-    // and the dashboard; `@dunx/ui` declares it once and the bundle build emits
-    // it next to the script.
-    `<link rel="icon" type="image/svg+xml" href="${escape(favicon)}">` +
-    `<style>${BOOT}</style></head><body><div id="root"></div>` +
+    `<link rel="stylesheet" href="${escape(style)}">` +
+    `<style>${BOOT}</style></head><body><div id="swagger-ui"></div>` +
     '<noscript><p class="no-js">This API explorer needs JavaScript. ' +
     `The document itself is at <a href="${escape(options.jsonHref)}">` +
     `${escape(options.jsonHref)}</a>.</p></noscript>` +
-    `<script type="application/json" id="${MODEL_ELEMENT_ID}">` +
-    `${embed(buildModel(document, options))}</script>` +
-    `<script>${ui}</script></body></html>`
+    `<script type="application/json" id="${DOCUMENT_ELEMENT_ID}">` +
+    `${embed(document)}</script>` +
+    `<script src="${escape(script)}"></script>` +
+    // `defer` is not enough on its own: the bundle defines `SwaggerUIBundle` as a
+    // global, so this has to run after it and a plain trailing script does.
+    '<script>(function(){' +
+    `var node=document.getElementById(${embed(DOCUMENT_ELEMENT_ID)});` +
+    'window.ui=SwaggerUIBundle({' +
+    'spec:JSON.parse(node.textContent),' +
+    "dom_id:'#swagger-ui'," +
+    'deepLinking:true,' +
+    'presets:[SwaggerUIBundle.presets.apis],' +
+    'plugins:[SwaggerUIBundle.plugins.DownloadUrl],' +
+    // The standalone preset is a second 1 MiB file and all it adds is the
+    // petstore URL bar, which is wrong for a document served by this app.
+    "layout:'BaseLayout'" +
+    '});})();</script>' +
+    '</body></html>'
   );
 };

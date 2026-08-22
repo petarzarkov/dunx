@@ -425,14 +425,14 @@ dropped is a job.
 `@arkv/timezones` at decoration time so a typo is a boot error rather than a
 schedule that never fires at the hour it names.
 
-Bun 1.3.14 **silently ignores** `Bun.cron`'s `tz` option, and does not declare it
-in bun-types either. Asking for a named zone there is refused outright: it would
-otherwise run at the UTC hour with no error anywhere. `supportsTz()` is exported
-for an app that would rather fail its own boot on that.
+Bun 1.4 honours the option. Bun 1.3.14 **silently ignores** it and does not declare
+it in bun-types either, so asking for a named zone there is refused outright: it
+would otherwise run at the UTC hour with no error anywhere. `supportsTz()` is
+exported for an app that would rather fail its own boot on that.
 
-dunx always passes `{ tz: 'UTC' }` explicitly. That is correct on both sides of
-Bun's 1.4 change: 1.3.x ignores the option and is already UTC, and 1.4 honours it
-and pins UTC rather than drifting to the container's `TZ`.
+dunx always passes `{ tz: 'UTC' }` explicitly when no zone is named. That is correct
+on both sides of Bun's 1.4 change: 1.3.x ignores the option and is already UTC, and
+1.4 honours it and pins UTC rather than drifting to the container's `TZ`.
 
 **`@Interval` and `@OnceOnBoot` are measured from `onInit`,** which is the latest hook
 there is and runs *before* `Bun.serve` binds. So `@OnceOnBoot(0)` fires before the

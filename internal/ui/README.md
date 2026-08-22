@@ -15,12 +15,17 @@ bun run typecheck
 | Workspace               | Ships as                                     |
 | ----------------------- | -------------------------------------------- |
 | `internal/docs`          | the documentation site, built by Vite        |
-| `internal/openapi-ui`    | inlined into the page `@dunx/openapi` serves |
 | `internal/dashboard-ui`  | inlined into the page `@dunx/dashboard` serves |
 
-The point is that someone who reads the dunx docs, opens their own app's `/docs`
-and then its `/_dunx` cannot tell the three were built separately. Every symbol
-here exists because **two or more of them needed it** and had written it twice:
+The point is that someone who reads the dunx docs and then opens their own app's
+`/_dunx` cannot tell the two were built separately. Every symbol here exists because
+**two or more consumers needed it** and had written it twice.
+
+**There were three consumers, and now there are two.** `internal/openapi-ui` was
+deleted when `@dunx/openapi` moved to `swagger-ui-dist`, so several symbols here are
+down to one external consumer. None went to zero - the colour maps and icons the
+explorer used are still used by this package's own `MethodBadge`, `StatusBadge` and
+`ColorSchemeToggle`. Re-check that before deleting one, rather than assuming.
 
 - `Prose` was a rich version in `docs` and a thinner one in `openapi-ui`, so the
   same markdown rendered differently depending on which page you opened it in.

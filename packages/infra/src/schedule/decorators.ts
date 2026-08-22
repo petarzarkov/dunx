@@ -1,4 +1,3 @@
-import { parseCron } from './bun-cron.js';
 import { ScheduleError, ScheduleErrorCode } from './errors.js';
 import { assertZoneUsable } from './options.js';
 import {
@@ -81,7 +80,7 @@ export const Cron = (
   options: CronDecoratorOptions = {},
 ) => {
   try {
-    parseCron(expression, new Date(0));
+    Bun.cron.parse(expression, new Date(0));
   } catch (error) {
     throw new ScheduleError(
       ScheduleErrorCode.INVALID_SCHEDULE,

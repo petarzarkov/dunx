@@ -1,4 +1,0 @@
-# The explorer is a browser bundle, so its tests need a DOM before any module
-# under src/ can load.
-[test]
-preload = ["./happydom.ts"]

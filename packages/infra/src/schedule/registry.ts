@@ -1,5 +1,5 @@
 import type { Logger } from '@dunx/core';
-import { cron, parseCron } from './bun-cron.js';
+
 import { ScheduleError, ScheduleErrorCode } from './errors.js';
 import { Overlap, ScheduleKind, type ScheduleMeta } from './marker.js';
 import { assertZoneUsable, type ScheduleOptions } from './options.js';
@@ -144,7 +144,7 @@ export class ScheduleRegistry {
   #arm(armed: Armed): void {
     const { entry } = armed;
     if (entry.kind === ScheduleKind.CRON) {
-      const handle = cron(
+      const handle = Bun.cron(
         entry.at as Bun.CronWithAutocomplete,
         () => {
           const promise = this.#invoke(armed, 'cron');
@@ -191,7 +191,7 @@ export class ScheduleRegistry {
     if (entry.kind !== ScheduleKind.CRON) return undefined;
     try {
       return (
-        parseCron(entry.at as Bun.CronWithAutocomplete, new Date(), {
+        Bun.cron.parse(entry.at as Bun.CronWithAutocomplete, new Date(), {
           tz: entry.tz ?? 'UTC',
         }) ?? undefined
       );

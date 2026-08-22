@@ -35,6 +35,7 @@ const explorer = async (routes = describeRoutes(UsersModule)) =>
       ],
     }),
     '/openapi.json',
+    '/docs',
   );
 
 test('a contributed path is not re-prefixed by the mount', async () => {

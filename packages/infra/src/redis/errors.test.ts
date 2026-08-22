@@ -2,6 +2,7 @@ import { AppError } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
 import {
   isConnectionError,
+  isServerError,
   RedisError,
   RedisErrorCode,
   toRedisError,
@@ -62,19 +63,41 @@ describe('toRedisError', () => {
   });
 
   /**
-   * Bun reports server-side errors under INVALID_RESPONSE - the response parsed
-   * fine, the command was wrong. Pinned so the surprise stays documented.
+   * Bun 1.3 reported a server-side error as INVALID_RESPONSE, which was
+   * surprising: the response parsed fine, the command was wrong. 1.4 renamed it
+   * to SERVER_ERROR. The code passes through either way, so both are pinned.
    */
-  it('maps a server error under INVALID_RESPONSE', () => {
-    const mapped = toRedisError(
-      'GET',
-      bunError(
-        RedisErrorCode.INVALID_RESPONSE,
-        'WRONGTYPE Operation against a key holding the wrong kind of value',
+  it.each([RedisErrorCode.SERVER_ERROR, RedisErrorCode.INVALID_RESPONSE])(
+    'passes a server error code through: %s',
+    (code) => {
+      const mapped = toRedisError(
+        'GET',
+        bunError(
+          code,
+          'WRONGTYPE Operation against a key holding the wrong kind of value',
+        ),
+      );
+      expect(mapped.code).toBe(code);
+      expect(mapped.message).toContain('WRONGTYPE');
+      expect(isServerError(mapped)).toBe(true);
+    },
+  );
+});
+
+describe('isServerError', () => {
+  it('spans the codes Bun 1.3 and 1.4 use, and nothing else', () => {
+    expect(
+      isServerError(
+        toRedisError('GET', bunError(RedisErrorCode.CONNECTION_CLOSED, 'x')),
       ),
-    );
-    expect(mapped.code).toBe(RedisErrorCode.INVALID_RESPONSE);
-    expect(mapped.message).toContain('WRONGTYPE');
+    ).toBe(false);
+    expect(
+      isServerError(
+        toRedisError('GET', bunError(RedisErrorCode.INVALID_STATE, 'x')),
+      ),
+    ).toBe(false);
+    expect(isServerError(new Error('x'))).toBe(false);
+    expect(isServerError(undefined)).toBe(false);
   });
 });
 

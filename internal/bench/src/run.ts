@@ -2,7 +2,12 @@ import { buildNodeEntries } from './build.js';
 import { repoRoot, root } from './paths.js';
 import { describeSubjects, readMachine } from './machine.js';
 import { spread } from './stats.js';
-import { bunCommand, startSubject, verifySubject } from './subject-process.js';
+import {
+  bunCommand,
+  startSubject,
+  verifySubject,
+  type SubjectProcess,
+} from './subject-process.js';
 import {
   compileSubject,
   isNativeRuntime,
@@ -15,6 +20,8 @@ import {
 import type {
   BenchConfig,
   LoadGenerator,
+  LoadRequest,
+  LoadSample,
   Report,
   Scenario,
   ScenarioResult,
@@ -41,54 +48,101 @@ const measureStartup = async (
   return { subject: subject.id, samplesMs, medianMs: spread(samplesMs).median };
 };
 
-const measureScenario = async (
+const summarise = (
   subject: Subject,
+  scenario: Scenario,
+  runs: readonly LoadSample[],
+): ScenarioResult => ({
+  subject: subject.id,
+  scenario: scenario.id,
+  runs: [...runs],
+  rps: spread(runs.map((run) => run.rps)),
+  latencyP50Ms: spread(runs.map((run) => run.latencyP50Ms)),
+  latencyP99Ms: spread(runs.map((run) => run.latencyP99Ms)),
+  totalErrors: runs.reduce((total, run) => total + run.errors, 0),
+  totalNon2xx: runs.reduce((total, run) => total + run.non2xx, 0),
+});
+
+/**
+ * Measures one scenario across **every** subject, interleaved: all subjects are
+ * brought up and warmed first, then each measured round visits every one of them
+ * in turn.
+ *
+ * **This is the drift defence, and the suite used to lack it.** Measuring each
+ * subject to completion in turn spreads a full run over tens of minutes and maps
+ * whatever the machine does in that time onto subject identity - `bun-serve`
+ * measured first and `django` measured forty minutes later, with their ratio
+ * reported as if the two numbers were simultaneous. Measured: two sequential runs
+ * of identical code disagreed by a median of 3.9% and up to 10.1%, and 15 of 20
+ * cells moved the *same* direction, which is drift rather than sampling noise. The
+ * headline number this harness exists for - `@dunx/http` against raw `Bun.serve` -
+ * is a 0.1% to 8% gap, so it sat entirely inside that.
+ *
+ * `validation.ts`, `logging.ts` and `db-modes.ts` all interleaved from the start,
+ * for differences their comments describe as "often 2-4%". This is the same
+ * argument arriving at the suite whose differences got small enough to need it.
+ *
+ * A fresh process per (subject, scenario) is preserved: nothing inherits another
+ * scenario's warmed-up JIT state or heap, and a subject with a warmup floor (the
+ * JVM) still pays it once rather than once per round.
+ */
+const measureScenarioAcrossSubjects = async (
+  subjects: readonly Subject[],
   scenario: Scenario,
   generator: LoadGenerator,
   config: BenchConfig,
-  exec: readonly string[],
-): Promise<ScenarioResult> => {
-  // A fresh process per (subject, scenario) so no scenario inherits another's
-  // warmed-up JIT state or heap.
-  const server = await startSubject(subject, exec);
+  exec: ReadonlyMap<string, readonly string[]>,
+): Promise<readonly ScenarioResult[]> => {
+  const options = {
+    connections: config.connections,
+    durationSeconds: config.durationSeconds,
+  };
+  const live: {
+    subject: Subject;
+    server: SubjectProcess;
+    request: LoadRequest;
+    runs: LoadSample[];
+  }[] = [];
+
   try {
-    await verifySubject(subject, server.baseUrl, [scenario]);
-    const request = {
-      url: `${server.baseUrl}${scenario.path}`,
-      method: scenario.method,
-      body: scenario.body,
-      contentType: scenario.contentType,
-    };
-    const options = {
-      connections: config.connections,
-      durationSeconds: config.durationSeconds,
-    };
-
-    await generator.run(request, {
-      ...options,
-      durationSeconds: Math.max(
-        config.warmupSeconds,
-        subject.warmupFloorSeconds ?? 0,
-      ),
-    });
-
-    const runs = [];
-    for (let index = 0; index < config.runs; index += 1) {
-      runs.push(await generator.run(request, options));
+    // Brought up one at a time rather than concurrently: `freePort()` binds port
+    // zero, reads the number and closes, so two subjects racing that probe can be
+    // handed the same port.
+    for (const subject of subjects) {
+      const server = await startSubject(subject, exec.get(subject.id) ?? []);
+      await verifySubject(subject, server.baseUrl, [scenario]);
+      live.push({
+        subject,
+        server,
+        request: {
+          url: `${server.baseUrl}${scenario.path}`,
+          method: scenario.method,
+          body: scenario.body,
+          contentType: scenario.contentType,
+        },
+        runs: [],
+      });
     }
 
-    return {
-      subject: subject.id,
-      scenario: scenario.id,
-      runs,
-      rps: spread(runs.map((run) => run.rps)),
-      latencyP50Ms: spread(runs.map((run) => run.latencyP50Ms)),
-      latencyP99Ms: spread(runs.map((run) => run.latencyP99Ms)),
-      totalErrors: runs.reduce((total, run) => total + run.errors, 0),
-      totalNon2xx: runs.reduce((total, run) => total + run.non2xx, 0),
-    };
+    for (const entry of live) {
+      await generator.run(entry.request, {
+        ...options,
+        durationSeconds: Math.max(
+          config.warmupSeconds,
+          entry.subject.warmupFloorSeconds ?? 0,
+        ),
+      });
+    }
+
+    for (let round = 0; round < config.runs; round += 1) {
+      for (const entry of live) {
+        entry.runs.push(await generator.run(entry.request, options));
+      }
+    }
+
+    return live.map((entry) => summarise(entry.subject, scenario, entry.runs));
   } finally {
-    await server.stop();
+    for (const entry of live) await entry.server.stop();
   }
 };
 
@@ -96,6 +150,8 @@ interface Prepared {
   readonly runnable: readonly Subject[];
   readonly exec: ReadonlyMap<string, readonly string[]>;
   readonly toolchains: readonly ToolchainInfo[];
+  /** Package versions read out of the interpreter, for the `python` subjects. */
+  readonly pythonVersions: ReadonlyMap<string, string | null> | undefined;
 }
 
 /**
@@ -124,11 +180,14 @@ const prepare = async (
   for (const runtime of wanted)
     statuses.set(runtime, await probeToolchain(runtime));
 
-  // Probed only when something asks for it, so a run without Django costs no
-  // process spawn.
-  const python = chosen.some((subject) => subject.runtime === 'python')
-    ? await probePython()
-    : null;
+  // Probed only for the packages the chosen subjects actually need, so a run
+  // without a Python subject costs no process spawn and a run with one does not
+  // pay for the other's dependencies.
+  const pythonPackages = chosen
+    .filter((subject) => subject.runtime === 'python')
+    .map((subject) => subject.requires ?? subject.id);
+  const python =
+    pythonPackages.length > 0 ? await probePython(pythonPackages) : null;
 
   const built = new Map<NativeRuntime, { ids: string[]; seconds: number }>();
   const skipped = new Map<NativeRuntime, string[]>();
@@ -147,11 +206,12 @@ const prepare = async (
       continue;
     }
     if (subject.runtime === 'python') {
-      if (python === null || python.version === null) {
+      const needs = subject.requires ?? subject.id;
+      if (python === null || python.versions.get(needs) == null) {
         note(
-          `No importable Django for "${python?.binary ?? 'python3'}" - skipping ` +
+          `No importable ${needs} for "${python?.binary ?? 'python3'}" - skipping ` +
             `${subject.label}. Set BENCH_PYTHON, or BENCH_PYTHONPATH at a ` +
-            'directory holding an extracted Django wheel.',
+            `directory holding an extracted ${needs} wheel.`,
         );
         continue;
       }
@@ -198,7 +258,7 @@ const prepare = async (
     return toolchainInfo(status, tally?.ids ?? [], tally?.seconds ?? 0);
   });
 
-  return { runnable, exec, toolchains };
+  return { runnable, exec, toolchains, pythonVersions: python?.versions };
 };
 
 export const runSuite = async (
@@ -214,7 +274,7 @@ export const runSuite = async (
       `No Node binary at "${nodeBinary}" - skipping the Node subjects. Set BENCH_NODE to include them.`,
     );
   }
-  const { runnable, exec, toolchains } = await prepare(
+  const { runnable, exec, toolchains, pythonVersions } = await prepare(
     chosenSubjects,
     nodeBinary,
     machine.node !== 'not found',
@@ -223,24 +283,35 @@ export const runSuite = async (
   const results: ScenarioResult[] = [];
   const startup: StartupResult[] = [];
 
+  // Startup first and on its own: it spawns and stops one process at a time by
+  // definition, so it cannot be interleaved and does not need to be. Doing it
+  // before any load means no measured round shares the machine with a cold start.
   for (const subject of runnable) {
-    const argv = exec.get(subject.id) ?? [];
-    note(`\n${subject.label}`);
-    startup.push(await measureStartup(subject, argv, config.startupSamples));
-    note(
-      `  startup  ${startup.at(-1)?.medianMs.toFixed(1) ?? '?'} ms (median)`,
+    const measured = await measureStartup(
+      subject,
+      exec.get(subject.id) ?? [],
+      config.startupSamples,
     );
-    for (const scenario of chosenScenarios) {
-      const result = await measureScenario(
-        subject,
-        scenario,
-        generator,
-        config,
-        argv,
-      );
-      results.push(result);
+    startup.push(measured);
+    note(
+      `startup  ${subject.label} ${measured.medianMs.toFixed(1)} ms (median)`,
+    );
+  }
+
+  for (const scenario of chosenScenarios) {
+    note(`\n${scenario.id} - ${runnable.length} subjects, interleaved`);
+    const measured = await measureScenarioAcrossSubjects(
+      runnable,
+      scenario,
+      generator,
+      config,
+      exec,
+    );
+    results.push(...measured);
+    for (const result of measured) {
+      const subject = runnable.find((one) => one.id === result.subject);
       note(
-        `  ${scenario.id.padEnd(10)} ${Math.round(result.rps.median).toLocaleString('en-US').padStart(10)} req/s` +
+        `  ${(subject?.label ?? result.subject).padEnd(30)} ${Math.round(result.rps.median).toLocaleString('en-US').padStart(10)} req/s` +
           `  p99 ${result.latencyP99Ms.median.toFixed(3)} ms` +
           (result.totalErrors + result.totalNon2xx > 0
             ? `  errors ${result.totalErrors} non-2xx ${result.totalNon2xx}`
@@ -266,7 +337,9 @@ export const runSuite = async (
     },
     config,
     toolchains,
-    subjects: await describeSubjects(runnable),
+    // The probe's versions are passed through because `node_modules` holds no
+    // Python package, so `packageVersion` would report `unknown` for both rows.
+    subjects: await describeSubjects(runnable, pythonVersions),
     scenarios: chosenScenarios,
     results,
     startup,

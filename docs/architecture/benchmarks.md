@@ -90,18 +90,51 @@ rule.
 
 What the harness found, in one line each:
 
-- `@dunx/http` costs **6-7%** against raw `Bun.serve` on plain dispatch and JSON,
-  **14%** with a path parameter, **21%** with body validation.
-- It **loses to Elysia on all four scenarios**; the `params` gap (85.8% vs 95.5% of
-  baseline) is the largest and is the clearest optimisation target. Elysia compiles
-  per-route handler code ahead of time.
-- It **boots in ~53 ms against raw `Bun.serve`'s ~27 ms** - the compiler's oxc parse
-  plus eager DI resolution and route discovery. That is the trade this architecture
-  makes knowingly: paid once at boot, never per request. It is a real cost on a
-  short-lived process.
-- **Bun is worth ~2.3x on its own.** The same Hono app scores 101,667 req/s on
-  `Bun.serve` and 43,706 on `node:http`, a larger gap than any two frameworks on the
+From `results/latest.json`, Bun 1.4.0, 2026-08-22, **17 subjects measured
+interleaved**. Read a ratio as plus or minus one point: two full runs of the same code
+disagreed by a median of 0.6 percentage points, which is the harness's measured
+reproducibility since interleaving landed (`internal/bench/README.md`, "Interleaving,
+and the drift it removes").
+
+- `@dunx/http` costs **0.7% / 3.5% / 6.1% / 7.0%** against raw `Bun.serve` across
+  plaintext, json, params and validate. **Under 10% on all four, and inside a point
+  of the ceiling on plain dispatch.**
+- It is **level with Elysia**, not ahead of it and not behind: 99.3 against 99.1,
+  96.5 against 95.6, 93.9 against 97.2, 93.0 against 88.0. Three of those four are
+  inside three points. The earlier claim that dunx lost on all four does not
+  reproduce, and neither does a claim that it wins.
+- The **`params` gap is closed, and it was never what an older bullet here said.**
+  That bullet read "85.8% vs 95.5% of baseline" and named it the clearest
+  optimisation target; neither number matches any committed run. Elysia's
+  ahead-of-time handler compilation is a real difference in approach and the harness
+  has never priced it above the noise.
+- It **boots in 39.6 ms against raw `Bun.serve`'s 18.6 ms** - the compiler's oxc
+  parse plus eager DI resolution and route discovery. Both roughly halved on Bun 1.4,
+  which cut Bun's own startup: the same pair was 54.8 ms and 28.7 ms on 1.3.14, while
+  every Node subject stayed within 1%. The trade is unchanged and is paid once at
+  boot, never per request; it is still a real cost on a short-lived process.
+- **Bun is worth ~3.3x on its own.** The same Hono app scores 124,947 req/s on
+  `Bun.serve` and 38,167 on `node:http`, a larger gap than any two frameworks on the
   same runtime.
+- **Two rows do not add up and should not be quoted yet.** Gin sits at ~56% of
+  `bun-serve` and Axum at ~92%, flat across all four scenarios, and two
+  single-threaded compiled subjects 1.7x apart on plain dispatch is not a framework
+  result. Both are stable to within 2 points across runs, so it reproduces rather
+  than being noise. Per this page's own falsification rule, the first suspect is the
+  harness - most likely how `GOMAXPROCS(1)` handicaps the Go subjects - and not Go.
+
+**The measurement protocol changed with this run**, so it is not comparable with
+anything earlier here.
+
+Subjects used to be measured one at a time to completion. That spread a run over tens
+of minutes and mapped the machine's own drift onto subject identity: `bun-serve` was
+measured first and `django` forty minutes later, with their ratio published as if the
+two numbers were simultaneous.
+
+Measured: two sequential runs of identical code disagreed by a median of 3.9%, with 15
+of 20 cells moving the same direction. Rounds are now interleaved across every
+subject, which took that to 1.2% with no directional bias. The startup column is
+unaffected, since it was never interleaved.
 
 ## The cross-language subjects, and how to read them
 
