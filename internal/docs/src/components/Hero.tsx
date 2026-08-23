@@ -81,28 +81,31 @@ export const Hero = (): React.JSX.Element => (
         <Grid.Col span={{ base: 12, md: 6 }}>
           <Stack gap="lg">
             <Group gap={6}>
-              <Badge variant="light" size="sm" tt="none" radius="sm">
-                Bun-native
-              </Badge>
-              <Badge variant="default" size="sm" tt="none" radius="sm">
-                one version number
-              </Badge>
-              <Badge variant="default" size="sm" tt="none" radius="sm">
-                zero-dependency core
-              </Badge>
+              {site.positioning.chips.map((chip, index) => (
+                <Badge
+                  key={chip}
+                  variant={index === 0 ? 'light' : 'default'}
+                  size="sm"
+                  tt="none"
+                  radius="sm"
+                >
+                  {chip}
+                </Badge>
+              ))}
             </Group>
 
             <Stack gap="sm">
+              {/* Both lines and the paragraph come from `scripts/positioning.ts`,
+                  which the README is generated from too. */}
               <h1 className="hero-title">
-                Everything a service needs.
+                {site.positioning.headline[0]}
                 <br />
-                <span className="gradient-text">On Bun. One version.</span>
+                <span className="gradient-text">
+                  {site.positioning.headline[1]}
+                </span>
               </h1>
               <Text size="lg" c="dimmed" maw="46ch">
-                Controllers, dependency injection, validation, OpenAPI,
-                WebSockets, queues, an ORM, auth, a test harness and an ops
-                dashboard. Released together, tested together, on Bun&apos;s own
-                primitives.
+                {site.positioning.blurb}
               </Text>
             </Stack>
 

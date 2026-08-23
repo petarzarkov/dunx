@@ -16,6 +16,7 @@
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { BLURB, CAPABILITIES, lead } from './positioning.js';
 
 const ROOT = join(import.meta.dir, '..');
 /**
@@ -156,6 +157,69 @@ function buildProjectStructure(entries: PackageEntry[]): string {
 }
 
 /**
+ * The positioning block, which sits in the centered header above every `## `, so
+ * it is delimited by markers rather than by a heading. The comments are invisible
+ * on GitHub and on npm.
+ */
+const MARKED =
+  /(<!-- positioning:start -->\n)([\s\S]*?)(?=<!-- positioning:end -->)/;
+
+function replaceMarked(content: string, newBody: string): SectionResult {
+  if (!MARKED.test(content)) return { kind: 'missing' };
+  const next = content.replace(MARKED, `$1\n${newBody}\n\n`);
+  return next === content
+    ? { kind: 'unchanged', content }
+    : { kind: 'rewritten', content: next };
+}
+
+/** The README's opening, from the one place it is written. */
+function buildPositioning(): string {
+  return [`**${lead()}**`, '', wrap(BLURB)].join('\n');
+}
+
+/** The capability table, from the same place. */
+function buildCapabilities(): string {
+  const need = Math.max(
+    ...CAPABILITIES.map((c) => c.need.length),
+    'You need'.length,
+  );
+  const gives = Math.max(
+    ...CAPABILITIES.map((c) => c.gives.length),
+    'dunx gives you'.length,
+  );
+  const row = (a: string, b: string): string =>
+    `| ${a.padEnd(need)} | ${b.padEnd(gives)} |`;
+  return [
+    'Elysia and Hono hand you a router, and everything above it is yours to choose',
+    'and keep in step. This is the other trade: one dependency, one release train.',
+    '',
+    row('You need', 'dunx gives you'),
+    `| ${'-'.repeat(need)} | ${'-'.repeat(gives)} |`,
+    ...CAPABILITIES.map((c) => row(c.need, c.gives)),
+    '',
+    'Every one of those is a Bun primitive or a best-in-class library wired to one,',
+    'never a reimplementation. Each is opt-in: `@dunx/core` has zero dependencies,',
+    'and an app that imports no queue installs no queue.',
+  ].join('\n');
+}
+
+/** Hard-wrapped to the width the rest of the file uses. */
+function wrap(text: string, width = 78): string {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    if (line === '') line = word;
+    else if (`${line} ${word}`.length <= width) line += ` ${word}`;
+    else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line !== '') lines.push(line);
+  return lines.join('\n');
+}
+
+/**
  * Everything between a `## ` header and the next one, or the end of the file.
  */
 const sectionPattern = (heading: string): RegExp =>
@@ -203,11 +267,27 @@ const check = process.argv.includes('--check');
 interface Target {
   readonly file: string;
   readonly path: string;
+  /** The `## ` heading, or `positioning` for the marker-delimited header block. */
   readonly heading: string;
   readonly body: string;
+  /** Delimited by `<!-- positioning:* -->` rather than by a heading. */
+  readonly marked?: true;
 }
 
 const targets: readonly Target[] = [
+  {
+    file: 'README.md',
+    path: README_PATH,
+    heading: 'positioning',
+    body: buildPositioning(),
+    marked: true,
+  },
+  {
+    file: 'README.md',
+    path: README_PATH,
+    heading: 'What you get',
+    body: buildCapabilities(),
+  },
   {
     file: 'README.md',
     path: README_PATH,
@@ -223,27 +303,39 @@ const targets: readonly Target[] = [
 ];
 
 /**
- * Both files are resolved before either is written.
+ * Every file is resolved before any is written.
  *
- * The previous version wrote README.md and then aborted on CONTRIBUTING.md, which
+ * An earlier version wrote README.md and then aborted on CONTRIBUTING.md, which
  * left the repo half-regenerated - the state most likely to get committed without
  * anyone noticing, because the file someone was looking at did change.
+ *
+ * A file's targets fold over one running string rather than each reading from
+ * disk. Three blocks live in README.md now, and reading it fresh per target meant
+ * the last write won and the other two were silently dropped.
  */
+const contents = new Map<string, string>();
 const resolved: { readonly target: Target; readonly result: SectionResult }[] =
-  targets.map((target) => ({
-    target,
-    result: replaceSection(
-      readFileSync(target.path, 'utf8'),
-      target.heading,
-      target.body,
-    ),
-  }));
+  targets.map((target) => {
+    const current =
+      contents.get(target.path) ?? readFileSync(target.path, 'utf8');
+    const result = target.marked
+      ? replaceMarked(current, target.body)
+      : replaceSection(current, target.heading, target.body);
+    if (result.kind !== 'missing') contents.set(target.path, result.content);
+    return { target, result };
+  });
+
+/** How a target names itself in an error: a heading, or its marker pair. */
+const describe = (target: Target): string =>
+  target.marked
+    ? `"<!-- ${target.heading}:start -->"`
+    : `"## ${target.heading}"`;
 
 const missing = resolved.filter(({ result }) => result.kind === 'missing');
 if (missing.length > 0) {
   for (const { target } of missing) {
     console.error(
-      `No "## ${target.heading}" section found in ${target.file}. Aborting.`,
+      `No ${describe(target)} block found in ${target.file}. Aborting.`,
     );
   }
   process.exit(1);
@@ -254,21 +346,20 @@ const stale = resolved.filter(({ result }) => result.kind === 'rewritten');
 if (check) {
   if (stale.length === 0) {
     console.log(
-      `Both generated blocks are current (${entries.length} packages).`,
+      `All ${targets.length} generated blocks are current (${entries.length} packages).`,
     );
     process.exit(0);
   }
   for (const { target } of stale) {
     console.error(
-      `${target.file} has a stale "## ${target.heading}" block. Run \`bun run gen:readme\`.`,
+      `${target.file} has a stale ${describe(target)} block. Run \`bun run gen:readme\`.`,
     );
   }
   process.exit(1);
 }
 
-for (const { target, result } of resolved) {
-  if (result.kind === 'rewritten')
-    writeFileSync(target.path, result.content, 'utf8');
+for (const path of new Set(stale.map(({ target }) => target.path))) {
+  writeFileSync(path, contents.get(path) as string, 'utf8');
 }
 
 const names = entries.map((e) => e.pkg.name).join(', ');

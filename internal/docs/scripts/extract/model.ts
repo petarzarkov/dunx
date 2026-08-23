@@ -332,9 +332,21 @@ export interface BenchModel {
  * documentation, because none of `#/` reads either - those load per route from
  * `generated/guides/<slug>.json` and `generated/packages/<dir>.json`.
  */
+/**
+ * What dunx is, read from `scripts/positioning.ts` rather than written here. The
+ * hero and the README's opening are the same claim to the same reader, and they
+ * drifted inside one release when each held its own copy.
+ */
+export interface Positioning {
+  readonly headline: readonly [string, string];
+  readonly blurb: string;
+  readonly chips: readonly string[];
+}
+
 export interface SiteIndex {
   readonly generatedAt: string;
   readonly repoUrl: string;
+  readonly positioning: Positioning;
   readonly packages: readonly PackageMeta[];
   readonly guides: readonly GuideMeta[];
 }

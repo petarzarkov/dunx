@@ -4,9 +4,15 @@
 
 # dunx
 
-**Everything a service needs, on Bun, under one version number.** Controllers,
-DI, validation, OpenAPI, WebSockets, queues, an ORM, auth, a test harness and an
-ops dashboard - released together, tested together.
+<!-- positioning:start -->
+
+**Everything a service needs. On Bun. One version.**
+
+Controllers, dependency injection, validation, OpenAPI, WebSockets, queues, an
+ORM, auth, a test harness and an ops dashboard. Released together, tested
+together, on Bun's own primitives.
+
+<!-- positioning:end -->
 
 [![CI](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml/badge.svg)](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml)
 [![coverage](https://petarzarkov.github.io/dunx/badges/coverage.svg)](https://petarzarkov.github.io/dunx/#/coverage)
@@ -25,21 +31,21 @@ bunx @dunx/create-app my-api
 Elysia and Hono hand you a router, and everything above it is yours to choose
 and keep in step. This is the other trade: one dependency, one release train.
 
-| You need                | dunx gives you                                                        |
-| ----------------------- | ---------------------------------------------------------------------- |
-| Structure               | Controllers, scoped modules, constructor DI, lifecycle hooks           |
-| Requests                | `Bun.serve` routing, middleware, guards, CORS, compression, throttling |
-| Validation              | Standard Schema, so zod, Valibot or ArkType all drop in                |
-| API documentation       | OpenAPI 3.1 from the schemas the routes already validate, Swagger UI   |
-| Realtime                | WebSocket gateways on the same port, with a Redis relay for many nodes |
-| Data                    | drizzle over `bun:sqlite` and `Bun.SQL`, transactions, seeds, paging   |
-| Background work         | bullmq over `Bun.RedisClient`, sandboxed processors, `@Cron`           |
-| Storage and images      | One `Storage` contract over `Bun.file` and `Bun.S3Client`, `Bun.Image` |
-| Auth                    | better-auth mounted, a session guard, `Bun.password` hashing           |
-| Calling out             | An HTTP client with retry, backoff and trace propagation               |
-| Operating it            | Health checks, structured logging, an ops dashboard, bull-board        |
-| Testing                 | The real container with bindings replaced, a real server on port 0     |
-| Tooling                 | A scaffolder, and an MCP server so an agent can read your app          |
+| You need           | dunx gives you                                                         |
+| ------------------ | ---------------------------------------------------------------------- |
+| Structure          | Controllers, scoped modules, constructor DI, lifecycle hooks           |
+| Requests           | `Bun.serve` routing, middleware, guards, CORS, compression, throttling |
+| Validation         | Standard Schema, so zod, Valibot or ArkType all drop in                |
+| API documentation  | OpenAPI 3.1 from the schemas the routes already validate, Swagger UI   |
+| Realtime           | WebSocket gateways on the same port, with a Redis relay for many nodes |
+| Data               | drizzle over `bun:sqlite` and `Bun.SQL`, transactions, seeds, paging   |
+| Background work    | bullmq over `Bun.RedisClient`, sandboxed processors, `@Cron`           |
+| Storage and images | One `Storage` contract over `Bun.file` and `Bun.S3Client`, `Bun.Image` |
+| Auth               | better-auth mounted, a session guard, `Bun.password` hashing           |
+| Calling out        | An HTTP client with retry, backoff and trace propagation               |
+| Operating it       | Health checks, structured logging, an ops dashboard, bull-board        |
+| Testing            | The real container with bindings replaced, a real server on port 0     |
+| Tooling            | A scaffolder, and an MCP server so an agent can read your app          |
 
 Every one of those is a Bun primitive or a best-in-class library wired to one,
 never a reimplementation. Each is opt-in: `@dunx/core` has zero dependencies,
