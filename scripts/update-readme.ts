@@ -16,7 +16,7 @@
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLURB, CAPABILITIES, lead } from './positioning.js';
+import { BLURB, CAPABILITIES, lead, SHOWCASE } from './positioning.js';
 
 const ROOT = join(import.meta.dir, '..');
 /**
@@ -177,6 +177,19 @@ function buildPositioning(): string {
   return [`**${lead()}**`, '', wrap(BLURB)].join('\n');
 }
 
+/** Real applications, from the same place. */
+function buildShowcase(): string {
+  return SHOWCASE.flatMap((app) => [
+    `### [${app.name}](${app.repo})${app.url === undefined ? '' : ` - [live](${app.url})`}`,
+    '',
+    wrap(app.what),
+    '',
+    wrap(
+      `${app.scale}, on ${app.packages.map((name) => `\`@dunx/${name}\``).join(', ')}.`,
+    ),
+  ]).join('\n');
+}
+
 /** The capability table, from the same place. */
 function buildCapabilities(): string {
   const need = Math.max(
@@ -287,6 +300,12 @@ const targets: readonly Target[] = [
     path: README_PATH,
     heading: 'What you get',
     body: buildCapabilities(),
+  },
+  {
+    file: 'README.md',
+    path: README_PATH,
+    heading: 'Built with dunx',
+    body: buildShowcase(),
   },
   {
     file: 'README.md',

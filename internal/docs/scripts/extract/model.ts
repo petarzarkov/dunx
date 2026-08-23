@@ -343,10 +343,21 @@ export interface Positioning {
   readonly chips: readonly string[];
 }
 
+/** A real application built on dunx, from `scripts/positioning.ts`. */
+export interface ShowcaseApp {
+  readonly name: string;
+  readonly what: string;
+  readonly repo: string;
+  readonly url?: string;
+  readonly scale: string;
+  readonly packages: readonly string[];
+}
+
 export interface SiteIndex {
   readonly generatedAt: string;
   readonly repoUrl: string;
   readonly positioning: Positioning;
+  readonly showcase: readonly ShowcaseApp[];
   readonly packages: readonly PackageMeta[];
   readonly guides: readonly GuideMeta[];
 }

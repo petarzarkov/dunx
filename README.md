@@ -164,8 +164,6 @@ Reproduce it with `bun run --filter '@dunx/bench' start`; the methodology is in
 
 ## When not to use it
 
-Being honest about this up front is cheaper than a disappointed issue later.
-
 - **You do not want DI.** Elysia and Hono own that space, they are mature, and
   they are faster to learn.
 - **Boot time is your critical number.** 55 ms is fine for a service that starts
@@ -177,10 +175,21 @@ Being honest about this up front is cheaper than a disappointed issue later.
   `Bun.password` are load-bearing throughout.
 - **You want a mature third-party ecosystem.** There is not one yet.
 
+## Built with dunx
+
+### [Firecracker](https://github.com/petarzarkov/firecracker)
+
+A provably-fair crash game: bet during the window, watch the rocket climb,
+cash out before it explodes. Every round is verifiable after the fact.
+
+21 modules, 8 controllers, a WebSocket gateway and 4 job handlers across 165
+backend files, on `@dunx/core`, `@dunx/http`, `@dunx/infra`, `@dunx/auth`,
+`@dunx/openapi`, `@dunx/testing`, `@dunx/transform`.
+
 ## Examples
 
-A ladder, not one per package. All four are kept alive by CI, and each exits 0
-with no database, Redis or S3 installed.
+Each is kept alive by CI, and each exits 0 with no database, Redis or S3
+installed.
 
 | Example                                      | Answers                                                              |
 | -------------------------------------------- | -------------------------------------------------------------------- |

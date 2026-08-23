@@ -18,7 +18,12 @@ import { highlight, paletteCss, startHighlighter } from './highlight';
 import { ALL_SAMPLES, langOf } from '../src/samples';
 import { extractPackage, type Manifest } from './extract/index';
 import { parseChangelog } from '../../../scripts/changelog.js';
-import { BLURB, CHIPS, HEADLINE } from '../../../scripts/positioning.js';
+import {
+  BLURB,
+  CHIPS,
+  HEADLINE,
+  SHOWCASE,
+} from '../../../scripts/positioning.js';
 import type {
   CoverageModel,
   GuidePage,
@@ -316,6 +321,7 @@ const site: SiteIndex = {
   generatedAt: new Date().toISOString(),
   repoUrl: REPO_URL,
   positioning: { headline: HEADLINE, blurb: BLURB, chips: CHIPS },
+  showcase: SHOWCASE,
   packages: packages.map((pkg) => ({
     name: pkg.name,
     dir: pkg.dir,

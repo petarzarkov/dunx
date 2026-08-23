@@ -57,6 +57,64 @@ const STEPS = [
  * A strip rather than a section: these are other people's libraries, and the
  * point being made is that dunx does not compete with them.
  */
+/**
+ * Applications that are not in this repo. An evaluator deciding whether to depend
+ * on a solo-maintained framework wants to see one, and the numbers are counted
+ * from that app's own source rather than described.
+ */
+const BuiltWith = (): React.JSX.Element =>
+  site.showcase.length === 0 ? (
+    <></>
+  ) : (
+    <Container size="lg" component="section">
+      <Stack gap="md">
+        <Stack gap={6}>
+          <Title order={2} size="h2">
+            Built with dunx
+          </Title>
+          <Text c="dimmed" maw="74ch">
+            Real applications, outside this repository.
+          </Text>
+        </Stack>
+        {site.showcase.map((app) => (
+          <Card key={app.name} withBorder radius="md" padding="lg">
+            <Stack gap="xs">
+              <Group gap="sm" align="baseline">
+                <Anchor href={app.repo} target="_blank" fw={700} fz="lg">
+                  {app.name}
+                </Anchor>
+                {app.url !== undefined && (
+                  <Anchor href={app.url} target="_blank" size="sm">
+                    live
+                  </Anchor>
+                )}
+              </Group>
+              <Text c="dimmed" maw="74ch">
+                {app.what}
+              </Text>
+              <Text size="sm" c="dimmed" maw="74ch">
+                {app.scale}.
+              </Text>
+              <Group gap={6}>
+                {app.packages.map((name) => (
+                  <Badge
+                    key={name}
+                    variant="default"
+                    size="sm"
+                    tt="none"
+                    radius="sm"
+                  >
+                    @dunx/{name}
+                  </Badge>
+                ))}
+              </Group>
+            </Stack>
+          </Card>
+        ))}
+      </Stack>
+    </Container>
+  );
+
 const Integrations = (): React.JSX.Element => (
   <Container size="lg" component="section">
     <Stack gap="md">
@@ -241,6 +299,7 @@ export const Home = (): React.JSX.Element => (
       </Container>
       <Honesty />
       <Integrations />
+      <BuiltWith />
       <Examples />
       <Packages />
       <GetStarted />
