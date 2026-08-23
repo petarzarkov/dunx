@@ -88,7 +88,7 @@ describe('renderRelease', () => {
       commit('b'.repeat(40), 'feat: something else'),
     ]);
 
-    expect(section).toContain('\ngate publishing behind a release commit\n');
+    expect(section).toContain('\nGate publishing behind a release commit\n');
     expect(section).not.toContain('- gate publishing');
     expect(section.indexOf('gate publishing')).toBeLessThan(
       section.indexOf('### Features'),
@@ -97,7 +97,7 @@ describe('renderRelease', () => {
 
   it('renders a release whose only commit is the release commit', () => {
     const section = render([commit('a'.repeat(40), 'release(patch): one fix')]);
-    expect(section).toContain('one fix');
+    expect(section).toContain('One fix');
     expect(section).not.toContain('###');
     expect(section).not.toContain('No recorded changes.');
   });
@@ -207,7 +207,7 @@ describe('the release commit body', () => {
     });
 
     expect(section).toContain('## 2.1.2 - 2026-08-19');
-    expect(section).toContain('a short subject');
+    expect(section).toContain('A short subject');
     expect(section).toContain('The longer prose.');
     expect(section).toContain('A second paragraph.');
   });
@@ -269,8 +269,8 @@ describe('the release commit body', () => {
       repoUrl: REPO,
     });
 
-    expect(bare).toContain('subject only');
-    expect(bare.trim().endsWith('subject only')).toBe(true);
+    expect(bare).toContain('Subject only');
+    expect(bare.trim().endsWith('Subject only')).toBe(true);
   });
 
   /* A body on an ordinary commit is not release prose and must not be lifted. */

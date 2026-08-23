@@ -109,6 +109,26 @@
   display: none;
 }
 
+/* The scrollbar is hidden, so on a narrow screen the command just looked cut off
+   at "@du" with nothing to say it scrolled. It has spaces in it, so wrapping is
+   the honest answer and the button drops to its own row rather than being
+   squeezed out of the box. */
+@media (max-width: 36em) {
+  .install {
+    flex-wrap: wrap;
+  }
+
+  .install-cmd {
+    flex: 1 1 100%;
+    overflow-x: visible;
+    white-space: normal;
+  }
+
+  .install > button {
+    margin-left: auto;
+  }
+}
+
 /* A flex item shrinks by default, which clipped the label to "Cop" on a phone. */
 .install > button {
   flex: 0 0 auto;

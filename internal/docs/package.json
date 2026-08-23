@@ -10,7 +10,8 @@
     "generate": "bun ./scripts/generate.ts",
     "preview": "vite preview",
     "test": "bun test --bail --timeout 20000",
-    "typecheck": "bun run generate && tsc --noEmit"
+    "typecheck": "bun run generate && tsc --noEmit",
+    "shots": "bun run build && bun ./scripts/shots.ts"
   },
   "dependencies": {
     "@dunx/ui": "workspace:*",
@@ -30,6 +31,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^6.0.5",
+    "playwright": "^1.62.1",
     "vite": "^8.2.0"
   }
 }

@@ -10,14 +10,31 @@
  * `--prose-max` is a variable rather than a value because the constraint differs
  * per page: a documentation column wants a reading measure, a schema description
  * inside a card wants the card.
+ *
+ * `--prose-measure` caps the text-level children instead of the container, so a
+ * paragraph gets a reading measure while a code block, a table or an image keeps
+ * the full column. Capping `.prose` itself was tried and reverted: it left a third
+ * of a wide window empty, because the wide things are exactly the ones that want
+ * the room. Off by default; a consumer opts in.
  */
 :root {
   --prose-max: 100%;
+  --prose-measure: none;
 }
 
 .prose {
   max-width: var(--prose-max);
   line-height: 1.65;
+}
+
+.prose p,
+.prose li,
+.prose blockquote,
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  max-width: var(--prose-measure);
 }
 
 .prose > :first-child {
@@ -74,13 +91,14 @@
   text-decoration: underline;
 }
 
+/* A tint and no border. The border turned every inline symbol into a boxed chip,
+   and a sentence naming seven of them read as a ransom note. */
 .prose code {
   font-family: var(--mantine-font-family-monospace);
   font-size: 0.85em;
-  padding: 0.1em 0.35em;
+  padding: 0.1em 0.3em;
   border-radius: 4px;
   background: var(--mantine-color-default);
-  border: 1px solid var(--mantine-color-default-border);
 }
 
 .prose pre {

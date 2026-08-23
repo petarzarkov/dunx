@@ -85,25 +85,24 @@ export const Hero = (): React.JSX.Element => (
                 Bun-native
               </Badge>
               <Badge variant="default" size="sm" tt="none" radius="sm">
-                zero-dependency core
+                one version number
               </Badge>
               <Badge variant="default" size="sm" tt="none" radius="sm">
-                no reflect-metadata
+                zero-dependency core
               </Badge>
             </Group>
 
             <Stack gap="sm">
               <h1 className="hero-title">
-                Enterprise structure.
+                Everything a service needs.
                 <br />
-                <span className="gradient-text">Bun-native speed.</span>
+                <span className="gradient-text">On Bun. One version.</span>
               </h1>
-              <Text size="lg" c="dimmed" maw={540}>
-                Inversion of control, declarative modules and typed
-                configuration, on Bun&apos;s own primitives. Constructor
-                injection with nothing annotating it - no{' '}
-                <code>@Injectable()</code>, no <code>@Inject()</code>, no{' '}
-                <code>reflect-metadata</code>.
+              <Text size="lg" c="dimmed" maw="46ch">
+                Controllers, dependency injection, validation, OpenAPI,
+                WebSockets, queues, an ORM, auth, a test harness and an ops
+                dashboard. Released together, tested together, on Bun&apos;s own
+                primitives.
               </Text>
             </Stack>
 

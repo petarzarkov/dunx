@@ -218,7 +218,7 @@ export const Benchmarks = (): React.JSX.Element => {
       <Stack gap="xl">
         <Stack gap="xs">
           <Title order={1}>Benchmarks</Title>
-          <Text c="dimmed" maw={760}>
+          <Text c="dimmed" maw="74ch">
             <code>@dunx/http</code> against raw <code>Bun.serve</code>, Elysia,
             Hono, Fastify, Express and bare <code>node:http</code>. The number
             worth having is the gap to raw <code>Bun.serve</code>: dunx is a

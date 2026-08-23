@@ -171,7 +171,11 @@ export const renderRelease = ({
     .filter((entry): entry is Entry => entry !== null);
 
   const lines = [`## ${version} - ${date}`, ''];
-  if (summary) lines.push(sanitize(summary), '');
+  // The commit convention is a lowercase subject; this renders as a sentence of
+  // its own above the notes, where a lowercase opening reads as a typo.
+  if (summary) {
+    lines.push(sanitize(summary[0]?.toUpperCase() + summary.slice(1)), '');
+  }
   if (notes) lines.push(sanitize(notes), '');
 
   for (const [key, heading] of GROUPS) {

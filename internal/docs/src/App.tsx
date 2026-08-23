@@ -3,6 +3,7 @@ import {
   Anchor,
   Box,
   Burger,
+  Divider,
   Group,
   NavLink,
   ScrollArea,
@@ -69,6 +70,16 @@ const Navigation = ({
   onNavigate: () => void;
 }): React.JSX.Element => (
   <>
+    {/* The site's own two pages, ahead of the guide and separated from it. They
+        used to sit unlabelled above the first section heading, which read as two
+        entries someone had forgotten to file. */}
+    <NavLink
+      component="a"
+      href={href(RouteKind.Home)}
+      label="Overview"
+      active={route.kind === RouteKind.Home}
+      onClick={onNavigate}
+    />
     <NavLink
       component="a"
       href={href(RouteKind.Bench)}
@@ -79,13 +90,7 @@ const Navigation = ({
       active={route.kind === RouteKind.Bench}
       onClick={onNavigate}
     />
-    <NavLink
-      component="a"
-      href={href(RouteKind.Home)}
-      label="Overview"
-      active={route.kind === RouteKind.Home}
-      onClick={onNavigate}
-    />
+    <Divider my="sm" />
 
     {guideSections().map(([section, pages]) => (
       <Fragment key={section}>

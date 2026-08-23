@@ -63,13 +63,13 @@ export const Guide = ({ slug }: { slug: string }): React.JSX.Element => {
       <Group align="flex-start" wrap="nowrap" gap="xl">
         <Stack gap="md" style={{ minWidth: 0, flex: 1 }}>
           <Title order={1}>{guide.title}</Title>
+          {/* Dimmed, this read as a caption rather than something to click. */}
           <Anchor
             href={`${site.repoUrl}/blob/main/${guide.source}`}
             target="_blank"
             size="xs"
-            c="dimmed"
           >
-            {guide.source} on GitHub
+            Edit {guide.source} on GitHub
           </Anchor>
           {body ? (
             <Prose html={body.html} />

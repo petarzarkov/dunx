@@ -220,12 +220,6 @@ const Packages = (): React.JSX.Element => (
 export const Home = (): React.JSX.Element => (
   <Box className="landing">
     <Hero />
-    {/* First content section on purpose: "how much faster" is what a reader came
-        for, and burying it under the feature grid answered a question nobody had
-        asked yet. */}
-    <div className="speed-lead">
-      <SpeedPanel />
-    </div>
     <Stats />
     <div className="landing-sections">
       <Features />
@@ -234,6 +228,14 @@ export const Home = (): React.JSX.Element => (
       </Container>
       <ShowMeTheCode />
       <RequestFlow />
+      {/* Speed sits with the benchmark summary rather than above the fold. It
+          used to lead, on the reasoning that it is what a reader came for; a
+          throughput chart as the first thing after the hero invites a benchmark
+          argument before the reader knows what the thing is. What it is comes
+          first now, and the numbers are the reassurance underneath. */}
+      <div className="speed-lead">
+        <SpeedPanel />
+      </div>
       <Container size="lg" component="section">
         <BenchSummary />
       </Container>

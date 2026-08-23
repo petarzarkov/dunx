@@ -1,9 +1,40 @@
-/* The prose fills its column and the layout bounds it, rather than a `ch` cap
-   leaving a third of a wide window empty - which is what the side-by-side against
-   the Nest docs showed. The guide container is capped at 1560px, and the sidebar
-   and contents rail take their share, so the text column lands near 1050px. */
+/* The prose container fills its column and the layout bounds it, rather than a
+   `ch` cap leaving a third of a wide window empty - which is what the side-by-side
+   against the Nest docs showed. Code blocks, tables and images want that room.
+
+   Paragraphs do not. That reasoning held for the guide, where a sidebar and a
+   contents rail bound the column at ~107 characters, and failed on the package
+   pages, which have one rail and measured 139. So the cap is on the text-level
+   children only: prose reads at 74 characters and everything wide stays wide. */
 :root {
   --prose-max: 100%;
+  --prose-measure: 74ch;
+}
+
+/* A short page left the footer floating with 525px of dead space under it. The
+   shell is a column, the route fills what is left, and the footer sits after it. */
+.mantine-AppShell-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  /* The shell is a flex row and this is one of its items, so without an explicit
+     floor its min-content width is the widest code block on the page and the
+     whole document scrolls sideways on a phone. */
+  min-width: 0;
+}
+
+/* `width: 100%` is what keeps this honest. A flex item stretches to its
+   min-content width on the cross axis, and a code block's min-content is the
+   longest line in it - so on a phone the whole document scrolled sideways rather
+   than the block scrolling inside itself. An explicit cross size clamps it, and
+   the overflow goes back where it belongs. */
+.mantine-AppShell-main > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.mantine-AppShell-main > :first-child {
+  flex: 1 1 auto;
 }
 
 body {

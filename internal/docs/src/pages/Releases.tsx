@@ -34,7 +34,7 @@ export const Releases = (): React.JSX.Element => {
       <Stack gap="lg">
         <Stack gap={4}>
           <Title order={1}>Releases</Title>
-          <Text c="dimmed" size="sm">
+          <Text c="dimmed" size="sm" maw="74ch">
             Every @dunx package shares one version and ships together, so a
             release covers all {site.packages.length} of them. Written from the
             commits in each release range.
