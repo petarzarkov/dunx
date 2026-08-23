@@ -4,7 +4,7 @@ import { describe, expect, it } from 'bun:test';
  * The supported surface, frozen. `@dunx/http` had grown to 173 barrel exports,
  * every one of them a semver promise, and about a third were the framework's own
  * plumbing. Those moved to `@dunx/http/internal`; the barrel still re-exports
- * them under a `@deprecated` block and drops them in 3.0.
+ * them under a `@deprecated` block and drops them in 4.0.
  *
  * Freezing the list is what makes an addition show up in a diff, the same way
  * `site.test.tsx` freezes the published documentation set.

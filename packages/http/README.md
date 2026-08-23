@@ -78,7 +78,7 @@ The guide is canonical for every row; this table is the index.
 `@dunx/http/internal` holds route-table construction, the middleware fold, the
 relay codec and the discovery readers - what `@dunx/dashboard`, `@dunx/mcp` and
 `@dunx/openapi` call and an app does not. The barrel still re-exports it under a
-`@deprecated` block and drops it in 3.0.
+`@deprecated` block and drops it in 4.0.
 
 ## Notes
 

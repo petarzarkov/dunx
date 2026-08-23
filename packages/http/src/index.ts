@@ -209,10 +209,10 @@ export {
 } from './health/registry.js';
 
 /**
- * The framework's own plumbing, still reachable here and moving out in 3.0.
+ * The framework's own plumbing, still reachable here and moving out in 4.0.
  * Import it from `@dunx/http/internal`, which carries no stability promise.
  *
- * @deprecated Import from `@dunx/http/internal`. Removed in 3.0.
+ * @deprecated Import from `@dunx/http/internal`. Removed in 4.0.
  */
 export {
   assertNoCollisions,
