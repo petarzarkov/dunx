@@ -11,7 +11,7 @@ injection, with no `reflect-metadata`, no `forwardRef`, and no JavaScript router
 [![coverage](https://petarzarkov.github.io/dunx/badges/coverage.svg)](https://petarzarkov.github.io/dunx/#/coverage)
 [![docs](https://img.shields.io/badge/docs-petarzarkov.github.io%2Fdunx-blue)](https://petarzarkov.github.io/dunx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3-black.svg)](https://bun.sh)
+[![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.4-black.svg)](https://bun.sh)
 
 </div>
 
