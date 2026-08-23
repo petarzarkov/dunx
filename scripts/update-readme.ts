@@ -325,18 +325,19 @@ const resolved: { readonly target: Target; readonly result: SectionResult }[] =
     return { target, result };
   });
 
-/** How a target names itself in an error: a heading, or its marker pair. */
+/**
+ * How a target names itself in an error, noun included: a heading delimits a
+ * section, a marker pair delimits a block.
+ */
 const describe = (target: Target): string =>
   target.marked
-    ? `"<!-- ${target.heading}:start -->"`
-    : `"## ${target.heading}"`;
+    ? `"<!-- ${target.heading}:start -->" block`
+    : `"## ${target.heading}" section`;
 
 const missing = resolved.filter(({ result }) => result.kind === 'missing');
 if (missing.length > 0) {
   for (const { target } of missing) {
-    console.error(
-      `No ${describe(target)} block found in ${target.file}. Aborting.`,
-    );
+    console.error(`No ${describe(target)} found in ${target.file}. Aborting.`);
   }
   process.exit(1);
 }
@@ -352,7 +353,7 @@ if (check) {
   }
   for (const { target } of stale) {
     console.error(
-      `${target.file} has a stale ${describe(target)} block. Run \`bun run gen:readme\`.`,
+      `${target.file} has a stale ${describe(target)}. Run \`bun run gen:readme\`.`,
     );
   }
   process.exit(1);
