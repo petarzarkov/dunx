@@ -6,24 +6,12 @@ export {
   Post,
   Put,
 } from './route/decorators.js';
-export {
-  discoverRoutes,
-  joinPath,
-  type DiscoveredRoute,
-} from './route/discover.js';
-export {
-  defaultStatusFor,
-  type DefaultStatus,
-  type HttpMethod,
-  type RouteMeta,
-  type RoutePath,
-} from './route/marker.js';
+export type { HttpMethod, RoutePath } from './route/marker.js';
 // Route metadata and scoped middleware. `meta`/`metaKey` are the whole mechanism;
 // `@Roles` and `@Public` are wrappers over it, and ROLES/PUBLIC are exported so a
 // user's own guard can read what they set.
 export {
   ApiHidden,
-  guardsOf,
   HIDDEN,
   meta,
   metaKey,
@@ -57,29 +45,14 @@ export type {
 // traversal (`providersOf`, `modulesOf`); this is the half that needs route
 // metadata and the gateway marker. Both were `@dunx/mcp`'s until `@dunx/dashboard`
 // became a second consumer.
-export {
-  gatewaysOf,
-  routesOf,
-  type GatewayHandler,
-  type GatewayNode,
-  type RouteInputs,
-  type RouteNode,
-} from './inspect.js';
 export { ClientAddress } from './server/client-address.js';
-export { buildContext, type RouteContext } from './server/context.js';
-export {
-  preflight,
-  withCors,
-  type CorsOptions,
-  type CorsOrigin,
-} from './server/cors.js';
+export type { RouteContext } from './server/context.js';
+export type { CorsOptions, CorsOrigin } from './server/cors.js';
 export {
   defaultErrorMapper,
   ErrorFilter,
   errorMapper,
   HttpError,
-  isErrorFilter,
-  toErrorMapper,
   ValidationError,
   type ErrorHandler,
   type ErrorMapper,
@@ -107,22 +80,7 @@ export {
   RequestLoggingMiddleware,
   type RequestLoggingOptions,
 } from './server/request-logging.js';
-export {
-  compose,
-  type Middleware,
-  type Next,
-  type RouteHandler,
-} from './server/middleware.js';
-export {
-  assertNoCollisions,
-  assertNoGatewayCollisions,
-  buildRoutes,
-  withUpgradeRoutes,
-  type BunRoutes,
-  type GuardResolver,
-  type RouteMethod,
-  type ServeRoutes,
-} from './server/routes.js';
+export type { Middleware, Next, RouteHandler } from './server/middleware.js';
 export type { AppSettings } from './server/settings.js';
 // Static files, on `Bun.file` - which already streams, sets content-type, answers
 // a Range request and does it with sendfile(2). What is here is the traversal
@@ -131,11 +89,7 @@ export type { AppSettings } from './server/settings.js';
 // by the module: position in the chain is the app's decision.
 export { StaticFiles } from './static/files.js';
 export { StaticModule } from './static/module.js';
-export {
-  normalizePrefix,
-  StaticOptions,
-  type StaticOptionsInit,
-} from './static/options.js';
+export { StaticOptions, type StaticOptionsInit } from './static/options.js';
 // Response compression, on `Bun.zstdCompressSync`/`gzipSync` for a known length and
 // `CompressionStream` for a stream. Not installed by default and not installed by
 // the module either: the app calls `app.use(Compression)`, so an app that does not
@@ -143,11 +97,9 @@ export {
 // against gzip's 23 for the same body, and ignores the `level` that would fix that.
 export { Compression } from './compression/compression.js';
 export { CompressionModule } from './compression/module.js';
-export { negotiate } from './compression/negotiate.js';
 export {
   CompressionEncoding,
   CompressionOptions,
-  isCompressibleType,
   type CompressionOptionsInit,
 } from './compression/options.js';
 // A fixed-window rate limit. Here rather than in `@dunx/infra` because it is a
@@ -180,11 +132,6 @@ export { HttpStatusCode, type HttpStatusName } from './server/status.js';
 // The websocket half: gateways are declared in @Module({ providers }) and served by
 // the same Bun.serve call as the routes above.
 export {
-  buildWebSocket,
-  type UpgradeHandler,
-  type WebSocketRuntime,
-} from './ws/adapter.js';
-export {
   Gateway,
   OnClose,
   OnDrain,
@@ -197,27 +144,17 @@ export {
 // `discoverGateways` resolves every gateway through the container; `discoverGateway`
 // takes one instance, and `Object.create(Gateway.prototype)` satisfies it - which is
 // how a reader inspects gateways without booting the app.
-export {
-  discoverGateway,
-  discoverGateways,
-  normalizePath,
-  type DiscoveredGateway,
-  type DiscoveredHandler,
-  type Invoke,
-} from './ws/discover.js';
-export { decode, encode, type Envelope } from './ws/envelope.js';
+export type { Envelope } from './ws/envelope.js';
 // The socket half of the middleware chain. One interface with one method wrapping
 // `next()`, the same shape the HTTP `Middleware` has - and `SocketLoggingMiddleware`
 // is its `RequestLoggingMiddleware`, at `debug` because a gateway can take a frame
 // per connection per tick.
-export {
-  composeSocket,
-  observe,
-  type SocketContext,
-  type SocketDispatch,
-  type SocketFrame,
-  type SocketMiddleware,
-  type SocketNext,
+export type {
+  SocketContext,
+  SocketDispatch,
+  SocketFrame,
+  SocketMiddleware,
+  SocketNext,
 } from './ws/middleware.js';
 export {
   SocketLoggingMiddleware,
@@ -226,30 +163,16 @@ export {
 // `isGateway` is the filter that pairs with `discoverGateway` when walking a
 // module's providers, exported for the same reason `guardsOf` and `metaOf` are: a
 // reader outside this package needs the same channel the runtime uses.
-export { HandlerKind, isGateway, type HandlerMeta } from './ws/marker.js';
 export { PubSub } from './ws/pubsub.js';
 // Multi-node fan-out. `PubSubRelay` is two methods, so `@dunx/infra`'s
 // RedisConnection satisfies it structurally; `RedisRelay` is Bun.RedisClient
 // directly and therefore costs this package no dependency.
+export { RedisRelay, type RedisRelayOptions } from './ws/redis-relay.js';
 export {
-  defaultRelayUrl,
-  RedisRelay,
-  type RedisRelayOptions,
-} from './ws/redis-relay.js';
-export {
-  decodeRelay,
   DEFAULT_RELAY_CHANNEL,
-  encodeRelay,
   type PubSubRelay,
-  type RelayFrame,
   type RelayOptions,
-  type RelayPhase,
 } from './ws/relay.js';
-export {
-  buildGateways,
-  buildRuntime,
-  type GatewayRuntime,
-} from './ws/runtime.js';
 export type {
   Socket,
   SocketData,
@@ -263,10 +186,7 @@ export {
   type ProbeResult,
   type ProbeState,
 } from './health/contracts.js';
-export {
-  HealthController,
-  HiddenHealthController,
-} from './health/controller.js';
+export { HealthController } from './health/controller.js';
 export {
   DatabaseIndicator,
   DiskIndicator,
@@ -287,3 +207,67 @@ export {
   type HealthOptionsInit,
   type HealthReport,
 } from './health/registry.js';
+
+/**
+ * The framework's own plumbing, still reachable here and moving out in 3.0.
+ * Import it from `@dunx/http/internal`, which carries no stability promise.
+ *
+ * @deprecated Import from `@dunx/http/internal`. Removed in 3.0.
+ */
+export {
+  assertNoCollisions,
+  assertNoGatewayCollisions,
+  buildContext,
+  buildGateways,
+  buildRoutes,
+  buildRuntime,
+  buildWebSocket,
+  compose,
+  composeSocket,
+  decode,
+  decodeRelay,
+  defaultRelayUrl,
+  defaultStatusFor,
+  discoverGateway,
+  discoverGateways,
+  discoverRoutes,
+  encode,
+  encodeRelay,
+  gatewaysOf,
+  guardsOf,
+  HandlerKind,
+  HiddenHealthController,
+  isCompressibleType,
+  isErrorFilter,
+  isGateway,
+  joinPath,
+  negotiate,
+  normalizePath,
+  normalizePrefix,
+  observe,
+  preflight,
+  routesOf,
+  toErrorMapper,
+  withCors,
+  withUpgradeRoutes,
+  type BunRoutes,
+  type DefaultStatus,
+  type DiscoveredGateway,
+  type DiscoveredHandler,
+  type DiscoveredRoute,
+  type GatewayHandler,
+  type GatewayNode,
+  type GatewayRuntime,
+  type GuardResolver,
+  type HandlerMeta,
+  type Invoke,
+  type RelayFrame,
+  type RelayPhase,
+  type RouteInputs,
+  type RouteMeta,
+  type RouteMethod,
+  type RouteNode,
+  type ServeRoutes,
+  type UpgradeHandler,
+  type WebSocketRuntime,
+} from './internal.js';

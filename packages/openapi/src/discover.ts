@@ -1,5 +1,6 @@
 import { collectModules, readControllers, type ModuleRef } from '@dunx/core';
-import { discoverRoutes, HIDDEN, type DiscoveredRoute } from '@dunx/http';
+import { HIDDEN } from '@dunx/http';
+import { discoverRoutes, type DiscoveredRoute } from '@dunx/http/internal';
 
 interface Prototyped {
   readonly prototype: object;

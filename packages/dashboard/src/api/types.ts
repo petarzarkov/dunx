@@ -1,5 +1,5 @@
 import type { ModuleNode, ProviderNode } from '@dunx/core';
-import type { GatewayNode, RouteNode } from '@dunx/http';
+import type { GatewayNode, RouteNode } from '@dunx/http/internal';
 import type { ProbeState } from '../contracts.js';
 
 /**

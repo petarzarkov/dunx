@@ -5,7 +5,7 @@ import {
   type ModuleRef,
   type ProviderNode,
 } from '@dunx/core';
-import { gatewaysOf, isGateway, routesOf } from '@dunx/http';
+import { gatewaysOf, isGateway, routesOf } from '@dunx/http/internal';
 import { documentOf } from './openapi.js';
 import type { ToolDefinition } from './protocol.js';
 

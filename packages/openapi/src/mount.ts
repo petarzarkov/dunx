@@ -1,4 +1,4 @@
-import { joinPath } from '@dunx/http';
+import { joinPath } from '@dunx/http/internal';
 import type { OpenApiDocument } from './types.js';
 
 /**

@@ -1,4 +1,5 @@
-import type { DiscoveredRoute, HttpMethod } from '@dunx/http';
+import type { HttpMethod } from '@dunx/http';
+import type { DiscoveredRoute } from '@dunx/http/internal';
 import { rolesOf } from './metadata.js';
 import {
   bearerScheme,

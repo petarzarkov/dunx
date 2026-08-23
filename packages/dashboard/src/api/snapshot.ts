@@ -1,5 +1,5 @@
 import { modulesOf, providersOf, type ModuleRef } from '@dunx/core';
-import { gatewaysOf, isGateway, routesOf } from '@dunx/http';
+import { gatewaysOf, isGateway, routesOf } from '@dunx/http/internal';
 import type { DashboardOptions } from '../options.js';
 import type { ConfigEntry, Meta, Snapshot } from './types.js';
 
