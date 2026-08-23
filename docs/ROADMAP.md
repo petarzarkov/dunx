@@ -280,15 +280,15 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 
 ## Open items
 
-**One file per item in [docs/roadmap/](./roadmap/).** Delete a file when its item is
+**One file per item in [internal/notes/roadmap/](../internal/notes/roadmap/).** Delete a file when its item is
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                            | Shape                                                                        |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [class-modules-and-opt-in-config](./roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.                |
-| [queue-shutdown-sigterm](./roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq's Bun adapter. Bun 1.4 fixed the other.  |
-| [bun-1.4-adoption](./roadmap/bun-1.4-adoption.md)                               | Five adopt items, one rejected on measurement, four defects closed for free. |
+| Item                                                                                            | Shape                                                                        |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.                |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq's Bun adapter. Bun 1.4 fixed the other.  |
+| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                               | Five adopt items, one rejected on measurement, four defects closed for free. |
 
 Delivered and moved out of this folder rather than left here marked done:
 
@@ -323,7 +323,7 @@ deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, an
 
 `OpenApiModule.forRootAsync` closed the half of the options-before-container problem
 that `OpenApiModule` owned. The `HttpOptions` half is still open - it is
-[class-modules W1](./roadmap/class-modules-and-opt-in-config.md#w1---httpoptionsprovider-keystone),
+[class-modules W1](../internal/notes/roadmap/class-modules-and-opt-in-config.md#w1---httpoptionsprovider-keystone),
 which absorbed the analysis when that item stopped being a file of its own - and the
 template still validates its config twice because of it.
 

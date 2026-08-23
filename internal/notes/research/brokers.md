@@ -180,7 +180,7 @@ Three network conditions, with a `process.on('exit')` marker under `timeout -s K
 | `@platformatic/kafka` | exit 0          | exit 0        | exit 0                          |
 | `kafkajs`             | exit 0          | exit 0        | exit 0                          |
 
-Every one released the event loop. Compare `docs/roadmap/queue-shutdown-sigterm.md:29-33`, where a black-holed address
+Every one released the event loop. Compare `internal/notes/roadmap/queue-shutdown-sigterm.md:29-33`, where a black-holed address
 hangs `Bun.RedisClient` itself and a refused port hangs the bullmq adapter forever. No leak of that class reproduced.
 
 ## Public API

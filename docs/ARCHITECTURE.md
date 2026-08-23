@@ -62,13 +62,13 @@ relative ranking on one machine.
 ## What is not here
 
 - **What to build next** is [ROADMAP.md](./ROADMAP.md), with one file per open item
-  under [`docs/roadmap/`](./roadmap/). The phase plan used to be in this file and is
+  under [`internal/notes/roadmap/`](../internal/notes/roadmap/). The phase plan used to be in this file and is
   now there, where the rest of the planning already was.
 - **Whether something can be built at all**, with the probe output behind the answer,
-  is [`docs/research/`](./research/) - one file per investigated capability, written to
+  is [`internal/notes/research/`](../internal/notes/research/) - one file per investigated capability, written to
   be superseded. The pipeline is research, then roadmap, then here: a measurement
   arrives in `research/`, an accepted item becomes a `roadmap/` file, and what survives
-  delivery lands in `architecture/`. [research/README.md](./research/README.md) holds
+  delivery lands in `architecture/`. [research/README.md](../internal/notes/research/README.md) holds
   the verdict table.
 - **The rules a change has to satisfy** are in `CLAUDE.md` at the repo root. This
   file records decisions; that one constrains them.

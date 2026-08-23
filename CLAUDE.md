@@ -715,7 +715,7 @@ is how a file gets under them. This section is the summary, not the spec.
 ### `docs/` has two audiences, and the site serves one of them
 
 `docs/guide/*` is written for someone using dunx. `docs/architecture/*`,
-`docs/roadmap/*`, `docs/ROADMAP.md` and `docs/bun-apis.md` are the maintainer's
+`internal/notes/roadmap/*`, `docs/ROADMAP.md` and `docs/bun-apis.md` are the maintainer's
 record of what was measured, what was rejected, and which upstream bugs were
 found. Both belong in the repo; only the first belongs on the site.
 

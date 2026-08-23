@@ -658,7 +658,7 @@ Module-scoped DI shipped in 1.0.0 and moved the ground under two items:
   **The array shrinks less than this predicted, and that is now measured rather than
   guessed.** All three of `dunx-template`'s app-level entries stayed app-level:
   `SessionGuard` as expected, and `ThrottleGuard` and `AuditContextMiddleware` for
-  reasons recorded in [architecture/http.md](../architecture/http.md), "What module
+  reasons recorded in [architecture/http.md](../../../docs/architecture/http.md), "What module
   middleware is actually for". So W1 should be justified by the imperative-surface
   argument alone, not by an expectation that the list gets short.
 

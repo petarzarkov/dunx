@@ -4,7 +4,7 @@ Bun 1.4.0 (rev `34cbb9a40`) is installed and the repo is green on it. This file 
 the audit: what the upgrade cost, what it fixed for free, and which of its new APIs
 are worth taking. Every verdict below was probed on this machine rather than read off
 the release notes; the probe results live in
-[../bun-apis.md](../bun-apis.md), "Re-probed on Bun 1.4.0".
+[../bun-apis.md](../../../docs/bun-apis.md), "Re-probed on Bun 1.4.0".
 
 Delete this file when the adopt list is empty.
 
@@ -84,7 +84,7 @@ is the right outcome and it is still a behaviour change on upgrade.
 ## Adopt
 
 Ranked by value per unit of work. The priority rule in
-[../ROADMAP.md](../ROADMAP.md) still applies, so items landing in `core`, `transform`
+[../ROADMAP.md](../../../docs/ROADMAP.md) still applies, so items landing in `core`, `transform`
 or `http` come first and the frozen packages get nothing here that is not a fix.
 
 ### A1 - the test runner's new flags, in CI
@@ -157,7 +157,7 @@ because closing it by hand is the reimplementation Rule 1 forbids.
 
 `--cpu-prof` / `--cpu-prof-md` and `--heap-prof` / `--heap-prof-md` write a profile
 without a separate tool, and the Markdown variants are readable in a terminal. The
-open follow-up in [../ROADMAP.md](../ROADMAP.md) is the `params` gap against Elysia,
+open follow-up in [../ROADMAP.md](../../../docs/ROADMAP.md) is the `params` gap against Elysia,
 where dunx runs a generic input reader per request; a CPU profile of the `params`
 subject is the direct instrument for it. Cheap, and it needs no code change.
 

@@ -2,7 +2,7 @@
 
 Scope: everything between `Logger#writeLog` being called and a string existing - `src/entry.ts`,
 `src/sanitize.ts`, `src/format.ts`, `safeStringify` from `@arkv/shared`. Transports, batching and
-backpressure belong to the sibling report at `docs/research/arkv-logger-transports.md`. Measured on
+backpressure belong to the sibling report at `internal/notes/research/arkv-logger-transports.md`. Measured on
 branch `feat/abstract-log-context` (tip `88b8ae6`), Bun 1.3.14 and Node v24.18.0, 20-core WSL2.
 `cd packages/logger && bun test` is **179 pass, 0 fail, 404 expects, 12 files, 160 ms** there.
 

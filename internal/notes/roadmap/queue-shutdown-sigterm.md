@@ -99,7 +99,7 @@ connect is still pending, or waiting six seconds after `close()` before exiting.
 connection is clean - so the handle is the pending connect itself.
 
 This is the same family as the two already in
-[bun-apis.md](../bun-apis.md) (subscriber mode, and a failed `subscribe`), and it
+[bun-apis.md](../../../docs/bun-apis.md) (subscriber mode, and a failed `subscribe`), and it
 affects `@dunx/infra/redis` exactly as much as it affects the queue.
 
 ## Leak B - bullmq: `disconnect()` cannot cancel its own reconnect
@@ -273,7 +273,7 @@ finishes it ends the process, via an `unref()`d timer in `ShutdownHooks`
 runtime open, so a process with nothing pending still exits immediately and the
 callback never runs; it fires only when something else is holding the loop, which
 after a completed teardown is by definition a handle dunx does not own. Verified
-on Bun 1.3.14 and recorded in [bun-apis.md](../bun-apis.md).
+on Bun 1.3.14 and recorded in [bun-apis.md](../../../docs/bun-apis.md).
 
 That covers **any** leaked handle, not just these two, which is why it is the right
 layer: dunx cannot enumerate what a dependency leaks.

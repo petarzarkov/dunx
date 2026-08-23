@@ -5,10 +5,10 @@ tables and the argument behind a verdict. Written to be superseded.
 
 The pipeline is research, then decision, then delivery:
 
-- **`docs/research/`** answers "can this be built, on what, and what does it
+- **`internal/notes/research/`** answers "can this be built, on what, and what does it
   cost". A file stays here after the decision, because the measurements outlive
   it and a refusal needs its evidence kept.
-- **`docs/roadmap/`** holds accepted open work, one file per item, deleted when
+- **`internal/notes/roadmap/`** holds accepted open work, one file per item, deleted when
   delivered.
 - **`docs/architecture/`** takes the measurements that survive delivery.
 
@@ -34,7 +34,7 @@ Node v24.18.0 where a comparison needed it. Numbers are from that machine.
 
 [async-context-constraints](./async-context-constraints.md) holds that record's
 verified facts alone, in the format
-[architecture/constraints.md](../architecture/constraints.md) uses, ready to be
+[architecture/constraints.md](../../../docs/architecture/constraints.md) uses, ready to be
 appended there once the record is reviewed.
 
 All twelve records are in. Two of the six defects below have since been fixed and

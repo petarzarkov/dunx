@@ -69,7 +69,7 @@ its own reconnect once the connection has dropped, so an app that touched an
 unreachable broker used to drain perfectly and then hang.
 
 Both leaks are upstream and neither is reachable from userland. They are recorded
-in [queue-shutdown-sigterm.md](../roadmap/queue-shutdown-sigterm.md).
+in [queue-shutdown-sigterm.md](../../internal/notes/roadmap/queue-shutdown-sigterm.md).
 
 Once the drain finishes, dunx gives the process a moment to end on its own and
 exits it if it has not. The timer is `unref()`d, so it cannot itself hold the
