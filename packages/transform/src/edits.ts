@@ -6,8 +6,9 @@ export interface Edit {
 
 /**
  * Splices edits into the original text rather than reprinting the AST, so
- * everything untouched keeps its exact bytes - comments, formatting, and the
- * line numbers stack traces point at.
+ * everything untouched keeps its exact bytes. Line numbers survive too, but only
+ * because every edit this transform makes is a single line appended to one that
+ * already exists - splicing alone does not guarantee it.
  */
 export const applyEdits = (source: string, edits: readonly Edit[]): string => {
   const sorted = [...edits].sort(

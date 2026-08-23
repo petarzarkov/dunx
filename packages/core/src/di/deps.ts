@@ -15,6 +15,12 @@ export interface UnresolvedDep {
    * so it is worth telling apart.
    */
   readonly typeOnly?: string;
+  /**
+   * The parameter has a default, so the language already says it may be absent.
+   * The container passes `undefined` and the default stands, instead of failing
+   * boot over a type it was never going to resolve.
+   */
+  readonly optional?: true;
 }
 
 export type DepEntry = InjectionToken<unknown> | UnresolvedDep;

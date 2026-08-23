@@ -451,3 +451,13 @@ it('leaves a body under the threshold alone', async () => {
   expect(small.body.length).toBeLessThan(1024);
   expect(small.encoding).toBeNull();
 });
+
+it('leaves a defaulted constructor parameter to its default', async () => {
+  // `number` erases, so there is no token to resolve. The default is the language
+  // saying the parameter may be absent, so the container passes `undefined`
+  // instead of failing boot the way it does for an erased type with no default.
+  const { status, body } = await json<{ retries: number }>('wiring');
+
+  expect(status).toBe(200);
+  expect(body.retries).toBe(3);
+});

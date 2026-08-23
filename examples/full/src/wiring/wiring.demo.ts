@@ -25,6 +25,10 @@ export class WiringDemo {
     this.logger.info(
       'both reached with inject() in a field initializer, alongside a constructor-injected Logger',
     );
+    this.logger.info(
+      `a defaulted parameter keeps its default: retries = ${this.build.retries}, ` +
+        'because `number` erases and a default says the parameter may be absent',
+    );
 
     // Two tokens with the same description are still different tokens: `token()`
     // returns a fresh object every call and identity is what the container keys on.

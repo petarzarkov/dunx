@@ -306,6 +306,10 @@ export class Injector {
         }
       }
 
+      // A default in the source is the author saying the parameter may be absent,
+      // so there is nothing to report: `undefined` lets the default apply.
+      if (dep.optional === true) return undefined;
+
       // The annotation is identical whether the name was imported with `import type`
       // or is an interface, so quoting it alone points at a line that is already
       // correct. Only the import-type case has a one-line fix, and it is the likely

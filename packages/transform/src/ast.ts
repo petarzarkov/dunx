@@ -57,10 +57,25 @@ export interface ImportDeclaration extends Node {
   readonly importKind: 'value' | 'type';
 }
 
+/**
+ * `ImportSpecifier`, `ImportDefaultSpecifier` and `ImportNamespaceSpecifier`.
+ * Only the first carries its own `importKind`; all three carry `local`, which is
+ * the name the file binds and the only field the erasure map needs.
+ */
 export interface ImportSpecifier extends Node {
-  readonly type: 'ImportSpecifier';
   readonly local: Identifier;
-  readonly importKind: 'value' | 'type';
+  readonly importKind?: 'value' | 'type';
+}
+
+export interface TSQualifiedName extends Node {
+  readonly type: 'TSQualifiedName';
+  readonly left: Node;
+  readonly right: Identifier;
+}
+
+export interface AssignmentPattern extends Node {
+  readonly type: 'AssignmentPattern';
+  readonly left: Node;
 }
 
 const guard =
@@ -73,7 +88,9 @@ export const isMethodDefinition = guard<MethodDefinition>('MethodDefinition');
 export const isTypeReference = guard<TSTypeReference>('TSTypeReference');
 export const isImportDeclaration =
   guard<ImportDeclaration>('ImportDeclaration');
-export const isImportSpecifier = guard<ImportSpecifier>('ImportSpecifier');
+export const isQualifiedName = guard<TSQualifiedName>('TSQualifiedName');
+export const isAssignmentPattern =
+  guard<AssignmentPattern>('AssignmentPattern');
 export const isParameterProperty = guard<TSParameterProperty>(
   'TSParameterProperty',
 );
@@ -112,3 +129,10 @@ export const walk = (root: unknown, visit: (node: Node) => void): void => {
 
 export const nameOf = (node: Node | null | undefined): string | undefined =>
   isIdentifier(node) ? node.name : undefined;
+
+/**
+ * The leftmost identifier of a type name. In `a.b.C` only `a` has to exist at
+ * runtime, so it is the only part the erasure map can answer for.
+ */
+export const rootOfTypeName = (node: Node): Node =>
+  isQualifiedName(node) ? rootOfTypeName(node.left) : node;

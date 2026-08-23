@@ -36,7 +36,11 @@ export type Dependency =
    * primitive, a union, a type-only import. It is a boot error naming that
    * parameter, and the first thing worth asking about.
    */
-  | { readonly unresolved: string; readonly typeOnly?: string };
+  | {
+      readonly unresolved: string;
+      readonly typeOnly?: string;
+      readonly optional?: true;
+    };
 
 export interface ProviderNode {
   readonly token: string;
@@ -99,6 +103,7 @@ const asDependency = (entry: DepEntry): Dependency =>
         // from the import - and its annotation is indistinguishable from the
         // cases that do not.
         ...(entry.typeOnly === undefined ? {} : { typeOnly: entry.typeOnly }),
+        ...(entry.optional === undefined ? {} : { optional: entry.optional }),
       }
     : { token: describeToken(entry) };
 

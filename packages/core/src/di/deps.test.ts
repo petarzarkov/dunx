@@ -313,3 +313,56 @@ describe('deferred resolution', () => {
     );
   });
 });
+
+describe('optional parameters', () => {
+  it('passes undefined so the default applies', async () => {
+    class Service {
+      constructor(readonly retries = 3) {}
+    }
+    withDeps(Service, () => [
+      { unresolved: 'retries: number = 3', optional: true },
+    ]);
+
+    @Module({ providers: [Service] })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+    expect(app.get(Service).retries).toBe(3);
+    await app.shutdown();
+  });
+
+  it('still injects the dependency beside it', async () => {
+    class Db {}
+    class Service {
+      constructor(
+        readonly db: Db,
+        readonly retries = 3,
+      ) {}
+    }
+    withDeps(Service, () => [
+      Db,
+      { unresolved: 'retries: number = 3', optional: true },
+    ]);
+
+    @Module({ providers: [Db, Service] })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+    expect(app.get(Service).db).toBeInstanceOf(Db);
+    expect(app.get(Service).retries).toBe(3);
+    await app.shutdown();
+  });
+
+  it('still fails boot for an erased parameter with no default', async () => {
+    class Service {
+      constructor(readonly retries: number) {}
+    }
+    withDeps(Service, () => [{ unresolved: 'retries: number' }]);
+
+    @Module({ providers: [Service] })
+    class AppModule {}
+
+    const message = await rejectionMessage(AppFactory.create(AppModule));
+    expect(message).toContain('names nothing that exists at runtime');
+  });
+});

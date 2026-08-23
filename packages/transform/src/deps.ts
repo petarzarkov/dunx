@@ -1,11 +1,13 @@
 import { parseSync } from 'oxc-parser';
 import {
+  isAssignmentPattern,
   isClassDeclaration,
   isIdentifier,
   isMethodDefinition,
   isParameterProperty,
   isTypeReference,
   nameOf,
+  rootOfTypeName,
   walk,
   type ClassNode,
   type Node,
@@ -41,12 +43,30 @@ const constructorParams = (klass: ClassNode): readonly Node[] => {
   return isMethodDefinition(found) ? found.value.params : [];
 };
 
-/** The declared type of a parameter, unwrapping `private readonly x: X`. */
+/**
+ * The binding a parameter declares, unwrapping `private readonly x: X` and
+ * `x: X = fallback` down to the identifier that carries the annotation.
+ */
+const bindingOf = (param: Node): Node => {
+  const named = isParameterProperty(param) ? param.parameter : param;
+  return isAssignmentPattern(named) ? named.left : named;
+};
+
+/** The declared type of a parameter, or undefined when it has none. */
 const annotationOf = (param: Node): Node | undefined => {
-  const inner = isParameterProperty(param) ? param.parameter : param;
+  const inner = bindingOf(param);
   if (!isIdentifier(inner)) return undefined;
   return inner.typeAnnotation?.typeAnnotation;
 };
+
+/**
+ * A default makes the parameter optional in the language, so an erased type is
+ * no longer a boot error: the container passes `undefined` and the default
+ * stands. A resolvable type is still injected, and the default only applies to
+ * a `new` the container did not make.
+ */
+const hasDefault = (param: Node): boolean =>
+  isAssignmentPattern(isParameterProperty(param) ? param.parameter : param);
 
 /**
  * One entry per constructor parameter. A parameter whose type names something
@@ -60,21 +80,23 @@ const entryFor = (
   erased: ReadonlyMap<string, ErasureCause>,
 ): string => {
   const text = JSON.stringify(slice(source, param));
-  const unresolved = `{ unresolved: ${text} }`;
+  const optional = hasDefault(param) ? ', optional: true' : '';
+  const unresolved = `{ unresolved: ${text}${optional} }`;
   const annotation = annotationOf(param);
 
   if (!annotation || !isTypeReference(annotation)) return unresolved;
 
-  const token = slice(source, annotation.typeName);
-  // A qualified name (`ns.Thing`) is a runtime value; a bare erased name is not.
-  const cause = erased.get(token);
-  if (cause === undefined) return token;
+  const root = nameOf(rootOfTypeName(annotation.typeName));
+  const cause = root === undefined ? undefined : erased.get(root);
+  // `ns.Thing` is a member access on a value the file imported, so it resolves
+  // as written; only its leftmost name has to survive erasure.
+  if (cause === undefined) return slice(source, annotation.typeName);
 
   // The annotation reads the same whether the name was imported with
   // `import type` or declared as an interface, so the one case with a one-line
   // fix carries the identifier for the boot error to name.
   return cause === 'import-type'
-    ? `{ unresolved: ${text}, typeOnly: ${JSON.stringify(token)} }`
+    ? `{ unresolved: ${text}${optional}, typeOnly: ${JSON.stringify(root)} }`
     : unresolved;
 };
 
@@ -123,9 +145,12 @@ export const transform = (
       edits.push({
         start: node.end,
         end: node.end,
+        // One line, appended to the class's own closing brace. A record spread
+        // over three lines shifted everything below it, so a throw in the third
+        // class of a file reported a line six further down than the source's.
         text:
-          `\nObject.defineProperty(${name}, ${DEPS_KEY}, {\n` +
-          `  value: () => [${entries.join(', ')}],\n});`,
+          `;Object.defineProperty(${name}, ${DEPS_KEY}, ` +
+          `{ value: () => [${entries.join(', ')}] });`,
       });
     }
   });

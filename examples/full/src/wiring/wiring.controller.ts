@@ -16,7 +16,8 @@ export class WiringController {
     startedAt: string;
     revision: string;
     flags: readonly string[];
+    retries: number;
   } {
-    return this.build.describe();
+    return { ...this.build.describe(), retries: this.build.retries };
   }
 }

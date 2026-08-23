@@ -1,9 +1,10 @@
 import {
+  isClassDeclaration,
   isImportDeclaration,
-  isImportSpecifier,
   nameOf,
   walk,
   type ClassNode,
+  type ImportSpecifier,
   type Node,
 } from './ast.js';
 
@@ -15,6 +16,30 @@ import {
  * message points at a line that is already correct.
  */
 export type ErasureCause = 'import-type' | 'declared-type';
+
+/**
+ * A class puts its name in both the type and the value space, so an interface
+ * merging into it still describes something that exists at runtime. Every other
+ * pairing - `const X` beside `interface X`, `function X` beside `interface X` -
+ * leaves the annotation pointing at the type alone, which is erased.
+ *
+ * Top level only. A class nested in a function does not shadow a file-level
+ * interface at the point a constructor is annotated.
+ */
+const mergedClassNames = (program: Node): ReadonlySet<string> => {
+  const body = (program as { body?: readonly Node[] }).body ?? [];
+  const names = new Set<string>();
+
+  for (const statement of body) {
+    const declaration =
+      (statement as { declaration?: Node | null }).declaration ?? statement;
+    if (!isClassDeclaration(declaration)) continue;
+    const name = declaration.id?.name;
+    if (name !== undefined) names.add(name);
+  }
+
+  return names;
+};
 
 /**
  * Names that exist only in the type system, so emitting them in a value position
@@ -29,10 +54,10 @@ export const collectTypeOnlyNames = (
   walk(program, (node) => {
     if (isImportDeclaration(node)) {
       for (const specifier of node.specifiers) {
-        if (!isImportSpecifier(specifier)) continue;
-        if (node.importKind === 'type' || specifier.importKind === 'type') {
-          names.set(specifier.local.name, 'import-type');
-        }
+        const { local, importKind } = specifier as ImportSpecifier;
+        if (node.importKind !== 'type' && importKind !== 'type') continue;
+        const name = nameOf(local);
+        if (name !== undefined) names.set(name, 'import-type');
       }
       return;
     }
@@ -46,6 +71,8 @@ export const collectTypeOnlyNames = (
       if (name !== undefined) names.set(name, 'declared-type');
     }
   });
+
+  for (const name of mergedClassNames(program)) names.delete(name);
 
   return names;
 };

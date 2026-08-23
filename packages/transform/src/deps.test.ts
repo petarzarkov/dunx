@@ -209,3 +209,149 @@ describe('failures', () => {
     );
   });
 });
+
+describe('type-only imports that are not named specifiers', () => {
+  it('marks a default type import as unresolved', () => {
+    const source = `import type Config from './config.js';
+export class Service {
+  constructor(private readonly config: Config) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe(
+      '{ unresolved: "private readonly config: Config", typeOnly: "Config" }',
+    );
+  });
+
+  it('marks a namespace type import as unresolved', () => {
+    const source = `import type * as schema from './schema.js';
+export class Service {
+  constructor(private readonly row: schema.Row) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe(
+      '{ unresolved: "private readonly row: schema.Row", typeOnly: "schema" }',
+    );
+  });
+});
+
+describe('qualified type names', () => {
+  it('keeps a qualified name whose namespace is a value import', () => {
+    const source = `import * as infra from './infra.js';
+export class Service {
+  constructor(private readonly db: infra.Db) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe('infra.Db');
+  });
+
+  it('keeps a deeply qualified name whose root is a value import', () => {
+    const source = `import * as infra from './infra.js';
+export class Service {
+  constructor(private readonly db: infra.nested.Db) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe('infra.nested.Db');
+  });
+
+  it('marks a qualified name whose root was imported with import type', () => {
+    const source = `import type { infra } from './infra.js';
+export class Service {
+  constructor(private readonly db: infra.Db) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe(
+      '{ unresolved: "private readonly db: infra.Db", typeOnly: "infra" }',
+    );
+  });
+});
+
+describe('a type sharing a name with a runtime value', () => {
+  it('keeps a class that an interface in the same file merges into', () => {
+    const source = `export class Logger {}
+export interface Logger { extra(): void }
+export class Service {
+  constructor(private readonly logger: Logger) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe('Logger');
+  });
+
+  it('still erases an interface sharing a name with a const', () => {
+    const source = `const Logger = { level: 'info' };
+interface Logger { extra(): void }
+export class Service {
+  constructor(private readonly logger: Logger) {}
+}`;
+    expect(entriesFor(source, 'Service')).toContain('unresolved');
+  });
+});
+
+describe('parameters with a default', () => {
+  it('injects a defaulted parameter whose type is a runtime value', () => {
+    const source = `import { Db } from './db.js';
+export class Service {
+  constructor(private readonly db: Db = new Db()) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe('Db');
+  });
+
+  it('leaves a defaulted parameter with an erased type to its default', () => {
+    const source = `export class Service {
+  constructor(private readonly retries: number = 3) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe(
+      '{ unresolved: "private readonly retries: number = 3", optional: true }',
+    );
+  });
+
+  it('mixes an injected dependency with a defaulted one', () => {
+    const source = `import { Db } from './db.js';
+export class Service {
+  constructor(
+    private readonly db: Db,
+    private readonly retries: number = 3,
+  ) {}
+}`;
+    expect(entriesFor(source, 'Service')).toContain('Db, { unresolved');
+  });
+
+  it('leaves a defaulted parameter with no type at all to its default', () => {
+    const source = `export class Service {
+  constructor(private readonly retries = 3) {}
+}`;
+    expect(entriesFor(source, 'Service')).toContain('optional: true');
+  });
+});
+
+describe('parameters dunx cannot inject', () => {
+  // A rest parameter has no single type to resolve, so it is reported at boot
+  // rather than silently receiving nothing.
+  it('marks a rest parameter as unresolved', () => {
+    const source = `export class Service {
+  constructor(...args: string[]) { void args; }
+}`;
+    const entries = entriesFor(source, 'Service');
+    expect(entries).toContain('unresolved');
+    expect(entries).not.toContain('optional');
+  });
+
+  it('marks a destructured parameter as unresolved', () => {
+    const source = `import { Options } from './options.js';
+export class Service {
+  constructor({ retries }: Options) { void retries; }
+}`;
+    expect(entriesFor(source, 'Service')).toContain('unresolved');
+  });
+});
+
+describe('line numbers', () => {
+  it('adds no lines, so a stack trace still points at the original', () => {
+    const source = `import { D } from './d.js';
+class A { constructor(a: D) { void a; } }
+class B { constructor(b: D) { void b; } }
+class C {
+  constructor(c: D) { void c; }
+  boom() { throw new Error('from C.boom'); }
+}`;
+    const { code } = transform(source, 'x.ts');
+    const lineOf = (text: string, needle: string): number =>
+      text.split('\n').findIndex((line) => line.includes(needle)) + 1;
+
+    expect(code.split('\n').length).toBe(source.split('\n').length);
+    expect(lineOf(code, 'from C.boom')).toBe(lineOf(source, 'from C.boom'));
+  });
+});
