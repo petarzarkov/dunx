@@ -1,6 +1,6 @@
 {
   "name": "@dunx/dashboard",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "description": "An opt-in operations page for a running dunx app: routes, the provider graph, gateways, config and runtime health, with bull-board mounted for the queues",
   "keywords": [
     "bull-board",

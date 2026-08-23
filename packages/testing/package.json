@@ -1,6 +1,6 @@
 {
   "name": "@dunx/testing",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "description": "Test harness for dunx apps: a container with providers replaced in place, and a real Bun.serve on port 0",
   "keywords": [
     "bun",

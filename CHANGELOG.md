@@ -4,6 +4,102 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.0.0 - 2026-08-23
+
+a smaller public surface, five transform fixes, and documentation that stops repeating itself
+
+This release acts on an external review of the repository. Nothing in it is
+source breaking: every symbol that moved is still exported from where it was,
+and the container fixes turn failures into successes rather than the reverse.
+The major is deliberate, because the shape of the public API changed and a
+deprecation clock now runs against it.
+
+**Five defects in `@dunx/transform`, each reproduced with a failing test before
+it was fixed.** Four of them broke the promise that a type which erases is a
+boot error naming the parameter rather than a silent `undefined`:
+
+- `import type Foo from './foo.js'` and `import type * as NS from './ns.js'`
+  were never collected, because only named specifiers were read. Their names
+  were emitted bare into the dependency thunk, so resolution threw a raw
+  `ReferenceError` instead of the boot error.
+- A qualified name was sliced whole and looked up against a map keyed on bare
+  names, so `ns.Thing` never matched. Only the leftmost identifier has to exist
+  at runtime, and that is what is checked now: a value namespace import still
+  emits `ns.Thing`, and a type-only one is unresolved naming `ns`.
+- A local `interface Logger` poisoned a `class Logger` it merged with in the
+  same file. Top level class declarations are subtracted from the erasure map,
+  classes only, since `const X` beside `interface X` really is erased.
+- A constructor parameter with a default failed boot, so
+  `constructor(retries = 3)` could not be built at all. It is recorded as
+  optional now and the container passes `undefined`, letting the default stand.
+  A rest parameter is still an error, and a test says that is deliberate.
+
+The fifth was a false claim rather than a crash. `edits.ts` said splicing
+preserved the line numbers stack traces point at, and it did not: three lines
+were inserted per annotated class, so a throw in the third class of a file
+reported six lines low. The dependency record is emitted on the class's own
+closing brace line, so the line count is unchanged, and a test asserts it.
+
+**`@dunx/http` had grown to 173 barrel exports**, every one a semver promise, and
+about a third were the framework's own plumbing: route table construction, the
+middleware fold, the relay codec, the discovery readers, and the retry and JSON
+helpers behind the client. Those 56 symbols move to a new `@dunx/http/internal`
+subpath, which carries no stability promise.
+
+The barrel and `./client` still re-export all of them under a `@deprecated` block
+naming the replacement, so no import breaks on this release. They are removed in
+4.0. The supported surface is 133 on the barrel and 13 on `./client`, and
+`surface.test.ts` freezes both lists so an addition shows up in a diff.
+
+**Comments are now gated the way prose already was.** `packages/` and `tools/`
+measured 31.5% comment lines, and the densest were design memos in JSDoc costume.
+Length rather than density turned out to be what separates those from a comment
+that earns its place: the median block was four lines, while 131 blocks over
+twelve lines held 2,437 lines between them, 30% of every comment in 8% of the
+blocks. All 131 are gone. A flat density budget was rejected because the
+documentation site builds its API reference out of the same doc comments, so it
+would have charged a package for documenting itself.
+
+**Documentation stops saying the same thing twice.** The package READMEs went
+from 3,204 lines to 790, none over 100: what it is, install, one worked example,
+and a table linking the guide chapter that owns each area. The guide is canonical
+and each table says so. `docs/research/` and `docs/roadmap/`, 14 files of
+measurement records and planning notes, moved to `internal/notes/` and out of the
+tree a new reader browses; `docs/ROADMAP.md` stayed, since it is the public
+summary the README links.
+
+**The README leads with what dunx bundles.** It sold Nest style dependency
+injection at Bun speed, which is not why anyone would switch. What is unusual is
+that controllers, validation, OpenAPI, WebSockets with a Redis relay, bullmq,
+drizzle over both `bun:sqlite` and `Bun.SQL`, S3, images, scheduling, health
+checks, throttling, compression, an HTTP client, better-auth, a test harness, an
+ops dashboard, a scaffolder and an MCP server ship together under one version
+number. Dependency injection moved to fourth, and the benchmark table from
+headline to reassurance.
+
+Smaller corrections: the README badge claimed Bun 1.3 while every `engines` field
+required 1.4, and CLAUDE.md numbered its rules 1, 3, 2, 4.
+
+### Fixes
+
+- **transform**: five defects in constructor dependency recording ([`55d2b4b`](https://github.com/petarzarkov/dunx/commit/55d2b4b365a2072db158208ba3eb82c0daa2ecb5))
+
+### Refactors
+
+- **http**: move the framework's own plumbing behind ./internal ([`f677dc8`](https://github.com/petarzarkov/dunx/commit/f677dc8b59438c3cd4b456d796fcfaceb25c904a))
+- cut the design memos out of source comments ([`e261461`](https://github.com/petarzarkov/dunx/commit/e261461df01e5668ca3bde69b99db6ab3157f8fe))
+
+### Documentation
+
+- lead the README with what dunx bundles, not with DI ([`6e8287a`](https://github.com/petarzarkov/dunx/commit/6e8287a09aec6ff83260c30b2ee795efcb99a5bc))
+- cut the package READMEs to a page each ([`34f5824`](https://github.com/petarzarkov/dunx/commit/34f5824191ad871ffd2fe86f151edf5c15c9d3e5))
+- correct the Bun badge and the rule ordering ([`33b3d92`](https://github.com/petarzarkov/dunx/commit/33b3d92ffce128049ffe234e444e2d51e112ec64))
+- move the working notes out of the user-facing tree ([`101cd0b`](https://github.com/petarzarkov/dunx/commit/101cd0b088fb24010929ac27be9b86b9e62b3468))
+
+### Other changes
+
+- **scripts**: gate source comments on block length, not density ([`67c28b8`](https://github.com/petarzarkov/dunx/commit/67c28b82248a915cdc037de4cf4e099c7b40ced8))
+
 ## 2.5.0 - 2026-08-22
 
 response compression, W3C trace context, and compile-time response shapes
