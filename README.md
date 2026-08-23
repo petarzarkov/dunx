@@ -4,8 +4,9 @@
 
 # dunx
 
-**NestJS-style structure at Bun speed.** Controllers, modules and dependency
-injection, with no `reflect-metadata`, no `forwardRef`, and no JavaScript router.
+**Everything a service needs, on Bun, under one version number.** Controllers,
+DI, validation, OpenAPI, WebSockets, queues, an ORM, auth, a test harness and an
+ops dashboard - released together, tested together.
 
 [![CI](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml/badge.svg)](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml)
 [![coverage](https://petarzarkov.github.io/dunx/badges/coverage.svg)](https://petarzarkov.github.io/dunx/#/coverage)
@@ -18,6 +19,31 @@ injection, with no `reflect-metadata`, no `forwardRef`, and no JavaScript router
 ```bash
 bunx @dunx/create-app my-api
 ```
+
+## What you get
+
+Elysia and Hono hand you a router, and everything above it is yours to choose
+and keep in step. This is the other trade: one dependency, one release train.
+
+| You need                | dunx gives you                                                        |
+| ----------------------- | ---------------------------------------------------------------------- |
+| Structure               | Controllers, scoped modules, constructor DI, lifecycle hooks           |
+| Requests                | `Bun.serve` routing, middleware, guards, CORS, compression, throttling |
+| Validation              | Standard Schema, so zod, Valibot or ArkType all drop in                |
+| API documentation       | OpenAPI 3.1 from the schemas the routes already validate, Swagger UI   |
+| Realtime                | WebSocket gateways on the same port, with a Redis relay for many nodes |
+| Data                    | drizzle over `bun:sqlite` and `Bun.SQL`, transactions, seeds, paging   |
+| Background work         | bullmq over `Bun.RedisClient`, sandboxed processors, `@Cron`           |
+| Storage and images      | One `Storage` contract over `Bun.file` and `Bun.S3Client`, `Bun.Image` |
+| Auth                    | better-auth mounted, a session guard, `Bun.password` hashing           |
+| Calling out             | An HTTP client with retry, backoff and trace propagation               |
+| Operating it            | Health checks, structured logging, an ops dashboard, bull-board        |
+| Testing                 | The real container with bindings replaced, a real server on port 0     |
+| Tooling                 | A scaffolder, and an MCP server so an agent can read your app          |
+
+Every one of those is a Bun primitive or a best-in-class library wired to one,
+never a reimplementation. Each is opt-in: `@dunx/core` has zero dependencies,
+and an app that imports no queue installs no queue.
 
 ## What an app looks like
 
@@ -60,10 +86,10 @@ const app = await HttpFactory.create(AppModule);
 await app.listen(3000);
 ```
 
-That is the whole programming model. Note what is **not** there: no `@Injectable()`,
-no `@Inject()`, no `reflect-metadata` import, no `experimentalDecorators` in your
-tsconfig, and no `Response.json()` to remember. Two lines in `bunfig.toml` turn the
-constructor types into wiring:
+That is the whole programming model. There is no `@Injectable()`, no
+`@Inject()`, no `reflect-metadata` import, no `experimentalDecorators`, and no
+`Response.json()` to remember. Two lines in `bunfig.toml` turn the constructor
+types into wiring:
 
 ```toml
 preload = ["@dunx/transform/preload"]
@@ -76,51 +102,25 @@ Bun's test runner reads its own `preload`, so the `[test]` entry is what keeps
 `bun test` working. Miss it and the app runs while the suite fails at the first
 provider with a constructor parameter.
 
-## Three things that are different
+## How the DI differs
 
-**No `reflect-metadata`, and no `experimentalDecorators`.** dunx uses standard TC39
-decorators. `@dunx/transform` reads each class's constructor parameter types at load
-time with [`oxc-parser`](https://github.com/oxc-project/oxc) - a Rust parser over
-N-API - and records them on the class. There are no parameter decorators in the TC39
-proposal, so `@Inject()` does not exist and never will.
+**No `reflect-metadata`, and no `experimentalDecorators`.** dunx uses standard
+TC39 decorators. `@dunx/transform` reads each class's constructor parameter
+types at load time with [`oxc-parser`](https://github.com/oxc-project/oxc), a
+Rust parser over N-API, and records them on the class. There are no parameter
+decorators in the TC39 proposal, so `@Inject()` does not exist and never will.
 
-**A type that erases is a boot error, not `undefined`.** Annotate a parameter with an
-interface, a primitive or a type-only import and dunx fails at boot naming that exact
+**A type that erases is a boot error.** Annotate a parameter with an interface,
+a primitive or a type-only import and dunx fails at boot naming that exact
 parameter. `emitDecoratorMetadata` hands you `undefined` and a stack trace three
 frames from where the mistake was.
 
-**No `forwardRef`.** The dependency record is a thunk, evaluated at resolution rather
-than at class-definition time, so a circular import resolves on its own. Nothing to
-annotate, nothing to remember.
+**No `forwardRef`.** The dependency record is a thunk, evaluated at resolution
+rather than at class-definition time, so a circular import resolves on its own.
 
-One thing to add rather than delete: **every relative import ends in `.js`**, because
-`moduleResolution: nodenext` is what the scaffold sets. An extensionless specifier is a
-compile error, not a runtime surprise.
-
-## Benchmarks
-
-Median req/s, 64 connections, 5 runs. `@dunx/http` is a layer over
-`Bun.serve({ routes })`, so the gap to the raw row is dunx overhead and nothing else.
-
-| Framework            | Plain text  | JSON        | Path param  | Body validation |
-| -------------------- | ----------- | ----------- | ----------- | --------------- |
-| **@dunx/http**       | **137,539** | **119,912** | **124,867** | **75,769**      |
-| Elysia               | 135,907     | 127,524     | 129,497     | 74,858          |
-| Hono (Bun)           | 106,793     | 91,586      | 86,031      | 51,576          |
-| Fastify (Node)       | 42,923      | 42,871      | 44,309      | 18,642          |
-| NestJS (Fastify)     | 37,075      | 36,219      | 32,967      | 16,033          |
-| _Bun.serve (raw)_    | _136,940_   | _133,311_   | _128,930_   | _89,047_        |
-
-That is **3.3-4.7x NestJS on Fastify**, and 85-100% of raw `Bun.serve` depending on
-the scenario. Boot is **55 ms** against NestJS+Fastify's 287 ms.
-
-The harness runs Go, Rust and JVM subjects alongside these, and the NestJS
-subject is real NestJS with real `reflect-metadata` rather than a strawman. It
-also states what it cannot measure: the load generator shares a machine with
-the subject, and the closed-loop design is subject to coordinated omission.
-
-Reproduce it with `bun run --filter '@dunx/bench' start`; the methodology is in
-[internal/bench/README.md](internal/bench/README.md).
+One thing to add rather than delete: **every relative import ends in `.js`**,
+because `moduleResolution: nodenext` is what the scaffold sets. An extensionless
+specifier is a compile error rather than a runtime surprise.
 
 ## Documentation
 
@@ -128,30 +128,53 @@ Reproduce it with `bun run --filter '@dunx/bench' start`; the methodology is in
   introduction through agent tooling
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and
   what does not
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - what was measured, what was rejected,
-  and why
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - what was measured, what was
+  rejected, and why
 - **[ROADMAP.md](docs/ROADMAP.md)** - what is built and what is next
+
+## Performance
+
+Structure on Bun does not have to cost throughput. `@dunx/http` is a layer over
+`Bun.serve({ routes })` and lands at 85-100% of the raw server, within noise of
+Elysia, and 3.3-4.7x NestJS on Fastify. Boot is 55 ms against 287 ms.
+
+Median req/s, 64 connections, 5 runs:
+
+| Framework          | Plain text  | JSON        | Path param  | Body validation |
+| ------------------ | ----------- | ----------- | ----------- | --------------- |
+| **@dunx/http**     | **137,539** | **119,912** | **124,867** | **75,769**      |
+| Elysia             | 135,907     | 127,524     | 129,497     | 74,858          |
+| Hono (Bun)         | 106,793     | 91,586      | 86,031      | 51,576          |
+| NestJS (Fastify)   | 37,075      | 36,219      | 32,967      | 16,033          |
+| _Bun.serve (raw)_  | _136,940_   | _133,311_   | _128,930_   | _89,047_        |
+
+The harness runs Go, Rust and JVM subjects alongside these, and the NestJS
+subject is real NestJS with real `reflect-metadata`. It also states what it
+cannot measure: the load generator shares a machine with the subject, and the
+closed-loop design is subject to coordinated omission.
+
+Reproduce it with `bun run --filter '@dunx/bench' start`; the methodology is in
+[internal/bench/README.md](internal/bench/README.md).
 
 ## When not to use it
 
 Being honest about this up front is cheaper than a disappointed issue later.
 
-- **You do not want DI.** Elysia and Hono own this space, they are mature, and they
-  are faster to learn. The DI is the entire reason dunx exists; without it you are
-  paying boot cost and concepts for nothing.
-- **Boot time is your critical number.** 55 ms is fine for a service that starts once
-  and stays up, and wrong for a per-invocation serverless function.
-- **You need request-scoped or transient providers.** Not supported, rejected with
-  measurements.
-- **You are not certain you are on Bun.** No CommonJS build, no Node compatibility
-  layer. `Bun.serve`, `bun:sqlite`, `Bun.RedisClient` and `Bun.password` are
-  load-bearing throughout.
+- **You do not want DI.** Elysia and Hono own that space, they are mature, and
+  they are faster to learn.
+- **Boot time is your critical number.** 55 ms is fine for a service that starts
+  once and stays up, and wrong for a per-invocation serverless function.
+- **You need request-scoped or transient providers.** Not supported, rejected
+  with measurements.
+- **You are not certain you are on Bun.** No CommonJS build, no Node
+  compatibility layer. `Bun.serve`, `bun:sqlite`, `Bun.RedisClient` and
+  `Bun.password` are load-bearing throughout.
 - **You want a mature third-party ecosystem.** There is not one yet.
 
 ## Examples
 
-A ladder, not one per package. All four are kept alive by CI, and each exits 0 with
-no database, Redis or S3 installed.
+A ladder, not one per package. All four are kept alive by CI, and each exits 0
+with no database, Redis or S3 installed.
 
 | Example                                      | Answers                                                              |
 | -------------------------------------------- | -------------------------------------------------------------------- |
