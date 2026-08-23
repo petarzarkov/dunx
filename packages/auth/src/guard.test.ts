@@ -1,12 +1,6 @@
 import { AsyncRequestContext } from '@dunx/core';
-import {
-  buildContext,
-  HttpError,
-  mergeMeta,
-  Public,
-  Roles,
-  type DiscoveredRoute,
-} from '@dunx/http';
+import { HttpError, mergeMeta, Public, Roles } from '@dunx/http';
+import { buildContext, type DiscoveredRoute } from '@dunx/http/internal';
 import type { BunRequest } from 'bun';
 import { describe, expect, it } from 'bun:test';
 import type { Auth, Principal } from './auth.js';

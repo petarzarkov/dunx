@@ -3,19 +3,15 @@ import { describe, expect, it } from 'bun:test';
 /**
  * The supported surface, frozen. `@dunx/http` had grown to 173 barrel exports,
  * every one of them a semver promise, and about a third were the framework's own
- * plumbing. Those moved to `@dunx/http/internal`; the barrel still re-exports
- * them under a `@deprecated` block and drops them in 4.0.
+ * plumbing. Those live in `@dunx/http/internal` now.
  *
  * Freezing the list is what makes an addition show up in a diff, the same way
  * `site.test.tsx` freezes the published documentation set.
  */
 const supported = (text: string): readonly string[] => {
-  const marker = text.indexOf('@deprecated Import from `@dunx/http/internal`');
-  const head =
-    marker === -1 ? text : text.slice(0, text.lastIndexOf('/**', marker));
   return [
     ...new Set(
-      [...head.matchAll(/^export (?:type )?\{([^}]*)\}/gms)]
+      [...text.matchAll(/^export (?:type )?\{([^}]*)\}/gms)]
         .flatMap((match) => (match[1] ?? '').split(','))
         .map((name) => name.trim().replace(/^type /, ''))
         .filter(Boolean),

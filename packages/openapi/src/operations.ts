@@ -1,8 +1,5 @@
-import {
-  defaultStatusFor,
-  HttpStatusCode,
-  type DiscoveredRoute,
-} from '@dunx/http';
+import { HttpStatusCode } from '@dunx/http';
+import { defaultStatusFor, type DiscoveredRoute } from '@dunx/http/internal';
 import {
   convertObject,
   convertSchema,

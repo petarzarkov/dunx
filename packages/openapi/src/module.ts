@@ -10,11 +10,11 @@ import {
   ApiHidden,
   Controller,
   Get,
-  joinPath,
   Public,
   type Input,
   type RouteSchemas,
 } from '@dunx/http';
+import { joinPath } from '@dunx/http/internal';
 import { describeRoutes } from './discover.js';
 import {
   generateDocument,

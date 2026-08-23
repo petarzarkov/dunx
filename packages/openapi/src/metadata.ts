@@ -3,10 +3,10 @@ import {
   metaKey,
   PUBLIC,
   ROLES,
-  type DiscoveredRoute,
   type MetaKey,
   type MetaRecord,
 } from '@dunx/http';
+import { type DiscoveredRoute } from '@dunx/http/internal';
 
 /** What `@ApiDoc` adds that no schema can carry: prose, grouping, deprecation. */
 export interface ApiDocMeta {

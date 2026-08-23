@@ -19,19 +19,3 @@ export {
   type RequestConfig,
   type RequestMethod,
 } from './client/service.js';
-
-/**
- * The client's own plumbing, still reachable here and moving out in 4.0.
- * Import it from `@dunx/http/internal`, which carries no stability promise.
- *
- * @deprecated Import from `@dunx/http/internal`. Removed in 4.0.
- */
-export {
-  backoffDelay,
-  executeWithRetry,
-  isJsonBody,
-  isPlainObject,
-  isRetryableStatus,
-  retryAfterMs,
-  safeStringify,
-} from './internal.js';

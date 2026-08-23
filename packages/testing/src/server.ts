@@ -5,12 +5,12 @@ import {
   type ResolvedModule,
 } from '@dunx/core';
 import {
-  discoverRoutes,
   HttpFactory,
   type HttpApp,
   type HttpOptions,
   type Middleware,
 } from '@dunx/http';
+import { discoverRoutes } from '@dunx/http/internal';
 import { appOptions, testRoot, type TestAppOptions } from './app.js';
 import { testClient, type TestClient } from './client.js';
 

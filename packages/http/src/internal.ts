@@ -1,9 +1,9 @@
 /**
- * What the framework calls on itself. Every symbol here is still reachable from
- * the package barrel, deprecated, and leaves it in 4.0.
+ * What the framework calls on itself, and the only place it is exported from.
  *
- * The barrel is a semver promise, and 173 of them was more than this package
- * meant to make. What stays public is the surface an app writes against:
+ * The barrel was a semver promise 173 symbols wide, which is more than this
+ * package meant to make. What stays public there is the surface an app writes
+ * against:
  * decorators, options, contracts, errors, modules and the metadata helpers a
  * user's own guard reads. What is here is route-table construction, the
  * middleware fold, the relay codec and the discovery readers - things
