@@ -177,7 +177,7 @@ Reproduce it with `bun run --filter '@dunx/bench' start`; the methodology is in
 
 ## Built with dunx
 
-### [Firecracker](https://github.com/petarzarkov/firecracker)
+### [Firecracker](https://github.com/petarzarkov/firecracker) - [live](https://firecracker.petarzarkov.com/)
 
 A provably-fair crash game: bet during the window, watch the rocket climb,
 cash out before it explodes. Every round is verifiable after the fact.

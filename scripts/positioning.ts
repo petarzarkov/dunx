@@ -135,6 +135,7 @@ export const SHOWCASE: readonly Showcase[] = [
     name: 'Firecracker',
     what: 'A provably-fair crash game: bet during the window, watch the rocket climb, cash out before it explodes. Every round is verifiable after the fact.',
     repo: 'https://github.com/petarzarkov/firecracker',
+    url: 'https://firecracker.petarzarkov.com/',
     scale:
       '21 modules, 8 controllers, a WebSocket gateway and 4 job handlers across 165 backend files',
     packages: [
