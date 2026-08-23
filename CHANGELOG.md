@@ -4,6 +4,47 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.0.1 - 2026-08-23
+
+Drop the deprecated re-exports and fix what the screenshots showed
+
+`@dunx/http` no longer re-exports the 56 plumbing symbols that moved to
+`@dunx/http/internal` in 3.0.0. Those re-exports carried a `@deprecated` tag
+promising removal in 4.0; the package has no consumers to give a window to, so
+that notice is superseded rather than honoured, and the removal lands here.
+
+A patch rather than a major because the version is a statement about what
+happened to users, and nothing happened to any. The commit that removes them is
+marked breaking, so the API record stays accurate either way. The supported
+surface is 133 exports on the barrel and 13 on `./client`, unchanged from 3.0.0;
+`surface.test.ts` freezes both.
+
+The documentation site gained a screenshot script and six fixes it found.
+
+The hero sold the pitch the README stopped selling in 3.0.0: "Enterprise
+structure. Bun-native speed." over a throughput panel, before a reader knew what
+dunx was. It now leads with what the packages bundle, and speed moved down to
+sit with the benchmark summary.
+
+Prose ran at four different line lengths - 95, 107, 133 and 139 characters -
+because the reading measure the theme had a variable for was never set. It reads
+at 74 everywhere, and code blocks and tables still take the full column.
+
+A short page left the footer floating with 525px of dead space under it. On a
+phone the install command read `bun add @dunx/core @dunx/http @du`, scrollable
+with the scrollbar hidden, which looks the same as broken. Two sidebar entries
+sat unlabelled above the first section heading. The link to a guide's source was
+dimmed to caption grey with nothing to say it was clickable. Inline code carried
+a border that turned a sentence naming seven symbols into a ransom note.
+
+### Breaking changes
+
+- **http**: remove the deprecated re-exports ([`05139dc`](https://github.com/petarzarkov/dunx/commit/05139dcfd1a47cabc82d70245af736b708b604fb))
+
+### Fixes
+
+- **docs**: screenshot the site, then fix what it showed ([`6bc2502`](https://github.com/petarzarkov/dunx/commit/6bc25029a8111c0121d8b393ca5271a47295d483))
+
 ## 3.0.0 - 2026-08-23
 
 a smaller public surface, five transform fixes, and documentation that stops repeating itself
