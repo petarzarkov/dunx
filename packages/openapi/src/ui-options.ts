@@ -1,20 +1,13 @@
 /**
- * Every Swagger UI configuration parameter, as a typed object.
+ * Every Swagger UI configuration parameter, as a typed object - the full set from
+ * its own reference, minus the four dunx owns: `dom_id`, `domNode`, `spec` and
+ * `url`, which describe where the page is mounted rather than how it behaves.
  *
- * The full set from Swagger UI's own configuration reference, minus the four dunx
- * owns because they describe where the page is mounted rather than how it behaves:
- * `dom_id`, `domNode`, `spec` and `url`. `spec` in particular is not offered - the
- * document is embedded by `renderShell` and pointing Swagger UI at a URL instead is
- * a different design, not a setting.
- *
- * **Seven of Swagger UI's parameters are functions, and a server-rendered page
- * cannot carry a function.** The page is HTML built on the server; a JavaScript
- * closure has nowhere to travel. `.toString()`-ing one would work for a
- * self-contained function and break silently for one that captured anything, which
- * is the worst of both. So those are declared as {@link RawJs}: the source text of
- * an expression, evaluated in the browser, where nothing about the boundary is
- * hidden. `operationsSorter` and `tagsSorter` also accept Swagger UI's own
- * `'alpha'`/`'method'` shorthands, which covers the common case without any of that.
+ * Seven of them are functions, and a server-rendered page cannot carry one.
+ * `.toString()` would work for a self-contained function and break silently for
+ * one that captured anything, so those are {@link RawJs}: the source of an
+ * expression, evaluated in the browser. `operationsSorter` and `tagsSorter` also
+ * take Swagger UI's `'alpha'`/`'method'` shorthands.
  */
 
 /**

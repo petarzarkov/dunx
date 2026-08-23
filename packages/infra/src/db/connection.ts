@@ -38,17 +38,11 @@ export const drizzleOptions = (init: {
 });
 
 /**
- * What owns the socket or the file handle.
+ * What owns the socket or the file handle. A drizzle handle has no `close()` and
+ * no lifecycle hook, so something has to hold the driver and shut it down; every
+ * query method is still drizzle's.
  *
- * drizzle is the interface for *querying* - this package adds no query
- * abstraction over it. But a drizzle handle has no `close()` and no lifecycle
- * hook, so something has to hold the driver, know how to shut it down, and hand
- * the raw handle back. That is all this is: no `sql`, no `all`, no `get`, no
- * `run`. Those are drizzle's.
- *
- * It is an abstract class rather than an interface so it is an injection token -
- * `constructor(private readonly connection: DbConnection)` is how a service
- * reaches `raw` without knowing which backend is configured.
+ * An abstract class rather than an interface, so it is an injection token.
  */
 export abstract class DbConnection<TDb = unknown> implements OnShutdown {
   abstract readonly backend: BackendName;
@@ -73,21 +67,13 @@ export abstract class DbConnection<TDb = unknown> implements OnShutdown {
   abstract close(): Promise<void>;
 
   /**
-   * A round trip, for a health check. Throws if the connection is unusable.
+   * A round trip, for a health check. Throws if the connection is unusable. Here
+   * rather than in `@dunx/http`'s health module because a round trip is
+   * dialect-specific and an indicator building its own `sql` tag would put
+   * drizzle in the web layer. `QueryProbe` is satisfied structurally.
    *
-   * Here rather than in `@dunx/http`'s health module because a round trip is
-   * dialect-specific and this is what knows the dialect. It also keeps the
-   * `drizzle-orm` peer where it already is: an indicator building its own `sql`
-   * tag would put drizzle into the web layer. `@dunx/http`'s `QueryProbe` is
-   * satisfied by this method structurally, with no adapter, which is why neither
-   * package depends on the other.
-   *
-   * **Concrete rather than abstract, and that is a deliberate trade.** `abstract`
-   * would be the honest shape and it would break every connection an app has
-   * subclassed, for one method, in a package that versions in lockstep. So the base
-   * throws instead. The blast radius is what makes it acceptable: this is reached
-   * only by an app that opts into `DatabaseIndicator`, and it says exactly what to
-   * do rather than reporting a connection healthy without having checked.
+   * Concrete rather than abstract: `abstract` would break every subclassed
+   * connection for one method, so the base throws with what to do instead.
    */
   async ping(): Promise<void> {
     await Promise.resolve();

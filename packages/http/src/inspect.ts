@@ -14,18 +14,13 @@ import { discoverGateway } from './ws/discover.js';
 import { isGateway } from './ws/marker.js';
 
 /**
- * Routes and gateways read off the module graph, constructing nothing.
+ * Routes and gateways read off the module graph, constructing nothing. The
+ * traversal is `@dunx/core`'s; here is the half needing this package's metadata -
+ * route markers, guards, `@Roles`/`@Public`, the gateway marker.
  *
- * The traversal itself is `@dunx/core`'s - `collectModules`, `readControllers`,
- * `dependenciesOf`. What is here is the half that needs this package's own
- * metadata: route markers, guards, `@Roles`/`@Public`, and the gateway marker.
- * Two consumers read it, `@dunx/mcp` from outside a process that never boots and
- * `@dunx/dashboard` from inside one that already has.
- *
- * Routes read off the module graph. `discoverRoutes` walks a prototype chain, and
- * `Object.create(Controller.prototype)` is that chain with nothing behind it:
- * `instance.constructor` still resolves to the class and every method is still
- * reachable, so no constructor - or dependency of one - has to exist.
+ * `discoverRoutes` walks a prototype chain, and
+ * `Object.create(Controller.prototype)` is that chain with nothing behind it, so
+ * no constructor or dependency of one has to exist.
  */
 interface Prototyped {
   readonly prototype: object;

@@ -32,17 +32,13 @@ const providers = (optionsProvider: Registration) => [
 /**
  * Arms every `@Cron`, `@Interval` and `@OnceOnBoot` in the graph at boot.
  *
- * In-process and single-node, stated outright. Two replicas both run every
- * schedule, because nothing here coordinates: a schedule that must fire once across
- * a fleet is a job, and that is bullmq's `upsertJobScheduler` through
- * `@dunx/infra/queue`. Wrapping that surface here was refused for the same reason
- * the queue dashboard was.
+ * In-process and single-node: two replicas both run every schedule, since nothing
+ * here coordinates. A schedule that must fire once per fleet is a job, through
+ * bullmq's `upsertJobScheduler`.
  *
- * A `forRoot` pair rather than a decorated class, and the options are why: a scope
- * is keyed on the module reference and `forRoot()` returns a fresh object per call,
- * so two importers calling a zero-argument one would build two scopes, two
- * registries and two copies of every schedule. `tz`, `enabled` and `keepAlive` are
- * real, so it is called once at the root.
+ * A `forRoot` pair rather than a decorated class because a scope is keyed on the
+ * module reference, so two importers calling a zero-argument one would build two
+ * registries and two copies of every schedule.
  */
 @Module({})
 export class ScheduleModule {
@@ -66,8 +62,6 @@ export class ScheduleModule {
    * });
    * ```
    *
-   * It earns its place the way `RedisModule`'s does: reading a zone off
-   * `ConfigService` is the one thing a zero-argument `forRoot` cannot do.
    */
   static forRootAsync(
     load: () => ScheduleOptionsInit | Promise<ScheduleOptionsInit>,

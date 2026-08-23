@@ -41,23 +41,15 @@ const flushPending = (): void => {
 };
 
 /**
- * One `console.log` per request is one `write(2)` per request, and measured on
- * `bun run logging` it cost **1.84 µs** - the largest single component of request
- * logging, more than the `JSON.stringify` that produced the line. Concatenating
- * into one string and writing it once per event-loop turn costs **0.27 µs**.
+ * A `write(2)` per entry cost 1.84 us, the largest single component of request
+ * logging; concatenating and writing once per event-loop turn costs 0.27 us.
  *
- * **The trade:** a line that is still in this buffer is lost if the process dies
- * without unwinding - a `SIGKILL`, an OOM kill, a segfault - which is exactly when
- * the log matters most. Three things bound it:
+ * The trade is that a buffered line is lost if the process dies without unwinding.
+ * Three things bound it: `warn` and above are never buffered and flush what is
+ * queued behind them, the window is one event-loop turn rather than a timer, and
+ * `flush()` is public and called from `onShutdown()` and `process.on('exit')`.
  *
- * - **`warn`, `error` and `fatal` are never buffered.** They go out immediately and
- *   flush everything queued ahead of them, so the entries you go looking for after
- *   a crash are the ones that were never held back.
- * - The window is **one event-loop turn**, not a timer interval.
- * - `flush()` is public, `onShutdown()` calls it, and so does `process.on('exit')`.
- *
- * `new ConsoleLogger(context, level, false)` opts out and writes every entry as it
- * happens.
+ * `new ConsoleLogger(context, level, false)` opts out.
  */
 const emit = (line: string, toError: boolean): void => {
   if (toError) {

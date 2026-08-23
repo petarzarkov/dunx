@@ -28,17 +28,13 @@ export type TemplateName = (typeof TEMPLATES)[number];
 export const VERSION_PLACEHOLDER = '__DUNX_VERSION__';
 
 /**
- * Names a package cannot ship as-is, so they ship prefixed and are renamed on write.
+ * Names a package cannot ship as-is, so they ship prefixed and are renamed on
+ * write. `.gitignore` is the known one, which npm renames to `.npmignore`.
  *
- * `.gitignore` is the known one: npm renames a published copy to `.npmignore`.
- *
- * **`bunfig.toml` is the one that was silently missing.** It is stripped from the
- * tarball entirely - presumably so a dependency cannot hijack the installing
- * project's Bun config - and it is the single file dunx asks an app to have. Every
- * app scaffolded from a published `@dunx/create-app` therefore had no
- * `@dunx/transform/preload`, and failed at boot with the very error the guide
- * describes. Measured with `bun pm pack`, and `pack.test.ts` now measures it on
- * every run rather than trusting this comment.
+ * `bunfig.toml` is stripped from the tarball entirely, and it is the single file
+ * dunx asks an app to have - so every app scaffolded from a published
+ * `@dunx/create-app` had no preload and failed at boot. `pack.test.ts` measures
+ * it on every run.
  */
 const RENAMED = Object.freeze({
   _gitignore: '.gitignore',
@@ -46,19 +42,14 @@ const RENAMED = Object.freeze({
 });
 
 /**
- * Entries that do not make a directory non-empty for scaffolding purposes.
+ * Entries that do not make a directory non-empty for scaffolding. `.git` is the
+ * one that matters, since `git init` then scaffold is the documented way to start.
+ * `.gitkeep` means empty, `.DS_Store` comes from opening the folder, and `LICENSE`
+ * is what GitHub's create-a-repository flow leaves.
  *
- * `.git` is the one that matters: `git init` then scaffold into the repo is the
- * documented way to start, and refusing it blocks the flow outright. `.gitkeep`
- * exists only so git can track an otherwise empty directory, so it *means* empty.
- * `.DS_Store` appears from merely opening the folder in Finder. `LICENSE` is what
- * GitHub's create-a-repository flow leaves in a fresh clone.
- *
- * The list is deliberately short, and the test for it is whether the template
- * writes that name. It does not write any of these four, so ignoring them can
- * never destroy anything. `.gitignore` and `README.md` are excluded for exactly
- * that reason: the template writes both, and silently overwriting a user's copy
- * is what `--force` exists to gate.
+ * The test is whether the template writes that name. It writes none of these four,
+ * so ignoring them destroys nothing; `.gitignore` and `README.md` are excluded
+ * because it does write both.
  */
 const IGNORED_WHEN_EMPTY: ReadonlySet<string> = new Set([
   '.DS_Store',

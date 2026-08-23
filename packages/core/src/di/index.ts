@@ -41,19 +41,16 @@ export {
 // "drain, then make sure the process actually ends" is three chances to fix the
 // hang in one of them and not the others - which is how it got missed the first time.
 export { ShutdownHooks, type ShutdownHookOptions } from './shutdown-hooks.js';
-// collectModules + readControllers are the adapter seam: an HTTP package needs to
-// walk the import graph and find which instances to scan. Injector, readModule and
-// the lifecycle type guards stay internal - nothing outside core consumes them, and
-// exporting Injector would freeze the container's shape as public API.
+// collectModules + readControllers are the adapter seam: an HTTP package walks the
+// import graph and finds which instances to scan. Injector, readModule and the
+// lifecycle guards stay internal - exporting Injector would freeze the container's
+// shape as public API.
 //
-// `isModuleRef` and `findRootModule` are here because `@Module`'s marker is here.
-// Every tool that takes an entry path has to find the root module among a file's
-// exports, and a second implementation of that is a second set of conventions:
-// requiring `default`/`root` is what made both CLIs fail on a scaffolded app.
-// The graph readers. Here rather than in `@dunx/mcp`, which is where they were
-// written, because a second consumer exists: `@dunx/dashboard` reports the same
-// container from inside a running app, and a dashboard peer-depending on an MCP
-// server to borrow a traversal is upside down. `@dunx/mcp` re-exports them.
+// `isModuleRef` and `findRootModule` are here because `@Module`'s marker is, and a
+// second implementation would be a second set of conventions.
+//
+// The graph readers live here rather than in `@dunx/mcp`, where they were written,
+// because `@dunx/dashboard` is a second consumer. `@dunx/mcp` re-exports them.
 export {
   dependenciesOf,
   modulesOf,

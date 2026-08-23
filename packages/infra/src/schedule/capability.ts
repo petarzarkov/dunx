@@ -1,23 +1,14 @@
 /**
- * Whether this Bun honours `Bun.cron`'s `tz` option.
+ * Whether this Bun honours `Bun.cron`'s `tz` option. On 1.3.14 it is silently
+ * ignored and an unknown zone does not throw, so a zoned `@Cron` would run at UTC
+ * with no error. Bun 1.4 honours it and flips the default to the local zone
+ * (oven-sh/bun#36461); `ScheduleRegistry` passes `tz` on every call.
  *
- * On 1.3.14 the option is **silently ignored**: `Bun.cron.parse` returns the same
- * instant with and without it, and a zone id nothing recognises does not throw. So
- * `@Cron('0 9 * * *', { tz: 'America/New_York' })` would run at 09:00 UTC with no
- * error anywhere.
+ * Probed rather than read off `Bun.version`: a version string says which build
+ * this is, not what it does.
  *
- * Bun 1.4 honours it, rejects an unknown zone with `Bun.cron: unknown time zone`,
- * and flips the default from UTC to the container's local zone
- * (oven-sh/bun#36461). `ScheduleRegistry` passes `tz` on every call, so the flipped
- * default reaches no schedule.
- *
- * Probed rather than read off `Bun.version`, because a version string says which
- * build this is and not what it does: a backport, a patch release or a fork would
- * make the comparison wrong in whichever direction happened to be unlucky.
- *
- * The probe asks for the same wall-clock time in UTC and in a zone half an hour off
- * it, and reads whether the two answers differ. Kolkata is UTC+05:30, so an offset
- * this cannot round away.
+ * The probe asks for one wall-clock time in UTC and in Kolkata, UTC+05:30, an
+ * offset no rounding can hide.
  */
 
 const ZONE = 'Asia/Kolkata';

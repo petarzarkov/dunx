@@ -23,18 +23,14 @@ export interface FactoryProvider<T, D extends Deps> {
 }
 
 /**
- * What a `forRootAsync` takes: a factory, its dependencies, and **the modules those
- * dependencies come from**.
+ * What a `forRootAsync` takes: a factory, its dependencies, and the modules those
+ * dependencies come from.
  *
- * `imports` exists because of where the factory runs. It is written at the call site,
- * inside the importing module, but the provider it produces is registered in the
- * *configured* module's scope - so a factory injecting `DbConnection` is asking a
- * library module to resolve a token only the app's module can see. Naming the module
- * it comes from is what closes that, and it is the same field Nest's
- * `forRootAsync({ imports })` fills.
+ * `imports` exists because the factory is written at the call site but its provider
+ * is registered in the configured module's scope, so a factory injecting
+ * `DbConnection` asks a library module to resolve a token only the app can see.
  *
- * Not needed for a token from a `global: true` module. `ConfigService` is the common
- * case and `ConfigModule` is global, which is why most factories need nothing here.
+ * Not needed for a token from a `global: true` module, which `ConfigModule` is.
  */
 export interface AsyncModuleConfig<T, D extends Deps> extends FactoryProvider<
   T,

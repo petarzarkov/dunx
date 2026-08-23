@@ -7,13 +7,9 @@ import { ScheduleDemo } from './schedule.demo.js';
 /**
  * `Bun.cron` behind `@Cron`, `@Interval` and `@OnceOnBoot`, armed at boot.
  *
- * `keepAlive: false`, unlike the default. `Bun.cron` holds the event loop open so a
- * process with an armed schedule and nothing else to do waits for the next fire;
- * this app has a server holding it open already, and `bun run tour` has to exit.
- *
- * `tz` comes from the config because that is the one thing a zero-argument
- * `forRoot` cannot reach. A named zone is refused at boot on a Bun that ignores
- * `Bun.cron`'s `tz` option, rather than running at the UTC hour and saying nothing.
+ * `keepAlive: false`: `Bun.cron` would hold the event loop open, and this app has
+ * a server doing that already while `bun run tour` has to exit. `tz` comes from
+ * the config, and a named zone is refused at boot on a Bun that ignores it.
  */
 @Module({
   imports: [

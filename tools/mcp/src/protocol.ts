@@ -1,18 +1,12 @@
 /**
  * The slice of the Model Context Protocol a read-only tool server needs:
- * `initialize`, `tools/list`, `tools/call`, and the notification that follows
- * initialize.
+ * `initialize`, `tools/list`, `tools/call`, and the notification after initialize.
  *
- * Hand-written rather than taken from `@modelcontextprotocol/sdk`, which is the
- * one place in dunx where "never invent what a mature library solves" does not
- * apply: this is newline-delimited JSON-RPC 2.0 with three methods, fully
- * specified, and about sixty lines. The rule exists for ORMs, validators, auth
- * flows and job queues - years of edge cases - not for a framing loop. Keeping it
- * dependency-free is also what lets `bunx @dunx/mcp` resolve nothing at all.
+ * Hand-written rather than `@modelcontextprotocol/sdk`: this is
+ * newline-delimited JSON-RPC 2.0 with three methods and about sixty lines, and
+ * staying dependency-free is what lets `bunx @dunx/mcp` resolve nothing.
  *
- * If this server ever grows resources, prompts, sampling or progress
- * notifications, take the SDK: at that point the protocol surface stops being
- * something worth hand-holding.
+ * Take the SDK if this ever grows resources, prompts, sampling or progress.
  */
 export const PROTOCOL_VERSION = '2025-06-18';
 

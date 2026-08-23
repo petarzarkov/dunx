@@ -4,17 +4,12 @@ import { sql } from 'drizzle-orm';
 import * as schema from '../database/schema.js';
 
 /**
- * better-auth's tables, created at `onInit` for the same reason `Ledger` creates its
- * own: a `:memory:` database has nowhere to keep a migration journal. A real app runs
- * `bunx @better-auth/cli generate` and then `drizzle-kit`, which own the SQL.
+ * better-auth's tables, created at `onInit` because a `:memory:` database has
+ * nowhere to keep a migration journal. A real app runs
+ * `bunx @better-auth/cli generate` and then `drizzle-kit`.
  *
- * The column names are drizzle's defaults for the schema in `database/auth.schema.ts`
- * - camelCase, because that file passes no explicit names.
- */
-/**
- * One statement per entry, not one template with four. `db.run` goes through
- * `bun:sqlite`'s `prepare`, which compiles a single statement and silently drops
- * whatever follows the first semicolon - the table after it simply never exists.
+ * One statement per entry: `db.run` goes through `bun:sqlite`'s `prepare`, which
+ * compiles one statement and silently drops whatever follows the first semicolon.
  */
 const TABLES = [
   sql`CREATE TABLE IF NOT EXISTS user (
@@ -72,11 +67,8 @@ export class AuthTables implements OnInit {
     private readonly logger: Logger,
   ) {}
 
-  /**
-   * `onInit`, not the module factory: `betterAuth()` opens no connection and issues
-   * no query when it is built, so the tables only have to exist before the first
-   * request - and this runs before `listen()` binds.
-   */
+  /** `onInit` rather than the module factory: `betterAuth()` queries nothing when
+   * built, and this still runs before `listen()` binds. */
   onInit(): void {
     for (const table of TABLES) this.db.run(table);
     this.logger.info(`better-auth tables created (${TABLES.length})`);

@@ -6,19 +6,13 @@ import { snapshotOf } from './api/snapshot.js';
 import type { DashboardOptions } from './options.js';
 
 /**
- * What the mount answers, and nothing else. A path outside it never reaches here -
- * the middleware calls `next()` - which is what keeps the app's own routes and its
- * 404 behaving exactly as before.
+ * What the mount answers, and nothing else. A path outside it never reaches here.
  *
- * Three kinds of thing live under the mount:
- *
- * - `/` and any other non-`api`, non-`queues` path serve the page, so a client-side
- *   route survives a reload.
- * - `/api/*` are dunx's own JSON endpoints. Every panel has one, and they are
- *   supported rather than an implementation detail of the page - `curl` is a real
- *   way to read this.
- * - `/queues/*` is **bull-board's**, dispatched against its own route table. dunx
- *   renders no queue UI; see `board.ts`.
+ * - `/` and any other non-`api`, non-`queues` path serve the page, so a
+ *   client-side route survives a reload.
+ * - `/api/*` are dunx's own JSON endpoints, supported rather than an
+ *   implementation detail of the page.
+ * - `/queues/*` is bull-board's, dispatched against its own table.
  */
 
 const json = (body: unknown, status = 200): Response =>

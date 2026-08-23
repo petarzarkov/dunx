@@ -21,24 +21,15 @@ const modulesOf = (root: ModuleRef): readonly ModuleNode[] =>
   modulesIn(root, { isGateway });
 
 /**
- * Everything here reads the app. Nothing boots it.
+ * Everything here reads the app. Nothing boots it: `AppFactory.create` would open
+ * database connections, start queue workers and run every `onInit`, so an agent
+ * asking about the code would be running it.
  *
- * `AppFactory.create` instantiates every provider and awaits every async factory
- * before it returns, so booting an app to answer "what routes exist" would open
- * database connections, start queue workers, bind sockets and run every `onInit` -
- * an agent asking a question about the code would be running the code, with side
- * effects, against whatever environment happened to be configured.
- *
- * The cost of that choice: no runtime state. The value of a config field, or
- * whether the database is reachable, is not answerable here and should not be. If
- * one is ever genuinely needed it belongs in a separately named tool whose
- * description says it boots the app, so the cost is visible at the call site
- * rather than hidden inside every answer.
+ * The cost is no runtime state. Anything needing it belongs in a separately named
+ * tool whose description says it boots the app.
  *
  * Every filter is optional and omitting it means everything, so a caller that
- * knows nothing still gets a useful answer on the first call. They exist because a
- * large app's full route table is a lot of tokens to hand a model that asked about
- * one path.
+ * knows nothing still gets a useful first answer.
  */
 const NO_ARGS = Object.freeze({ type: 'object', properties: {} });
 

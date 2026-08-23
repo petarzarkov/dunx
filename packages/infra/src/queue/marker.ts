@@ -11,24 +11,15 @@ export interface JobMeta {
   /** The job name within that queue - what `publish` addresses. */
   readonly name: string;
   /**
-   * Run this queue's jobs in a **child process** rather than on the consuming
-   * process's event loop.
+   * Run this queue's jobs in a child process rather than on the consuming
+   * process's event loop. Per queue, since bullmq opens one `Worker` per queue:
+   * marking any handler marks the queue, and the boot log says which got what.
    *
-   * Per queue rather than per handler: bullmq opens one `Worker` per queue and a
-   * worker is either sandboxed or not, so marking any handler on a queue marks
-   * the queue. The boot log says which each queue got.
+   * A handler that blocks or crashes takes its child down and leaves the server
+   * answering, and the child's stdout is still the parent's. It costs a container
+   * per child and an IPC hop per job.
    *
-   * What it buys is isolation and traceability at once. A handler that blocks,
-   * leaks or crashes takes its child down and leaves the server answering, and
-   * the child's stdout is still the parent's - so its log lines land in the same
-   * stream, with `job.log()` putting them on the job for bull-board as well.
-   *
-   * What it costs is a container per child and an IPC hop per job, which is why a
-   * short handler is better left in the foreground.
-   *
-   * Needs `QueueModule.forRoot({ processor })` - the file bullmq forks into. A
-   * queue marked `background` with no processor configured is a boot error rather
-   * than a silent demotion to the foreground.
+   * Needs `QueueModule.forRoot({ processor })`; without one it is a boot error.
    */
   readonly background?: boolean;
 }

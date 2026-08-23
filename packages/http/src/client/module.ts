@@ -107,13 +107,8 @@ export class HttpModule {
   }
 
   /**
-   * `forRoot` with the options behind a factory, which is the one thing a
-   * zero-argument `forRoot` cannot do: read the base url or the timeout off
-   * `ConfigService`.
-   *
-   * There is no separate async machinery - the container resolves eagerly and
-   * awaits factories before any constructor runs, so awaited config is settled by
-   * the time anything is built.
+   * `forRoot` with the options behind a factory, so the base url or the timeout
+   * can come off `ConfigService`.
    *
    * ```ts
    * HttpModule.forRootAsync({

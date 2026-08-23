@@ -76,17 +76,14 @@ export const Roles = (...roles: readonly string[]) => meta(ROLES, roles);
 export const Public = () => meta(PUBLIC, true);
 
 /**
- * Route, but not documented. Valid on a method or on a class.
+ * Route, but not documented. Valid on a method or a class.
  *
- * The motivating case is a handler mounted on a wildcard: `@dunx/auth` routes
- * `<basePath>/*` to Better Auth's own handler, which is real and has to be
- * routed, but `*` is not an OpenAPI path template - so documenting it produced an
- * invalid entry named after an internal class, next to the 45 paths
- * `betterAuthDocument` describes properly.
+ * The motivating case is a wildcard mount: `@dunx/auth` routes `<basePath>/*` to
+ * better-auth's handler, and `*` is not an OpenAPI path template, so documenting
+ * it produced an invalid entry named after an internal class.
  *
- * It lives here rather than in `@dunx/openapi` because `@dunx/auth` must not
- * depend on the documentation package to say a route is undocumented, and this is
- * where the rest of the route metadata already is.
+ * Here rather than in `@dunx/openapi` so `@dunx/auth` need not depend on the
+ * documentation package to say a route is undocumented.
  */
 export const ApiHidden = () => meta(HIDDEN, true);
 

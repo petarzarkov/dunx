@@ -14,10 +14,8 @@ import {
 import type { BunRequest } from 'bun';
 import { Lobby } from './lobby.service.js';
 
-/**
- * Served by the same `Bun.serve` call as the HTTP routes: `HttpFactory` discovers
- * it from `providers`, and `listen()` mounts the upgrade as a native route.
- */
+/** Served by the same `Bun.serve` call as the HTTP routes: `listen()` mounts the
+ * upgrade as a native route. */
 @Gateway('/chat')
 export class ChatGateway {
   constructor(
@@ -26,13 +24,9 @@ export class ChatGateway {
   ) {}
 
   /**
-   * Runs before the socket exists, and is the only place a connection can be
-   * refused: return a `Response` and there is no upgrade. Anything else returned
-   * becomes `socket.data.context`, which is how a room name or an authenticated
-   * user gets carried onto the connection.
-   *
-   * It is handed the `BunRequest` because the upgrade really is a route - Bun
-   * matched it - so headers, query and path params are all readable here.
+   * The only place a connection can be refused: return a `Response` and there is
+   * no upgrade. Anything else becomes `socket.data.context`. Handed the
+   * `BunRequest`, since Bun matched the upgrade as a route.
    */
   @OnUpgrade()
   upgrade(req: BunRequest): Response | { nickname: string } {
@@ -45,23 +39,18 @@ export class ChatGateway {
 
   @OnOpen()
   opened(socket: Socket): void {
-    // Bun's own pub/sub - topics live in the runtime, not in a JavaScript map.
+    // Bun's own pub/sub: topics live in the runtime.
     socket.subscribe(Lobby.TOPIC);
     socket.send('welcome');
   }
 
   @OnMessage('say')
   say(text: string): { delivered: number } {
-    // The broadcast reaches everyone subscribed; the return value is replied to
-    // the sender under the same event name.
+    // Broadcast reaches every subscriber; the return value replies to the sender.
     return { delivered: this.lobby.broadcast(text) };
   }
 
-  /**
-   * Backpressure relieved: Bun buffered because the client was not reading fast
-   * enough and has now flushed. This is where a server streaming to a slow
-   * consumer resumes.
-   */
+  /** Backpressure relieved: where a server streaming to a slow consumer resumes. */
   @OnDrain()
   drained(socket: Socket): void {
     this.logger.info(`${socket.data.path} drained, safe to resume sending`);

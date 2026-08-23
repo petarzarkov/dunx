@@ -1,25 +1,16 @@
 import type { DashboardOptions } from './options.js';
 
 /**
- * bull-board, mounted. **dunx renders no queue UI of its own.**
+ * bull-board, mounted. dunx renders no queue UI of its own: a hand-rolled table
+ * was written here and deleted, because bull-board is years of edge cases with
+ * flows, job logs, the repeatable-job editor and per-queue metrics.
  *
- * This package briefly did - a table over `getJobCounts`, `getJobs` and seven
- * commands - and that was the wrong call under Rule 1's second half: never invent
- * what a mature library already solves. bull-board is years of edge cases with
- * flows, job logs, the repeatable-job editor, per-queue metrics, redis stats and a
- * pause/retry/clean surface nobody is going to re-derive correctly.
+ * It was hand-rolled because mounting bull-board on `Bun.serve` needed an adapter.
+ * bull-board 8.6.0 ships one, so the integration is three calls - which is also
+ * what surfaced the `getWorkers()` bug, since bull-board asked a question the
+ * hand-rolled panel had designed around. See `QueueConnection.#handleErrors`.
  *
- * The reason it was hand-rolled was that mounting bull-board on `Bun.serve` meant
- * writing a `BunServeAdapter` to satisfy its interface, which the deleted
- * `@dunx/queue-dashboard` did and which was a liability. **That reason expired:**
- * bull-board 8.6.0 ships `@bull-board/bun`, an official `BunAdapter`. So the
- * integration is now three calls and dunx owns none of the queue surface - which is
- * also what surfaced the `getWorkers()` bug: bull-board asks the question dunx's own
- * panel had decided not to, and the answer turned out to be wrong for a reason in
- * `@dunx/infra/queue`. See `QueueConnection.#handleErrors`.
- *
- * All three packages are **optional peers**. An app with no queues installs none of
- * them and the board is simply absent, with the queues nav item explaining why.
+ * All three packages are optional peers; without them the board is absent.
  */
 
 /** bull-board's `BaseAdapter`, restated to the one thing this file does with it. */
@@ -95,12 +86,9 @@ export interface Board {
  * socket for it.
  */
 /**
- * The names alone, answerable **without opening anything**.
- *
- * That separation is the whole reason `/_dunx/api/queues` and `/_dunx/queues` are
- * different endpoints: the page asks this one on every poll to decide whether to
- * offer the link, and it must not open a socket to answer. Only somebody actually
- * opening the board does that.
+ * The names alone, answerable without opening anything - which is why
+ * `/_dunx/api/queues` and `/_dunx/queues` are different endpoints. The page polls
+ * this one to decide whether to offer the link, and must not open a socket for it.
  */
 export const boardNames = (
   options: DashboardOptions,
@@ -214,19 +202,14 @@ export const buildBoard = async (
 };
 
 /**
- * Bun's route patterns, matched against a path.
+ * Bun's route patterns, matched against a path. bull-board's table carries
+ * `:queueName`, `:jobId` and a `static/*` prefix, thirty-odd patterns; an
+ * exact-match version 404'd every job view.
  *
- * bull-board's table is not a list of literals - it carries `:queueName`,
- * `:jobId`, `:queueStatus` and a `static/*` prefix, thirty-odd patterns in all.
- * The first version of this did exact-match plus one wildcard and 404'd every
- * job view and every per-queue API call, which is the bug that produced
- * `{"error":"no such bull-board route"}` on a page bull-board itself renders.
- *
- * This **is** a small path matcher, and dunx bans writing one - for the app's
- * routes, where `Bun.serve({ routes })` does it natively and better. It cannot
- * here: the board is built on the first request for it, long after `listen()`
- * folded the route table, so there is nothing to hand these to. The compensation
- * is that it never sees an app's routes, only the table bull-board handed over.
+ * This is a small path matcher, which dunx bans for an app's routes because
+ * `Bun.serve({ routes })` does it natively. It cannot here: the board is built on
+ * the first request for it, long after `listen()` folded the table. It never sees
+ * an app's routes, only bull-board's.
  */
 interface Pattern {
   readonly segments: readonly string[];

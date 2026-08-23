@@ -5,20 +5,12 @@ import type { RouteContext } from '../server/context.js';
 import { StaticOptions } from './options.js';
 
 /**
- * Static files, on `Bun.file`.
+ * Static files, on `Bun.file`. A `Bun.file` handed to a `Response` already
+ * streams, sets `content-type`, answers a `Range` request and uses `sendfile(2)`,
+ * so this file is a path check and a cache policy.
  *
- * Nest has `ServeStaticModule` over `serve-static`, which is Express middleware
- * doing its own `stat`, its own range parsing, its own ETag and its own MIME table.
- * None of that is needed here: `Bun.file(path)` handed to a `Response` already
- * streams, already sets `content-type` from the extension, already answers a
- * `Range` request, and does the whole thing with `sendfile(2)` rather than reading
- * into JavaScript. So this file is a **path check and a cache policy**, and that is
- * the entire justification for it existing.
- *
- * A middleware rather than routes, for the same reason the dashboard is one: the
- * file set is whatever is on disk at request time, and turning it into a
- * `Bun.serve` route table would mean walking a directory at boot and being wrong
- * the moment anything changed.
+ * A middleware rather than routes: the file set is whatever is on disk at request
+ * time, and a route table would be walked at boot and wrong thereafter.
  */
 export class StaticFiles implements Middleware {
   readonly #options: StaticOptions;

@@ -2,18 +2,13 @@ import type { FileSink } from 'bun';
 
 /**
  * Drains `source` into `sink` one chunk at a time, returning the byte count.
+ * Neither write path takes a stream: `Bun.write(path, stream)` matches no
+ * overload and persists `"[object ReadableStream]"`, and its `Response` overload
+ * never settles on a streamed body. A sink also keeps one chunk resident, so a
+ * file larger than memory still transfers.
  *
- * This exists because neither write path takes a stream. `Bun.write(path,
- * stream)` matches no overload and silently persists the string
- * `"[object ReadableStream]"`, and its `Response` overload never settles when
- * the response body is itself a stream (measured on Bun 1.3.14). A sink is also
- * the only option that keeps the promise this package makes: one chunk is
- * resident at a time, so a file larger than memory still transfers.
- *
- * `FileSink.write` returns a promise once its buffer fills, which is how
- * backpressure reaches the producer - hence the await. Its return value is a
- * buffered-bytes counter rather than a per-chunk count, so the total is taken
- * from the chunks instead.
+ * The await is backpressure: `FileSink.write` returns a promise once its buffer
+ * fills. Its return is a buffered-bytes counter, so the total comes from chunks.
  */
 export const pump = async (
   sink: FileSink,

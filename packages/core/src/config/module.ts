@@ -34,13 +34,11 @@ export interface ConfigModuleOptions<T extends object> {
    * ConfigModule.forRoot({ validate, as: AppConfigService });
    * ```
    *
-   * Without this, `inject: [ConfigService]` resolves to
+   * Without it, `inject: [ConfigService]` resolves to
    * `ConfigService<Record<string, unknown>>` and a factory declaring
-   * `ConfigService<AppConfig>` is rejected - parameters are contravariant, and
-   * the token carries no type argument to recover. A subclass is a distinct
-   * runtime value, so it is both a precise token and a usable annotation.
-   *
-   * `ConfigService` stays bound to the same instance, so either injects.
+   * `ConfigService<AppConfig>` is rejected: parameters are contravariant and the
+   * token carries no type argument. `ConfigService` stays bound to the same
+   * instance, so either injects.
    */
   readonly as?: new (values: T) => ConfigService<T>;
 }

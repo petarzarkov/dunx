@@ -1,27 +1,12 @@
 /**
- * Every area in full, with **three** exceptions: `/db`, `/queue` and `/pagination`.
+ * Every area in full, except `/db`, `/queue` and `/pagination`. If an area is here
+ * at all, all of it is.
  *
- * The rule, so which barrel has a symbol is never a guess: if an area is here at
- * all, all of it is here.
+ * `/db` and `/queue` each reach an optional peer through a static import, so
+ * re-exporting either would make `drizzle-orm` or `ioredis` a hard requirement of
+ * `import '@dunx/infra'`. `/pagination` is absent through drift.
  *
- * `/db` and `/queue` are absent for the same reason, and it is the one that
- * matters: each reaches an **optional peer** through a static import, so
- * re-exporting either would make that peer a hard requirement of
- * `import '@dunx/infra'` for every consumer. bullmq's own entry point imports
- * `ioredis`; `/db` imports `drizzle-orm`. Reach them at `@dunx/infra/db` and
- * `@dunx/infra/queue`. `packages/infra/src/index.test.ts` holds both halves of
- * that to account.
- *
- * `/pagination` is absent for no stated reason, which is drift rather than a
- * decision: it has no peer of its own and predates this note. Adding it changes a
- * published surface, so it is recorded here rather than fixed in passing.
- *
- * `/schedule` **is** here. Its only externals are `@dunx/core` and the first-party
- * `@arkv/timezones`, a hard dependency, so it obliges a consumer to install
- * nothing.
- *
- * The subpaths are still the better import: they say what a file uses, and they
- * evaluate only the peers that area needs.
+ * The subpaths are the better import: they evaluate only what that area needs.
  */
 export {
   defaultRedisUrl,

@@ -5,10 +5,7 @@ import { MysqlConnection } from './driver.js';
 import * as schema from './schema.js';
 import { widgets, type Widget } from './schema.js';
 
-/**
- * MySQL. The query code is drizzle's, exactly as on the other two dialects -
- * everything MySQL-specific is in `driver.ts` and in the two notes below.
- */
+/** MySQL. Everything dialect-specific is in `driver.ts` and the two notes below. */
 export class MysqlWidgets implements OnInit {
   constructor(
     private readonly db: MySqlRemoteDatabase<typeof schema>,
@@ -24,11 +21,8 @@ export class MysqlWidgets implements OnInit {
     await this.db.execute(sql`TRUNCATE TABLE widgets`);
   }
 
-  /**
-   * MySQL has no `RETURNING`, so drizzle offers `$returningId()` instead - it reads
-   * the `insertId` the adapter forwards and, for a multi-row insert, counts forward
-   * from it. Reading the row back is the second statement.
-   */
+  /** MySQL has no `RETURNING`; `$returningId()` reads the forwarded `insertId`
+   * and counts forward for a multi-row insert. */
   async add(name: string, weight: number): Promise<Widget | undefined> {
     const [inserted] = await this.db
       .insert(widgets)
@@ -46,12 +40,8 @@ export class MysqlWidgets implements OnInit {
     return this.db.select().from(widgets).orderBy(desc(widgets.id));
   }
 
-  /**
-   * Not `transaction()` from `@dunx/infra/db` - that dispatches on `bun:sqlite` vs
-   * `bun-sql`, and this handle is neither. `mysql-proxy` refuses `db.transaction()`
-   * outright, so the connection opens one on `Bun.SQL` and builds a drizzle handle
-   * over the reserved socket. See `MysqlConnection.transaction`.
-   */
+  /** Not `@dunx/infra/db`'s `transaction()`: it dispatches on `bun:sqlite` vs
+   * `bun-sql`, and this handle is neither. See `MysqlConnection.transaction`. */
   addPairAtomically(
     first: string,
     second: string,

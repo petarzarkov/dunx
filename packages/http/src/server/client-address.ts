@@ -22,20 +22,13 @@ const trustedHops = (setting: boolean | number): number => {
 const sources = new WeakMap<ClientAddress, AddressSource>();
 
 /**
- * The client's address, honouring the `'trust proxy'` setting.
+ * The client's address, honouring `'trust proxy'`. The address is counted from the
+ * right of `X-Forwarded-For` by the number of trusted hops, never from the left: a
+ * client can send anything, and only the entries a proxy appended carry weight.
  *
- * With the setting on, the address is read from `X-Forwarded-For` counting from
- * the right by the number of trusted hops, never from the left. A client can put
- * anything in the header it sends; only the entries a proxy appended carry any
- * weight, and there are exactly as many of those as there are proxies in front of
- * this server.
- *
- * Bound and exported by `HttpFactory`'s global wrapper module, so injecting it in a
- * middleware or controller needs no registration and `app.clientIp(req)` is the same
- * instance. That binding is not optional under module scoping: an unbound class
- * self-binds into whichever scope asks first, so a second module injecting it was a
- * boot error naming the first, and `listen()` could attach the server to an instance
- * nothing else held.
+ * Bound by `HttpFactory`'s global wrapper, which is not optional under module
+ * scoping - an unbound class self-binds into whichever scope asks first, so a
+ * second module injecting it was a boot error.
  */
 export class ClientAddress {
   of(req: BunRequest): string | undefined {

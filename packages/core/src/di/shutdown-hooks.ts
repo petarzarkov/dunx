@@ -20,32 +20,13 @@ export interface ShutdownHookOptions {
 }
 
 /**
- * Signal handlers that guarantee the process actually **ends**, not merely that the
- * container drained.
+ * Signal handlers that guarantee the process ends, not merely that the container
+ * drained. A bare `process.once(signal, shutdown)` guarantees the drain alone, so
+ * one handle outliving teardown turns `SIGTERM` into a hang until `SIGKILL`.
  *
- * `process.once(signal, () => void shutdown())` was the whole implementation, in
- * three packages. It guarantees a drain and nothing else, so a single handle that
- * outlives teardown turns `SIGTERM` into "drain correctly, then hang until
- * `SIGKILL`". That is not hypothetical: bullmq's Bun adapter cannot cancel a pending
- * reconnect, so against an unreachable broker a client survives `disconnect()` and
- * holds the loop open after a completely successful shutdown
- * (docs/roadmap/queue-shutdown-sigterm.md). Every deployment then pays its full
- * termination grace period on every rollout.
- *
- * **The exit timer is `unref()`d, and that is the entire design.** An unref'd timer
- * cannot itself keep the runtime alive, so a process that would end on its own still
- * ends immediately and this never fires. It fires only when something else is
- * holding the loop open, which after a completed drain means a handle dunx does not
- * own. Verified on Bun 1.3.14: with nothing else pending the process exits in ~1 ms
- * and the callback never runs; with a live `Bun.serve` holding it, the callback runs
- * on schedule and `process.exit` takes effect (docs/bun-apis.md).
- *
- * The wait is therefore not a shutdown delay. It is the window in which work queued
- * after `app.closed` still gets to run, which is why it is not zero.
- *
- * **Only the signal path.** A programmatic `shutdown()` never exits the process: the
- * caller owns it, and a library that killed the process because a test called
- * `shutdown()` would be indefensible.
+ * The exit timer is `unref()`d, so it never fires for a process that would end on
+ * its own - only when something else holds the loop open. Signal path only: a
+ * programmatic `shutdown()` never exits the process.
  */
 export class ShutdownHooks {
   #installed = false;

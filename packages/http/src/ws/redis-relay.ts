@@ -27,15 +27,10 @@ export interface RedisRelayOptions {
   /** @default `$VALKEY_URL`, `$REDIS_URL`, then `redis://localhost:6379` */
   readonly url?: string;
   /**
-   * Bun's reconnection budget.
-   *
-   * `0` by default, and that default is not a preference: a `Bun.RedisClient` that
-   * never connects keeps an internal retry timer alive past `close()`, and the
-   * process then never exits. A relay is exactly the connection most likely to be
-   * absent - a single-node deployment with `REDIS_URL` left over from staging -
-   * so the default has to be the one that lets the app boot, degrade, and still
-   * exit. Raise it when Redis is a hard requirement and you want Bun to reconnect
-   * for you.
+   * Bun's reconnection budget. `0` by default: a `Bun.RedisClient` that never
+   * connects keeps a retry timer alive past `close()`, so the process never exits,
+   * and a relay is the connection most likely to be absent. Raise it where Redis
+   * is a hard requirement.
    *
    * @default 0
    */
@@ -65,17 +60,12 @@ const assertUrl = (url: string): string => {
 };
 
 /**
- * A {@link PubSubRelay} on `Bun.RedisClient` - a Bun global, so this costs
- * `@dunx/http` no dependency at all.
+ * A {@link PubSubRelay} on `Bun.RedisClient`, a Bun global, so it costs
+ * `@dunx/http` no dependency.
  *
- * **Two connections, not one.** A client in subscriber mode rejects every data
- * command, and throws synchronously doing it, so the subscription cannot share the
- * socket that publishes. This is the same split the socket.io Redis adapter makes
- * with its `pubClient` / `subClient`.
- *
- * Both are opened lazily, on the first call that needs them, and a failed one is
- * discarded so the next call builds a fresh connection rather than reusing a dead
- * one.
+ * Two connections: a client in subscriber mode rejects every data command, so the
+ * subscription cannot share the publishing socket. Both open lazily, and a failed
+ * one is discarded rather than reused.
  */
 export class RedisRelay implements PubSubRelay {
   readonly #url: string;

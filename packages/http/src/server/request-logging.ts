@@ -16,57 +16,26 @@ export interface RequestLoggingOptions {
   /** Bodies past this many characters are logged as a size. Default 2048. `0` omits them. */
   readonly maxBodyLength?: number;
   /**
-   * Log the request body. Default **`false`**.
+   * Log the request body. Default `false`, and the cost depends on whether the
+   * route declares a `body` schema: +1.9 us when it does, +28.8 us when it does
+   * not, because the logger has to `req.clone()` an unread network stream.
    *
-   * **What it costs depends on whether the route declares a `body` schema**, and by
-   * a factor of fifteen. `bun run logging:bodies` in `internal/bench`, round-robin
-   * over 3 runs against `POST /validate`:
-   *
-   * | setting                                  | us/req | vs the default |
-   * | ---------------------------------------- | -----: | -------------: |
-   * | `requestLogging: false`                  |  12.80 |      -4.45 us |
-   * | the shipped default, both bodies off     |  17.25 |              - |
-   * | **`requestBody: true`, schema route**    | **19.12** |  **+1.87 us** |
-   * | `responseBody: true`                     |  19.80 |      +2.55 us |
-   * | both bodies, schema route                |  20.03 |      +2.78 us |
-   * | **`requestBody: true`, no schema**       | **46.06** | **+28.81 us** |
-   *
-   * A route with a schema has already had its body buffered by the input reader, so
-   * the logger reads that text and nothing is cloned. A route without one leaves the
-   * logger to `req.clone()`, and cloning a request whose body is an unread network
-   * stream is the entire cost - not the second `JSON.parse`, which is 0.32 us.
-   * `raw-body.ts` has that decomposition.
-   *
-   * It is the field most likely to contain a password. Turn it on in development,
-   * where seeing the payload is the point.
+   * It is the field most likely to contain a password.
    */
   readonly requestBody?: boolean;
-  /**
-   * Log the response body. Default **`false`**, +2.55 us - see the table above.
-   *
-   * No equivalent trick here and none needed: a response is already a materialised
-   * string by the time this clones it, which is why it was never the expensive half.
-   */
+  /** Log the response body. Default `false`, +2.6 us. A response is already a
+   * materialised string by the time this clones it. */
   readonly responseBody?: boolean;
   /**
-   * Paths to skip entirely - a health check polled every second, say.
-   *
-   * **Entirely** is literal: no entry, no `x-request-id` on the response, and no
-   * `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated. That
-   * is what makes it free. `correlateIgnored` buys the correlation back.
+   * Paths to skip entirely: no entry, no `x-request-id`, and no
+   * `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated.
+   * `correlateIgnored` buys the correlation back.
    */
   readonly ignore?: readonly string[];
   /**
-   * Path **prefixes** to skip, for a whole mount rather than one path.
-   *
-   * `ignore` is an exact-match `Set` because that is one lookup on the hot path
-   * and a health check is one path. A mount is not: `@dunx/dashboard` at
-   * `/_dunx` polls four endpoints every five seconds and bull-board pulls a
-   * dozen assets, and listing them is both tedious and wrong the moment either
-   * grows an endpoint.
-   *
-   * Scanned only when non-empty, so an app that sets none pays nothing - the
-   * same guard `ignore` has. Keep the list short; it is a loop.
+   * Path prefixes to skip, for a whole mount rather than one path. `ignore` is an
+   * exact-match `Set`; this is a loop, so keep the list short. Scanned only when
+   * non-empty.
    *
    * ```ts
    * requestLogging: { ignorePrefix: ['/_dunx'] }
@@ -75,50 +44,23 @@ export interface RequestLoggingOptions {
   readonly ignorePrefix?: readonly string[];
   /**
    * Keep the request id and the async scope on an `ignore`d path. Default
-   * **`false`**.
-   *
-   * "Do not log the health check, but do keep its request id" is this. The path
-   * still writes no entry of its own; it gets an id - inbound or minted - on the
-   * response, and everything the handler logs carries it.
-   *
-   * It is not the default because it is not free: the ignored path pays for
-   * reading the header, `crypto.randomUUID()`, the `runWithContext` scope and the
-   * response header. On the `bun run logging` decomposition those four rows are
-   * ~2.2 µs, against ~5.4 µs for the whole default path - so it costs the half
-   * that buys correlation and not the half that builds and serialises the entry.
+   * `false`. The path still writes no entry; it gets an id on the response and
+   * everything the handler logs carries it. Costs ~2.2 us of the ~5.4 us the
+   * default path spends.
    */
   readonly correlateIgnored?: boolean;
   /**
-   * Wrap every request in an `AsyncLocalStorage` scope. Default **`true`**.
-   *
-   * The scope is what lets a service logging four frames down come out carrying
-   * `requestId` without being handed a request object. It is measured: the
-   * `runWithContext` row of `bun run logging` is **+0.91 µs**, 17% of the 5.38 µs
-   * request logging costs over `requestLogging: false`.
-   *
-   * `correlate: false` skips it. **The request entry is unchanged** - the same
-   * `requestId`, `method`, `event`, `flow` and `context` fields are written onto
-   * it directly instead of being read back out of the store. What is lost is
-   * everything *else* the request logs: those lines carry no `requestId`, and
-   * `updateContext` from a handler has nothing to update.
-   *
-   * Worth it for an app whose handlers never log, or one that passes correlation
-   * explicitly. Leave it on otherwise; correlation is most of what a request id
-   * is for.
+   * Wrap every request in an `AsyncLocalStorage` scope. Default `true`, +0.91 us.
+   * It is what lets a service four frames down log `requestId` without being
+   * handed a request. `correlate: false` skips it; this middleware's own entry is
+   * unchanged, but every other line the request writes loses its id.
    */
   readonly correlate?: boolean;
   /**
    * Adopt W3C Trace Context, so `traceId`, `spanId` and `parentSpanId` join
-   * `requestId` on every line the request writes. Default **`false`**.
-   *
-   * On, an inbound `traceparent` is honoured and this service becomes a child
-   * span of the caller's; off, nothing reads the header and nothing is minted.
-   * It costs a header read and 8 random bytes per request, which is not worth
-   * paying in a service with nothing to correlate against - and `requestId`
-   * already spans two dunx services on its own.
-   *
-   * `@dunx/http/client` sends the adopted trace upstream, so turning this on at
-   * both ends is what makes one trace cover both.
+   * `requestId`. Default `false`: it costs a header read and 8 random bytes, and
+   * `requestId` already spans two dunx services. `@dunx/http/client` sends the
+   * adopted trace upstream.
    */
   readonly trace?: boolean;
 }
@@ -142,29 +84,15 @@ type RequestFields = Record<string, unknown>;
 
 /**
  * One structured entry per request, carrying the request and its response.
+ * Installed by `HttpFactory.create` unless `requestLogging: false`, and injecting
+ * only core contracts, so it works with no logging module imported.
  *
- * Installed by `HttpFactory.create` unless `requestLogging: false`. It injects
- * `Logger` and `RequestContext` - both `@dunx/core` contracts, both bound by
- * default - so it works with no logging module imported, and picks up
- * `@arkv/logger` automatically once `@dunx/infra/logger` is.
+ * One entry rather than a middleware and an interceptor to correlate: middleware
+ * wraps `next()`, so both halves are the same closure. A 4xx logs at `warn`, a
+ * 5xx at `error`.
  *
- * **One entry, not two.** A framework whose middleware cannot see the response
- * needs a middleware for the inbound half and an
- * interceptor for the outbound one, because they are different classes and the
- * interceptor cannot see what the middleware saw. Here they are the same
- * closure, so there is no pair to correlate by `requestId` to find out how a
- * call ended. A 4xx is the same line at `warn`, a 5xx at `error`.
- *
- * Everything the handler logs in between carries `requestId`, `method`, `event`
- * and `context` without being passed anything, because the whole call runs
- * inside `runWithContext` - unless `correlate: false`, which drops the scope and
- * with it that guarantee, but not the fields on this middleware's own entry.
- *
- * **Nothing here is `async`.** Reading the request or the response body are the
- * only steps that can ever wait, both are off by default, and both are adopted
- * with `.then` rather than awaited - the same rule `input.ts` follows, for the
- * same measured reason. An `async` scope callback alone cost 0.44 µs/request
- * against a synchronous one on raw `Bun.serve`.
+ * Nothing here is `async`. The two steps that can wait are off by default and
+ * adopted with `.then`; an `async` scope callback alone cost 0.44 us/request.
  */
 export class RequestLoggingMiddleware implements Middleware {
   readonly #limit: number;
@@ -191,10 +119,7 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#trace = options.trace ?? false;
   }
 
-  /**
-   * Both guards check emptiness first, so an app configuring neither pays one
-   * `size` read and one `length` read rather than a lookup and a loop.
-   */
+  /** Both guards check emptiness first, so configuring neither costs two reads. */
   #ignored(path: string): boolean {
     if (this.#ignore.size > 0 && this.#ignore.has(path)) return true;
     if (this.#ignorePrefix.length === 0) return false;
@@ -202,10 +127,8 @@ export class RequestLoggingMiddleware implements Middleware {
   }
 
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
-    // `new URL(req.url)` parses the scheme, host, port, query and hash to reach one
-    // string. This finds the same two offsets once and slices both the pathname and
-    // the query out of them, which is what every request needs and all that most of
-    // them need.
+    // `new URL(req.url)` parses scheme, host, port, query and hash to reach one
+    // string. This finds the same two offsets once and slices both out.
     const url = req.url;
     const from = url.indexOf('/', url.indexOf('://') + 3);
     const mark = from === -1 ? -1 : url.indexOf('?', from);
@@ -235,10 +158,8 @@ export class RequestLoggingMiddleware implements Middleware {
       }
     }
 
-    // The same five fields either way. Under `correlate` they go into the store,
-    // which the logger reads back for every line the request writes; without it
-    // they are merged straight onto this middleware's own entry, so the request
-    // log is identical and only the lines in between lose their id.
+    // The same five fields either way: into the store under `correlate`, else
+    // merged straight onto this entry.
     return this.#correlate
       ? this.context.runWithContext(scope, () =>
           this.#begin(
@@ -302,13 +223,9 @@ export class RequestLoggingMiddleware implements Middleware {
   }
 
   /**
-   * The body text the reader buffered, turned into the entry's `body` field at log
-   * time rather than before the handler.
-   *
-   * Runs `parse` on the same text the clone path would have produced, so the cap,
-   * the `[N bytes]` form and the raw-string fallback for a non-JSON body are all
-   * the behaviour they always were. Nothing here when the body was not logged, or
-   * when the route read no body at all.
+   * The body text the reader buffered, parsed at log time rather than before the
+   * handler. Same `parse` as the clone path, so the cap and the `[N bytes]` form
+   * are unchanged.
    */
   #shared(req: BunRequest, request: RequestFields): void {
     if (!this.#requestBody) return;
@@ -321,10 +238,7 @@ export class RequestLoggingMiddleware implements Middleware {
 
   /**
    * An ignored path under `correlateIgnored`: the scope and the response header,
-   * and no entry. Nothing is timed and no fields are collected, because nothing
-   * here is ever logged. Under `correlate: false` there is no scope to open here
-   * either - only the response header is left, which is all `correlateIgnored`
-   * can still mean once nothing reads the store.
+   * no entry, nothing timed. Under `correlate: false` only the header is left.
    */
   #correlated(
     req: BunRequest,
@@ -359,9 +273,8 @@ export class RequestLoggingMiddleware implements Middleware {
     next: Next,
     scope: ScopeFields | undefined,
   ): Promise<Response> {
-    // `next()` is only ever a promise once the chain bottoms out in a route, but a
-    // user middleware ahead of the route may throw out of `handle` synchronously,
-    // and that request is still one this middleware promised to log.
+    // A user middleware ahead of the route may throw out of `handle`
+    // synchronously, and that request is still one this promised to log.
     let settled: Promise<Response>;
     try {
       settled = next();
@@ -387,11 +300,7 @@ export class RequestLoggingMiddleware implements Middleware {
     );
   }
 
-  /**
-   * Logged and rethrown: the error mapper still owns the status and the response
-   * shape. A 404 or a rejected body is the caller's fault, and logging every probe
-   * at `error` would drown the ones that matter.
-   */
+  /** Logged and rethrown: the error mapper still owns the status and the shape. */
   #failed(
     req: BunRequest,
     path: string,
@@ -455,13 +364,10 @@ export class RequestLoggingMiddleware implements Middleware {
   }
 
   /**
-   * `undefined` means nothing to read **here**, which is now two different things:
-   * the body is not being logged at all, or it is being logged from `RawBody`
-   * instead. Either way the caller stays on the synchronous path.
-   *
-   * When it does clone, it clones - so the handler's own stream is never the one
-   * that was consumed. Reading `req` without cloning makes the handler's
-   * `req.json()` throw `Body already used`, verified on Bun.
+   * `undefined` means nothing to read here: either the body is not logged, or it
+   * comes from `RawBody`. Either way the caller stays synchronous. When it does
+   * clone it clones - reading `req` directly makes the handler's `req.json()`
+   * throw `Body already used`.
    */
   #body(req: BunRequest, ctx: RouteContext): Promise<unknown> | undefined {
     if (!this.#requestBody) return undefined;
@@ -469,9 +375,8 @@ export class RequestLoggingMiddleware implements Middleware {
     if (!(req.headers.get('content-type') ?? '').includes('application/json')) {
       return undefined;
     }
-    // The route declares a body schema, so the reader is about to buffer this body
-    // anyway. Asking it for the text costs +0.38 us and replaces a ~20 us clone -
-    // which is the entire cost of this option. `raw-body.ts` has the numbers.
+    // The route declares a body schema, so the reader buffers it anyway: +0.38 us
+    // instead of a ~20 us clone. `raw-body.ts` has the numbers.
     if (ctx.parsesBody) {
       RawBody.want(req);
       return undefined;

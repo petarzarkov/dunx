@@ -12,23 +12,15 @@ import { QueueOptions } from './options.js';
 import { QueueConsumer } from './worker.js';
 
 /**
- * Consuming, owned by the container.
+ * Consuming, owned by the container. `QueueModule.forRoot({ consume: true })`
+ * binds it and the lifecycle does the rest: `onInit` runs once every provider
+ * exists, so handlers are there to discover, and `onShutdown` runs in reverse
+ * construction order, so workers stop before the connections they use close.
  *
- * `QueueModule.forRoot({ consume: true })` binds this, and everything else follows
- * from the lifecycle: `onInit` runs once every provider exists, so the handlers are
- * there to discover; `onShutdown` runs in **reverse construction order**, so the
- * workers stop before the connections and the database they use close underneath
- * them.
+ * That ordering is why this exists rather than two lines in an entrypoint.
  *
- * That ordering is the entire reason this exists rather than two lines in an
- * entrypoint. Nothing an app writes by hand can guarantee it - `WorkerFactory.attach`
- * says so in its own doc comment and leaves it to the caller. Here the container
- * enforces it, and the app's `main.ts` says nothing about queues at all.
- *
- * `AppRef` rather than constructor injection for the handlers: which classes declare
- * a `@JobHandler` is not knowable when this is built, so the tokens cannot be named
- * in an `inject` list. It is read in `onInit`, which is the only point at which it
- * is legal.
+ * `AppRef` rather than constructor injection: which classes declare a
+ * `@JobHandler` is not knowable when this is built.
  */
 export class QueueRunner implements OnInit, OnShutdown {
   readonly #ref: AppRef;

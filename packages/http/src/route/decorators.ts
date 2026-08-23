@@ -16,19 +16,15 @@ export const Controller =
   };
 
 /**
- * `const O` is load-bearing: without it `{ body: CreateNote, status: 201 }` widens
- * to `RouteSchemas` and `Input<typeof opts>` degrades to bare `{ req }`, taking the
- * type check with it.
+ * `const O` is required: without it `{ body: CreateNote, status: 201 }` widens to
+ * `RouteSchemas` and `Input<typeof opts>` degrades to bare `{ req }`.
  *
- * The `H` constraint is the guarantee, on both halves of the signature. A wrongly
- * annotated `input` is a `TS1241` + `TS1270` naming the mismatched property; an
- * unannotated one is `TS7006`. Inference is impossible here - see
- * docs/architecture/constraints.md, "A route decorator can *check* a handler's
- * input type but cannot *infer* it".
+ * The `H` constraint carries the check on both halves. A wrongly annotated `input`
+ * is a `TS1241`; an unannotated one is `TS7006`. Inference is impossible - see
+ * docs/architecture/constraints.md.
  *
- * `const M` is what makes the return half work: the verb has to reach the type
- * level as `'POST'` rather than as `HttpMethod` for `Returns` to know that an
- * options object with no `status` is documenting a 201.
+ * `const M` puts the verb at the type level as `'POST'`, so `Returns` knows an
+ * options object with no `status` documents a 201.
  */
 const verb =
   <const M extends HttpMethod>(method: M) =>

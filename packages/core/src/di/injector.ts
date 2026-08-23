@@ -29,15 +29,10 @@ class PendingSignal {
 /**
  * Resolves tokens against a graph of module scopes.
  *
- * The instance caches key on the **binding**, not the token: two modules that each
- * declare `UsersService` hold two bindings and therefore two instances, which is the
- * per-module rebinding module scoping exists to allow. Under the flat container that
- * was a duplicate-token boot error.
- *
- * `#building` is shared across every scope rather than per scope, so a construction
- * cycle that spans two modules is still caught with the full path. A cycle in module
- * *imports* is fine and unrelated - see the resolution notes in
- * docs/roadmap/module-scoped-di.md.
+ * The instance caches key on the binding, not the token, so two modules each
+ * declaring `UsersService` hold two instances. `#building` is shared across scopes
+ * rather than per scope, so a construction cycle spanning two modules is caught
+ * with the full path. A cycle in module imports is fine and unrelated.
  */
 export class Injector {
   readonly #graph: ScopeGraph;
@@ -180,19 +175,14 @@ export class Injector {
     }
 
     /**
-     * The one loop here that genuinely cannot state its bound in the header, and the
-     * reason is worth writing down rather than leaving a reader to trust it.
+     * `get` is synchronous, so a factory that returned a promise parks it in
+     * `#settling` and throws `PendingSignal`. Awaiting the signalled binding
+     * settles it and the whole `get` is retried from the top, since everything
+     * resolved before the signal was discarded when the stack unwound.
      *
-     * `get` is synchronous. When it reaches a factory that returned a promise it parks
-     * that promise in `#settling` and throws `PendingSignal`, because there is no way
-     * to await from inside a sync call. Awaiting the signalled binding settles it into
-     * `#instances`, and then the whole `get` is retried - from the top, since the
-     * tokens resolved before the signal were discarded when the stack unwound.
-     *
-     * **It terminates**, and not by luck: every iteration awaits one binding and
-     * settles it, `get` never signals a binding already settled, and the number of
-     * bindings is finite. So the iteration count is at most the number of async
-     * factories on this token's dependency path.
+     * It terminates: each iteration settles one binding, `get` never signals a
+     * settled one, and the bindings are finite. At most one iteration per async
+     * factory on this token's dependency path.
      */
     for (;;) {
       try {

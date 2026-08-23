@@ -3,32 +3,19 @@ import type { OpenApiDocument } from './types.js';
 import { renderUiOptions, type SwaggerUiOptions } from './ui-options.js';
 
 /**
- * The page is a Swagger UI shell: its stylesheet, its bundle, the document
- * embedded as JSON, and one call to `SwaggerUIBundle`.
+ * A Swagger UI shell: its stylesheet, its bundle, the document embedded as JSON,
+ * and one call to `SwaggerUIBundle`.
  *
- * **The stylesheet and the script are same-origin `<link>` and `<script src>`,
- * which is a change.** The old page inlined a bundle of dunx's own and fetched
- * nothing at all. Swagger UI is 3.7x the size gzipped, so inlining it would resend
- * 1.7 MiB on every page load; served as two assets with an immutable cache header
- * it is fetched once. Nothing reaches a CDN or any other host either way, which is
- * the half of that guarantee worth keeping and what `html.test.ts` asserts.
+ * The stylesheet and script are same-origin `<link>` and `<script src>` rather
+ * than inlined - Swagger UI is 1.7 MiB, so inlining would resend it on every load.
+ * Nothing reaches a CDN either way, which `html.test.ts` asserts.
  *
- * The **document** is still embedded rather than fetched. Swagger UI's `url` option
- * would have it request the JSON route itself, which costs a round trip and makes
- * the page depend on that route staying reachable and unguarded; `spec` hands it the
- * bytes the server already has.
+ * The document is embedded rather than fetched: `url` would cost a round trip and
+ * make the page depend on that route staying reachable and unguarded.
  *
- * **`color-scheme: light` is load bearing, and getting it wrong is what a first
- * draft of this file did.** Swagger UI ships one stylesheet and it is light-only.
- * Declaring `light dark` - which the old dunx explorer correctly did, because it had
- * a dark theme - tells the browser to paint dark defaults under it, and the result
- * on a dark-preference machine is a page with a black canvas, dark grey text on
- * black, and white bands wherever Swagger UI happens to set a background
- * explicitly. There is no dark Swagger UI to opt into.
- *
- * The `box-sizing` rules and the `#fafafa` background are Swagger UI's own
- * `index.css`, which is not part of `swagger-ui.css` and which its dist `index.html`
- * loads separately. Its layout assumes them.
+ * `color-scheme: light` is load bearing: Swagger UI ships one light-only
+ * stylesheet, so `light dark` paints dark defaults under it. The `box-sizing`
+ * rules and `#fafafa` are its own `index.css`, which its layout assumes.
  */
 const BOOT = `
 :root { color-scheme: light; }

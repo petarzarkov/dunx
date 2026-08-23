@@ -11,18 +11,13 @@ import type { Registration } from './provider.js';
 import { describeToken, type Ctor, type InjectionToken } from './token.js';
 
 /**
- * The container graph, read through the same functions the container itself reads
- * it with: `collectModules`, `readControllers`, `readDeps` and `describeToken`.
- * Nothing about the record's key, the laziness of its thunk, or the shape of an
- * `unresolved` entry is restated here - a second reader of those would drift.
+ * The container graph, read through the same functions the container reads it
+ * with, so nothing about the record's key or the shape of an `unresolved` entry is
+ * restated here.
  *
- * **Nothing constructs anything.** `AppFactory.create` instantiates every provider
- * and awaits every async factory before it returns, so booting an app to answer
- * "what is bound" would open database connections, start queue workers and bind
- * sockets. `@dunx/mcp` needs that guarantee absolutely - it answers questions about
- * an app it must never run - and `@dunx/dashboard` needs the traversal without
- * peer-depending on an MCP server to borrow it. That second consumer is why this
- * lives in core rather than in the tool that first needed it.
+ * Nothing constructs anything. Booting an app to answer "what is bound" would open
+ * connections and bind sockets, and `@dunx/mcp` answers questions about an app it
+ * must never run. `@dunx/dashboard` is the second consumer that put it in core.
  */
 
 /** What a registration binds. `role` is why it was registered, not how. */

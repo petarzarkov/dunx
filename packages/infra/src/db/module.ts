@@ -8,21 +8,14 @@ import {
 import { DbConnection, DbOptions } from './connection.js';
 
 /**
- * Binds three tokens:
+ * Binds three tokens: `DbOptions` (the resolved configuration), `DbConnection`
+ * (the lifecycle and raw driver handle), and drizzle's own database class, which
+ * is what a repository injects. There is no wrapper.
  *
- * - `DbOptions` - the resolved configuration, so anything can read the dialect.
- * - `DbConnection` - the lifecycle and the raw driver handle.
- * - drizzle's own database class - `BunSQLiteDatabase` or `BunSQLDatabase` - which
- *   is what a repository injects. There is no wrapper: drizzle is the interface.
- *
- * The drizzle handle is bound through a factory that depends on `DbConnection`,
- * which is what fixes the shutdown order. dunx tears down in reverse construction
- * order, so the connection - constructed first, because everything else needs it -
- * closes last, after every repository has drained.
- *
- * Every factory settles before the first constructor runs, so the connection is
- * open and handshaked before any repository is built. No lazy connect, no
- * `await db.ready()`.
+ * The handle is bound through a factory depending on `DbConnection`, which fixes
+ * the shutdown order: the connection is constructed first and so closes last.
+ * Every factory settles before the first constructor runs, so there is no lazy
+ * connect and no `await db.ready()`.
  */
 export class DbModule {
   static forRoot<TDb>(options: DbOptions<TDb>): DynamicModule {
@@ -49,12 +42,9 @@ export class DbModule {
   }
 
   /**
-   * The same `forRoot`, with the options produced by a factory that may await and
-   * may inject - for when the URL comes from a secret store or a `Config`.
-   *
-   * `token` has to be passed, unlike in `forRoot`. drizzle's database class is the
-   * injection token, and which class that is only becomes known once the factory
-   * has produced the options - too late to register a provider under it:
+   * The same `forRoot` with the options behind a factory that may await and
+   * inject. `token` has to be passed, unlike in `forRoot`: which drizzle class is
+   * the injection token is only known once the factory has produced the options.
    *
    * ```ts
    * DbModule.forRootAsync(BunSQLiteDatabase, {

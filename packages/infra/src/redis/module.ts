@@ -13,14 +13,11 @@ import { RedisOptions, type RedisOptionsInit } from './options.js';
 const tokens = new Map<string, Token<RedisConnection>>();
 
 /**
- * The token a named connection is bound to.
+ * The token a named connection is bound to. Memoised, since `token()` returns a
+ * fresh object per call and the module and consumer would otherwise hold
+ * different tokens for one name.
  *
- * Memoised: `token()` returns a fresh object every call, so without this the
- * module and the consumer would each hold a different token for `'cache'` and the
- * lookup would miss. Same name in, same token out.
- *
- * A `Token` is not a constructor type, so a named connection cannot be a
- * constructor parameter - reach it with `inject()` in a field initialiser:
+ * A `Token` is not a constructor type, so reach it with `inject()`:
  *
  * ```ts
  * class Sessions {
@@ -102,12 +99,7 @@ export class RedisModule {
   }
 
   /**
-   * `forRoot` with the options behind a factory. There is no separate async
-   * machinery: the container resolves eagerly and awaits factories before any
-   * constructor runs, so awaited config is already settled by then.
-   *
-   * The factory may also **inject**, which a bare loader cannot - reading the url
-   * off `ConfigService`, say:
+   * `forRoot` with the options behind a factory, which may inject:
    *
    * ```ts
    * RedisModule.forRootAsync({
@@ -118,8 +110,8 @@ export class RedisModule {
    * });
    * ```
    *
-   * `name` is a parameter rather than a field of the awaited init because the
-   * token has to exist before the factory runs.
+   * `name` is a parameter rather than a field of the init: the token has to exist
+   * before the factory runs.
    */
   static forRootAsync(
     load: () => RedisOptionsInit | Promise<RedisOptionsInit>,

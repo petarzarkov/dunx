@@ -1,15 +1,11 @@
 /**
- * Every read the dashboard makes off-process is bounded, and this is the one
- * implementation of that.
+ * Every read the dashboard makes off-process is bounded here. With Redis
+ * unreachable, `getJobCounts` waits out the 5 s connection timeout, so opening the
+ * dashboard on a broken broker hung the page for as long as the thing you opened
+ * it to look at was broken.
  *
- * The failure it exists for is specific and was measured: with Redis unreachable,
- * a queue's `getJobCounts` waits out the connection timeout - 5 s by default in
- * `@dunx/infra/queue` - so opening the dashboard on a broken broker hung the page
- * for exactly as long as the thing you opened it to look at was broken. A
- * dependency being down must cost one panel, not the page.
- *
- * The fallback is a **value**, not a rejection: a queue that could not be reached
- * still gets a row saying so, which is the whole point of looking.
+ * The fallback is a value rather than a rejection: an unreachable queue still gets
+ * a row saying so.
  */
 export const bounded = async <T>(
   work: () => Promise<T>,

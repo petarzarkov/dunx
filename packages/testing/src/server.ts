@@ -110,11 +110,10 @@ const warnAboutGlobals = (
 };
 
 /**
- * A **real** `Bun.serve` on port 0, with the same override semantics as
- * {@link createTestApp}. Nothing is faked: `Bun.serve` binds in about a
- * millisecond, and a fake would only be able to prove the parts of the request
- * path dunx wrote rather than the parts Bun owns - routing, params, method
- * dispatch, upgrades.
+ * A real `Bun.serve` on port 0, with the same override semantics as
+ * {@link createTestApp}. `Bun.serve` binds in about a millisecond, and a fake
+ * could only prove the parts of the request path dunx wrote rather than the parts
+ * Bun owns - routing, params, method dispatch, upgrades.
  *
  * ```ts
  * const server = await createTestServer({ modules: [ApiModule], prefix: 'api' });
@@ -122,16 +121,12 @@ const warnAboutGlobals = (
  * await server.close();
  * ```
  *
- * Request logging and boot logging are both **off** unless asked for: they are on by
- * default in production for good reasons, none of which apply to a suite that would
- * print one JSON line per assertion and one route table per file.
+ * Request logging and boot logging are off unless asked for, since a suite would
+ * otherwise print one JSON line per assertion and one route table per file.
  *
- * **An `HttpOptions` field not passed is absent, not inherited from production.**
- * `middleware` (where global guards live) and `onError` are the two that change
- * what the application does, so pass the same object `main.ts` passes - one
- * exported `httpOptions(config)` spread into both. Omitting `middleware` in a graph
- * that declares a `Middleware` no `@UseGuards` attaches writes one line to
- * `console.warn`; `middleware: []` says the omission is deliberate.
+ * An `HttpOptions` field not passed is absent, not inherited from production.
+ * `middleware` and `onError` change what the application does, so pass the same
+ * object `main.ts` passes. `middleware: []` says the omission is deliberate.
  */
 export const createTestServer = async (
   options: TestServerOptions,

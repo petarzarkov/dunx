@@ -11,20 +11,16 @@ import { HealthDemo } from './health.demo.js';
 import { AppIndicators } from './indicators.js';
 
 /**
- * The indicators, in a module of their own for the reason `WorkspaceModule` is:
- * `HealthModule.forRootAsync` registers its provider in its own scope, so a factory
- * injecting `AppIndicators` has to name the module it comes from - and pointing that
- * back at `ProbesModule` would be a cycle.
- *
- * A health check is still the feature that imports the most, so this list is an
- * accurate statement of what it touches.
+ * Its own module because `HealthModule.forRootAsync` registers in its own scope,
+ * so a factory injecting `AppIndicators` must name where it comes from - and
+ * pointing that back at `ProbesModule` would be a cycle.
  */
 @Module({
   imports: [DatabaseModule, CacheModule, WorkspaceModule],
   providers: [
     provide(AppIndicators, {
-      // Async because the upload root is: `Workspace.create()` is idempotent, so
-      // this is the directory `FilesModule` already made rather than a second one.
+      // `Workspace.create()` is idempotent, so this is the directory
+      // `FilesModule` already made.
       useFactory: async (
         db: DbConnection,
         redis: RedisConnection,
@@ -45,13 +41,9 @@ import { AppIndicators } from './indicators.js';
 export class IndicatorsModule {}
 
 /**
- * `HealthModule` from `@dunx/http`, which mounts `/api/health/live` and
- * `/api/health/ready`. Both are `@Public()` and hidden from the OpenAPI document:
- * a probe carries no credentials and is not an API a consumer calls.
- *
- * There is no indicator for `@dunx/infra/files` or `@dunx/infra/images`. Both are
- * in-process, so "it booted" is already answered by the port answering at all, and
- * a check that cannot fail tells an operator nothing.
+ * Mounts `/api/health/live` and `/api/health/ready`, both `@Public()` and hidden
+ * from the document. No indicator for the in-process packages: a check that
+ * cannot fail tells an operator nothing.
  */
 @Module({
   imports: [
@@ -61,9 +53,8 @@ export class IndicatorsModule {}
       useFactory: (indicators: AppIndicators) => ({
         readiness: indicators.readiness,
         liveness: indicators.liveness,
-        // A real deployment sets a few probe intervals here, so a load balancer
-        // sees readiness fail before the socket closes. Short enough that
-        // `bun run tour` and the suites are not waiting on it.
+        // A real deployment tunes these so a load balancer sees readiness fail
+        // before the socket closes.
         drainDelayMs: 250,
       }),
       inject: [AppIndicators] as const,

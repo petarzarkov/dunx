@@ -5,32 +5,17 @@ import { generateDocument, type DocumentInfo } from './generate.js';
 
 /**
  * Writes the OpenAPI document to a file, with no container, no server and no
- * database.
- *
- * `describeRoutes` walks the module graph reading metadata off prototypes, so
- * nothing is constructed and no port is bound. That makes an offline document a
- * matter of importing one module and serialising the result - which every app was
- * otherwise writing for itself, because the two primitives were public and the
- * plumbing around them was not.
+ * database: `describeRoutes` reads metadata off prototypes, so nothing is
+ * constructed and no port is bound.
  *
  * ```
  * bunx dunx-openapi ./src/app.module.ts
  * bunx dunx-openapi ./src/openapi.config.ts --out public/openapi.json
  * ```
  *
- * The entry may export, in this order of preference:
- *
- * - **`openapi`** - a function returning `{ root, ...DocumentInfo }`, or that
- *   object. This is the form that supports `contribute`, so it is the one an app
- *   mounting Better Auth needs: the contribution is the app's to describe, not
- *   something a CLI can guess.
- * - **`default`** or **`root`** - a `ModuleRef`. Title and version then come from
- *   the nearest `package.json`.
- * - **any single `@Module` export**, found by `findRootModule` reading the marker
- *   `@Module` leaves. This is what makes the command work on an app scaffolded by
- *   `@dunx/create-app`, whose template ends `export class AppModule {}` - a named
- *   export and nothing else. Requiring `default`/`root` meant the first thing
- *   anyone would try failed. `--export=<name>` settles a file declaring several.
+ * The entry may export, in order of preference: `openapi`, the only form
+ * supporting `contribute`; `default` or `root`, a `ModuleRef`; or any single
+ * `@Module` export. `--export=<name>` settles a file declaring several.
  */
 interface OpenApiEntry extends Omit<DocumentInfo, 'title' | 'version'> {
   readonly root: ModuleRef;
@@ -60,16 +45,12 @@ const flag = (argv: readonly string[], name: string): string | undefined => {
 
 /**
  * `Bun.resolveSync` is the runtime's own resolver, so every specifier `import`
- * accepts works. It follows Node resolution, which means a bare *relative* path
- * throws - `src/app.module.ts` reads as a package named `src` - so an unresolved
- * specifier is retried as explicitly relative. As-is first, so a real package still
- * wins over a same-named directory.
+ * accepts works. It follows Node resolution, so a bare relative path throws -
+ * `src/app.module.ts` reads as a package named `src` - and is retried as
+ * explicitly relative. As-is first, so a real package wins over a directory.
  *
- * The previous `startsWith('.') ? cwd + entryPath : entryPath` failed on exactly
- * that bare relative form. Deliberately duplicated in `@dunx/mcp`'s CLI rather than
- * shared: what belongs in `@dunx/core` is the *contract* for finding a root module,
- * which `findRootModule` now is. A path resolver is not a contract, and core is a DI
- * container.
+ * Duplicated in `@dunx/mcp`'s CLI rather than shared: what belongs in core is the
+ * contract for finding a root module, and a path resolver is not one.
  */
 const locate = (entry: string): string | undefined => {
   for (const specifier of [entry, `./${entry}`]) {

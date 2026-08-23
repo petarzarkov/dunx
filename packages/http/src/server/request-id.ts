@@ -33,18 +33,13 @@ interface Tagged {
 /**
  * The request id, and the only thing that decides a request has one.
  *
- * `RequestLoggingMiddleware` sets the header on a response it returns, and a
- * failure is never one: `buildRoutes` and `buildFallback` catch outside the chain
- * and build a fresh `Response` from the error mapper. So a guard's 401, a
- * validation 400, a mapped 500 and every unmatched 404 went out with no id on
- * them, which are the responses a caller most needs in order to find the log line
- * the middleware just wrote.
+ * The logging middleware sets the header on a response it returns, and a failure
+ * is never one - the error mapper builds a fresh `Response` outside the chain. So
+ * a guard's 401, a validation 400 and every unmatched 404 went out with no id.
  *
- * Recorded against the request rather than threaded through the mapper, because
- * `ErrorMapper` is `(error, req) => Response` and an app writes its own.
- * {@link stamp} then reads back whatever {@link assign} recorded, so an app that
- * turned request logging off, or a path it told the middleware to ignore, is still
- * answered without a header: nothing minted an id, so there is none to stamp.
+ * Recorded against the request rather than threaded through the mapper, which an
+ * app writes its own of. {@link stamp} reads back what {@link assign} recorded, so
+ * a path nothing minted an id for is still answered without a header.
  */
 export class RequestIds {
   /**

@@ -20,27 +20,12 @@ export type SyncTransaction<TSchema extends Record<string, unknown>> =
   Parameters<Parameters<BunSQLiteDatabase<TSchema>['transaction']>[0]>[0];
 
 /**
- * A callback's return type, unless it is a promise - in which case it becomes a
- * branded tuple that nothing can be assigned to, so the mistake is a type error at
- * the point the result is used and the message says what to do about it.
+ * A callback's return type, unless it is a promise - then a branded tuple nothing
+ * can be assigned to, so the mistake is a type error where the result is used.
  *
- * ### Why this is not a constraint on the type parameter
- *
- * It was, and the constraint was `{ then?: undefined } | string | number | …`, on
- * the reasoning that an ordinary object has no `then` at all and so satisfies the
- * first member while `Promise<T>` does not.
- *
- * That is wrong, and in the direction that matters. `{ then?: undefined }` is a
- * **weak type** - every property optional - so TypeScript's weak type detection
- * rejects any object that has no property in common with it. Returning a row from
- * a transaction, which is the single most common thing to want, did not compile:
- *
- *     transactionSync(db, (tx) => tx.insert(users).values(v).returning().get())
- *     //  Type '{ id: string; … }' is not assignable to type 'NotThenable'.
- *
- * Only primitives got through, which is why every test in this package returned a
- * `number` and the hole went unnoticed. The promise half of the guarantee is kept
- * here, on the return type, where it costs objects nothing.
+ * Not a constraint on the type parameter. `{ then?: undefined }` is a weak type,
+ * so TypeScript rejects any object sharing no property with it, and returning a
+ * row from a transaction did not compile. Only primitives got through.
  */
 type NoPromise<T> =
   T extends PromiseLike<unknown>
@@ -123,30 +108,15 @@ const sqliteTransaction = <TSchema extends Record<string, unknown>, T>(
 
 /**
  * Runs `fn` in a transaction, committing on return and rolling back on throw.
- * Nesting opens a savepoint, so an inner failure unwinds only the inner work.
+ * Nesting opens a savepoint.
  *
- * ### Why this is not `db.transaction()` on `bun:sqlite`
+ * Not `db.transaction()` on `bun:sqlite`: drizzle delegates to `bun:sqlite`'s,
+ * which commits as soon as the callback returns its promise, so anything after an
+ * `await` runs in autocommit. This issues `BEGIN`/`COMMIT`/`ROLLBACK` itself, and
+ * overlapping top-level transactions queue rather than nest a `BEGIN`.
  *
- * Because drizzle's is synchronous there. `drizzle-orm/bun-sqlite` delegates to
- * `bun:sqlite`'s own `db.transaction()`, and that wrapper commits as soon as the
- * callback **returns its promise** - so `client.inTransaction` is already `false`
- * before the first `await` resumes, every statement after an `await` runs in
- * autocommit, and a later throw rolls back nothing. Measured on Bun 1.3.14:
- * insert, `await Bun.sleep(1)`, throw, catch - the row is still there.
- *
- * This issues `BEGIN`/`COMMIT`/`ROLLBACK` itself instead, so an async callback is
- * atomic. There is only one connection, so two overlapping top-level transactions
- * would issue a nested `BEGIN`; they queue instead. A nested call is already
- * inside the holder's turn and takes a savepoint, so it must not queue behind
- * itself.
- *
- * On Postgres this delegates to drizzle's own `db.transaction()`, which is
- * genuinely async - it goes through `Bun.SQL`'s `begin()`, which reserves a
- * connection for the duration. The handle a Postgres callback receives is
- * drizzle's `PgTransaction`, not the database, because the pooled backend's outer
- * handle would take a different connection and sit outside the transaction. That
- * also means nesting on Postgres is `tx.transaction(...)` - drizzle's own, which
- * takes a savepoint - since this function's second overload takes the database.
+ * On Postgres it delegates to drizzle's own, over `Bun.SQL.begin()`, so nesting
+ * there is `tx.transaction(...)`.
  */
 export function transaction<TSchema extends Record<string, unknown>, T>(
   db: BunSQLiteDatabase<TSchema>,
@@ -176,29 +146,16 @@ export function transaction<TSchema extends Record<string, unknown>, T>(
 }
 
 /**
- * Runs `fn` in a real `bun:sqlite` transaction and returns its value - not a
- * promise, not a microtask, nothing to await. Commits on return, rolls back on
- * throw, and nests as a savepoint via `tx.transaction(...)`.
+ * Runs `fn` in a real `bun:sqlite` transaction and returns its value, with nothing
+ * to await. Commits on return, rolls back on throw, nests as a savepoint.
  *
- * ### This is drizzle's own `db.transaction()`, and here that is correct
+ * This is drizzle's own `db.transaction()`, which is correct here: the early
+ * commit `transaction()` works around is entirely downstream of a callback that
+ * returns a promise, and `NoPromise` makes an `async` callback a type error.
  *
- * The workaround `transaction()` above exists because drizzle's bun-sqlite
- * transaction delegates to `bun:sqlite`'s, which commits the moment the callback
- * **returns** - so a callback that returns a promise has already committed before
- * its first `await` resumes. Everything about that failure is downstream of the
- * callback being asynchronous. Take the promise away and the wrapper is exactly
- * right, so this delegates instead of issuing `BEGIN`/`COMMIT` itself: one native
- * transaction, no statement strings, no queue, no promise.
- *
- * The callback is held to that by `NoPromise`. An `async` callback, or one that
- * returns `Promise.resolve(…)`, gets a return type nothing can be assigned to and
- * whose first member says what to use instead. Verified against Bun 1.3.14: with a
- * synchronous callback the row is gone after a throw; with an async one it is not.
- *
- * Both transactions may be used against the same `SyncDatabase`. A `transactionSync`
- * opened while an async `transaction()` is suspended across an `await` takes a
- * savepoint rather than failing, because `bun:sqlite` branches on
- * `Database.inTransaction`, which the outer `BEGIN` has already set.
+ * Both may be used against one `SyncDatabase`. A `transactionSync` opened while an
+ * async `transaction()` is suspended takes a savepoint, since `bun:sqlite`
+ * branches on `Database.inTransaction`.
  */
 export const transactionSync = <TSchema extends Record<string, unknown>, T>(
   db: SyncDatabase<TSchema>,

@@ -47,35 +47,26 @@ export interface SocketFrame {
 export type SocketNext = () => unknown;
 
 /**
- * The single extension point on the socket side, shaped like {@link Middleware} on
- * the HTTP side: one method, wrapping `next()`.
+ * The socket side's single extension point, shaped like {@link Middleware}: one
+ * method wrapping `next()`. It sees every dispatched handler, and open and close
+ * arrive even for a gateway declaring neither.
  *
- * It sees every dispatched handler - open, each named message, the catch-all,
- * close, drain, ping and pong - and open and close arrive even for a gateway that
- * declares no `@OnOpen`/`@OnClose`, so a connection is never invisible to it.
+ * A throwing handler passes through here. Rethrow to leave the outcome to
+ * `SocketOptions.onError`, or return a value to answer the frame.
  *
- * A throwing or rejecting handler passes through here, which is where a guard
- * refuses and where an observer records the failure. Rethrow to leave the outcome
- * to `SocketOptions.onError`; return a value instead to answer the frame.
- *
- * Three things it cannot see, because they never reach the dispatcher: a
- * `socket.send` a handler makes itself, a `PubSub` broadcast, and the upgrade -
- * which is an HTTP request answered by the gateway's own route.
+ * It cannot see a `socket.send` a handler makes itself, a `PubSub` broadcast, or
+ * the upgrade, which is an HTTP request.
  */
 export interface SocketMiddleware {
   /**
-   * That a failure passing through here is reported somewhere. Default
-   * **`false`**.
+   * That a failure passing through here is reported somewhere. Default `false`.
    *
    * `SocketOptions.onError`'s `console.error` fallback is not installed while any
-   * socket middleware exists, because a middleware wraps the handler and would
-   * report the same failure a second time. Whether it does is something only the
-   * middleware knows: one that ignores a throw turns error reporting off for the
-   * whole server, and nothing about the wiring says so.
+   * socket middleware exists, since a middleware would report the same failure
+   * twice. Only the middleware knows whether it does, and one that ignores a throw
+   * would silently turn error reporting off for the whole server.
    *
-   * Setting it is how a middleware says it does report. Leaving it unset with no
-   * `websocket.onError` beside it is what `HttpFactory.create` warns about at
-   * boot.
+   * Unset with no `websocket.onError` beside it is what `create` warns about.
    */
   readonly reportsErrors?: boolean;
   handle(frame: SocketFrame, ctx: SocketContext, next: SocketNext): unknown;

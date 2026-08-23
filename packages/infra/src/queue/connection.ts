@@ -4,22 +4,12 @@ import { QueueOptions } from './options.js';
 
 /**
  * The class bullmq is handed a client of, rather than `Bun.RedisClient` itself.
+ * Its adapter rebuilds the client with `new (this.raw.constructor)(this.raw.url)`
+ * on `duplicate()` and on reconnect, which drops both the options (so
+ * `maxRetries: 0` covers the first socket only) and the url (`Bun.RedisClient`
+ * exposes none, so a replacement silently resolves Bun's default server).
  *
- * bullmq's adapter does not keep the client it was given: `duplicate()` (a
- * `Worker` blocks on its own connection) and its auto-reconnect both build a
- * replacement with `new (this.raw.constructor)(this.raw.url)`. Two things go
- * wrong there, and one subclass fixes both:
- *
- * - **The options are dropped.** `createBunRedisClient(client, opts)` takes only
- *   `lazyConnect`, so a replacement gets Bun's defaults - unbounded retries - and
- *   the `maxRetries: 0` this package chose applies to the first socket only.
- * - **The url is dropped too.** `Bun.RedisClient` exposes no `url` property on Bun
- *   1.3.14, so `this.raw.url` is `undefined` and the replacement resolves Bun's
- *   default (`$VALKEY_URL`, `$REDIS_URL`, `valkey://localhost:6379`) - a different
- *   server than the one configured, silently.
- *
- * A subclass that carries the url and reapplies the options makes both
- * constructions come out the same as the first one.
+ * A subclass carrying the url and reapplying the options fixes both.
  */
 const boundClientClass = (
   options: QueueOptions,
@@ -35,18 +25,13 @@ const boundClientClass = (
 };
 
 /**
- * Where the ioredis boundary is actually drawn.
+ * Where the ioredis boundary is drawn. bullmq takes either a connection
+ * description it builds a client from, or a built client implementing
+ * `IRedisClient`; dunx does the second over `Bun.RedisClient`, so every byte of
+ * queue traffic is Bun's and dunx never imports ioredis.
  *
- * bullmq accepts either a connection *description*, which it hands to a client it
- * constructs itself, or an already-built client implementing its `IRedisClient`
- * adapter interface. dunx does the second, over `Bun.RedisClient` and bullmq's own
- * `createBunRedisClient` - so every byte of queue traffic goes through Bun's
- * client, and dunx neither imports nor constructs ioredis. `@dunx/infra/redis` is
- * unaffected and unshared: a queue's sockets are its own.
- *
- * ioredis is still a load-time requirement of bullmq's barrel - measured on
- * bullmq 6.0.5, which statically imports it from `redis-connection` despite
- * declaring it an optional peer. See docs/architecture/queues.md, "Queues".
+ * ioredis remains a load-time requirement of bullmq's barrel. See
+ * docs/architecture/queues.md.
  */
 export class QueueConnection implements OnShutdown {
   readonly #options: QueueOptions;
@@ -61,22 +46,11 @@ export class QueueConnection implements OnShutdown {
   }
 
   /**
-   * Every adapter client gets an `error` listener, including the ones bullmq
-   * derives with `duplicate()`.
-   *
-   * `bun-redis-client.js` does `this.emit('error', error)` on an unexpected close.
-   * An `error` event with no listener throws, and Bun prints the raw `RedisError`
-   * to stderr - two unstructured multi-line blocks per failed publish, bypassing
-   * the bound Logger entirely, in an app whose logging is otherwise JSON.
-   *
-   * Attaching to the client dunx hands over was not enough: bullmq duplicates it
-   * for connections it may block on, and the duplicate is a fresh emitter. So
-   * `duplicate()` is wrapped to attach to whatever it returns.
-   *
-   * This covers the clients. The other half was the `Queue` itself: `QueueBase`
-   * forwards its connection's errors onto the Queue, so the object `JobPublisher`
-   * constructs needed a listener too. Both are handled now and an unreachable
-   * broker writes nothing raw.
+   * Every adapter client gets an `error` listener, the duplicates included. The
+   * adapter emits `error` on an unexpected close, and an `error` event with no
+   * listener throws - Bun then prints raw multi-line `RedisError` blocks past the
+   * bound Logger. Duplicates are fresh emitters, so `duplicate()` is wrapped;
+   * `QueueBase` forwards connection errors onto the `Queue`, so that needs one too.
    */
   #handleErrors(adapter: IRedisClient): IRedisClient {
     adapter.on('error', (error: unknown) => {
@@ -84,23 +58,14 @@ export class QueueConnection implements OnShutdown {
     });
 
     /**
-     * **The arguments are forwarded, and that is load bearing.**
+     * The arguments are forwarded. Calling `duplicate.call(adapter)` with none
+     * silently broke `Queue.getWorkers()`: the Bun adapter takes the connection
+     * name only through `duplicate({ connectionName })`, and `getWorkers()`
+     * matches that name in `CLIENT LIST`, so a live worker reported as absent.
      *
-     * This wrapper used to call `duplicate.call(adapter)` with none, which looked
-     * harmless and silently broke `Queue.getWorkers()` for every dunx app.
-     * bullmq's Bun adapter takes the connection's name only through
-     * `duplicate({ connectionName })` - its constructor ignores the option - and
-     * `getWorkers()` finds workers by matching that name in `CLIENT LIST`. Dropping
-     * the options meant no `CLIENT SETNAME`, so a live worker draining jobs
-     * reported as absent and bull-board showed "No workers" forever.
-     *
-     * Measured both ways against a real Redis: with the arguments dropped,
-     * `CLIENT LIST` carries no named connection and `getWorkers()` is `0`; with
-     * them forwarded, the name appears and it is `1`. This was long believed to be
-     * an unfixable gap in bullmq's Bun adapter. It was ours.
+     * `unknown[]` rather than `readonly unknown[]`: `Function.apply` declares a
+     * mutable array.
      */
-    // `unknown[]` rather than `readonly unknown[]`: `Function.apply` declares a
-    // mutable array and will not take a readonly one.
     const derived = adapter as {
       duplicate?: (...args: unknown[]) => IRedisClient;
     };
@@ -134,21 +99,14 @@ export class QueueConnection implements OnShutdown {
   }
 
   /**
-   * Closes every client handed out. Constructed before anything that uses it, so
-   * reverse-order teardown runs this last - after the publisher has closed its
-   * queues and the worker has drained.
+   * Closes every client handed out, last in reverse-order teardown. Both halves,
+   * in this order: `disconnect()` on the adapter first, since bullmq reads an
+   * untold close as a blip and would rebuild the connection being torn down; then
+   * `close()` on the socket, which `disconnect()` skips for a client that never
+   * connected and which would otherwise keep the process alive.
    *
-   * Both halves are needed, in this order. `disconnect()` on the **adapter**
-   * first: bullmq treats a socket that closed without being told to as a blip and
-   * schedules a reconnect, so closing the socket underneath it would rebuild the
-   * connection being torn down. Then `close()` on the socket, because
-   * `disconnect()` skips it for a client that never finished connecting, and an
-   * unclosed one keeps the process alive.
-   *
-   * This does **not** cure the SIGTERM hang in docs/roadmap - `disconnect()`
-   * returns early once the connection has already dropped, which is exactly when
-   * a reconnect is pending. That one is upstream's; see
-   * docs/roadmap/queue-shutdown-sigterm.md.
+   * This does not cure the SIGTERM hang in
+   * internal/notes/roadmap/queue-shutdown-sigterm.md.
    */
   onShutdown(): void {
     for (const { adapter, raw } of this.#open) {

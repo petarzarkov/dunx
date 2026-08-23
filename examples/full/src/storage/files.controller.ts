@@ -11,10 +11,9 @@ import { LocalStorage, PathTraversalError, Storage } from '@dunx/infra/files';
 import { z } from 'zod';
 
 /**
- * The key is a query parameter rather than a path segment because keys contain
- * slashes - `reports/q1.csv` is one key, not two segments. Traversal is rejected
- * by `Storage` itself rather than by a pattern here, which is the behaviour worth
- * seeing: try `?key=../../etc/passwd`.
+ * The key is a query parameter because keys contain slashes: `reports/q1.csv` is
+ * one key, not two segments. `Storage` itself rejects traversal - try
+ * `?key=../../etc/passwd`.
  */
 const FileKey = z.object({ key: z.string().min(1).max(200) }).meta({
   id: 'FileKey',
@@ -34,15 +33,12 @@ const listFiles = {
 const objectKey = { query: FileKey } as const;
 const writeFile = { query: FileKey, body: WriteFile } as const;
 
-/**
- * Injects `Storage`, never `LocalStorage` - swapping a disk for a bucket is one
- * `forRoot` call in storage.module.ts and nothing here changes.
- */
+/** Injects `Storage`, never `LocalStorage`: swapping disk for bucket is one
+ * `forRoot` call and nothing here changes. */
 @Controller('files')
 export class FilesController {
   constructor(private readonly storage: Storage) {}
 
-  /** `list` is an AsyncIterable so a million objects page rather than accumulate. */
   @Get('/', listFiles)
   async list(
     input: Input<typeof listFiles>,
@@ -54,8 +50,7 @@ export class FilesController {
     })) {
       keys.push(entry.key);
     }
-    // The contract cannot promise a root - narrowing to the backend is how you
-    // reach anything backend-specific.
+    // The contract cannot promise a root, so narrowing reaches it.
     const root =
       this.storage instanceof LocalStorage ? this.storage.root : '(remote)';
     return { root, keys: keys.sort() };
@@ -97,10 +92,8 @@ export class FilesController {
     return { deleted: true };
   }
 
-  /**
-   * Nothing signs bytes on a local disk, so this refuses with the backend's own
-   * message instead of handing back a URL that cannot work.
-   */
+  /** Nothing signs bytes on a local disk, so this refuses rather than hand back
+   * a URL that cannot work. */
   @Get('/presign', objectKey)
   async presign(input: Input<typeof objectKey>): Promise<{ url: string }> {
     const { key } = input.query;
@@ -115,10 +108,8 @@ export class FilesController {
     }
   }
 
-  /**
-   * A traversal is a bad request, not a server fault - `Storage` rejects it
-   * before any syscall, and without this it would surface as a 500.
-   */
+  /** A traversal is a bad request: `Storage` rejects it before any syscall, and
+   * without this it would surface as a 500. */
   private async present(key: string): Promise<void> {
     try {
       if (await this.storage.exists(key)) return;

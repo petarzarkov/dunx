@@ -127,18 +127,12 @@ export const withUpgradeRoutes = (
 };
 
 /**
- * The context an unmatched request gets. There is no controller and no handler,
- * and saying so is more useful to a log line than an empty string.
+ * The context an unmatched request gets. A miss carries no route metadata, so a
+ * global guard refuses it and an anonymous caller sees 401 rather than 404 - which
+ * is the default, since a 404 among 401s tells a prober which paths exist.
  *
- * A miss carries no route metadata, so a global guard reading none of it refuses,
- * which makes every 404 a 401 for an anonymous caller with no `@Public()`
- * anywhere to put. **That is deliberate and stays the default**: an unmatched
- * path answering 404 while every real path answers 401 tells a prober exactly
- * which paths exist.
- *
- * `notFound: 'public'` opts into the conventional 404 by reporting the miss as
- * public. Either way `UNMATCHED` is set, and no real route ever sets it, so a
- * guard can tell a genuinely public route from one that matched nothing.
+ * `notFound: 'public'` opts into the conventional 404. Either way `UNMATCHED` is
+ * set and no real route sets it, so a guard can tell the two apart.
  */
 const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
   Object.freeze({
@@ -156,19 +150,12 @@ const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
   });
 
 /**
- * Bun answers an unmatched path itself, so nothing in the middleware chain ever
- * sees it - which makes a 404 invisible to request logging, metrics and tracing.
+ * Bun answers an unmatched path itself, so nothing in the middleware chain sees
+ * it and a 404 is invisible to request logging. This is the only `fetch` handler
+ * dunx installs and it is not a router: it runs once Bun has matched nothing.
  *
- * This is the only `fetch` handler dunx installs, and it is not a router: Bun
- * still does all the matching, and this runs only once Bun has decided nothing
- * matched. It puts the global middleware in front of a 404 in the framework's
- * own error shape.
- *
- * **The miss is a `throw`, not a returned `Response`.** `miss` raises
- * `HttpError(404)` and `compose` propagates it, so a middleware written as
- * `const response = await next(); if (response.status === 404) ...` never reaches
- * its own second line on an unmatched path - the rewrite it was written for is the
- * one case it cannot see. A middleware that means to act on a miss has to catch:
+ * The miss is a throw, not a returned `Response`, so a middleware reading
+ * `(await next()).status` never sees one and has to catch:
  *
  * ```ts
  * try {
@@ -179,13 +166,8 @@ const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
  * }
  * ```
  *
- * `ctx.get(UNMATCHED)` is the other half, and the cheaper one: it is set here and
- * by no real route, so a middleware can tell "nothing matched this path" from "a
- * handler answered 404 for a record that does not exist" **before** calling
- * `next()` at all. Only the second of those is a `Response` to inspect.
- *
- * Composed per request rather than at boot, because the context names the path
- * that missed. That allocation is on the 404 path only.
+ * `ctx.get(UNMATCHED)` is the cheaper half: set here and by no real route, so a
+ * middleware can tell a miss from a handler's own 404 before calling `next()`.
  */
 export const buildFallback = (
   middleware: readonly Middleware[] = [],
@@ -217,24 +199,14 @@ export const buildFallback = (
 
 /**
  * The direct path, taken when a route has no middleware and no CORS. Nothing here
- * is `async`: every step looks at what it got and only allocates a promise when
- * there is genuinely something to wait for.
+ * is `async`: a promise is allocated only where there is something to wait for.
  *
- * The general path is `async (req) => toResponse(await handler(await read(req)))`
- * inside an `async` try/catch - four `await`s across two async frames, on values
- * that are usually not thenable at all. A route with no declared schemas awaits
- * nothing; a route with only `query` or `params` awaits nothing either, because
- * every Standard Schema validator worth using is synchronous. Even a `body` route,
- * which really does have to wait for `req.json()`, pays one promise link instead of
- * six frames.
+ * The general path is four `await`s across two async frames on values that are
+ * usually not thenable. A route with no schemas awaits nothing, and a `body` route
+ * pays one promise link instead of six frames.
  *
- * Worth ~6 points of throughput against raw `Bun.serve` on the `params` scenario
- * when it covered only schema-less routes, and a further ~5 on `validate` when it
- * was extended to cover reading ones - which is most of what separated dunx from
- * Elysia, whose whole trick is compiling this shape ahead of time.
- *
- * A handler or a validator that *does* return a promise still works: it is adopted
- * here rather than awaited by a wrapper.
+ * Worth ~6 points of throughput on `params` and a further ~5 on `validate`. A
+ * handler that does return a promise is adopted rather than awaited by a wrapper.
  */
 const directOr = (
   guarded: RouteHandler,

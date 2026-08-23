@@ -193,18 +193,11 @@ const load = async <TSchema extends Record<string, unknown>>(
 
 /**
  * Runs every seed file in `dir` that has not run before, in numeric order, each
- * once, each recorded in a tracking table.
+ * once and each recorded in a tracking table.
  *
- * This is not a migration runner and does not try to be one. Schema changes are
- * `drizzle-kit generate` plus `drizzle-orm/bun-sqlite/migrator` (sync) or
- * `drizzle-orm/bun-sql/migrator` (async) - drizzle-kit owns the SQL, the journal
- * and the snapshot folder. What it has no concept of is *data*, which is what this
- * is for, and why the journal table is separate from drizzle's own.
- *
- * A seed and its journal row are written in **one transaction**, so a seed that
- * throws leaves no record and no half-applied data. On `bun:sqlite` that
- * transaction is this package's `transaction()`, not drizzle's - drizzle's cannot
- * roll back an async callback there.
+ * Not a migration runner: schema changes are `drizzle-kit generate` plus
+ * drizzle's migrator, which have no concept of data. A seed and its journal row
+ * are written in one transaction, so a throwing seed leaves nothing behind.
  */
 export const runSeeds = async <TSchema extends Record<string, unknown>>(
   db: SeedableDb<TSchema>,

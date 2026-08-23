@@ -1,23 +1,14 @@
 /**
  * The content codings this package produces.
  *
- * **Brotli is absent, and that is a measurement rather than an oversight.** Bun
- * implements it - `new CompressionStream('brotli')` works - but at 6,344 us to
- * encode a 6.4 KB JSON body against gzip's 23 us and zstd's 24 us, roughly 275x.
- * The `level` argument that would fix it is accepted and ignored: `{ level: 4 }`
- * encodes in 6,345 us and produces the same 339 bytes as the default. Brotli
- * belongs on a build artefact compressed once, not on a response encoded per
- * request. Note also that the `CompressionStream` format is spelled `brotli`
- * while the HTTP token is `br`, so the two never lined up anyway.
+ * Brotli is absent on measurement: 6,344 us to encode a 6.4 KB JSON body against
+ * gzip's 23 us, and the `level` argument that would fix it is accepted and
+ * ignored. It belongs on a build artefact, not a per-request response.
  *
- * **`deflate` is absent for a second and worse reason: Bun's two encoders disagree
- * about what it means.** `Bun.deflateSync` emits raw DEFLATE (first bytes
- * `cb 48`), while `CompressionStream('deflate')` emits zlib (`78 9c`), which is
- * what `Content-Encoding: deflate` is defined as. No option reconciles them -
- * `library`, `windowBits` and `level` all leave `deflateSync` raw - so offering
- * the coding would flip wire format at the buffering threshold and serve bytes a
- * strict client rejects. `gzip` is taken by everything that would have accepted
- * `deflate`. Measured on Bun 1.4.0; see docs/bun-apis.md.
+ * `deflate` is absent because Bun's two encoders disagree: `Bun.deflateSync` emits
+ * raw DEFLATE while `CompressionStream('deflate')` emits zlib, which is what the
+ * header is defined as. Nothing reconciles them, so offering it would flip wire
+ * format at the buffering threshold. Measured on Bun 1.4.0; see docs/bun-apis.md.
  */
 export const CompressionEncoding = Object.freeze({
   ZSTD: 'zstd',
@@ -76,14 +67,11 @@ const encodable = (encoding: CompressionEncoding): boolean => {
 export interface CompressionOptionsInit {
   /**
    * The codings offered, most preferred first. A tie in the client's q-values is
-   * broken by this order, so it is a real preference and not just a filter.
+   * broken by this order.
    *
-   * The default puts `zstd` first for speed. On a 6.4 KB JSON body zstd encodes to
-   * 372 bytes in 7.7 us where gzip takes 16.1 us to reach 576; on a 116 KB OpenAPI
-   * document the two land within 0.2% of each other (9,603 against 9,587), so the
-   * size advantage narrows with the body while the time one does not. A client
-   * that does not send `zstd` in `accept-encoding` gets gzip, so the order costs
-   * nothing to state.
+   * `zstd` leads for speed: 7.7 us to 372 bytes on a 6.4 KB JSON body where gzip
+   * takes 16.1 us to reach 576. On a 116 KB document the sizes land within 0.2%,
+   * so the size advantage narrows with the body while the time one does not.
    *
    * @default ['zstd', 'gzip']
    */

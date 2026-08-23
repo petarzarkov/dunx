@@ -55,17 +55,12 @@ const MIB = 1024 * 1024;
 const mib = (bytes: number): string => `${Math.round(bytes / MIB)} MiB`;
 
 /**
- * Resident set size against a ceiling.
+ * Resident set size against a ceiling. `process.memoryUsage()` costs 5.96 us,
+ * which is what makes it safe on an endpoint scraped every two seconds;
+ * `jsc.heapStats()` is 2.2 ms and up and `v8.getHeapStatistics()` 1 to 7.6 ms.
  *
- * `process.memoryUsage()` costs 5.96 us, which is what makes it safe on an endpoint
- * scraped every two seconds. The alternatives were measured and rejected:
- * `jsc.heapStats()` walks every live object at 2.2 ms and up,
- * `v8.getHeapStatistics()` is 1 to 7.6 ms, and `Bun.generateHeapSnapshot()` is
- * hundreds of milliseconds and megabytes. None belongs on this path.
- *
- * Not critical: a process near its ceiling is worth seeing, and shedding traffic
- * from it does not make it use less memory. Liveness is where a ceiling belongs, so
- * the orchestrator restarts it.
+ * Not critical: shedding traffic from a process near its ceiling does not make it
+ * use less memory. A ceiling belongs on liveness, where it restarts.
  */
 export class MemoryIndicator extends HealthIndicator {
   readonly name = 'memory';

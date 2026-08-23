@@ -3,20 +3,13 @@ import { AuthError } from './errors.js';
 
 /**
  * The injection token for the better-auth instance, and the whole of dunx's
- * contract with the library.
+ * contract with the library. `betterAuth()` returns a plain object, so there is no
+ * class to use: this is an abstract class whose members alias better-auth's own,
+ * which a real instance satisfies structurally.
  *
- * `betterAuth()` returns a plain object, so there is no class to use as a token.
- * This is the same trick `Logger` and `RequestContext` use in `@dunx/core`: an
- * abstract class whose members are **aliases of better-auth's own** - not
- * restatements - which a real instance satisfies structurally. That is what makes
- * `constructor(private readonly auth: Auth)` work, since `@dunx/transform` records
- * the bare type name and the container resolves it.
- *
- * The type argument is the `DbModule` trick from `@dunx/infra/db`: the token is the
- * erased class, so `Auth<typeof authOptions>` at an injection site keeps the
- * plugin-widened `api` while still resolving the one binding. Written bare, `Auth`
- * carries better-auth's core endpoints only - a plugin's endpoints are on the
- * annotation, not on the token.
+ * The type argument is `DbModule`'s trick - the token is the erased class, so
+ * `Auth<typeof authOptions>` keeps the plugin-widened `api` while resolving the
+ * one binding. Written bare it carries better-auth's core endpoints only.
  */
 export abstract class Auth<O extends BetterAuthOptions = BetterAuthOptions> {
   /**

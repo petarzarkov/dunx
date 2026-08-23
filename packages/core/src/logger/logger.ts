@@ -1,12 +1,9 @@
 import type { LogLevel } from './types.js';
 
 /**
- * The injectable contract.
- *
- * An `abstract class` rather than an interface on purpose: `@dunx/transform` records
- * constructor parameter *types*, and an interface has no runtime value to record,
- * so an interface here would be a boot error at the injection site. See CLAUDE.md,
- * "Dependency injection".
+ * The injectable contract. An `abstract class` rather than an interface:
+ * `@dunx/transform` records constructor parameter types, and an interface has no
+ * runtime value to record, so one here would be a boot error at the injection site.
  *
  * ```ts
  * class Users {
@@ -14,15 +11,9 @@ import type { LogLevel } from './types.js';
  * }
  * ```
  *
- * Every level takes the same three shapes:
- *
- * - `logger.info('message', extra, err)` - a message plus any number of extras.
- *   An `Error` among them becomes the entry's `error`; at `warn` and above so does
- *   a bare string or an `{ err }` / `{ error }` property.
- * - `logger.info({ orderId, total })` - the object's fields are merged into the
- *   entry. An `Error` nested anywhere inside it is found and its message becomes
- *   the entry's message.
- * - `logger.info(err)` - the error's message becomes the entry's message.
+ * Every level takes three shapes: a message plus extras, where an `Error` among
+ * them becomes the entry's `error`; an object, whose fields are merged in and
+ * whose nested `Error` supplies the message; or an `Error` alone.
  */
 export abstract class Logger {
   /** The configured threshold. Entries below it are dropped. */

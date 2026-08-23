@@ -17,8 +17,7 @@ const Enqueue = z
     width: z.coerce.number().int().min(1).max(1024).default(128),
     format: z.enum(EncodableFormat).default(EncodableFormat.WEBP),
   })
-  // `.strict()` **after** `.meta()` discards the metadata - `meta()` then returns
-  // null and the schema is inlined despite declaring an id. Order matters.
+  // `.strict()` after `.meta()` discards the metadata; put `.meta()` last.
   .strict()
   .meta({
     id: 'EnqueueRender',
@@ -28,11 +27,7 @@ const Enqueue = z
 const enqueue = { body: Enqueue } as const;
 const oneJob = { params: z.object({ id: z.string().min(1) }) } as const;
 
-/**
- * The publish side. Nothing here consumes: `QueueModule.forRoot` binds
- * `JobPublisher` and no worker, so this process enqueues and returns immediately.
- * Consumed by this same process - see `JobsModule`'s `consume: true`.
- */
+/** The publish side: `QueueModule.forRoot` binds `JobPublisher` and no worker. */
 @Controller('jobs')
 export class JobsController {
   constructor(private readonly publisher: JobPublisher) {}
@@ -48,16 +43,12 @@ export class JobsController {
     return {
       id: job.id ?? '(unassigned)',
       queue: THUMBNAIL_QUEUE,
-      // `waiting` until a worker takes it - which is the observable point of a
-      // queue, so it is in the response rather than hidden.
       state: await job.getState(),
     };
   }
 
-  /**
-   * Poll a job. `returnvalue` is whatever the handler returned, so this is how the
-   * web process reads a result computed in another process.
-   */
+  /** `returnvalue` is whatever the handler returned, so this is how the web
+   * process reads a result computed elsewhere. */
   @Get('/thumbnails/:id', oneJob)
   async status(input: Input<typeof oneJob>): Promise<{
     id: string;
@@ -84,11 +75,9 @@ export class JobsController {
   }
 
   /**
-   * No Redis is a degraded queue, not a broken app - the same contract the cache
-   * routes keep. bullmq surfaces the failure through ioredis rather than Bun's
-   * client, so the connection-error shape is not guaranteed to match; anything
-   * unrecognised still becomes a 503 rather than a 500, because "the queue is not
-   * reachable" is the only thing it can mean here.
+   * No Redis is a degraded queue, not a broken app. bullmq surfaces the failure
+   * through ioredis, so the error shape is not guaranteed; anything unrecognised
+   * still becomes a 503.
    */
   private async degrades<T>(run: () => Promise<T>): Promise<T> {
     try {

@@ -29,18 +29,12 @@ import { QueueRunner } from './runner.js';
 const surface = [QueueOptions, QueueConnection, JobPublisher];
 
 /**
- * Always bound, and it does nothing unless `consume` is set - the check is inside
- * `onInit` rather than here because `forRootAsync` builds its options from a
- * factory, so the flag is not knowable when the providers are declared. An idle
- * runner costs one object.
+ * Always bound, and idle unless `consume` is set - checked in `onInit`, since
+ * `forRootAsync` builds its options from a factory and the flag is not knowable
+ * when providers are declared.
  *
- * Bound **after** the publisher, so reverse-order teardown stops the workers before
- * the connection they run on closes.
- *
- * `QueueConnection` is in the inject list even though the runner never touches it
- * directly: it is what puts the runner after it in construction order, and
- * therefore before it in teardown. An ordering expressed as a dependency is one the
- * container enforces rather than one a comment asks for.
+ * `QueueConnection` is injected though the runner never touches it: that is what
+ * orders the runner after it in construction and before it in teardown.
  */
 const runner = (): Registration =>
   provide(QueueRunner, {
@@ -98,12 +92,7 @@ export class QueueModule {
   }
 
   /**
-   * `forRoot` with the options behind a factory. There is no separate async
-   * machinery: the container resolves eagerly and awaits factories before any
-   * constructor runs, so awaited config is already settled by then.
-   *
-   * The factory may also **inject**, which a bare loader cannot - reading the url
-   * off `ConfigService`, say:
+   * `forRoot` with the options behind a factory, which may inject:
    *
    * ```ts
    * QueueModule.forRootAsync({

@@ -11,36 +11,22 @@ import { SyncWidgets } from './widgets-sync.service.js';
 import { Widgets } from './widgets.service.js';
 
 /**
- * `bun:sqlite` through `drizzle-orm/bun-sqlite`.
- *
- * Two module factories, because the mode is the one thing that cannot be a runtime
- * flag: it decides which class the drizzle handle is bound under, and that is what
- * `DbModule.forRoot` infers the injection token from. A flag would leave that
- * inference with a union to guess at.
- *
- * Only one of the two may be imported at a time - the container is flat and throws
- * on a duplicate token, and both bind `DbConnection`.
+ * `bun:sqlite` through `drizzle-orm/bun-sqlite`. Sync and async are separate
+ * factories because the mode decides which class the handle is bound under, and
+ * a runtime flag would leave `DbModule.forRoot` a union to infer from. Import
+ * one or the other: both bind `DbConnection`.
  */
 export class SqliteModule {
-  /**
-   * Asynchronous mode - the default, and what to pick if the app might move to
-   * Postgres later, since every call is already awaited. The handle bound is
-   * drizzle's `BunSQLiteDatabase`.
-   *
-   * `forRoot` takes the options object directly, because the token is knowable
-   * from it before anything runs.
-   */
+  /** Asynchronous mode, binding drizzle's `BunSQLiteDatabase`. */
   static asynchronous(filename: string): DynamicModule {
     return {
       module: SqliteModule,
       imports: [
         DbModule.forRoot(
           new SqliteOptions({
-            // Required, and the reason it is: this is the type argument that
-            // reaches `BunSQLiteDatabase<typeof schema>` in every constructor.
+            // Required: this is the type argument every constructor sees.
             schema,
             filename,
-            // The only place a pragma can run before the first query.
             pragmas: ['foreign_keys = ON'],
           }),
         ),
@@ -50,17 +36,9 @@ export class SqliteModule {
   }
 
   /**
-   * Synchronous mode. The handle is `SyncDatabase` and `transactionSync` becomes
-   * reachable. Wired with `forRootAsync` so both styles appear once: the filename
-   * comes off the validated config, which is the one thing a zero-argument
-   * `forRoot` cannot reach.
-   *
-   * `forRootAsync` takes the token as its first argument, unlike `forRoot` - which
-   * class the handle is bound under only becomes known once the factory has
-   * produced the options, too late to register a provider under it.
-   *
-   * There is deliberately no Postgres counterpart. `Bun.SQL` talks to a server over
-   * a socket, and nothing makes a socket synchronous.
+   * Synchronous mode, binding `SyncDatabase` and reaching `transactionSync`.
+   * `forRootAsync` takes the token first: the factory has not run yet, so the
+   * options cannot supply it. No Postgres counterpart - a socket is not sync.
    */
   static synchronous(): DynamicModule {
     return {

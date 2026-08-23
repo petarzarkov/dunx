@@ -78,14 +78,9 @@ const enumOf = <T extends string>(
 /**
  * Validates raw query values into `PageOptions`, applying the defaults.
  *
- * **A hand-written function rather than a shipped zod schema.** `@dunx/infra` has no
- * validation dependency and should not gain one for five fields, and dunx's route
- * validation targets Standard Schema so an app is free to use Zod, Valibot or
- * ArkType - shipping a zod schema here would pick for them. The same reasoning
- * `ConfigModule.forRoot({ validate })` rests on.
- *
- * An app that does want a schema builds one from `PAGINATION`, and gets the OpenAPI
- * document for free because the schema is then its own:
+ * Hand-written rather than a shipped zod schema: route validation targets Standard
+ * Schema, so shipping one would pick the validator for the app. An app that wants
+ * a schema builds one from `PAGINATION`, and gets the OpenAPI document with it:
  *
  * ```ts
  * const pageQuery = z.object({

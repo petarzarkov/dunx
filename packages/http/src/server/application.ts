@@ -47,102 +47,54 @@ export interface HttpOptions extends AppOptions {
   /** Resolved from the container, so middleware can inject(). */
   readonly middleware?: readonly Ctor<Middleware>[];
   /**
-   * Replaces the default mapper.
-   *
-   * A bare `ErrorMapper` function, or an `ErrorFilter` **class** - which is the one
-   * to prefer, because a class is resolved from the container and can therefore
-   * inject the `Logger` or the config a real filter needs. A mapper cannot; dunx's
-   * own default has to be curried over its logger for exactly that reason.
-   *
-   * A filter with dependencies needs them bindable, the same rule `middleware`
-   * entries follow; one with none self-binds and needs no `providers` entry.
+   * Replaces the default mapper. Prefer an `ErrorFilter` class over a bare
+   * `ErrorMapper`: a class is resolved from the container and can inject.
    */
   readonly onError?: ErrorHandler;
   /**
-   * One structured entry per request, on by default. `false` removes it; an
-   * options object tunes what it records. See {@link RequestLoggingMiddleware}.
-   *
-   * It is the **outermost** middleware, ahead of anything `middleware` declares,
-   * so a request rejected by a guard is still logged with the status it got.
+   * One structured entry per request, on by default and outermost, so a request
+   * a guard rejected is still logged with the status it got.
+   * See {@link RequestLoggingMiddleware}.
    */
   readonly requestLogging?: boolean | RequestLoggingOptions;
   /**
-   * One entry at `listen()` naming every route and gateway the process serves. On
-   * by default, because it is the answer to "is my route registered" and a service
-   * that logs nothing at boot cannot answer it from production.
-   *
-   * `false` removes it. Separate from `requestLogging` rather than sharing its
-   * switch: one is per request and one is per process, and silencing the noisy one
-   * is not a reason to lose the quiet one. `@dunx/testing` defaults it off, for the
-   * same reason it defaults request logging off.
+   * One entry at `listen()` naming every route and gateway served. On by default,
+   * and switched separately from `requestLogging`: one is per process, the other
+   * per request. `@dunx/testing` defaults it off.
    */
   readonly bootLogging?: boolean;
-  /**
-   * Bun's `websocket` options, plus where a throwing handler goes. Server-wide, so
-   * they live here next to `middleware` rather than on a module: gateways
-   * themselves are declared in `@Module({ providers })`.
-   */
+  /** Bun's `websocket` options, plus where a throwing handler goes. Server-wide;
+   * gateways themselves are declared in `@Module({ providers })`. */
   readonly websocket?: SocketOptions;
   /**
-   * The socket half of `middleware`, resolved from the container the same way.
-   *
-   * Each entry wraps every dispatched gateway handler - open, each named message,
-   * the catch-all, close, drain, ping and pong - the way an HTTP middleware wraps a
-   * route. `socketLogging`'s middleware runs outermost, ahead of anything here.
+   * The socket half of `middleware`. Each entry wraps every dispatched gateway
+   * handler; `socketLogging`'s runs outermost, ahead of anything here.
    */
   readonly socketMiddleware?: readonly Ctor<SocketMiddleware>[];
   /**
-   * One structured entry per socket frame, on by default at **`debug`**. `false`
-   * removes it; an options object tunes the level per event. See
-   * {@link SocketLoggingMiddleware}.
-   *
-   * `debug` rather than request logging's `info`, because a gateway can take a
-   * frame per connection per tick. The default `ConsoleLogger` threshold is
-   * `info`, so this writes nothing until an app lowers its level or names a louder
-   * one here.
-   *
-   * Installing it also takes `SocketOptions.onError`'s `console.error` default out
-   * of the way: a middleware wraps the handler, so the failure is already reported
-   * through the `Logger` with the gateway and the event on it.
+   * One structured entry per socket frame, on by default at `debug` - a gateway
+   * can take a frame per connection per tick, so it writes nothing until an app
+   * lowers its level. See {@link SocketLoggingMiddleware}.
    */
   readonly socketLogging?: boolean | SocketLoggingOptions;
   /**
-   * Multi-node websocket fan-out. Absent - the default - means `PubSub` publishes
-   * to this process only, which is exactly Bun's native pub/sub and costs nothing.
-   *
-   * `new RedisRelay({ url })` is the batteries-included one. Anything with a
-   * `publish` and a `subscribe` fits, including `@dunx/infra`'s `RedisConnection`,
-   * which has to come out of the container and so goes through
-   * `app.get(PubSub).relayThrough(...)` instead of this option.
+   * Multi-node websocket fan-out. Absent means `PubSub` publishes to this process
+   * only. Anything with `publish` and `subscribe` fits; one that has to come out
+   * of the container goes through `app.get(PubSub).relayThrough(...)` instead.
    */
   readonly relay?: PubSubRelay;
   /** The broker channel the relay carries frames on. @default 'dunx:ws' */
   readonly relayChannel?: string;
   /**
-   * How hard to retry a subscribe that failed. Same shape as
-   * `RelayOptions.resubscribe`: bounded, doubling, and on an unref'd timer, so a
-   * broker that never comes back cannot hold the process open.
-   *
-   * Here rather than only on `relayThrough` because reaching for that to set one
-   * option means giving up `relay` above entirely - the two conflict, and the
-   * second to run throws `PubSub already relays`.
+   * How hard to retry a failed subscribe. Bounded, doubling, on an unref'd timer,
+   * so a broker that never returns cannot hold the process open.
    */
   readonly relayResubscribe?: RelayOptions['resubscribe'];
   /**
-   * What an unmatched path looks like to global middleware.
-   *
-   * `'guarded'`, the default, gives the miss no route metadata, so a global guard
-   * refuses it and an anonymous caller gets that guard's status rather than a 404.
-   * That is deliberate: a 404 on a miss while every real path answers 401 tells a
-   * prober which paths exist.
-   *
-   * `'public'` reports the miss as `@Public()`, so a guard honouring that flag
-   * passes it through to the conventional 404. The request is still logged and
-   * still gets a request id either way, which is the whole reason the fallback
-   * runs the middleware at all.
-   *
-   * A guard can discriminate under either setting: `UNMATCHED` is set on the miss
-   * and no real route ever sets it.
+   * What an unmatched path looks like to global middleware. `'guarded'` gives the
+   * miss no route metadata, so a global guard refuses it and a prober cannot tell
+   * a 404 from a 401. `'public'` reports it as `@Public()` for a conventional 404.
+   * Either way `UNMATCHED` is set, which no real route sets.
    *
    * @default 'guarded'
    */
@@ -150,9 +102,8 @@ export interface HttpOptions extends AppOptions {
 }
 
 /**
- * Everything below `listen()` configures the route table, which is built exactly
- * once - when the server binds. Calling any of them afterwards throws rather than
- * being quietly dropped.
+ * Everything below `listen()` configures the route table, built once when the
+ * server binds. Calling any of them afterwards throws.
  */
 export interface HttpApp extends App {
   /** Prefixes every discovered route. Last call wins. */
@@ -174,12 +125,8 @@ export class HttpApplication implements HttpApp {
   /** Forwarded from the container so an app can log scope warnings at boot. */
   readonly warnings: readonly string[];
   /**
-   * The app's own root module, not this package's wrapper around it.
-   *
-   * Global middleware, guards and an error filter are all listed by the app, so they
-   * resolve as the app's root sees them. Resolving them from the wrapper would mean a
-   * guard could only inject what the app happened to *export*, which is a boundary the
-   * app never asked for - it wrote the list.
+   * The app's own root module, not this package's wrapper. Resolving from the
+   * wrapper would limit a guard to what the app happened to export.
    */
   readonly #root: ModuleRef;
   readonly closed: Promise<void>;
@@ -219,13 +166,9 @@ export class HttpApplication implements HttpApp {
       ...(options.requestLogging === false ? [] : [RequestLoggingMiddleware]),
       ...(options.middleware ?? []),
     ];
-    // The bound Logger, resolved only when the app did not bring its own handler:
-    // a 500's stack belongs in the same stream as everything else.
-    //
-    // A filter class is resolved from the container here rather than per request, so
-    // a missing binding is a boot error like any other and the request path stays a
-    // method call. Its `catch` is looked up per call, which is what lets a filter be
-    // rebound in a test.
+    // A filter class is resolved here rather than per request, so a missing
+    // binding is a boot error. Its `catch` is looked up per call, so a test can
+    // rebind it.
     this.#onError =
       options.onError === undefined
         ? errorMapper(app.get(Logger))
@@ -279,38 +222,27 @@ export class HttpApplication implements HttpApp {
     return this.#app.get(ClientAddress).of(req);
   }
 
-  /**
-   * The one `Bun.serve` call. A gateway's upgrade is a native `GET` route in the
-   * same table, so Bun's router - not a hand-written `fetch` fallback - is what
-   * matches an upgrade, and no `fetch` handler is needed at all.
-   */
+  /** The one `Bun.serve` call. A gateway's upgrade is a native `GET` route in the
+   * same table, so Bun's router matches it and no `fetch` handler is needed. */
   async listen(port = this.#port): Promise<string> {
     this.#assertNotStarted('listen()');
     this.#started = true;
 
     /**
-     * Global middleware resolves **permissively**, not from a named scope.
-     *
-     * It is the app's own list, and the class it names is usually declared by whichever
-     * feature module owns it - so the right instance is the one that module built, with
-     * that module's dependencies. Pinning the lookup to the app's root would instead
-     * demand the root re-export every guard it lists, which is a boundary nobody asked
-     * for. `app.get` finds the single module that declares it, and errors if two do.
+     * Global middleware resolves permissively rather than from a named scope: the
+     * right instance is the one its own feature module built. `app.get` finds the
+     * single module that declares it and errors if two do.
      */
     const middleware = this.#middleware.map((entry) =>
       this.#app.get(entry, this.#root),
     );
     const prefixed = this.#prefixed();
-    // A `@UseGuards` class comes from the container too, so a guard injects exactly
-    // like global middleware does.
     const routes = buildRoutes(
       prefixed,
       middleware,
       this.#onError,
       this.#cors,
-      // A module's own middleware resolves from that module, which `from` carries. A
-      // `@UseGuards` guard without one takes the same permissive lookup as global
-      // middleware.
+      // A module's own middleware resolves from that module, carried by `from`.
       (guard, from) =>
         from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
     );
@@ -318,10 +250,8 @@ export class HttpApplication implements HttpApp {
     const ws = this.#websocket;
     if (ws) assertNoGatewayCollisions(prefixed, ws.paths);
 
-    // Bun's own 404 never reaches the middleware chain, so an unmatched path is
-    // invisible to request logging. This runs only after Bun has matched nothing,
-    // so Bun is still the router - it just puts the global middleware in front of
-    // the 404 and returns it in the framework's error shape.
+    // Bun's own 404 never reaches the middleware chain. This runs only after Bun
+    // has matched nothing, so Bun is still the router.
     const fetch = buildFallback(
       middleware,
       this.#onError,
@@ -329,9 +259,8 @@ export class HttpApplication implements HttpApp {
       this.#notFound,
     );
 
-    // Two literals, one call: a route that may answer `undefined` because it
-    // upgraded is only a valid route table when `websocket` is there to receive it,
-    // and Bun's own types say so.
+    // One call: a route that may answer `undefined` because it upgraded is only
+    // a valid table when `websocket` is there, and Bun's types say so.
     const options: Bun.Serve.Options<SocketData> = ws
       ? {
           port,
@@ -348,9 +277,8 @@ export class HttpApplication implements HttpApp {
     });
     const pubsub = this.#app.get(PubSub);
     pubsub.attach(this.#server);
-    // After attach, so a frame that arrives during the subscribe already has a
-    // server to fan out on. Awaited so a two-node deployment is subscribed by the
-    // time listen() resolves; an unreachable broker fails fast and degrades.
+    // After attach, so a frame arriving during the subscribe has a server to fan
+    // out on. Awaited, so a two-node deployment is subscribed by listen().
     if (this.#relay) {
       const logger = this.#app.get(Logger);
       await pubsub.relayThrough(this.#relay, {
@@ -374,21 +302,9 @@ export class HttpApplication implements HttpApp {
   }
 
   /**
-   * What the process serves, in one entry, once the table is final.
-   *
-   * Nest emits a line per controller and a line per route through `RoutesResolver`
-   * and `RouterExplorer`, plus one per websocket subscription. That is the useful
-   * information and the wrong shape: 30 lines a collector reads as 30 records, for
-   * one fact. This is the same content as one structured entry, which is what
-   * `WorkerFactory`'s "Consuming N job(s) on M queue(s)" already does for the
-   * consuming side.
-   *
-   * At `info`, deliberately. It is one line per process, it is the answer to "is my
-   * route registered", and a service that logs nothing at boot cannot answer that
-   * from production. `logLevel: 'warn'` silences it with everything else.
-   *
-   * Here rather than at `create()` because `setGlobalPrefix` runs in between, and a
-   * table listing unprefixed paths would name routes that do not exist.
+   * What the process serves, as one entry once the table is final. One structured
+   * record rather than a line per route, which a collector reads as one fact.
+   * Here rather than at `create()` because `setGlobalPrefix` runs in between.
    */
   #logServed(
     routes: readonly DiscoveredRoute[],
@@ -402,7 +318,6 @@ export class HttpApplication implements HttpApp {
     ].join(' and ');
 
     this.#app.get(Logger).info(`Serving ${subject}`, {
-      // The first entry this process writes, so it names what is running it.
       // Under `bun test` `main` is the test file rather than the app entry.
       ...runtimeInfo(),
       routes: routes.map((route) => `${route.method} ${route.path}`),
@@ -418,24 +333,19 @@ export class HttpApplication implements HttpApp {
     });
   }
 
-  // Not delegated to the core app: the server has to stop before providers tear
-  // down, so the signal handler must land here. With a gateway the stop is forced -
-  // a graceful stop waits for open connections and a WebSocket does not close on
-  // its own, so it would hang. Those clients see a 1006 close.
-  /**
-   * Delegated unchanged: the drain is the container's phase, and `shutdown()`
-   * runs it. Public so an operator can start draining without committing to a
-   * shutdown, which is what a readiness probe wants during a rolling deploy.
-   */
+  // The server has to stop before providers tear down, so the handler lands
+  // here. With a gateway the stop is forced: a graceful one waits for open
+  // connections and a WebSocket never closes itself. Those clients see a 1006.
+  /** Public so an operator can start draining without committing to a shutdown,
+   * which is what a readiness probe wants during a rolling deploy. */
   drain(): Promise<void> {
     return this.#app.drain();
   }
 
   /**
-   * The four phases, in order, and **none of them is skipped because an earlier
-   * one failed**. A drain hook that threw used to abort this before `server.stop()`
-   * had run, so the port stayed open and `closed` never resolved; each failure is
-   * collected now and thrown once the whole teardown is over.
+   * Four phases in order, none skipped because an earlier one failed. A throwing
+   * drain hook used to abort before `server.stop()`, leaving the port open and
+   * `closed` unresolved; failures are collected and thrown at the end.
    */
   async shutdown(): Promise<void> {
     this.#shuttingDown ??= (async () => {
@@ -448,15 +358,12 @@ export class HttpApplication implements HttpApp {
         }
       };
 
-      // While the port is still open and the routes still answer: a readiness
-      // probe has to start failing *before* the server stops, or a load balancer
-      // is still routing when the socket closes. `App.shutdown()` below calls
-      // this too and it is memoized, so nothing drains twice.
+      // While the port is still open: a readiness probe has to fail before the
+      // server stops. Memoized, so `App.shutdown()` below cannot drain twice.
       await step(() => this.#app.drain());
       await step(async () => this.#server?.stop(this.#websocket !== undefined));
       this.#server = undefined;
-      // Before the container: a relay this app owns holds two Redis sockets, and
-      // `maxRetries: 0` means nothing else will ever close them.
+      // Before the container: a relay this app owns holds two Redis sockets.
       await step(() => this.#app.get(PubSub).close());
       try {
         await step(() => this.#app.shutdown());
@@ -485,8 +392,7 @@ export class HttpApplication implements HttpApp {
     }));
   }
 
-  // #started rather than #server, which shutdown() clears - a hook called after
-  // the server stopped is just as ineffective as one called while it ran.
+  // #started rather than #server, which shutdown() clears.
   #assertNotStarted(hook: string): void {
     if (!this.#started) return;
     throw new AppError(

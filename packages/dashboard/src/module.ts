@@ -32,17 +32,12 @@ const middleware = (): Registration =>
   });
 
 /**
- * Binds the options and the middleware. **It does not register the middleware** -
- * the app does, with `app.use(DashboardMiddleware)`, and that is deliberate:
- * position in the chain is the whole security property here.
+ * Binds the options and the middleware, and does not register it - the app does,
+ * because position in the chain is the security property here.
  *
- * `@Module({ middleware })` scopes middleware to that module's own controllers, of
- * which this module has none, so it would never run. Registering globally from
- * inside the module would put it wherever the module happened to be imported, and
- * it has to be **ahead of any session guard** - measured in `dunx-template`, where a
- * guard running first answered every dashboard request `401` before `authorize`
- * ran, defeating the 404 contract. Two lines in the app, one of which is a
- * decision:
+ * `@Module({ middleware })` scopes to that module's own controllers, of which this
+ * has none. Registering globally from inside would put it wherever the module was
+ * imported, and it has to sit ahead of any session guard:
  *
  * ```ts
  * const app = await HttpFactory.create(AppModule);

@@ -77,18 +77,12 @@ interface SendConfig {
 
 /**
  * A `fetch` client with a per-request timeout, retry with backoff, request-id
- * propagation and one log line per call.
+ * propagation and one log line per call. `fetch` and nothing else, so there is no
+ * client dependency; what it adds is the parts every caller otherwise
+ * reimplements - the timeout, the retry policy, `Retry-After`, url building, and
+ * a failure that says which call failed.
  *
- * `fetch` and nothing else: it is a Web standard Bun implements natively, so there
- * is no client dependency to justify - which is also why `axios` and `node-fetch`
- * are banned repo-wide. What this adds over calling `fetch` yourself is the parts
- * every caller otherwise reimplements slightly differently: the timeout, the
- * retry policy, `Retry-After`, url building, and a failure that says which call
- * failed.
- *
- * Extends `UrlHelper` from `@arkv/shared`, so `buildUrl` and `interpolate` are
- * available on the service, and there is one implementation of them across the
- * owner's projects rather than a fork per repo.
+ * Extends `UrlHelper` from `@arkv/shared` for `buildUrl` and `interpolate`.
  */
 export class HttpService extends UrlHelper {
   constructor(
@@ -311,18 +305,13 @@ export class HttpService extends UrlHelper {
   }
 
   /**
-   * Resolves the target, accepting the three forms a caller actually reaches for:
-   * an absolute url, a path relative to `baseUrl`, or `baseUrl` plus an explicit
-   * `path`.
+   * Resolves the target: an absolute url, a path relative to `baseUrl`, or
+   * `baseUrl` plus an explicit `path`.
    *
-   * `get('/users')` is the one worth calling out. A relative first argument is what
-   * every HTTP client takes once a base url exists, and passing it straight to
-   * `buildUrl` throws `ERR_INVALID_URL` from inside `new URL()` - a message naming
-   * neither the call nor the missing base. So a first argument that is not an
-   * absolute url is treated as the path, which is what it reads as.
-   *
-   * `URL.canParse` decides, rather than a regex over `//` or `:` - it is the same
-   * parser `new URL` uses, so the two cannot disagree.
+   * A relative first argument reaching `buildUrl` throws `ERR_INVALID_URL` from
+   * inside `new URL()`, naming neither the call nor the missing base, so one that
+   * is not absolute is treated as the path. `URL.canParse` decides rather than a
+   * regex, so it cannot disagree with `new URL`.
    */
   private urlFor(config: {
     readonly url?: string | URL;

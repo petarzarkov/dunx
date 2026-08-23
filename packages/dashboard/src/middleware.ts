@@ -6,27 +6,16 @@ import { DashboardOptions } from './options.js';
 import { handleDashboard, type RouterDeps } from './router.js';
 
 /**
- * A **global middleware**, not a controller, and that is not a stylistic choice.
+ * A global middleware rather than a controller: `app.use` runs in front of the
+ * unmatched-path fallback, which is where the dashboard's paths land because the
+ * app declares none of them.
  *
- * Middleware registered with `app.use` runs in front of the unmatched-path
- * fallback, which is exactly where the dashboard's paths land because the app
- * declares none of them. Declaring them as dunx routes would mean generating
- * controllers for a route table handed over at runtime, and every panel would need
- * its own `@Get`.
+ * Register it ahead of any session guard - with this last in the chain a guard
+ * answers `401` before `authorize` runs, defeating the 404 contract. That works
+ * only because `authorize` gets the raw `Request`, so keep it self-sufficient.
+ * Anything outside the mount falls through untouched.
  *
- * Two consequences of that, both learned the hard way and both worth keeping:
- *
- * - **Register it ahead of any session guard.** Measured in `dunx-template`: with
- *   this last in the chain, `SessionGuard` answered every dashboard request `401`
- *   before `authorize` ran, which defeats the 404 contract entirely. That works
- *   only because `authorize` gets the raw `Request` and can ask the auth library
- *   itself, so keep it self-sufficient.
- * - **Anything outside the mount falls through untouched**, so the app's own
- *   routes and its 404 behave exactly as before.
- *
- * The page bundle is built on the **first request** and memoised on the promise,
- * so two concurrent first requests build one page and importing this package pulls
- * in none of its 400-odd KB.
+ * The page bundle is built on the first request and memoised on the promise.
  */
 export class DashboardMiddleware implements Middleware {
   readonly #options: DashboardOptions;

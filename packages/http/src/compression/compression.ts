@@ -26,15 +26,12 @@ const BUFFER_LIMIT = 1024 * 1024;
 /**
  * The body, buffered, or a stream that replays what was read.
  *
- * **A handler's `Response` almost never declares a `content-length`** - probed on
- * Bun 1.4, and true of a string, a `Uint8Array`, a `Blob`, `Response.json()` and
- * `Bun.file()` alike, because Bun computes the header when it serializes rather
- * than putting it on the object. So an absent header says nothing about size, and
- * reading the body is the only way to apply a threshold or to declare a length.
+ * A handler's `Response` almost never declares a `content-length` - Bun computes
+ * it at serialization rather than putting it on the object - so an absent header
+ * says nothing about size and reading is the only way to apply a threshold.
  *
- * Reading stops at `limit`. Past it the response is handed back as a stream with
- * the consumed chunks in front, so an SSE feed or a large download still streams
- * and is never held whole.
+ * Reading stops at `limit`, past which the response is handed back as a stream
+ * with the consumed chunks in front, so a large download is never held whole.
  */
 const buffer = async (
   body: BodyStream,
@@ -127,25 +124,20 @@ const encodeSync = (
 };
 
 /**
- * Response compression, on Bun's own compressors.
- *
- * **Not installed by default, and registered by the app rather than by a module:**
+ * Response compression, on Bun's own compressors. Not installed by default, and
+ * registered by the app rather than a module:
  *
  * ```ts
  * const app = await HttpFactory.create(AppModule, { imports: [CompressionModule.forRoot()] });
  * app.use(Compression);
  * ```
  *
- * An app that never registers it pays nothing - there is no branch in the request
- * path to skip. Position is the app's decision for the same reason `StaticFiles`
- * leaves it open: compression belongs inside request logging, so the logged status
- * is the real one, and outside anything that wants to read the body it produced.
+ * An app that never registers it pays nothing. Position is the app's: compression
+ * belongs inside request logging and outside anything reading the body it made.
  *
- * Two encoders rather than one. A body whose `content-length` is known and under
- * `BUFFER_LIMIT` goes through `Bun.zstdCompressSync`/`gzipSync`, which is faster
- * than the stream and leaves an accurate `content-length` on the response; a
- * streamed or oversized body goes through `CompressionStream` and loses the header,
- * as it must.
+ * Two encoders. A known length under `BUFFER_LIMIT` goes through the sync
+ * compressors, which keep an accurate `content-length`; anything larger or
+ * streamed goes through `CompressionStream` and loses the header.
  */
 export class Compression implements Middleware {
   readonly #options: CompressionOptions;

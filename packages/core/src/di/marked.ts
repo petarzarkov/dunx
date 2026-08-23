@@ -15,22 +15,16 @@ export interface MarkedMethod<M> {
 }
 
 /**
- * Every marked method on a prototype chain, most-derived first, names deduped.
- *
- * The marker technique is core's: a decorator defines a symbol-keyed property on
- * the method function, so nothing accumulates at class-definition time and there
- * is no ordering dependence. Reading it back means walking the chain, and three
- * packages had written that walk identically - `@dunx/http` twice, for routes and
- * for gateway handlers, and `@dunx/infra` once for `@JobHandler`. A scheduler's
- * `@Cron` would have been the fourth.
+ * Every marked method on a prototype chain, most-derived first, names deduped. A
+ * decorator defines a symbol-keyed property on the method function, so nothing
+ * accumulates at class-definition time; three packages had written this walk
+ * identically before it moved here.
  *
  * Most-derived wins on a repeated name, so an undecorated override does not
- * inherit its base's marker. Dispatch still lands on the override, because every
- * caller binds the handler off the instance rather than off `value`.
+ * inherit its base's marker. Dispatch still lands on the override, since callers
+ * bind off the instance.
  *
- * `Object.prototype` ends the walk, and `constructor` is skipped: neither can
- * carry a marker, and descending into `Object.prototype` would read every
- * built-in on every scan.
+ * `Object.prototype` ends the walk and `constructor` is skipped.
  */
 export const markedMethods = <M>(
   start: object | null,
@@ -62,16 +56,11 @@ export const markedMethods = <M>(
 
 /**
  * The class a `providers` entry would construct, or nothing for a value or factory
- * provider.
+ * provider - neither is a discovery candidate, since there is no prototype chain
+ * to read until it is built and building it to find out is the ordering trap the
+ * marker technique avoids.
  *
- * A factory- or value-provided instance is not a discovery candidate: there is no
- * prototype chain to read until it has been built, and building it to find out
- * whether it was worth building is the ordering trap the marker technique exists to
- * avoid.
- *
- * Here because three packages walk `providers` looking for marked methods -
- * `@dunx/http` for routes and gateways, `@dunx/infra` for job handlers and
- * schedules - and this was written identically in each, doc comment included.
+ * Here because three packages walk `providers` looking for marked methods.
  */
 export const classOf = (
   entry: ProviderEntry,

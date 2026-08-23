@@ -10,14 +10,9 @@ import { SyncWidgets } from './sqlite/widgets-sync.service.js';
 import { Widgets } from './sqlite/widgets.service.js';
 
 /**
- * Four containers, one after another, because each binds its own `DbConnection`
- * and the container is flat - two backends in one app would be a duplicate token,
- * which dunx rejects at boot naming both modules. Running an app per dialect is
- * also what a real deployment does.
- *
- * `AppFactory`, not `HttpFactory`: there is no HTTP here at all. A dunx app does
- * not need a server, and keeping one out is what makes the database wiring the
- * only thing on screen.
+ * One container per dialect: each binds its own `DbConnection`, and two in one
+ * app is a duplicate token dunx rejects at boot. `AppFactory` rather than
+ * `HttpFactory` - a dunx app does not need a server.
  */
 const configModule = ConfigModule.forRoot({
   validate,
@@ -52,7 +47,6 @@ const sqliteSync = async (logger: Logger): Promise<void> => {
   });
   const widgets = app.get(SyncWidgets);
 
-  // Not one `await` in this block. `bun:sqlite` is a function call into SQLite.
   widgets.add('bolt', 3);
   widgets.addPairAtomically('nut', 'screw', false);
   const committed = widgets.list().length;
@@ -60,7 +54,7 @@ const sqliteSync = async (logger: Logger): Promise<void> => {
   try {
     widgets.addPairAtomically('ghost', 'phantom', true);
   } catch {
-    // The rollback is the demonstration.
+    // The rollback is what the next line counts.
   }
   const afterRollback = widgets.list().length;
 
@@ -124,22 +118,13 @@ const mysql = async (logger: Logger, url: string): Promise<void> => {
 
 const run = async (): Promise<void> => {
   /**
-   * A timer, for the event loop, and not decoration - without it this script exits
-   * **silently with code 0** in the middle of the MySQL section.
-   *
-   * On Bun 1.3.14 an in-flight `Bun.SQL` query on the **MySQL** adapter does not
-   * hold a reference on the event loop. A long-running server never notices,
-   * because `Bun.serve` holds one; a script like this has nothing else pending, so
-   * the loop drains while the query is outstanding and the process just stops -
-   * no error, no rejection, no output, exit 0. Measured: with this interval the
-   * MySQL section completes every time, without it never. The Postgres adapter and
-   * `bun:sqlite` are unaffected. See docs/bun-apis.md.
+   * Holds the event loop open. On Bun 1.3.14 an in-flight `Bun.SQL` query on the
+   * MySQL adapter takes no reference, so this script exits silently with code 0
+   * mid-section. See docs/bun-apis.md.
    */
   const keepalive = setInterval(() => undefined, 250);
 
   try {
-    // One throwaway container purely to read the validated config the same way
-    // every other app in this repo does, rather than touching `Bun.env` here.
     const root = await AppFactory.create({
       module: class ConfigOnly {},
       imports: [configModule],

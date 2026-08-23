@@ -2,8 +2,7 @@ import { AppError } from './errors.js';
 import type { Registration } from './provider.js';
 import { token, type Ctor, type InjectionToken, type Token } from './token.js';
 
-// Symbol.for, not Symbol: two copies of @dunx/core in a dependency tree still
-// agree on the key. Same marker technique as route discovery - no accumulator.
+// Symbol.for, so two copies of @dunx/core in one tree agree on the key.
 const MODULE = Symbol.for('dunx.module');
 
 /** A bare class is shorthand for binding it to itself. */
@@ -17,54 +16,37 @@ export interface ModuleOptions {
    * whatever its imports `export`, and nothing else.
    */
   readonly imports?: readonly ModuleRef[];
-  // Registered exactly like providers. Kept separate so an HTTP adapter can find
-  // which instances to scan for routes; core itself only constructs them.
+  // Registered like providers, kept separate so an HTTP adapter can find which
+  // instances to scan for routes.
   readonly controllers?: readonly Ctor<unknown>[];
   readonly providers?: readonly ProviderEntry[];
   /**
-   * This module's public surface. A token listed here is resolvable by any module
-   * that imports this one; everything else stays private to it.
+   * This module's public surface. A `ModuleRef` here re-exports whatever that
+   * module exports, which is what makes a facade module possible.
    *
-   * A `ModuleRef` re-exports whatever that module exports, which is what makes a
-   * facade module possible - `InfraModule` importing and re-exporting `DbModule`
-   * means an importer of `InfraModule` sees the database without naming it.
-   *
-   * **Absent means nothing is exported.** A module with providers and no `exports`
-   * is fully private, which is the point of the boundary.
+   * Absent means nothing is exported.
    */
   readonly exports?: readonly (InjectionToken<unknown> | ModuleRef)[];
   /**
-   * Publishes this module's `exports` to every scope in the app, with no import
-   * needed. Its private providers stay private.
-   *
-   * A field rather than a separate `@Global()` decorator: dunx configures modules
-   * through one options object, and a `DynamicModule` would need the field anyway,
-   * so a decorator would be a second spelling for one idea.
+   * Publishes this module's `exports` to every scope, with no import needed. Its
+   * private providers stay private. A field rather than a `@Global()` decorator,
+   * which a `DynamicModule` would need anyway.
    */
   readonly global?: boolean;
   /**
-   * Middleware applied to the routes **this module's controllers declare**, and to
-   * nothing else. Resolved from this module's scope, so it can inject providers the
-   * module keeps private.
-   *
-   * There is no inheritance: importing a module never changes the request path of
-   * the importer's own routes. Middleware that really is app-wide stays app-wide.
-   *
-   * One field rather than `middleware` plus `guards`, because a guard here is
-   * middleware that throws - the same "one extension point, not five" decision the
-   * global chain rests on.
+   * Middleware applied to the routes this module's controllers declare, and to
+   * nothing else. Resolved from this module's scope, so it can inject providers
+   * the module keeps private. There is no inheritance: importing a module never
+   * changes the importer's own routes. A guard here is middleware that throws.
    */
   readonly middleware?: readonly Ctor<unknown>[];
 }
 
 /**
- * A configured module - what a `static forRoot(options)` returns. The
- * registrations it carries are merged with whatever the class's own `@Module`
- * decorator declares, so a module can have a static core plus configured extras.
- *
- * There is no separate `forRootAsync`: because dunx resolves eagerly and awaits
- * async factories before any constructor runs, an asynchronously configured
- * module is just one whose options token is bound with `useFactory`.
+ * What a `static forRoot(options)` returns. Merged with whatever the class's own
+ * `@Module` declares, so a module can have a static core plus configured extras.
+ * An asynchronously configured module is one whose options token is bound with
+ * `useFactory`, since dunx awaits async factories before any constructor runs.
  */
 export interface DynamicModule extends ModuleOptions {
   readonly module: ModuleClass;
@@ -74,17 +56,10 @@ export interface DynamicModule extends ModuleOptions {
 export type ModuleRef = ModuleClass | DynamicModule;
 
 /**
- * The reference `AppFactory.create` was handed, bound into the global scope so a
- * provider can read the module graph it is itself part of.
- *
- * It exists for one shape of consumer: something mounted **inside** a running app
- * that has to report on that app - `@dunx/dashboard` is the case that forced it.
- * The graph readers all take a `ModuleRef`, and a middleware has no other way to
- * name the root; passing it back in through an option would mean an app listing
- * its own root module inside its own `imports`.
- *
- * Reading it is not booting anything: the readers walk prototypes and construct
- * nothing, which is the guarantee `providersOf` and `routesOf` are built on.
+ * The reference `AppFactory.create` was handed, bound globally so a provider can
+ * read the module graph it is part of. For something mounted inside a running app
+ * that has to report on it, such as `@dunx/dashboard`: the graph readers take a
+ * `ModuleRef` and a middleware has no other way to name the root.
  */
 export const ROOT_MODULE: Token<ModuleRef> =
   token<ModuleRef>('dunx.root-module');
@@ -95,11 +70,8 @@ export interface ResolvedModule {
   /** Names the module in a duplicate-binding or visibility error. */
   readonly name: string;
   readonly options: ModuleOptions;
-  /**
-   * The reference this was resolved from, so the visibility graph can key on
-   * identity: two different configurations of one class are two scopes, and the
-   * class alone cannot tell them apart.
-   */
+  /** The reference this was resolved from, so the visibility graph keys on
+   * identity: two configurations of one class are two scopes. */
   readonly ref: ModuleRef;
 }
 
@@ -120,17 +92,11 @@ const isDynamic = (ref: ModuleRef): ref is DynamicModule =>
 
 /**
  * Whether an `exports` entry is a module reference rather than an injection token.
+ * Not {@link isModuleRef}, which demands the `@Module` marker: a `DynamicModule`
+ * from a static factory usually names an undecorated class, so requiring the
+ * marker rejected the facade re-export this exists for.
  *
- * Deliberately **not** {@link isModuleRef}: that one demands the `@Module` marker,
- * and a `DynamicModule` from a static factory usually names a class that carries no
- * decorator at all - `MailerModule`, `DbModule`, `AuthModule`, every configured
- * module in `@dunx/infra`. Requiring the marker here rejected exactly the facade
- * re-export the feature exists for, and reported it as an unresolvable token named
- * `undefined`.
- *
- * The structural test is enough because the alternatives are disjoint: a `Token` is
- * `{ description }` with no `module`, and an abstract-class token is a function,
- * which the decorated-class branch already answers.
+ * The structural test suffices because the alternatives are disjoint.
  */
 export const isModuleExport = (
   entry: InjectionToken<unknown> | ModuleRef,
@@ -148,14 +114,10 @@ const declaredOptions = (module: ModuleClass): ModuleOptions | undefined =>
     : undefined;
 
 /**
- * A declared list and a configured one, joined **without duplicating**: an entry
- * present in both appears once, at the configured position.
- *
- * This is what makes `@Module` and a `static forRoot()` on the same class safe to
- * combine. A plain concatenation registered the decorator's entries a second time -
- * two scopes of one module, two of everything in them - so the rule used to be
- * "decorated or configured, never both", and every module that needed a static core
- * plus a configured extra had to put the static half in the factory too.
+ * A declared list and a configured one joined without duplicating, which is what
+ * makes `@Module` and a `static forRoot()` on one class safe to combine. A plain
+ * concatenation registered the decorator's entries twice: two scopes of one
+ * module, and two of everything in them.
  */
 const union = <T>(
   declared: readonly T[] | undefined,
@@ -171,12 +133,9 @@ const tokenOf = (entry: ProviderEntry): InjectionToken<unknown> =>
   typeof entry === 'function' ? entry : entry.token;
 
 /**
- * The same join for providers, keyed on the **token** rather than the entry.
- *
- * `forRoot()`'s binding wins, which is what makes a decorator a place to put the
- * default: `@Module({ providers: [provide(Options, { useValue: defaults })] })`
- * plus a `forRoot(init)` that binds `Options` is one module with a default and an
- * override, instead of a duplicate-binding error.
+ * The same join for providers, keyed on the token. `forRoot()`'s binding wins, so
+ * a decorator can hold the default and the factory the override, instead of the
+ * pair being a duplicate-binding error.
  */
 const unionProviders = (
   declared: readonly ProviderEntry[] | undefined,
@@ -192,14 +151,9 @@ const unionProviders = (
 };
 
 /**
- * An `exports` entry naming a module **class** becomes the configured module of
- * that class this module imports.
- *
- * Re-exporting a configured import used to mean hoisting it to a module-level
- * `const` so the same object could appear in `imports` and in `exports` - and
- * writing the class instead was not an error at the call site, it was an
- * unresolvable-token failure blamed on this module. The class is the name a reader
- * would reach for, so it resolves to what was imported under it.
+ * An `exports` entry naming a module class becomes the configured module of that
+ * class this module imports. Writing the class used to fail as an unresolvable
+ * token blamed on this module, so it resolves to what was imported under it.
  */
 type ExportEntry = InjectionToken<unknown> | ModuleRef;
 
@@ -214,11 +168,10 @@ const resolveModuleExports = (
 
   return exports.map((entry) => {
     if (typeof entry !== 'function') return entry;
-    // An abstract-class token this module declares is a token, however module-like
-    // it looks - so a provider always wins over the rewrite.
+    // An abstract-class token this module declares is a token however module-like
+    // it looks, so a provider wins over the rewrite.
     if (own.has(entry as InjectionToken<unknown>)) return entry;
-    // A class imported bare is already the reference the scope is keyed on. Only a
-    // configured import is reached under a different object than its class.
+    // A bare import is already the reference the scope is keyed on.
     return (
       imports.find(
         (imported) => isDynamic(imported) && imported.module === entry,
@@ -277,14 +230,10 @@ const resolveRef = (ref: ModuleRef): ResolvedModule => {
 };
 
 /**
- * Flattens the import graph, imports before importers so a module's dependencies
- * register first.
- *
- * A bare class is visited once however many modules import it, which is what makes
- * a diamond import register once and a cycle terminate. Two *different*
- * configurations of the same module are deliberately not deduped - both register,
- * so the duplicate-token check reports them by name instead of silently keeping
- * whichever was reached first.
+ * Flattens the import graph, imports before importers. A bare class is visited
+ * once however many modules import it, so a diamond registers once and a cycle
+ * terminates. Two different configurations of one module are not deduped, so the
+ * duplicate-token check reports them by name.
  */
 export const collectModules = (root: ModuleRef): readonly ResolvedModule[] => {
   const seen = new Set<ModuleRef>();
@@ -329,11 +278,8 @@ export const readControllers = (
 ): readonly Ctor<unknown>[] => resolved.options.controllers ?? [];
 
 /**
- * Whether a value is something `collectModules` could be handed - a `@Module` class
- * or a configured module from a static factory.
- *
- * `Object.hasOwn`, matching `declaredOptions`: a subclass of a module does not
- * inherit its bindings, so it is not a module either.
+ * Whether a value is something `collectModules` could be handed. `Object.hasOwn`,
+ * matching `declaredOptions`: a subclass does not inherit its bindings.
  */
 export const isModuleRef = (value: unknown): value is ModuleRef => {
   if (typeof value === 'function') return Object.hasOwn(value, MODULE);
@@ -352,18 +298,12 @@ export type RootModuleResult =
   | { readonly kind: 'ambiguous'; readonly names: readonly string[] };
 
 /**
- * The root module among a loaded file's exports.
+ * The root module among a loaded file's exports. Tools used to require `default`
+ * or `root`, which failed on a freshly scaffolded app ending
+ * `export class AppModule {}`; `@Module` leaves a marker, so the root is
+ * recognised rather than named.
  *
- * Every tool that takes an entry path needs this and none of them can guess a
- * name: `bunx dunx-openapi` and `bunx @dunx/mcp` both required `default` or `root`,
- * while `@dunx/create-app`'s template - and every example in this repo - ends
- * `export class AppModule {}` and nothing else. So the first thing anyone would try
- * failed on a freshly scaffolded app. `@Module` leaves a marker, so the root can be
- * *recognised* rather than named.
- *
- * `root` and `default` still win when present, so a file that also exports feature
- * modules resolves to the one it nominated rather than reporting a tie. `named` is
- * the explicit override for a file that nominates nothing and declares several.
+ * `root` and `default` still win when present. `named` is the explicit override.
  */
 export const findRootModule = (
   exports: Readonly<Record<string, unknown>>,

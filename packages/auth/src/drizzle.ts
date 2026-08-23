@@ -30,9 +30,9 @@ const PROVIDERS: Readonly<
 });
 
 /**
- * better-auth's `database` option over a connection the app already opened. Nothing
- * here connects: the point is that the app keeps **one** pool, one SQLite handle and
- * one shutdown path, instead of better-auth opening a second.
+ * better-auth's `database` option over a connection the app already opened, so the
+ * app keeps one pool and one shutdown path rather than better-auth opening a
+ * second. Nothing here connects.
  *
  * ```ts
  * AuthModule.forRootAsync({
@@ -43,30 +43,13 @@ const PROVIDERS: Readonly<
  * });
  * ```
  *
- * The `provider` comes from the connection's own dialect, so swapping `bun:sqlite`
- * for `Bun.SQL` needs no edit at the call site. The schema does not have to be passed
- * either - `@dunx/infra/db` builds its handle with `drizzle({ client, schema })` and
- * the adapter reads `db._.fullSchema`.
- *
- * **The tables have to be exported under the names better-auth looks up**, which is
- * the singular model name and not the table name. The adapter does `fullSchema['user']`,
- * so a barrel exporting `users` fails on the first query rather than at boot:
- *
- * ```
- * BetterAuthError: [# Drizzle Adapter]: The model "user" was not found in the schema object.
- * ```
- *
- * Either name the exports `user`, `session`, `account` and `verification`, or map them
- * where the schema is assembled:
+ * The `provider` comes from the connection's dialect and the schema off
+ * `db._.fullSchema`. Tables must be exported under better-auth's singular model
+ * names, so a barrel exporting `users` fails on first query:
  *
  * ```ts
  * schema: { user: users, session: sessions, account: accounts, verification: verifications }
  * ```
- *
- * dunx ships **no** schema for those tables. They are better-auth's, they change with
- * its plugins, and its own CLI generates them: `bunx @better-auth/cli generate`. A
- * copy of them inside a framework is a copy that silently rots against the library
- * that reads it.
  */
 export const drizzleDatabase = (
   connection: DrizzleSource,

@@ -1,13 +1,9 @@
 import { Logger } from '@dunx/core';
 import type { QueuesReport, RuntimeReport, Snapshot } from '@dunx/dashboard';
 /**
- * What the ops page shows, narrated - and, more usefully, an assertion in CI that
- * every panel's endpoint answers against the real container rather than a fixture.
- *
- * The JSON endpoints are the point of this demo as much as the page is: they are a
- * supported way to read the dashboard, not an implementation detail of the bundle,
- * which is what makes `curl $APP/api/_dunx/api/queues` a real answer on a box with
- * no browser.
+ * What the ops page shows, and a CI assertion that every panel's endpoint answers
+ * against the real container. The JSON endpoints are supported, so
+ * `curl $APP/api/_dunx/api/queues` works on a box with no browser.
  */
 export class DashboardDemo {
   constructor(private readonly logger: Logger) {}
@@ -15,10 +11,8 @@ export class DashboardDemo {
   async demonstrate(url: string): Promise<void> {
     const base = new URL('api/_dunx', url).href;
 
-    // This example mounts the dashboard with **no** `authorize`, so it is open -
-    // which is what the boot warning above is about, and what makes the page
-    // explorable with `bun start`. A real service passes one, and a caller it
-    // rejects gets 404 rather than 403 so a prober cannot tell the mount is there.
+    // Mounted with no `authorize`, so it is open - the boot warning above. A
+    // real service passes one, and a rejected caller gets 404 rather than 403.
     this.logger.info(
       'mounted with no authorize: open to anyone who can reach this port',
     );
@@ -42,8 +36,7 @@ export class DashboardDemo {
         '(each one would be a boot error naming that parameter)',
     );
 
-    // Keys always, values only where `reveal` said so - and the page has no
-    // control to change that, because redaction is decided at boot.
+    // Keys always, values only where `reveal` said so, decided at boot.
     const shown = (snapshot.config ?? []).filter((entry) => 'value' in entry);
     this.logger.info(
       `config -> ${snapshot.config?.length ?? 0} keys, ${shown.length} revealed: ` +
@@ -57,8 +50,8 @@ export class DashboardDemo {
         `${runtime.probes.map((probe) => `${probe.name}=${probe.state}`).join(' ') || 'none'}`,
     );
 
-    // Names only. Everything *about* a queue is bull-board's, mounted under the
-    // same path and behind the same `authorize` - dunx renders no queue UI.
+    // Names only: everything about a queue is bull-board's, behind the same
+    // `authorize`.
     const queues = await read<QueuesReport>('/api/queues');
     this.logger.info(
       queues.unavailable === undefined

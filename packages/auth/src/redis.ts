@@ -22,25 +22,17 @@ export interface RedisStore {
 }
 
 /**
- * better-auth's `secondaryStorage` over `Bun.RedisClient`, so sessions, verification
- * values and rate-limit counters live in Redis instead of costing a database round
- * trip on every request.
+ * better-auth's `secondaryStorage` over `Bun.RedisClient`, so sessions and
+ * rate-limit counters cost no database round trip.
  *
- * All five methods are implemented, not the three that are mandatory.
- * `getAndDelete` and `increment` are optional in better-auth's interface because most
- * clients cannot do them atomically - `Bun.RedisClient` can, through `GETDEL` and
- * `INCR`, both already on `@dunx/infra/redis`'s contract. Without them better-auth
- * falls back to read-then-delete for single-use credentials, which is a race, and to
- * a non-atomic rate-limit counter.
+ * All five methods, not the three that are mandatory: `getAndDelete` and
+ * `increment` are optional because most clients cannot do them atomically, and
+ * `Bun.RedisClient` can through `GETDEL` and `INCR`. Without them better-auth
+ * falls back to a read-then-delete race and a non-atomic counter.
  *
- * `increment`'s TTL applies on creation only, which is what makes the counter expire
- * a fixed window after the first hit rather than sliding forever: `INCR` returning
- * `1` is the signal that this call created the key.
- *
- * Redis being unreachable is deliberately **not** softened here. Bun's client
- * connects lazily and queues, so a command against a down server rejects and
- * better-auth's own error path is what should see it - a swallowed `null` from `get`
- * would read as "no session" and sign every user out.
+ * `increment`'s TTL applies on creation only, so the window is fixed from the
+ * first hit. An unreachable Redis is not softened: a swallowed `null` would read
+ * as "no session" and sign every user out.
  */
 export const redisStorage = (connection: RedisStore): SecondaryStorage => ({
   get: (key) => connection.get(key),

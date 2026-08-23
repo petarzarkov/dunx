@@ -6,20 +6,15 @@ import { Sessions } from './sessions.service.js';
 
 @Module({
   imports: [
-    // Without a url Bun's own chain decides it - $VALKEY_URL, then $REDIS_URL,
-    // then valkey://localhost:6379. Connections are lazy, so nothing is dialled
-    // here and an unavailable cache cannot stop the process from booting.
-    // `eager: true` would opt into finding out at startup, which is the opposite
-    // of the point: the cache routes report themselves degraded instead.
+    // No url, so Bun resolves $VALKEY_URL, $REDIS_URL, then localhost.
+    // Connections are lazy, so an unavailable cache cannot stop boot.
     //
-    // `maxRetries: 0` is not just impatience: measured on Bun 1.3.14, a client
-    // that failed to connect with `maxRetries > 0` keeps a retry timer alive even
-    // after `close()`, and the process never exits. With 0 it exits cleanly.
+    // `maxRetries: 0` because on Bun 1.3.14 a client that failed to connect with
+    // `maxRetries > 0` keeps a retry timer alive after `close()` and never exits.
     RedisModule.forRootAsync({
       useFactory: (config: AppConfigService) => {
-        // Destructured first: `exactOptionalPropertyTypes` will not let a
-        // `string | undefined` reach a `url?: string`, even inside the branch
-        // that has already ruled `undefined` out.
+        // `exactOptionalPropertyTypes` will not let `string | undefined` reach
+        // a `url?: string`, even where `undefined` is ruled out.
         const { url } = config.get('redis');
         return {
           ...(url === undefined ? {} : { url }),
@@ -32,8 +27,7 @@ import { Sessions } from './sessions.service.js';
   ],
   controllers: [CacheController],
   providers: [Sessions],
-  // Re-exported: the chat gateway fans out across processes through the same
-  // connection, so it imports this module rather than opening a second client.
+  // Re-exported so the chat gateway fans out through the same connection.
   exports: [RedisConnection, Sessions],
 })
 export class CacheModule {}

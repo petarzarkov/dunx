@@ -163,16 +163,12 @@ const assertExportsResolve = (
 
 /**
  * One module class registered twice, each registration binding the same token.
+ * `forRoot()` returns a fresh object per call and a scope is keyed on the
+ * reference, so two calls are two of everything: each resolves, nothing errors,
+ * and half the app talks to the wrong copy.
  *
- * `forRoot()` returns a fresh object per call, and a scope is keyed on the
- * reference - so two calls are two scopes with two of everything in them. Two
- * database connections, two schedule registries, two auth instances: each one
- * resolves, nothing errors, and half the app talks to the wrong copy.
- *
- * A warning rather than an error, because two registrations that bind **different**
- * tokens are a supported shape - `RedisModule.forRoot()` alongside
- * `RedisModule.forRoot({ name: 'cache' })` is two connections on purpose, and it is
- * silent here because the named one binds named tokens.
+ * A warning rather than an error, since two registrations binding different tokens
+ * are supported - a named `RedisModule.forRoot({ name })` is two connections.
  */
 const duplicateConfigurations = (
   modules: readonly ResolvedModule[],

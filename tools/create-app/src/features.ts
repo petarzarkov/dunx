@@ -1,16 +1,11 @@
 /**
- * The features a generated app can be composed from, each one a directory of
- * `examples/full` - the example CI boots and tours on every push.
+ * The features a generated app can be composed from, each a directory of
+ * `examples/full`, which CI boots and tours on every push - a template nobody runs
+ * rots. `bun run sync:templates` copies them in and `features.test.ts` fails on
+ * drift.
  *
- * That is the whole point of sourcing them there rather than writing starter code
- * here: a template nobody runs rots, and this repo already runs `examples/full`
- * end to end. `bun run sync:templates` copies the directories in and
- * `features.test.ts` fails if a copy drifts, so what gets scaffolded is what CI
- * proved works.
- *
- * What is **not** copied is the wiring: `app.module.ts`, `config.ts`,
- * `bootstrap.ts` and `main.ts` in the full example name every feature at once, so
- * they are generated from the selection instead. See `generate.ts`.
+ * The wiring is not copied: `app.module.ts`, `config.ts`, `bootstrap.ts` and
+ * `main.ts` name every feature at once, so they are generated from the selection.
  */
 export interface Feature {
   /** Flag name, and the directory under `templates/features/`. */

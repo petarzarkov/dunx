@@ -31,13 +31,9 @@ export class ImagesModule {
    * ImagesModule.forRoot(async () => ({ quality: await settings.quality() }));
    * ```
    *
-   * Use {@link ImagesModule.forRootAsync} when the options have to come from
-   * another provider - that is the one thing a zero-argument function cannot do.
-   *
-   * `Images` is bound through an explicit factory rather than as a bare class so
-   * that `@dunx/infra/images` works with or without the `@dunx/transform` preload.
-   * Consumers still need the preload for *their own* classes to inject `Images`
-   * by constructor.
+   * Use {@link ImagesModule.forRootAsync} when the options come from another
+   * provider. `Images` is bound through an explicit factory so this module works
+   * without the `@dunx/transform` preload.
    */
   static forRoot(config: ImagesConfig = {}): DynamicModule {
     return {
@@ -59,8 +55,7 @@ export class ImagesModule {
   }
 
   /**
-   * The same two bindings, with the options produced by a factory that may
-   * inject - reading the quality off `ConfigService`, say:
+   * The same two bindings, with the options behind a factory that may inject:
    *
    * ```ts
    * ImagesModule.forRootAsync({
@@ -70,9 +65,6 @@ export class ImagesModule {
    *   inject: [ConfigService],
    * });
    * ```
-   *
-   * Named for the `FilesModule`/`DbModule` precedent, not because asynchrony is
-   * the point: `forRoot` already awaits a function.
    */
   static forRootAsync<const D extends Deps>(
     config: AsyncModuleConfig<ImagesOptionsInput, D>,

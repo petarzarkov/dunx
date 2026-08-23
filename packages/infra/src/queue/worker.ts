@@ -20,36 +20,21 @@ import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueOptions } from './options.js';
 
 export interface WorkerAppOptions {
-  /**
-   * Consume only these queues. Defaults to every queue a handler was found for,
-   * which is what a single worker process wants; naming a subset is how one queue
-   * gets its own process and its own concurrency.
-   */
+  /** Consume only these queues. Defaults to every queue a handler was found for;
+   * naming a subset gives one queue its own process and concurrency. */
   readonly queues?: readonly string[];
   /**
-   * Run a queue's jobs in a child rather than inline.
-   *
-   * There is no option for it here on purpose: a queue is sandboxed by marking a
-   * handler `@JobHandler({ background: true })`, and the file to fork into is
-   * `QueueModule.forRoot({ processor })`. Both live with the jobs, so an
-   * entrypoint says nothing about where a handler runs - which is the point.
+   * Run a queue's jobs in a child rather than inline. No option here: a queue is
+   * sandboxed by `@JobHandler({ background: true })`, and the file to fork into
+   * is `QueueModule.forRoot({ processor })`. Both live with the jobs.
    */
 }
 
 /**
- * `FORCE_COLOR` for a forked child, when this process has colour and nothing has
- * already decided for it.
- *
- * bullmq forks a sandboxed processor with `stdio: 'pipe'` and copies its output
- * into ours, so the child's stdout is a pipe and every colour check inside it
- * answers for that pipe rather than for the terminal the lines end up on -
- * `Bun.enableANSIColors`, which `LoggerModule` defaults `isDevelopment` from, and
- * `@arkv/colors`, which `prettyFormat` asks before it emits an escape. A worker's
- * lines came out as plain JSON in a stream where every other line was coloured.
- *
- * `FORCE_COLOR` is what carries the answer across a fork, and both of those read
- * it. Absent when either variable is already set: it crosses in `process.env`
- * unchanged, and it is the consumer's answer rather than a terminal check.
+ * `FORCE_COLOR` for a forked child. bullmq forks with `stdio: 'pipe'`, so every
+ * colour check inside the child answers for that pipe rather than the terminal
+ * the lines end up on, and a worker's output came out uncoloured. Absent when
+ * either variable is already set: that is the consumer's answer, not a guess.
  */
 export const childColourEnv = (
   env: Record<string, string | undefined>,
@@ -60,10 +45,8 @@ export const childColourEnv = (
   return { ...env, FORCE_COLOR: '1' };
 };
 
-/**
- * What a worker process holds. `create` discovers and validates; `start` is what
- * opens the connections - so a wiring mistake fails before anything consumes.
- */
+/** What a worker process holds. `create` discovers and validates; `start` opens
+ * the connections, so a wiring mistake fails before anything consumes. */
 export interface WorkerApp extends App {
   /** Every handler discovered, after the `queues` filter. */
   readonly jobs: readonly DiscoveredJob[];
@@ -74,9 +57,8 @@ export interface WorkerApp extends App {
 }
 
 /**
- * The consuming half, with no `App` of its own. `WorkerFactory.create` owns a
- * container and delegates here; `WorkerFactory.attach` hands this to a process
- * that already has one, so a single process can serve HTTP and consume jobs.
+ * The consuming half, with no `App` of its own. `create` owns a container and
+ * delegates here; `attach` hands this to a process that already has one.
  */
 export class QueueConsumer {
   readonly jobs: readonly DiscoveredJob[];
@@ -103,12 +85,8 @@ export class QueueConsumer {
     this.#logger = app.get(Logger);
   }
 
-  /**
-   * A queue is sandboxed when **any** handler on it is marked `background`.
-   *
-   * Per queue rather than per handler because bullmq opens one `Worker` per queue
-   * and a worker is either given a file path or a function - there is no halfway.
-   */
+  /** A queue is sandboxed when any handler on it is marked `background`: bullmq
+   * opens one `Worker` per queue, given either a path or a function. */
   #isBackground(queue: string): boolean {
     return this.jobs.some((job) => job.queue === queue && job.background);
   }
@@ -123,8 +101,7 @@ export class QueueConsumer {
     this.#started = true;
 
     // Checked before anything opens, so a queue asking for a sandbox that was
-    // never configured is a boot error rather than a quiet demotion to the
-    // foreground - which would look identical until something crashed the server.
+    // never configured is a boot error rather than a quiet demotion.
     const unbacked = this.queues.filter(
       (queue) => this.#isBackground(queue) && this.#processor() === undefined,
     );
@@ -141,23 +118,17 @@ export class QueueConsumer {
       this.#workers.push(this.#open(queue));
     }
     try {
-      // Serially rather than Promise.all, so an unreachable server is reported
-      // against the first queue instead of once per queue.
+      // Serially, so an unreachable server is reported once rather than per queue.
       for (const worker of this.#workers) await worker.waitUntilReady();
     } catch (error) {
       /**
-       * **A worker that never became ready is still a running worker**, and leaving
-       * it open is what turned "degrades, does not fail boot" into a hang.
+       * A worker that never became ready is still a running worker. `new Worker()`
+       * reconnects immediately, so after `waitUntilReady()` rejects every retry
+       * emits `error`: 2.3 million events in 25 s against a dead broker, which
+       * starves the event loop and keeps the process alive.
        *
-       * `new Worker()` starts reconnecting immediately, so after `waitUntilReady()`
-       * rejects, every retry emits `error` against a dead broker. Measured on the
-       * `examples/full` tour against `redis://127.0.0.1:1`: 2.3 million error events
-       * in 25 seconds. That starves the event loop, so the caller's degraded path
-       * never runs, and it keeps a handle open, so the process never exits.
-       *
-       * Force-closed because nothing can be mid-flight - readiness never arrived -
-       * and a graceful close would itself wait on the connection that just failed.
-       * `allSettled` so a close that rejects cannot mask the original error.
+       * Force-closed, since nothing can be mid-flight and a graceful close would
+       * wait on the connection that just failed.
        */
       await Promise.allSettled(
         this.#workers.map((worker) => worker.close(true)),
@@ -166,9 +137,8 @@ export class QueueConsumer {
       throw error;
     }
 
-    // One entry per queue, naming where its handlers run and which they are.
-    // "Consuming N job(s)" alone could not answer the question a sandbox exists
-    // to raise: is this queue isolated from the server or not.
+    // One entry per queue, naming where its handlers run: a count alone cannot
+    // say whether a queue is isolated from the server.
     for (const queue of this.queues) {
       const handlers = this.jobs.filter((job) => job.queue === queue);
       const where = this.#isBackground(queue) ? 'background' : 'foreground';
@@ -190,12 +160,9 @@ export class QueueConsumer {
   }
 
   /**
-   * Stops consuming and waits for whatever is mid-flight. Idempotent.
-   *
-   * This has to happen **before** the providers tear down, or a handler still
-   * running would find its database connection closed underneath it. `close()`
-   * without `force` is what makes that safe: bullmq stops fetching and waits for
-   * what is already running.
+   * Stops consuming and waits for whatever is mid-flight. Idempotent. Has to run
+   * before the providers tear down, or a handler still going would find its
+   * database connection closed underneath it.
    */
   async stop(): Promise<void> {
     this.#stopping ??= (async () => {
@@ -206,11 +173,9 @@ export class QueueConsumer {
   }
 
   /**
-   * A **file path** where a sandbox is configured, a function otherwise - that one
-   * argument is the whole difference between a handler running on this event loop
-   * and one running in a child. bullmq imports the file in the child and calls its
-   * default export; nothing of `this` crosses over, which is why the child builds
-   * its own container (see `JobProcessor`).
+   * A file path where a sandbox is configured, a function otherwise. bullmq
+   * imports the file in the child and calls its default export; nothing of `this`
+   * crosses over, so the child builds its own container. See `JobProcessor`.
    */
   #processor(): string | undefined {
     return this.#options.processor;
@@ -224,9 +189,8 @@ export class QueueConsumer {
     const background = this.#isBackground(queue);
     const processor = this.#processor();
     const forked = background && this.#isolation() === 'process';
-    // Nothing is added when the consumer passed fork options of their own: theirs
-    // carry an `env` this would have to merge into, and a guess there is worse
-    // than a child that logs the way it does today.
+    // Nothing added when the consumer passed their own fork options: merging
+    // into their `env` would be a guess.
     const env =
       forked && this.#options.worker.workerForkOptions === undefined
         ? childColourEnv(process.env, Bun.enableANSIColors)
@@ -249,8 +213,8 @@ export class QueueConsumer {
       this.#logger.debug(`Job completed ${describeJob(job)}`),
     );
     worker.on('failed', (job, error) => {
-      // A job can fail before bullmq has one to report - a lock lost to a stall
-      // check, say - and the queue is still worth naming.
+      // A job can fail before bullmq has one to report, and the queue is still
+      // worth naming.
       const subject = job ? describeJob(job) : `a job on ${queue}`;
       this.#logger.error(`Job failed ${subject}`, error);
     });
@@ -298,22 +262,16 @@ class WorkerApplication implements WorkerApp {
   }
 
   /** Consumers first, then providers. The order is the whole point. */
-  /**
-   * The container's drain phase, delegated. `shutdown()` below already stops the
-   * consumer before tearing providers down, so the consumer stop is not moved in
-   * here: the ordering it depends on is tangled with two upstream defects tracked
-   * in `docs/roadmap/queue-shutdown-sigterm.md`.
-   */
+  /** The container's drain phase, delegated. `shutdown()` below stops the
+   * consumer before tearing providers down. */
   drain(): Promise<void> {
     return this.#app.drain();
   }
 
   /**
-   * Consumers first, then providers - and **every step runs**.
-   *
-   * A worker that could not stop its consumer used to skip the container teardown
-   * entirely and leave `closed` pending, so the process hung on a Redis that had
-   * already gone. Each failure is collected and thrown once the phase is over.
+   * Consumers first, then providers, and every step runs. A worker that could not
+   * stop its consumer used to skip the container teardown and leave `closed`
+   * pending. Failures are collected and thrown at the end.
    */
   async shutdown(): Promise<void> {
     this.#shuttingDown ??= (async () => {
@@ -348,10 +306,10 @@ class WorkerApplication implements WorkerApp {
 }
 
 /**
- * Read off the module graph rather than by resolving the token, because
- * `QueueOptions` is a class whose constructor argument is optional - so an unbound
- * container would **self-bind** it and hand back defaults instead of failing. A
- * worker silently pointed at `localhost` is worse than one that will not boot.
+ * Read off the module graph rather than by resolving the token: `QueueOptions`
+ * has an optional constructor argument, so an unbound container would self-bind
+ * it and hand back defaults. A worker silently pointed at `localhost` is worse
+ * than one that will not boot.
  */
 const assertQueueModule = (modules: readonly ResolvedModule[]): void => {
   const bound = modules.some((module) =>
@@ -370,11 +328,8 @@ const assertQueueModule = (modules: readonly ResolvedModule[]): void => {
 };
 
 /**
- * The entrypoint of a worker process.
- *
- * It boots the same container an HTTP process would - the root module it is given
- * may be the app's own, or a narrower one that leaves the controllers out - then
- * finds the handlers by inspection and consumes for them:
+ * The entrypoint of a worker process. Boots the same container an HTTP process
+ * would, then finds the handlers by inspection and consumes for them:
  *
  * ```ts
  * const worker = await WorkerFactory.create(WorkerModule);
@@ -388,8 +343,6 @@ export class WorkerFactory {
     root: ModuleRef,
     options: WorkerAppOptions = {},
   ): Promise<WorkerApp> {
-    // Before the container is built: nothing is gained by booting an app that
-    // cannot possibly consume.
     const modules = collectModules(root);
     assertQueueModule(modules);
 
@@ -400,7 +353,6 @@ export class WorkerFactory {
     try {
       jobs = selectJobs(modules, (token) => app.get(token), options.queues);
     } catch (error) {
-      // This path owns the container, so a rejected wiring has to take it down.
       await app.shutdown();
       throw error;
     }
@@ -426,17 +378,9 @@ export class WorkerFactory {
    * await consumer.start();
    * ```
    *
-   * `root` is the same module ref the app was built from; the handlers are found
-   * by inspecting it, and resolved out of the container that is already running.
-   *
-   * **Stop the consumer before shutting the app down.** Nothing here can enforce
-   * it, because `App` has no hook to register against, and a worker still running
-   * when providers tear down finds its database connection closed underneath it:
-   *
-   * ```ts
-   * await consumer.stop();
-   * await app.shutdown();
-   * ```
+   * Stop the consumer before shutting the app down - `await consumer.stop()`
+   * then `await app.shutdown()`. Nothing here can enforce it, and a worker still
+   * running when providers tear down loses its database connection.
    */
   static async attach(
     app: App,

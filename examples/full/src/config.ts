@@ -2,13 +2,9 @@ import { ConfigService, type ConfigSource, LogLevel } from '@dunx/core';
 import { z } from 'zod';
 
 /**
- * One validation function, which is the whole `ConfigModule` contract. dunx does
- * not pick the library - this is zod because the routes already use it, and a
- * hand-written function that throws would work identically.
- *
- * `.default()` is where a value comes from when the variable is unset, so a clean
- * checkout boots with no `.env` at all. Bun loads `.env` and `.env.local` itself,
- * so there is nothing here that reads a file.
+ * One validation function is the whole `ConfigModule` contract. zod here because
+ * the routes already use it; a hand-written function would work identically.
+ * Bun loads `.env` itself, so nothing here reads a file.
  */
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(0).max(65535).default(3000),
@@ -16,11 +12,9 @@ const envSchema = z.object({
   /** Unset means console only. Set it to also append JSON to a rotating file. */
   LOG_FILE: z.string().optional(),
   /**
-   * Whether the request entry carries the bodies. On here because this is a
-   * walkthrough and seeing the payload is the point; both default to `false` in
-   * `@dunx/http`, which is what a production service wants - reading a body is
-   * `req.clone().text()`, and the two together cost about two thirds of the
-   * throughput on `internal/bench`'s `validate` scenario.
+   * Both default to `false` in `@dunx/http`: reading a body is
+   * `req.clone().text()`, and the pair costs about two thirds of the throughput
+   * on `internal/bench`'s `validate` scenario.
    */
   LOG_REQUEST_BODY: z.stringbool().default(true),
   LOG_RESPONSE_BODY: z.stringbool().default(true),
@@ -30,7 +24,7 @@ const envSchema = z.object({
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
-  /** The app-wide rate limit. Generous, so per-route `@Throttle` is the interesting half. */
+  /** Generous, so per-route `@Throttle` is the interesting half. */
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(1000),
   THROTTLE_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
   /** A `@Cron` with no zone of its own runs in this one. */
@@ -44,11 +38,7 @@ const envSchema = z.object({
     .default('dunx-full-example-development-secret-not-for-production'),
 });
 
-/**
- * The one broker channel the websocket relay carries every topic on. Two apps
- * sharing a Redis need two of these; the second node in the chat demo needs this
- * exact one.
- */
+/** The broker channel the websocket relay carries every topic on. */
 export const RELAY_CHANNEL = 'dunx-full:ws';
 
 export interface AppConfig {
@@ -72,18 +62,12 @@ export interface AppConfig {
 }
 
 /**
- * One name for the typed config everywhere. A subclass rather than
- * `ConfigService<AppConfig>` at each site because a factory's `inject: [...]`
- * carries no type argument - the class does, and it is a real runtime value, so
- * it is both a precise token and a usable constructor annotation.
+ * A subclass rather than `ConfigService<AppConfig>` at each site: a factory's
+ * `inject: [...]` carries no type argument, and a class is a runtime value.
  */
 export class AppConfigService extends ConfigService<AppConfig> {}
 
-/**
- * Flat variables in, a shaped object out - the reason `config.get('log')` hands
- * back a group rather than a lone string. Everything downstream reads this
- * shape; nothing downstream reads `process.env`.
- */
+/** Flat variables in, a shaped object out. Nothing downstream reads the env. */
 export const validate = (env: ConfigSource): AppConfig => {
   const parsed = envSchema.safeParse(env);
   if (!parsed.success) {

@@ -37,20 +37,16 @@ export const rolesOf = (user: object): readonly string[] => {
 };
 
 /**
- * Authenticates every request it sees through better-auth's own session lookup, and
- * composes with the metadata `@dunx/http` already carries:
+ * Authenticates every request through better-auth's own session lookup, composing
+ * with the metadata `@dunx/http` carries:
  *
- * - `@Public()` - skipped outright. No session lookup, no rejection, no role check.
- *   That is what makes it safe to install globally: better-auth's own endpoints are
- *   `@Public()`, and a sign-in route that needed a session could never be reached.
- *   A public route that wants to *adapt* to an optional caller injects `Auth` and
- *   calls `auth.api.getSession({ headers: req.headers })` itself - one line, and it
- *   does not put a lookup on every public request in the app.
- * - `@Roles('admin')` - a 403 unless the caller holds one of them.
+ * - `@Public()` - skipped outright, which is what makes it safe to install
+ *   globally: better-auth's own endpoints are public. A public route adapting to
+ *   an optional caller injects `Auth` and looks the session up itself.
+ * - `@Roles('admin')` - a 403 unless the caller holds one.
  *
- * Install it globally with `HttpFactory.create(root, { middleware: [SessionGuard] })`
- * and opt routes out with `@Public()`, or scope it with `@UseGuards(SessionGuard)`
- * and leave the rest of the app open. `AuthModule` registers it either way.
+ * Install it in `HttpFactory.create(root, { middleware: [SessionGuard] })`, or
+ * scope it with `@UseGuards(SessionGuard)`. `AuthModule` registers it either way.
  */
 export class SessionGuard implements Middleware {
   constructor(

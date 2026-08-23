@@ -3,21 +3,13 @@ import { eq, like, sql } from 'drizzle-orm';
 import * as schema from '../database/schema.js';
 import { users, type User } from '../database/schema.js';
 
-// The row type comes from the table, so the controller and the service import one
-// definition rather than a hand-written copy of the columns.
 export type { User };
 
 export class UsersRepository {
   /**
-   * `SyncDatabase` because `DatabaseModule` configured synchronous mode; it is
-   * drizzle's `BunSQLiteDatabase` with a name the container can tell apart.
-   * `@dunx/transform` records the bare type name - a real runtime class, so a usable
-   * token - and ignores the type argument, so the schema types survive injection.
-   *
-   * Every method below is `async` although bun-sqlite executes synchronously: the
-   * HTTP layer awaits them, and moving this table to the pooled backend then costs
-   * no signature change. `Ledger.transferSync` is what refusing that trade looks
-   * like.
+   * Every method is `async` although bun-sqlite executes synchronously, so moving
+   * this table to the pooled backend costs no signature change.
+   * `Ledger.transferSync` is what refusing that trade looks like.
    */
   constructor(private readonly db: SyncDatabase<typeof schema>) {}
 
@@ -28,7 +20,7 @@ export class UsersRepository {
     )`);
   }
 
-  /** One statement for every name; `name` is UNIQUE, so a repeat boot is a no-op. */
+  /** `name` is UNIQUE, so a repeat boot is a no-op. */
   async seed(names: readonly string[]): Promise<void> {
     this.db
       .insert(users)
@@ -52,7 +44,6 @@ export class UsersRepository {
     return this.db.select().from(users).where(eq(users.id, id)).get() ?? null;
   }
 
-  /** `.returning()`, so the id is the one the database wrote. */
   async create(name: string): Promise<User> {
     return this.db.insert(users).values({ name }).returning().get();
   }

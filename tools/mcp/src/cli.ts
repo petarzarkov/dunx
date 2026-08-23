@@ -43,19 +43,11 @@ const version = async (): Promise<string> => {
 };
 
 /**
- * `Bun.resolveSync` rather than string-munging a path: it is the runtime's own
- * resolver, so `./src/app.module.ts`, an absolute path, an extensionless
- * `./src/app.module` and a bare package specifier all resolve exactly as `import`
- * would resolve them.
- *
- * It follows Node resolution, which means a bare *relative* path throws -
- * `src/app.module.ts` is read as a package named `src`. Measured, not assumed. So
- * an unresolved specifier is retried as explicitly relative, which is what someone
- * typing a path from their shell meant. As-is is tried first, so a real package
- * still wins over a same-named directory.
- *
- * The old `startsWith('.') ? cwd + entry : entry` got this wrong in the same place
- * and failed to find a file that was plainly there.
+ * `Bun.resolveSync` rather than string-munging a path, so every specifier `import`
+ * accepts resolves the same way. It follows Node resolution, so a bare relative
+ * path throws - `src/app.module.ts` reads as a package named `src` - and is
+ * retried as explicitly relative. As-is first, so a real package wins over a
+ * same-named directory.
  */
 const locate = (entry: string): string | undefined => {
   for (const specifier of [entry, `./${entry}`]) {

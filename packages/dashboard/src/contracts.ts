@@ -1,77 +1,41 @@
 /**
- * What the dashboard needs from the things it reports on, restated structurally.
+ * What the dashboard needs from the things it reports on, restated structurally
+ * so this package depends on `@dunx/infra` and `bullmq` not at all. Each is
+ * satisfied by an object an app already has:
  *
- * **This package depends on `@dunx/infra` not at all**, and on `bullmq` not at
- * all - the same choice `@dunx/auth` makes with `DrizzleSource` and `RedisStore`.
- * A dashboard that peer-depended on the queue library would oblige an app with no
- * queues to install it to see its routes, and would put a build-order edge between
- * two packages that never call each other.
- *
- * This list used to be twice as long. `DashboardQueue` and `DashboardJob` restated
- * bullmq's `Queue` and `Job` in enough detail to drive a queue table - signatures
- * shaped to satisfy bullmq's own variance, with a paragraph explaining why. All of
- * it went when bull-board took the queue UI back: the queue object is now passed
- * straight through to `BullMQAdapter`, so there is nothing left to describe.
- *
- * Everything here is satisfied by an object an app already has:
- *
- * | This             | Satisfied by                             |
- * | ---------------- | ---------------------------------------- |
- * | `QueueSource`    | `JobPublisher` from `@dunx/infra/queue`    |
- * | `RedisProbe`     | `RedisConnection` from `@dunx/infra/redis` |
- * | `ConfigValues`   | `ConfigService` from `@dunx/core`          |
- *
- * No adapter, no wrapper - `queues: publisher` in the options is the whole wiring,
- * which is what makes the restatement worth its lines rather than a tax.
+ * | This           | Satisfied by                               |
+ * | -------------- | ------------------------------------------ |
+ * | `QueueSource`  | `JobPublisher` from `@dunx/infra/queue`    |
+ * | `RedisProbe`   | `RedisConnection` from `@dunx/infra/redis` |
+ * | `ConfigValues` | `ConfigService` from `@dunx/core`          |
  */
 
 /**
- * The validated configuration. `ConfigService` satisfies it as written.
- *
- * Passed in rather than resolved from the container, and that is deliberate twice
- * over. Mechanically, `inject()` only works inside a class the container builds and
- * this middleware is built by a factory. But the better reason is that showing an
- * app's configuration should be something the app **says yes to** - the same
- * instinct behind `reveal` defaulting to revealing nothing.
+ * The validated configuration. `ConfigService` satisfies it as written. Passed in
+ * rather than resolved, so showing an app's configuration is something the app
+ * says yes to.
  */
 export interface ConfigValues {
-  /**
-   * `object`, not `Record<string, unknown>`: an app's `AppConfig` is an interface
-   * with no index signature, so the record type would reject the very
-   * `ConfigService` this exists to accept. It is enumerated, never read by a key
-   * this package knows.
-   */
+  /** `object` rather than `Record<string, unknown>`: an app's `AppConfig` has no
+   * index signature, so the record type would reject it. */
   readonly values: object;
 }
 
 /**
- * Where queues come from. `JobPublisher` satisfies it as written.
- *
- * `opened` is what the publisher has opened *so far*, which is deliberately not the
- * same as "every queue this app has" - a queue is a key prefix opened on first use,
- * so a web process that has published to none has opened none. That is why
- * `DashboardOptions.queueNames` exists: a process that consumes a queue it never
- * publishes to has to name it, and the panel says which of the two it is showing.
+ * Where queues come from. `JobPublisher` satisfies it as written. `opened` is what
+ * the publisher has opened so far, not every queue the app has - which is why
+ * `DashboardOptions.queueNames` exists for a consume-only process.
  */
 export interface QueueSource {
   readonly opened: readonly string[];
-  /**
-   * bullmq's `Queue`, handed to bull-board's `BullMQAdapter` untouched - which is
-   * why the return type is `unknown` rather than a restatement. dunx reads nothing
-   * off it and calls nothing on it; matching bullmq's own signatures here was a
-   * whole file of variance notes existing only to describe a UI dunx no longer
-   * renders.
-   */
+  /** bullmq's `Queue`, handed to `BullMQAdapter` untouched, so the return type is
+   * `unknown` rather than a restatement. */
   queue(name: string): unknown;
 }
 
 /**
- * Enough Redis to answer "is it up and what is it doing". `RedisConnection`
- * satisfies it, and so does `Bun.RedisClient` with a `send`.
- *
- * `send` rather than a typed `info()`: `INFO` is one command whose reply is a text
- * blob, and adding a method per Redis command to a restatement is how a
- * restatement becomes a client library.
+ * Enough Redis to answer "is it up and what is it doing". `send` rather than a
+ * typed `info()`: a method per command is how a restatement becomes a client.
  */
 export interface RedisProbe {
   readonly connected: boolean;
@@ -80,29 +44,18 @@ export interface RedisProbe {
 }
 
 /**
- * The state a probe reports, and its result. `unknown` is not `down`; see
- * `StatusDot`.
- *
- * Declared in `@dunx/http` and re-exported here. They moved down when the health
- * module became a second consumer: this package already peer-depends on
- * `@dunx/http`, so the descent adds no edge, and two copies of a three-value union
- * is how one of them gains a fourth value nobody else honours.
- *
- * `RedisProbe` below did **not** move with them. `@dunx/http`'s `PingProbe` is a
- * `ping` and nothing else, while this needs `connected` and `send` for the `INFO`
- * panel, so one shared contract would oblige a health check to supply two members
- * it never calls.
+ * The state a probe reports, and its result. `unknown` is not `down`. Declared in
+ * `@dunx/http` and re-exported here, since this package already peer-depends on
+ * it. `RedisProbe` below did not move with them: `PingProbe` is a `ping` alone.
  */
 export type { ProbeResult, ProbeState } from '@dunx/http';
 
-// Imported as well as re-exported: `DashboardProbe` below names it, and a bare
-// re-export puts nothing in this file's scope.
+// Imported as well as re-exported: a bare re-export puts nothing in scope.
 import type { ProbeResult } from '@dunx/http';
 
 /**
- * Anything else worth a light on the page - a third-party API, a disk, a leader
- * election. The dashboard awaits it with a timeout and never lets it throw into a
- * response, so a probe that hangs costs one panel rather than the page.
+ * Anything else worth a light on the page. Awaited with a timeout and never let
+ * to throw, so a probe that hangs costs one panel rather than the page.
  */
 export interface DashboardProbe {
   readonly name: string;

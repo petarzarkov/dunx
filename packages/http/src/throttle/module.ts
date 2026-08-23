@@ -44,12 +44,11 @@ const store = (): Registration =>
   });
 
 /**
- * A first-class rate limit: the decorator, the guard, the counter and its options.
+ * The decorator, the guard, the counter and its options.
  *
- * `global: true`, because the guard is listed in `HttpOptions.middleware` - which
- * is the app's own list, resolved from wherever the class is declared - and a
- * non-global module would make every consumer import this one to reach a guard it
- * never names.
+ * `global: true`: the guard is listed in `HttpOptions.middleware`, the app's own
+ * list, so a non-global module would make every consumer import this one to reach
+ * a guard it never names.
  *
  * ```ts
  * ThrottleModule.forRootAsync({
@@ -65,9 +64,8 @@ const store = (): Registration =>
  * HttpFactory.create(AppModule, { middleware: [SessionGuard, ThrottleGuard] });
  * ```
  *
- * Position in the chain is the app's, the same decision `StaticFiles` leaves open,
- * and for a sharper reason: ahead of a session guard the limit counts every caller
- * as an address.
+ * Position in the chain is the app's: ahead of a session guard, the limit counts
+ * every caller as an address.
  */
 @Module({})
 export class ThrottleModule {

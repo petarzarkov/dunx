@@ -18,25 +18,14 @@ import { DEFAULT_BASE_PATH } from './options.js';
 
 /**
  * better-auth's handler is a plain `(request: Request) => Promise<Response>`, so
- * mounting it is five one-line routes and nothing else. Every endpoint the library
- * and its plugins declare lives under one wildcard - dunx does not restate, wrap or
- * re-dispatch a single one of them.
+ * mounting it is five one-line routes. Every endpoint it and its plugins declare
+ * lives under one wildcard, which `Bun.serve` matches natively, so Bun is still
+ * the router. All five verbs, because a plugin may declare any of them.
  *
- * `Bun.serve` matches `<basePath>/*` natively (verified on Bun 1.3.14), so Bun is
- * still the router. All five verbs are mounted because a plugin may declare any of
- * them; better-auth's own endpoints are `GET` and `POST`.
- *
- * The `Response` is returned untouched - `buildRoutes` passes one straight through,
- * which is what keeps better-auth's `Set-Cookie` headers and redirects intact.
- *
- * `@Public()` at class scope, so all five inherit it - `mergeMeta` reads the class's
- * record under the handler's. Without it a globally installed `SessionGuard` would
- * demand a session from the sign-in endpoint, and no session could ever be created.
- *
- * `inject(Auth)` in a field rather than a constructor parameter, because a bare
- * class in `controllers` is bound as a class provider and would then need
- * `@dunx/transform`'s transform to have run. This way mounting works in an app that
- * never added the preload.
+ * The `Response` is returned untouched, keeping `Set-Cookie` and redirects intact.
+ * `@Public()` at class scope, or a global `SessionGuard` would demand a session
+ * from the sign-in endpoint. `inject(Auth)` in a field rather than a constructor
+ * parameter, so mounting works without the transform preload.
  */
 @Public()
 export class AuthHandler {
@@ -91,18 +80,13 @@ export class AuthHandler {
 /**
  * The controller `AuthModule` registers, prefixed with `AuthOptions.mountAt`.
  *
- * A subclass rather than `@Controller(...)` on {@link AuthHandler} itself: the prefix
- * is only known once the module is configured, and mutating the shared class from a
- * factory would make two configurations fight over one prefix. The subclass declares
- * nothing of its own and inherits everything - `discoverRoutes` walks the prototype
- * chain for the routes, and `metaOf` and `prefixOf` are plain lookups, so `@Public()`
- * comes down from the base while the prefix stays own to the subclass.
+ * A subclass rather than `@Controller(...)` on {@link AuthHandler}: the prefix is
+ * only known once the module is configured, and mutating the shared class would
+ * make two configurations fight over one. The subclass inherits the routes and
+ * `@Public()` off the prototype chain while owning the prefix.
  *
- * `@ApiHidden()` because the mount is a wildcard. The route is real and has to be
- * served, but `*` is not an OpenAPI path template, so documenting it produced an
- * invalid entry tagged with this class's internal name - alongside the paths
- * `betterAuthDocument` describes properly, which is where the auth surface should
- * be read from.
+ * `@ApiHidden()` because `*` is not an OpenAPI path template;
+ * `betterAuthDocument` describes the auth surface properly.
  */
 export const mountHandler = (mountAt: string): Ctor<AuthHandler> =>
   ApiHidden()(

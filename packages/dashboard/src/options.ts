@@ -7,134 +7,83 @@ import type {
 } from './contracts.js';
 
 /**
- * Decides whether a request may see the dashboard at all.
+ * Decides whether a request may see the dashboard at all. It receives the raw
+ * `Request`: the middleware must be registered ahead of any session guard, so
+ * there is nothing upstream to have written a context and this has to ask the
+ * auth library itself.
  *
- * It receives the **raw `Request`**, not an `AuthContext` some earlier middleware
- * wrote, and that is load bearing rather than incidental. The dashboard middleware
- * has to be registered ahead of any session guard - measured in `dunx-template`,
- * where a guard running first answered every dashboard request `401` before
- * `authorize` was reached, which defeats the 404 contract below entirely. Running
- * first means there is nothing upstream to have written a context, so this has to
- * be able to ask the auth library itself.
- *
- * A rejected request gets **404, not 403**. A dashboard that announces itself to
- * an unauthenticated caller has told them where to keep knocking.
+ * A rejected request gets 404, not 403.
  */
 export type Authorize = (req: BunRequest) => boolean | Promise<boolean>;
 
 /**
- * Whether a config value may be shown.
- *
- * **The default reveals nothing**, and that is the answer to the open question the
- * design left. `ConfigService` holds whatever the app's `validate` returned, which
- * includes every secret it has; a deny-list of the usual suspects - `SECRET`,
- * `PASSWORD`, `TOKEN` - looks careful and leaks the first key nobody thought of.
- * A deny-list that quietly misses one is worse than no config panel at all.
- *
- * So the panel shows **keys and types** by default, which is most of what it was
- * wanted for ("is FEATURE_X actually set here"), and a value appears only when this
- * predicate says so:
+ * Whether a config value may be shown. The default reveals nothing: a deny-list
+ * of the usual suspects leaks the first key nobody thought of. The panel shows
+ * keys and types, and a value appears only when this says so:
  *
  * ```ts
  * reveal: (key) => key.startsWith('PUBLIC_') || key === 'NODE_ENV'
  * ```
  *
- * There is no "reveal" affordance on the page. Redaction is decided at boot by the
- * app, not per click by whoever reached the page.
+ * There is no reveal affordance on the page; redaction is decided at boot.
  */
 export type Reveal = (key: string, value: unknown) => boolean;
 
 export interface DashboardOptionsInit {
   /**
-   * Where the page is mounted. `/_dunx` by default - the underscore keeps it
-   * clear of an app's own routes, and the name is the framework's rather than
-   * `/queues`, because queues are one panel of six.
-   *
-   * **`app.setGlobalPrefix('api')` does not move it.** That prefixes the routes
-   * discovered from controllers, and this is not one of those - it is a middleware
-   * matching a path, which is the whole reason the dashboard needs no controllers
-   * for a table handed over at runtime. An app with a global prefix that wants the
-   * page beside its routes writes `path: '/api/_dunx'` here.
+   * Where the page is mounted, `/_dunx` by default. `app.setGlobalPrefix('api')`
+   * does not move it: that prefixes discovered routes, and this is a middleware
+   * matching a path. Write `path: '/api/_dunx'` to put it beside them.
    */
   readonly path?: string;
   /**
-   * **There is no default, and leaving it out serves the page to anyone who can
-   * reach the port.** That is fine behind a private network and bad everywhere
-   * else, so it is stated either way rather than guessed: omitting it logs a
-   * warning naming the mount path at boot.
+   * No default: leaving it out serves the page to anyone who can reach the port,
+   * and logs a warning naming the mount path at boot.
    */
   readonly authorize?: Authorize;
   /** Shown in the header and the `<title>`. @default 'dunx' */
   readonly title?: string;
-  /**
-   * `JobPublisher` goes here. Absent means the queues panel says this process has
-   * no queue source rather than that it has no queues.
-   */
+  /** `JobPublisher` goes here. Absent means the panel reports no queue source. */
   readonly queues?: QueueSource;
-  /**
-   * Queues to show beyond the ones the source has opened. A process that
-   * **consumes** a queue never publishes to it, so the publisher has never opened
-   * it and it would otherwise be invisible on the page that exists to show it.
-   */
+  /** Queues beyond the ones the source has opened. A consume-only process never
+   * publishes, so its queues would otherwise be invisible. */
   readonly queueNames?: readonly string[];
   /** `RedisConnection` goes here; it drives the Redis panel and one probe. */
   readonly redis?: RedisProbe;
   /** Anything else worth a light: a database, an upstream, a leader lease. */
   readonly probes?: readonly DashboardProbe[];
-  /**
-   * `ConfigService` goes here, and the panel is absent without it - showing an
-   * app's configuration is something the app says yes to, not something this
-   * package reaches into the container for.
-   */
+  /** `ConfigService` goes here; the panel is absent without it. */
   readonly config?: ConfigValues;
   /** See {@link Reveal}. The default reveals nothing, even with `config` set. */
   readonly reveal?: Reveal;
-  /**
-   * Where `@dunx/openapi` serves its explorer, so the routes panel can link a row
-   * to the operation that documents it. A string, not a dependency: the two
-   * packages describe the same routes for different audiences and a link is free,
-   * where importing one into the other is not.
-   */
+  /** Where `@dunx/openapi` serves its explorer, so a routes row can link to the
+   * operation documenting it. A string rather than a dependency. */
   readonly openApiPath?: string;
   /**
-   * How often the live panels re-fetch, in milliseconds. `0` turns polling off and
-   * leaves the refresh button.
-   *
-   * Polling rather than a websocket, deliberately: the page is stateless, a gateway
-   * would put the dashboard in the app's own upgrade table, and 5 s is well inside
-   * what "how many jobs are failing" needs.
+   * How often the live panels re-fetch, in milliseconds. `0` turns polling off
+   * and leaves the refresh button. Polling rather than a websocket, which would
+   * put the dashboard in the app's own upgrade table.
    *
    * @default 5000
    */
   readonly pollMs?: number;
   /**
-   * How long a probe may take before it is reported `unknown`. A hung probe must
-   * cost one light, not the page.
+   * How long a probe may take before it is reported `unknown`.
    *
    * @default 2000
    */
   readonly probeTimeoutMs?: number;
   /**
-   * Whether the queue board may change anything.
-   *
-   * Passed through to **bull-board's own `readOnlyMode`** rather than enforced
-   * here: it already has the switch, and a second implementation would disagree
-   * with it the moment bull-board grew an operation dunx had not heard of.
-   *
-   * The rest of the dashboard is read-only regardless - it reports on the process
-   * and never acts on it - so this is entirely about the queues page. `authorize`
-   * gates who reaches the mount; this gates what they can do once there.
+   * Whether the queue board may change anything, passed through to bull-board's
+   * own `readOnlyMode`. The rest of the dashboard is read-only regardless.
    *
    * @default true
    */
   readonly commands?: boolean;
 }
 
-/**
- * A class, not an interface, so it is a runtime value and can therefore be a
- * constructor parameter type that `@dunx/transform` records - the same reason
- * `QueueOptions` and `RedisOptions` are classes.
- */
+/** A class rather than an interface, so it is a runtime value the transform can
+ * record as a constructor parameter type. */
 export class DashboardOptions {
   readonly path: string;
   readonly authorize: Authorize | undefined;
@@ -169,10 +118,7 @@ export class DashboardOptions {
 
 /**
  * A leading slash and no trailing one, so `${path}/api/...` is never `//api`.
- *
- * `/` itself is rejected: mounting the dashboard at the root would swallow every
- * unmatched path in the app, and the middleware's whole contract is that anything
- * outside its mount falls through untouched.
+ * `/` is rejected: mounting at the root would swallow every unmatched path.
  */
 export const normalizeMount = (path: string): string => {
   const trimmed = `/${path.split('/').filter(Boolean).join('/')}`;

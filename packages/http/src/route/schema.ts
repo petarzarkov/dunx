@@ -2,11 +2,9 @@ import type { BunRequest } from 'bun';
 import type { DefaultStatus, HttpMethod } from './marker.js';
 
 /**
- * Standard Schema v1, restated rather than depended on. The spec is an
- * *interface*, not a runtime: `@standard-schema/spec` ships nothing but these
- * declarations, so restating them costs one file and keeps `@dunx/http` at zero
- * dependencies. Zod 4, Valibot and ArkType already satisfy this shape, so any of
- * them drops straight into a route's options.
+ * Standard Schema v1, restated rather than depended on: the spec is an interface,
+ * so restating it keeps `@dunx/http` at zero dependencies. Zod 4, Valibot and
+ * ArkType all satisfy this shape already.
  */
 export interface StandardSchemaV1<In = unknown, Out = In> {
   readonly '~standard': {
@@ -37,11 +35,8 @@ export type InferOutput<S> =
   S extends StandardSchemaV1<unknown, infer Out> ? Out : never;
 
 /**
- * A JSON Schema, as JSON. OpenAPI 3.1 embeds draft 2020-12 verbatim.
- *
- * Declared here rather than in `@dunx/openapi` because {@link RouteSchemas} names
- * it and that package depends on this one, so this is the lowest common owner.
- * `@dunx/openapi` re-exports it.
+ * A JSON Schema, as JSON. Declared here rather than in `@dunx/openapi` because
+ * {@link RouteSchemas} names it and that package depends on this one.
  */
 export type JsonSchema = Readonly<Record<string, unknown>>;
 
@@ -58,9 +53,7 @@ export interface RouteSchemas {
   readonly status?: number;
   /**
    * What the route answers with, keyed by status code, in the same Standard
-   * Schema the request side takes - so a response schema with a `.meta({ id })`
-   * hoists into `components/schemas` exactly as a request body does, and there is
-   * one contract for both directions.
+   * Schema the request side takes.
    *
    * ```ts
    * const one = {
@@ -69,19 +62,9 @@ export interface RouteSchemas {
    * } as const satisfies RouteSchemas;
    * ```
    *
-   * **Never validated at runtime, checked at compile time.** Running a validation
-   * pass over every response body would be a per-request cost paid for a
-   * documentation feature. The handler's own return type carries the check
-   * instead: the verb decorators constrain it against the entry for the success
-   * status, so a handler answering with a different shape is a `TS1241` naming
-   * the mismatched property. See {@link Returns}. Nothing in the request path
-   * reads this key.
-   *
-   * A plain {@link JsonSchema} is accepted here too, and only here: a JSON Schema
-   * needs no conversion, so documenting a response costs no validator. `$id` names
-   * it, hoisting it into `components/schemas` the way `.meta({ id })` does for a
-   * zod schema. `body`, `query` and `params` still take a Standard Schema, because
-   * those are parsed.
+   * Never validated at runtime, checked at compile time against the success
+   * status. A plain {@link JsonSchema} is accepted here and only here, and `$id`
+   * hoists it into `components/schemas`.
    *
    * ```ts
    * response: {
@@ -99,10 +82,8 @@ export type ResponseMap = Readonly<
 
 /**
  * The handler's parameter type, derived from its own options object. It has to be
- * written out - a standard method decorator can *check* a parameter's type but
- * cannot contextually type an unannotated one
- * (docs/architecture/constraints.md) - but every field type still comes from the schemas, so nothing
- * is declared twice:
+ * written out: a standard method decorator can check a parameter's type but not
+ * contextually type an unannotated one (docs/architecture/constraints.md).
  *
  * ```ts
  * const createNote = { body: CreateNote, status: HttpStatusCode.CREATED } as const;
@@ -129,8 +110,8 @@ export type Input<O extends RouteSchemas> = {
 
 /**
  * The status a handler's return type is held to: an explicit `options.status`,
- * else the verb's default. Widened to `number` without `as const`, which is what
- * turns the check off rather than misapplying it.
+ * else the verb's default. Widened to `number` without `as const`, which turns
+ * the check off rather than misapplying it.
  */
 type SuccessStatus<O extends RouteSchemas, M extends HttpMethod> = O extends {
   status: infer S extends number;
@@ -148,18 +129,13 @@ type Declared<S> = [InferOutput<S>] extends [never]
   : Serialised<InferOutput<S>>;
 
 /**
- * The declared shape as JSON will present it, which is the same shape with every
- * array made readonly.
+ * The declared shape as JSON will present it: the same shape with every array made
+ * readonly. `z.array()` infers a mutable `T[]`, so a method correctly returning
+ * `readonly User[]` would fail against a document it satisfies, and mutability
+ * does not survive `Response.json` anyway.
  *
- * `z.array()` infers a mutable `T[]`, and `readonly T[]` is not assignable to it -
- * so a repository method returning `readonly User[]`, the correct signature for
- * something that must not be mutated, would fail against a document it satisfies.
- * Mutability does not survive `Response.json`, so it is not part of the contract.
- *
- * Only arrays need the rewrite; TypeScript already ignores a property's `readonly`
- * modifier when checking assignability. The object branch is how nested arrays are
- * reached, and functions are returned untouched because mapping over one would
- * discard its call signature.
+ * Only arrays need it. The object branch reaches nested ones; functions are
+ * returned untouched, since mapping over one discards its call signature.
  */
 type Serialised<T> = T extends readonly (infer E)[]
   ? readonly Serialised<E>[]
@@ -170,16 +146,12 @@ type Serialised<T> = T extends readonly (infer E)[]
       : T;
 
 /**
- * What a handler may return, given its own options object and its verb.
+ * What a handler may return, given its options object and its verb. The return
+ * half of the guarantee `Input<O>` gives the parameter, so `response: { 200: User }`
+ * stops being documentation a handler can contradict.
  *
- * A route decorator can *check* a handler's type but cannot *infer* it
- * (docs/architecture/constraints.md), and that cuts both ways: this is the return
- * half of the same guarantee `Input<O>` gives the parameter. Declaring
- * `response: { 200: User }` stops being documentation a handler can contradict.
- *
- * `Response` is always allowed - it is the escape hatch `buildRoutes` passes
- * through untouched. So is a promise of either. Nothing is checked when the
- * success status has no `response` entry.
+ * `Response` is always allowed, and so is a promise of either. Nothing is checked
+ * when the success status has no `response` entry.
  */
 export type Returns<O extends RouteSchemas, M extends HttpMethod> =
   | SuccessBody<O, M>
@@ -187,9 +159,9 @@ export type Returns<O extends RouteSchemas, M extends HttpMethod> =
   | Promise<SuccessBody<O, M> | Response>;
 
 /**
- * `infer R extends ResponseMap` is load bearing: without the constraint the
- * narrowed `O` inside the branch is `{ response: R } & O`, whose `response` no
- * longer satisfies `RouteSchemas`, and `SuccessStatus<O, M>` fails with `TS2344`.
+ * `infer R extends ResponseMap` is required: without it the narrowed `O` is
+ * `{ response: R } & O`, whose `response` no longer satisfies `RouteSchemas`, and
+ * `SuccessStatus<O, M>` fails with `TS2344`.
  */
 type SuccessBody<O extends RouteSchemas, M extends HttpMethod> = O extends {
   response: infer R extends ResponseMap;

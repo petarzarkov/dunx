@@ -220,19 +220,13 @@ const buildController = (paths: DocPaths) => {
     }
 
     /**
-     * Swagger UI's files, served from the consumer's `swagger-ui-dist` install as
-     * siblings of the page.
+     * Swagger UI's files, served from the consumer's install as siblings of the
+     * page. One wildcard rather than a route per file, since the allow-list is
+     * `ASSETS` in `swagger.ts`. Not a `{ dir }` route either: Bun 1.4's directory
+     * routes cannot set `cache-control` and answer any method (docs/bun-apis.md).
      *
-     * One wildcard rather than a route per file, because the allow-list lives in
-     * `ASSETS` in `swagger.ts` and four handlers differing only by a string literal
-     * would be that list written twice. Not a `{ dir }` route either: Bun 1.4's
-     * directory routes cannot set `cache-control` and serve the file body for any
-     * HTTP method, including `OPTIONS` (docs/bun-apis.md).
-     *
-     * `@ApiHidden` because these are the only routes in this controller that are
-     * not API. The document deliberately describes its own `/docs` and
-     * `/openapi.json` - they are endpoints someone calls - but a stylesheet in an
-     * OpenAPI document is noise.
+     * `@ApiHidden` because a stylesheet in an OpenAPI document is noise, while
+     * `/docs` and `/openapi.json` are endpoints someone calls.
      */
     @ApiHidden()
     @Public()
@@ -294,10 +288,8 @@ export class OpenApiModule {
   }
 
   /**
-   * The same module, with `title`, `version`, `description`, `servers`, `path` and
-   * `jsonPath` produced by a factory that may await and may itself inject - which
-   * is the one thing `forRoot` cannot do, and the reason every other configurable
-   * module has this pair:
+   * The same module, with every field produced by a factory that may await and
+   * inject:
    *
    * ```ts
    * OpenApiModule.forRootAsync({
@@ -311,11 +303,9 @@ export class OpenApiModule {
    * });
    * ```
    *
-   * The mount paths come out of the factory too, so they are as configurable as
-   * the rest. That works because the controller's routes are declared with path
-   * thunks and route discovery runs after every provider has settled: the factory
-   * below fills `paths` before it generates a document, and both the document and
-   * the served table read the filled values.
+   * The mount paths come out of the factory too. The controller's routes are
+   * declared with path thunks and discovery runs after every provider has
+   * settled, so both the document and the served table read the filled values.
    */
   static forRootAsync<const D extends Deps>(
     options: OpenApiAsyncOptions<D>,

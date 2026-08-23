@@ -2,19 +2,16 @@ import { metaOf } from './api/snapshot.js';
 import type { DashboardOptions } from './options.js';
 
 /**
- * The page is a shell: a boot stylesheet, the mount's own metadata as JSON, and the
- * bundle inlined. Nothing is fetched to start up - no CDN, no `src=`, no `<link>` -
- * which is what lets the dashboard work on a host with no egress, and it is the
- * same guarantee `@dunx/openapi`'s page makes.
+ * The page is a shell: a boot stylesheet, the mount's metadata as JSON, and the
+ * bundle inlined. Nothing is fetched to start up, so the dashboard works on a host
+ * with no egress.
  *
- * The bundle arrives as an **argument**, not an import, which is what keeps this
- * module cheap: `./ui.js` is the entrypoint that pairs the two, and it is loaded
- * lazily on the first page request. Importing it here would silently revert the
- * split and put 400-odd KB in every app that mounts the module.
+ * The bundle arrives as an argument rather than an import: `./ui.js` pairs the two
+ * lazily on the first page request, and importing it here would put 400-odd KB in
+ * every app that mounts the module.
  *
- * Only the meta is embedded. Routes, queues and the runtime are **fetched**, unlike
- * the explorer's model: a queue count embedded in the HTML would be stale before it
- * painted, and the endpoints have to exist anyway so `curl` can reach them.
+ * Only the meta is embedded; routes, queues and the runtime are fetched, since a
+ * queue count in the HTML would be stale before it painted.
  */
 const BOOT = `
 :root { color-scheme: light dark; }

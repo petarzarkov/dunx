@@ -112,7 +112,7 @@ const bindings = (options: LoggerModuleOptions): readonly Registration[] => [
     // logs stop parsing. `Bun.enableANSIColors` is the question actually being
     // asked, and it already folds in TTY, `NO_COLOR` and `FORCE_COLOR`. The
     // consumer still wins, and this is the Bun-specific half of the fix: the
-    // portable one belongs upstream (docs/roadmap/arkv-integrations.md).
+    // portable one belongs upstream (internal/notes/roadmap/arkv-integrations.md).
     useFactory: (settings: LoggerConfig, context: ContextStore) =>
       new ArkvLogger(
         {

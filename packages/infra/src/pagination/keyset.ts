@@ -58,15 +58,12 @@ interface PaginateBase<TTable extends Table> {
 /**
  * Keyset (cursor) pagination over a drizzle table.
  *
- * Keyset rather than `OFFSET`: an offset scan re-reads and discards every row
- * before the page, so page 500 costs 500 pages of work, and a row inserted between
- * two requests shifts every subsequent page by one - the same item appears twice or
- * not at all. A cursor names the last row seen, so the database seeks straight to it
- * and a concurrent insert changes nothing about what the reader has already read.
+ * Keyset rather than `OFFSET`: an offset scan discards every row before the page,
+ * and a row inserted between two requests shifts every later page by one. A cursor
+ * names the last row seen, so the database seeks to it and a concurrent insert
+ * changes nothing.
  *
- * This is the asynchronous shape: `await` on the query builder, which is what
- * `drizzle-orm/bun-sql` answers. See {@link SyncPaginateParams} for the
- * synchronous one.
+ * The asynchronous shape; see {@link SyncPaginateParams} for the other.
  */
 export interface PaginateParams<
   TTable extends Table,
@@ -185,21 +182,11 @@ const envelope = <TRow extends Record<string, unknown>>(
 
 /**
  * Rows plus the cursors to move either way, on whichever channel the driver
- * answers on.
+ * answers on. The return type follows `db`, by overload rather than a flag, so a
+ * repository over `drizzle-orm/bun-sqlite` is synchronous end to end.
  *
- * **The return type follows `db`.** A synchronous driver gets a `Page` and an
- * asynchronous one a `Promise<Page>`, decided by overload rather than by a flag,
- * so a repository over `drizzle-orm/bun-sqlite` is synchronous end to end - which
- * is what keeps a read-check-write inside `transactionSync` atomic instead of
- * forcing an `async list` onto every repository that shares the file.
- *
- * The two are not distinguished at runtime by the builder's *shape*: an
- * asynchronous SQLite driver has an `all()` too. What is checked is the value it
- * returns, so a promise is adopted rather than mistaken for rows.
- *
- * An argument error - a table with no tie-break column - throws rather than
- * rejecting, on both channels. It is a `TypeError` about the call, not a database
- * failure, and the synchronous overload has nowhere to reject from.
+ * The two are told apart by the value the builder returns, not its shape. An
+ * argument error throws rather than rejects: the sync overload cannot reject.
  */
 export function paginate<
   TTable extends Table,

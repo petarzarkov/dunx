@@ -56,24 +56,16 @@ const mark =
   };
 
 /**
- * Runs the method on a cron expression, through `Bun.cron`.
+ * Runs the method on a cron expression, through `Bun.cron`. Five fields, minute
+ * resolution: a sixth is rejected, so sub-minute work is `@Interval`.
  *
- * Five fields, minute resolution: `Bun.cron` rejects a sixth with "seconds are not
- * supported". Sub-minute work is `@Interval`.
+ * The parameter is `Bun.CronWithAutocomplete`, so `@Cron('@daily')` is offered by
+ * an editor. {@link CronExpression} holds the same seven as values.
  *
- * The parameter is `Bun.CronWithAutocomplete`, so the named schedules Bun
- * understands are accepted and offered by an editor: `@Cron('@daily')` alongside
- * `@Cron('0 3 * * *')`. {@link CronExpression} holds the same seven as values, for
- * a config object that cannot carry a literal.
+ * No class decorator: the method's marker is the whole record, found by walking
+ * prototype chains, so an abstract base's marked methods are inherited.
  *
- * There is no class decorator to go with it. The method's marker is the whole
- * record, and the runner finds it by walking the prototype chains of the classes
- * the modules already declare, so a handler needs no second registration and an
- * abstract base's marked methods are inherited by every subclass.
- *
- * The expression is validated here, at decoration time, by asking `Bun.cron.parse`
- * for a next fire. A schedule that cannot parse is a boot error rather than a job
- * that never runs.
+ * Validated at decoration time, so an unparseable schedule is a boot error.
  */
 export const Cron = (
   expression: Bun.CronWithAutocomplete,
@@ -104,17 +96,10 @@ export const Interval = (ms: number, options: TimerDecoratorOptions = {}) =>
   });
 
 /**
- * Runs the method once, `ms` after the app is ready.
- *
- * Named for when it runs rather than for the timer underneath it. "Timeout" said
- * only that a timer was involved, and the interesting half is that "ready" here is
- * earlier than it looks.
- *
- * "Ready" is `onInit`, which is the latest hook there is and runs **before**
- * `Bun.serve` binds. So the delay is measured from container readiness rather than
- * from the first request, and `@OnceOnBoot(0)` fires before the socket is open. An app
- * needing the later point uses `forRoot({ enabled: false })` and calls
- * `registry.add` after `listen()`.
+ * Runs the method once, `ms` after the app is ready. "Ready" is `onInit`, which
+ * runs before `Bun.serve` binds, so the delay is measured from container
+ * readiness and `@OnceOnBoot(0)` fires before the socket is open. An app needing
+ * the later point uses `forRoot({ enabled: false })` and `registry.add`.
  */
 export const OnceOnBoot = (ms: number, options: TimerDecoratorOptions = {}) =>
   mark({

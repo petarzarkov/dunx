@@ -13,17 +13,14 @@ import { ThrottleStore } from './store.js';
 /**
  * A fixed-window rate limit, one key per subject and handler.
  *
- * **Fails open.** A store that cannot be reached allows the request and warns
- * **once per process** - a line per request would be its own outage, and refusing
- * every request because the counter is down turns a degraded dependency into a
- * dead service.
+ * Fails open: an unreachable store allows the request and warns once per process,
+ * since refusing everything because the counter is down turns a degraded
+ * dependency into a dead service.
  *
- * **List it after any session guard.** An authenticated caller should be limited by
- * user id and an anonymous one by address, and only the guard ahead of this one
- * knows which - which is what `ThrottleOptions.subject` reads.
+ * List it after any session guard - only the guard ahead knows whether to limit by
+ * user id or by address, which is what `ThrottleOptions.subject` reads.
  *
- * The 429 is thrown, never returned, so it goes through the app's own `onError` and
- * comes out in the app's error shape like every other status.
+ * The 429 is thrown, so it comes out in the app's own error shape.
  */
 export class ThrottleGuard implements Middleware {
   #warned = false;

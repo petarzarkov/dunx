@@ -1,18 +1,12 @@
 import type { ModuleRef } from '@dunx/core';
 
 /**
- * The OpenAPI document, from `@dunx/openapi` when the app has it.
+ * The OpenAPI document, from `@dunx/openapi` when the app has it. An optional peer
+ * reached with `await import()`, so an app with no OpenAPI setup still gets a
+ * working server and one that has it gets the real schemas.
  *
- * An **optional** peer dependency reached with `await import()`, so nothing here
- * loads unless the tool is called: an app with no OpenAPI setup still gets a
- * working server, and one that has it gets the real schemas rather than this
- * package's guess at them. `@dunx/openapi` derives them from the routes' own zod
- * schemas, which is work with a zod-shaped answer - restating any part of it here
- * would be a second, worse generator.
- *
- * `describeRoutes` + `generateDocument` is the whole bridge, and both read the
- * module graph without constructing a controller, so this tool costs the same
- * nothing the others do.
+ * `describeRoutes` plus `generateDocument` is the whole bridge, and both read the
+ * module graph without constructing a controller.
  */
 export interface OpenApiInput {
   readonly title: string;

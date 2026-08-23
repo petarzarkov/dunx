@@ -1,8 +1,7 @@
 import { Logger } from '@dunx/core';
 
-/** Large enough that every branch below is the interesting one. */
 const DOCUMENT = 'api/openapi.json';
-/** Two fields. Under the 1024-byte threshold, so it is sent as it is. */
+/** Under the 1024-byte threshold, so it is sent as it is. */
 const SMALL = 'api/notes/whoami';
 
 interface Measured {
@@ -12,10 +11,8 @@ interface Measured {
   readonly vary: string;
 }
 
-/**
- * `fetch` decodes the body itself but leaves `content-encoding` and the encoded
- * `content-length` on the response, so one request measures both sides.
- */
+/** `fetch` decodes the body but leaves `content-encoding` and the encoded
+ * `content-length`, so one request measures both sides. */
 const measure = async (
   url: string,
   path: string,
@@ -43,9 +40,8 @@ export class CompressionDemo {
   async demonstrate(url: string): Promise<void> {
     const { logger } = this;
 
-    // This folder is vendored by `@dunx/create-app`, and a scaffold that took
-    // `http` without `openapi` has no document to encode. Same convention as a
-    // part whose backing service is absent: say so and carry on.
+    // Vendored by `@dunx/create-app`: a scaffold taking `http` without `openapi`
+    // has no document to encode.
     const available = await fetch(new URL(DOCUMENT, url));
     await available.body?.cancel();
     if (!available.ok) {
@@ -53,8 +49,7 @@ export class CompressionDemo {
       return;
     }
 
-    // `identity` names a coding the app does not offer, so negotiation picks
-    // nothing and the body goes out unencoded.
+    // `identity` is a coding the app does not offer, so nothing is picked.
     for (const accept of ['identity', 'gzip', 'zstd', 'gzip, zstd']) {
       const m = await measure(url, DOCUMENT, accept);
       logger.info(
@@ -63,15 +58,12 @@ export class CompressionDemo {
       );
     }
 
-    // Both offered at the same q, so the server's own order decides. The app
-    // offers `['zstd', 'gzip']`: on a body this size the two compress to within
-    // 0.2% of each other and zstd is the faster encoder.
+    // Same q, so the server's order decides: `['zstd', 'gzip']`.
     const preferred = await measure(url, DOCUMENT, 'gzip, zstd');
     logger.info(
       `a tie in the client's q-values is broken by the server order -> ${preferred.encoding}`,
     );
 
-    // An explicit q-value outranks that order.
     const forced = await measure(url, DOCUMENT, 'zstd;q=0.1, gzip;q=0.9');
     logger.info(`zstd;q=0.1, gzip;q=0.9 -> ${forced.encoding}`);
 

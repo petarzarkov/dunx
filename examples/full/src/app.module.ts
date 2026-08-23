@@ -28,11 +28,7 @@ import { Tour } from './tour/tour.service.js';
 import { UsersModule } from './users/users.module.js';
 import { WiringModule } from './wiring/wiring.module.js';
 
-/**
- * Supplying `transports` *replaces* the console sink, so keeping stdout means
- * naming it. The file transport buffers, which is safe because `LoggerModule`
- * flushes and closes it from `onShutdown`.
- */
+/** `transports` replaces the console sink, so keeping stdout means naming it. */
 const fileAndConsole = (path: string): Transport[] => [
   new ConsoleTransport(),
   new FileTransport({
@@ -43,18 +39,13 @@ const fileAndConsole = (path: string): Transport[] => [
   }),
 ];
 
-/**
- * Import order is construction order, and shutdown runs in reverse - so config
- * and the logger are built first and torn down last, and the database and the
- * workspace outlive every feature that uses them.
- */
+/** Import order is construction order and shutdown runs in reverse, so config
+ * and the logger are built first and torn down last. */
 @Module({
   imports: [
     ConfigModule.forRoot({ validate, as: AppConfigService }),
-    // The level comes from the validated config, which is the one thing a
-    // zero-argument `forRoot` function cannot reach. `captureGlobalErrors` turns
-    // an uncaught exception into a fatal entry that is flushed before exit -
-    // worth having in a service that is meant to stay up.
+    // `captureGlobalErrors` turns an uncaught exception into a fatal entry
+    // flushed before exit.
     LoggerModule.forRootAsync(
       {
         useFactory: (config: AppConfigService) => {
@@ -80,26 +71,22 @@ const fileAndConsole = (path: string): Transport[] => [
     NotesModule,
     ChatModule,
     JobsModule,
-    // After CacheModule, whose RedisModule binds the connection the shared
-    // throttle counter writes to.
+    // After CacheModule, which binds the connection its counter writes to.
     LimitsModule,
     MaintenanceModule,
     AssetsModule,
     UpstreamModule,
     GuardsModule,
-    // After DatabaseModule, so better-auth reuses the connection it opened - and so
-    // the auth tables are created after the ledger's, both at onInit.
+    // After DatabaseModule, so better-auth reuses the connection it opened.
     AccountsModule,
     ProbesModule,
     WiringModule,
     DocsModule,
-    // After JobsModule, whose QueueModule.forRoot binds the publisher it reads,
-    // and after CacheModule, whose RedisModule binds the connection it probes.
+    // After JobsModule and CacheModule, which bind what it reads and probes.
     OpsModule,
   ],
   providers: [Tour],
-  // `OpenApiModule` wraps this module rather than being imported by it, so its
-  // factory resolves from here: `Auth` is exported for `betterAuthDocument`.
+  // `OpenApiModule` wraps this module, so its factory resolves from here.
   exports: [Auth],
 })
 export class AppModule {}

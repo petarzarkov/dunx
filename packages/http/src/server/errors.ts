@@ -3,14 +3,9 @@ import { HttpStatusCode } from './status.js';
 
 export interface HttpErrorOptions extends ErrorOptions {
   /**
-   * Headers the error response carries. `Retry-After` on a 429,
-   * `WWW-Authenticate` on a 401, `Allow` on a 405 - each of them part of the
-   * status rather than an extra, and none of them expressible by a throw before
-   * this existed.
-   *
-   * {@link errorMapper} copies them onto the response. An app that replaces the
-   * mapper has to read them itself, which is the same contract `status` and
-   * `message` already have.
+   * Headers the error response carries: `Retry-After` on a 429,
+   * `WWW-Authenticate` on a 401, `Allow` on a 405. {@link errorMapper} copies them
+   * onto the response; an app replacing the mapper reads them itself.
    */
   readonly headers?: Readonly<Record<string, string>>;
 }
@@ -56,16 +51,9 @@ export class ValidationError extends HttpError {
 export type ErrorMapper = (error: unknown, req: Request) => Response;
 
 /**
- * The class form of {@link ErrorMapper}, and the one to reach for in an app.
- *
- * A mapper is a function, which means it cannot inject: the interesting ones need
- * the app's config to decide how much of an error to reveal, or its `Logger` to
- * record the ones that became a 500. dunx's own default proves the point - it is
- * `errorMapper(logger)`, a curried factory, because currying was the only way to
- * hand a function a dependency.
- *
- * A filter is resolved **from the container**, exactly as `HttpOptions.middleware`
- * entries are, so it takes whatever it needs as constructor parameters:
+ * The class form of {@link ErrorMapper}, and the one to reach for in an app. A
+ * mapper is a function and cannot inject; a filter is resolved from the container
+ * exactly as `HttpOptions.middleware` entries are:
  *
  * ```ts
  * export class AppErrorFilter extends ErrorFilter {
@@ -85,48 +73,36 @@ export type ErrorMapper = (error: unknown, req: Request) => Response;
  * HttpFactory.create(root, { onError: AppErrorFilter });
  * ```
  *
- * `abstract class` rather than an interface, so it is a runtime value and therefore
- * usable as an injection token - an app that wants to swap filters by binding one
- * can. Extending it is optional: `onError` accepts any class with a matching
- * `catch`, because the check is structural.
- *
- * The method is `catch` to match the vocabulary of the thing it replaces, NestJS's
- * `ExceptionFilter.catch`. A filter that cannot handle an error should rethrow it,
- * or delegate to `defaultErrorMapper`.
+ * `abstract class` rather than an interface, so it is a runtime value and usable
+ * as an injection token. Extending it is optional: the check is structural. A
+ * filter that cannot handle an error should rethrow or delegate to
+ * `defaultErrorMapper`.
  */
 export abstract class ErrorFilter {
   abstract catch(error: unknown, req: Request): Response;
 }
 
-/**
- * What `onError` accepts. A bare mapper still works and is the cheaper thing for a
- * filter with no dependencies; a class is what an app that needs one uses.
- */
+/** What `onError` accepts. A bare mapper is cheaper where nothing is injected. */
 export type ErrorHandler = ErrorMapper | Ctor<ErrorFilter>;
 
 /**
- * Whether `onError` was given a class rather than a mapper.
- *
- * Both are `typeof === 'function'`, so the discriminator is the prototype carrying
- * a `catch`: a class declaration always has one, and neither an arrow function nor
- * a `function` expression ever does. Checking `prototype` alone would be wrong -
- * `function mapper() {}` has an empty one.
+ * Whether `onError` was given a class rather than a mapper. Both are functions, so
+ * the discriminator is a prototype carrying a `catch`. `prototype` alone would be
+ * wrong: `function mapper() {}` has an empty one.
  */
 export const isErrorFilter = (
   handler: ErrorHandler,
 ): handler is Ctor<ErrorFilter> =>
   typeof handler === 'function' &&
-  // Narrowed through a structural shape rather than `Ctor`: a construct signature
-  // has no `prototype` in the type system, so `Partial<Ctor<T>>` cannot see it.
+  // A construct signature has no `prototype` in the type system, so `Ctor<T>`
+  // cannot be narrowed on one.
   typeof (handler as { prototype?: { catch?: unknown } }).prototype?.catch ===
     'function';
 
 /**
- * Narrows an `ErrorHandler` to the mapper the request path actually calls.
- *
- * `resolve` is typed for this one token rather than generically: the only thing ever
- * looked up here is the filter, and a `<T>(token: Ctor<T>) => T` signature makes
- * every caller - a test included - satisfy a polymorphic contract it does not need.
+ * Narrows an `ErrorHandler` to the mapper the request path calls. `resolve` is
+ * typed for this one token rather than generically, so no caller has to satisfy a
+ * polymorphic contract it does not need.
  */
 export const toErrorMapper = (
   handler: ErrorHandler,
@@ -138,17 +114,12 @@ export const toErrorMapper = (
 
 /**
  * The mapper `HttpFactory` installs unless `onError` replaces it, built from the
- * app's **bound** `Logger` - so a service that imported `@dunx/infra/logger` gets
- * the stack as one `@arkv/logger` entry, sanitized and shaped like every other.
+ * app's bound `Logger`. An `HttpError` is not logged here: the status is the whole
+ * record and `RequestLoggingMiddleware` already wrote the line, so only an
+ * undeclared error is worth a stack.
  *
- * An `HttpError` is not logged here at all: the status is the whole record, and
- * `RequestLoggingMiddleware` already writes the 4xx line. Only an error nothing
- * declared - the one that becomes a 500 - is worth a stack.
- *
- * The error goes in as its own argument rather than as a field of an object.
- * `JSON.stringify(new Error('x'))` is `{}`, so `{ err: error }` would drop the
- * stack; every `Logger` implementation picks an `Error` argument out and
- * serialises it.
+ * The error is its own argument, not a field: `JSON.stringify(new Error('x'))` is
+ * `{}`, so `{ err: error }` would drop the stack.
  */
 export const errorMapper =
   (logger: Logger): ErrorMapper =>
@@ -183,9 +154,7 @@ export const errorMapper =
 
 /**
  * The same mapper with no container behind it, for `buildRoutes` and
- * `buildFallback` called directly. It writes through core's `ConsoleLogger`, which
- * is one JSON line - the point being that nothing in this package ever reaches for
- * `console.error` and emits a multi-line dump a collector reads as several broken
- * records. An app gets {@link errorMapper} over its own bound logger instead.
+ * `buildFallback` called directly. Writes through core's `ConsoleLogger`, so
+ * nothing here emits a multi-line dump a collector reads as several records.
  */
 export const defaultErrorMapper: ErrorMapper = errorMapper(new ConsoleLogger());

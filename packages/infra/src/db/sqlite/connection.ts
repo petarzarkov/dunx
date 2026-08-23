@@ -72,22 +72,14 @@ export class SqliteConnection<
 }
 
 /**
- * The same `drizzle-orm/bun-sqlite` handle, marked at the type level as belonging
- * to a connection opened in **synchronous mode**.
+ * The same `drizzle-orm/bun-sqlite` handle, marked at the type level as opened in
+ * synchronous mode. It adds no behaviour, only a name: `transactionSync()` accepts
+ * this and nothing else, and the container will not hand it to a service that
+ * asked for the async handle.
  *
- * It adds no method and no behaviour. What it adds is a name: `transactionSync()`
- * accepts this and nothing else, so reaching the synchronous transaction requires
- * having configured `SyncSqliteOptions` rather than `SqliteOptions`. The container
- * enforces it too - a service annotating `SyncDatabase<typeof schema>` fails to
- * resolve in an app whose `DbModule` bound `BunSQLiteDatabase`.
- *
- * The relationship is one-way on purpose. A `SyncDatabase` **is** a
- * `BunSQLiteDatabase`, so everything that took the async handle - `transaction()`,
- * `runSeeds()`, a repository written before the mode existed - still takes this
- * one. Synchronous mode is a superset, not a fork.
- *
- * There is no Postgres counterpart and there will not be one: `Bun.SQL` is a
- * socket, and nothing makes a socket synchronous.
+ * The relationship is one-way. A `SyncDatabase` is a `BunSQLiteDatabase`, so
+ * anything written against the async handle still takes this one. There is no
+ * Postgres counterpart: nothing makes a socket synchronous.
  */
 export class SyncDatabase<
   TSchema extends Record<string, unknown>,

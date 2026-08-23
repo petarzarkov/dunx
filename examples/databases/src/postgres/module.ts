@@ -4,21 +4,10 @@ import * as schema from './schema.js';
 import { PostgresWidgets } from './widgets.service.js';
 
 /**
- * Postgres, in five lines of configuration.
- *
- * `SqlInit` extends `Bun.SQL`'s own option type rather than restating it, so
- * pooling, TLS and auth stay in sync with whatever Bun supports - `max`,
- * `idleTimeout`, `tls` and the rest are all accepted here.
- *
- * The dialect is resolved from the URL **at construction**, so a bad URL throws
- * before any I/O, and a non-Postgres one throws with a message saying why:
- * `drizzle-orm/bun-sql` builds a `PgDialect` unconditionally, so it would compile
- * `$1` placeholders and Postgres quoting against a server that does not speak them.
- *
- * The handshake is awaited inside `open()` rather than deferred to the first
- * query. dunx settles every async factory before it constructs anything, so a
- * repository can never be handed a client that has not connected - there is no
- * lazy connect and no `await db.ready()`.
+ * Postgres. `SqlInit` extends `Bun.SQL`'s own option type, so `max`, `tls` and
+ * the rest are accepted as Bun defines them. The dialect is resolved from the
+ * URL at construction: `drizzle-orm/bun-sql` builds a `PgDialect` unconditionally
+ * and would emit Postgres syntax at a server that does not speak it.
  */
 export class PostgresModule {
   static forUrl(url: string): DynamicModule {

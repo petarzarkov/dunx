@@ -37,11 +37,9 @@ export interface JobProcessorOptions {
 }
 
 /**
- * The **child** half of a sandboxed worker.
- *
- * bullmq runs a job outside the main event loop when a `Worker` is given a **file
- * path** instead of a function. That file's default export is the processor, and
- * this is the class that builds one out of a dunx module:
+ * The child half of a sandboxed worker. bullmq runs a job off the main event loop
+ * when a `Worker` is given a file path; that file's default export is the
+ * processor, and this builds one out of a dunx module:
  *
  * ```ts
  * // jobs.processor.ts - the file the child runs
@@ -51,22 +49,8 @@ export interface JobProcessorOptions {
  * export default new JobProcessor(JobsModule).handle;
  * ```
  *
- * What it buys:
- *
- * - **Traceability.** The child's stdout is the parent's, so a handler's log lines
- *   land in the same stream as the request that enqueued the job - without sharing
- *   an event loop with it. `job.log()` goes further and lands in Redis, where
- *   bull-board shows it against the job itself.
- * - **Isolation.** A handler that blocks, leaks or crashes takes its child down and
- *   not the process serving HTTP.
- *
- * What it costs is a container per child. That is the deal every sandboxed-processor
- * setup makes, and it is why `handle` builds one **once per child and reuses it**
- * rather than once per job: a fork already costs a process, and rebuilding a
- * database pool on top of that would make the sandbox slower than it is worth.
- *
- * Both isolation modes were measured on Bun 1.3.14 and both work - see
- * `SandboxOptions.isolation` for which to pick.
+ * It costs a container per child, which is why `handle` builds one once per child
+ * and reuses it. See `SandboxOptions.isolation` for the two modes.
  */
 export class JobProcessor {
   readonly #root: ModuleRef;

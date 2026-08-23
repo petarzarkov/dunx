@@ -2,41 +2,20 @@ import { dirname } from 'node:path';
 
 /**
  * Where `swagger-ui-dist` put its files, resolved from the consumer's install.
+ * dunx shipped its own explorer until this replaced it. The cost is 1.7 MiB
+ * against 434 KiB, 3.7x gzipped, which is why the files are served as two
+ * cacheable assets rather than inlined.
  *
- * dunx used to ship its own explorer - a React app in `internal/openapi-ui`, built
- * by Vite and inlined into the page as a 434 KiB string. It was deleted for the
- * reason `@dunx/queue-dashboard` was: a hand-built version of something mature
- * already does is the second half of Rule 1, and Swagger UI is the reference
- * implementation for reading an OpenAPI document.
- *
- * **The cost is real and is not hidden.** Swagger UI is 1.7 MiB against the old
- * bundle's 434 KiB, 443 KiB against 121 KiB gzipped - about 3.7x. That is why the
- * files are **served as two cacheable assets** rather than inlined the way the old
- * bundle was: inlining 1.7 MiB into every page response would send it again on
- * every load. See `SwaggerAssets.href`.
- *
- * **A `dependency`, not a peer**, which is the one place this package departs from
- * CLAUDE.md's "sanctioned integrations go in peerDependencies" rule. The reasoning
- * is recorded there; the short version is that a consumer never imports this, never
- * calls it and has no version opinion about it - it is an asset bundle, and
- * `@nestjs/swagger` ships it the same way.
- *
- * Still resolved **lazily**, on the first request for the page, so an app that
- * serves only `/openapi.json` never reads it. Async because that resolution reads a
- * manifest through `Bun.file`, and it is cached, so only the first request pays.
+ * A `dependency` rather than a peer: nobody imports it, calls it or has a version
+ * opinion about it. Resolved lazily on the first request, and cached.
  */
 /**
- * The files served out of `swagger-ui-dist`, and their content types.
+ * The files served out of `swagger-ui-dist`, and their content types. This map is
+ * the allow-list, which lets the route be a single wildcard: the package also
+ * holds four other builds and 4 MB of sourcemaps.
  *
- * **This map is the allow-list**, which is why the route that serves them can be a
- * single wildcard: `node_modules/swagger-ui-dist` also holds four other builds and
- * 4 MB of sourcemaps, and a wildcard that read the filesystem directly would serve
- * all of it.
- *
- * `swagger-ui.css.map` is here because `swagger-ui.css` ends with a
- * `sourceMappingURL` comment pointing at it. Without it every consumer with
- * devtools open logs a 404 against their own app. `swagger-ui-bundle.js` carries no
- * such comment, so its 1.9 MB map is not served.
+ * `swagger-ui.css.map` is here because the stylesheet points at it, and without it
+ * every consumer with devtools open logs a 404.
  */
 const ASSETS = Object.freeze({
   'swagger-ui-bundle.js': 'text/javascript; charset=utf-8',

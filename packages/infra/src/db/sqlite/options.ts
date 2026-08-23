@@ -164,20 +164,15 @@ export class SqliteOptions<
 }
 
 /**
- * The same configuration, opened in **synchronous mode**.
- *
- * Every init field is `SqliteOptions`'s. What changes is the handle: services are
- * given a `SyncDatabase`, which is the only thing `transactionSync()` accepts, and
- * which the container will not hand to a service that asked for the async one.
+ * The same configuration opened in synchronous mode. Every init field is
+ * `SqliteOptions`'s; what changes is that services are given a `SyncDatabase`.
  *
  * ```ts
  * DbModule.forRoot(new SyncSqliteOptions({ schema, filename: './dev.db' }));
  * // constructor(private readonly db: SyncDatabase<typeof schema>) {}
  * ```
  *
- * There is deliberately no `SyncSqlOptions`. `Bun.SQL` talks to a server over a
- * socket, so no amount of API design makes a Postgres query return a row instead
- * of a promise.
+ * There is no `SyncSqlOptions`: nothing makes a socket synchronous.
  */
 export class SyncSqliteOptions<
   TSchema extends Record<string, unknown>,

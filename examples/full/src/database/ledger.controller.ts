@@ -23,17 +23,13 @@ const CreateEntry = z
   })
   .meta({ id: 'CreateEntry', description: 'A single ledger movement' });
 
-/** Both legs succeed or neither does - the rollback is the point of the route. */
 const Transfer = z
   .object({
     from: z.string().min(1).max(80),
     to: z.string().min(1).max(80),
     amount: z.number().int().positive(),
-    /**
-     * Throw between the two legs on purpose. The response is a 409 and the row
-     * count is unchanged - which is the only way to see from outside that the
-     * first insert was rolled back rather than committed.
-     */
+    /** Throws between the two legs: a 409 with an unchanged row count is how
+     * the rollback is visible from outside. */
     fail: z.boolean().default(false),
   })
   .meta({ id: 'Transfer', description: 'Move an amount between two memos' });
@@ -44,11 +40,10 @@ const listEntries = {
   }),
 } as const;
 /**
- * The page query, written as zod here rather than shipped by `@dunx/infra/pagination`.
- * That package deliberately ships no schema - route validation targets Standard
- * Schema, so the app picks the library - and stating it here is what puts the
- * parameters in the OpenAPI document. `PAGINATION` supplies the bounds so they
- * cannot drift from what `parsePageOptions` would enforce.
+ * The page query as zod. `@dunx/infra/pagination` ships no schema - validation
+ * targets Standard Schema, so the app picks the library - and stating it here is
+ * what puts the parameters in the OpenAPI document. `PAGINATION` supplies the
+ * bounds so they cannot drift from `parsePageOptions`.
  */
 const pageQuery = z
   .object({
@@ -93,11 +88,8 @@ export class LedgerController {
     };
   }
 
-  /**
-   * The same rows as `GET /ledger`, walked by cursor. Declared **before** `/:id` for
-   * readability only - `Bun.serve` matches a static segment ahead of a parameter, so
-   * `/ledger/page` cannot be swallowed by `/ledger/:id`.
-   */
+  /** Walked by cursor. Declared before `/:id` for readability only: `Bun.serve`
+   * matches a static segment ahead of a parameter. */
   @Get('/page', pagedEntries)
   page(input: Input<typeof pagedEntries>): Page<Entry> {
     return this.ledger.page(input.query);
@@ -120,11 +112,8 @@ export class LedgerController {
     return this.ledger.add(input.body.memo, input.body.amount);
   }
 
-  /**
-   * The failure path is the interesting one: `"fail": true` throws between the
-   * two inserts, and the 409's `rows` is unchanged - proof the first leg was
-   * rolled back rather than committed.
-   */
+  /** `"fail": true` throws between the two inserts; the 409's unchanged `rows`
+   * is proof the first leg rolled back. */
   @Post('/transfer', transfer)
   async transfer(
     input: Input<typeof transfer>,
@@ -142,11 +131,9 @@ export class LedgerController {
   }
 
   /**
-   * The same transfer with no `async` and no `await` on the path at all - the
-   * handler returns a value, `@dunx/http` turns it into a `Response` without
-   * allocating a promise, and SQLite answered on the same tick. What makes it
-   * possible is `SyncSqliteOptions` in `DatabaseModule`; `transactionSync` will not
-   * compile against the async mode's handle.
+   * The same transfer with no `async` anywhere: the handler returns a value and
+   * SQLite answers on the same tick. `SyncSqliteOptions` in `DatabaseModule` is
+   * what allows it - `transactionSync` will not compile against the async handle.
    */
   @Post('/transfer-sync', transfer)
   transferSync(input: Input<typeof transfer>): {

@@ -81,22 +81,12 @@ export const danglingRefs = (document: OpenApiDocument): readonly string[] => {
  * lands here instead.
  */
 /**
- * A component's own name as its `title`, unless it declared one.
+ * A component's own name as its `title`, unless it declared one - the only thing
+ * an explorer can label a nested schema by. Swagger UI renders a model as
+ * `schema.title || displayName || name`, and a schema reached through `items`
+ * supplies neither, so `array<User>` rendered as `array<object>`.
  *
- * That is the only thing an explorer can label a **nested** schema by. Swagger UI
- * 5.32.14 renders a model as `schema.title || displayName || name` - verified in
- * `swagger-ui-bundle.js`, in all three of its model components. A root `$ref`
- * supplies those two fallbacks from the ref itself, but a schema reached through
- * `items` supplies neither, so `array<User>` rendered as `array<object>` while the
- * same `User` at the root of a response rendered as `User`. `title` is the one field
- * that reaches both positions.
- *
- * This is not the sentence-in-`title` mistake that put prose in the Schemas list.
- * The title here **is** the name, identical to the key, so that list reads exactly
- * as it did; prose still belongs in `description`.
- *
- * Applied to a contributed schema too, so better-auth's `Session` labels the same
- * way a generated `User` does.
+ * The title is the name, so the Schemas list reads as it did.
  */
 export const titledAs = (name: string, schema: JsonSchema): JsonSchema =>
   schema['title'] === undefined ? { title: name, ...schema } : schema;

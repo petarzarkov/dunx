@@ -4,15 +4,10 @@ import { MysqlConnection, MysqlOptions } from './driver.js';
 import { MysqlWidgets } from './widgets.service.js';
 
 /**
- * The same `DbModule.forRoot` shape as the other two dialects, over the backend
- * assembled in `driver.ts`. Nothing in `@dunx/infra` had to change to accept it.
- *
- * The one extra binding: `DbModule` registers the connection under the abstract
- * `DbConnection` token, and `MysqlWidgets` needs the concrete class for its
- * `transaction()` helper. Rebinding the class to the *same instance* through a
- * factory is how a service annotates the narrower type - no cast, and no second
- * connection opened, because the factory returns what `DbConnection` already
- * resolved to.
+ * The same `DbModule.forRoot` shape as the other dialects, over the backend in
+ * `driver.ts`. The extra binding rebinds the concrete class to the same instance
+ * `DbConnection` resolved to, so `MysqlWidgets` can annotate the narrower type
+ * without a cast and without a second connection.
  */
 export class MysqlModule {
   static forUrl(url: string): DynamicModule {

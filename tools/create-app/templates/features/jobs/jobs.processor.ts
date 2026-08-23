@@ -5,25 +5,17 @@ import { AppConfigService, validate } from '../config.js';
 import { JobsModule } from './jobs.module.js';
 
 /**
- * **The file bullmq forks into.** Its default export is the processor, and nothing
- * else here runs in the parent.
- *
- * The child builds its own container, which is the whole point: a handler gets the
- * database, the image pipeline and the logger it declares, without sharing an event
- * loop with the process serving HTTP. `JobProcessor` builds it once per child and
- * reuses it for every job on that child.
- *
- * Its own module rather than reusing `WorkerModule` from `worker.ts`: that file is
- * an entrypoint with a `run()` at the bottom, and importing it here would boot a
- * second worker inside every child.
+ * The file bullmq forks into; its default export is the processor. The child
+ * builds its own container, so a handler gets what it declares without sharing
+ * an event loop with the HTTP process. Its own module rather than `worker.ts`,
+ * which has a `run()` that would boot a second worker inside every child.
  */
 @Module({
   imports: [
     ConfigModule.forRoot({ validate, as: AppConfigService }),
     LoggerModule.forRootAsync({
       useFactory: (config: AppConfigService) => ({
-        // Named so a line from a child is attributable to one on sight - which is
-        // the traceability a sandbox is for.
+        // Named, so a line from a child is attributable on sight.
         name: `${config.get('appName')}-job`,
         level: config.get('log').level,
       }),

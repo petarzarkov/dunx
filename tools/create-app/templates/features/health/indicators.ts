@@ -12,12 +12,8 @@ import type { DbConnection } from '@dunx/infra/db';
 import type { RedisConnection } from '@dunx/infra/redis';
 import { Ledger } from '../database/ledger.service.js';
 
-/**
- * The custom-indicator path: an app-specific query rather than a round trip.
- *
- * `DatabaseIndicator` answers "does the connection answer". This answers "is the
- * data there", which is the part only the app knows how to ask.
- */
+/** A custom indicator: `DatabaseIndicator` asks whether the connection answers,
+ * this asks whether the data is there. */
 export class LedgerIndicator extends HealthIndicator {
   readonly name = 'ledger';
 
@@ -37,12 +33,8 @@ export class LedgerIndicator extends HealthIndicator {
 }
 
 /**
- * `RedisIndicator` with the criticality flipped, because this app treats a missing
- * cache as degraded rather than fatal - the same promise `CacheModule` makes with
- * lazy connections and `maxRetries: 0`.
- *
- * Shedding traffic here would be wrong: the routes that need Redis report
- * themselves degraded and every other route still works.
+ * `RedisIndicator` with the criticality flipped: a missing cache is degraded
+ * rather than fatal, matching `CacheModule`'s lazy connect and `maxRetries: 0`.
  */
 export class CacheIndicator extends RedisIndicator {
   override readonly critical = false;
@@ -57,21 +49,14 @@ export interface AppIndicatorsInit {
 }
 
 /**
- * The one declaration of what this service probes.
- *
- * It is a provider rather than two lists inlined into two factories because two
- * things read it: `HealthModule` answers `/api/health/ready`, and
- * `DashboardModule` lights the same checks on the ops page. A `HealthIndicator`
- * satisfies `DashboardProbe` as written, so neither side needs an adapter.
+ * One declaration of what this service probes, read by both `HealthModule` and
+ * `DashboardModule`. A `HealthIndicator` satisfies `DashboardProbe` as written.
  */
 export class AppIndicators {
   readonly readiness: readonly HealthIndicator[];
   readonly liveness: readonly HealthIndicator[];
-  /**
-   * The readiness list minus what the dashboard already sources itself:
-   * `DashboardOptions.redis` drives the Redis panel *and* a `redis` probe, so
-   * handing it `CacheIndicator` as well would light the same name twice.
-   */
+  /** Minus what the dashboard sources itself: `DashboardOptions.redis` already
+   * drives a `redis` probe, so `CacheIndicator` here would light it twice. */
   readonly dashboardProbes: readonly HealthIndicator[];
 
   constructor(init: AppIndicatorsInit) {
@@ -79,13 +64,12 @@ export class AppIndicators {
       new DatabaseIndicator(init.db),
       new LedgerIndicator(init.ledger),
       new CacheIndicator(init.redis),
-      // Non-critical, because no other pod's disk is any emptier.
       new DiskIndicator(
         new DiskOptions({ path: init.uploadRoot, maxUsedFraction: 0.95 }),
       ),
     ];
-    // A ceiling belongs on liveness, where the orchestrator restarts the process
-    // rather than routing around it.
+    // A ceiling belongs on liveness, where the orchestrator restarts rather
+    // than routes around.
     this.liveness = [
       new MemoryIndicator(
         new MemoryOptions({ maxRssBytes: 1024 * 1024 * 1024 }),

@@ -34,11 +34,8 @@ const postNote = (url: string, text: unknown): Promise<Response> =>
     body: JSON.stringify({ text }),
   });
 
-/**
- * `203.0.113.7` stands in for whatever the caller put in the header itself, and
- * `10.0.0.1` for the entry the one proxy in front of this app appended. With
- * `trust proxy` set to one hop, only the second is worth anything.
- */
+/** `203.0.113.7` is what the caller sent, `10.0.0.1` what the one proxy
+ * appended. With `trust proxy` at one hop, only the second counts. */
 const whoami = async (url: string, forwarded: boolean): Promise<string> => {
   const response = await fetch(new URL('api/notes/whoami', url), {
     headers: forwarded ? { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' } : {},
@@ -83,28 +80,25 @@ export class HttpDemo {
         `${JSON.stringify(await rejected.json())}`,
     );
 
-    // Bun.serve answers a method miss with 404, so a preflight can never be
-    // inferred - enableCors mounts an explicit OPTIONS per path.
+    // Bun.serve answers a method miss with 404, so `enableCors` mounts an
+    // explicit OPTIONS per path.
     const allowed = await preflight(url, origin);
     logger.info(
       `enableCors: OPTIONS from ${origin} -> ${allowed.status} ${describeCors(allowed)}`,
     );
-    // A denied origin gets no CORS headers at all, which is what makes a browser
-    // block the response.
+    // A denied origin gets no CORS headers, which is what blocks the browser.
     const denied = await preflight(url, 'https://evil.test');
     logger.info(
       `OPTIONS from https://evil.test -> ${denied.status} ${describeCors(denied)}`,
     );
 
-    // One trusted hop, so the last entry wins and the caller's own leftmost
-    // entry is ignored. Reaching past the proxy takes set('trust proxy', 2).
+    // One trusted hop, so the last entry wins. Reaching past it takes 2.
     logger.info(
       `set("trust proxy", true): X-Forwarded-For sent -> ${await whoami(url, true)}`,
     );
     logger.info(`no header -> ${await whoami(url, false)}`);
 
-    // The route table and the middleware chain fold into one closure per route at
-    // listen(), so a late call could only ever be a silent no-op.
+    // Routes and middleware fold into one closure per route at listen().
     try {
       app.setGlobalPrefix('too-late');
     } catch (error) {

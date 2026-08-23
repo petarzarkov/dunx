@@ -41,55 +41,32 @@ export interface QueueOptionsInit {
   /** Forwarded verbatim as every `Queue`'s `defaultJobOptions`. */
   readonly defaultJobOptions?: JobsOptions;
   /**
-   * Forwarded to every `Bun.RedisClient` the queue opens - `connectionTimeout`,
-   * `maxRetries`, `autoReconnect` and the rest.
+   * Forwarded to every `Bun.RedisClient` the queue opens. Defaults to
+   * `{ connectionTimeout: 5000, maxRetries: 0 }`: Bun's own defaults retry without
+   * bound, so `publish()` never settles, and any `maxRetries > 0` leaves a retry
+   * timer alive past `close()` so the process never exits. See docs/bun-apis.md.
    *
-   * **Defaults to `{ connectionTimeout: 5000, maxRetries: 0 }`, and both halves
-   * of that were measured rather than guessed.** With Bun's own defaults a client
-   * that cannot reach Redis retries without bound, so `publish()` never settles
-   * and a route waiting on it hangs instead of answering. And with **any**
-   * `maxRetries > 0`, a client that never connected keeps a retry timer alive past
-   * `close()` and the process never exits - verified here at `maxRetries: 3`,
-   * where a full-example boot with no Redis survived SIGTERM for 12s. See
-   * docs/bun-apis.md, "A failed connection leaks a retry timer past `close()`".
-   *
-   * So `0` is the only default that both fails fast and lets the process die.
-   *
-   * **The trade:** a worker set to `0` will not ride out a Redis blip. Raise it if
-   * that matters more than a clean exit on a cold start against an absent Redis -
-   * they cannot both be had until Bun clears the timer on `close()`.
+   * The trade is that `0` will not ride out a Redis blip. Raise it if that matters
+   * more than a clean exit against an absent Redis.
    */
   readonly connection?: Bun.RedisOptions;
   /**
-   * The file bullmq forks into for a queue marked `background`.
-   *
-   * **Absolute.** bullmq resolves it in the child, not against the module that
-   * configured it, so a relative specifier resolves from the child's cwd and
-   * silently finds nothing:
+   * The file bullmq forks into for a queue marked `background`. Absolute: bullmq
+   * resolves it in the child, so a relative specifier finds nothing.
    *
    * ```ts
    * processor: new URL('./jobs.processor.ts', import.meta.url).pathname,
    * ```
-   *
-   * Its default export is the processor, and `JobProcessor` builds one from a
-   * module in three lines. Only queues with a `background` handler use it.
    */
   readonly processor?: string;
   /**
-   * `'process'` forks; `'thread'` uses a worker thread.
+   * `'process'` forks; `'thread'` uses a worker thread. Use `'process'` unless the
+   * app is prebuilt: a fork reads `bunfig.toml`, so `@dunx/transform/preload` runs
+   * over the `.ts` files it loads, while a thread enters through bullmq's prebuilt
+   * `main-worker.js` where the preload cannot match one - so no provider gets a
+   * dependency record and the first constructor parameter fails at boot.
    *
-   * **Use `'process'` unless the app is prebuilt.** Both carry the child's stdout
-   * back to the parent - measured on Bun 1.3.14, and worker threads did not always,
-   * so that half is fixed upstream. They differ on something dunx-specific: a fork
-   * is a fresh Bun process, so it reads `bunfig.toml` and `@dunx/transform/preload`
-   * runs over the `.ts` files it loads. A thread enters through bullmq's prebuilt
-   * `main-worker.js`, where the preload cannot match a `.ts` file - so nothing gets
-   * a dependency record and the first provider with a constructor parameter fails
-   * at boot, naming that parameter.
-   *
-   * `'thread'` is therefore for an app whose dependencies were recorded at **build**
-   * time - `Bun.build({ plugins: [depsPlugin] })`. It also isolates less: a thread
-   * shares the address space, so a handler that segfaults takes the whole process.
+   * A thread also shares the address space, so a segfault takes the process.
    *
    * @default 'process'
    */

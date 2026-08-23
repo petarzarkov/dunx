@@ -6,11 +6,9 @@ import {
 } from '@dunx/http/client';
 
 /**
- * Calling out, over `fetch` and therefore over no dependency at all.
- *
- * Three things a bare `fetch` does not do: retry a 503 with backoff, raise a
- * non-2xx as an error carrying the parsed body, and forward the inbound request id
- * so one trace covers both services.
+ * Calling out over `fetch`. Three things a bare `fetch` does not do: retry a 503
+ * with backoff, raise a non-2xx as an error carrying the parsed body, and forward
+ * the inbound request id.
  */
 export class UpstreamDemo {
   constructor(
@@ -24,7 +22,6 @@ export class UpstreamDemo {
     );
     this.logger.info(`GET api/notes -> ${JSON.stringify(notes)}`);
 
-    // The 503s are retried; the attempt callback is what makes that visible.
     const attempts: string[] = [];
     const recovered = await this.http.get<{ after: number }>(
       new URL('api/upstream/flaky', url),
@@ -42,12 +39,8 @@ export class UpstreamDemo {
         `recovered after ${recovered.after}`,
     );
 
-    /**
-     * A 404 is a `FetchError`, not an `HttpError`. That distinction is the whole
-     * reason the class exists: an upstream 401 arriving as an `HttpError(401)`
-     * would make *this* service answer 401, telling its own caller "you are
-     * unauthorized" when what failed was this service authenticating upstream.
-     */
+    /** A 404 is a `FetchError`, not an `HttpError`: an upstream 401 arriving as
+     * `HttpError(401)` would make this service answer 401 to its own caller. */
     try {
       await this.http.get(new URL('api/upstream/missing', url), {
         retry: { maxRetries: 0 },
@@ -61,9 +54,7 @@ export class UpstreamDemo {
       );
     }
 
-    // Not retried: the budget for the call is spent, and an abort means the
-    // caller's signal fired or the timeout did. `/slow` sleeps 300 ms, so this
-    // is a deadline rather than a race with the loopback.
+    // Not retried: an abort means the caller's signal or the timeout fired.
     try {
       await this.http.get(new URL('api/upstream/slow', url), {
         timeoutMs: 25,

@@ -58,12 +58,9 @@ const connect = async (base: string): Promise<Client> => {
 };
 
 /**
- * A second node, in-process. Two `Bun.serve` instances, two containers, two
- * `PubSub`s with two different origin ids - everything a second deployment has
- * except a second pid, which the relay logic cannot tell apart anyway.
- *
- * It reuses the very same `ChatGateway`, and takes only what that gateway needs:
- * `ChatDemo` itself is not in here, so this module cannot recurse.
+ * A second node in-process: two `Bun.serve` instances, two containers, two
+ * `PubSub` origin ids. It reuses the same `ChatGateway` and excludes `ChatDemo`,
+ * so it cannot recurse.
  */
 @Module({ providers: [ChatGateway, Lobby] })
 class PeerNode {}
@@ -107,20 +104,13 @@ export class ChatDemo {
 
     ada.close();
     grace.close();
-    // Long enough for @OnClose to run before the tour moves on.
     await Bun.sleep(20);
   }
 
   /**
-   * The relay: a publish on this node reaching a client connected to a *different*
-   * node, exactly once. Both nodes run in this process - two `Bun.serve`
-   * instances, two containers - which is every part of a two-machine deployment
-   * that the fan-out logic can distinguish.
-   *
-   * Node A relays through `RedisRelay`, which `createApp` handed to
-   * `HttpFactory`. Node B relays through the application's **own**
-   * `RedisConnection`, which satisfies `PubSubRelay` structurally - two methods,
-   * no adapter, and `@dunx/http` depending on `@dunx/infra` not at all.
+   * A publish on one node reaching a client connected to the other, exactly once.
+   * Node A relays through `RedisRelay`; node B through its own `RedisConnection`,
+   * which satisfies `PubSubRelay` structurally with no adapter.
    */
   async relayed(url: string): Promise<void> {
     const { logger } = this;
@@ -139,8 +129,8 @@ export class ChatDemo {
 
     try {
       logger.info(`node A on ${url}, node B on ${peerUrl}`);
-      // The last chars, not the first: a v7 uuid starts with a timestamp, so two
-      // ids minted in the same second share their leading digits.
+      // The last chars: a v7 uuid leads with a timestamp, so two minted in the
+      // same second share their leading digits.
       logger.info(
         `origins: A …${this.pubsub.origin.slice(-6)} / B …${peerPubsub.origin.slice(-6)} ` +
           '- what tells a node its own echoed frame',
@@ -152,9 +142,8 @@ export class ChatDemo {
       const said = 'across nodes';
       this.pubsub.publishEvent(Lobby.TOPIC, 'said', said);
       logger.info(`node B's client <- ${await onB.next()} (relayed via Redis)`);
-      // Redis echoes a publish back to its publisher. Fanning that out again would
-      // deliver twice on node A, so the origin check drops it - and these counts
-      // are what would show it if it did not.
+      // Redis echoes a publish back to its publisher; the origin check drops it
+      // so node A does not deliver twice.
       await Bun.sleep(200);
       const delivered = (client: Client): number =>
         client.received.filter((frame) => frame.includes(said)).length;

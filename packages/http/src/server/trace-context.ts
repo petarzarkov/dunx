@@ -52,17 +52,13 @@ const mintSpanId = (): string =>
  */
 export class TraceContext {
   /**
-   * The inbound `traceparent`, or a fresh trace.
+   * The inbound `traceparent`, or a fresh trace. A malformed header is discarded
+   * rather than repaired, as the standard requires. Version `ff` is invalid; a
+   * higher version keeps its first four fields, so a future format still
+   * propagates.
    *
-   * A malformed header is discarded rather than repaired, which is what the
-   * standard requires: an unparseable `traceparent` means the caller's trace is
-   * unknown, not that this request has none. Version `ff` is invalid, and a
-   * higher version keeps its first four fields and drops the rest, so a future
-   * format still propagates through this service instead of being dropped.
-   *
-   * When nothing arrives, `traceId` is the request id with its hyphens removed -
-   * a UUID is 16 bytes, which is exactly a trace id, and reusing it means one
-   * identifier in two spellings rather than a second `crypto` call per request.
+   * With nothing inbound, `traceId` is the request id minus its hyphens - a UUID
+   * is 16 bytes, exactly a trace id, so there is no second `crypto` call.
    */
   static adopt(req: Request, requestId: string): Trace {
     const inbound = TraceContext.#parse(req.headers.get(TRACEPARENT_HEADER));

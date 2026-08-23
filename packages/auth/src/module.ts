@@ -62,17 +62,11 @@ const build = (
 };
 
 /**
- * Binds three tokens and one controller:
+ * Binds `AuthOptions`, `Auth` and `AuthContext`, plus a prefixed `AuthHandler`
+ * serving every better-auth endpoint under `basePath`.
  *
- * - `AuthOptions` - what `betterAuth()` was called with, and where it is mounted.
- * - `Auth` - the better-auth instance itself.
- * - `AuthContext` - the authenticated caller, per request.
- * - a prefixed `AuthHandler`, serving every better-auth endpoint under `basePath`.
- *
- * `SessionGuard` is registered as a provider rather than installed as global
- * middleware, because whether it guards the whole app or one controller is the app's
- * decision - pass it to `HttpFactory.create(root, { middleware: [SessionGuard] })`
- * or to `@UseGuards(SessionGuard)`.
+ * `SessionGuard` is a provider rather than global middleware: whether it guards
+ * the whole app or one controller is the app's decision.
  */
 export class AuthModule {
   /**
@@ -104,9 +98,8 @@ export class AuthModule {
   }
 
   /**
-   * `forRoot` with the options behind a factory that may await and may inject -
-   * which is the only way the secret, the base URL and the database can come from
-   * `ConfigService` rather than from module scope:
+   * `forRoot` with the options behind a factory that may await and inject, so the
+   * secret, base URL and database can come from `ConfigService`:
    *
    * ```ts
    * AuthModule.forRootAsync({
@@ -120,13 +113,10 @@ export class AuthModule {
    * });
    * ```
    *
-   * `mountAt` is a second, **synchronous** argument for the same reason
-   * `DbModule.forRootAsync` takes its token positionally: the mount is a route in
-   * Bun's table, and that table is built before any factory has run. It is only
-   * needed under a global prefix - see {@link AuthOptions.mountAt}. Omitting it while
-   * the factory returns a non-default `basePath` is a boot error, because that
-   * combination could only ever have mounted the handler where better-auth is not
-   * looking.
+   * `mountAt` is a second, synchronous argument: the mount is a route in Bun's
+   * table, built before any factory has run. Only needed under a global prefix.
+   * Omitting it while the factory returns a non-default `basePath` is a boot
+   * error, since that would mount the handler where better-auth is not looking.
    */
   static forRootAsync<const D extends Deps>(
     provider: AsyncModuleConfig<BetterAuthOptions, D>,

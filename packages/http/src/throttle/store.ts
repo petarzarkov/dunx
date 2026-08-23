@@ -1,17 +1,12 @@
 import { AppError } from '@dunx/core';
 
 /**
- * The counter behind the guard.
+ * The counter behind the guard. An `abstract class` rather than an interface,
+ * since an interface at an injection site is a boot error.
  *
- * An `abstract class` rather than an interface: `@dunx/transform` records
- * constructor parameter *types*, so an interface at an injection site is a boot
- * error. Same reason `RedisConnection` and `Logger` are classes.
- *
- * **A fixed window, not a sliding one.** `hit` increments and returns the count for
- * the window the key is already in; the window starts at the first hit and ends
- * when the key expires. A sliding window needs a sorted set per subject and a
- * range trim per request, which is a different cost for an accuracy a rate limit
- * does not need.
+ * A fixed window: `hit` returns the count for the window the key is already in,
+ * which starts at the first hit and ends when the key expires. A sliding window
+ * needs a sorted set per subject and a trim per request.
  */
 export abstract class ThrottleStore {
   constructor() {
@@ -84,17 +79,13 @@ interface Window {
 }
 
 /**
- * The single-process counter, and the default - so an app with no Redis still
- * limits something rather than nothing.
+ * The single-process counter and the default, so an app with no Redis still limits
+ * something. Per process is the caveat: two replicas each allow the full budget,
+ * and `RedisThrottleStore` is the answer for more than one.
  *
- * It is per process, which is the whole caveat: two replicas each allow the full
- * budget. `RedisThrottleStore` is the answer for more than one.
- *
- * The map is bounded. An expired entry is dropped when its key is next touched,
- * and once the map passes `maxKeys` every expired entry is swept - so a burst
- * across many subjects cannot grow it without limit. Reaching the cap with nothing
- * expired clears it, which resets a window early rather than holding memory a
- * server does not have.
+ * The map is bounded. Expired entries are dropped on touch and swept past
+ * `maxKeys`; reaching the cap with nothing expired clears it, resetting a window
+ * early rather than holding memory.
  */
 export class MemoryThrottleStore extends ThrottleStore {
   readonly #windows = new Map<string, Window>();

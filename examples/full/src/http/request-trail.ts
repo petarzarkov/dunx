@@ -7,15 +7,12 @@ export class RequestTrail {
 }
 
 /**
- * A class with `handle(req, ctx, next)`, resolved from the container - which is
- * what lets it inject. Chains are folded into one closure per route at boot, and
- * `ctx` is the route it was folded into: names, method, path, and its metadata.
+ * A class with `handle(req, ctx, next)`, resolved from the container so it can
+ * inject. `ctx` is the route the chain was folded into.
  *
- * **This does not log**, which is what the name says now and did not before.
- * `@dunx/http` installs `RequestLoggingMiddleware` itself - one structured entry
- * per request, tuned through `requestLogging` in bootstrap.ts - so an app writing
- * its own would write everything twice. What is left here is the part a framework
- * cannot supply: an app-specific side effect on a response the middleware can see.
+ * It does not log: `@dunx/http` writes the request entry itself, so an app doing
+ * its own would write everything twice. What is left is the app-specific side
+ * effect a framework cannot supply.
  */
 export class RequestTrailMiddleware implements Middleware {
   constructor(private readonly trail: RequestTrail) {}

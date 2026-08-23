@@ -50,16 +50,12 @@ interface RawSchema {
 }
 
 /**
- * Better Auth's own endpoints, as a contribution to the app's OpenAPI document.
+ * better-auth's own endpoints, contributed to the app's OpenAPI document. It
+ * serves `<basePath>/*` from its own handler, so route discovery sees none of it
+ * and the document would omit the whole authentication surface.
  *
- * Better Auth serves `<basePath>/*` from its own handler rather than from dunx
- * controllers, so route discovery cannot see any of it and the document would
- * describe an API missing its entire authentication surface. This asks the
- * library for its schema and hands it over:
- *
- * **`forRootAsync`, not `forRoot`.** `forRoot` is evaluated while the module graph
- * is being described, before there is a container, so there is nowhere for the
- * `Auth` instance to come from. The async pair injects it:
+ * `forRootAsync`, not `forRoot`: the latter is evaluated while the module graph is
+ * described, before there is a container to take `Auth` from.
  *
  * ```ts
  * OpenApiModule.forRootAsync({
@@ -73,17 +69,8 @@ interface RawSchema {
  * });
  * ```
  *
- * Building a second `betterAuth()` purely to generate the schema is the workaround
- * this replaces, and it is not needed.
- *
- * **Better Auth only generates a schema when the `openAPI()` plugin is enabled.**
- * Without it `generateOpenAPISchema` is absent and this contributes nothing rather
- * than throwing, because a missing plugin should cost documentation and not boot.
- * Pass `openAPI({ disableDefaultReference: true })` if you want the schema without
- * Better Auth also mounting its own reference page next to the dunx one.
- *
- * Paths are rewritten to sit under `basePath`, since the library reports them
- * relative to its own mount.
+ * A schema exists only with the `openAPI()` plugin enabled; without it this
+ * contributes nothing rather than throwing. Paths are rewritten under `basePath`.
  */
 export const betterAuthDocument =
   (auth: OpenApiCapableAuth, options: AuthDocumentOptions) =>

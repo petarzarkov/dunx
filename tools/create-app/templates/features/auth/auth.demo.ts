@@ -11,11 +11,8 @@ const CREDENTIALS = {
   name: 'Ada',
 };
 
-/**
- * The whole loop over HTTP: better-auth's own mounted endpoints sign a user up and
- * in, then dunx's `SessionGuard` decides who reaches `/api/profile`. Nothing here
- * reimplements an auth flow - every `/api/auth/*` call lands in better-auth.
- */
+/** The whole loop over HTTP: better-auth's mounted endpoints sign a user up and
+ * in, then `SessionGuard` decides who reaches `/api/profile`. */
 export class AuthDemo {
   constructor(
     private readonly logger: Logger,
@@ -28,8 +25,6 @@ export class AuthDemo {
 
   async demonstrate(url: string): Promise<void> {
     const base = new URL(url).origin;
-    // `$context` is where the resolved configuration lands; `options.baseURL` is
-    // whatever was passed in, which better-auth also allows to be a function.
     this.#origin = (await this.auth.$context).baseURL;
     this.logger.info(
       `better-auth ${this.auth.options.basePath} mounted, hashing with Bun.password bcrypt`,
@@ -46,8 +41,7 @@ export class AuthDemo {
     });
     await this.report('POST /api/auth/sign-in/email', signIn);
 
-    // The `bearer` plugin returns the session token in a header, so a server-side
-    // client authenticates without a cookie jar.
+    // The `bearer` plugin returns the token in a header, so no cookie jar.
     const token = signIn.headers.get('set-auth-token') ?? '';
     const cookie = signIn.headers
       .getSetCookie()
@@ -81,8 +75,7 @@ export class AuthDemo {
       },
     );
 
-    // What an admin console would do. The `admin` plugin's own `setRole` endpoint
-    // needs an existing admin to call it, and there is none yet.
+    // The `admin` plugin's `setRole` needs an existing admin, and there is none.
     this.db
       .update(user)
       .set({ role: 'admin' })
@@ -122,8 +115,7 @@ export class AuthDemo {
       },
     );
 
-    // The instance is injectable, so a service can ask better-auth directly rather
-    // than going over HTTP.
+    // Injectable, so a service can ask better-auth without going over HTTP.
     const session = await this.auth.api.getSession({
       headers: new Headers({ cookie }),
     });
@@ -132,12 +124,8 @@ export class AuthDemo {
     );
   }
 
-  /**
-   * `Origin` is set because better-auth rejects a cookie-bearing state change without
-   * one - `MISSING_OR_NULL_ORIGIN`, its CSRF check. A browser sends it for free; a
-   * server-side client has to, and the value that has to match is `trustedOrigins`,
-   * which defaults to the configured `baseURL`.
-   */
+  /** better-auth rejects a cookie-bearing state change with no `Origin`
+   * (`MISSING_OR_NULL_ORIGIN`); it has to match `trustedOrigins`. */
   private post(
     base: string,
     endpoint: string,

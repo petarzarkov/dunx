@@ -17,11 +17,8 @@ const documentAt = async (
 export class DocsDemo {
   constructor(private readonly logger: Logger) {}
 
-  /**
-   * The document is served by a controller in the same graph, so it goes through the
-   * same middleware and the same CORS as everything else - and describes the paths
-   * the app really mounted, `setGlobalPrefix('api')` included.
-   */
+  /** Served by a controller in the same graph, so it goes through the same
+   * middleware and describes the paths the app really mounted. */
   async demonstrate(app: HttpApp, url: string): Promise<void> {
     const { logger } = this;
     const [response, document] = await documentAt(url);
@@ -35,8 +32,6 @@ export class DocsDemo {
       `components/schemas: ${JSON.stringify(Object.keys(document.components.schemas))}`,
     );
 
-    // `.meta({ id: 'CreateUser' })` on the zod schema is what named this ref, and
-    // the $defs entry it referenced (`Tag`) came along with it.
     const create = document.paths['/api/users']?.post;
     logger.info(
       `POST /api/users requestBody -> ` +
@@ -48,9 +43,8 @@ export class DocsDemo {
       `POST /api/users 400 -> ` +
         JSON.stringify(create?.responses['400']?.content?.['application/json']),
     );
-    // `options.response` is the same contract as the request side, so a named
-    // response schema becomes a component and the operation $refs it. It is
-    // documentation only - nothing validates a response.
+    // A named response schema becomes a component the operation $refs. It is
+    // documentation only: nothing validates a response.
     const one = document.paths['/api/users/{id}']?.get;
     logger.info(
       `GET /api/users/{id} responses -> ` +
@@ -66,8 +60,7 @@ export class DocsDemo {
     const list = document.paths['/api/users']?.get;
     logger.info(`GET /api/users query -> ${JSON.stringify(list?.parameters)}`);
 
-    // The check that matters: a $ref that resolves to nothing renders as an empty
-    // box in every viewer and reports no error at all.
+    // A $ref resolving to nothing renders as an empty box and reports no error.
     logger.info(
       `unresolved $refs: ${danglingRefs(document).length}, warnings: ` +
         JSON.stringify(app.get(OpenApiExplorer).warnings),
@@ -81,14 +74,9 @@ export class DocsDemo {
     );
 
     /**
-     * **The page fetches, and this is the check that it only fetches from here.**
-     * The explorer used to be dunx's own bundle inlined into the page, so the
-     * assertion was that nothing was requested at all. It is now `swagger-ui-dist`,
-     * 3.7x the size gzipped, served as two assets - so the guarantee is narrower and
-     * has to be stated as what it is: same-origin only, no CDN.
-     *
-     * Script bodies are stripped first. Inside a `<script>` everything is text, so a
-     * `src=` in the boot script is not a resource.
+     * The page fetches two `swagger-ui-dist` assets, and the guarantee is that
+     * they are same-origin: no CDN. Script bodies are stripped first, since a
+     * `src=` inside a `<script>` is text rather than a resource.
      */
     const shell = html.replace(/(<script[^>]*>)[\s\S]*?(<\/script>)/g, '$1$2');
     const requested = [
@@ -102,9 +90,7 @@ export class DocsDemo {
         JSON.stringify(requested),
     );
 
-    // Every one of them has to actually answer, which is the half a unit test
-    // cannot show: these resolve out of the consumer's own swagger-ui-dist
-    // install, through this app's global prefix.
+    // Each has to answer, resolving out of the consumer's own install.
     for (const href of requested) {
       const asset = await fetch(new URL(href.replace(/^\//, ''), url));
       logger.info(
@@ -116,11 +102,8 @@ export class DocsDemo {
     }
   }
 
-  /**
-   * The guarded app, whose `AuthGuard` is global. Security in the document comes from
-   * the same `@Public()` and `@Roles()` metadata the guards read at runtime - there
-   * is no second annotation for the documentation to disagree with.
-   */
+  /** Security in the document comes from the same `@Public()` and `@Roles()`
+   * metadata the guards read at runtime. */
   async guarded(url: string): Promise<void> {
     const { logger } = this;
     const [, document] = await documentAt(url);
@@ -137,10 +120,8 @@ export class DocsDemo {
       `@Public() GET /api/reports/health -> security ${JSON.stringify(health?.security)}`,
     );
 
-    // The class-level @Roles('admin') is merged into every one of its routes, so it
-    // is documented on this one too - even though no RolesGuard reads it here. The
-    // document describes what the metadata declares; which guard enforces it is a
-    // separate decision, and one no generator can see.
+    // A class-level @Roles merges into every route, so it is documented here
+    // too. The document describes the metadata; enforcement is a separate call.
     const list = document.paths['/api/reports']?.get;
     logger.info(
       `class-level @Roles("admin") GET /api/reports -> security ` +
