@@ -620,15 +620,19 @@ then not cover it.
   and the seeder directories the db suites write into the system temp dir. Those
   four throwaway `app.module.ts` files were 8 of `@dunx/openapi`'s 136 functions and
   held it at 90.44%.
-- The floor is set against a denominator with three things in it that no test can
-  reach: type-only lines (via the sourcemap remap), abstract member signatures,
-  and until recently `*.fixture.ts`. All three measured in
+- The floor is set against a denominator holding things no test can reach:
+  type-only lines via the sourcemap remap, one function per class with no explicit
+  constructor, a `throw` in `di/scope.ts` its own comment calls unreachable, and
+  code covered by a test that spawns a process. All measured in
   [docs/bun-apis.md](./docs/bun-apis.md). `coverageIgnoreSourcemaps = true` would
   fix the first and is **not** set, because it turns the coverage page's uncovered
-  line ranges into transpiled line numbers. Do not raise the floor without reading
-  that section: `@dunx/core` is 91.0% functions with every reachable function
-  covered, and `infra` at 90.7% lines and `openapi` at 90.4% functions are the
-  other thin margins.
+  line ranges into transpiled line numbers.
+- **Do not try to correct the denominator for those**, and do not raise the floor
+  without reading that section. The constructor rule was pinned down one construct
+  at a time and still does not add up at scale, so a correction built on it would be
+  wrong in a way that is harder to notice than the artifact. `@dunx/core` at 91.0%
+  functions is the binding constraint: its remaining unhit functions are five files
+  with **no uncovered lines at all**, which is the artifact and not a gap.
 - **The release job takes the model and badges from the `coverage` job** as an
   artifact rather than regenerating them. Regenerating ran the whole suite a second
   time and needed a second copy of the service containers the gate depends on, which

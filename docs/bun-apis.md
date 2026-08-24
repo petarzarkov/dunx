@@ -883,11 +883,44 @@ Repo-wide the remapping costs about 1.8 points of line coverage: 93.55% against
 breaks the thing the ratio is for: the uncovered line ranges the coverage page
 lists would become transpiled line numbers, pointing at nothing a reader can open.
 
-**An abstract member is an unhit function, permanently.** Same probe, `FNF:5
-FNH:3` in both columns. The two are `Contract.get` and `Contract.set`, declared
-`abstract` with no body. Every abstract contract in `@dunx/core` costs function
-coverage that no test can recover, which is most of the distance between its
-94.7% lines and 91.0% functions.
+**A class with no explicit constructor is an unhit function, and abstract has
+nothing to do with it.** The first reading of this was wrong: the same probe showed
+`FNF:5 FNH:3` against an abstract class with two abstract members, and the two
+looked like the members. They are not. Probed one construct at a time:
+
+```
+abstract class, 1 abstract member          FNF:1 FNH:0
+abstract class, 3 abstract members          FNF:1 FNH:0
+abstract class, 1 member, 3 overloads       FNF:1 FNH:0
+abstract class, abstract getter             FNF:1 FNH:0
+abstract class, abstract field              FNF:1 FNH:0
+abstract class, no members at all           FNF:1 FNH:0
+interface with two methods                  FNF:0 FNH:0
+```
+
+One per class regardless of what is in it, and nothing for an interface. So it is
+the class, not its members. Narrowing further:
+
+```
+class with an implicit constructor, instantiated and called   FNF:2 FNH:1
+class with `constructor() {}`, instantiated and called        FNF:2 FNH:2
+```
+
+**An implicit constructor is counted and never marked hit**, even when `new C()`
+runs. An explicit empty one is marked hit. Abstract classes show up because they
+rarely declare a constructor.
+
+That is as far as it can be pinned down, and not far enough to correct for. The
+counts do not add up at scale: `@dunx/core` has 15 unhit functions against roughly
+43 classes with no explicit constructor, so something else marks most of them hit.
+**Do not try to subtract this from the denominator** - a correction built on a rule
+this shaky would be wrong in a way that is harder to notice than the artifact it
+replaces, and it would be baked into the gate.
+
+Two other things no test can reach, for the same tally: `di/scope.ts:289` is a
+throw its own comment calls unreachable by construction, and
+`di/shutdown-hooks.ts:86-92` is covered by a test that **spawns** a process to be
+exited, which the parent's coverage run cannot see into.
 
 **Bun's lcov carries no per-function records.** `FNF` and `FNH` counts only, no
 `FN:` or `FNDA:` lines, so nothing downstream can name which function was missed.

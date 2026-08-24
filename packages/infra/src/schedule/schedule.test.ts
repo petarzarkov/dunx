@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { AppFactory, Logger, Module, provide } from '@dunx/core';
 
 import { supportsTz } from './capability.js';
-import { Quiet } from './quiet.fixture.js';
+import { Quiet } from '../quiet.fixture.js';
 import { Cron, Interval, OnceOnBoot } from './decorators.js';
 import { ScheduleErrorCode } from './errors.js';
 import { CronExpression, Overlap, ScheduleKind } from './marker.js';
