@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { Module } from '@dunx/core';
+import { Module, provide, token } from '@dunx/core';
 import {
   Controller,
   Get,
@@ -236,6 +236,48 @@ describe('forRootAsync', () => {
         inject: [DocsConfig] as const,
       }),
     });
+
+  /**
+   * `imports: [options.root]` covers a provider the root exports, which is what the
+   * test below uses. It does not cover one the root never sees: this module is its
+   * own scope, so the caller's own `imports` are what put that in reach.
+   *
+   * A `token()` rather than a class: an unbound class self-binds into whichever
+   * scope asks first, so a class resolves whether or not `imports` reached the
+   * factory, and the test would pass against the bug it guards.
+   */
+  it('injects from a module named in its own imports, not only from the root', async () => {
+    const TITLE = token<string>('DocTitle');
+
+    @Module({
+      providers: [provide(TITLE, { useValue: 'From Imports' })],
+      exports: [TITLE],
+    })
+    class TitleModule {}
+
+    @Module({ imports: [ThingsModule] })
+    class PlainRoot {}
+
+    const server = await createTestServer({
+      modules: OpenApiModule.forRootAsync({
+        root: PlainRoot,
+        imports: [TitleModule],
+        useFactory: (title: string) => ({ title, version: '2.0.0' }),
+        inject: [TITLE],
+      }),
+    });
+
+    try {
+      const { status, body: document } =
+        await server.json<OpenApiDocument>('openapi.json');
+
+      expect(status).toBe(200);
+      expect(document.info.title).toBe('From Imports');
+      expect(document.info.version).toBe('2.0.0');
+    } finally {
+      await server.close();
+    }
+  });
 
   it('takes info off a provider, and mounts where that provider says', async () => {
     const server = await startAsync();

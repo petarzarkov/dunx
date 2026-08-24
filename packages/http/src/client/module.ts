@@ -4,7 +4,9 @@ import {
   RequestContext,
   token,
   type Deps,
+  type ModuleRef,
   type DynamicModule,
+  type AsyncModuleConfig,
   type FactoryProvider,
   type Token,
 } from '@dunx/core';
@@ -57,6 +59,7 @@ const serviceFrom = (
 const namedModule = (
   name: string,
   options: HttpClientOptions | FactoryProvider<HttpClientOptions, Deps>,
+  imports: readonly ModuleRef[] = [],
 ): DynamicModule => {
   const optionsToken = token<HttpClientOptions>(`HttpClientOptions(${name})`);
   const optionsProvider =
@@ -66,6 +69,7 @@ const namedModule = (
 
   return {
     module: HttpModule,
+    imports,
     exports: [optionsToken, httpClient(name)],
     providers: [optionsProvider, serviceFrom(httpClient(name), optionsToken)],
   };
@@ -127,30 +131,36 @@ export class HttpModule {
     name?: string,
   ): DynamicModule;
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<HttpClientOptionsInit, D>,
+    config: AsyncModuleConfig<HttpClientOptionsInit, D>,
     name?: string,
   ): DynamicModule;
   static forRootAsync(
     source:
       | (() => HttpClientOptionsInit | Promise<HttpClientOptionsInit>)
-      | FactoryProvider<HttpClientOptionsInit, Deps>,
+      | AsyncModuleConfig<HttpClientOptionsInit, Deps>,
     name?: string,
   ): DynamicModule {
     const load = typeof source === 'function' ? source : source.useFactory;
     const inject = typeof source === 'function' ? [] : (source.inject ?? []);
+    // The container is scoped: this dynamic module is its own scope, so a factory
+    // injecting a provider needs the module that exports it in *these* imports.
+    // Importing it into whatever module calls forRootAsync does not reach here.
+    const imports = typeof source === 'function' ? [] : (source.imports ?? []);
     const useFactory = async (
       ...deps: readonly unknown[]
     ): Promise<HttpClientOptions> => new HttpClientOptions(await load(...deps));
 
     if (name !== undefined) {
-      return namedModule(name, { useFactory, inject } as FactoryProvider<
-        HttpClientOptions,
-        Deps
-      >);
+      return namedModule(
+        name,
+        { useFactory, inject } as FactoryProvider<HttpClientOptions, Deps>,
+        imports,
+      );
     }
 
     return {
       module: HttpModule,
+      imports,
       exports: [HttpClientOptions, HttpService],
       providers: [
         provide(HttpClientOptions, { useFactory, inject } as FactoryProvider<

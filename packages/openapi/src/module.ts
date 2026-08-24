@@ -3,7 +3,7 @@ import {
   provide,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   type ModuleRef,
 } from '@dunx/core';
 import {
@@ -60,7 +60,7 @@ export interface OpenApiOptions extends OpenApiInfo {
  * module reference - the graph has to exist before the container that would run
  * the factory does.
  */
-export interface OpenApiAsyncOptions<D extends Deps> extends FactoryProvider<
+export interface OpenApiAsyncOptions<D extends Deps> extends AsyncModuleConfig<
   OpenApiInfo,
   D
 > {
@@ -314,7 +314,10 @@ export class OpenApiModule {
 
     const configured: DynamicModule = {
       module: OpenApiModule,
-      imports: [options.root],
+      // The root this module wraps, plus whatever the caller's factory needs:
+      // this module is its own scope, so a provider the root merely imports is
+      // not in reach of the factory unless the root exports it.
+      imports: [options.root, ...(options.imports ?? [])],
       // The generated document, so an app can read `warnings` or serve the JSON
       // itself. This module wraps the app's root rather than being imported by it,
       // so the export is what makes `app.get(OpenApiExplorer)` resolve.

@@ -4,7 +4,7 @@ import {
   provide,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   type Registration,
 } from '@dunx/core';
 import { ClientAddress } from '../server/client-address.js';
@@ -84,9 +84,7 @@ export class ThrottleModule {
 
   /** `forRoot` with the limit read off the container - a config value, usually. */
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<ThrottleOptionsInit, D> & {
-      readonly imports?: DynamicModule['imports'];
-    },
+    config: AsyncModuleConfig<ThrottleOptionsInit, D>,
   ): DynamicModule {
     return {
       module: ThrottleModule,

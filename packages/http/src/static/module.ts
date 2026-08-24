@@ -3,7 +3,7 @@ import {
   provide,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   type Registration,
 } from '@dunx/core';
 import { StaticFiles } from './files.js';
@@ -73,9 +73,7 @@ export class StaticModule {
 
   /** `forRoot` with the root read off the container - a config value, usually. */
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<StaticOptionsInit, D> & {
-      readonly imports?: DynamicModule['imports'];
-    },
+    config: AsyncModuleConfig<StaticOptionsInit, D>,
   ): DynamicModule {
     return {
       module: StaticModule,

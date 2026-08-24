@@ -5,6 +5,8 @@ import {
   ConfigService,
   inject,
   Module,
+  provide,
+  token,
 } from '@dunx/core';
 import { HttpClientOptions } from './options.js';
 import { httpClient, HttpModule } from './module.js';
@@ -108,6 +110,80 @@ describe('HttpModule.forRootAsync', () => {
     expect(app.get(HttpClientOptions).timeoutMs).toBe(1234);
     expect(await app.get(HttpService).get<Path>('/from-config')).toEqual({
       path: '/from-config',
+    });
+    await app.shutdown();
+  });
+
+  /**
+   * The scoped-container case: this dynamic module is its own scope, so a factory
+   * cannot see a provider merely because the module calling `forRootAsync` imports
+   * it. `imports` here is what puts it in reach.
+   *
+   * A `token()` rather than a class: an unbound class self-binds into whichever
+   * scope asks first, so a class resolves whether or not `imports` reached the
+   * factory, and the test would pass against the bug it guards.
+   */
+  it('injects from a module named in its own imports', async () => {
+    const BASE = token<string>('UpstreamBase');
+
+    @Module({
+      providers: [provide(BASE, { useValue: base })],
+      exports: [BASE],
+    })
+    class UpstreamModule {}
+
+    @Module({
+      imports: [
+        HttpModule.forRootAsync({
+          imports: [UpstreamModule],
+          useFactory: (baseUrl: string) => ({ baseUrl, timeoutMs: 555 }),
+          inject: [BASE],
+        }),
+      ],
+    })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+
+    expect(app.get(HttpClientOptions).timeoutMs).toBe(555);
+    expect(await app.get(HttpService).get<Path>('/scoped')).toEqual({
+      path: '/scoped',
+    });
+    await app.shutdown();
+  });
+
+  it('forwards those imports to a named client too', async () => {
+    const BASE = token<string>('UpstreamBase');
+
+    @Module({
+      providers: [provide(BASE, { useValue: base })],
+      exports: [BASE],
+    })
+    class UpstreamModule {}
+
+    class Caller {
+      readonly billing = inject(httpClient('billing'));
+    }
+
+    @Module({
+      imports: [
+        HttpModule.forRootAsync(
+          {
+            imports: [UpstreamModule],
+            useFactory: (baseUrl: string) => ({ baseUrl, timeoutMs: 666 }),
+            inject: [BASE],
+          },
+          'billing',
+        ),
+      ],
+      providers: [Caller],
+    })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+
+    expect(await app.get(Caller).billing.get<Path>('/billing')).toEqual({
+      path: '/billing',
     });
     await app.shutdown();
   });
