@@ -236,7 +236,9 @@ export class ScheduleRegistry {
           ? undefined
           : error instanceof Error
             ? error
-            : new Error(String(error));
+            : // `Bun.inspect` for anything else thrown: `String({})` is
+              // `[object Object]`, which names nothing a reader can act on.
+              new Error(typeof error === 'string' ? error : Bun.inspect(error));
       if (error !== undefined) {
         // Reported, never rethrown: a throwing handler must not take down the
         // timer or leave `Bun.cron` with a rejected promise it will not schedule
