@@ -17,6 +17,15 @@ import { relative } from 'node:path';
 interface Step {
   readonly name: string;
   readonly run: readonly string[];
+  /**
+   * How many trailing lines of this step's output to print when it passes, for a
+   * step whose *number* is the point. A green `coverage` job otherwise reported
+   * nothing about coverage, and answering "what did infra score" meant downloading
+   * the lcov artifact. A tail rather than all of it: `--coverage-reporter` on the
+   * command line does not override `coverageReporter` in bunfig, so the per-file
+   * text report is 370 lines ahead of the table that matters.
+   */
+  readonly echo?: number;
 }
 
 interface Phase {
@@ -165,7 +174,7 @@ export const PHASES: readonly Phase[] = Object.freeze([
     name: 'coverage',
     summary: 'The coverage model and the badges the site renders',
     concurrent: false,
-    steps: [{ name: 'test:cov', run: ['bun', 'run', 'test:cov'] }],
+    steps: [{ name: 'test:cov', run: ['bun', 'run', 'test:cov'], echo: 20 }],
   },
   {
     name: 'static',
@@ -201,16 +210,44 @@ const runStep = async (phase: Phase, step: Step): Promise<Result> => {
     stderr: 'pipe',
   });
 
-  const [code, out, err] = await Promise.all([
+  /**
+   * Both pipes into one buffer as the chunks arrive, rather than reading each to a
+   * string and concatenating. `bun test` writes its report to stderr and a script's
+   * own `console.log` to stdout, so `out` followed by `err` put the coverage table
+   * 370 lines *above* the run that produced it, and put every failure output in the
+   * wrong order the same way.
+   */
+  const chunks: string[] = [];
+  const decoder = new TextDecoder();
+  const drain = async (stream: ReadableStream<Uint8Array>): Promise<void> => {
+    for await (const chunk of stream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+  };
+
+  const [code] = await Promise.all([
     proc.exited,
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
+    drain(proc.stdout),
+    drain(proc.stderr),
   ]);
 
   const ok = code === 0;
   console.log(`${ok ? '✓' : '✗'} ${label} ${ms(Bun.nanoseconds() - started)}`);
 
-  return { label, ok, output: `${out}${err}` };
+  const output = chunks.join('');
+  const tail = step.echo ?? 0;
+  if (ok && tail > 0) {
+    console.log(
+      output
+        .trimEnd()
+        .split('\n')
+        .slice(-tail)
+        .map((line) => `  ${line}`)
+        .join('\n'),
+    );
+  }
+
+  return { label, ok, output };
 };
 
 const runPhase = async (phase: Phase): Promise<Result[]> => {

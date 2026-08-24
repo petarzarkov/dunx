@@ -967,3 +967,19 @@ which is what made it look like a slow test rather than a leak.
 preload-registered hook does run for every test in every file (probed). The whole
 suite went from 16,645 ms to 3,683 ms, and every file got faster, not just that
 one: `site` 1,701 to 1,103 ms, `links` 437 to 25 ms, `releases` 511 to 255 ms.
+
+### `--coverage-reporter` on the command line does not override bunfig
+
+`coverageReporter = ["text", "lcov"]` in the root `bunfig.toml` wins over
+`bun test --coverage --coverage-reporter=lcov`: the per-file text report prints
+either way. Counted the table rows both ways from the repo root and got 4 and 4.
+
+It looks like it works when you probe it from inside a package, because Bun reads
+the `bunfig.toml` beside the working directory and `packages/*` have none, so there
+is no `text` setting to override. `scripts/ci.ts` prints a tail of the step's output
+instead, which is the table and not the 370 lines of per-file report ahead of it.
+
+While measuring that: **`bun test` writes its report to stderr**, and a script's own
+`console.log` goes to stdout. Reading the two pipes to strings and concatenating
+them put `bun run test:cov`'s coverage table 370 lines _above_ the test run that
+produced it. `scripts/ci.ts` drains both pipes into one buffer as the chunks arrive.

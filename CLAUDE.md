@@ -573,12 +573,20 @@ then not cover it.
   or above it green, so the gate and the badge cannot disagree. The `coverage`
   phase fails naming each workspace under it and writes a per-package table into
   the GitHub job summary; `coverage/lcov.info` is uploaded as an artifact.
-- **The floor assumes valkey is reachable**, so the `unit` and `coverage` jobs run a
-  `valkey/valkey:8-alpine` service. `@dunx/infra`'s redis and queue suites gate on a
-  reachability probe and skip when nothing answers: 49 tests skipped in CI against 5
-  locally put `infra` at 84.6% lines rather than 90.7%, which is the gate reading a
-  different denominator than the machine that set it. A new live-service suite needs
-  its service added to those jobs, or the floor measures less than it looks like.
+- **The floor assumes the backing services are reachable**, so the `unit` and
+  `coverage` jobs run `valkey/valkey:8-alpine` and `postgres:17-alpine` and set
+  `DUNX_DB_TEST_URL`. `@dunx/infra`'s suites gate on whether their service answers
+  and skip when it does not: 49 tests skipped in CI against 5 locally put `infra` at
+  84.6% lines rather than 90.7%, which is the gate reading a different denominator
+  than the machine that set it. **A new live-service suite needs its service added
+  to those jobs**, or the floor measures less than it looks like. `files/s3.ts` at
+  35% is the remaining one, gated on a bucket nothing sets.
+- **Test scaffolding is counted as shipped code unless excluded.**
+  `coverageSkipTestFiles` drops `*.test.ts` and stops there, so
+  `coveragePathIgnorePatterns` also covers `**/*.fixture.ts`, `**/cli-fixture-*/**`
+  and the seeder directories the db suites write into the system temp dir. Those
+  four throwaway `app.module.ts` files were 8 of `@dunx/openapi`'s 136 functions and
+  held it at 90.44%.
 - The floor is set against a denominator with three things in it that no test can
   reach: type-only lines (via the sourcemap remap), abstract member signatures,
   and until recently `*.fixture.ts`. All three measured in

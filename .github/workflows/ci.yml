@@ -38,11 +38,18 @@ jobs:
   unit:
     name: Packages, tools and scripts
     runs-on: ubuntu-latest
-    # `@dunx/infra`'s redis and queue suites gate on a reachability probe against
-    # `valkey://localhost:6379` and skip when nothing answers, so CI never ran them:
-    # 49 tests skipped here against 5 locally, which put `infra` at 84.6% lines
-    # against the 90.7% measured on a machine with valkey running. The gate was
-    # reading a different denominator than the developer who set it.
+    # `@dunx/infra`'s suites gate on whether their backing service answers and skip
+    # when it does not, so CI ran neither: 49 tests skipped here against 5 on a
+    # machine with valkey up, which put `infra` at 84.6% lines against the 90.7% the
+    # floor was set from. The gate was reading a different denominator than the
+    # machine that set it.
+    #
+    # Postgres covers `db/connection.ts` and `db/sql/connection.ts`, which had no
+    # test run anywhere: `drizzle-orm/bun-sql` is a sanctioned integration and
+    # `DUNX_DB_TEST_URL` was set in no environment. Adding a live-service suite means
+    # adding its service here, or the floor measures less than it looks like.
+    env:
+      DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
     services:
       valkey:
         image: valkey/valkey:8-alpine
@@ -50,6 +57,19 @@ jobs:
           - 6379:6379
         options: >-
           --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: dunx
+          POSTGRES_PASSWORD: dunx
+          POSTGRES_DB: dunx
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dunx"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -114,11 +134,18 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
-    # `@dunx/infra`'s redis and queue suites gate on a reachability probe against
-    # `valkey://localhost:6379` and skip when nothing answers, so CI never ran them:
-    # 49 tests skipped here against 5 locally, which put `infra` at 84.6% lines
-    # against the 90.7% measured on a machine with valkey running. The gate was
-    # reading a different denominator than the developer who set it.
+    # `@dunx/infra`'s suites gate on whether their backing service answers and skip
+    # when it does not, so CI ran neither: 49 tests skipped here against 5 on a
+    # machine with valkey up, which put `infra` at 84.6% lines against the 90.7% the
+    # floor was set from. The gate was reading a different denominator than the
+    # machine that set it.
+    #
+    # Postgres covers `db/connection.ts` and `db/sql/connection.ts`, which had no
+    # test run anywhere: `drizzle-orm/bun-sql` is a sanctioned integration and
+    # `DUNX_DB_TEST_URL` was set in no environment. Adding a live-service suite means
+    # adding its service here, or the floor measures less than it looks like.
+    env:
+      DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
     services:
       valkey:
         image: valkey/valkey:8-alpine
@@ -126,6 +153,19 @@ jobs:
           - 6379:6379
         options: >-
           --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: dunx
+          POSTGRES_PASSWORD: dunx
+          POSTGRES_DB: dunx
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dunx"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10

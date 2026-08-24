@@ -362,13 +362,37 @@ console.log(`\n${headline}`);
 console.log(table);
 
 if (failing.length > 0) {
-  console.error(
-    `\nBelow ${MIN_COVERAGE}%: ${failing
-      .map(
-        (row) =>
-          `${row.name} (${format(row.lines)}% lines, ${format(row.funcs)}% functions)`,
-      )
-      .join('; ')}`,
-  );
+  console.error(`\nBelow ${MIN_COVERAGE}%:`);
+
+  for (const row of failing) {
+    console.error(
+      `  ${row.name}: ${format(row.lines)}% lines, ${format(row.funcs)}% functions`,
+    );
+
+    /**
+     * The files to open, not just the number. A margin of half a point moves on
+     * any commit, and "infra is at 89.8%" reads as a regression when it is a
+     * rounding move; the worst files say which is which.
+     */
+    // Ranked on the axis that actually failed: a package under on functions alone
+    // listed nothing when the ranking was by line gap.
+    const onLines = below(row.lines);
+    const gap = (file: FileCoverage): number =>
+      onLines
+        ? file.linesFound - file.linesHit
+        : file.funcsFound - file.funcsHit;
+
+    const worst = (packages.find((pkg) => pkg.name === row.name)?.files ?? [])
+      .filter((file) => gap(file) > 0)
+      .sort((a, b) => gap(b) - gap(a))
+      .slice(0, 3);
+
+    for (const file of worst) {
+      const shown = onLines
+        ? `${format(pct(file.linesHit, file.linesFound))}%  ${file.linesHit}/${file.linesFound} lines`
+        : `${format(pct(file.funcsHit, file.funcsFound))}%  ${file.funcsHit}/${file.funcsFound} functions`;
+      console.error(`    ${shown}  ${relative(ROOT_DIR, file.path)}`);
+    }
+  }
   process.exit(1);
 }

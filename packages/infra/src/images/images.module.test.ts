@@ -119,3 +119,59 @@ describe('ImagesModule.forRoot', () => {
     expect(app.get(First).images).toBe(app.get(Second).images);
   });
 });
+
+/**
+ * `forRoot` already takes a loader, so the only thing `forRootAsync` adds is
+ * `inject`: reading options off a provider is the one thing a zero-argument
+ * loader cannot do.
+ */
+describe('ImagesModule.forRootAsync', () => {
+  it('injects what it names, and merges the result over the defaults', async () => {
+    class Settings {
+      readonly quality = 55;
+    }
+
+    @Module({ providers: [Settings], exports: [Settings] })
+    class SettingsModule {}
+
+    @Module({
+      imports: [
+        ImagesModule.forRootAsync({
+          imports: [SettingsModule],
+          useFactory: (settings: Settings) => ({ quality: settings.quality }),
+          inject: [Settings],
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const options = app.get(ImagesOptions);
+
+    expect(options.quality).toBe(55);
+    expect(options.maxPixels).toBe(defaultImagesOptions.maxPixels);
+    expect(app.get(Images).config).toBe(options);
+  });
+
+  it('awaits an async factory', async () => {
+    const app = await AppFactory.create(
+      ImagesModule.forRootAsync({
+        useFactory: async () => {
+          await Bun.sleep(1);
+          return { quality: 77, allowedFormats: ['webp'] as const };
+        },
+      }),
+    );
+
+    expect(app.get(ImagesOptions).quality).toBe(77);
+    expect(app.get(ImagesOptions).allowedFormats).toEqual(['webp']);
+  });
+
+  it('defaults imports and inject away when the config omits them', async () => {
+    const app = await AppFactory.create(
+      ImagesModule.forRootAsync({ useFactory: () => ({ quality: 12 }) }),
+    );
+
+    expect(app.get(Images).config.quality).toBe(12);
+  });
+});
