@@ -345,7 +345,13 @@ export const App = (): React.JSX.Element => {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Page route={route} />
+        {/* Keyed on the page, not the whole route, so the entrance replays on
+            navigation while a `?h=symbol-...` on the page already open does not
+            remount it - `PackagePage` opens its API tab from that anchor and has
+            to survive the hash change. */}
+        <div className="page-enter" key={`${route.kind}:${route.slug ?? ''}`}>
+          <Page route={route} />
+        </div>
         <DocsFooter />
         <Search />
       </AppShell.Main>

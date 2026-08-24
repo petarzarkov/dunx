@@ -398,3 +398,133 @@ body {
   border: 0;
   border-radius: 0;
 }
+
+/* Motion. Every rule below animates `opacity` and `transform` only, so it runs on
+   the compositor and never triggers layout; nothing moves horizontally, because the
+   browser suite asserts that no route scrolls sideways. Durations are 140-220ms:
+   long enough to read as motion, short enough that a reader clicking through the
+   sidebar is never waiting for one. Easing matches `bench-grow` above.
+
+   Colours resolve through Mantine variables, so both schemes follow the theme
+   rather than needing a second palette. The whole block is switched off under
+   `prefers-reduced-motion` at the end of this file. */
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Keyed on the route in `App.tsx`, so React remounts it and the animation replays
+   per navigation. The key deliberately omits the anchor: a `?h=symbol-...` on the
+   page already open must not remount it, or `PackagePage` loses the API tab it
+   opened for that anchor. */
+.page-enter {
+  animation: page-enter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* This div is now the flex item that `.mantine-AppShell-main > *` was clamping,
+     so it has to pass the clamp on to the page inside it. Without this the widest
+     code block's min-content width wins again and the document scrolls sideways on
+     a phone, which is the exact bug those rules above were written for. */
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.page-enter > * {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* The one place a reader has to find something: the card a `?h=symbol-...` link
+   named. The ring is already there from `.symbol-card-linked`; this draws the eye
+   to it once and then stops. */
+@keyframes symbol-found {
+  0% {
+    box-shadow: 0 0 0 0 var(--mantine-primary-color-light);
+  }
+  40% {
+    box-shadow: 0 0 0 6px var(--mantine-primary-color-light);
+  }
+  100% {
+    box-shadow: 0 0 0 2px var(--mantine-primary-color-light);
+  }
+}
+
+.symbol-card-linked {
+  animation: symbol-found 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Cards lift on hover the way `.feature` does on the landing page, so the two
+   pages behave the same way under the cursor. */
+.symbol-card {
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease;
+}
+
+.symbol-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(
+    in srgb,
+    var(--mantine-primary-color-filled) 45%,
+    var(--mantine-color-default-border)
+  );
+}
+
+.search-trigger {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.search-trigger:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--mantine-primary-color-filled) 45%,
+    var(--mantine-color-default-border)
+  );
+}
+
+/* The dot and the rule already mark position in the page; this makes moving
+   between them feel continuous rather than stepped. */
+.toc a::before {
+  transition:
+    background-color 140ms ease,
+    scale 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toc a:hover::before,
+.toc a[aria-current='true']::before {
+  scale: 1.35;
+}
+
+/* Mantine paints the active state itself. This is only the fade between states, so
+   clicking down the sidebar does not flash. */
+.mantine-NavLink-root {
+  transition: background-color 140ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .symbol-card-linked {
+    animation: none;
+  }
+
+  .symbol-card,
+  .search-trigger,
+  .toc a::before,
+  .mantine-NavLink-root {
+    transition: none;
+  }
+
+  .symbol-card:hover {
+    transform: none;
+  }
+
+  .toc a:hover::before,
+  .toc a[aria-current='true']::before {
+    scale: 1;
+  }
+}
