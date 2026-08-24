@@ -80,23 +80,11 @@ jobs:
       # No browser download step: `Bun.WebView` drives the Chrome the runner image
       # already ships. If that ever stops being true the constructor throws naming
       # what it looked for, rather than failing silently.
+      # The suite still writes its 28 PNGs, because `bun run shots` is the same
+      # traversal and that is where they are looked at. They are not uploaded: a
+      # 7.8 MB artifact per run that nobody opened.
       - name: Browser suite
         run: bun run ci browser
-
-      # `if: always()` because the failing run is the one worth looking at: each
-      # test writes its frame before it asserts, so an overflow or a route that
-      # loaded the wrong page leaves the picture behind. 28 PNGs, 7.8 MB.
-      - name: Upload the screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: internal/docs/.shots
-          # `.shots` is dot-prefixed, and the default is to skip hidden paths, so
-          # the upload found nothing and failed a job whose suite had passed.
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
 
   coverage:
     name: Coverage
