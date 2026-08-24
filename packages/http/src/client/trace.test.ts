@@ -27,8 +27,8 @@ beforeAll(() => {
   base = `http://localhost:${server.port}/`;
 });
 
-afterAll(() => {
-  server.stop(true);
+afterAll(async () => {
+  await server.stop(true);
 });
 
 const clientFor = (

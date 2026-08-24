@@ -79,7 +79,7 @@ const buildActions = (): SpotlightActionData[] => {
 };
 
 export const Search = (): React.JSX.Element => {
-  const actions = useMemo(buildActions, []);
+  const actions = useMemo(() => buildActions(), []);
 
   return (
     <Spotlight

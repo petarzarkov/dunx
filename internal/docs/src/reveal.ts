@@ -14,16 +14,16 @@ export const useReveal = <T extends HTMLElement>(): {
   revealed: boolean;
 } => {
   const ref = useRef<T>(null);
-  const [revealed, setRevealed] = useState(false);
+  // Initialized from the capability check rather than set from the effect: with no
+  // observer there is nothing to wait for, so the first paint is the revealed one.
+  const [revealed, setRevealed] = useState(
+    () => typeof IntersectionObserver === 'undefined',
+  );
 
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
-
-    if (typeof IntersectionObserver === 'undefined') {
-      setRevealed(true);
-      return;
-    }
+    if (typeof IntersectionObserver === 'undefined') return;
 
     const observer = new IntersectionObserver(
       (entries) => {

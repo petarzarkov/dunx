@@ -8,124 +8,176 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
+# A PR run is superseded by its own next push. `main` is never cancelled: a run
+# there can reach the release step.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Every gate is a phase of `scripts/ci.ts`, invoked as `bun run ci <phase>`, so
+# `bun run ci` locally runs exactly what these jobs run. `scripts/ci.test.ts`
+# fails if a phase stops being wired here, or if a job reaches a gate directly.
+#
+# The four check jobs are independent and share only the build, which each one
+# does for itself: `dist/` is 2 MB and rebuilding it costs less wall clock than
+# a job that uploads it and three that wait to download it.
 jobs:
-  ci:
+  static:
+    name: Lint, format, types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: bun run ci build
+
+      - name: Static checks
+        run: bun run ci static
+
+  unit:
+    name: Packages, tools and scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: bun run ci build
+
+      - name: Tests
+        run: bun run ci unit
+
+  examples:
+    name: Examples, tour and scaffolds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: bun run ci build
+
+      # Every example is a bootstrap that rots the moment nobody runs it. An
+      # example whose backing service is absent (Redis, Postgres, MySQL, S3)
+      # reports that it is skipping and still exits 0.
+      - name: Examples
+        run: bun run ci examples
+
+  browser:
+    name: Site in a browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: bun run ci build
+
+      # No browser download step: `Bun.WebView` drives the Chrome the runner image
+      # already ships. If that ever stops being true the constructor throws naming
+      # what it looked for, rather than failing silently.
+      - name: Browser suite
+        run: bun run ci browser
+
+      # `if: always()` because the failing run is the one worth looking at: each
+      # test writes its frame before it asserts, so an overflow or a route that
+      # loaded the wrong page leaves the picture behind. 28 PNGs, 7.8 MB.
+      - name: Upload the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: internal/docs/.shots
+          if-no-files-found: error
+          retention-days: 14
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: bun run ci build
+
+      # Sequential on purpose: `--coverage --parallel` reports a lower figure and
+      # a different one each run (docs/bun-apis.md). The step writes a per-package
+      # table into the job summary and fails any workspace under 90% on lines or
+      # on functions.
+      - name: Coverage
+        run: bun run ci coverage
+
+      - name: Upload lcov
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 14
+
+  docs:
+    name: Documentation site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: bun run ci build
+
+      - name: Documentation site suite
+        run: bun run ci docs
+
+  # Runs on every push to main and publishes on almost none of them: the script
+  # self-skips unless HEAD is a `release:` commit. Publishing used to be a side
+  # effect of merging, which shipped 33 versions in six days. The bump covers
+  # every commit back to the last release, which is why `fetch-depth: 0` is
+  # load bearing here: a shallow checkout cannot see the previous release marker
+  # and would under-report the bump. The four check jobs above take the default
+  # shallow checkout, because nothing they run reads history.
+  #
+  # Authenticated by npm trusted publishing (OIDC) via the id-token permission
+  # below, no NPM_TOKEN. Each package needs a trusted publisher configured on
+  # npmjs.com pointing at this repo and at this workflow **filename**; renaming
+  # ci.yml silently breaks publishing for every package. version.ts runs the npm
+  # CLI through `bunx npm@<pinned>`, so there is no Node/npm setup step here.
+  #
+  # Live as of 0.1.0, which was published by hand because a package with no
+  # versions on npm has no trusted-publisher settings page to configure yet.
+  release:
+    name: Release and build the site
+    needs: [static, unit, examples, browser, coverage, docs]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.0
+      - uses: ./.github/actions/setup
 
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      # Build first: examples/ consume packages through their published `exports`,
-      # so nothing under examples/ can typecheck until dist/*.d.ts exists.
       - name: Build
-        run: bun run build
+        run: bun run ci build
 
-      # `bun run lint`/`format` auto-fix in place, which would let a violation
-      # pass CI silently and never reach the repo. CI uses the check variants.
-      - name: Lint
-        run: bun run lint:check
-
-      - name: Format
-        run: bun run format:check
-
-      - name: Typecheck
-        run: bun run typecheck
-
-      # The README packages table and CONTRIBUTING's project tree are generated
-      # from the workspace manifests and committed. Nothing ran `gen:readme` in CI,
-      # so when it broke - it conflated "already current" with "section missing" and
-      # failed on every no-op run - the only signal was somebody trying to use it.
-      # `--check` writes nothing and fails on drift.
-      - name: Check the generated README blocks
-        run: bun run gen:readme --check
-
-      - name: Test
-        run: bun run test:cov
-
-      # test:cov deliberately covers only ./packages and ./scripts, and the docs
-      # site needs its own bunfig preload (a DOM), so
-      # its suite runs from its own workspace.
-      - name: Test the documentation site
-        run: bun run --filter '@dunx/docs' test
-
-      # Every example is a bootstrap that rots the moment nobody runs it, so all of
-      # them are kept alive here rather than only the full one. test:cov above
-      # deliberately covers ./packages and ./scripts only - the examples need their
-      # own bunfig preload (the compiler transform), so their suites run from their
-      # own workspaces. An example whose backing service is absent (Redis, Postgres,
-      # MySQL, S3) reports that it is skipping and still exits 0.
-      - name: Test the examples
-        run: bun run --parallel --filter '@dunx/example-*' test
-
-      # `start` is a long-running service now, so it can never exit 0. `tour`
-      # boots the same app, narrates every package and exits - which is the
-      # end-to-end check that the whole DI graph builds and every part works.
-      - name: Tour the full example
-        run: bun run --filter '@dunx/example-full' tour
-
-      # The one example with no HTTP: four containers, one per database
-      # configuration. SQLite always runs; Postgres and MySQL report that they are
-      # skipping. Separate from the suites above because it is the entrypoint a
-      # reader actually runs.
-      - name: Run the databases example
-        run: bun run --filter '@dunx/example-databases' start
-
-      # `create-app` composes an app from feature directories copied out of
-      # examples/full, and generates the wiring around whichever were chosen. The
-      # copies are covered by the steps above and by a byte-for-byte parity test;
-      # the *generated* wiring is a different file per selection, so it is only
-      # covered by scaffolding and typechecking one. Every feature alone, the whole
-      # set, and the combinations with something to get wrong.
-      - name: Typecheck every scaffolded feature selection
-        run: bun run check:scaffolds
+      # Run again here rather than downloaded from the `coverage` job: the site
+      # this job deploys renders the model and serves the badges, and a second
+      # 14.6s on a job that already gates the release costs no wall clock.
+      - name: Coverage model and badges
+        run: bun run ci coverage
 
       - name: Configure git identity
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Runs on every push to main and publishes on almost none of them: the script
-      # self-skips unless HEAD is a `release:` commit. Publishing used to be a side
-      # effect of merging, which shipped 33 versions in six days. The bump now covers
-      # every commit back to the last release, which is why `fetch-depth: 0` above is
-      # load-bearing - a shallow checkout cannot see the previous release marker and
-      # would under-report the bump.
-      #
-      # Authenticated by npm trusted publishing (OIDC) via the id-token permission
-      # above - no NPM_TOKEN. Each package needs a trusted publisher configured on
-      # npmjs.com pointing at this repo and at this workflow **filename**; renaming
-      # ci.yml silently breaks publishing for every package. version.ts runs the npm
-      # CLI through `bunx npm@<pinned>`, so there is no Node/npm setup step here.
-      #
-      # Live as of 0.1.0, which was published by hand because a package with no
-      # versions on npm has no trusted-publisher settings page to configure yet.
-      # Every release from here is this step.
       - name: Release (on a `release:` commit)
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: bun run version
         env:
           FORCE_PUBLISH: ${{ contains(github.event.head_commit.message, '[force-publish]') }}
@@ -138,30 +190,26 @@ jobs:
           # Husky's pre-push hook refuses any push oxfmt would change, and what gets
           # pushed here is this script's own generated commit. CI already ran
           # format:check over the source, so the hook can only produce a false
-          # negative - which it did on 2.2.0, blocking a release that had already
-          # reached npm and leaving main a version behind the registry.
+          # negative, which it did on 2.2.0: it blocked a release that had already
+          # reached npm and left main a version behind the registry.
           HUSKY: '0'
 
-      # After the release, not before it. `bun run build` already built the site
-      # once, before the coverage model and the badges existed; the release step
-      # then writes the CHANGELOG.md the Releases page is generated from. Built
-      # ahead of it, the deployed artifact carried neither - and the release
-      # commit is `[skip ci]`, so nothing would rebuild until the next push.
+      # After the release, not before it. The release step writes the
+      # CHANGELOG.md the Releases page is generated from, and the release commit
+      # is `[skip ci]`, so nothing would rebuild until the next push.
       - name: Build the documentation site
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: bun run docs:build
 
       - name: Upload the documentation site
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./internal/docs/dist
 
-  # Separate job so the `github-pages` environment (and any branch protection on it)
-  # never gates the CI job itself - PR runs must not need it.
+  # Separate job so the `github-pages` environment (and any branch protection on
+  # it) never gates a check job. PR runs must not need it.
   pages:
-    needs: ci
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    name: Deploy the site
+    needs: release
     runs-on: ubuntu-latest
     permissions:
       pages: write

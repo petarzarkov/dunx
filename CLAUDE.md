@@ -481,6 +481,12 @@ Every package manifest needs `"type": "module"`. Without it,
   keeps it typed.
 - `bun run lint` / `bun run format` fix in place; `lint:check` / `format:check`
   do not and are what CI runs.
+- **`lint:check` is `oxlint --max-warnings 0`.** A warning fails it, the same as an
+  error. The repo sat at 33 warnings across 8 rules with nothing to stop the 34th;
+  they are fixed and the threshold is what keeps them fixed. `typescript/await-thenable`
+  is `off` for `**/*.test.ts` and `**/*.test.tsx`, because `bun-types` types every
+  matcher `: void` so `await expect(...).rejects.toThrow()` reads as awaiting
+  nothing - measured, in docs/bun-apis.md.
 - Pre-commit hook runs lint-staged: lints then formats staged `.ts` files. Its
   entries are the **bare binaries** (`oxlint --fix`, `oxfmt`), not `bun run lint` /
   `bun run format` - those end in `.`, and lint-staged _appends_ the staged paths, so
@@ -508,15 +514,74 @@ Every package manifest needs `"type": "module"`. Without it,
 
 ## Testing
 
+**`bun run ci` runs every gate CI runs, and it is the one command to finish on.**
+`scripts/ci.ts` owns the list; `.github/workflows/ci.yml` invokes it one phase per
+job rather than restating the commands, and `scripts/ci.test.ts` fails if the two
+drift. `build` first, then `static`, `examples`, `docs`, `browser` and `coverage`
+together. **`unit` is on request**: it runs the same 1,663 files `coverage` does,
+so a bare `bun run ci` runs them once. CI keeps both as separate jobs on separate
+runners, which is the point: `unit` answers "do the tests pass" in 3.2s while
+`coverage` spends 17s on what it covers. Running both at once locally also had them
+competing for the same Redis, and cost one flaky queue test.
+`bun run ci <phase>` runs one while iterating,
+`bun run ci --list` names them. Step output is captured and printed only on
+failure, so a green run is one line per step.
+
+The `browser` phase is `internal/docs/browser/`, the built site in a real Chrome
+through **`Bun.WebView`** - no playwright, and no browser download, because
+`ubuntu-latest` ships one. It asserts the three things happy-dom cannot: that the
+bundle loads, that a route reached by direct link works on a cold load, and that
+no page scrolls sideways, and that no route logs an error. **It is also where the
+screenshots come from**: one test per route per viewport per colour scheme, each
+writing its frame into `.shots/` before it asserts, so a red CI run leaves the
+picture behind and the `browser` job uploads all 28 as an artifact. `bun run shots`
+is that suite plus a build, so there is no second traversal to drift from it. Two
+traps are recorded in
+[docs/bun-apis.md](./docs/bun-apis.md): the suite must run from its own directory
+because the happy-dom preload replaces the global `Response` and `Bun.serve` then
+refuses it, and colour scheme and pixel ratio come from `view.cdp` rather than
+constructor options.
+
+Adding a gate means adding it to `PHASES` **and** to a job. Adding a `run:` to
+ci.yml that calls a gate directly fails the drift test, because `bun run ci` would
+then not cover it.
+
 - Runner: `bun test`
-- `bun run test` - run tests with bail on first failure (per package, via `--filter '*'`)
-- `bun run test:cov` - one root run over `./packages ./scripts` (excluding
+- `bun run test` - every workspace's own suite, bailing on first failure (per
+  package, via `--filter '*'`). The dev loop; `bun run ci` is the gate.
+- **`render()` has no auto-cleanup under `bun test`**, so `internal/docs`'s preload
+  registers `afterEach(cleanup)` for every file. Without it no tree was ever
+  unmounted, `useRoute`'s `hashchange` listener outlived its test, and the suite
+  cost 16.6s instead of 3.7s. Do not drop that line, and do not add a
+  `document.body.innerHTML = ''` in place of it - clearing the DOM does not
+  unmount.
+- **`bun test --parallel` is 4.6x** and the `unit` phase uses it: 1,663 tests in
+  3.16s against 14.56s. Two things it changes, both measured in
+  [docs/bun-apis.md](./docs/bun-apis.md): a `?raw` import resolves as JSON inside a
+  worker, which is why `internal/docs` is the one workspace excluded, and
+  `--coverage --parallel` reports low and differently every run, which is why the
+  `coverage` phase is sequential.
+- `bun run test:cov` - one root run over `./packages ./tools ./scripts` (excluding
   `**/templates/**`, which holds a working app whose test cannot resolve from there)
   so everything lands in
   a single `coverage/lcov.info`, then `bun run gen:cov`. It deliberately excludes
   `examples/`: the root has no compiler preload, because core's missing-transform
   test asserts that un-transformed state. Example tests run per workspace, where the
   per-example `bunfig.toml` supplies the preload.
+- **Every published workspace clears 90%, on lines and on functions.**
+  `MIN_COVERAGE` in `scripts/coverage-report.ts` is the floor, `badge()` paints at
+  or above it green, so the gate and the badge cannot disagree. The `coverage`
+  phase fails naming each workspace under it and writes a per-package table into
+  the GitHub job summary; `coverage/lcov.info` is uploaded as an artifact.
+- The floor is set against a denominator with three things in it that no test can
+  reach: type-only lines (via the sourcemap remap), abstract member signatures,
+  and until recently `*.fixture.ts`. All three measured in
+  [docs/bun-apis.md](./docs/bun-apis.md). `coverageIgnoreSourcemaps = true` would
+  fix the first and is **not** set, because it turns the coverage page's uncovered
+  line ranges into transpiled line numbers. Do not raise the floor without reading
+  that section: `@dunx/core` is 91.0% functions with every reachable function
+  covered, and `infra` at 90.7% lines and `openapi` at 90.4% functions are the
+  other thin margins.
 - Coverage report, badges, and the GitHub Pages site: `/coverage-report`
 
 ## Typecheck
@@ -527,6 +592,15 @@ bun run typecheck     # all packages: bun run --filter '*' typecheck
 
 Within a package: `tsc --noEmit`. The root `tsconfig.json` includes `scripts/`,
 so `bunx tsc --noEmit` at the repo root typechecks the repo scripts.
+
+**`internal/docs/src/generated/` is a build output, and `build` owns it.** The docs
+`typecheck` passes `bun run generate --if-missing`, which does nothing when the
+model is already there. Do not drop that flag: `generate` empties
+`generated/guides/` and `generated/packages/` with `rmSync` before rewriting them,
+so regenerating from `typecheck` had the `static` and `docs` phases of
+`bun run ci` writing that directory at once. `docs/test` read it mid-wipe and
+reported zero published pages, once in five runs. `build` runs before every other
+phase, so the guard never costs freshness.
 
 ## Versioning & Publishing
 
@@ -767,6 +841,7 @@ Two things that follow:
 - `bun run gen:readme` - regenerates the README Packages table and Project Structure block (`scripts/update-readme.ts`). `--check` writes nothing and fails on drift; CI runs that, because nothing ran this at all until it silently broke
 - `bun run gen:cov` - rebuilds the coverage model and badges **into `internal/docs`** (`scripts/coverage-report.ts`)
 - `bun run docs:dev` / `bun run docs:build` - the documentation site in `internal/docs`. Its API reference is extracted from the packages' doc comments by `oxc-parser`; see `internal/docs/README.md`
+- `bun run ci` - every CI gate, in one command (`scripts/ci.ts`). See Testing
 - `bun run version:dry-run` - previews version bumps without writing
 
 ## Skills
@@ -777,7 +852,7 @@ descriptions are in context until one is invoked, so this file stays cheap.
 | Skill              | Invoke when                                                         |
 | ------------------ | ------------------------------------------------------------------- |
 | `/whats-next`      | Ending a task block, crossing ~50% context, handing off, resuming   |
-| `/ci-check`        | Verifying build + lint + typecheck + test before a commit           |
+| `/ci-check`        | Finishing any change - runs `bun run ci`, every gate CI runs        |
 | `/spike`           | An open question needs measuring on real Bun before an API is fixed |
 | `/new-package`     | Adding a package, an example, or a public subpath export            |
 | `/release`         | Cutting a release, or a publish failed                              |
@@ -866,3 +941,7 @@ New repeatable workflow → new skill. Do not grow this file instead.
 - When adding or changing a feature in `packages/*` or `tools/*` - update
   `examples/full` in the same change, per Rule 4 under Examples. A capability with
   no example is untested end to end
+- **Finish with `bun run ci`.** Not `bun run test`, and not `build` plus `lint`
+  plus `typecheck`: those miss `format:check`, `gen:readme --check`,
+  `check:scaffolds`, the examples, the tour and the docs suite, which is the set
+  that used to turn a finished change into a red pipeline

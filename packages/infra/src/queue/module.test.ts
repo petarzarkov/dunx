@@ -115,18 +115,18 @@ describe('QueueModule.forRoot', () => {
   });
 
   it('reports a queue error through the bound Logger, with the error', async () => {
-    const entries: { message: string; params: unknown[] }[] = [];
+    const entries: { message: unknown; params: unknown[] }[] = [];
+    // A real ConsoleLogger with `warn` shadowed. Spreading one copied `logLevel`
+    // and nothing else - its methods are on the prototype - so the value bound as
+    // the Logger had no `info` or `error` on it and a cast to hide that.
+    const logger = new ConsoleLogger(undefined, 'fatal');
+    logger.warn = (message: unknown, ...params: unknown[]): void => {
+      entries.push({ message, params });
+    };
+
     @Module({
       imports: [QueueModule.forRoot({ url })],
-      providers: [
-        provide(Logger, {
-          useValue: {
-            ...new ConsoleLogger(undefined, 'fatal'),
-            warn: (message: string, ...params: unknown[]) =>
-              entries.push({ message, params }),
-          } as unknown as Logger,
-        }),
-      ],
+      providers: [provide(Logger, { useValue: logger })],
     })
     class Root {}
 

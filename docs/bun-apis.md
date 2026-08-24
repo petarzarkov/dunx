@@ -773,3 +773,197 @@ a real import. Verified to fail - it times out - if the read goes back to `Bun.f
 Found from a report that editing a `@JobHandler` did nothing. The handler runs in a
 forked child, which made the child look like the cause; it was not, and no imported
 file of any kind restarted.
+
+### `bun test --parallel` is 4.6x, and changes two things
+
+Probed on 1.4.0, 32 cores, comparing every workspace both ways.
+
+The whole `./packages ./tools ./scripts` sweep, 1,663 tests across 140 files:
+**3.16s with `--parallel`, 14.56s without**. `packages/http` alone is 3.03s against
+6.70s. `--parallel` implies `--isolate`: one module registry per worker, N workers,
+N defaulting to the core count.
+
+Two behaviours change with it.
+
+**A `?raw` import suffix does not survive a worker.** `internal/docs/src/data.ts`
+has `import indexRaw from './generated/index.json?raw'`. In one process that is the
+file's text. In a `--parallel` worker it is the parsed object, so `JSON.parse` on it
+throws `SyntaxError: JSON Parse error: Unexpected identifier "object"` and 7 of the
+suite's 10 files bail: **91 tests sequentially against 30 passing and 7 failing**.
+It fails loudly, so opting in per workspace is safe. `internal/docs` is the one
+exclusion, in the `docs` phase of `scripts/ci.ts`.
+
+**`--coverage --parallel` reports low, and a different figure each run.** The same
+sweep sequentially is 87.80% lines / 93.92% functions on every run. With
+`--parallel`: 87.21/88.52, then 87.10/88.23, then 87.24/88.27. Functions is the
+number that moves, about 5.5 points under. The `coverage` phase stays sequential.
+
+One difference that is not a bug: `packages/infra` is 538 pass sequentially against
+543 under `--parallel`, with the same 5 skips. `describe.if(live)` in
+`queue/worker.test.ts` and `redis/client.test.ts` gates on a reachability probe and
+each worker probes for itself. The distinct test names are identical, 536 either way.
+
+Undocumented flags on the same command that CI can use: `--shard=1/3` splits files
+across jobs, `--timings <file>` plus `--update-timings` writes per-file durations and
+balances shards by them, and `--dots` cuts the reporter to a character per file.
+Those timings put **`internal/docs/src/symbol-anchor.test.tsx` at 13,069 ms of that
+suite's 17.4s**, with the other nine files summing to 4.3s.
+
+### `expect(...).rejects` returns `undefined`, so the `await` is a no-op
+
+`bun-types` declares every matcher `: void` and `rejects: Matchers<unknown>`, and the
+runtime agrees: `expect(Promise.reject(x)).rejects.toThrow()` evaluates to
+`undefined`, not a promise. `await expect(...).rejects.toThrow()` therefore awaits
+nothing, which is what `typescript/await-thenable` fires on at 19 sites here.
+
+The assertion holds without the `await`. Probed all four combinations, settled or
+pending promise against correct or wrong expectation, awaited or not: Bun tracks the
+assertion against the running test and fails it either way, taking 5.53 ms to do it
+for a promise that settles after 5 ms.
+
+The `await`s stay. They are the form every Jest and Vitest reader expects, and the
+only form that still asserts if Bun makes these matchers return the promise its own
+documentation implies. `typescript/await-thenable` is `off` for `**/*.test.ts` and
+`**/*.test.tsx` in `.oxlintrc.json` instead.
+
+### `Bun.WebView` - a headless browser in the runtime, and one trap
+
+`Bun.WebView` on 1.4.0, capital V, no `Bun.Webview`. Marked experimental in Bun's
+own docs. `WKWebView` on macOS; on Linux and Windows it drives an installed Chrome,
+Chromium, Edge or Brave over CDP, and falls back to Playwright's
+`chrome-headless-shell` cache. GitHub's `ubuntu-latest` ships Chrome, so there is no
+browser to download.
+
+The prototype carries `navigate`, `evaluate`, `screenshot`, `cdp`, `click`, `type`,
+`press`, `scroll`, `scrollTo`, `resize`, `goBack`, `goForward`, `reload`, `close`,
+`url`, `title`, `loading`, `onNavigated`, `onNavigationFailed`. Input dispatches
+native events, so the page sees `isTrusted: true`. `screenshot()` resolves to a
+**`Blob`**, not a `Uint8Array`: read `.size`, or hand it straight to `Bun.write`.
+
+Verified against the real built site, served out of `internal/docs/dist`: navigate,
+read the `h1` and take a 1440x900 screenshot in **526 ms**, 183,085 bytes of PNG.
+
+**`navigate()` never resolves when only the hash changes.** The docs site is hash
+routed, so the second call in a loop over `#/`, `#/guide/introduction` hangs
+forever rather than rejecting. Set the hash from inside the page and poll for the
+heading instead:
+
+```ts
+await view.evaluate(`location.hash = ${JSON.stringify(hash)}`);
+```
+
+With that, six routes render in **719 ms**. `await using` disposes cleanly and a
+single view survives repeated `navigate` calls to distinct URLs, so the hang is the
+hash case alone.
+
+### Three things `bun test --coverage` counts that no test can reach
+
+Chasing a 90% floor turned up measurement artifacts rather than untested code, so
+the numbers below are what the floor is actually set against.
+
+**Type-only lines count against you, through the sourcemap.** Reduced to a
+subject with one import, two interfaces, an abstract class and one implementation,
+and a test that calls every method on it:
+
+```
+                                LF   LH    lines
+default (remap to source)       28   11    39.3%
+coverageIgnoreSourcemaps = true 17   15    88.2%
+```
+
+The 17 lines Bun cannot reach in the first column are the `import` statement,
+the interface members and the abstract member signatures: none of them emit
+anything, so they are unhittable by construction. `packages/core/src/logger/context.ts`
+was the live case, `DA:1,0` through `DA:46,0` over its imports and its two
+interfaces, reading as 32.35% for a file whose class is exercised on every boot.
+Repo-wide the remapping costs about 1.8 points of line coverage: 93.55% against
+95.33%.
+
+`coverageIgnoreSourcemaps = true` is **not** set here. It fixes the ratio and
+breaks the thing the ratio is for: the uncovered line ranges the coverage page
+lists would become transpiled line numbers, pointing at nothing a reader can open.
+
+**An abstract member is an unhit function, permanently.** Same probe, `FNF:5
+FNH:3` in both columns. The two are `Contract.get` and `Contract.set`, declared
+`abstract` with no body. Every abstract contract in `@dunx/core` costs function
+coverage that no test can recover, which is most of the distance between its
+94.7% lines and 91.0% functions.
+
+**Bun's lcov carries no per-function records.** `FNF` and `FNH` counts only, no
+`FN:` or `FNDA:` lines, so nothing downstream can name which function was missed.
+Finding them means reading `DA:` ranges and the source.
+
+One thing that is not an artifact: a `*.fixture.ts` is counted like shipped code.
+`coverageSkipTestFiles` drops `*.test.ts` and stops there, and
+`tools/mcp/src/app.fixture.ts` is a module graph for the tests to read whose 16
+decorated handlers nothing calls. That alone held `@dunx/mcp` at 76.62%
+functions; `coveragePathIgnorePatterns` now covers `**/*.fixture.ts` and it reads
+96.4%.
+
+### Driving a browser from `bun test`: two things in the way
+
+`internal/docs/browser/site.browser.test.ts` asserts against the built site in a
+real Chrome, so it needs `Bun.serve` and `Bun.WebView` in the same process as
+`bun test`. Two obstacles, both probed.
+
+**happy-dom's registrator replaces the global `Response`, and `Bun.serve` refuses
+its own handler's return value.** With `happydom.ts` preloaded, `new Response(file)`
+is happy-dom's class, and the server answers `Expected a Response object, but
+received 'Response { ... }'` for every request: the page loads nothing and every
+route reads as an empty document.
+
+Neither obvious escape works. `bun test -c other-bunfig.toml` still ran the
+preload (probed both ways: happy-dom reported `isRegistered` either way), and
+`GlobalRegistrator.unregister()` in a `beforeAll` does not hand the native
+`Response` back. What does work is **a `bunfig.toml` next to the working
+directory**: Bun picks the config beside the cwd, so the suite lives in
+`browser/` with an empty `[test]` there and its script does `cd browser && bun test`.
+Then `Response` is `function Response() { [native code] }`, `document` is
+undefined, and the server serves.
+
+**`Bun.WebView` has no `colorScheme` or `deviceScaleFactor` option.**
+`ConstructorOptions` is `width`, `height`, `headless`, `backend`, `url`,
+`console`, `dataStore`. Both come from CDP through `view.cdp`, after one
+`navigate`:
+
+```ts
+await view.cdp('Emulation.setEmulatedMedia', {
+  features: [{ name: 'prefers-color-scheme', value: 'dark' }],
+});
+await view.cdp('Emulation.setDeviceMetricsOverride', {
+  width,
+  height,
+  deviceScaleFactor: 2,
+  mobile: false,
+});
+```
+
+Verified against the built site: the body background goes `rgb(255, 255, 255)` to
+`rgb(36, 36, 36)`, `devicePixelRatio` reads 2, and the PNG comes out 2880x1800 for
+a 1440x900 viewport. The `console` option is a
+`(type, ...args) => void` callback, which is how the suite catches a page-side
+error no happy-dom test can see. 29 tests over 7 routes, 2 viewports and 2 schemes,
+writing 28 PNGs as they go, take 15.4s against a playwright install that was 150 MB
+of browser for the same work.
+
+Both emulations are per-target and survive a navigation, so re-applying the one
+already in force is worth skipping: `setEmulatedMedia` needs a repaint wait, and 28
+shots would otherwise spend 4.2s re-setting what was already set.
+
+### `render()` has no auto-cleanup under `bun test`
+
+`@testing-library/react` registers its own `afterEach(cleanup)` only when it finds
+Jest's globals, and it does not find them here. Nothing in `internal/docs` called
+`cleanup`, so no `render` was ever unmounted, and `useRoute`'s `hashchange`
+listener outlived the test that created it. `mount()` sets `window.location.hash`
+first thing, so each new test re-rendered every detached tree every earlier file
+had left behind.
+
+The cost was quadratic and hidden in one file: `symbol-anchor.test.tsx` measured
+**1.7s alone and 12.5s behind the other nine**. Pairs of files never reproduced it,
+which is what made it look like a slow test rather than a leak.
+
+`afterEach(cleanup)` registered from the **preload** fixes it for every file, and a
+preload-registered hook does run for every test in every file (probed). The whole
+suite went from 16,645 ms to 3,683 ms, and every file got faster, not just that
+one: `site` 1,701 to 1,103 ms, `links` 437 to 25 ms, `releases` 511 to 255 ms.
