@@ -1,6 +1,6 @@
 import type { OnBeforeShutdown } from '@dunx/core';
 
-export interface ReadinessOptionsInit {
+interface ReadinessOptionsInit {
   /**
    * How long to keep failing readiness after the drain starts, before the server
    * stops accepting. Default `0`.

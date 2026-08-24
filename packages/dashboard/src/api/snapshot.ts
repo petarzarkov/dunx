@@ -28,7 +28,7 @@ const typeOf = (value: unknown): string => {
  * declaration order, and `validate` returns whatever object literal order the app
  * happened to write.
  */
-export const configEntries = (
+const configEntries = (
   values: object,
   reveal: DashboardOptions['reveal'],
 ): readonly ConfigEntry[] =>

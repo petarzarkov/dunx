@@ -27,9 +27,7 @@ export const configGroupsFor = (
   return Object.keys(CONFIG_GROUPS).filter((group) => wanted.includes(group));
 };
 
-export const dependenciesFor = (
-  features: readonly Feature[],
-): readonly string[] =>
+const dependenciesFor = (features: readonly Feature[]): readonly string[] =>
   uniq([
     '@dunx/core',
     '@dunx/http',

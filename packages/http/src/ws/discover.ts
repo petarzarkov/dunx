@@ -75,7 +75,7 @@ export const discoverGateway = (instance: object): DiscoveredGateway => {
  * provider that declares one but is not a gateway would silently never receive a
  * frame, so that becomes a boot error naming the method.
  */
-export const findHandlerMethod = (ctor: Ctor<unknown>): string | undefined =>
+const findHandlerMethod = (ctor: Ctor<unknown>): string | undefined =>
   eachHandler(ctor.prototype as object | null)[0]?.name;
 
 /**

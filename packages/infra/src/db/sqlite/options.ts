@@ -79,7 +79,7 @@ const toPath = (filename: string | URL): string => {
  * decides `TDb`, and `TDb` is what `DbModule.forRoot` infers the injection token
  * from. A flag would leave that inference with a union to guess at.
  */
-export abstract class SqliteSettings<
+abstract class SqliteSettings<
   TSchema extends Record<string, unknown>,
   TDb,
 > extends DbOptions<TDb> {

@@ -36,7 +36,7 @@ export interface Feature {
  * `examples/full/src/config.ts` states for every group at once, split so a
  * selection can state only its own.
  */
-export interface ConfigGroup {
+interface ConfigGroup {
   readonly schema: readonly string[];
   readonly field: string;
   readonly map: string;

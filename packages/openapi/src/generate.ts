@@ -50,13 +50,13 @@ export interface DocumentInfo {
  * through unvalidated, which is the honest contract - dunx did not generate them
  * and cannot vouch for them.
  */
-export interface DocumentFragment {
+interface DocumentFragment {
   readonly paths?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   readonly schemas?: Readonly<Record<string, unknown>>;
   readonly tags?: readonly TagObject[];
 }
 
-export type DocumentContributor =
+type DocumentContributor =
   | DocumentFragment
   | (() => DocumentFragment | Promise<DocumentFragment>);
 

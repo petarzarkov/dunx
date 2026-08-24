@@ -282,7 +282,7 @@ const matchParams = (
  * table it walks is the one bull-board handed over. Twenty lines here is the price
  * of not asking `HttpFactory` to accept a foreign route table at boot.
  */
-export interface BoardMatch {
+interface BoardMatch {
   readonly handler: (req: Request) => Response | Promise<Response>;
   /**
    * What `Bun.serve` would have put on `BunRequest.params`.
