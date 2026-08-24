@@ -4,7 +4,7 @@ import {
   provide,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   type Registration,
 } from '@dunx/core';
 import { ScheduleOptions, type ScheduleOptionsInit } from './options.js';
@@ -67,18 +67,23 @@ export class ScheduleModule {
     load: () => ScheduleOptionsInit | Promise<ScheduleOptionsInit>,
   ): DynamicModule;
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<ScheduleOptionsInit, D>,
+    config: AsyncModuleConfig<ScheduleOptionsInit, D>,
   ): DynamicModule;
   static forRootAsync(
     source:
       | (() => ScheduleOptionsInit | Promise<ScheduleOptionsInit>)
-      | FactoryProvider<ScheduleOptionsInit, Deps>,
+      | AsyncModuleConfig<ScheduleOptionsInit, Deps>,
   ): DynamicModule {
     const load = typeof source === 'function' ? source : source.useFactory;
     const inject = typeof source === 'function' ? [] : (source.inject ?? []);
+    // The container is scoped: this dynamic module is its own scope, so a factory
+    // injecting a provider needs the module that exports it in *these* imports.
+    // Importing it into whatever module calls forRootAsync does not reach here.
+    const imports = typeof source === 'function' ? [] : (source.imports ?? []);
 
     return {
       module: ScheduleModule,
+      imports,
       exports: [ScheduleOptions, ScheduleRegistry],
       providers: providers(
         provide(ScheduleOptions, {

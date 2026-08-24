@@ -2,7 +2,9 @@ import {
   provide,
   token,
   type Deps,
+  type ModuleRef,
   type DynamicModule,
+  type AsyncModuleConfig,
   type FactoryProvider,
   type Token,
 } from '@dunx/core';
@@ -58,6 +60,7 @@ const connectionFrom = (
 const namedModule = (
   name: string,
   options: RedisOptions | FactoryProvider<RedisOptions, Deps>,
+  imports: readonly ModuleRef[] = [],
 ): DynamicModule => {
   const optionsToken = token<RedisOptions>(`RedisOptions(${name})`);
   // Branch on the call, not the argument: a union of provider shapes matches
@@ -69,6 +72,7 @@ const namedModule = (
 
   return {
     module: RedisModule,
+    imports,
     exports: [optionsToken, redisConnection(name)],
     providers: [
       optionsProvider,
@@ -118,25 +122,32 @@ export class RedisModule {
     name?: string,
   ): DynamicModule;
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<RedisOptionsInit, D>,
+    config: AsyncModuleConfig<RedisOptionsInit, D>,
     name?: string,
   ): DynamicModule;
   static forRootAsync(
     source:
       | (() => RedisOptionsInit | Promise<RedisOptionsInit>)
-      | FactoryProvider<RedisOptionsInit, Deps>,
+      | AsyncModuleConfig<RedisOptionsInit, Deps>,
     name?: string,
   ): DynamicModule {
     const load = typeof source === 'function' ? source : source.useFactory;
     const inject = typeof source === 'function' ? [] : (source.inject ?? []);
+    // The container is scoped: this dynamic module is its own scope, so a factory
+    // injecting a provider needs the module that exports it in *these* imports.
+    // Importing it into whatever module calls forRootAsync does not reach here.
+    const imports = typeof source === 'function' ? [] : (source.imports ?? []);
     const useFactory = async (
       ...deps: readonly unknown[]
     ): Promise<RedisOptions> => new RedisOptions(await load(...deps));
 
-    if (name !== undefined) return namedModule(name, { useFactory, inject });
+    if (name !== undefined) {
+      return namedModule(name, { useFactory, inject }, imports);
+    }
 
     return {
       module: RedisModule,
+      imports,
       exports: [RedisOptions, RedisConnection],
       providers: [
         provide(RedisOptions, { useFactory, inject }),

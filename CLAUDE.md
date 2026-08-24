@@ -421,6 +421,19 @@ contravariant and the token carries no type argument to recover.
 `RedisModule`, `FilesModule` and `DbModule` for the same reason: reading options
 off `ConfigService` is the one thing a zero-argument `forRoot` function cannot do.
 
+**Its config type is `AsyncModuleConfig`, not `FactoryProvider`, and the difference
+is `imports`.** A dynamic module is its own scope, so a factory injecting a provider
+needs the module that exports it in _that module's_ imports; importing it alongside
+does not reach the factory. `ScheduleModule` and `RedisModule` took a bare
+`FactoryProvider` and forwarded nothing, so injecting from a non-global module was a
+boot error there while working everywhere else. The documented case survived only
+because `ConfigModule.forRoot` is `global: true`.
+
+Still on the older shape, and the same gap: `HttpModule`'s client `forRootAsync`
+takes a `FactoryProvider` and forwards no `imports` at all, while `compression`,
+`health`, `static`, `throttle` and `@dunx/openapi` restate `AsyncModuleConfig`
+inline as `FactoryProvider<T, D> & { imports?: DynamicModule['imports'] }`.
+
 ## Request logging
 
 `@dunx/http` installs `RequestLoggingMiddleware` **by default**, outermost in the
@@ -573,14 +586,21 @@ then not cover it.
   or above it green, so the gate and the badge cannot disagree. The `coverage`
   phase fails naming each workspace under it and writes a per-package table into
   the GitHub job summary; `coverage/lcov.info` is uploaded as an artifact.
-- **The floor assumes the backing services are reachable**, so the `unit` and
-  `coverage` jobs run `valkey/valkey:8-alpine` and `postgres:17-alpine` and set
-  `DUNX_DB_TEST_URL`. `@dunx/infra`'s suites gate on whether their service answers
-  and skip when it does not: 49 tests skipped in CI against 5 locally put `infra` at
-  84.6% lines rather than 90.7%, which is the gate reading a different denominator
-  than the machine that set it. **A new live-service suite needs its service added
-  to those jobs**, or the floor measures less than it looks like. `files/s3.ts` at
-  35% is the remaining one, gated on a bucket nothing sets.
+- **The floor assumes the backing services are reachable, and the `coverage` job is
+  the one place that declares them**: `valkey/valkey:8-alpine`,
+  `postgres:17-alpine`, and MinIO through a `docker run` step, because a `services:`
+  block cannot pass the `server /data` command MinIO needs. `@dunx/infra`'s suites
+  gate on whether their service answers and skip when it does not, so without them
+  49 tests skip and `infra` reads 84.6% lines rather than 94.9%: the gate measuring
+  a different denominator than the machine that set it. **A new live-service suite
+  adds its service there**, and nowhere else. Declaring them on two jobs is what
+  broke the release job, which ran the gate with none of them.
+- `unit` deliberately has **no** services: those suites skip without one, and
+  `coverage` runs the same files with all of them. `unit` is the fast signal.
+- `S3_ENDPOINT` is **not** exported, even though `Bun.S3Client` reads it. The
+  offline presign suite asserts on AWS hosts, and exporting it turned two of those
+  tests into assertions about MinIO. The live block takes
+  `DUNX_S3_TEST_ENDPOINT` explicitly instead.
 - **Test scaffolding is counted as shipped code unless excluded.**
   `coverageSkipTestFiles` drops `*.test.ts` and stops there, so
   `coveragePathIgnorePatterns` also covers `**/*.fixture.ts`, `**/cli-fixture-*/**`
