@@ -2,7 +2,7 @@ import { AppFactory, Logger, Module, provide, token } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
 import { ScheduleModule } from './module.js';
 import { ScheduleOptions } from './options.js';
-import { Quiet } from './quiet.fixture.js';
+import { Quiet } from '../quiet.fixture.js';
 import { ScheduleRegistry } from './registry.js';
 
 describe('ScheduleModule.forRootAsync', () => {

@@ -1,6 +1,10 @@
 import { Logger, LogLevel } from '@dunx/core';
 
-/** Silent, so a suite asserting on schedules is not read through boot noise. */
+/**
+ * Silent, and keeps what it was told, so a suite asserting on behaviour is not read
+ * through boot noise. Here rather than under one feature because `schedule` and
+ * `queue` both boot containers that log.
+ */
 export class Quiet extends Logger {
   readonly logLevel = LogLevel.DEBUG;
   readonly lines: string[] = [];
