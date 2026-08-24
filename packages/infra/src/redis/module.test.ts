@@ -1,4 +1,4 @@
-import { AppFactory, inject, Module } from '@dunx/core';
+import { AppFactory, inject, Module, provide, token } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
 import { RedisConnection } from './connection.js';
 import { RedisError, RedisErrorCode } from './errors.js';
@@ -114,6 +114,59 @@ describe('RedisModule.forRootAsync', () => {
       AppFactory.create(RedisModule.forRootAsync(() => ({ url: 'nope' }))),
     );
     expect(message).toContain('not a valid URL');
+  });
+
+  /**
+   * The scoped-container case: this dynamic module is its own scope, so a factory
+   * cannot see a provider merely because the module calling `forRootAsync` imports
+   * it. A token rather than a class, because an unbound class self-binds into
+   * whichever scope asks first and would resolve with or without the fix.
+   */
+  it('injects from a module named in its own imports', async () => {
+    const URL_TOKEN = token<string>('RedisUrl');
+
+    @Module({
+      providers: [provide(URL_TOKEN, { useValue: unreachable })],
+      exports: [URL_TOKEN],
+    })
+    class UrlModule {}
+
+    const app = await AppFactory.create(
+      RedisModule.forRootAsync({
+        imports: [UrlModule],
+        useFactory: (url: string) => ({ url }),
+        inject: [URL_TOKEN],
+      }),
+    );
+
+    expect(app.get(RedisOptions).url).toBe(unreachable);
+    await app.shutdown();
+  });
+
+  it('forwards those imports to a named connection too', async () => {
+    const URL_TOKEN = token<string>('RedisUrl');
+
+    @Module({
+      providers: [provide(URL_TOKEN, { useValue: unreachable })],
+      exports: [URL_TOKEN],
+    })
+    class UrlModule {}
+
+    const app = await AppFactory.create(
+      RedisModule.forRootAsync(
+        {
+          imports: [UrlModule],
+          useFactory: (url: string) => ({ url }),
+          inject: [URL_TOKEN],
+        },
+        'sessions',
+      ),
+    );
+
+    expect(app.get(redisConnection('sessions'))).toBeInstanceOf(
+      RedisConnection,
+    );
+    await app.shutdown();
   });
 
   it('binds a named token when given a name', async () => {

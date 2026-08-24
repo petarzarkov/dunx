@@ -1,43 +1,14 @@
 import { describe, expect, it } from 'bun:test';
-import { AppFactory, Logger, LogLevel, Module, provide } from '@dunx/core';
+import { AppFactory, Logger, Module, provide } from '@dunx/core';
 
 import { supportsTz } from './capability.js';
+import { Quiet } from './quiet.fixture.js';
 import { Cron, Interval, OnceOnBoot } from './decorators.js';
 import { ScheduleErrorCode } from './errors.js';
 import { CronExpression, Overlap, ScheduleKind } from './marker.js';
 import { ScheduleModule } from './module.js';
 import { ScheduleOptions } from './options.js';
 import { ScheduleRegistry } from './registry.js';
-
-/** Silent, so a suite asserting on schedules is not read through boot noise. */
-class Quiet extends Logger {
-  readonly logLevel = LogLevel.DEBUG;
-  readonly lines: string[] = [];
-  readonly warnings: string[] = [];
-  readonly errors: string[] = [];
-
-  override info(message: unknown): void {
-    this.lines.push(String(message));
-  }
-  override log(message: unknown): void {
-    this.lines.push(String(message));
-  }
-  override debug(message: unknown): void {
-    this.lines.push(String(message));
-  }
-  override verbose(message: unknown): void {
-    this.lines.push(String(message));
-  }
-  override warn(message: unknown): void {
-    this.warnings.push(String(message));
-  }
-  override error(message: unknown): void {
-    this.errors.push(String(message));
-  }
-  override fatal(message: unknown): void {
-    this.errors.push(String(message));
-  }
-}
 
 class Reports {
   ran: string[] = [];
@@ -394,80 +365,3 @@ describe('zones, on a Bun that honours tz', () => {
  * `inject`: reading `tz` or `enabled` off a `ConfigService` is the one thing a
  * zero-argument `forRoot` cannot do.
  */
-describe('ScheduleModule.forRootAsync', () => {
-  /**
-   * From a globally published provider, which is what the API allows: this
-   * `forRootAsync` takes a `FactoryProvider`, not an `AsyncModuleConfig`, so it has
-   * no `imports` to forward. The documented case works because
-   * `ConfigModule.forRoot` is `global: true`.
-   */
-  it('injects what it names', async () => {
-    class Settings {
-      readonly tz = 'Europe/Sofia';
-    }
-
-    @Module({
-      imports: [
-        ScheduleModule.forRootAsync({
-          useFactory: (settings: Settings) => ({
-            tz: settings.tz,
-            keepAlive: false,
-            enabled: false,
-          }),
-          inject: [Settings],
-        }),
-      ],
-      providers: [Settings, provide(Logger, { useValue: new Quiet() })],
-      exports: [Logger, Settings],
-      global: true,
-    })
-    class Root {}
-
-    const app = await AppFactory.create(Root);
-
-    expect(app.get(ScheduleOptions).tz).toBe('Europe/Sofia');
-    expect(app.get(ScheduleOptions).enabled).toBe(false);
-    expect(app.get(ScheduleRegistry)).toBeInstanceOf(ScheduleRegistry);
-    await app.shutdown();
-  });
-
-  it('takes a bare loader and awaits it', async () => {
-    @Module({
-      imports: [
-        ScheduleModule.forRootAsync(async () => {
-          await Bun.sleep(1);
-          return { keepAlive: false, enabled: false, tz: 'UTC' };
-        }),
-      ],
-      providers: [provide(Logger, { useValue: new Quiet() })],
-      exports: [Logger],
-      global: true,
-    })
-    class Root {}
-
-    const app = await AppFactory.create(Root);
-
-    expect(app.get(ScheduleOptions).tz).toBe('UTC');
-    expect(app.get(ScheduleOptions).keepAlive).toBe(false);
-    await app.shutdown();
-  });
-
-  it('defaults inject away when the config omits it', async () => {
-    @Module({
-      imports: [
-        ScheduleModule.forRootAsync({
-          useFactory: () => ({ keepAlive: false, enabled: false }),
-        }),
-      ],
-      providers: [provide(Logger, { useValue: new Quiet() })],
-      exports: [Logger],
-      global: true,
-    })
-    class Root {}
-
-    const app = await AppFactory.create(Root);
-
-    expect(app.get(ScheduleOptions).enabled).toBe(false);
-    await app.shutdown();
-  });
-});
