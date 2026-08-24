@@ -15,10 +15,9 @@ import {
  * scroll sideways, and that nothing logs an error along the way.
  *
  * One test per route per viewport per colour scheme, and each writes its PNG into
- * `.shots/`. The screenshots are not a side errand: a failure saying `landing`
- * overflows at mobile is worth having the frame for, and this traversal already
- * visits every combination. `bun run shots` is this suite plus a build, so the
- * pictures and the assertions cannot drift apart.
+ * `.shots/`. That is for looking at locally - `bun run shots` is this suite plus a
+ * build, so the pictures and the assertions cannot drift apart. CI does not keep
+ * them.
  *
  * Outside `src/`, and with its own `bunfig.toml`, so `bun run test` does not
  * collect it and the happy-dom preload does not replace the global `Response` -
@@ -65,7 +64,7 @@ for (const scheme of SCHEMES) {
           await preview.view(width, height, 2);
           await preview.open(hash);
 
-          // Written before the assertions, so a failure leaves the frame behind.
+          // Before the assertions, so a local failure leaves the frame behind.
           await Bun.write(
             `${shots}${name}-${viewport}-${scheme}.png`,
             await preview.screenshot(),
