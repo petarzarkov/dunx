@@ -20,10 +20,15 @@ Bun-only, so the ESM/CJS/types triple build is wasted work.
 Both halves run from the shared `scripts/build-package.ts`, so there is one
 implementation for every package.
 
-`tools/*` is outside all of this. Those workspaces are `"private": true`, never
-published, and build with whatever suits them - `internal/docs` is a React bundle,
-not a `Bun.build` package. The dependency rules constrain what dunx ships; they do not
-constrain what builds its website.
+`tools/*` builds exactly like `packages/*`, through the same script: those
+workspaces are published too, and `bunx @dunx/create-app` is the point of them. The
+parent says what a workspace **is**, not whether it ships.
+
+`internal/*` is what sits outside all of this. Those workspaces are
+`"private": true`, never published, and build with whatever suits them -
+`internal/docs` is a React bundle, not a `Bun.build` package. The dependency rules
+constrain what dunx ships; they do not constrain what builds its website or measures
+it.
 
 ## Scaffolder (`create-app`)
 
