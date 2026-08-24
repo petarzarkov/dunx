@@ -38,6 +38,22 @@ jobs:
   unit:
     name: Packages, tools and scripts
     runs-on: ubuntu-latest
+    # `@dunx/infra`'s redis and queue suites gate on a reachability probe against
+    # `valkey://localhost:6379` and skip when nothing answers, so CI never ran them:
+    # 49 tests skipped here against 5 locally, which put `infra` at 84.6% lines
+    # against the 90.7% measured on a machine with valkey running. The gate was
+    # reading a different denominator than the developer who set it.
+    services:
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -89,12 +105,31 @@ jobs:
         with:
           name: screenshots
           path: internal/docs/.shots
+          # `.shots` is dot-prefixed, and the default is to skip hidden paths, so
+          # the upload found nothing and failed a job whose suite had passed.
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    # `@dunx/infra`'s redis and queue suites gate on a reachability probe against
+    # `valkey://localhost:6379` and skip when nothing answers, so CI never ran them:
+    # 49 tests skipped here against 5 locally, which put `infra` at 84.6% lines
+    # against the 90.7% measured on a machine with valkey running. The gate was
+    # reading a different denominator than the developer who set it.
+    services:
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
