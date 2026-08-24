@@ -10,7 +10,7 @@ import { pageOf, type Page } from './page.js';
  * end of it. Anything with drizzle's `select()` fits, so both dialects and a
  * transaction handle do.
  */
-export interface PaginateSource<TTable extends Table, TResult> {
+interface PaginateSource<TTable extends Table, TResult> {
   select: () => {
     from: (table: TTable) => {
       where: (condition: SQL | undefined) => {
@@ -28,7 +28,7 @@ export interface PaginateSource<TTable extends Table, TResult> {
  * `drizzle-orm/bun-sql` has no `all` at all, and an asynchronous SQLite driver's
  * `all()` returns a promise, so neither is assignable here.
  */
-export interface SyncRows {
+interface SyncRows {
   all: () => unknown[];
 }
 
@@ -79,7 +79,7 @@ export interface PaginateParams<
  * returns a `Page` rather than a promise of one and a repository over
  * `drizzle-orm/bun-sqlite` needs no `async` on its `list`.
  */
-export interface SyncPaginateParams<
+interface SyncPaginateParams<
   TTable extends Table,
 > extends PaginateBase<TTable> {
   readonly db: PaginateSource<TTable, SyncRows>;

@@ -12,7 +12,7 @@ import { Overlap } from './marker.js';
  * `isTimezoneCode` type guard upstream would remove the cast, and is the only thing
  * this needs from `@arkv/timezones` that it does not already do.
  */
-export const assertZone = (zone: string, where: string): string => {
+const assertZone = (zone: string, where: string): string => {
   if (getZone(zone as TimezoneCode) === null) {
     throw new ScheduleError(
       ScheduleErrorCode.INVALID_SCHEDULE,

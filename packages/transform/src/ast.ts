@@ -36,22 +36,22 @@ export interface MethodDefinition extends Node {
   readonly value: FunctionExpression;
 }
 
-export interface TSParameterProperty extends Node {
+interface TSParameterProperty extends Node {
   readonly type: 'TSParameterProperty';
   readonly parameter: Node;
 }
 
-export interface TSTypeAnnotation extends Node {
+interface TSTypeAnnotation extends Node {
   readonly type: 'TSTypeAnnotation';
   readonly typeAnnotation: Node;
 }
 
-export interface TSTypeReference extends Node {
+interface TSTypeReference extends Node {
   readonly type: 'TSTypeReference';
   readonly typeName: Node;
 }
 
-export interface ImportDeclaration extends Node {
+interface ImportDeclaration extends Node {
   readonly type: 'ImportDeclaration';
   readonly specifiers: readonly Node[];
   readonly importKind: 'value' | 'type';
@@ -67,13 +67,13 @@ export interface ImportSpecifier extends Node {
   readonly importKind?: 'value' | 'type';
 }
 
-export interface TSQualifiedName extends Node {
+interface TSQualifiedName extends Node {
   readonly type: 'TSQualifiedName';
   readonly left: Node;
   readonly right: Identifier;
 }
 
-export interface AssignmentPattern extends Node {
+interface AssignmentPattern extends Node {
   readonly type: 'AssignmentPattern';
   readonly left: Node;
 }
@@ -88,7 +88,7 @@ export const isMethodDefinition = guard<MethodDefinition>('MethodDefinition');
 export const isTypeReference = guard<TSTypeReference>('TSTypeReference');
 export const isImportDeclaration =
   guard<ImportDeclaration>('ImportDeclaration');
-export const isQualifiedName = guard<TSQualifiedName>('TSQualifiedName');
+const isQualifiedName = guard<TSQualifiedName>('TSQualifiedName');
 export const isAssignmentPattern =
   guard<AssignmentPattern>('AssignmentPattern');
 export const isParameterProperty = guard<TSParameterProperty>(

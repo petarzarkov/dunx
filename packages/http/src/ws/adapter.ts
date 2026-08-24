@@ -63,7 +63,7 @@ export interface WebSocketRuntime {
   readonly warnings: readonly string[];
 }
 
-export interface GatewaySummary {
+interface GatewaySummary {
   readonly name: string;
   readonly path: string;
   /** `@OnMessage('name')` events. A raw catch-all has no name to report. */

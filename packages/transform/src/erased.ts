@@ -78,9 +78,7 @@ export const collectTypeOnlyNames = (
 };
 
 /** A class's own type parameters are erased, so `T` is never a usable token. */
-export const collectTypeParameters = (
-  klass: ClassNode,
-): ReadonlySet<string> => {
+const collectTypeParameters = (klass: ClassNode): ReadonlySet<string> => {
   const names = new Set<string>();
   if (klass.typeParameters === null) return names;
 

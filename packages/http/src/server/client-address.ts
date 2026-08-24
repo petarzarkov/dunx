@@ -1,7 +1,7 @@
 import type { BunRequest, Server } from 'bun';
 import { AppError } from '@dunx/core';
 
-export interface AddressSource {
+interface AddressSource {
   readonly server: Server<unknown>;
   readonly trustProxy: boolean | number;
 }
