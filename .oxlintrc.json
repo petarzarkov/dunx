@@ -130,7 +130,8 @@
     {
       "files": ["**/*.test.ts", "**/*.test.tsx"],
       "rules": {
-        "typescript/await-thenable": "off"
+        "typescript/await-thenable": "off",
+        "max-lines": ["error", { "max": 800 }]
       }
     },
     {
