@@ -596,6 +596,11 @@ then not cover it.
   that section: `@dunx/core` is 91.0% functions with every reachable function
   covered, and `infra` at 90.7% lines and `openapi` at 90.4% functions are the
   other thin margins.
+- **The release job takes the model and badges from the `coverage` job** as an
+  artifact rather than regenerating them. Regenerating ran the whole suite a second
+  time and needed a second copy of the service containers the gate depends on, which
+  is how the first release run on main failed: no valkey there, 49 tests skipped,
+  `infra` read 85.8%. One place declares the services, one job runs the gate.
 - Coverage report, badges, and the GitHub Pages site: `/coverage-report`
 
 ## Typecheck

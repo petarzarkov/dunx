@@ -193,6 +193,21 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # The model the site renders and the badges the README links, both generated
+      # and gitignored. Published here so the release job can take them rather than
+      # regenerate them: regenerating meant a second full test run *and* a second
+      # copy of the service containers the gate needs, which is exactly what broke
+      # the first release run on main.
+      - name: Upload the coverage model and badges
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-model
+          path: |
+            internal/docs/src/generated/coverage.json
+            internal/docs/public/badges
+          if-no-files-found: error
+          retention-days: 14
+
   docs:
     name: Documentation site
     runs-on: ubuntu-latest
@@ -241,11 +256,30 @@ jobs:
       - name: Build
         run: bun run ci build
 
-      # Run again here rather than downloaded from the `coverage` job: the site
-      # this job deploys renders the model and serves the badges, and a second
-      # 14.6s on a job that already gates the release costs no wall clock.
-      - name: Coverage model and badges
-        run: bun run ci coverage
+      # Taken from the `coverage` job, not regenerated. Regenerating ran the whole
+      # suite again, and the gate it ends in needs the valkey and postgres services
+      # that job declares: without them 49 tests skip, `infra` reads 85.8% against
+      # its 92.6%, and this step fails on a release that nothing was wrong with.
+      # One place declares the services, one job runs the gate.
+      #
+      # After the build, whose docs `generate` writes an empty model when it finds
+      # none and leaves a real one alone, and before `docs:build`, which is what
+      # copies `public/badges` into the deployed site.
+      - name: Download the coverage model and badges
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-model
+          path: internal/docs
+
+      # Loud rather than subtle. The upload roots the archive at the least common
+      # ancestor of its paths, so a third path added above `internal/docs` would
+      # silently land these somewhere else and the site would deploy an empty
+      # coverage page with no badges.
+      - name: Check the model and badges landed
+        run: |
+          test -f internal/docs/src/generated/coverage.json
+          test -d internal/docs/public/badges
+          echo "coverage model $(wc -c < internal/docs/src/generated/coverage.json) bytes, $(ls internal/docs/public/badges | wc -l) badges"
 
       - name: Configure git identity
         run: |
