@@ -16,6 +16,13 @@ const storage = (prefix = ''): S3Storage =>
 
 /** Real credentials in the environment turn the integration block on. */
 const liveBucket = Bun.env['DUNX_S3_TEST_BUCKET'];
+/**
+ * An S3-compatible endpoint, for running the block against MinIO rather than AWS.
+ * Its own variable rather than `S3_ENDPOINT`, which `Bun.S3Client` reads for every
+ * client that does not set one: exporting that turned the offline `presign` tests
+ * below into assertions about MinIO's host, and two of them failed.
+ */
+const liveEndpoint = Bun.env['DUNX_S3_TEST_ENDPOINT'];
 
 /** See local.test.ts - bun:test's `.rejects` chain is not typed as thenable. */
 const rejection = (promise: Promise<unknown>): Promise<unknown> =>
@@ -176,7 +183,13 @@ describe.skipIf(liveBucket === undefined)(
     // out - but the fallback keeps `bucket` a plain string for the typechecker.
     const live = (): S3Storage =>
       new S3Storage(
-        new S3StorageOptions({ bucket: liveBucket ?? '' }, 'dunx-files-test'),
+        new S3StorageOptions(
+          {
+            bucket: liveBucket ?? '',
+            ...(liveEndpoint === undefined ? {} : { endpoint: liveEndpoint }),
+          },
+          'dunx-files-test',
+        ),
       );
     const key = `${crypto.randomUUID()}.txt`;
 

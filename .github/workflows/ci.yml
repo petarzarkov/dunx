@@ -38,42 +38,9 @@ jobs:
   unit:
     name: Packages, tools and scripts
     runs-on: ubuntu-latest
-    # `@dunx/infra`'s suites gate on whether their backing service answers and skip
-    # when it does not, so CI ran neither: 49 tests skipped here against 5 on a
-    # machine with valkey up, which put `infra` at 84.6% lines against the 90.7% the
-    # floor was set from. The gate was reading a different denominator than the
-    # machine that set it.
-    #
-    # Postgres covers `db/connection.ts` and `db/sql/connection.ts`, which had no
-    # test run anywhere: `drizzle-orm/bun-sql` is a sanctioned integration and
-    # `DUNX_DB_TEST_URL` was set in no environment. Adding a live-service suite means
-    # adding its service here, or the floor measures less than it looks like.
-    env:
-      DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
-    services:
-      valkey:
-        image: valkey/valkey:8-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: dunx
-          POSTGRES_PASSWORD: dunx
-          POSTGRES_DB: dunx
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U dunx"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-
+    # No services here on purpose. The suites that need one skip without it, and
+    # `coverage` runs the same files with every service attached. Declaring them
+    # twice is what broke the release job: it ran the gate with none.
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -146,6 +113,14 @@ jobs:
     # adding its service here, or the floor measures less than it looks like.
     env:
       DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
+      DUNX_S3_TEST_BUCKET: dunx-test
+      DUNX_S3_TEST_ENDPOINT: http://localhost:9000
+      # Read by `Bun.S3Client` for any client that sets none. `S3_ENDPOINT` is
+      # deliberately *not* set: the offline presign suite asserts on AWS hosts, and
+      # exporting that turned two of its tests into assertions about MinIO.
+      AWS_ACCESS_KEY_ID: dunxtest
+      AWS_SECRET_ACCESS_KEY: dunxtestsecret
+      AWS_REGION: us-east-1
     services:
       valkey:
         image: valkey/valkey:8-alpine
@@ -173,6 +148,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+
+      # MinIO cannot be a `services:` container: it needs `server /data` as its
+      # command and a service block has no way to pass one. `files/s3.ts` was 35.1%
+      # lines with nothing exercising `Bun.S3Client` at all; the round-trip against
+      # a real bucket takes it to 87.8%.
+      - name: Start MinIO and create the bucket
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=dunxtest -e MINIO_ROOT_PASSWORD=dunxtestsecret \
+            minio/minio server /data
+          for _ in $(seq 1 40); do
+            if curl -sf http://localhost:9000/minio/health/live >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://localhost:9000/minio/health/live >/dev/null
+          docker run --rm --network host \
+            -e MC_HOST_local=http://dunxtest:dunxtestsecret@localhost:9000 \
+            minio/mc mb --ignore-existing local/dunx-test
 
       - name: Build
         run: bun run ci build

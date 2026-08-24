@@ -983,3 +983,20 @@ While measuring that: **`bun test` writes its report to stderr**, and a script's
 `console.log` goes to stdout. Reading the two pipes to strings and concatenating
 them put `bun run test:cov`'s coverage table 370 lines _above_ the test run that
 produced it. `scripts/ci.ts` drains both pipes into one buffer as the chunks arrive.
+
+### `Bun.S3Client` reads `S3_ENDPOINT` for every client that sets none
+
+Pointing the live `@dunx/infra/files` suite at MinIO by exporting `S3_ENDPOINT`
+broke two tests that had nothing to do with it. `S3StorageOptions` passes its
+options straight through, and anything omitted falls back to the environment, so
+the offline `presign` suite - which sets explicit fake credentials and region but
+no endpoint - started signing URLs against `localhost:9000` and failed its
+assertions on `s3.eu-west-1.amazonaws.com`.
+
+The live block takes `DUNX_S3_TEST_ENDPOINT` instead and passes it explicitly, so
+the endpoint reaches one client rather than all of them. Credentials can stay
+ambient: those tests set theirs, so `AWS_ACCESS_KEY_ID` in the environment changes
+nothing.
+
+Against MinIO the whole suite passes as written, no path-style flag needed, and
+`files/s3.ts` goes from 35.1% lines to 87.8% on one round-trip test.
