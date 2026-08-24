@@ -3,7 +3,7 @@ import {
   provide,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   type Registration,
 } from '@dunx/core';
 import { Compression } from './compression.js';
@@ -41,9 +41,7 @@ export class CompressionModule {
 
   /** `forRoot` with the options read off the container - a config value, usually. */
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<CompressionOptionsInit, D> & {
-      readonly imports?: DynamicModule['imports'];
-    },
+    config: AsyncModuleConfig<CompressionOptionsInit, D>,
   ): DynamicModule {
     return {
       module: CompressionModule,

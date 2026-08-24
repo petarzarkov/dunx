@@ -3,7 +3,7 @@ import {
   provide,
   type Deps,
   type DynamicModule,
-  type FactoryProvider,
+  type AsyncModuleConfig,
   type ProviderEntry,
 } from '@dunx/core';
 import { HealthController, HiddenHealthController } from './controller.js';
@@ -86,8 +86,7 @@ export class HealthModule {
    * wait on a factory. Pass `routes: false` and mount your own if that matters.
    */
   static forRootAsync<const D extends Deps>(
-    config: FactoryProvider<HealthOptionsInit, D> & {
-      readonly imports?: DynamicModule['imports'];
+    config: AsyncModuleConfig<HealthOptionsInit, D> & {
       readonly routes?: boolean;
       readonly documented?: boolean;
     },

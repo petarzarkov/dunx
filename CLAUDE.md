@@ -421,18 +421,31 @@ contravariant and the token carries no type argument to recover.
 `RedisModule`, `FilesModule` and `DbModule` for the same reason: reading options
 off `ConfigService` is the one thing a zero-argument `forRoot` function cannot do.
 
-**Its config type is `AsyncModuleConfig`, not `FactoryProvider`, and the difference
-is `imports`.** A dynamic module is its own scope, so a factory injecting a provider
-needs the module that exports it in _that module's_ imports; importing it alongside
-does not reach the factory. `ScheduleModule` and `RedisModule` took a bare
-`FactoryProvider` and forwarded nothing, so injecting from a non-global module was a
-boot error there while working everywhere else. The documented case survived only
-because `ConfigModule.forRoot` is `global: true`.
+**Every `forRootAsync` takes an `AsyncModuleConfig`, never a bare
+`FactoryProvider`, and the difference is `imports`.** A dynamic module is its own
+scope, so a factory injecting a provider needs the module that exports it in _that
+module's_ imports; importing it alongside does not reach the factory.
+`FactoryProvider` is the shape `provide()` takes, not the shape a module factory
+takes: reaching for it in a `forRootAsync` signature is the mistake.
 
-Still on the older shape, and the same gap: `HttpModule`'s client `forRootAsync`
-takes a `FactoryProvider` and forwards no `imports` at all, while `compression`,
-`health`, `static`, `throttle` and `@dunx/openapi` restate `AsyncModuleConfig`
-inline as `FactoryProvider<T, D> & { imports?: DynamicModule['imports'] }`.
+Nine modules got this wrong in two ways. `ScheduleModule`, `RedisModule` and
+`HttpModule`'s client took a bare `FactoryProvider` and forwarded nothing, so
+injecting from a non-global module was a boot error there while working elsewhere;
+the documented cases survived only because `ConfigModule.forRoot` is `global: true`.
+`compression`, `health`, `static`, `throttle` and `@dunx/openapi` restated
+`AsyncModuleConfig` inline as
+`FactoryProvider<T, D> & { imports?: DynamicModule['imports'] }`, which is Rule 2 on
+a type that already existed. All of them are uniform now.
+
+`@dunx/openapi` is the one with an extra term: it wraps the app root, so it forwards
+`[options.root, ...(options.imports ?? [])]`.
+
+Two things to know when testing this. A **`token()`** is required, not a class: an
+unbound class self-binds into whichever scope asks first, so a class resolves
+whether or not `imports` reached the factory and the test passes against the bug it
+guards. And the forwarding is one line per module, so
+`packages/http/src/async-imports.test.ts` asserts it structurally for the modules
+whose resolution is covered elsewhere.
 
 ## Request logging
 
