@@ -12,7 +12,7 @@ import {
   Title,
 } from '@mantine/core';
 import { Prose } from '@dunx/ui';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DocSymbol, PackageBody } from '../../scripts/extract/model';
 import { useChunk } from '../chunk';
 
@@ -125,14 +125,16 @@ export const PackagePage = ({
   /**
    * A `?h=symbol-…` route has to open the API tab, or the card it names is
    * never mounted and the reader lands on the readme instead. Set on mount for
-   * a cold load, and again on the effect for a hash change that keeps this page
-   * instance alive.
+   * a cold load, and adjusted during render for a hash change that keeps this
+   * page instance alive - from an effect, the readme tab paints first.
    */
   const [tab, setTab] = useState<string | null>(linked ? 'api' : 'readme');
+  const [lastLinked, setLastLinked] = useState(linked);
 
-  useEffect(() => {
+  if (linked !== lastLinked) {
+    setLastLinked(linked);
     if (linked) setTab('api');
-  }, [linked]);
+  }
 
   if (!pkg) return <NotFound what={`package "${dir}"`} />;
 

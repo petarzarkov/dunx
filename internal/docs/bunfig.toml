@@ -1,11 +1,15 @@
 # The site is a browser bundle, so its tests need a DOM before any module under
 # src/ can load.
 #
+# The preload also registers testing-library's `cleanup` as a global `afterEach`,
+# which is what keeps these suites fast: `render` has no auto-cleanup under
+# `bun test`, and the mounted trees left behind took the whole suite from 3.7s to
+# 16.6s. See the comment in happydom.ts.
+#
 # The suite also runs with `--timeout 20000`, set on the `test` script rather than
-# here. These tests render real Mantine and recharts trees through happy-dom, and
-# several legitimately take seconds: on a GitHub runner, which is 2 to 3 times
-# slower than a laptop, `symbol-anchor`'s scroll test measured 3,995 ms and 4,595 ms
-# against Bun's 5,000 ms default. The default was never chosen for this suite, and a
-# real hang still fails, just later.
+# here. These tests render real Mantine and recharts trees through happy-dom, and a
+# GitHub runner is 2 to 3 times slower than a laptop. Headroom rather than a
+# measured need now that the slowest file is 831 ms; a real hang still fails, just
+# later.
 [test]
 preload = ["./happydom.ts"]

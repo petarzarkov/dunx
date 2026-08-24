@@ -9,9 +9,10 @@
     "dev": "bun run generate && vite",
     "generate": "bun ./scripts/generate.ts",
     "preview": "vite preview",
-    "test": "bun test --bail --timeout 20000",
-    "typecheck": "bun run generate && tsc --noEmit",
-    "shots": "bun run build && bun ./scripts/shots.ts"
+    "test": "bun test src scripts --bail --timeout 20000",
+    "typecheck": "bun run generate --if-missing && tsc --noEmit",
+    "shots": "bun run build && bun run test:browser",
+    "test:browser": "cd browser && bun test --timeout 60000"
   },
   "dependencies": {
     "@dunx/ui": "workspace:*",
@@ -31,7 +32,6 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^6.0.5",
-    "playwright": "^1.62.1",
     "vite": "^8.2.0"
   }
 }

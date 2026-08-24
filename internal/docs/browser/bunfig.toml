@@ -1,0 +1,14 @@
+# Empty on purpose, and it has to be here rather than a `-c` flag.
+#
+# This suite drives a real Chrome through `Bun.WebView` and must **not** load the
+# workspace's `happydom.ts` preload: `GlobalRegistrator.register()` replaces the
+# global `Response` class, `Bun.serve` rejects a Response that is not its own with
+# "Expected a Response object", and the preview server then answers nothing so
+# every route reads as an empty page.
+#
+# `bun test -c ../bunfig.browser.toml` does not help: the preload still ran
+# (probed - happy-dom reported registered either way), and
+# `GlobalRegistrator.unregister()` in a `beforeAll` does not give the native
+# `Response` back. Bun picks the config next to the working directory, so the
+# `test:browser` script runs from here.
+[test]

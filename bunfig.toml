@@ -9,4 +9,19 @@ coverageSkipTestFiles = true
 # Cross-package imports resolve to built output (a package's node_modules entry points
 # at its sibling's dist/), which would otherwise be counted twice - once as src, once
 # as dist.
-coveragePathIgnorePatterns = ["**/dist/**"]
+# A `*.fixture.ts` is test scaffolding, the same as a `*.test.ts` that
+# `coverageSkipTestFiles` already drops. `tools/mcp/src/app.fixture.ts` is a module
+# graph for the tests to read: 16 of its 17 functions are decorated handlers nothing
+# calls, which alone put @dunx/mcp at 76.62% functions.
+coveragePathIgnorePatterns = [
+  "**/dist/**",
+  "**/*.fixture.ts",
+  # Scaffolds the CLI suites write and then delete. `mkdtempSync` under
+  # `packages/openapi/`, so they were counted as shipped code: 8 of that package's
+  # 136 functions were four throwaway `app.module.ts` files, which alone held it at
+  # 90.44% functions.
+  "**/cli-fixture-*/**",
+  # Seeder files the db suites write into the system temp directory.
+  "**/dunx-seeds-*/**",
+  "**/dunx-sync-seed-*/**",
+]

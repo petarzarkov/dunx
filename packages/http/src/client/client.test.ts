@@ -95,8 +95,8 @@ beforeAll(() => {
   base = server.url.href;
 });
 
-afterAll(() => {
-  server.stop(true);
+afterAll(async () => {
+  await server.stop(true);
 });
 
 /**

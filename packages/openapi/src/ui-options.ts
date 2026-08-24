@@ -102,10 +102,15 @@ export interface SwaggerUiOptions {
   readonly persistAuthorization?: boolean;
   readonly request?: { readonly curlOptions?: readonly string[] };
 
-  /** `'alpha'`, `'method'`, or the source of a comparator. */
-  readonly operationsSorter?: 'alpha' | 'method' | RawJs;
+  /**
+   * `'alpha'`, `'method'`, or the source of a comparator.
+   *
+   * `RawJs & {}` rather than `RawJs`: the alias is `string`, so a bare union with
+   * it reduces to `string` and the two shorthands stop being offered.
+   */
+  readonly operationsSorter?: 'alpha' | 'method' | (RawJs & {});
   /** `'alpha'`, or the source of a comparator. */
-  readonly tagsSorter?: 'alpha' | RawJs;
+  readonly tagsSorter?: 'alpha' | (RawJs & {});
   /** Source of `(request) => request`. */
   readonly requestInterceptor?: RawJs;
   /** Source of `(response) => response`. */
@@ -183,8 +188,11 @@ export const renderUiOptions = (
     if (value === undefined) continue;
     if ((DUNX_KEYS as readonly string[]).includes(key)) continue;
 
-    if (isRawKey(key) || (isSorter(key) && !isShorthand(value))) {
-      parts.push(`${JSON.stringify(key)}:${String(value)}`);
+    if (
+      typeof value === 'string' &&
+      (isRawKey(key) || (isSorter(key) && !isShorthand(value)))
+    ) {
+      parts.push(`${JSON.stringify(key)}:${value}`);
       continue;
     }
     parts.push(`${JSON.stringify(key)}:${JSON.stringify(value)}`);

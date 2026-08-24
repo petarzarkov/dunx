@@ -11,6 +11,6 @@
     "resolveJsonModule": false,
     "noEmit": true
   },
-  "include": ["src", "scripts", "happydom.ts", "vite.config.ts"],
+  "include": ["src", "scripts", "browser", "happydom.ts", "vite.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

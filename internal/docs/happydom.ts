@@ -25,3 +25,19 @@ Bun.plugin({
     }));
   },
 });
+
+/**
+ * Unmount after every test, for every file.
+ *
+ * `render()` has no auto-cleanup under `bun test`: testing-library registers its
+ * own only when it finds Jest's globals. Without it a `render` is never unmounted,
+ * so `useRoute`'s `hashchange` listener survives the test that created it - and
+ * `mount()` sets `window.location.hash` first thing, which then re-renders every
+ * detached tree left by every earlier file. `symbol-anchor.test.tsx` ran 1.7s on
+ * its own and 12.5s behind the other nine.
+ *
+ * Registered from the preload rather than per file so a new suite cannot forget it.
+ */
+const { cleanup } = await import('@testing-library/react');
+const { afterEach } = await import('bun:test');
+afterEach(cleanup);

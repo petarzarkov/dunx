@@ -388,3 +388,86 @@ describe('zones, on a Bun that honours tz', () => {
     registry.stopAll();
   });
 });
+
+/**
+ * `forRoot` takes a plain options object, so the only thing `forRootAsync` adds is
+ * `inject`: reading `tz` or `enabled` off a `ConfigService` is the one thing a
+ * zero-argument `forRoot` cannot do.
+ */
+describe('ScheduleModule.forRootAsync', () => {
+  /**
+   * From a globally published provider, which is what the API allows: this
+   * `forRootAsync` takes a `FactoryProvider`, not an `AsyncModuleConfig`, so it has
+   * no `imports` to forward. The documented case works because
+   * `ConfigModule.forRoot` is `global: true`.
+   */
+  it('injects what it names', async () => {
+    class Settings {
+      readonly tz = 'Europe/Sofia';
+    }
+
+    @Module({
+      imports: [
+        ScheduleModule.forRootAsync({
+          useFactory: (settings: Settings) => ({
+            tz: settings.tz,
+            keepAlive: false,
+            enabled: false,
+          }),
+          inject: [Settings],
+        }),
+      ],
+      providers: [Settings, provide(Logger, { useValue: new Quiet() })],
+      exports: [Logger, Settings],
+      global: true,
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+
+    expect(app.get(ScheduleOptions).tz).toBe('Europe/Sofia');
+    expect(app.get(ScheduleOptions).enabled).toBe(false);
+    expect(app.get(ScheduleRegistry)).toBeInstanceOf(ScheduleRegistry);
+    await app.shutdown();
+  });
+
+  it('takes a bare loader and awaits it', async () => {
+    @Module({
+      imports: [
+        ScheduleModule.forRootAsync(async () => {
+          await Bun.sleep(1);
+          return { keepAlive: false, enabled: false, tz: 'UTC' };
+        }),
+      ],
+      providers: [provide(Logger, { useValue: new Quiet() })],
+      exports: [Logger],
+      global: true,
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+
+    expect(app.get(ScheduleOptions).tz).toBe('UTC');
+    expect(app.get(ScheduleOptions).keepAlive).toBe(false);
+    await app.shutdown();
+  });
+
+  it('defaults inject away when the config omits it', async () => {
+    @Module({
+      imports: [
+        ScheduleModule.forRootAsync({
+          useFactory: () => ({ keepAlive: false, enabled: false }),
+        }),
+      ],
+      providers: [provide(Logger, { useValue: new Quiet() })],
+      exports: [Logger],
+      global: true,
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+
+    expect(app.get(ScheduleOptions).enabled).toBe(false);
+    await app.shutdown();
+  });
+});
