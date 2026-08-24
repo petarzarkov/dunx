@@ -43,6 +43,26 @@ const DOCS_DIR = join(REPO_ROOT, 'docs');
 const OUT_DIR = join(TOOL_ROOT, 'src', 'generated');
 const GUIDES_OUT = join(OUT_DIR, 'guides');
 const PACKAGES_OUT = join(OUT_DIR, 'packages');
+/**
+ * `--if-missing` generates only when there is nothing there, and is what
+ * `typecheck` passes.
+ *
+ * `src/generated/` is a build output that `build` owns. Regenerating it from
+ * `typecheck` meant two phases of `bun run ci` writing it at once, and the
+ * `rmSync` below empties two directories on the way: `docs/test` read the model
+ * mid-wipe and saw zero published pages, once in five runs. The guard is enough
+ * because `build` runs before every other phase, so the files are always there
+ * and always fresh by the time anything else asks.
+ */
+if (
+  process.argv.includes('--if-missing') &&
+  existsSync(join(OUT_DIR, 'index.json')) &&
+  existsSync(join(OUT_DIR, 'chunks.ts'))
+) {
+  console.log('docs: generated model already present, skipping');
+  process.exit(0);
+}
+
 // Created here, not next to the first write. `src/generated/` is gitignored, so
 // on a clean checkout it does not exist, and a write placed above the mkdir fails
 // with ENOENT only in CI. That happened once already.
