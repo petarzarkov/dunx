@@ -1,12 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { loadPackage } from './data';
 import { mount } from './harness';
 import { anchoredSymbol, parseRoute, symbolHref } from './router';
@@ -26,6 +19,10 @@ const scrolled: string[] = [];
  * of `requestAnimationFrame` at best, and `bun run --filter '*' test` runs every
  * workspace at once, so under contention it blew any timeout.
  *
+ * The other half of that contention was this file's own: with no `cleanup()`, every
+ * earlier suite left a mounted tree listening for `hashchange`, and this file ran
+ * 12.5s behind the other nine against 1.7s alone. Fixed in `happydom.ts`.
+ *
  * So the frames are queued instead of scheduled, and `flushFrames` drains them on
  * demand. The timing dependence is gone rather than widened - the same chain still
  * has to call `scrollIntoView` with the right id, and removing the flush fails.
@@ -33,6 +30,8 @@ const scrolled: string[] = [];
 const frames: FrameRequestCallback[] = [];
 const realRaf = globalThis.requestAnimationFrame;
 const realCancel = globalThis.cancelAnimationFrame;
+// Saved unbound on purpose, to put the real method back on the prototype in afterAll.
+// oxlint-disable-next-line typescript/unbound-method
 const realScroll = Element.prototype.scrollIntoView;
 
 /** Bounded above SCROLL_ATTEMPTS, so a runaway chain fails rather than hangs. */
@@ -63,10 +62,6 @@ beforeEach(() => {
   ): void {
     scrolled.push(this.id);
   };
-});
-
-afterEach(() => {
-  document.body.innerHTML = '';
 });
 
 /** Restored: `bun test` shares one process, so a stub here reaches every later file. */
