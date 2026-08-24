@@ -9,4 +9,8 @@ coverageSkipTestFiles = true
 # Cross-package imports resolve to built output (a package's node_modules entry points
 # at its sibling's dist/), which would otherwise be counted twice - once as src, once
 # as dist.
-coveragePathIgnorePatterns = ["**/dist/**"]
+# A `*.fixture.ts` is test scaffolding, the same as a `*.test.ts` that
+# `coverageSkipTestFiles` already drops. `tools/mcp/src/app.fixture.ts` is a module
+# graph for the tests to read: 16 of its 17 functions are decorated handlers nothing
+# calls, which alone put @dunx/mcp at 76.62% functions.
+coveragePathIgnorePatterns = ["**/dist/**", "**/*.fixture.ts"]

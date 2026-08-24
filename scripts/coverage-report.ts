@@ -1,8 +1,10 @@
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   writeFileSync,
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -22,6 +24,12 @@ const ROOT_DIR = resolve(import.meta.dir, '..');
 /** Every parent that holds a published workspace, so a tool gets a badge too. */
 const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 const COVERAGE_DIR = join(ROOT_DIR, 'coverage');
+/**
+ * The floor every published workspace clears, on lines **and** on functions.
+ * `badge()` already paints at or above this green, so the gate and the badge
+ * cannot disagree. A workspace with no tests at all counts as 0.
+ */
+const MIN_COVERAGE = 90;
 const LCOV_PATH = join(COVERAGE_DIR, 'lcov.info');
 const DOCS_DIR = join(ROOT_DIR, 'internal', 'docs');
 const MODEL_DIR = join(DOCS_DIR, 'src', 'generated');
@@ -275,7 +283,13 @@ const model: CoverageModel = {
 mkdirSync(MODEL_DIR, { recursive: true });
 mkdirSync(BADGE_DIR, { recursive: true });
 
-writeFileSync(join(MODEL_DIR, 'coverage.json'), JSON.stringify(model));
+// Written through a rename: the documentation site imports this file, and
+// `bun run ci` runs the phase that generates it beside the phase that reads it.
+// A partial `writeFileSync` is a `JSON.parse` failure in the other process.
+const modelPath = join(MODEL_DIR, 'coverage.json');
+writeFileSync(`${modelPath}.tmp`, JSON.stringify(model));
+renameSync(`${modelPath}.tmp`, modelPath);
+
 writeFileSync(join(BADGE_DIR, 'coverage.svg'), badge(totalLines));
 
 for (const pkg of packages) {
@@ -297,4 +311,64 @@ console.log(
 );
 if (untested.length) {
   console.log(`No tests in: ${untested.join(', ')}`);
+}
+
+const rows = [
+  ...packages.map((pkg) => ({
+    name: pkg.name,
+    lines: pct(pkg.linesHit, pkg.linesFound),
+    funcs: pct(pkg.funcsHit, pkg.funcsFound),
+  })),
+  ...untested.map((name) => ({ name, lines: 0, funcs: 0 })),
+].sort((a, b) => a.lines - b.lines);
+
+const below = (value: number): boolean => value < MIN_COVERAGE;
+const failing = rows.filter((row) => below(row.lines) || below(row.funcs));
+const mark = (value: number): string => (below(value) ? '❌' : '✅');
+
+/**
+ * Rendered into the job summary as well as the log, because a percentage buried
+ * in 14 seconds of test output is a percentage nobody reads.
+ */
+const table = [
+  `| Package | Lines | Functions |`,
+  `| --- | --- | --- |`,
+  ...rows.map(
+    (row) =>
+      `| \`${row.name}\` | ${mark(row.lines)} ${format(row.lines)}% | ${mark(row.funcs)} ${format(row.funcs)}% |`,
+  ),
+].join('\n');
+
+const headline = `${format(totalLines)}% lines, ${format(pct(totals.funcsHit, totals.funcsFound))}% functions, floor ${MIN_COVERAGE}%`;
+
+const summaryPath = process.env['GITHUB_STEP_SUMMARY'];
+if (summaryPath !== undefined) {
+  appendFileSync(
+    summaryPath,
+    [
+      `## Coverage`,
+      ``,
+      failing.length === 0
+        ? `${headline}. Every workspace clears it.`
+        : `${headline}. **${failing.length} below the floor:** ${failing.map((row) => row.name).join(', ')}.`,
+      ``,
+      table,
+      ``,
+    ].join('\n'),
+  );
+}
+
+console.log(`\n${headline}`);
+console.log(table);
+
+if (failing.length > 0) {
+  console.error(
+    `\nBelow ${MIN_COVERAGE}%: ${failing
+      .map(
+        (row) =>
+          `${row.name} (${format(row.lines)}% lines, ${format(row.funcs)}% functions)`,
+      )
+      .join('; ')}`,
+  );
+  process.exit(1);
 }
