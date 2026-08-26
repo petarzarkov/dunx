@@ -22,7 +22,7 @@ import { ProfileController } from './profile.controller.js';
         // `AppConfigService` does not: ConfigModule is global.
         imports: [DatabaseModule],
         useFactory: (config: AppConfigService, connection: DbConnection) => ({
-          secret: config.get('auth').secret,
+          secret: config.get('auth.secret'),
           baseURL: `http://localhost:${config.get('port')}`,
           // What better-auth matches a pathname against; the global prefix is
           // what makes the mounted `/auth` route answer here.

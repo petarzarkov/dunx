@@ -120,8 +120,8 @@ hands back a group rather than a lone string.
 ```ts
 class ConfigService<T extends object = Record<string, unknown>> {
   readonly values: T;
-  get<K extends keyof T>(key: K): T[K];
-  getOrThrow<K extends keyof T>(key: K): NonNullable<T[K]>;
+  get(keyOrPath): // the value there, typed
+  getOrThrow(keyOrPath): // the same, minus null and undefined
 }
 ```
 
@@ -131,22 +131,28 @@ export class Notifier {
 
   send(): void {
     const { level } = this.config.get('log');
+    const host = this.config.get('db.host');
     const { appName } = this.config.values;
-    const url = this.config.getOrThrow('redis').url;
+    const url = this.config.getOrThrow('redis.url');
   }
 }
 ```
 
 - `get(key)` returns the value at that key, typed. A key absent from `T` is a
   compile error rather than a runtime `undefined`.
-- `getOrThrow(key)` guards the **value** being present. A missing key is already
+- `get('a.b')` and `get('a.b.c')` read a path, checked the same way. A step that
+  is absent or `null` reads as `undefined` rather than throwing, and the return
+  type says so.
+- `getOrThrow(...)` guards the **value** being present. A missing key is already
   a type error, so this catches a declared-but-optional field that is `undefined`
-  or `null` at run time. It throws `ConfigError`.
+  or `null` at run time. It throws `ConfigError` naming the whole path.
 - `values` is the whole validated object, for destructuring or passing on.
 
-There is no dotted-path lookup. The object is fully typed, and
-`config.values.db.host` reads better than `config.get('db.host')` while staying
-checked.
+Paths stop at three segments, and `config.values.a.b.c.d` is what reaches past
+them. Each depth is a separate overload rather than one recursive type: a
+conditional type over `T` anywhere on this class makes its variance unmeasurable,
+and `app.get(ConfigService)` then stops compiling. A top-level key that itself
+contains a dot is read whole, so it keeps winning over a path that spells it.
 
 ## Why `as` exists
 

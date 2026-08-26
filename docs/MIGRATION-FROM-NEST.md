@@ -231,7 +231,7 @@ What still changes, per class:
 | `OnModuleInit`                            | `OnInit` - on a service as well as a module       |
 | `OnModuleDestroy`                         | `OnShutdown` - likewise                           |
 | `NestFactory.create`                      | `HttpFactory.create`                              |
-| `config.get('a.b')`                       | `config.get('a').b` - top-level keys only         |
+| `config.get('a.b')`                       | same, up to three segments deep                   |
 | `logger.log(...)`                         | `logger.info(...)` - `log` works, deprecated      |
 | `@HttpCode(HttpStatus.CREATED)` on a POST | delete it - POST answers 201 already              |
 | relative imports                          | `.js` under `nodenext`, unchanged under `bundler` |

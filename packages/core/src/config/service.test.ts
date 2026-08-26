@@ -71,3 +71,73 @@ describe('ConfigService', () => {
     expect(new ConfigError('nope').name).toBe('ConfigError');
   });
 });
+
+/**
+ * Dotted paths. Typed by an overload per depth rather than a recursive
+ * conditional, for the reason recorded above `get` - the types are checked by
+ * `bun run typecheck`, so what is left to assert here is the walk.
+ */
+interface Nested {
+  port: number;
+  db: { host: string; pool: { max: number }; label?: string };
+  cache?: { ttl: number };
+  'has.dot': string;
+  empty: null;
+}
+
+const nested = (): ConfigService<Nested> =>
+  new ConfigService<Nested>({
+    port: 3000,
+    db: { host: 'localhost', pool: { max: 10 } },
+    'has.dot': 'read whole',
+    empty: null,
+  });
+
+describe('dotted paths', () => {
+  it('reads two and three segments deep', () => {
+    expect(nested().get('db.host')).toBe('localhost');
+    expect(nested().get('db.pool.max')).toBe(10);
+  });
+
+  it('still reads a top-level key, including the object itself', () => {
+    expect(nested().get('port')).toBe(3000);
+    expect(nested().get('db')).toEqual({
+      host: 'localhost',
+      pool: { max: 10 },
+    });
+  });
+
+  it('reads through an absent step as undefined rather than throwing', () => {
+    expect(nested().get('cache.ttl')).toBeUndefined();
+    expect(nested().get('db.label')).toBeUndefined();
+  });
+
+  it('reads through a null step as undefined rather than throwing', () => {
+    // `empty` is null, so the walk stops there. Reaching into it would be a
+    // TypeError, which is what a hand-written `values.empty.anything` gives.
+    expect(nested().get('empty')).toBeNull();
+  });
+
+  /**
+   * A top-level key that contains a dot is read whole. Checked before the walk,
+   * so a real key always beats a path that happens to spell one - and so every
+   * call written before paths existed reads exactly what it used to.
+   */
+  it('prefers a literal key over splitting it', () => {
+    expect(nested().get('has.dot')).toBe('read whole');
+  });
+
+  describe('getOrThrow', () => {
+    it('takes the same paths', () => {
+      expect(nested().getOrThrow('db.pool.max')).toBe(10);
+      expect(nested().getOrThrow('db.host')).toBe('localhost');
+    });
+
+    it('names the whole path when a step is missing', () => {
+      expect(() => nested().getOrThrow('cache.ttl')).toThrow(ConfigError);
+      expect(() => nested().getOrThrow('cache.ttl')).toThrow(
+        'Config key "cache.ttl" is not set',
+      );
+    });
+  });
+});
