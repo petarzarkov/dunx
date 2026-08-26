@@ -2,12 +2,15 @@ import {
   AppRef,
   collectModules,
   Logger,
+  type InjectionToken,
   type ModuleRef,
   type OnInit,
   type OnShutdown,
+  type ResolvedModule,
 } from '@dunx/core';
 import { JobDispatcher } from './dispatcher.js';
-import { selectJobs } from './discover.js';
+import { selectJobs, type DiscoveredJob } from './discover.js';
+import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueOptions } from './options.js';
 import { QueueConsumer } from './worker.js';
 
@@ -69,7 +72,8 @@ export class QueueRunner implements OnInit, OnShutdown {
 
     const app = this.#ref.current;
     const modules = collectModules(this.#root);
-    const jobs = selectJobs(modules, (token) => app.get(token), undefined);
+    const jobs = this.#select(modules, (token) => app.get(token));
+    if (jobs === undefined) return;
     const dispatcher = new JobDispatcher(jobs, this.#options.jobTimeoutMs);
 
     this.#consumer = new QueueConsumer(
@@ -97,6 +101,34 @@ export class QueueRunner implements OnInit, OnShutdown {
           'This process is serving but consuming nothing.',
         error,
       );
+    }
+  }
+
+  /**
+   * The handlers to consume for, or `undefined` when `consume: 'if-any'` found
+   * none and this process should stand down.
+   *
+   * Only `NO_HANDLERS` is caught. Two handlers claiming one `(queue, name)` is a
+   * different refusal and stays a boot error under every setting - standing down
+   * on it would start a process that consumes an ambiguous graph.
+   */
+  #select(
+    modules: readonly ResolvedModule[],
+    resolve: (token: InjectionToken<unknown>) => unknown,
+  ): readonly DiscoveredJob[] | undefined {
+    try {
+      return selectJobs(modules, resolve, undefined);
+    } catch (error) {
+      const softenable =
+        this.#options.consume === 'if-any' &&
+        error instanceof QueueError &&
+        error.code === QueueErrorCode.NO_HANDLERS;
+      if (!softenable) throw error;
+      this.#logger.warn(
+        "consume: 'if-any' and no @JobHandler in this module graph, so no " +
+          'workers were opened. This process publishes but consumes nothing.',
+      );
+      return undefined;
     }
   }
 

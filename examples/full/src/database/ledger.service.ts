@@ -1,9 +1,9 @@
 import { Logger } from '@dunx/core';
 import type { OnInit, OnShutdown } from '@dunx/core';
 import {
+  asSqlite,
   DbConnection,
   runSeeds,
-  SqliteConnection,
   SyncDatabase,
   transaction,
   transactionSync,
@@ -139,10 +139,14 @@ export class Ledger implements OnInit, OnShutdown {
         'table "ledger" created at onInit',
     );
 
-    // `raw` is `unknown` on the base, so `instanceof` restores the driver type.
-    if (this.connection instanceof SqliteConnection) {
-      logger.info(`raw driver -> bun:sqlite ${this.connection.raw.filename}`);
-    }
+    // `raw` is `unknown` on the base, because the base also describes `Bun.SQL`.
+    // `asSqlite` checks the connection and hands back the `bun:sqlite` handle, so
+    // pragmas and triggers are reachable without a cast.
+    const driver = asSqlite(this.connection);
+    const journal = driver.query('pragma journal_mode').get();
+    logger.info(
+      `raw driver -> bun:sqlite ${driver.filename}, ${JSON.stringify(journal)}`,
+    );
 
     logger.info(
       `insert -> ${JSON.stringify(this.add('opening balance', 100))}`,

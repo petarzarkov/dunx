@@ -14,6 +14,8 @@ import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueModule } from './module.js';
 import { QueueOptions } from './options.js';
 import { JobPublisher } from './publisher.js';
+import { JobHandler } from './decorators.js';
+import { QueueRunner } from './runner.js';
 
 const url = 'valkey://localhost:6379';
 
@@ -222,5 +224,85 @@ describe('QueueModule.forRootAsync', () => {
         }),
       ),
     ).rejects.toThrow('no config');
+  });
+});
+
+/**
+ * `consume: true` with nothing to consume is a boot error, and the report that
+ * asked for this called that refusal correct. What it does not fit is an
+ * incremental migration, where the queue wiring lands several commits before the
+ * first `@JobHandler`.
+ *
+ * Neither case reaches the broker: the handler set is decided before a worker
+ * opens, so these run without a Redis.
+ */
+describe('consume with no handlers in the graph', () => {
+  it('is a boot error under true', async () => {
+    const failure = await AppFactory.create(
+      QueueModule.forRoot({ url, consume: true }),
+    ).then(
+      (created) => {
+        app = created;
+        return undefined;
+      },
+      (reason: unknown) => reason,
+    );
+
+    expect(failure).toMatchObject({ code: QueueErrorCode.NO_HANDLERS });
+  });
+
+  it("stands down with a warning under 'if-any'", async () => {
+    const warnings: unknown[] = [];
+    const logger = new ConsoleLogger(undefined, 'fatal');
+    logger.warn = (message: unknown): void => {
+      warnings.push(message);
+    };
+
+    @Module({
+      imports: [QueueModule.forRoot({ url, consume: 'if-any' })],
+      providers: [provide(Logger, { useValue: logger })],
+    })
+    class Root {}
+
+    app = await AppFactory.create(Root);
+
+    expect(app.get(QueueRunner).consumer).toBeUndefined();
+    expect(String(warnings[0])).toContain('no @JobHandler');
+  });
+
+  /*
+   * The other refusal stays a refusal. Standing down on an ambiguous graph would
+   * start a process consuming a wiring nobody had resolved.
+   */
+  it("keeps a duplicate handler a boot error under 'if-any'", async () => {
+    class Duplicated {
+      @JobHandler({ queue: 'emails', name: 'welcome' })
+      one(): string {
+        return 'one';
+      }
+
+      @JobHandler({ queue: 'emails', name: 'welcome' })
+      two(): string {
+        return 'two';
+      }
+    }
+
+    @Module({
+      imports: [QueueModule.forRoot({ url, consume: 'if-any' })],
+      providers: [Duplicated],
+    })
+    class Root {}
+
+    const failure = await AppFactory.create(Root).then(
+      (created) => {
+        app = created;
+        return undefined;
+      },
+      (reason: unknown) => reason,
+    );
+
+    expect(failure).toMatchObject({
+      code: QueueErrorCode.DUPLICATE_HANDLER,
+    });
   });
 });
