@@ -202,11 +202,12 @@ workers when you ask it to.
 publishes never starts a worker by accident. There are three ways to consume, and
 they agree on exactly one thing: the module.
 
-| How                                      | Where the workers live                       |
-| ---------------------------------------- | -------------------------------------------- |
-| `QueueModule.forRoot({ consume: true })` | the container that imported the module       |
-| `WorkerFactory.create(root)`             | a process of its own, with its own container |
-| `WorkerFactory.attach(app, root)`        | a container somebody else already built      |
+| How                                          | Where the workers live                           |
+| -------------------------------------------- | ------------------------------------------------ |
+| `QueueModule.forRoot({ consume: true })`     | the container that imported the module           |
+| `QueueModule.forRoot({ consume: 'if-any' })` | the same, and stands down when no handler exists |
+| `WorkerFactory.create(root)`                 | a process of its own, with its own container     |
+| `WorkerFactory.attach(app, root)`            | a container somebody else already built          |
 
 `consume: true` is the one to reach for first. `QueueRunner` implements `OnInit` and
 `OnShutdown`, so the workers start with the container and stop with it, before the
@@ -226,6 +227,12 @@ A broker that is down degrades rather than failing boot: the runner logs at `err
 that the process is serving but consuming nothing. A sandbox child sets
 `DUNX_JOB_WORKER`, and the runner refuses to open workers when it sees it, so a
 processor file may import a `consume: true` module without forking forever.
+
+`consume: true` with no `@JobHandler` anywhere in the graph is a boot error: a
+process that consumes nothing is one nobody notices. `consume: 'if-any'` stands
+down with a warning instead, for an incremental migration where the queue wiring
+lands several commits before the first handler. Two handlers claiming one
+`(queue, name)` stays a boot error under both.
 
 ### Isolation is per handler, and per queue in effect
 

@@ -6,10 +6,10 @@ provides, written from the migrating application's point of view.
 Status legend: **undesigned** = no decision recorded anywhere · **out of scope** =
 refused, with the reasoning below.
 
-## Read this part first: four things that fail at boot
+## Read this part first: five things that fail at boot
 
 Everything else on this page is a mapping you can look up when you reach it. These
-four are what a migrating app hits in the first hour, and each one stops the process
+five are what a migrating app hits in the first hour, and each one stops the process
 rather than degrading.
 
 **1. The `bunfig.toml` preload is not optional.**
@@ -38,8 +38,8 @@ boot error tells you which of the two situations you are in.
 
 **2. A constructor parameter must name something that exists at runtime.**
 
-An interface, a type alias, a primitive, a union, a class type parameter or a value
-imported with `import type` all erase, so there is no token to resolve.
+An interface, a primitive, a union, a class type parameter or a value imported with
+`import type` all erase, so there is no token to resolve.
 `emitDecoratorMetadata` degrades those to `Object` and hands you `undefined` three
 frames from the mistake. dunx fails at boot naming the parameter and its position.
 
@@ -48,7 +48,26 @@ parameter as that token. Every `*Options` in the framework is a class for this r
 The error tells the `import type` case apart from the others, because that one has a
 one-line fix.
 
-**3. A module is decorated or configured, never both.**
+**3. A type alias is not a class, even when it aliases one.**
+
+Item 2's root cause in a disguise, and it gets its own number because the alias
+_resolves_ to a class, so it does not read like an erasure:
+
+```ts
+type Db = SyncDatabase<AppSchema>;
+
+class UsersRepository {
+  constructor(private readonly db: Db) {} // boot error
+}
+```
+
+`type` declares no runtime value, so the transform has nothing to record and the
+parameter is reported `unresolved`. Stated positively: **a constructor annotates the
+class; everything else annotates the alias.**
+
+One migration hit this three times in three repositories before it stuck.
+
+**4. A module is decorated or configured, never both.**
 
 A scope is keyed on the module **reference**, and `forRoot()` returns a fresh object
 on every call. So `@Module` on a class that also has a `static forRoot()` registers
@@ -63,11 +82,38 @@ two instances of everything in them. Take one:
 If two feature modules need the same binding, give it its own module with
 `global: true` rather than calling `forRoot()` twice.
 
-**4. Every relative import ends in `.js`.**
+**5. Relative imports end in `.js` under `nodenext`, and nowhere else.**
 
-Not `.ts`, not extensionless. `moduleResolution: nodenext` makes it a compile error
-rather than a consumer's problem, which is the good outcome, but it is the change with
-the most occurrences in a migrating codebase.
+Not `.ts`, not extensionless. Whether this is the largest diff of the migration or
+no diff at all depends on a setting the app already has:
+
+| Your `moduleResolution` | What changes                                               |
+| ----------------------- | ---------------------------------------------------------- |
+| `nodenext`              | Every relative import gains `.js`. Large mechanical diff.  |
+| `bundler`               | Nothing. Subpath exports and `paths` aliases both resolve. |
+
+The scaffold sets `nodenext`, where the extension is a compile error rather than a
+consumer's problem. An app already on `bundler` keeps its extensionless imports and
+its `paths` aliases: one migration of a production application touched no import
+specifier at all.
+
+## One handler per job name
+
+Not a boot failure you will hit in the first hour, but a semantic difference worth
+knowing before the queue work starts.
+
+A Nest dispatcher that fans one routing key out to every subscriber has no dunx
+equivalent: two handlers claiming the same `(queue, name)` is a boot error.
+
+An app doing fan-out decides, per channel, what a retry means there. One migration
+landed on the in-app notification firing on the first attempt only, since a toast
+arriving after a backoff is stale, and the Slack notification awaited and
+rethrowing, since it benefits from retries.
+
+`QueueModule.forRoot({ consume: 'if-any' })` exists for the other half of this: it
+stands down instead of failing when the graph has no `@JobHandler` yet, so the queue
+wiring can land several commits before the first handler. `consume: true` keeps
+refusing.
 
 ## Core DI
 
@@ -110,21 +156,21 @@ the most occurrences in a migrating codebase.
 
 ## Ecosystem
 
-| Nest package                           | dunx                                                             | Status       |
-| -------------------------------------- | ---------------------------------------------------------------- | ------------ |
-| `nestjs-zod` / `ValidationPipe`        | [Standard Schema on route decorators](./guide/06-validation.md)  | done         |
-| `@nestjs/testing` (`overrideProvider`) | [`createTestApp({ modules, overrides })`](./guide/11-testing.md) | done         |
-| `@nestjs/swagger`                      | [`@dunx/openapi`](./guide/10-openapi.md)                         | done         |
-| `@nestjs/bullmq`                       | [`@dunx/infra/queue`](./guide/15-queues.md)                      | done         |
-| `@thallesp/nestjs-better-auth`         | [`@dunx/auth`](./guide/17-authentication.md)                     | done         |
-| `@nestjs/websockets` + socket.io       | [gateways on `Bun.serve`](./guide/09-websockets.md)              | done         |
-| `@nestjs/serve-static`                 | `StaticFiles` in `@dunx/http`                                    | done         |
-| `@bull-board/*`                        | bull-board mounted by `@dunx/dashboard`                          | done         |
-| `@nestjs/cache-manager`                | `@dunx/infra/redis`                                              | partial      |
-| `@nestjs/schedule` (`@Cron`)           | [`@dunx/infra/schedule`](./guide/16-scheduling.md)               | done         |
-| `@nestjs/throttler`                    | middleware                                                       | undesigned   |
-| `@nestjs/terminus`                     | [`HealthModule` in `@dunx/http`](./guide/20-health-checks.md)    | done         |
-| `@nestjs/platform-express` (`app.use`) | -                                                                | out of scope |
+| Nest package                           | dunx                                                                                                  | Status       |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------ |
+| `nestjs-zod` / `ValidationPipe`        | [Standard Schema on route decorators](./guide/06-validation.md)                                       | done         |
+| `@nestjs/testing` (`overrideProvider`) | [`createTestApp({ modules, overrides })`](./guide/11-testing.md)                                      | done         |
+| `@nestjs/swagger`                      | [`@dunx/openapi`](./guide/10-openapi.md)                                                              | done         |
+| `@nestjs/bullmq`                       | [`@dunx/infra/queue`](./guide/15-queues.md)                                                           | done         |
+| `@thallesp/nestjs-better-auth`         | [`@dunx/auth`](./guide/17-authentication.md)                                                          | done         |
+| `@nestjs/websockets` + socket.io       | [gateways on `Bun.serve`](./guide/09-websockets.md)                                                   | done         |
+| `@nestjs/serve-static`                 | `StaticFiles` in `@dunx/http`                                                                         | done         |
+| `@bull-board/*`                        | bull-board mounted by `@dunx/dashboard`                                                               | done         |
+| `@nestjs/cache-manager`                | `RedisConnection.set` with a TTL; no store or `@Cacheable`                                            | partial      |
+| `@nestjs/schedule` (`@Cron`)           | [`@dunx/infra/schedule`](./guide/16-scheduling.md)                                                    | done         |
+| `@nestjs/throttler`                    | `ThrottleModule`, `ThrottleGuard`, `@Throttle`, `@SkipThrottle`, `RedisThrottleStore` in `@dunx/http` | done         |
+| `@nestjs/terminus`                     | [`HealthModule` in `@dunx/http`](./guide/20-health-checks.md)                                         | done         |
+| `@nestjs/platform-express` (`app.use`) | -                                                                                                     | out of scope |
 
 ## The reference application
 
@@ -175,17 +221,20 @@ it works and what it refuses to guess.
 
 What still changes, per class:
 
-| Nest                          | dunx                                      |
-| ----------------------------- | ----------------------------------------- |
-| `@Injectable()`               | delete it - every class is injectable     |
-| `@Inject(TOKEN) private x: T` | declare the parameter as the token's type |
-| `@Global()`                   | `global: true` on the same options object |
-| `exports: [...]`              | `exports: [...]`, unchanged               |
-| `{ provide: X, useClass: Y }` | `provide(X, { useClass: Y })`             |
-| `OnModuleInit`                | `OnInit`                                  |
-| `OnModuleDestroy`             | `OnShutdown`                              |
-| `NestFactory.create`          | `HttpFactory.create`                      |
-| relative imports              | add the `.js` extension                   |
+| Nest                                      | dunx                                              |
+| ----------------------------------------- | ------------------------------------------------- |
+| `@Injectable()`                           | delete it - every class is injectable             |
+| `@Inject(TOKEN) private x: T`             | declare the parameter as the token's type         |
+| `@Global()`                               | `global: true` on the same options object         |
+| `exports: [...]`                          | `exports: [...]`, unchanged                       |
+| `{ provide: X, useClass: Y }`             | `provide(X, { useClass: Y })`                     |
+| `OnModuleInit`                            | `OnInit` - on a service as well as a module       |
+| `OnModuleDestroy`                         | `OnShutdown` - likewise                           |
+| `NestFactory.create`                      | `HttpFactory.create`                              |
+| `config.get('a.b')`                       | same, up to three segments deep                   |
+| `logger.log(...)`                         | `logger.info(...)` - `log` works, deprecated      |
+| `@HttpCode(HttpStatus.CREATED)` on a POST | delete it - POST answers 201 already              |
+| relative imports                          | `.js` under `nodenext`, unchanged under `bundler` |
 
 Custom parameter decorators have no target API. See
 [What is still missing](#what-is-still-missing).

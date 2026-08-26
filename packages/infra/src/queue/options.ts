@@ -79,11 +79,13 @@ export interface QueueOptionsInit {
    * wanted to enqueue would be a surprise with a database attached.
    *
    * On, the container owns the workers - started at `onInit`, stopped at
-   * `onShutdown`, which runs in reverse construction order and therefore **before**
-   * the connections the handlers use. That ordering is the reason this lives here
-   * rather than in an entrypoint: nothing an app writes by hand can guarantee it.
+   * `onShutdown`, which runs before the connections the handlers use. Nothing an
+   * app writes by hand can guarantee that ordering.
+   *
+   * `'if-any'` stands down with a warning where `true` fails boot, for a
+   * migration whose queue wiring lands before its first `@JobHandler`.
    */
-  readonly consume?: boolean;
+  readonly consume?: boolean | 'if-any';
   /**
    * Reject a handler that runs longer than this, so a job hung on an external
    * call fails and retries instead of holding its lock until the stall check
@@ -108,7 +110,7 @@ export class QueueOptions {
   readonly jobTimeoutMs: number | undefined;
   readonly processor: string | undefined;
   readonly isolation: 'process' | 'thread';
-  readonly consume: boolean;
+  readonly consume: boolean | 'if-any';
 
   constructor(init: QueueOptionsInit = {}) {
     this.url = assertUrl(init.url ?? defaultRedisUrl());

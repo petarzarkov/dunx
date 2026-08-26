@@ -1,6 +1,7 @@
 import type { Database as BunSqlite } from 'bun:sqlite';
 import { BunSQLiteDatabase, drizzle } from 'drizzle-orm/bun-sqlite';
 import { DbConnection, type DrizzleInit } from '../connection.js';
+import { DatabaseError } from '../errors.js';
 import {
   Backend,
   Dialect,
@@ -109,3 +110,29 @@ export class SyncSqliteConnection<
     Object.defineProperty(this.db, 'synchronous', { value: true });
   }
 }
+
+/**
+ * The `bun:sqlite` handle behind a connection, checked rather than asserted.
+ *
+ * `DbConnection.raw` is `unknown` because the base also describes `Bun.SQL`, so
+ * an app that configured SQLite and knows it still wrote `connection.raw as
+ * Database` to reach a `PRAGMA` or install a trigger - both ordinary things to do
+ * with a SQLite app, and a cast in code that otherwise has none. This owns the
+ * narrowing once and throws naming the backend it actually got, where the cast
+ * would have handed back a `Bun.SQL` client wearing the wrong type.
+ *
+ * ```ts
+ * asSqlite(connection).exec('pragma foreign_keys = on');
+ * ```
+ *
+ * There is no `asSql` twin. `Bun.SQL`'s surface is reachable through drizzle's
+ * own `sql` tag, so nothing needed one; SQLite's pragmas and triggers are not.
+ */
+export const asSqlite = (connection: DbConnection<unknown>): BunSqlite => {
+  if (connection instanceof SqliteConnection) return connection.raw;
+  throw new DatabaseError(
+    `asSqlite() needs a SQLite connection and this one is ${connection.backend}. ` +
+      'It is the driver DbModule opened, so the fix is the module configuration ' +
+      'rather than the call site.',
+  );
+};

@@ -23,7 +23,9 @@ import * as schema from './schema.js';
         new SyncSqliteOptions({
           // Required: the type argument every constructor below sees.
           schema,
-          filename: config.get('database').file,
+          // A dotted path, checked against AppConfig the same way a top-level
+          // key is. `config.get('database').file` still reads the same value.
+          filename: config.get('database.file'),
           pragmas: ['foreign_keys = ON'],
         }),
       inject: [AppConfigService],

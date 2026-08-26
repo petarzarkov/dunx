@@ -595,6 +595,19 @@ the duration of the work in a one-shot script.
 Narrow with `instanceof SqliteConnection` or `instanceof SqlConnection`, which
 restores the concrete type.
 
+For SQLite there is `asSqlite`, which does that check and returns the `bun:sqlite`
+`Database`. Pragmas and triggers are what reach for it:
+
+```ts
+import { asSqlite } from '@dunx/infra/db';
+
+asSqlite(connection).exec('pragma foreign_keys = on');
+```
+
+It throws naming the backend it was handed, where `connection.raw as Database`
+would hand back a `Bun.SQL` client under the wrong type. There is no `asSql` twin:
+`Bun.SQL`'s surface is reachable through drizzle's own `sql` tag.
+
 `onShutdown()` is concrete rather than abstract: the hook and the explicit call are
 one operation. `@dunx/core` shuts down in reverse construction order, and every
 repository depends on the drizzle handle which depends on the connection, so
@@ -643,6 +656,18 @@ page(input: Input<typeof paged>): Promise<Page<Entry>> {
 
 Pass `meta.nextCursor` back as `?cursor=` to read forwards, and
 `meta.previousCursor` with `?direction=backward` to go the other way.
+
+Both type arguments are given above, and a generic wrapper needs them. `paginate`
+infers the row type from the table, so a base repository that pages a narrower
+select type gets the table's type back unless it says otherwise:
+
+```ts
+// Infers the table's select type, not TSelect.
+return paginate<TTable>({ db, table, options, where });
+
+// Returns Page<TSelect>.
+return paginate<TTable, TSelect>({ db, table, options, where });
+```
 
 ### Why not `OFFSET`
 

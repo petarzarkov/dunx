@@ -19,6 +19,7 @@ export {
 export { SqlConnection } from './sql/connection.js';
 export { SqlOptions, type SqlInit } from './sql/options.js';
 export {
+  asSqlite,
   SqliteConnection,
   SyncDatabase,
   SyncSqliteConnection,

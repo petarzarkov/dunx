@@ -20,6 +20,10 @@ import { ThumbnailJobs } from './thumbnail.jobs.js';
           prefix: 'dunx-full',
           // The container starts the workers at onInit and stops them before
           // the database they use, so `main.ts` says nothing about queues.
+          //
+          // `true`, not `'if-any'`: this module declares handlers, and `true`
+          // refuses to boot if that ever stops being so. `'if-any'` is for a
+          // migration where the wiring lands before the first @JobHandler.
           consume: true,
           // Where bullmq forks for a `background` handler. Absolute: the child
           // resolves it, not this module.

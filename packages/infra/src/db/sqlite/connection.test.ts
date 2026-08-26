@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { eq, sql } from 'drizzle-orm';
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { DbConnection } from '../connection.js';
 import { Backend, Dialect } from '../dialect.js';
-import { SqliteConnection } from './connection.js';
+import { DatabaseError } from '../errors.js';
+import { asSqlite, SqliteConnection } from './connection.js';
 import { SqliteOptions } from './options.js';
 
 const people = sqliteTable('people', {
@@ -266,5 +268,36 @@ describe('closing', () => {
   it('makes a later query through drizzle fail', async () => {
     await connection.close();
     expect(() => connection.db.select().from(people).all()).toThrow();
+  });
+});
+
+/**
+ * Reported from a production migration as "the one cast in the whole
+ * application": `DbConnection.raw` is `unknown` because the base also describes
+ * `Bun.SQL`, and a SQLite app doing `PRAGMA` or trigger work had to assert its
+ * way to the handle.
+ */
+describe('asSqlite', () => {
+  it('returns the bun:sqlite handle from a connection typed as the base', () => {
+    const base: DbConnection<unknown> = connection;
+
+    expect(asSqlite(base)).toBe(connection.raw);
+    expect(asSqlite(base)).toBeInstanceOf(BunSqlite);
+  });
+
+  it('reaches what the cast was reached for', () => {
+    asSqlite(connection).exec('pragma foreign_keys = on');
+
+    expect(
+      asSqlite(connection).query('pragma foreign_keys').get(),
+    ).toMatchObject({ foreign_keys: 1 });
+  });
+
+  /** A `Bun.SQL` connection would have satisfied the cast and failed later. */
+  it('names the backend it got instead of narrowing a lie', () => {
+    const wrong = { backend: Backend.SQL } as unknown as DbConnection;
+
+    expect(() => asSqlite(wrong)).toThrow(DatabaseError);
+    expect(() => asSqlite(wrong)).toThrow(/this one is sql/);
   });
 });
