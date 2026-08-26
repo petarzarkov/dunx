@@ -4,6 +4,90 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.0.2 - 2026-08-26
+
+Field notes from a NestJS migration
+
+Four changes and a documentation pass, all from one production NestJS/Bun
+application's move to 3.0.1, plus the two Dependabot alerts on the benchmark
+harness.
+
+`config.get('db.host')` reads a dotted path, up to three segments, checked
+against the config type the way a top-level key already was. `asSqlite(connection)`
+narrows `DbConnection.raw` with a check rather than the cast a SQLite app needed
+for pragma and trigger work. `consume: 'if-any'` lets queue wiring land several
+commits before the first `@JobHandler`, which is what an incremental migration
+does. And `ClientAddress.of()` returns `10.0.0.1` where it used to return
+`::ffff:10.0.0.1`, the same address in the notation every caller was converting
+it to.
+
+**A patch rather than a minor, stated outright rather than derived.** Three of
+the four are additive API, which semver would call a minor; the version is set
+by hand for that reason and this note is where that is on the record.
+
+**One thing to read before upgrading.** An app that stored the IPv4-mapped form
+and compares those rows against `ClientAddress.of()` stops matching until the
+stored values are normalised too. Nothing else changes an existing call: a
+config key that itself contains a dot is still read whole, and every `get` written
+before paths returns exactly what it did.
+
+The migration also corrected the documentation it had been misled by. The
+`.js`-extension warning is now conditional on `moduleResolution`, since it is a
+large diff under `nodenext` and no diff at all under `bundler`. A type alias in a
+constructor is its own boot-failure item. The `@nestjs/throttler` row said
+`undesigned` while five exports ship.
+
+### Features
+
+- **core**: dotted paths in ConfigService.get ([`900da71`](https://github.com/petarzarkov/dunx/commit/900da713ad60eb0eeb8a3800f6287df4f4f46bfb))
+- **infra**: asSqlite, and consume: 'if-any' for incremental migrations ([`41d7df8`](https://github.com/petarzarkov/dunx/commit/41d7df86f463ead90e9e636fde28d29d2b0e71fe))
+- **bench**: ASP.NET Core minimal API and MVC subjects ([`5813773`](https://github.com/petarzarkov/dunx/commit/5813773c6d9716b39aa13b01e5f7de02c7bc649f))
+- **docs**: motion for the documentation chrome ([`4408528`](https://github.com/petarzarkov/dunx/commit/4408528752cf2a9c3fd8cfe0ecb566bcde8da6e6))
+
+### Fixes
+
+- **http**: return IPv4-mapped client addresses in their IPv4 form ([`3b15806`](https://github.com/petarzarkov/dunx/commit/3b15806564042918d9881c02e9a28a708bcdf118))
+- **http,openapi**: let the client and OpenApi forRootAsync take imports ([`148c24d`](https://github.com/petarzarkov/dunx/commit/148c24d06d0f02dc0a0fd122af291e7fcbe7fd6b))
+- **infra**: let ScheduleModule and RedisModule forRootAsync take imports ([`d1553e5`](https://github.com/petarzarkov/dunx/commit/d1553e5fa8c5d3f7ecb9552609a1866207f737ae))
+- **infra**: name a thrown non-Error in a schedule's lastError ([`f68da45`](https://github.com/petarzarkov/dunx/commit/f68da45aaf0dc87c248fe4dee27210e3916f6d9b))
+- **openapi**: keep the sorter shorthands offered, and pass raw source through as source ([`a9ea444`](https://github.com/petarzarkov/dunx/commit/a9ea44436fd1967c0e8e41332ec8cee3c8f98f6c))
+- **scripts**: keep calling a heading-delimited target a section ([`f9e7e87`](https://github.com/petarzarkov/dunx/commit/f9e7e87969c9491434d5d1e1972644c63dc5ec44))
+
+### Performance
+
+- **docs**: unmount after every test, cutting the suite from 16.6s to 3.7s ([`c3586b3`](https://github.com/petarzarkov/dunx/commit/c3586b3cdb55c79bf3ebff78820f43637b030fd6))
+
+### Refactors
+
+- stop exporting 23 symbols nothing outside their file uses ([`fdeae59`](https://github.com/petarzarkov/dunx/commit/fdeae59a06c2d3a5adac0a0aaf4f78c621aa06e4))
+- **http**: use AsyncModuleConfig instead of restating it inline ([`364eaba`](https://github.com/petarzarkov/dunx/commit/364eaba90bee49eefb7a69fa338eb470f61aa546))
+- one source for the positioning, read by both the README and the hero ([`bd2ecda`](https://github.com/petarzarkov/dunx/commit/bd2ecdaf3a67381e6a5565bb28f29f3c80313a6d))
+
+### Documentation
+
+- corrections from a NestJS migration's field notes ([`088fcc3`](https://github.com/petarzarkov/dunx/commit/088fcc3caaf68e7bed070e32dc8ccd708ad385c7))
+- trim CLAUDE.md back to rules, with the rationale linked once ([`0433b22`](https://github.com/petarzarkov/dunx/commit/0433b2266fa6b12ecc92639b3b30b43156b8cf26))
+- **architecture**: tools/* is published, internal/* is the private half ([`17a9d99`](https://github.com/petarzarkov/dunx/commit/17a9d993cce7e5e79ab5822924001eb2251dda05))
+- correct what coverage counts that no test can reach ([`695d3ca`](https://github.com/petarzarkov/dunx/commit/695d3ca08fc427d0586f2e0ac3f12f38d3210da0))
+- link the Firecracker deployment ([`6cccbe8`](https://github.com/petarzarkov/dunx/commit/6cccbe87f5cdc7bc27a3dd0cae4b3291f4f1dd26))
+- showcase Firecracker, and cut two lines that describe the document ([`cf981bc`](https://github.com/petarzarkov/dunx/commit/cf981bc6d6e8b1f3612e1f06a64d4ebd6e669e8c))
+
+### Other changes
+
+- **bench**: bump the two Go deps Dependabot flagged ([`95c5acb`](https://github.com/petarzarkov/dunx/commit/95c5acb58cfc007bc224fdbaa7dad1deb6caeaec))
+- stop uploading the screenshots ([`1367ae2`](https://github.com/petarzarkov/dunx/commit/1367ae247ddecff2202897ce8f40155e3b364bdf))
+- **docs**: check that every @dunx import in a guide really exists ([`16b11bd`](https://github.com/petarzarkov/dunx/commit/16b11bd8d89d1f465abfd4a492b7b336afea909c))
+- **lint**: raise max-lines to 800 for test files ([`53e1cbe`](https://github.com/petarzarkov/dunx/commit/53e1cbe718cd13a3c74dd0f9a9f935d5ecb65f0e))
+- drop six dependencies nothing imports ([`24413ad`](https://github.com/petarzarkov/dunx/commit/24413ad230097acf418f66ede58b463a26235c86))
+- **infra**: cover JobProcessor, the child half of a sandboxed worker ([`2e28c50`](https://github.com/petarzarkov/dunx/commit/2e28c5097d6b687605e4ade73f058a1b26428d79))
+- **infra**: run the S3 suite against MinIO, and declare services in one job ([`3267959`](https://github.com/petarzarkov/dunx/commit/3267959bb7ea1bddfa46ec2aa3ff49d1e58592a1))
+- take the coverage model from the coverage job instead of rebuilding it ([`2d46edd`](https://github.com/petarzarkov/dunx/commit/2d46edd0ba81d04a69c86d209f912780fbbde085))
+- raise the infra and openapi floors, and show the coverage number on success ([`0d0de97`](https://github.com/petarzarkov/dunx/commit/0d0de975a17492804043e6fdcf5cfe9982a01af4))
+- give the test jobs a valkey service, and upload the dot-prefixed screenshots ([`10a1863`](https://github.com/petarzarkov/dunx/commit/10a186302cb9c38488834f4fe01bc585b1d1e66f))
+- run every gate through one command, and fail on the first new lint warning ([`9440ab9`](https://github.com/petarzarkov/dunx/commit/9440ab907966bf302fb0ca13314dda89bd62afeb))
+- gate every published workspace at 90% coverage ([`1743282`](https://github.com/petarzarkov/dunx/commit/17432822c37955e4330c225d676aa7fb34b1a9ba))
+- **docs**: drive the built site with Bun.WebView instead of playwright ([`3c2a149`](https://github.com/petarzarkov/dunx/commit/3c2a14985d1e3090e0ed1adbbdf9aef91218da41))
+
 ## 3.0.1 - 2026-08-23
 
 Drop the deprecated re-exports and fix what the screenshots showed
