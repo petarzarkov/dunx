@@ -87,6 +87,37 @@ under `basePath`.
 `SessionGuard` is a provider rather than global middleware because whether it
 guards the whole app or one controller is the app's decision to make.
 
+### Reaching the caller from a second module
+
+`AuthModule` exports those four tokens **to the module that imported it**, which is
+the `AccountsModule` above. A second feature module that injects `AuthContext` gets
+a boot error, and calling `forRootAsync` again there would build a second
+better-auth against a second session store.
+
+Pass them on instead, the way any module re-exports what it imported:
+
+```ts
+@Module({
+  imports: [AuthModule.forRootAsync({ ... }, '/auth')],
+  controllers: [ProfileController],
+  exports: [Auth, AuthContext, SessionGuard],
+})
+export class AccountsModule {}
+```
+
+Now `imports: [AccountsModule]` reaches them. Add `global: true` to that options
+object when enough modules need the caller that naming the import everywhere is the
+larger cost.
+
+The boot error names both fixes and the module that has the binding, so getting
+this wrong is a one-read fix rather than a hunt:
+
+```
+Cannot resolve Auth in module "UsersModule". "AuthModule" declares it, but
+"UsersModule" does not import it. Add that module to "UsersModule"'s imports,
+or give it `global: true`.
+```
+
 ## Mounting on `Bun.serve`
 
 better-auth's handler is a plain `(request: Request) => Promise<Response>`, so
@@ -289,10 +320,19 @@ export class Notes {
 - `run(principal, callback)` runs `callback` with that caller. `SessionGuard`
   calls this; a job or a socket handler that resolved a session itself can too.
 
-The type argument surfaces a plugin's extra user fields:
+A `Principal` is `{ session, user }`, so the caller is one field down: `require().id`
+is `undefined` and `require().user.id` is the id.
+
+The type argument surfaces a plugin's extra user fields, on `current` and `require`
+alike. `admin()` puts `role` on the user, which is the line a role check is built
+from:
 
 ```ts
 const principal = this.auth.current<typeof authOptions>();
+
+// Without the type argument, `role` is not on the type: `user` is better-auth's
+// base user.
+const isAdmin = this.auth.require<typeof authOptions>().user.role === 'admin';
 ```
 
 ### Why a second async store
