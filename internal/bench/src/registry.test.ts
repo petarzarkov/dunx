@@ -33,6 +33,7 @@ describe('subjects', () => {
       go: /^servers\/go\/cmd\/[^/]+\/main\.go$/,
       rust: /^servers\/rust\/src\/[^/]+\.rs$/,
       jvm: /^servers\/java\/src\/main\/java\/.+\.java$/,
+      dotnet: /^servers\/dotnet\/[^/]+\/Program\.cs$/,
     };
     for (const subject of subjects) {
       const pattern = expected[subject.runtime];
@@ -41,33 +42,63 @@ describe('subjects', () => {
     }
   });
 
-  test('the Go and Rust artifact names are derived from the subject id, so they must not collide', () => {
-    const compiled = subjects.filter(
-      (subject) => subject.runtime === 'go' || subject.runtime === 'rust',
+  test('the Go, Rust and .NET artifact names are derived from the subject id, so they must not collide', () => {
+    const named: readonly string[] = ['go', 'rust', 'dotnet'];
+    const compiled = subjects.filter((subject) =>
+      named.includes(subject.runtime),
     );
     expect(new Set(compiled.map((subject) => subject.id)).size).toBe(
       compiled.length,
     );
   });
 
-  test('the JVM subject asks for a warmup long enough to be worth reporting', () => {
+  /*
+   * The JVM and .NET both compile in tiers, and 3 seconds warms neither.
+   * Measured for `aspnet-minimal`: 40k req/s on the json scenario after a
+   * 3-second warmup, still climbing 20 seconds later, plateauing near 88k. A
+   * subject that JITs and does not say so here would be reported cold.
+   */
+  test('every tiered-JIT subject asks for a warmup long enough to be worth reporting', () => {
+    const tiered: readonly string[] = ['jvm', 'dotnet'];
     for (const subject of subjects) {
-      if (subject.runtime !== 'jvm') continue;
+      if (!tiered.includes(subject.runtime)) continue;
       expect(subject.warmupFloorSeconds ?? 0).toBeGreaterThanOrEqual(30);
     }
   });
 
   test('every compiled subject says in its notes that it is single-threaded', () => {
     for (const subject of subjects) {
-      if (!['go', 'rust', 'jvm'].includes(subject.runtime)) continue;
+      if (!['go', 'rust', 'jvm', 'dotnet'].includes(subject.runtime)) continue;
       const notes = subject.notes.join(' ').toLowerCase();
-      expect(notes).toMatch(/gomaxprocs|current_thread|one worker thread/);
+      expect(notes).toMatch(
+        /gomaxprocs|current_thread|one worker thread|dotnet_processor_count/,
+      );
+    }
+  });
+
+  /*
+   * .NET reads DOTNET_PROCESSOR_COUNT once as the runtime starts, so unlike
+   * GOMAXPROCS and tokio's flavour it cannot be set from the subject's own
+   * source. `Shared.PinToOneThread` throws without it rather than serving on 32
+   * cores, and this is what stops the registry dropping the variable that keeps
+   * that throw from firing.
+   */
+  test('every .NET subject is started with its processor count pinned', () => {
+    for (const subject of subjects) {
+      if (subject.runtime !== 'dotnet') continue;
+      expect(subject.env?.['DOTNET_PROCESSOR_COUNT']).toBe('1');
     }
   });
 });
 
 describe('toolchains', () => {
-  const OVERRIDES = ['BENCH_GO', 'BENCH_CARGO', 'BENCH_JAVA', 'BENCH_MVN'];
+  const OVERRIDES = [
+    'BENCH_GO',
+    'BENCH_CARGO',
+    'BENCH_JAVA',
+    'BENCH_MVN',
+    'BENCH_DOTNET',
+  ];
 
   test('report themselves absent instead of throwing, which is how CI skips them', async () => {
     const saved = OVERRIDES.map((name) => [name, process.env[name]] as const);

@@ -64,6 +64,13 @@ const manifestVersion = async (
         `<artifactId>${escape(name)}</artifactId>\\s*<version>([^<]+)</version>`,
       ),
     ],
+    // ASP.NET Core ships in the shared framework rather than as a package, so
+    // there is no version to read: what pins it is the target framework, and
+    // `versionOf: 'TargetFramework'` names the property that holds it.
+    dotnet: [
+      `${root}/servers/dotnet/Directory.Build.props`,
+      new RegExp(`<${escape(name)}>([^<]+)</`),
+    ],
   };
   const found = patterns[subject.runtime];
   if (found === undefined) return packageVersion(name);

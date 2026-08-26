@@ -11,7 +11,7 @@ to hide as the places it wins.
 
 ```bash
 bun run setup       # downloads oha into .bin/ (optional, but read "Load generator")
-bun run start       # full suite: 17 subjects x 4 scenarios, minus any whose toolchain is absent
+bun run start       # full suite: 19 subjects x 4 scenarios, minus any whose toolchain is absent
 bun run validation  # the validation-cost harness - see "Validation cost"
 bun run db-modes    # @dunx/infra/db async vs synchronous SQLite, end to end
 bun run start --help
@@ -74,13 +74,15 @@ And one thing per subject:
 | `gin`             | Go      | Gin, the Go framework Elysia's landing page compares itself against.           |
 | `axum`            | Rust    | Axum on tokio and hyper, no tower layers.                                      |
 | `spring`          | JVM     | Spring Boot on its default stack: Spring MVC, Tomcat, Jackson.                 |
+| `aspnet-minimal`  | .NET    | ASP.NET Core minimal APIs on Kestrel: the .NET floor, routes as lambdas.       |
+| `aspnet-mvc`      | .NET    | The same runtime and server with MVC on top: controllers, model binding, DI.   |
 | `django`          | Python  | Django on gunicorn with one worker, `DEBUG` off and no middleware.             |
 | `fastapi`         | Python  | FastAPI on uvicorn with one worker, async ASGI, validating with pydantic.      |
 
 Each subject is a single file under `servers/`, small enough to read in full. If a
 number looks wrong, read the file - that is the whole implementation.
 
-The last four need a toolchain this repo does not otherwise use. They are
+The last eight need a toolchain this repo does not otherwise use. They are
 **opt-in**: `bun run start` probes for each one, and if it is not there it prints a
 line saying which subjects it is skipping and produces a report without them, the
 same way the Node subjects drop out when `node` does not resolve. Nothing is
@@ -157,9 +159,45 @@ and not an artefact.
 which is what `pip install fastapi uvicorn` gives. Naming the floor is more useful
 than tuning one subject that nothing else in the suite is tuned against.
 
-#### Reading the Go, Rust and JVM rows fairly
+#### Reading the .NET rows fairly
 
-These four exist as a **falsification test on this harness**, not as a
+The pair answers a question the JavaScript rows can only answer across runtimes:
+**what does the controllers-and-DI programming model cost with everything
+underneath it held still?** `aspnet-minimal` and `aspnet-mvc` are the same
+Kestrel, the same runtime, the same JSON serialiser and the same validator. MVC
+adds attribute routing, model binding, the filter pipeline, automatic model
+validation and a controller resolved from the container on every request, and the
+gap between the two rows is that and nothing else - the `nest-express` against
+`express` comparison, in a compiled language, with the runtime term removed.
+
+So `aspnet-mvc` is the closest cross-language neighbour of the `spring` and NestJS
+rows, and `aspnet-minimal` is the .NET analogue of `node-http` and `bun-serve`.
+Read dunx against `bun-serve` and MVC against `aspnet-minimal` before reading dunx
+against either .NET row.
+
+What the published run says: MVC costs **16% of `aspnet-minimal` on `plaintext`,
+20% on `json` and 31% on both `params` and `validate`**. Against the same figure
+for Nest on Fastify (12%, 14%, 18%, 15%) and for dunx on `Bun.serve` (2.0%, 4.5%,
+4.1%, 8.8%), MVC is the most expensive of the three programming models relative to
+its own floor - and still 2.4x NestJS-on-Fastify and 1.6x Spring in absolute
+throughput, because the floor it is paying that tax on is a different height.
+`params` is where it costs most, which is route-value plus action-parameter model
+binding rather than dispatch.
+
+Both are `dotnet publish -c Release` and nothing else: no ReadyToRun, no Native
+AOT, no trimming, no invariant globalization. Native AOT would take most of the
+startup number away and is what a .NET benchmark usually ships; it is not what
+`dotnet new webapi` gives anyone, and nothing else in this suite is tuned that way
+either.
+
+Neither row logs. ASP.NET Core's hosting layer writes two Information entries per
+request out of the box, which is what the default template's `appsettings.json`
+turns off; both subjects do the same in the file you are reading, for the reason
+the `dunx` and `dunx-logging` split exists.
+
+#### Reading the Go, Rust, JVM and .NET rows fairly
+
+These six exist as a **falsification test on this harness**, not as a
 scoreboard. Elysia's landing page shows a JavaScript runtime beating Gin by 3.6x
 and Spring by 4.8x, which is not a plausible framework result, and the same
 question applies here: if `@dunx/http` comes out ahead of Gin or Axum, the first
@@ -170,39 +208,50 @@ Three things make these rows readable, and every one of them is a constraint
 that has to be stated with the number:
 
 **Threads.** Every subject in this suite is one process on one thread. Bun and
-Node are single-threaded because that is what they are; Go, tokio and Tomcat are
-single-threaded here because the harness **made** them, and that is the largest
-handicap in the file. `runtime.GOMAXPROCS(1)`, `#[tokio::main(flavor =
-"current_thread")]` and `server.tomcat.threads.max=1` are in the three source
-files. Without them a 32-core Go server would be measured against a
+Node are single-threaded because that is what they are; Go, tokio, Tomcat and
+Kestrel are single-threaded here because the harness **made** them, and that is
+the largest handicap in the file. `runtime.GOMAXPROCS(1)`, `#[tokio::main(flavor =
+"current_thread")]` and `server.tomcat.threads.max=1` are in three of the source
+files. The .NET pair takes a fourth route: `DOTNET_PROCESSOR_COUNT=1` in the
+environment, because the runtime reads it once as it starts and it is what sizes
+the GC heaps, the thread pool and Kestrel's IO queues. `Shared.PinToOneThread`
+caps the pool at one worker on top of it and throws if that variable is absent,
+so the pinning cannot be lost by launching the process another way.
+
+Without any of this a 32-core Go server would be measured against a
 single-threaded JavaScript one, which ranks the machine and not the framework.
 With them, the ranking is per-thread dispatch cost, which is the only thing the
 rest of this table has ever measured - and which is **not** what anyone deploying
-Go or Rust actually gets. Measured on the machine below: raw `net/http` goes from
-about 73k req/s at `GOMAXPROCS(1)` to about 230k with all 32 cores at the same 64
-connections, and Axum from about 121k to about 503k. Neither Bun subject can move
-at all, because `Bun.serve` is one thread.
+Go, Rust or .NET actually gets. Measured on the machine below at the same 64
+connections: raw `net/http` goes from about 73k req/s at `GOMAXPROCS(1)` to about
+230k with all 32 cores, Axum from about 121k to about 503k, and `aspnet-minimal`
+from about 88k to about 377k. Neither Bun subject can move at all, because
+`Bun.serve` is one thread.
 
-**Compilation is not startup.** The Go and Rust binaries and the Spring fat jar
-are all built in a prepare pass before anything is measured, and the build time is
-reported next to the toolchain rather than inside the startup column. So the
-startup column times the same thing for everyone: a cold process answering its
-first request. That is honest for Go and Rust, where the compile is genuinely
-somebody else's problem at deploy time, and it is honest for the JVM too - class
-loading and a JIT-free first request are real costs a JVM pays every boot, and
-they stay in the number.
+**Compilation is not startup.** The Go and Rust binaries, the Spring fat jar and
+the two .NET publish outputs are all built in a prepare pass before anything is
+measured, and the build time is reported next to the toolchain rather than inside
+the startup column. So the startup column times the same thing for everyone: a
+cold process answering its first request. That is honest for Go and Rust, where
+the compile is genuinely somebody else's problem at deploy time, and it is honest
+for the JVM and .NET too - class or assembly loading and a JIT-free first request
+are real costs both pay every boot, and they stay in the number.
 
-**JIT warmup.** Three seconds does not warm a JVM, so `spring` gets a
-30-second unmeasured warmup instead, recorded per subject in the report and
-printed above the tables. Reporting a cold JVM would be exactly the kind of
-flattering measurement this file exists to avoid, pointed the other way.
+**JIT warmup.** Three seconds warms neither a JVM nor a .NET runtime, so `spring`,
+`aspnet-minimal` and `aspnet-mvc` get a 30-second unmeasured warmup instead,
+recorded per subject in the report and printed above the tables. Reporting a cold
+JVM would be exactly the kind of flattering measurement this file exists to avoid,
+pointed the other way, and .NET turned out to need it just as badly: measured,
+`aspnet-minimal` served 40k req/s on the `json` scenario after a 3-second warmup,
+was still climbing 20 seconds later and plateaued near 88k. Quoting the first
+number would have understated it by 2.2x.
 
 **The validator is not held constant across languages.** Inside JavaScript every
 subject validates with zod, which is what makes `validate` minus `json` readable.
-There is no zod in Go, Rust or Java, so each uses the idiomatic choice -
-`go-playground/validator`, the `validator` crate, Hibernate Validator - and each
-brings its own email regex. Compare the cross-language `validate` rows to their
-own `json` row, not to a JavaScript subject's.
+There is no zod in Go, Rust, Java or C#, so each uses the idiomatic choice -
+`go-playground/validator`, the `validator` crate, Hibernate Validator,
+DataAnnotations - and each brings its own email regex. Compare the cross-language
+`validate` rows to their own `json` row, not to a JavaScript subject's.
 
 ### Deliberate handicaps, in both directions
 
@@ -372,21 +421,21 @@ intend to quote.**
 
 ## Which cross-language rows are in the tables below
 
-`nethttp`, `gin`, `axum` and `spring` are implemented and pass the contract check.
-Whether a row appears depends on the toolchain being installed on the machine that
-took the run, because a missing one is a skip rather than a failure.
+`nethttp`, `gin`, `axum`, `spring`, `aspnet-minimal`, `aspnet-mvc`, `django` and
+`fastapi` are implemented and pass the contract check. Whether a row appears depends
+on the toolchain being installed on the machine that took the run, because a missing
+one is a skip rather than a failure.
 
-The published `results/latest.json` was taken on 2026-08-22 with Rust present and Go,
-the JDK and Django absent, so **`axum` is in the tables and `nethttp`, `gin`, `spring`
-and `django` are not**. Every table here is generated from that one file rather than
-typed, so the missing rows appear the next time a full run is taken on a machine that
-has the toolchains. Reproduce them meanwhile with
-`bun run start --subjects bun-serve,dunx,nethttp,gin,spring`.
+The published `results/latest.json` was taken with all five toolchains present, so
+**every subject is in the tables**. A checkout without them produces a shorter
+report and still exits 0; every table here is generated from that one file rather
+than typed, so a row is either measured or absent and never guessed at.
 
 What a clean run should be read for, in this order: whether the load generator has
 headroom over the fastest row (see "Load generator"), then whether the JavaScript
-rows sit above Gin and Axum - and if they do, "Reading the Go, Rust and JVM rows
-fairly" is the paragraph that says what that does and does not mean.
+rows sit above Gin, Axum and the .NET pair - and if they do, "Reading the Go, Rust,
+JVM and .NET rows fairly" is the paragraph that says what that does and does not
+mean.
 
 ## Interleaving, and the drift it removes
 
@@ -459,9 +508,9 @@ transcribed by hand.
 
 ```
 AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
-linux 7.0.0-28-generic x64 | bun 1.4.0 | node v20.20.2 | oha oha 1.15.0
-64 connections | 3s warmup | 5 x 5s measured | 2026-08-22
-dunx-logging 2.2.1 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1 | gin v1.12.0 | axum 0.8.9 | spring 4.1.0 | django 6.1 | fastapi 0.141.1
+linux 7.0.0-30-generic x64 | bun 1.4.0 | node v20.20.2 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 5s measured | 2026-08-26
+dunx-logging 3.0.1 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1 | gin v1.12.0 | axum 0.8.9 | spring 4.1.0 | aspnet-minimal net10.0 | aspnet-mvc net10.0 | django 6.1 | fastapi 0.141.1
 ```
 
 Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
@@ -470,111 +519,121 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 131,805 | 1,663 | 0.460 | 0.927 | 100.0% |
-| **@dunx/http** | **130,843** | 649 | 0.466 | 0.940 | **99.3%** |
-| Elysia | 130,565 | 1,045 | 0.467 | 0.946 | 99.1% |
-| Hono (Bun) | 124,947 | 4,261 | 0.489 | 0.989 | 94.8% |
-| Axum (Rust) | 121,925 | 963 | 0.515 | 0.654 | 92.5% |
-| @dunx/http (+ request logging) | 79,903 | 1,894 | 0.764 | 1.516 | 60.6% |
-| net/http (Go) | 74,290 | 614 | 0.859 | 1.881 | 56.4% |
-| Gin (Go) | 73,402 | 503 | 0.868 | 1.962 | 55.7% |
-| Spring Boot (JVM) | 45,176 | 771 | 1.372 | 1.811 | 34.3% |
-| node:http (raw) | 40,970 | 1,678 | 1.555 | 1.989 | 31.1% |
-| Fastify (Node) | 39,215 | 781 | 1.590 | 1.990 | 29.8% |
-| Hono (Node) | 38,167 | 1,203 | 1.629 | 2.086 | 29.0% |
-| NestJS (Fastify) | 33,140 | 273 | 1.873 | 2.415 | 25.1% |
-| Express (Node) | 11,967 | 119 | 5.038 | 7.183 | 9.1% |
-| NestJS (Express) | 9,222 | 162 | 6.479 | 9.397 | 7.0% |
-| FastAPI (Python) | 7,171 | 12 | 8.909 | 9.118 | 5.4% |
-| Django (Python) | 4,587 | 98 | 13.844 | 15.076 | 3.5% |
+| Bun.serve (raw) | 115,298 | 1,990 | 0.527 | 1.077 | 100.0% |
+| **@dunx/http** | **113,030** | 2,409 | 0.535 | 1.088 | **98.0%** |
+| Elysia | 111,396 | 3,935 | 0.551 | 1.117 | 96.6% |
+| Axum (Rust) | 109,690 | 4,524 | 0.572 | 0.786 | 95.1% |
+| Hono (Bun) | 104,270 | 1,939 | 0.590 | 1.184 | 90.4% |
+| ASP.NET Core minimal APIs | 94,487 | 3,255 | 0.658 | 0.932 | 82.0% |
+| ASP.NET Core MVC | 79,449 | 2,151 | 0.774 | 1.107 | 68.9% |
+| @dunx/http (+ request logging) | 69,909 | 2,769 | 0.860 | 1.677 | 60.6% |
+| Gin (Go) | 65,671 | 2,543 | 0.971 | 2.157 | 57.0% |
+| net/http (Go) | 60,074 | 2,816 | 1.058 | 2.263 | 52.1% |
+| Spring Boot (JVM) | 43,797 | 1,140 | 1.408 | 2.095 | 38.0% |
+| node:http (raw) | 38,841 | 816 | 1.607 | 3.015 | 33.7% |
+| Fastify (Node) | 35,387 | 2,405 | 1.794 | 2.308 | 30.7% |
+| Hono (Node) | 34,017 | 934 | 1.802 | 2.418 | 29.5% |
+| NestJS (Fastify) | 31,225 | 405 | 1.971 | 2.898 | 27.1% |
+| Express (Node) | 11,816 | 177 | 5.004 | 7.455 | 10.2% |
+| NestJS (Express) | 9,230 | 130 | 6.429 | 9.655 | 8.0% |
+| FastAPI (Python) | 7,057 | 89 | 8.996 | 9.631 | 6.1% |
+| Django (Python) | 4,221 | 41 | 15.229 | 16.507 | 3.7% |
 
 **JSON** - `GET /json`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 127,439 | 4,240 | 0.481 | 0.969 | 100.0% |
-| **@dunx/http** | **123,022** | 1,651 | 0.496 | 0.996 | **96.5%** |
-| Elysia | 121,831 | 3,021 | 0.500 | 1.006 | 95.6% |
-| Axum (Rust) | 119,941 | 1,353 | 0.519 | 0.736 | 94.1% |
-| Hono (Bun) | 109,381 | 3,876 | 0.555 | 1.116 | 85.8% |
-| @dunx/http (+ request logging) | 78,583 | 1,604 | 0.775 | 1.541 | 61.7% |
-| net/http (Go) | 72,013 | 704 | 0.885 | 1.938 | 56.5% |
-| Gin (Go) | 71,272 | 1,320 | 0.893 | 2.029 | 55.9% |
-| Spring Boot (JVM) | 51,476 | 1,191 | 1.223 | 1.564 | 40.4% |
-| node:http (raw) | 39,828 | 448 | 1.565 | 1.975 | 31.3% |
-| Fastify (Node) | 38,135 | 701 | 1.621 | 1.900 | 29.9% |
-| Hono (Node) | 31,797 | 890 | 1.950 | 2.418 | 25.0% |
-| NestJS (Fastify) | 31,068 | 516 | 2.056 | 2.462 | 24.4% |
-| Express (Node) | 11,614 | 90 | 5.159 | 7.340 | 9.1% |
-| NestJS (Express) | 8,983 | 67 | 6.628 | 9.712 | 7.0% |
-| FastAPI (Python) | 7,186 | 66 | 8.845 | 9.735 | 5.6% |
-| Django (Python) | 4,294 | 90 | 14.584 | 16.579 | 3.4% |
+| Bun.serve (raw) | 111,883 | 1,024 | 0.544 | 1.097 | 100.0% |
+| Elysia | 107,020 | 282 | 0.567 | 1.145 | 95.7% |
+| **@dunx/http** | **106,867** | 1,563 | 0.567 | 1.149 | **95.5%** |
+| Axum (Rust) | 104,493 | 3,153 | 0.599 | 0.814 | 93.4% |
+| Hono (Bun) | 93,598 | 1,531 | 0.642 | 1.288 | 83.7% |
+| ASP.NET Core minimal APIs | 91,573 | 2,331 | 0.692 | 0.890 | 81.8% |
+| ASP.NET Core MVC | 73,097 | 1,767 | 0.868 | 1.180 | 65.3% |
+| @dunx/http (+ request logging) | 69,164 | 1,605 | 0.868 | 1.722 | 61.8% |
+| net/http (Go) | 61,779 | 2,468 | 1.033 | 2.255 | 55.2% |
+| Gin (Go) | 61,016 | 972 | 1.044 | 2.355 | 54.5% |
+| Spring Boot (JVM) | 46,073 | 1,088 | 1.371 | 1.643 | 41.2% |
+| node:http (raw) | 38,379 | 546 | 1.602 | 3.150 | 34.3% |
+| Fastify (Node) | 35,002 | 826 | 1.768 | 2.609 | 31.3% |
+| Hono (Node) | 31,045 | 750 | 2.003 | 2.573 | 27.7% |
+| NestJS (Fastify) | 30,234 | 375 | 2.069 | 2.758 | 27.0% |
+| Express (Node) | 11,331 | 191 | 5.248 | 7.839 | 10.1% |
+| NestJS (Express) | 8,958 | 169 | 6.664 | 9.954 | 8.0% |
+| FastAPI (Python) | 7,122 | 108 | 8.943 | 10.316 | 6.4% |
+| Django (Python) | 4,020 | 58 | 15.755 | 17.167 | 3.6% |
 
 **Path parameter** - `GET /params/42`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 122,963 | 4,056 | 0.496 | 1.006 | 100.0% |
-| Elysia | 119,472 | 1,544 | 0.503 | 1.020 | 97.2% |
-| **@dunx/http** | **115,506** | 3,078 | 0.513 | 1.054 | **93.9%** |
-| Axum (Rust) | 112,675 | 6,833 | 0.547 | 0.704 | 91.6% |
-| Hono (Bun) | 102,299 | 1,102 | 0.596 | 1.198 | 83.2% |
-| @dunx/http (+ request logging) | 71,358 | 3,379 | 0.828 | 1.619 | 58.0% |
-| net/http (Go) | 70,862 | 363 | 0.898 | 1.953 | 57.6% |
-| Gin (Go) | 69,659 | 950 | 0.909 | 2.063 | 56.7% |
-| Spring Boot (JVM) | 40,361 | 1,686 | 1.521 | 2.027 | 32.8% |
-| node:http (raw) | 38,129 | 974 | 1.609 | 2.277 | 31.0% |
-| Fastify (Node) | 35,221 | 1,228 | 1.797 | 2.279 | 28.6% |
-| Hono (Node) | 30,743 | 747 | 2.047 | 2.755 | 25.0% |
-| NestJS (Fastify) | 28,529 | 1,043 | 2.173 | 2.708 | 23.2% |
-| Express (Node) | 11,340 | 186 | 5.258 | 7.680 | 9.2% |
-| NestJS (Express) | 8,658 | 72 | 6.854 | 10.380 | 7.0% |
-| FastAPI (Python) | 6,624 | 50 | 9.565 | 10.774 | 5.4% |
-| Django (Python) | 4,172 | 100 | 15.216 | 17.295 | 3.4% |
+| Bun.serve (raw) | 111,212 | 3,820 | 0.550 | 1.106 | 100.0% |
+| Elysia | 107,220 | 1,586 | 0.560 | 1.143 | 96.4% |
+| **@dunx/http** | **106,634** | 2,299 | 0.563 | 1.134 | **95.9%** |
+| Axum (Rust) | 100,799 | 2,101 | 0.617 | 0.905 | 90.6% |
+| ASP.NET Core minimal APIs | 91,330 | 4,559 | 0.671 | 0.969 | 82.1% |
+| Hono (Bun) | 88,063 | 5,004 | 0.704 | 1.403 | 79.2% |
+| @dunx/http (+ request logging) | 68,620 | 2,157 | 0.857 | 1.916 | 61.7% |
+| ASP.NET Core MVC | 62,901 | 1,333 | 0.986 | 1.359 | 56.6% |
+| Gin (Go) | 61,822 | 495 | 1.031 | 2.273 | 55.6% |
+| net/http (Go) | 60,265 | 1,892 | 1.056 | 2.266 | 54.2% |
+| node:http (raw) | 38,399 | 693 | 1.626 | 3.197 | 34.5% |
+| Spring Boot (JVM) | 37,943 | 945 | 1.667 | 2.199 | 34.1% |
+| Fastify (Node) | 33,523 | 586 | 1.881 | 2.363 | 30.1% |
+| Hono (Node) | 29,861 | 805 | 2.076 | 2.735 | 26.9% |
+| NestJS (Fastify) | 27,462 | 473 | 2.253 | 3.328 | 24.7% |
+| Express (Node) | 11,212 | 310 | 5.311 | 7.796 | 10.1% |
+| NestJS (Express) | 8,575 | 58 | 6.920 | 10.349 | 7.7% |
+| FastAPI (Python) | 6,415 | 86 | 9.898 | 10.722 | 5.8% |
+| Django (Python) | 4,081 | 41 | 15.439 | 17.151 | 3.7% |
 
 **Body validation** - `POST /validate`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Axum (Rust) | 86,327 | 1,577 | 0.733 | 0.879 | 100.8% |
-| Bun.serve (raw) | 85,605 | 2,135 | 0.709 | 1.417 | 100.0% |
-| **@dunx/http** | **79,596** | 1,888 | 0.766 | 1.527 | **93.0%** |
-| Elysia | 75,330 | 879 | 0.792 | 1.586 | 88.0% |
-| Hono (Bun) | 60,458 | 2,579 | 0.993 | 1.957 | 70.6% |
-| @dunx/http (+ request logging) | 57,561 | 1,051 | 1.063 | 2.040 | 67.2% |
-| Gin (Go) | 48,008 | 639 | 1.329 | 2.985 | 56.1% |
-| net/http (Go) | 46,360 | 882 | 1.373 | 3.053 | 54.2% |
-| Spring Boot (JVM) | 30,020 | 398 | 2.098 | 2.520 | 35.1% |
-| node:http (raw) | 28,736 | 868 | 2.163 | 4.213 | 33.6% |
-| Hono (Node) | 18,582 | 198 | 3.388 | 4.714 | 21.7% |
-| Fastify (Node) | 17,669 | 227 | 3.288 | 6.526 | 20.6% |
-| NestJS (Fastify) | 14,786 | 372 | 4.002 | 7.121 | 17.3% |
-| Express (Node) | 8,855 | 118 | 6.719 | 9.903 | 10.3% |
-| NestJS (Express) | 7,107 | 57 | 8.305 | 12.209 | 8.3% |
-| FastAPI (Python) | 4,380 | 27 | 14.467 | 16.287 | 5.1% |
-| Django (Python) | 4,015 | 78 | 16.093 | 17.449 | 4.7% |
+| Bun.serve (raw) | 77,297 | 2,024 | 0.781 | 1.557 | 100.0% |
+| Axum (Rust) | 76,226 | 1,331 | 0.823 | 1.108 | 98.6% |
+| ASP.NET Core minimal APIs | 70,869 | 1,917 | 0.870 | 1.220 | 91.7% |
+| **@dunx/http** | **70,514** | 2,585 | 0.854 | 1.694 | **91.2%** |
+| Elysia | 65,773 | 3,949 | 0.918 | 1.836 | 85.1% |
+| Hono (Bun) | 56,556 | 1,432 | 1.065 | 2.107 | 73.2% |
+| @dunx/http (+ request logging) | 50,688 | 3,522 | 1.194 | 2.304 | 65.6% |
+| ASP.NET Core MVC | 49,098 | 461 | 1.268 | 1.713 | 63.5% |
+| net/http (Go) | 43,727 | 762 | 1.466 | 3.113 | 56.6% |
+| Gin (Go) | 42,781 | 806 | 1.498 | 3.286 | 55.3% |
+| Spring Boot (JVM) | 28,671 | 1,331 | 2.267 | 2.826 | 37.1% |
+| node:http (raw) | 28,200 | 419 | 2.234 | 4.323 | 36.5% |
+| Hono (Node) | 18,585 | 341 | 3.367 | 6.542 | 24.0% |
+| Fastify (Node) | 16,793 | 218 | 3.481 | 6.818 | 21.7% |
+| NestJS (Fastify) | 14,210 | 357 | 4.100 | 8.044 | 18.4% |
+| Express (Node) | 8,754 | 41 | 6.785 | 9.989 | 11.3% |
+| NestJS (Express) | 7,174 | 265 | 8.305 | 12.036 | 9.3% |
+| FastAPI (Python) | 4,195 | 105 | 15.063 | 16.406 | 5.4% |
+| Django (Python) | 3,852 | 57 | 16.344 | 18.958 | 5.0% |
 
 **Startup** - cold process to first served request, 7 samples
 
 | Subject | median ms | min ms | max ms |
 | ------- | --------: | -----: | -----: |
-| Axum (Rust) | 1.6 | 1.5 | 1.8 |
-| net/http (Go) | 3.9 | 3.8 | 4.2 |
-| Gin (Go) | 5.0 | 3.9 | 5.4 |
-| Bun.serve (raw) | 18.6 | 18.1 | 19.8 |
-| Hono (Bun) | 23.3 | 21.8 | 24.3 |
-| **@dunx/http** | **39.6** | 39.3 | 41.7 |
-| @dunx/http (+ request logging) | 40.7 | 39.6 | 43.3 |
-| Elysia | 46.5 | 45.0 | 48.7 |
-| node:http (raw) | 71.1 | 65.8 | 83.7 |
-| Hono (Node) | 99.7 | 93.1 | 113.3 |
-| Express (Node) | 122.2 | 114.9 | 130.3 |
-| Django (Python) | 134.3 | 132.8 | 140.7 |
-| Fastify (Node) | 150.8 | 141.5 | 157.8 |
-| FastAPI (Python) | 244.3 | 242.9 | 247.1 |
-| NestJS (Express) | 273.7 | 265.1 | 280.2 |
-| NestJS (Fastify) | 320.2 | 288.8 | 328.1 |
-| Spring Boot (JVM) | 1285.9 | 1259.1 | 1303.8 |
+| Axum (Rust) | 1.8 | 1.6 | 7.0 |
+| net/http (Go) | 4.1 | 3.9 | 4.3 |
+| Gin (Go) | 4.2 | 3.9 | 5.4 |
+| Bun.serve (raw) | 18.3 | 16.9 | 19.9 |
+| Hono (Bun) | 23.6 | 22.6 | 24.5 |
+| @dunx/http (+ request logging) | 41.8 | 41.3 | 44.6 |
+| **@dunx/http** | **42.7** | 40.5 | 45.0 |
+| Elysia | 47.4 | 45.5 | 49.5 |
+| node:http (raw) | 70.2 | 66.1 | 72.8 |
+| Hono (Node) | 93.6 | 91.4 | 98.4 |
+| Express (Node) | 121.6 | 118.1 | 124.0 |
+| Django (Python) | 131.1 | 127.1 | 144.5 |
+| Fastify (Node) | 147.6 | 142.9 | 159.8 |
+| FastAPI (Python) | 246.9 | 240.1 | 253.3 |
+| NestJS (Express) | 277.4 | 271.4 | 355.4 |
+| ASP.NET Core minimal APIs | 280.4 | 269.6 | 289.3 |
+| ASP.NET Core MVC | 292.5 | 284.4 | 306.4 |
+| NestJS (Fastify) | 293.1 | 279.3 | 329.8 |
+| Spring Boot (JVM) | 1285.6 | 1256.3 | 1540.6 |
 
 ### What these say, including where dunx loses
 
@@ -582,10 +641,10 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Scenario | Bun.serve | @dunx/http | dunx costs |
 | -------- | --------: | ---------: | ---------: |
-| `plaintext` | 131,805 | 130,843 | −0.7% |
-| `json` | 127,439 | 123,022 | −3.5% |
-| `params` | 122,963 | 115,506 | −6.1% |
-| `validate` | 85,605 | 79,596 | −7.0% |
+| `plaintext` | 115,298 | 113,030 | −2.0% |
+| `json` | 111,883 | 106,867 | −4.5% |
+| `params` | 111,212 | 106,634 | −4.1% |
+| `validate` | 77,297 | 70,514 | −8.8% |
 
 **A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
 *through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
@@ -951,6 +1010,11 @@ internal/bench/
       src/axum.rs     Axum on tokio, single-threaded
     java/             one Maven project
       src/main/java/bench/App.java   Spring Boot, MVC over Tomcat
+    dotnet/           one solution-less directory, one project per subject
+      Directory.Build.props          the target framework and where builds land
+      shared/         the payloads, the validator and the thread pinning
+      aspnet-minimal/ minimal APIs on Kestrel, the .NET floor
+      aspnet-mvc/     the same server with MVC on top
   src/
     index.ts          entrypoint for the framework suite
     validation.ts     entrypoint for the validation harness
@@ -959,7 +1023,7 @@ internal/bench/
     run.ts            orchestration: startup, warmup, measured runs
     subject-process.ts  spawn, readiness, contract verification, stop
     build.ts          Bun.build transpile of the Node subjects
-    toolchains.ts     probe, compile and skip for the Go, Rust and JVM subjects
+    toolchains.ts     probe, compile and skip for the Go, Rust, JVM and .NET subjects
     scenarios.ts      the four workloads and their exact expected responses
     subjects.ts       the subject registry, including each one's handicaps
     loadgen/          oha adapter, Bun fetch driver, worker, histogram
@@ -983,11 +1047,17 @@ internal/bench/
 Node subjects need nothing extra - `src/build.ts` finds them by `runtime: 'node'`.
 
 A subject in an **existing** compiled language needs its source under
-`servers/go`, `servers/rust` or `servers/java`, and the naming the toolchain
-expects: a Go subject's `entry` is `servers/go/cmd/<id>/main.go`, a Rust subject
-needs a `[[bin]]` in `Cargo.toml` named after its id, and a JVM subject's
-`finalName` in `pom.xml` must be its id. It must also be single-threaded, for the
-reason in "Reading the Go, Rust and JVM rows fairly".
+`servers/go`, `servers/rust`, `servers/java` or `servers/dotnet`, and the naming
+the toolchain expects: a Go subject's `entry` is `servers/go/cmd/<id>/main.go`, a
+Rust subject needs a `[[bin]]` in `Cargo.toml` named after its id, a JVM subject's
+`finalName` in `pom.xml` must be its id, and a .NET subject's `entry` is
+`servers/dotnet/<id>/Program.cs` with the project file named after its id too. It
+must also be single-threaded, for the reason in "Reading the Go, Rust, JVM and
+.NET rows fairly" - and a .NET one needs `env: { DOTNET_PROCESSOR_COUNT: '1' }` in
+its registry entry, which `Shared.PinToOneThread` throws without.
+
+`src/registry.test.ts` checks every one of those namings, so a subject filed in
+the wrong place fails a test rather than a run.
 
 A **new** language is one entry in `TOOLCHAINS` in `src/toolchains.ts`: the
 binaries to probe, the environment variables that override them, the hint printed
@@ -1007,6 +1077,7 @@ none of them.
 | Go 1.22+                 | `nethttp`, `gin`         | `PATH`, or `$BENCH_GO`           |
 | Rust / Cargo             | `axum`                   | `PATH`, or `$BENCH_CARGO`        |
 | JDK 21+ **and** Maven    | `spring`                 | `PATH`, or `$BENCH_JAVA` and `$BENCH_MVN` |
+| .NET SDK 10+             | `aspnet-minimal`, `aspnet-mvc` | `PATH`, or `$BENCH_DOTNET`  |
 | Python 3.10+, Django, gunicorn | `django`           | `PATH`, or `$BENCH_PYTHON`       |
 | Python 3.10+, FastAPI, uvicorn | `fastapi`          | `PATH`, or `$BENCH_PYTHON`       |
 
@@ -1036,5 +1107,11 @@ passes `ws="none"`, which this suite wants anyway.
 Nothing here is downloaded or installed for you - `bun run setup` fetches oha and
 that is all. The first build of each is slow (Go and Maven resolve dependencies
 from the network, Rust compiles about 200 crates); every run after that is cached.
-Maven's local repository is `.bin/m2` rather than `~/.m2`, so a benchmark run
-leaves nothing behind outside this workspace.
+The .NET pair is the exception in both directions: it publishes in about three
+seconds from cold and needs no network at all, because neither project references
+anything outside the shared framework the SDK already ships.
+
+Maven's local repository is `.bin/m2` rather than `~/.m2`, and NuGet's is
+`.bin/nuget` with `DOTNET_CLI_HOME` alongside it, so a benchmark run leaves
+nothing behind outside this workspace. Everything the four compile lands in
+`.bench-tmp/`.

@@ -181,7 +181,14 @@ export interface CoverageModel {
  */
 export const BENCH_SCHEMA_VERSION = 1;
 
-export type BenchRuntime = 'bun' | 'node' | 'go' | 'rust' | 'jvm' | 'python';
+export type BenchRuntime =
+  | 'bun'
+  | 'node'
+  | 'go'
+  | 'rust'
+  | 'jvm'
+  | 'dotnet'
+  | 'python';
 
 export interface BenchMachine {
   readonly cpuModel: string;

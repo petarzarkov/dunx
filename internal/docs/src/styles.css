@@ -179,6 +179,10 @@ body {
   background: var(--mantine-color-red-filled);
 }
 
+.bench-fill[data-runtime='dotnet'] {
+  background: var(--mantine-color-grape-filled);
+}
+
 .bench-fill[data-runtime='python'] {
   background: var(--mantine-color-yellow-filled);
 }
@@ -224,6 +228,10 @@ body {
 
 .bench-swatch[data-runtime='jvm'] {
   background: var(--mantine-color-red-filled);
+}
+
+.bench-swatch[data-runtime='dotnet'] {
+  background: var(--mantine-color-grape-filled);
 }
 
 .bench-swatch-focus {

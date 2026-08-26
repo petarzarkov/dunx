@@ -1,9 +1,9 @@
 /**
- * The compiled subjects - Go, Rust and the JVM - and the two rules that keep
- * them honest.
+ * The compiled subjects - Go, Rust, the JVM and .NET - and the two rules that
+ * keep them honest.
  *
  * **They are opt-in.** `internal/bench` needs only Bun to run, and CI has no Go,
- * Rust or JDK. Each toolchain is probed once; if it is missing the harness says
+ * Rust, JDK or .NET SDK. Each toolchain is probed once; if it is missing the harness says
  * so, drops those subjects and still exits 0, exactly the way the Node subjects
  * are dropped when `node` does not resolve. Nothing is downloaded or installed.
  *
@@ -16,7 +16,12 @@ import { dirname, relative } from 'node:path';
 import { binDir, buildDir, root } from './paths.js';
 import type { Runtime, Subject, ToolchainInfo } from './types.js';
 
-export const NATIVE_RUNTIMES = Object.freeze(['go', 'rust', 'jvm'] as const);
+export const NATIVE_RUNTIMES = Object.freeze([
+  'go',
+  'rust',
+  'jvm',
+  'dotnet',
+] as const);
 export type NativeRuntime = (typeof NATIVE_RUNTIMES)[number];
 
 export const isNativeRuntime = (runtime: Runtime): runtime is NativeRuntime =>
@@ -103,6 +108,18 @@ const javaHome = (java: string): Record<string, string> =>
 
 const noEnv = (): Record<string, string> => ({});
 
+/**
+ * Keeps the SDK's caches inside the workspace, the way `.bin/m2` does for Maven:
+ * `dotnet` otherwise writes NuGet packages and a first-run sentinel into the home
+ * directory.
+ */
+const dotnetEnv = (): Record<string, string> => ({
+  NUGET_PACKAGES: `${binDir}/nuget`,
+  DOTNET_CLI_HOME: `${binDir}/dotnet-home`,
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1',
+  DOTNET_NOLOGO: '1',
+});
+
 const TOOLCHAINS: readonly Toolchain[] = [
   {
     runtime: 'go',
@@ -172,6 +189,47 @@ const TOOLCHAINS: readonly Toolchain[] = [
       );
       // `finalName` in pom.xml is the subject id, so this is the fat jar.
       return [java, '-jar', `${target}/${subject.id}.jar`];
+    },
+  },
+  {
+    runtime: 'dotnet',
+    label: '.NET SDK',
+    hint: 'Install the .NET 10 SDK from https://dotnet.microsoft.com/download, or set BENCH_DOTNET to a dotnet binary.',
+    tools: [
+      { env: 'BENCH_DOTNET', fallback: 'dotnet', versionArgs: ['--version'] },
+    ],
+    envFor: dotnetEnv,
+    compile: async (subject, binaries) => {
+      const dotnet = binaries[0] ?? 'dotnet';
+      const target = `${buildDir}/dotnet`;
+      const out = `${target}/${subject.id}`;
+      // A plain `publish -c Release`: no ReadyToRun, no Native AOT, no trimming
+      // and no invariant globalization, none of which anything else here gets.
+      //
+      // `BenchTarget` goes through the environment rather than as
+      // `-p:BenchTarget=`, which the 10.0.400 CLI forwards to MSBuild stripped of
+      // its `--property:` prefix; MSBuild then reads it as a second project file
+      // and fails with MSB1008. MSBuild reads environment variables as
+      // properties, and Directory.Build.props points obj/ and bin/ at it.
+      await build(
+        subject,
+        [
+          dotnet,
+          'publish',
+          `${root}/${dirname(subject.entry)}`,
+          '-c',
+          'Release',
+          '--nologo',
+          '-o',
+          out,
+        ],
+        `${root}/servers/dotnet`,
+        { ...dotnetEnv(), BenchTarget: target },
+      );
+      // `dotnet <dll>`, the way the JVM subject is `java -jar`: UseAppHost is off
+      // in Directory.Build.props, so there is no native launcher to hunt for a
+      // shared framework the SDK never registered with the machine.
+      return [dotnet, `${out}/${subject.id}.dll`];
     },
   },
 ];

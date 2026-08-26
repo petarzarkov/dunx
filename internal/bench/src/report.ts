@@ -163,7 +163,7 @@ export const formatReport = (report: Report): string => {
     );
     if (report.toolchains.some((chain) => chain.version !== null)) {
       out.push(
-        '  Go, Rust and JVM artifacts are built before the run: this times the artifact, never the build',
+        '  Go, Rust, JVM and .NET artifacts are built before the run: this times the artifact, never the build',
       );
     }
     out.push(

@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The harness runs `dotnet <id>.dll` the way it runs `java -jar`, so the
+         native launcher would be an unused file that also has to find a runtime
+         the SDK did not register. -->
+    <UseAppHost>false</UseAppHost>
+    <!-- Set by the harness through the environment - MSBuild reads variables as
+         properties - so nothing compiled ever lands under servers/. Defaults to
+         the usual place for a manual build. See src/toolchains.ts for why it is
+         not passed as -p:BenchTarget. -->
+    <BenchTarget Condition="'$(BenchTarget)' == ''">$(MSBuildThisFileDirectory)target</BenchTarget>
+    <BaseIntermediateOutputPath>$(BenchTarget)/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(BenchTarget)/bin/$(MSBuildProjectName)/</BaseOutputPath>
+  </PropertyGroup>
+</Project>

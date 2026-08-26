@@ -1,11 +1,19 @@
 export type HttpMethod = 'GET' | 'POST';
 
 /**
- * `go`, `rust` and `jvm` need a compiler the other four do not. The harness
- * probes for each one and skips its subjects when it is absent, so a checkout
- * with only Bun and Node still produces a report - see `src/toolchains.ts`.
+ * `go`, `rust`, `jvm` and `dotnet` need a compiler the other three do not. The
+ * harness probes for each one and skips its subjects when it is absent, so a
+ * checkout with only Bun and Node still produces a report - see
+ * `src/toolchains.ts`.
  */
-export type Runtime = 'bun' | 'node' | 'go' | 'rust' | 'jvm' | 'python';
+export type Runtime =
+  | 'bun'
+  | 'node'
+  | 'go'
+  | 'rust'
+  | 'jvm'
+  | 'dotnet'
+  | 'python';
 
 export interface Scenario {
   readonly id: string;
@@ -43,6 +51,13 @@ export interface Subject {
    * here. Recorded in the report so the asymmetry is visible rather than hidden.
    */
   readonly warmupFloorSeconds?: number | undefined;
+  /**
+   * Environment the subject process needs beyond `PORT`, merged in by
+   * `startSubject`. `DOTNET_PROCESSOR_COUNT=1` is the .NET counterpart of
+   * `GOMAXPROCS(1)` and is read once as the runtime starts, so it cannot live in
+   * the subject's own source the way Go's and tokio's pinning does.
+   */
+  readonly env?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface LoadRequest {

@@ -41,7 +41,7 @@ const measureStartup = async (
 ): Promise<StartupResult> => {
   const samplesMs: number[] = [];
   for (let index = 0; index < samples; index += 1) {
-    const process_ = await startSubject(subject, exec);
+    const process_ = await startSubject(subject, exec, subject.env ?? {});
     samplesMs.push(process_.startupMs);
     await process_.stop();
   }
@@ -84,7 +84,7 @@ const summarise = (
  *
  * A fresh process per (subject, scenario) is preserved: nothing inherits another
  * scenario's warmed-up JIT state or heap, and a subject with a warmup floor (the
- * JVM) still pays it once rather than once per round.
+ * JVM and the two .NET rows) still pays it once rather than once per round.
  */
 const measureScenarioAcrossSubjects = async (
   subjects: readonly Subject[],
@@ -109,7 +109,11 @@ const measureScenarioAcrossSubjects = async (
     // zero, reads the number and closes, so two subjects racing that probe can be
     // handed the same port.
     for (const subject of subjects) {
-      const server = await startSubject(subject, exec.get(subject.id) ?? []);
+      const server = await startSubject(
+        subject,
+        exec.get(subject.id) ?? [],
+        subject.env ?? {},
+      );
       await verifySubject(subject, server.baseUrl, [scenario]);
       live.push({
         subject,
@@ -157,8 +161,8 @@ interface Prepared {
 /**
  * Resolves every subject to the argv that launches it, before anything is
  * measured: Bun runs from source, Node from a `Bun.build` transpile, and Go,
- * Rust and the JVM from an artifact compiled here. A subject whose toolchain is
- * missing is dropped with a line saying so, and the run continues.
+ * Rust, the JVM and .NET from an artifact compiled here. A subject whose
+ * toolchain is missing is dropped with a line saying so, and the run continues.
  */
 const prepare = async (
   chosen: readonly Subject[],
