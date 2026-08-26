@@ -89,11 +89,14 @@ const SOCKET = '10.0.0.254';
  * thing under test. `requestIP` answers a fixed peer, which stands in for the
  * proxy that opened the connection.
  */
-const attached = (trustProxy: boolean | number): ClientAddress => {
+const attached = (
+  trustProxy: boolean | number,
+  socket: string = SOCKET,
+): ClientAddress => {
   const address = new ClientAddress();
   attachAddressSource(address, {
     server: {
-      requestIP: () => ({ address: SOCKET }),
+      requestIP: () => ({ address: socket }),
     } as unknown as Server<unknown>,
     trustProxy,
   });
@@ -158,5 +161,48 @@ describe('ClientAddress hop counting', () => {
     expect(attached(2).of(withForwarded('203.0.113.9, , 10.1.1.1'))).toBe(
       '203.0.113.9',
     );
+  });
+});
+
+/**
+ * Reported from a production migration: on a dual-stack listener the socket
+ * answers `::ffff:10.0.0.1`, an app storing plain IPv4 normalised it at one call
+ * site and not another, and the second silently matched nothing. It is the same
+ * address in a different notation, so `of()` returns one notation.
+ */
+describe('ClientAddress IPv4-mapped addresses', () => {
+  test('the socket form comes back as plain IPv4', () => {
+    expect(attached(false, '::ffff:10.0.0.1').of(withForwarded())).toBe(
+      '10.0.0.1',
+    );
+  });
+
+  test('a mapped entry in the header comes back the same way', () => {
+    expect(attached(true).of(withForwarded('::ffff:203.0.113.9'))).toBe(
+      '203.0.113.9',
+    );
+    expect(
+      attached(2).of(withForwarded('::ffff:203.0.113.9, 10.1.1.1, 10.1.1.2')),
+    ).toBe('10.1.1.1');
+  });
+
+  test('a real IPv6 address is left alone', () => {
+    expect(attached(false, '2001:db8::1').of(withForwarded())).toBe(
+      '2001:db8::1',
+    );
+    expect(attached(false, '::1').of(withForwarded())).toBe('::1');
+    expect(attached(true).of(withForwarded('2001:db8::1'))).toBe('2001:db8::1');
+  });
+
+  /** The same value in hex. Nothing writes it, so nothing reads it - see `unmap`. */
+  test('the hex spelling of a mapped address is not rewritten', () => {
+    expect(attached(false, '::ffff:a00:1').of(withForwarded())).toBe(
+      '::ffff:a00:1',
+    );
+  });
+
+  test('a plain IPv4 address is unchanged', () => {
+    expect(attached(false, '10.0.0.1').of(withForwarded())).toBe('10.0.0.1');
+    expect(attached(true).of(withForwarded('203.0.113.9'))).toBe('203.0.113.9');
   });
 });
