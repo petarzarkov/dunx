@@ -68,7 +68,7 @@ const HANDLER = {
  * next()" as a claim in prose rather than a shape you can see.
  */
 export const RequestFlow = (): React.JSX.Element => {
-  const { ref, revealed } = useReveal<HTMLDivElement>();
+  const { ref, revealed, inView } = useReveal<HTMLDivElement>();
 
   return (
     <Container size="lg" component="section">
@@ -78,20 +78,30 @@ export const RequestFlow = (): React.JSX.Element => {
             What happens to a request
           </Title>
           <Text c="dimmed" maw={660}>
-            Each layer wraps the one inside it. The ones that call{' '}
-            <code>next()</code> see the response coming back out, so a single
+            Each layer wraps the one inside it, and the pulse below is one
+            request descending them and unwinding back out. The layers that call{' '}
+            <code>next()</code> see the response on the way, so a single
             middleware can log both halves. Two of these layers are the runtime
             rather than the framework.
           </Text>
         </Stack>
 
-        <div className="onion" ref={ref} data-revealed={revealed}>
+        {/* `data-running` rather than a CSS-only loop: the pulse repeats for as
+            long as the page is open, and an infinite animation off screen costs
+            what one on screen costs. */}
+        <div
+          className="onion"
+          ref={ref}
+          data-revealed={revealed}
+          data-running={inView}
+        >
           {LAYERS.reduceRight(
             (inner, layer, index) => (
               <div
                 className="onion-layer"
                 key={layer.who}
                 data-native={layer.native === true}
+                data-wraps={layer.wraps !== undefined}
                 style={{ '--depth': index } as React.CSSProperties}
               >
                 <div className="onion-head">
