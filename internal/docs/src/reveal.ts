@@ -1,24 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * Marks an element once it has scrolled into view, so CSS can transition it in.
+ * Tracks an element against the viewport, for CSS to key motion off.
  *
- * The observer is dropped after the first intersection: these are one-shot
- * entrances, and leaving observers attached to every section on a long page
- * costs more than the effect is worth. `prefers-reduced-motion` is honoured in
- * CSS rather than here, so the attribute lands either way and only the
- * transition is dropped.
+ * `revealed` latches on the first intersection and drives the one-shot entrance
+ * transitions. `inView` keeps following, which is what lets a looping animation
+ * stop when nobody is looking at it: an infinite keyframe animation off screen
+ * costs what one on screen costs, and the request pulse in `RequestFlow` runs
+ * for as long as the page is open.
+ *
+ * One observer answers both, so the live half adds no second subscription. It is
+ * no longer disconnected after the first hit for that reason.
+ * `prefers-reduced-motion` is honoured in CSS rather than here, so both flags land
+ * either way and only the motion is dropped.
  */
 export const useReveal = <T extends HTMLElement>(): {
   ref: React.RefObject<T | null>;
   revealed: boolean;
+  inView: boolean;
 } => {
   const ref = useRef<T>(null);
   // Initialized from the capability check rather than set from the effect: with no
-  // observer there is nothing to wait for, so the first paint is the revealed one.
-  const [revealed, setRevealed] = useState(
-    () => typeof IntersectionObserver === 'undefined',
-  );
+  // observer there is nothing to wait for, so the first paint is the revealed one
+  // and the animation runs.
+  const blind = typeof IntersectionObserver === 'undefined';
+  const [revealed, setRevealed] = useState(blind);
+  const [inView, setInView] = useState(blind);
 
   useEffect(() => {
     const node = ref.current;
@@ -28,9 +35,8 @@ export const useReveal = <T extends HTMLElement>(): {
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          setRevealed(true);
-          observer.disconnect();
+          setInView(entry.isIntersecting);
+          if (entry.isIntersecting) setRevealed(true);
         }
       },
       { rootMargin: '0px 0px -12% 0px', threshold: 0.12 },
@@ -40,5 +46,5 @@ export const useReveal = <T extends HTMLElement>(): {
     return () => observer.disconnect();
   }, []);
 
-  return { ref, revealed };
+  return { ref, revealed, inView };
 };
