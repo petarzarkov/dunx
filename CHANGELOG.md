@@ -4,6 +4,41 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.0.3 - 2026-08-27
+
+The scaffolder exits, and setup instructions an agent can fetch
+
+Both from feedback on r/bun.
+
+`bunx @dunx/create-app my-api` wrote the app, printed its next steps and then sat
+there until the user pressed Ctrl+C. The feature prompt read one line with
+`console[Symbol.asyncIterator]().next()`, which never ends the iteration, so the
+stdin handle stayed referenced for the life of the process. A piped run always
+exited, because EOF ends the iteration on its own, which is why the CLI suite
+stayed green for weeks. Six ways out were probed on Bun 1.4.0 and recorded in
+docs/bun-apis.md; the test now spawns the reader with a pipe it deliberately does
+not close.
+
+Starting a project with an agent had nothing to point at. There is now a setup
+document served raw at https://petarzarkov.github.io/dunx/setup.md, so "set up my
+project using that URL" is a usable instruction, and an llms.txt beside it linking
+every dunx document as fetchable markdown. Every scaffolded app also gets an
+AGENTS.md naming its layout, its commands, the services its features want running
+and the rules dunx fails at boot over, plus a CLAUDE.md pointing at it. Neither
+copies the framework's own instructions: both link setup.md, which moves with each
+release.
+
+A patch rather than a minor, stated outright rather than derived. No package API
+changed: the scaffolder writes two more files, and the rest is documentation.
+
+### Features
+
+- **create-app**: setup instructions an agent can fetch, and AGENTS.md per app ([`c94c241`](https://github.com/petarzarkov/dunx/commit/c94c241dce9f25edc30cfab21aa4a27e35a7e02d))
+
+### Fixes
+
+- **create-app**: exit after the feature prompt instead of hanging ([`5fc5d6f`](https://github.com/petarzarkov/dunx/commit/5fc5d6fc2ffd62ddf5030e1d00e4dbfd95e0995e))
+
 ## 3.0.2 - 2026-08-26
 
 Field notes from a NestJS migration
