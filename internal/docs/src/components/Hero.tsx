@@ -10,6 +10,7 @@ import {
   Text,
 } from '@mantine/core';
 import { decimal, scenarioHeadlines, startupHeadline } from '../bench';
+import { useReveal } from '../reveal';
 import { bench, site } from '../data';
 import { href, RouteKind } from '../router';
 import { HERO_FILES } from '../samples';
@@ -73,79 +74,88 @@ const MeasuredLine = (): React.JSX.Element | null => {
   );
 };
 
-export const Hero = (): React.JSX.Element => (
-  <Box component="section" className="hero">
-    <div className="hero-glow" aria-hidden="true" />
-    <Container size="lg">
-      <Grid gutter={{ base: 'xl', md: 48 }} align="center">
-        <Grid.Col span={{ base: 12, md: 6 }}>
-          <Stack gap="lg">
-            <Group gap={6}>
-              {site.positioning.chips.map((chip, index) => (
-                <Badge
-                  key={chip}
-                  variant={index === 0 ? 'light' : 'default'}
-                  size="sm"
-                  tt="none"
-                  radius="sm"
-                >
-                  {chip}
-                </Badge>
-              ))}
-            </Group>
+export const Hero = (): React.JSX.Element => {
+  // The lap repeats for as long as the page is open, so it stops once the headline
+  // has scrolled away rather than running behind the rest of the page.
+  const { ref, inView } = useReveal<HTMLHeadingElement>();
 
-            <Stack gap="sm">
-              {/* Both lines and the paragraph come from `scripts/positioning.ts`,
+  return (
+    <Box component="section" className="hero">
+      <div className="hero-glow" aria-hidden="true" />
+      <Container size="lg">
+        <Grid gutter={{ base: 'xl', md: 48 }} align="center">
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Stack gap="lg">
+              <Group gap={6}>
+                {site.positioning.chips.map((chip, index) => (
+                  <Badge
+                    key={chip}
+                    variant={index === 0 ? 'light' : 'default'}
+                    size="sm"
+                    tt="none"
+                    radius="sm"
+                  >
+                    {chip}
+                  </Badge>
+                ))}
+              </Group>
+
+              <Stack gap="sm">
+                {/* Both lines and the paragraph come from `scripts/positioning.ts`,
                   which the README is generated from too. */}
-              <h1 className="hero-title">
-                {site.positioning.headline[0]}
-                <br />
-                <span className="gradient-text">
-                  {site.positioning.headline[1]}
-                </span>
-              </h1>
-              <Text size="lg" c="dimmed" maw="46ch">
-                {site.positioning.blurb}
-              </Text>
+                <h1 className="hero-title" ref={ref} data-spark={inView}>
+                  {site.positioning.headline[0]}
+                  <br />
+                  <span className="gradient-text">
+                    {site.positioning.headline[1]}
+                  </span>
+                  {/* Empty and hidden: the heading's text is asserted against
+                    `scripts/positioning.ts`, so the spark must add none. */}
+                  <span className="hero-spark" aria-hidden="true" />
+                </h1>
+                <Text size="lg" c="dimmed" maw="46ch">
+                  {site.positioning.blurb}
+                </Text>
+              </Stack>
+
+              <InstallLine />
+
+              <Group gap="sm">
+                <Button
+                  component="a"
+                  href={href(RouteKind.Guide, 'introduction')}
+                  size="md"
+                >
+                  Get started
+                </Button>
+                <Button
+                  component="a"
+                  href={href(RouteKind.Bench)}
+                  size="md"
+                  variant="default"
+                >
+                  See the benchmarks
+                </Button>
+                <Button
+                  component="a"
+                  href={site.repoUrl}
+                  target="_blank"
+                  size="md"
+                  variant="subtle"
+                >
+                  GitHub
+                </Button>
+              </Group>
+
+              <MeasuredLine />
             </Stack>
+          </Grid.Col>
 
-            <InstallLine />
-
-            <Group gap="sm">
-              <Button
-                component="a"
-                href={href(RouteKind.Guide, 'introduction')}
-                size="md"
-              >
-                Get started
-              </Button>
-              <Button
-                component="a"
-                href={href(RouteKind.Bench)}
-                size="md"
-                variant="default"
-              >
-                See the benchmarks
-              </Button>
-              <Button
-                component="a"
-                href={site.repoUrl}
-                target="_blank"
-                size="md"
-                variant="subtle"
-              >
-                GitHub
-              </Button>
-            </Group>
-
-            <MeasuredLine />
-          </Stack>
-        </Grid.Col>
-
-        <Grid.Col span={{ base: 12, md: 6 }}>
-          <EditorWindow files={FILES} label="A dunx application" />
-        </Grid.Col>
-      </Grid>
-    </Container>
-  </Box>
-);
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <EditorWindow files={FILES} label="A dunx application" />
+          </Grid.Col>
+        </Grid>
+      </Container>
+    </Box>
+  );
+};
