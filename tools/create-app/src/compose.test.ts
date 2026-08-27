@@ -192,6 +192,20 @@ describe('a composed app', () => {
     expect(await read('bunfig.toml')).toContain('@dunx/transform/preload');
   });
 
+  test('lists the features and the services in AGENTS.md', async () => {
+    const { result, read } = await compose(['jobs']);
+    expect(result.files).toContain('AGENTS.md');
+
+    const agents = await read('AGENTS.md');
+    expect(agents).toContain('**jobs**');
+    expect(agents).toContain('Redis or Valkey');
+    // A queue needs a second process, and the layout has to name the directories
+    // the selection actually carries.
+    expect(agents).toContain('bun run worker');
+    expect(agents).toContain('src/jobs/');
+    expect(agents).not.toContain('src/notes/');
+  });
+
   test('lists the features and the services they need in the README', async () => {
     const { read } = await compose(['jobs']);
     const readme = await read('README.md');

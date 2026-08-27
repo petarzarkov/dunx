@@ -147,6 +147,11 @@ tmp
 internal/docs/src/generated/
 internal/docs/public/badges/
 
+# The agent-facing pair the docs build copies into the site root, from
+# `docs/setup.md` and the generated guide list.
+internal/docs/public/setup.md
+internal/docs/public/llms.txt
+
 # Session resume point written by /whats-next - regenerated per session, not a
 # repo artifact
 HANDOFF.md

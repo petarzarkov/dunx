@@ -137,6 +137,12 @@ specifier is a compile error rather than a runtime surprise.
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - what was measured, what was
   rejected, and why
 - **[ROADMAP.md](docs/ROADMAP.md)** - what is built and what is next
+- **[setup.md](https://petarzarkov.github.io/dunx/setup.md)** - the same setup for
+  an agent to fetch and follow: "set up my project using
+  https://petarzarkov.github.io/dunx/setup.md". Every scaffolded app also gets an
+  `AGENTS.md` and a `CLAUDE.md`
+- **[llms.txt](https://petarzarkov.github.io/dunx/llms.txt)** - every document
+  above, linked as raw markdown
 
 ## Performance
 
