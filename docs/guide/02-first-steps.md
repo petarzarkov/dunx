@@ -11,7 +11,7 @@ bunx @dunx/create-app my-api
 
 ```
 Created my-api in my-api/
-  10 files from the minimal template
+  12 files from the minimal template
 
 Next:
   cd my-api
@@ -58,7 +58,7 @@ bunx @dunx/create-app my-api --with users,openapi,http
 
 ```
 Created my-api in my-api/
-  28 files, 4 features: openapi, http, database, users
+  33 files, 4 features: openapi, http, database, users
   database came along as requirements
 ```
 
@@ -113,6 +113,8 @@ my-api/
   package.json
   tsconfig.json
   README.md
+  AGENTS.md
+  CLAUDE.md
   .gitignore
   src/
     main.ts
@@ -491,6 +493,21 @@ you ask for it, because a suite printing one JSON line per assertion helps nobod
 `server.json(path)` returns `{ status, headers, body }` in one await. `server.request()`
 gives you the raw `Response` for bytes, HTML or a header assertion. `server.close()`
 is `app.shutdown()`: it stops the server, then tears the container down.
+
+### `AGENTS.md` and `CLAUDE.md`
+
+`AGENTS.md` states this app's layout, its commands, and the rules dunx fails at boot
+over: no `@Injectable()` to add, `.js` on relative imports, a `import type` at an
+injection site being an error rather than an `undefined`. A composed app also lists
+the features it carries and the services they want running.
+
+`CLAUDE.md` is four lines pointing at it, so both filenames find the same
+instructions and there is one file to edit.
+
+Neither restates the framework. They link
+[setup.md](https://petarzarkov.github.io/dunx/setup.md) and
+[llms.txt](https://petarzarkov.github.io/dunx/llms.txt), which are served from the
+documentation site and move with each release.
 
 ## Run it
 

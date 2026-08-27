@@ -80,6 +80,27 @@ describe('scaffold', () => {
     }
   });
 
+  test('writes agent instructions for the fixed template too', async () => {
+    const cwd = workspace();
+    const { directory, files } = await scaffold({ target: 'my-api', cwd });
+
+    expect(files).toContain('AGENTS.md');
+    expect(files).toContain('CLAUDE.md');
+
+    const agents = await read(directory, 'AGENTS.md');
+    expect(agents).toContain('# my-api');
+    // The rules an agent breaks first, and where the framework's own instructions
+    // live rather than a copy of them frozen at scaffold time.
+    expect(agents).toContain('@Injectable()');
+    expect(agents).toContain('https://petarzarkov.github.io/dunx/setup.md');
+    expect(agents).toContain('bunx @dunx/mcp');
+
+    // A pointer, so Claude Code and everything else read one file.
+    const claude = await read(directory, 'CLAUDE.md');
+    expect(claude).toContain('@AGENTS.md');
+    expect(claude.length).toBeLessThan(agents.length);
+  });
+
   test('refuses a non-empty directory unless forced', async () => {
     const cwd = workspace();
     await Bun.write(join(cwd, 'taken', 'keep.txt'), 'mine');

@@ -68,6 +68,9 @@ const MODES: readonly (readonly [RegExp, Mode])[] = [
   // Private workspaces. `internal/bench/README.md` is a long argument about
   // methodology and is meant to be.
   [/^internal\//, Mode.Exempt],
+  // Fetched by an agent rather than read on the site, and served raw at
+  // /dunx/setup.md. Instructions to a machine still have a reader.
+  [/^docs\/setup\.md$/, Mode.Reference],
   [/^docs\/guide\/01-introduction\.md$/, Mode.Explanation],
   [/^docs\/guide\/02-first-steps\.md$/, Mode.Tutorial],
   [/^docs\/guide\//, Mode.Reference],

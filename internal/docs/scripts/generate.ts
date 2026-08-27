@@ -13,6 +13,7 @@ import {
   slugify,
   type LinkTargets,
 } from './content';
+import { writeAgentDocs } from './agent-docs';
 import { readBench } from './extract/bench';
 import { highlight, paletteCss, startHighlighter } from './highlight';
 import { ALL_SAMPLES, langOf } from '../src/samples';
@@ -43,6 +44,7 @@ const DOCS_DIR = join(REPO_ROOT, 'docs');
 const OUT_DIR = join(TOOL_ROOT, 'src', 'generated');
 const GUIDES_OUT = join(OUT_DIR, 'guides');
 const PACKAGES_OUT = join(OUT_DIR, 'packages');
+const PUBLIC_DIR = join(TOOL_ROOT, 'public');
 /**
  * `--if-missing` generates only when there is nothing there, and is what
  * `typecheck` passes.
@@ -403,6 +405,19 @@ writeFileSync(join(OUT_DIR, 'releases.json'), JSON.stringify(releases));
 const bench = readBench(BENCH_RESULTS);
 
 writeFileSync(join(OUT_DIR, 'index.json'), JSON.stringify(site));
+
+// The pair an agent fetches rather than rendering the site: `/setup.md` and
+// `/llms.txt`, written into `public/` for Vite to copy to the output root. Built
+// from the same guide list as the nav, so a page added to the site is a line added
+// to the index.
+writeAgentDocs({
+  publicDir: PUBLIC_DIR,
+  docsDir: DOCS_DIR,
+  setupDoc: join(DOCS_DIR, 'setup.md'),
+  blurb: BLURB,
+  guides: site.guides,
+  read,
+});
 writeFileSync(join(OUT_DIR, 'bench.json'), JSON.stringify(bench));
 // Last: every highlight() call above has interned its colours by now.
 writeFileSync(join(OUT_DIR, 'shiki.css'), `${paletteCss()}\n`);

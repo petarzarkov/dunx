@@ -117,6 +117,25 @@ properly, so `dunx_openapi` is where it lives - and that split is what keeps the
 other five tools working in an app with no OpenAPI setup. `@dunx/openapi` is an
 optional peer, loaded only when `dunx_openapi` is called.
 
+## Starting a project with an agent
+
+Two files are served for an agent to fetch rather than render:
+
+| URL                                           | Holds                                                                   |
+| --------------------------------------------- | ----------------------------------------------------------------------- |
+| <https://petarzarkov.github.io/dunx/setup.md> | Install, wire and verify an app, plus the rules dunx fails at boot over |
+| <https://petarzarkov.github.io/dunx/llms.txt> | Every dunx document, linked as raw markdown                             |
+
+Hand the first one to an agent as an instruction: "set up my project using
+<https://petarzarkov.github.io/dunx/setup.md>". It is the same content the
+repository's guards check, copied to that URL by each build, so it states the
+version being served.
+
+`bunx @dunx/create-app my-api --yes` writes an `AGENTS.md` and a `CLAUDE.md` into
+the app: its layout, its commands, the features it carries and the services those
+want running. **Pass `--yes` or `--with` when an agent runs it**, since a bare run
+in a terminal asks which features to include and waits for an answer.
+
 ## It reads the app. It never boots it.
 
 This is the decision the package is built around.

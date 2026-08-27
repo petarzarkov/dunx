@@ -671,6 +671,33 @@ was not going to end anyway" without a race or a fixed delay. A ref'd timer woul
 add its own delay to every clean exit, and polling would need a loop that is itself
 a handle.
 
+### One line of stdin keeps the process alive
+
+`console` is async-iterable over stdin's lines. Taking one line off the iterator
+with `.next()` and stopping there leaves the handle referenced for the life of the
+process. Probed on Bun 1.4.0, one line written into a stdin the parent holds open:
+
+```
+console[Symbol.asyncIterator]().next()         still running after 6s     <- HANG
+for await (const line of console) { break }    exited after 0.02s
+for await (const line of console) { return }   exited after 0.02s
+process.stdin.unref() after .next()            exited after 0.02s
+process.stdin.pause() after .next()            exited after 0.02s
+Bun.stdin.stream() reader, then cancel()       exited after 0.02s
+```
+
+Ending the iteration is what releases it: `break` and `return` both run the
+iterator's `return()`, and the three explicit calls do the same job by hand.
+
+**A piped test never sees this.** `printf 'notes\n' | bun cli.ts` closes stdin
+straight away, the iteration ends on EOF, and the process exits. The hang needs
+something holding the other end open, which is every real terminal. That is how it
+reached a release: `bunx @dunx/create-app my-api` wrote the app, printed its next
+steps and then sat there until the user pressed Ctrl+C, reported from a real run
+after the piped CLI suite had been green for weeks. `tools/create-app/src/stdin.ts`
+is the one-line read, and its test spawns the reader with a pipe it deliberately
+does not close.
+
 ### Decorators - a compound assignment to a private field is a `SyntaxError`
 
 **Bun 1.4.0 refuses to parse a class that has both a decorated member and a

@@ -21,10 +21,17 @@ bun run start     # http://localhost:3000/greetings
 | Flag                | Default            | Meaning                                            |
 | ------------------- | ------------------ | -------------------------------------------------- |
 | `--name <name>`     | the directory name | Package name for the generated app                 |
+| `--with <a,b,c>`    |                    | Features to compose the app from                   |
+| `--all`             | off                | Every feature                                      |
+| `--list`            |                    | Print the features and exit                        |
 | `--template <name>` | `minimal`          | Which template to write                            |
 | `--force`           | off                | Write into a directory that already has files      |
-| `--yes`, `-y`       |                    | Accepted and ignored; nothing here ever prompts    |
+| `--yes`, `-y`       | off                | Take the minimal template without prompting        |
 | `--help`            |                    | Print usage                                        |
+
+With neither `--with` nor `--yes`, and a terminal attached, it lists the features
+and reads one line of stdin. Piped or in CI it never prompts, so **an agent or a
+script should pass `--yes` or `--with`**.
 
 The name is validated against npm's rules **before** anything is created, because
 an invalid one would otherwise surface as a confusing `bun install` failure inside
@@ -49,7 +56,12 @@ The `minimal` template, the same app as
 server, and the `bunfig.toml` preload line that makes constructor injection work.
 
 Its `src/` is a **byte-for-byte copy** of that example, and a test in this package
-fails if the two ever drift. The example is the one CI boots, so keeping them
+fails if the two ever drift.
+
+Every app also gets an `AGENTS.md` naming its layout, its commands and the rules
+dunx fails at boot over, plus a `CLAUDE.md` pointing at it. Both link
+<https://petarzarkov.github.io/dunx/setup.md>, which is served per release, rather
+than copying the framework's own instructions into your repository. The example is the one CI boots, so keeping them
 identical is what makes the template trustworthy rather than merely plausible.
 
 ## Two details

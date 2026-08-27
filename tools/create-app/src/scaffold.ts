@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Glob } from 'bun';
+import { agentFiles } from './agents.js';
 import { resolveFeatures, type Feature } from './features.js';
 import {
   appModule,
@@ -225,6 +226,16 @@ export const scaffold = async (
     }
   };
 
+  /** Generated content, with the same placeholder substitution a copy gets. */
+  const writeAll = async (
+    files: Readonly<Record<string, string>>,
+  ): Promise<void> => {
+    for (const [target, contents] of Object.entries(files)) {
+      await Bun.write(join(directory, target), fill(contents, name, version));
+      written.push(target);
+    }
+  };
+
   if (!composing) {
     const source = join(templatesRoot(), template);
     if (!existsSync(source)) {
@@ -233,6 +244,9 @@ export const scaffold = async (
       );
     }
     await copyTree(source, '.');
+    // Written for the fixed template too, so both paths leave the app with one set
+    // of agent instructions rather than the template carrying a second copy.
+    await writeAll(agentFiles(name, []));
     return {
       directory,
       name,
@@ -263,10 +277,10 @@ export const scaffold = async (
     await copyTree(from, join('src', feature.source));
   }
 
-  for (const [target, contents] of Object.entries(generated(name, features))) {
-    await Bun.write(join(directory, target), fill(contents, name, version));
-    written.push(target);
-  }
+  await writeAll({
+    ...generated(name, features),
+    ...agentFiles(name, features),
+  });
 
   return {
     directory,

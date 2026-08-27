@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { relative } from 'node:path';
 import { FEATURES, featureNames, impliedBy } from './features.js';
 import { scaffold, ScaffoldError, TEMPLATES } from './scaffold.js';
+import { readLine } from './stdin.js';
 import type { TemplateName } from './scaffold.js';
 
 const USAGE = `Scaffold a new dunx application.
@@ -100,8 +101,7 @@ const ask = async (): Promise<readonly string[]> => {
   console.log('Names or numbers, comma separated. `all` for everything.');
   process.stdout.write('> ');
 
-  const line = (await console[Symbol.asyncIterator]().next()).value;
-  const answer = typeof line === 'string' ? line.trim() : '';
+  const answer = await readLine();
   if (answer === '') return [];
   if (answer === 'all') return featureNames;
 
