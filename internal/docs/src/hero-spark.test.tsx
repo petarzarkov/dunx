@@ -48,6 +48,22 @@ describe('the hero spark', () => {
     });
   });
 
+  test('stops being observed when the hero unmounts', () => {
+    withIntersection(({ fire }) => {
+      const view = render(
+        <MantineProvider>
+          <Hero />
+        </MantineProvider>,
+      );
+      fire(true);
+      view.unmount();
+
+      // `useReveal` disconnects on unmount and the stub drops that callback with
+      // it, so a later event has nothing to push state into.
+      expect(() => fire(true)).toThrow(/nothing subscribed/);
+    });
+  });
+
   test('laps anyway where there is no observer to ask', () => {
     expect(withoutIntersection(titleOf).dataset['spark']).toBe('true');
   });

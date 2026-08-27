@@ -82,7 +82,7 @@
     linear-gradient(
       96deg,
       transparent 42%,
-      var(--spark-sheen) 50%,
+      var(--spark-sheen, transparent) 50%,
       transparent 58%
     ),
     linear-gradient(
@@ -633,7 +633,7 @@
     linear-gradient(
       96deg,
       transparent 42%,
-      var(--spark-sheen) 50%,
+      var(--spark-sheen, transparent) 50%,
       transparent 58%
     ),
     linear-gradient(

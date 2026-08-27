@@ -42,7 +42,19 @@ const swap = <T,>(stub: unknown, body: () => T): T => {
   const real = globalThis.IntersectionObserver;
   globalThis.IntersectionObserver = stub as typeof IntersectionObserver;
   try {
-    return body();
+    const result = body();
+    // The real observer goes back when this returns, so an async body would run
+    // its assertions against a stub that is no longer installed and fail somewhere
+    // unrelated. Checked here rather than in the signature: inference through an
+    // `Exclude<T, Promise<unknown>>` parameter collapses T to `unknown` and takes
+    // every caller's return type with it.
+    const thenable = result as unknown as { then?: unknown } | null;
+    if (typeof thenable?.then === 'function') {
+      throw new Error(
+        'the body must be synchronous: the real IntersectionObserver is restored when it returns',
+      );
+    }
+    return result;
   } finally {
     globalThis.IntersectionObserver = real;
   }
@@ -60,14 +72,23 @@ export const withIntersection = <T,>(body: (io: Intersection) => T): T => {
   const watched: Element[] = [];
 
   class Stub {
-    constructor(callback: IntersectionObserverCallback) {
+    constructor(private readonly callback: IntersectionObserverCallback) {
       callbacks.push(callback);
     }
+
     observe(node: Element): void {
       watched.push(node);
     }
+
+    /**
+     * Drops its own callback, and nothing else. `useReveal` disconnects on unmount,
+     * so a `fire` after that would push state into an unmounted tree: an `act`
+     * warning at best, a pass that means nothing at worst. `watched` is left alone,
+     * being the record of what was observed rather than what is still live.
+     */
     disconnect(): void {
-      watched.length = 0;
+      const at = callbacks.indexOf(this.callback);
+      if (at !== -1) callbacks.splice(at, 1);
     }
   }
 
