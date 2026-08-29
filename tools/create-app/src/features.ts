@@ -64,10 +64,16 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
         'LOG_LEVEL: z.enum(LogLevel).default(LogLevel.INFO),',
         '/** Unset means console only. Set it to also append JSON to a rotating file. */',
         'LOG_FILE: z.string().optional(),',
+        '/** Both cost a `req.clone().text()` on the hot path, so off in production. */',
+        'LOG_REQUEST_BODY: z.stringbool().default(false),',
+        'LOG_RESPONSE_BODY: z.stringbool().default(false),',
       ],
       field:
-        'readonly log: { readonly level: LogLevel; readonly file: string | undefined };',
-      map: 'log: { level: value.LOG_LEVEL, file: value.LOG_FILE },',
+        'readonly log: { readonly level: LogLevel; readonly file: string | undefined; ' +
+        'readonly requestBody: boolean; readonly responseBody: boolean };',
+      map:
+        'log: { level: value.LOG_LEVEL, file: value.LOG_FILE, ' +
+        'requestBody: value.LOG_REQUEST_BODY, responseBody: value.LOG_RESPONSE_BODY },',
       env: [{ name: 'LOG_LEVEL', value: 'info' }],
     },
     corsOrigin: {

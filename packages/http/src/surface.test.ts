@@ -163,6 +163,7 @@ const CLIENT = [
   'FetchError',
   'FetchTransportError',
   'HeaderFactory',
+  'ClientTarget',
   'HttpClientOptions',
   'HttpClientOptionsInit',
   'HttpModule',

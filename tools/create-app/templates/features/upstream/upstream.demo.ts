@@ -4,6 +4,7 @@ import {
   FetchTransportError,
   HttpService,
 } from '@dunx/http/client';
+import { HealthClient } from './health.client.js';
 
 /**
  * Calling out over `fetch`. Three things a bare `fetch` does not do: retry a 503
@@ -14,6 +15,10 @@ export class UpstreamDemo {
   constructor(
     private readonly logger: Logger,
     private readonly http: HttpService,
+    // A named client as a constructor parameter, which is what registering it as
+    // a subclass buys: `inject(httpClient('health'))` in a field is the only way
+    // to reach one bound to a `Token`.
+    private readonly health: HealthClient,
   ) {}
 
   async demonstrate(url: string): Promise<void> {
@@ -21,6 +26,11 @@ export class UpstreamDemo {
       new URL('api/notes', url),
     );
     this.logger.info(`GET api/notes -> ${JSON.stringify(notes)}`);
+
+    const live = await this.health.get<{ status: string }>(
+      new URL('api/health/live', url),
+    );
+    this.logger.info(`HealthClient -> ${live.status}`);
 
     const attempts: string[] = [];
     const recovered = await this.http.get<{ after: number }>(

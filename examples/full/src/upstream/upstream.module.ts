@@ -2,6 +2,7 @@ import { Module } from '@dunx/core';
 import { HttpModule as HttpClientModule } from '@dunx/http/client';
 import { AppConfigService } from '../config.js';
 import { FlakyController } from './flaky.controller.js';
+import { HealthClient } from './health.client.js';
 import { UpstreamDemo } from './upstream.demo.js';
 
 /**
@@ -25,9 +26,26 @@ import { UpstreamDemo } from './upstream.demo.js';
       }),
       inject: [AppConfigService] as const,
     }),
+    /**
+     * A second client, bound to a subclass rather than a name, so `HealthClient`
+     * is an ordinary constructor parameter. It does not claim `HttpService`, so
+     * the default above is untouched.
+     */
+    HttpClientModule.forRootAsync(
+      {
+        useFactory: (config: AppConfigService) => ({
+          ...config.get('upstream'),
+          // A readiness probe waits far less than a business call.
+          timeoutMs: 1_000,
+          headers: { 'user-agent': `${config.get('appName')}/health` },
+        }),
+        inject: [AppConfigService] as const,
+      },
+      HealthClient,
+    ),
   ],
   controllers: [FlakyController],
   providers: [UpstreamDemo],
-  exports: [UpstreamDemo],
+  exports: [UpstreamDemo, HealthClient],
 })
 export class UpstreamModule {}

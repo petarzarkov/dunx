@@ -358,6 +358,14 @@ it('serves static assets with two cache policies', () => {
   expect(tour.text).toContain('GET /api/notes -> 200 (outside /assets');
 });
 
+it('reaches a second outbound client through a constructor parameter', () => {
+  // `HealthClient extends HttpService`, registered with `forRootAsync(config,
+  // HealthClient)`. A subclass is a token and a parameter type, so `UpstreamDemo`
+  // takes it as an argument - `httpClient('health')` would return a `Token`, and
+  // a token can only be reached with `inject()` in a field.
+  expect(tour.text).toContain('HealthClient -> up');
+});
+
 it('retries an outbound 503, and does not retry a 404 or an abort', () => {
   expect(tour.text).toContain(
     'two 503s then a 200 -> attempts 1, 2 (retry), 3 (retry), recovered after 3',
