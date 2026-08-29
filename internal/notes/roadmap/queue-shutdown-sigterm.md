@@ -36,6 +36,15 @@ upstream at bullmq rather than at oven-sh/bun.
 and none releases the loop. There is no userland workaround, so `ShutdownHooks`'
 forced exit stays until bullmq fixes it.
 
+**Filed as [taskforcesh/bullmq#4656](https://github.com/taskforcesh/bullmq/issues/4656).**
+`close()` is pending rather than rejected, and what holds the loop is three armed
+ioredis retry timers with no live socket, so the `await disconnecting` in
+`redis-connection.js` waits on an `end` that a reconnecting client never emits.
+That is the same un-timed await
+[#4065](https://github.com/taskforcesh/bullmq/issues/4065) identifies for
+`pause()`, reached from a single worker and a server that was never up. Reproduced
+on bullmq 6.3.2 as well as the 6.0.5 this repo pins.
+
 ## Re-measured on Bun 1.4.0 (rev 34cbb9a40), bullmq 6.0.5
 
 The file's own instruction is to re-measure on every Bun and bullmq bump. Half the
