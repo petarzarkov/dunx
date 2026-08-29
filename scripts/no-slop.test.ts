@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { $ } from 'bun';
+import { existsSync } from 'node:fs';
 
 /**
  * Enforces the documentation voice rules in CLAUDE.md, the way
@@ -388,6 +389,10 @@ describe('source comments', () => {
         // A template is a working app vendored into the scaffolder, measured where
         // it lives in `examples/full`.
         .filter((f) => !f.includes('/templates/'))
+        // `--cached` lists the index, which still holds a file deleted from the
+        // working tree but not yet staged - and reading it threw ENOENT rather
+        // than reporting a voice offence.
+        .filter((f) => existsSync(f))
         .filter((f) => budgetFor(f) !== undefined)
     );
   };
