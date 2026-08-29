@@ -4,6 +4,32 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.0.5 - 2026-08-29
+
+Errors carry their own status, and the logger drains on the way out
+
+`AppError` gained an optional `status`, and `@dunx/http`'s default mapper honours
+any error that names one. An integer is not the web layer, which is what lets
+`@dunx/infra` say what a failure means without importing `@dunx/http` to say it:
+`CursorError` and `PageOptionsError` declare 400, so a bad cursor is a 400 in an
+app that wrote no `catch`. The status is range-checked, because it is typed by hand
+in a package that never sees a `Response` and a typo would otherwise throw a
+`RangeError` from the error path itself. A 4xx is no longer logged as an incident.
+
+`@arkv/logger` moved to 0.12, which brings the HTTP, syslog and sampling transports
+and the `textFormat`/`logfmtFormat` renderings, all re-exported from
+`@dunx/infra/logger` rather than restated. `LoggerLifecycle.onShutdown` now drains
+with `closeAsync`: a transport whose sink is a network discards its queue on a
+synchronous `close()`, so an app shipping to a collector lost its last batch on
+every deploy.
+
+`examples/full` reads `LOG_FORMAT` and asserts the 400 end to end.
+
+### Features
+
+- **core**: an error carries the status it means, whoever raised it ([`57e0fb5`](https://github.com/petarzarkov/dunx/commit/57e0fb5661d21964ea99079af22b1dd143d8749f))
+- **infra**: @arkv/logger 0.12, and drain the logger on the way out ([`d557dd7`](https://github.com/petarzarkov/dunx/commit/d557dd7f7661df07f82cd3add7078c16ccc29750))
+
 ## 3.0.4 - 2026-08-29
 
 A scaffolder you answer, not one you configure
