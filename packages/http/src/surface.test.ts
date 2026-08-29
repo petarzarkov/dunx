@@ -99,6 +99,7 @@ const BARREL = [
   'ReadinessOptions',
   'RedisIndicator',
   'RedisRelay',
+  'RelayConnectionOptions',
   'RedisRelayOptions',
   'RedisThrottleStore',
   'RelayOptions',
@@ -155,6 +156,7 @@ const BARREL = [
   'meta',
   'metaKey',
   'metaOf',
+  'WsRelayModule',
 ].sort();
 
 const CLIENT = [

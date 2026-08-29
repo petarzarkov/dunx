@@ -296,10 +296,9 @@ A `create()` argument still wins field by field, and the imperative methods are
 unchanged. Design and measurements: architecture/http.md, "HTTP options as a
 provider".
 
-**One part of it is still open**, and it is the relay paragraph below:
-`relay: new RedisRelay({...})` is still an instance the app constructs and passes
-to `create()`, so `examples/full` still hand-builds one object. `WsRelayModule` is
-the follow-up.
+The relay paragraph below is closed too: `WsRelayModule.forRootAsync` binds
+`RedisRelay` as a provider, `AppHttpOptions` takes it as a constructor parameter,
+and the container closes it at shutdown. `examples/full` hand-builds nothing.
 
 The analysis below is kept because it records why the shape is what it is.
 
@@ -322,11 +321,12 @@ inject })` produces `title`, `version`, `description`, `servers`, `path` and
 takes a `RoutePath` thunk resolved at route discovery, which runs after every
 provider has settled.
 
-**Hard part:** `relay: new RedisRelay({...})` is an _instance_ the app constructs.
-Under a provider it becomes a bound provider, which is better - but `RedisRelay`
-currently takes connection options the app assembles from config, so it wants the same
-treatment: `WsRelayModule.forRootAsync({ useFactory, inject })`. Do that in the same
-pass or the options provider still has one hand-built object in it.
+**Hard part, and it was done in the same pass:** `relay: new RedisRelay({...})` was
+an _instance_ the app constructed, so the options provider still had one hand-built
+object in it. `WsRelayModule.forRootAsync({ useFactory, inject })` binds it, with
+`RelayConnectionOptions` as the options class and a shutdown hook that closes the
+relay the container built - `PubSub.close()` reaches a relay only if a socket was
+opened, so an app that never took a connection used to leak one.
 
 ### W1b - the imperative surface, which is where IoC actually breaks
 

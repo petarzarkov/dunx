@@ -214,7 +214,10 @@ export const FEATURES: readonly Feature[] = [
     requires: [],
     module: { klass: 'HttpModule', from: './http/http.module.js' },
     dependencies: [],
-    config: ['corsOrigin'],
+    // `redis` because this feature wires the websocket relay, whose url comes
+    // from the same place. REDIS_URL is optional and the relay connects lazily,
+    // so an app that never opens a socket pays nothing for it.
+    config: ['corsOrigin', 'redis'],
   },
   {
     name: 'guards',

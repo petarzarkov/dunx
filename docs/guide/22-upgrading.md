@@ -108,6 +108,20 @@ RedisModule.forRootAsync({ useFactory, inject }, SessionsRedis);
 takes no options, so it cannot be the base a subclass extends. The string form
 still works, and a subclass does not claim `RedisConnection`.
 
+## The websocket relay can be a provider
+
+`relay: new RedisRelay({...})` was an instance `main.ts` built and threaded into
+`HttpFactory.create`, which made it the one setting an options provider could not
+answer from config.
+
+| Before                                     | After                                        |
+| ------------------------------------------ | -------------------------------------------- |
+| `new RedisRelay(...)` in `main.ts`         | `WsRelayModule.forRootAsync({ useFactory })` |
+| `relay:` and `relayChannel:` on `create()` | `override get relay()` on the provider       |
+
+The container closes it at shutdown, which `PubSub.close()` does not do for an app
+that never opened a socket. Passing an instance to `create()` still works.
+
 ## A constraint violation answers 409
 
 A unique violation reaching the HTTP layer used to answer 500.

@@ -1,5 +1,10 @@
 import { Module, provide } from '@dunx/core';
-import { CompressionModule, HttpOptionsProvider } from '@dunx/http';
+import {
+  CompressionModule,
+  HttpOptionsProvider,
+  WsRelayModule,
+} from '@dunx/http';
+import { AppConfigService } from '../config.js';
 import { AppHttpOptions } from './http-options.js';
 import { CompressionDemo } from './compression.demo.js';
 import { TraceController } from './trace.controller.js';
@@ -20,6 +25,22 @@ import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
     // body under it is sent as it is, because gzip's header and trailer alone are
     // 18 bytes and a short JSON response comes out larger.
     CompressionModule.forRoot({ threshold: 1024 }),
+    /**
+     * The relay as a provider, imported here because `AppHttpOptions` is what
+     * consumes it. `main.ts` used to build `new RedisRelay(...)` and thread it
+     * into `HttpFactory.create`, which was the last hand-built object in the
+     * options. The container closes it at shutdown.
+     */
+    WsRelayModule.forRootAsync({
+      useFactory: (config: AppConfigService) => {
+        const { url } = config.get('redis');
+        return {
+          ...(url === undefined ? {} : { url }),
+          connectionTimeout: 500,
+        };
+      },
+      inject: [AppConfigService] as const,
+    }),
   ],
   controllers: [TraceController],
   providers: [

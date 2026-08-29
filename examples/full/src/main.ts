@@ -5,14 +5,13 @@ import {
   Compression,
   HealthRegistry,
   HttpFactory,
-  RedisRelay,
   StaticFiles,
   ThrottleGuard,
   type HttpApp,
 } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
-import { AppConfigService, RELAY_CHANNEL } from './config.js';
+import { AppConfigService } from './config.js';
 import { RequestTrailMiddleware } from './http/request-trail.js';
 
 /**
@@ -62,17 +61,12 @@ export const createApp = async (): Promise<HttpApp> => {
     }),
     {
       /**
-       * `requestLogging`, `cors`, `prefix` and `trustProxy` are not here: they
-       * read from validated config, so `AppHttpOptions` answers them from inside
-       * the container (`http/http-options.ts`). What is left is the settings that
-       * are constructed objects rather than environment.
+       * Everything else is a provider now. `requestLogging`, `cors`, `prefix`,
+       * `trustProxy`, `relay` and `relayChannel` all read from validated config
+       * or from the container, so `AppHttpOptions` answers them
+       * (`http/http-options.ts`). This is the last literal.
        */
       websocket: { idleTimeout: 30 },
-      // Multi-node websocket fan-out on `Bun.RedisClient`. No url, so it
-      // resolves $VALKEY_URL, $REDIS_URL, then localhost. With no Redis running
-      // it degrades to single-process behaviour and still boots.
-      relay: new RedisRelay({ connectionTimeout: 500 }),
-      relayChannel: RELAY_CHANNEL,
     },
   );
 

@@ -1,9 +1,11 @@
 import {
   HttpOptionsProvider,
+  RedisRelay,
   type CorsOptions,
+  type PubSubRelay,
   type RequestLoggingOptions,
 } from '@dunx/http';
-import { AppConfigService } from '../config.js';
+import { AppConfigService, RELAY_CHANNEL } from '../config.js';
 
 /**
  * The HTTP settings that come from validated config, answered from the container
@@ -19,7 +21,10 @@ import { AppConfigService } from '../config.js';
  * which are constructed objects rather than settings read from the environment.
  */
 export class AppHttpOptions extends HttpOptionsProvider {
-  constructor(private readonly config: AppConfigService) {
+  constructor(
+    private readonly config: AppConfigService,
+    private readonly bus: RedisRelay,
+  ) {
     super();
     this.trustProxy = this.config.get('trustProxy');
   }
@@ -44,6 +49,13 @@ export class AppHttpOptions extends HttpOptionsProvider {
       maxAge: 600,
     };
   }
+
+  /** Multi-node websocket fan-out, resolved rather than constructed. */
+  override get relay(): PubSubRelay {
+    return this.bus;
+  }
+
+  override readonly relayChannel = RELAY_CHANNEL;
 
   override get requestLogging(): RequestLoggingOptions {
     const log = this.config.get('log');

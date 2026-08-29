@@ -294,6 +294,42 @@ const app = await HttpFactory.create(AppModule, {
 });
 ```
 
+### The same relay from the container
+
+`WsRelayModule` binds `RedisRelay` as a provider, so its url comes off
+`ConfigService` like everything else and the container closes it at shutdown:
+
+```ts
+@Module({
+  imports: [
+    WsRelayModule.forRootAsync({
+      useFactory: (config: AppConfigService) => ({
+        url: config.get('redis').url,
+        connectionTimeout: 500,
+      }),
+      inject: [AppConfigService],
+    }),
+  ],
+  providers: [provide(HttpOptionsProvider, { useClass: AppHttpOptions })],
+})
+export class HttpConfigModule {}
+```
+
+```ts
+export class AppHttpOptions extends HttpOptionsProvider {
+  constructor(private readonly bus: RedisRelay) {
+    super();
+  }
+
+  override get relay(): PubSubRelay {
+    return this.bus;
+  }
+}
+```
+
+A relay of your own needs no module: bind the class and return it from that same
+getter. See [Configuration](./12-configuration.md) for the options provider.
+
 `RedisRelay` is built on `Bun.RedisClient`, a Bun global, so the relay itself costs
 `@dunx/http` **no new dependency**. The package's one runtime dependency is
 `@arkv/shared`, which the outbound HTTP client behind `./client` uses; nothing in the

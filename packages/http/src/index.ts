@@ -172,6 +172,7 @@ export { PubSub } from './ws/pubsub.js';
 // RedisConnection satisfies it structurally; `RedisRelay` is Bun.RedisClient
 // directly and therefore costs this package no dependency.
 export { RedisRelay, type RedisRelayOptions } from './ws/redis-relay.js';
+export { RelayConnectionOptions, WsRelayModule } from './ws/relay-module.js';
 export {
   DEFAULT_RELAY_CHANNEL,
   type PubSubRelay,
