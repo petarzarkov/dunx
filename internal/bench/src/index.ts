@@ -24,7 +24,16 @@ const report = await runSuite(
   generator,
   options.config,
   options.nodeBinary,
+  options.profile === undefined
+    ? undefined
+    : { kind: options.profile, dir: options.profileDir },
 );
+
+if (options.profile !== undefined) {
+  process.stderr.write(
+    `\n${options.profile} profiles written to ${options.profileDir}\n`,
+  );
+}
 
 await Bun.write(options.out, `${JSON.stringify(report, null, 2)}\n`);
 process.stdout.write(`\n${formatReport(report)}`);

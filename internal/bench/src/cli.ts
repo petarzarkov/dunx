@@ -3,6 +3,7 @@ import { resultsDir } from './paths.js';
 import type { LoadGeneratorChoice } from './loadgen/index.js';
 import { scenarios } from './scenarios.js';
 import { subjects } from './subjects.js';
+import type { ProfileKind } from './subject-process.js';
 import type { BenchConfig, Scenario, Subject } from './types.js';
 
 export interface Options {
@@ -14,6 +15,14 @@ export interface Options {
   readonly scenarios: readonly Scenario[];
   readonly out: string;
   readonly nodeBinary: string;
+  /**
+   * Write a Bun profile per subject. Bun's own flags, so there is no external
+   * profiler; the markdown variant is readable in a terminal. Only Bun subjects
+   * take it - a Node or JVM subject is run unprofiled.
+   */
+  readonly profile: ProfileKind | undefined;
+  /** Where the profiles land. */
+  readonly profileDir: string;
 }
 
 export const usage = `bun run start [options]
@@ -28,6 +37,8 @@ export const usage = `bun run start [options]
   --subjects <a,b>       comma-separated subject ids (default all)
   --scenarios <a,b>      comma-separated scenario ids (default all)
   --out <path>           JSON report path (default results/latest.json)
+  --profile <cpu|heap>   write a Bun profile per Bun subject (also markdown)
+  --profile-dir <path>   where profiles land (default results/profiles)
   --help
 
   Subjects:  ${subjects.map((subject) => subject.id).join(', ')}
@@ -70,6 +81,12 @@ const asChoice = (raw: string | undefined): LoadGeneratorChoice => {
   throw new Error(`--loadgen must be auto, oha or fetch (got "${raw}")`);
 };
 
+const asProfile = (raw: string | undefined): ProfileKind | undefined => {
+  if (raw === undefined) return undefined;
+  if (raw === 'cpu' || raw === 'heap') return raw;
+  throw new Error(`--profile must be cpu or heap (got "${raw}")`);
+};
+
 export const parseOptions = (argv: readonly string[]): Options | null => {
   const { values } = parseArgs({
     args: [...argv],
@@ -84,6 +101,8 @@ export const parseOptions = (argv: readonly string[]): Options | null => {
       subjects: { type: 'string' },
       scenarios: { type: 'string' },
       out: { type: 'string' },
+      profile: { type: 'string' },
+      'profile-dir': { type: 'string' },
       help: { type: 'boolean' },
     },
     strict: true,
@@ -105,5 +124,7 @@ export const parseOptions = (argv: readonly string[]): Options | null => {
     scenarios: pick(scenarios, values.scenarios, 'scenario'),
     out: values.out ?? `${resultsDir}/latest.json`,
     nodeBinary: process.env['BENCH_NODE'] ?? 'node',
+    profile: asProfile(values.profile),
+    profileDir: values['profile-dir'] ?? `${resultsDir}/profiles`,
   };
 };

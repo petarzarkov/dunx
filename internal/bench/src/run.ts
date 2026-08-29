@@ -4,6 +4,7 @@ import { describeSubjects, readMachine } from './machine.js';
 import { spread } from './stats.js';
 import {
   bunCommand,
+  type ProfileKind,
   startSubject,
   verifySubject,
   type SubjectProcess,
@@ -92,6 +93,7 @@ const measureScenarioAcrossSubjects = async (
   generator: LoadGenerator,
   config: BenchConfig,
   exec: ReadonlyMap<string, readonly string[]>,
+  profile?: { readonly kind: ProfileKind; readonly dir: string },
 ): Promise<readonly ScenarioResult[]> => {
   const options = {
     connections: config.connections,
@@ -113,6 +115,12 @@ const measureScenarioAcrossSubjects = async (
         subject,
         exec.get(subject.id) ?? [],
         subject.env ?? {},
+        'null',
+        // Only the measured runs are worth profiling, and only a graceful stop
+        // writes one. The startup samples above stay on SIGKILL: they start and
+        // stop the subject seven times and would overwrite the profile with a
+        // recording of nothing but boot.
+        profile !== undefined,
       );
       await verifySubject(subject, server.baseUrl, [scenario]);
       live.push({
@@ -168,6 +176,7 @@ const prepare = async (
   chosen: readonly Subject[],
   nodeBinary: string,
   nodeAvailable: boolean,
+  profile?: { readonly kind: ProfileKind; readonly dir: string },
 ): Promise<Prepared> => {
   const nodeEntries = await buildNodeEntries(chosen);
   const exec = new Map<string, readonly string[]>();
@@ -198,7 +207,9 @@ const prepare = async (
 
   for (const subject of chosen) {
     if (subject.runtime === 'bun') {
-      exec.set(subject.id, bunCommand(subject));
+      // Only a Bun subject can take Bun's profiler flags, so `--profile` is
+      // applied here rather than around every spawn.
+      exec.set(subject.id, bunCommand(subject, profile));
       runnable.push(subject);
       continue;
     }
@@ -271,6 +282,7 @@ export const runSuite = async (
   generator: LoadGenerator,
   config: BenchConfig,
   nodeBinary: string,
+  profile?: { readonly kind: ProfileKind; readonly dir: string },
 ): Promise<Report> => {
   const machine = await readMachine(nodeBinary);
   if (machine.node === 'not found') {
@@ -282,6 +294,7 @@ export const runSuite = async (
     chosenSubjects,
     nodeBinary,
     machine.node !== 'not found',
+    profile,
   );
 
   const results: ScenarioResult[] = [];
@@ -310,6 +323,7 @@ export const runSuite = async (
       generator,
       config,
       exec,
+      profile,
     );
     results.push(...measured);
     for (const result of measured) {

@@ -10,11 +10,8 @@ import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging.js';
 
 /**
- * How an app configures its HTTP server, as a provider rather than an argument.
- *
- * A subclass is resolved from the container, so it can inject `ConfigService` and
- * answer from validated config - which an argument to `HttpFactory.create` cannot,
- * the container not existing when that argument is built.
+ * How an app configures its HTTP server. A subclass is resolved from the
+ * container, so it can inject `ConfigService`.
  *
  * ```ts
  * export class AppHttpOptions extends HttpOptionsProvider {
@@ -33,16 +30,9 @@ import type { RequestLoggingOptions } from './request-logging.js';
  * export class HttpConfigModule {}
  * ```
  *
- * Every member has a default, so a subclass overrides only what differs, and
- * anything passed to `create()` still wins field by field.
- *
- * **Fields must be overridden by fields and getters by getters** (`TS2611`,
- * `TS2610`). Fields here are the members that are usually literal - a middleware
- * list, a boolean; getters are the ones that usually derive. To override a field
- * from config, declare `override trustProxy: boolean` and assign in the
- * constructor; to override a getter with a constant, return the literal.
- *
- * See docs/architecture/http.md, "HTTP options as a provider".
+ * Every member has a default, and anything passed to `create()` wins field by
+ * field. Override a field with a field and a getter with a getter (`TS2611`,
+ * `TS2610`). See docs/architecture/http.md, "HTTP options as a provider".
  */
 /*
  * `class-literal-property-style` wants the three getters that return a literal to

@@ -1150,3 +1150,52 @@ Three further differences that a single code path has to absorb:
 MySQL reports a duplicate primary key as `1062`, the same as any other duplicate
 index entry, where SQLite and Postgres both distinguish it
 (`SQLITE_CONSTRAINT_PRIMARYKEY`, and `23505` with a `_pkey` constraint name).
+
+### `fetch` with `protocol: 'http2'` throws rather than falling back
+
+Bun 1.4 added `protocol` to `BunFetchRequestInit`: `'http2' | 'http1.1' | 'h2' | 'h1'`.
+`'http2'` lets concurrent requests to one origin share a connection.
+
+Against a cleartext `http://` origin it does not negotiate down. Both `'http2'` and
+`'h2'` reject with a `TypeError` whose `code` is `HTTP2Unsupported`, where
+`'http1.1'` and an unset `protocol` both return 200 from the same `Bun.serve`.
+
+So it is not a safe default to switch on, and an app calling a plain-HTTP upstream
+must leave it unset. `examples/full` calls itself over HTTP and does exactly that.
+`@dunx/http/client` passes it through and does not interpret it.
+
+Found by setting it in `examples/full`, where it turned the tour into a
+`HTTP2Unsupported` at the first outbound call.
+
+### `--parallel` implies `--isolate`, and `--isolate` re-runs a shared test module
+
+`bun test --help` states it: `--parallel` implies `--isolate`, and `--no-isolate`
+opts back out. So the `unit` phase has been isolating since `--parallel` was
+adopted, and adding `--isolate` to it changes nothing.
+
+Adding it to the sequential `coverage` phase does two things, both measured on
+1.4.0 over this repo's 160 files:
+
+- **16.6s to 17.9s**, about 8%.
+- **1874 tests become 1879.** The five are one test, run five times. It is declared
+  in `packages/infra/src/images/fixture.test.ts`, which five other test files
+  import for its exported sources. A fresh module registry per file re-evaluates
+  that module per importer, so its own `it()` re-registers each time. Nothing is
+  recovered; the count inflates.
+
+A shared module that exports fixtures and also declares tests is what triggers it.
+The name has to end in `.test.ts` for `coverageSkipTestFiles` to drop it, so the
+combination is not easily avoided here.
+
+### `--timings` cannot beat the slowest single file
+
+`--timings=<file>` plus `--update-timings` records per-file durations and makes
+`--parallel` start the slowest first. Measured over three runs each: 3.12-3.17s
+with, 3.13-3.16s without.
+
+The reason is in the file it writes. The slowest test file is 3045 ms of a 21161 ms
+total across 160 files, and the wall clock is ~3150 ms - the run is already bounded
+by that one file, so no scheduling order can improve it. `--shard` is bounded by
+the same file for the same reason.
+
+Worth re-measuring only if that file gets faster or another gets slower.

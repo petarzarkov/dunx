@@ -8,6 +8,8 @@ export interface SubjectProcess {
 }
 
 const READY_TIMEOUT_MS = 20_000;
+/** How long a profiled subject gets to write its profile and exit. */
+const GRACEFUL_TIMEOUT_MS = 5_000;
 
 export const freePort = async (): Promise<number> => {
   const probe = Bun.serve({
@@ -21,12 +23,45 @@ export const freePort = async (): Promise<number> => {
 };
 
 /**
+ * Which profile to write, if any. `'cpu'` and `'heap'` add Bun's own profiler
+ * flags to a Bun subject, so no separate tool is involved.
+ */
+export type ProfileKind = 'cpu' | 'heap';
+
+/**
+ * Bun writes both a machine-readable profile and a markdown one. The markdown is
+ * readable in a terminal, which is what makes the flags worth having here rather
+ * than reaching for an external profiler.
+ *
+ * Only Bun subjects can take these. Asking for a profile of the Node or JVM
+ * subject silently gets nothing, so the caller checks `subject.runtime` first.
+ */
+export const profileFlags = (
+  kind: ProfileKind | undefined,
+  dir: string,
+): readonly string[] =>
+  kind === undefined
+    ? []
+    : kind === 'cpu'
+      ? ['--cpu-prof', '--cpu-prof-md', `--cpu-prof-dir=${dir}`]
+      : ['--heap-prof', '--heap-prof-md', `--heap-prof-dir=${dir}`];
+
+/**
  * How a Bun subject is launched. Every other runtime needs a transpile or a
  * compile first, so `runSuite` works out its argv up front and hands it in - see
  * `src/toolchains.ts`.
+ *
+ * `--no-orphans` makes the child die with the harness and take its own
+ * descendants with it. The harness spawns a subject per subject and the queue
+ * worker forks a child, so a run killed part way used to leave both behind.
  */
-export const bunCommand = (subject: Subject): readonly string[] => [
+export const bunCommand = (
+  subject: Subject,
+  profile?: { readonly kind: ProfileKind; readonly dir: string },
+): readonly string[] => [
   'bun',
+  '--no-orphans',
+  ...profileFlags(profile?.kind, profile?.dir ?? '.'),
   ...subject.preload.flatMap((module) => ['--preload', module]),
   `${root}/${subject.entry}`,
 ];
@@ -48,6 +83,7 @@ export const startSubject = async (
   exec: readonly string[],
   extraEnv: Readonly<Record<string, string>> = {},
   stdout: StdoutSink = 'null',
+  graceful = false,
 ): Promise<SubjectProcess> => {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -66,6 +102,22 @@ export const startSubject = async (
   });
 
   const stop = async (): Promise<void> => {
+    /**
+     * `SIGKILL` normally: it is immediate and a subject has nothing to flush.
+     *
+     * When profiling it has everything to flush, and a signal with no handler
+     * writes no profile - so a profiled subject gets `SIGTERM`, which
+     * `servers/shared.ts` turns into a clean `process.exit(0)`. Bounded, because
+     * a subject that ignores it must not hang the run.
+     */
+    if (graceful) {
+      proc.kill('SIGTERM');
+      const exited = await Promise.race([
+        proc.exited.then(() => true),
+        Bun.sleep(GRACEFUL_TIMEOUT_MS).then(() => false),
+      ]);
+      if (exited) return;
+    }
     proc.kill('SIGKILL');
     await proc.exited;
   };

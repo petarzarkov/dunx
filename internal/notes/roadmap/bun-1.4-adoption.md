@@ -87,30 +87,33 @@ Ranked by value per unit of work. The priority rule in
 [../ROADMAP.md](../../../docs/ROADMAP.md) still applies, so items landing in `core`, `transform`
 or `http` come first and the frozen packages get nothing here that is not a fix.
 
-### A1 - the test runner's new flags, in CI
+### A1 - the test runner's new flags, in CI - settled
 
 `bun test` gained `--parallel[=N]`, `--isolate`, `--shard=M/N`, `--changed[=ref]`,
-`--timings`/`--update-timings`, and per-test `{ retry }` / `{ repeats }`. Four of those
-answer problems this repo has written about.
+`--timings`/`--update-timings`, and per-test `{ retry }` / `{ repeats }`. All of
+them are now measured on this repo, and `--parallel` is the only one adopted.
 
-- **`--isolate`** gives each file a fresh global in the same process, clearing module
-  registries and cancelling timers. `packages/openapi/src/page-ui.test.ts` needed
-  `await happyDOM.waitUntilComplete()` to stop a react-dom commit running with no
-  `window` after teardown; that whole class of cross-file leak is what `--isolate`
-  exists for. Measure whether the drain is still needed, and keep it if it is - the
-  guard test that fails 15/15 without it is the arbiter.
-- **`--parallel`** and **`--timings`** together start the slowest file first. The
-  suite is currently `bun run --filter '*' test`, which parallelises across
-  workspaces but not within one; `@dunx/infra` alone is 314 tests in 24 files.
-- **`--shard=M/N`** splits files across CI runners, which is only worth wiring when
-  the single-runner time justifies it. Not yet.
-- **`{ retry }`** is the honest tool for a genuinely flaky externality, and it is a
-  trap for anything else. This repo fixed its one-in-forty failure by finding the
-  teardown race rather than retrying it, and that is the precedent to keep.
+- **`--parallel`** is in the `unit` phase: 3.2s against 14.6s.
+- **`--isolate`** needs nothing done. `bun test --help` states that `--parallel`
+  implies it, so the `unit` phase has isolated since `--parallel` landed. Adding it
+  to the sequential `coverage` phase costs 8% (16.6s to 17.9s) and inflates the
+  count by five, because a fresh module registry re-evaluates
+  `packages/infra/src/images/fixture.test.ts` once per importing file and its own
+  `it()` re-registers each time. Numbers in [../../bun-apis.md](../../../docs/bun-apis.md).
+- The reason `--isolate` was wanted has also expired. It was for the react-dom
+  teardown leak in `packages/openapi/src/page-ui.test.ts`, and that file was
+  deleted with the hand-built API explorer when `@dunx/openapi` moved to
+  swagger-ui-dist.
+- **`--timings`** changes nothing measurable: 3.12-3.17s with against 3.13-3.16s
+  without, over three runs each. The timings file says why - the slowest test file
+  is 3045 ms of a 21161 ms total, and the wall clock is ~3150 ms, so the run is
+  bounded by that one file and no ordering helps.
+- **`--shard`** is bounded by that same file, so it cannot beat 3 s either.
+- **`{ retry }`** stays unused. This repo fixed its one-in-forty failure by finding
+  the teardown race, and that precedent is worth more than the flag.
 
-**Do not turn `--parallel` on blind.** Several suites bind real ports, spawn
-processes, and talk to a real Redis with keys namespaced per run. Verify, then wire it
-into `ci.yml`.
+Re-measure if `packages/http/src/client/client.test.ts` gets faster, or another
+file gets slower than it.
 
 ### A2 - `fetch`'s new options on `HttpClientOptions`
 
@@ -164,24 +167,60 @@ gap in the other direction - dunx serves no `ETag` and answers no conditional re
 - stays open on purpose, because closing it by hand is the reimplementation Rule 1
   forbids.
 
-### A4 - profiling flags in the bench harness
+### A4 - profiling flags in the bench harness - done
 
-`--cpu-prof` / `--cpu-prof-md` and `--heap-prof` / `--heap-prof-md` write a profile
-without a separate tool, and the Markdown variants are readable in a terminal. The
-open follow-up in [../ROADMAP.md](../../../docs/ROADMAP.md) is the `params` gap against Elysia,
-where dunx runs a generic input reader per request; a CPU profile of the `params`
-subject is the direct instrument for it. Cheap, and it needs no code change.
+`bun run start --profile cpu` (or `heap`) adds `--cpu-prof --cpu-prof-md
+--cpu-prof-dir=<dir>` to every **Bun** subject and writes into
+`results/profiles`, which is gitignored. `--profile-dir` moves it. Another
+runtime's subject is run unprofiled rather than failing, since these are Bun's own
+flags. `--no-orphans` is on for every Bun subject now, so a run killed part way
+takes the subject and the queue worker's child with it.
 
-`--no-orphans` belongs next to it. The bench harness spawns a subject per subject and
-the queue worker spawns a child process; a run killed part way currently leaves them.
+**Wiring the flags was not enough, and the reason is worth keeping.** Bun writes a
+profile **on exit**, and a signal with no handler is not an exit: measured on
+1.4.0, a `Bun.serve` process killed with `SIGKILL`, `SIGTERM` or `SIGINT` writes
+nothing at all, while the same process reaching `process.exit(0)` writes both the
+`.cpuprofile` and the markdown. The harness killed every subject with `SIGKILL`,
+so the first profiled run produced an empty directory and a green report.
 
-### A5 - `bun install --linker=isolated` in CI
+Two halves fix it. `servers/shared.ts` installs a `SIGTERM` handler that calls
+`process.exit(0)`, at module scope because every Bun and Node subject imports that
+file. `startSubject` takes a `graceful` flag, set only when profiling, that sends
+`SIGTERM` and waits up to 5 s before falling back to `SIGKILL`. The startup samples
+stay on `SIGKILL`: they start and stop the subject seven times and would leave a
+profile of nothing but boot.
 
-A shared virtual store with one `symlink()` per package instead of one
-`clonefileat()`. The release notes claim 7x on a warm CI cache. Measure it on
-`ci.yml` before believing the number, and check that `oxlint`'s JS plugin and the
-`oxc-parser` native binary both still resolve through the symlink farm, since the
-plugin already has a Node-versus-Bun resolution problem recorded in CLAUDE.md.
+One limitation, unresolved and not worth resolving here: with the fallback
+JavaScript load generator a 3 s `params` run collects 41 samples at the default
+1 ms interval, and 98% of them land in native `json`. Install `oha` (`bun run
+setup`) and lower `--cpu-prof-interval` before reading anything into a profile.
+
+### A5 - `bun install --linker=isolated` in CI - already the default
+
+Nothing to change, and the reason is that Bun 1.4 already picked it. A plain
+`bun install` in this repo writes `node_modules/.bun`, the shared virtual store;
+`--linker=hoisted` is the flag that produces a tree without one. So CI has been
+installing isolated since the 1.4 bump, and `--linker=isolated` in `ci.yml` would
+restate the default.
+
+Measured on this workspace with a warm cache, `rm -rf node_modules` before each:
+
+| Linker              | Install    | `node_modules` |
+| ------------------- | ---------- | -------------- |
+| default (isolated)  | 1.05-1.06s | 476 MB         |
+| `--linker=isolated` | 1.01-1.10s | 476 MB         |
+| `--linker=hoisted`  | 1.05-1.10s | 470 MB         |
+
+The release notes' 7x is not visible here in either direction. At one second the
+install is not what CI spends its time on, so there is nothing to chase.
+
+The two resolution risks were checked against an isolated tree and both are fine:
+`bun run lint:check` passes, so `oxlint` still finds its JS plugin through the
+symlink farm and still spawns Node to load it, and the full unit suite passes at
+1879/1879. `oxc-parser` resolves from `packages/transform`, where it is declared,
+and **not** from the repo root - which is isolated linking working as intended
+rather than a fault. A package importing something it does not declare would fail
+here and pass under hoisting; nothing in this repo does.
 
 ## Measured and rejected
 
