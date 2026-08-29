@@ -53,3 +53,17 @@ describe('--no-orphans', () => {
     expect(bunCommand(bunSubject!)).toContain('--no-orphans');
   });
 });
+
+describe('startup samples', () => {
+  it('are never profiled, even when --profile is set', () => {
+    // `--cpu-prof` costs sampling overhead whether or not a profile is written,
+    // and the startup pass spawns the subject seven times. Timing those under
+    // the profiler would report a median that is an artefact of measuring.
+    const measured = bunCommand(bunSubject!, { kind: 'cpu', dir: '/tmp/p' });
+    const startup = bunCommand(bunSubject!);
+
+    expect(measured).toContain('--cpu-prof');
+    expect(startup).not.toContain('--cpu-prof');
+    expect(startup).toContain('--no-orphans');
+  });
+});

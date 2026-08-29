@@ -53,7 +53,9 @@ export const profileFlags = (
  *
  * `--no-orphans` makes the child die with the harness and take its own
  * descendants with it. The harness spawns a subject per subject and the queue
- * worker forks a child, so a run killed part way used to leave both behind.
+ * worker forks a child, so a run killed part way used to leave both behind. It
+ * landed in Bun 1.3.14, which is why this workspace declares `bun >=1.4.0` like
+ * every published package rather than the `>=1.3.0` it used to.
  */
 export const bunCommand = (
   subject: Subject,

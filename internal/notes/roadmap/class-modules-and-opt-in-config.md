@@ -347,7 +347,10 @@ an order that matters, every one of which throws if called after `listen()`. Tha
 the opposite of declaring what you want and letting the container wire it. It is also
 why `main.ts` is a hundred lines that every consumer copies and then edits by hand.
 
-Under W1 all five are fields on the options provider:
+**As shipped, four of the five are fields on the options provider**, and the
+methods are all still there. `forceExitAfter()` is the fifth and has no field: its
+watchdog is `ShutdownHooks`' own, reached through `shutdownHooks.options` rather
+than a member of its own.
 
 ```ts
 export class AppHttpOptions extends HttpOptionsProvider {
@@ -355,8 +358,11 @@ export class AppHttpOptions extends HttpOptionsProvider {
 
   override get prefix() { return this.config.get('app').prefix; }
   override get cors() { return { origin: ..., credentials: ... }; }
-  override trustProxy = true;
-  override shutdown = { signals: ['SIGTERM', 'SIGINT'], forceExitAfterMs: 8000 };
+  override readonly trustProxy: boolean;   // assigned in the constructor
+  override readonly shutdownHooks = {
+    signals: ['SIGTERM', 'SIGINT'],
+    options: { exitAfterMs: 8000 },
+  };
 }
 ```
 

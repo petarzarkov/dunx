@@ -72,8 +72,12 @@ export abstract class HttpOptionsProvider {
    * Install `SIGTERM`/`SIGINT` handlers that shut the app down. Off by default,
    * because installing a signal handler changes how the process terminates and
    * that is the app's decision to make.
+   *
+   * The object form names the signals and tunes the force-exit watchdog, which is
+   * what `forceExitAfter()` in a hand-written `main.ts` was doing:
+   * `{ signals: ['SIGTERM'], options: { exitAfterMs: 8000 } }`.
    */
-  readonly shutdownHooks: boolean = false;
+  readonly shutdownHooks: NonNullable<HttpOptions['shutdownHooks']> = false;
 
   /** The broker channel a relay carries frames on. */
   readonly relayChannel: string = 'dunx:ws';

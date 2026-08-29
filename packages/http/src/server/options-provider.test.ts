@@ -10,6 +10,7 @@ import { Controller, Get, Post } from '../route/decorators.js';
 import { HttpFactory } from './factory.js';
 import { captured } from './request-logging.fixture.test.js';
 import { HttpOptionsProvider } from './options-provider.js';
+import type { CorsOptions } from './cors.js';
 import type { RequestLoggingOptions } from './request-logging.js';
 
 @Controller('users')
@@ -173,5 +174,56 @@ describe('HttpOptionsProvider', () => {
     expect(
       (entry?.['request'] as Record<string, unknown> | undefined)?.['body'],
     ).toEqual({ name: 'ada' });
+  });
+});
+
+describe('the four settings that also have methods', () => {
+  it('lets a provider express every one of them', async () => {
+    class DeclarativeOptions extends HttpOptionsProvider {
+      override readonly trustProxy = true;
+      // The object form, which `forceExitAfter()` in a hand-written main.ts was
+      // standing in for. A bare `boolean` here could not express it.
+      override readonly shutdownHooks = {
+        signals: ['SIGTERM'] as const,
+        options: { exitAfterMs: 8_000 },
+      };
+
+      override get prefix(): string {
+        return '/declared';
+      }
+
+      override get cors(): CorsOptions {
+        return { origin: 'https://declared.test' };
+      }
+    }
+
+    @Module({
+      imports: [config({})],
+      controllers: [UsersController, ThingsController],
+      providers: [
+        provide(HttpOptionsProvider, { useClass: DeclarativeOptions }),
+      ],
+    })
+    class AppModule {}
+
+    const app = await HttpFactory.create(AppModule, { port: 0 });
+    const url = await app.listen(0);
+
+    const prefixed = await fetch(new URL('/declared/users', url));
+    // `enableCors` mounts an OPTIONS preflight per path, so the route answering
+    // one is how the field is visible from outside.
+    const preflight = await fetch(new URL('/declared/users', url), {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://declared.test',
+        'access-control-request-method': 'GET',
+      },
+    });
+    await app.shutdown();
+
+    expect(prefixed.status).toBe(200);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe(
+      'https://declared.test',
+    );
   });
 });

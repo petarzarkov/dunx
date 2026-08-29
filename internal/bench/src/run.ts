@@ -161,6 +161,15 @@ const measureScenarioAcrossSubjects = async (
 interface Prepared {
   readonly runnable: readonly Subject[];
   readonly exec: ReadonlyMap<string, readonly string[]>;
+  /**
+   * The same commands with the profiler flags removed, for the startup samples.
+   * Identical to `exec` unless `--profile` is set.
+   *
+   * `--cpu-prof` costs sampling overhead whether or not a profile is ever
+   * written, so timing seven cold starts under it would report a startup median
+   * that is an artefact of the measurement.
+   */
+  readonly startupExec: ReadonlyMap<string, readonly string[]>;
   readonly toolchains: readonly ToolchainInfo[];
   /** Package versions read out of the interpreter, for the `python` subjects. */
   readonly pythonVersions: ReadonlyMap<string, string | null> | undefined;
@@ -180,6 +189,7 @@ const prepare = async (
 ): Promise<Prepared> => {
   const nodeEntries = await buildNodeEntries(chosen);
   const exec = new Map<string, readonly string[]>();
+  const startupExec = new Map<string, readonly string[]>();
   const runnable: Subject[] = [];
 
   const wanted = [
@@ -210,6 +220,7 @@ const prepare = async (
       // Only a Bun subject can take Bun's profiler flags, so `--profile` is
       // applied here rather than around every spawn.
       exec.set(subject.id, bunCommand(subject, profile));
+      startupExec.set(subject.id, bunCommand(subject));
       runnable.push(subject);
       continue;
     }
@@ -273,7 +284,19 @@ const prepare = async (
     return toolchainInfo(status, tally?.ids ?? [], tally?.seconds ?? 0);
   });
 
-  return { runnable, exec, toolchains, pythonVersions: python?.versions };
+  // Every other runtime is unprofiled either way, so its startup command is the
+  // one it already has.
+  for (const [id, command] of exec) {
+    if (!startupExec.has(id)) startupExec.set(id, command);
+  }
+
+  return {
+    runnable,
+    exec,
+    startupExec,
+    toolchains,
+    pythonVersions: python?.versions,
+  };
 };
 
 export const runSuite = async (
@@ -290,12 +313,13 @@ export const runSuite = async (
       `No Node binary at "${nodeBinary}" - skipping the Node subjects. Set BENCH_NODE to include them.`,
     );
   }
-  const { runnable, exec, toolchains, pythonVersions } = await prepare(
-    chosenSubjects,
-    nodeBinary,
-    machine.node !== 'not found',
-    profile,
-  );
+  const { runnable, exec, startupExec, toolchains, pythonVersions } =
+    await prepare(
+      chosenSubjects,
+      nodeBinary,
+      machine.node !== 'not found',
+      profile,
+    );
 
   const results: ScenarioResult[] = [];
   const startup: StartupResult[] = [];
@@ -306,7 +330,8 @@ export const runSuite = async (
   for (const subject of runnable) {
     const measured = await measureStartup(
       subject,
-      exec.get(subject.id) ?? [],
+      // Unprofiled: profiler overhead would land in the startup median.
+      startupExec.get(subject.id) ?? [],
       config.startupSamples,
     );
     startup.push(measured);
