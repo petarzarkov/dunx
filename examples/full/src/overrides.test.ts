@@ -69,9 +69,9 @@ it('refuses an override for a token the slice does not bind', async () => {
  * on port 0, with a client already pointed at it.
  *
  * `service.test.ts` deliberately does *not* use this - it drives `createApp()`
- * itself, because the thing it is testing is the real bootstrap with its prefix,
+ * itself, because the thing it is testing is the real `createApp` with its prefix,
  * CORS and middleware. This is the other case, and the more common one: a slice of
- * modules with no bootstrap of its own.
+ * modules with no wiring of its own.
  *
  * `prefix` is passed here rather than a `setGlobalPrefix` call, and request
  * logging defaults to `false` so the suite does not print a JSON line per

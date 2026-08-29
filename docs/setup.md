@@ -10,17 +10,19 @@ annotation. Requires **Bun 1.4 or newer** and no other runtime.
 
 ## Scaffold, or wire it by hand
 
-`bunx @dunx/create-app` writes a working app. **Pass `--yes` or `--with`**: with
-neither, and a TTY attached, it asks which features to include and waits for an
-answer.
+`bunx @dunx/create-app` writes a working app. With a terminal attached it opens a
+list of features: space toggles one, Enter takes the selection, and the list says
+which entries your choices pull in. **Piped or in CI it asks nothing** and writes
+the minimal template, so an agent or a script never blocks on it.
 
 ```bash
-bunx @dunx/create-app my-api --yes                      # minimal: 12 files, one route
-bunx @dunx/create-app my-api --with notes,openapi       # composed from features
-bunx @dunx/create-app my-api --all                      # every feature
-bunx @dunx/create-app --list                            # the feature names, then exit
-cd my-api && bun install && bun run start
+bunx @dunx/create-app my-api        # asks, then writes what you chose
+bunx @dunx/create-app my-api --yes  # skips the questions: 12 files, one route
+cd my-api && bun install && bun run dev
 ```
+
+To choose features without a terminal, call `scaffold({ target, features })` from
+`@dunx/create-app` rather than passing flags.
 
 Composed apps carry a feature directory each, copied from dunx's own
 `examples/full`. Every scaffolded app gets an `AGENTS.md` naming its layout and the

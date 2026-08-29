@@ -133,8 +133,12 @@ version being served.
 
 `bunx @dunx/create-app my-api --yes` writes an `AGENTS.md` and a `CLAUDE.md` into
 the app: its layout, its commands, the features it carries and the services those
-want running. **Pass `--yes` or `--with` when an agent runs it**, since a bare run
-in a terminal asks which features to include and waits for an answer.
+want running.
+
+An agent driving a terminal should **pass `--yes`**, since a bare run opens a
+feature list and waits for an arrow key. To pick features from a script, call
+`scaffold({ target, features })` from `@dunx/create-app`. With no terminal at all
+it writes the minimal template rather than blocking.
 
 ## It reads the app. It never boots it.
 

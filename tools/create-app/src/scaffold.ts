@@ -6,14 +6,12 @@ import { agentFiles } from './agents.js';
 import { resolveFeatures, type Feature } from './features.js';
 import {
   appModule,
-  bootstrap,
   config,
   configGroupsFor,
   envExample,
   main,
   manifest,
   readme,
-  worker,
 } from './generate.js';
 
 /** The templates that ship with the package, as `templates/<name>/`. */
@@ -58,6 +56,21 @@ const IGNORED_WHEN_EMPTY: ReadonlySet<string> = new Set([
   '.gitkeep',
   'LICENSE',
 ]);
+
+/**
+ * What is in `directory` that stops it being a scaffolding target. Empty means it
+ * is one, whether or not it exists.
+ *
+ * Exported because the wizard asks about a non-empty directory before writing
+ * anything, and asking a different question from the one `scaffold` then enforces
+ * is how a prompt and its guard drift apart.
+ */
+export const blockingEntries = (directory: string): readonly string[] =>
+  existsSync(directory)
+    ? readdirSync(directory)
+        .filter((entry) => !IGNORED_WHEN_EMPTY.has(entry))
+        .sort()
+    : [];
 
 export interface ScaffoldOptions {
   /** Directory to create. Relative paths resolve against `cwd`. */
@@ -113,10 +126,11 @@ const templatesRoot = (): string =>
  * Checked here because the failure would otherwise surface as a confusing
  * `bun install` error inside a directory the user just created.
  */
-const isValidPackageName = (name: string): boolean =>
+export const isValidPackageName = (name: string): boolean =>
   /^(?:@[a-z0-9-*~][a-z0-9-*._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/.test(name);
 
-const readPackageVersion = async (): Promise<string> => {
+/** This package's own version, which is also the one it writes into the app. */
+export const packageVersion = async (): Promise<string> => {
   const file = Bun.file(join(templatesRoot(), '..', 'package.json'));
   const json = (await file.json()) as { version?: string };
   return json.version ?? '0.0.0';
@@ -129,27 +143,22 @@ const fill = (contents: string, name: string, version: string): string =>
     .replaceAll('__DUNX_APP_NAME__', name);
 
 /**
- * The four files a subset of features cannot copy, because the full example states
- * every feature at once in each of them.
+ * The files a subset of features cannot copy, because the full example states every
+ * feature at once in each of them.
  */
 const generated = (
   name: string,
   features: readonly Feature[],
 ): Readonly<Record<string, string>> => {
   const groups = configGroupsFor(features);
-  const files: Record<string, string> = {
+  return {
     'package.json': manifest(features),
     'README.md': readme(name, features),
     '.env.example': envExample(groups),
     'src/main.ts': main(name, features),
-    'src/bootstrap.ts': bootstrap(name, features),
     'src/app.module.ts': appModule(name, features),
     'src/config.ts': config(name, groups),
   };
-  if (features.some((feature) => feature.name === 'jobs')) {
-    files['src/worker.ts'] = worker(name);
-  }
-  return files;
 };
 
 export const scaffold = async (
@@ -184,14 +193,12 @@ export const scaffold = async (
     );
   }
 
-  if (existsSync(directory) && options.force !== true) {
-    const blocking = readdirSync(directory).filter(
-      (entry) => !IGNORED_WHEN_EMPTY.has(entry),
-    );
+  if (options.force !== true) {
+    const blocking = blockingEntries(directory);
     if (blocking.length > 0) {
       // Naming what blocked it, because `.git` used to block it and the message
       // gave no way to tell that from a directory of real work.
-      const shown = blocking.sort().slice(0, 3).join(', ');
+      const shown = blocking.slice(0, 3).join(', ');
       const rest = blocking.length > 3 ? `, +${blocking.length - 3} more` : '';
       throw new ScaffoldError(
         `${directory} is not empty (${shown}${rest}). ` +
@@ -200,7 +207,7 @@ export const scaffold = async (
     }
   }
 
-  const version = options.version ?? `^${await readPackageVersion()}`;
+  const version = options.version ?? `^${await packageVersion()}`;
   const written: string[] = [];
 
   /** Copies a directory of the package's own templates into the new app. */

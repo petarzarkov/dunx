@@ -134,6 +134,82 @@ standalone: the model to `internal/docs/src/generated/coverage.json`, the badges
 rebuilds the site after `test:cov`, because the first build (inside
 `bun run build`) predates the coverage data.
 
+## `@dunx/create-app` asks with an arrow-key list, and takes no prompt library
+
+The scaffolder used to print a numbered list and read one line of stdin. The
+comment above that read said a full-screen selector "means owning cursor movement,
+terminal restore on signal and a fallback for every terminal that does not do what
+it claims - which is a library's job". That was wrong twice over, and both halves
+were settled by probing Bun rather than arguing.
+
+**The library half.** Every prompt package is a dependency in a tool whose appeal
+is that `bunx @dunx/create-app` resolves almost nothing.
+
+Bun ships the platform here: `process.stdin.setRawMode` (a `node:tty` built-in it
+implements natively), `Bun.stringWidth` and `Bun.sliceAnsi` for measuring and
+cutting by terminal columns, `Bun.stripANSI`, `Bun.color` for the palette, and
+`Bun.enableANSIColors` as the capability check. What was left to own is a key
+decoder and a repaint: `keys.ts` and `prompt.ts`, together under 250 lines.
+
+**The "cannot be tested" half, which was the real argument.** `Bun.spawn(cmd,
+{ terminal })` gives a child a real PTY: it reports `isTTY === true`, gets the
+`cols` and `rows` the parent declared, and reads the bytes the parent writes. So
+`interactive.test.ts` answers the CLI with arrow keys the way a person does, with
+no `node-pty` and no browser download. The measurements are in
+[bun-apis.md](../bun-apis.md), "Raw-mode stdin".
+
+### Where the split falls, and why
+
+A spawned process reports no coverage, so a design that only worked through the PTY
+would have put the whole feature outside the 90% gate. The split is:
+
+| Piece                       | Knows about                    | Tested by     |
+| --------------------------- | ------------------------------ | ------------- |
+| `KeyDecoder`                | bytes                          | in-process    |
+| `Prompt` and its subclasses | state and frames, no I/O       | in-process    |
+| `PromptRunner`              | a `Tty`, repainting            | in-process    |
+| `ProcessTty`                | raw mode, two injected streams | in-process    |
+| the CLI end to end          | an actual terminal             | a spawned PTY |
+
+`Tty` is an abstract class with five members; `MemoryTty` in `tty.fixture.ts` is the
+other implementation. `ProcessTty` takes its input and output streams as
+constructor arguments defaulting to `process.stdin` and `process.stdout`, which is
+what lets its raw-mode handling be asserted without a terminal. The PTY suite is
+left with the one question a fake cannot answer: whether a real terminal behaves
+the way the fake assumes.
+
+### The generated app lost two files
+
+`src/bootstrap.ts` exported `createApp` and `src/main.ts` declared a local function
+called `bootstrap` that imported it. Two files, and the names crossed over. It is
+one file now: `main.ts` exports `createApp` and serves it under
+`if (import.meta.main)`, which is false for the import a test makes. Measured on Bun
+1.4.0 as the entry, under `bun --watch`, and from a `bun test` import.
+
+`src/worker.ts` and its `worker` script are gone, and they were dead on arrival.
+`QueueModule` is given `consume: true`, so the container opens the bullmq workers at
+`onInit` and closes them before the connections the handlers use; a handler marked
+`background: true` is forked by bullmq into `jobs/jobs.processor.ts`.
+
+`examples/full` had neither file, and the vendored `jobs.processor.ts` said so in its
+own comment: "its own module rather than `worker.ts`, which has a `run()` that would
+boot a second worker inside every child." The generator was the only thing that still
+believed in it.
+
+`WorkerFactory` remains a real `@dunx/infra/queue` capability for a deployment that
+wants a separate process, and the queues guide documents all three ways to consume.
+
+### What the flags lost
+
+`--with`, `--all`, `--list` and `--template` are gone. A flag cannot show which
+features a selection pulls in, or which of them need Redis running, and both are
+lines the list updates as the cursor moves. `scaffold({ target, features })` is the
+scripted path, and it is the one the repo's own `check:scaffolds` already used.
+
+A run with no terminal - piped, redirected, CI - still asks nothing and writes the
+minimal template, because a scaffolder that blocks on a question there hangs the
+job.
+
 ## The API explorer: built, measured, then replaced by Swagger UI
 
 **`internal/openapi-ui` is deleted and `@dunx/openapi` mounts `swagger-ui-dist`.**

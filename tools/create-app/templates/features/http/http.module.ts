@@ -10,7 +10,7 @@ import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
 // declaring them here is for the reader, not for the resolver.
 @Module({
   imports: [
-    // Binds `Compression`; the **app** registers it, in `bootstrap.ts`, for the
+    // Binds `Compression`; the **app** registers it, in `main.ts`, for the
     // same reason `StaticFiles` is registered there. Nothing is installed by
     // importing this, so an app that never calls `app.use(Compression)` has no
     // branch in the request path to skip.

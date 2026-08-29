@@ -3,7 +3,7 @@ import { HttpError, Readiness, type HttpApp } from '@dunx/http';
 import { FetchError, HttpService } from '@dunx/http/client';
 import { ScheduleRegistry } from '@dunx/infra/schedule';
 import { testClient, type JsonInit, type TestClient } from '@dunx/testing';
-import { createApp } from './bootstrap.js';
+import { createApp } from './main.js';
 import { Maintenance } from './schedule/maintenance.service.js';
 
 /**
@@ -12,7 +12,7 @@ import { Maintenance } from './schedule/maintenance.service.js';
  *
  * `@dunx/testing`'s client owns the fetch-and-parse plumbing. `createTestServer`
  * is not used here on purpose: the point of this suite is that `createApp()` - the
- * real bootstrap, with its prefix, CORS and middleware - is what answers.
+ * real `createApp`, with its prefix, CORS and middleware - is what answers.
  */
 let app: HttpApp;
 let client: TestClient;
@@ -390,7 +390,7 @@ it('documents the routes Better Auth serves', async () => {
 });
 
 /**
- * `Compression` is registered by `bootstrap.ts`, so these run against the same
+ * `Compression` is registered by `createApp`, so these run against the same
  * chain that serves. `fetch` decodes the body itself but leaves
  * `content-encoding` and the encoded `content-length` in place, so one request
  * shows both what went over the wire and what arrived.

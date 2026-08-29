@@ -7,7 +7,7 @@ const HASHED = /\.[0-9a-f]{8}\.(js|css)$/;
 
 /**
  * `public/` served at `/assets`. `StaticModule` binds `StaticFiles`; the app
- * registers it in `bootstrap.ts`, because position in the chain is the app's
+ * registers it in `main.ts`, because position in the chain is the app's
  * call. The mount skips the global prefix: middleware is not a discovered route.
  */
 @Module({

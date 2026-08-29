@@ -1,5 +1,5 @@
 import { Logger } from '@dunx/core';
-import { createApp } from './bootstrap.js';
+import { createApp } from './main.js';
 import { Tour } from './tour/tour.service.js';
 
 /** The scripted walkthrough CI runs: boot the app `bun start` serves, narrate
