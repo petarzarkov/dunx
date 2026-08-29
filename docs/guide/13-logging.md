@@ -284,10 +284,57 @@ const fileAndConsole = (path: string): Transport[] => [
 ```
 
 `FileTransport` buffers, which is safe here because `LoggerModule` registers a
-lifecycle provider that flushes and closes it from `onShutdown`. That hook runs
-late: `App.shutdown` walks instances in reverse resolution order and the logger
-resolves before anything that depends on it, so services can still log while they
-close.
+lifecycle provider that drains it from `onShutdown`. That hook runs late:
+`App.shutdown` walks instances in reverse resolution order and the logger resolves
+before anything that depends on it, so services can still log while they close.
+
+It drains with `closeAsync`, and the await matters for anything reached over a
+network. A file is written synchronously and either form finishes it; a collector
+cannot answer synchronously at all, so a plain `close()` discards whatever it was
+holding and every deploy loses its last batch.
+
+### Shipping somewhere other than a file
+
+`HttpTransport` covers the collectors that differ only in the shape of the body:
+
+```ts
+import { HttpTransport, SamplingTransport } from '@dunx/infra/logger';
+
+new HttpTransport({
+  url: 'https://logs.example.com/ingest',
+  headers: { authorization: `Bearer ${token}` },
+  batchSize: 200,
+  flushIntervalMs: 2000,
+});
+```
+
+`encode` is the seam: Datadog wants a JSON array, Splunk HEC concatenated objects,
+Loki streams and values. `SyslogTransport` speaks RFC 5424 over UDP or TCP, and
+anything else that batches is a subclass of `BatchTransport`, which owns the
+bounded queue, the retry and the drop accounting.
+
+`SamplingTransport` wraps another transport to thin what reaches it. Warnings and
+worse are never sampled, and every discard is announced in the stream rather than
+being silent.
+
+`logger.stats()` on the `BackingLogger` token reports what each transport is
+holding and what it has dropped, which is what an alert on "we are losing logs"
+reads.
+
+### Output formats
+
+`format` on any transport takes one of four:
+
+| Formatter      | Emits                                            |
+| -------------- | ------------------------------------------------ |
+| `jsonFormat`   | `{"level":"info","message":"order placed",…}`    |
+| `prettyFormat` | the same JSON, ANSI-coloured for a terminal      |
+| `textFormat`   | `09:00:15.123 INFO  order placed  requestId=r-1` |
+| `logfmtFormat` | `level=info msg="order placed" order.id=ord_1`   |
+
+`examples/full` reads `LOG_FORMAT` and wires whichever you name. A file always
+takes a machine format even when the console does not, since nothing reads a log
+file with its eyes first.
 
 ### `captureGlobalErrors`
 

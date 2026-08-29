@@ -29,9 +29,14 @@ export const LoggerSettings = token<LoggerConfig>('LoggerConfig');
  * The same instance `Logger` resolves to, typed as the implementation.
  *
  * Core's contract covers the six levels and nothing else, on purpose. The
- * implementation carries three things beyond it - `child(bindings)`,
- * `flush()` and `close()` - and this token is how an app reaches them without
- * a cast or an adapter class widening the contract for everyone.
+ * implementation carries more than that - `child(bindings)`, `setLevel(level)`,
+ * `stats()`, `flush()`/`close()` and their awaited counterparts - and this token
+ * is how an app reaches them without a cast or an adapter class widening the
+ * contract for everyone.
+ *
+ * `setLevel` is the one worth knowing about: it moves this logger and every child
+ * it made, so a `SIGUSR2` handler resolving this token can turn a running process
+ * to debug without a restart.
  */
 export const BackingLogger = token<ArkvLogger>('BackingLogger');
 
@@ -75,10 +80,17 @@ class LoggerLifecycle implements OnInit, OnShutdown {
    * Runs late: `App.shutdown` walks instances in reverse resolution order, and
    * the logger resolves before anything that depends on it, so those services
    * can still log while they close.
+   *
+   * **`closeAsync`, and the await is the point.** A `FileTransport` writes
+   * synchronously and either form drains it, but a transport whose sink is a
+   * network cannot answer synchronously at all: `close()` on one discards
+   * whatever it was holding, so every deploy lost the last batch of logs before
+   * the pod went away. `@dunx/core` declares `onShutdown(): void | Promise<void>`
+   * and `App.shutdown` awaits it, so this costs nothing to arrange.
    */
-  onShutdown(): void {
+  async onShutdown(): Promise<void> {
     this.#release?.();
-    this.logger.close();
+    await this.logger.closeAsync();
   }
 }
 
