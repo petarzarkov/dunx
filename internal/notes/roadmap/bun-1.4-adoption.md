@@ -72,10 +72,12 @@ Four findings this repo had recorded as live defects now pass their own probes.
 | `AsyncLocalStorage.enterWith()` segfaulted after any `await`        | bun-apis.md                                                     |
 
 **Leak A is the one that mattered.** It was the half of the SIGTERM hang with no
-workaround at all. Leak B, bullmq's uncancellable reconnect, is still live: a real
-dunx app with `QueueModule` pointed at a refused Redis still needs `ShutdownHooks`'
-forced exit. The re-measured table and the reproduction that still works are in
-[queue-shutdown-sigterm](./queue-shutdown-sigterm.md).
+workaround at all. Leak B is still live and has since been narrowed out of Bun
+entirely: a bullmq `Worker` against an unreachable server holds the loop after
+`close()` on Node 24 with ioredis, the same as on Bun. A `Queue` is clean. So a
+dunx app with `QueueModule` on a refused Redis still needs `ShutdownHooks`' forced
+exit, and the report belongs at bullmq rather than at oven-sh/bun. The six-line
+reproduction is in [queue-shutdown-sigterm](./queue-shutdown-sigterm.md).
 
 The `Date` one is worth flagging to consumers rather than only recording: an app that
 shipped against 1.3 and unknowingly relied on the silence now gets a thrown error. That
