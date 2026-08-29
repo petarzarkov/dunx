@@ -1,7 +1,49 @@
 # Defects in bullmq's Bun adapter and `Bun.RedisClient`
 
-**Leak A is fixed in Bun 1.4. Leak B is still live.** Three bugs, of which two were
-the SIGTERM hang this file was opened for; the third was dunx's own and is fixed.
+**Leak A is fixed in Bun 1.4. Leak B is still live, and is not a Bun defect.**
+Three bugs, of which two were the SIGTERM hang this file was opened for; the third
+was dunx's own and is fixed.
+
+## Correction: leak B is bullmq's, on every runtime
+
+This file spent its life calling leak B a defect in bullmq's **Bun adapter**. It is
+not. Narrowed on Bun 1.4.0 and bullmq 6.0.5:
+
+| Object                    | Connection             | Runtime | Exits? |
+| ------------------------- | ---------------------- | ------- | ------ |
+| `Queue` + `add` + `close` | `createBunRedisClient` | Bun     | yes    |
+| `Worker` + `close`        | `createBunRedisClient` | Bun     | **no** |
+| `Worker` + `close`        | ioredis                | Bun     | **no** |
+| `Worker` + `close`        | ioredis                | Node 24 | **no** |
+
+Six lines reproduce it, with no dunx and no Bun:
+
+```js
+import { Worker } from 'bullmq';
+const worker = new Worker('probe', async () => {}, {
+  connection: { host: '127.0.0.1', port: 6399, maxRetriesPerRequest: 0 },
+});
+await new Promise((r) => setTimeout(r, 300));
+await worker.close();
+```
+
+Two things follow. **The `Worker` is the leak and the `Queue` is clean**, which the
+earlier three-layer table could not see because it only ever built a `Queue`. And
+the ioredis-on-Node row removes Bun from the report altogether, so this belongs
+upstream at bullmq rather than at oven-sh/bun.
+
+`close(true)`, `disconnect()` after `close()`, and both together were each measured
+and none releases the loop. There is no userland workaround, so `ShutdownHooks`'
+forced exit stays until bullmq fixes it.
+
+**Filed as [taskforcesh/bullmq#4656](https://github.com/taskforcesh/bullmq/issues/4656).**
+`close()` is pending rather than rejected, and what holds the loop is three armed
+ioredis retry timers with no live socket, so the `await disconnecting` in
+`redis-connection.js` waits on an `end` that a reconnecting client never emits.
+That is the same un-timed await
+[#4065](https://github.com/taskforcesh/bullmq/issues/4065) identifies for
+`pause()`, reached from a single worker and a server that was never up. Reproduced
+on bullmq 6.3.2 as well as the 6.0.5 this repo pins.
 
 ## Re-measured on Bun 1.4.0 (rev 34cbb9a40), bullmq 6.0.5
 
@@ -38,11 +80,11 @@ bisecting the stack a layer at a time found a leak in `Bun.RedisClient` on its o
 and a second, separate one in bullmq's Bun adapter. Neither is reachable from
 userland. All three have a minimal reproduction, ready to file.
 
-| #                                                                          | Symptom                                                                       | Layer          |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------- |
-| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | ~~a pending connect outlives `close()`~~ **fixed in Bun 1.4**                 | Bun            |
-| [B](#leak-b---bullmq-disconnect-cannot-cancel-its-own-reconnect)           | `disconnect()` cannot cancel its own reconnect                                | bullmq adapter |
-| [C](#defect-c---no-connection-is-ever-named-so-getworkers-is-always-empty) | ~~`getWorkers()` always `[]`~~ **fixed - was dunx's own `duplicate` wrapper** | dunx           |
+| #                                                                          | Symptom                                                                       | Layer  |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------ |
+| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | ~~a pending connect outlives `close()`~~ **fixed in Bun 1.4**                 | Bun    |
+| [B](#leak-b---bullmq-disconnect-cannot-cancel-its-own-reconnect)           | a `Worker` on an unreachable server holds the loop after `close()`            | bullmq |
+| [C](#defect-c---no-connection-is-ever-named-so-getworkers-is-always-empty) | ~~`getWorkers()` always `[]`~~ **fixed - was dunx's own `duplicate` wrapper** | dunx   |
 
 ## The measurement that separated them
 

@@ -37,6 +37,10 @@ const appWith = async (setup: Setup): Promise<HttpApp> => {
   const app = await HttpFactory.create(Root, {
     middleware: [SessionGuard],
     requestLogging: false,
+    // Opted into explicitly now that `'public'` is the default. This app has a
+    // global `SessionGuard`, which is exactly the case the setting exists for: a
+    // 404 on a miss while every real path answers 401 enumerates the surface.
+    notFound: 'guarded',
     ...(setup.reportErrors === true
       ? {
           onError: (error: unknown) =>
@@ -55,8 +59,8 @@ describe('AuthHandler', () => {
 
     expect((await fetch(`${base}/api/auth/ok`)).status).toBe(200);
     // The wildcard claims nothing outside the mount. An unmatched path reaches the
-    // fallback, where the global guard rejects it before the 404 - which is the
-    // right answer, since a 404 there would enumerate the app's surface.
+    // fallback, where the global guard rejects it before the 404 - which is what
+    // `notFound: 'guarded'` above buys, and why an app with a global guard wants it.
     expect((await fetch(`${base}/elsewhere`)).status).toBe(401);
     await app.shutdown();
   });

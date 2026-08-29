@@ -7,6 +7,7 @@ import {
   type ModuleRef,
   type DynamicModule,
   type AsyncModuleConfig,
+  type Ctor,
   type FactoryProvider,
   type Token,
 } from '@dunx/core';
@@ -22,14 +23,17 @@ const tokens = new Map<string, Token<HttpService>>();
  * module and the consumer would hold different tokens for `'stripe'` and the lookup
  * would miss. Same name in, same token out.
  *
- * A `Token` is not a constructor type, so a named client cannot be a constructor
- * parameter. Reach it with `inject()` in a field initialiser:
+ * A `Token` is not a constructor type, so a client registered under one cannot be a
+ * constructor parameter. Reach it with `inject()` in a field initialiser:
  *
  * ```ts
  * class Payments {
  *   readonly stripe = inject(httpClient('stripe'));
  * }
  * ```
+ *
+ * Passing `as` a subclass instead gives an ordinary constructor parameter, and is
+ * the shape to prefer for new code.
  */
 export const httpClient = (name: string): Token<HttpService> => {
   const existing = tokens.get(name);
@@ -39,16 +43,35 @@ export const httpClient = (name: string): Token<HttpService> => {
   return created;
 };
 
+/**
+ * How a client is addressed: a name, which binds a `Token`, or a subclass of
+ * `HttpService`, which binds the class itself.
+ *
+ * A subclass is both a token and a parameter type, so `constructor(private readonly
+ * email: EmailClient)` resolves - which a `Token` can never do. `as` is the spelling
+ * `ConfigModule.forRoot({ validate, as })` already established.
+ */
+export type ClientTarget = string | Ctor<HttpService>;
+
 const serviceFrom = (
-  target: Token<HttpService> | typeof HttpService,
+  target: Token<HttpService> | Ctor<HttpService>,
   optionsToken: Token<HttpClientOptions> | typeof HttpClientOptions,
+  // The concrete class to construct. A subclass binds itself, so the instance has
+  // to be one - `new HttpService()` under an `EmailClient` token would fail every
+  // `instanceof` and defeat the point of the subclass.
+  ctor: Ctor<HttpService> = HttpService,
 ) =>
   provide(target, {
     useFactory: (
       options: HttpClientOptions,
       logger: Logger,
       context: RequestContext,
-    ) => new HttpService(options, logger, context),
+    ) =>
+      new (ctor as new (
+        options: HttpClientOptions,
+        logger: Logger,
+        context: RequestContext,
+      ) => HttpService)(options, logger, context),
     inject: [optionsToken, Logger, RequestContext] as const,
   });
 
@@ -57,11 +80,14 @@ const serviceFrom = (
  * `HttpClientOptions` - the flat container reports that as a duplicate binding.
  */
 const namedModule = (
-  name: string,
+  target: ClientTarget,
   options: HttpClientOptions | FactoryProvider<HttpClientOptions, Deps>,
   imports: readonly ModuleRef[] = [],
 ): DynamicModule => {
-  const optionsToken = token<HttpClientOptions>(`HttpClientOptions(${name})`);
+  const label = typeof target === 'string' ? target : target.name;
+  const service = typeof target === 'string' ? httpClient(target) : target;
+  const ctor = typeof target === 'string' ? HttpService : target;
+  const optionsToken = token<HttpClientOptions>(`HttpClientOptions(${label})`);
   const optionsProvider =
     options instanceof HttpClientOptions
       ? provide(optionsToken, { useValue: options })
@@ -70,8 +96,8 @@ const namedModule = (
   return {
     module: HttpModule,
     imports,
-    exports: [optionsToken, httpClient(name)],
-    providers: [optionsProvider, serviceFrom(httpClient(name), optionsToken)],
+    exports: [optionsToken, service],
+    providers: [optionsProvider, serviceFrom(service, optionsToken, ctor)],
   };
 };
 
@@ -92,13 +118,28 @@ const namedModule = (
  */
 export class HttpModule {
   /**
-   * Binds `HttpService` and `HttpClientOptions`, or `httpClient(init.name)` alone
-   * when `name` is set - a named registration deliberately does not also claim
-   * `HttpService`, so several upstreams can coexist alongside one default.
+   * Binds `HttpService` and `HttpClientOptions`.
+   *
+   * Pass `as` a subclass, or set `init.name`, to register an additional client
+   * instead. Either way it does not also claim `HttpService`, so several upstreams
+   * coexist alongside one default.
+   *
+   * ```ts
+   * export class EmailClient extends HttpService {}
+   * HttpModule.forRoot({ baseUrl: 'https://email.internal' }, EmailClient);
+   *
+   * class Notifier {
+   *   constructor(private readonly email: EmailClient) {}
+   * }
+   * ```
    */
-  static forRoot(init: HttpClientOptionsInit = {}): DynamicModule {
+  static forRoot(
+    init: HttpClientOptionsInit = {},
+    as?: Ctor<HttpService>,
+  ): DynamicModule {
     const options = new HttpClientOptions(init);
-    if (options.name !== undefined) return namedModule(options.name, options);
+    const target = as ?? options.name;
+    if (target !== undefined) return namedModule(target, options);
 
     return {
       module: HttpModule,
@@ -123,22 +164,23 @@ export class HttpModule {
    * });
    * ```
    *
-   * `name` is a parameter rather than a field of the awaited init, because the
-   * token has to exist before the factory runs.
+   * The second parameter is positional rather than a field of the awaited init,
+   * because the token has to exist before the factory runs. A subclass there gives
+   * a constructor parameter; a string gives an `httpClient(name)` token.
    */
   static forRootAsync(
     load: () => HttpClientOptionsInit | Promise<HttpClientOptionsInit>,
-    name?: string,
+    as?: ClientTarget,
   ): DynamicModule;
   static forRootAsync<const D extends Deps>(
     config: AsyncModuleConfig<HttpClientOptionsInit, D>,
-    name?: string,
+    as?: ClientTarget,
   ): DynamicModule;
   static forRootAsync(
     source:
       | (() => HttpClientOptionsInit | Promise<HttpClientOptionsInit>)
       | AsyncModuleConfig<HttpClientOptionsInit, Deps>,
-    name?: string,
+    as?: ClientTarget,
   ): DynamicModule {
     const load = typeof source === 'function' ? source : source.useFactory;
     const inject = typeof source === 'function' ? [] : (source.inject ?? []);
@@ -150,9 +192,9 @@ export class HttpModule {
       ...deps: readonly unknown[]
     ): Promise<HttpClientOptions> => new HttpClientOptions(await load(...deps));
 
-    if (name !== undefined) {
+    if (as !== undefined) {
       return namedModule(
-        name,
+        as,
         { useFactory, inject } as FactoryProvider<HttpClientOptions, Deps>,
         imports,
       );

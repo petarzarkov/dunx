@@ -270,3 +270,37 @@ See [Logging](./13-logging.md), [Database](./14-database.md),
 [Queues](./15-queues.md), [Authentication](./17-authentication.md) and
 [Files and images](./18-files-and-images.md) for the rest, and
 [Providers](./03-providers.md) for how a factory provider resolves in general.
+
+## The HTTP server's own settings
+
+`HttpFactory.create(root, options)` builds the container, so its `options` argument
+is assembled before `ConfigService` exists. `HttpOptionsProvider` is the same
+settings as a provider, which can inject:
+
+```ts
+export class AppHttpOptions extends HttpOptionsProvider {
+  constructor(private readonly config: AppConfigService) {
+    super();
+  }
+
+  override get prefix(): string {
+    return this.config.get('prefix');
+  }
+}
+
+@Module({
+  providers: [provide(HttpOptionsProvider, { useClass: AppHttpOptions })],
+  exports: [HttpOptionsProvider],
+})
+export class HttpConfigModule {}
+```
+
+Every member has a default, so a subclass overrides only what differs. Anything
+passed to `create()` wins field by field, and `setGlobalPrefix`, `enableCors` and
+`set` still work and win over both, since they run after construction.
+
+Override a field with a field and a getter with a getter - TypeScript rejects the
+other pairing (`TS2611`, `TS2610`). To derive a field from config, declare
+`override trustProxy: boolean` and assign it in the constructor.
+
+See [Upgrading](./22-upgrading.md) for what each imperative call maps to.

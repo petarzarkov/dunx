@@ -1,6 +1,7 @@
 import {
   provide,
   token,
+  type Ctor,
   type Deps,
   type ModuleRef,
   type DynamicModule,
@@ -44,12 +45,32 @@ export const redisConnection = (name: string): Token<RedisConnection> => {
  * `dist/index.js` already carries the `Symbol.for('dunx.deps')` record for `Redis`.
  * A published package is transformed once, at its own build, not at the consumer's.
  */
+/**
+ * How a connection is addressed: a name, which binds a `Token`, or a subclass of
+ * `Redis`, which binds the class itself.
+ *
+ * A subclass is both a token and a parameter type, so `constructor(private readonly
+ * sessions: SessionsRedis)` resolves - which a `Token` can never do. Same treatment
+ * `HttpModule` in `@dunx/http/client` gives a named outbound client.
+ */
+export type ConnectionTarget = string | Ctor<RedisConnection>;
+
 const connectionFrom = (
-  target: Token<RedisConnection> | typeof RedisConnection,
+  // `typeof RedisConnection` is in the union separately: the contract is abstract,
+  // so it is a valid token but not a `Ctor`, which is only ever the thing built.
+  target:
+    | Token<RedisConnection>
+    | Ctor<RedisConnection>
+    | typeof RedisConnection,
   optionsToken: Token<RedisOptions> | typeof RedisOptions,
+  // The concrete class to construct. A subclass binds itself, so the instance has
+  // to be one: `new Redis()` under a `SessionsRedis` token would fail every
+  // `instanceof` and defeat the point of the subclass.
+  ctor: Ctor<RedisConnection> = Redis,
 ) =>
   provide(target, {
-    useFactory: (options: RedisOptions) => new Redis(options),
+    useFactory: (options: RedisOptions) =>
+      new (ctor as new (options: RedisOptions) => RedisConnection)(options),
     inject: [optionsToken] as const,
   });
 
@@ -58,11 +79,15 @@ const connectionFrom = (
  * on `RedisOptions` - the flat container reports that as a duplicate binding.
  */
 const namedModule = (
-  name: string,
+  target: ConnectionTarget,
   options: RedisOptions | FactoryProvider<RedisOptions, Deps>,
   imports: readonly ModuleRef[] = [],
 ): DynamicModule => {
-  const optionsToken = token<RedisOptions>(`RedisOptions(${name})`);
+  const label = typeof target === 'string' ? target : target.name;
+  const connection =
+    typeof target === 'string' ? redisConnection(target) : target;
+  const ctor = typeof target === 'string' ? Redis : target;
+  const optionsToken = token<RedisOptions>(`RedisOptions(${label})`);
   // Branch on the call, not the argument: a union of provider shapes matches
   // neither `provide` overload.
   const optionsProvider =
@@ -73,10 +98,10 @@ const namedModule = (
   return {
     module: RedisModule,
     imports,
-    exports: [optionsToken, redisConnection(name)],
+    exports: [optionsToken, connection],
     providers: [
       optionsProvider,
-      connectionFrom(redisConnection(name), optionsToken),
+      connectionFrom(connection, optionsToken, ctor),
     ],
   };
 };
@@ -88,9 +113,13 @@ export class RedisModule {
    * deliberately does not also claim `RedisConnection`, so several can coexist
    * alongside one default.
    */
-  static forRoot(init: RedisOptionsInit = {}): DynamicModule {
+  static forRoot(
+    init: RedisOptionsInit = {},
+    as?: Ctor<RedisConnection>,
+  ): DynamicModule {
     const options = new RedisOptions(init);
-    if (options.name !== undefined) return namedModule(options.name, options);
+    const target = as ?? options.name;
+    if (target !== undefined) return namedModule(target, options);
 
     return {
       module: RedisModule,
@@ -119,17 +148,17 @@ export class RedisModule {
    */
   static forRootAsync(
     load: () => RedisOptionsInit | Promise<RedisOptionsInit>,
-    name?: string,
+    as?: ConnectionTarget,
   ): DynamicModule;
   static forRootAsync<const D extends Deps>(
     config: AsyncModuleConfig<RedisOptionsInit, D>,
-    name?: string,
+    as?: ConnectionTarget,
   ): DynamicModule;
   static forRootAsync(
     source:
       | (() => RedisOptionsInit | Promise<RedisOptionsInit>)
       | AsyncModuleConfig<RedisOptionsInit, Deps>,
-    name?: string,
+    as?: ConnectionTarget,
   ): DynamicModule {
     const load = typeof source === 'function' ? source : source.useFactory;
     const inject = typeof source === 'function' ? [] : (source.inject ?? []);
@@ -141,8 +170,8 @@ export class RedisModule {
       ...deps: readonly unknown[]
     ): Promise<RedisOptions> => new RedisOptions(await load(...deps));
 
-    if (name !== undefined) {
-      return namedModule(name, { useFactory, inject }, imports);
+    if (as !== undefined) {
+      return namedModule(as, { useFactory, inject }, imports);
     }
 
     return {

@@ -100,6 +100,17 @@ describe('a composed app', () => {
     expect(env).not.toContain('REDIS_URL');
   });
 
+  test('writes every env entry a group declares, not only the first', async () => {
+    const { read } = await compose(['http']);
+    const env = await read('.env.example');
+
+    // The `corsOrigin` group carries two. `TRUST_PROXY` was in the schema and the
+    // map but not in the metadata, so the generated app validated a setting its
+    // own `.env.example` never mentioned.
+    expect(env).toContain('CORS_ORIGIN=https://example.com');
+    expect(env).toContain('TRUST_PROXY=false');
+  });
+
   test('adds a dependency per feature and resolves the dunx version', async () => {
     const { read } = await compose(['auth']);
     const manifest = JSON.parse(await read('package.json')) as {

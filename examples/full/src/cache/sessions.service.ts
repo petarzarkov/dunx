@@ -1,16 +1,15 @@
 import { Logger } from '@dunx/core';
-import {
-  isConnectionError,
-  RedisConnection,
-  RedisOptions,
-} from '@dunx/infra/redis';
+import { isConnectionError, RedisOptions } from '@dunx/infra/redis';
+import { SessionsRedis } from './sessions.redis.js';
 
 export class Sessions {
   // Namespaced by pid so one run cannot read another run's keys.
   readonly #prefix = `dunx-full:${process.pid}`;
 
   constructor(
-    private readonly redis: RedisConnection,
+    // The subclass, not `RedisConnection`: a named connection is a parameter
+    // type now, so this needs no `inject()` in a field.
+    private readonly redis: SessionsRedis,
     private readonly options: RedisOptions,
     private readonly logger: Logger,
   ) {}

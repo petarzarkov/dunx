@@ -33,6 +33,7 @@ const BARREL = [
   'CorsOrigin',
   'DEFAULT_RELAY_CHANNEL',
   'DatabaseIndicator',
+  'DefaultHttpOptions',
   'Delete',
   'DiskIndicator',
   'DiskOptions',
@@ -59,6 +60,7 @@ const BARREL = [
   'HttpFactory',
   'HttpMethod',
   'HttpOptions',
+  'HttpOptionsProvider',
   'HttpStatusCode',
   'HttpStatusName',
   'InferOutput',
@@ -97,6 +99,7 @@ const BARREL = [
   'ReadinessOptions',
   'RedisIndicator',
   'RedisRelay',
+  'RelayConnectionOptions',
   'RedisRelayOptions',
   'RedisThrottleStore',
   'RelayOptions',
@@ -153,6 +156,7 @@ const BARREL = [
   'meta',
   'metaKey',
   'metaOf',
+  'WsRelayModule',
 ].sort();
 
 const CLIENT = [
@@ -161,6 +165,7 @@ const CLIENT = [
   'FetchError',
   'FetchTransportError',
   'HeaderFactory',
+  'ClientTarget',
   'HttpClientOptions',
   'HttpClientOptionsInit',
   'HttpModule',

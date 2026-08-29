@@ -44,6 +44,32 @@ import { defaultSettings, type AppSettings } from './settings.js';
 
 export interface HttpOptions extends AppOptions {
   readonly port?: number;
+  /**
+   * Prefixes every discovered route, the same thing {@link HttpApp.setGlobalPrefix}
+   * does. Both exist: the method is what NestJS offers and what a script reaches
+   * for, the field is what an `HttpOptionsProvider` can answer from validated
+   * config. A later `setGlobalPrefix` call still wins, because it happens after.
+   *
+   * Explicitly `| undefined`, unlike the rest: a suite running one fixture both
+   * prefixed and unprefixed passes a variable here, and under
+   * `exactOptionalPropertyTypes` that would otherwise need a conditional spread.
+   * "No prefix" and "absent" mean the same thing. `@dunx/testing` relies on it.
+   */
+  readonly prefix?: string | undefined;
+  /** Mounts an `OPTIONS` preflight per path, as {@link HttpApp.enableCors} does. */
+  readonly cors?: CorsOptions;
+  /** `app.set('trust proxy', ...)` as a field. */
+  readonly trustProxy?: boolean;
+  /**
+   * Calls `enableShutdownHooks` at construction. `true` takes the default signals;
+   * an object names them and tunes the force-exit.
+   */
+  readonly shutdownHooks?:
+    | boolean
+    | {
+        readonly signals?: readonly ShutdownSignal[];
+        readonly options?: ShutdownHookOptions;
+      };
   /** Resolved from the container, so middleware can inject(). */
   readonly middleware?: readonly Ctor<Middleware>[];
   /**
@@ -178,12 +204,36 @@ export class HttpApplication implements HttpApp {
     this.#relay = options.relay;
     this.#relayChannel = options.relayChannel;
     this.#relayResubscribe = options.relayResubscribe;
-    this.#notFound = options.notFound ?? 'guarded';
+    this.#notFound = options.notFound ?? 'public';
     this.#bootLogging = options.bootLogging ?? true;
     this.gatewayPaths = websocket?.paths ?? [];
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
     });
+
+    /**
+     * The declarative half of the four settings that also have methods. Applied
+     * here, at construction, so a later `setGlobalPrefix` or `enableCors` call
+     * still wins - which is what keeps both spellings working and makes the
+     * method the more specific of the two, as an imperative call should be.
+     */
+    if (options.prefix !== undefined && options.prefix !== '') {
+      this.setGlobalPrefix(options.prefix);
+    }
+    if (options.cors !== undefined) {
+      this.enableCors(options.cors);
+    }
+    if (options.trustProxy !== undefined) {
+      this.set('trust proxy', options.trustProxy);
+    }
+    const hooks = options.shutdownHooks;
+    if (hooks !== undefined && hooks !== false) {
+      if (hooks === true) {
+        this.enableShutdownHooks();
+      } else {
+        this.enableShutdownHooks(hooks.signals, hooks.options);
+      }
+    }
   }
 
   get<T>(token: InjectionToken<T>): T {

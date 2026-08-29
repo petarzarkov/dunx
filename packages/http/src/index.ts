@@ -65,6 +65,10 @@ export {
   type HttpApp,
   type HttpOptions,
 } from './server/factory.js';
+export {
+  DefaultHttpOptions,
+  HttpOptionsProvider,
+} from './server/options-provider.js';
 export { REQUEST_ID_HEADER } from './server/request-id.js';
 // W3C Trace Context, off unless `requestLogging: { trace: true }` asks for it.
 // One header parsed and one written - no exporter, no sampler, no dependency.
@@ -168,6 +172,7 @@ export { PubSub } from './ws/pubsub.js';
 // RedisConnection satisfies it structurally; `RedisRelay` is Bun.RedisClient
 // directly and therefore costs this package no dependency.
 export { RedisRelay, type RedisRelayOptions } from './ws/redis-relay.js';
+export { RelayConnectionOptions, WsRelayModule } from './ws/relay-module.js';
 export {
   DEFAULT_RELAY_CHANNEL,
   type PubSubRelay,

@@ -16,13 +16,25 @@ interface Path {
   readonly path: string;
 }
 
+interface Agent {
+  readonly agent: string | null;
+}
+
 let server: ReturnType<typeof Bun.serve>;
 let base: string;
 
 beforeAll(() => {
   server = Bun.serve({
     port: 0,
-    fetch: (request) => Response.json({ path: new URL(request.url).pathname }),
+    fetch: (request) => {
+      const url = new URL(request.url);
+      // `/echo` reports a header back, which is how a test tells two clients
+      // apart from outside: `options` is private, so the configuration itself
+      // is not readable.
+      return url.pathname === '/echo'
+        ? Response.json({ agent: request.headers.get('x-client') })
+        : Response.json({ path: url.pathname });
+    },
   });
   base = server.url.href;
 });
@@ -255,6 +267,159 @@ describe('named clients', () => {
 
     const app = await AppFactory.create(AppModule);
     expect(() => app.get(HttpService)).toThrow();
+    await app.shutdown();
+  });
+});
+
+/**
+ * W6: a named client as a subclass, so it can be a constructor parameter. A
+ * `Token` never can, which forced `inject()` in a field on every consumer.
+ */
+describe('a client registered as a subclass', () => {
+  class EmailClient extends HttpService {}
+  class BillingClient extends HttpService {}
+
+  it('resolves as a constructor parameter', async () => {
+    class Notifier {
+      constructor(readonly email: EmailClient) {}
+    }
+
+    @Module({
+      imports: [
+        HttpModule.forRoot(
+          { baseUrl: base, headers: { 'x-client': 'email' } },
+          EmailClient,
+        ),
+      ],
+      providers: [
+        // The suite runs without `@dunx/transform`, so the parameter type is not
+        // recorded. An app with the preload writes `providers: [Notifier]` and
+        // the constructor above is all there is to it.
+        provide(Notifier, {
+          useFactory: (email: EmailClient) => new Notifier(email),
+          inject: [EmailClient] as const,
+        }),
+      ],
+    })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+    // The instance is the subclass, not an `HttpService` under a subclass token.
+    expect(app.get(Notifier).email).toBeInstanceOf(EmailClient);
+    expect(await app.get(Notifier).email.get<Path>('/mail')).toEqual({
+      path: '/mail',
+    });
+    await app.shutdown();
+  });
+
+  it('does not claim HttpService, so a default coexists', async () => {
+    @Module({
+      imports: [
+        HttpModule.forRoot({
+          baseUrl: base,
+          headers: { 'x-client': 'default' },
+        }),
+        HttpModule.forRoot(
+          { baseUrl: base, headers: { 'x-client': 'email' } },
+          EmailClient,
+        ),
+      ],
+    })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+    expect(app.get(HttpService)).not.toBeInstanceOf(EmailClient);
+    expect(await app.get(HttpService).get<Agent>('/echo')).toEqual({
+      agent: 'default',
+    });
+    expect(await app.get(EmailClient).get<Agent>('/echo')).toEqual({
+      agent: 'email',
+    });
+    await app.shutdown();
+  });
+
+  it('gives two subclasses their own options', async () => {
+    @Module({
+      imports: [
+        HttpModule.forRoot(
+          { baseUrl: base, headers: { 'x-client': 'email' } },
+          EmailClient,
+        ),
+        HttpModule.forRootAsync(
+          () => ({ baseUrl: base, headers: { 'x-client': 'billing' } }),
+          BillingClient,
+        ),
+      ],
+    })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+    // Each binds its own `HttpClientOptions(<class name>)` token, which is what
+    // stops the second registration reading as a duplicate binding.
+    expect(await app.get(EmailClient).get<Agent>('/echo')).toEqual({
+      agent: 'email',
+    });
+    expect(await app.get(BillingClient).get<Agent>('/echo')).toEqual({
+      agent: 'billing',
+    });
+    expect(app.get(EmailClient)).not.toBe(app.get(BillingClient));
+    await app.shutdown();
+  });
+
+  it('reaches a factory’s own imports', async () => {
+    const BASE = token<string>('SubclassBase');
+
+    @Module({
+      providers: [provide(BASE, { useValue: base })],
+      exports: [BASE],
+    })
+    class UpstreamModule {}
+
+    @Module({
+      imports: [
+        HttpModule.forRootAsync(
+          {
+            imports: [UpstreamModule],
+            useFactory: (baseUrl: string) => ({
+              baseUrl,
+              headers: { 'x-client': 'from-imports' },
+            }),
+            inject: [BASE],
+          },
+          BillingClient,
+        ),
+      ],
+    })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+    expect(await app.get(BillingClient).get<Agent>('/echo')).toEqual({
+      agent: 'from-imports',
+    });
+    await app.shutdown();
+  });
+
+  it('leaves the string form working', async () => {
+    class Caller {
+      readonly stripe = inject(httpClient('legacy-stripe'));
+    }
+
+    @Module({
+      imports: [
+        HttpModule.forRoot({
+          name: 'legacy-stripe',
+          baseUrl: base,
+          headers: { 'x-client': 'legacy' },
+        }),
+      ],
+      providers: [Caller],
+    })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+    expect(await app.get(Caller).stripe.get<Agent>('/echo')).toEqual({
+      agent: 'legacy',
+    });
     await app.shutdown();
   });
 });

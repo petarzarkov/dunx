@@ -281,3 +281,41 @@ fan-out nobody notices.
 through `PubSub`, so it stays local. Anything that must cross nodes goes through
 `PubSub`. `subscriberCount` is local too - Bun counts its own sockets and cannot
 count another node's.
+
+## HTTP options as a provider
+
+`HttpFactory.create(root, options)` builds the container, so its `options`
+argument has to be complete before a single provider exists. An app whose request
+logging follows its own configuration therefore validated that configuration
+twice: once in `main.ts` to build the argument, and once through `ConfigModule`
+for everything else. `examples/full` opened with `validate(Bun.env).log`, and the
+container had no view of that second copy.
+
+`HttpOptionsProvider` carries the same settings and is resolved from the
+container. `HttpFactory` promotes a default binding; a module binding a subclass
+replaces it, and that subclass injects `ConfigService` like anything else.
+
+Three decisions in it:
+
+**The argument wins, field by field.** A `create()` argument already meant
+something before this existed, so a provider that outranked it would change what
+an existing app does. A field the argument omits is the provider's to answer,
+which lets configuration move into the container one field at a time.
+
+**Promoted rather than bound in the HTTP scope.** `AppOptions.promote` is the
+mechanism core already used for `Logger` and `RequestContext`: the binding is laid
+into every scope holding no view of its own, and a module declaring the token
+replaces it with no shadowing warning. Binding it in `HttpModule`'s own providers
+was tried first. It put the token in that scope's `own` map, which warned every
+app that declared a subclass, and the HTTP scope went on resolving its own default
+because a scope prefers what it owns.
+
+**The imperative methods are unchanged.** `setGlobalPrefix`, `enableCors`, `set`
+and `enableShutdownHooks` all still work, and each now has a field alongside it.
+The fields are applied in the constructor, so a later method call overrides one.
+
+Both logging middlewares are now bound unconditionally. `requestLogging: false`
+used to decide whether the middleware provider was bound at all, and that decision
+had to be made before the container existed; whether the middleware sits in the
+chain is read off the resolved options at `listen()`. Binding one that goes unused
+costs a constructor call at boot.

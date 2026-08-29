@@ -12,7 +12,7 @@ export {
   type HttpClientOptionsInit,
 } from './client/options.js';
 export type { BackoffOptions, RetryOptions } from './client/retry.js';
-export { httpClient, HttpModule } from './client/module.js';
+export { httpClient, HttpModule, type ClientTarget } from './client/module.js';
 export {
   HttpService,
   type HeaderFactory,

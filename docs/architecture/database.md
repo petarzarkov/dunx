@@ -171,3 +171,37 @@ is an embedded database versus one over a network, and an app gets it from
 `SqliteOptions` just as much as from `SyncSqliteOptions`. What sync mode buys on top
 is single-digit percent, plus a request path with no promise in it at all, which is
 worth having and is not worth overselling.
+
+## Constraint errors carry their own status
+
+A unique violation reaching `@dunx/http` used to answer 500. It is a conflict the
+caller can act on, and the information needed to say so is in the driver's error.
+
+`toDatabaseError(error)` classifies one and returns a `ConstraintError` carrying
+`status`; anything it does not recognise comes back untouched. The status travels
+on `AppError.status`, an integer, so `@dunx/infra` still imports nothing of the
+web layer. `CursorError` and `PageOptionsError` already worked this way.
+
+Four kinds are distinguished, being the four every supported dialect reports
+separately: unique and foreign key answer 409, not-null and check answer 400. A
+foreign key sits with the 409s because its two causes - inserting a child with no
+parent, and deleting a parent with children - share one driver code, and only the
+first is a bad value from the caller.
+
+The driver's message stays out of the response. `@dunx/http` sends `error.message`
+to the caller for a 4xx, and a driver names the table, the column and the index in
+its own: `duplicate key value violates unique constraint "users_email_key"` would
+put the schema in a response body. `ConstraintError` carries a generic message per
+kind and holds the original as `cause`, which is what gets logged.
+
+**Where it is applied.** `transaction`, `transactionSync` and `runSeeds` classify
+on the way out, those being the query paths this package owns. Drizzle owns the
+rest, and wrapping `db.insert()` would mean restating drizzle's surface, so a
+repository calls `toDatabaseError` in its own `catch` - one line, shown in
+`examples/full/src/users/users.repository.ts`.
+
+The codes were provoked out of `bun:sqlite`, Postgres 16 and MySQL 8.0 rather than
+read off a reference, and the shapes differ enough to matter: both `Bun.SQL`
+backends put their own label in `code` and the server's code in `errno`, reversing
+where `pg` and `mysql2` keep it. The table is in
+[bun-apis.md](../bun-apis.md).

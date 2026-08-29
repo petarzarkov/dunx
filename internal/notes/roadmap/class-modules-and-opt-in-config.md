@@ -6,10 +6,24 @@ below.
 
 W3 and W4 are done, and every `*Options` in the framework is a class:
 `QueueOptions`, `RedisOptions`, `DashboardOptions`, `StaticOptions`,
-`SqliteOptions`, `AuthOptions`. **W1, W1b, W2 and W6 are open** - `HttpOptions` is
-still a plain object `HttpFactory.create` evaluates before the container exists,
-`AppError` still carries no `status`, and `redisConnection(name)` is still a token
-function rather than a subclass.
+`SqliteOptions`, `AuthOptions`.
+
+**W1, W2, W6 and W0 are shipped.** `HttpOptionsProvider` is resolved from the
+container and promoted through `AppOptions.promote`; `AppError.status` carries an
+integer that `@dunx/http` reads, and `toDatabaseError` in `@dunx/infra/db` turns a
+driver constraint error into one; `HttpModule.forRoot(init, EmailClient)` binds a
+named outbound client as a subclass; the guide is `docs/guide/22-upgrading.md`.
+
+**W1b is withdrawn.** It would have deleted `setGlobalPrefix`, `enableCors`, `set`
+and `enableShutdownHooks` in favour of the provider alone. The owner's call is to
+keep them, matching what NestJS offers, and to unify the options and the validation
+without a breaking change. Each of those four now has a field on
+`HttpOptionsProvider` alongside it, applied at construction so a later method call
+wins.
+
+W6 covers `@dunx/infra/redis` too: `RedisModule.forRoot(init, SessionsRedis)` binds
+a named connection as a subclass, and `Redis` is exported so there is a concrete
+base to extend. **W5 and W7-W9 are open.**
 
 The rule to reach:
 
@@ -274,9 +288,19 @@ diff against the template is not specified well enough to ship.
 **Prerequisite: already met.** Module-scoped DI shipped in 1.0.0, and it changed what
 W1 means - see "What module scoping already settled" at the end.
 
-### W1 - `HttpOptionsProvider` (keystone)
+### W1 - `HttpOptionsProvider` (keystone) - shipped
 
-Above. Everything else is independent of each other but easier after this.
+`HttpOptionsProvider` is an abstract class with a default for every member,
+promoted through `AppOptions.promote` so a module binding a subclass replaces it.
+A `create()` argument still wins field by field, and the imperative methods are
+unchanged. Design and measurements: architecture/http.md, "HTTP options as a
+provider".
+
+The relay paragraph below is closed too: `WsRelayModule.forRootAsync` binds
+`RedisRelay` as a provider, `AppHttpOptions` takes it as a constructor parameter,
+and the container closes it at shutdown. `examples/full` hand-builds nothing.
+
+The analysis below is kept because it records why the shape is what it is.
 
 **The shape of the problem, absorbed from what used to be its own roadmap file.**
 `HttpOptions` is an argument to `HttpFactory.create`, which is the call that _builds_
@@ -297,11 +321,12 @@ inject })` produces `title`, `version`, `description`, `servers`, `path` and
 takes a `RoutePath` thunk resolved at route discovery, which runs after every
 provider has settled.
 
-**Hard part:** `relay: new RedisRelay({...})` is an _instance_ the app constructs.
-Under a provider it becomes a bound provider, which is better - but `RedisRelay`
-currently takes connection options the app assembles from config, so it wants the same
-treatment: `WsRelayModule.forRootAsync({ useFactory, inject })`. Do that in the same
-pass or the options provider still has one hand-built object in it.
+**Hard part, and it was done in the same pass:** `relay: new RedisRelay({...})` was
+an _instance_ the app constructed, so the options provider still had one hand-built
+object in it. `WsRelayModule.forRootAsync({ useFactory, inject })` binds it, with
+`RelayConnectionOptions` as the options class and a shutdown hook that closes the
+relay the container built - `PubSub.close()` reaches a relay only if a socket was
+opened, so an app that never took a connection used to leak one.
 
 ### W1b - the imperative surface, which is where IoC actually breaks
 
@@ -322,16 +347,27 @@ an order that matters, every one of which throws if called after `listen()`. Tha
 the opposite of declaring what you want and letting the container wire it. It is also
 why `main.ts` is a hundred lines that every consumer copies and then edits by hand.
 
-Under W1 all five are fields on the options provider:
+**As shipped, four of the five are fields on the options provider**, and the
+methods are all still there. `forceExitAfter()` is the fifth and has no field: its
+watchdog is `ShutdownHooks`' own, reached through `shutdownHooks.options` rather
+than a member of its own.
 
 ```ts
 export class AppHttpOptions extends HttpOptionsProvider {
-  constructor(private readonly config: AppConfigService) { super(); }
+  constructor(private readonly config: AppConfigService) {
+    super();
+    // A field deriving from config is assigned here: the base declares
+    // `trustProxy` as a field, and TS2611 rejects an accessor overriding one.
+    this.trustProxy = this.config.get('trustProxy');
+  }
 
   override get prefix() { return this.config.get('app').prefix; }
   override get cors() { return { origin: ..., credentials: ... }; }
-  override trustProxy = true;
-  override shutdown = { signals: ['SIGTERM', 'SIGINT'], forceExitAfterMs: 8000 };
+  override readonly trustProxy: boolean;
+  override readonly shutdownHooks = {
+    signals: ['SIGTERM', 'SIGINT'],
+    options: { exitAfterMs: 8000 },
+  };
 }
 ```
 
