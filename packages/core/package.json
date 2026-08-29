@@ -1,6 +1,6 @@
 {
   "name": "@dunx/core",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "DI container, modules, lifecycle and the injectable Logger contract for the dunx framework",
   "keywords": [
     "bun",

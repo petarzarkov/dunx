@@ -4,6 +4,50 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.0.4 - 2026-08-29
+
+A scaffolder you answer, not one you configure
+
+`bunx @dunx/create-app my-api` opens an arrow-key list instead of taking flags for
+what the app should do. Space toggles a feature, Enter takes the selection, and the
+two lines under the list recompute as the cursor moves: which features the selection
+pulls in, and which of them need Redis or Postgres running to do anything. Neither
+is something a flag could show.
+
+`--with`, `--all`, `--list` and `--template` are gone. `scaffold({ target, features })`
+is the scripted path, and `FEATURES` is exported beside it. `--name`, `--force`,
+`--yes` and `--help` remain, none of which chooses anything about the app. Piped or
+in CI it asks nothing and writes the minimal template, so a script never blocks on a
+question nothing can answer.
+
+No prompt library arrived with it. `setRawMode` is a `node:tty` built-in Bun
+implements natively, `Bun.stringWidth` and `Bun.sliceAnsi` measure and cut by
+terminal columns, `Bun.color` paints and `Bun.enableANSIColors` is the capability
+check. Bun 1.4 also ships `Bun.Terminal`, an undocumented PTY, so the suite answers
+the real CLI with real arrow keys rather than asserting against a mock of a terminal.
+
+A generated app also gains `bun run dev` and loses two files. `src/bootstrap.ts`
+exported `createApp` while `src/main.ts` declared a local function called `bootstrap`
+that imported it; there is one file now, serving under `import.meta.main`.
+`src/worker.ts` and its `worker` script were dead on arrival: `QueueModule` opens the
+bullmq workers itself and a `background: true` handler is forked into
+`jobs/jobs.processor.ts`.
+
+Note for anyone scripting the CLI: the four removed flags exit with "Unknown option"
+rather than being ignored, so a pinned range that expected them needs the
+programmatic `scaffold` call instead.
+
+### Features
+
+- **create-app**: pick what the app does from a list, not from flags ([`4d1df4d`](https://github.com/petarzarkov/dunx/commit/4d1df4d3bbf7ac1e978cceca1bdc9ed46c005bb5))
+- **docs**: a spark that laps the hero headline ([`8ad9894`](https://github.com/petarzarkov/dunx/commit/8ad98946b8217cd63bea90101e0f8f4576b3e1e5))
+- **docs**: run a request through the landing page's onion diagram ([`13d7673`](https://github.com/petarzarkov/dunx/commit/13d76732f68850e11771b91fad5feda569332248))
+
+### Fixes
+
+- **ci**: keep a gitignored tmp/ scaffold out of the test sweep ([`f6df3c8`](https://github.com/petarzarkov/dunx/commit/f6df3c8c428a67a7d6f6f06c909d322448abbf62))
+- **docs**: guard the sheen variable, and the observer stub's own contract ([`6e304e5`](https://github.com/petarzarkov/dunx/commit/6e304e588a717f1f8e064f55f14164bb43773418))
+
 ## 3.0.3 - 2026-08-27
 
 The scaffolder exits, and setup instructions an agent can fetch
