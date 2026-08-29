@@ -88,7 +88,12 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
       ],
       field: 'readonly corsOrigin: string;\n  readonly trustProxy: boolean;',
       map: 'corsOrigin: value.CORS_ORIGIN,\n    trustProxy: value.TRUST_PROXY,',
-      env: [{ name: 'CORS_ORIGIN', value: 'https://example.com' }],
+      env: [
+        { name: 'CORS_ORIGIN', value: 'https://example.com' },
+        // Written to `.env.example` so the setting is visible rather than only
+        // implied by the schema default.
+        { name: 'TRUST_PROXY', value: 'false' },
+      ],
     },
     database: {
       schema: [

@@ -6,7 +6,6 @@ import { Redis } from '@dunx/infra/redis';
  * can only be reached with `inject()` in a field. `cache.module.ts` binds it with
  * `RedisModule.forRootAsync(config, SessionsRedis)`.
  *
- * Splitting the session store off the cache is the reason to want a second one:
- * a `FLUSHDB` on the cache must not sign every user out.
+ * `cache.module.ts` binds it to database 1, which is what separates it.
  */
 export class SessionsRedis extends Redis {}

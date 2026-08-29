@@ -1,9 +1,20 @@
 import { Module } from '@dunx/core';
-import { RedisConnection, RedisModule } from '@dunx/infra/redis';
+import {
+  defaultRedisUrl,
+  RedisConnection,
+  RedisModule,
+} from '@dunx/infra/redis';
 import { AppConfigService } from '../config.js';
 import { CacheController } from './cache.controller.js';
 import { SessionsRedis } from './sessions.redis.js';
 import { Sessions } from './sessions.service.js';
+
+/** The configured server, database 1. A path already on the url is replaced. */
+const sessionsUrl = (url: string | undefined): string => {
+  const parsed = new URL(url ?? defaultRedisUrl());
+  parsed.pathname = '/1';
+  return parsed.href;
+};
 
 @Module({
   imports: [
@@ -26,21 +37,18 @@ import { Sessions } from './sessions.service.js';
       inject: [AppConfigService] as const,
     }),
     /**
-     * The same server, bound to a subclass rather than a name, so `SessionsRedis`
-     * is an ordinary constructor parameter. It does not claim `RedisConnection`,
-     * so the general-purpose connection above is untouched and the two hold
-     * separate clients.
+     * A subclass rather than a name, so `SessionsRedis` is an ordinary
+     * constructor parameter, and it does not claim `RedisConnection`. Database 1:
+     * separate clients do not isolate what a `FLUSHDB` reaches, so a shared
+     * database would mean flushing the cache signed every user out.
      */
     RedisModule.forRootAsync(
       {
-        useFactory: (config: AppConfigService) => {
-          const { url } = config.get('redis');
-          return {
-            ...(url === undefined ? {} : { url }),
-            connectionTimeout: 500,
-            maxRetries: 0,
-          };
-        },
+        useFactory: (config: AppConfigService) => ({
+          url: sessionsUrl(config.get('redis').url),
+          connectionTimeout: 500,
+          maxRetries: 0,
+        }),
         inject: [AppConfigService] as const,
       },
       SessionsRedis,
