@@ -4,6 +4,60 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.1.0 - 2026-08-29
+
+Options as providers, constraint statuses, and the 1.4 fetch options
+
+`HttpOptionsProvider` carries every HTTP setting and is resolved from the
+container, so a subclass injects `ConfigService` and answers from validated
+config. `AppOptions.promote` in `@dunx/core` is what binds it: core's own
+mechanism for `Logger` and `RequestContext`, now callable by a framework layer.
+An argument to `create()` still wins field by field, and `setGlobalPrefix`,
+`enableCors`, `set` and `enableShutdownHooks` are unchanged, each with a field
+alongside it applied at construction.
+
+`WsRelayModule` binds the websocket relay as a provider and closes it at
+shutdown, which `PubSub.close()` does not do for an app that never opened a
+socket.
+
+A named instance can be a subclass rather than a token, in both packages that had
+a token function: `HttpModule.forRoot(init, EmailClient)` in `@dunx/http/client`
+and `RedisModule.forRoot(init, SessionsRedis)` in `@dunx/infra/redis`. A subclass
+is a token and a parameter type, so it resolves as a constructor parameter.
+`Redis` is newly exported as the base to extend. Both string forms still work.
+
+`toDatabaseError` in `@dunx/infra/db` turns a driver constraint error into a
+`ConstraintError` carrying a status, 409 for unique and foreign key and 400 for
+not-null and check, through `AppError.status`, so nothing there imports the web
+layer. The driver's message stays on `cause` rather than in the response body.
+
+`HttpClientOptionsInit` passes `compress`, `protocol` and `maxRedirects` to
+fetch, and `proxy` widens to Bun's object form.
+
+One behaviour change: an unmatched path answers 404 rather than 401 in an app
+behind a global guard. `notFound: 'guarded'` restores it. `docs/guide/22-upgrading.md`
+covers each item.
+
+### Features
+
+- **http**: WsRelayModule, so the websocket relay is a provider ([`1092aa5`](https://github.com/petarzarkov/dunx/commit/1092aa564a3850c8c74552644b7ea6c0feea5936))
+- **infra**: a named Redis connection can be a subclass, and CodeRabbit's findings ([`ba4d788`](https://github.com/petarzarkov/dunx/commit/ba4d7885aa291583b8f24dec45f5f53812e74e87))
+- **bench,http**: the 1.4 fetch options, profiling in the harness, and A1/A5 measured ([`093fafe`](https://github.com/petarzarkov/dunx/commit/093fafe56a741351a2c7c12375c5a32008c38c17))
+- **http**: a named outbound client can be a subclass, not only a token ([`16caace`](https://github.com/petarzarkov/dunx/commit/16caacec92bcce496c610a9ae8d10cebdf462eda))
+- **http,infra**: HTTP options as a provider, and constraint errors that carry a status ([`073bed3`](https://github.com/petarzarkov/dunx/commit/073bed38d4448c9b081d9579064cbd82cd393d8f))
+
+### Fixes
+
+- **examples,create-app**: isolate the sessions database, and write every env entry ([`8f096b3`](https://github.com/petarzarkov/dunx/commit/8f096b306cada16b4b981ba3f6b8c5127aabbaf1))
+- **bench,http**: unprofiled startup samples, and a provider that can express shutdownHooks ([`ad1add5`](https://github.com/petarzarkov/dunx/commit/ad1add54ab333e8d96515d3fd884f11d3c90cf6d))
+
+### Documentation
+
+- **roadmap**: assign trustProxy in the W1b snippet, as the real example does ([`2e1ae4c`](https://github.com/petarzarkov/dunx/commit/2e1ae4c109a9cd9f5bc9193cd72d8d9cff771844))
+- link the filed bullmq issue for the worker shutdown hang ([`7494647`](https://github.com/petarzarkov/dunx/commit/7494647b7bd06ffbba5ab8234146c941e165b60c))
+- **roadmap**: record W1/W2/W6/W0 shipped, W1b withdrawn, A1-A5 settled ([`c733f30`](https://github.com/petarzarkov/dunx/commit/c733f3024a13cc128d9289771f954af6f3ac9338))
+- an upgrading guide, and leak B narrowed out of Bun ([`1c564db`](https://github.com/petarzarkov/dunx/commit/1c564db451ed2fe07e337df8907f7d6bc5bf3317))
+
 ## 3.0.5 - 2026-08-29
 
 Errors carry their own status, and the logger drains on the way out
