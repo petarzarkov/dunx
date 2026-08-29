@@ -286,11 +286,10 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                            | Shape                                                                                |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** Every item closed. W7 and W8 shipped; W1b, W5 and W9 withdrawn with reasons. |
-| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.        |
-| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                               | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined.     |
+| Item                                                                          | Shape                                                                            |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md) | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.    |
+| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined. |
 
 Delivered and moved out of this folder rather than left here marked done:
 
@@ -298,6 +297,17 @@ Delivered and moved out of this folder rather than left here marked done:
   in [architecture/benchmarks.md](./architecture/benchmarks.md).
 - **the MCP server** - shipped as `@dunx/mcp`; the reasoning is in
   [architecture/mcp.md](./architecture/mcp.md).
+- **class modules and opt-in config** - every option a class, every setting a
+  provider. `HttpOptionsProvider` and the argument-wins ordering are in
+  [architecture/http.md](./architecture/http.md); the named-instance subclasses,
+  the config schema and the document contributors are in
+  [Upgrading](./guide/22-upgrading.md). Three items were withdrawn rather than
+  built: the imperative `app.*` methods stay
+  ([architecture/http.md](./architecture/http.md)), a decorated module that also
+  configures itself keeps its override
+  ([architecture/dependency-injection.md](./architecture/dependency-injection.md)),
+  and `openapi.config.ts` stays
+  ([architecture/tooling.md](./architecture/tooling.md)).
 - **module-scoped DI** - shipped in 1.0.0, with `dunx-template` on 1.0.1. The scope
   model is in
   [architecture/dependency-injection.md](./architecture/dependency-injection.md), and
@@ -334,11 +344,11 @@ deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, an
 **queue dashboard page** is bull-board, mounted by `@dunx/dashboard`.
 
 `OpenApiModule.forRootAsync` closed the half of the options-before-container problem
-that `OpenApiModule` owned. The `HttpOptions` half is closed too, by
-[class-modules W1](../internal/notes/roadmap/class-modules-and-opt-in-config.md#w1---httpoptionsprovider-keystone):
-`HttpOptionsProvider` is a subclass resolved from the container, so the template no
-longer has to validate its config twice. See
-[Upgrading](./guide/22-upgrading.md) for what each imperative call maps to.
+that `OpenApiModule` owned, and `HttpOptionsProvider` closed the other:
+a subclass resolved from the container, so the template no longer validates its
+config twice. See [Upgrading](./guide/22-upgrading.md) for what each imperative
+call maps to, and
+[architecture/http.md](./architecture/http.md) for why the argument still wins.
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;

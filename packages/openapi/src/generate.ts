@@ -69,8 +69,9 @@ export interface DocumentFragment {
  *     super();
  *   }
  *
- *   override contribute(): DocumentFragment {
- *     return betterAuthDocument(this.auth, { basePath: '/api/auth' });
+ *   override async contribute(): Promise<DocumentFragment> {
+ *     // `betterAuthDocument` defers: asking for the schema is async.
+ *     return betterAuthDocument(this.auth, { basePath: '/api/auth' })();
  *   }
  * }
  *
