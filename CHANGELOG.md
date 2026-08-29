@@ -4,6 +4,32 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.1.1 - 2026-08-29
+
+A config schema, and contributions as providers
+
+`ConfigModule.forRoot` takes either `validate` or `schema`, and the type makes it
+exactly one. A Standard Schema is validated directly, so zod, Valibot and ArkType
+all work with no wrapper; its issues become a `ConfigError` naming each path.
+`StandardSchemaV1` moved from `@dunx/http` down to `@dunx/core`, which both
+needed, and `@dunx/http` re-exports the three names unchanged.
+
+`contribute` in `@dunx/openapi` also takes anything with a `contribute()` method,
+so a contributor that needs an injected instance is a provider rather than a
+closure over one. `DocumentSource` is the class to extend, and anything with the
+method satisfies it structurally.
+
+Both are additive: every existing `validate` and every fragment or thunk keeps
+working.
+
+### Features
+
+- **core,openapi**: a Standard Schema for config, and contributions as providers ([`cd3fbf8`](https://github.com/petarzarkov/dunx/commit/cd3fbf87c8e962a0076fa71c05c339b3912493a2))
+
+### Documentation
+
+- retire the class-modules note, per the folder's own rule ([`3eb567c`](https://github.com/petarzarkov/dunx/commit/3eb567c5fc00b8ca3dc244c7e905249fff349322))
+
 ## 3.1.0 - 2026-08-29
 
 Options as providers, constraint statuses, and the 1.4 fetch options
