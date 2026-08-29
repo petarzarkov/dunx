@@ -413,6 +413,14 @@ export const errorMapper =
         { status: error.status },
       );
     }
+    // Any `AppError` that named a status, whoever raised it.
+    if (error instanceof AppError && isStatus(error.status)) {
+      if (error.status >= 500) logger.error('Unhandled error', error);
+      return Response.json(
+        { error: error.message, status: error.status },
+        { status: error.status },
+      );
+    }
     logger.error('Unhandled error', error);
     return Response.json(
       {
@@ -452,6 +460,38 @@ const app = await HttpFactory.create(AppModule, {
 ```
 
 Falling through to `defaultErrorMapper` is the normal way to handle the rest.
+
+### An error is mapped by whoever raised it
+
+`AppError` carries an optional `status`, and that is how a package with no business
+importing the web layer still says what its failure means:
+
+```ts
+export class CursorError extends AppError {
+  override readonly name = 'CursorError';
+  override readonly status = 400;
+}
+```
+
+An integer is not a dependency. `@dunx/infra` must not import `@dunx/http`, so it
+cannot raise an `HttpError` or ship a filter that constructs one; it can set a
+number, and the default mapper reads it. `CursorError` and `PageOptionsError` in
+`@dunx/infra/pagination` already do, so a bad cursor is a 400 in an app that wrote
+no `catch` at all.
+
+Two details that follow from where the number is set:
+
+- **A 4xx is not logged as an incident.** It is the caller's mistake, and logging
+  one at error level is how a log fills with entries nobody can act on. A status of
+  500 or above still logs.
+- **The value is range-checked.** It is set by hand in a package that never sees a
+  `Response`, so a typo would otherwise reach `Response.json` as `status: 4000` and
+  throw a `RangeError` from the error path itself. Anything outside 200 to 599 falls
+  back to a 500.
+
+An `AppError` with no status is a 500 with its message withheld, which is the right
+answer for something like `CircularDependencyError`: a boot failure is not a
+response.
 
 ### `ErrorFilter`, when the mapper needs dependencies
 

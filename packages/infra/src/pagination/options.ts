@@ -50,6 +50,8 @@ export interface PageOptions {
 
 export class PageOptionsError extends AppError {
   override readonly name = 'PageOptionsError';
+  /** Page parameters the caller sent and got wrong. See {@link CursorError}. */
+  override readonly status = 400;
 }
 
 const one = (value: unknown): string | undefined => {

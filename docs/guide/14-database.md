@@ -700,9 +700,10 @@ asynchronous `Bun.SQL` one.
   document.
 - **No total count.** `hasNextPage` comes from fetching one row more than asked and
   dropping it, so there is no second `COUNT(*)`.
-- **No HTTP error.** A bad cursor throws `CursorError`; bad options throw
-  `PageOptionsError`. `@dunx/infra` must not depend on the web layer, so mapping them
-  to a 400 is yours.
+- **A 400 without a filter.** A bad cursor throws `CursorError`; bad options throw
+  `PageOptionsError`. Both extend `AppError` and carry `status = 400`, which is an
+  integer rather than a dependency on the web layer, and `@dunx/http`'s default
+  mapper turns it into the response. You write no `catch`.
 
 `examples/full` serves it at `GET /api/ledger/page`.
 

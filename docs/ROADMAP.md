@@ -20,7 +20,7 @@ other.
 | `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0                                    |
 | `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing                                 |
 | `@dunx/dashboard`  | Opt-in ops page, one middleware, bull-board mounted for queues                              |
-| `@dunx/create-app` | `bunx @dunx/create-app my-api` - base template plus feature folders                         |
+| `@dunx/create-app` | `bunx @dunx/create-app my-api` - an arrow-key feature list, base template plus folders      |
 | `@dunx/mcp`        | MCP server that reads an app's routes, providers and modules                                |
 
 Five of those are a library wired in rather than dunx code - never invent what a
@@ -29,7 +29,9 @@ drives `bun:sqlite`/`Bun.SQL` through its own Bun adapters; `bullmq` is one too 
 reaches Redis through `createBunRedisClient`; `swagger-ui-dist` is the `/docs` page
 and is optional too; `better-auth` is a required peer of `@dunx/auth`; `@arkv/logger`
 is a `dependency` and satisfies core's `Logger` contract structurally, with no
-adapter class in between.
+adapter class in between - and since 0.12 it brings the HTTP, syslog and sampling
+transports, `textFormat`/`logfmtFormat`, `setLevel` and `stats()`, all of which
+`@dunx/infra/logger` re-exports rather than restates.
 
 ## Priority: the core three, until someone who is not the owner files an issue
 
@@ -284,11 +286,11 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                            | Shape                                                                        |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.                |
-| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq's Bun adapter. Bun 1.4 fixed the other.  |
-| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                               | Five adopt items, one rejected on measurement, four defects closed for free. |
+| Item                                                                                            | Shape                                                                       |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.               |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq's Bun adapter. Bun 1.4 fixed the other. |
+| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                               | A1 partly adopted: `--parallel` is in the `unit` phase. A2-A5 open.         |
 
 Delivered and moved out of this folder rather than left here marked done:
 
@@ -309,6 +311,16 @@ Delivered and moved out of this folder rather than left here marked done:
 - **the landing page** - the hero, the lifecycle drawing, the motion and the light
   palette are built; what remains is judgement about the benchmark panel rather than
   work.
+- **the scaffolder's interface** - `bunx @dunx/create-app` asks with an arrow-key
+  list instead of taking `--with`, `--all`, `--list` and `--template`. The list shows
+  what a selection pulls in and what needs a service running, which a flag cannot.
+  Built on `setRawMode` and tested through `Bun.spawn({ terminal })`, a real PTY;
+  both are recorded in [bun-apis.md](./bun-apis.md).
+- **`@arkv/logger` 0.12** - the upstream work landed there rather than here, which is
+  the "improvements go into the `@arkv` repo" rule doing its job. What dunx changed is
+  one line: `LoggerLifecycle.onShutdown` drains with `closeAsync`, because a transport
+  whose sink is a network discards its queue on a synchronous `close()` and an app
+  shipping to a collector lost its last batch on every deploy.
 
 ### From porting nestjs-template to dunx-template
 

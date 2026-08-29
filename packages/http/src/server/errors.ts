@@ -15,7 +15,9 @@ export class HttpError extends AppError {
   readonly headers: Readonly<Record<string, string>> | undefined;
 
   constructor(
-    readonly status: number,
+    // Narrows `AppError`'s optional status to a required one: an `HttpError`
+    // exists to name a status, so there is no version of it without one.
+    override readonly status: number,
     message: string,
     options?: HttpErrorOptions,
   ) {
@@ -142,6 +144,24 @@ export const errorMapper =
         },
       );
     }
+    /**
+     * Any `AppError` that named a status, which is how a package with no business
+     * importing the web layer still says what its failure means. `@dunx/infra`
+     * cannot raise an `HttpError` without depending on `@dunx/http`; it can set an
+     * integer. Nothing is logged at error level here: a 4xx is the caller's
+     * mistake, not the server's, and logging one as an incident is how a log fills
+     * with noise nobody can act on.
+     */
+    if (error instanceof AppError && isStatus(error.status)) {
+      if (error.status >= HttpStatusCode.INTERNAL_SERVER_ERROR) {
+        logger.error('Unhandled error', error);
+      }
+      return Response.json(
+        { error: error.message, status: error.status },
+        { status: error.status },
+      );
+    }
+
     logger.error('Unhandled error', error);
     return Response.json(
       {
@@ -151,6 +171,17 @@ export const errorMapper =
       { status: HttpStatusCode.INTERNAL_SERVER_ERROR },
     );
   };
+
+/**
+ * A status a response can actually carry. A package outside `@dunx/http` sets this
+ * by hand, so a typo reaching `Response.json` as `status: 4000` would be a
+ * `RangeError` thrown from the error path itself.
+ */
+const isStatus = (value: number | undefined): value is number =>
+  value !== undefined &&
+  Number.isInteger(value) &&
+  value >= 200 &&
+  value <= 599;
 
 /**
  * The same mapper with no container behind it, for `buildRoutes` and

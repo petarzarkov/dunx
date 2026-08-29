@@ -360,6 +360,18 @@ there, and even those are a candidate for a `logStartup` option.
 
 ### W2 - an error is mapped by whoever raised it
 
+**Half shipped.** `AppError` carries an optional `status`, `@dunx/http`'s default
+mapper honours any error that names one and range-checks it, a 4xx no longer logs as
+an incident, and `CursorError`/`PageOptionsError` declare 400 - so the `catch` that
+used to be in the `CursorError` doc comment is deleted rather than documented.
+
+**What remains is the `bun:sqlite` half, and it is blocked on a design decision
+rather than on effort.** The plan says `@dunx/infra/db` catches `SQLiteError`, reads
+the constraint code and rethrows `DatabaseError` with 409 or 400. There is nowhere to
+catch it: drizzle owns the call, `@dunx/infra/db` has no interception point, and
+adding one means wrapping every query or making the repository base class mandatory.
+Both are larger than the item and neither is obviously right. Pick the seam first.
+
 `error-mapper.ts` is 130 lines and only about 20 are the app's own errors. The rest is
 knowledge that belongs to the package that produced the error:
 
