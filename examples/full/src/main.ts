@@ -12,7 +12,7 @@ import {
 } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
-import { AppConfigService, RELAY_CHANNEL, validate } from './config.js';
+import { AppConfigService, RELAY_CHANNEL } from './config.js';
 import { RequestTrailMiddleware } from './http/request-trail.js';
 
 /**
@@ -24,10 +24,6 @@ import { RequestTrailMiddleware } from './http/request-trail.js';
  * `listen()` each of these throws.
  */
 export const createApp = async (): Promise<HttpApp> => {
-  // Read before there is a container, so this is the one call to `validate`
-  // rather than `ConfigService.get`.
-  const log = validate(Bun.env).log;
-
   const app = await HttpFactory.create(
     // `forRootAsync` because `contribute` needs the `Auth` instance, which
     // `AppModule` exports and the graph cannot supply synchronously.
@@ -65,16 +61,12 @@ export const createApp = async (): Promise<HttpApp> => {
       }),
     }),
     {
-      requestLogging: {
-        // Off by default: both cost a `req.clone().text()` on the hot path.
-        requestBody: log.requestBody,
-        responseBody: log.responseBody,
-        // The dashboard polls every five seconds and would bury everything else.
-        ignorePrefix: ['/api/_dunx'],
-        // ~360 ns per request, so off by default. On here so `traceId` joins
-        // `requestId` and `@dunx/http/client` forwards it upstream.
-        trace: true,
-      },
+      /**
+       * `requestLogging`, `cors`, `prefix` and `trustProxy` are not here: they
+       * read from validated config, so `AppHttpOptions` answers them from inside
+       * the container (`http/http-options.ts`). What is left is the settings that
+       * are constructed objects rather than environment.
+       */
       websocket: { idleTimeout: 30 },
       // Multi-node websocket fan-out on `Bun.RedisClient`. No url, so it
       // resolves $VALKEY_URL, $REDIS_URL, then localhost. With no Redis running
@@ -84,10 +76,10 @@ export const createApp = async (): Promise<HttpApp> => {
     },
   );
 
-  // `listen(port)` rather than a `create()` option, so `PORT` goes through the
-  // same validation as everything else.
-  const config = app.get(AppConfigService);
-  app.setGlobalPrefix('api');
+  // The imperative half, unchanged and still supported: `use`, `set`,
+  // `enableCors` and `setGlobalPrefix` all still work, and a call here wins over
+  // the provider because it happens after construction.
+  //
   // First, ahead of everything. Its `authorize` answers 404 to a stranger; a
   // guard running earlier would answer 401 and confirm the mount exists.
   app.use(DashboardMiddleware);
@@ -97,13 +89,6 @@ export const createApp = async (): Promise<HttpApp> => {
   app.use(RequestTrailMiddleware);
   // After anything that establishes the caller, since that decides the subject.
   app.use(ThrottleGuard);
-  app.set('trust proxy', true);
-  app.enableCors({
-    origin: config.get('corsOrigin'),
-    credentials: true,
-    exposedHeaders: ['x-handled-by'],
-    maxAge: 600,
-  });
   return app;
 };
 

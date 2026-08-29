@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import type { BunSQLDatabase } from 'drizzle-orm/bun-sql';
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import type { SyncDatabase } from './sqlite/connection.js';
+import { toDatabaseError } from './errors.js';
 
 /**
  * The handle drizzle hands a Postgres transaction callback. Derived from
@@ -134,15 +135,25 @@ export function transaction<TSchema extends Record<string, unknown>, T>(
 ): Promise<T> {
   // The two backends take different handles, so the callback is narrowed by the
   // same test that picks the implementation.
+  //
+  // Both arms are classified on the way out: a transaction is a seam this package
+  // owns, so a unique violation inside one arrives as a `ConstraintError` with a
+  // 409 rather than as the driver's error and a 500.
   if (db instanceof BunSQLiteDatabase) {
     return sqliteTransaction(
       db,
       fn as (tx: BunSQLiteDatabase<TSchema>) => T | Promise<T>,
-    );
+    ).catch((error: unknown) => {
+      throw toDatabaseError(error);
+    });
   }
 
   const callback = fn as (tx: SqlTransaction<TSchema>) => T | Promise<T>;
-  return db.transaction(async (tx) => callback(tx));
+  return db
+    .transaction(async (tx) => callback(tx))
+    .catch((error: unknown) => {
+      throw toDatabaseError(error);
+    });
 }
 
 /**
@@ -160,4 +171,10 @@ export function transaction<TSchema extends Record<string, unknown>, T>(
 export const transactionSync = <TSchema extends Record<string, unknown>, T>(
   db: SyncDatabase<TSchema>,
   fn: (tx: SyncTransaction<TSchema>) => T,
-): NoPromise<T> => db.transaction(fn) as NoPromise<T>;
+): NoPromise<T> => {
+  try {
+    return db.transaction(fn) as NoPromise<T>;
+  } catch (error) {
+    throw toDatabaseError(error);
+  }
+};

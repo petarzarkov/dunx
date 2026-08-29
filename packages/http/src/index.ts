@@ -65,6 +65,10 @@ export {
   type HttpApp,
   type HttpOptions,
 } from './server/factory.js';
+export {
+  DefaultHttpOptions,
+  HttpOptionsProvider,
+} from './server/options-provider.js';
 export { REQUEST_ID_HEADER } from './server/request-id.js';
 // W3C Trace Context, off unless `requestLogging: { trace: true }` asks for it.
 // One header parsed and one written - no exporter, no sampler, no dependency.

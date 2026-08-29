@@ -148,10 +148,21 @@ exists for the thing `{ dir }` has no way to express:
 - **Every method is served.** `DELETE /assets/app.js` returns 200 and the file body,
   and `OPTIONS` returns the file instead of CORS preflight headers.
 
-So this is an upstream ask before it is an adoption. File both, and revisit. Until
-then `StaticFiles` keeps its justification, and the gap in the other direction -
-dunx serves no `ETag` and answers no conditional request - stays open on purpose,
-because closing it by hand is the reimplementation Rule 1 forbids.
+So this is an upstream ask before it is an adoption. **Both re-verified on 1.4.0 rev
+34cbb9a40 and both filed:**
+
+- [oven-sh/bun#40892](https://github.com/oven-sh/bun/issues/40892) - `{ dir }` routes
+  accept a `headers` option and ignore it, so a hashed bundle cannot be served with
+  an `immutable` max-age.
+- [oven-sh/bun#40893](https://github.com/oven-sh/bun/issues/40893) - `{ dir }` routes
+  answer every method. `DELETE /assets/app.js` returns 200 and the file body, and
+  `OPTIONS` returns the file instead of the `Allow` a CORS preflight needs.
+
+Revisit when either closes. Until then `StaticFiles` keeps its justification, and the
+gap in the other direction - dunx serves no `ETag` and answers no conditional request
+
+- stays open on purpose, because closing it by hand is the reimplementation Rule 1
+  forbids.
 
 ### A4 - profiling flags in the bench harness
 

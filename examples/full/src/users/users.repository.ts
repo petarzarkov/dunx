@@ -1,4 +1,4 @@
-import { SyncDatabase } from '@dunx/infra/db';
+import { SyncDatabase, toDatabaseError } from '@dunx/infra/db';
 import { eq, like, sql } from 'drizzle-orm';
 import * as schema from '../database/schema.js';
 import { users, type User } from '../database/schema.js';
@@ -44,7 +44,17 @@ export class UsersRepository {
     return this.db.select().from(users).where(eq(users.id, id)).get() ?? null;
   }
 
+  /**
+   * `name` is UNIQUE, so a repeat is a conflict rather than a server fault.
+   * `toDatabaseError` turns the driver's `SQLITE_CONSTRAINT_UNIQUE` into a
+   * `ConstraintError` carrying 409, and `@dunx/http` reads the status off it -
+   * no error filter, and nothing here knows what a Response is.
+   */
   async create(name: string): Promise<User> {
-    return this.db.insert(users).values({ name }).returning().get();
+    try {
+      return this.db.insert(users).values({ name }).returning().get();
+    } catch (error) {
+      throw toDatabaseError(error);
+    }
   }
 }

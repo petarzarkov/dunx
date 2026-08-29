@@ -492,3 +492,25 @@ it('leaves a defaulted constructor parameter to its default', async () => {
   expect(status).toBe(200);
   expect(body.retries).toBe(3);
 });
+
+it('answers 409 for a duplicate, from the driver error alone', async () => {
+  const name = `dup-${Date.now()}`;
+
+  const created = await json<{ id: number }>('users', post({ name }));
+  expect(created.status).toBe(201);
+
+  // `name` is UNIQUE. The repository rethrows through `toDatabaseError`, which
+  // turns SQLite's `SQLITE_CONSTRAINT_UNIQUE` into a `ConstraintError` carrying
+  // a 409; `@dunx/http` reads the status off `AppError`. No error filter is
+  // registered, and `@dunx/infra` never imports the web layer.
+  const again = await json<{ error: string; status: number }>(
+    'users',
+    post({ name }),
+  );
+  expect(again.status).toBe(409);
+  expect(again.body.status).toBe(409);
+
+  // The driver's message names the table and the column, so it stays on `cause`
+  // and out of the body.
+  expect(again.body.error).not.toContain('users.name');
+});

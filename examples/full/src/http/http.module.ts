@@ -1,5 +1,6 @@
-import { Module } from '@dunx/core';
-import { CompressionModule } from '@dunx/http';
+import { Module, provide } from '@dunx/core';
+import { CompressionModule, HttpOptionsProvider } from '@dunx/http';
+import { AppHttpOptions } from './http-options.js';
 import { CompressionDemo } from './compression.demo.js';
 import { TraceController } from './trace.controller.js';
 import { TraceDemo } from './trace.demo.js';
@@ -22,6 +23,9 @@ import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
   ],
   controllers: [TraceController],
   providers: [
+    // The HTTP settings that read from config, resolved after the container
+    // exists. `HttpFactory` promotes a default, so binding this replaces it.
+    provide(HttpOptionsProvider, { useClass: AppHttpOptions }),
     RequestTrail,
     RequestTrailMiddleware,
     HttpDemo,
@@ -29,6 +33,7 @@ import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
     TraceDemo,
   ],
   exports: [
+    HttpOptionsProvider,
     RequestTrail,
     RequestTrailMiddleware,
     HttpDemo,
