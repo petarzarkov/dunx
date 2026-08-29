@@ -6,10 +6,24 @@ below.
 
 W3 and W4 are done, and every `*Options` in the framework is a class:
 `QueueOptions`, `RedisOptions`, `DashboardOptions`, `StaticOptions`,
-`SqliteOptions`, `AuthOptions`. **W1, W1b, W2 and W6 are open** - `HttpOptions` is
-still a plain object `HttpFactory.create` evaluates before the container exists,
-`AppError` still carries no `status`, and `redisConnection(name)` is still a token
-function rather than a subclass.
+`SqliteOptions`, `AuthOptions`.
+
+**W1, W2, W6 and W0 are shipped.** `HttpOptionsProvider` is resolved from the
+container and promoted through `AppOptions.promote`; `AppError.status` carries an
+integer that `@dunx/http` reads, and `toDatabaseError` in `@dunx/infra/db` turns a
+driver constraint error into one; `HttpModule.forRoot(init, EmailClient)` binds a
+named outbound client as a subclass; the guide is `docs/guide/22-upgrading.md`.
+
+**W1b is withdrawn.** It would have deleted `setGlobalPrefix`, `enableCors`, `set`
+and `enableShutdownHooks` in favour of the provider alone. The owner's call is to
+keep them, matching what NestJS offers, and to unify the options and the validation
+without a breaking change. Each of those four now has a field on
+`HttpOptionsProvider` alongside it, applied at construction so a later method call
+wins.
+
+**W5 and W7-W9 are open**, and `redisConnection(name)` is still a token function
+rather than a subclass - W6's treatment applied to `@dunx/infra/redis` is the
+obvious follow-up.
 
 The rule to reach:
 

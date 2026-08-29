@@ -286,11 +286,11 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                            | Shape                                                                       |
-| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.               |
-| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq's Bun adapter. Bun 1.4 fixed the other. |
-| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                               | A1 partly adopted: `--parallel` is in the `unit` phase. A2-A5 open.         |
+| Item                                                                                            | Shape                                                                            |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** W1, W2, W6 and W0 shipped. W1b withdrawn. W5, W7-W9 remain.              |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.    |
+| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                               | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined. |
 
 Delivered and moved out of this folder rather than left here marked done:
 
