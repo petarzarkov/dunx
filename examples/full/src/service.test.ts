@@ -113,6 +113,37 @@ it('serves the ledger over drizzle, seeded at onInit', async () => {
   expect(typeof page.balance).toBe('number');
 });
 
+it('answers a bad cursor with a 400 that nothing in this app maps', async () => {
+  const { status, body } = await json<{ error: string; status: number }>(
+    'ledger/page?cursor=not-a-cursor',
+  );
+
+  // `CursorError` is raised by `@dunx/infra/pagination`, which must not depend on
+  // the web layer and so cannot raise an `HttpError`. It carries `status = 400`
+  // instead, and `@dunx/http`'s default mapper reads it. No controller here
+  // catches anything: that `catch` used to be the app's to write.
+  expect(status).toBe(400);
+  expect(body.status).toBe(400);
+});
+
+it('walks the ledger by cursor', async () => {
+  const first = await json<{
+    data: unknown[];
+    meta: { nextCursor: string | null };
+  }>('ledger/page?take=1');
+
+  expect(first.status).toBe(200);
+  expect(first.body.data).toHaveLength(1);
+
+  const cursor = first.body.meta.nextCursor;
+  if (cursor !== null) {
+    const second = await json<{ data: unknown[] }>(
+      `ledger/page?take=1&cursor=${encodeURIComponent(cursor)}`,
+    );
+    expect(second.status).toBe(200);
+  }
+});
+
 it('rolls a transfer back as one unit, observably', async () => {
   const entries = async (): Promise<number> =>
     (await json<{ entries: unknown[] }>('ledger')).body.entries.length;
