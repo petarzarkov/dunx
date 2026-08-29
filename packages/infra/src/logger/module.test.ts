@@ -383,3 +383,103 @@ describe('LoggerModule', () => {
     expect(process.listenerCount('unhandledRejection')).toBe(unhandled);
   });
 });
+
+/**
+ * A sink that can only answer asynchronously, which is every collector reached
+ * over a network. `close()` on one discards what it is holding; `closeAsync()` is
+ * the half that drains.
+ */
+class AsyncSink implements Transport {
+  readonly sent: string[] = [];
+  #queued: string[] = [];
+  closedSync = false;
+
+  write(entry: { message?: unknown }): void {
+    this.#queued.push(String(entry['message']));
+  }
+
+  close(): void {
+    // What a sync shutdown does to a batch: it is simply gone.
+    this.closedSync = true;
+    this.#queued = [];
+  }
+
+  async closeAsync(): Promise<void> {
+    await Bun.sleep(1);
+    this.sent.push(...this.#queued);
+    this.#queued = [];
+  }
+}
+
+describe('shutting the logger down', () => {
+  it('drains a transport that can only answer asynchronously', async () => {
+    const sink = new AsyncSink();
+
+    @Module({ imports: [LoggerModule.forRoot({ transports: [sink] })] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    app.get(Logger).info('the last thing before the pod goes away');
+    await app.shutdown();
+
+    // Without the await this entry was discarded on every deploy.
+    expect(sink.sent).toEqual(['the last thing before the pod goes away']);
+    expect(sink.closedSync).toBe(false);
+  });
+
+  it('still closes a transport that only answers synchronously', async () => {
+    let closed = false;
+    const sink: Transport = {
+      write: () => undefined,
+      close: () => {
+        closed = true;
+      },
+    };
+
+    @Module({ imports: [LoggerModule.forRoot({ transports: [sink] })] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    await app.shutdown();
+
+    expect(closed).toBe(true);
+  });
+});
+
+describe('the backing logger', () => {
+  it('can be turned to debug on a running app, children included', async () => {
+    const sink = new MemoryTransport();
+
+    @Module({
+      imports: [
+        LoggerModule.forRoot({ level: LogLevel.INFO, transports: [sink] }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const backing = app.get(BackingLogger);
+    const child = backing.child({ module: 'orders' });
+
+    child.debug('before');
+    backing.setLevel(BackingLogLevel.DEBUG);
+    child.debug('after');
+    await app.shutdown();
+
+    expect(sink.entries.map((each) => each['message'])).toEqual(['after']);
+  });
+
+  it('reports what its transports are holding', async () => {
+    const sink = new MemoryTransport();
+
+    @Module({ imports: [LoggerModule.forRoot({ transports: [sink] })] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    const stats = app.get(BackingLogger).stats();
+    await app.shutdown();
+
+    // MemoryTransport keeps no counters, so it reports none rather than zeroes.
+    expect(stats).toEqual([]);
+  });
+});

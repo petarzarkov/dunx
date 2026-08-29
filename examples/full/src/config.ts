@@ -16,6 +16,12 @@ const envSchema = z.object({
    * `req.clone().text()`, and the pair costs about two thirds of the throughput
    * on `internal/bench`'s `validate` scenario.
    */
+  /**
+   * How an entry is rendered. `json` is what a shipper reads, `text` is the
+   * human line for a terminal, `logfmt` is the `key=value` shape Loki and Splunk
+   * parse without a schema.
+   */
+  LOG_FORMAT: z.enum(['json', 'text', 'logfmt']).default('json'),
   LOG_REQUEST_BODY: z.stringbool().default(true),
   LOG_RESPONSE_BODY: z.stringbool().default(true),
   CORS_ORIGIN: z.string().default('https://example.com'),
@@ -49,6 +55,7 @@ export interface AppConfig {
   readonly log: {
     readonly level: LogLevel;
     readonly file: string | undefined;
+    readonly format: 'json' | 'text' | 'logfmt';
     readonly requestBody: boolean;
     readonly responseBody: boolean;
   };
@@ -86,6 +93,7 @@ export const validate = (env: ConfigSource): AppConfig => {
     log: {
       level: value.LOG_LEVEL,
       file: value.LOG_FILE,
+      format: value.LOG_FORMAT,
       requestBody: value.LOG_REQUEST_BODY,
       responseBody: value.LOG_RESPONSE_BODY,
     },
