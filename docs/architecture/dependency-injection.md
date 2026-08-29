@@ -464,3 +464,36 @@ create(req: BunRequest<'/users'>, input: { body: CreateUser; query: Paging }) {}
 
 Validation targets the **Standard Schema** spec (`~standard.validate`), so
 Zod 4, Valibot, and ArkType all work with zero dependencies in `@dunx/*`.
+
+## A decorated module that also configures itself
+
+`resolveRef` merges a `DynamicModule`'s options with the `@Module` metadata on the
+class it names, and a provider declared in both resolves to the one `forRoot()`
+returned. That override is the feature, not a leftover:
+
+```ts
+@Module({
+  providers: [provide(Settings, { useValue: new Settings('default') })],
+})
+class Configurable {
+  static forRoot(value: string): DynamicModule {
+    return {
+      module: Configurable,
+      providers: [provide(Settings, { useValue: new Settings(value) })],
+    };
+  }
+}
+```
+
+The decorator carries the default and the factory carries the configured value, so
+one class serves both an app that configures it and a test that does not.
+`module-compose.test.ts` pins it.
+
+**It used to be a duplicate-binding error**, because the two lists were
+concatenated. `union` and `unionProviders` replaced `concat`, keying on the token
+so a collision resolves rather than throws.
+
+Making that collision an error again was proposed and implemented, and it broke
+three of those tests: forbidding the collision forbids the feature, since the
+collision is how a default gets replaced. If the silent half ever needs
+surfacing, it is a `warnings` entry naming the class and the token, not an error.

@@ -22,7 +22,10 @@ export {
 } from './metadata.js';
 export { describeRoutes } from './discover.js';
 export {
+  DocumentSource,
   generateDocument,
+  type DocumentContributor,
+  type DocumentFragment,
   type DocumentInfo,
   type GeneratedDocument,
 } from './generate.js';

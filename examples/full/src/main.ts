@@ -1,4 +1,3 @@
-import { betterAuthDocument, Auth } from '@dunx/auth';
 import { Logger } from '@dunx/core';
 import { DashboardMiddleware } from '@dunx/dashboard';
 import {
@@ -11,6 +10,7 @@ import {
 } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
+import { AuthDocs, AuthDocsModule } from './auth-docs.js';
 import { AppConfigService } from './config.js';
 import { RequestTrailMiddleware } from './http/request-trail.js';
 
@@ -24,21 +24,21 @@ import { RequestTrailMiddleware } from './http/request-trail.js';
  */
 export const createApp = async (): Promise<HttpApp> => {
   const app = await HttpFactory.create(
-    // `forRootAsync` because `contribute` needs the `Auth` instance, which
-    // `AppModule` exports and the graph cannot supply synchronously.
+    // `forRootAsync` because `contribute` needs `AuthDocs`, which the container
+    // owns and the graph cannot supply synchronously.
     OpenApiModule.forRootAsync({
       root: AppModule,
-      inject: [Auth] as const,
-      useFactory: (auth: Auth) => ({
+      // Its own scope, so the module exporting `AuthDocs` goes in *these*
+      // imports; importing it into the root does not reach the factory.
+      imports: [AuthDocsModule],
+      inject: [AuthDocs] as const,
+      useFactory: (authDocs: AuthDocs) => ({
         title: 'dunx full example',
         version: '0.1.0',
         description:
           'Every part of dunx in one service. Generated from the same zod schemas the routes validate against.',
-        // better-auth answers `/api/auth/*` itself, so route discovery sees
-        // none of it; this merges the library's own schema in.
-        contribute: [
-          betterAuthDocument(auth, { basePath: '/api/auth', tag: 'Auth' }),
-        ],
+        // A provider, asked for its fragment when the document is generated.
+        contribute: [authDocs],
         /**
          * Every Swagger UI parameter is available; these are a sample.
          * `requestInterceptor` takes the source of an expression, not a

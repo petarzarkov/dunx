@@ -14,34 +14,50 @@ import { validate, AppConfigService } from './config.js';
 export class AppModule {}
 ```
 
-## One validation function in place of a schema DSL
+## A schema, or a function
 
-`ConfigModule.forRoot` takes exactly one required option:
+`forRoot` takes exactly one of the two, and the type enforces it.
 
 ```ts
-interface ConfigModuleOptions<T extends object> {
-  validate: (env: ConfigSource) => T | Promise<T>;
+ConfigModule.forRoot({ schema: envSchema, as: AppConfigService });
+```
+
+`schema` is any Standard Schema, so zod 4, Valibot and ArkType all work and dunx
+names no vendor. A failure fails boot with a `ConfigError` listing every issue and
+its path, rather than whatever shape the library throws.
+
+## One validation function in place of a schema DSL
+
+`ConfigModule.forRoot` takes one required option, in either spelling:
+
+```ts
+type ConfigModuleOptions<T extends object> = {
   source?: ConfigSource;
   as?: new (values: T) => ConfigService<T>;
-}
+} & (
+  | { validate: (env: ConfigSource) => T | Promise<T>; schema?: undefined }
+  | { schema: StandardSchemaV1<unknown, T>; validate?: undefined }
+);
 ```
 
 `validate` receives the raw key/value pairs and returns the shaped, typed object.
 Whatever it throws is what boot fails with, so throw something whose message says
-which keys are wrong.
+which keys are wrong. `schema` is the same step handed to a Standard Schema
+instead, and its issues become a `ConfigError` naming each path.
 
 That is the whole contract. There is no `envFilePath`, no `load: [...]`, no
-`validationSchema`, no `expandVariables`.
+`expandVariables`.
 
 A schema DSL can only express what its author anticipated; a function expresses
 everything. Grouping flat variables into nested objects, deriving one value from
 two others, reading a secret out of a file, calling a secret manager: each is
 ordinary code inside `validate`, and none needs an option added to dunx.
 
-With zod it is one line:
+With zod it is one line, or none at all if the schema is the whole of it:
 
 ```ts
 const validate = (env: ConfigSource): AppConfig => envSchema.parse(env);
+// or: ConfigModule.forRoot({ schema: envSchema, as: AppConfigService })
 ```
 
 A hand-written function works identically and costs no dependency:

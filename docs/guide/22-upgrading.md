@@ -122,6 +122,45 @@ answer from config.
 The container closes it at shutdown, which `PubSub.close()` does not do for an app
 that never opened a socket. Passing an instance to `create()` still works.
 
+## Config takes a schema directly
+
+`validate: (env) => envSchema.parse(env)` still works. The wrapper is now optional:
+
+| Before                                    | After               |
+| ----------------------------------------- | ------------------- |
+| `validate: (env) => envSchema.parse(env)` | `schema: envSchema` |
+
+One or the other, never both. A schema failure becomes a `ConfigError` naming
+every issue and its path.
+
+## An OpenAPI contribution can be a provider
+
+`contribute` took a fragment or a thunk. It now also takes anything with a
+`contribute()` method, so a contributor that needs an injected instance is a
+provider rather than a closure:
+
+```ts
+export class AuthDocs extends DocumentSource {
+  constructor(private readonly auth: Auth) {
+    super();
+  }
+
+  override async contribute(): Promise<DocumentFragment> {
+    return betterAuthDocument(this.auth, { basePath: '/api/auth' })();
+  }
+}
+
+OpenApiModule.forRootAsync({
+  root: AppModule,
+  imports: [DocsModule],
+  inject: [AuthDocs],
+  useFactory: (docs: AuthDocs) => ({ contribute: [docs] }),
+});
+```
+
+`imports` is what puts `AuthDocs` in reach: the module is its own scope, so
+importing its module into the root does not reach this factory.
+
 ## A constraint violation answers 409
 
 A unique violation reaching the HTTP layer used to answer 500.

@@ -312,3 +312,25 @@ took Bun's ~25 % larger output, which is right for a site. Both numbers have sin
 been re-measured and reversed - see "Documentation site" above. The dashboard bundle
 is inlined into a page a backend serves, so Rollup's tree-shaking wins there and the
 ~1.5 s is paid once per package build.
+
+## Why `openapi.config.ts` stays
+
+`bunx dunx-openapi` takes either a bare module or a config file:
+
+```
+bunx dunx-openapi ./src/app.module.ts
+bunx dunx-openapi ./src/openapi.config.ts --out public/openapi.json
+```
+
+The first form needs no config file at all: `findRootModule` and `describeRoutes`
+read the routes statically, and no server is constructed.
+
+The file was proposed for deletion, on the theory that a root module plus a
+document contributor could be read statically the way `@dunx/mcp` reads routes. A
+contributor cannot. It describes endpoints some library owns, and asking
+better-auth for its schema means constructing better-auth, so there is nothing
+static to read.
+
+So the split is: routes are static and need no file, contributions are not and do.
+`DocumentSource` improved the file rather than removing it, since a config file
+can now hand over a provider instead of a thunk.
