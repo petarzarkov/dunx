@@ -11,8 +11,10 @@
 export {
   defaultRedisUrl,
   isConnectionError,
+  type ConnectionTarget,
   isServerError,
   type MessageListener,
+  Redis,
   REDIS_PROTOCOLS,
   type RedisArg,
   redisConnection,

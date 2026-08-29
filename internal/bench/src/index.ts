@@ -30,8 +30,11 @@ const report = await runSuite(
 );
 
 if (options.profile !== undefined) {
+  // "requested", not "written": only a Bun subject takes the flags, and a
+  // subject that ignores SIGTERM falls back to SIGKILL and writes nothing. The
+  // directory is the honest thing to report.
   process.stderr.write(
-    `\n${options.profile} profiles written to ${options.profileDir}\n`,
+    `\n${options.profile} profiling requested; any profiles are in ${options.profileDir}\n`,
   );
 }
 

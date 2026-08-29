@@ -21,9 +21,9 @@ without a breaking change. Each of those four now has a field on
 `HttpOptionsProvider` alongside it, applied at construction so a later method call
 wins.
 
-**W5 and W7-W9 are open**, and `redisConnection(name)` is still a token function
-rather than a subclass - W6's treatment applied to `@dunx/infra/redis` is the
-obvious follow-up.
+W6 covers `@dunx/infra/redis` too: `RedisModule.forRoot(init, SessionsRedis)` binds
+a named connection as a subclass, and `Redis` is exported so there is a concrete
+base to extend. **W5 and W7-W9 are open.**
 
 The rule to reach:
 
@@ -288,9 +288,20 @@ diff against the template is not specified well enough to ship.
 **Prerequisite: already met.** Module-scoped DI shipped in 1.0.0, and it changed what
 W1 means - see "What module scoping already settled" at the end.
 
-### W1 - `HttpOptionsProvider` (keystone)
+### W1 - `HttpOptionsProvider` (keystone) - shipped
 
-Above. Everything else is independent of each other but easier after this.
+`HttpOptionsProvider` is an abstract class with a default for every member,
+promoted through `AppOptions.promote` so a module binding a subclass replaces it.
+A `create()` argument still wins field by field, and the imperative methods are
+unchanged. Design and measurements: architecture/http.md, "HTTP options as a
+provider".
+
+**One part of it is still open**, and it is the relay paragraph below:
+`relay: new RedisRelay({...})` is still an instance the app constructs and passes
+to `create()`, so `examples/full` still hand-builds one object. `WsRelayModule` is
+the follow-up.
+
+The analysis below is kept because it records why the shape is what it is.
 
 **The shape of the problem, absorbed from what used to be its own roadmap file.**
 `HttpOptions` is an argument to `HttpFactory.create`, which is the call that _builds_

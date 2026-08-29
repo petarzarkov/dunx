@@ -77,9 +77,17 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
       env: [{ name: 'LOG_LEVEL', value: 'info' }],
     },
     corsOrigin: {
-      schema: ["CORS_ORIGIN: z.string().default('https://example.com'),"],
-      field: 'readonly corsOrigin: string;',
-      map: 'corsOrigin: value.CORS_ORIGIN,',
+      schema: [
+        "CORS_ORIGIN: z.string().default('https://example.com'),",
+        '/**',
+        ' * Whether `x-forwarded-for` is believed. Off unless a trusted proxy is in',
+        ' * front: with nothing stripping the header, any caller picks its own',
+        ' * address, which fakes both rate limiting and the logged client address.',
+        ' */',
+        'TRUST_PROXY: z.stringbool().default(false),',
+      ],
+      field: 'readonly corsOrigin: string;\n  readonly trustProxy: boolean;',
+      map: 'corsOrigin: value.CORS_ORIGIN,\n    trustProxy: value.TRUST_PROXY,',
       env: [{ name: 'CORS_ORIGIN', value: 'https://example.com' }],
     },
     database: {

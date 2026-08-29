@@ -88,6 +88,26 @@ HttpModule.forRootAsync({ useFactory, inject }, EmailClient);
 The string form still works. A subclass does not claim `HttpService`, so a default
 client and any number of named ones coexist.
 
+## A named Redis connection can be a class
+
+The same change, in `@dunx/infra/redis`. `redisConnection(name)` returns a `Token`,
+so a named connection could only be reached with `inject()` in a field.
+
+```ts
+export class SessionsRedis extends Redis {}
+
+RedisModule.forRootAsync({ useFactory, inject }, SessionsRedis);
+```
+
+| Before                                                 | After                                         |
+| ------------------------------------------------------ | --------------------------------------------- |
+| `readonly redis = inject(redisConnection('sessions'))` | `constructor(private redis: SessionsRedis)`   |
+| `RedisModule.forRoot({ name: 'sessions', ... })`       | `RedisModule.forRoot({ ... }, SessionsRedis)` |
+
+`Redis` is now exported for this: `RedisConnection` is the abstract contract and
+takes no options, so it cannot be the base a subclass extends. The string form
+still works, and a subclass does not claim `RedisConnection`.
+
 ## A constraint violation answers 409
 
 A unique violation reaching the HTTP layer used to answer 500.

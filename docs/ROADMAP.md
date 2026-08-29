@@ -334,10 +334,11 @@ deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, an
 **queue dashboard page** is bull-board, mounted by `@dunx/dashboard`.
 
 `OpenApiModule.forRootAsync` closed the half of the options-before-container problem
-that `OpenApiModule` owned. The `HttpOptions` half is still open - it is
-[class-modules W1](../internal/notes/roadmap/class-modules-and-opt-in-config.md#w1---httpoptionsprovider-keystone),
-which absorbed the analysis when that item stopped being a file of its own - and the
-template still validates its config twice because of it.
+that `OpenApiModule` owned. The `HttpOptions` half is closed too, by
+[class-modules W1](../internal/notes/roadmap/class-modules-and-opt-in-config.md#w1---httpoptionsprovider-keystone):
+`HttpOptionsProvider` is a subclass resolved from the container, so the template no
+longer has to validate its config twice. See
+[Upgrading](./guide/22-upgrading.md) for what each imperative call maps to.
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;

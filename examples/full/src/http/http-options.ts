@@ -21,11 +21,16 @@ import { AppConfigService } from '../config.js';
 export class AppHttpOptions extends HttpOptionsProvider {
   constructor(private readonly config: AppConfigService) {
     super();
+    this.trustProxy = this.config.get('trustProxy');
   }
 
-  // A field on the base, so a field here - TypeScript rejects an accessor
-  // overriding a field (TS2611).
-  override readonly trustProxy = true;
+  /**
+   * A field on the base, so a field here (TS2611 rejects an accessor), assigned in
+   * the constructor, which is how a field derives from config. Defaults to
+   * **false**: believing `x-forwarded-for` with no proxy stripping it lets any
+   * caller pick its own address, faking the throttle subject and the logged one.
+   */
+  override readonly trustProxy: boolean;
 
   override get prefix(): string {
     return 'api';
