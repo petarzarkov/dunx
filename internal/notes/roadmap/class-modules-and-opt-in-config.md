@@ -354,11 +354,16 @@ than a member of its own.
 
 ```ts
 export class AppHttpOptions extends HttpOptionsProvider {
-  constructor(private readonly config: AppConfigService) { super(); }
+  constructor(private readonly config: AppConfigService) {
+    super();
+    // A field deriving from config is assigned here: the base declares
+    // `trustProxy` as a field, and TS2611 rejects an accessor overriding one.
+    this.trustProxy = this.config.get('trustProxy');
+  }
 
   override get prefix() { return this.config.get('app').prefix; }
   override get cors() { return { origin: ..., credentials: ... }; }
-  override readonly trustProxy: boolean;   // assigned in the constructor
+  override readonly trustProxy: boolean;
   override readonly shutdownHooks = {
     signals: ['SIGTERM', 'SIGINT'],
     options: { exitAfterMs: 8000 },
