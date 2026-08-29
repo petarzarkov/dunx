@@ -288,7 +288,7 @@ Feedback goes in as a new file rather than into conversation.
 
 | Item                                                                                            | Shape                                                                                |
 | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** W1 (with the relay), W2, W6 and W0 shipped. W1b withdrawn. W5, W7-W9 remain. |
+| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** Every item closed. W7 and W8 shipped; W1b, W5 and W9 withdrawn with reasons. |
 | [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.        |
 | [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                               | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined.     |
 

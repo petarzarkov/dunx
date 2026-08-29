@@ -23,7 +23,13 @@ wins.
 
 W6 covers `@dunx/infra/redis` too: `RedisModule.forRoot(init, SessionsRedis)` binds
 a named connection as a subclass, and `Redis` is exported so there is a concrete
-base to extend. **W5 and W7-W9 are open.**
+base to extend.
+
+**Every item in this file is now closed.** W1, W2, W6, W7, W8 and W0 shipped.
+Three were withdrawn rather than built, each for a reason recorded in its own
+section: W1b because the imperative methods stay, W5 because the override it
+wanted to forbid turned out to be a tested feature, and W9 because the condition
+it set itself cannot be met.
 
 The rule to reach:
 
@@ -535,31 +541,28 @@ becomes zero, and one framework default changes rather than every app's copy.
 **Deletes:** `force-exit.ts`, and the `cancelWatchdog()` / `process.exit(0)` pair at
 the bottom of `main.ts` and `worker.ts`.
 
-### W5 - one way to declare a module
+### W5 - one way to declare a module - closed, the other way up
 
-`resolveRef` in `packages/core/src/di/module.ts` **concatenates** a `DynamicModule`'s
-options with any `@Module` metadata on the class it names:
+**The footgun is gone and the proposal is withdrawn.** This item was filed when
+`resolveRef` **concatenated** a `DynamicModule`'s options with the `@Module`
+metadata on the class it names, so the natural shape died with a duplicate-binding
+error. It proposed making that combination a boot error.
 
-```ts
-imports: concat(declared?.imports, ref.imports),
-providers: concat(declared?.providers, ref.providers),
-```
+Both halves are out of date:
 
-So the natural shape - a decorated class with a `static forRoot()` that configures it
-differently for tests - registers both lists and dies with a duplicate-binding error
-naming the same module on both sides. **No package in this repo benefits**: every
-configurable module (`DbModule`, `RedisModule`, `QueueModule`, `OpenApiModule`,
-`LoggerModule`) is an undecorated class with static factories, so none has metadata to
-merge. One footgun, no beneficiary.
+- `union` and `unionProviders` replaced `concat`. The two lists merge, and a
+  provider declared in both resolves to the one `forRoot()` returned.
+- That override is a **deliberate, tested feature**, not a leftover.
+  `module-compose.test.ts` opens by calling this "the shape the framework used to
+  forbid" and asserts that a decorator's binding is a default which
+  `forRoot(value)` replaces.
 
-**Proposed:** declaring both is a **boot error** naming the class and both option sets,
-telling the author to pick one. Non-breaking for anything not already failing.
-Overriding instead is what NestJS does and is friendlier, but silently discards a
-decorator someone wrote, which is the failure mode dunx refuses elsewhere.
+So a boot error on a colliding token was implemented, and it broke three of that
+file's tests. It was reverted rather than argued with: forbidding the collision
+forbids the feature, since the collision _is_ how a default gets replaced.
 
-The template already reads better for having been fixed to an undecorated
-`AppModule.forRoot()`, which needed no framework change - but the trap is still there
-for the next person.
+Nothing to do here. If the silent half ever needs surfacing, the shape is a
+`warnings` entry naming the class and the token, not an error.
 
 ### W6 - a named provider is a subclass, not a token function
 
@@ -582,23 +585,26 @@ the established spelling (`ConfigModule.forRoot({ validate, as })`), which is wo
 more than either option being individually prettier. Apply the same treatment to any
 future module wanting several named instances.
 
-### W7 - config validation
+### W7 - config validation - shipped
+
+`ConfigModule.forRoot` takes **either** `validate` or `schema`, and the type makes
+it exactly one:
 
 ```ts
-ConfigModule.forRoot({ validate, as: AppConfigService });
+ConfigModule.forRoot({ schema: envSchema, as: AppConfigService });
 ```
 
-`validate` is a function the app writes, and unlike the others it is **defensible**:
-it is the one place the app genuinely owns the knowledge, and a schema DSL was
-rejected on purpose. Two smaller changes are still worth it:
+A Standard Schema is validated directly, so zod, Valibot and ArkType all work with
+no wrapper and dunx names no vendor. A failure becomes a `ConfigError` listing
+every issue with its path, rather than whatever shape the library throws.
 
-- Accept a **Standard Schema** directly as an alternative to a function, so
-  `ConfigModule.forRoot({ schema: envSchema, as })` needs no wrapper. Route validation
-  already targets Standard Schema, so this costs nothing and picks no vendor.
-- The `as` subclass should be the documented default rather than an option, because
-  without it `inject: [ConfigService]` resolves to
-  `ConfigService<Record<string, unknown>>` and a factory annotating the app's type is
-  rejected. Consumers hit this and the error is opaque.
+`StandardSchemaV1` moved from `@dunx/http` down to `@dunx/core`, since both need
+it and core is the package they share; `@dunx/http` re-exports the three names, so
+its surface is unchanged. `issuePath` came with it, because the two spellings of a
+path (zod's bare key, Valibot's `{ key }`) were about to be handled in two places.
+
+The second half needed no code: `as` is already what the guide leads with, what
+`examples/full` uses, and what every scaffold generates.
 
 ### W8 - contributions are providers
 
@@ -607,13 +613,22 @@ provider class, which is what lets W3 delete the second better-auth instance. Th
 `DocumentContributor` type already accepts a thunk, so this is a widening rather than
 a break.
 
-### W9 - the CLI entry
+### W9 - the CLI entry - closed, correct as it is
 
-`openapi.config.ts` exports `openapi = () => ({ root, title, contribute })` for
-`bunx dunx-openapi`. It is a function because a CLI has no container. Lowest priority,
-and it may be correct as it is - but if `AppModule.forRoot()` plus a
-`DocumentContributor` provider can be read statically the way `@dunx/mcp` reads
-routes, the file disappears too.
+The condition this item set itself cannot be met. It asked whether
+`AppModule.forRoot()` plus a `DocumentContributor` provider could be read
+**statically**, the way `@dunx/mcp` reads routes, so `openapi.config.ts` could
+disappear. It cannot: a contributor describes endpoints some library owns, and
+asking better-auth for its schema means constructing it. There is nothing static
+to read.
+
+The half that does not need a container already works without the file:
+`bunx dunx-openapi ./src/app.module.ts` takes a bare module and discovers its
+routes. So the config file is only needed for a contribution, which is exactly
+the case that needs code to run.
+
+W8 improved it rather than removing it: the file can now hand over a
+`DocumentSource` instead of a thunk.
 
 ## Before and after, in one table
 

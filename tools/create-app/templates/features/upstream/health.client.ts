@@ -1,9 +1,4 @@
 import { HttpService } from '@dunx/http/client';
 
-/**
- * A second outbound client, with its own timeout, reachable as a constructor
- * parameter: `httpClient('health')` returns a `Token`, and a token can only be
- * reached with `inject()` in a field. `upstream.module.ts` binds it with
- * `HttpClientModule.forRootAsync(config, HealthClient)`.
- */
+/** A probe client with its own short timeout, taken as a parameter. */
 export class HealthClient extends HttpService {}

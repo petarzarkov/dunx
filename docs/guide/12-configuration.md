@@ -14,6 +14,18 @@ import { validate, AppConfigService } from './config.js';
 export class AppModule {}
 ```
 
+## A schema, or a function
+
+`forRoot` takes exactly one of the two, and the type enforces it.
+
+```ts
+ConfigModule.forRoot({ schema: envSchema, as: AppConfigService });
+```
+
+`schema` is any Standard Schema, so zod 4, Valibot and ArkType all work and dunx
+names no vendor. A failure fails boot with a `ConfigError` listing every issue and
+its path, rather than whatever shape the library throws.
+
 ## One validation function in place of a schema DSL
 
 `ConfigModule.forRoot` takes exactly one required option:
