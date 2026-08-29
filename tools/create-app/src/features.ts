@@ -4,8 +4,8 @@
  * rots. `bun run sync:templates` copies them in and `features.test.ts` fails on
  * drift.
  *
- * The wiring is not copied: `app.module.ts`, `config.ts`, `bootstrap.ts` and
- * `main.ts` name every feature at once, so they are generated from the selection.
+ * The wiring is not copied: `app.module.ts`, `config.ts` and `main.ts` name every
+ * feature at once, so they are generated from the selection.
  */
 export interface Feature {
   /** Flag name, and the directory under `templates/features/`. */
@@ -278,7 +278,7 @@ export const FEATURES: readonly Feature[] = [
   {
     name: 'jobs',
     source: 'jobs',
-    summary: 'bullmq queues and a worker, over Bun.RedisClient.',
+    summary: 'bullmq queues over Bun.RedisClient, background handlers forked.',
     requires: ['images'],
     module: { klass: 'JobsModule', from: './jobs/jobs.module.js' },
     dependencies: ['@dunx/infra', 'bullmq', 'ioredis', 'zod'],

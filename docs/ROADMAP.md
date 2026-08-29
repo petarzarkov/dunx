@@ -480,8 +480,11 @@ one earns its place, and it is why several plausible candidates were rejected:
 - **An auth example.** It would be `full`'s `src/auth/` copied with the rest deleted:
   same better-auth config, same schema, same guard, no new question answered.
 - **A queue / background-worker example.** Its entire subject needs Redis, so in CI
-  it would skip and demonstrate nothing. `full`'s `bun run worker` already isolates
-  the two-process shape, which is the part that is genuinely hard to see.
+  it would skip and demonstrate nothing. `full`'s `jobs/jobs.processor.ts` already
+  shows the isolated shape, and shows it the way it should be reached for: bullmq
+  forks that file for a `background: true` handler, so there is no second process to
+  run. The `bun run worker` script this line used to cite is gone, along with the
+  `src/worker.ts` the scaffolder generated next to it.
 - **An OpenAPI-first example.** `full` already generates the document from the zod
   schemas its routes validate against; a second app would only have fewer routes in
   it.

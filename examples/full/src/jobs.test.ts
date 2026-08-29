@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import type { HttpApp } from '@dunx/http';
-import { createApp } from './bootstrap.js';
+import { createApp } from './main.js';
 
 /**
  * **No second process to spawn.** `JobsModule` sets `consume: true`, so building the

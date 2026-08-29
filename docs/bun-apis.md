@@ -105,12 +105,15 @@ bun -e "console.log(Object.getOwnPropertyNames(Bun.Image.prototype))"
 
 ### Present and undocumented
 
-| API                 | Notes                                                            |
-| ------------------- | ---------------------------------------------------------------- |
-| `Bun.S3Client`      | Absent from the table above. Native S3 - no `@aws-sdk/*` needed. |
-| `Bun.embeddedFiles` | Files embedded by `bun build --compile`.                         |
-| `Bun.openInEditor`  | Opens a path in the user's editor.                               |
-| `Bun.mmap`          | Listed above only as "low-level"; it is a plain function.        |
+| API                 | Notes                                                             |
+| ------------------- | ----------------------------------------------------------------- |
+| `Bun.S3Client`      | Absent from the table above. Native S3 - no `@aws-sdk/*` needed.  |
+| `Bun.embeddedFiles` | Files embedded by `bun build --compile`.                          |
+| `Bun.openInEditor`  | Opens a path in the user's editor.                                |
+| `Bun.mmap`          | Listed above only as "low-level"; it is a plain function.         |
+| `Bun.Terminal`      | A PTY. `Bun.spawn(cmd, { terminal })` gives the child a real one. |
+| `Bun.sliceAnsi`     | Slices by terminal columns without severing an escape sequence.   |
+| `Bun.stripANSI`     | The inverse, for asserting on what a frame says.                  |
 
 ### `Bun.Image` surface
 
@@ -694,9 +697,64 @@ straight away, the iteration ends on EOF, and the process exits. The hang needs
 something holding the other end open, which is every real terminal. That is how it
 reached a release: `bunx @dunx/create-app my-api` wrote the app, printed its next
 steps and then sat there until the user pressed Ctrl+C, reported from a real run
-after the piped CLI suite had been green for weeks. `tools/create-app/src/stdin.ts`
-is the one-line read, and its test spawns the reader with a pipe it deliberately
-does not close.
+after the piped CLI suite had been green for weeks.
+
+The line read is gone - `@dunx/create-app` reads keys in raw mode now, and
+`ProcessTty.close()` in `tools/create-app/src/tty.ts` is the same release by hand,
+measured again in the section below. The rule outlives the call it was found in:
+**a read of stdin that is not ended holds the process open**, whatever API opened
+it.
+
+### Raw-mode stdin, and driving it from a test with `Bun.Terminal`
+
+Probed on Bun 1.4.0, because `@dunx/create-app` asks its questions with an arrow-key
+list rather than a line of text. Five facts, all of them load bearing for
+`tools/create-app/src/tty.ts`:
+
+```
+process.stdin.setRawMode              undefined on a pipe, a function on a TTY
+arrow key, raw mode on                one chunk: 1b 5b 41
+Ctrl+C, raw mode on                   one chunk: 03      no SIGINT handler fired
+off('data') + setRawMode(false) + pause()      exited 0, no process.exit() needed
+write('a\nb\n') while raw            arrives as a<CR><LF>b<CR><LF>
+```
+
+- **`setRawMode` is absent, not failing, on a pipe.** Checking `isTTY` on both
+  streams is the capability test; there is nothing to catch.
+- **An escape sequence arrives whole.** Three bytes in one read, which is what lets
+  a decoder treat a chunk holding nothing but `0x1b` as the Escape key rather than
+  waiting on a timer.
+- **`ISIG` is off, so Ctrl+C is a byte.** A `SIGINT` handler installed alongside
+  never ran. Nothing ends the process unless the reader does, which is why the
+  cancel path exits 130 itself.
+- **Restoring is enough to exit.** No `process.exit`, no `unref`.
+- **`OPOST` and `ONLCR` survive raw mode**, so a frame written with `\n` still
+  returns the carriage. Node's `setRawMode` only clears input and local flags.
+
+The last one is what makes the suite possible. **`Bun.spawn(cmd, { terminal })` is
+a real PTY**: the child reports `isTTY === true`, gets the `cols`/`rows` the parent
+declared, and reads keys the parent writes with `terminal.write()`. So
+`interactive.test.ts` answers the CLI's prompts the way a person does, with no
+`node-pty` and no browser.
+
+```ts
+await using terminal = new Bun.Terminal({ cols: 100, rows: 30, data(_t, bytes) { … } });
+const proc = Bun.spawn(['bun', CLI, 'billing'], { cwd, terminal });
+terminal.write('\u001b[B');
+```
+
+Two things to know before writing one:
+
+- The `data` callback receives the **stream**, not a rendered screen: every repaint
+  is in there, one after another. Assert on the last frame, or on a substring that
+  only the state you are testing produces.
+- `exit` on `TerminalOptions` is the **PTY's** lifecycle, not the child's. The
+  child's code comes from `subprocess.exited`.
+
+A spawned process reports no coverage, so the classes underneath take a stream pair
+as constructor arguments and the suite drives them in-process. The PTY suite is
+there for the half a fake cannot answer: whether a real terminal behaves the way
+the fake assumes.
 
 ### Decorators - a compound assignment to a private field is a `SyntaxError`
 

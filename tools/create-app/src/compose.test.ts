@@ -45,10 +45,9 @@ describe('a composed app', () => {
     expect(result.features).toEqual(['notes']);
     // The feature's own files, verbatim.
     expect(result.files).toContain('src/notes/notes.controller.ts');
-    // The four files the full example states every feature at once in.
+    // The three files the full example states every feature at once in.
     for (const generatedFile of [
       'src/main.ts',
-      'src/bootstrap.ts',
       'src/app.module.ts',
       'src/config.ts',
     ]) {
@@ -116,41 +115,50 @@ describe('a composed app', () => {
     expect(manifest.scripts['worker']).toBeUndefined();
   });
 
-  /** A queue needs a process to drain it, and it is not the web one. */
-  test('adds a worker entry point only for jobs', async () => {
+  /**
+   * bullmq forks `jobs.processor.ts` for a `background: true` handler and
+   * `QueueModule` opens the in-process workers itself, so there is nothing left for
+   * a second entry point to do. One was generated for a while and nothing ran it.
+   */
+  test('generates no worker entry point, even for jobs', async () => {
     const { result, read } = await compose(['jobs']);
-    expect(result.files).toContain('src/worker.ts');
+    expect(result.files).not.toContain('src/worker.ts');
+    expect(result.files).toContain('src/jobs/jobs.processor.ts');
     const manifest = JSON.parse(await read('package.json')) as {
       scripts: Record<string, string>;
     };
-    expect(manifest.scripts['worker']).toBe('bun src/worker.ts');
+    expect(manifest.scripts['worker']).toBeUndefined();
+    expect(manifest.scripts['dev']).toBe('bun --watch src/main.ts');
+  });
+
+  test('serves only when it is the entry point, so a test may import it', async () => {
+    const main = await (await compose(['notes'])).read('src/main.ts');
+
+    expect(main).toContain('export const createApp');
+    expect(main).toContain('if (import.meta.main) {');
   });
 
   test('sets the global prefix the copied controllers assume', async () => {
     const { read } = await compose(['notes']);
-    expect(await read('src/bootstrap.ts')).toContain(
-      "app.setGlobalPrefix('api')",
-    );
+    expect(await read('src/main.ts')).toContain("app.setGlobalPrefix('api')");
   });
 
   test('wraps the root in OpenApiModule only when openapi is selected', async () => {
-    expect(
-      await (await compose(['openapi'])).read('src/bootstrap.ts'),
-    ).toContain('OpenApiModule.forRoot(');
-    expect(
-      await (await compose(['notes'])).read('src/bootstrap.ts'),
-    ).not.toContain('OpenApiModule');
+    expect(await (await compose(['openapi'])).read('src/main.ts')).toContain(
+      'OpenApiModule.forRoot(',
+    );
+    expect(await (await compose(['notes'])).read('src/main.ts')).not.toContain(
+      'OpenApiModule',
+    );
   });
 
   test('installs the websocket relay only when websockets are selected', async () => {
-    const withWs = await (
-      await compose(['websockets'])
-    ).read('src/bootstrap.ts');
+    const withWs = await (await compose(['websockets'])).read('src/main.ts');
     expect(withWs).toContain('RedisRelay');
     expect(withWs).toContain('relayChannel: RELAY_CHANNEL');
-    expect(
-      await (await compose(['notes'])).read('src/bootstrap.ts'),
-    ).not.toContain('RedisRelay');
+    expect(await (await compose(['notes'])).read('src/main.ts')).not.toContain(
+      'RedisRelay',
+    );
   });
 
   test('substitutes the app name everywhere, generated or copied', async () => {
@@ -199,9 +207,10 @@ describe('a composed app', () => {
     const agents = await read('AGENTS.md');
     expect(agents).toContain('**jobs**');
     expect(agents).toContain('Redis or Valkey');
-    // A queue needs a second process, and the layout has to name the directories
-    // the selection actually carries.
-    expect(agents).toContain('bun run worker');
+    // An agent that invents a worker command is what this line is against, and the
+    // layout has to name the directories the selection actually carries.
+    expect(agents).toContain('There is no worker command');
+    expect(agents).toContain('bun run dev');
     expect(agents).toContain('src/jobs/');
     expect(agents).not.toContain('src/notes/');
   });

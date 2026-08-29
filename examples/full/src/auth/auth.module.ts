@@ -54,7 +54,7 @@ import { ProfileController } from './profile.controller.js';
   controllers: [ProfileController],
   providers: [AuthTables, Audit, AuthDemo],
   // `Auth` is exported because `OpenApiModule` wraps the root and can only
-  // inject what the root exports. See bootstrap.ts.
+  // inject what the root exports. See main.ts.
   exports: [Audit, AuthDemo, Auth],
 })
 export class AccountsModule {}

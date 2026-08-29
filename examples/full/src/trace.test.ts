@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import type { HttpApp } from '@dunx/http';
-import { createApp } from './bootstrap.js';
+import { createApp } from './main.js';
 
 /**
  * W3C Trace Context, against the same `createApp()` that `bun start` uses.
  *
  * Its own file rather than `service.test.ts`, which is at the 500-line cap.
- * `requestLogging: { trace: true }` in `bootstrap.ts` is what puts these fields
+ * `requestLogging: { trace: true }` in `main.ts` is what puts these fields
  * into `RequestContext`, and `TraceController` reads them back out inside a
  * handler - so this covers the whole path, not just the parser.
  */

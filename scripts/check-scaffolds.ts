@@ -3,8 +3,8 @@
  *
  * The feature *sources* are already covered: they are copied byte-for-byte from
  * `examples/full`, which CI builds, typechecks, tests and tours. What nothing else
- * covers is the **wiring generated around them** - `app.module.ts`, `config.ts`,
- * `bootstrap.ts` and `main.ts` - and that is a different file for every selection.
+ * covers is the **wiring generated around them** - `app.module.ts`, `config.ts`
+ * and `main.ts` - and that is a different file for every selection.
  * A generator that emits an import for a module the selection does not carry, or a
  * `config.get('redis')` with no `redis` group, breaks only for the combination that
  * hits it.
@@ -25,7 +25,7 @@ const HOST = join(ROOT, 'examples/full');
 
 /**
  * Every feature alone, plus the combinations with something to get wrong: the whole
- * set, and the pairs where one feature's config or bootstrap contribution has to
+ * set, and the pairs where one feature's config or wiring contribution has to
  * coexist with another's.
  */
 const SELECTIONS: readonly (readonly string[])[] = [

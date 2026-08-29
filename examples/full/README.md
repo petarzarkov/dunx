@@ -235,7 +235,7 @@ exercises a 03:00 cron without waiting for 03:00.
 ## Logging
 
 `@dunx/http` writes the entry, and `requestLogging` in
-[src/bootstrap.ts](./src/bootstrap.ts) is all this app configures - the bodies come
+[src/main.ts](./src/main.ts) is all this app configures - the bodies come
 from `LOG_REQUEST_BODY` and `LOG_RESPONSE_BODY`, and `/api/_dunx` is skipped.
 Nothing here writes a request line by hand;
 [src/http/request-trail.ts](./src/http/request-trail.ts) is a middleware of the
