@@ -114,12 +114,16 @@ export class QueueConsumer {
       );
     }
 
-    for (const queue of this.queues) {
-      this.#workers.push(this.#open(queue));
-    }
     try {
-      // Serially, so an unreachable server is reported once rather than per queue.
-      for (const worker of this.#workers) await worker.waitUntilReady();
+      // Opened **and** awaited one at a time. Opening them all first left every
+      // queue after the first storming while the first was still failing to
+      // become ready, so the guard below could not run until the flood had
+      // already starved the loop. One queue hid that; two did not.
+      for (const queue of this.queues) {
+        const worker = this.#open(queue);
+        this.#workers.push(worker);
+        await worker.waitUntilReady();
+      }
     } catch (error) {
       /**
        * A worker that never became ready is still a running worker. `new Worker()`
@@ -218,9 +222,20 @@ export class QueueConsumer {
       const subject = job ? describeJob(job) : `a job on ${queue}`;
       this.#logger.error(`Job failed ${subject}`, error);
     });
-    worker.on('error', (error) =>
-      this.#logger.error(`Worker error on ${queue}`, error),
-    );
+    // Reported once per outage, not once per reconnect. bullmq reopens a blocking
+    // read the moment its connection closes, so against an absent broker this
+    // fires in a hot loop: measured at 21.9M lines in two minutes, which is enough
+    // I/O to stop a process making progress at all. The same gate `PubSub` uses
+    // for a failing relay.
+    let failing = false;
+    worker.on('ready', () => {
+      failing = false;
+    });
+    worker.on('error', (error) => {
+      if (failing) return;
+      failing = true;
+      this.#logger.error(`Worker error on ${queue}`, error);
+    });
     return worker;
   }
 }
