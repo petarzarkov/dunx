@@ -245,6 +245,33 @@ describe('markdown content', () => {
     expect(rewriteHref('#anchor', targets)).toBe('#anchor');
   });
 
+  test('a `../` link resolves against the page it was written on', () => {
+    const targets = {
+      guides: new Map([['architecture/http.md', '#/guide/http']]),
+      packages: new Map<string, string>(),
+    };
+    // `docs/architecture/http.md` links to `../bun-apis.md`, which is
+    // `docs/bun-apis.md`. Stripping the `../` instead of resolving it produced
+    // `blob/main/bun-apis.md`, a 404 on a page the site publishes.
+    expect(
+      rewriteHref('../bun-apis.md', targets, '', 'docs/architecture/http.md'),
+    ).toBe('https://github.com/petarzarkov/dunx/blob/main/docs/bun-apis.md');
+    expect(
+      rewriteHref('./queues.md', targets, '', 'docs/architecture/http.md'),
+    ).toBe(
+      'https://github.com/petarzarkov/dunx/blob/main/docs/architecture/queues.md',
+    );
+    // A tour page reaching sideways still lands on the in-site route.
+    expect(
+      rewriteHref(
+        '../architecture/http.md',
+        targets,
+        '',
+        'docs/guide/05-controllers.md',
+      ),
+    ).toBe('#/guide/http');
+  });
+
   test('slugify strips backticks and punctuation', () => {
     expect(slugify('`Bun.serve()` adapter')).toBe('bun-serve-adapter');
   });
