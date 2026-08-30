@@ -286,10 +286,11 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                          | Shape                                                                            |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md) | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.    |
-| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined. |
+| Item                                                                                          | Shape                                                                               |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.       |
+| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined.    |
+| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Queue, cache and fan-out with no Redis. All three measured; three verdicts to take. |
 
 Delivered and moved out of this folder rather than left here marked done:
 

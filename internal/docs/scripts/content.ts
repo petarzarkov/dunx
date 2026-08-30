@@ -1,3 +1,4 @@
+import { posix } from 'node:path';
 import { highlightFences } from './highlight';
 import type { GuidePage } from './extract/model';
 
@@ -28,6 +29,23 @@ export interface LinkTargets {
 }
 
 /**
+ * `../bun-apis.md` written on `docs/architecture/http.md` means `docs/bun-apis.md`.
+ * Stripping the `../` instead of resolving it pointed the GitHub fallback at
+ * `blob/main/bun-apis.md`, a 404. Without a source path there is nothing to
+ * resolve against, so the old strip is the fallback.
+ */
+const resolveFrom = (from: string, path: string): string => {
+  if (!from || !/^\.\.?\//.test(path)) {
+    return path.replace(/^(?:\.\/|\.\.\/)+/, '');
+  }
+  // `node:path`'s `relative` and `Bun.Glob` both hand back `\` on Windows, and a
+  // link target is always `/`. Normalised here rather than at each call site, so
+  // a new source of `from` cannot reintroduce it.
+  const dir = posix.dirname(from.replaceAll('\\', '/'));
+  return posix.join(dir, path).replace(/^(?:\.\.\/)+/, '');
+};
+
+/**
  * Rewrites the links the source markdown was written with. A doc that says
  * `./ARCHITECTURE.md` must land on the guide page here, and anything the site
  * does not host at all has to become an absolute link back to GitHub rather
@@ -38,6 +56,8 @@ export const rewriteHref = (
   targets: LinkTargets,
   /** The route this document is served at, for same-page `#anchor` links. */
   self = '',
+  /** The repo path this document was written at, for relative links. */
+  from = '',
 ): string => {
   // A bare `#anchor` in a hash-routed site replaces the route rather than
   // scrolling, so `#two-things` navigated away from the page it was written on.
@@ -53,7 +73,7 @@ export const rewriteHref = (
   const suffix = hash ? `#${hash}` : '';
   if (path === '') return href;
 
-  const base = path.replace(/^(?:\.\/|\.\.\/)+/, '');
+  const base = resolveFrom(from, path);
 
   const guide =
     targets.guides.get(base) ?? targets.guides.get(base.replace(/^docs\//, ''));
@@ -174,6 +194,8 @@ export const renderDoc = (
   targets: LinkTargets,
   /** The route this document is served at. Needed for same-page anchors. */
   self = '',
+  /** The repo path it was written at. Needed for relative links. */
+  from = '',
 ): RenderedDoc => {
   const headings: { id: string; text: string }[] = [];
   const seen = new Map<string, number>();
@@ -196,7 +218,8 @@ export const renderDoc = (
 
   html = html.replace(
     ANCHOR,
-    (_match, href: string) => `<a href="${rewriteHref(href, targets, self)}"`,
+    (_match, href: string) =>
+      `<a href="${rewriteHref(href, targets, self, from)}"`,
   );
 
   return { html, headings };
@@ -217,7 +240,12 @@ export const buildGuide = (
   order = 0,
   section = '',
 ): GuidePage => {
-  const { html, headings } = renderDoc(markdown, targets, `#/guide/${slug}`);
+  const { html, headings } = renderDoc(
+    markdown,
+    targets,
+    `#/guide/${slug}`,
+    source,
+  );
   return {
     slug,
     category,

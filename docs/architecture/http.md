@@ -202,6 +202,52 @@ no adapter between them. That is the `@dunx/auth` `RedisStore` precedent - decla
 the shape, let the app supply anything that fits - and `examples/full` runs its
 second node that way on purpose.
 
+### A Postgres relay over `LISTEN`/`NOTIFY`
+
+`Bun.SQL` has both of `PubSubRelay`'s operations under other names: `notify` for
+publish, `listen` for subscribe, and `unlisten` on the returned handle for close. So
+this is not the structural fit `RedisConnection` is, where the names already match.
+It is a class of about thirty lines holding one `Bun.SQL` and renaming three calls.
+`Bun.SQL` is a global, so it would add no dependency to `@dunx/http`.
+
+Measured on Bun 1.4.0 (rev 34cbb9a40) against Postgres 17, with two real nodes: a
+gateway on each, a client connected to node B alone, `publishEvent` called on node A,
+and `relayChannel` left at its default:
+
+```
+frames on the node-b client: [ "{\"event\":\"greet\",\"data\":{\"from\":\"node-a\"}}" ]
+local fan-out on node a:     0
+```
+
+The `0` carries the result. Node A had no local subscriber, so the frame reached that
+client across the channel or not at all. `dunx:ws` needs no respelling for Postgres;
+Bun quotes the identifier.
+
+One behaviour differs from the Redis relay, and an app moving between the two has to
+size its frames for it. Postgres caps a `NOTIFY` payload at 7999 bytes, and the relay
+envelope adds an origin id and a topic on top of the frame:
+
+```
+frame 7925 bytes -> relayed
+frame 7935 bytes -> refused
+```
+
+The refusal is reported. `notify()` rejects with `ERR_POSTGRES_SERVER_ERROR` and
+`22023`, `#outbound` takes its promise branch because `Query` extends `Promise`, and
+the app gets one `logger.warn` per degradation:
+
+```
+the websocket relay could not publish. Fan-out is local to this process until it recovers.
+```
+
+Redis has no comparable ceiling.
+
+Not built. `WsRelayModule` binds `RedisRelay` and takes `RelayConnectionOptions`, so
+a Postgres relay reaches an app through the `relay` option or `relayThrough` rather
+than through that module. Whether it earns a place beside `RedisRelay`, with the
+module growing a second binding, or stays the 30 lines an app writes against the
+interface, is open.
+
 ### One channel, because `psubscribe` does not work
 
 Frames for **every** topic travel on one broker channel, not one channel per topic.
