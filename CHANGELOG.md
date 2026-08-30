@@ -4,6 +4,49 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.1.2 - 2026-08-30
+
+A Postgres websocket relay, and the createTestServer globals warning
+
+Stated as patch outright rather than derived, which would have read the
+feat(http) in this range as a minor.
+
+Since 3.1.1, in @dunx/http, @dunx/testing and @dunx/create-app:
+
+`PostgresRelay` carries websocket frames over Bun.SQL's LISTEN/NOTIFY, so an app
+already running Postgres needs no broker for multi-node fan-out. `WsRelay` is the
+contract both relays extend and `WsRelayModule` binds, with
+forPostgres/forPostgresAsync beside the Redis pair. Additive throughout:
+`RedisRelay` stays bound and exported on the Redis path.
+
+`createTestServer` stopped warning that global middleware was missing when an
+HttpOptionsProvider had supplied it, which fired on every suite of an app that
+took the 3.1.0 advice and told it to undo that. The onError half of the same
+message is now conditional on the resolved handler rather than asserted.
+
+A relative link on a published docs page resolved against the repo root instead
+of the page's own directory, so architecture/http.md's link to bun-apis.md was a
+404 on the site.
+
+### Features
+
+- **http**: a Postgres websocket relay, and WsRelay as the contract both bind ([`c93cfbf`](https://github.com/petarzarkov/dunx/commit/c93cfbf29bc07086462b2ba8ea043df6ae3ed4a4))
+
+### Fixes
+
+- **testing**: match resolveHttpOptions on an explicitly overridden onError ([`9eec298`](https://github.com/petarzarkov/dunx/commit/9eec298abb1c83b2a09d932cd24f477d6cbc7226))
+- **testing**: read the resolved middleware, not the argument, before warning ([`ec7d27e`](https://github.com/petarzarkov/dunx/commit/ec7d27ece19586af1aa2e0ecdb07745ac87be354))
+- **docs**: resolve a relative link against the page it was written on ([`c094db3`](https://github.com/petarzarkov/dunx/commit/c094db3af99926ccec319cbe24c16da7a25f79ed))
+
+### Documentation
+
+- **http**: a listening PostgresRelay holds max + 1 connections ([`b2c147d`](https://github.com/petarzarkov/dunx/commit/b2c147dbe1fcf74dcfbe98a0e1727d2988802b63))
+- record the JSON binding bug as oven-sh/bun#40942 ([`cfe9ec1`](https://github.com/petarzarkov/dunx/commit/cfe9ec1c1dc94cb1b659b91b06134ecc26766598))
+- **queues**: the latency turns on notification support, not the other flags ([`e5a8d7d`](https://github.com/petarzarkov/dunx/commit/e5a8d7dc89e1c25a2fbf5daefca4c77cdb4a65b7))
+- **queues**: name the backend the pg-boss figures were measured on ([`337aa59`](https://github.com/petarzarkov/dunx/commit/337aa59425a6e7d5d859ddd08197345feb2fc9b4))
+- **architecture**: a Postgres relay renames three calls, it does not fit as it is ([`ef837f3`](https://github.com/petarzarkov/dunx/commit/ef837f30fdf4ac79fa989aa8eca6d9234d4062b5))
+- **architecture**: measure a queue, a cache and websocket fan-out with no Redis ([`39adda1`](https://github.com/petarzarkov/dunx/commit/39adda153a4a414c0a8bf30b7ab1b4492e33027f))
+
 ## 3.1.1 - 2026-08-29
 
 A config schema, and contributions as providers
