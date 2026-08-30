@@ -286,12 +286,11 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                          | Shape                                                                               |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.       |
-| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined.    |
-| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Queue, cache and fan-out with no Redis. All three measured; three verdicts to take. |
-| [db-backed-queues-and-cache](../internal/notes/roadmap/db-backed-queues-and-cache.md)         | Queues and cache on SQLite or Postgres. Plan written, two engines, one 4.0 break.   |
+| Item                                                                                  | Shape                                                                             |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)         | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.     |
+| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                     | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined.  |
+| [db-backed-queues-and-cache](../internal/notes/roadmap/db-backed-queues-and-cache.md) | Queues and cache on SQLite or Postgres. Plan written, two engines, one 4.0 break. |
 
 Delivered and moved out of this folder rather than left here marked done:
 

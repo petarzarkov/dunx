@@ -94,10 +94,33 @@ export interface AppJob<T = unknown> {
 behind it. A consumer's handler signature changes once, rather than the surface
 carrying two job types for a release cycle.
 
-The field-by-field comparison of bullmq's `Job` against this draft is still the
-first task of phase 1, but it now decides how thin the Redis adapter is rather than
-whether the break happens. `getState()` against `state()`, `returnvalue` against
-`result`, and `id?: string` against `id: string` are the three known to differ.
+**`AppJob` alone is not enough**, and the table above is the checklist. Every row
+needs a dunx-owned replacement or an explicit "Redis only" label, because a
+half-migrated surface is one where the backend still leaks:
+
+| Surface                          | 4.0                                                                                                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JobPublisher.queue(name)`       | returns `JobQueue`, a dunx interface: `add`, `addBulk`, `getJob`, `counts`, `drain`, `remove`                                                                           |
+| `JobPublisher.publish(...)`      | returns `AppJob<T>`                                                                                                                                                     |
+| `@JobHandler` parameter          | `AppJob<T>`                                                                                                                                                             |
+| `QueueOptions.worker`            | `WorkerTuning`: `concurrency`, `lockDurationMs`, `stalledIntervalMs`, `limiter`. Anything else is Redis only and moves under `redis: { worker }`                        |
+| `QueueOptions.defaultJobOptions` | `JobOptions`: `attempts`, `backoff`, `delay`, `priority`, `removeOnComplete`, `removeOnFail`                                                                            |
+| `DashboardOptions.queues`        | `QueueSource.queue()` keeps returning `unknown`, and the dashboard picks its renderer from a new `kind` on the source: bull-board for `redis`, the dunx panel for `sql` |
+
+`buildBoard()` hands its queue straight to `BullMQAdapter`, which rejects anything
+else, so the dashboard cannot be made backend-neutral by leaving that return type
+`unknown`. The `kind` discriminator is what stops a SQL queue reaching bull-board.
+
+**`AppJob.id` is `string`, and bullmq's is `id?: string`.** The adapter assigns at
+publish rather than propagating the optionality: an id that may be absent makes
+every status route and every dashboard row branch on it. Publishing without an id
+is a `QueueError`, not a job. Phase 0 gains a test that a published job always
+reports one.
+
+The rest of the field comparison is still phase 1's first task, and it now decides
+how thin the Redis adapter is rather than whether the break happens. `getState()`
+against `state()` and `returnvalue` against `result` are the two others known to
+differ.
 
 ## What a queue has to do, and what this one will not
 
@@ -109,20 +132,42 @@ Reproduced from bullmq, because an app on Redis today must keep working:
 - delayed jobs, priorities, per-worker concurrency
 - job states, the handler's return value, and the failure reason
 - repeatable and cron jobs
-- rate limiting, dead-letter routing, bulk add
-- retention and cleanup
+- bulk add, retention and cleanup
 
 **Out of scope, stated rather than discovered later:** flows and parent/child
-dependencies, per-job logs, and per-queue metrics history. bullmq has all three.
-An app using them stays on Redis, and the docs must say so.
+dependencies, per-job logs, per-queue metrics history, **rate limiting** and
+**dead-letter routing**. bullmq has all six. An app using them stays on Redis, and
+the docs must say so.
 
 ### Claiming a job without two workers taking it
 
-- **Postgres**: `SELECT ... FOR UPDATE SKIP LOCKED` inside a transaction.
-- **SQLite**: no `SKIP LOCKED`, and `bun:sqlite` serialises writers anyway. A single
-  `UPDATE ... SET claimed_by = ? WHERE id = (SELECT id ... LIMIT 1) RETURNING *` is
-  atomic under its write lock. Verify `RETURNING` behaves under WAL with two
-  processes before relying on it.
+A row lock is not the mechanism, and reaching for one is the trap. `SELECT ... FOR
+UPDATE SKIP LOCKED` holds only until the transaction ends, so committing the claim
+before the handler runs lets a second worker take the same job, and holding the
+transaction open for the handler's duration keeps a row lock for as long as the
+work takes, which blocks the stalled-job sweep that has to reclaim it.
+
+So the claim is **state written to the row**, and the lock only guards the
+transition:
+
+```sql
+UPDATE jobs SET state = 'active', claimed_by = ?, lease_until = now() + interval
+WHERE id = (SELECT id FROM jobs WHERE state = 'waiting' AND run_at <= now()
+            ORDER BY priority, run_at LIMIT 1 FOR UPDATE SKIP LOCKED)
+RETURNING *
+```
+
+The transaction is one statement long. `lease_until` is the visibility timeout: a
+sweep returns rows whose lease expired to `waiting` and increments the attempt, and
+a worker renews the lease while its handler runs. That is what makes at-least-once
+delivery survive a worker being killed mid-job.
+
+- **SQLite**: no `SKIP LOCKED`, and `bun:sqlite` serialises writers anyway, so the
+  same `UPDATE ... RETURNING` is atomic under its write lock without the subquery
+  hint. **Verify `RETURNING` under WAL with two processes** before relying on it.
+- **Two-worker test, both dialects**: N jobs, two workers, assert each job runs
+  exactly once and no id is claimed twice. Kill one worker mid-job and assert the
+  lease expiry hands it to the other.
 
 ### Waking a worker
 
@@ -171,11 +216,41 @@ export abstract class CacheStore {
 }
 ```
 
-Implementations: `SqlCacheStore` over drizzle (one table: key, value, expires_at,
-created_at, with an index on expires_at), `RedisCacheStore` over
-`Bun.RedisClient`, and a memory one for tests. Expiry in batches on write or on a
-schedule, which is what Solid Cache does and the reason it can hold a much larger
-cache than a memory store.
+`get<T>` and `set<T>` take independent type parameters, so nothing stops a caller
+storing a number and reading a string. That is the same latitude `ConfigService`
+gives and it is not worth a codec registry, but it does mean **the serialization
+rules have to be written down rather than inherited from whatever `JSON.stringify`
+happens to do**:
+
+| Value                         | Stored as                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| JSON scalars, arrays, objects | `JSON.stringify`                                                               |
+| `Date`                        | ISO 8601 string. **Read back as a string**, not a `Date`                       |
+| `undefined`                   | rejected: it is indistinguishable from a miss                                  |
+| `bigint`                      | rejected: `JSON.stringify` throws on it, and silently coercing loses precision |
+| a missing key                 | `undefined`                                                                    |
+
+The two rejections throw a `CacheError` at `set`, so the loss is at the write that
+caused it rather than at a read weeks later.
+
+**Expiry is a read-time invariant, not a cleanup schedule.** `get` filters on
+`expires_at > now()` in the same statement that reads the row, so an expired entry
+is a miss whether or not a sweep has run. Batch cleanup only reclaims space. A
+contract test covers exactly that: write with a 1 second TTL, wait, read with no
+sweep run, expect a miss.
+
+`SqlCacheStore` over drizzle, one table:
+
+| Column       | Notes                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `key`        | **primary key**. `set` is an upsert, so a rewrite replaces the value and the TTL in one statement rather than accumulating rows |
+| `value`      | text, the serialized form above                                                                                                 |
+| `expires_at` | nullable for no TTL, indexed for the sweep and the read filter                                                                  |
+| `created_at` | for FIFO eviction                                                                                                               |
+
+`RedisCacheStore` over `Bun.RedisClient` with the same rules, and a memory one for
+tests only. Batch expiry on a schedule, which is what Solid Cache does and the
+reason it can hold a much larger cache than a memory store.
 
 Unlike the queue, this half is genuinely small: a TTL table is not years of edge
 cases, and no mature library clears Rule 1 anyway (`@keyv/postgres` depends on
@@ -196,20 +271,39 @@ cases, and no mature library clears Rule 1 anyway (`@keyv/postgres` depends on
 Phase 1 is the one that must land with every existing test still green, because it
 changes types under working code. Phase 0 is what makes that checkable.
 
-## What phase 0 pins
+## What phase 0 pins, and what it still owes
 
 The suite asserts through the example's HTTP routes and never imports a bullmq
 type, so the same file runs unchanged against a SQL backend. Anything it cannot
-observe through a route needs a route added to `examples/full` first.
+observe through a route needs a route added to `examples/full` first, which is why
+this is a two-part list rather than one.
 
-- enqueue returns an id, and the job reaches `completed` with the handler's result
-- a handler that throws retries to its attempt limit, then reports `failed` with a
-  reason
-- a delayed job is not claimed before its delay elapses
-- concurrency: N jobs enqueued together all complete
-- an unknown job name fails rather than being silently acknowledged
-- a job id nobody enqueued is a 404
-- in-process and `background: true` handlers both run and both return a result
+**Pinned now**, in `jobs.characterize.test.ts` and `jobs.test.ts`:
+
+- a job runs in this process and reports the handler's return value
+- a throwing handler retries and completes once it stops throwing
+- the attempt limit is respected and the failure reason readable
+- a delayed job reads `delayed`, then runs
+- a batch enqueued at once all completes
 - the publisher reports the queues it has opened
-- shutdown does not drop an in-flight job
+- a job id nobody enqueued is a 404
 - with the backend unreachable, publishing degrades to 503 rather than hanging
+- the forked `background: true` path runs and returns a result
+
+**Still owed before phase 2 starts**, because the compatibility target above names
+them and prose is not a test:
+
+| Behaviour                 | Needs                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| stalled recovery          | a handler that exits without completing, and a lease short enough to observe the reclaim |
+| a published job has an id | asserted directly, since `AppJob.id` is now non-optional                                 |
+| priorities                | two jobs enqueued out of priority order, asserted in completion order                    |
+| bulk add                  | a route over `addBulk`                                                                   |
+| retention                 | `removeOnComplete`, then a status route that 404s                                        |
+| cron and repeatable       | the `ScheduleModule` interplay, which has its own example already                        |
+| shutdown mid-job          | `shutdown.test.ts` covers app teardown; it does not cover an in-flight job               |
+
+**Narrowed out of the v1 target**, so they are neither characterized nor promised:
+rate limiting and dead-letter routing. Both are bullmq features an app can keep by
+staying on Redis, and neither is on Firecracker's path. Adding them later is
+additive; promising them now and discovering the semantics differ is not.

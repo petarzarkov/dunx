@@ -52,22 +52,26 @@ const view = async (id: string): Promise<TaskView> =>
   (await (await fetch(api(`jobs/tasks/${id}`))).json()) as TaskView;
 
 /**
- * Waits for the **result**, not merely a terminal state. A backend can report
- * `completed` before the return value is readable, so stopping at the state
- * flakes on exactly the assertion that matters. A failure has no result, so
- * `failed` ends the wait on its own.
+ * Waits for the **result**, and for nothing else. Two states lie on the way there:
+ * a backend reports `completed` before the return value is readable, and it
+ * reports `failed` between attempts while a retry is still owed. Treating either
+ * as terminal flakes on exactly the assertion that matters.
  *
- * Polled rather than slept, so a slow machine waits instead of failing.
+ * A job that genuinely fails never produces a result, so a caller expecting that
+ * uses {@link exhausted} instead and this one times out, which is the honest
+ * outcome for a test that asked for a result and did not get one.
  */
 const settled = async (id: string, ms = 15_000): Promise<TaskView> => {
   const deadline = Date.now() + ms;
   let last: TaskView | undefined;
   while (Date.now() < deadline) {
     last = await view(id);
-    if (last.result !== null || last.state === 'failed') return last;
+    if (last.result !== null) return last;
     await Bun.sleep(50);
   }
-  throw new Error(`job ${id} never settled. last=${JSON.stringify(last)}`);
+  throw new Error(
+    `job ${id} never produced a result. last=${JSON.stringify(last)}`,
+  );
 };
 
 beforeAll(async () => {
