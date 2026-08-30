@@ -52,18 +52,23 @@ interface Closable {
 
 /**
  * How long a worker that reached readiness gets to finish what it is holding
- * before the close is forced. Workers drain concurrently, so this bounds the whole
- * teardown rather than each one.
+ * before `start()` stops waiting for it. Workers drain concurrently, so this
+ * bounds the whole teardown rather than each one.
  */
 export const DRAIN_ON_FAILED_START_MS = 5_000;
 
 /**
- * A graceful close, forced if it does not finish in `ms`.
+ * A graceful close, waited on for at most `ms`.
  *
- * Neither half alone is right on a failed start. `close(true)` abandons whatever
- * the worker is running, and a worker that became ready may well be running
- * something. A bare `close()` waits on the broker, which is the connection that
- * just failed, so it can wait forever.
+ * **The close cannot be escalated**, so this stops waiting rather than forcing.
+ * bullmq 6.0.5's `Worker.close` returns the `closing` promise it already started
+ * (`worker.js:736`), so a later `close(true)` is the same pending promise and
+ * forces nothing. A first call decides which kind of close a worker gets, and
+ * that is the only decision available.
+ *
+ * Which is why the choice is made per worker before either is called: a worker
+ * that never became ready is force-closed outright, and only one that may be
+ * holding a job is drained through here.
  *
  * The timer is unref'd, so a worker that closes in time cannot leave it holding
  * the process open.
@@ -73,20 +78,39 @@ export const closeWithin = async (
   ms: number,
 ): Promise<void> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const forced = new Promise<void>((resolve) => {
-    timer = setTimeout(() => {
-      void worker.close(true).then(
-        () => resolve(),
-        () => resolve(),
-      );
-    }, ms);
+  const gaveUp = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
     timer.unref?.();
   });
   try {
-    await Promise.race([worker.close(), forced]);
+    await Promise.race([worker.close(), gaveUp]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
+};
+
+/** How often one queue's worker may report a connection error. */
+export const ERROR_LOG_INTERVAL_MS = 30_000;
+
+/**
+ * Answers whether this error is the one to report, at most once per interval.
+ *
+ * Time rather than a `ready` gate: bullmq emits `Worker`'s `ready` once, from the
+ * initial `waitUntilReady` chain (`worker.js:125`), and the connection's recurring
+ * ready reaches the backend rather than the worker. A gate cleared on that event
+ * would latch after the first outage and silence every one after it.
+ */
+export const errorThrottle = (
+  intervalMs: number,
+  now: () => number = Date.now,
+): (() => boolean) => {
+  let last = Number.NEGATIVE_INFINITY;
+  return () => {
+    const at = now();
+    if (at - last < intervalMs) return false;
+    last = at;
+    return true;
+  };
 };
 
 /** What a worker process holds. `create` discovers and validates; `start` opens
@@ -278,19 +302,13 @@ export class QueueConsumer {
       const subject = job ? describeJob(job) : `a job on ${queue}`;
       this.#logger.error(`Job failed ${subject}`, error);
     });
-    // Reported once per outage, not once per reconnect. bullmq reopens a blocking
-    // read the moment its connection closes, so against an absent broker this
-    // fires in a hot loop: measured at 21.9M lines in two minutes, which is enough
-    // I/O to stop a process making progress at all. The same gate `PubSub` uses
-    // for a failing relay.
-    let failing = false;
-    worker.on('ready', () => {
-      failing = false;
-    });
+    // Throttled, not deduplicated. bullmq reopens a blocking read the moment its
+    // connection closes, so against an absent broker this fires in a hot loop:
+    // measured at 21.9M lines in two minutes, which is enough I/O to stop a
+    // process making progress at all. A later outage still gets reported.
+    const report = errorThrottle(ERROR_LOG_INTERVAL_MS);
     worker.on('error', (error) => {
-      if (failing) return;
-      failing = true;
-      this.#logger.error(`Worker error on ${queue}`, error);
+      if (report()) this.#logger.error(`Worker error on ${queue}`, error);
     });
     return worker;
   }

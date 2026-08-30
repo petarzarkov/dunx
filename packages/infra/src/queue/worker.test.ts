@@ -18,6 +18,7 @@ import { QueueModule } from './module.js';
 import { JobPublisher } from './publisher.js';
 import {
   closeWithin,
+  errorThrottle,
   QueueConsumer,
   WorkerFactory,
   type WorkerApp,
@@ -484,40 +485,68 @@ describe('WorkerFactory.attach', () => {
  * waiting on it without a bound waits on the broker that just failed.
  */
 describe('closeWithin', () => {
-  it('lets a close that finishes in time finish, and never forces', async () => {
+  /** bullmq's own shape: `close()` returns the promise it already started, so a
+   * second call with `force` is the same pending promise and escalates nothing. */
+  const bullmqLike = (settles: boolean) => {
     const calls: (boolean | undefined)[] = [];
-    const worker = {
-      close: (force?: boolean) => {
+    let closing: Promise<void> | undefined;
+    return {
+      calls,
+      close(force?: boolean): Promise<void> {
         calls.push(force);
-        return Promise.resolve();
-      },
-    };
-
-    await closeWithin(worker, 50);
-    // The graceful call, and nothing after it.
-    expect(calls).toEqual([undefined]);
-    // Long enough that a surviving timer would have fired.
-    await Bun.sleep(120);
-    expect(calls).toEqual([undefined]);
-  });
-
-  it('forces a close that does not finish, and still settles', async () => {
-    const calls: (boolean | undefined)[] = [];
-    const worker = {
-      close: (force?: boolean) => {
-        calls.push(force);
-        // The graceful call never settles, which is a close waiting on a broker
-        // that is gone.
-        // Never settles, which is a close waiting on a broker that is gone.
-        return force === true
+        closing ??= settles
           ? Promise.resolve()
           : new Promise<void>(() => {
-              /* deliberately pending */
+              /* a close waiting on a broker that is gone */
             });
+        return closing;
       },
     };
+  };
 
-    await closeWithin(worker, 30);
-    expect(calls).toEqual([undefined, true]);
+  it('returns as soon as a close that finishes does', async () => {
+    const worker = bullmqLike(true);
+    const started = Bun.nanoseconds();
+    await closeWithin(worker, 5_000);
+    // Returned on the close, not on the bound.
+    expect((Bun.nanoseconds() - started) / 1e6).toBeLessThan(1_000);
+    expect(worker.calls).toEqual([undefined]);
+  });
+
+  it('stops waiting on a close that never finishes', async () => {
+    const worker = bullmqLike(false);
+    const started = Bun.nanoseconds();
+    await closeWithin(worker, 40);
+    const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
+    // The point: it settles. Without the bound this test would never return.
+    expect(elapsedMs).toBeGreaterThanOrEqual(35);
+    expect(elapsedMs).toBeLessThan(2_000);
+    // And it did not try to escalate, which bullmq would have ignored anyway.
+    expect(worker.calls).toEqual([undefined]);
+  });
+});
+
+/**
+ * Throttled rather than gated on recovery: bullmq emits `Worker`'s `ready` once,
+ * so a flag cleared on that event would silence every outage after the first.
+ */
+describe('errorThrottle', () => {
+  it('reports one of a flood', () => {
+    const report = errorThrottle(30_000, () => 0);
+    const reported = Array.from({ length: 10_000 }, () => report()).filter(
+      Boolean,
+    );
+    expect(reported).toHaveLength(1);
+  });
+
+  it('reports a second outage once the interval has passed', () => {
+    let at = 0;
+    const report = errorThrottle(30_000, () => at);
+    expect(report()).toBe(true);
+    expect(report()).toBe(false);
+    // Recovered, ran for a while, then failed again.
+    at = 30_000;
+    expect(report()).toBe(true);
+    expect(report()).toBe(false);
   });
 });
