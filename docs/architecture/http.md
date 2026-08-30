@@ -202,11 +202,13 @@ no adapter between them. That is the `@dunx/auth` `RedisStore` precedent - decla
 the shape, let the app supply anything that fits - and `examples/full` runs its
 second node that way on purpose.
 
-### A Postgres relay satisfies the same two methods
+### A Postgres relay over `LISTEN`/`NOTIFY`
 
-`Bun.SQL`'s `LISTEN`/`NOTIFY` is publish and subscribe, so it fits `PubSubRelay` with
-no adapter between them, as `RedisConnection` does. `Bun.SQL` is a global, so a
-Postgres relay beside `RedisRelay` would add no dependency to `@dunx/http` either.
+`Bun.SQL` has both of `PubSubRelay`'s operations under other names: `notify` for
+publish, `listen` for subscribe, and `unlisten` on the returned handle for close. So
+this is not the structural fit `RedisConnection` is, where the names already match.
+It is a class of about thirty lines holding one `Bun.SQL` and renaming three calls.
+`Bun.SQL` is a global, so it would add no dependency to `@dunx/http`.
 
 Measured on Bun 1.4.0 (rev 34cbb9a40) against Postgres 17, with two real nodes: a
 gateway on each, a client connected to node B alone, `publishEvent` called on node A,

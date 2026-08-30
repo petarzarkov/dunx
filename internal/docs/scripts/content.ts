@@ -38,7 +38,11 @@ const resolveFrom = (from: string, path: string): string => {
   if (!from || !/^\.\.?\//.test(path)) {
     return path.replace(/^(?:\.\/|\.\.\/)+/, '');
   }
-  return posix.join(posix.dirname(from), path).replace(/^(?:\.\.\/)+/, '');
+  // `node:path`'s `relative` and `Bun.Glob` both hand back `\` on Windows, and a
+  // link target is always `/`. Normalised here rather than at each call site, so
+  // a new source of `from` cannot reintroduce it.
+  const dir = posix.dirname(from.replaceAll('\\', '/'));
+  return posix.join(dir, path).replace(/^(?:\.\.\/)+/, '');
 };
 
 /**

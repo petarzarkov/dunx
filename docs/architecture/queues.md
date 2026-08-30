@@ -161,8 +161,9 @@ Two costs stand against adopting this, and the measurement settles neither:
   pg-boss backend has a different job model, so it is a second surface rather than a
   driver swap behind the existing one.
 
-Postgres only, besides. SQLite and MySQL have no `LISTEN`/`NOTIFY`, so 2012 ms is
-the whole story on either.
+Postgres only, besides, and doubly so: pg-boss supports no other backend, and
+`Bun.SQL` answers `LISTEN`/`NOTIFY` on the Postgres adapter alone. An app on SQLite
+or MySQL has no candidate here at all, so both figures above are Postgres figures.
 
 Recorded here rather than built; the open item is in
 [ROADMAP.md](../ROADMAP.md), "Open items".

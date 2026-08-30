@@ -20,12 +20,14 @@ Delete it once the three verdicts are taken.
 
 ## Fan-out: the cheapest of the three, and the closest to done
 
-`PubSubRelay` is two methods, and `Bun.SQL`'s `LISTEN`/`NOTIFY` is those two methods,
-so a relay needs no adapter. Two real dunx nodes, a client on one, a publish on the
-other: the frame crosses, on the default `dunx:ws` channel, with `relayChannel`
-untouched. The measurement and the 7.9 KB frame ceiling are in
-[architecture/http.md](../../../docs/architecture/http.md), "A Postgres relay
-satisfies the same two methods".
+`PubSubRelay` is two methods, and `Bun.SQL` has both under other names: `notify`,
+`listen`, and `unlisten` on the handle. So a relay is a class of about thirty lines
+renaming three calls, rather than the structural fit `RedisConnection` is. Two real
+dunx nodes, a client on one, a publish on the other: the frame crosses, on the
+default `dunx:ws` channel, with `relayChannel` untouched. The measurement and the
+7.9 KB frame ceiling are in
+[architecture/http.md](../../../docs/architecture/http.md), "A Postgres relay over
+`LISTEN`/`NOTIFY`".
 
 What is open is placement, not feasibility. `RedisRelay` sits in `@dunx/http` because
 `Bun.RedisClient` is a global that costs the package no dependency, and `Bun.SQL` is

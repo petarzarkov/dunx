@@ -270,6 +270,12 @@ describe('markdown content', () => {
         'docs/guide/05-controllers.md',
       ),
     ).toBe('#/guide/http');
+    // `relative()` and `Bun.Glob` hand back `\` on Windows; a link target does not.
+    expect(
+      rewriteHref('./usage.md', targets, '', 'packages\\infra/README.md'),
+    ).toBe(
+      'https://github.com/petarzarkov/dunx/blob/main/packages/infra/usage.md',
+    );
   });
 
   test('slugify strips backticks and punctuation', () => {
