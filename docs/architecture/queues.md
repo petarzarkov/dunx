@@ -108,6 +108,65 @@ test.
 The `devDependency` was `^6.0.0` against a `>=5.0.0` peer; it now matches the
 peer, as `bullmq`'s and `drizzle-orm`'s already did.
 
+### A Postgres-backed queue, measured and not adopted
+
+Rails 8 moved its queue, cache and websocket fan-out onto the application's own
+database and dropped Redis. The question that raises here is whether
+`@dunx/infra/queue` should have a second backend needing no broker.
+
+**pg-boss is the library, on the rule that made bullmq the queue.** Retries, backoff,
+cron, singleton queues, dead letters and archival are already its, and building them
+over `Bun.SQL` is the failure Rule 1's second half names. graphile-worker is the
+other candidate and was not measured; pg-boss took the first look for publishing a
+`Db` interface aimed at this case.
+
+pg-boss 12.28.1 takes a `db` implementing `executeSql(text, values)`, and its types
+say a custom adapter may also implement `listen` to enable `useListenNotify`.
+`Bun.SQL` satisfies both through three shims, one per gap recorded in
+[bun-apis.md](../bun-apis.md): reserve a connection for the `BEGIN` blocks, spell a
+JS array as a Postgres array literal, and parse a stringified JSON parameter before
+binding it. The `$n::type` cast pg-boss writes beside each placeholder says which
+applies, so the shim is about 20 lines.
+
+Measured on Bun 1.4.0 (rev 34cbb9a40), pg-boss 12.28.1, Postgres 17:
+
+```
+migration + start:                  75 ms (2 reserved connections)
+warnings:                           none
+pg_stat_activity:                   10 conns, application_name "" on all of them
+dispatch -> handler, notify: true   10 ms
+dispatch -> handler, notify: false  2012 ms
+retries with retryLimit 3:          succeeded on attempt 3
+```
+
+The connection census is the load-bearing line. pg-boss's own `Db` sets
+`application_name` to `pgboss` on the pool it opens, so ten unnamed connections and
+no `pgboss` among them means that pool was never constructed and every statement
+went through `Bun.SQL`. An empty `warnings` list says the same about the listener:
+pg-boss emits `listen_notify_unavailable` when it falls back to polling, and the
+200x gap between the two dispatch figures is what the fallback costs.
+
+`pg` still has to be installed. `dist/db.js` imports it statically and
+`dist/index.js` imports `db.js`, so the barrel pulls it in whether or not a custom
+adapter replaces it. That is the shape of bullmq's `ioredis` import above, and it
+would be an optional peer for the same reason.
+
+Two costs stand against adopting this, and the measurement settles neither:
+
+- **The shim reads pg-boss's own SQL.** A cast that changes spelling upstream breaks
+  binding with no compile error, and the fix would live here rather than in either
+  project. Its home is Bun, or an adapter pg-boss ships.
+- **pg-boss is not a bullmq drop-in.** `JobPublisher.for()` returns bullmq's `Queue`
+  so that `addBulk`, `upsertJobScheduler` and `getJobCounts` need no restating. A
+  pg-boss backend has a different job model, so it is a second surface rather than a
+  driver swap behind the existing one.
+
+Postgres only, besides. SQLite and MySQL have no `LISTEN`/`NOTIFY`, so 2012 ms is
+the whole story on either.
+
+Recorded here rather than built; the open item is in
+[ROADMAP.md](../ROADMAP.md), "Open items".
+
 ### Job discovery
 
 The **marker-plus-prototype-scan** technique from **Route discovery**, third use:

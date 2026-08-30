@@ -578,6 +578,72 @@ that `@dunx/infra/db`'s `SqlOptions` uses the options-object form - harmless the
 because that backend is Postgres by construction, but any non-Postgres backend
 built on `Bun.SQL` must name its `adapter`.
 
+#### `LISTEN`/`NOTIFY` on the Postgres adapter, and the 7999-byte cap
+
+Measured on 1.4.0 (rev 34cbb9a40) against Postgres 17. `sql.listen(channel, cb, onReconnect)`
+resolves once the server acknowledges the `LISTEN`; `sql.notify(channel, payload)`
+publishes. Delivery between two clients works, and `unlisten()` ends it:
+
+```
+handle:                    { own: ["channel"], unlisten: fn, asyncDispose: fn }
+cross-connection delivery: [ "first" ]
+after unlisten:            [ "first" ]
+```
+
+The payload has a hard ceiling, and the boundary is exact:
+
+```
+7998 -> accepted
+7999 -> accepted
+8000 -> payload string too long
+```
+
+Postgres only. The SQLite adapter answers `LISTEN/NOTIFY is not supported by this
+adapter (PostgreSQL only)`.
+
+`notify()` returns a `Query`, and `Query` extends `Promise`, so `result instanceof
+Promise` is `true` and a rejection reaches a `.then(onOk, onErr)` pair. `PubSub`'s
+`#outbound` branches on that test, so a relay built on `notify` reports its failures
+through the normal degrade path rather than raising an unhandled rejection.
+
+#### Three parameter-binding gaps between `Bun.SQL` and a `pg`-shaped library
+
+Measured on 1.4.0 while running pg-boss over `Bun.SQL`. Each is something `pg` does
+that `Bun.SQL` does not, so any library written against `pg`'s parameter handling
+meets all three.
+
+**Transaction control is refused on a pooled connection.** A multi-statement string
+opening with `BEGIN` throws `Only use sql.begin, sql.reserved or max: 1`. The same
+string through `sql.reserve()` runs and returns one result array per statement, so a
+caller reading `rows` takes the last of them.
+
+**A JS array parameter is comma-joined rather than made into an array literal.** Both
+forms fail identically:
+
+```
+sql.unsafe('SELECT $1::text[]', [['probe','other']]) -> malformed array literal: "probe,other"
+sql`SELECT ${['probe','other']}::text[]`             -> malformed array literal: "probe,other"
+```
+
+The literal Postgres spelling binds correctly: `'{probe,other}'` reads back as
+`[ "probe", "other" ]`. Reported upstream and open:
+[#16840](https://github.com/oven-sh/bun/issues/16840),
+[#17798](https://github.com/oven-sh/bun/issues/17798),
+[#18775](https://github.com/oven-sh/bun/issues/18775),
+[#22165](https://github.com/oven-sh/bun/issues/22165).
+
+**A JSON string bound to a `::json` cast arrives as a JSON scalar.** Postgres reports
+what it was handed:
+
+```
+$1 = JSON.stringify([{ id: 1 }])   json_typeof -> string
+$1 = [{ id: 1 }]                   json_typeof -> array
+```
+
+So `json_to_recordset($1::json)` fails with `cannot call json_to_recordset on a
+scalar` against a string that a `pg`-based library already stringified, and succeeds
+against the raw value. Not found in the issue tracker; unreported as of this note.
+
 #### An in-flight MySQL query does not hold the event loop open
 
 Measured on 1.3.14, and the failure is silent. A script whose only pending work is
