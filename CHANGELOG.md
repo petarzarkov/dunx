@@ -4,6 +4,41 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.1.3 - 2026-08-30
+
+A worker that cannot reach its broker no longer floods
+
+Three fixes in @dunx/infra/queue, all on the failed-start path.
+
+`QueueConsumer.start()` opened every worker before awaiting any of them. A
+bullmq `Worker` reconnects the moment it is constructed, so against an absent
+broker each retry emits `error` and the guard that force-closes on a failed
+`waitUntilReady()` could not run until the first worker had finished failing.
+One queue hid it; a second flooded 21,950,586 log lines in two minutes and the
+process stopped making progress. Workers are opened and awaited one at a time
+now, which is what the comment above the loop always claimed.
+
+The failed-start path also force-closed workers that were already consuming.
+bullmq starts consuming at readiness, so a worker that became ready while a
+later one was still starting may hold a job, and `close(true)` abandons it for
+stalled recovery to run its side effects again. A worker that never became ready
+is still force-closed; one that did gets a graceful close, waited on for at most
+five seconds.
+
+That wait cannot escalate, and the first attempt at it was wrong. bullmq's
+`Worker.close` returns the `closing` promise it already started, so a second
+call with `force` is the same pending promise. The bound stops waiting instead.
+
+The error log is throttled to one report per queue per 30s rather than gated on
+recovery: bullmq emits `Worker`'s `ready` once, so a flag cleared on that event
+would have silenced every outage after the first.
+
+### Fixes
+
+- **queue**: a close bullmq cannot escalate, and a throttle that does not latch ([`9980d87`](https://github.com/petarzarkov/dunx/commit/9980d8700f1652ef2eb5b301f7e293e5aa4cbbe2))
+- **queue**: drain a ready worker on a failed start rather than forcing it ([`02dfa5d`](https://github.com/petarzarkov/dunx/commit/02dfa5d22e5390f79813fd80d7c15020da984741))
+- **queue**: open each worker in turn, so a second queue cannot flood ([`7fe6d23`](https://github.com/petarzarkov/dunx/commit/7fe6d23033b95702e0699fba44d9d59099d3e684))
+
 ## 3.1.2 - 2026-08-30
 
 A Postgres websocket relay, and the createTestServer globals warning
