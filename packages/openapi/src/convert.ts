@@ -124,6 +124,26 @@ interface RootConversion {
 }
 
 /**
+ * zod 4.5's self-hoisted root, resolved to the definition it points at. Anything
+ * else is returned untouched, including a root that carries siblings alongside a
+ * `$ref`, which is not the shape this is for.
+ */
+const vendorRootKey = (
+  root: Record<string, unknown>,
+  defs: unknown,
+): string | undefined => {
+  const ref = root['$ref'];
+  if (typeof ref !== 'string' || Object.keys(root).length !== 1) {
+    return undefined;
+  }
+  if (!ref.startsWith(DEFS_PREFIX)) return undefined;
+  if (typeof defs !== 'object' || defs === null) return undefined;
+  const key = ref.slice(DEFS_PREFIX.length);
+  const target = (defs as Record<string, unknown>)[key];
+  return typeof target === 'object' && target !== null ? key : undefined;
+};
+
+/**
  * Converts, hoists `$defs` into `components/schemas`, and rewrites the refs that
  * pointed at them. zod emits `#/$defs/Tag`; OpenAPI wants
  * `#/components/schemas/Tag`. That is the whole difference - the definitions
@@ -171,7 +191,25 @@ const convertRoot = async (
     return { root: undefined, unconverted: vendor };
   }
 
-  const { $schema: _schema, $defs: defs, ...rest } = emitted;
+  const { $schema: _schema, $defs: defs, ...vendorRoot } = emitted;
+  // zod 4.5 hoists a schema carrying `.meta({ id })` into `$defs` and leaves a
+  // bare `$ref` at the root, where 4.4 emitted it inline. Resolved back here so
+  // everything downstream reads a schema rather than a reference: `convertObject`
+  // splits the root into `parameters`, which a `$ref` cannot be, and `store.add`
+  // deep-equals, so re-registering the resolved definition is idempotent rather
+  // than a name collision with the one the `$defs` loop already stored.
+  const selfHoisted = vendorRootKey(vendorRoot, defs);
+  const rest =
+    selfHoisted === undefined
+      ? vendorRoot
+      : ((defs as Record<string, unknown>)[selfHoisted] as Record<
+          string,
+          unknown
+        >);
+  // zod 4.4 spelled a self-reference `#`; 4.5 spells it `#/$defs/<name>`.
+  const cyclic =
+    selfHoisted !== undefined &&
+    collectRefs(rest).has(`${DEFS_PREFIX}${selfHoisted}`);
   const id = metaOf(schema)?.id;
   // A cyclic schema refs the document root as `#`, which means "this schema" -
   // true where zod emitted it, false once it is one entry among many. Hoisting is
@@ -186,12 +224,20 @@ const convertRoot = async (
 
   if (defs !== undefined && typeof defs === 'object' && defs !== null) {
     for (const [key, definition] of Object.entries(defs)) {
+      // The entry that *is* the root is the caller's to register or inline:
+      // `convertSchema` hoists it, `convertObject` splits it into parameters and
+      // wants it in neither. Storing it here left an unreferenced component in
+      // the document for every named params schema.
+      //
+      // Unless it refers to itself. A cyclic root needs a component to point at,
+      // which is the same reason `selfReferential` forces a hoist below.
+      if (key === selfHoisted && !cyclic) continue;
       store.add(key, rewriteRefs(definition, map) as JsonSchema);
     }
   }
 
   const root = rewriteRefs(rest, map) as JsonSchema;
-  const selfReferential = collectRefs(rest).has('#');
+  const selfReferential = collectRefs(rest).has('#') || cyclic;
   return {
     root,
     ...(id !== undefined || selfReferential ? { id: name } : {}),

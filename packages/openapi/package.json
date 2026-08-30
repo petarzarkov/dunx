@@ -54,7 +54,7 @@
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/testing": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",
