@@ -316,6 +316,8 @@ export class HttpConfigModule {}
 ```
 
 ```ts
+import { HttpOptionsProvider, WsRelay, type PubSubRelay } from '@dunx/http';
+
 export class AppHttpOptions extends HttpOptionsProvider {
   constructor(private readonly bus: WsRelay) {
     super();
@@ -346,8 +348,9 @@ WsRelayModule.forPostgresAsync({
 });
 ```
 
-Both relays are bound under `WsRelay`, so the injection site above does not change
-with the backend. Which method you call is the choice: a binding is fixed when the
+The factory changes with the method: `PostgresRelayOptions` is `url` and `max`, so
+Redis-only settings like `connectionTimeout` do not carry across. The injection site
+does not change, because both relays are bound under `WsRelay`. Which method you call is the choice: a binding is fixed when the
 module graph is built, so it cannot be read from config the container resolves
 later.
 

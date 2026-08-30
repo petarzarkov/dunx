@@ -249,18 +249,21 @@ Redis has no comparable ceiling.
 extend **`WsRelay`**, an abstract class the module binds to whichever one it built,
 so an `HttpOptionsProvider` naming `WsRelay` does not change when the backend does.
 
-The choice sits in the method name rather than in a field on the options, and that
-is forced rather than preferred. **Providers are instantiated eagerly**: a factory
-bound to a token runs during `AppFactory.create`, not on first use, measured on a
-module whose unused factory threw at boot. So a `forRootAsync` that picked its
-backend from the resolved settings would still have to declare both bindings up
-front, and the one it did not pick would be a `RedisRelay` constructed against a
-Postgres url. Two methods declare two static binding sets instead.
+The choice sits in the method name, and one measurement forces it.
+**Providers are instantiated eagerly**: a factory bound to a token runs during
+`AppFactory.create`, measured on a module whose unused factory threw at boot. A
+single `forRootAsync` reading its backend from the resolved settings would still
+declare both bindings up front, so the unpicked one would be a `RedisRelay`
+constructed against a Postgres url. Two methods declare two static binding sets.
 
 The cost is that the backend cannot come from validated config, since config is
-resolved after the module graph is built. An app that must decide at run time reads
-the environment where it declares the import, which is the one place the decision
-can be made.
+resolved after the module graph is built. An app deciding at run time reads the
+environment where it declares the import.
+
+`PostgresRelay` holds `max + 1` connections while it listens. `Bun.SQL` dedicates
+one to the `LISTEN` and leaves the pool to answer `notify`: with `max: 1`,
+`pg_stat_activity` shows two rows for the relay and one once it closes. Budget two
+connections per replica at the default.
 
 ### One channel, because `psubscribe` does not work
 

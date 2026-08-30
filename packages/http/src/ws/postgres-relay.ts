@@ -14,8 +14,9 @@ export interface PostgresRelayOptions {
   /** @default `$POSTGRES_URL`, `$DATABASE_URL`, then `postgres://localhost:5432` */
   readonly url?: string;
   /**
-   * Connections in the pool. One is enough: a `LISTEN` on `Bun.SQL` leaves the
-   * connection able to answer queries, so there is no second socket here.
+   * Size of the query pool `notify` publishes through. **`subscribe` opens a
+   * dedicated connection on top of it**, so a relay that is listening holds up to
+   * `max + 1`. Measured: `max: 1` shows two rows in `pg_stat_activity`.
    *
    * @default 1
    */
@@ -44,6 +45,9 @@ const assertUrl = (url: string): string => {
 /**
  * A {@link WsRelay} on `Bun.SQL`'s `LISTEN`/`NOTIFY`, a Bun global, so it costs
  * `@dunx/http` no dependency and an app already on Postgres needs no broker.
+ *
+ * One client, two connections while it listens: Bun dedicates one to the `LISTEN`
+ * and leaves the pool to answer `notify`. Budget `max + 1` per replica.
  *
  * **A frame over about 7.9 KB is refused**, because Postgres caps a `NOTIFY`
  * payload at 7999 bytes and the relay envelope adds to the frame. `PubSub` reports
