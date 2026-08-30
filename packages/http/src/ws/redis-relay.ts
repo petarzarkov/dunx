@@ -1,5 +1,5 @@
 import { AppError } from '@dunx/core';
-import type { PubSubRelay } from './relay.js';
+import { WsRelay } from './relay.js';
 
 /**
  * The schemes `Bun.RedisClient` accepts. Checked here because Bun takes any string
@@ -60,14 +60,14 @@ const assertUrl = (url: string): string => {
 };
 
 /**
- * A {@link PubSubRelay} on `Bun.RedisClient`, a Bun global, so it costs
+ * A {@link WsRelay} on `Bun.RedisClient`, a Bun global, so it costs
  * `@dunx/http` no dependency.
  *
  * Two connections: a client in subscriber mode rejects every data command, so the
  * subscription cannot share the publishing socket. Both open lazily, and a failed
  * one is discarded rather than reused.
  */
-export class RedisRelay implements PubSubRelay {
+export class RedisRelay extends WsRelay {
   readonly #url: string;
   readonly #options: Bun.RedisOptions;
   #pub: Bun.RedisClient | undefined;
@@ -76,6 +76,7 @@ export class RedisRelay implements PubSubRelay {
   #channel: string | undefined;
 
   constructor(options: RedisRelayOptions = {}) {
+    super();
     this.#url = assertUrl(options.url ?? defaultRelayUrl());
     this.#options = {
       maxRetries: options.maxRetries ?? 0,

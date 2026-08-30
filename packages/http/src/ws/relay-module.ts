@@ -7,10 +7,12 @@ import {
   type OnShutdown,
   type Registration,
 } from '@dunx/core';
+import { PostgresRelay, type PostgresRelayOptions } from './postgres-relay.js';
 import { RedisRelay, type RedisRelayOptions } from './redis-relay.js';
+import { WsRelay } from './relay.js';
 
 /**
- * The relay's connection settings, as a class so a factory can bind them.
+ * The Redis relay's connection settings, as a class so a factory can bind them.
  *
  * `RedisRelayOptions` stays the interface a caller writes; this is what the
  * container holds, which is the same split `HttpClientOptions` and
@@ -42,6 +44,24 @@ export class RelayConnectionOptions {
   }
 }
 
+/** The same, for the Postgres relay. */
+export class PostgresRelayConnectionOptions {
+  readonly url: string | undefined;
+  readonly max: number | undefined;
+
+  constructor(init: PostgresRelayOptions = {}) {
+    this.url = init.url;
+    this.max = init.max;
+  }
+
+  toInit(): PostgresRelayOptions {
+    return {
+      ...(this.url !== undefined && { url: this.url }),
+      ...(this.max !== undefined && { max: this.max }),
+    };
+  }
+}
+
 /**
  * Closes the relay's own sockets at shutdown.
  *
@@ -50,14 +70,14 @@ export class RelayConnectionOptions {
  * is the container's to close.
  */
 class RelayLifecycle implements OnShutdown {
-  constructor(private readonly relay: RedisRelay) {}
+  constructor(private readonly relay: WsRelay) {}
 
   async onShutdown(): Promise<void> {
     await this.relay.close();
   }
 }
 
-const bindings = (
+const redisBindings = (
   options: FactoryProvider<RelayConnectionOptions, Deps>,
 ): readonly Registration[] => [
   provide(RelayConnectionOptions, options),
@@ -66,9 +86,32 @@ const bindings = (
       new RedisRelay(settings.toInit()),
     inject: [RelayConnectionOptions] as const,
   }),
-  provide(RelayLifecycle, {
-    useFactory: (relay: RedisRelay) => new RelayLifecycle(relay),
+  provide(WsRelay, {
+    useFactory: (relay: RedisRelay) => relay,
     inject: [RedisRelay] as const,
+  }),
+  provide(RelayLifecycle, {
+    useFactory: (relay: WsRelay) => new RelayLifecycle(relay),
+    inject: [WsRelay] as const,
+  }),
+];
+
+const postgresBindings = (
+  options: FactoryProvider<PostgresRelayConnectionOptions, Deps>,
+): readonly Registration[] => [
+  provide(PostgresRelayConnectionOptions, options),
+  provide(PostgresRelay, {
+    useFactory: (settings: PostgresRelayConnectionOptions) =>
+      new PostgresRelay(settings.toInit()),
+    inject: [PostgresRelayConnectionOptions] as const,
+  }),
+  provide(WsRelay, {
+    useFactory: (relay: PostgresRelay) => relay,
+    inject: [PostgresRelay] as const,
+  }),
+  provide(RelayLifecycle, {
+    useFactory: (relay: WsRelay) => new RelayLifecycle(relay),
+    inject: [WsRelay] as const,
   }),
 ];
 
@@ -76,11 +119,11 @@ const bindings = (
  * Binds the websocket relay, so `relay` is a provider rather than an instance
  * `main.ts` constructs and threads into `HttpFactory.create`.
  *
- * `RedisRelay` is a class, so an options provider takes it as a parameter:
+ * Name {@link WsRelay} at the injection site and the backend is a wiring choice:
  *
  * ```ts
  * export class AppHttpOptions extends HttpOptionsProvider {
- *   constructor(private readonly bus: RedisRelay) {
+ *   constructor(private readonly bus: WsRelay) {
  *     super();
  *   }
  *
@@ -90,16 +133,17 @@ const bindings = (
  * }
  * ```
  *
- * A relay of your own needs no module: bind the class and return it from that
- * same getter. This one exists because `RedisRelay` is the one dunx ships and its
- * url comes from config like everything else.
+ * The backend is chosen by which method you call, not by a field in the options.
+ * A relay of your own needs no module: extend `WsRelay`, bind it, and return it
+ * from that same getter.
  */
 export class WsRelayModule {
+  /** Redis or Valkey, over `Bun.RedisClient`. */
   static forRoot(init: RedisRelayOptions = {}): DynamicModule {
     return {
       module: WsRelayModule,
-      exports: [RedisRelay, RelayConnectionOptions],
-      providers: bindings({
+      exports: [WsRelay, RedisRelay, RelayConnectionOptions],
+      providers: redisBindings({
         useFactory: () => new RelayConnectionOptions(init),
         inject: [] as const,
       }),
@@ -122,11 +166,49 @@ export class WsRelayModule {
     return {
       module: WsRelayModule,
       ...(config.imports === undefined ? {} : { imports: config.imports }),
-      exports: [RedisRelay, RelayConnectionOptions],
-      providers: bindings({
+      exports: [WsRelay, RedisRelay, RelayConnectionOptions],
+      providers: redisBindings({
         useFactory,
         inject: config.inject ?? ([] as const),
       } as FactoryProvider<RelayConnectionOptions, Deps>),
+    };
+  }
+
+  /**
+   * Postgres, over `Bun.SQL`'s `LISTEN`/`NOTIFY`, for an app that already has a
+   * database and would rather not run a broker. A frame over about 7.9 KB is
+   * refused; see {@link PostgresRelay}.
+   */
+  static forPostgres(init: PostgresRelayOptions = {}): DynamicModule {
+    return {
+      module: WsRelayModule,
+      exports: [WsRelay, PostgresRelay, PostgresRelayConnectionOptions],
+      providers: postgresBindings({
+        useFactory: () => new PostgresRelayConnectionOptions(init),
+        inject: [] as const,
+      }),
+    };
+  }
+
+  /** `forPostgres` with the settings behind a factory. */
+  static forPostgresAsync<const D extends Deps>(
+    config: AsyncModuleConfig<PostgresRelayOptions, D>,
+  ): DynamicModule {
+    const useFactory = async (
+      ...deps: readonly unknown[]
+    ): Promise<PostgresRelayConnectionOptions> =>
+      new PostgresRelayConnectionOptions(
+        await config.useFactory(...(deps as never)),
+      );
+
+    return {
+      module: WsRelayModule,
+      ...(config.imports === undefined ? {} : { imports: config.imports }),
+      exports: [WsRelay, PostgresRelay, PostgresRelayConnectionOptions],
+      providers: postgresBindings({
+        useFactory,
+        inject: config.inject ?? ([] as const),
+      } as FactoryProvider<PostgresRelayConnectionOptions, Deps>),
     };
   }
 }

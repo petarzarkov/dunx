@@ -242,11 +242,25 @@ the websocket relay could not publish. Fan-out is local to this process until it
 
 Redis has no comparable ceiling.
 
-Not built. `WsRelayModule` binds `RedisRelay` and takes `RelayConnectionOptions`, so
-a Postgres relay reaches an app through the `relay` option or `relayThrough` rather
-than through that module. Whether it earns a place beside `RedisRelay`, with the
-module growing a second binding, or stays the 30 lines an app writes against the
-interface, is open.
+### The backend is a method, not a field
+
+`PostgresRelay` ships beside `RedisRelay`, and `WsRelayModule` grew
+`forPostgres`/`forPostgresAsync` beside `forRoot`/`forRootAsync`. Both relays
+extend **`WsRelay`**, an abstract class the module binds to whichever one it built,
+so an `HttpOptionsProvider` naming `WsRelay` does not change when the backend does.
+
+The choice sits in the method name rather than in a field on the options, and that
+is forced rather than preferred. **Providers are instantiated eagerly**: a factory
+bound to a token runs during `AppFactory.create`, not on first use, measured on a
+module whose unused factory threw at boot. So a `forRootAsync` that picked its
+backend from the resolved settings would still have to declare both bindings up
+front, and the one it did not pick would be a `RedisRelay` constructed against a
+Postgres url. Two methods declare two static binding sets instead.
+
+The cost is that the backend cannot come from validated config, since config is
+resolved after the module graph is built. An app that must decide at run time reads
+the environment where it declares the import, which is the one place the decision
+can be made.
 
 ### One channel, because `psubscribe` does not work
 

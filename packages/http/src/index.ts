@@ -169,12 +169,22 @@ export {
 // reader outside this package needs the same channel the runtime uses.
 export { PubSub } from './ws/pubsub.js';
 // Multi-node fan-out. `PubSubRelay` is two methods, so `@dunx/infra`'s
-// RedisConnection satisfies it structurally; `RedisRelay` is Bun.RedisClient
-// directly and therefore costs this package no dependency.
+// RedisConnection satisfies it structurally; both relays shipped here are a Bun
+// global directly and therefore cost this package no dependency. `WsRelay` is the
+// injectable form, so the backend is a wiring choice.
+export {
+  PostgresRelay,
+  type PostgresRelayOptions,
+} from './ws/postgres-relay.js';
 export { RedisRelay, type RedisRelayOptions } from './ws/redis-relay.js';
-export { RelayConnectionOptions, WsRelayModule } from './ws/relay-module.js';
+export {
+  PostgresRelayConnectionOptions,
+  RelayConnectionOptions,
+  WsRelayModule,
+} from './ws/relay-module.js';
 export {
   DEFAULT_RELAY_CHANNEL,
+  WsRelay,
   type PubSubRelay,
   type RelayOptions,
 } from './ws/relay.js';
