@@ -162,12 +162,16 @@ Two costs stand against adopting this, and the measurement settles neither:
   driver swap behind the existing one.
 
 Both figures above are PostgreSQL 17 through `Bun.SQL`'s Postgres adapter, and
-nothing else was measured. pg-boss carries four other backend profiles, and they
-differ on the two things the 10 ms depends on: `cockroachdb` sets `noListenNotify`,
-so it polls; `yugabytedb` needs a server flag for it and drops advisory locks and
-partitioning; `citus` and `pglite` keep it. SQLite and MySQL are not pg-boss backends
-at all, and `Bun.SQL` answers `LISTEN`/`NOTIFY` on the Postgres adapter alone, so an
-app on either has no candidate here.
+nothing else was measured. pg-boss carries four other backend profiles, and the
+latency does not carry to them, because the only thing separating 10 ms from 2012 ms
+is whether a notification arrives: `cockroachdb` sets `noListenNotify` and polls,
+`yugabytedb` has it early-access behind `ysql_yb_enable_listen_notify` and off by
+default, `citus` and `pglite` have it. Their other flags, `noAdvisoryLocks` and
+`noTablePartitioning`, bear on migration and table layout rather than on dispatch.
+
+SQLite and MySQL are not pg-boss backends at all, and `Bun.SQL` answers
+`LISTEN`/`NOTIFY` on the Postgres adapter alone, so an app on either has no candidate
+here.
 
 Recorded here rather than built; the open item is in
 [ROADMAP.md](../ROADMAP.md), "Open items".
