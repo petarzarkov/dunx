@@ -4,8 +4,10 @@ import {
   Controller,
   Get,
   HttpError,
+  HttpOptionsProvider,
   Post,
   UseGuards,
+  type ErrorHandler,
   type Middleware,
   type RouteInput,
 } from '@dunx/http';
@@ -256,6 +258,36 @@ class ScopedController {
 })
 class ScopedGuardModule {}
 
+class ProvidedMiddleware extends HttpOptionsProvider {
+  override readonly middleware = [DenyGuard];
+}
+
+@Module({
+  controllers: [OpenController],
+  providers: [
+    DenyGuard,
+    provide(HttpOptionsProvider, { useClass: ProvidedMiddleware }),
+  ],
+  exports: [DenyGuard, HttpOptionsProvider],
+})
+class ProvidedMiddlewareModule {}
+
+class ProvidedErrorMapper extends HttpOptionsProvider {
+  override get onError(): ErrorHandler {
+    return () => new Response('mapped', { status: 418 });
+  }
+}
+
+@Module({
+  controllers: [OpenController],
+  providers: [
+    DenyGuard,
+    provide(HttpOptionsProvider, { useClass: ProvidedErrorMapper }),
+  ],
+  exports: [DenyGuard, HttpOptionsProvider],
+})
+class ProvidedErrorMapperModule {}
+
 const warnings = async (run: () => Promise<void>): Promise<string[]> => {
   const lines: string[] = [];
   const { warn } = console;
@@ -326,6 +358,47 @@ describe('createTestServer() global middleware', () => {
       expect(lines).toEqual([]);
       // Route-level guards are in the route table, so the fixture is the app.
       expect((await fixture!.request('scoped')).status).toBe(401);
+    } finally {
+      await fixture?.close();
+    }
+  });
+
+  /**
+   * Since 3.1.0 the argument is not the only source of global middleware, so a
+   * fixture whose module binds an `HttpOptionsProvider` is the application. The
+   * warning read the argument alone and fired anyway, telling an app that had
+   * taken the upgrading guide's advice to undo it.
+   */
+  it('says nothing when an HttpOptionsProvider supplied the middleware', async () => {
+    let fixture: TestServer | undefined;
+    const lines = await warnings(async () => {
+      fixture = await createTestServer({ modules: [ProvidedMiddlewareModule] });
+    });
+
+    try {
+      expect(lines).toEqual([]);
+      // The guard the warning would have claimed was not running.
+      expect((await fixture!.request('open')).status).toBe(401);
+    } finally {
+      await fixture?.close();
+    }
+  });
+
+  it('does not call the mapper default when a provider supplied one', async () => {
+    let fixture: TestServer | undefined;
+    const lines = await warnings(async () => {
+      fixture = await createTestServer({
+        modules: [ProvidedErrorMapperModule],
+      });
+    });
+
+    try {
+      // Middleware is still unsupplied, so the warning is right to fire.
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('DenyGuard');
+      // ...but this app's errors do not reach the default mapper.
+      expect(lines[0]).not.toContain('`onError` is the default mapper');
+      expect(lines[0]).toContain('HttpOptionsProvider');
     } finally {
       await fixture?.close();
     }
