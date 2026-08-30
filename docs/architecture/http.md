@@ -242,11 +242,28 @@ the websocket relay could not publish. Fan-out is local to this process until it
 
 Redis has no comparable ceiling.
 
-Not built. `WsRelayModule` binds `RedisRelay` and takes `RelayConnectionOptions`, so
-a Postgres relay reaches an app through the `relay` option or `relayThrough` rather
-than through that module. Whether it earns a place beside `RedisRelay`, with the
-module growing a second binding, or stays the 30 lines an app writes against the
-interface, is open.
+### The backend is a method, not a field
+
+`PostgresRelay` ships beside `RedisRelay`, and `WsRelayModule` grew
+`forPostgres`/`forPostgresAsync` beside `forRoot`/`forRootAsync`. Both relays
+extend **`WsRelay`**, an abstract class the module binds to whichever one it built,
+so an `HttpOptionsProvider` naming `WsRelay` does not change when the backend does.
+
+The choice sits in the method name, and one measurement forces it.
+**Providers are instantiated eagerly**: a factory bound to a token runs during
+`AppFactory.create`, measured on a module whose unused factory threw at boot. A
+single `forRootAsync` reading its backend from the resolved settings would still
+declare both bindings up front, so the unpicked one would be a `RedisRelay`
+constructed against a Postgres url. Two methods declare two static binding sets.
+
+The cost is that the backend cannot come from validated config, since config is
+resolved after the module graph is built. An app deciding at run time reads the
+environment where it declares the import.
+
+`PostgresRelay` holds `max + 1` connections while it listens. `Bun.SQL` dedicates
+one to the `LISTEN` and leaves the pool to answer `notify`: with `max: 1`,
+`pg_stat_activity` shows two rows for the relay and one once it closes. Budget two
+connections per replica at the default.
 
 ### One channel, because `psubscribe` does not work
 

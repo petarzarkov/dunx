@@ -1,3 +1,4 @@
+import { AppError } from '@dunx/core';
 /**
  * What `PubSub` needs from something that carries a message to the other nodes:
  * publish, and subscribe. Nothing else, so anything that already talks to a
@@ -133,3 +134,31 @@ export const decodeRelay = (message: string): RelayFrame | undefined => {
   }
   return { origin: o, topic: t, data: b ? Buffer.from(d, 'base64') : d };
 };
+
+/**
+ * The injectable form of {@link PubSubRelay}. An interface has no runtime value
+ * for the container to record, so a module binds this and a consumer that wants
+ * the relay names this rather than `RedisRelay` or `PostgresRelay` - which is
+ * what lets the backend change without the code that publishes changing with it.
+ *
+ * `close` is abstract here though it is optional on the interface: a relay the
+ * container built is the container's to close.
+ */
+export abstract class WsRelay implements PubSubRelay {
+  constructor() {
+    if (new.target === WsRelay) {
+      throw new AppError(
+        'WsRelay is a contract, not an implementation. Bind one with ' +
+          'WsRelayModule.forRoot() for Redis or WsRelayModule.forPostgres() ' +
+          'for Postgres, or extend it with a relay of your own.',
+      );
+    }
+  }
+
+  abstract publish(channel: string, message: string): unknown;
+  abstract subscribe(
+    channel: string,
+    listener: (message: string) => void,
+  ): unknown;
+  abstract close(): unknown;
+}

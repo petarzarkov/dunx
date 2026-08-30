@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'bun:test';
 import { AppFactory, Module, provide, token } from '@dunx/core';
+import { PostgresRelay } from './postgres-relay.js';
 import { RedisRelay } from './redis-relay.js';
-import { RelayConnectionOptions, WsRelayModule } from './relay-module.js';
+import {
+  PostgresRelayConnectionOptions,
+  RelayConnectionOptions,
+  WsRelayModule,
+} from './relay-module.js';
+import { WsRelay } from './relay.js';
 
 // Nothing here dials: `Bun.RedisClient` connects lazily, so a container can be
 // built and torn down against an address nothing is listening on.
 const unreachable = 'redis://127.0.0.1:6399';
+// The same for `Bun.SQL`: the client is built on first publish or subscribe.
+const unreachablePg = 'postgres://127.0.0.1:6399/nothing';
 
 describe('WsRelayModule', () => {
   it('binds the relay as a class, so it can be a parameter', async () => {
@@ -109,5 +117,58 @@ describe('WsRelayModule', () => {
     // opened a socket never reaches it. A relay the container built is the
     // container's to close.
     expect(closed).toBe(true);
+  });
+
+  it('binds WsRelay to the same instance as the concrete class', async () => {
+    @Module({ imports: [WsRelayModule.forRoot({ url: unreachable })] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    // One relay, two names: existing code injecting `RedisRelay` keeps working
+    // and new code can name the contract instead.
+    expect(app.get(WsRelay)).toBe(app.get(RedisRelay));
+    await app.shutdown();
+  });
+
+  it('binds Postgres under the same contract', async () => {
+    @Module({ imports: [WsRelayModule.forPostgres({ url: unreachablePg })] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(PostgresRelay)).toBeInstanceOf(PostgresRelay);
+    expect(app.get(WsRelay)).toBe(app.get(PostgresRelay));
+    await app.shutdown();
+  });
+
+  it('reaches a provider its own imports export, on the Postgres path too', async () => {
+    // A `token()`, never a class, for the reason above.
+    const DB_URL = token<string>('DbUrl');
+
+    @Module({
+      providers: [provide(DB_URL, { useValue: unreachablePg })],
+      exports: [DB_URL],
+    })
+    class UrlModule {}
+
+    @Module({
+      imports: [
+        WsRelayModule.forPostgresAsync({
+          imports: [UrlModule],
+          useFactory: (url: string) => ({ url, max: 3 }),
+          inject: [DB_URL] as const,
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(PostgresRelayConnectionOptions).max).toBe(3);
+    expect(app.get(PostgresRelay).url).toContain('6399');
+    await app.shutdown();
+  });
+
+  it('refuses to be instantiated as a contract', () => {
+    // @ts-expect-error - abstract, and the runtime says so too.
+    expect(() => new WsRelay()).toThrow(/contract, not an implementation/);
   });
 });

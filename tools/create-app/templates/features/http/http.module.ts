@@ -30,6 +30,9 @@ import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
      * consumes it. `main.ts` used to build `new RedisRelay(...)` and thread it
      * into `HttpFactory.create`, which was the last hand-built object in the
      * options. The container closes it at shutdown.
+     *
+     * `forPostgresAsync` here runs the same fan-out over Postgres, with a
+     * factory returning `{ url }` for the database instead of these.
      */
     WsRelayModule.forRootAsync({
       useFactory: (config: AppConfigService) => {

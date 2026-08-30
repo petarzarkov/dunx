@@ -296,7 +296,7 @@ const app = await HttpFactory.create(AppModule, {
 
 ### The same relay from the container
 
-`WsRelayModule` binds `RedisRelay` as a provider, so its url comes off
+`WsRelayModule` binds the relay as a provider, so its url comes off
 `ConfigService` like everything else and the container closes it at shutdown:
 
 ```ts
@@ -316,8 +316,10 @@ export class HttpConfigModule {}
 ```
 
 ```ts
+import { HttpOptionsProvider, WsRelay, type PubSubRelay } from '@dunx/http';
+
 export class AppHttpOptions extends HttpOptionsProvider {
-  constructor(private readonly bus: RedisRelay) {
+  constructor(private readonly bus: WsRelay) {
     super();
   }
 
@@ -327,8 +329,36 @@ export class AppHttpOptions extends HttpOptionsProvider {
 }
 ```
 
-A relay of your own needs no module: bind the class and return it from that same
-getter. See [Configuration](./12-configuration.md) for the options provider.
+A relay of your own needs no module: extend `WsRelay`, bind it, and return it from
+that same getter. See [Configuration](./12-configuration.md) for the options
+provider.
+
+### Postgres instead of Redis
+
+`WsRelayModule.forPostgres` and `forPostgresAsync` bind `PostgresRelay`, which
+carries the same frames over `LISTEN`/`NOTIFY` on `Bun.SQL`. An app already running
+Postgres needs no broker for fan-out:
+
+```ts
+WsRelayModule.forPostgresAsync({
+  useFactory: (config: AppConfigService) => ({
+    url: config.get('database').url,
+  }),
+  inject: [AppConfigService],
+});
+```
+
+The factory changes with the method: `PostgresRelayOptions` is `url` and `max`, so
+Redis-only settings like `connectionTimeout` do not carry across. The injection site
+does not change, because both relays are bound under `WsRelay`. Which method you call is the choice: a binding is fixed when the
+module graph is built, so it cannot be read from config the container resolves
+later.
+
+Two differences from Redis are worth knowing before you switch. **A frame over
+about 7.9 KB does not cross**, because Postgres caps a `NOTIFY` payload at 7999
+bytes and the envelope adds a topic and an origin id to it; `PubSub` logs one
+warning and fan-out stays local for that message. And `LISTEN`/`NOTIFY` is Postgres
+only, so `Bun.SQL`'s SQLite and MySQL adapters reject it.
 
 `RedisRelay` is built on `Bun.RedisClient`, a Bun global, so the relay itself costs
 `@dunx/http` **no new dependency**. The package's one runtime dependency is

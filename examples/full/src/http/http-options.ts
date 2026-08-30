@@ -1,6 +1,6 @@
 import {
   HttpOptionsProvider,
-  RedisRelay,
+  WsRelay,
   type CorsOptions,
   type PubSubRelay,
   type RequestLoggingOptions,
@@ -23,7 +23,8 @@ import { AppConfigService, RELAY_CHANNEL } from '../config.js';
 export class AppHttpOptions extends HttpOptionsProvider {
   constructor(
     private readonly config: AppConfigService,
-    private readonly bus: RedisRelay,
+    // The contract, not `RedisRelay`, so the backend changes without this moving.
+    private readonly bus: WsRelay,
   ) {
     super();
     this.trustProxy = this.config.get('trustProxy');
