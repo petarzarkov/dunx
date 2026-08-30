@@ -109,11 +109,17 @@ describe('global middleware from an HttpOptionsProvider', () => {
       lines.push(args.map(String).join(' '));
     };
 
-    const server = await createTestServer({
-      modules: [HttpModule, WeatherModule],
-      overrides: [provide(ForecastClient, { useValue: new FixedForecast() })],
-    });
-    console.warn = warn;
+    let server: Awaited<ReturnType<typeof createTestServer>>;
+    try {
+      server = await createTestServer({
+        modules: [HttpModule, WeatherModule],
+        overrides: [provide(ForecastClient, { useValue: new FixedForecast() })],
+      });
+    } finally {
+      // Restored even if boot throws, or every later test in this file reports
+      // into a dead array.
+      console.warn = warn;
+    }
 
     try {
       const { headers } = await server.request('weather/oslo');

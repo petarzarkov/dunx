@@ -156,7 +156,10 @@ export const createTestServer = async (
     warnAboutGlobals(
       app,
       collectModules(root),
-      (http.onError ?? settings.onError) === undefined,
+      // `in`, not `??`: `resolveHttpOptions` merges by `Object.keys(given)`, so an
+      // explicit `onError: undefined` is a caller saying "no filter" and the
+      // default mapper is what runs.
+      ('onError' in http ? http.onError : settings.onError) === undefined,
     );
   if (prefix !== undefined) app.setGlobalPrefix(prefix);
 
