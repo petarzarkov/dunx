@@ -642,7 +642,8 @@ $1 = [{ id: 1 }]                   json_typeof -> array
 
 So `json_to_recordset($1::json)` fails with `cannot call json_to_recordset on a
 scalar` against a string that a `pg`-based library already stringified, and succeeds
-against the raw value. Not found in the issue tracker; unreported as of this note.
+against the raw value. Filed as
+[#40942](https://github.com/oven-sh/bun/issues/40942).
 
 #### An in-flight MySQL query does not hold the event loop open
 

@@ -83,78 +83,22 @@ sit in or beside frozen ground.
 
 The suggested order, if any of it proceeds:
 
-1. **File the Bun JSON binding bug.** The report is written and sits at the bottom of
-   this file; posting it costs nothing and it is the gate on the queue being cheap
-   later.
+1. **Watch the two Bun gaps.** The JSON one is filed as
+   [#40942](https://github.com/oven-sh/bun/issues/40942), the array one is open on
+   four issues, and both closing is the gate on the queue adapter being small.
 2. **Decide the relay.** It is additive, it is in `@dunx/http`, and the measurement
    is done.
 3. **Hold the queue** until the Bun gaps close or someone asks for it.
 4. **Hold the cache** until something other than symmetry with Rails argues for it.
 
-## The Bun report, ready to file
+## Filed upstream
 
-Not yet filed. Post it at `oven-sh/bun`, then replace this section with the issue
-number the way [bun-1.4-adoption](./bun-1.4-adoption.md) records #40892 and #40893.
+[oven-sh/bun#40942](https://github.com/oven-sh/bun/issues/40942): a string parameter
+bound to a `::json` cast arrives as a JSON string scalar, so
+`json_to_recordset($1::json)` fails against a document a `pg`-shaped library already
+stringified. `node-postgres` answers `array` for `json_typeof` on the same statement,
+which is in the report.
 
----
-
-**Title:** `Bun.SQL`: a string parameter bound to a `::json` cast arrives as a JSON
-string scalar
-
-**What version of Bun is running?** 1.4.0+34cbb9a40, Linux x64. Postgres 17.
-
-**What steps will reproduce the bug?**
-
-```ts
-const sql = new Bun.SQL({
-  url: 'postgres://postgres:postgres@localhost:5432/postgres',
-});
-
-// A JSON document, already serialised - what every `pg`-based library passes.
-const payload = JSON.stringify([{ id: 1, name: 'a' }]);
-
-const [row] = await sql.unsafe(
-  'SELECT json_typeof($1::json) AS kind, $1::json AS value',
-  [payload],
-);
-console.log(row); // { kind: "string", value: '[{"id":1,"name":"a"}]' }
-//                   expected: { kind: "array", value: [ { id: 1, name: "a" } ] }
-
-// The consequence: anything that reads the document server-side fails.
-await sql.unsafe(
-  'SELECT * FROM json_to_recordset($1::json) AS x(id int, name text)',
-  [payload],
-); // PostgresError: cannot call json_to_recordset on a scalar
-
-await sql.close();
-```
-
-**What is the expected behaviour?**
-
-`json_typeof` answers `array`, and `json_to_recordset` returns one row per element.
-`node-postgres` does exactly that against the same server and the same statement:
-
-```
-pg       json_typeof -> array
-Bun.SQL  json_typeof -> string
-```
-
-**What do you see instead?**
-
-Postgres receives the JSON document wrapped as a JSON string, so `$1::json` is a
-scalar rather than the array the text spells out. Passing the parsed value instead of
-the string works, which is what identifies the encoding as the cause rather than the
-cast.
-
-**Additional information**
-
-This makes `Bun.SQL` unusable as the driver behind a library that serialises JSON
-parameters itself, which is the normal shape for anything written against `pg`.
-pg-boss builds its entire insert path on `json_to_recordset($1::json)` with a
-`JSON.stringify`d argument, so every `send` fails. The workaround is to parse the
-string back before binding, which needs the caller to know which placeholders carry a
-`::json` cast.
-
-Related, and already reported: a JS array parameter is comma-joined rather than
-rendered as a Postgres array literal (#16840, #17798, #18775, #22165). The two
-together are what stand between `Bun.SQL` and a `pg`-shaped library.
+The array half was already open on #16840, #17798, #18775 and #22165. Both closing is
+what turns the queue adapter from a driver-compat layer into `executeSql` plus
+`listen`, which is the size worth owning.
