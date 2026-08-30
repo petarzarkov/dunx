@@ -210,6 +210,15 @@ describe('WorkerFactory.create rejects a worker that could not work', () => {
    * The margin is deliberately enormous - the defect produced tens of thousands of
    * entries in this window and the fix produces a handful - so the threshold is not
    * a timing race.
+   *
+   * **One queue is what this reaches, and it is not the whole defect.** `start()`
+   * also used to open every worker before awaiting any, so a second queue stormed
+   * while the first was still failing. One foreground queue cannot show that: the
+   * single worker's own rejection reaches the guard immediately. It needs a
+   * background queue first, whose `waitUntilReady()` forks a child and takes long
+   * enough for a foreground queue to flood - which is `examples/full`, and where
+   * it was found: 21,950,574 entries in two minutes and a `bun test` that never
+   * exited. CI's examples job runs with no broker, so that path is gated there.
    */
   it('closes the workers it opened when the broker is unreachable', async () => {
     const opened: string[] = [];
