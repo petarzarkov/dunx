@@ -8,7 +8,7 @@ relays all keep working on whichever it picked.
 This file is the plan. Nothing below is built. Delete it when the phases are done
 and the outcome is in `docs/architecture/queues.md`.
 
-## Two things have to be settled before any code
+## Two things were settled before any code
 
 ### 1. Rule 1 says do not write this
 
@@ -39,15 +39,21 @@ panel, one dialect difference. Rule 1 broken for the SQL half, deliberately.
 
 **C. One engine.** Drop bullmq. Rewrites years of Redis edge cases for no gain.
 
-**Recommended: B.** What Rule 1 protects against is a half-built queue competing
-with a mature one. For SQLite there is no mature one to compete with, so that half
-is forced. Having written it, running the same SQL over Postgres costs a dialect
-rather than a second integration, and it is the option where a consumer's SQLite
-development database behaves like its Postgres production one. A is the more
-faithful reading of Rule 1 and its cost lands on consumers rather than on dunx.
+**Decided: B**, two engines. What Rule 1 protects against is a half-built queue
+competing with a mature one. For SQLite there is no mature one to compete with, so
+that half is forced. Having written it, running the same SQL over Postgres costs a
+dialect rather than a second job model, and it is the option where a consumer's
+SQLite development database behaves like its Postgres production one. A is the more
+faithful reading of Rule 1, and its cost lands on consumers rather than on dunx.
 
-Whichever is chosen, it belongs in CLAUDE.md as a recorded exception, not as
-silence.
+**pg-boss therefore has no role**, despite measuring well in PR #21. That
+measurement stands as the evidence that the Postgres half was reachable by
+integration; B trades it for one job model across both SQL dialects.
+
+**Phase 1 adds the exception to CLAUDE.md.** Rule 1 keeps "do not write a dunx ORM,
+a validator or an auth flow" and gains a named carve-out for the queue, with the
+reason and the boundary: bullmq stays the Redis engine, and nothing here competes
+with a library that exists.
 
 ### 2. bullmq's types are in the public surface, and in consumer code
 
@@ -83,11 +89,15 @@ export interface AppJob<T = unknown> {
 }
 ```
 
-Whether bullmq's `Job` satisfies that as written, or needs a wrapper, is a
-field-by-field check nobody has done. Do it before committing to the interface: a
-structural fit means the Redis path costs no allocation per job.
+**Decided: one break, at 4.0.** `AppJob` becomes the only shape a handler sees,
+`JobPublisher` and `JobDispatcher` are retyped against it, and bullmq is adapted
+behind it. A consumer's handler signature changes once, rather than the surface
+carrying two job types for a release cycle.
 
-The version consequence is the owner's call.
+The field-by-field comparison of bullmq's `Job` against this draft is still the
+first task of phase 1, but it now decides how thin the Redis adapter is rather than
+whether the break happens. `getState()` against `state()`, `returnvalue` against
+`result`, and `id?: string` against `id: string` are the three known to differ.
 
 ## What a queue has to do, and what this one will not
 
