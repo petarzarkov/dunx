@@ -45,6 +45,74 @@ export const childColourEnv = (
   return { ...env, FORCE_COLOR: '1' };
 };
 
+/** The half of a bullmq `Worker` {@link closeWithin} needs. */
+interface Closable {
+  close(force?: boolean): Promise<void>;
+}
+
+/**
+ * How long a worker that reached readiness gets to finish what it is holding
+ * before `start()` stops waiting for it. Workers drain concurrently, so this
+ * bounds the whole teardown rather than each one.
+ */
+export const DRAIN_ON_FAILED_START_MS = 5_000;
+
+/**
+ * A graceful close, waited on for at most `ms`.
+ *
+ * **The close cannot be escalated**, so this stops waiting rather than forcing.
+ * bullmq 6.0.5's `Worker.close` returns the `closing` promise it already started
+ * (`worker.js:736`), so a later `close(true)` is the same pending promise and
+ * forces nothing. A first call decides which kind of close a worker gets, and
+ * that is the only decision available.
+ *
+ * Which is why the choice is made per worker before either is called: a worker
+ * that never became ready is force-closed outright, and only one that may be
+ * holding a job is drained through here.
+ *
+ * The timer is unref'd, so a worker that closes in time cannot leave it holding
+ * the process open.
+ */
+export const closeWithin = async (
+  worker: Closable,
+  ms: number,
+): Promise<void> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const gaveUp = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
+  try {
+    await Promise.race([worker.close(), gaveUp]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+};
+
+/** How often one queue's worker may report a connection error. */
+export const ERROR_LOG_INTERVAL_MS = 30_000;
+
+/**
+ * Answers whether this error is the one to report, at most once per interval.
+ *
+ * Time rather than a `ready` gate: bullmq emits `Worker`'s `ready` once, from the
+ * initial `waitUntilReady` chain (`worker.js:125`), and the connection's recurring
+ * ready reaches the backend rather than the worker. A gate cleared on that event
+ * would latch after the first outage and silence every one after it.
+ */
+export const errorThrottle = (
+  intervalMs: number,
+  now: () => number = Date.now,
+): (() => boolean) => {
+  let last = Number.NEGATIVE_INFINITY;
+  return () => {
+    const at = now();
+    if (at - last < intervalMs) return false;
+    last = at;
+    return true;
+  };
+};
+
 /** What a worker process holds. `create` discovers and validates; `start` opens
  * the connections, so a wiring mistake fails before anything consumes. */
 export interface WorkerApp extends App {
@@ -114,24 +182,40 @@ export class QueueConsumer {
       );
     }
 
-    for (const queue of this.queues) {
-      this.#workers.push(this.#open(queue));
-    }
+    // Which workers reached readiness, so the failure path can tell a worker that
+    // may be holding a job from one that never started.
+    const ready = new Set<Worker>();
     try {
-      // Serially, so an unreachable server is reported once rather than per queue.
-      for (const worker of this.#workers) await worker.waitUntilReady();
+      // Opened **and** awaited one at a time. Opening them all first left every
+      // queue after the first storming while the first was still failing to
+      // become ready, so the guard below could not run until the flood had
+      // already starved the loop. One queue hid that; two did not.
+      for (const queue of this.queues) {
+        const worker = this.#open(queue);
+        this.#workers.push(worker);
+        await worker.waitUntilReady();
+        ready.add(worker);
+      }
     } catch (error) {
       /**
        * A worker that never became ready is still a running worker. `new Worker()`
        * reconnects immediately, so after `waitUntilReady()` rejects every retry
        * emits `error`: 2.3 million events in 25 s against a dead broker, which
-       * starves the event loop and keeps the process alive.
+       * starves the event loop and keeps the process alive. Those are force-closed:
+       * nothing reached them, so there is nothing to drain.
        *
-       * Force-closed, since nothing can be mid-flight and a graceful close would
-       * wait on the connection that just failed.
+       * A worker that **did** become ready is a different case, and the old
+       * comment here was wrong to lump them together. bullmq starts consuming at
+       * readiness, so it may be holding a job, and `close(true)` abandons it for
+       * stalled recovery to retry later - running a handler's side effects twice.
+       * It gets a bounded drain instead.
        */
       await Promise.allSettled(
-        this.#workers.map((worker) => worker.close(true)),
+        this.#workers.map((worker) =>
+          ready.has(worker)
+            ? closeWithin(worker, DRAIN_ON_FAILED_START_MS)
+            : worker.close(true),
+        ),
       );
       this.#workers.length = 0;
       throw error;
@@ -218,9 +302,14 @@ export class QueueConsumer {
       const subject = job ? describeJob(job) : `a job on ${queue}`;
       this.#logger.error(`Job failed ${subject}`, error);
     });
-    worker.on('error', (error) =>
-      this.#logger.error(`Worker error on ${queue}`, error),
-    );
+    // Throttled, not deduplicated. bullmq reopens a blocking read the moment its
+    // connection closes, so against an absent broker this fires in a hot loop:
+    // measured at 21.9M lines in two minutes, which is enough I/O to stop a
+    // process making progress at all. A later outage still gets reported.
+    const report = errorThrottle(ERROR_LOG_INTERVAL_MS);
+    worker.on('error', (error) => {
+      if (report()) this.#logger.error(`Worker error on ${queue}`, error);
+    });
     return worker;
   }
 }
