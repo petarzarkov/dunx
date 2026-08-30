@@ -16,7 +16,12 @@ import { JobHandler } from './decorators.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueModule } from './module.js';
 import { JobPublisher } from './publisher.js';
-import { QueueConsumer, WorkerFactory, type WorkerApp } from './worker.js';
+import {
+  closeWithin,
+  QueueConsumer,
+  WorkerFactory,
+  type WorkerApp,
+} from './worker.js';
 
 const url = defaultRedisUrl();
 
@@ -470,5 +475,49 @@ describe('WorkerFactory.attach', () => {
     await consumer.stop();
 
     await app.shutdown();
+  });
+});
+
+/**
+ * The close policy a failed start uses for a worker that **did** become ready.
+ * bullmq starts consuming at readiness, so forcing it abandons whatever it holds;
+ * waiting on it without a bound waits on the broker that just failed.
+ */
+describe('closeWithin', () => {
+  it('lets a close that finishes in time finish, and never forces', async () => {
+    const calls: (boolean | undefined)[] = [];
+    const worker = {
+      close: (force?: boolean) => {
+        calls.push(force);
+        return Promise.resolve();
+      },
+    };
+
+    await closeWithin(worker, 50);
+    // The graceful call, and nothing after it.
+    expect(calls).toEqual([undefined]);
+    // Long enough that a surviving timer would have fired.
+    await Bun.sleep(120);
+    expect(calls).toEqual([undefined]);
+  });
+
+  it('forces a close that does not finish, and still settles', async () => {
+    const calls: (boolean | undefined)[] = [];
+    const worker = {
+      close: (force?: boolean) => {
+        calls.push(force);
+        // The graceful call never settles, which is a close waiting on a broker
+        // that is gone.
+        // Never settles, which is a close waiting on a broker that is gone.
+        return force === true
+          ? Promise.resolve()
+          : new Promise<void>(() => {
+              /* deliberately pending */
+            });
+      },
+    };
+
+    await closeWithin(worker, 30);
+    expect(calls).toEqual([undefined, true]);
   });
 });

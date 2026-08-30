@@ -45,6 +45,50 @@ export const childColourEnv = (
   return { ...env, FORCE_COLOR: '1' };
 };
 
+/** The half of a bullmq `Worker` {@link closeWithin} needs. */
+interface Closable {
+  close(force?: boolean): Promise<void>;
+}
+
+/**
+ * How long a worker that reached readiness gets to finish what it is holding
+ * before the close is forced. Workers drain concurrently, so this bounds the whole
+ * teardown rather than each one.
+ */
+export const DRAIN_ON_FAILED_START_MS = 5_000;
+
+/**
+ * A graceful close, forced if it does not finish in `ms`.
+ *
+ * Neither half alone is right on a failed start. `close(true)` abandons whatever
+ * the worker is running, and a worker that became ready may well be running
+ * something. A bare `close()` waits on the broker, which is the connection that
+ * just failed, so it can wait forever.
+ *
+ * The timer is unref'd, so a worker that closes in time cannot leave it holding
+ * the process open.
+ */
+export const closeWithin = async (
+  worker: Closable,
+  ms: number,
+): Promise<void> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const forced = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      void worker.close(true).then(
+        () => resolve(),
+        () => resolve(),
+      );
+    }, ms);
+    timer.unref?.();
+  });
+  try {
+    await Promise.race([worker.close(), forced]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+};
+
 /** What a worker process holds. `create` discovers and validates; `start` opens
  * the connections, so a wiring mistake fails before anything consumes. */
 export interface WorkerApp extends App {
@@ -114,6 +158,9 @@ export class QueueConsumer {
       );
     }
 
+    // Which workers reached readiness, so the failure path can tell a worker that
+    // may be holding a job from one that never started.
+    const ready = new Set<Worker>();
     try {
       // Opened **and** awaited one at a time. Opening them all first left every
       // queue after the first storming while the first was still failing to
@@ -123,19 +170,28 @@ export class QueueConsumer {
         const worker = this.#open(queue);
         this.#workers.push(worker);
         await worker.waitUntilReady();
+        ready.add(worker);
       }
     } catch (error) {
       /**
        * A worker that never became ready is still a running worker. `new Worker()`
        * reconnects immediately, so after `waitUntilReady()` rejects every retry
        * emits `error`: 2.3 million events in 25 s against a dead broker, which
-       * starves the event loop and keeps the process alive.
+       * starves the event loop and keeps the process alive. Those are force-closed:
+       * nothing reached them, so there is nothing to drain.
        *
-       * Force-closed, since nothing can be mid-flight and a graceful close would
-       * wait on the connection that just failed.
+       * A worker that **did** become ready is a different case, and the old
+       * comment here was wrong to lump them together. bullmq starts consuming at
+       * readiness, so it may be holding a job, and `close(true)` abandons it for
+       * stalled recovery to retry later - running a handler's side effects twice.
+       * It gets a bounded drain instead.
        */
       await Promise.allSettled(
-        this.#workers.map((worker) => worker.close(true)),
+        this.#workers.map((worker) =>
+          ready.has(worker)
+            ? closeWithin(worker, DRAIN_ON_FAILED_START_MS)
+            : worker.close(true),
+        ),
       );
       this.#workers.length = 0;
       throw error;
