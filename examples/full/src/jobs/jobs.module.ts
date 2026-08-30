@@ -3,6 +3,7 @@ import { JobPublisher, QueueModule } from '@dunx/infra/queue';
 import { AppConfigService } from '../config.js';
 import { PicturesModule } from '../pictures/pictures.module.js';
 import { JobsController } from './jobs.controller.js';
+import { TaskJobs } from './tasks.jobs.js';
 import { ThumbnailJobs } from './thumbnail.jobs.js';
 
 /**
@@ -35,8 +36,8 @@ import { ThumbnailJobs } from './thumbnail.jobs.js';
     PicturesModule,
   ],
   controllers: [JobsController],
-  providers: [ThumbnailJobs],
+  providers: [ThumbnailJobs, TaskJobs],
   // Re-exported so a feature that enqueues does not import @dunx/infra/queue.
-  exports: [JobPublisher, ThumbnailJobs],
+  exports: [JobPublisher, ThumbnailJobs, TaskJobs],
 })
 export class JobsModule {}

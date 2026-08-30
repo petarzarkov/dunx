@@ -10,6 +10,7 @@ import { EncodableFormat } from '@dunx/infra/images';
 import { isConnectionError } from '@dunx/infra/redis';
 import { JobPublisher } from '@dunx/infra/queue';
 import { z } from 'zod';
+import { TASKS_QUEUE } from './tasks.jobs.js';
 import { THUMBNAIL_QUEUE, type RenderResult } from './thumbnail.jobs.js';
 
 const Enqueue = z
@@ -26,6 +27,37 @@ const Enqueue = z
 
 const enqueue = { body: Enqueue } as const;
 const oneJob = { params: z.object({ id: z.string().min(1) }) } as const;
+
+/**
+ * The in-process queue, parameterised so a caller can ask for a delay or an
+ * attempt limit. It exists for the characterization suite: retries and delays are
+ * behaviour a second backend has to reproduce, and neither is observable through
+ * the thumbnail routes.
+ */
+const Task = z
+  .object({
+    name: z.enum(['echo', 'flaky']),
+    note: z.string().default('hello'),
+    token: z.string().default('t'),
+    failTimes: z.coerce.number().int().min(0).max(5).default(0),
+    delayMs: z.coerce.number().int().min(0).max(30_000).default(0),
+    attempts: z.coerce.number().int().min(1).max(5).default(1),
+  })
+  .strict()
+  .meta({
+    id: 'EnqueueTask',
+    description: 'A task to run on the in-process queue',
+  });
+
+const task = { body: Task } as const;
+
+interface TaskView {
+  readonly id: string;
+  readonly state: string;
+  readonly result: unknown;
+  readonly failedReason: string | null;
+  readonly attemptsMade: number;
+}
 
 /** The publish side: `QueueModule.forRoot` binds `JobPublisher` and no worker. */
 @Controller('jobs')
@@ -71,6 +103,47 @@ export class JobsController {
       state: await job.getState(),
       result: (job.returnvalue as RenderResult | null) ?? null,
       failedReason: job.failedReason ?? null,
+    };
+  }
+
+  /** The queues the publisher has opened so far, which is what the dashboard reads. */
+  @Get('/queues')
+  queues(): { opened: readonly string[] } {
+    return { opened: this.publisher.opened };
+  }
+
+  @Post('/tasks', task)
+  async enqueueTask(
+    input: Input<typeof task>,
+  ): Promise<{ id: string; queue: string }> {
+    const { name, delayMs, attempts, ...data } = input.body;
+    const job = await this.degrades(() =>
+      this.publisher.publish(TASKS_QUEUE, name, data, {
+        attempts,
+        ...(delayMs > 0 ? { delay: delayMs } : {}),
+        backoff: { type: 'fixed', delay: 20 },
+      }),
+    );
+    return { id: job.id ?? '(unassigned)', queue: TASKS_QUEUE };
+  }
+
+  @Get('/tasks/:id', oneJob)
+  async task(input: Input<typeof oneJob>): Promise<TaskView> {
+    const job = await this.degrades(() =>
+      this.publisher.queue(TASKS_QUEUE).getJob(input.params.id),
+    );
+    if (job === undefined) {
+      throw new HttpError(
+        HttpStatusCode.NOT_FOUND,
+        `No job ${input.params.id} on "${TASKS_QUEUE}"`,
+      );
+    }
+    return {
+      id: job.id ?? input.params.id,
+      state: await job.getState(),
+      result: job.returnvalue ?? null,
+      failedReason: job.failedReason ?? null,
+      attemptsMade: job.attemptsMade,
     };
   }
 
