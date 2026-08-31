@@ -148,14 +148,32 @@ Keeping every field that a log pipeline filters or groups on, the reachable figu
 is **69.3% on json and 68.6% on plaintext**. Dropping only `user-agent` takes it
 to 71.4% and 70.9%.
 
-### `@dunx/infra/logger` costs twice what the benchmark measures
+### `@dunx/infra/logger` costs about twice what the benchmark measures
 
 Every other figure here is `ConsoleLogger`, because that is what `internal/bench`
-binds. Driven through the same rig, arkv's logger cost 10147 ns of request logging
-against `ConsoleLogger`'s 4923. So an app on `@dunx/infra/logger`, which is the
-configuration `packages/infra/README.md` recommends, sat near **46% of
-`bun-serve`** rather than the 61.8% the benchmark reports. That had never been
-measured.
+binds. Driven through the rig above, arkv's logger cost 10147 ns of request logging
+against `ConsoleLogger`'s 4923, so **about 2.06x**. Both numbers come from the same
+run on the same machine, which is what makes the ratio worth stating.
+
+**The ratio is measured; a percentage of `bun-serve` is not, and an earlier version
+of this page gave one anyway.** It read 46%, reached by adding this laptop's arkv
+figure to the 5950X's no-logging baseline, which sums two machines. The rig also
+has no socket under it, and the giveaway is in the numbers already here: it puts
+`ConsoleLogger` logging at 4923 ns where the 5950X's socket run implies 5100. A
+slower machine measuring less is only possible because the rig leaves out what
+`Bun.serve` itself does, so its absolute figures are a subset of the path rather
+than the path.
+
+The error also runs one way. A socket adds its cost to both loggers, and
+`(10147 + s) / (4923 + s)` falls as `s` grows, so the true ratio through a socket
+is below 2.06 and the true percentage is above the 46% that was published. It made
+production look worse than it is.
+
+What can be said is the ratio, and that `internal/bench` measures neither side of
+it: there is no arkv subject in the socket harness, so the configuration
+`packages/infra/README.md` recommends has never been benchmarked end to end. That
+is the gap worth closing, on the 5950X, before any figure for it goes in a
+sentence with a percent sign.
 
 It is consistent rather than surprising: arkv's own `bench.ts` put `Logger.info`
 at 1474 ns against `ConsoleLogger`'s 543 in the same kind of tight loop. The extra
@@ -191,9 +209,11 @@ What was in them, all allocation rather than algorithm:
 - `logfmt`'s `quote` ran four `replaceAll` passes over every quoted value; most
   are quoted for containing a space and have nothing for the other three to do.
 
-In the dunx request path that is 10147 ns to 9117 ns, **-10.2%**. Less than the
-35% the tight loop shows, for the reason the rest of this page keeps finding: what
-was removed is short-lived nursery garbage, and the path is paced by the retained
+Through the same rig, before and after, that is 10147 ns to 9117 ns, **-10.2%**.
+A relative figure from one machine and one rig, which is what a before-and-after
+in the same harness supports; it is not a claim about a socket. Less than the 35%
+the tight loop shows, for the reason the rest of this page keeps finding: what was
+removed is short-lived nursery garbage, and the path is paced by the retained
 strings.
 
 Two things measured and **not** adopted, both recorded because the reasoning is
