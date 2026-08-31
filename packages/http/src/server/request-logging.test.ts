@@ -381,3 +381,84 @@ describe('request logging', () => {
     );
   });
 });
+
+/**
+ * `x-request-id` on the response is the only part of request logging that leaves
+ * the process, so turning it off has to leave everything inside it working: the
+ * entry, the async scope, and the same silence on a failure.
+ */
+describe('requestIdHeader', () => {
+  const opts = { requestLogging: { requestIdHeader: false } } as const;
+
+  it('answers without the header and still logs the id', async () => {
+    const seen: { header?: string | undefined } = {};
+    const entries = await captured(async () => {
+      await withApp(async (_app, url) => {
+        const response = await fetch(new URL('things', url));
+        seen.header = response.headers.get('x-request-id') ?? undefined;
+      }, opts);
+    });
+
+    expect(seen.header).toBeUndefined();
+    const entry = entries.find((e) =>
+      String(e['message']).startsWith('GET /things'),
+    );
+    expect(String(entry?.['requestId'])).toMatch(UUID);
+  });
+
+  it('keeps the async scope, so a handler still logs the same id', async () => {
+    const entries = await captured(async () => {
+      await withApp(async (app, url) => {
+        handlerLogger.current = app.get(Logger);
+        await fetch(new URL('things/inner', url));
+        handlerLogger.current = undefined;
+      }, opts);
+    });
+
+    const fromHandler = entries.find(
+      (e) => e['message'] === 'from the handler',
+    );
+    const fromMiddleware = entries.find((e) =>
+      String(e['message']).startsWith('GET /things/inner'),
+    );
+    expect(fromHandler?.['requestId']).toBeDefined();
+    expect(fromHandler?.['requestId']).toBe(fromMiddleware?.['requestId']);
+  });
+
+  /**
+   * A failure never returns the middleware's response: the error mapper builds a
+   * fresh one, and stamps it from what `RequestIds.assign` recorded. Turning the
+   * header off has to reach that path too, or it would come back on the 500s.
+   */
+  it('stays off on a failure, which the error mapper answers', async () => {
+    const seen: { header?: string | undefined; status?: number } = {};
+    await captured(async () => {
+      await withApp(async (_app, url) => {
+        const response = await fetch(new URL('things/broken', url));
+        seen.status = response.status;
+        seen.header = response.headers.get('x-request-id') ?? undefined;
+      }, opts);
+    });
+
+    expect(seen.status).toBe(500);
+    expect(seen.header).toBeUndefined();
+  });
+
+  it('is on by default, on both a success and a failure', async () => {
+    const seen: { ok?: string | undefined; failed?: string | undefined } = {};
+    await captured(async () => {
+      await withApp(async (_app, url) => {
+        seen.ok =
+          (await fetch(new URL('things', url))).headers.get('x-request-id') ??
+          undefined;
+        seen.failed =
+          (await fetch(new URL('things/broken', url))).headers.get(
+            'x-request-id',
+          ) ?? undefined;
+      });
+    });
+
+    expect(String(seen.ok)).toMatch(UUID);
+    expect(String(seen.failed)).toMatch(UUID);
+  });
+});

@@ -489,7 +489,7 @@ Any UUID version is accepted; the check reads the shape rather than the version 
 
 It is set on the response of every request the middleware handles - which is every
 request except an `ignore`d one, and one of those too if `correlateIgnored` is on.
-See the option below.
+See the option below. `requestIdHeader: false` stops it going out at all.
 
 ### Options
 
@@ -499,10 +499,34 @@ interface RequestLoggingOptions {
   requestBody?: boolean; // default false
   responseBody?: boolean; // default false
   ignore?: readonly string[]; // paths skipped entirely - see below
+  ignorePrefix?: readonly string[]; // prefixes skipped, for a whole mount
   correlateIgnored?: boolean; // default false; keep the id on an ignored path
   correlate?: boolean; // default true; false drops the async scope - see below
+  requestIdHeader?: boolean; // default true; false stops `x-request-id` going out
+  trace?: boolean; // default false; adopt W3C Trace Context - see below
 }
 ```
+
+### `requestIdHeader`
+
+The response header is the only part of request logging that leaves the process,
+and it is about 500 ns of the 4.7 µs the path costs, which is 11%. It is the
+largest single thing you can turn off without losing a field from a log line.
+
+```ts
+requestLogging: {
+  requestIdHeader: false;
+}
+```
+
+What you keep: the id is still minted, still on every line the middleware writes,
+and still in the `AsyncLocalStorage` scope, so everything else the request logs
+carries it. What you lose is the outward half, a caller quoting an id back at you,
+and that includes failures: the error mapper stamps a fresh `Response` from what
+the middleware recorded, and `false` stops it recording.
+
+Turn it off on a service nothing correlates from the outside. Leave it on at an
+edge.
 
 **Both body options default to `false`**, and the request body is the field most
 likely to contain a password. Turn them on in development.

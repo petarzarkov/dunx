@@ -46,10 +46,14 @@ export class RequestIds {
    * Called by `RequestLoggingMiddleware` and by nothing else. Splitting minting
    * from recording would let a second caller invent an id the log line does not
    * carry.
+   *
+   * `expose: false` mints without recording, so {@link stamp} answers without a
+   * header as it does for a path that minted none. That is how
+   * `requestIdHeader: false` reaches the error mapper.
    */
-  static assign(req: Request): string {
+  static assign(req: Request, expose = true): string {
     const id = traceId(req.headers.get(REQUEST_ID_HEADER));
-    (req as Tagged)[ID] = id;
+    if (expose) (req as Tagged)[ID] = id;
     return id;
   }
 
