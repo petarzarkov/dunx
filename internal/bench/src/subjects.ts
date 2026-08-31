@@ -41,6 +41,19 @@ export const subjects: readonly Subject[] = [
     ],
   },
   {
+    id: 'dunx-logging-arkv',
+    label: '@dunx/http (+ request logging, @arkv/logger)',
+    runtime: 'bun',
+    entry: 'servers/dunx-logging-arkv.ts',
+    preload: ['@dunx/transform/preload'],
+    versionOf: '@dunx/http',
+    validator: 'zod (Standard Schema)',
+    notes: [
+      '`dunx-logging` with `LoggerModule.forRoot()` bound, which is what `packages/infra/README.md` recommends and therefore what most production apps run.',
+      'It is here because the gap to `dunx-logging` was estimated twice and the estimates disagreed by 5.7x. Nothing that quotes a figure for this configuration should predate this row.',
+    ],
+  },
+  {
     id: 'elysia',
     label: 'Elysia',
     runtime: 'bun',
