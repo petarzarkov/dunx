@@ -202,3 +202,46 @@ handler's return value. Removing it means generating per-route source and `eval`
 it, which is Elysia's approach; it would trade a readable dispatch path for a code
 generator, and at 1.3 µs on a request whose parse alone is 2.9 µs it is not the next
 thing worth doing.
+
+### zod 4.5, measured through the seam dunx actually uses
+
+zod 4.5 landed with two claims: a 9x smaller schema footprint and `z.compile()` for
+3-9x faster parsing. Neither is quotable here as written, because dunx calls
+`schema['~standard'].validate()` rather than `.parse()`, so that is what was
+measured. Median of five runs, **each variant in its own process**, on a shaped
+request body of five fields. Running them in one process undercounts the compiled
+figure by half, since the first variant warms the JIT for the second.
+
+| per validation  | 4.4.3    | 4.5.4    | 4.5.4 + `z.compile()` |
+| --------------- | -------- | -------- | --------------------- |
+| valid           | 0.581 us | 0.547 us | 0.157 us              |
+| one bad field   | 2.516 us | 1.356 us | 1.818 us              |
+| four bad fields | 6.345 us | 2.128 us | 2.669 us              |
+| memory          | 72.6 KB  | 29.4 KB  | 39.5 KB               |
+
+Memory is bytes per schema, linear across 500, 2,000 and 8,000 schemas, so it is
+per-schema cost rather than fixed overhead.
+
+**The upgrade improves rejection and memory.** Valid input moved 0.581 to 0.547 us,
+inside the run-to-run spread. Rejection got 1.9x to 3.0x faster, and a schema costs
+2.5x less to hold.
+
+**`z.compile()` is not adopted.** It reaches 3.5x on valid input, so that claim
+holds. It is also 1.25x to 1.34x **slower** on rejected input and costs 34% more
+memory, and request validation rejects routinely. Whether it pays depends on an
+app's own valid-to-invalid ratio. A compiled schema keeps `~standard` and still
+converts through `z.toJSONSchema`, so a consumer that wants one passes it to a route
+and needs nothing from dunx.
+
+None of it is visible per request. The harness above puts `dunx:zod` at 65,215
+req/s before and 66,117 after, against standard deviations of 2,733 and 6,450, and
+the subjects that touch no validator moved by as much in both directions. Saving
+0.25 us on a request costing tens of microseconds sits under that noise floor.
+
+**The upgrade cost `@dunx/openapi` work.** 4.5 hoists any schema carrying
+`.meta({ id })` into `$defs` and leaves a `$ref` at the root, where 4.4 emitted it
+inline, and a cyclic root moved from `$ref: "#"` to `$ref: "#/$defs/<name>"`. Ten
+tests failed. `convertRoot` now resolves that root back to its definition, so
+`convertObject` still sees an object to split into parameters, and it leaves the
+root's own entry for the caller to register rather than storing it eagerly, which
+had put an unreferenced component in the document for every named params schema.

@@ -97,10 +97,14 @@ it('generates a JSON Schema from the same zod schema', () => {
   // its `title` when there is one and by its `components/schemas` key otherwise,
   // so a prose title makes the Schemas list read as sentences rather than type
   // names. Verified against Swagger UI 5.32.14.
+  // zod 4.5 hoists the **root** into `$defs` too and leaves a `$ref` behind it,
+  // where 4.4 emitted the root inline and only named children were hoisted. The
+  // named child is still there; what moved is the top of the document.
+  expect(tour.text).toContain('"$ref":"#/$defs/CreateUser"');
   expect(tour.text).toContain(
-    '"$defs":{"Tag":{"type":"object","properties":{"label":{"type":"string",' +
+    '"Tag":{"type":"object","properties":{"label":{"type":"string",' +
       '"minLength":1}},"required":["label"],"additionalProperties":false,' +
-      '"description":"A label attached to a user"}}',
+      '"description":"A label attached to a user"}',
   );
   expect(tour.text).toContain('"description":"Create a user"');
 });
