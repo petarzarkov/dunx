@@ -67,7 +67,12 @@ const once = async (variant: string): Promise<number> => {
 
 const samples = new Map<string, number[]>(VARIANTS.map((v) => [v, []]));
 for (let round = 0; round < ROUNDS; round += 1) {
-  for (const variant of VARIANTS) {
+  // Rotated by round. Running the list in the same order every time maps a
+  // within-round trend, a thermal ramp or a scheduler that settles after the
+  // first spawn, onto position in the list, which is the drift this was supposed
+  // to spread. Rotating gives every variant every position.
+  for (let i = 0; i < VARIANTS.length; i += 1) {
+    const variant = VARIANTS[(i + round) % VARIANTS.length]!;
     samples.get(variant)!.push(await once(variant));
   }
   process.stderr.write(`round ${round + 1} of ${ROUNDS}\n`);
@@ -90,13 +95,16 @@ const stats = VARIANTS.map((variant) => {
 
 console.log('\nvariant       ns/req      sd   this step   vs floor');
 let previous: number | undefined;
-const floor = stats.find((s) => s.variant === 'floor')?.median ?? 0;
+// Absent when the selection did not include it, and then there is no baseline to
+// subtract: printing the raw median under a "vs floor" heading reads as a cost
+// over nothing.
+const floor = stats.find((s) => s.variant === 'floor')?.median;
 for (const s of stats) {
   const step = previous === undefined ? 0 : s.median - previous;
   console.log(
     `${s.variant.padEnd(12)} ${s.median.toFixed(0).padStart(6)}  ${s.sd.toFixed(0).padStart(6)}  ` +
       `${(previous === undefined ? '-' : (step >= 0 ? '+' : '') + step.toFixed(0)).padStart(9)}  ` +
-      `${(s.median - floor).toFixed(0).padStart(9)}`,
+      `${(floor === undefined ? '-' : (s.median - floor).toFixed(0)).padStart(9)}`,
   );
   previous = s.median;
 }

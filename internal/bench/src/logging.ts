@@ -383,7 +383,10 @@ const chosenUnits =
   wanted === undefined
     ? reachable
     : reachable.filter((unit) => wanted.includes(unit.id));
-const skipped = reachable.length - chosenUnits.length;
+// Counted against `units`, not `reachable`. The notice is about the body rows the
+// scenario cannot reach, and comparing the two post-filter lists made it zero on
+// exactly the run it exists for.
+const skipped = units.length - reachable.length;
 if (skipped > 0 && wanted === undefined) {
   note(
     `skipping ${skipped} body unit(s): the "${scenario.id}" scenario sends no ` +

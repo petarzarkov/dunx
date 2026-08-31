@@ -200,6 +200,11 @@ export class NoMergeLogger extends FormatLogger {
  * the middleware puts in the store, then the three it passes as fields, with
  * anything unexpected spliced in generically so no entry is silently dropped.
  *
+ * Every string goes through `str`, including the four that in practice cannot hold
+ * a quote. Interpolating them raw was faster and emitted invalid JSON for any value
+ * that did, which would have made this row's output differ from the contract it is
+ * being compared against.
+ *
  * This is the ceiling the format experiment is really asking about - no merged
  * entry object, no per-key dispatch, one template literal.
  */
@@ -230,11 +235,11 @@ export class FastJsonLogger extends FormatLogger {
     return (
       `{"level":"${level}","timestamp":"${timestamp()}","pid":${PID},` +
       `"message":${str(message)},` +
-      `"requestId":"${scope.requestId ?? ''}",` +
-      `"method":"${scope.method ?? ''}",` +
+      `"requestId":${str(String(scope.requestId ?? ''))},` +
+      `"method":${str(String(scope.method ?? ''))},` +
       `"event":${str(String(scope.event ?? ''))},` +
-      `"flow":"${scope.flow ?? ''}",` +
-      `"context":"${scope.context ?? ''}",` +
+      `"flow":${str(String(scope.flow ?? ''))},` +
+      `"context":${str(String(scope.context ?? ''))},` +
       `"request":${request === undefined ? '{}' : JSON.stringify(request)},` +
       `"statusCode":${Number(fields?.['statusCode'] ?? 0)},` +
       `"elapsedMs":${Number(fields?.['elapsedMs'] ?? 0)}` +
