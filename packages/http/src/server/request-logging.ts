@@ -57,6 +57,16 @@ export interface RequestLoggingOptions {
    */
   readonly correlate?: boolean;
   /**
+   * Put `x-request-id` on the response. Default `true`, and ~500 ns of the 4.7 us
+   * the path costs, which is the largest thing here that can go without losing a
+   * field from a line.
+   *
+   * `false` keeps the id on this middleware's own lines and in the async scope,
+   * and withholds it from every response including a failure's: the error mapper
+   * stamps from what `RequestIds.assign` recorded, and this stops it recording.
+   */
+  readonly requestIdHeader?: boolean;
+  /**
    * Adopt W3C Trace Context, so `traceId`, `spanId` and `parentSpanId` join
    * `requestId`. Default `false`: it costs a header read and 8 random bytes, and
    * `requestId` already spans two dunx services. `@dunx/http/client` sends the
@@ -103,6 +113,7 @@ export class RequestLoggingMiddleware implements Middleware {
   readonly #correlateIgnored: boolean;
   readonly #correlate: boolean;
   readonly #trace: boolean;
+  readonly #requestIdHeader: boolean;
 
   constructor(
     private readonly logger: Logger,
@@ -117,6 +128,7 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#correlateIgnored = options.correlateIgnored ?? false;
     this.#correlate = options.correlate ?? true;
     this.#trace = options.trace ?? false;
+    this.#requestIdHeader = options.requestIdHeader ?? true;
   }
 
   /** Both guards check emptiness first, so configuring neither costs two reads. */
@@ -141,7 +153,7 @@ export class RequestLoggingMiddleware implements Middleware {
     }
 
     const started = Bun.nanoseconds();
-    const requestId = RequestIds.assign(req);
+    const requestId = RequestIds.assign(req, this.#requestIdHeader);
     const scope: ScopeFields = {
       requestId,
       method: ctx.method,
@@ -246,9 +258,11 @@ export class RequestLoggingMiddleware implements Middleware {
     path: string,
     next: Next,
   ): Promise<Response> {
-    const requestId = RequestIds.assign(req);
+    const requestId = RequestIds.assign(req, this.#requestIdHeader);
     const stamp = (response: Response): Response => {
-      response.headers.set(REQUEST_ID_HEADER, requestId);
+      if (this.#requestIdHeader) {
+        response.headers.set(REQUEST_ID_HEADER, requestId);
+      }
       return response;
     };
     if (!this.#correlate) return next().then(stamp);
@@ -347,7 +361,9 @@ export class RequestLoggingMiddleware implements Middleware {
         statusCode: response.status,
         elapsedMs: elapsedMs(started),
       });
-      response.headers.set(REQUEST_ID_HEADER, requestId);
+      if (this.#requestIdHeader) {
+        response.headers.set(REQUEST_ID_HEADER, requestId);
+      }
       return response;
     }
     return body.then((value) => {
@@ -358,7 +374,9 @@ export class RequestLoggingMiddleware implements Middleware {
         ...(value === undefined ? {} : { responseBody: value }),
         elapsedMs: elapsedMs(started),
       });
-      response.headers.set(REQUEST_ID_HEADER, requestId);
+      if (this.#requestIdHeader) {
+        response.headers.set(REQUEST_ID_HEADER, requestId);
+      }
       return response;
     });
   }

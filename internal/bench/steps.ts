@@ -24,6 +24,7 @@ export const STEPS = [
   'scope',
   'als',
   'request',
+  'then',
   'respheader',
   'entry',
   'precomp',
@@ -277,6 +278,11 @@ export class StepMiddleware implements Middleware {
       }
 
       return next().then((response) => {
+        // `then` and `respheader` split what used to be one step. The row below
+        // it returns `next()` directly, so a single step was carrying both the
+        // promise continuation and the `Headers.set`, which are unrelated costs.
+        if (this.#at('then')) return response;
+
         response.headers.set(REQUEST_ID_HEADER, requestId);
         if (this.#at('respheader')) return response;
 
