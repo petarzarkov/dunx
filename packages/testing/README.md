@@ -2,8 +2,8 @@
 
 The container an app already has, with named bindings **replaced in place**, plus
 a real `Bun.serve` on port 0. Bun binds a socket in about a millisecond, so the
-thing under test is the thing that ships: there is no mocking framework, no fake
-request object and no in-memory transport.
+thing under test is the thing that ships. There is no mocking framework, no fake
+request object, and no in-memory transport.
 
 ## Install
 
@@ -51,10 +51,10 @@ The [Testing guide](../../docs/guide/11-testing.md) is canonical.
   stubbing `Logger` need not know how many modules bind it. Naming a token
   nobody binds is an error rather than a silent no-op.
 - The replacement happens before anything resolves, so the discarded provider is
-  never constructed: its `useFactory` never runs and its `onInit` never fires,
-  which makes overriding a database safe.
+  never constructed: its `useFactory` never runs and its `onInit` never fires.
+  That makes overriding a database safe.
 - Request logging and boot logging are off unless asked for.
-- An `HttpOptions` field not passed is absent; nothing is inherited from
+- An `HttpOptions` field not passed stays absent. Nothing is inherited from
   production. `middleware` and `onError` change what the application does, so
   pass the same object `main.ts` passes.
 

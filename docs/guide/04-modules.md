@@ -1,8 +1,7 @@
 # Modules
 
 A module is a **scope**: a named set of registrations that are private to it, plus a
-list of tokens it makes visible to whoever imports it. That sentence is the whole
-model.
+list of tokens it makes visible to whoever imports it.
 
 ```ts
 import { Module } from '@dunx/core';
@@ -16,15 +15,15 @@ import { Module } from '@dunx/core';
 export class UsersModule {}
 ```
 
-`UsersRepository` is not on the `exports` line, so nothing outside `UsersModule` can
-resolve it. That is the boundary, and everything else on this page follows from it.
+`UsersRepository` is not on the `exports` line, so nothing outside `UsersModule`
+can resolve it.
 
 ## `@Module` is a marker
 
 The decorator writes its options onto the class as a
 `Symbol.for('dunx.module')` property and returns the class. The class is never
 instantiated. It has no constructor to inject into, no lifecycle hooks, and no
-runtime behaviour at all. It exists to give a module a name for error messages.
+runtime behaviour. It exists to give a module a name for error messages.
 
 A class handed to `AppFactory.create` or to `imports` without the decorator is a
 boot error:

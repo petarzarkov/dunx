@@ -3,11 +3,13 @@
 [Better Auth](https://better-auth.com) for
 [dunx](https://github.com/petarzarkov/dunx).
 
-**This package is not an authentication system.** better-auth is, and it is very
-good at it. This is the wiring: a module that builds the instance from your
-`ConfigService`, five routes that mount its handler, a guard that composes with
-the `@Public()` and `@Roles()` metadata `@dunx/http` already carries, and two
-adapters that let it drive Bun's own APIs.
+This package wires better-auth into dunx: a module that builds the instance
+from your `ConfigService`, five routes that mount its handler, a guard that
+composes with the `@Public()` and `@Roles()` metadata `@dunx/http` already
+carries, and two adapters that let it drive Bun's own APIs.
+
+better-auth handles authentication itself; this package does not reimplement
+it.
 
 There is no dunx sign-in flow, no dunx session table and no dunx OAuth. Each is
 a better-auth feature reached through `AuthModule.forRoot`'s options, which
@@ -68,15 +70,15 @@ The [Authentication guide](../../docs/guide/17-authentication.md) is canonical.
 
 ## Notes
 
-- dunx ships no schema for better-auth's tables. They are better-auth's, they
-  change with its plugins, and `bunx @better-auth/cli generate` writes them.
+- dunx ships no schema for better-auth's tables: they belong to better-auth
+  and change with its plugins. `bunx @better-auth/cli generate` writes them.
   Export them under the singular model names the adapter looks up.
-- Under `setGlobalPrefix`, `basePath` is what better-auth matches and `mountAt`
+- Under `setGlobalPrefix`, `basePath` is what better-auth matches. `mountAt`
   is where the route is mounted. Omitting `mountAt` with a non-default
   `basePath` is a boot error.
 - `AuthContext` is a second `AsyncLocalStorage` store rather than a key in
-  `RequestContext`, because everything in that store is serialized into every
-  log line the request writes.
+  `RequestContext`. Everything in that store is serialized into every log
+  line the request writes.
 
 ## License
 

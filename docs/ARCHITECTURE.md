@@ -1,11 +1,11 @@
 # Architecture
 
 The design record: what was measured, what was rejected, and why. It exists so a
-decision is not re-litigated, and so a constraint that was probed on real Bun is not
-re-derived from memory.
+decision is not re-litigated. A constraint that was probed on real Bun should not
+have to be re-derived from memory.
 
 **Not a tutorial.** If you want to learn dunx, start with the
-[Introduction](./guide/01-introduction.md); each page below assumes you already
+[Introduction](./guide/01-introduction.md). Each page below assumes you already
 know what the thing being justified does.
 
 One page per subject. Read the one you need.
@@ -13,8 +13,8 @@ One page per subject. Read the one you need.
 ## Read this first
 
 [**Verified constraints**](./architecture/constraints.md) - what was probed on real
-Bun, and what each result rules out. Every other page rests on it, and a decision
-that contradicts it is a decision made without measuring.
+Bun, and what each result rules out. Every other page rests on it. A decision that
+contradicts it is a decision made without measuring.
 
 ## The framework
 
@@ -25,7 +25,7 @@ that contradicts it is a decision made without measuring.
 
 ## The integrations
 
-Five areas are a mature library wired in rather than dunx code, which is the second
+Five areas are a mature library wired in rather than dunx code. This is the second
 half of the principle above: **never reimplement what Bun does, never invent what a
 mature library already solves.** None of them restates the library's own surface.
 
@@ -37,8 +37,8 @@ mature library already solves.** None of them restates the library's own surface
 | [Logging](./architecture/logging.md)               | `@arkv/logger`, and where a fix belongs        |
 
 The fifth is **swagger-ui-dist**, which `@dunx/openapi` mounts for its `/docs` page.
-It is written up with the tooling rather than here, because what it replaced was a
-frontend of dunx's own: [The tools](./architecture/tooling.md), "The API explorer".
+It is written up with the tooling rather than here: what it replaced was a frontend
+of dunx's own. See [The tools](./architecture/tooling.md), "The API explorer".
 
 ## Shipping it
 
@@ -62,14 +62,15 @@ relative ranking on one machine.
 ## What is not here
 
 - **What to build next** is [ROADMAP.md](./ROADMAP.md), with one file per open item
-  under [`internal/notes/roadmap/`](../internal/notes/roadmap/). The phase plan used to be in this file and is
-  now there, where the rest of the planning already was.
+  under [`internal/notes/roadmap/`](../internal/notes/roadmap/). The phase plan used
+  to be in this file. It now lives there, with the rest of the planning.
 - **Whether something can be built at all**, with the probe output behind the answer,
-  is [`internal/notes/research/`](../internal/notes/research/) - one file per investigated capability, written to
-  be superseded. The pipeline is research, then roadmap, then here: a measurement
-  arrives in `research/`, an accepted item becomes a `roadmap/` file, and what survives
-  delivery lands in `architecture/`. [research/README.md](../internal/notes/research/README.md) holds
-  the verdict table.
+  is [`internal/notes/research/`](../internal/notes/research/) - one file per
+  investigated capability, written to be superseded. The pipeline runs research,
+  then roadmap, then here: a measurement arrives in `research/`, an accepted item
+  becomes a `roadmap/` file, and what survives delivery lands in `architecture/`.
+  [research/README.md](../internal/notes/research/README.md) holds the verdict
+  table.
 - **The rules a change has to satisfy** are in `CLAUDE.md` at the repo root. This
   file records decisions; that one constrains them.
 - **How to contribute** is [CONTRIBUTING.md](../CONTRIBUTING.md).

@@ -1,8 +1,8 @@
 # Deployment
 
-A dunx app is a Bun process that calls `Bun.serve`. There is no adapter to pick,
-no build step that rewrites your code, and nothing that has to run before the
-process starts except the one preload line.
+A dunx app is a Bun process that calls `Bun.serve`. There is no adapter to pick
+and no build step that rewrites your code. Nothing has to run before the process
+starts except one preload line.
 
 ## The one thing that must survive to production
 
@@ -14,8 +14,8 @@ preload = ["@dunx/transform/preload"]
 `@dunx/transform` records each class's constructor parameter types when the file
 loads. Without it the container has no way to know what a constructor wants, and
 boot fails with an error naming the class rather than constructing it with
-`undefined` arguments. That is deliberate, and it means a deployment that loses
-`bunfig.toml` fails immediately and loudly rather than at the first request.
+`undefined` arguments. A deployment that loses `bunfig.toml` fails immediately
+and loudly rather than at the first request.
 
 Three ways to supply it, all equivalent:
 
@@ -37,7 +37,7 @@ bun src/main.ts
 
 That is the whole command. `HttpFactory.create` builds the container,
 `listen()` hands the route table to `Bun.serve`, and the server holds the
-process open. There is no cluster module to configure - see the note on
+process open. There is no cluster module to configure, see the note on
 horizontal scaling below.
 
 ## Shutting down cleanly
@@ -52,8 +52,8 @@ await app.closed;
 
 `enableShutdownHooks()` installs the signal handlers. On `SIGTERM` or `SIGINT`
 the graph is torn down in **reverse construction order**, so a repository is
-disposed before the database connection it holds, and `app.closed` resolves once
-that finishes. Anything implementing `OnShutdown` participates.
+disposed before the database connection it holds. `app.closed` resolves once
+that finishes, and anything implementing `OnShutdown` participates.
 
 This matters more than it looks under an orchestrator. Kubernetes sends
 `SIGTERM` and then waits `terminationGracePeriodSeconds` before `SIGKILL`; a
@@ -65,7 +65,7 @@ handle is often not yours.
 
 The real case is a Redis client. A `Bun.RedisClient` whose TCP connect never
 completed keeps a handle past `close()`, and bullmq's Bun adapter cannot cancel
-its own reconnect once the connection has dropped, so an app that touched an
+its own reconnect once the connection has dropped. An app that touched an
 unreachable broker used to drain perfectly and then hang.
 
 Both leaks are upstream and neither is reachable from userland. They are recorded
@@ -79,8 +79,8 @@ logs a line, since it means something leaked.
 
 You no longer need a short `terminationGracePeriodSeconds` to work around this.
 
-Pass `{ exitAfterMs: false }` to opt out, and pass it in **tests that fire a
-signal at their own process** - otherwise the forced exit lands in the middle of
+Pass `{ exitAfterMs: false }` to opt out. Pass it in **tests that fire a
+signal at their own process**, too, or the forced exit lands in the middle of
 your test run:
 
 ```ts
@@ -130,8 +130,6 @@ the image.
 ## Health checks
 
 `HealthModule` from `@dunx/http` serves `/api/health/live` and `/api/health/ready`.
-Do not hand-roll a controller for this; the part worth having is the drain, and a
-controller cannot express it.
 
 ```ts
 HealthModule.forRootAsync({
@@ -146,26 +144,30 @@ HealthModule.forRootAsync({
 });
 ```
 
-Two settings decide whether a rollout drops requests.
+Do not hand-roll a controller for this. The part worth having is the drain, and a
+plain controller cannot express it. Two settings decide whether a rollout drops
+requests; the full mechanics, including how to write your own indicator, are in
+[Health checks](./20-health-checks.md).
 
-**`critical`** is what separates readiness from liveness. A `critical: false`
-indicator reports `degraded` without failing the probe, so an absent Redis degrades a
-route rather than restarting the process. Be sparing with `critical: true`: it should
+**`critical`** separates readiness from liveness. A `critical: false` indicator
+reports `degraded` without failing the probe, so an absent Redis degrades a route
+rather than restarting the process. Be sparing with `critical: true`: it should
 name only what makes the process useless, which in most services is the database
-alone. A liveness probe that checks Redis will restart a healthy process on a cache
-blip.
+alone. A liveness probe that checks Redis will restart a healthy process on a
+cache blip.
 
 **`drainDelayMs`** holds readiness failing before the port closes.
-
 `Readiness` implements `OnBeforeShutdown`, which runs while the server is still
-accepting. The probe can therefore answer "not ready" on an open socket for as long as
+accepting, so the probe can answer "not ready" on an open socket for as long as
 the load balancer needs to notice. An `onShutdown` hook runs after the server has
-stopped, so a probe answering from there answers on a closed socket.
+stopped, so a probe answering from there answers on a closed socket already.
 
-Liveness keeps passing throughout: a pod that is shutting down does not need killing.
+Liveness keeps passing throughout: a pod that is shutting down does not need
+killing.
 
-Set `drainDelayMs` to at least your ingress's deregistration interval. The probes are
-hidden from the OpenAPI document, so they will not appear in a generated client.
+Set `drainDelayMs` to at least your ingress's deregistration interval. The probes
+are hidden from the OpenAPI document, so they will not appear in a generated
+client.
 
 ## Logging
 
@@ -196,7 +198,7 @@ balancer works with no changes. Two things need attention when you do:
 
 - **WebSocket fan-out is per process.** `socket.subscribe(topic)` joins a topic
   in the Bun runtime of that process only, so a publish reaches the clients
-  connected to that instance. Attach the Redis relay to fan out across nodes -
+  connected to that instance. Attach the Redis relay to fan out across nodes,
   see [WebSockets](./09-websockets.md).
 - **Queue workers are separate processes.** `QueueModule.forRoot` binds the
   publish side alone, so a web process that publishes never accidentally starts
@@ -211,6 +213,6 @@ watch. The current figures are on the
 [benchmarks page](https://petarzarkov.github.io/dunx/#/benchmarks), regenerated
 from a real run rather than written down.
 
-Eager resolution is a deliberate trade: every provider is constructed at boot, so
-a missing binding or a bad config is a failed start rather than a 500 on the
-first request that happens to need it.
+Eager resolution is a trade: every provider is constructed at boot, so a missing
+binding or a bad config is a failed start rather than a 500 on the first request
+that happens to need it.

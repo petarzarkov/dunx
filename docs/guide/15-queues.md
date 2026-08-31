@@ -1,12 +1,10 @@
 # Queues
 
-**bullmq is the queue.** dunx adds no retry policy, no backoff, no rate limiter and
-no scheduler: those are bullmq's, and a second implementation of them would be a
-worse one.
-
-What `@dunx/infra/queue` contributes is the four things bullmq has no opinion
-about: where a handler lives, how it is found, how it is injected, and when it
-stops.
+**bullmq is the queue.** What `@dunx/infra/queue` contributes is the four things
+bullmq has no opinion about: where a handler lives, how it is found, how it is
+injected, and when it stops. dunx adds no retry policy, no backoff, no rate
+limiter and no scheduler: those are bullmq's, and a second implementation of
+them would be a worse one.
 
 ```bash
 bun add bullmq ioredis
@@ -195,8 +193,8 @@ client.
 
 `QueueModule.forRoot()` exports three tokens: `QueueOptions`, `QueueConnection` and
 `JobPublisher`. That is the **publish** side, which is all a web process needs. It
-also binds a fourth provider it does not export, `QueueRunner`, which is what opens
-workers when you ask it to.
+also binds a fourth provider it does not export, `QueueRunner` - the piece that
+opens workers when you ask it to.
 
 **By default it consumes nothing.** `consume` is `false`, so a web process that
 publishes never starts a worker by accident. There are three ways to consume, and
@@ -238,8 +236,8 @@ lands several commits before the first handler. Two handlers claiming one
 
 `@JobHandler({ queue, name, background })` marks one handler. `background: true`
 makes bullmq fork the file named by `QueueModule.forRoot({ processor })` instead of
-calling a function in this process, which is what keeps a CPU-bound handler off the
-loop serving requests.
+calling a function in this process - the switch that keeps a CPU-bound handler off
+the loop serving requests.
 
 Two things about it are easy to get wrong.
 
@@ -400,8 +398,6 @@ own it.
 
 ### Stop the consumer before you shut the app down
 
-This is the sharp edge, and it deserves saying plainly.
-
 ```ts
 await consumer.stop();
 await app.shutdown();
@@ -443,9 +439,9 @@ by default.
 ## Shutdown
 
 `worker.shutdown()` closes every bullmq `Worker` **before** the container tears
-down. That order is the point: `close()` without `force` stops fetching and waits
-for what is already running, so an in-flight job finishes while the database
-connection it is using is still open.
+down, so an in-flight job finishes while the database connection it is using is
+still open. `close()` without `force` stops fetching and waits for what is
+already running.
 
 The container's own reverse-construction-order teardown then closes the
 publisher's queues, and last of all the sockets. `QueueConnection` is constructed
@@ -570,7 +566,7 @@ even while workers drained jobs.
 
 `QueueConnection` wrapped `duplicate` and called it with no arguments, dropping
 the `{ connectionName }` bullmq's Bun adapter names a connection through. One
-line, fixed; `CLIENT SETNAME` runs and the worker appears..
+line, fixed; `CLIENT SETNAME` runs and the worker appears.
 
 ## Related
 

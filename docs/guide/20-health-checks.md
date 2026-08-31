@@ -61,11 +61,11 @@ costs the slowest check rather than their sum.
 
 ## Three states
 
-A check that throws is `down`, carrying its message. A check that outruns its budget
-is `unknown`.
+A check that throws is `down`, carrying its message. A check that outruns its
+budget is `unknown`.
 
-The difference matters. A probe that did not answer has told you nothing, which is not
-the same as telling you it is broken.
+The difference matters. A probe that did not answer has told you nothing, which
+is not the same as telling you it is broken.
 
 `unknown` on a critical check fails readiness. On a non-critical one it does not.
 
@@ -73,32 +73,36 @@ the same as telling you it is broken.
 
 `critical` defaults to `true`. A failure sheds traffic.
 
-`MemoryIndicator` and `DiskIndicator` ship as `critical: false`. A disk at 91 percent
-is worth seeing on the page, and pulling the pod out of rotation does not make it
-emptier, because no other pod's disk is.
+`MemoryIndicator` and `DiskIndicator` ship as `critical: false`. A disk at 91
+percent is worth seeing on the page. Pulling the pod out of rotation does not
+make it emptier, since no other pod's disk is either.
 
-A memory ceiling belongs on `liveness`, where the orchestrator restarts the process
-rather than routing around it.
+A memory ceiling belongs on `liveness`, where the orchestrator restarts the
+process rather than routing around it.
 
 ## Draining
 
-Readiness starts failing **before** the port closes. That ordering is the point.
+Readiness starts failing **before** the port closes.
 
-`Readiness` implements [`OnBeforeShutdown`](./07-lifecycle.md), which runs while the
-server is still accepting. Every `onShutdown` hook runs after the server has stopped,
-so a probe answering from there answers on a closed socket.
+`Readiness` implements [`OnBeforeShutdown`](./07-lifecycle.md), which runs while
+the server is still accepting, so the probe can answer "not ready" while the
+load balancer can still reach it. Every `onShutdown` hook runs after the server
+has stopped, so a probe answering from there answers on a socket that is already
+closed.
 
-`drainDelayMs` keeps readiness failing for that long before the socket closes. A load
-balancer notices a failing probe on its own schedule: at a 2 second interval and a 3
-failure threshold, traffic can arrive for 6 seconds after the pod has decided to go.
-Set it to a few intervals.
+`drainDelayMs` keeps readiness failing for that long before the socket closes. A
+load balancer notices a failing probe on its own schedule: at a 2 second interval
+and a 3 failure threshold, traffic can arrive for 6 seconds after the pod has
+decided to go. Set it to a few intervals.
 
 Liveness keeps passing throughout. A pod that is shutting down does not need
 restarting, and `down` there invites a SIGKILL mid-drain.
 
 ## Taking a pod out by hand
 
-`Readiness` is injectable, so a handler can do it for a migration.
+A drain does not always start with a signal. A migration needs the same
+"stop sending me traffic" behaviour on demand, and `Readiness` is injectable so
+a handler can trigger it directly.
 
 ```ts
 export class MaintenanceController {
@@ -120,7 +124,8 @@ export class MaintenanceController {
 
 ## Your own indicators
 
-Subclass `HealthIndicator`, or hand `HealthOptions` any object with the three members.
+Subclass `HealthIndicator`, or hand `HealthOptions` any object with the three
+members.
 
 ```ts
 import { HealthIndicator, type ProbeResult } from '@dunx/http';
@@ -143,14 +148,14 @@ Throwing is how a check reports `down`. The registry never lets one throw into a
 response.
 
 `DatabaseIndicator` needs a connection with `ping()`, which `DbConnection` from
-`@dunx/infra/db` has. A custom connection must implement it: the base throws with a
-message saying so, rather than reporting a database healthy without having asked it
-anything.
+`@dunx/infra/db` has. A custom connection must implement `ping()` too: the base
+throws a message naming what is missing, rather than reporting a database
+healthy without having asked it anything.
 
 ## No startup probe
 
-The port already answers that. `create()` finishes every `onInit` before `listen()`
-binds, so a refused connection is "not started yet".
+The port already answers that question. `create()` finishes every `onInit`
+before `listen()` binds, so a refused connection means "not started yet".
 
 ## Options
 
@@ -165,7 +170,7 @@ HealthModule.forRoot({
 });
 ```
 
-`routes: false` binds `HealthRegistry` and `Readiness` and mounts nothing, for an app
-that answers on its own paths.
+`routes: false` binds `HealthRegistry` and `Readiness` and mounts nothing, for an
+app that answers on its own paths.
 
 `documented: false` mounts the routes and hides them from `@dunx/openapi`.

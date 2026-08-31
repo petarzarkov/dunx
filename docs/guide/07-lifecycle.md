@@ -26,9 +26,9 @@ per scope. [Modules](./04-modules.md) covers when that is what you want.
 
 ### Per-request state
 
-Request-scoped DI was measured and turned down: it is a container's largest
-source of per-request cost and complexity. Two replacements cover what it was
-used for.
+Request-scoped DI was measured and turned down. It is a container's largest
+source of per-request cost and complexity, and two replacements cover what it
+was used for.
 
 **Correlation data** goes through `RequestContext`, an `AsyncLocalStorage` that
 never touches the container:
@@ -159,18 +159,19 @@ export class Readiness implements OnBeforeShutdown {
 }
 ```
 
-`onShutdown` is too late for anything that has to be observable from outside.
-`@dunx/http` stops the server before tearing providers down, so a hook that flips a
-readiness probe there answers on a closed port: a load balancer is still routing when
-the socket goes away.
+`onShutdown` runs too late for anything that has to be observable from outside.
+`@dunx/http` stops the server before tearing providers down. A readiness probe
+flipped inside `onShutdown` would answer on an already-closed port, while a load
+balancer is still routing traffic to it.
 
 So `app.drain()` runs every `onBeforeShutdown` first, then the port closes, then
 `onShutdown` tears down. `shutdown()` calls the drain itself, which is what makes a
 process with no server drain at all.
 
 Every `onBeforeShutdown` runs **concurrently**, unlike `onShutdown`. These are
-independent waits and the phase should cost the slowest rather than their sum, where
-teardown follows dependencies and has to be sequential.
+independent waits, so the phase costs as much as the slowest one rather than
+their sum. Teardown, in contrast, follows dependencies and has to run
+sequentially.
 
 `@dunx/http`'s `HealthModule` is built on this, and its `drainDelayMs` is the window
 above. A queue consumer that must stop accepting jobs before its database closes
@@ -189,9 +190,9 @@ app.enableShutdownHooks(['SIGTERM'], { exitAfterMs: false });
 
 **This ends the process.** After the drain completes, an `unref()`d timer gives
 the runtime 1000 ms to exit on its own, then calls `process.exit`. A process
-with nothing pending exits in about 1 ms and the timer never fires; it fires
-only when a handle outside the container is still holding the loop open, and it
-logs a warning naming that case before exiting.
+with nothing pending exits in about 1 ms and the timer never fires. It fires
+only when a handle outside the container is still holding the loop open, and
+when that happens it logs a warning naming the case before exiting.
 
 Pass `exitAfterMs: false` when the app does not own its process, and in any test
 that fires a signal at its own runner. A programmatic `app.shutdown()` never
@@ -199,9 +200,9 @@ exits the process at any setting.
 
 ## Circular dependencies
 
-There is no `forwardRef`. `@dunx/transform` records constructor dependencies as
-a **thunk** evaluated at resolution time, so a class declared later in the file,
-or reached across a circular import, resolves normally.
+`@dunx/transform` records constructor dependencies as a **thunk** evaluated at
+resolution time, so a class declared later in the file, or reached across a
+circular import, resolves normally. There is no `forwardRef` to reach for.
 
 A genuine cycle throws `CircularDependencyError` at boot, carrying the full path:
 
@@ -239,7 +240,9 @@ it.
 
 ## Overrides in tests
 
-`createTestApp` replaces a binding **in place**, in every scope that holds one:
+A test wants the same container with one binding swapped, not a second boot
+path built to route around it. `createTestApp` replaces a binding **in place**,
+in every scope that holds one:
 
 ```ts
 const app = await createTestApp({
@@ -251,25 +254,28 @@ const app = await createTestApp({
 The discarded provider is never constructed, so an async `useFactory` that would
 have opened the real database does not run.
 
-An override naming a non-class token nothing binds throws. A silent no-op there
-produces a test asserting against the provider it believed it had swapped. A class
-token nobody bound is accepted instead, and bound lazily, because a class self-binds
-on demand anyway.
+Overriding a token that nothing binds throws, unless the token is a class. A
+silent no-op there would produce a test asserting against a provider it
+believed it had swapped. A class token nobody bound is accepted instead and
+bound lazily, because a class self-binds on demand anyway.
 
 Full harness, including `createTestServer` and `RecordingLogger`:
 [Testing](./11-testing.md).
 
 ## Reaching the container
 
+The container itself is reachable too, for wiring and debugging code that sits
+outside constructor injection:
+
 ```ts
 app.get(UsersService); // root scope view, then any single declarer
 app.get(UsersService, OrdersModule); // prefers OrdersModule's view
 ```
 
-`app.get` is more permissive than constructor injection, being a wiring and
-debugging call. With a module argument it prefers that module's view, then falls back
-to the root scope's, then to the single module that declares the token, and finally
-self-binds a class into the module named. Two scopes binding the token differently is
-an error rather than a guess, and a module that is not in the graph at all throws.
+`app.get` is more permissive than constructor injection. With a module argument
+it prefers that module's view. Failing that, it falls back to the root scope's
+view, then to the single module that declares the token, and finally self-binds
+a class into the module named. Two scopes binding the token differently is an
+error rather than a guess, and a module that is not in the graph at all throws.
 
 `AppRef` is the injectable form, and is dunx's `ModuleRef`.

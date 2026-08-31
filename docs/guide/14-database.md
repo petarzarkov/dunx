@@ -1,11 +1,9 @@
 # Database
 
-`@dunx/infra/db` is **drizzle**, wired into the container. It adds no query
-abstraction, no entity decorators, and no repository base class. drizzle is the
-interface.
-
-What it does add is the four things a drizzle handle does not have: a lifecycle,
-module wiring, an async-safe transaction, and data seeding.
+`@dunx/infra/db` is **drizzle**, wired into the container. What it adds is what
+a drizzle handle does not have on its own: a lifecycle, module wiring, an
+async-safe transaction, and data seeding. It adds no query abstraction, no
+entity decorators, and no repository base class. drizzle is the interface.
 
 ```bash
 bun add drizzle-orm
@@ -53,10 +51,10 @@ export class Widgets {
 }
 ```
 
-There is no wrapper in that constructor. `BunSQLiteDatabase` and `BunSQLDatabase`
-are real runtime classes, so a class is usable as a token directly, and
-`@dunx/transform` records the bare type name while ignoring the type argument. One
-erased class is the token; the schema types stay on the annotation.
+`BunSQLiteDatabase` and `BunSQLDatabase` are real runtime classes, so a class is
+usable as a token directly: `@dunx/transform` records the bare type name while
+ignoring the type argument. One erased class is the token; the schema types
+stay on the annotation. There is no wrapper in that constructor.
 
 `schema` is required for that reason: it is the type argument that reaches
 `BunSQLiteDatabase<typeof schema>` at every injection site. Pass `{}` if you only
@@ -160,10 +158,10 @@ The handshake is awaited inside `open()` rather than deferred to the first query
 query.
 
 `create: false` behaves differently across Bun versions. On 1.4 it throws
-`bad parameter or other API misuse` when the file is missing, which is what the
-option is for. On 1.3.14 it created the file anyway. `readOnly` refuses a missing
-file on both, with `unable to open database file`, so it is the portable way to
-require an existing database.
+`bad parameter or other API misuse` when the file is missing - the behaviour
+the option is for. On 1.3.14 it created the file anyway. `readOnly` refuses a
+missing file on both, with `unable to open database file`, so it is the
+portable way to require an existing database.
 
 `strict: true` is this package's default and the driver's is not. Strict mode
 turns an unsupported binding into a `TypeError` instead of a silent `NULL`. It is also why `SqliteOptions` opens the `bun:sqlite` handle itself instead
@@ -303,11 +301,10 @@ So:
 - **Pick `SyncSqliteOptions`** if SQLite is the decision for good and you want a
   request path with no promise in it at all. Sync mode is SQLite forever.
 
-There is **no `SyncSqlOptions`, and there will not be one.**
 `Bun.SQL` talks to a server over a socket, and no amount of API design makes a
-Postgres query return a row instead of a promise. The asymmetry is structural:
-`SqlOptions` simply has no sync sibling, and `transactionSync` does not accept a
-`BunSQLDatabase`.
+Postgres query return a row instead of a promise. That asymmetry is structural:
+`SqlOptions` has no sync sibling, and `transactionSync` does not accept a
+`BunSQLDatabase`. There is **no `SyncSqlOptions`, and there will not be one.**
 
 ## Querying
 

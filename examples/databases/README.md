@@ -1,8 +1,8 @@
 # @dunx/example-databases
 
 Setting up `@dunx/infra/db` on **SQLite** (asynchronous *and* synchronous),
-**Postgres** and **MySQL** - the same three operations against each, so the parts
-that differ are the only parts on screen.
+**Postgres** and **MySQL**. The same three operations run against each, so the
+parts that differ are the only parts on screen.
 
 ```bash
 bun install
@@ -11,10 +11,10 @@ bun run --filter '@dunx/example-databases' start
 bun run --filter '@dunx/example-databases' dev
 ```
 
-With nothing installed that prints two SQLite results and says it is skipping
-Postgres and MySQL, and exits 0. There is no HTTP anywhere in this example: it
-uses `AppFactory`, not `HttpFactory`, so the database wiring is all there is to
-read.
+With nothing installed, running it prints two SQLite results, reports that it is
+skipping Postgres and MySQL, and exits 0. There is no HTTP anywhere in this
+example: it uses `AppFactory`, not `HttpFactory`, so the database wiring is all
+there is to read.
 
 ## One app, four configurations
 
@@ -25,9 +25,9 @@ read.
 | `PostgresModule.forUrl()`     | `drizzle-orm/bun-sql` over `Bun.SQL`        | `BunSQLDatabase`     |
 | `MysqlModule.forUrl()`        | `drizzle-orm/mysql-proxy` over `Bun.SQL`    | `MySqlRemoteDatabase` |
 
-Four containers rather than one, because the container is flat and each binds its
-own `DbConnection` - two backends in one app would be a duplicate token, which
-dunx rejects at boot naming both modules. Running one app per database is also
+Four containers rather than one. The container is flat and each one binds its own
+`DbConnection`, so two backends in one app would be a duplicate token: dunx
+rejects that at boot, naming both modules. Running one app per database is also
 what a real deployment does.
 
 ## SQLite, two modes
@@ -56,10 +56,10 @@ the move is a change to one module and to no repository. Compare
 [`postgres/widgets.service.ts`](./src/postgres/widgets.service.ts): the imports
 differ by two lines and the bodies are the same.
 
-The mode is not a runtime flag, and cannot be: it decides which class the drizzle
-handle is bound under, and `DbModule.forRoot` infers the injection
-token from. It is also enforced - a service annotating `SyncDatabase` will not
-resolve in an app that bound `BunSQLiteDatabase`.
+The mode is not a runtime flag, and cannot be. It decides which class the drizzle
+handle is bound under, and `DbModule.forRoot` infers the injection token from that
+class. It is also enforced: a service annotating `SyncDatabase` will not resolve
+in an app that bound `BunSQLiteDatabase`.
 
 ### Transactions differ, and the difference is the point
 
@@ -69,17 +69,17 @@ resolve in an app that bound `BunSQLiteDatabase`.
 | `transactionSync(db, fn)`  | **sync only**        | `T`          | savepoint   |
 
 `transaction()` on `bun:sqlite` issues `BEGIN`/`COMMIT`/`ROLLBACK` itself rather
-than delegating to drizzle, because drizzle delegates to `bun:sqlite`'s wrapper,
-which commits as soon as the callback *returns its promise* - so every statement
-after the first `await` runs in autocommit and a later throw rolls back nothing.
+than delegating to drizzle. drizzle delegates to `bun:sqlite`'s wrapper, which
+commits as soon as the callback *returns its promise*, so every statement after
+the first `await` runs in autocommit and a later throw rolls back nothing.
 
 `transactionSync()` **does** delegate, correctly: the whole failure is
 downstream of a callback that returns a promise, and this one cannot. An `async`
 callback is a compile error naming the constraint.
 
 One wart: `transactionSync`'s return type is constrained to
-"not a promise", and that constraint's object branch is a TypeScript *weak type* -
-so returning an object or an array from the callback is rejected even though it is
+"not a promise", and that constraint's object branch is a TypeScript *weak type*.
+Returning an object or an array from the callback is rejected, even though it is
 not thenable. Return a scalar, or use the async `transaction()`.
 
 ## Postgres
@@ -93,8 +93,8 @@ socket, the pool and the wire protocol. `SqlInit` extends `Bun.SQL`'s own option
 type rather than restating it, so `max`, `idleTimeout` and `tls` are all accepted.
 
 The dialect is resolved from the URL at construction, so a bad URL throws before
-any I/O. The handshake is awaited inside `open()`, and dunx settles every async
-factory before it constructs anything - so a repository can never be handed a
+any I/O. The handshake is awaited inside `open()`. dunx settles every async
+factory before it constructs anything, so a repository can never be handed a
 client that has not connected.
 
 ```bash
@@ -104,9 +104,9 @@ bun run --filter '@dunx/example-databases' start
 
 ## MySQL
 
-**There is no Bun-native drizzle driver for MySQL, and this example builds one in
-about forty lines.** [`mysql/driver.ts`](./src/mysql/driver.ts) is the whole of it,
-and `@dunx/infra` needed no change to accept it - `DbOptions.open()` is where a
+**There is no Bun-native drizzle driver for MySQL. This example builds one in
+about forty lines.** [`mysql/driver.ts`](./src/mysql/driver.ts) is the whole of it.
+`@dunx/infra` needed no change to accept it: `DbOptions.open()` is where a
 backend lives, so adding one is a new class rather than an edit to a dispatch table.
 
 The reasoning: drizzle 0.45.2's only Bun entrypoints are `bun-sql` (Postgres,
@@ -179,14 +179,14 @@ naming `adapter` explicitly. This example does the last two.
 nothing else pending exits **silently with code 0** in the middle of a query - no
 error, no rejection, no output. A server never notices because `Bun.serve` holds a
 reference; a CLI does. [`main.ts`](./src/main.ts) holds one `setInterval` for the
-duration for exactly this reason. Postgres and `bun:sqlite` are unaffected.
+duration for this reason. Postgres and `bun:sqlite` are unaffected.
 
 ## Migrations
 
 None of the three run migrations here. Schema changes are
-`drizzle-kit generate` plus the dialect's own migrator - which own the SQL, the
-journal and the snapshot folder - and a `:memory:` database has nowhere to keep any
-of that. Each service creates its table in `onInit` instead, which runs after the
+`drizzle-kit generate` plus the dialect's own migrator, which own the SQL, the
+journal and the snapshot folder. A `:memory:` database has nowhere to keep any of
+that, so each service creates its table in `onInit` instead, which runs after the
 graph is built and before the first caller.
 
 `runSeeds()` from `@dunx/infra/db` is the seeding half, and

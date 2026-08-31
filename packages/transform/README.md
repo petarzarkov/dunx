@@ -36,8 +36,8 @@ await Bun.build({ entrypoints: ['src/main.ts'], plugins: [depsPlugin] });
 
 ## What it does
 
-It parses each file with `oxc-parser`, reads every class declaration's constructor
-parameter types, and appends one statement per class:
+It parses each file with `oxc-parser` and reads every class declaration's
+constructor parameter types. Then it appends one statement per class:
 
 ```ts
 Object.defineProperty(UsersService, Symbol.for('dunx.deps'), {
@@ -51,15 +51,15 @@ The record is a **thunk**, so it is evaluated when the container resolves the cl
 rather than when the module is defined. A dependency declared later in the file, or
 reached through a circular import, therefore needs no `forwardRef`.
 
-Only the appended statement is added - every other byte of the original source is
+Only the appended statement is added. Every other byte of the original source is
 preserved, so comments, formatting, and the line numbers in stack traces are
 unchanged.
 
 ## Parameters it will not guess
 
 A parameter whose type names nothing that exists at runtime is recorded as
-`unresolved` together with its original source text, and the container throws at
-boot:
+`unresolved`, together with its original source text. The container then throws
+at boot:
 
 ```
 UsersService cannot be constructed: parameter 2 (private readonly cfg: AppConfig)

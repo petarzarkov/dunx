@@ -2,13 +2,11 @@
 
 dunx is a dependency injection framework for [Bun](https://bun.com). It gives you
 modules, constructor injection, class-based controllers, lifecycle hooks and
-guards, and it serves HTTP through `Bun.serve` rather than through a server it
-wrote itself.
+guards. HTTP is served through `Bun.serve`, not through a server dunx wrote.
 
-The architecture is the one Spring and Angular established: inversion of control
-with a container that owns object lifetimes, declarative metadata instead of wiring
-code, and modules that draw domain boundaries. If you have worked in either, the
-shape will be familiar within a minute:
+The architecture follows the pattern Spring and Angular established. A container
+owns object lifetimes. Metadata replaces wiring code. Modules draw domain
+boundaries. If you have worked with either framework, the shape is familiar:
 
 ```ts
 import { Module } from '@dunx/core';
@@ -52,19 +50,19 @@ cannot be recovered.
 ## What it is built on
 
 **Bun does the I/O.** `Bun.serve({ routes })` matches paths, dispatches per method
-and answers a method miss, in native Zig, so dunx ships no router: it builds the
-routes object at boot and hands it over. The same goes for SQLite, Postgres, Redis,
-S3, image resizing, password hashing and `.env` loading, each of which Bun already
-does. `ConfigModule` has no loader because Bun reads `.env` itself.
+and answers a method miss, in native Zig. dunx builds the routes object at boot
+and hands it over. The same goes for SQLite, Postgres, Redis, S3, image resizing,
+password hashing and `.env` loading: Bun already does each of those.
+`ConfigModule` has no loader because Bun reads `.env` itself.
 
 You can see where the line falls in the dependency tree: `@dunx/core` has **zero
 dependencies**, and nothing in dunx pulls in express, `ws`, ioredis, pg, sharp or
 dotenv.
 
-One exception, and it is the parser. Bun cannot tell you a TypeScript
-constructor's parameter types, so `@dunx/transform` reads them with
+The one exception is the parser. Bun cannot tell you a TypeScript constructor's
+parameter types, so `@dunx/transform` reads them with
 [oxc-parser](https://github.com/oxc-project/oxc), a Rust parser over N-API. It is
-build-time only and ships as its own package, so a production deploy carries no
+build-time only and ships as its own package. A production deploy carries no
 parser.
 
 **Libraries do the hard parts.** Where Bun has no primitive, dunx integrates
@@ -86,39 +84,35 @@ property works, a hand-written object included. TypeBox and ajv do not ship one,
 each took about ten lines to bridge in the benchmark harness without touching
 `@dunx/http`.
 
-## What it does not have
+## Design decisions
 
-Decisions rather than gaps.
+**TC39 decorators only.** The standard has no parameter decorators, so there is no
+`@Inject()`. `inject()` in a field initializer covers what a constructor parameter
+cannot express. No `@Injectable()` either: listing a class in `providers` is enough.
 
-**No `@Injectable()`, no `@Inject()`.** TC39 decorators have no parameter
-decorators, so `@Inject()` has nowhere to come from. `inject()` in a field
-initializer covers what a constructor parameter cannot express.
+**Module scoping replaces globals and path matching.** Each module is a scope,
+`exports` is its public surface, and `global: true` publishes one app-wide. These
+are fields on the one options object. A module's `middleware` covers the routes
+its own controllers declare. See [Modules](./04-modules.md).
 
-**No `@Global()` decorator, no `forRoutes()`.** Modules do encapsulate - each is a
-scope, `exports` is its public surface, and `global: true` publishes one app-wide -
-but each of those is a field on the one options object rather than a second
-spelling. A module's `middleware` covers the routes its own controllers declare, so
-there is no path-matching language and no ancestor layer. See
-[Modules](./04-modules.md).
+**Circular imports work.** Dependencies are recorded as a thunk and read at
+resolution, so a class declared later in the file, or across a circular import,
+resolves without `forwardRef`.
 
-**No `forwardRef`.** Dependencies are recorded as a thunk and read at resolution, so
-a class declared later in the file, or across a circular import, resolves anyway.
+**Singleton providers only.** Every provider lives for the container's lifetime.
+Per-request state is an argument. Per-request correlation is `AsyncLocalStorage`
+through `RequestContext`, which never touches the container.
 
-**No request-scoped DI.** Every provider is a singleton. Per-request state is an
-argument, and per-request correlation is `AsyncLocalStorage` through
-`RequestContext`, which never touches the container.
+**Eager resolution.** `AppFactory.create()` builds every provider and awaits every
+async factory before the server binds. A wiring mistake fails at boot, not on the
+first request that hits it. This costs boot time, measured below.
 
-**No lazy resolution.** `AppFactory.create()` builds every provider and awaits every
-async factory before the server binds, so a wiring mistake fails at boot instead of
-on the first request that hits it. It costs boot time, measured below.
-
-**No CommonJS and no Node.** ESM only, Bun only.
+**ESM only, Bun only.** No CommonJS build, no Node compatibility layer.
 
 ## The measured position
 
-`@dunx/http` sits on `Bun.serve`. The single most useful number the benchmark
-harness produces is the gap between the two, because that gap is dunx's own
-overhead and nothing else.
+`@dunx/http` sits on `Bun.serve`. The most useful number the benchmark harness
+produces is the gap between the two: that gap is dunx's own overhead.
 
 Run on an AMD Ryzen 9 5950X with 32 logical cores, Bun 1.4.0, oha 1.15.0, 64
 connections, 3 s warmup, 5 measured rounds of 5 s, dated 2026-08-22:
@@ -130,13 +124,12 @@ connections, 3 s warmup, 5 measured rounds of 5 s, dated 2026-08-22:
 | `params`    |   122,963 req/s |      115,506 |    93.9% | 119,472 (97.2%) |
 | `validate`  |    85,605 req/s |       79,596 |    93.0% |  75,330 (88.0%) |
 
-So **dunx costs 1% to 7%** against the API it dispatches through, and is level with
-Elysia. Read a ratio as plus or minus one point and anything under three points as a
-tie: two full runs of the same code disagreed by a median of 0.6 points, which is
-what the harness's measured reproducibility works out to.
+**dunx costs 1% to 7%** against the API it dispatches through, and is level with
+Elysia. Read a ratio as plus or minus one point. Anything under three points is a
+tie: two full runs of the same code disagreed by a median of 0.6 points.
 
-A figure at or above 100% would be noise, not a win: dunx dispatches through
-`Bun.serve` and cannot serve a request faster than the API it calls.
+A figure at or above 100% would be noise: dunx dispatches through `Bun.serve` and
+cannot serve a request faster than the API it calls.
 
 Startup is the clearest loss, and it is a real one:
 
@@ -150,15 +143,13 @@ Startup is the clearest loss, and it is a real one:
 | Fastify          |                                         150.8 ms |
 | NestJS (Express) |                                         273.7 ms |
 
-Both Bun figures roughly halved on Bun 1.4, from 54.8 ms and 28.7 ms, while every
-Node subject in the table stayed within 1% of its previous number. The ratio is what
-has not changed: dunx boots in about twice raw `Bun.serve`'s time, for the compiler's
-parse plus eager resolution of the whole graph.
+Both Bun figures roughly halved on Bun 1.4, from 54.8 ms and 28.7 ms. Every Node
+subject in the table stayed within 1% of its previous number. The ratio has not
+changed: dunx boots in about twice raw `Bun.serve`'s time, for the `oxc-parser`
+preload plus eager DI resolution and route discovery.
 
-Roughly twice raw `Bun.serve`, from the `oxc-parser` preload plus eager DI
-resolution and route discovery. That is the trade this architecture makes on
-purpose: paid once at boot, never per request. It is a real cost on a short-lived
-process.
+That cost is paid once at boot, never per request. It is a real cost on a
+short-lived process.
 
 Two more numbers worth having before you commit to anything:
 
@@ -183,7 +174,7 @@ API, error quality and ecosystem.
 The harness does not measure absolute capacity, concurrency beyond one process,
 anything with I/O, memory, behaviour under sustained load, TLS, HTTP/2, websockets
 or streaming. In an application that talks to Postgres, every difference in the
-table above is rounding error next to one query. That is the honest framing.
+table above is rounding error next to one query.
 
 ## When not to use dunx
 

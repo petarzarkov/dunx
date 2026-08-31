@@ -11,7 +11,7 @@ bunx @dunx/mcp ./src/app.module.ts
 ```
 
 Point it at the file that declares your root module. `@Module` leaves a marker,
-so a module exported only by name is found on its own; `default` and `root` win
+so a module exported only by name is found on its own. `default` and `root` win
 if present, and `--export=<name>` settles a file that declares several. The path
 goes through `Bun.resolveSync`, so anything `import` accepts works.
 
@@ -38,14 +38,14 @@ The [Agent tooling guide](../../docs/guide/21-agent-tooling.md) is canonical.
 | `list_modules`     | The import graph                                          |
 | `describe_route`   | One route in full, with its schemas when `@dunx/openapi` is installed |
 
-Every filter is optional, and omitting one means everything, so a caller that
+Every filter is optional. Omitting one means everything, so a caller that
 knows nothing still gets a useful first answer.
 
 ## Notes
 
 - **It reads the app and never boots it.** `AppFactory.create` would open
-  database connections, start queue workers and run every `onInit`, so an agent
-  asking a question about the code would be running the code. The cost of that
+  database connections, start queue workers, and run every `onInit`. Asking a
+  question about the code would then mean running the code. The cost of that
   is no runtime state: the value of a config field is not answerable here.
 - It reads through the framework's own readers - `providersOf`, `modulesOf`,
   `routesOf`, `gatewaysOf` - so an answer cannot drift from what the container

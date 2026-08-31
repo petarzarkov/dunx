@@ -6,16 +6,16 @@ except the first, which changes a default.
 ## An unmatched path answers 404
 
 `HttpFactory.create` used to report a miss to global middleware with no route
-metadata, so a global guard refused it and a prober could not tell a 404 from a 401. That is now opt-in.
+metadata. A global guard refused it, and a prober could not tell a 404 from a 401. That is now opt-in.
 
 | Before                            | After                                    |
 | --------------------------------- | ---------------------------------------- |
 | a miss behind a global guard: 401 | a miss behind a global guard: 404        |
 | `notFound: 'public'` to get 404   | `notFound: 'guarded'` to get the old 401 |
 
-An app with no global authentication guard needs no change and now behaves the way
-every other framework does. An app that has one, and wants a miss to look like
-every other refused request, sets it back:
+An app with no global authentication guard needs no change. It now behaves the
+way every other framework does. An app that has one, and wants a miss to look
+like every other refused request, sets it back:
 
 ```ts
 await HttpFactory.create(AppModule, { notFound: 'guarded' });
@@ -61,9 +61,9 @@ export class HttpConfigModule {}
 | `app.set('trust proxy', true)`                   | `override readonly trustProxy`   |
 
 **Nothing is removed.** `setGlobalPrefix`, `enableCors`, `set` and
-`enableShutdownHooks` all still work, and a call to one wins over the provider,
-because it happens after construction. An argument to `create()` wins too, field by
-field, so a setting can move into the container one at a time.
+`enableShutdownHooks` all still work. A call to one wins over the provider,
+because it happens after construction. An argument to `create()` wins too, field
+by field, so a setting can move into the container one at a time.
 
 Override a field with a field and a getter with a getter: TypeScript rejects the
 other pairing with `TS2611` and `TS2610`. To derive a field from config, declare
@@ -71,7 +71,7 @@ other pairing with `TS2611` and `TS2610`. To derive a field from config, declare
 
 ## A named outbound client can be a class
 
-`httpClient(name)` returns a `Token`, and a token is not a class, so a named client
+`httpClient(name)` returns a `Token`, and a token is not a class. A named client
 could only be reached with `inject()` in a field initialiser.
 
 ```ts
@@ -90,8 +90,8 @@ client and any number of named ones coexist.
 
 ## A named Redis connection can be a class
 
-The same change, in `@dunx/infra/redis`. `redisConnection(name)` returns a `Token`,
-so a named connection could only be reached with `inject()` in a field.
+The same change, in `@dunx/infra/redis`. `redisConnection(name)` returns a
+`Token`, so a named connection could only be reached with `inject()` in a field.
 
 ```ts
 export class SessionsRedis extends Redis {}
@@ -106,12 +106,12 @@ RedisModule.forRootAsync({ useFactory, inject }, SessionsRedis);
 
 `Redis` is now exported for this: `RedisConnection` is the abstract contract and
 takes no options, so it cannot be the base a subclass extends. The string form
-still works, and a subclass does not claim `RedisConnection`.
+still works. A subclass does not claim `RedisConnection`.
 
 ## The websocket relay can be a provider
 
 `relay: new RedisRelay({...})` was an instance `main.ts` built and threaded into
-`HttpFactory.create`, which made it the one setting an options provider could not
+`HttpFactory.create`. That made it the one setting an options provider could not
 answer from config.
 
 | Before                                     | After                                        |
@@ -119,7 +119,7 @@ answer from config.
 | `new RedisRelay(...)` in `main.ts`         | `WsRelayModule.forRootAsync({ useFactory })` |
 | `relay:` and `relayChannel:` on `create()` | `override get relay()` on the provider       |
 
-The container closes it at shutdown, which `PubSub.close()` does not do for an app
+The container closes it at shutdown. `PubSub.close()` does not do that for an app
 that never opened a socket. Passing an instance to `create()` still works.
 
 ## Config takes a schema directly
@@ -173,19 +173,19 @@ try {
 }
 ```
 
-`toDatabaseError` returns a `ConstraintError` carrying a status - 409 for a unique
-or foreign key violation, 400 for not-null and check - and returns anything it does
-not recognise untouched. `@dunx/http` reads the status off it, so no error filter is
-involved. `transaction`, `transactionSync` and `runSeeds` already classify on the
-way out.
+`toDatabaseError` returns a `ConstraintError` carrying a status - 409 for a
+unique or foreign key violation, 400 for not-null and check. Anything it does
+not recognise passes through untouched. `@dunx/http` reads the status off it, so
+no error filter is involved. `transaction`, `transactionSync` and `runSeeds`
+already classify on the way out.
 
 The driver's own message stays on `cause` rather than in the response body, which
 would otherwise carry the table and column names.
 
 ## Four more `fetch` options
 
-`HttpClientOptionsInit` passes `compress`, `protocol` and `maxRedirects` through,
-and `proxy` widens to `string | URL | { url, headers }` - the object form sends
+`HttpClientOptionsInit` passes `compress`, `protocol` and `maxRedirects` through.
+`proxy` widens to `string | URL | { url, headers }`: the object form sends
 `Proxy-Authorization` to the proxy rather than to the target.
 
 `protocol: 'http2'` lets concurrent requests to one origin share a connection.

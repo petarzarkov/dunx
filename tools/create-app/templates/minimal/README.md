@@ -26,12 +26,12 @@ preload = ["@dunx/transform/preload"]
 ```
 
 `@dunx/transform` reads each class's constructor parameter types when the file
-loads and records them, so the container can resolve them before calling `new`.
-Without it, providers are constructed with no arguments and boot fails saying so -
-it is not a silent `undefined`.
+loads and records them. The container uses that record to resolve them before
+calling `new`. Without it, providers are constructed with no arguments, and boot
+fails by naming the problem rather than returning a silent `undefined`.
 
 That is also why there is no `@Injectable()` and no `@Inject()`. Being listed in a
-module's `providers` is what makes a class injectable, and TC39 standard decorators
+module's `providers` is what makes a class injectable. TC39 standard decorators
 have no parameter decorators, so `@Inject()` does not exist.
 
 ## Next

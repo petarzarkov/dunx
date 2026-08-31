@@ -40,8 +40,8 @@ There is no flag for choosing features. The command opens a list:
 | Ctrl+C, Esc     | Stop, having written nothing                  |
 
 `◉` is chosen, `◈` is pulled in by something else you chose, `○` is neither. The
-two lines under the list update as you go: what your selection drags in, and which
-of it needs Redis or Postgres running to do anything.
+two lines under the list update as you go: one shows what your selection drags in,
+the other shows which of it needs Redis or Postgres running to do anything.
 
 Three more questions appear only when there is something to ask: a directory, when
 the command line named none; a package name, when the directory's is one npm would
@@ -56,9 +56,10 @@ reject; and whether to write into a directory that already has files in it.
 | `--yes`, `-y`   | off                | Skip the questions, take the minimal template |
 | `--help`        |                    | Print usage                                   |
 
-**Piped, redirected or in CI it asks nothing** and writes the minimal template, so
-a script never hangs on a question nothing can answer. To choose features without
-a terminal, call [`scaffold`](#programmatic-use) rather than passing flags.
+**Piped, redirected or in CI it asks nothing.** It writes the minimal template
+instead, so a script never hangs on a question nothing can answer. To choose
+features without a terminal, call [`scaffold`](#programmatic-use) rather than
+passing flags.
 
 The name is validated against npm's rules **before** anything is created, because
 an invalid one would otherwise surface as a confusing `bun install` failure inside
@@ -73,8 +74,8 @@ bunx @dunx/create-app .
 
 `.git`, `.gitkeep`, `.DS_Store` and `LICENSE` do not count as contents, so a fresh
 repo or a clone of an empty GitHub repository is a valid target without a question.
-Nothing else is ignored: `.gitignore` and `README.md` both come out of the template,
-and overwriting your copy of either is what the last question asks about.
+Nothing else is ignored: `.gitignore` and `README.md` both come out of the template.
+Overwriting your copy of either is what the last question asks about.
 
 ## What a composed app looks like
 
@@ -89,9 +90,10 @@ my-api/
   bunfig.toml        the transform preload
 ```
 
-Three files are generated for the selection and the feature directories are copied.
-`main.ts` is one file rather than two: a test imports `createApp` from it, and the
-`import.meta.main` block at the bottom is what stops that starting a server.
+Three files are generated for the selection, and the feature directories are just
+copied. `main.ts` is one file rather than two: a test imports `createApp` from it,
+and the `import.meta.main` block at the bottom stops that same import from
+starting a server.
 
 **There is no worker entry point, even with queues.** `QueueModule` is given
 `consume: true`, so the container opens the bullmq workers at `onInit` and closes
@@ -100,18 +102,21 @@ forked by bullmq itself into `src/jobs/jobs.processor.ts`.
 
 ## What it generates
 
-The `minimal` template, the same app as
-[`examples/minimal`](https://github.com/petarzarkov/dunx/tree/main/examples/minimal) a service, a controller, a module, `HttpFactory.create`, one test against a real
+The `minimal` template is the same app as
+[`examples/minimal`](https://github.com/petarzarkov/dunx/tree/main/examples/minimal):
+a service, a controller, a module, `HttpFactory.create`, one test against a real
 server, and the `bunfig.toml` preload line that makes constructor injection work.
 
-Its `src/` is a **byte-for-byte copy** of that example, and a test in this package
+Its `src/` is a **byte-for-byte copy** of that example. A test in this package
 fails if the two ever drift.
 
 Every app also gets an `AGENTS.md` naming its layout, its commands and the rules
 dunx fails at boot over, plus a `CLAUDE.md` pointing at it. Both link
 <https://petarzarkov.github.io/dunx/setup.md>, which is served per release, rather
-than copying the framework's own instructions into your repository. The example is the one CI boots, so keeping them
-identical is what makes the template trustworthy rather than merely plausible.
+than copying the framework's own instructions into your repository.
+
+The example is the one CI boots, so keeping them identical makes the template
+trustworthy rather than merely plausible.
 
 ## Two details
 
@@ -146,7 +151,7 @@ const { directory, files } = await scaffold({
 ```
 
 This is the scripted path the removed `--with` flag used to be. `features` takes
-the same names the list shows, in any order, and pulls in what they require;
+the same names the list shows, in any order, and pulls in what they require.
 `FEATURES` exports the set. Omitting it writes the minimal template.
 
 `scaffold` throws `ScaffoldError` for anything the caller can fix - an unknown

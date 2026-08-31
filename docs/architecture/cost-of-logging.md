@@ -22,12 +22,13 @@ and a `GET` has no body. `bun run logging:bodies` adds a ladder on `POST /valida
 
 The two request-body rows differ by one `Request.clone()`. Decomposed on raw
 `Bun.serve`, cloning a request whose body is an unread network stream costs ~8 µs
-before either half is read and ~20 µs once one is; the second buffer and the second
-`JSON.parse` are 0.32 µs together, and putting the body in the entry is 0.27 µs.
+before either half is read and ~20 µs once one is. The second buffer and the
+second `JSON.parse` are 0.32 µs together, and putting the body in the entry is
+0.27 µs.
 
 **So the expensive part was never the parsing, which is where everyone looks.** A
 route declaring a `body` schema now has its buffered text handed to the logger
-through `RawBody`, and only an unvalidated route still clones. The old figure was
+through `RawBody`. Only an unvalidated route still clones. The old figure was
 right about the old code and only ever described the unvalidated case.
 
 ### The default path, re-measured
@@ -64,11 +65,11 @@ largest step overall before the write.
 
 ## The cost of request logging on Bun 1.3.14 (`internal/bench` logging harness)
 
-`bun run logging` is the third harness, and it exists because `dunx-logging` in the
+`bun run logging` is the third harness. It exists because `dunx-logging` in the
 main suite was **one number for at least eight different things**. It sat at 40-45%
 of raw `Bun.serve` while `dunx` sat at 90-98%, so dunx's _default_ configuration -
-the one nearly every user runs - cost more than half the throughput, and nothing said
-which half.
+the one nearly every user runs - cost more than half the throughput, and nothing
+said which half.
 
 `servers/logging/dunx.ts` is one app whose middleware is truncated at a step chosen
 by `$LOGGING_VARIANT`, plus three stand-in `Logger` bindings that stop after the
@@ -100,11 +101,11 @@ subsequent write until the kernel finds room. Seven of the eight subjects log
 nothing, so only `dunx-logging` ever hit it - the one row where it mattered.
 
 Measured, on the `json` scenario: an unbatched writer into an unread pipe cost
-**2.68 µs/request** more than the same writer into `/dev/null`. Subjects now write to
-`/dev/null` (`StdoutSink` in `src/subject-process.ts`), which is a real `write(2)`
-that can never block, and the blocked-pipe case survives as an explicit row rather
-than as the default. The docstring in `servers/dunx-logging.ts` claimed the harness
-drained that pipe; it never did.
+**2.68 µs/request** more than the same writer into `/dev/null`. Subjects now write
+to `/dev/null` (`StdoutSink` in `src/subject-process.ts`), which is a real
+`write(2)` that can never block. The blocked-pipe case survives as an explicit row
+rather than as the default. The docstring in `servers/dunx-logging.ts` claimed the
+harness drained that pipe; it never did.
 
 ### Where the time went
 
@@ -140,18 +141,18 @@ Three suspicions were wrong, recorded here as wrong:
 
 What actually costs: **the first touch of `req.headers`** (1.29 µs - Bun
 materialises the whole header map, and the inbound `x-request-id` is part of the
-contract, so it is irreducible), the **`AsyncLocalStorage` scope** (0.91 µs, which is
-what makes a handler's own log lines carry `requestId`), and **building and
-serialising the entry** (2.05 µs, most of it `JSON.stringify`).
+contract, so it is irreducible), the **`AsyncLocalStorage` scope** (0.91 µs, the
+mechanism that makes a handler's own log lines carry `requestId`), and **building
+and serialising the entry** (2.05 µs, most of it `JSON.stringify`).
 
 ### The write was the largest single component, and batching removed it
 
-One `console.log` per request measured **+1.24 µs** against not writing at all - more
-than the `JSON.stringify` that produced the line. `ConsoleLogger` now concatenates
-entries at `info` and below into one string and writes it once per event-loop turn,
-and the write becomes **unmeasurable** (−0.62 µs against the serialise-only row, i.e.
-inside the noise floor). It also largely defuses the blocked-pipe case: with batching
-an unread pipe costs 1.16 µs instead of 2.68.
+One `console.log` per request measured **+1.24 µs** against not writing at all -
+more than the `JSON.stringify` that produced the line. `ConsoleLogger` now
+concatenates entries at `info` and below into one string and writes it once per
+event-loop turn. The write becomes **unmeasurable** (−0.62 µs against the
+serialise-only row, i.e. inside the noise floor). It also largely defuses the
+blocked-pipe case: with batching an unread pipe costs 1.16 µs instead of 2.68.
 
 Things that were measured and did **not** work, all in a real `Bun.serve` handler:
 
@@ -169,8 +170,8 @@ Things that were measured and did **not** work, all in a real `Bun.serve` handle
 this work preferred a library to the platform primitive. A `FileSink.write()`
 encodes into its own
 buffer on every call, so it pays per entry exactly what it was meant to save; a JS
-string concatenation is a rope and pays almost nothing. Only the _flush_ is a write,
-and once per turn it does not matter which API performs it - so the flush goes
+string concatenation is a rope and pays almost nothing. Only the _flush_ is a
+write, and once per turn it does not matter which API performs it. The flush goes
 through `console.log`, which is also what keeps `console` interception working in
 tests.
 
@@ -200,7 +201,7 @@ things bound it, and they are asserted in `packages/core/src/logger/console.test
 they returned `{}` immediately, so every request paid two async frames and two
 `await`s on values that were never promises. They now return `Promise<unknown>
 | undefined`, where `undefined` means there is nothing to read and the caller
-stays synchronous, and the scope callback passed to `runWithContext` is a plain
+stays synchronous. The scope callback passed to `runWithContext` is now a plain
 function using `.then` rather than an `async` arrow.
 
 This is the same fault the input reader had, found the same way, and an
@@ -212,17 +213,18 @@ one. The pathname and the query string now come out of **one** pair of
 shape every framework call has. The general path spends two array allocations (the
 rest parameter, then `[message, ...rest]`), a third object and an `Object.assign` to
 reach an entry the fast path builds as one literal. The timestamp is cached by
-millisecond: at any rate worth logging, `Date.now()` has not moved since the previous
-entry, and `new Date().toISOString()` measured ~170 ns.
+millisecond: at any rate worth logging, `Date.now()` has not moved since the
+previous entry. `new Date().toISOString()` measured ~170 ns.
 
 ### Rejected: skipping the entry when the level would drop it
 
 `Logger` exposes `logLevel`, so `RequestLoggingMiddleware` could check at
 construction whether `info` survives and skip building the `request` object. It was
-not done. The default level _is_ `info`, so the gate never fires in the configuration
-being optimised; and a 4xx logs at `warn` and a 5xx at `error`, both of which need
-the same `request` object, which is not known until after `next()` resolves. The
-branch would add a field and a condition to buy nothing on the default path.
+not done. The default level _is_ `info`, so the gate never fires in the
+configuration being optimised. A 4xx logs at `warn` and a 5xx at `error`, both of
+which need the same `request` object, which is not known until after `next()`
+resolves. The branch would add a field and a condition to buy nothing on the
+default path.
 
 ### Rejected: a cheaper request id
 
@@ -236,8 +238,8 @@ It used to be `req.headers.get(REQUEST_ID_HEADER) ?? crypto.randomUUID()`, so
 `curl -H 'x-request-id: MY-OWN-ID'` was echoed on the response and written into
 every line the request produced. That is a caller-supplied string on a trust
 boundary: it can carry a newline, be a megabyte long, or be set to somebody else's
-trace id knowingly. `nestjs-template` ran `isUuid()` on it first, and that is what
-was adopted, the accepted shape matching what this middleware mints.
+trace id knowingly. `nestjs-template` ran `isUuid()` on it first. dunx adopted the
+same check, the accepted shape matching what this middleware mints.
 
 Any UUID version passes; the check reads the layout rather than the version nibble, because
 an upstream service minting v7 is not a threat model. The order matters more than
@@ -249,13 +251,12 @@ can resolve, and below the `crypto.randomUUID()` call that follows it either way
 
 ### `ignore` skips everything, and `correlateIgnored` buys back the half worth having
 
-`ignore` returns `next()` before anything else happens, which makes it
-free and also means an ignored path has no `x-request-id` and no
-`AsyncLocalStorage` scope - so a health check's own log lines were
-uncorrelated, and guide 12 claimed the id was "always set on the response".
-Splitting `ignore` into two lists was rejected: the cost is not the path list,
-it is the work, and a second list would still not say which work.
-`correlateIgnored: boolean` names the work instead.
+`ignore` returns `next()` before anything else happens, which makes it free. It
+also means an ignored path has no `x-request-id` and no `AsyncLocalStorage`
+scope, so a health check's own log lines were uncorrelated, and guide 12 claimed
+the id was "always set on the response". Splitting `ignore` into two lists was
+rejected: the cost is not the path list, it is the work, and a second list would
+still not say which work. `correlateIgnored: boolean` names the work instead.
 
 On an ignored path it pays for the header read, the id, the scope and one
 `Headers.set` - the four rows above that sum to ~2.2 µs of the ~5.4 the full
@@ -265,10 +266,10 @@ path costs, and never for the entry, the expensive half. Default
 ### The 500's stack goes through the bound `Logger`
 
 `defaultErrorMapper` wrote it with `console.error`. In a JSON-only service that
-is one structured entry from request logging plus a multi-line, Bun-formatted
-dump that a collector reads as several broken records, and a custom `onError`
-was the only way to suppress it. `errorMapper(logger)` is now the real
-implementation and `HttpApplication` builds the default from `app.get(Logger)`,
+means one structured entry from request logging plus a multi-line, Bun-formatted
+dump that a collector reads as several broken records. A custom `onError` was
+the only way to suppress it. `errorMapper(logger)` is now the real
+implementation, and `HttpApplication` builds the default from `app.get(Logger)`,
 so the stack lands in the same stream and the same shape as everything else.
 
 `defaultErrorMapper` remains as `errorMapper(new ConsoleLogger())` for

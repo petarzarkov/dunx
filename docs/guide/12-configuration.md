@@ -164,10 +164,10 @@ export class Notifier {
   or `null` at run time. It throws `ConfigError` naming the whole path.
 - `values` is the whole validated object, for destructuring or passing on.
 
-Paths stop at three segments, and `config.values.a.b.c.d` is what reaches past
-them. Each depth is a separate overload rather than one recursive type: a
-conditional type over `T` anywhere on this class makes its variance unmeasurable,
-and `app.get(ConfigService)` then stops compiling. A top-level key that itself
+Paths stop at three segments. `config.values.a.b.c.d` is what reaches past them.
+Each depth is a separate overload rather than one recursive type: a conditional
+type over `T` anywhere on this class makes its variance unmeasurable, and
+`app.get(ConfigService)` then stops compiling. A top-level key that itself
 contains a dot is read whole, so it keeps winning over a path that spells it.
 
 ## Why `as` exists
@@ -185,9 +185,9 @@ bare type name of a constructor parameter and discards the type argument, so
 `constructor(private readonly config: ConfigService<AppConfig>)` resolves the
 `ConfigService` token while the annotation keeps the precise type.
 
-It breaks in a **factory's `inject` array**, which is why `as` is on the API at
-all. `inject: [ConfigService]` resolves to
-`ConfigService<Record<string, unknown>>`, the token being a plain runtime value
+It breaks in a **factory's `inject` array**, and `as` exists on the API because
+of that gap. `inject: [ConfigService]` resolves to
+`ConfigService<Record<string, unknown>>`: the token is a plain runtime value,
 carrying no type argument to recover.
 
 A factory annotating its parameter as `ConfigService<AppConfig>` is then
@@ -212,9 +212,9 @@ LoggerModule.forRootAsync({
 });
 ```
 
-A subclass serves as both a precise token and a usable annotation, which is what
-the factory case needs. Every `forRootAsync` in dunx exists so options can be read
-off config, so `as` comes up almost immediately.
+A subclass serves as both a precise token and a usable annotation - exactly what
+the factory case needs. Every `forRootAsync` in dunx exists so options can be
+read off config, so `as` comes up almost immediately.
 
 `ConfigService` stays bound to the same instance when `as` is used, so either name
 injects. That matters for library code, which only knows the base contract.
@@ -251,18 +251,18 @@ The raw source is bound too, under the `ConfigInput` token, but it is **not**
 exported: `validate` is what reads it, and everything downstream reads the shaped
 object instead.
 
-## Two things that are absent
+## No `isGlobal`, no `forRootAsync`
 
-**No `isGlobal`.** `ConfigModule.forRoot` is already `global: true`, and exports
-`ConfigService` plus whatever `as` names. Configuration is the one thing every
-module reads, so a flag to turn that on would only ever be turned on. `ConfigInput`
-stays private: it is the raw environment, and nothing outside the module should read
+`ConfigModule.forRoot` is already `global: true`, and exports `ConfigService`
+plus whatever `as` names. Configuration is the one thing every module reads, so
+a flag to turn that on would only ever be turned on. `ConfigInput` stays
+private: it is the raw environment, and nothing outside the module should read
 it.
 
-**No `forRootAsync`.** Every other module has one; `ConfigModule` needs none.
-`validate` may already return a promise, and the container settles every factory
-before the first constructor runs, so an async validation has finished by the
-time anything can read it.
+Every other module offers `forRootAsync`; `ConfigModule` needs none. `validate`
+may already return a promise, and the container settles every factory before the
+first constructor runs, so an async validation has finished by the time anything
+can read it.
 
 `forRootAsync` exists elsewhere to let a factory **inject**, the one thing a
 zero-argument function cannot do. `validate` runs before everything and has
