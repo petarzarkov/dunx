@@ -142,8 +142,8 @@ it writes the minimal template rather than blocking.
 
 ## It reads the app. It never boots it.
 
-`AppFactory.create()` instantiates every provider and awaits every async factory
-before it returns; dunx has no lazy resolution. Booting an app to answer "what
+`AppFactory.create()` instantiates every declared binding and awaits every async
+factory before it returns. Booting an app to answer "what
 routes exist" would open database connections, start queue workers, bind sockets
 and run every `onInit`. An agent asking a question about the code would end up
 running the code against whatever environment happened to be configured.

@@ -273,8 +273,8 @@ after    parent pid 1148355  COLOURED   Started [background] worker for queue: .
 variable both checks read and the only thing that crosses a fork. Nothing is
 added when `NO_COLOR` or `FORCE_COLOR` is already set: it crosses in
 `process.env` unchanged, and it is the consumer's answer rather than a terminal
-check. Nothing is added either when the consumer passed `workerForkOptions` of
-their own, which would have to be merged into.
+check. Nothing is added when the consumer passed `workerForkOptions` of their own,
+since dunx's defaults would have to be merged into the consumer's options.
 
 `isolation: 'thread'` needs none of this: Bun ignores the `stdout`/`stderr` options
 bullmq passes `new Worker`, so a thread writes to the process's real stdout.

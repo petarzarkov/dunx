@@ -309,7 +309,8 @@ the immutable header, and the page requests nothing off-origin.
 
 The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms
 and took Bun's ~25 % larger output, which was right for a site. Both numbers have
-since been re-measured and reversed - see "Documentation site" above. The
+since been re-measured. The speed gap narrowed but Bun.build remains faster,
+while the bundle-size result reversed - see "Documentation site" above. The
 dashboard bundle is inlined into a page a backend serves, so Rollup's
 tree-shaking wins there, and the ~1.5 s is paid once per package build.
 

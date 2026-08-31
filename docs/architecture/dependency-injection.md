@@ -352,9 +352,9 @@ into three:
 - Two modules binding one token is legal and silent.
 - An importer seeing one token from two imports is legal. It takes the
   **last** and **warns**, naming both modules, but only when the bindings
-  actually differ - a diamond re-export stays silent. Warnings surface on
-  `App.warnings` rather than being logged, because core has no logger and
-  the caller knows what level they belong at.
+  actually differ - a diamond re-export stays silent. `AppFactory.create`
+  logs each warning through `Logger.warn` and also collects them on
+  `App.warnings` for programmatic access.
 
 Nest is silent here and it costs people hours, so the warning exists.
 

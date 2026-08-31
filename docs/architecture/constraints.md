@@ -204,7 +204,7 @@ Four results worth keeping:
   modifier when checking assignability, so the object branch exists to reach nested
   arrays. A function is returned untouched, because mapping over one discards its
   call signature.
-- **`infer R extends ResponseMap` is load bearing.** Without the constraint the
+- **`infer R extends ResponseMap` is load-bearing.** Without the constraint the
   narrowed `O` in the branch is `{ response: R } & O`, whose `response` no longer
   satisfies `RouteSchemas`, and the nested `SuccessStatus<O, M>` fails with
   `TS2344`. Measured both ways.

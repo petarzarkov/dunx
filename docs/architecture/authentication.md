@@ -10,7 +10,7 @@ dance.
 
 Never inventing what a mature library solves is not a close call here. An auth
 system is years of edge cases, and a half-built one is a liability dressed as a
-feature. `better-auth` is an optional `peerDependency`, as is `drizzle-orm` behind
+feature. `better-auth` is a required `peerDependency`. `drizzle-orm` is optional behind
 the `@dunx/auth/drizzle` subpath.
 
 ### `better-auth` is a required peer, `drizzle-orm` an optional one

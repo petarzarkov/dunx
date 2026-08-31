@@ -26,10 +26,11 @@ before either half is read and ~20 µs once one is. The second buffer and the
 second `JSON.parse` are 0.32 µs together, and putting the body in the entry is
 0.27 µs.
 
-**So the expensive part was never the parsing, which is where everyone looks.** A
-route declaring a `body` schema now has its buffered text handed to the logger
-through `RawBody`. Only an unvalidated route still clones. The old figure was
-right about the old code and only ever described the unvalidated case.
+**So the expensive part was never the parsing, which is where everyone looks.**
+For a JSON route declaring a `body` schema, `RawBody` records the buffered text
+when request-body logging is enabled. Only an unvalidated route still clones.
+The old figure was right about the old code and only ever described the
+unvalidated case.
 
 ### The default path, re-measured
 

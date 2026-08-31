@@ -136,7 +136,7 @@ Details:
 S3 signs; a local disk cannot. `LocalStorage.presign()` throws
 `UnsupportedOperationError`, naming the key and what to do instead:
 
-```
+```text
 LocalStorage does not support presign(). Nothing signs "report.pdf" on a local
 disk. Configure S3StorageOptions, or serve the bytes through your own route.
 ```
@@ -252,8 +252,8 @@ nothing extra:
 ImagesModule.forRoot(async () => ({ quality: await settings.imageQuality() }));
 ```
 
-`forRootAsync` is for the one thing that cannot do: **injecting** a dependency
-into the factory.
+`forRootAsync` is for the one thing `forRoot` cannot do: **injecting** a
+dependency into the factory.
 
 ```ts
 ImagesModule.forRootAsync({
@@ -454,16 +454,16 @@ Bun's own codes pass through unchanged. Two are added here:
 `ERR_IMAGE_UNREADABLE_SOURCE` for a source that could not be read at all, and
 `ERR_IMAGE_FORMAT_NOT_ALLOWED` for one excluded by `allowedFormats`.
 
-| Condition                                    | Type        | `code`                          |
-| -------------------------------------------- | ----------- | ------------------------------- |
-| No container signature matched               | `Error`     | `ERR_IMAGE_UNKNOWN_FORMAT`      |
-| Header valid, pixels truncated or corrupt    | `Error`     | `ERR_IMAGE_DECODE_FAILED`       |
-| HEIC/AVIF/TIFF with no OS codec              | `Error`     | `ERR_IMAGE_FORMAT_UNSUPPORTED`  |
-| Over `maxPixels` (raised even by `metadata`) | `Error`     | `ERR_IMAGE_TOO_MANY_PIXELS`     |
-| Rotation not a multiple of 90                | `TypeError` | `ERR_INVALID_ARG_TYPE`          |
-| Unknown resize `filter`                      | `TypeError` | `ERR_INVALID_ARG_TYPE`          |
-| Input is a `Response`/`ReadableStream`       | `TypeError` | `ERR_INVALID_ARG_TYPE`          |
-| Missing path or directory                    | `Error`     | raw syscall: `ENOENT`, `ENODEV` |
+| Condition                                    | Cause         | `code`                         |
+| -------------------------------------------- | ------------- | ------------------------------ |
+| No container signature matched               | `Error`       | `ERR_IMAGE_UNKNOWN_FORMAT`     |
+| Header valid, pixels truncated or corrupt    | `Error`       | `ERR_IMAGE_DECODE_FAILED`      |
+| HEIC/AVIF/TIFF with no OS codec              | `Error`       | `ERR_IMAGE_FORMAT_UNSUPPORTED` |
+| Over `maxPixels` (raised even by `metadata`) | `Error`       | `ERR_IMAGE_TOO_MANY_PIXELS`    |
+| Rotation not a multiple of 90                | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
+| Unknown resize `filter`                      | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
+| Input is a `Response`/`ReadableStream`       | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
+| Missing path or directory                    | syscall error | `ERR_IMAGE_UNREADABLE_SOURCE`  |
 
 `ERR_IMAGE_ENCODE_FAILED` and `ERR_INVALID_STATE` are declared in Bun's types but
 were not reachable in probing.

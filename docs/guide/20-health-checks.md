@@ -91,8 +91,8 @@ has stopped, so a probe answering from there answers on a socket that is already
 closed.
 
 `drainDelayMs` keeps readiness failing for that long before the socket closes. A
-load balancer notices a failing probe on its own schedule: at a 2 second interval
-and a 3 failure threshold, traffic can arrive for 6 seconds after the pod has
+load balancer notices a failing probe on its own schedule: at a 2-second interval
+and a 3-failure threshold, traffic can arrive for 6 seconds after the pod has
 decided to go. Set it to a few intervals.
 
 Liveness keeps passing throughout. A pod that is shutting down does not need

@@ -4,9 +4,10 @@ An OpenAPI 3.1 document generated from the routes an app already has, with
 **Swagger UI** served from the same `Bun.serve` as everything else.
 
 The difference from a reflection-based generator is what it reads. A route's
-schemas are the objects the request path validates against. Its metadata is
-what its guards enforce. Both are already on the route, so the document is not a
-second description that can drift from the first.
+schemas are the objects the request path validates against. Its security
+metadata (`@Public()`, `@Roles()`) is what its guards enforce. Both are already
+on the route, so the document is not a second description that can drift from
+the first.
 
 ## Install
 
@@ -15,10 +16,11 @@ bun add @dunx/openapi zod
 ```
 
 `zod` is a peer dependency. Route validation targets Standard Schema, so Valibot
-and ArkType work for validation too, but hoisting a schema into
-`components/schemas` needs `z.toJSONSchema`, which is zod's. `swagger-ui-dist` is
-a regular dependency - nobody writes code against it, so nobody has a version
-opinion about it.
+and ArkType work for validation too, but the OpenAPI document needs JSON Schema,
+and only zod has `z.toJSONSchema`. A non-zod schema validates at runtime and
+appears as a permissive entry in the document, with a warning at generation time.
+`swagger-ui-dist` is a regular dependency - nobody writes code against it, so
+nobody has a version opinion about it.
 
 ## Usage
 

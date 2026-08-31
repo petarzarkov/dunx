@@ -188,14 +188,14 @@ asserting `recording.entries` is empty must not find an entry the application
 never wrote. `middleware: []` is the opt-out, because "none, intentionally" is
 expressible and "forgot" is not.
 
-**`@dunx/core` and `@dunx/http` are `dependencies` at `workspace:^` - measured, not
-assumed.** Peers were the first choice and are the better contract: a second copy
-of core in a consumer's tree is a second `Logger` class, and therefore a token
-that matches nothing. Overrides would then silently replace nothing, exactly the
-failure the unmatched-override error exists to prevent. Peers did not survive the
-build **at the time**; the topological build fixed that, and peers are now in
-use. The measurement below is kept because it explains why the build had to
-change first.
+**`@dunx/core` and `@dunx/http` were initially `dependencies` at `workspace:^`
+rather than peers - measured, not assumed.** Peers are the better contract: a
+second copy of core in a consumer's tree is a second `Logger` class, and
+therefore a token that matches nothing. Overrides would then silently replace
+nothing, exactly the failure the unmatched-override error exists to prevent.
+Peers did not survive the build at the time; the topological build fixed that,
+and **peers are now in use**. The measurement below is kept because it explains
+why the build had to change first.
 
 `bun run --filter '*' build` derives its ordering from **`dependencies` only**.
 Measured on Bun 1.3.14: with core in `devDependencies` and in `peerDependencies`
@@ -209,7 +209,8 @@ Two consequences worth keeping:
 
 - The range publishes as a **caret** rather than an exact version. An exact pin
   makes `@dunx/testing@0.4.0` demand `@dunx/core@0.4.0` and nothing else, so a
-  consumer on 0.4.1 gets a nested second copy - the duplication being avoided.
+  consumer on 0.4.1 gets a nested second copy (Bun warns and installs it;
+  npm fails with ERESOLVE) - the duplication being avoided.
   **That pass has since been taken for every package**: `workspace:*` no longer
   publishes as the exact version, it publishes as `^<version>`. The rule lives in
   one place (`resolveWorkspaceRange` in `scripts/workspace-ranges.ts`), shared by
