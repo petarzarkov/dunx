@@ -32,6 +32,12 @@ export const loggingVariants = Object.freeze([
   'unbatched',
   'default',
   'uncorrelated',
+  // The format experiment: the shipped default with only the `Logger` swapped,
+  // so a row against `default` differs by how the line is built and nothing else.
+  // `servers/logging/formats.ts` holds the three.
+  'text',
+  'nomerge',
+  'fastjson',
   // The body options, which the `json` ladder above cannot reach: they need a
   // request with a body, so these only run under `--scenario validate`.
   'body-request',
