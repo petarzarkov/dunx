@@ -14,6 +14,7 @@ const LADDER = [
   'scope',
   'als',
   'request',
+  'then',
   'respheader',
   'entry-discard',
   'entry-stamp',

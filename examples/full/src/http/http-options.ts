@@ -69,6 +69,7 @@ export class AppHttpOptions extends HttpOptionsProvider {
       // ~360 ns per request, so off by default. On here so `traceId` joins
       // `requestId` and `@dunx/http/client` forwards it upstream.
       trace: true,
+      requestIdHeader: true,
     };
   }
 }
