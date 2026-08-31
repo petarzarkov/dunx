@@ -19,6 +19,7 @@ bun add @dunx/openapi zod
 and ArkType work for validation too, but the OpenAPI document needs JSON Schema,
 and only zod has `z.toJSONSchema`. A non-zod schema validates at runtime and
 appears as a permissive entry in the document, with a warning at generation time.
+
 `swagger-ui-dist` is a regular dependency - nobody writes code against it, so
 nobody has a version opinion about it.
 
