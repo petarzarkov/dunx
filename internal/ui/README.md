@@ -29,7 +29,7 @@ explorer used are still used by this package's own `MethodBadge`, `StatusBadge` 
 
 - `Prose` was a rich version in `docs` and a thinner one in `openapi-ui`, so the
   same markdown rendered differently depending on which page you opened it in.
-- `ColorSchemeToggle` was correct in `docs` and buggy in `openapi-ui` - the
+- `ColorSchemeToggle` was correct in `docs` and buggy in `openapi-ui`. The
   explorer's first click was a no-op on a dark-OS machine, because it read the
   stored `auto` rather than the computed scheme.
 - `statusColor` and `METHOD_COLOR` lived in the explorer's `model.ts`, where the
@@ -44,9 +44,9 @@ component only one page has stays on that page.
 Two things it must **not** grow:
 
 - **A union that another package already declares.** `methodColor` and
-  `jobStateColor` take a plain `string` and fall back to grey on purpose:
+  `jobStateColor` take a plain `string` and fall back to grey on purpose.
   `HttpMethod` is `@dunx/http`'s, `OperationKey` is `@dunx/openapi`'s and
-  `JOB_STATES` is `@dunx/dashboard`'s, and a fourth here would only ever be
+  `JOB_STATES` is `@dunx/dashboard`'s, so a fourth here would only ever be
   converted to and from those three.
 - **A dependency.** Icons are inline paths rather than an icon package -
   `@tabler/icons-react` is 20 MB installed, and two of the three consumers inline

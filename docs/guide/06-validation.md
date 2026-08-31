@@ -1,6 +1,6 @@
 # Validation
 
-A route declares the shape of what it accepts on the decorator itself, and the
+A route declares the shape of what it accepts on the decorator itself. The
 framework parses, validates and types the request before the handler runs.
 
 ```ts
@@ -27,17 +27,18 @@ export class UsersController {
 }
 ```
 
-No `await req.json()`, no `Response.json()`, no status: the body arrives parsed
-and validated, `input.body.name` is a `string`, and a POST answers 201. A request
-that fails the schema never reaches the handler.
+The body arrives parsed and validated: `input.body.name` is already a `string`,
+and a POST answers 201, all without writing `await req.json()`, `Response.json()`
+or a status code by hand. A request that fails the schema never reaches the
+handler.
 
 ## Standard Schema is the contract
 
-`@dunx/http` has **no validator dependency**. Its `peerDependencies` are
-`@dunx/core` and (optionally) `@types/bun`, and the list ends there. What a
-route's `body`, `query` and `params` accept is anything implementing
+What a route's `body`, `query` and `params` accept is anything implementing
 [Standard Schema v1](https://standardschema.dev): an object carrying a
-`~standard` property.
+`~standard` property. `@dunx/http` needs no validator dependency to enforce
+that. Its `peerDependencies` are `@dunx/core` and (optionally) `@types/bun`,
+and the list ends there.
 
 ```ts
 export interface StandardSchemaV1<In = unknown, Out = In> {
@@ -52,10 +53,11 @@ export interface StandardSchemaV1<In = unknown, Out = In> {
 }
 ```
 
-That interface is **restated** by `@dunx/http` rather than imported. The spec is an interface and nothing else: `@standard-schema/spec` ships
-declarations with no runtime, so restating it costs one file and adds no dependency
-to the package. zod 4, Valibot and ArkType already satisfy the shape, so all
-three drop straight into a route's options with nothing adapting anything:
+That interface is restated in `@dunx/http` rather than imported. The spec is
+only an interface: `@standard-schema/spec` ships type declarations with no
+runtime code, so restating it costs one file and adds no dependency to the
+package. zod 4, Valibot and ArkType already satisfy the shape, so all three
+drop straight into a route's options with no adapter needed:
 
 ```ts
 import { z } from 'zod';
@@ -72,8 +74,8 @@ does not know or care which library produced the object.
 
 ### Sync and async validators
 
-`~standard.validate` is _permitted_ to return a promise. zod, Valibot and ArkType
-never do, and the input reader is built around that: it checks
+`~standard.validate` is permitted to return a promise, though zod, Valibot and
+ArkType never do. The input reader is built around that difference: it checks
 `result instanceof Promise` and only allocates a promise link when it gets one.
 A validator that really is asynchronous still works and is awaited correctly; it
 just costs an async frame that the synchronous ones do not.
@@ -250,8 +252,8 @@ value, and only the validator knows that.
 
 ## `Input<typeof schema>` and why it must be written out
 
-The annotation on the handler parameter is not optional, and it is not a wart the
-framework can remove.
+The annotation on the handler parameter carries the type the schema infers. It is
+not optional, and not a wart the framework could remove if it tried.
 
 A TC39 standard method decorator is
 `(value: V, context: ClassMethodDecoratorContext) => V | void`. It receives the
@@ -347,7 +349,7 @@ Replace all of it by passing `onError` to `HttpFactory.create`; see
 
 ## Vendor-specific features sit behind a vendor check
 
-Standard Schema **validates**, and says nothing about describing, serialising or
+Standard Schema validates. It says nothing about describing, serialising or
 converting a schema, so there is no vendor-neutral way to turn one into JSON
 Schema. `@dunx/openapi` needs exactly that, and resolves it with the one
 piece of vendor information the interface does carry:
@@ -381,7 +383,8 @@ loudly.
 
 ## What validation costs
 
-This repo publishes its losses, and here the loss is not where most people expect.
+This repo measures its own losses rather than guessing at them. Here, the loss
+sits somewhere most people would not expect.
 
 Four raw `Bun.serve` routes, each doing exactly one thing more than the one above
 it, all answering the same bytes, all against a 69 byte three-field payload:

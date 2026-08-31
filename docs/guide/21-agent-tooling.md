@@ -24,10 +24,10 @@ bunx @dunx/mcp ./src/app.module.ts
 ```
 
 Point it at the file that declares your root module. No naming convention applies:
-`@Module` leaves a marker, so a module exported only by name is found on its own,
-which is what `bunx @dunx/create-app` scaffolds.
+`@Module` leaves a marker, so a module exported only by name is found on its own.
+`bunx @dunx/create-app` scaffolds a module exported exactly this way.
 
-`default` and `root` win if present, and `--export=<name>` settles a file that
+`default` and `root` win if present. `--export=<name>` settles a file that
 declares several. The path is resolved with `Bun.resolveSync`, so anything
 `import` accepts works: a relative path with or without `./`, an absolute one, an
 extensionless specifier, or a package name.
@@ -72,12 +72,12 @@ whether it would boot, without returning the graph:
 }
 ```
 
-`unresolvedDependencies` is listed rather than counted, because each entry is a boot
+`unresolvedDependencies` is listed rather than counted: each entry is a boot
 error naming a parameter. A constructor parameter whose type was erased - an
 interface, a primitive, a union, a type-only import - is recorded by
-`@dunx/transform` as `unresolved`. `emitDecoratorMetadata` has that wart and dunx
-does not. The `typeOnly` case is called out separately because it has a
-one-line fix:
+`@dunx/transform` as `unresolved`. That is the same wart `emitDecoratorMetadata`
+has; dunx's transform does not carry it. The `typeOnly` case gets its own field
+because it has a one-line fix:
 
 ```json
 {
@@ -112,9 +112,9 @@ Schema vendor. It does not report the schema:
 }
 ```
 
-Turning a schema into JSON Schema is zod-specific work `@dunx/openapi` already does
-properly, so `dunx_openapi` is where it lives - and that split is what keeps the
-other five tools working in an app with no OpenAPI setup. `@dunx/openapi` is an
+Turning a schema into JSON Schema is zod-specific work; `@dunx/openapi` already
+does it properly, so `dunx_openapi` is where it lives. That split keeps the other
+five tools working in an app with no OpenAPI setup at all. `@dunx/openapi` is an
 optional peer, loaded only when `dunx_openapi` is called.
 
 ## Starting a project with an agent
@@ -142,12 +142,10 @@ it writes the minimal template rather than blocking.
 
 ## It reads the app. It never boots it.
 
-This is the decision the package is built around.
-
-`AppFactory.create()` instantiates every provider and awaits every async factory
-before it returns, dunx having no lazy resolution. Booting an app to answer "what
+`AppFactory.create()` instantiates every declared binding and awaits every async
+factory before it returns. Booting an app to answer "what
 routes exist" would open database connections, start queue workers, bind sockets
-and run every `onInit`, so an agent asking a question about the code would be
+and run every `onInit`. An agent asking a question about the code would end up
 running the code against whatever environment happened to be configured.
 
 Reading costs none of that. `discoverRoutes` and `discoverGateway` each walk a

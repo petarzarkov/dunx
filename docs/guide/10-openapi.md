@@ -79,12 +79,13 @@ is actually served. From each route it reads:
 - `meta` and `classMeta` - whatever `@Public`, `@Roles` and `@ApiDoc` wrote.
 - the path and the method, from the verb decorator.
 
-It constructs nothing. `discoverRoutes` walks an instance's prototype chain
-looking for marked methods, and `Object.create(Controller.prototype)` is that
-chain with nothing behind it: `instance.constructor` still resolves to the class,
-every method is still reachable, and no constructor, or dependency of one, has to
-exist. So a document can be written to a file from a script with no container and
-no server:
+A document can be written to a file from a script with no container and no
+server, because `describeRoutes` never constructs a controller.
+
+`discoverRoutes` walks an instance's prototype chain looking for marked
+methods, and `Object.create(Controller.prototype)` is that chain with nothing
+behind it: `instance.constructor` still resolves to the class, every method is
+still reachable, and no constructor, or dependency of one, has to exist:
 
 ```ts
 import { describeRoutes, generateDocument } from '@dunx/openapi';
@@ -151,10 +152,10 @@ export const oneUser = {
 } as const satisfies RouteSchemas;
 ```
 
-One contract for both directions, so a named response schema hoists into
+One contract covers both directions: a named response schema hoists into
 `components/schemas` and the operation `$ref`s it exactly as a request body does.
-That is what the document needs for client codegen, and what gives
-`.meta({ id })` on a response-only schema its meaning.
+That gives `.meta({ id })` on a response-only schema its meaning, and gives the
+document what it needs for client codegen.
 
 Two consequences of it being the same contract rather than a second channel:
 
@@ -177,7 +178,7 @@ declared success status keeps its own description and gains the `content`.
 A hoisted schema gets a `title` equal to its `components/schemas` key, unless it
 declared one of its own.
 
-That is what an explorer labels a **nested** schema by. Swagger UI renders a model as
+An explorer labels a **nested** schema by that title. Swagger UI renders a model as
 `title || displayName || name`: a `$ref` at the root of a response supplies those
 fallbacks from the ref, but the same `$ref` inside `items` supplies neither, so
 `array<User>` read as `array<object>` before the title was there.
@@ -246,7 +247,7 @@ It works at class scope and at method scope, and the two **compose per field**.
 The operation above is tagged and described from the class, then summarised and
 deprecated from the method; the method wins only on a field they both set.
 
-Class tags plus per-method summaries therefore needs no repetition, and dropping
+Class tags plus per-method summaries therefore need no repetition, and dropping
 the class `tags` from a method does not silently fall back to the class-name
 default.
 
@@ -263,8 +264,9 @@ the merged `meta`.
 
 ## Security comes from the guards' own metadata
 
-There is no `@ApiBearerAuth`. The document reads the same `@Public()` and
-`@Roles()` that the guards read at runtime, so the two cannot drift:
+The document reads the same `@Public()` and `@Roles()` that the guards read at
+runtime, so the two cannot drift. There is no separate `@ApiBearerAuth`
+decorator to keep in sync:
 
 | Route declares     | Operation gets                                                  |
 | ------------------ | --------------------------------------------------------------- |

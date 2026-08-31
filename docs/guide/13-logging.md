@@ -1,9 +1,8 @@
 # Logging
 
 dunx logs every HTTP request by default, in an app that imported no logging
-module at all, and it does that without `@dunx/core` taking a single dependency.
-This page explains how, what it costs, and what you get by swapping the default
-out.
+module at all, and it does that without `@dunx/core` taking a single
+dependency.
 
 ## The contract lives in core
 
@@ -22,10 +21,10 @@ export abstract class Logger {
 }
 ```
 
-An abstract class rather than an `interface`, because `@dunx/transform` records
-constructor parameter **types**, and an interface has no runtime value to record.
-An interface here would be a boot error at every injection site. That is the same
-trick `RequestContext`, `Storage`, `DbOptions` and `Auth` all use.
+An abstract class rather than an `interface`: `@dunx/transform` records
+constructor parameter **types**, and an interface has no runtime value to
+record. An interface here would be a boot error at every injection site. That is
+the same trick `RequestContext`, `Storage`, `DbOptions` and `Auth` all use.
 
 Inject it like anything else:
 
@@ -117,14 +116,14 @@ That missing list is what `@dunx/infra/logger` buys.
 
 `ConsoleLogger` **batches `info` and below into one write per event-loop turn.**
 
-A `console.log` per entry is a `write(2)` per entry, and measured, that was the
+A `console.log` per entry is a `write(2)` per entry. Measured, that was the
 largest single component of request logging: **1.84 µs**, more than the
-`JSON.stringify` that produced the line. Concatenating into one string and writing it once per
-event-loop turn costs **0.27 µs**.
+`JSON.stringify` that produced the line. Concatenating into one string and
+writing it once per event-loop turn costs **0.27 µs**.
 
-The trade is real and worth stating plainly: **a line still sitting in the buffer
-is lost if the process dies without unwinding** - a `SIGKILL`, an OOM kill, a
-segfault - which is exactly when the log matters most.
+The trade matters: **a line still sitting in the buffer is lost if the process
+dies without unwinding** - a `SIGKILL`, an OOM kill, a segfault - and a crash is
+when the log is needed most.
 
 Three things bound it:
 
@@ -318,7 +317,7 @@ worse are never sampled, and every discard is announced in the stream rather tha
 being silent.
 
 `logger.stats()` on the `BackingLogger` token reports what each transport is
-holding and what it has dropped, which is what an alert on "we are losing logs"
+holding and what it has dropped - the numbers an alert on "we are losing logs"
 reads.
 
 ### Output formats
@@ -365,11 +364,11 @@ final path and every gateway with the messages it claims:
 }
 ```
 
-This is the answer to "is my route registered", and a service that logs nothing at
-boot cannot answer it from production. Nest emits a line per controller and a line
-per route to say the same thing; one structured entry is the same content in the
-shape a collector wants, and it is what `WorkerFactory` already does for the
-consuming side with `Consuming N job(s) on M queue(s)`.
+This is the answer to "is my route registered"; a service that logs nothing at
+boot cannot answer it from production. Nest emits a line per controller and a
+line per route to say the same thing. One structured entry carries the same
+content in the shape a collector wants, and it is what `WorkerFactory` already
+does for the consuming side, with `Consuming N job(s) on M queue(s)`.
 
 It is at `listen()` rather than `create()` because `setGlobalPrefix` runs in between,
 and a table listing unprefixed paths would name routes that do not exist.
@@ -388,10 +387,10 @@ what an import already exports to it, or imports one token from two modules that
 disagree, is legal and warned.
 
 They used to sit on `app.warnings` and be logged by nobody, on the reasoning that
-core had no logger. It has one, `Logger` is always bound, and the reference app
-never read the property, so a shadowed binding would have been silent in the app
-most likely to hit one. The list is still public for an app that would rather
-fail boot on it.
+core had no logger. It has one now: `Logger` is always bound, and the reference
+app never read the property, so a shadowed binding would have been silent in the
+app most likely to hit one. The list is still public for an app that would
+rather fail boot on it.
 
 ## Request logging
 
@@ -428,11 +427,12 @@ The entry carries the request and its response together:
 }
 ```
 
-A framework whose middleware cannot see the response needs a middleware for the inbound half and an interceptor for the outbound
-one, because they are different classes and the interceptor cannot see what the
-middleware saw. dunx does not, because middleware wraps `next()` and both halves
-are the same closure. There is no pair to correlate by `requestId` just to find out
-how a call ended.
+dunx writes both halves from one middleware, because middleware wraps `next()`
+and both halves are the same closure. A framework whose middleware cannot see
+the response needs a middleware for the inbound half and an interceptor for the
+outbound one instead: different classes, and the interceptor cannot see what
+the middleware saw. There is no pair to correlate by `requestId` just to find
+out how a call ended.
 
 - A **4xx** is the same line at `warn`.
 - A **5xx** is the same line at `error`.

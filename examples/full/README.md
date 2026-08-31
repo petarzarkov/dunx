@@ -6,7 +6,7 @@ and poke at it rather than read about it.
 **Start smaller if this is your first look.** [`examples/minimal`](../minimal) is
 five files and two minutes; [`examples/databases`](../databases) is database setup
 on four configurations; [`examples/testing`](../testing) is the test story. This one
-is the answer to "does it all actually compose?", and it is the only example where
+is the answer to "does it all actually compose?" It is the only example where
 that is visible.
 
 ```bash
@@ -38,7 +38,7 @@ services first, then the database and the temp directory they were using.
 | `bun run tour`  | boots the same app, narrates every package, shuts down, exits 0      |
 
 The tour is what CI runs. It is the end-to-end check that the whole DI graph builds
-and that every package still does what its comments claim - `bun start` cannot be
+and that every package still does what its comments claim. `bun start` cannot be
 that check, because a service never exits.
 
 ## What is mounted
@@ -101,8 +101,8 @@ starts answering `503` while the port is still open, waits `drainDelayMs`, and o
 then does the socket close. `/api/health/live` keeps answering `200` throughout, so
 nothing decides to restart a pod that is already leaving.
 
-`bun run tour` also boots a **second node** for `/chat` - a second `Bun.serve`
-and a second container in the same process - and relays a publish between the
+`bun run tour` also boots a **second node** for `/chat`: a second `Bun.serve`
+and a second container in the same process. It relays a publish between the
 two through Redis, asserting one delivery per client.
 
 Node A relays with `@dunx/http`'s `RedisRelay`; node B relays through the app's
@@ -114,8 +114,8 @@ With no Redis running it says it is skipping and the app still exits 0.
 ### Where a handler runs
 
 `bun start` works the queues as well as serving them. There is no second command,
-and **nothing in `main.ts` says so** - `JobsModule` sets `consume: true` on its
-`QueueModule`, and the container starts the workers at `onInit` and stops them at
+and **nothing in `main.ts` says so**: `JobsModule` sets `consume: true` on its
+`QueueModule`. The container starts the workers at `onInit` and stops them at
 `onShutdown`, before the database they use closes.
 
 A queue runs in a **forked child** when a handler asks for one:
@@ -234,8 +234,9 @@ exercises a 03:00 cron without waiting for 03:00.
 
 ## Logging
 
-`@dunx/http` writes the entry, and `requestLogging` in
-[src/main.ts](./src/main.ts) is all this app configures - the bodies come
+`@dunx/http` writes the entry. `requestLogging` in
+[src/http/http-options.ts](./src/http/http-options.ts) is all this app
+configures: the bodies come
 from `LOG_REQUEST_BODY` and `LOG_RESPONSE_BODY`, and `/api/_dunx` is skipped.
 Nothing here writes a request line by hand;
 [src/http/request-trail.ts](./src/http/request-trail.ts) is a middleware of the
@@ -270,7 +271,7 @@ Everything the *handler* logs in between still carries `requestId`, `method`,
 `AsyncLocalStorage`. An inbound `x-request-id` is honoured so a trace survives
 across services; otherwise one is minted and returned on the response.
 
-An unmatched path is logged too. Bun answers a miss itself and the middleware chain
-would never see it, so `@dunx/http` installs one `fetch` fallback that puts the
-global middleware in front of a `{"error":"NOT_FOUND","status":404}` - Bun is still
-the router.
+An unmatched path is logged too. Bun answers a miss itself, and the middleware
+chain would never see it, so `@dunx/http` installs one `fetch` fallback that puts
+the global middleware in front of a `{"error":"NOT_FOUND","status":404}`. Bun is
+still the router.

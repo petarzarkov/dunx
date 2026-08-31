@@ -11,8 +11,7 @@ export class UsersService {
 }
 ```
 
-No `@Injectable()`. No `@Inject()`. No `reflect-metadata`. This page explains how
-that works, where it stops working, and what to do at each of those edges.
+No `@Injectable()`. No `@Inject()`. No `reflect-metadata`.
 
 ## How constructor injection works
 
@@ -74,10 +73,9 @@ export class UsersRepository extends Repository {
 A subclass that _does_ declare a constructor gets its own record from the
 transform, which shadows the base's.
 
-This is the opposite of the rule `@Module` uses, and the difference is
-deliberate. Module options are read with `Object.hasOwn`, so subclassing a module
-does not silently inherit its bindings. Constructors are inherited by the language
-and dependencies follow them; module options are not.
+`@Module` uses the opposite rule. Module options are read with `Object.hasOwn`,
+so subclassing a module does not silently inherit its bindings. Constructors are
+inherited by the language and dependencies follow them. Module options are not.
 
 ## When the type cannot be recovered
 
@@ -103,12 +101,12 @@ Six cases are detected this way:
 | a class type parameter     | `class Box<T> { constructor(x: T) {} }` erases `T` |
 | a primitive or a union     | `number`, `string`, `A \| B` are not tokens        |
 
-Measured against `emitDecoratorMetadata`: given
-`constructor(db: Db, cache: Cache, n: number)` the legacy metadata table yields
-`["Db", "Object", "Number"]`. An interface degrades to `Object` and a primitive
-to `Number`, indistinguishably, so a metadata-driven container needs
-`@Inject(TOKEN)` for everything that is not a class. The transform reads the
-difference from source and names the parameter.
+For comparison, `emitDecoratorMetadata` given
+`constructor(db: Db, cache: Cache, n: number)` yields `["Db", "Object", "Number"]`.
+An interface degrades to `Object` and a primitive to `Number`, indistinguishably.
+A metadata-driven container then needs `@Inject(TOKEN)` for everything that is
+not a class. The dunx transform reads the difference from source and names the
+parameter.
 
 The fix is one of two things. If the erased type is a contract implemented
 elsewhere, make it an `abstract class`, which is a runtime value and therefore a
@@ -165,9 +163,9 @@ export class BuildInfo implements OnInit {
 ```
 
 Both mechanisms may appear in one class. Use `inject()` when there is no
-constructor parameter for the value to hang off, which in practice means a
-`Token<T>`: a token is a value rather than a type, so it cannot be written as a
-parameter type and the transform has nothing to record.
+constructor parameter for the value to hang off. In practice that means a
+`Token<T>`: a token is a value rather than a type, so it cannot be a parameter
+type and the transform has nothing to record.
 
 The window is narrow. Constructor arguments resolve _before_ the injector is
 made ambient, since argument resolution recurses back through `get()` and must

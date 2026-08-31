@@ -40,11 +40,10 @@ last one answers 201.
 ## Bun does the routing
 
 `Bun.serve({ routes })` handles path parameters, per-method dispatch, static
-`Response` values and 404-on-method-miss in native Zig. dunx does not ship a
-router, and writing one is a standing prohibition rather than a backlog item.
-`@dunx/http`'s job is to build the `routes` object at boot and hand it to Bun.
+`Response` values and 404-on-method-miss in native Zig. dunx ships no router.
+`@dunx/http` builds the `routes` object at boot and hands it to Bun.
 
-Four consequences you will actually notice.
+Four consequences worth knowing about.
 
 **An unmatched method returns 404 where most frameworks return 405.** Bun answers a
 method miss natively only when nothing else can claim the request. dunx always
@@ -63,9 +62,9 @@ The status is 404 either way; what differs is that your middleware sees it, so
 request logging, throttling and CORS all get a look at a method miss.
 
 **Paths are matched exactly, so a trailing slash is a different path.** `GET /t`
-is a 200 and `GET /t/` is a 404, and the same goes for `/t/sub/` and `POST /t/`.
-Most frameworks normalise this, so it is the common break in a ported client, and
-it breaks as a 404 that reads like a missing route.
+is a 200 and `GET /t/` is a 404. The same goes for `/t/sub/` and `POST /t/`.
+Most frameworks normalise this, so it is the common break in a ported client. It
+shows up as a 404 that reads like a missing route.
 
 The declared side is already normalised: `@Get('/')` inside `@Controller('t')` is
 `/t`, never `/t/`, so both spellings are never live at once. Route discovery

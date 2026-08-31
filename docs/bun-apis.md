@@ -65,9 +65,10 @@ Use the links in the table to jump to the associated documentation.
 
 ## Re-probed on Bun 1.4.0 (rev 34cbb9a40)
 
-Everything below this heading was first measured on 1.3.14. Re-running the probes on
-1.4 moved five entries and added three; the rest still reproduce. **Fixed** means the
-probe that used to fail now passes, not that the note was wrong.
+Everything below this heading was first measured on Bun 1.3.14. Re-running the probes
+on 1.4 moved five entries and added three; the rest still reproduce. **Fixed** here
+means the probe that used to fail now passes. It does not mean the earlier note was
+wrong.
 
 | Finding                                                           | On 1.4                                                            |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -185,27 +186,27 @@ wrong. Same process each time - construct, attempt one operation, tear down, the
 
 The black-holed row is Bun's, and is the "connect that never completes" entry in the
 table above - no framework involved. The refused row is bullmq's: its adapter runs a
-`setTimeout` reconnect chain, and both `disconnect()` and `quit()` return early when
-`closed` is already `true`, which is exactly when a reconnect is pending. Nothing on
+`setTimeout` reconnect chain. Both `disconnect()` and `quit()` return early when
+`closed` is already `true`, which is when a reconnect is pending, and nothing on
 `IRedisClient` can cancel it. Reproductions for both, ready to file, are in
 internal/notes/roadmap/queue-shutdown-sigterm.md.
 
-The healthy row is clean at every layer, which is why no normal deployment sees this.
-Consequence: a container that touched a Redis it could not reach will not exit on
-`SIGTERM` and will be `SIGKILL`ed. It serves correctly throughout - the route answers
-503 in single-digit milliseconds - so this is a shutdown defect, not an availability
-one.
+The healthy row is clean at every layer, so no normal deployment sees this. The
+consequence: a container that touched a Redis it could not reach will not exit on
+`SIGTERM`, and gets `SIGKILL`ed instead. It serves correctly throughout - the route
+answers 503 in single-digit milliseconds. This is a shutdown defect, not an
+availability one.
 
-Two neighbouring leaks in `Bun.RedisClient` itself, both fixed in
+Two neighbouring leaks live in `Bun.RedisClient` itself, and both are fixed in
 `@dunx/infra/redis`: a client that entered subscriber mode needs `unsubscribe()`
 before `close()`, and a `subscribe()` that failed to connect needs `connect()` first.
-`bun test` cannot observe either, because the runner exits the process itself - they
-need a spawned process to catch, which is what `@dunx/infra/redis` now has.
+`bun test` cannot observe either, because the runner exits the process itself.
+Catching them needs a spawned process, and `@dunx/infra/redis` now has one.
 
 **bullmq 6.0.5 has no `exports` map and no `"type": "module"`, so Bun resolves it to
-`main` - the CJS build.** The imported namespace carries `__esModule` and a `default`
-holding `Queue`, which is how you tell. This matters because a previous note here
-claimed the ESM build was the safe one: both builds statically import `ioredis` and
+`main`, the CJS build.** The imported namespace carries `__esModule` and a `default`
+holding `Queue`; that is how you can tell. A previous note here claimed the ESM build
+was the safe one. It was not: both builds statically import `ioredis` and
 `ioredis/built/utils`, ioredis 6.0.0 still ships that path, and no pin is needed.
 Full measurement in architecture/queues.md, "Not pinning ioredis 5".
 
@@ -225,26 +226,28 @@ Measured on `internal/bench`'s validation harness (`bun run validation`), four r
 | `POST` + `await req.json()`              |  12.14 | +3.10 µs |
 | `POST` + `req.json()` + zod              |  13.09 | +0.94 µs |
 
-**Putting a body on the wire is near-free; reading it is not, and reading it costs
+**Putting a body on the wire is near-free. Reading it is not, and reading it costs
 ~3.3x what validating it costs.** So the framework-level advice - "pick a faster
 validator" - is aimed at the smaller half. Every validator measured (zod, Valibot,
 ArkType, TypeBox's compiled checker, ajv) lands between 0.0 µs and 0.94 µs, all of
 them under the parse.
 
 **The primitive Bun is missing is a validating parser.** `req.json()` allocates a
-full JavaScript object graph which the validator then walks a second time, and
-Bun ships nothing that fuses the two: no `Bun.JSON` with a schema, no JSON Schema
-validator, no way to validate the body bytes without materialising them first.
-`Bun.TOML` and `Bun.markdown` exist; a `Bun.json(bytes, schema)` that answered from
-one pass over the buffer would remove most of what a validated POST costs today, and
-it is the kind of thing only the runtime can do - a userland library cannot avoid
-the intermediate object.
+full JavaScript object graph, and the validator then walks that same graph a second
+time. Bun ships nothing that fuses the two steps: no `Bun.JSON` with a schema, no
+JSON Schema validator, no way to validate the body bytes without materialising them
+first.
 
-Until then this is a floor, not a dunx cost, and **dunx must not try to fill it**:
-Not inventing what a mature library solves rules out writing a validator, and a
-hand-rolled JSON parser
-would be a JavaScript reimplementation of a JSC primitive, which the first half
-rules out. Recorded here so the ceiling is known rather than rediscovered.
+`Bun.TOML` and `Bun.markdown` exist, so the gap is not that Bun avoids parsers. A
+`Bun.json(bytes, schema)` that answered from one pass over the buffer would remove
+most of what a validated POST costs today. It is also the kind of thing only the
+runtime can do: a userland library cannot avoid building the intermediate object.
+
+Until then this is a floor, not a dunx cost. **dunx must not try to fill it**: not
+inventing what a mature library already solves rules out writing a validator, and a
+hand-rolled JSON parser would be a JavaScript reimplementation of a JSC primitive,
+which the first half of Rule 1 already rules out. Recorded here so the ceiling is
+known rather than rediscovered.
 
 ### `Bun.cron` - 1.4 honours `{ tz }` and changed the default zone
 
@@ -303,7 +306,7 @@ Three things it does not do, and the first is the one that decides an adoption:
 | **Every HTTP method is served**               | `GET`, `HEAD`, `POST`, `PUT`, `DELETE`, `PATCH` and `OPTIONS` all return **200 with the file body**. So `DELETE /assets/app.js` answers with the script, and `OPTIONS` cannot carry CORS preflight headers.       |
 | No `x-content-type-options: nosniff`          | Not set, and not settable for the same reason as `cache-control`.                                                                                                                                                 |
 
-One more shape worth knowing: `index` is **half-implemented**. It is type-checked at
+One more shape to flag: `index` is **half-implemented**. It is type-checked at
 `Bun.serve` (`index: false` throws `The "index" property must be of type string`),
 undeclared in `bun-types`, and then ignored - `{ dir, index: 'a.txt' }` still serves
 `index.html`. A validated-but-inert option is worse than an unknown one, which Bun
@@ -444,7 +447,7 @@ Fully typed in `bun-types` (`bun.d.ts` ~8180-8408), just undocumented on the sit
   `.resize(10,10).resize(20,20)` yields 20×20. Execution order is fixed at
   `autoOrient → rotate → flip/flop → resize → modulate` regardless of call order.
   A shared instance therefore lets one caller silently reconfigure another's
-  transform, which is why a wrapper should be immutable.
+  transform, so a wrapper should be immutable.
 - **`metadata()` ignores the chain** and only reads the header, so it reports the
   _source_ dimensions and format. It also succeeds on a truncated file - it is
   **not** a validity check.
@@ -573,10 +576,10 @@ names nothing. The explicit argument loses to the ambient variable.
 | `MYSQL_URL`                 | ok → `adapter: mysql`              |
 
 Three forms are unaffected, all verified: `new Bun.SQL(urlString)`,
-`new Bun.SQL(new URL(url))`, and `new Bun.SQL({ url, adapter: 'mysql' })`. Note
-that `@dunx/infra/db`'s `SqlOptions` uses the options-object form - harmless there,
-because that backend is Postgres by construction, but any non-Postgres backend
-built on `Bun.SQL` must name its `adapter`.
+`new Bun.SQL(new URL(url))`, and `new Bun.SQL({ url, adapter: 'mysql' })`.
+`@dunx/infra/db`'s `SqlOptions` uses the options-object form, which is harmless
+there because that backend is Postgres by construction. Any non-Postgres backend
+built on `Bun.SQL` must name its `adapter` explicitly.
 
 #### `LISTEN`/`NOTIFY` on the Postgres adapter, and the 7999-byte cap
 
@@ -665,7 +668,8 @@ MySQL URL through it emits `$1` placeholders and double-quoted identifiers) and
 `bun-sqlite`. Its MySQL drivers are `mysql2` and `mysql-proxy`.
 
 `drizzle-orm/mysql-proxy` over `Bun.SQL` works and keeps the split: drizzle owns the
-dialect, Bun owns the socket, `mysql2` is never installed. Verified against MySQL 8 inserts, selects, `where`, ordering, updates, deletes, aggregates,
+dialect, Bun owns the socket, and `mysql2` is never installed. Verified against
+MySQL 8: inserts, selects, `where`, ordering, updates, deletes, aggregates,
 `$returningId()` single and multi-row, inner and left joins, `placeholder()`
 prepared statements, and the `mysql-proxy` migrator.
 
@@ -761,10 +765,11 @@ iterator's `return()`, and the three explicit calls do the same job by hand.
 
 **A piped test never sees this.** `printf 'notes\n' | bun cli.ts` closes stdin
 straight away, the iteration ends on EOF, and the process exits. The hang needs
-something holding the other end open, which is every real terminal. That is how it
-reached a release: `bunx @dunx/create-app my-api` wrote the app, printed its next
-steps and then sat there until the user pressed Ctrl+C, reported from a real run
-after the piped CLI suite had been green for weeks.
+something holding the other end open, and every real terminal does.
+
+That is how it reached a release: `bunx @dunx/create-app my-api` wrote the app,
+printed its next steps, and then sat there until the user pressed Ctrl+C. It was
+reported from a real run, after the piped CLI suite had been green for weeks.
 
 The line read is gone - `@dunx/create-app` reads keys in raw mode now, and
 `ProcessTty.close()` in `tools/create-app/src/tty.ts` is the same release by hand,
@@ -788,12 +793,12 @@ write('a\nb\n') while raw            arrives as a<CR><LF>b<CR><LF>
 
 - **`setRawMode` is absent, not failing, on a pipe.** Checking `isTTY` on both
   streams is the capability test; there is nothing to catch.
-- **An escape sequence arrives whole.** Three bytes in one read, which is what lets
-  a decoder treat a chunk holding nothing but `0x1b` as the Escape key rather than
+- **An escape sequence arrives whole.** Three bytes arrive in one read, so a decoder
+  can treat a chunk holding nothing but `0x1b` as the Escape key rather than
   waiting on a timer.
 - **`ISIG` is off, so Ctrl+C is a byte.** A `SIGINT` handler installed alongside
-  never ran. Nothing ends the process unless the reader does, which is why the
-  cancel path exits 130 itself.
+  never ran. Nothing ends the process unless the reader does, so the cancel path
+  exits 130 itself.
 - **Restoring is enough to exit.** No `process.exit`, no `unref`.
 - **`OPOST` and `ONLCR` survive raw mode**, so a frame written with `\n` still
   returns the carriage. Node's `setRawMode` only clears input and local flags.
@@ -852,15 +857,15 @@ Three things about the shape of it:
 - Nothing to do with `@dunx/transform`. Reproduced in `/tmp` with no preload, no
   `bunfig.toml` and a two-line local decorator.
 
-This one is worth knowing rather than filing and forgetting, because dunx makes it
-easy to hit: **every controller, gateway, `@JobHandler` and scheduled service is a
-decorated class**, and `#count++` is the obvious way to keep a counter in one.
+dunx makes this easy to hit: **every controller, gateway, `@JobHandler` and
+scheduled service is a decorated class**, and `#count++` is the obvious way to keep
+a counter in one.
 
-It also sits under an idiom already in shipped code. `this.#x ??= ...` is how six
+It also sits under an idiom already in shipped code: `this.#x ??= ...` is how six
 classes do lazy init - `DashboardMiddleware`, `RedisRelay`, `QueueProcessor`,
 `QueueWorker`, `Workspace`, `Application`. None of them is decorated today, so none
-is broken; adding one decorator to any of them turns the file into a parse error
-with a message that names neither the field nor the decorator.
+is broken. Adding one decorator to any of them would turn the file into a parse
+error, with a message that names neither the field nor the decorator.
 
 Found while writing `examples/full/src/schedule/maintenance.service.ts`, whose
 `@Cron`/`@Interval`/`@OnceOnBoot` handlers each incremented a private counter.
@@ -938,10 +943,12 @@ N defaulting to the core count.
 Two behaviours change with it.
 
 **A `?raw` import suffix does not survive a worker.** `internal/docs/src/data.ts`
-has `import indexRaw from './generated/index.json?raw'`. In one process that is the
-file's text. In a `--parallel` worker it is the parsed object, so `JSON.parse` on it
-throws `SyntaxError: JSON Parse error: Unexpected identifier "object"` and 7 of the
-suite's 10 files bail: **91 tests sequentially against 30 passing and 7 failing**.
+has `import indexRaw from './generated/index.json?raw'`. In one process that import
+is the file's text. In a `--parallel` worker it is the parsed object instead, so
+`JSON.parse` on it throws `SyntaxError: JSON Parse error: Unexpected identifier
+"object"`, and 7 of the suite's 10 files bail: **91 tests sequentially against 30
+passing and 7 failing**.
+
 It fails loudly, so opting in per workspace is safe. `internal/docs` is the one
 exclusion, in the `docs` phase of `scripts/ci.ts`.
 
@@ -966,7 +973,7 @@ suite's 17.4s**, with the other nine files summing to 4.3s.
 `bun-types` declares every matcher `: void` and `rejects: Matchers<unknown>`, and the
 runtime agrees: `expect(Promise.reject(x)).rejects.toThrow()` evaluates to
 `undefined`, not a promise. `await expect(...).rejects.toThrow()` therefore awaits
-nothing, which is what `typescript/await-thenable` fires on at 19 sites here.
+nothing; `typescript/await-thenable` fires on that at 19 sites here.
 
 The assertion holds without the `await`. Probed all four combinations, settled or
 pending promise against correct or wrong expectation, awaited or not: Bun tracks the
@@ -1023,13 +1030,14 @@ default (remap to source)       28   11    39.3%
 coverageIgnoreSourcemaps = true 17   15    88.2%
 ```
 
-The 17 lines Bun cannot reach in the first column are the `import` statement,
-the interface members and the abstract member signatures: none of them emit
-anything, so they are unhittable by construction. `packages/core/src/logger/context.ts`
-was the live case, `DA:1,0` through `DA:46,0` over its imports and its two
-interfaces, reading as 32.35% for a file whose class is exercised on every boot.
-Repo-wide the remapping costs about 1.8 points of line coverage: 93.55% against
-95.33%.
+The 17 lines Bun cannot reach in the first column are the `import` statement, the
+interface members and the abstract member signatures. None of them emit anything,
+so they are unhittable by construction.
+
+`packages/core/src/logger/context.ts` was the live case: `DA:1,0` through `DA:46,0`
+over its imports and its two interfaces, reading as 32.35% for a file whose class
+is exercised on every boot. Repo-wide the remapping costs about 1.8 points of line
+coverage: 93.55% against 95.33%.
 
 `coverageIgnoreSourcemaps = true` is **not** set here. It fixes the ratio and
 breaks the thing the ratio is for: the uncovered line ranges the coverage page
@@ -1065,9 +1073,10 @@ rarely declare a constructor.
 That is as far as it can be pinned down, and not far enough to correct for. The
 counts do not add up at scale: `@dunx/core` has 15 unhit functions against roughly
 43 classes with no explicit constructor, so something else marks most of them hit.
-**Do not try to subtract this from the denominator** - a correction built on a rule
+
+**Do not try to subtract this from the denominator.** A correction built on a rule
 this shaky would be wrong in a way that is harder to notice than the artifact it
-replaces, and it would be baked into the gate.
+replaces, and it would get baked into the gate.
 
 Two other things no test can reach, for the same tally: `di/scope.ts:289` is a
 throw its own comment calls unreachable by construction, and
@@ -1100,11 +1109,13 @@ route reads as an empty document.
 Neither obvious escape works. `bun test -c other-bunfig.toml` still ran the
 preload (probed both ways: happy-dom reported `isRegistered` either way), and
 `GlobalRegistrator.unregister()` in a `beforeAll` does not hand the native
-`Response` back. What does work is **a `bunfig.toml` next to the working
-directory**: Bun picks the config beside the cwd, so the suite lives in
-`browser/` with an empty `[test]` there and its script does `cd browser && bun test`.
-Then `Response` is `function Response() { [native code] }`, `document` is
-undefined, and the server serves.
+`Response` back.
+
+What does work is **a `bunfig.toml` next to the working directory**: Bun picks the
+config beside the cwd, so the suite lives in `browser/` with an empty `[test]`
+there, and its script does `cd browser && bun test`. Then `Response` is
+`function Response() { [native code] }`, `document` is undefined, and the server
+serves.
 
 **`Bun.WebView` has no `colorScheme` or `deviceScaleFactor` option.**
 `ConstructorOptions` is `width`, `height`, `headless`, `backend`, `url`,
@@ -1125,11 +1136,11 @@ await view.cdp('Emulation.setDeviceMetricsOverride', {
 
 Verified against the built site: the body background goes `rgb(255, 255, 255)` to
 `rgb(36, 36, 36)`, `devicePixelRatio` reads 2, and the PNG comes out 2880x1800 for
-a 1440x900 viewport. The `console` option is a
-`(type, ...args) => void` callback, which is how the suite catches a page-side
-error no happy-dom test can see. 29 tests over 7 routes, 2 viewports and 2 schemes,
-writing 28 PNGs as they go, take 15.4s against a playwright install that was 150 MB
-of browser for the same work.
+a 1440x900 viewport. The `console` option is a `(type, ...args) => void` callback,
+and that is how the suite catches a page-side error no happy-dom test can see.
+
+29 tests over 7 routes, 2 viewports and 2 schemes, writing 28 PNGs as they go, take
+15.4s, against a playwright install that was 150 MB of browser for the same work.
 
 Both emulations are per-target and survive a navigation, so re-applying the one
 already in force is worth skipping: `setEmulatedMedia` needs a repaint wait, and 28
@@ -1138,15 +1149,16 @@ shots would otherwise spend 4.2s re-setting what was already set.
 ### `render()` has no auto-cleanup under `bun test`
 
 `@testing-library/react` registers its own `afterEach(cleanup)` only when it finds
-Jest's globals, and it does not find them here. Nothing in `internal/docs` called
-`cleanup`, so no `render` was ever unmounted, and `useRoute`'s `hashchange`
-listener outlived the test that created it. `mount()` sets `window.location.hash`
-first thing, so each new test re-rendered every detached tree every earlier file
-had left behind.
+Jest's globals, and it does not find them here.
+
+Nothing in `internal/docs` called `cleanup`, so no `render` was ever unmounted, and
+`useRoute`'s `hashchange` listener outlived the test that created it. `mount()`
+sets `window.location.hash` first thing, so each new test re-rendered every
+detached tree every earlier file had left behind.
 
 The cost was quadratic and hidden in one file: `symbol-anchor.test.tsx` measured
 **1.7s alone and 12.5s behind the other nine**. Pairs of files never reproduced it,
-which is what made it look like a slow test rather than a leak.
+so it looked like a slow test rather than a leak.
 
 `afterEach(cleanup)` registered from the **preload** fixes it for every file, and a
 preload-registered hook does run for every test in every file (probed). The whole
@@ -1173,9 +1185,10 @@ produced it. `scripts/ci.ts` drains both pipes into one buffer as the chunks arr
 
 Pointing the live `@dunx/infra/files` suite at MinIO by exporting `S3_ENDPOINT`
 broke two tests that had nothing to do with it. `S3StorageOptions` passes its
-options straight through, and anything omitted falls back to the environment, so
-the offline `presign` suite - which sets explicit fake credentials and region but
-no endpoint - started signing URLs against `localhost:9000` and failed its
+options straight through, and anything omitted falls back to the environment.
+
+The offline `presign` suite sets explicit fake credentials and region but no
+endpoint, so it started signing URLs against `localhost:9000` and failed its
 assertions on `s3.eu-west-1.amazonaws.com`.
 
 The live block takes `DUNX_S3_TEST_ENDPOINT` instead and passes it explicitly, so

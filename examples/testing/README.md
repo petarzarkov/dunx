@@ -1,7 +1,7 @@
 # @dunx/example-testing
 
 How you test a dunx app. A small service with one external collaborator and one
-guard, and the two test files that exercise them.
+guard, plus the two test files that exercise them.
 
 ```bash
 bun install
@@ -32,16 +32,16 @@ const app = await createTestApp({
 });
 ```
 
-No `IForecastClient`, no factory indirection, no mocking framework. dunx resolves
-by class, so binding a different class to the same token reaches every consumer.
-`bun test` already ships `mock()` and `spyOn()` if a single method on a returned
-instance is all you need.
+dunx resolves by class, so binding a different class to the same token reaches
+every consumer: no `IForecastClient`, no factory indirection, no mocking
+framework needed. `bun test` already ships `mock()` and `spyOn()` if a single
+method on a returned instance is all you need.
 
 ## Overrides replace; they never append
 
 This is the whole design, and it follows from the container being flat. `@dunx/core`
 collects every module's registrations into one list and **throws on a duplicate
-token** - so an override cannot be an extra module tacked on the end that wins,
+token**. An override cannot be an extra module tacked on the end that wins,
 because there is no "wins". Three consequences the tests assert:
 
 - **The discarded provider is never constructed.** Its constructor never runs, its
@@ -83,7 +83,7 @@ parts of the request path dunx wrote - not route matching, params, method dispat
 or upgrades, which are Bun's. Bun binds a socket in about a millisecond, so the
 real server is cheaper than the lie.
 
-Two differences from production, both deliberate: `port` is always 0, and
+Two differences from production, both intentional: `port` is always 0, and
 **`requestLogging` defaults to `false`** so a suite does not print one JSON line
 per assertion. Pass `requestLogging: true` to test the logging itself.
 
@@ -112,8 +112,8 @@ binds a key store with one known key.
 
 ## Websockets
 
-`@dunx/testing` ships no websocket client, because Bun implements `WebSocket`
-natively and wrapping it would add nothing:
+Bun implements `WebSocket` natively, and wrapping it would add nothing, so
+`@dunx/testing` ships no client of its own:
 
 ```ts
 const ws = new WebSocket(`${server.url.replace('http', 'ws')}chat`);

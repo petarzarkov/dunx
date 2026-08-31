@@ -3,8 +3,8 @@
 The documentation site for dunx: **React + Mantine over Vite**, built to static
 output and deployed to GitHub Pages at <https://petarzarkov.github.io/dunx>.
 
-Private, never published. Per CLAUDE.md, `tools/*` may depend on anything -
-The dependency rules govern what dunx _ships_, not what builds its website.
+Private, never published. Per CLAUDE.md, `tools/*` may depend on anything: the
+dependency rules govern what dunx _ships_, not what builds its website.
 
 ```bash
 bun run docs:dev      # extract, then serve with HMR
@@ -15,7 +15,7 @@ bun run docs:build    # extract, then build to internal/docs/dist
 
 It was `Bun.build` - `bun build ./index.html` did the same job in 41 ms against
 Vite 5's 1.7 s, at ~25% more gzipped JS. Vite 8 is Rolldown, which removed the
-speed argument, and Mantine plus `@mantine/charts`/recharts had grown the size
+speed argument. Mantine plus `@mantine/charts`/recharts had also grown the size
 one. Re-measured on this site, same content, `gzip -9`:
 
 | Bundler            | JS raw    | JS gzip      | CSS gzip | Build   |
@@ -26,8 +26,8 @@ one. Re-measured on this site, same content, `gzip -9`:
 83.5 KB less over the wire for 150 ms nobody waits on. Two consequences worth
 knowing before reversing it: text imports are Vite's `?raw` rather than
 `with { type: 'text' }` (typed by `src/env.d.ts`, taught to `bun test` by
-`happydom.ts`), and `public/` copying and the `dist/` clean are Vite's rather
-than a hand-written `scripts/build.ts`.
+`happydom.ts`). The other is that `public/` copying and the `dist/` clean are
+Vite's rather than a hand-written `scripts/build.ts`.
 
 ## What the site is made of
 
@@ -76,7 +76,7 @@ Measured, `gzip -9`, entry chunk only - which is all `#/` downloads:
 
 329.1 KB less on the landing page, 55% of it. The sum over *every* chunk goes the
 other way, 2529.9 KB to 2554.8 KB raw and 595.2 KB to 626.3 KB gzipped, because
-each chunk is compressed against its own dictionary - the trade is deliberate:
+each chunk is compressed against its own dictionary. The trade is deliberate:
 nobody downloads all 30.
 
 **`chunks.ts` is generated rather than a glob.** `import.meta.glob` is a Vite
@@ -106,13 +106,13 @@ is not the one on the docs site. `siteMarkdown` in `scripts/content.ts` drops:
   **Packages**
 
 Matching is on the heading's slug with a `-` word boundary, so
-`## Install it as a devDependency` goes with `## Install`, and `## Setup` - which
-is API documentation in `@dunx/transform` - stays. Nested `###` headings go with
+`## Install it as a devDependency` goes with `## Install`. `## Setup`, which is
+API documentation in `@dunx/transform`, stays. Nested `###` headings go with
 their parent `##`. Fenced code is tracked, so the `# bunfig.toml` inside
 `packages/transform/README.md`'s example is not mistaken for a heading.
 
 **Naming a section is how an author chooses.** Content worth keeping should not
-live under one of those headings; `@dunx/testing`'s single-copy-of-`@dunx/core`
+live under one of those headings. `@dunx/testing`'s single-copy-of-`@dunx/core`
 reasoning sits under `## Install it as a devDependency` and is therefore not on
 the site.
 

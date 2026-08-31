@@ -22,26 +22,27 @@ preload = ["@dunx/transform/preload"]
 ```
 
 Constructor injection needs no decorator because a load-time plugin records each
-class's parameter types instead. Without the plugin a class with constructor
-parameters has no record, and the container compares that against
-`Function.prototype.length` and fails at boot naming the class.
+class's parameter types instead. Without the plugin, a class with constructor
+parameters has no record. The container compares that against
+`Function.prototype.length` and fails at boot, naming the class.
 
 - **Both entries are needed.** Bun's test runner reads its own `preload`, so missing
   the second gives you a working app and a failing suite.
 - **It is a runtime dependency.** A `--production` install, or a `.dockerignore` that
   drops `bunfig.toml`, breaks the deploy rather than the build.
 
-Deploying a **built** tree changes the answer. The plugin's filter is `/\.tsx?$/`, so
-it never sees emitted JavaScript and no preload setting makes it. Record the
-dependencies at build time instead, with `Bun.build({ plugins: [depsPlugin] })`. The
-boot error tells you which of the two situations you are in.
+Deploying a **built** tree changes the answer. The plugin's filter is `/\.tsx?$/`,
+so it never sees emitted JavaScript, and no preload setting changes that. Record
+the dependencies at build time instead, with `Bun.build({ plugins: [depsPlugin] })`.
+The boot error tells you which of the two situations you are in.
 
 **2. A constructor parameter must name something that exists at runtime.**
 
-An interface, a primitive, a union, a class type parameter or a value imported with
-`import type` all erase, so there is no token to resolve.
+An interface, a primitive, a union, a class type parameter, or a value imported with
+`import type` all erase at runtime. There is no token left to resolve.
 `emitDecoratorMetadata` degrades those to `Object` and hands you `undefined` three
-frames from the mistake. dunx fails at boot naming the parameter and its position.
+frames from the mistake. dunx fails at boot instead, naming the parameter and its
+position.
 
 Replace the type with an abstract class, or bind it with `token()` and declare the
 parameter as that token. Every `*Options` in the framework is a class for this reason.
@@ -71,7 +72,7 @@ One migration hit this three times in three repositories before it stuck.
 
 A scope is keyed on the module **reference**, and `forRoot()` returns a fresh object
 on every call. So `@Module` on a class that also has a `static forRoot()` registers
-its contents twice, and two importers each calling `forRoot()` build two scopes with
+its contents twice. Two importers each calling `forRoot()` build two scopes, with
 two instances of everything in them. Take one:
 
 | The module          | Spelling                                                |
@@ -99,21 +100,21 @@ specifier at all.
 
 ## One handler per job name
 
-Not a boot failure you will hit in the first hour, but a semantic difference worth
-knowing before the queue work starts.
+This is not a boot failure hit in the first hour. It is a semantic difference that
+matters once queue work starts.
 
 A Nest dispatcher that fans one routing key out to every subscriber has no dunx
-equivalent: two handlers claiming the same `(queue, name)` is a boot error.
+equivalent: two handlers claiming the same `(queue, name)` is a boot error instead.
 
-An app doing fan-out decides, per channel, what a retry means there. One migration
-landed on the in-app notification firing on the first attempt only, since a toast
-arriving after a backoff is stale, and the Slack notification awaited and
-rethrowing, since it benefits from retries.
+An app doing fan-out has to decide, per channel, what a retry means there. One
+migration fired the in-app notification on the first attempt only, since a toast
+arriving after a backoff is stale. The same migration awaited and rethrew on the
+Slack notification, since that one benefits from retries.
 
-`QueueModule.forRoot({ consume: 'if-any' })` exists for the other half of this: it
+`QueueModule.forRoot({ consume: 'if-any' })` covers the other half of this: it
 stands down instead of failing when the graph has no `@JobHandler` yet, so the queue
-wiring can land several commits before the first handler. `consume: true` keeps
-refusing.
+wiring can land several commits before the first handler exists. `consume: true`
+keeps refusing.
 
 ## Core DI
 
@@ -316,8 +317,8 @@ to collate across files.
 
 `createParamDecorator` has no successor and will not get one: TC39 decorators have
 no parameter decorators, so there is nowhere for it to come from. The reference app
-has 14 usages across `@CurrentUser` and `@UuidParam`, and the two halves of that
-migrate differently.
+has 14 usages across `@CurrentUser` and `@UuidParam`, and the two halves migrate
+differently.
 
 `@UuidParam` and its relatives are **validation**, and are answered: the schema moves
 onto the route decorator, where it also coerces and documents. See
@@ -341,18 +342,17 @@ export class ProfileController {
 throws a 401. `SessionGuard` is what calls `run()` to establish it, and a job or a
 socket handler that resolved a session itself can call `run()` too.
 
-The gain over a parameter decorator is that it reaches **anything the handler calls,
-however deep**, rather than only the handler's own signature. The cost is that the
-caller is not in the method signature, so it does not appear in the handler's type.
-An app wanting its own `@CurrentUser` writes a one-method service over `AuthContext`
-and injects that.
+The gain over a parameter decorator is that it reaches **anything the handler
+calls, however deep**. A parameter decorator reaches only the handler's own
+signature. The cost is that the caller is not in the method signature, so it does
+not appear in the handler's type. An app wanting its own `@CurrentUser` writes a
+one-method service over `AuthContext` and injects that.
 
 ### `@Optional()`
 
-No equivalent, and no design. Every constructor parameter is required, and a
-parameter whose type is erased is a boot error rather than an `undefined`. An
-optional collaborator is expressed today as a provider that binds a no-op
-implementation.
+No equivalent, and no design. Every constructor parameter is required. A parameter
+whose type is erased is a boot error rather than an `undefined`. An optional
+collaborator is expressed today as a provider that binds a no-op implementation.
 
 ## Out of scope
 
@@ -385,8 +385,7 @@ CRUD controllers, an auth guard reading `@Roles`, OpenAPI, queues and a health
 endpoint. [`examples/full`](https://github.com/petarzarkov/dunx/tree/main/examples/full)
 is the version of that which CI keeps alive.
 
-It exercises the question module scoping introduced, which is which
-cross-cutting guards were only ever cross-cutting because Nest offered nowhere
-else to put them. `SessionGuard` stays app-wide. A throttle on one feature's
-routes, or an audit stamp on one feature's writes, becomes a
-`@Module({ middleware })` line.
+It exercises the question module scoping introduced: which cross-cutting guards
+were only ever cross-cutting because Nest offered nowhere else to put them.
+`SessionGuard` stays app-wide. A throttle on one feature's routes, or an audit
+stamp on one feature's writes, becomes a `@Module({ middleware })` line.

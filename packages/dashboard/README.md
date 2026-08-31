@@ -57,8 +57,8 @@ way to read this on a box with no browser. The queues page is bull-board's.
 
 ## Three things that are decisions
 
-- **`authorize` has no default**, and leaving it out serves the page to anyone
-  who can reach the port. Omitting it logs a warning naming the mount at boot.
+- **`authorize` has no default.** Leaving it out serves the page to anyone who
+  can reach the port. Omitting it logs a warning naming the mount at boot.
 - **A rejected request gets 404, not 403.** Register the middleware **ahead of
   any session guard**: a guard running first answers 401 and tells a prober the
   mount exists. `authorize` takes the raw `Request` so it can be self-sufficient.
@@ -67,9 +67,9 @@ way to read this on a box with no browser. The queues page is bull-board's.
 
 ## Notes
 
-- It depends on `@dunx/infra` and `bullmq` not at all. `QueueSource` and
-  `RedisProbe` restate structurally what `JobPublisher` and `RedisConnection`
-  already are, so `queues: publisher` is the whole wiring.
+- `QueueSource` and `RedisProbe` restate structurally what `JobPublisher` and
+  `RedisConnection` already are, so `queues: publisher` is the whole wiring.
+  It depends on neither `@dunx/infra` nor `bullmq`.
 - The board is built on the first request for the queues page, never at boot, so
   an app that never opens it holds no broker socket.
 - `commands: false` maps onto bull-board's own `readOnlyMode`.

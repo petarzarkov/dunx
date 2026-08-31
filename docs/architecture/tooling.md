@@ -10,9 +10,9 @@ coverage report as the Pages root; coverage is now a page inside it.
 
 **The bundler was `Bun.build` and was moved back to Vite, by measuring rather than
 by preference.** The original swap traded ~25% more gzipped JS for a 41 ms build
-against Vite 5's 1.7 s. Vite 8 ships Rolldown, which removed the speed argument,
-and the size argument had grown as Mantine and `@mantine/charts`/recharts entered
-the graph. Same site, same content, both bundlers, gzip -9:
+against Vite 5's 1.7 s. Vite 8 ships Rolldown, which removed the speed argument.
+The size argument had also grown, as Mantine and `@mantine/charts`/recharts
+entered the graph. Same site, same content, both bundlers, gzip -9:
 
 | Bundler           | JS raw    | JS gzip      | CSS raw  | CSS gzip | Build   |
 | ----------------- | --------- | ------------ | -------- | -------- | ------- |
@@ -30,17 +30,17 @@ it is ever reversed:
 - `public/` copying and the `dist/` clean are Vite's; `scripts/build.ts` is gone.
 
 **Every `@mantine/*` is on one major, and it is 8.** `@mantine/charts` had
-drifted to 9.5.0 against core 8.3.18, which its own `peerDependencies` forbids
-(it pins `@mantine/core` and `@mantine/hooks` to an exact version). The fix was
-pinning `charts` back to `^8.3.6` rather than moving the whole site to Mantine
-9, and the reason it works is that `charts@8.3.18` peers `recharts` at
-`>=2.13.3`, so the installed recharts 3.10.1 satisfies both majors.
+drifted to 9.5.0 against core 8.3.18, which its own `peerDependencies` forbids:
+it pins `@mantine/core` and `@mantine/hooks` to an exact version. The fix was
+pinning `charts` back to `^8.3.6` rather than moving the whole site to Mantine 9.
+That works because `charts@8.3.18` peers `recharts` at `>=2.13.3`, so the
+installed recharts 3.10.1 satisfies both majors.
 
-`BarChart` in 8 carries every prop `BenchChart.tsx` passes, and a
-headless-Chrome render of `#/benchmarks` produced 5 recharts surfaces with 55
-bars and the focus colour on `@dunx/http`, so this is verified rather than
-assumed. `@mantine/code-highlight` went with it: highlighting happens at
-generate time now, and nothing under `internal/docs` imported it.
+`BarChart` in 8 carries every prop `BenchChart.tsx` passes. A headless-Chrome
+render of `#/benchmarks` produced 5 recharts surfaces with 55 bars and the focus
+colour on `@dunx/http`, so this is verified rather than assumed.
+`@mantine/code-highlight` went with it: highlighting happens at generate time
+now, and nothing under `internal/docs` imported it.
 
 **The model is one file per route, and the landing page carries none of them.**
 `site.json` was imported into the entry chunk, so `#/` downloaded all 21 guide
@@ -82,10 +82,10 @@ the site's shape, and a field surviving the projection means something renders i
 **A README is rendered minus its repo-plumbing sections.** A package page
 showed `## Install`, `## License` and the monorepo's own build instructions,
 which are for someone working in this repository and not for someone reading
-the docs. `siteMarkdown` in `scripts/content.ts` drops a `##` section whose
-slug matches `EXCLUDED_SECTIONS` with a `-` word boundary - so `## Install it
-as a devDependency` goes with `## Install` - plus the centered title-and-badges
-block every README opens with.
+the docs. `siteMarkdown` in `scripts/content.ts` drops a `##` section whose slug
+matches `EXCLUDED_SECTIONS` with a `-` word boundary, so `## Install it as a
+devDependency` goes with `## Install`. It also drops the centered
+title-and-badges block every README opens with.
 
 The list is published in `internal/docs/README.md`, and an author decides which
 side a section falls on by naming it. Guides under `docs/` are exempt: they
@@ -246,10 +246,10 @@ decision rather than a footnote to it. Two things follow, and both are in the co
 - **It is an optional peer, resolved on the first request for the page.** An app
   serving only `/openapi.json` neither installs nor loads it.
 
-Two measurements from the explorer era that are still the reason things are shaped
-as they are: **per-component Mantine CSS** beat the `styles.css` barrel 381 KiB to
-517 KiB, and dropping `Tooltip` and `ScrollArea` for `title=` and `overflow: auto`
-took 490 KiB to 434 KiB because `Tooltip` drags in floating-ui. Both applied to
+Two measurements from the explorer era still shape things as they are:
+**per-component Mantine CSS** beat the `styles.css` barrel 381 KiB to 517 KiB, and
+dropping `Tooltip` and `ScrollArea` for `title=` and `overflow: auto` took 490 KiB
+to 434 KiB, because `Tooltip` drags in floating-ui. Both applied to
 `internal/dashboard-ui`, which still exists and still follows them.
 
 ### `splitting: true`, which outlived the thing that needed it
@@ -292,7 +292,7 @@ being reachable and guarded the same way, and the server already has the bytes.
 
 ### The no-external-requests guarantee narrowed, and the test says so
 
-The old page fetched nothing at all, and the assertion had already had to move once
+The old page fetched nothing at all, and the assertion had already had to move once:
 
 - `expect(page).not.toContain('src=')` is sound over hand-written HTML and
   meaningless over a minified React bundle that contains `.src=`, `href="` and the
@@ -307,11 +307,12 @@ the immutable header, and the page requests nothing off-origin.
 
 ### Vite in `internal/dashboard-ui`, `bun build` in `internal/docs`
 
-The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms and
-took Bun's ~25 % larger output, which is right for a site. Both numbers have since
-been re-measured and reversed - see "Documentation site" above. The dashboard bundle
-is inlined into a page a backend serves, so Rollup's tree-shaking wins there and the
-~1.5 s is paid once per package build.
+The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms
+and took Bun's ~25 % larger output, which was right for a site. Both numbers have
+since been re-measured. The speed gap narrowed but Bun.build remains faster,
+while the bundle-size result reversed - see "Documentation site" above. The
+dashboard bundle is inlined into a page a backend serves, so Rollup's
+tree-shaking wins there, and the ~1.5 s is paid once per package build.
 
 ## Why `openapi.config.ts` stays
 

@@ -9,8 +9,8 @@ route, a service and a test. It assumes Bun 1.4 or newer and nothing else.
 bunx @dunx/create-app my-api
 ```
 
-It asks what the app should do, and nothing about that is a flag. Enter on an
-empty selection gives the minimal template:
+It asks what the app should do. Enter on an empty selection gives the minimal
+template:
 
 ```
 ✓ Features  none, the minimal template
@@ -94,18 +94,18 @@ The set:
 | `jobs`       | bullmq queues and a job processor, over `Bun.RedisClient`        | `images`                     |
 | `health`     | Liveness and readiness probes, and which parts are degraded      | `cache`, `database`, `files` |
 
-Requirements come along automatically - the list marks them `◈` while you choose,
-and the order they are imported in is construction order, so a database is built before the feature that reads it and torn
-down after it. `cache`, `websockets` and `jobs` want a Redis or Valkey; each reports
-itself degraded rather than failing the boot, so the app still starts without one.
+Requirements come along automatically. The list marks them `◈` while you choose.
+Import order is construction order, so a database is built before the feature that
+reads it and torn down after it. `cache`, `websockets` and `jobs` want a Redis or
+Valkey. Each reports itself degraded rather than failing the boot, so the app still
+starts without one.
 
 ### Where the code comes from
 
 Every feature directory is copied out of dunx's own
-[`examples/full`](https://github.com/petarzarkov/dunx/tree/main/examples/full) - the
-service CI builds, typechecks, tests and tours on every push. Starter code nobody
-runs rots, so a byte-for-byte parity test fails the moment a copy drifts from the
-example.
+[`examples/full`](https://github.com/petarzarkov/dunx/tree/main/examples/full).
+CI builds, typechecks, tests and tours that service on every push. A byte-for-byte
+parity test fails the moment a copy drifts from the example.
 
 The wiring cannot be copied. `app.module.ts`, `config.ts` and `main.ts` name every
 feature at once in the full example, so those three are **generated** for the
@@ -174,11 +174,11 @@ There are two `preload` entries because Bun's test runner reads its own. The
 top-level one covers `bun run start` and `bun src/main.ts`; the `[test]` one
 covers `bun test`. Miss the second and your app runs but your suite does not.
 
-**What breaks without it.** Not a silent `undefined`. The container compares the
-recorded dependency count against `Function.prototype.length`, which still reports
-the declared parameter count after TypeScript's parameter properties are compiled
-away. Zero recorded dependencies plus a non-zero arity can only mean the plugin
-never saw the file, so boot fails carrying the fix:
+**What breaks without it.** The container compares the recorded dependency count
+against `Function.prototype.length`, which still reports the declared parameter
+count after TypeScript's parameter properties are compiled away. Zero recorded
+dependencies plus a non-zero arity can only mean the plugin never saw the file.
+Boot fails with a clear message carrying the fix:
 
 ```
 GreetingsService declares 1 constructor parameter(s) but no dependencies were
@@ -192,11 +192,10 @@ the plugin, then retry:
   preload = ["@dunx/transform/preload"]
 ```
 
-There are no false positives here. A constructor whose parameters all have
-defaults has `length === 0` and is genuinely callable with no arguments; a class
-bound with `useValue` is never constructed; and the transform only ever writes a
-record whose length equals the parameter count, so a present record is never
-empty.
+There are no false positives. A constructor whose parameters all have defaults
+has `length === 0` and is genuinely callable with no arguments. A class bound
+with `useValue` is never constructed. The transform only writes a record whose
+length equals the parameter count, so a present record is never empty.
 
 `@dunx/core` does not register the plugin on import, for two reasons, both fatal.
 
@@ -258,10 +257,10 @@ without it `verbatimModuleSyntax` raises `TS1287` against ESM syntax.
 preload runs when you run the app. If you compile ahead of time with
 `Bun.build({ plugins: [depsPlugin] })`, it becomes build-time only and can move.
 
-`@dunx/testing` is a dev dependency and is what `src/app.test.ts` uses.
+`@dunx/testing` is a dev dependency. It is what `src/app.test.ts` uses.
 
 `dev` is `--watch`, which restarts the process on a change. `--hot` swaps modules
-in place, and a container is built once at boot, so the old providers would still
+in place, but a container is built once at boot. The old providers would still
 hold the socket the new ones are trying to bind.
 
 ### Keep every `@dunx/*` on the same version
@@ -282,10 +281,10 @@ That happens when a lockfile already has an entry satisfying your range. Adding
 rest at 0.2.0, and `@dunx/auth@0.2.5` peers on `@dunx/http@^0.2.5`.
 
 The warning is the good case. The bad one is **two copies of `@dunx/core` in one
-tree, which breaks dependency injection outright**: a token _is_ a class object, so
-two copies are two different classes, and a provider bound against one is invisible
-to a resolution against the other. The error you get says nothing is bound, from
-somewhere unrelated to the version mismatch.
+tree**, which breaks dependency injection. A token _is_ a class object, so two
+copies are two different classes. A provider bound against one is invisible to a
+resolution against the other. The error says nothing is bound, from somewhere
+unrelated to the version mismatch.
 
 So when you add a package, match the version to the ones already installed:
 
@@ -322,11 +321,11 @@ Or edit the manifest so every `@dunx/*` range reads the same, and reinstall.
 **Do not enable `experimentalDecorators` or `emitDecoratorMetadata`.** dunx uses
 TC39 standard decorators, and those flags change decorator semantics under you.
 
-`moduleResolution: nodenext` is why relative imports in the generated source carry
-a `.js` extension: `import { AppModule } from './app.module.js'`. The file on disk
-is `.ts`; the specifier is what the emitted declaration would carry, and an
-extensionless one fails to resolve for consumers on `node16` or `nodenext`. Under
-this setting it is a compile error rather than someone else's problem.
+`moduleResolution: nodenext` is why relative imports carry a `.js` extension:
+`import { AppModule } from './app.module.js'`. The file on disk is `.ts`. The
+specifier is what the emitted declaration would carry, and an extensionless one
+fails to resolve for consumers on `node16` or `nodenext`. Under this setting it
+is a compile error.
 
 `verbatimModuleSyntax` is why type-only imports must say so: `import type { Input }`.
 It is also, indirectly, a DI hazard, and [Providers](./03-providers.md) covers
@@ -353,8 +352,8 @@ Four lines of real work.
 `HttpFactory.create(AppModule)` builds the container from the root module's import
 graph, resolves every provider, awaits every async factory, runs every `onInit`,
 then discovers each controller's routes and rejects any collision. It does not
-bind a port. There is no separate `init()` step, because resolution is eager: an
-app that exists is an app that booted.
+bind a port. There is no separate `init()` step: resolution is eager, so an app
+that exists is an app that booted.
 
 `app.enableShutdownHooks()` registers `SIGTERM` and `SIGINT` handlers. Pass your
 own list to change that. On a signal, the server stops first, then every provider
@@ -420,9 +419,9 @@ A plain class. No decorator, no registration boilerplate. Listing it in a module
 `providers` is what makes it injectable.
 
 `Logger` in the constructor is the entire dependency injection story. Nothing in
-this app bound `Logger` and it still resolves: `AppFactory.create` offers a
-default binding for `Logger` and `RequestContext` after every module's, so a
-module that binds either one wins and an app that binds neither still gets one.
+this app bound `Logger` and it still resolves. `AppFactory.create` offers a
+default binding for `Logger` and `RequestContext` after every module's. A module
+that binds either one wins, and an app that binds neither still gets one.
 
 The default is `ConsoleLogger`, which writes one JSON line per entry and reaches
 for no dependency. It performs no sanitizing, masking or rotation, so swapping in

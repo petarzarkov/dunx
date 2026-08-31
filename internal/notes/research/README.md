@@ -37,11 +37,11 @@ verified facts alone, in the format
 [architecture/constraints.md](../../../docs/architecture/constraints.md) uses, ready to be
 appended there once the record is reviewed.
 
-All twelve records are in. Two of the six defects below have since been fixed and
-two of the verdicts have shipped; the rows say which. The serialization one carries the logger performance
-question, and it lands where
-[arkv-logger-transports](./arkv-logger-transports.md) pointed: the write is 4 to 9
-percent of a log call and entry assembly plus sanitization is the rest. A fused
+All twelve records are in. Two of the six defects below have since been fixed,
+and two of the verdicts have shipped; the rows say which. The serialization one
+carries the logger performance question, and it lands where
+[arkv-logger-transports](./arkv-logger-transports.md) pointed. The write is 4 to
+9 percent of a log call, and entry assembly plus sanitization is the rest. A fused
 walk that redacts while serializing is 3.09x on Bun and 1.69x on Node, 44 of 44
 corpus payloads byte-identical.
 
@@ -51,14 +51,14 @@ These are not features and do not wait on a roadmap decision.
 
 1. ~~**`ClientAddress` trusts the wrong end of `X-Forwarded-For`.**~~ **Fixed.**
    It took `.split(',')[0]`, the leftmost entry, which is the one a client
-   appends, so a caller could set its own address and bypass any IP-keyed limiter
-   by rotating one header. `ClientAddress` now counts trusted hops from the right,
+   appends. So a caller could set its own address and bypass any IP-keyed
+   limiter by rotating one header. `ClientAddress` now counts trusted hops from the right,
    `true` meaning one proxy, and clamps a count longer than the header to the
    leftmost entry. The setting is `app.set('trust proxy', n)`; the record below
    still spells it `trustProxy`. This unblocked [throttle](./throttle.md), which
    found it.
 2. ~~**`@dunx/mcp` drops JSON-RPC batches.**~~ **Fixed.** A batch is an array with
-   no `id`, so it fell through to the notification check and was answered with
+   no `id`, so it fell through to the notification check. It was answered with
    silence while the client held an outstanding id. `protocol.ts` now has a
    `rejection()` step ahead of that check which answers an array with `-32600`
    and a message naming the protocol revision. See [rpc](./rpc.md).
@@ -66,17 +66,17 @@ These are not features and do not wait on a roadmap decision.
    **Correction to that record, and it is what the fix followed.**
    [rpc](./rpc.md) reads the absence of batch handling as the defect, which would
    have made implementing it the fix. MCP **removed** JSON-RPC batching in
-   2025-06-18, listed first among that revision's major changes, and
+   2025-06-18, listed first among that revision's major changes.
    `PROTOCOL_VERSION` in the same file is `2025-06-18`. A batch is therefore not a
    request this server can answer, so the defect was the silence rather than the
    missing feature.
 3. ~~**`@arkv/logger` loses buffered entries on SIGTERM.**~~ **Not a defect.**
    [arkv-logger-transports](./arkv-logger-transports.md) reports that a batched
-   entry is lost on SIGTERM unless some handler is installed and that
-   `captureGlobalErrors` installs none, which is true. It is also documented and
+   entry is lost on SIGTERM unless some handler is installed, and that
+   `captureGlobalErrors` installs none. Both are true. It is also documented and
    deliberate: `packages/logger/README.md` states that installing a SIGINT or
    SIGTERM listener suppresses default termination, which is the host's decision
-   and not a logger's, and tells the caller to call `logger.close()` from its own
+   and not a logger's. It tells the caller to call `logger.close()` from its own
    shutdown hook.
 
    dunx already does. `packages/infra/src/logger/module.ts:79-82` calls
@@ -94,9 +94,9 @@ These are not features and do not wait on a roadmap decision.
 5. **`findNestedError` walks a typed array element by element.** It runs on the
    caller's object before sanitization looking for an `Error`, and treated a typed
    array as a plain object. No element of one can be an `Error`. A 64 KiB
-   `Uint8Array` cost 24 ms of blocked event loop per log call and a 1 MiB buffer
-   cost 1,415 ms, so `logger.info('upload', { body })` stalled a service for over a
-   second. One `ArrayBuffer.isView` guard. Found by
+   `Uint8Array` cost 24 ms of blocked event loop per log call, and a 1 MiB buffer
+   cost 1,415 ms. So `logger.info('upload', { body })` stalled a service for over
+   a second. One `ArrayBuffer.isView` guard. Found by
    [arkv-logger-serialization](./arkv-logger-serialization.md), which was looking
    for something else.
 6. **`shouldMask` lowercases the whole mask list once per key.** A twenty-key entry
@@ -192,10 +192,10 @@ be remembered rather than done first.
    folding the principal onto the one store instead of nesting a second
    `AsyncLocalStorage` in `AuthContext`, worth 363.7 ns to 26.0 ns on an
    authenticated request. `packages/auth/src/context.ts` documents why there are
-   two: `RequestContext` is the log record, every field in it is serialized into
-   every line the request writes, so a session object there is noise on each
-   entry and a redaction hazard in the ones that matter. Only `userId` goes in,
-   which is what correlates the lines without carrying the principal.
+   two: `RequestContext` is the log record, and every field in it is serialized
+   into every line the request writes. So a session object there would be noise
+   on each entry, and a redaction hazard in the ones that matter. Only `userId`
+   goes in, which is what correlates the lines without carrying the principal.
 
    A symbol-keyed field would survive `getContext()`'s spread while staying
    invisible to `JSON.stringify` and to any sanitizer walking string keys, so the
