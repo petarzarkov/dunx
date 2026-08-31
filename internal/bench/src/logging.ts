@@ -161,6 +161,27 @@ const units: readonly Unit[] = [
     stdout: 'null',
   },
   {
+    id: 'text',
+    variant: 'text',
+    label: 'the default, logfmt instead of JSON',
+    adds: '**replaces** `JSON.stringify` with a text walk',
+    stdout: 'null',
+  },
+  {
+    id: 'nomerge',
+    variant: 'nomerge',
+    label: 'the default, same JSON built without a merged entry',
+    adds: '**removes** the entry object; `JSON.stringify` per bag',
+    stdout: 'null',
+  },
+  {
+    id: 'fastjson',
+    variant: 'fastjson',
+    label: 'the default, JSON written out longhand',
+    adds: '**removes** the entry object and the per-key dispatch',
+    stdout: 'null',
+  },
+  {
     id: 'default-blocked',
     variant: 'default',
     label: 'the default, into a pipe nobody reads',
@@ -278,6 +299,7 @@ const usage = `bun run logging [options]
   --runs <n>             measured runs per unit (default 3)
   --loadgen <name>       auto | oha | fetch (default auto)
   --scenario <id>        ${scenarios.map((s) => s.id).join(' | ')} (default json)
+  --only <ids>           comma-separated unit ids, for one comparison at a time
   --out <path>           JSON path (default results/logging.json)
   --help
 `;
@@ -292,6 +314,7 @@ const { values } = parseArgs({
     loadgen: { type: 'string' },
     'allow-fallback': { type: 'boolean' },
     scenario: { type: 'string' },
+    only: { type: 'string' },
     out: { type: 'string' },
     help: { type: 'boolean' },
   },
@@ -328,16 +351,46 @@ const machine = await readMachine('node');
  * a few percent and the machine drifts by more than that over a run, so measuring
  * each unit to completion in turn maps the drift onto row identity.
  */
-const chosenUnits = units.filter(
+const reachable = units.filter(
   (unit) => unit.needsBody !== true || scenario.body !== undefined,
 );
-const skipped = units.length - chosenUnits.length;
-if (skipped > 0) {
+
+/**
+ * `--only` narrows the run to the rows a question is actually about. Every unit
+ * stays up for the whole run, so a full ladder on a machine with fewer cores than
+ * rows has each row's server competing with sixteen others for a scheduler slot -
+ * measured on a 20-thread laptop, that put `default` behind `unbatched`, which is
+ * strictly more work, and the ladder cannot be read at all once it says that.
+ *
+ * A subset is not a ladder: neighbouring rows no longer differ by one step, so read
+ * the result as a comparison against whichever rows were kept.
+ */
+const wanted = values.only
+  ?.split(',')
+  .map((id) => id.trim())
+  .filter((id) => id !== '');
+if (wanted !== undefined) {
+  const unknown = wanted.filter((id) => !units.some((unit) => unit.id === id));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown unit id(s): ${unknown.join(', ')}. Known: ${units
+        .map((unit) => unit.id)
+        .join(', ')}`,
+    );
+  }
+}
+const chosenUnits =
+  wanted === undefined
+    ? reachable
+    : reachable.filter((unit) => wanted.includes(unit.id));
+const skipped = reachable.length - chosenUnits.length;
+if (skipped > 0 && wanted === undefined) {
   note(
     `skipping ${skipped} body unit(s): the "${scenario.id}" scenario sends no ` +
       'request body. Use --scenario validate to measure them.',
   );
 }
+if (chosenUnits.length === 0) throw new Error('--only matched no units');
 
 const live: Live[] = [];
 try {

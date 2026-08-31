@@ -21,6 +21,7 @@
     "db-modes": "bun src/db-modes.ts",
     "validation": "bun src/validation.ts",
     "logging": "bun src/logging.ts",
+    "inproc": "bun inproc-driver.ts",
     "test": "bun test --bail",
     "typecheck": "tsc --noEmit && tsc --noEmit -p servers/nest",
     "logging:bodies": "bun src/logging.ts --scenario validate --out results/logging-bodies.json"
