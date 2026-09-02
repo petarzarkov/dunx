@@ -76,18 +76,19 @@ export const manifest = (features: readonly Feature[]): string => {
 };
 
 /**
- * Third-party ranges, pinned here rather than read off `examples/full` at run time:
+ * Third-party versions, exact for the reason dunx's own manifests are, and
+ * written here rather than read off `examples/full` at run time:
  * the generated app installs from npm and the example installs from the workspace,
  * so the example's manifest is not a statement about what a consumer should take.
  * `features.test.ts` checks these against the example's, which is what stops them
  * silently diverging from a version combination that is actually exercised.
  */
 export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
-  zod: '^4.5.4',
-  'drizzle-orm': '^0.45.2',
-  'better-auth': '^1.6.25',
-  bullmq: '^6.0.5',
-  ioredis: '^6.0.0',
+  zod: '4.5.4',
+  'drizzle-orm': '0.45.2',
+  'better-auth': '1.6.25',
+  bullmq: '6.0.5',
+  ioredis: '6.0.0',
 });
 
 const versionOf = (dep: string): string => THIRD_PARTY[dep] ?? 'latest';
@@ -275,16 +276,22 @@ export const main = (name: string, features: readonly Feature[]): string => {
     })`
       : 'AppModule';
 
-  const options = websockets
-    ? [
-        '// Multi-node websocket fan-out on `Bun.RedisClient`, so it costs no',
-        '// dependency. With no Redis running this degrades to single-process',
-        '// behaviour, logs one warning, and the app still boots.',
-        'websocket: { idleTimeout: 30 },',
-        'relay: new RedisRelay({ connectionTimeout: 500 }),',
-        'relayChannel: RELAY_CHANNEL,',
-      ]
-    : [];
+  const options = [
+    // Per-route counts and timings, folded into the entry request logging already
+    // builds: +35.2 ns a request. `DbModule` is scaffolded with `metrics: true`
+    // to match, so `QueryMetrics` has something in it.
+    ...(has(features, 'stats') ? ['metrics: true,'] : []),
+    ...(websockets
+      ? [
+          '// Multi-node websocket fan-out on `Bun.RedisClient`, so it costs no',
+          '// dependency. With no Redis running this degrades to single-process',
+          '// behaviour, logs one warning, and the app still boots.',
+          'websocket: { idleTimeout: 30 },',
+          'relay: new RedisRelay({ connectionTimeout: 500 }),',
+          'relayChannel: RELAY_CHANNEL,',
+        ]
+      : []),
+  ];
 
   /**
    * Everything between `create()` and `listen()`. The prefix is set whatever is

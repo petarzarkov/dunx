@@ -58,15 +58,15 @@ describe('the context contract dunx binds to', () => {
 
   it('behaves the same through either implementation', () => {
     for (const context of [new ContextStore(), new AsyncRequestContext()]) {
-      const seen = context.runWithContext({ requestId: 'r1' }, () => {
+      const seen = context.runWithContext({ traceId: 'r1' }, () => {
         context.updateContext({ userId: 'u1' });
         return context.getContext();
       });
 
-      expect(seen['requestId']).toBe('r1');
+      expect(seen['traceId']).toBe('r1');
       expect(seen['userId']).toBe('u1');
       // The scope closes on both.
-      expect(context.getContext()['requestId']).toBeUndefined();
+      expect(context.getContext()['traceId']).toBeUndefined();
     }
   });
 

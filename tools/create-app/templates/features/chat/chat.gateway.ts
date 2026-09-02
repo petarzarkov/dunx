@@ -1,4 +1,4 @@
-import { Logger } from '@dunx/core';
+import { Gauge, Logger } from '@dunx/core';
 import {
   Gateway,
   HttpStatusCode,
@@ -18,6 +18,9 @@ import { Lobby } from './lobby.service.js';
  * upgrade as a native route. */
 @Gateway('/chat')
 export class ChatGateway {
+  /** A `Gauge` rather than a `Counter`: connections close as well as open. */
+  readonly #live = new Gauge();
+
   constructor(
     private readonly lobby: Lobby,
     private readonly logger: Logger,
@@ -41,7 +44,13 @@ export class ChatGateway {
   opened(socket: Socket): void {
     // Bun's own pub/sub: topics live in the runtime.
     socket.subscribe(Lobby.TOPIC);
+    this.#live.inc();
     socket.send('welcome');
+  }
+
+  /** What the gauge reads, for the tour and for anything else that asks. */
+  get live(): number {
+    return this.#live.value;
   }
 
   @OnMessage('say')
@@ -69,6 +78,7 @@ export class ChatGateway {
 
   @OnClose()
   closed(socket: Socket, code: number): void {
+    this.#live.dec();
     this.logger.info(`${socket.data.path} closed with ${code}`);
   }
 }

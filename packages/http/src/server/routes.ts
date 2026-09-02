@@ -9,7 +9,7 @@ import { buildContext, type RouteContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
 import { defaultErrorMapper, HttpError, type ErrorMapper } from './errors.js';
 import { buildInputReader, type InputReader } from './input.js';
-import { RequestIds } from './request-id.js';
+import { TraceContext } from './trace-context.js';
 import {
   compose,
   type Middleware,
@@ -190,7 +190,7 @@ export const buildFallback = (
         miss,
       )(req);
     } catch (error) {
-      return RequestIds.stamp(onError(error, req), req);
+      return TraceContext.stamp(onError(error, req), req);
     }
   };
 
@@ -308,11 +308,11 @@ export const buildRoutes = (
       try {
         return await chained(req);
       } catch (error) {
-        // The mapper builds a fresh Response, so the id the logging middleware
-        // put on the one it returns is not on this one. Stamped here, where the
-        // request that carries it is still in scope; a request that was never
-        // given an id is left alone.
-        return RequestIds.stamp(onError(error, req), req);
+        // The mapper builds a fresh Response, so the `traceresponse` the logging
+        // middleware put on the one it returns is not on this one. Stamped here,
+        // where the request carrying the trace is still in scope; a request that
+        // never adopted one is left alone.
+        return TraceContext.stamp(onError(error, req), req);
       }
     };
 

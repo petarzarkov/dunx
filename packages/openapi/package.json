@@ -1,6 +1,6 @@
 {
   "name": "@dunx/openapi",
-  "version": "3.1.3",
+  "version": "3.0.3",
   "description": "OpenAPI 3.1 documents for dunx controllers, generated from the schemas the routes already validate, with Swagger UI mounted over them",
   "keywords": [
     "bun",
@@ -48,13 +48,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "swagger-ui-dist": "^5.32.14"
+    "swagger-ui-dist": "5.32.14"
   },
   "devDependencies": {
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/testing": "workspace:*",
-    "zod": "^4.5.4"
+    "zod": "4.5.4"
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",

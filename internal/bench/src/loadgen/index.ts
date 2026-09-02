@@ -40,7 +40,7 @@ export const findOha = async (): Promise<{
  *
  * Measured in a checkout with no `.bin/oha`: the fallback capped at 14-65k req/s
  * against oha's 115k on the same row, with standard deviations of 17-30k, and rows
- * in an order that contradicted itself - the `requestid` step came out faster than
+ * in an order that contradicted itself - the `trace` step came out faster than
  * the baseline it is strictly slower than. `bun run logging` decomposes request
  * logging into steps worth 0.04 to 2.04 microseconds; a generator with a 20k
  * standard deviation cannot see any of them.

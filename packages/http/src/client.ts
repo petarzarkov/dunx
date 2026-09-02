@@ -7,7 +7,6 @@
  */
 export { FetchError, FetchTransportError } from './client/errors.js';
 export {
-  DEFAULT_REQUEST_ID_HEADER,
   HttpClientOptions,
   type HttpClientOptionsInit,
 } from './client/options.js';

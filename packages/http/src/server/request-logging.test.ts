@@ -8,7 +8,10 @@ import {
   withApp,
 } from './request-logging.fixture.test.js';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HEX_32 = /^[0-9a-f]{32}$/;
+const TRACERESPONSE = /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/;
+const INBOUND_TRACE = '4bf92f3577b34da6a3ce929d0e0e4736';
+const INBOUND_SPAN = '00f067aa0ba902b7';
 
 describe('request logging', () => {
   it('is on with no logging module imported at all', async () => {
@@ -24,7 +27,11 @@ describe('request logging', () => {
     expect(entry).toBeDefined();
     expect(entry?.['statusCode']).toBe(200);
     expect(entry?.['context']).toBe('ThingsController.list');
-    expect(typeof entry?.['requestId']).toBe('string');
+    // Trace context is on by default, so a line is correlated with nothing
+    // configured at all.
+    expect(entry?.['traceId']).toMatch(HEX_32);
+    expect(entry?.['spanId']).toMatch(/^[0-9a-f]{16}$/);
+    expect(entry?.['traceFlags']).toBe('01');
     expect(typeof entry?.['elapsedMs']).toBe('number');
     // Bodies are off by default: reading one means cloning and buffering every
     // payload, which measured at two thirds of the throughput on internal/bench's
@@ -74,56 +81,83 @@ describe('request logging', () => {
     expect(entry?.['request']).not.toHaveProperty('body');
   });
 
-  it('reuses an inbound x-request-id and returns it', async () => {
+  it('continues an inbound traceparent and answers with traceresponse', async () => {
     // A holder, not a `let`: assigning inside a closure keeps TypeScript's
     // narrowing from the initialiser, and `null` is not a useful type.
     const seen: { header?: string | undefined } = {};
-    const given = '3f8c1b0e-9a4d-4c2f-8e11-6b7a2d5c9f03';
     const entries = await captured(async () => {
       await withApp(async (_app, url) => {
         const response = await fetch(new URL('things', url), {
-          headers: { 'x-request-id': given },
+          headers: { traceparent: `00-${INBOUND_TRACE}-${INBOUND_SPAN}-01` },
         });
-        seen.header = response.headers.get('x-request-id') ?? undefined;
+        seen.header = response.headers.get('traceresponse') ?? undefined;
       });
     });
 
-    expect(seen.header).toBe(given);
-    expect(entries.find((e) => e['requestId'] === given)).toBeDefined();
+    const entry = entries.find((e) => e['traceId'] === INBOUND_TRACE);
+    expect(entry?.['parentSpanId']).toBe(INBOUND_SPAN);
+    // The response names the span that answered, not the caller's.
+    expect(seen.header).toBe(
+      `00-${INBOUND_TRACE}-${String(entry?.['spanId'])}-01`,
+    );
   });
 
   /**
-   * The trust boundary: an inbound id is a caller-supplied string, and it ends up
-   * in every line the request writes. Anything that is not a UUID is replaced.
+   * The trust boundary: `traceparent` is a caller-supplied string that ends up in
+   * every line the request writes. A malformed one is discarded, not repaired.
    */
-  it('replaces an inbound x-request-id that is not a uuid', async () => {
+  it('starts its own trace when the inbound traceparent is malformed', async () => {
     const seen: { header?: string | undefined } = {};
     const entries = await captured(async () => {
       await withApp(async (_app, url) => {
         const response = await fetch(new URL('things', url), {
-          headers: { 'x-request-id': 'MY-OWN-ID' },
+          headers: { traceparent: 'MY-OWN-TRACE' },
         });
-        seen.header = response.headers.get('x-request-id') ?? undefined;
+        seen.header = response.headers.get('traceresponse') ?? undefined;
       });
     });
 
-    expect(seen.header).not.toBe('MY-OWN-ID');
-    expect(seen.header).toMatch(UUID);
-    expect(entries.find((e) => e['requestId'] === 'MY-OWN-ID')).toBeUndefined();
+    expect(seen.header).toMatch(TRACERESPONSE);
+    const entry = entries.find((e) => e['message'] === 'GET /things 200');
+    expect(entry?.['traceId']).toMatch(HEX_32);
+    expect(entry?.['parentSpanId']).toBeUndefined();
   });
 
-  it('replaces an inbound id shaped like a uuid but not one', async () => {
-    const seen: { header?: string | undefined } = {};
-    await captured(async () => {
+  it('puts an inbound tracestate in the scope, for the client to forward', async () => {
+    const entries = await captured(async () => {
       await withApp(async (_app, url) => {
-        const response = await fetch(new URL('things', url), {
-          headers: { 'x-request-id': '3f8c1b0e-9a4d-4c2f-8e11-6b7a2d5c9zzz' },
+        await fetch(new URL('things', url), {
+          headers: {
+            traceparent: `00-${INBOUND_TRACE}-${INBOUND_SPAN}-01`,
+            tracestate: 'vendor=opaque',
+          },
         });
-        seen.header = response.headers.get('x-request-id') ?? undefined;
       });
     });
 
-    expect(seen.header).toMatch(UUID);
+    const entry = entries.find((e) => e['traceId'] === INBOUND_TRACE);
+    expect(entry?.['traceState']).toBe('vendor=opaque');
+  });
+
+  it('carries no trace at all under trace: false', async () => {
+    const seen: { header?: string | undefined } = {};
+    const entries = await captured(async () => {
+      await withApp(
+        async (_app, url) => {
+          const response = await fetch(new URL('things', url));
+          seen.header = response.headers.get('traceresponse') ?? undefined;
+        },
+        { requestLogging: { trace: false } },
+      );
+    });
+
+    expect(seen.header).toBeUndefined();
+    const entry = entries.find((e) => e['message'] === 'GET /things 200');
+    // The entry is still written, and still carries the route fields.
+    expect(entry?.['context']).toBe('ThingsController.list');
+    expect(entry?.['traceId']).toBeUndefined();
+    expect(entry?.['spanId']).toBeUndefined();
+    expect(entry?.['traceFlags']).toBeUndefined();
   });
 
   it('logs a 4xx at warn and a 5xx at error', async () => {
@@ -183,7 +217,8 @@ describe('request logging', () => {
     const outer = entries.find((e) => e['message'] === 'GET /things/inner 200');
     expect(inner).toBeDefined();
     // Nothing was passed to the handler: AsyncLocalStorage carried it.
-    expect(inner?.['requestId']).toBe(outer?.['requestId']);
+    expect(inner?.['traceId']).toBe(outer?.['traceId']);
+    expect(inner?.['spanId']).toBe(outer?.['spanId']);
     expect(inner?.['context']).toBe('ThingsController.inner');
   });
 
@@ -232,13 +267,13 @@ describe('request logging', () => {
   });
 
   /** What `ignore` costs on its own, so the guide can say it plainly. */
-  it('drops the request id along with the entry on an ignored path', async () => {
+  it('drops the trace along with the entry on an ignored path', async () => {
     const seen: { header?: string | undefined } = {};
     await captured(async () => {
       await withApp(
         async (_app, url) => {
           const response = await fetch(new URL('things', url));
-          seen.header = response.headers.get('x-request-id') ?? undefined;
+          seen.header = response.headers.get('traceresponse') ?? undefined;
         },
         { requestLogging: { ignore: ['/things'] } },
       );
@@ -247,14 +282,14 @@ describe('request logging', () => {
     expect(seen.header).toBeUndefined();
   });
 
-  it('keeps the id and the scope on an ignored path when asked', async () => {
+  it('keeps the trace and the scope on an ignored path when asked', async () => {
     const seen: { header?: string | undefined } = {};
     const entries = await captured(async () => {
       await withApp(
         async (app, url) => {
           handlerLogger.current = app.get(Logger);
           const response = await fetch(new URL('things/inner', url));
-          seen.header = response.headers.get('x-request-id') ?? undefined;
+          seen.header = response.headers.get('traceresponse') ?? undefined;
           handlerLogger.current = undefined;
         },
         {
@@ -270,29 +305,32 @@ describe('request logging', () => {
     expect(
       entries.find((e) => e['message'] === 'GET /things/inner 200'),
     ).toBeUndefined();
-    expect(seen.header).toMatch(UUID);
+    expect(seen.header).toMatch(TRACERESPONSE);
     // But the handler's own line is still correlated with the response header.
     const inner = entries.find((e) => e['message'] === 'from the handler');
-    expect(inner?.['requestId']).toBe(seen.header);
+    expect(seen.header).toBe(
+      `00-${String(inner?.['traceId'])}-${String(inner?.['spanId'])}-01`,
+    );
     expect(inner?.['context']).toBe('ThingsController.inner');
   });
 
-  it('honours an inbound id on a correlated ignored path', async () => {
+  it('continues an inbound trace on a correlated ignored path', async () => {
     const seen: { header?: string | undefined } = {};
-    const given = '9c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f';
     await captured(async () => {
       await withApp(
         async (_app, url) => {
           const response = await fetch(new URL('things', url), {
-            headers: { 'x-request-id': given },
+            headers: { traceparent: `00-${INBOUND_TRACE}-${INBOUND_SPAN}-00` },
           });
-          seen.header = response.headers.get('x-request-id') ?? undefined;
+          seen.header = response.headers.get('traceresponse') ?? undefined;
         },
         { requestLogging: { ignore: ['/things'], correlateIgnored: true } },
       );
     });
 
-    expect(seen.header).toBe(given);
+    expect(seen.header).toMatch(
+      new RegExp(`^00-${INBOUND_TRACE}-[0-9a-f]{16}-00$`),
+    );
   });
 
   it('logs the same entry without the scope under correlate: false', async () => {
@@ -302,7 +340,7 @@ describe('request logging', () => {
         async (app, url) => {
           handlerLogger.current = app.get(Logger);
           const response = await fetch(new URL('things/inner', url));
-          seen.header = response.headers.get('x-request-id') ?? undefined;
+          seen.header = response.headers.get('traceresponse') ?? undefined;
         },
         { requestLogging: { correlate: false } },
       );
@@ -311,7 +349,9 @@ describe('request logging', () => {
     const entry = entries.find(
       (e) => e['message'] === 'GET /things/inner 200',
     ) as Record<string, unknown>;
-    expect(entry['requestId']).toBe(seen.header);
+    expect(seen.header).toBe(
+      `00-${String(entry['traceId'])}-${String(entry['spanId'])}-01`,
+    );
     expect(entry['method']).toBe('GET');
     expect(entry['event']).toBe('/things/inner');
     expect(entry['flow']).toBe('http');
@@ -319,9 +359,9 @@ describe('request logging', () => {
     expect(entry['statusCode']).toBe(200);
 
     // The trade, and the whole reason it is not the default: the handler's own
-    // line has no store to read the id back out of.
+    // line has no store to read the trace back out of.
     const inner = entries.find((e) => e['message'] === 'from the handler');
-    expect(inner?.['requestId']).toBeUndefined();
+    expect(inner?.['traceId']).toBeUndefined();
   });
 
   it('keeps the fields on a failure under correlate: false', async () => {
@@ -339,7 +379,7 @@ describe('request logging', () => {
       unknown
     >;
     expect(entry['statusCode']).toBe(418);
-    expect(entry['requestId']).toMatch(UUID);
+    expect(entry['traceId']).toMatch(HEX_32);
     expect(entry['context']).toBe('ThingsController.boom');
   });
 
@@ -349,7 +389,7 @@ describe('request logging', () => {
       await withApp(
         async (_app, url) => {
           const response = await fetch(new URL('things', url));
-          seen.header = response.headers.get('x-request-id') ?? undefined;
+          seen.header = response.headers.get('traceresponse') ?? undefined;
         },
         {
           requestLogging: {
@@ -361,7 +401,7 @@ describe('request logging', () => {
       );
     });
 
-    expect(seen.header).toMatch(UUID);
+    expect(seen.header).toMatch(TRACERESPONSE);
     expect(
       entries.find((e) => e['message'] === 'GET /things 200'),
     ).toBeUndefined();
@@ -371,10 +411,10 @@ describe('request logging', () => {
     await withApp(
       async (app) => {
         const context = app.get(RequestContext);
-        const seen = context.runWithContext({ requestId: 'r1' }, () =>
+        const seen = context.runWithContext({ traceId: 't1' }, () =>
           context.getContext(),
         );
-        expect(seen['requestId']).toBe('r1');
+        expect(seen['traceId']).toBe('t1');
         expect(context.getContext()).toEqual({});
       },
       { requestLogging: false },
@@ -383,19 +423,19 @@ describe('request logging', () => {
 });
 
 /**
- * `x-request-id` on the response is the only part of request logging that leaves
- * the process, so turning it off has to leave everything inside it working: the
- * entry, the async scope, and the same silence on a failure.
+ * `traceresponse` is the only part of request logging that leaves the process, so
+ * turning it off has to leave everything inside it working: the entry, the async
+ * scope, the metrics exemplar, and the same silence on a failure.
  */
-describe('requestIdHeader', () => {
-  const opts = { requestLogging: { requestIdHeader: false } } as const;
+describe('traceResponse', () => {
+  const opts = { requestLogging: { traceResponse: false } } as const;
 
-  it('answers without the header and still logs the id', async () => {
+  it('answers without the header and still logs the trace', async () => {
     const seen: { header?: string | undefined } = {};
     const entries = await captured(async () => {
       await withApp(async (_app, url) => {
         const response = await fetch(new URL('things', url));
-        seen.header = response.headers.get('x-request-id') ?? undefined;
+        seen.header = response.headers.get('traceresponse') ?? undefined;
       }, opts);
     });
 
@@ -403,10 +443,10 @@ describe('requestIdHeader', () => {
     const entry = entries.find((e) =>
       String(e['message']).startsWith('GET /things'),
     );
-    expect(String(entry?.['requestId'])).toMatch(UUID);
+    expect(String(entry?.['traceId'])).toMatch(HEX_32);
   });
 
-  it('keeps the async scope, so a handler still logs the same id', async () => {
+  it('keeps the async scope, so a handler still logs the same trace', async () => {
     const entries = await captured(async () => {
       await withApp(async (app, url) => {
         handlerLogger.current = app.get(Logger);
@@ -421,13 +461,13 @@ describe('requestIdHeader', () => {
     const fromMiddleware = entries.find((e) =>
       String(e['message']).startsWith('GET /things/inner'),
     );
-    expect(fromHandler?.['requestId']).toBeDefined();
-    expect(fromHandler?.['requestId']).toBe(fromMiddleware?.['requestId']);
+    expect(fromHandler?.['traceId']).toBeDefined();
+    expect(fromHandler?.['traceId']).toBe(fromMiddleware?.['traceId']);
   });
 
   /**
    * A failure never returns the middleware's response: the error mapper builds a
-   * fresh one, and stamps it from what `RequestIds.assign` recorded. Turning the
+   * fresh one and stamps it from what `TraceContext.adopt` marked. Turning the
    * header off has to reach that path too, or it would come back on the 500s.
    */
   it('stays off on a failure, which the error mapper answers', async () => {
@@ -436,7 +476,7 @@ describe('requestIdHeader', () => {
       await withApp(async (_app, url) => {
         const response = await fetch(new URL('things/broken', url));
         seen.status = response.status;
-        seen.header = response.headers.get('x-request-id') ?? undefined;
+        seen.header = response.headers.get('traceresponse') ?? undefined;
       }, opts);
     });
 
@@ -449,16 +489,16 @@ describe('requestIdHeader', () => {
     await captured(async () => {
       await withApp(async (_app, url) => {
         seen.ok =
-          (await fetch(new URL('things', url))).headers.get('x-request-id') ??
+          (await fetch(new URL('things', url))).headers.get('traceresponse') ??
           undefined;
         seen.failed =
           (await fetch(new URL('things/broken', url))).headers.get(
-            'x-request-id',
+            'traceresponse',
           ) ?? undefined;
       });
     });
 
-    expect(String(seen.ok)).toMatch(UUID);
-    expect(String(seen.failed)).toMatch(UUID);
+    expect(String(seen.ok)).toMatch(TRACERESPONSE);
+    expect(String(seen.failed)).toMatch(TRACERESPONSE);
   });
 });

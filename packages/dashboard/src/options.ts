@@ -2,8 +2,10 @@ import type { BunRequest } from 'bun';
 import type {
   ConfigValues,
   DashboardProbe,
+  DbStatsSource,
   QueueSource,
   RedisProbe,
+  StatsSource,
 } from './contracts.js';
 
 /**
@@ -52,6 +54,12 @@ export interface DashboardOptionsInit {
   readonly redis?: RedisProbe;
   /** Anything else worth a light: a database, an upstream, a leader lease. */
   readonly probes?: readonly DashboardProbe[];
+  /** `RequestMetrics` from `@dunx/http` goes here, and needs `metrics: true` on
+   * `HttpFactory.create` to have anything in it. Absent means no stats panel. */
+  readonly stats?: StatsSource;
+  /** `QueryMetrics` from `@dunx/infra/db` goes here, and needs
+   * `DbModule.forRoot(options, { metrics: true })`. */
+  readonly dbStats?: DbStatsSource;
   /** `ConfigService` goes here; the panel is absent without it. */
   readonly config?: ConfigValues;
   /** See {@link Reveal}. The default reveals nothing, even with `config` set. */
@@ -92,6 +100,8 @@ export class DashboardOptions {
   readonly queueNames: readonly string[];
   readonly redis: RedisProbe | undefined;
   readonly probes: readonly DashboardProbe[];
+  readonly stats: StatsSource | undefined;
+  readonly dbStats: DbStatsSource | undefined;
   readonly config: ConfigValues | undefined;
   readonly reveal: Reveal;
   readonly openApiPath: string | undefined;
@@ -107,6 +117,8 @@ export class DashboardOptions {
     this.queueNames = init.queueNames ?? [];
     this.redis = init.redis;
     this.probes = init.probes ?? [];
+    this.stats = init.stats;
+    this.dbStats = init.dbStats;
     this.config = init.config;
     this.reveal = init.reveal ?? (() => false);
     this.openApiPath = init.openApiPath;

@@ -21,8 +21,10 @@ import { UpstreamDemo } from './upstream.demo.js';
           retryDelayMs: 20,
           backoff: { jitterMs: 10, maxMs: 200 },
         },
-        // The inbound request id, forwarded so one trace spans both services.
-        propagateRequestId: true,
+        // The inbound trace, forwarded as `traceparent` so one trace spans
+        // both services. On by default; stated here because it is the point of
+        // this module.
+        propagateTrace: true,
       }),
       inject: [AppConfigService] as const,
     }),

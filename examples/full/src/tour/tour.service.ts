@@ -6,6 +6,7 @@ import { ChatDemo } from '../chat/chat.demo.js';
 import { CompressionDemo } from '../http/compression.demo.js';
 import { TraceDemo } from '../http/trace.demo.js';
 import { DashboardDemo } from '../dashboard/dashboard.demo.js';
+import { StatsDemo } from '../stats/stats.demo.js';
 import { Ledger } from '../database/ledger.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
 import { AssetsDemo } from '../assets/assets.demo.js';
@@ -47,6 +48,7 @@ export class Tour {
     private readonly docs: DocsDemo,
     private readonly wiring: WiringDemo,
     private readonly dashboard: DashboardDemo,
+    private readonly stats: StatsDemo,
   ) {}
 
   async run(app: HttpApp, url: string): Promise<void> {
@@ -112,6 +114,10 @@ export class Tour {
 
     this.group('@dunx/dashboard - one page over the running process');
     await this.dashboard.demonstrate(url);
+
+    // Last, so it counts every request and query the sections above made.
+    this.group('@dunx/http + @dunx/infra/db - request and query stats');
+    this.stats.demonstrate();
   }
 
   /** A header, so a reader can tell which area is talking. */

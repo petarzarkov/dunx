@@ -110,7 +110,7 @@ const surface = [Logger, RequestContext, BackingLogger];
 
 const bindings = (options: LoggerModuleOptions): readonly Registration[] => [
   // Core's contract, bound to the very store this logger reads. Without it
-  // @dunx/http's request logging would write a requestId into core's default
+  // @dunx/http's request logging would write a traceId into core's default
   // store and @arkv/logger would read its own, so no entry would carry one.
   // `ContextStore` satisfies `RequestContext` structurally - no adapter.
   provide(RequestContext, {

@@ -12,7 +12,13 @@ export {
   DatabaseError,
   toDatabaseError,
 } from './errors.js';
-export { DbModule } from './module.js';
+export { DbModule, type DbModuleSettings } from './module.js';
+export {
+  QueryMetrics,
+  QueryOperation,
+  type DbStatsReport,
+  type QueryStats,
+} from './metrics.js';
 export {
   runSeeds,
   type SeedableDb,

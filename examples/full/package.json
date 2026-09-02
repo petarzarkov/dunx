@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bull-board/api": "^8.6.0",
-    "@bull-board/bun": "^8.6.0",
-    "@bull-board/ui": "^8.6.0",
+    "@bull-board/api": "8.6.0",
+    "@bull-board/bun": "8.6.0",
+    "@bull-board/ui": "8.6.0",
     "@dunx/auth": "workspace:*",
     "@dunx/core": "workspace:*",
     "@dunx/dashboard": "workspace:*",
@@ -22,11 +22,11 @@
     "@dunx/infra": "workspace:*",
     "@dunx/openapi": "workspace:*",
     "@dunx/transform": "workspace:*",
-    "better-auth": "^1.6.25",
-    "bullmq": "^6.0.5",
-    "drizzle-orm": "^0.45.2",
-    "ioredis": "^6.0.0",
-    "zod": "^4.5.4"
+    "better-auth": "1.6.25",
+    "bullmq": "6.0.5",
+    "drizzle-orm": "0.45.2",
+    "ioredis": "6.0.0",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@dunx/testing": "workspace:*"

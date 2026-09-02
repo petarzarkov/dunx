@@ -87,7 +87,7 @@ response, or refuse to call `next()` at all.
 
 Frameworks that split this across two base classes run middleware before and wrap
 an interceptor around the observable. They are separate objects with no shared
-frame, so correlating the two halves means threading a request id through and
+frame, so correlating the two halves means threading a trace through and
 reassembling the pair in a log aggregator.
 
 The built-in request logger is the proof. It is one class, and it emits **one
@@ -95,12 +95,12 @@ structured entry per request** carrying the request and the response together:
 
 ```ts
 return this.context.runWithContext(
-  { requestId, method: ctx.method, event: path, flow: 'http', context: `${ctx.controller}.${ctx.handler}` },
-  () => { ... this.#dispatch(req, path, requestId, started, request, next) },
+  { traceId, spanId, method: ctx.method, event: path, flow: 'http', context: `${ctx.controller}.${ctx.handler}` },
+  () => { ... this.#dispatch(req, ctx, path, started, request, next) },
 );
 ```
 
-Everything the handler logs in between carries `requestId`, `method`, `event` and
+Everything the handler logs in between carries `traceId`, `method`, `event` and
 `context` without being passed anything, because the whole call runs inside
 `runWithContext` on an `AsyncLocalStorage`. There is no pair to correlate, because
 there is no pair.
@@ -609,12 +609,13 @@ two thirds of the throughput on the `validate` benchmark scenario, and the reque
 body is the field most likely to contain a password. Turn them on in development,
 where seeing the payload is the point.
 
-An inbound `x-request-id` is honoured so a trace survives across services, but
-only if it is a UUID: it is caller-supplied and ends up in every line the request
-writes. Anything else is replaced by a fresh `crypto.randomUUID()`.
+An inbound `traceparent` is continued so one trace spans both services, but only
+if it parses: it is caller-supplied and ends up in every line the request writes,
+so a malformed one is discarded rather than repaired and the request starts a
+trace of its own.
 
-Either way it comes back on the response header, unless the path is in `ignore`
-and `correlateIgnored` is off; see
+Either way the answering span comes back as `traceresponse`, unless the path is in
+`ignore` and `correlateIgnored` is off; see
 [Logging](./13-logging.md#what-ignore-costs-and-how-to-buy-part-of-it-back).
 
 ### The 404 is logged too

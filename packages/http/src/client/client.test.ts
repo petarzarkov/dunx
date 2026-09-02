@@ -50,7 +50,6 @@ beforeAll(() => {
             body: text,
             contentType: request.headers.get('content-type'),
             accept: request.headers.get('accept'),
-            requestId: request.headers.get('x-request-id'),
             trace: request.headers.get('x-trace'),
             signed: request.headers.get('x-signature'),
           });
@@ -102,7 +101,7 @@ afterAll(async () => {
 /**
  * A real logger and a real context, not stubs - `ConsoleLogger` takes the context as
  * its first argument and reads it on every entry, so passing one is the only way the
- * request-id propagation is being tested rather than mocked. `'fatal'` silences the
+ * header propagation is being tested rather than mocked. `'fatal'` silences the
  * output without silencing the calls.
  */
 const clientFor = (
@@ -255,32 +254,6 @@ describe('a successful call', () => {
 });
 
 describe('headers', () => {
-  it('propagates the inbound request id so one trace spans both services', async () => {
-    const context = new AsyncRequestContext();
-    const client = clientFor({}, context);
-
-    const echoed = await context.runWithContext(
-      { requestId: 'trace-me' },
-      () => client.get(`${base}echo`) as Promise<{ requestId: string | null }>,
-    );
-    expect(echoed.requestId).toBe('trace-me');
-  });
-
-  it('sends no request id when there is no request in scope', async () => {
-    const echoed = (await clientFor().get(`${base}echo`)) as {
-      requestId: string | null;
-    };
-    expect(echoed.requestId).toBeNull();
-  });
-
-  it('can be told not to propagate, or to use another header', async () => {
-    const off = clientFor({ propagateRequestId: false });
-    expect(
-      ((await off.get(`${base}echo`)) as { requestId: string | null })
-        .requestId,
-    ).toBeNull();
-  });
-
   it('merges client headers under per-call headers', async () => {
     const client = clientFor({ headers: { 'x-trace': 'from-client' } });
     const echoed = (await client.get(`${base}echo`, {

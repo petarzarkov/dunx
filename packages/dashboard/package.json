@@ -54,12 +54,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@bull-board/api": "^8.6.0",
-    "@bull-board/bun": "^8.6.0",
-    "@bull-board/ui": "^8.6.0",
+    "@bull-board/api": "8.6.0",
+    "@bull-board/bun": "8.6.0",
+    "@bull-board/ui": "8.6.0",
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
-    "bullmq": "^6.0.5"
+    "bullmq": "6.0.5"
   },
   "peerDependencies": {
     "@bull-board/api": "^8.6.0",

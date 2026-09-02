@@ -63,6 +63,8 @@ The guide is canonical for every row; this table is the index.
 | Middleware and guards   | One extension point, `@UseGuards`, `@Roles`, `@Public`      | [Middleware and guards](../../docs/guide/08-middleware-and-guards.md) |
 | WebSocket gateways      | `@Gateway`, handlers, `PubSub`, multi-node relay            | [WebSockets](../../docs/guide/09-websockets.md)                   |
 | Request logging         | One structured entry per request, on by default             | [Logging](../../docs/guide/13-logging.md)                         |
+| Trace context           | W3C `traceparent` adopted and propagated, on by default     | [Logging](../../docs/guide/13-logging.md)                         |
+| Metrics                 | Per-route counts and timings, off by default                | [Metrics](../../docs/guide/22-metrics.md)                         |
 | Health and draining     | `/health/live`, `/health/ready`, readiness during a rollout | [Health checks](../../docs/guide/20-health-checks.md)             |
 | Throttling              | `@Throttle`, `@SkipThrottle`, memory and Redis counters     | [Middleware and guards](../../docs/guide/08-middleware-and-guards.md) |
 | Static files            | `Bun.file` behind a mount, with a cache policy              | [Deployment](../../docs/guide/19-deployment.md)                   |
@@ -91,6 +93,13 @@ from, and it may change in any release.
   for a 204.
 - Schemas, parsers and the status resolve at boot into the same closure the
   middleware chain folds into. A request reads no metadata and does no lookup.
+- Every request adopts W3C Trace Context, so `traceId`, `spanId`, `parentSpanId`
+  and `traceFlags` reach every line it writes and `traceresponse` goes out on the
+  response. `requestLogging: { trace: false }` removes both;
+  `{ traceResponse: false }` keeps the trace and drops the header, which is ~500
+  ns. W3C Trace Context is the only correlation id; there is no second one.
+- `metrics: true` adds per-route counts and a nanosecond histogram at +35.2 ns a
+  request, folded into the `.then` request logging already allocates.
 
 ## License
 

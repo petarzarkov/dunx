@@ -1,6 +1,6 @@
 import { Module, provide } from '@dunx/core';
 import { HttpOptionsProvider } from '@dunx/http';
-import { RequestId } from './request-id.middleware.js';
+import { ServerTiming } from './server-timing.middleware.js';
 
 /**
  * Global middleware on a provider rather than an argument to `create()`. That is
@@ -9,12 +9,12 @@ import { RequestId } from './request-id.middleware.js';
  * gets without restating it.
  */
 export class AppHttpOptions extends HttpOptionsProvider {
-  override readonly middleware = [RequestId];
+  override readonly middleware = [ServerTiming];
 }
 
 @Module({
   providers: [
-    RequestId,
+    ServerTiming,
     provide(HttpOptionsProvider, { useClass: AppHttpOptions }),
   ],
   exports: [HttpOptionsProvider],

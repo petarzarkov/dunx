@@ -1,4 +1,4 @@
-import { Logger } from '@dunx/core';
+import { Counter, Logger } from '@dunx/core';
 import { Cron, Interval, OnceOnBoot } from '@dunx/infra/schedule';
 
 /**
@@ -6,13 +6,13 @@ import { Cron, Interval, OnceOnBoot } from '@dunx/infra/schedule';
  * with no second registration. Nothing here coordinates across replicas: work
  * that must happen once per fleet is a `@JobHandler`.
  *
- * Counters are `x = x + 1` rather than `x += 1` because Bun 1.4.0 fails to parse
- * a class with both a decorated member and a read-modify-write on a private
- * field. See docs/bun-apis.md.
+ * Counts go through `@dunx/core`'s `Counter` rather than a private field, which
+ * also sidesteps Bun 1.4.0 failing to parse a class with both a decorated member
+ * and a read-modify-write on a private field. See docs/bun-apis.md.
  */
 export class Maintenance {
-  #sweeps = 0;
-  #compactions = 0;
+  readonly #sweeps = new Counter();
+  readonly #compactions = new Counter();
   #warmed = false;
 
   constructor(private readonly logger: Logger) {}
@@ -28,8 +28,8 @@ export class Maintenance {
   /** Ten minutes, so it never fires during a tour. `trigger` runs it now. */
   @Interval(600_000, { name: 'maintenance.sweep' })
   sweepSessions(): number {
-    this.#sweeps = this.#sweeps + 1;
-    return this.#sweeps;
+    this.#sweeps.inc();
+    return this.#sweeps.value;
   }
 
   /**
@@ -39,14 +39,14 @@ export class Maintenance {
   @Cron('0 3 * * *', { name: 'maintenance.compact' })
   async compactLedger(): Promise<number> {
     await Bun.sleep(1);
-    this.#compactions = this.#compactions + 1;
-    return this.#compactions;
+    this.#compactions.inc();
+    return this.#compactions.value;
   }
 
   get counts(): { sweeps: number; compactions: number; warmed: boolean } {
     return {
-      sweeps: this.#sweeps,
-      compactions: this.#compactions,
+      sweeps: this.#sweeps.value,
+      compactions: this.#compactions.value,
       warmed: this.#warmed,
     };
   }

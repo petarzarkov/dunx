@@ -28,7 +28,7 @@ The guide is canonical for every row; this table is the index.
 
 | Subpath                  | What it is                                                       | Guide                                                       |
 | ------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------- |
-| `@dunx/infra/db`         | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds  | [Database](../../docs/guide/14-database.md)                 |
+| `@dunx/infra/db`         | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds, query timings | [Database](../../docs/guide/14-database.md)                 |
 | `@dunx/infra/redis`      | `Bun.RedisClient`, named connections, pub/sub                     | [Database](../../docs/guide/14-database.md)                 |
 | `@dunx/infra/queue`      | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker    | [Queues](../../docs/guide/15-queues.md)                     |
 | `@dunx/infra/schedule`   | `Bun.cron` and timers: `@Cron`, `@Interval`, `@OnceOnBoot`        | [Scheduling](../../docs/guide/16-scheduling.md)             |
@@ -74,6 +74,12 @@ It is an abstract class where dunx owns the contract (`Storage`, `DbConnection`,
 the two the barrel does not re-export: each reaches an optional peer through a
 static import, so exporting them would make `drizzle-orm` and `ioredis` hard
 requirements of `import '@dunx/infra'`. Reach them at their subpaths.
+
+**Query timing is off unless asked for.** `DbModule.forRoot(options, { metrics:
+true })` binds a `QueryMetrics` and wraps the driver dunx constructs. Drizzle's
+`logger` option cannot supply a duration: `logQuery` fires before the statement
+runs and has no completion callback. See
+[Metrics](../../docs/guide/22-metrics.md).
 
 ## Verified against
 

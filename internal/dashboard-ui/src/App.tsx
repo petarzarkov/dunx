@@ -34,6 +34,7 @@ import { Graph } from './panels/Graph';
 import { Overview } from './panels/Overview';
 import { Queues } from './panels/Queues';
 import { Routes } from './panels/Routes';
+import { Stats } from './panels/Stats';
 import { usePoll, useOnce } from './poll';
 import {
   hrefFor,
@@ -52,6 +53,7 @@ const NAV: readonly {
   { panel: 'gateways', label: 'Gateways', icon: <RouteIcon /> },
   { panel: 'graph', label: 'Modules & providers', icon: <StackIcon /> },
   { panel: 'queues', label: 'Queues & Redis', icon: <DatabaseIcon /> },
+  { panel: 'stats', label: 'Stats', icon: <StackIcon /> },
   { panel: 'config', label: 'Configuration', icon: <DatabaseIcon /> },
 ];
 
@@ -76,11 +78,14 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
   // Names only, and they cannot change while the process runs - but the board may
   // become reachable, so it is polled rather than fetched once.
   const queues = usePoll(() => api.queues(), interval, []);
+  // Counters move with every request, so this is the one panel polling earns.
+  const stats = usePoll(() => api.stats(), interval, []);
 
   const refresh = (): void => {
     runtime.refresh();
     redis.refresh();
     queues.refresh();
+    stats.refresh();
   };
 
   const failing = runtime.data?.probes.some((probe) => probe.state === 'down');
@@ -115,6 +120,8 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
         );
       case 'queues':
         return <Queues report={queues.data} redis={redis.data} meta={meta} />;
+      case 'stats':
+        return <Stats report={stats.data} error={stats.error} />;
       case 'config':
         return <Config config={snapshot.data.config} />;
       default:

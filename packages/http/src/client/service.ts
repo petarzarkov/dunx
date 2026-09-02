@@ -1,5 +1,9 @@
 import { Logger, RequestContext } from '@dunx/core';
-import { TRACEPARENT_HEADER, TraceContext } from '../server/trace-context.js';
+import {
+  TRACEPARENT_HEADER,
+  TRACESTATE_HEADER,
+  TraceContext,
+} from '../server/trace-context.js';
 import { UrlHelper, type ParamsType } from '@arkv/shared';
 import type { HttpMethod } from '../route/marker.js';
 import { FetchError, FetchTransportError } from './errors.js';
@@ -76,8 +80,8 @@ interface SendConfig {
 }
 
 /**
- * A `fetch` client with a per-request timeout, retry with backoff, request-id
- * propagation and one log line per call. `fetch` and nothing else, so there is no
+ * A `fetch` client with a per-request timeout, retry with backoff, W3C Trace
+ * Context propagation and one log line per call. `fetch` and nothing else, so there is no
  * client dependency; what it adds is the parts every caller otherwise
  * reimplements - the timeout, the retry policy, `Retry-After`, url building, and
  * a failure that says which call failed.
@@ -381,14 +385,9 @@ export class HttpService extends UrlHelper {
     serialised: string,
     accept = 'application/json',
   ): Promise<Response> {
-    const requestId =
-      this.options.requestIdHeader === undefined
-        ? undefined
-        : this.requestContext.getContext().requestId;
-
-    // Both read the same store. A trace is only there when the inbound side
-    // adopted one, so with `requestLogging: { trace: true }` off this is a
-    // property read and nothing is sent.
+    // A trace is only in the store when the inbound side adopted one, so with
+    // `requestLogging: { trace: false }` this is a property read and nothing is
+    // sent.
     const trace = this.options.propagateTrace
       ? this.requestContext.getContext()
       : undefined;
@@ -397,16 +396,22 @@ export class HttpService extends UrlHelper {
       accept,
       ...(serialised === '' ? {} : { 'content-type': 'application/json' }),
       ...this.options.headers,
-      ...(requestId === undefined || this.options.requestIdHeader === undefined
-        ? {}
-        : { [this.options.requestIdHeader]: requestId }),
       ...(typeof trace?.traceId === 'string' && typeof trace.spanId === 'string'
         ? {
             [TRACEPARENT_HEADER]: TraceContext.header({
               traceId: trace.traceId,
               spanId: trace.spanId,
-              flags: '01',
+              // The inbound decision, not a fresh one. `traceFlags` is absent only
+              // if something wrote a trace into the store by hand.
+              flags:
+                typeof trace.traceFlags === 'string' ? trace.traceFlags : '01',
             }),
+            // Forwarded unchanged alongside it, which the standard requires of a
+            // participant: this service does not read the vendor data, and
+            // dropping it would strip whatever an upstream put there.
+            ...(typeof trace.traceState === 'string'
+              ? { [TRACESTATE_HEADER]: trace.traceState }
+              : {}),
           }
         : {}),
       ...config.headerFactory?.({

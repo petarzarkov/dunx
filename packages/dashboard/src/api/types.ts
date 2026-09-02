@@ -1,6 +1,18 @@
-import type { ModuleNode, ProviderNode } from '@dunx/core';
+import type {
+  MemoryReport,
+  ModuleNode,
+  ProviderNode,
+  RuntimeReport as CoreRuntimeReport,
+} from '@dunx/core';
 import type { GatewayNode, RouteNode } from '@dunx/http/internal';
-import type { ProbeState } from '../contracts.js';
+import type {
+  DbQueryStats,
+  DbStatsReport,
+  HistogramSnapshot,
+  HttpStatsReport,
+  ProbeState,
+  RouteStats,
+} from '../contracts.js';
 
 /**
  * Everything the page reads, declared once.
@@ -67,24 +79,23 @@ export interface ProbeReport {
   readonly ms: number;
 }
 
-export interface MemoryReport {
-  readonly rss: number;
-  readonly heapUsed: number;
-  readonly heapTotal: number;
-  readonly external: number;
-}
+/**
+ * The process half moved down to `@dunx/core` once the health module wanted the
+ * same numbers. Re-exported so `internal/dashboard-ui`'s relative `import type`
+ * is unchanged, and so nothing here declares a second copy of it.
+ */
+export type { CoreRuntimeReport, MemoryReport };
 
 /** The half that changes. Polled. */
-export interface RuntimeReport {
-  readonly pid: number;
-  readonly uptimeMs: number;
-  readonly bun: string;
-  readonly platform: string;
-  readonly arch: string;
-  readonly memory: MemoryReport;
+export interface RuntimeReport extends Omit<
+  CoreRuntimeReport,
+  'now' | 'cpu' | 'resource'
+> {
   readonly probes: readonly ProbeReport[];
-  /** Server clock, so the page can show ages rather than raw timestamps. */
+  /** Server clock as epoch milliseconds, so the page can show ages. */
   readonly now: number;
+  readonly cpu: CoreRuntimeReport['cpu'];
+  readonly resource: CoreRuntimeReport['resource'];
 }
 
 export interface RedisReport {
@@ -118,3 +129,32 @@ export interface QueuesReport {
   /** Why there is no board: no source, no queues opened, or bull-board absent. */
   readonly unavailable?: string;
 }
+
+/** Absent because the app passed no source, which the page reads to hide a panel. */
+export interface StatsAbsent {
+  readonly configured: false;
+}
+
+/**
+ * A half that is present carries `configured: true`, the same discriminant
+ * `RedisReport` uses: the reports themselves are `@dunx/http`'s and a restatement
+ * of `@dunx/infra/db`'s, and neither should grow a field only this page reads.
+ */
+export type StatsHalf<T> = (T & { readonly configured: true }) | StatsAbsent;
+
+/**
+ * Both halves of `{path}/api/stats`. Independent: an app may time requests and
+ * not queries, or the other way round.
+ */
+export interface StatsReport {
+  readonly http: StatsHalf<HttpStatsReport>;
+  readonly db: StatsHalf<DbStatsReport>;
+}
+
+export type {
+  DbQueryStats,
+  DbStatsReport,
+  HistogramSnapshot,
+  HttpStatsReport,
+  RouteStats,
+};

@@ -23,7 +23,7 @@ export const loggingVariants = Object.freeze([
   'passthru',
   'path',
   'headers',
-  'requestid',
+  'trace',
   'als',
   'respheader',
   'entry',

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { TRACEPARENT_HEADER, TraceContext } from './trace-context.js';
+import {
+  TRACEPARENT_HEADER,
+  TRACERESPONSE_HEADER,
+  TraceContext,
+} from './trace-context.js';
 
-const REQUEST_ID = '0189d7f2-5c3a-7b1e-9f44-2a6c8d1e3b70';
 const INBOUND_TRACE = '4bf92f3577b34da6a3ce929d0e0e4736';
 const INBOUND_SPAN = '00f067aa0ba902b7';
 
@@ -14,7 +17,6 @@ describe('TraceContext.adopt', () => {
       requestWith({
         [TRACEPARENT_HEADER]: `00-${INBOUND_TRACE}-${INBOUND_SPAN}-01`,
       }),
-      REQUEST_ID,
     );
     expect(trace.traceId).toBe(INBOUND_TRACE);
     expect(trace.parentSpanId).toBe(INBOUND_SPAN);
@@ -24,19 +26,29 @@ describe('TraceContext.adopt', () => {
     expect(trace.flags).toBe('01');
   });
 
-  it('derives a trace id from the request id when nothing arrives', () => {
-    const trace = TraceContext.adopt(requestWith(), REQUEST_ID);
-    // A UUID is 16 bytes, which is exactly a trace id - so one identifier, two
-    // spellings, and no second crypto call.
-    expect(trace.traceId).toBe(REQUEST_ID.replaceAll('-', ''));
-    expect(trace.traceId).toMatch(/^[0-9a-f]{32}$/);
-    expect(trace.parentSpanId).toBeUndefined();
+  it('keeps the inbound sampling decision rather than forcing one', () => {
+    const trace = TraceContext.adopt(
+      requestWith({
+        [TRACEPARENT_HEADER]: `00-${INBOUND_TRACE}-${INBOUND_SPAN}-00`,
+      }),
+    );
+    expect(trace.flags).toBe('00');
+    expect(TraceContext.sampled(trace)).toBe(false);
   });
 
-  it('mints a distinct span per request', () => {
-    const first = TraceContext.adopt(requestWith(), REQUEST_ID);
-    const second = TraceContext.adopt(requestWith(), REQUEST_ID);
+  it('mints a trace of its own when nothing arrives', () => {
+    const trace = TraceContext.adopt(requestWith());
+    expect(trace.traceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(trace.spanId).toMatch(/^[0-9a-f]{16}$/);
+    expect(trace.parentSpanId).toBeUndefined();
+    expect(trace.flags).toBe('01');
+  });
+
+  it('mints a distinct trace and span per request', () => {
+    const first = TraceContext.adopt(requestWith());
+    const second = TraceContext.adopt(requestWith());
     expect(first.spanId).not.toBe(second.spanId);
+    expect(first.traceId).not.toBe(second.traceId);
   });
 
   it.each([
@@ -54,11 +66,11 @@ describe('TraceContext.adopt', () => {
   ])('discards a malformed traceparent (%s)', (_name, header) => {
     const trace = TraceContext.adopt(
       requestWith({ [TRACEPARENT_HEADER]: header }),
-      REQUEST_ID,
     );
     // Discarded rather than repaired: the caller's trace is unknown, so this
     // request starts one instead of joining a trace that may not exist.
-    expect(trace.traceId).toBe(REQUEST_ID.replaceAll('-', ''));
+    expect(trace.traceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(trace.traceId).not.toBe(INBOUND_TRACE);
     expect(trace.parentSpanId).toBeUndefined();
   });
 
@@ -67,7 +79,6 @@ describe('TraceContext.adopt', () => {
       requestWith({
         [TRACEPARENT_HEADER]: `01-${INBOUND_TRACE}-${INBOUND_SPAN}-01-something`,
       }),
-      REQUEST_ID,
     );
     expect(trace.traceId).toBe(INBOUND_TRACE);
     expect(trace.parentSpanId).toBe(INBOUND_SPAN);
@@ -79,14 +90,12 @@ describe('TraceContext.adopt', () => {
         [TRACEPARENT_HEADER]: `00-${INBOUND_TRACE}-${INBOUND_SPAN}-01`,
         tracestate: 'vendor=opaque',
       }),
-      REQUEST_ID,
     );
     expect(joined.state).toBe('vendor=opaque');
 
     // A tracestate belongs to a trace this request is not part of.
     const orphan = TraceContext.adopt(
       requestWith({ tracestate: 'vendor=opaque' }),
-      REQUEST_ID,
     );
     expect(orphan.state).toBeUndefined();
   });
@@ -94,27 +103,44 @@ describe('TraceContext.adopt', () => {
   it('reads back off the request', () => {
     const req = requestWith();
     expect(TraceContext.of(req)).toBeUndefined();
-    const trace = TraceContext.adopt(req, REQUEST_ID);
+    const trace = TraceContext.adopt(req);
     expect(TraceContext.of(req)).toEqual(trace);
   });
 });
 
 describe('TraceContext.header', () => {
   it('sends this span as the callee parent', () => {
-    const trace = TraceContext.adopt(requestWith(), REQUEST_ID);
+    const trace = TraceContext.adopt(requestWith());
     expect(TraceContext.header(trace)).toBe(
       `00-${trace.traceId}-${trace.spanId}-01`,
     );
   });
 
   it('round-trips through adopt', () => {
-    const first = TraceContext.adopt(requestWith(), REQUEST_ID);
+    const first = TraceContext.adopt(requestWith());
     const second = TraceContext.adopt(
       requestWith({ [TRACEPARENT_HEADER]: TraceContext.header(first) }),
-      '0189d7f2-5c3a-7b1e-9f44-2a6c8d1e3b71',
     );
     expect(second.traceId).toBe(first.traceId);
     expect(second.parentSpanId).toBe(first.spanId);
+  });
+});
+
+describe('TraceContext.stamp', () => {
+  it('sends this span back as traceresponse', () => {
+    const req = requestWith();
+    const trace = TraceContext.adopt(req);
+    const response = TraceContext.stamp(new Response('ok'), req);
+    expect(response.headers.get(TRACERESPONSE_HEADER)).toBe(
+      `00-${trace.traceId}-${trace.spanId}-01`,
+    );
+  });
+
+  it('leaves a response alone when the request adopted no trace', () => {
+    // `requestLogging: { trace: false }`, or an ignored path. The error mapper
+    // calls this on every failure, so it must answer for those too.
+    const response = TraceContext.stamp(new Response('ok'), requestWith());
+    expect(response.headers.get(TRACERESPONSE_HEADER)).toBeNull();
   });
 });
 

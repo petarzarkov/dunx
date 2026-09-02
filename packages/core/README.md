@@ -54,6 +54,7 @@ preload = ["@dunx/transform/preload"]
 | Lifecycle     | `onInit`, `onBeforeShutdown`, `onShutdown`, signal handlers  | [Lifecycle](../../docs/guide/07-lifecycle.md)          |
 | Configuration | `ConfigModule.forRoot({ validate })`, one validation function | [Configuration](../../docs/guide/12-configuration.md)  |
 | Logging       | The `Logger` contract and `ConsoleLogger`                    | [Logging](../../docs/guide/13-logging.md)              |
+| Stats         | `Durations`, `Counter`, `Gauge`, `RuntimeStats`, `EventLoopLag` | [Metrics](../../docs/guide/22-metrics.md)           |
 
 ## Notes
 
@@ -69,6 +70,15 @@ preload = ["@dunx/transform/preload"]
   one wins.
 - `ConsoleLogger` batches `info` and below into one write per event-loop turn;
   `warn` and above are never batched and flush what is queued behind them.
+- The stats primitives are `node:perf_hooks` and `process`, both platform
+  builtins, so this package still has zero dependencies.
+- **`Durations` closes four edges the native histogram has**, each of which can
+  otherwise reach a payload: `record(0)` throws `ERR_OUT_OF_RANGE`, an empty
+  histogram reports a `min` of 9223372036854776000 and a `mean` of `NaN`, its
+  `percentiles` is a `Map` of `bigint` that `JSON.stringify` turns into `{}` with
+  no error, and `mean` costs 42.2 us. So an observation under 1 clamps, an empty
+  snapshot is `{ count: 0 }`, percentiles are read with `percentile(n)` and come
+  back as numbers, and `mean` is not offered.
 
 ## License
 

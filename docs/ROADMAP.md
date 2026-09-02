@@ -269,7 +269,7 @@ leaves a request in flight on purpose, which fails **every** run without the dra
 `bun run logging` prices at +0.91 µs, can now be turned off for an app whose handlers
 never log. The request entry is unchanged either way - the five correlation fields go
 onto it directly instead of being read back out of the store - so what is traded is
-only the lines _between_, which then carry no `requestId`. Measured delta in
+only the lines _between_, which then carry no `traceId`. Measured delta in
 `docs/guide/13-logging.md`.
 
 **Two bullmq connection bugs, found while chasing the SIGTERM hang and fixed.**

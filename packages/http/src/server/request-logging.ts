@@ -7,8 +7,8 @@ import type { BunRequest } from 'bun';
 import type { RouteContext } from './context.js';
 import { HttpError } from './errors.js';
 import type { Middleware, Next } from './middleware.js';
+import type { RequestMetrics } from './metrics.js';
 import { RawBody } from './raw-body.js';
-import { REQUEST_ID_HEADER, RequestIds } from './request-id.js';
 import { TraceContext } from './trace-context.js';
 import { HttpStatusCode } from './status.js';
 
@@ -27,7 +27,7 @@ export interface RequestLoggingOptions {
    * materialised string by the time this clones it. */
   readonly responseBody?: boolean;
   /**
-   * Paths to skip entirely: no entry, no `x-request-id`, and no
+   * Paths to skip entirely: no entry, no trace, no `traceresponse`, and no
    * `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated.
    * `correlateIgnored` buys the correlation back.
    */
@@ -43,34 +43,37 @@ export interface RequestLoggingOptions {
    */
   readonly ignorePrefix?: readonly string[];
   /**
-   * Keep the request id and the async scope on an `ignore`d path. Default
-   * `false`. The path still writes no entry; it gets an id on the response and
-   * everything the handler logs carries it. Costs ~2.2 us of the ~5.4 us the
-   * default path spends.
+   * Keep the trace and the async scope on an `ignore`d path. Default `false`.
+   * The path still writes no entry; it gets a `traceresponse` and everything the
+   * handler logs carries the trace. Costs ~2.2 us of the ~5.4 us the default path
+   * spends.
    */
   readonly correlateIgnored?: boolean;
   /**
    * Wrap every request in an `AsyncLocalStorage` scope. Default `true`, +0.91 us.
-   * It is what lets a service four frames down log `requestId` without being
+   * It is what lets a service four frames down log `traceId` without being
    * handed a request. `correlate: false` skips it; this middleware's own entry is
-   * unchanged, but every other line the request writes loses its id.
+   * unchanged, but every other line the request writes loses its trace.
    */
   readonly correlate?: boolean;
   /**
-   * Put `x-request-id` on the response. Default `true`, and ~500 ns of the 4.7 us
+   * Put `traceresponse` on the response. Default `true`, and ~500 ns of the 4.7 us
    * the path costs, which is the largest thing here that can go without losing a
    * field from a line.
    *
-   * `false` keeps the id on this middleware's own lines and in the async scope,
-   * and withholds it from every response including a failure's: the error mapper
-   * stamps from what `RequestIds.assign` recorded, and this stops it recording.
+   * `false` keeps the trace on this middleware's own lines, in the async scope and
+   * on the metrics exemplar, and withholds the header from every response
+   * including a failure's: the error mapper stamps from what `TraceContext.adopt`
+   * marked, and this stops it marking.
    */
-  readonly requestIdHeader?: boolean;
+  readonly traceResponse?: boolean;
   /**
-   * Adopt W3C Trace Context, so `traceId`, `spanId` and `parentSpanId` join
-   * `requestId`. Default `false`: it costs a header read and 8 random bytes, and
-   * `requestId` already spans two dunx services. `@dunx/http/client` sends the
-   * adopted trace upstream.
+   * Adopt W3C Trace Context, putting `traceId`, `spanId`, `parentSpanId` and
+   * `traceFlags` on every line the request writes and `traceresponse` on its
+   * response. Default `true`, at 49.2 ns to mint both ids plus one header read.
+   * `@dunx/http/client` sends the adopted trace upstream.
+   *
+   * `false` removes it, and a request then carries no correlation id at all.
    */
   readonly trace?: boolean;
 }
@@ -113,12 +116,22 @@ export class RequestLoggingMiddleware implements Middleware {
   readonly #correlateIgnored: boolean;
   readonly #correlate: boolean;
   readonly #trace: boolean;
-  readonly #requestIdHeader: boolean;
+  readonly #traceResponse: boolean;
+
+  /**
+   * Present only under `metrics: true`. The observation folds into the `.then`
+   * this already allocates and reuses the `started` mark it already holds, which
+   * is what makes it 35.2 ns rather than the 175.9 ns a middleware of its own
+   * costs. `elapsedMs` cannot be the shared value: it rounds to milliseconds, so
+   * every sub-millisecond request would record a 0 the histogram rejects.
+   */
+  readonly #metrics: RequestMetrics | undefined;
 
   constructor(
     private readonly logger: Logger,
     private readonly context: RequestContext,
     options: RequestLoggingOptions = {},
+    metrics?: RequestMetrics,
   ) {
     this.#limit = options.maxBodyLength ?? 2048;
     this.#requestBody = options.requestBody ?? false;
@@ -127,8 +140,9 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#ignorePrefix = options.ignorePrefix ?? [];
     this.#correlateIgnored = options.correlateIgnored ?? false;
     this.#correlate = options.correlate ?? true;
-    this.#trace = options.trace ?? false;
-    this.#requestIdHeader = options.requestIdHeader ?? true;
+    this.#trace = options.trace ?? true;
+    this.#traceResponse = options.traceResponse ?? true;
+    this.#metrics = metrics;
   }
 
   /** Both guards check emptiness first, so configuring neither costs two reads. */
@@ -147,46 +161,43 @@ export class RequestLoggingMiddleware implements Middleware {
     const path =
       from === -1 ? '/' : mark === -1 ? url.slice(from) : url.slice(from, mark);
     if (this.#ignored(path)) {
+      // `ignore` is about log volume, not about counting. A health check polled
+      // every second is the clearest case of something worth a metric and not
+      // worth an entry, so metrics are observed here even though nothing is
+      // logged. Costs two `Bun.nanoseconds()` reads, and only under `metrics`.
+      if (this.#metrics !== undefined) {
+        return this.#ignoredWithMetrics(req, ctx, path, next);
+      }
       return this.#correlateIgnored
         ? this.#correlated(req, ctx, path, next)
         : next();
     }
 
     const started = Bun.nanoseconds();
-    const requestId = RequestIds.assign(req, this.#requestIdHeader);
     const scope: ScopeFields = {
-      requestId,
       method: ctx.method,
       event: path,
       flow: 'http',
       context: `${ctx.controller}.${ctx.handler}`,
     };
     if (this.#trace) {
-      const trace = TraceContext.adopt(req, requestId);
+      const trace = TraceContext.adopt(req, this.#traceResponse);
       scope.traceId = trace.traceId;
       scope.spanId = trace.spanId;
+      scope.traceFlags = trace.flags;
       if (trace.parentSpanId !== undefined) {
         scope.parentSpanId = trace.parentSpanId;
       }
+      if (trace.state !== undefined) scope.traceState = trace.state;
     }
 
-    // The same five fields either way: into the store under `correlate`, else
-    // merged straight onto this entry.
+    // The same fields either way: into the store under `correlate`, else merged
+    // straight onto this entry.
     return this.#correlate
       ? this.context.runWithContext(scope, () =>
-          this.#begin(
-            req,
-            ctx,
-            url,
-            mark,
-            path,
-            requestId,
-            started,
-            next,
-            undefined,
-          ),
+          this.#begin(req, ctx, url, mark, path, started, next, undefined),
         )
-      : this.#begin(req, ctx, url, mark, path, requestId, started, next, scope);
+      : this.#begin(req, ctx, url, mark, path, started, next, scope);
   }
 
   #begin(
@@ -195,7 +206,6 @@ export class RequestLoggingMiddleware implements Middleware {
     url: string,
     mark: number,
     path: string,
-    requestId: string,
     started: number,
     next: Next,
     scope: ScopeFields | undefined,
@@ -209,28 +219,12 @@ export class RequestLoggingMiddleware implements Middleware {
     const body = this.#body(req, ctx);
     if (body === undefined) {
       request['userAgent'] = req.headers.get('user-agent');
-      return this.#dispatch(
-        req,
-        path,
-        requestId,
-        started,
-        request,
-        next,
-        scope,
-      );
+      return this.#dispatch(req, ctx, path, started, request, next, scope);
     }
     return body.then((value) => {
       if (value !== undefined) request['body'] = value;
       request['userAgent'] = req.headers.get('user-agent');
-      return this.#dispatch(
-        req,
-        path,
-        requestId,
-        started,
-        request,
-        next,
-        scope,
-      );
+      return this.#dispatch(req, ctx, path, started, request, next, scope);
     });
   }
 
@@ -249,6 +243,47 @@ export class RequestLoggingMiddleware implements Middleware {
   }
 
   /**
+   * An ignored path under `metrics`. Both settlements are observed with the same
+   * status mapping `#failed` uses, so an ignored route that throws is counted
+   * rather than silently missing: with request logging on, `MetricsMiddleware` is
+   * not installed and nothing else would see it.
+   */
+  #ignoredWithMetrics(
+    req: BunRequest,
+    ctx: RouteContext,
+    path: string,
+    next: Next,
+  ): Promise<Response> {
+    const started = Bun.nanoseconds();
+    const failed = (error: unknown): never => {
+      this.#observe(
+        req,
+        ctx,
+        error instanceof HttpError
+          ? error.status
+          : HttpStatusCode.INTERNAL_SERVER_ERROR,
+        started,
+      );
+      throw error;
+    };
+
+    let settled: Promise<Response>;
+    try {
+      settled = this.#correlateIgnored
+        ? this.#correlated(req, ctx, path, next)
+        : next();
+    } catch (error) {
+      // A user middleware ahead of the route may throw out of `handle`
+      // synchronously, which never reaches the rejection handler below.
+      return failed(error);
+    }
+    return settled.then((response) => {
+      this.#observe(req, ctx, response.status, started);
+      return response;
+    }, failed);
+  }
+
+  /**
    * An ignored path under `correlateIgnored`: the scope and the response header,
    * no entry, nothing timed. Under `correlate: false` only the header is left.
    */
@@ -258,17 +293,27 @@ export class RequestLoggingMiddleware implements Middleware {
     path: string,
     next: Next,
   ): Promise<Response> {
-    const requestId = RequestIds.assign(req, this.#requestIdHeader);
-    const stamp = (response: Response): Response => {
-      if (this.#requestIdHeader) {
-        response.headers.set(REQUEST_ID_HEADER, requestId);
-      }
-      return response;
-    };
+    const trace = this.#trace
+      ? TraceContext.adopt(req, this.#traceResponse)
+      : undefined;
+    // `stamp` reads the mark `adopt` left, so `traceResponse: false` needs no
+    // condition here or in the error mapper.
+    const stamp = (response: Response): Response =>
+      trace === undefined ? response : TraceContext.stamp(response, req);
     if (!this.#correlate) return next().then(stamp);
     return this.context.runWithContext(
       {
-        requestId,
+        ...(trace === undefined
+          ? {}
+          : {
+              traceId: trace.traceId,
+              spanId: trace.spanId,
+              traceFlags: trace.flags,
+              ...(trace.parentSpanId === undefined
+                ? {}
+                : { parentSpanId: trace.parentSpanId }),
+              ...(trace.state === undefined ? {} : { traceState: trace.state }),
+            }),
         method: ctx.method,
         event: path,
         flow: 'http',
@@ -280,8 +325,8 @@ export class RequestLoggingMiddleware implements Middleware {
 
   #dispatch(
     req: BunRequest,
+    ctx: RouteContext,
     path: string,
-    requestId: string,
     started: number,
     request: RequestFields,
     next: Next,
@@ -293,22 +338,14 @@ export class RequestLoggingMiddleware implements Middleware {
     try {
       settled = next();
     } catch (error) {
-      this.#failed(req, path, started, request, error, scope);
+      this.#failed(req, ctx, path, started, request, error, scope);
       throw error;
     }
     return settled.then(
       (response) =>
-        this.#succeeded(
-          req,
-          path,
-          requestId,
-          started,
-          request,
-          response,
-          scope,
-        ),
+        this.#succeeded(req, ctx, path, started, request, response, scope),
       (error: unknown) => {
-        this.#failed(req, path, started, request, error, scope);
+        this.#failed(req, ctx, path, started, request, error, scope);
         throw error;
       },
     );
@@ -317,6 +354,7 @@ export class RequestLoggingMiddleware implements Middleware {
   /** Logged and rethrown: the error mapper still owns the status and the shape. */
   #failed(
     req: BunRequest,
+    ctx: RouteContext,
     path: string,
     started: number,
     request: RequestFields,
@@ -335,6 +373,7 @@ export class RequestLoggingMiddleware implements Middleware {
       statusCode: status,
       elapsedMs: elapsedMs(started),
     };
+    this.#observe(req, ctx, status, started);
     const line = `${req.method} ${path} ${status}`;
     if (status < HttpStatusCode.INTERNAL_SERVER_ERROR) {
       this.logger.warn(line, entry);
@@ -345,14 +384,15 @@ export class RequestLoggingMiddleware implements Middleware {
 
   #succeeded(
     req: BunRequest,
+    ctx: RouteContext,
     path: string,
-    requestId: string,
     started: number,
     request: RequestFields,
     response: Response,
     scope: ScopeFields | undefined,
   ): Response | Promise<Response> {
     this.#shared(req, request);
+    this.#observe(req, ctx, response.status, started);
     const body = this.#responseFields(response);
     if (body === undefined) {
       this.logger.info(`${req.method} ${path} ${response.status}`, {
@@ -361,10 +401,7 @@ export class RequestLoggingMiddleware implements Middleware {
         statusCode: response.status,
         elapsedMs: elapsedMs(started),
       });
-      if (this.#requestIdHeader) {
-        response.headers.set(REQUEST_ID_HEADER, requestId);
-      }
-      return response;
+      return TraceContext.stamp(response, req);
     }
     return body.then((value) => {
       this.logger.info(`${req.method} ${path} ${response.status}`, {
@@ -374,11 +411,28 @@ export class RequestLoggingMiddleware implements Middleware {
         ...(value === undefined ? {} : { responseBody: value }),
         elapsedMs: elapsedMs(started),
       });
-      if (this.#requestIdHeader) {
-        response.headers.set(REQUEST_ID_HEADER, requestId);
-      }
-      return response;
+      return TraceContext.stamp(response, req);
     });
+  }
+
+  /**
+   * The exemplar's trace is read back off the request, not out of the store:
+   * `getContext()` spreads into a fresh object, which is not a thing to do per
+   * request for one field. A symbol property read is 9.5 ns.
+   */
+  #observe(
+    req: BunRequest,
+    ctx: RouteContext,
+    status: number,
+    started: number,
+  ): void {
+    if (this.#metrics === undefined) return;
+    this.#metrics.observe(
+      ctx,
+      status,
+      Bun.nanoseconds() - started,
+      TraceContext.of(req)?.traceId,
+    );
   }
 
   /**

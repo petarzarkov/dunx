@@ -837,22 +837,28 @@ AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.0 | oha oha 1.15
 records: the differences are a few percent and the machine drifts by more than that
 over a run. Read anything under about **±0.5 µs** as unresolvable.
 
+> Rows relabelled: the correlation id is W3C Trace Context, so the ids row is
+> `TraceContext.adopt` and the two header rows are `traceparent` and
+> `traceresponse`. The figures are from the run before that change, and adopting a
+> trace is cheaper than the `crypto.randomUUID()` pair measured here, so those
+> three are upper bounds until the next run.
+
 | Step | req/s | µs/req | this step adds | total |
 | ---- | ----: | -----: | -------------: | ----: |
 | `requestLogging: false` | 125,312 | 7.98 | - | - |
 | one middleware that only calls `next()` | 116,537 | 8.58 | +0.60 µs | +0.60 µs |
 | + the pathname sliced out of `req.url` | 107,411 | 9.31 | +0.73 µs | +1.33 µs |
-| + `x-request-id` and `user-agent` read | 97,232 | 10.28 | +0.97 µs | +2.30 µs |
-| + `crypto.randomUUID()` | 100,161 | 9.98 | −0.30 µs | +2.00 µs |
+| + `traceparent` and `user-agent` read | 97,232 | 10.28 | +0.97 µs | +2.30 µs |
+| + `TraceContext.adopt` | 100,161 | 9.98 | −0.30 µs | +2.00 µs |
 | + `runWithContext` around the handler | 97,814 | 10.22 | +0.24 µs | +2.24 µs |
-| + `x-request-id` set on the response | 95,558 | 10.46 | +0.24 µs | +2.48 µs |
+| + `traceresponse` set on the response | 95,558 | 10.46 | +0.24 µs | +2.48 µs |
 | + the real middleware, `Logger` discards | 92,200 | 10.85 | +0.38 µs | +2.87 µs |
 | + `new Date().toISOString()` | 90,465 | 11.05 | +0.21 µs | +3.07 µs |
 | + the entry and `JSON.stringify`, string dropped | 77,950 | 12.83 | +1.77 µs | +4.85 µs |
 | batched instead - **the shipped default** | 78,377 | 12.76 | −0.07 µs | +4.78 µs |
 
 Reading it: the middleware chain, `crypto.randomUUID()` and setting
-`x-request-id` on the response are each at or below what this harness can resolve.
+`traceresponse` on the response are each at or below what this harness can resolve.
 What costs is the **first touch of `req.headers`**, the `AsyncLocalStorage`
 scope, and **building and serialising the entry** - and, before it was batched, the
 write.

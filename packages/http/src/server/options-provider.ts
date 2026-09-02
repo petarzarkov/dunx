@@ -106,6 +106,11 @@ export abstract class HttpOptionsProvider {
     return true;
   }
 
+  /** Per-route counts and timings. Off by default; see {@link RequestMetrics}. */
+  get metrics(): boolean {
+    return false;
+  }
+
   /**
    * Replaces the default mapper. Prefer an `ErrorFilter` class over a bare
    * function: a class is resolved from the container and can inject.
@@ -165,6 +170,7 @@ export function resolveHttpOptions(
     cors: settings.cors,
     requestLogging: settings.requestLogging,
     socketLogging: settings.socketLogging,
+    metrics: settings.metrics,
     onError: settings.onError,
     websocket: settings.websocket,
     relay: settings.relay,

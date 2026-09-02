@@ -7,7 +7,12 @@ import {
   pathTemplate,
   SECURITY_SCHEME,
 } from './operations.js';
-import { danglingRefs, SchemaStore, titledAs } from './refs.js';
+import {
+  danglingRefs,
+  reachableComponents,
+  SchemaStore,
+  titledAs,
+} from './refs.js';
 import {
   OPERATION_ORDER,
   type ComponentsObject,
@@ -206,7 +211,17 @@ export const generateDocument = async (
     components,
   };
 
+  // Taken before the merge: only a name this generator hoisted may be pruned. A
+  // contributor supplying a schema is asking for it in the document, referenced
+  // or not.
+  const generated = new Set(Object.keys(components.schemas));
+
   const merged = await mergeContributions(document, info.contribute ?? []);
+
+  // After the merge, so a definition a contributed path refs is kept. Parameters
+  // are expanded rather than referenced, so a `params` or `query` schema carrying
+  // `.meta({ id })` would otherwise leave a component nothing points at.
+  pruneOrphans(merged.document, generated);
 
   // A canary, not a guard: every `$ref` this generator writes is one it hoisted a
   // definition for, so a dangling one is a bug here rather than in the input.
@@ -309,4 +324,20 @@ const mergeContributions = async (
     warnings,
     absolutePaths,
   };
+};
+
+/**
+ * Removes every `components/schemas` entry nothing reaches. Mutates, because the
+ * document has already been assembled and rebuilding it would reorder the keys a
+ * caller may have diffed.
+ */
+const pruneOrphans = (
+  document: { components: { schemas: Record<string, unknown> } },
+  generated: ReadonlySet<string>,
+): void => {
+  const { schemas } = document.components;
+  const reachable = reachableComponents(document, schemas);
+  for (const name of Object.keys(schemas)) {
+    if (generated.has(name) && !reachable.has(name)) delete schemas[name];
+  }
 };

@@ -1,5 +1,10 @@
 import { Logger, RequestContext } from '@dunx/core';
-import { REQUEST_ID_HEADER, type Middleware, type Next } from '@dunx/http';
+import {
+  TRACEPARENT_HEADER,
+  TraceContext,
+  type Middleware,
+  type Next,
+} from '@dunx/http';
 import type { BunRequest } from 'bun';
 import { emitLine, timestamp } from './servers/logging/formats.js';
 
@@ -20,7 +25,7 @@ export const STEPS = [
   'ignored',
   'clock',
   'inbound',
-  'uuid',
+  'mint',
   'scope',
   'als',
   'request',
@@ -46,15 +51,15 @@ export const sink = { line: '', path: '', count: 0 };
  * Most of the entry never changes for a given route and status. `level`, `pid` and
  * `flow` are constant for the process; `method`, `event` and `context` are
  * constant for the route; `message` is "GET /json 200", so it is constant for the
- * route and status together. Only the timestamp, the request id, the user agent
- * and the elapsed milliseconds vary per request.
+ * route and status together. Only the timestamp, the trace, the user agent and
+ * the elapsed milliseconds vary per request.
  *
  * So the line can be cut into fragments once and roped together per request. A
  * real implementation would hang these off the frozen `RouteContext`, which is
  * built when the route table is; this caches on the same object to price it the
  * same way.
  *
- * `HEAD` carries the timestamp, `MID` the request id, `TAIL` the elapsed time.
+ * `HEAD` carries the timestamp, `MID` the trace id, `TAIL` the elapsed time.
  * `noua` drops `request.userAgent`, which removes the one variable field needing
  * an escape check and the longest field on the line.
  */
@@ -79,7 +84,7 @@ const quoted = (value: string): string =>
  */
 const CONSTANT_LINE =
   `{"level":"info","timestamp":"2026-08-31T12:00:00.000Z","pid":12345,` +
-  `"message":"GET /json 200","requestId":"3f2a91c4-7b5e-4d18-9a06-2c8e5f1b7d43",` +
+  `"message":"GET /json 200","traceId":"4bf92f3577b34da6a3ce929d0e0e4736",` +
   `"method":"GET","event":"/json","flow":"http","context":"BenchController.json",` +
   `"request":{"userAgent":"oha/1.15.0"},"statusCode":200,"elapsedMs":1}`;
 
@@ -97,8 +102,7 @@ const fragmentsFor = (
   const built: Fragments = {
     head: `{"level":"info","timestamp":"`,
     mid:
-      `","pid":${PID},"message":"${method} ${path} ${status}",` +
-      `"requestId":"`,
+      `","pid":${PID},"message":"${method} ${path} ${status}",` + `"traceId":"`,
     tailUa:
       `","method":"${method}","event":"${path}","flow":"http",` +
       `"context":"${context}","request":{"userAgent":`,
@@ -127,7 +131,7 @@ const fragmentsFor = (
 const boundEntry = (
   stamp: string,
   message: string,
-  requestId: string,
+  traceId: string,
   method: string,
   event: string,
   context: string,
@@ -139,7 +143,7 @@ const boundEntry = (
   timestamp: stamp,
   pid: PID,
   message,
-  requestId,
+  traceId,
   method,
   event,
   flow: 'http',
@@ -149,14 +153,12 @@ const boundEntry = (
   elapsedMs,
 });
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * Everything given up at once, to bound what is reachable: no
- * `AsyncLocalStorage` scope, so nothing else the request logs carries its id; no
- * inbound `x-request-id` honoured and a counter instead of a UUID, so an id is
- * unique to this process and no further; no `user-agent`; no `x-request-id` on the
- * response; and a five-field line rather than twelve.
+ * `AsyncLocalStorage` scope, so nothing else the request logs carries its trace;
+ * no inbound `traceparent` honoured and a counter instead of 16 random bytes, so
+ * an id is unique to this process and no further; no `user-agent`; no
+ * `traceresponse` on the response; and a five-field line rather than twelve.
  *
  * Not a proposal. The number it produces is the answer to how far this can go
  * while still writing one line per request.
@@ -168,7 +170,7 @@ const maxMid = (method: string, path: string, status: number): string => {
   const key = `${method} ${path} ${status}`;
   const found = maxCache.get(key);
   if (found !== undefined) return found;
-  const built = `","message":"${method} ${path} ${status}","requestId":"`;
+  const built = `","message":"${method} ${path} ${status}","traceId":"`;
   maxCache.set(key, built);
   return built;
 };
@@ -240,23 +242,25 @@ export class StepMiddleware implements Middleware {
       return next();
     }
 
-    const inbound = req.headers.get(REQUEST_ID_HEADER);
+    const inbound = req.headers.get(TRACEPARENT_HEADER);
     if (this.#at('inbound')) {
       sink.line = inbound ?? '';
       return next();
     }
 
-    const requestId =
-      inbound !== null && inbound.length === 36 && UUID.test(inbound)
-        ? inbound
-        : crypto.randomUUID();
-    if (this.#at('uuid')) {
-      sink.line = requestId;
+    // The shipped `TraceContext.adopt`, called rather than copied, so the row
+    // pays exactly what the middleware pays: the header this step already read
+    // is parsed, and what it did not carry is minted.
+    const trace = TraceContext.adopt(req);
+    if (this.#at('mint')) {
+      sink.line = trace.spanId;
       return next();
     }
 
     const scope = {
-      requestId,
+      traceId: trace.traceId,
+      spanId: trace.spanId,
+      traceFlags: trace.flags,
       method: (ctx as unknown as { method: string }).method,
       event: path,
       flow: 'http',
@@ -283,7 +287,7 @@ export class StepMiddleware implements Middleware {
         // promise continuation and the `Headers.set`, which are unrelated costs.
         if (this.#at('then')) return response;
 
-        response.headers.set(REQUEST_ID_HEADER, requestId);
+        TraceContext.stamp(response, req);
         if (this.#at('respheader')) return response;
 
         const elapsed = Math.round((Bun.nanoseconds() - started) / 1e6);
@@ -304,7 +308,7 @@ export class StepMiddleware implements Middleware {
             f.head +
             timestamp() +
             f.mid +
-            requestId +
+            trace.traceId +
             f.tailNoUa +
             elapsed +
             '}';
@@ -317,7 +321,7 @@ export class StepMiddleware implements Middleware {
               boundEntry(
                 timestamp(),
                 `${req.method} ${path} ${response.status}`,
-                requestId,
+                trace.traceId,
                 (ctx as unknown as { method: string }).method,
                 path,
                 scope.context,
@@ -341,7 +345,7 @@ export class StepMiddleware implements Middleware {
             f.head +
               timestamp() +
               f.mid +
-              requestId +
+              trace.traceId +
               f.tailUa +
               quoted(String(request['userAgent'])) +
               `},"statusCode":${response.status},"elapsedMs":${elapsed}}`,
@@ -360,7 +364,7 @@ export class StepMiddleware implements Middleware {
             f.head +
               timestamp() +
               f.mid +
-              requestId +
+              trace.traceId +
               f.tailNoUa +
               elapsed +
               '}',

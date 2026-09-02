@@ -9,7 +9,7 @@ import { HealthClient } from './health.client.js';
 /**
  * Calling out over `fetch`. Three things a bare `fetch` does not do: retry a 503
  * with backoff, raise a non-2xx as an error carrying the parsed body, and forward
- * the inbound request id.
+ * the inbound trace.
  */
 export class UpstreamDemo {
   constructor(

@@ -208,7 +208,7 @@ export class NoMergeLogger extends FormatLogger {
  * This is the ceiling the format experiment is really asking about - no merged
  * entry object, no per-key dispatch, one template literal.
  */
-const KNOWN_SCOPE = ['requestId', 'method', 'event', 'flow', 'context'];
+const KNOWN_SCOPE = ['traceId', 'method', 'event', 'flow', 'context'];
 const KNOWN_FIELDS = ['request', 'statusCode', 'elapsedMs'];
 
 const rest = (
@@ -235,7 +235,7 @@ export class FastJsonLogger extends FormatLogger {
     return (
       `{"level":"${level}","timestamp":"${timestamp()}","pid":${PID},` +
       `"message":${str(message)},` +
-      `"requestId":${str(String(scope.requestId ?? ''))},` +
+      `"traceId":${str(String(scope.traceId ?? ''))},` +
       `"method":${str(String(scope.method ?? ''))},` +
       `"event":${str(String(scope.event ?? ''))},` +
       `"flow":${str(String(scope.flow ?? ''))},` +
@@ -274,7 +274,7 @@ type Compiled = (
   fields: Record<string, unknown> | undefined,
 ) => string;
 
-const SCOPE_KEYS = ['requestId', 'method', 'event', 'flow', 'context'];
+const SCOPE_KEYS = ['traceId', 'method', 'event', 'flow', 'context'];
 const FIELD_KEYS = ['request', 'statusCode', 'elapsedMs', 'err'];
 
 const compile = (
@@ -433,7 +433,7 @@ export class LeanLogger extends FormatLogger {
       level,
       timestamp: timestamp(),
       message,
-      requestId: scope.requestId,
+      traceId: scope.traceId,
       elapsedMs: fields?.['elapsedMs'],
     });
   }
@@ -445,7 +445,7 @@ export class LeanLogger extends FormatLogger {
  *
  * Out go `pid`, constant for the life of the process; `flow`, the constant 'http';
  * and `request.userAgent`, which is a header the caller chooses and the longest
- * single field on the line. `method`, `event`, `context`, `requestId`,
+ * single field on the line. `method`, `event`, `context`, `traceId`,
  * `statusCode` and `elapsedMs` stay, so nothing that a query selects on is lost.
  */
 export class TrimLogger extends FormatLogger {
@@ -459,7 +459,7 @@ export class TrimLogger extends FormatLogger {
       level,
       timestamp: timestamp(),
       message,
-      requestId: scope.requestId,
+      traceId: scope.traceId,
       method: scope.method,
       event: scope.event,
       context: scope.context,

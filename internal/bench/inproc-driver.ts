@@ -10,7 +10,7 @@ const LADDER = [
   'ignored',
   'clock',
   'inbound',
-  'uuid',
+  'mint',
   'scope',
   'als',
   'request',

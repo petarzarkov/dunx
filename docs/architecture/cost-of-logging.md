@@ -21,19 +21,19 @@ running total that disagreed with its own steps: the machine drifts by more than
 most of these rows are worth, so a number is only comparable to the numbers
 measured beside it.
 
-| Step                                       | this step | running total |
-| ------------------------------------------ | --------: | ------------: |
-| the middleware chain                       |    +13 ns |         13 ns |
-| the pathname sliced out of `req.url`       |    +20 ns |         33 ns |
-| the `ignore` and `ignorePrefix` checks     |    +13 ns |         46 ns |
-| `Bun.nanoseconds()`                        |    +97 ns |        143 ns |
-| `x-request-id` read                        |    +80 ns |        223 ns |
-| `crypto.randomUUID()`                      |   +151 ns |        374 ns |
-| the scope object                           |    +28 ns |        402 ns |
-| `runWithContext` around the handler        |   +100 ns |        502 ns |
-| `user-agent` and the request object        |   +143 ns |        645 ns |
-| `.then` and `x-request-id` on the response |   +676 ns |       1321 ns |
-| the `logger.info` call                     |  +3387 ns |       4708 ns |
+| Step                                        | this step | running total |
+| ------------------------------------------- | --------: | ------------: |
+| the middleware chain                        |    +13 ns |         13 ns |
+| the pathname sliced out of `req.url`        |    +20 ns |         33 ns |
+| the `ignore` and `ignorePrefix` checks      |    +13 ns |         46 ns |
+| `Bun.nanoseconds()`                         |    +97 ns |        143 ns |
+| `traceparent` read                          |    +80 ns |        223 ns |
+| `TraceContext.adopt`                        |   +151 ns |        374 ns |
+| the scope object                            |    +28 ns |        402 ns |
+| `runWithContext` around the handler         |   +100 ns |        502 ns |
+| `user-agent` and the request object         |   +143 ns |        645 ns |
+| `.then` and `traceresponse` on the response |   +676 ns |       1321 ns |
+| the `logger.info` call                      |  +3387 ns |       4708 ns |
 
 The running total is the measured figure and the step is the difference between
 two of them, so the column adds up rather than carrying a rounding error per row.
@@ -104,7 +104,7 @@ save, which is its own answer to whether hand-rolled JSON is worth writing.
 
 The socket ladder puts +0.97 us on the first touch of `req.headers`, which would
 make it the second largest item on the path. In the rig above the two header reads
-cost 224 ns together, 80 for `x-request-id` and 144 for `user-agent` with the
+cost 224 ns together, 80 for `traceparent` and 144 for `user-agent` with the
 request object built around it. Probed directly on `Bun.serve`, a handler reading one header
 was within noise of one reading none.
 
@@ -121,8 +121,8 @@ respectively, which is 63% and 64% of what request logging costs.
 Most of the line is the same on every request. `level`, `pid` and `flow` are
 constant for the process; `method`, `event` and `context` are constant for the
 route; `message` is "GET /json 200", so it is constant for the route and the
-status together. Only the timestamp, the request id, the user agent and the
-elapsed milliseconds vary. So the line can be cut into fragments once and roped
+status together. Only the timestamp, the trace, the user agent and the elapsed
+milliseconds vary. So the line can be cut into fragments once and roped
 together per request, which is what the `precomp` rows do.
 
 | Variant                                 | logging ns | saved | % of `bun-serve`, json |
@@ -139,10 +139,10 @@ work at all and still writes 250 bytes, and it lands at 63.6%, against the 63% a
 reaches it. What reaches it is writing less.
 
 The last row does reach it, at 83.8%, and its bill is the whole feature set: no
-`AsyncLocalStorage` scope, so nothing else the request logs carries its id; no
-inbound `x-request-id` honoured and a process-local counter instead of a UUID, so
-an id does not span two services; no `user-agent`; no `x-request-id` on the
-response; and five fields where there were twelve.
+`AsyncLocalStorage` scope, so nothing else the request logs carries its trace; no
+inbound `traceparent` honoured and a process-local counter instead of 16 random
+bytes, so an id does not span two services; no `user-agent`; no `traceresponse` on
+the response; and five fields where there were twelve.
 
 Keeping every field that a log pipeline filters or groups on, the reachable figure
 is **69.3% on json and 68.6% on plaintext**. Dropping only `user-agent` takes it
@@ -448,18 +448,22 @@ floor is about ±0.5 µs, so three of these steps are not resolvable at all.
 | ------------------------------------------------ | -------- |
 | one middleware that only calls `next()`          | +0.05 µs |
 | the pathname sliced out of `req.url`             | +0.73 µs |
-| `x-request-id` and `user-agent` read             | +1.29 µs |
-| `crypto.randomUUID()`                            | +0.04 µs |
+| `traceparent` and `user-agent` read              | +1.29 µs |
+| minting the correlation ids                      | +0.04 µs |
 | `runWithContext` around the handler              | +0.91 µs |
-| `x-request-id` set on the response               | −0.04 µs |
+| the correlation header set on the response       | −0.04 µs |
 | the entry object, the timings, `Logger` dispatch | +0.80 µs |
 | `new Date().toISOString()`, cached per ms        | +0.17 µs |
 | building and serialising the line                | +2.05 µs |
 | the write, batched                               | −0.62 µs |
 
+The three id rows were measured against a `crypto.randomUUID()` pair.
+`TraceContext.adopt` is cheaper - 49.2 ns for a trace id and a span id together,
+against 260.5 ns - so all three are upper bounds.
+
 Three suspicions were wrong, recorded here as wrong:
 
-- **`crypto.randomUUID()` is free.** 0.04 µs, an order of magnitude under the noise
+- **Minting the id is free.** 0.04 µs, an order of magnitude under the noise
   floor, and 90 ns in a hot loop. A per-process prefix plus a counter would save
   nothing measurable and would leak how many requests the process has served.
 - **Losing the direct dispatch path costs nothing measurable.** A bare
@@ -471,10 +475,10 @@ Three suspicions were wrong, recorded here as wrong:
   is the arbiter.
 
 What actually costs: **the first touch of `req.headers`** (1.29 µs - Bun
-materialises the whole header map, and the inbound `x-request-id` is part of the
-contract, so it is irreducible), the **`AsyncLocalStorage` scope** (0.91 µs, the
-mechanism that makes a handler's own log lines carry `requestId`), and **building
-and serialising the entry** (2.05 µs, most of it `JSON.stringify`).
+materialises the whole header map, and the inbound `traceparent` is part of the
+contract, so it is irreducible), the **`AsyncLocalStorage` scope** (0.91 µs, which is
+what makes a handler's own log lines carry `traceId`), and **building and
+serialising the entry** (2.05 µs, most of it `JSON.stringify`).
 
 ### The write was the largest single component, and batching removed it
 
@@ -547,6 +551,44 @@ reach an entry the fast path builds as one literal. The timestamp is cached by
 millisecond: at any rate worth logging, `Date.now()` has not moved since the
 previous entry. `new Date().toISOString()` measured ~170 ns.
 
+### `@arkv/logger` 0.13.0 halves the entry, and is still dearer than `ConsoleLogger`
+
+`@dunx/infra` had been pinned to `^0.10.2`, which for a `0.x` caret means
+`<0.11.0`, so three minor versions of upstream work never arrived. 0.13.0 cuts a
+log call's allocations.
+
+Measured both builds in one process alternating by round, because separate `bun`
+runs drift by more than the change does. A dunx-shaped entry - nine fields
+including the trace triple - with the default transport and stdout on
+`/dev/null`, five rounds, median:
+
+| `@arkv/logger` | ns/entry |
+| -------------- | -------: |
+| 0.10.2         |     4968 |
+| 0.13.0         |     2197 |
+
+**-55.8%.** Upstream reported -35% for `Logger.info`; this entry carries more
+fields, so more of the call is the part that got cheaper.
+
+**None of it reaches the default path.** `ConsoleLogger` in `@dunx/core` is what
+`AppFactory` binds when nothing else claims `Logger`, and it is dunx's own. The
+step decomposition at the top of this document measures that one, not the two rows
+here. `@arkv/logger` arrives only through `@dunx/infra/logger`, so the bump moves
+an app that imported `LoggerModule` and nothing else.
+
+What it costs to import it, same route and same discarded output, 32 connections,
+three rounds, median:
+
+| `Logger` binding                       |  req/s |
+| -------------------------------------- | -----: |
+| `ConsoleLogger` (core default)         | 62,363 |
+| `LoggerModule` (`@arkv/logger` 0.13.0) | 47,852 |
+
+So `LoggerModule` is **23% off** the default path even after the improvement, and
+that is the sanitization: `ConsoleLogger` does not mask, redact or rotate, which
+is the whole reason to swap it out. The number to weigh is that one, not the
+per-entry figure above.
+
 ### Rejected: skipping the entry when the level would drop it
 
 `Logger` exposes `logLevel`, so `RequestLoggingMiddleware` could check at
@@ -557,39 +599,49 @@ which need the same `request` object, which is not known until after `next()`
 resolves. The branch would add a field and a condition to buy nothing on the
 default path.
 
-### Rejected: a cheaper request id
+### Rejected: a cheaper id
 
-Covered above - `crypto.randomUUID()` measured at 0.04 µs, and a counter-based id
-would trade an unmeasurable saving for leaking request volume in a header that is
-returned to the caller.
+Covered above - minting measured at 0.04 µs, and a counter-based id would trade an
+unmeasurable saving for leaking request volume in a header returned to the caller.
 
-### An inbound `x-request-id` is validated rather than trusted
+### One correlation id, and it is W3C Trace Context
 
-It used to be `req.headers.get(REQUEST_ID_HEADER) ?? crypto.randomUUID()`, so
-`curl -H 'x-request-id: MY-OWN-ID'` was echoed on the response and written into
-every line the request produced. That is a caller-supplied string on a trust
-boundary: it can carry a newline, be a megabyte long, or be set to somebody else's
-trace id knowingly. `nestjs-template` ran `isUuid()` on it first. dunx adopted the
-same check, the accepted shape matching what this middleware mints.
+There is no second id beside `traceId`. Anything a service needs to correlate by
+is in `traceparent` on the way in, in the async scope while the request runs, and
+in `traceresponse` on the way out. A private id alongside it would be a second
+value per line that always agreed with the first.
 
-Any UUID version passes; the check reads the layout rather than the version nibble, because
-an upstream service minting v7 is not a threat model. The order matters more than
-the regex: `inbound !== null` first, then `length === 36`, then the pattern. The
-common request carries no header at all and pays one comparison. Measured in
-isolation at 2M iterations, validating a present header costs **~40 ns** and the
-no-header path is unchanged - two orders of magnitude below the ±0.5 µs the harness
-can resolve, and below the `crypto.randomUUID()` call that follows it either way.
+Three things about the shape are decisions rather than details:
+
+- **Minting is 49.2 ns** for a trace id and a span id together, through
+  `Uint8Array.prototype.toHex`, against 260.5 ns for a `crypto.randomUUID()` pair.
+  `toHex` exists on Bun 1.4.0 and typechecks under the root tsconfig's
+  `lib: ESNext`.
+- **A malformed `traceparent` is discarded, not repaired**, which the standard
+  requires and which is also the trust boundary: it is a caller-supplied string
+  that reaches every line the request writes. An all-zero trace id, an all-zero
+  span id and the reserved version `ff` are each rejected.
+- **The response header is `traceresponse`**, carrying the span that answered. It
+  is a W3C Distributed Tracing Working Group proposal rather than a ratified
+  standard - the published Trace Context Level 2 draft covers `traceparent` and
+  `tracestate`, both request headers - so it is a specified format with thin
+  adoption, not a guarantee that a caller reads it. `traceResponse: false` drops
+  it, which is ~500 ns.
+
+The sampling decision travels as it arrived: `traceFlags` is in the scope and the
+outbound client forwards it, so a trace an upstream sampler declined is not
+re-sampled at this hop. `tracestate` is forwarded unchanged for the same reason.
 
 ### `ignore` skips everything, and `correlateIgnored` buys back the half worth having
 
 `ignore` returns `next()` before anything else happens, which makes it free. It
-also means an ignored path has no `x-request-id` and no `AsyncLocalStorage`
+also means an ignored path has no `traceresponse` and no `AsyncLocalStorage`
 scope, so a health check's own log lines were uncorrelated, and guide 12 claimed
-the id was "always set on the response". Splitting `ignore` into two lists was
+the trace was "always set on the response". Splitting `ignore` into two lists was
 rejected: the cost is not the path list, it is the work, and a second list would
 still not say which work. `correlateIgnored: boolean` names the work instead.
 
-On an ignored path it pays for the header read, the id, the scope and one
+On an ignored path it pays for the header read, the trace, the scope and one
 `Headers.set` - the four rows above that sum to ~2.2 µs of the ~5.4 the full
 path costs, and never for the entry, the expensive half. Default
 `false`, so the shipped hot path is unchanged.
@@ -617,8 +669,8 @@ logging's own entry, so the mapper's line earns its place alongside it.
 The remaining ~5.4 µs over `requestLogging: false` is **~1.3 µs of
 `req.headers`, ~0.9 µs of `AsyncLocalStorage`, ~2.1 µs of entry construction
 and `JSON.stringify`**, and ~0.7 µs of reading `req.url`. The first two are the
-contract: an inbound `x-request-id` has to be honoured and a handler's own log
-lines have to carry the id. The third is the one with room left, and the
+contract: an inbound `traceparent` has to be honoured and a handler's own log
+lines have to carry the trace. The third is the one with room left, and the
 obvious move - hand-rolling a serialiser instead of `JSON.stringify` - is a
 JavaScript reimplementation of a platform primitive with string escaping to get
 wrong.

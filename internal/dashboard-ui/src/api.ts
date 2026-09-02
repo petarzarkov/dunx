@@ -4,6 +4,7 @@ import type {
   RedisReport,
   RuntimeReport,
   Snapshot,
+  StatsReport,
 } from '../../../packages/dashboard/src/api/types';
 
 export type {
@@ -13,12 +14,20 @@ export type {
   ModuleNode,
   ProbeReport,
   ProviderNode,
+  DbQueryStats,
+  DbStatsReport,
+  HistogramSnapshot,
+  HttpStatsReport,
   QueuesReport,
   RedisAbsent,
   RedisReport,
   RouteNode,
+  RouteStats,
   RuntimeReport,
   Snapshot,
+  StatsAbsent,
+  StatsHalf,
+  StatsReport,
 } from '../../../packages/dashboard/src/api/types';
 
 /**
@@ -91,5 +100,9 @@ export class Api {
 
   async redis(): Promise<RedisReport | RedisAbsent> {
     return (await request(this.#url('/redis'))) as RedisReport | RedisAbsent;
+  }
+
+  async stats(): Promise<StatsReport> {
+    return (await request(this.#url('/stats'))) as StatsReport;
   }
 }

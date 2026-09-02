@@ -20,6 +20,7 @@ export const PANELS = [
   'gateways',
   'graph',
   'queues',
+  'stats',
   'config',
 ] as const;
 

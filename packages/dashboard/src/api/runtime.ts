@@ -1,3 +1,4 @@
+import { RuntimeStats } from '@dunx/core';
 import type { DashboardProbe, ProbeResult } from '../contracts.js';
 import type { DashboardOptions } from '../options.js';
 import { bounded } from './bounded.js';
@@ -60,16 +61,6 @@ export const redisProbe = (
   },
 });
 
-const memory = (): RuntimeReport['memory'] => {
-  const usage = process.memoryUsage();
-  return {
-    rss: usage.rss,
-    heapUsed: usage.heapUsed,
-    heapTotal: usage.heapTotal,
-    external: usage.external,
-  };
-};
-
 export const runtimeReport = async (
   options: DashboardOptions,
   startedAt: number,
@@ -79,16 +70,15 @@ export const runtimeReport = async (
     ...options.probes,
   ];
 
+  // `RuntimeStats` owns every process reader now that the health module wants
+  // the same ones. `uptimeMs` still counts from when the middleware was
+  // constructed rather than from `process.uptime()`, which counts from the
+  // interpreter starting - a difference that matters in a process that spent
+  // thirty seconds running migrations before it served.
+  const { now: _iso, ...process_ } = new RuntimeStats(startedAt).snapshot();
+
   return {
-    pid: process.pid,
-    // From when the middleware was constructed rather than `process.uptime()`,
-    // which counts from the interpreter starting - a difference that matters in a
-    // process that spent thirty seconds running migrations before it served.
-    uptimeMs: Math.round(performance.now() - startedAt),
-    bun: Bun.version,
-    platform: process.platform,
-    arch: process.arch,
-    memory: memory(),
+    ...process_,
     // Concurrent, and each already bounded, so the endpoint costs the slowest
     // probe rather than their sum.
     probes: await Promise.all(

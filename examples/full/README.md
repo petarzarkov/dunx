@@ -251,7 +251,9 @@ middleware wraps `next()`, so the request and its response go out together:
 {
   "level": "info",
   "message": "POST /api/ledger 201",
-  "requestId": "trace-9",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "spanId": "00f067aa0ba902b7",
+  "traceFlags": "01",
   "method": "POST",
   "event": "/api/ledger",
   "flow": "http",
@@ -263,13 +265,14 @@ middleware wraps `next()`, so the request and its response go out together:
 }
 ```
 
-One line to grep, one line to ship, and no correlating a pair by `requestId` to
+One line to grep, one line to ship, and no correlating a pair by `traceId` to
 find out how a call ended. A 4xx is the same line at `warn`, a 5xx at `error`.
 
-Everything the *handler* logs in between still carries `requestId`, `method`,
+Everything the *handler* logs in between still carries `traceId`, `method`,
 `event` and `context` without being passed anything, because `ContextStore` is an
-`AsyncLocalStorage`. An inbound `x-request-id` is honoured so a trace survives
-across services; otherwise one is minted and returned on the response.
+`AsyncLocalStorage`. An inbound `traceparent` is continued so one trace spans both
+services; otherwise a fresh trace is minted, and either way the answering span
+goes back as `traceresponse`.
 
 An unmatched path is logged too. Bun answers a miss itself, and the middleware
 chain would never see it, so `@dunx/http` installs one `fetch` fallback that puts

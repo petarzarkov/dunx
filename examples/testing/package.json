@@ -14,7 +14,7 @@
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/transform": "workspace:*",
-    "zod": "^4.5.4"
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@dunx/testing": "workspace:*"

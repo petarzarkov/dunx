@@ -2,6 +2,7 @@ import { Module } from '@dunx/core';
 import {
   DbConnection,
   DbModule,
+  QueryMetrics,
   SyncDatabase,
   SyncSqliteOptions,
 } from '@dunx/infra/db';
@@ -18,18 +19,24 @@ import * as schema from './schema.js';
     // `SyncSqliteOptions` runs SQLite in synchronous mode, so the token is
     // `SyncDatabase` and `transactionSync` is reachable. `SqliteOptions` is the
     // default and what an app wants if it might move to Postgres.
-    DbModule.forRootAsync(SyncDatabase, {
-      useFactory: (config: AppConfigService) =>
-        new SyncSqliteOptions({
-          // Required: the type argument every constructor below sees.
-          schema,
-          // A dotted path, checked against AppConfig the same way a top-level
-          // key is. `config.get('database').file` still reads the same value.
-          filename: config.get('database.file'),
-          pragmas: ['foreign_keys = ON'],
-        }),
-      inject: [AppConfigService],
-    }),
+    DbModule.forRootAsync(
+      SyncDatabase,
+      {
+        useFactory: (config: AppConfigService) =>
+          new SyncSqliteOptions({
+            // Required: the type argument every constructor below sees.
+            schema,
+            // A dotted path, checked against AppConfig the same way a top-level
+            // key is. `config.get('database').file` still reads the same value.
+            filename: config.get('database.file'),
+            pragmas: ['foreign_keys = ON'],
+          }),
+        inject: [AppConfigService],
+      },
+      // Times every query the driver runs, readable through `QueryMetrics` and
+      // shown on the dashboard's stats panel. Off by default.
+      { metrics: true },
+    ),
   ],
   controllers: [LedgerController],
   providers: [Ledger],
@@ -37,6 +44,6 @@ import * as schema from './schema.js';
    * Re-exported so importers can inject it. `DbModule` exports to this module
    * only; naming it again passes it on.
    */
-  exports: [SyncDatabase, DbConnection, Ledger],
+  exports: [SyncDatabase, DbConnection, Ledger, QueryMetrics],
 })
 export class DatabaseModule {}

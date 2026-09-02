@@ -123,7 +123,7 @@ describe('global middleware from an HttpOptionsProvider', () => {
 
     try {
       const { headers } = await server.request('weather/oslo');
-      expect(headers.get('x-request-id')).toBeTruthy();
+      expect(headers.get('server-timing')).toMatch(/^handler;dur=/);
       // Omitting `middleware` is correct here: the provider supplies it.
       expect(lines).toEqual([]);
     } finally {

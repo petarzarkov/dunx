@@ -22,7 +22,7 @@
   ],
   "type": "module",
   "scripts": {
-    "prepare": "husky || true",
+    "prepare": "bun scripts/install-hooks.ts",
     "install:clean": "find . -name node_modules -type d -prune -exec rm -rf {} + && rm -f bun.lock && bun install",
     "build": "bun scripts/build-all.ts",
     "ci": "bun ./scripts/ci.ts",
@@ -43,22 +43,12 @@
     "version:dry-run": "DRY_RUN=true bun ./scripts/version.ts"
   },
   "devDependencies": {
+    "@stagelint/stagelint": "0.1.4",
     "@types/bun": "1.4.0",
-    "@types/node": "26.2.0",
-    "husky": "9.1.7",
-    "lint-staged": "17.3.0",
-    "oxfmt": "0.64.0",
-    "oxlint": "1.79.0",
+    "@types/node": "26.4.1",
+    "oxfmt": "0.66.0",
+    "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
     "typescript": "7.0.2"
-  },
-  "lint-staged": {
-    "*.{ts,tsx,mts,cts}": [
-      "oxlint --fix --no-error-on-unmatched-pattern",
-      "oxfmt --no-error-on-unmatched-pattern"
-    ],
-    "*.{js,jsx,mjs,cjs,json,jsonc,md}": [
-      "oxfmt --no-error-on-unmatched-pattern"
-    ]
   }
 }

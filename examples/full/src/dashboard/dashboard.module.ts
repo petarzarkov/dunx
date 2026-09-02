@@ -1,9 +1,12 @@
 import { Module } from '@dunx/core';
 import { DashboardModule } from '@dunx/dashboard';
+import { RequestMetrics } from '@dunx/http';
+import { QueryMetrics } from '@dunx/infra/db';
 import { JobPublisher } from '@dunx/infra/queue';
 import { RedisConnection } from '@dunx/infra/redis';
 import { AppConfigService } from '../config.js';
 import { CacheModule } from '../cache/cache.module.js';
+import { DatabaseModule } from '../database/database.module.js';
 import { AppIndicators } from '../health/indicators.js';
 import { IndicatorsModule } from '../health/health.module.js';
 import { JobsModule } from '../jobs/jobs.module.js';
@@ -23,12 +26,14 @@ import { DashboardDemo } from './dashboard.demo.js';
     DashboardModule.forRootAsync({
       // The dynamic module is its own scope, so what the factory injects is
       // imported here rather than on OpsModule.
-      imports: [JobsModule, CacheModule, IndicatorsModule],
+      imports: [JobsModule, CacheModule, IndicatorsModule, DatabaseModule],
       useFactory: (
         queues: JobPublisher,
         redis: RedisConnection,
         config: AppConfigService,
         indicators: AppIndicators,
+        stats: RequestMetrics,
+        dbStats: QueryMetrics,
       ) => ({
         // Spelled out: the global prefix covers discovered routes, and this is
         // a middleware.
@@ -41,6 +46,10 @@ import { DashboardDemo } from './dashboard.demo.js';
         redis,
         // The same checks `/api/health/ready` runs, declared once.
         probes: indicators.dashboardProbes,
+        // `metrics: true` on HttpFactory.create and on DbModule is what puts
+        // anything in these; without it the panel says so rather than lying.
+        stats,
+        dbStats,
         config,
         // Keys only, except two that are safe to read. Everything else stays
         // redacted, including the database url and every secret.
@@ -52,6 +61,8 @@ import { DashboardDemo } from './dashboard.demo.js';
         RedisConnection,
         AppConfigService,
         AppIndicators,
+        RequestMetrics,
+        QueryMetrics,
       ] as const,
     }),
   ],

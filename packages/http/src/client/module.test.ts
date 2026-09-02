@@ -80,7 +80,7 @@ describe('HttpModule.forRoot', () => {
     const app = await AppFactory.create(AppModule);
     const options = app.get(HttpClientOptions);
     expect(options.timeoutMs).toBe(30_000);
-    expect(options.requestIdHeader).toBe('x-request-id');
+    expect(options.propagateTrace).toBe(true);
     expect(options.baseUrl).toBeUndefined();
     await app.shutdown();
   });

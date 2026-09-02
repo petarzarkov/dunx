@@ -66,10 +66,8 @@ export class AppHttpOptions extends HttpOptionsProvider {
       responseBody: log.responseBody,
       // The dashboard polls every five seconds and would bury everything else.
       ignorePrefix: ['/api/_dunx'],
-      // ~360 ns per request, so off by default. On here so `traceId` joins
-      // `requestId` and `@dunx/http/client` forwards it upstream.
-      trace: true,
-      requestIdHeader: true,
+      // `trace` and `traceResponse` are not set: both are on by default, and
+      // `TraceController` reading the trace back proves it.
     };
   }
 }

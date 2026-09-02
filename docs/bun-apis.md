@@ -344,6 +344,73 @@ auto-instrumentation sees none of those four. Tracing here would be spans dunx e
 against `@opentelemetry/api` at the seams it already owns: the request middleware, the
 job processor, the Redis wrapper.
 
+#### The propagation half does work, and dunx interoperates with it
+
+Re-probed on 1.4.0 with `@opentelemetry/api` 1.9.1, `sdk-trace-node` 2.11.0 and
+`W3CTraceContextPropagator`. Every result below is asserted by
+`packages/http/src/server/otel-interop.test.ts`, which runs against a real
+`Bun.serve`:
+
+| Probe                                           | Result                                            |
+| ----------------------------------------------- | ------------------------------------------------- |
+| `NodeTracerProvider.register()` and `startSpan` | works; spans reach an `InMemorySpanExporter`      |
+| `propagation.inject`                            | emits `00-<32 hex>-<16 hex>-01`                   |
+| `propagation.extract` of a header dunx wrote    | yields a span context with `isRemote: true`       |
+| a child span started from that context          | joins the trace, dunx's span as `parentSpanId`    |
+| `context.with(...)` across an `await Bun.sleep` | survives                                          |
+| all-zero trace id                               | the SDK rejects it too - `getSpanContext` is void |
+
+So the SDK and `TraceContext` agree on the wire in both directions with no adapter.
+There is **no** `Bun.*` or `bun:*` trace API on 1.4.0: `Bun` has no trace-ish key,
+`globalThis` has none, and `bun:otel`, `bun:telemetry` and `bun:trace` do not
+resolve. `node:diagnostics_channel` exists, including `tracingChannel`.
+
+### `Uint8Array.prototype.toHex` exists and is the fastest hex on 1.4
+
+TC39 `Uint8Array` base16, present with `fromHex` alongside it, and it typechecks
+under the root tsconfig's `lib: ESNext` with no cast.
+
+```text
+crypto.randomUUID().replaceAll('-','')          223.4 ns
+Buffer.from(getRandomValues(16)).toString('hex') 112.6 ns
+getRandomValues(24) -> toHex + 2 slices           49.2 ns
+```
+
+Minting a W3C trace id and span id together is 49.2 ns, against 260.5 ns for the
+`crypto.randomUUID()` path it replaced.
+
+### `node:perf_hooks` histograms - four edges, unchanged on 1.4.0
+
+`createHistogram()` and `monitorEventLoopDelay()` both work and are undocumented on
+Bun's side. Re-measured on 1.4.0: `record()` **11.1 ns**, `percentile(99)` **3.9
+us**, `mean` **42.2 us**, `process.memoryUsage()` **12.7 us**.
+
+| Edge                       | Behaviour                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| `record(0)` / `record(-1)` | `RangeError [ERR_OUT_OF_RANGE]`. Clamp to 1.                                     |
+| empty histogram            | `min` 9223372036854776000, `mean` `NaN`, `max` 0. Never serialise `count === 0`. |
+| `percentiles`              | a `Map` of `bigint`, so `JSON.stringify` yields `{}` with **no error**           |
+| `toJSON`                   | absent under Bun                                                                 |
+
+The `percentiles` result corrects an earlier note: it does not throw. Extracting a
+value and stringifying that does (`JSON.stringify cannot serialize BigInt`), but
+serialising the Map is silent data loss. `percentile(n)` returns a `number`.
+
+`process.memoryUsage()` reports `heapUsed` **larger** than `heapTotal` routinely
+under JSC - 9.6 MB against 7.1 MB was one observed pair - so an assertion that
+`heapTotal >= heapUsed` fails intermittently.
+
+### `Bun.SQL`'s client is a function, and `unsafe()` is lazy
+
+`typeof new Bun.SQL(url)` is `'function'`, not `'object'`: the client is callable as
+a tagged template. A `typeof x === 'object'` guard skips the whole Postgres backend.
+
+`client.unsafe(sql, params)` returns a `Query` that is `instanceof Promise` but does
+**not** execute until it is awaited. Its prototype carries `execute`, `run`, `raw`,
+`simple`, `values`, `then`, `catch`, `finally`. Attaching `.finally()` to time it
+**starts the query**; wrapping `then` does not, and the first `then` is the moment
+execution begins. Verified against a live Postgres 16.
+
 ### `Bun.deflateSync` and `CompressionStream('deflate')` disagree on the format
 
 `Content-Encoding: deflate` means zlib (RFC 1950). Bun's two encoders produce
