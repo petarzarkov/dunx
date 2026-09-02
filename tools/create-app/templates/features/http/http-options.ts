@@ -70,12 +70,4 @@ export class AppHttpOptions extends HttpOptionsProvider {
       // `TraceController` reading the trace back proves it.
     };
   }
-
-  /**
-   * Per-route counts and timings, folded into the entry request logging already
-   * builds. The dashboard's stats panel reads them.
-   */
-  override get metrics(): boolean {
-    return true;
-  }
 }

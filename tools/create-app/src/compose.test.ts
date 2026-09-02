@@ -111,6 +111,25 @@ describe('a composed app', () => {
     expect(env).toContain('TRUST_PROXY=false');
   });
 
+  /**
+   * `metrics: true` comes from the generator when `stats` is chosen, and from
+   * nowhere else. It used to sit on `AppHttpOptions` in `examples/full`, which is
+   * vendored into the `http` feature - so picking `http` turned metrics on for an
+   * app that never asked, and `stats` had nothing left to do.
+   */
+  test('enables metrics for stats and for no other selection', async () => {
+    const { read: withStats } = await compose(['stats']);
+    expect(await withStats('src/main.ts')).toContain('metrics: true');
+
+    for (const selection of [['http'], ['notes'], ['database']]) {
+      const { read } = await compose(selection);
+      expect(await read('src/main.ts')).not.toContain('metrics: true');
+      expect(
+        await read('src/http/http-options.ts').catch(() => ''),
+      ).not.toContain('metrics');
+    }
+  });
+
   test('adds a dependency per feature and resolves the dunx version', async () => {
     const { read } = await compose(['auth']);
     const manifest = JSON.parse(await read('package.json')) as {

@@ -22,7 +22,9 @@ export class ServerTiming implements Middleware {
     const response = await next();
     const ms = (Bun.nanoseconds() - started) / 1e6;
     const headers = new Headers(response.headers);
-    headers.set('server-timing', `handler;dur=${ms.toFixed(1)}`);
+    // `append`, not `set`: `Server-Timing` is a list, so a route that reported a
+    // metric of its own keeps it.
+    headers.append('server-timing', `handler;dur=${ms.toFixed(1)}`);
     return new Response(response.body, { status: response.status, headers });
   }
 }

@@ -67,6 +67,10 @@ export const createApp = async (): Promise<HttpApp> => {
        * (`http/http-options.ts`). This is the last literal.
        */
       websocket: { idleTimeout: 30 },
+      // Not on `AppHttpOptions`: that file is vendored into `@dunx/create-app`'s
+      // `http` feature, and an override there would turn metrics on for every
+      // scaffold that picked `http` without picking `stats`.
+      metrics: true,
     },
   );
 
