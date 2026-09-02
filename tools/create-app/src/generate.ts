@@ -76,18 +76,19 @@ export const manifest = (features: readonly Feature[]): string => {
 };
 
 /**
- * Third-party ranges, pinned here rather than read off `examples/full` at run time:
+ * Third-party versions, exact for the reason dunx's own manifests are, and
+ * written here rather than read off `examples/full` at run time:
  * the generated app installs from npm and the example installs from the workspace,
  * so the example's manifest is not a statement about what a consumer should take.
  * `features.test.ts` checks these against the example's, which is what stops them
  * silently diverging from a version combination that is actually exercised.
  */
 export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
-  zod: '^4.4.3',
-  'drizzle-orm': '^0.45.2',
-  'better-auth': '^1.6.25',
-  bullmq: '^6.0.5',
-  ioredis: '^6.0.0',
+  zod: '4.5.4',
+  'drizzle-orm': '0.45.2',
+  'better-auth': '1.6.25',
+  bullmq: '6.0.5',
+  ioredis: '6.0.0',
 });
 
 const versionOf = (dep: string): string => THIRD_PARTY[dep] ?? 'latest';

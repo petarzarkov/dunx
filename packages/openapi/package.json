@@ -48,13 +48,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "swagger-ui-dist": "^5.32.14"
+    "swagger-ui-dist": "5.32.14"
   },
   "devDependencies": {
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/testing": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "4.5.4"
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",

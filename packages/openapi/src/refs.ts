@@ -54,6 +54,56 @@ export const collectRefs = (
 };
 
 /**
+ * The components reachable from the rest of the document, following refs between
+ * components too, so a definition used only by another definition survives.
+ *
+ * Needed because a schema can reach `components/schemas` without anything
+ * referencing it: zod 4.5 emits any root carrying `.meta({ id })` into `$defs`,
+ * and a `params` or `query` schema is expanded into `parameters` rather than
+ * referenced, so a named one would leave an orphan behind. zod 4.4 inlined that
+ * root and left nothing.
+ */
+export const reachableComponents = (
+  document: unknown,
+  schemas: Readonly<Record<string, unknown>>,
+): Set<string> => {
+  const nameOf = (ref: string): string | undefined =>
+    ref.startsWith(COMPONENTS_PREFIX)
+      ? ref.slice(COMPONENTS_PREFIX.length)
+      : undefined;
+
+  // Seeded from everything but `components`, so a component referencing itself
+  // does not keep itself alive.
+  const { components: _components, ...rest } = document as Record<
+    string,
+    unknown
+  >;
+  const reached = new Set<string>();
+  const queue: string[] = [];
+
+  for (const ref of collectRefs(rest)) {
+    const name = nameOf(ref);
+    if (name !== undefined && !reached.has(name)) {
+      reached.add(name);
+      queue.push(name);
+    }
+  }
+
+  while (queue.length > 0) {
+    const current = queue.pop() as string;
+    for (const ref of collectRefs(schemas[current])) {
+      const name = nameOf(ref);
+      if (name !== undefined && !reached.has(name)) {
+        reached.add(name);
+        queue.push(name);
+      }
+    }
+  }
+
+  return reached;
+};
+
+/**
  * Every `$ref` in the document that does not land on a present
  * `components/schemas` entry. A dangling `$ref` is the usual way generated OpenAPI
  * is silently broken - a viewer renders an empty box and says nothing - so this is
@@ -122,6 +172,15 @@ export class SchemaStore {
       );
     }
     return name;
+  }
+
+  /**
+   * A definition already hoisted, by name. `convertObject` needs it because zod
+   * 4.5 emits a named root as a bare `$ref` into `$defs` rather than inline, and
+   * parameters have to be expanded from the object itself.
+   */
+  get(name: string): JsonSchema | undefined {
+    return this.#schemas.get(name);
   }
 
   snapshot(): Record<string, JsonSchema> {

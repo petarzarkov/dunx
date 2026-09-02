@@ -108,9 +108,12 @@ describe('a composed app', () => {
       scripts: Record<string, string>;
     };
 
+    // dunx's own packages keep a range, so a scaffolded app picks up patches.
     expect(manifest.dependencies['@dunx/auth']).toBe('^9.9.9');
-    expect(manifest.dependencies['better-auth']).toMatch(/^\^\d/);
-    expect(manifest.dependencies['drizzle-orm']).toMatch(/^\^\d/);
+    // Third-party versions are exact, and `features.test.ts` ties them to the
+    // combination `examples/full` is actually tested against.
+    expect(manifest.dependencies['better-auth']).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(manifest.dependencies['drizzle-orm']).toMatch(/^\d+\.\d+\.\d+$/);
     // Not selected, so not installed.
     expect(manifest.dependencies['bullmq']).toBeUndefined();
     expect(manifest.scripts['worker']).toBeUndefined();

@@ -1,0 +1,13 @@
+# Replaces husky + lint-staged: one Rust binary, no runtime, and it three-way
+# merges a formatter's output into a partially staged file instead of refusing
+# the commit.
+#
+# The commands are the bare binaries, never `bun run lint` / `bun run format`.
+# Those end in `.`, and the staged paths are appended, so `oxlint --fix . <files>`
+# would lint the whole repo on every commit and fail on unrelated pre-existing
+# errors.
+'*.{ts,tsx,mts,cts}':
+  - oxlint --fix --no-error-on-unmatched-pattern
+  - oxfmt --no-error-on-unmatched-pattern
+
+'*.{js,jsx,mjs,cjs,json,jsonc,md}': oxfmt --no-error-on-unmatched-pattern

@@ -16,22 +16,22 @@
   },
   "dependencies": {
     "@dunx/ui": "workspace:*",
-    "@mantine/charts": "^8.3.6",
-    "@mantine/core": "^8.3.6",
-    "@mantine/hooks": "^8.3.6",
-    "@mantine/spotlight": "^8.3.6",
+    "@mantine/charts": "8.3.18",
+    "@mantine/core": "8.3.18",
+    "@mantine/hooks": "8.3.18",
+    "@mantine/spotlight": "8.3.18",
     "oxc-parser": "0.142.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "recharts": "^3.10.1",
-    "shiki": "^4.4.1"
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "recharts": "3.10.1",
+    "shiki": "4.4.1"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.11.1",
-    "@testing-library/react": "^16.3.2",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2",
-    "@vitejs/plugin-react": "^6.0.5",
-    "vite": "^8.2.0"
+    "@happy-dom/global-registrator": "20.11.1",
+    "@testing-library/react": "16.3.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.0.5",
+    "vite": "8.2.0"
   }
 }

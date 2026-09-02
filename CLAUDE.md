@@ -149,6 +149,29 @@ record what you verify there.
 - Run scripts with `bun run <script>`.
 - Execute TypeScript files directly with `bun <file.ts>`.
 - Install dependencies with `bun install` (use `--frozen-lockfile` in CI).
+- Update everything with `bun update --latest` from the repo root. It does reach
+  every workspace, and it will **not** rewrite a manifest whose range already
+  covers the new version, which is half the reason for the rule below.
+
+### Exact versions, and the one exemption
+
+**`dependencies`, `devDependencies` and `optionalDependencies` carry a bare
+`1.2.3`. No `^`, no `~`, and no `>=`.** A manifest should say what is installed;
+with a range it does not. `bun update --latest` moved zod from 4.4.3 to 4.5.4 and
+left every `^4.4.3` manifest untouched, and `^5.6.1` had been reading as fastify
+5.11.0 for months.
+
+Enforced by `scripts/exact-versions.test.ts`, which also fails when a pin does not
+match what is in `node_modules`, so a hand-edited version no install has seen is
+caught too.
+
+**`peerDependencies` stay ranges, and pinning one is also a failure.** A peer says
+which versions the package works with rather than which one it chose. An exact
+peer makes a consumer's patch bump of zod, drizzle or better-auth an install
+conflict, and dunx's own reproducibility comes from its lockfile, not from a peer
+range. The same guard checks this direction.
+
+`workspace:*` is exempt in both: the version is the workspace's own.
 
 ## Monorepo Structure
 
@@ -491,11 +514,24 @@ Every package manifest needs `"type": "module"`. Without it,
   types every matcher `: void` so `await expect(...).rejects.toThrow()` reads as
   awaiting nothing - measured, in docs/bun-apis.md. `max-lines` is 500, raised to
   800 for test files where length is usually more cases rather than more branches.
-- Pre-commit hook runs lint-staged: lints then formats staged `.ts` files. Its
-  entries are the **bare binaries** (`oxlint --fix`, `oxfmt`), not `bun run lint` /
-  `bun run format` - those end in `.`, and lint-staged _appends_ the staged paths, so
-  `oxlint --fix . <files>` linted the whole repo on every commit and failed on
-  unrelated pre-existing errors.
+- **Git hooks are `scripts/install-hooks.ts` plus `stagelint`. There is no husky
+  and no lint-staged.** `prepare` runs the script, which writes `pre-commit` and
+  `pre-push` into the repository's hooks directory; `.stagelint.yml` says what
+  runs over the staged files.
+  - Its entries are the **bare binaries** (`oxlint --fix`, `oxfmt`), not
+    `bun run lint` / `bun run format` - those end in `.`, and the staged paths are
+    _appended_, so `oxlint --fix . <files>` linted the whole repo on every commit
+    and failed on unrelated pre-existing errors. That trap is unchanged.
+  - `@stagelint/stagelint` is one Rust binary with zero dependencies, replacing
+    two JavaScript tools. Measured on this repo's config, 10 staged files in a
+    1,000-file tree: **34-39 ms against lint-staged's 186-255 ms**.
+  - The reason that matters more than the speed: a formatter rewriting a
+    **partially staged** file no longer blocks the commit. lint-staged discarded
+    the formatting and failed; stagelint three-way merges, so the staged lines get
+    formatted and the unstaged edit stays in the working tree.
+  - The script writes into `--git-common-dir`, not `core.hooksPath`. That is what
+    husky used, and it is why hooks silently did nothing in a linked worktree: the
+    path was relative and `.husky/_` was gitignored.
 - **Type-aware lint needs `dist/` built.** `oxlint` resolves a workspace import
   through the package's `types` entry, so an unbuilt or stale `dist/` reads as
   `TS2307: Cannot find module '@dunx/...'` or a missing export, in files nobody

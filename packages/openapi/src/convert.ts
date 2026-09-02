@@ -207,6 +207,21 @@ export interface Converted {
 }
 
 /**
+ * The definition a root `$ref` points at, when the root is nothing but that ref.
+ * `undefined` for any other shape, including a ref the store does not hold.
+ */
+const resolved = (
+  root: JsonSchema,
+  store: SchemaStore,
+): JsonSchema | undefined => {
+  const ref = root['$ref'];
+  if (typeof ref !== 'string' || !ref.startsWith(COMPONENTS_PREFIX)) {
+    return undefined;
+  }
+  return store.get(ref.slice(COMPONENTS_PREFIX.length));
+};
+
+/**
  * The body case, and the response case with `io: 'output'`: a named schema becomes
  * a `components/schemas` entry and a `$ref`, an anonymous one is inlined where it
  * is used. One contract for both directions, so a response schema is hoisted
@@ -231,6 +246,12 @@ export const convertSchema = async (
     };
   }
   if (id === undefined) return { schema: root };
+  // zod 4.5 emits a named root as a bare `$ref` into `$defs`, which `convertRoot`
+  // has already hoisted and repointed - so the ref is the answer. Adding it again
+  // under the same name would register `Link` as a ref to itself and warn about
+  // two schemas claiming one name. zod 4.4 inlined the object, and still does the
+  // branch below.
+  if (resolved(root, store) !== undefined) return { schema: root };
   return { schema: refTo(store.add(id, root)) };
 };
 
@@ -269,7 +290,13 @@ export const convertObject = async (
   // nothing else would ever create it.
   if (selfReferential === true && id !== undefined) store.add(id, root);
 
-  const properties = root['properties'];
+  // zod 4.5 emits a named or cyclic root as a bare `$ref` into `$defs`, where 4.4
+  // inlined the object and put `$ref: "#"` inside it. Both are valid and the peer
+  // range is `^4`, so the ref is followed rather than either shape being assumed.
+  // A `$ref` cannot be split into `parameters` entries.
+  const object = resolved(root, store) ?? root;
+
+  const properties = object['properties'];
   if (typeof properties !== 'object' || properties === null) {
     store.warn(
       `${fallbackName}: the schema is not an object, so it describes no ` +
@@ -278,7 +305,7 @@ export const convertObject = async (
     return { properties: {}, required: [] };
   }
 
-  const required = root['required'];
+  const required = object['required'];
   return {
     properties: properties as Readonly<Record<string, JsonSchema>>,
     required: Array.isArray(required)
