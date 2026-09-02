@@ -280,16 +280,22 @@ export const bootstrap = (
     })`
       : 'AppModule';
 
-  const options = websockets
-    ? [
-        '// Multi-node websocket fan-out on `Bun.RedisClient`, so it costs no',
-        '// dependency. With no Redis running this degrades to single-process',
-        '// behaviour, logs one warning, and the app still boots.',
-        'websocket: { idleTimeout: 30 },',
-        'relay: new RedisRelay({ connectionTimeout: 500 }),',
-        'relayChannel: RELAY_CHANNEL,',
-      ]
-    : [];
+  const options = [
+    // Per-route counts and timings, folded into the entry request logging already
+    // builds: +35.2 ns a request. `DbModule` is scaffolded with `metrics: true`
+    // to match, so `QueryMetrics` has something in it.
+    ...(has(features, 'stats') ? ['metrics: true,'] : []),
+    ...(websockets
+      ? [
+          '// Multi-node websocket fan-out on `Bun.RedisClient`, so it costs no',
+          '// dependency. With no Redis running this degrades to single-process',
+          '// behaviour, logs one warning, and the app still boots.',
+          'websocket: { idleTimeout: 30 },',
+          'relay: new RedisRelay({ connectionTimeout: 500 }),',
+          'relayChannel: RELAY_CHANNEL,',
+        ]
+      : []),
+  ];
 
   /**
    * Everything between `create()` and `listen()`. The prefix is set whatever is

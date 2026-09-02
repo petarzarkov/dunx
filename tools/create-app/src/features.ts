@@ -337,6 +337,18 @@ export const FEATURES: readonly Feature[] = [
     config: [],
   },
   {
+    name: 'stats',
+    source: 'stats',
+    summary:
+      'Per-route request timings and per-operation query timings, as JSON.',
+    // `QueryMetrics` comes from `DbModule`, so the database has to be there for
+    // the query half to exist at all.
+    requires: ['database'],
+    module: { klass: 'StatsModule', from: './stats/stats.module.js' },
+    dependencies: [],
+    config: [],
+  },
+  {
     name: 'client',
     source: 'upstream',
     summary:

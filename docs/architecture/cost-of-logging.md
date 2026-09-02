@@ -220,6 +220,44 @@ reach an entry the fast path builds as one literal. The timestamp is cached by
 millisecond: at any rate worth logging, `Date.now()` has not moved since the previous
 entry, and `new Date().toISOString()` measured ~170 ns.
 
+### `@arkv/logger` 0.13.0 halves the entry, and is still dearer than `ConsoleLogger`
+
+`@dunx/infra` had been pinned to `^0.10.2`, which for a `0.x` caret means
+`<0.11.0`, so three minor versions of upstream work never arrived. 0.13.0 cuts a
+log call's allocations.
+
+Measured both builds in one process alternating by round, because separate `bun`
+runs drift by more than the change does. A dunx-shaped entry - nine fields
+including the trace triple - with the default transport and stdout on
+`/dev/null`, five rounds, median:
+
+| `@arkv/logger` | ns/entry |
+| -------------- | -------: |
+| 0.10.2         |     4968 |
+| 0.13.0         |     2197 |
+
+**-55.8%.** Upstream reported -35% for `Logger.info`; this entry carries more
+fields, so more of the call is the part that got cheaper.
+
+**None of it reaches the default path.** `ConsoleLogger` in `@dunx/core` is what
+`AppFactory` binds when nothing else claims `Logger`, and it is dunx's own. The
+ladder above measures that one. `@arkv/logger` arrives only through
+`@dunx/infra/logger`, so the bump moves an app that imported `LoggerModule` and
+nothing else.
+
+What it costs to import it, same route and same discarded output, 32 connections,
+three rounds, median:
+
+| `Logger` binding                       |  req/s |
+| -------------------------------------- | -----: |
+| `ConsoleLogger` (core default)         | 62,363 |
+| `LoggerModule` (`@arkv/logger` 0.13.0) | 47,852 |
+
+So `LoggerModule` is **23% off** the default path even after the improvement, and
+that is the sanitization: `ConsoleLogger` does not mask, redact or rotate, which
+is the whole reason to swap it out. The number to weigh is that one, not the
+per-entry figure above.
+
 ### Rejected: skipping the entry when the level would drop it
 
 `Logger` exposes `logLevel`, so `RequestLoggingMiddleware` could check at
