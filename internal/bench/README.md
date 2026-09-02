@@ -837,6 +837,10 @@ AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.0 | oha oha 1.15
 records: the differences are a few percent and the machine drifts by more than that
 over a run. Read anything under about **±0.5 µs** as unresolvable.
 
+> Measured before trace context replaced the request id. The `crypto.randomUUID()`
+> row is now `TraceContext.adopt` and the two `x-request-id` rows are `traceparent`
+> and `traceresponse`; the next run regenerates the table with those labels.
+
 | Step | req/s | µs/req | this step adds | total |
 | ---- | ----: | -----: | -------------: | ----: |
 | `requestLogging: false` | 125,312 | 7.98 | - | - |

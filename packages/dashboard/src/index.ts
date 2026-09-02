@@ -13,10 +13,12 @@ export {
 export type {
   ConfigValues,
   DashboardProbe,
+  DbStatsSource,
   ProbeResult,
   ProbeState,
   QueueSource,
   RedisProbe,
+  StatsSource,
 } from './contracts.js';
 // The wire format, so a consumer can type a `fetch` of the JSON endpoints - which
 // are a supported way to read the dashboard, not an implementation detail of the
@@ -24,10 +26,18 @@ export type {
 export type {
   ConfigEntry,
   GatewayNode,
+  DbQueryStats,
+  DbStatsReport,
+  HistogramSnapshot,
+  HttpStatsReport,
   MemoryReport,
   Meta,
   ModuleNode,
   ProbeReport,
+  RouteStats,
+  StatsAbsent,
+  StatsHalf,
+  StatsReport,
   ProviderNode,
   QueuesReport,
   RedisAbsent,

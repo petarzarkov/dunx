@@ -160,9 +160,9 @@ describe('AuthContext', () => {
     const requests = new AsyncRequestContext();
     const context = new AuthContext(requests);
 
-    requests.runWithContext({ requestId: 'r1' }, () => {
+    requests.runWithContext({ traceId: 'r1' }, () => {
       context.run(principal(), () => {
-        expect(requests.getContext()).toEqual({ requestId: 'r1', userId: 'u' });
+        expect(requests.getContext()).toEqual({ traceId: 'r1', userId: 'u' });
       });
     });
   });

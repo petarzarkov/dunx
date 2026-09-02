@@ -66,10 +66,13 @@ export const createApp = async (): Promise<HttpApp> => {
         responseBody: log.responseBody,
         // The dashboard polls every five seconds and would bury everything else.
         ignorePrefix: ['/api/_dunx'],
-        // ~360 ns per request, so off by default. On here so `traceId` joins
-        // `requestId` and `@dunx/http/client` forwards it upstream.
-        trace: true,
+        // `trace` is not set: W3C Trace Context is on by default, and
+        // `TraceController` reading it back proves that rather than asserting a
+        // flag this file set.
       },
+      // Per-route counts and timings, folded into the entry request logging
+      // already builds. The dashboard's stats panel reads them.
+      metrics: true,
       websocket: { idleTimeout: 30 },
       // Multi-node websocket fan-out on `Bun.RedisClient`. No url, so it
       // resolves $VALKEY_URL, $REDIS_URL, then localhost. With no Redis running

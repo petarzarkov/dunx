@@ -259,12 +259,12 @@ describe('LoggerModule', () => {
 
     const seen: string[] = [];
     await Promise.all([
-      store.runWithContext({ requestId: 'a' }, async () => {
+      store.runWithContext({ traceId: 'a' }, async () => {
         await Bun.sleep(2);
-        seen.push(`a:${String(store.getContext()['requestId'])}`);
+        seen.push(`a:${String(store.getContext()['traceId'])}`);
       }),
-      store.runWithContext({ requestId: 'b' }, async () => {
-        seen.push(`b:${String(store.getContext()['requestId'])}`);
+      store.runWithContext({ traceId: 'b' }, async () => {
+        seen.push(`b:${String(store.getContext()['traceId'])}`);
       }),
     ]);
 
@@ -272,16 +272,16 @@ describe('LoggerModule', () => {
     expect(store.getContext()).toEqual({});
   });
 
-  it('nests contexts by merging, so an inner scope keeps the outer requestId', async () => {
+  it('nests contexts by merging, so an inner scope keeps the outer traceId', async () => {
     @Module({ imports: [LoggerModule.forRoot({ level: LogLevel.DEBUG })] })
     class Root {}
 
     const app = await AppFactory.create(Root);
     const store = app.get(ContextStore);
 
-    store.runWithContext({ requestId: 'r1' }, () => {
+    store.runWithContext({ traceId: 'r1' }, () => {
       store.runWithContext({ userId: 'u1' }, () => {
-        expect(store.getContext()['requestId']).toBe('r1');
+        expect(store.getContext()['traceId']).toBe('r1');
         expect(store.getContext()['userId']).toBe('u1');
       });
       // The merge produced a fresh object, so the inner scope did not leak out.
@@ -290,7 +290,7 @@ describe('LoggerModule', () => {
       store.runWithContext(
         { userId: 'u2' },
         () => {
-          expect(store.getContext()['requestId']).toBeUndefined();
+          expect(store.getContext()['traceId']).toBeUndefined();
         },
         { inherit: false },
       );

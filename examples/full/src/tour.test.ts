@@ -311,6 +311,45 @@ it('probes liveness and readiness, and takes the pod out by hand', () => {
   expect(tour.text).toContain('readiness.release() -> ready 200');
 });
 
+it('counts and times every request the tour already made', () => {
+  // `metrics: true` on HttpFactory.create, folded into the entry request logging
+  // already builds - so these numbers are a by-product of work the app did.
+  expect(tour.text).toMatch(
+    /\d+ route series, \d+ in flight, \d+ sockets - both read off Bun\.serve, not counted/,
+  );
+  expect(tour.text).toMatch(
+    /GET \/api\/\S+: \d+ calls, p50 [\d.]+ms p99 [\d.]+ms max [\d.]+ms/,
+  );
+  // The exemplar joins the percentile back to the request's own log lines.
+  expect(tour.text).toMatch(
+    /the slowest \/api\/\S+ call has traceId [0-9a-f]{32}/,
+  );
+});
+
+it('keeps one series per route pattern, and one for every miss', () => {
+  expect(tour.text).toMatch(
+    /unmatched paths: \d+ across one series, so a scanner walking urls cannot grow/,
+  );
+});
+
+it('times queries at the driver, since drizzle cannot time one', () => {
+  expect(tour.text).toMatch(
+    /\d+ queries, timed at the bun:sqlite handle dunx constructs/,
+  );
+  expect(tour.text).toMatch(/select: \d+ calls, \d+ failed, p99 [\d.]+ms/);
+});
+
+it('samples event-loop lag from boot rather than from the first read', () => {
+  // `EventLoopLag` is a provider, so `onInit` enabled it before any of this ran.
+  expect(tour.text).toMatch(
+    /event loop lag: \d+ samples, p99 [\d.]+ms max [\d.]+ms/,
+  );
+});
+
+it('serves the stats panel over the ops page', () => {
+  expect(tour.text).toContain('stats -> http configured, db configured');
+});
+
 it('lights the same indicators on the ops page, each once', () => {
   // `IndicatorsModule` declares them and both readers take that list, so the
   // dashboard names every check `/api/health/ready` runs. `redis` appears once:

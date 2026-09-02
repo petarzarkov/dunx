@@ -116,18 +116,23 @@ floor is about ±0.5 µs, so three of these steps are not resolvable at all.
 | ------------------------------------------------ | -------- |
 | one middleware that only calls `next()`          | +0.05 µs |
 | the pathname sliced out of `req.url`             | +0.73 µs |
-| `x-request-id` and `user-agent` read             | +1.29 µs |
-| `crypto.randomUUID()`                            | +0.04 µs |
+| `traceparent` and `user-agent` read              | +1.29 µs |
+| minting the correlation ids                      | +0.04 µs |
 | `runWithContext` around the handler              | +0.91 µs |
-| `x-request-id` set on the response               | −0.04 µs |
+| the correlation header set on the response       | −0.04 µs |
 | the entry object, the timings, `Logger` dispatch | +0.80 µs |
 | `new Date().toISOString()`, cached per ms        | +0.17 µs |
 | building and serialising the line                | +2.05 µs |
 | the write, batched                               | −0.62 µs |
 
+The three id rows were measured while the middleware minted a UUID request id.
+`TraceContext.adopt` replaced that and is cheaper - 49.2 ns for a trace id and a
+span id together, against 260.5 ns for `crypto.randomUUID()` plus a span - so all
+three are upper bounds now.
+
 Three suspicions were wrong, recorded here as wrong:
 
-- **`crypto.randomUUID()` is free.** 0.04 µs, an order of magnitude under the noise
+- **Minting the id is free.** 0.04 µs, an order of magnitude under the noise
   floor, and 90 ns in a hot loop. A per-process prefix plus a counter would save
   nothing measurable and would leak how many requests the process has served.
 - **Losing the direct dispatch path costs nothing measurable.** A bare
@@ -139,9 +144,9 @@ Three suspicions were wrong, recorded here as wrong:
   is the arbiter.
 
 What actually costs: **the first touch of `req.headers`** (1.29 µs - Bun
-materialises the whole header map, and the inbound `x-request-id` is part of the
+materialises the whole header map, and the inbound `traceparent` is part of the
 contract, so it is irreducible), the **`AsyncLocalStorage` scope** (0.91 µs, which is
-what makes a handler's own log lines carry `requestId`), and **building and
+what makes a handler's own log lines carry `traceId`), and **building and
 serialising the entry** (2.05 µs, most of it `JSON.stringify`).
 
 ### The write was the largest single component, and batching removed it
@@ -224,40 +229,54 @@ being optimised; and a 4xx logs at `warn` and a 5xx at `error`, both of which ne
 the same `request` object, which is not known until after `next()` resolves. The
 branch would add a field and a condition to buy nothing on the default path.
 
-### Rejected: a cheaper request id
+### Rejected: a cheaper id
 
-Covered above - `crypto.randomUUID()` measured at 0.04 µs, and a counter-based id
-would trade an unmeasurable saving for leaking request volume in a header that is
-returned to the caller.
+Covered above - minting measured at 0.04 µs, and a counter-based id would trade an
+unmeasurable saving for leaking request volume in a header returned to the caller.
 
-### An inbound `x-request-id` is validated rather than trusted
+### `x-request-id` was removed, and W3C Trace Context replaced it
 
-It used to be `req.headers.get(REQUEST_ID_HEADER) ?? crypto.randomUUID()`, so
-`curl -H 'x-request-id: MY-OWN-ID'` was echoed on the response and written into
-every line the request produced. That is a caller-supplied string on a trust
-boundary: it can carry a newline, be a megabyte long, or be set to somebody else's
-trace id knowingly. `nestjs-template` ran `isUuid()` on it first, and that is what
-was adopted, the accepted shape matching what this middleware mints.
+The two did the same job and only one of them is a standard. `requestId` was a
+UUID minted per request, validated on the way in and echoed on the way out;
+`traceId` is 32 hex digits carried in `traceparent`, understood by every
+OpenTelemetry collector, and already had to be minted alongside it once tracing
+existed. Carrying both meant two correlation ids per line that always agreed.
 
-Any UUID version passes; the check reads the layout rather than the version nibble, because
-an upstream service minting v7 is not a threat model. The order matters more than
-the regex: `inbound !== null` first, then `length === 36`, then the pattern. The
-common request carries no header at all and pays one comparison. Measured in
-isolation at 2M iterations, validating a present header costs **~40 ns** and the
-no-header path is unchanged - two orders of magnitude below the ±0.5 µs the harness
-can resolve, and below the `crypto.randomUUID()` call that follows it either way.
+What the removal cost, and what it bought:
+
+- **Minting got cheaper.** `Uint8Array.prototype.toHex` produces a trace id and a
+  span id in **49.2 ns**, against **260.5 ns** for `crypto.randomUUID()` plus a
+  `getRandomValues(8)` span. `toHex` exists on Bun 1.4.0 and typechecks under the
+  root tsconfig's `lib: ESNext`.
+- **The trust boundary moved rather than disappearing.** An inbound `x-request-id`
+  was validated as a UUID because it is a caller-supplied string that reaches every
+  line the request writes. `traceparent` gets the stricter version of the same
+  treatment, and the standard specifies it: a malformed header is **discarded, not
+  repaired**, and an all-zero trace id, an all-zero span id and the reserved
+  version `ff` are each rejected.
+- **The response header changed from `x-request-id` to `traceresponse`**, W3C Trace
+  Context Level 2, carrying the span that answered. Same purpose, same wire cost, a
+  specification behind it.
+- **A bug went with it.** The outbound client hardcoded `flags: '01'` when building
+  `traceparent`, so a trace an upstream sampler had declined was re-sampled at every
+  dunx hop. `traceFlags` is in the async scope now and forwarded as it arrived,
+  which is why `RequestFields` gained a fourth trace field.
+
+`@dunx/http` exports no `REQUEST_ID_HEADER` and `@dunx/http/client` no
+`propagateRequestId`. There is no compatibility shim: two ids that always agreed is
+exactly the thing being removed.
 
 ### `ignore` skips everything, and `correlateIgnored` buys back the half worth having
 
 `ignore` returns `next()` before anything else happens, which makes it
-free and also means an ignored path has no `x-request-id` and no
+free and also means an ignored path has no `traceresponse` and no
 `AsyncLocalStorage` scope - so a health check's own log lines were
 uncorrelated, and guide 12 claimed the id was "always set on the response".
 Splitting `ignore` into two lists was rejected: the cost is not the path list,
 it is the work, and a second list would still not say which work.
 `correlateIgnored: boolean` names the work instead.
 
-On an ignored path it pays for the header read, the id, the scope and one
+On an ignored path it pays for the header read, the trace, the scope and one
 `Headers.set` - the four rows above that sum to ~2.2 µs of the ~5.4 the full
 path costs, and never for the entry, the expensive half. Default
 `false`, so the shipped hot path is unchanged.
@@ -285,8 +304,8 @@ logging's own entry, so the mapper's line earns its place alongside it.
 The remaining ~5.4 µs over `requestLogging: false` is **~1.3 µs of
 `req.headers`, ~0.9 µs of `AsyncLocalStorage`, ~2.1 µs of entry construction
 and `JSON.stringify`**, and ~0.7 µs of reading `req.url`. The first two are the
-contract: an inbound `x-request-id` has to be honoured and a handler's own log
-lines have to carry the id. The third is the one with room left, and the
+contract: an inbound `traceparent` has to be honoured and a handler's own log
+lines have to carry the trace. The third is the one with room left, and the
 obvious move - hand-rolling a serialiser instead of `JSON.stringify` - is a
 JavaScript reimplementation of a platform primitive with string escaping to get
 wrong.

@@ -5,15 +5,20 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  * are named so a log pipeline can rely on them; anything else is allowed.
  */
 export interface RequestFields {
-  requestId?: string;
   /**
-   * W3C Trace Context, when `@dunx/http` was asked to adopt it. 32 hex digits for
-   * `traceId` and 16 for the two span ids, so a log pipeline can join these lines
-   * to spans emitted by anything else that speaks the same standard.
+   * W3C Trace Context, which `@dunx/http` adopts unless told not to. 32 hex
+   * digits for `traceId`, 16 for the two span ids and 2 for `traceFlags`, which
+   * are the OpenTelemetry log data model's own fields - so a pipeline joins these
+   * lines to spans emitted by anything else that speaks the standard.
+   *
+   * `traceFlags` is here rather than left implicit because `@dunx/http/client`
+   * reads it back to build the outbound `traceparent`. Sending a fixed `01`
+   * instead would re-sample a trace the caller had decided not to sample.
    */
   traceId?: string;
   spanId?: string;
   parentSpanId?: string;
+  traceFlags?: string;
   userId?: string;
   method?: string;
   event?: string;
@@ -68,7 +73,7 @@ export class AsyncRequestContext extends RequestContext {
 
   /**
    * Nested scopes merge. `AsyncLocalStorage.run` on its own replaces the store
-   * outright, which would drop the `requestId` an outer scope established - the
+   * outright, which would drop the `traceId` an outer scope established - the
    * field a log is most often correlated by. The merged object is fresh, so an
    * `updateContext` inside does not leak back out.
    *

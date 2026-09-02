@@ -101,7 +101,9 @@ separate them:
   "timestamp": "2026-08-02T09:14:22.881Z",
   "pid": 4711,
   "message": "GET /notes 200",
-  "requestId": "...",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "spanId": "00f067aa0ba902b7",
+  "traceFlags": "01",
   "statusCode": 200,
   "elapsedMs": 3
 }
@@ -146,8 +148,8 @@ loggers' lines.
 
 ## `RequestContext` and `AsyncRequestContext`
 
-The second contract in core. It is what carries `requestId` from the middleware
-that minted it down to a service three constructor hops away, without anything
+The second contract in core. It is what carries `traceId` from the middleware
+that adopted it down to a service three constructor hops away, without anything
 being passed:
 
 ```ts
@@ -163,13 +165,15 @@ export abstract class RequestContext {
 ```
 
 `RequestFields` names the well-known keys a log pipeline can rely on -
-`requestId`, `userId`, `method`, `event`, `context`, `flow` - and permits anything
-else.
+`traceId`, `spanId`, `parentSpanId`, `traceFlags`, `userId`, `method`, `event`,
+`context`, `flow` - and permits anything else. The first four are OpenTelemetry's
+log data model fields, so a collector joins these lines to spans emitted by
+anything else that speaks the standard.
 
 `AsyncRequestContext` is the default implementation, over `AsyncLocalStorage`,
 with one departure from the built-in: **nested scopes merge.**
 
-`AsyncLocalStorage.run` replaces the store outright, dropping the `requestId` an
+`AsyncLocalStorage.run` replaces the store outright, dropping the `traceId` an
 outer scope established. `runWithContext` merges into a fresh object instead, so
 an `updateContext` inside a nested scope does not leak back out. Pass
 `{ inherit: false }` for the replacing behaviour.
@@ -182,7 +186,7 @@ export class Importer {
     await this.context.runWithContext(
       { flow: 'import', event: batchId },
       async () => {
-        // every log line in here carries flow, event, and the caller's requestId
+        // every log line in here carries flow, event, and the caller's traceId
       },
     );
   }
@@ -215,7 +219,7 @@ The same holds for context: arkv's `ContextStore` satisfies `RequestContext`
 structurally, so `LoggerModule` binds one to the other directly.
 
 That last point is load-bearing rather than tidy. Without it, `@dunx/http`'s
-request logging would write a `requestId` into core's default store while
+request logging would write a `traceId` into core's default store while
 `@arkv/logger` read its own, and no entry would carry one.
 
 ### What it binds
@@ -370,7 +374,9 @@ The entry carries the request and its response together:
   "timestamp": "...",
   "pid": 4711,
   "message": "POST /notes 201",
-  "requestId": "7b1f...",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "spanId": "00f067aa0ba902b7",
+  "traceFlags": "01",
   "method": "POST",
   "event": "/notes",
   "flow": "http",
@@ -384,7 +390,7 @@ The entry carries the request and its response together:
 A framework whose middleware cannot see the response needs a middleware for the inbound half and an interceptor for the outbound
 one, because they are different classes and the interceptor cannot see what the
 middleware saw. dunx does not, because middleware wraps `next()` and both halves
-are the same closure. There is no pair to correlate by `requestId` just to find out
+are the same closure. There is no pair to correlate by `traceId` just to find out
 how a call ended.
 
 - A **4xx** is the same line at `warn`.
@@ -412,7 +418,7 @@ await HttpFactory.create(AppModule, { notFound: 'public' });
 ```
 
 The miss then reports itself as `@Public()`, so a guard honouring that flag
-passes it through. Either way it is logged and gets a request id, so the fallback
+passes it through. Either way it is logged and adopts a trace, so the fallback
 runs the middleware for both.
 
 A guard can decide for itself under either setting. `UNMATCHED` is set on a miss
@@ -424,25 +430,52 @@ import { PUBLIC, UNMATCHED } from '@dunx/http';
 if (ctx.get(PUBLIC) === true && ctx.get(UNMATCHED) !== true) return next();
 ```
 
-Everything the handler logs in between carries `requestId`, `method`, `event` and
+Everything the handler logs in between carries `traceId`, `method`, `event` and
 `context` without being passed anything, because the whole call runs inside
 `runWithContext`.
 
-### `x-request-id`
+### W3C Trace Context
 
-An inbound `x-request-id` header is honoured, so a trace survives across
-services, **but only if it is a UUID.**
+Every request adopts a trace. An inbound `traceparent` is continued with a span of
+this server's own; without one, a fresh trace id and span id are minted. Four
+fields reach the async scope and therefore every line the request writes:
+`traceId`, `spanId`, `parentSpanId` when a caller sent one, and `traceFlags`.
 
-It is a caller-supplied string that ends up in every line the request writes, so
-`curl -H 'x-request-id: MY-OWN-ID'` is not echoed. A newline, a megabyte, or an
-id collided with somebody else's trace is dropped and a fresh
-`crypto.randomUUID()` used instead. Nothing tells the caller.
+The response carries `traceresponse`, naming the span that answered.
 
-Any UUID version is accepted; the check reads the shape rather than the version bits.
+```
+$ curl -i -H 'traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' localhost:3000/notes
+traceresponse: 00-4bf92f3577b34da6a3ce929d0e0e4736-7a9d1a31080e694d-01
+```
 
-It is set on the response of every request the middleware handles - which is every
-request except an `ignore`d one, and one of those too if `correlateIgnored` is on.
-See the option below.
+A malformed `traceparent` is **discarded rather than repaired**, which is what the
+standard requires. The request starts a trace of its own rather than joining one
+that may not exist, and nothing tells the caller.
+
+An all-zero trace id, an all-zero span id, the reserved version `ff` and a non-hex
+field are each rejected. A version this code does not know keeps its first four
+fields, so a future format still propagates.
+
+An inbound sampling decision is kept rather than overridden, so a trace an upstream
+sampler declined is not re-sampled here. `tracestate` is carried through verbatim
+alongside a valid `traceparent`, and dropped without one.
+
+`@dunx/http/client` sends the adopted trace upstream as `traceparent`, so one trace
+spans both services. It reads `traceFlags` out of the same store, which is why
+that field is there.
+
+There is no exporter, no sampler and no dependency: one header parsed and two
+written. `traceId`, `spanId` and `traceFlags` are OpenTelemetry's own log data
+model fields, so a collector correlates these lines with spans emitted by anything
+speaking the standard - including an OpenTelemetry SDK running in the same Bun
+process, which Bun 1.4.0 supports.
+
+`trace: false` removes all of it, at which point a request carries no correlation
+id at all.
+
+```ts
+HttpFactory.create(AppModule, { requestLogging: { trace: false } });
+```
 
 ### Options
 
@@ -452,8 +485,10 @@ interface RequestLoggingOptions {
   requestBody?: boolean; // default false
   responseBody?: boolean; // default false
   ignore?: readonly string[]; // paths skipped entirely - see below
-  correlateIgnored?: boolean; // default false; keep the id on an ignored path
+  ignorePrefix?: readonly string[]; // a whole mount rather than one path
+  correlateIgnored?: boolean; // default false; keep the trace on an ignored path
   correlate?: boolean; // default true; false drops the async scope - see below
+  trace?: boolean; // default true; W3C Trace Context - see above
 }
 ```
 
@@ -483,12 +518,12 @@ The middleware slices the pathname - it has to, to check the list - and then
 returns `next()` without touching anything else, so an ignored path has:
 
 - no entry;
-- no `x-request-id` on the response;
+- no trace, and no `traceresponse` on the response;
 - no `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated: no
-  `requestId`, no `event`, no `context`.
+  `traceId`, no `event`, no `context`.
 
 Skipping all three is what makes it free. "Do not log the health check, but do
-keep its request id" is `correlateIgnored`:
+keep its trace" is `correlateIgnored`:
 
 ```ts
 HttpFactory.create(AppModule, {
@@ -496,11 +531,11 @@ HttpFactory.create(AppModule, {
 });
 ```
 
-The path still writes no entry of its own. It gets an id on the response, inbound
-if it was a UUID and minted otherwise, and everything the handler logs carries it.
+The path still writes no entry of its own. It gets a `traceresponse`, continuing
+an inbound trace or starting one, and everything the handler logs carries it.
 
 It is off by default because it costs something: the path pays for reading the
-header, `crypto.randomUUID()`, the `runWithContext` scope and one `Headers.set`.
+header, minting the ids, the `runWithContext` scope and one `Headers.set`.
 That is **~2.5 µs** of the 4.78 the full default path costs in the table below.
 It never pays for building and serialising the entry, the expensive half.
 
@@ -516,15 +551,14 @@ resolution, so the honest reading is that this option now buys nothing measurabl
 HttpFactory.create(AppModule, { requestLogging: { correlate: false } });
 ```
 
-**The request entry is unchanged.** The same `requestId`, `method`, `event`, `flow`
+**The request entry is unchanged.** The same `traceId`, `method`, `event`, `flow`
 and `context` fields are written onto it directly instead of being read back out of
-the store, so the line a log pipeline sees is identical and the `x-request-id`
-response header still goes out. What is lost is everything _else_ the request logs:
-those lines carry no `requestId`, and `updateContext` in a handler has nothing to
-update.
+the store, so the line a log pipeline sees is identical and the `traceresponse`
+header still goes out. What is lost is everything _else_ the request logs: those
+lines carry no `traceId`, and `updateContext` in a handler has nothing to update.
 
-It is not the default because correlation is most of what a request id is for, and
-on Bun 1.4 there is no throughput argument on the other side either.
+It is not the default because correlation is most of what a trace is for, and on
+Bun 1.4 there is no throughput argument on the other side either.
 
 The option stays for an app that already threads correlation through explicitly, and
 for `ignore` with `correlateIgnored`, where an ignored path gets the response header
@@ -546,15 +580,19 @@ a dunx tax; it is the cost of the work itself, and the breakdown says where it g
 Each row below is the same app on the same route with one more piece of the
 default path switched on. Read anything under about **±0.5 µs** as unresolvable:
 
+The two trace rows were measured while the middleware minted a UUID request id
+instead. Adopting a trace is 49.2 ns against that path's 260.5 ns, so both rows are
+now upper bounds.
+
 | Step                                            | µs/req | this step adds |
 | ----------------------------------------------- | -----: | -------------: |
 | `requestLogging: false`                         |   7.98 |              - |
 | one middleware that only calls `next()`         |   8.58 |       +0.60 µs |
 | the pathname sliced out of `req.url`            |   9.31 |       +0.73 µs |
-| `x-request-id` and `user-agent` read            |  10.28 |       +0.97 µs |
-| `crypto.randomUUID()`                           |   9.98 |       -0.30 µs |
+| `traceparent` and `user-agent` read             |  10.28 |       +0.97 µs |
+| `TraceContext.adopt`                            |   9.98 |       -0.30 µs |
 | `runWithContext` around the handler             |  10.22 |       +0.24 µs |
-| `x-request-id` set on the response              |  10.46 |       +0.24 µs |
+| `traceresponse` set on the response             |  10.46 |       +0.24 µs |
 | the real middleware, `Logger` discards          |  10.85 |       +0.38 µs |
 | `new Date().toISOString()`                      |  11.05 |       +0.21 µs |
 | the entry and `JSON.stringify`, string dropped  |  12.83 |       +1.77 µs |
@@ -563,7 +601,7 @@ default path switched on. Read anything under about **±0.5 µs** as unresolvabl
 The whole default path is **+4.78 µs**, and two steps account for most of it: the
 **first touch of `req.headers`** and **building and serialising the entry**. Six of
 the eleven steps land inside the ±0.5 µs resolution, and one of them is negative -
-`crypto.randomUUID()` reads as -0.30 µs, which is the clearest available evidence
+adopting the trace reads as -0.30 µs, which is the clearest available evidence
 that a single step at this scale is at the harness's floor. Read the total, not the
 row.
 

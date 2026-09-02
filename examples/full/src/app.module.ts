@@ -11,6 +11,7 @@ import { CacheModule } from './cache/cache.module.js';
 import { ChatModule } from './chat/chat.module.js';
 import { AppConfigService, validate } from './config.js';
 import { OpsModule } from './dashboard/dashboard.module.js';
+import { StatsModule } from './stats/stats.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { DocsModule } from './docs/docs.module.js';
 import { GuardsModule } from './guards/guards.module.js';
@@ -84,6 +85,7 @@ const fileAndConsole = (path: string): Transport[] => [
     DocsModule,
     // After JobsModule and CacheModule, which bind what it reads and probes.
     OpsModule,
+    StatsModule,
   ],
   providers: [Tour],
   // `OpenApiModule` wraps this module, so its factory resolves from here.

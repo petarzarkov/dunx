@@ -4,6 +4,7 @@ import { redisReport } from './api/redis.js';
 import { runtimeReport } from './api/runtime.js';
 import { snapshotOf } from './api/snapshot.js';
 import type { DashboardOptions } from './options.js';
+import type { StatsReport } from './api/types.js';
 
 /**
  * What the mount answers, and nothing else. A path outside it never reaches here.
@@ -55,6 +56,22 @@ const handleApi = async (
           ? { configured: false }
           : await redisReport(deps.options.redis, deps.options.probeTimeoutMs),
       );
+    case 'stats': {
+      // Both sources are optional and independent: an app may time requests and
+      // not queries, or the other way round. `configured: false` is what the
+      // page reads to decide whether to draw the panel at all.
+      const report: StatsReport = {
+        http:
+          deps.options.stats === undefined
+            ? { configured: false }
+            : { ...deps.options.stats.snapshot(), configured: true },
+        db:
+          deps.options.dbStats === undefined
+            ? { configured: false }
+            : { ...deps.options.dbStats.snapshot(), configured: true },
+      };
+      return json(report);
+    }
     case 'queues': {
       // Names only, read straight off the options - **not** through `deps.board()`,
       // which would open a connection per queue. The page polls this to decide

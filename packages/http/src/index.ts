@@ -65,13 +65,13 @@ export {
   type HttpApp,
   type HttpOptions,
 } from './server/factory.js';
-export { REQUEST_ID_HEADER } from './server/request-id.js';
-// W3C Trace Context, off unless `requestLogging: { trace: true }` asks for it.
-// One header parsed and one written - no exporter, no sampler, no dependency.
+// W3C Trace Context, on unless `requestLogging: { trace: false }` removes it.
+// One header parsed and two written - no exporter, no sampler, no dependency.
 // What it buys is that `traceId` on a log line here is the same `traceId` the
 // service upstream logged, which is the part a collector cannot supply.
 export {
   TRACEPARENT_HEADER,
+  TRACERESPONSE_HEADER,
   TRACESTATE_HEADER,
   TraceContext,
   type Trace,
@@ -80,6 +80,18 @@ export {
   RequestLoggingMiddleware,
   type RequestLoggingOptions,
 } from './server/request-logging.js';
+// Per-route counts and timings, on `node:perf_hooks`'s native histogram through
+// `@dunx/core`'s `Durations`. Off unless `metrics: true`; the observation folds
+// into the `.then` request logging already allocates. dunx serves the numbers as
+// JSON and writes no Prometheus text - `prom-client` owns exposition, and its
+// histogram is 61x the native one.
+export {
+  MetricsMiddleware,
+  RequestMetrics,
+  UNMATCHED_ROUTE,
+  type HttpStatsReport,
+  type RouteStats,
+} from './server/metrics.js';
 export type { Middleware, Next, RouteHandler } from './server/middleware.js';
 export type { AppSettings } from './server/settings.js';
 // Static files, on `Bun.file` - which already streams, sets content-type, answers

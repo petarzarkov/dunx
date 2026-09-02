@@ -12,6 +12,7 @@ import {
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
 import { ClientAddress } from './client-address.js';
+import { MetricsMiddleware, RequestMetrics } from './metrics.js';
 import { buildWebSocket } from '../ws/adapter.js';
 import { discoverGateways } from '../ws/discover.js';
 import { SocketLoggingMiddleware } from '../ws/logging.js';
@@ -54,15 +55,22 @@ export class HttpFactory {
     // the options object as well as two injectables. `Logger` and
     // `RequestContext` always resolve: @dunx/core binds a default for each.
     const logging = provide(RequestLoggingMiddleware, {
-      useFactory: (logger: Logger, context: RequestContext) =>
+      useFactory: (
+        logger: Logger,
+        context: RequestContext,
+        metrics: RequestMetrics,
+      ) =>
         new RequestLoggingMiddleware(
           logger,
           context,
           typeof options.requestLogging === 'object'
             ? options.requestLogging
             : {},
+          // Handed in only when asked for, so the observe call is a branch the
+          // default configuration never takes.
+          options.metrics === true ? metrics : undefined,
         ),
-      inject: [Logger, RequestContext] as const,
+      inject: [Logger, RequestContext, RequestMetrics] as const,
     });
 
     // `ClientAddress` belongs here for the same reason `PubSub` does: `listen()`
@@ -71,6 +79,15 @@ export class HttpFactory {
     // so a second module injecting it was a boot error naming the first - and the
     // app's own `app.get(ClientAddress)` could then reach an instance no server was
     // ever attached to.
+    // Bound explicitly for the reason the two logging middlewares are: a
+    // framework class must resolve whether or not the app registered
+    // `@dunx/transform`, and left to self-bind this one is a boot error naming a
+    // preload the consumer may already have.
+    const metricsMiddleware = provide(MetricsMiddleware, {
+      useFactory: (metrics: RequestMetrics) => new MetricsMiddleware(metrics),
+      inject: [RequestMetrics] as const,
+    });
+
     // Bound for the same reason: its constructor takes an options object as well
     // as two injectables, so it cannot self-bind.
     const socketLogging = provide(SocketLoggingMiddleware, {
@@ -85,10 +102,17 @@ export class HttpFactory {
       inject: [Logger, RequestContext] as const,
     });
 
-    const services = [PubSub, ClientAddress];
+    // `RequestMetrics` is bound here rather than left to self-bind for the
+    // reason `ClientAddress` is: `listen()` hands one instance the live server,
+    // and a second scope resolving its own would read `pendingRequests` off no
+    // server at all.
+    const services = [PubSub, ClientAddress, RequestMetrics];
     const providers = [
       ...services,
       ...(options.requestLogging === false ? [] : [logging]),
+      ...(options.metrics === true && options.requestLogging === false
+        ? [metricsMiddleware]
+        : []),
       ...(options.socketLogging === false ? [] : [socketLogging]),
     ];
     const scope: DynamicModule = {

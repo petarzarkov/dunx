@@ -20,7 +20,7 @@ const LADDER = [
   'passthru',
   'path',
   'headers',
-  'requestid',
+  'trace',
   'als',
   'respheader',
   'entry',
@@ -166,8 +166,8 @@ over a run. Read anything under about **±0.5 µs** as unresolvable.
 
 ${ladderTable(report)}
 
-Reading it: the middleware chain, \`crypto.randomUUID()\` and setting
-\`x-request-id\` on the response are each at or below what this harness can resolve.
+Reading it: the middleware chain, \`TraceContext.adopt\` and setting
+\`traceresponse\` on the response are each at or below what this harness can resolve.
 What costs is the **first touch of \`req.headers\`**, the \`AsyncLocalStorage\`
 scope, and **building and serialising the entry** - and, before it was batched, the
 write.

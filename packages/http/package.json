@@ -59,7 +59,10 @@
     "@arkv/shared": "^0.8.0"
   },
   "devDependencies": {
-    "@dunx/core": "workspace:*"
+    "@dunx/core": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/core": "^2.11.0",
+    "@opentelemetry/sdk-trace-node": "^2.11.0"
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",

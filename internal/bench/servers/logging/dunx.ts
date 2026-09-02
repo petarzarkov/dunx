@@ -13,9 +13,10 @@ import {
   type Middleware,
   type Next,
   Post,
-  REQUEST_ID_HEADER,
   type RouteContext,
   type RouteSchemas,
+  TRACEPARENT_HEADER,
+  TraceContext,
 } from '@dunx/http';
 import type { BunRequest } from 'bun';
 import { echo, jsonPayload, personSchema, PLAINTEXT, port } from '../shared.js';
@@ -38,11 +39,10 @@ if (!isLoggingVariant(raw)) {
 }
 const variant: LoggingVariant = raw;
 const step = stepOf(variant);
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PASSTHRU = stepOf('passthru');
 const PATH = stepOf('path');
 const HEADERS = stepOf('headers');
-const REQUEST_ID = stepOf('requestid');
+const TRACE = stepOf('trace');
 const RESP_HEADER = stepOf('respheader');
 const ENTRY = stepOf('entry');
 
@@ -67,28 +67,27 @@ class StepMiddleware implements Middleware {
       return next();
     }
 
-    const inbound = req.headers.get(REQUEST_ID_HEADER);
+    const inbound = req.headers.get(TRACEPARENT_HEADER);
     sink.stamp = req.headers.get('user-agent') ?? '';
     if (step === HEADERS) {
       sink.line = inbound ?? '';
       return next();
     }
 
-    // The shipped middleware's `traceId`, copied for the same reason the rest of
-    // this class is: an inbound id is only trusted if it is a UUID, so the row has
-    // to pay for the check or the step below it inherits the cost.
-    const requestId =
-      inbound !== null && inbound.length === 36 && UUID.test(inbound)
-        ? inbound
-        : crypto.randomUUID();
-    if (step === REQUEST_ID) {
-      sink.line = requestId;
+    // The shipped `TraceContext.adopt`, called rather than copied: it parses the
+    // header this row already read and mints what the header did not carry, so
+    // the row pays exactly what the middleware pays.
+    const trace = TraceContext.adopt(req);
+    if (step === TRACE) {
+      sink.line = trace.spanId;
       return next();
     }
 
     return this.context.runWithContext(
       {
-        requestId,
+        traceId: trace.traceId,
+        spanId: trace.spanId,
+        traceFlags: trace.flags,
         method: ctx.method,
         event: path,
         flow: 'http',
@@ -99,10 +98,7 @@ class StepMiddleware implements Middleware {
       () => {
         const settled = next();
         if (step < RESP_HEADER) return settled;
-        return settled.then((response) => {
-          response.headers.set(REQUEST_ID_HEADER, requestId);
-          return response;
-        });
+        return settled.then((response) => TraceContext.stamp(response, req));
       },
     );
   }

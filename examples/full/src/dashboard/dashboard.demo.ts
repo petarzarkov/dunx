@@ -1,5 +1,10 @@
 import { Logger } from '@dunx/core';
-import type { QueuesReport, RuntimeReport, Snapshot } from '@dunx/dashboard';
+import type {
+  QueuesReport,
+  RuntimeReport,
+  Snapshot,
+  StatsReport,
+} from '@dunx/dashboard';
 /**
  * What the ops page shows, and a CI assertion that every panel's endpoint answers
  * against the real container. The JSON endpoints are supported, so
@@ -57,6 +62,14 @@ export class DashboardDemo {
       queues.unavailable === undefined
         ? `queues -> ${queues.queues.join(', ')}, board at ${base}/queues`
         : `queues -> no board: ${queues.unavailable}`,
+    );
+
+    // Each half is independent: `configured: false` is what the panel reads to
+    // say so rather than drawing an empty table.
+    const stats = await read<StatsReport>('/api/stats');
+    this.logger.info(
+      `stats -> http ${stats.http.configured ? 'configured' : 'absent'}, ` +
+        `db ${stats.db.configured ? 'configured' : 'absent'}`,
     );
 
     const page = await fetch(base);

@@ -54,6 +54,7 @@ preload = ["@dunx/transform/preload"]
 | Lifecycle     | `onInit`, `onBeforeShutdown`, `onShutdown`, signal handlers  | [Lifecycle](../../docs/guide/07-lifecycle.md)          |
 | Configuration | `ConfigModule.forRoot({ validate })`, one validation function | [Configuration](../../docs/guide/12-configuration.md)  |
 | Logging       | The `Logger` contract and `ConsoleLogger`                    | [Logging](../../docs/guide/13-logging.md)              |
+| Stats         | `Durations`, `Counter`, `Gauge`, `RuntimeStats`, `EventLoopLag` | [Metrics](../../docs/guide/22-metrics.md)           |
 
 ## Notes
 
@@ -68,6 +69,10 @@ preload = ["@dunx/transform/preload"]
   in an app that imported no logging module. A module binding either one wins.
 - `ConsoleLogger` batches `info` and below into one write per event-loop turn;
   `warn` and above are never batched and flush what is queued behind them.
+- The stats primitives are `node:perf_hooks` and `process`, both platform
+  builtins, so this package still has zero dependencies. `Durations` closes the
+  native histogram's four edges: `record(0)` throws, an empty one reports
+  sentinels, `percentiles` is a `Map` of `bigint`, and `mean` costs 42.2 us.
 
 ## License
 

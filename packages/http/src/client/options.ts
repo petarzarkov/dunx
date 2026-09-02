@@ -18,20 +18,16 @@ export interface HttpClientOptionsInit {
   readonly headers?: Readonly<Record<string, string>>;
   readonly retry?: RetryOptions<unknown>;
   /**
-   * Forward the inbound request id to the upstream, so one trace spans both
-   * services. `true` uses `x-request-id`; a string names the header. Read from
-   * `RequestContext`, so it only carries when there is a request in scope.
-   *
-   * @default true
-   */
-  readonly propagateRequestId?: boolean | string;
-  /**
    * Forward W3C Trace Context upstream as `traceparent`, so the callee's spans
-   * join this request's trace.
+   * join this request's trace and one trace spans both services.
    *
    * Read from `RequestContext`, so it only carries when a trace is in scope -
-   * which means `requestLogging: { trace: true }` on the inbound side. With that
-   * off there is nothing to send and this costs one property read.
+   * which the inbound side puts there unless `requestLogging: { trace: false }`
+   * removed it. With that off there is nothing to send and this costs one
+   * property read.
+   *
+   * The caller's `traceFlags` are sent as they arrived, so a trace an upstream
+   * sampler declined is not re-sampled at this hop.
    *
    * @default true
    */
@@ -53,8 +49,6 @@ export interface HttpClientOptionsInit {
   readonly verbose?: boolean;
 }
 
-export const DEFAULT_REQUEST_ID_HEADER = 'x-request-id';
-
 /**
  * The resolved options, as a class so it is both the injection token and the type
  * a factory annotates - the same trick `RedisOptions` and `ConfigService` use.
@@ -64,7 +58,6 @@ export class HttpClientOptions {
   readonly timeoutMs: number;
   readonly headers: Readonly<Record<string, string>>;
   readonly retry: RetryOptions<unknown>;
-  readonly requestIdHeader: string | undefined;
   readonly propagateTrace: boolean;
   readonly name: string | undefined;
   readonly fetchOptions: Readonly<Record<string, unknown>>;
@@ -77,14 +70,6 @@ export class HttpClientOptions {
     this.retry = init.retry ?? {};
     this.name = init.name;
     this.propagateTrace = init.propagateTrace ?? true;
-
-    const propagate = init.propagateRequestId ?? true;
-    this.requestIdHeader =
-      propagate === false
-        ? undefined
-        : propagate === true
-          ? DEFAULT_REQUEST_ID_HEADER
-          : propagate;
 
     // Only the keys actually set: `exactOptionalPropertyTypes` means passing
     // `proxy: undefined` is not the same as omitting it, and Bun reads presence.

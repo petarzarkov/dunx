@@ -93,15 +93,15 @@ const units: readonly Unit[] = [
   {
     id: 'headers',
     variant: 'headers',
-    label: '+ `x-request-id` and `user-agent` read',
+    label: '+ `traceparent` and `user-agent` read',
     adds: '**first touch of `req.headers`**',
     stdout: 'null',
   },
   {
-    id: 'requestid',
-    variant: 'requestid',
-    label: '+ `crypto.randomUUID()`',
-    adds: 'the request id',
+    id: 'trace',
+    variant: 'trace',
+    label: '+ `TraceContext.adopt`',
+    adds: 'the trace id and the span id',
     stdout: 'null',
   },
   {
@@ -114,7 +114,7 @@ const units: readonly Unit[] = [
   {
     id: 'respheader',
     variant: 'respheader',
-    label: '+ `x-request-id` set on the response',
+    label: '+ `traceresponse` set on the response',
     adds: 'one `Headers.set`',
     stdout: 'null',
   },

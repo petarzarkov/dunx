@@ -41,9 +41,9 @@ export class OrdersService {
   ) {}
 
   place(order: Order) {
-    // requestId was set by RequestLoggingMiddleware, on the way in
-    const { requestId } = this.context.getContext();
-    this.logger.info('placing', { requestId });
+    // traceId was set by RequestLoggingMiddleware, on the way in
+    const { traceId } = this.context.getContext();
+    this.logger.info('placing', { traceId });
   }
 }
 ```

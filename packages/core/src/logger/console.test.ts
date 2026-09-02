@@ -154,12 +154,12 @@ describe('ConsoleLogger', () => {
     expect(out[0]?.['orderId']).toBe(9);
   });
 
-  it('merges the request context, which is how requestId reaches an entry', () => {
+  it('merges the request context, which is how traceId reaches an entry', () => {
     const context = new AsyncRequestContext();
     const logger = new ConsoleLogger(context);
 
     const { out } = capture(() => {
-      context.runWithContext({ requestId: 'r1', flow: 'http' }, () => {
+      context.runWithContext({ traceId: 'r1', flow: 'http' }, () => {
         logger.info('inside');
       });
       logger.info('outside');
@@ -167,10 +167,10 @@ describe('ConsoleLogger', () => {
 
     expect(out[0]).toMatchObject({
       message: 'inside',
-      requestId: 'r1',
+      traceId: 'r1',
       flow: 'http',
     });
-    expect(out[1]?.['requestId']).toBeUndefined();
+    expect(out[1]?.['traceId']).toBeUndefined();
   });
 
   it('lets a per-call field win over the context', () => {

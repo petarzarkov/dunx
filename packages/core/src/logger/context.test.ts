@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { AsyncRequestContext } from './context.js';
 
 /**
- * The default binding for `RequestContext`, and therefore what carries `requestId`
+ * The default binding for `RequestContext`, and therefore what carries `traceId`
  * in any app that has not imported a logging module. `@dunx/http`'s request
  * logging opens a scope per request and every entry a handler writes inside it is
  * expected to inherit those fields, so the merge and isolation rules here are load
@@ -16,11 +16,11 @@ describe('AsyncRequestContext', () => {
   it('exposes the fields of the enclosing scope', () => {
     const context = new AsyncRequestContext();
 
-    const seen = context.runWithContext({ requestId: 'r1' }, () =>
+    const seen = context.runWithContext({ traceId: 'r1' }, () =>
       context.getContext(),
     );
 
-    expect(seen).toEqual({ requestId: 'r1' });
+    expect(seen).toEqual({ traceId: 'r1' });
     // And the scope closes: nothing leaks to the caller.
     expect(context.getContext()).toEqual({});
   });
@@ -28,10 +28,10 @@ describe('AsyncRequestContext', () => {
   it('hands back a copy, so a mutation cannot reach the store', () => {
     const context = new AsyncRequestContext();
 
-    context.runWithContext({ requestId: 'r1' }, () => {
+    context.runWithContext({ traceId: 'r1' }, () => {
       const first = context.getContext();
-      first['requestId'] = 'tampered';
-      expect(context.getContext()['requestId']).toBe('r1');
+      first['traceId'] = 'tampered';
+      expect(context.getContext()['traceId']).toBe('r1');
     });
   });
 
@@ -43,37 +43,37 @@ describe('AsyncRequestContext', () => {
    */
   it('copies the fields even with no enclosing scope to merge', () => {
     const context = new AsyncRequestContext();
-    const fields = { requestId: 'r1' };
+    const fields = { traceId: 'r1' };
 
     context.runWithContext(fields, () => {
       context.updateContext({ userId: 'u1' });
-      expect(context.getContext()).toEqual({ requestId: 'r1', userId: 'u1' });
+      expect(context.getContext()).toEqual({ traceId: 'r1', userId: 'u1' });
     });
 
-    expect(fields).toEqual({ requestId: 'r1' });
+    expect(fields).toEqual({ traceId: 'r1' });
   });
 
   it('merges a nested scope over the outer one', () => {
     const context = new AsyncRequestContext();
 
-    context.runWithContext({ requestId: 'r1', flow: 'http' }, () => {
+    context.runWithContext({ traceId: 'r1', flow: 'http' }, () => {
       context.runWithContext({ userId: 'u1', flow: 'job' }, () => {
         expect(context.getContext()).toEqual({
-          requestId: 'r1',
+          traceId: 'r1',
           userId: 'u1',
           flow: 'job',
         });
       });
 
       // The merge produced a fresh object, so the inner scope did not leak out.
-      expect(context.getContext()).toEqual({ requestId: 'r1', flow: 'http' });
+      expect(context.getContext()).toEqual({ traceId: 'r1', flow: 'http' });
     });
   });
 
   it('starts clean when inheritance is refused', () => {
     const context = new AsyncRequestContext();
 
-    context.runWithContext({ requestId: 'r1' }, () => {
+    context.runWithContext({ traceId: 'r1' }, () => {
       context.runWithContext(
         { jobId: 'j1' },
         () => {
@@ -89,9 +89,9 @@ describe('AsyncRequestContext', () => {
   it('adds fields to the live scope with updateContext', () => {
     const context = new AsyncRequestContext();
 
-    context.runWithContext({ requestId: 'r1' }, () => {
+    context.runWithContext({ traceId: 'r1' }, () => {
       context.updateContext({ userId: 'u1' });
-      expect(context.getContext()).toEqual({ requestId: 'r1', userId: 'u1' });
+      expect(context.getContext()).toEqual({ traceId: 'r1', userId: 'u1' });
     });
   });
 
@@ -107,7 +107,7 @@ describe('AsyncRequestContext', () => {
   it('keeps an updateContext inside a nested scope out of the outer one', () => {
     const context = new AsyncRequestContext();
 
-    context.runWithContext({ requestId: 'r1' }, () => {
+    context.runWithContext({ traceId: 'r1' }, () => {
       context.runWithContext({}, () => {
         context.updateContext({ userId: 'u1' });
       });
@@ -119,10 +119,10 @@ describe('AsyncRequestContext', () => {
     const context = new AsyncRequestContext();
 
     const flow = async (id: string, delay: number): Promise<string> =>
-      context.runWithContext({ requestId: id }, async () => {
+      context.runWithContext({ traceId: id }, async () => {
         await Bun.sleep(delay);
         // Interleaved on purpose: the later-starting flow finishes first.
-        return String(context.getContext()['requestId']);
+        return String(context.getContext()['traceId']);
       });
 
     expect(await Promise.all([flow('a', 8), flow('b', 1)])).toEqual(['a', 'b']);
@@ -131,11 +131,11 @@ describe('AsyncRequestContext', () => {
   it('propagates across an await inside the scope', async () => {
     const context = new AsyncRequestContext();
 
-    await context.runWithContext({ requestId: 'r1' }, async () => {
+    await context.runWithContext({ traceId: 'r1' }, async () => {
       await Bun.sleep(2);
-      expect(context.getContext()['requestId']).toBe('r1');
+      expect(context.getContext()['traceId']).toBe('r1');
       await Promise.resolve();
-      expect(context.getContext()['requestId']).toBe('r1');
+      expect(context.getContext()['traceId']).toBe('r1');
     });
   });
 
@@ -143,7 +143,7 @@ describe('AsyncRequestContext', () => {
     const first = new AsyncRequestContext();
     const second = new AsyncRequestContext();
 
-    first.runWithContext({ requestId: 'r1' }, () => {
+    first.runWithContext({ traceId: 'r1' }, () => {
       // Two apps booted in one process each get their own unless handed the same
       // instance. The container makes that one binding, so they share it.
       expect(second.getContext()).toEqual({});
