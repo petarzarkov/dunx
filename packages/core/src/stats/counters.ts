@@ -6,7 +6,13 @@
 export class Counter {
   protected current = 0;
 
+  /**
+   * A negative step is ignored rather than applied: this class is monotonic, and
+   * a `Counter` that went down would be a `Gauge` a consumer was handed under the
+   * wrong contract. `Gauge.dec()` is the way down.
+   */
   inc(by = 1): void {
+    if (by < 0) return;
     this.current += by;
   }
 

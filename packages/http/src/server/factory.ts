@@ -12,7 +12,11 @@ import {
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
 import { ClientAddress } from './client-address.js';
-import { MetricsMiddleware, RequestMetrics } from './metrics.js';
+import {
+  MetricsMiddleware,
+  RequestMetrics,
+  usesMetricsMiddleware,
+} from './metrics.js';
 import { buildWebSocket } from '../ws/adapter.js';
 import { discoverGateways } from '../ws/discover.js';
 import { SocketLoggingMiddleware } from '../ws/logging.js';
@@ -110,9 +114,7 @@ export class HttpFactory {
     const providers = [
       ...services,
       ...(options.requestLogging === false ? [] : [logging]),
-      ...(options.metrics === true && options.requestLogging === false
-        ? [metricsMiddleware]
-        : []),
+      ...(usesMetricsMiddleware(options) ? [metricsMiddleware] : []),
       ...(options.socketLogging === false ? [] : [socketLogging]),
     ];
     const scope: DynamicModule = {

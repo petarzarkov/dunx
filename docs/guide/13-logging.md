@@ -441,9 +441,12 @@ this server's own; without one, a fresh trace id and span id are minted. Four
 fields reach the async scope and therefore every line the request writes:
 `traceId`, `spanId`, `parentSpanId` when a caller sent one, and `traceFlags`.
 
-The response carries `traceresponse`, naming the span that answered.
+The response carries `traceresponse`, naming the span that answered. That header
+is a W3C Distributed Tracing Working Group proposal rather than a ratified
+standard: `traceparent` and `tracestate` are the Recommendation, and both are
+request headers. Treat a caller reading it as a bonus.
 
-```
+```console
 $ curl -i -H 'traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' localhost:3000/notes
 traceresponse: 00-4bf92f3577b34da6a3ce929d0e0e4736-7a9d1a31080e694d-01
 ```

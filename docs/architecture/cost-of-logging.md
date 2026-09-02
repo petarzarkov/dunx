@@ -254,9 +254,12 @@ What the removal cost, and what it bought:
   treatment, and the standard specifies it: a malformed header is **discarded, not
   repaired**, and an all-zero trace id, an all-zero span id and the reserved
   version `ff` are each rejected.
-- **The response header changed from `x-request-id` to `traceresponse`**, W3C Trace
-  Context Level 2, carrying the span that answered. Same purpose, same wire cost, a
-  specification behind it.
+- **The response header changed from `x-request-id` to `traceresponse`**, carrying
+  the span that answered. Same purpose and same wire cost. It is a W3C Distributed
+  Tracing Working Group proposal rather than a ratified standard - the published
+  Trace Context Level 2 draft covers `traceparent` and `tracestate`, both request
+  headers - so this is a specified format with thin adoption, not a guarantee that
+  a caller reads it. `x-request-id` had neither.
 - **A bug went with it.** The outbound client hardcoded `flags: '01'` when building
   `traceparent`, so a trace an upstream sampler had declined was re-sampled at every
   dunx hop. `traceFlags` is in the async scope now and forwarded as it arrived,

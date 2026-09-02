@@ -121,7 +121,7 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
       case 'queues':
         return <Queues report={queues.data} redis={redis.data} meta={meta} />;
       case 'stats':
-        return <Stats report={stats.data} />;
+        return <Stats report={stats.data} error={stats.error} />;
       case 'config':
         return <Config config={snapshot.data.config} />;
       default:

@@ -1,9 +1,15 @@
 export const TRACEPARENT_HEADER = 'traceparent';
 export const TRACESTATE_HEADER = 'tracestate';
 /**
- * W3C Trace Context Level 2. The span that answered, sent back so a caller can
- * record which of the callee's spans its own span points at. Same four fields as
- * `traceparent`, and the replacement for the `x-request-id` this used to echo.
+ * The span that answered, sent back so a caller can record which of the callee's
+ * spans its own span points at. Same four fields as `traceparent`, and the
+ * replacement for the `x-request-id` this used to echo.
+ *
+ * A W3C Distributed Tracing Working Group proposal rather than a ratified
+ * standard: `traceparent` and `tracestate` are the Recommendation, and the
+ * published Trace Context Level 2 Candidate Recommendation Draft covers those two
+ * request headers and not this response one. The format is specified and stable,
+ * and adoption is thin, so treat a caller reading it as a bonus.
  */
 export const TRACERESPONSE_HEADER = 'traceresponse';
 

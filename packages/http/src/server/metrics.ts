@@ -159,6 +159,19 @@ export class RequestMetrics {
 }
 
 /**
+ * Whether `MetricsMiddleware` is the thing doing the observing.
+ *
+ * With request logging on - the default - `RequestLoggingMiddleware` observes
+ * from the `.then` it already allocates and this middleware would double-count.
+ * Exported because `HttpFactory` binds it and `HttpApplication` installs it, and
+ * the two disagreeing would mean either no metrics or twice as many.
+ */
+export const usesMetricsMiddleware = (options: {
+  readonly metrics?: boolean;
+  readonly requestLogging?: unknown;
+}): boolean => options.metrics === true && options.requestLogging === false;
+
+/**
  * Installed by `HttpFactory` only when `requestLogging: false`. With logging on -
  * the default - `RequestLoggingMiddleware` calls `observe` from the `.then` it
  * already allocates, at 35.2 ns against this middleware's 175.9 ns standalone.

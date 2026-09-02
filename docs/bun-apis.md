@@ -364,7 +364,7 @@ resolve. `node:diagnostics_channel` exists, including `tracingChannel`.
 TC39 `Uint8Array` base16, present with `fromHex` alongside it, and it typechecks
 under the root tsconfig's `lib: ESNext` with no cast.
 
-```
+```text
 crypto.randomUUID().replaceAll('-','')          223.4 ns
 Buffer.from(getRandomValues(16)).toString('hex') 112.6 ns
 getRandomValues(24) -> toHex + 2 slices           49.2 ns

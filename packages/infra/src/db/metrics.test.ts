@@ -59,13 +59,53 @@ describe('QueryMetrics classification', () => {
     expect(stats?.errors).toBe(1);
   });
 
-  it('keeps the text of the slowest query, truncated', () => {
+  it('keeps the shape of the slowest query, truncated', () => {
     const metrics = new QueryMetrics();
-    metrics.observe(`select '${'x'.repeat(500)}'`, 9_000);
+    // Identifiers, so redaction leaves them and truncation is what bites.
+    const columns = Array.from({ length: 80 }, (_, i) => `"c${i}"`).join(', ');
+    metrics.observe(`select ${columns} from t`, 9_000);
     metrics.observe('select 1', 1_000);
     const slowest = metrics.snapshot().operations[0]?.slowest;
     expect(slowest).toHaveLength(200);
     expect(metrics.snapshot().operations[0]?.duration.max).toBe(9_000);
+  });
+
+  it('redacts before truncating, so a long literal cannot survive', () => {
+    const metrics = new QueryMetrics();
+    metrics.observe(`select '${'x'.repeat(500)}'`, 9_000);
+    expect(metrics.snapshot().operations[0]?.slowest).toBe("select '?'");
+  });
+
+  /**
+   * The snapshot is served over the dashboard's stats endpoint, which can be
+   * mounted without `authorize`. Truncation is not redaction.
+   */
+  it('redacts literals from the slowest statement', () => {
+    const metrics = new QueryMetrics();
+    metrics.observe(
+      "select * from users where email = 'ada@example.com' and age > 30",
+      9_000,
+    );
+    const slowest = String(metrics.snapshot().operations[0]?.slowest);
+    expect(slowest).not.toContain('ada@example.com');
+    expect(slowest).not.toContain('30');
+    expect(slowest).toBe("select * from users where email = '?' and age > ?");
+  });
+
+  it('keeps an escaped quote from leaking the rest of the statement', () => {
+    const metrics = new QueryMetrics();
+    metrics.observe("select * from t where a = 'it''s' and b = 'secret'", 1);
+    const slowest = String(metrics.snapshot().operations[0]?.slowest);
+    expect(slowest).not.toContain('secret');
+    expect(slowest).toBe("select * from t where a = '?' and b = '?'");
+  });
+
+  it('leaves a parameterised statement readable', () => {
+    const metrics = new QueryMetrics();
+    metrics.observe('select "id" from "users" where "id" = $1', 1);
+    expect(metrics.snapshot().operations[0]?.slowest).toBe(
+      'select "id" from "users" where "id" = $1',
+    );
   });
 
   it('clamps a sub-nanosecond query rather than throwing', () => {
@@ -217,23 +257,30 @@ describe('instrumenting Bun.SQL', () => {
       class Root {}
 
       const app = await AppFactory.create(Root);
-      const db = app.get(BunSQLDatabase);
-      const metrics = app.get(QueryMetrics);
+      try {
+        const db = app.get(BunSQLDatabase);
+        const metrics = app.get(QueryMetrics);
 
-      await db.execute(sql`create table if not exists dunx_metrics_t (id int)`);
-      await db.execute(sql`insert into dunx_metrics_t (id) values (1)`);
-      const rows = await db.execute(sql`select * from dunx_metrics_t`);
-      await db.execute(sql`drop table dunx_metrics_t`);
+        await db.execute(
+          sql`create table if not exists dunx_metrics_t (id int)`,
+        );
+        await db.execute(sql`insert into dunx_metrics_t (id) values (1)`);
+        const rows = await db.execute(sql`select * from dunx_metrics_t`);
+        await db.execute(sql`drop table dunx_metrics_t`);
 
-      expect(rows).toBeDefined();
-      const report = metrics.snapshot();
-      expect(report.total).toBe(4);
-      const selects = report.operations.find(
-        (o) => o.operation === QueryOperation.SELECT,
-      );
-      expect(selects?.count).toBe(1);
-      expect(Number(selects?.duration.min)).toBeGreaterThan(0);
-      await app.shutdown();
+        expect(rows).toBeDefined();
+        const report = metrics.snapshot();
+        expect(report.total).toBe(4);
+        const selects = report.operations.find(
+          (o) => o.operation === QueryOperation.SELECT,
+        );
+        expect(selects?.count).toBe(1);
+        expect(Number(selects?.duration.min)).toBeGreaterThan(0);
+      } finally {
+        // A live Postgres holds the process open, so a failing assertion above
+        // would hang the suite rather than fail it.
+        await app.shutdown();
+      }
     },
   );
 
@@ -248,17 +295,20 @@ describe('instrumenting Bun.SQL', () => {
     class Root {}
 
     const app = await AppFactory.create(Root);
-    const metrics = app.get(QueryMetrics);
-    // `db.execute` returns drizzle's own thenable rather than a Promise, so it
-    // is awaited here rather than handed to `.rejects`.
-    let threw = false;
     try {
-      await app.get(BunSQLDatabase).execute(sql`select * from nope_not_here`);
-    } catch {
-      threw = true;
+      const metrics = app.get(QueryMetrics);
+      // `db.execute` returns drizzle's own thenable rather than a Promise, so it
+      // is awaited here rather than handed to `.rejects`.
+      let threw = false;
+      try {
+        await app.get(BunSQLDatabase).execute(sql`select * from nope_not_here`);
+      } catch {
+        threw = true;
+      }
+      expect(threw).toBe(true);
+      expect(metrics.snapshot().operations[0]?.errors).toBe(1);
+    } finally {
+      await app.shutdown();
     }
-    expect(threw).toBe(true);
-    expect(metrics.snapshot().operations[0]?.errors).toBe(1);
-    await app.shutdown();
   });
 });

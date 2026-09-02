@@ -17,7 +17,10 @@ export interface QueryStats {
   readonly errors: number;
   /** Nanoseconds. */
   readonly duration: HistogramSnapshot;
-  /** The text of the slowest query on this operation, truncated. */
+  /**
+   * The slowest query on this operation as a statement shape: literals replaced
+   * with `?` and the text truncated. Never the query as written.
+   */
   readonly slowest?: string;
 }
 
@@ -29,6 +32,26 @@ export interface DbStatsReport {
 
 /** Enough of the statement to recognise, without putting a 4 KB query in a payload. */
 const SLOWEST_TEXT_LIMIT = 200;
+
+/** A single-quoted literal, `''` escapes included. */
+const STRING_LITERAL = /'(?:[^']|'')*'/g;
+/** A bare number that is not part of an identifier or a `$1` placeholder. */
+const NUMBER_LITERAL = /(?<![\w$.])\d+(?:\.\d+)?/g;
+
+/**
+ * The statement's shape, with its literals replaced.
+ *
+ * A snapshot is served over the dashboard's stats endpoint, so anything kept here
+ * is readable by whoever can reach that page. drizzle parameterises, so a query it
+ * built carries no values - but `sql` template escape hatches and hand-written
+ * statements do, and a `where email = 'ada@example.com'` in a metrics payload is
+ * the leak. Truncation is not redaction.
+ */
+const redact = (sql: string): string =>
+  sql
+    .replace(STRING_LITERAL, "'?'")
+    .replace(NUMBER_LITERAL, '?')
+    .slice(0, SLOWEST_TEXT_LIMIT);
 
 const LEADING = /^\s*(select|insert|update|delete)\b/i;
 
@@ -99,7 +122,7 @@ export class QueryMetrics {
     stats.duration.record(durationNs);
     if (durationNs > stats.slowestNs) {
       stats.slowestNs = durationNs;
-      stats.slowest = sql.slice(0, SLOWEST_TEXT_LIMIT);
+      stats.slowest = redact(sql);
     }
   }
 
@@ -151,13 +174,15 @@ export class QueryMetrics {
     const record = this.observe.bind(this);
     client.prepare = (sql: string, ...rest: unknown[]): SqliteStatement => {
       let statement: SqliteStatement;
+      // sqlite compiles here, so a syntax error or an unknown table throws out of
+      // `prepare` and never reaches a method below. Timed as well as counted: a
+      // failed compilation or schema lookup is not free, and recording a constant
+      // would skew the percentiles of an error-heavy workload.
+      const preparing = Bun.nanoseconds();
       try {
         statement = original(sql, ...rest);
       } catch (error) {
-        // sqlite compiles here, so a syntax error or an unknown table throws out
-        // of `prepare` and never reaches a method below. Counted, or a broken
-        // query would be the one thing the numbers did not show.
-        record(sql, 1, true);
+        record(sql, Bun.nanoseconds() - preparing, true);
         throw error;
       }
       for (const name of SQLITE_METHODS) {

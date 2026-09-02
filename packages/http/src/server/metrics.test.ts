@@ -266,6 +266,51 @@ describe('metrics against a real server', () => {
     );
   });
 
+  /**
+   * `ignore` is about log volume. A health check polled every second is exactly
+   * the thing worth a metric and not worth an entry, so silencing the log must
+   * not silence the counter.
+   */
+  it('counts an ignored path even though it writes no entry', async () => {
+    await withApp(
+      {
+        metrics: true,
+        bootLogging: false,
+        requestLogging: { ignore: ['/things'] },
+      },
+      async (app, url) => {
+        await fetch(new URL('things', url));
+        await fetch(new URL('things', url));
+        const series = app
+          .get(RequestMetrics)
+          .snapshot()
+          .routes.find((r) => r.route === '/things');
+        expect(series?.count).toBe(2);
+        expect(series?.byStatus).toEqual({ '200': 2 });
+      },
+    );
+  });
+
+  it('counts an ignored path under correlateIgnored too', async () => {
+    await withApp(
+      {
+        metrics: true,
+        bootLogging: false,
+        requestLogging: { ignore: ['/things'], correlateIgnored: true },
+      },
+      async (app, url) => {
+        await fetch(new URL('things', url));
+        const series = app
+          .get(RequestMetrics)
+          .snapshot()
+          .routes.find((r) => r.route === '/things');
+        expect(series?.count).toBe(1);
+        // The trace is adopted on this path, so the exemplar is there too.
+        expect(series?.slowestTraceId).toMatch(/^[0-9a-f]{32}$/);
+      },
+    );
+  });
+
   it('installs exactly one observer, so a request is not counted twice', async () => {
     await withApp({ metrics: true, bootLogging: false }, async (app, url) => {
       await fetch(new URL('things', url));

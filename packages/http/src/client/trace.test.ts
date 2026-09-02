@@ -16,13 +16,17 @@ const SPAN = '00f067aa0ba902b7';
 
 interface Echoed {
   traceparent: string | null;
+  tracestate: string | null;
 }
 
 beforeAll(() => {
   server = Bun.serve({
     port: 0,
     fetch: (request) =>
-      Response.json({ traceparent: request.headers.get('traceparent') }),
+      Response.json({
+        traceparent: request.headers.get('traceparent'),
+        tracestate: request.headers.get('tracestate'),
+      }),
   });
   base = `http://localhost:${server.port}/`;
 });
@@ -73,6 +77,36 @@ describe('traceparent propagation', () => {
       () => client.get(base) as Promise<Echoed>,
     );
     expect(echoed.traceparent).toBe(`00-${TRACE}-${SPAN}-01`);
+  });
+
+  it('forwards tracestate unchanged beside traceparent', async () => {
+    const context = new AsyncRequestContext();
+    const client = clientFor({}, context);
+
+    const echoed = await context.runWithContext(
+      {
+        traceId: TRACE,
+        spanId: SPAN,
+        traceFlags: '01',
+        traceState: 'vendor=opaque,other=1',
+      },
+      () => client.get(base) as Promise<Echoed>,
+    );
+    // The standard requires a participant to pass it on untouched, and this
+    // service does not read it.
+    expect(echoed.tracestate).toBe('vendor=opaque,other=1');
+  });
+
+  it('sends no tracestate when the scope carries none', async () => {
+    const context = new AsyncRequestContext();
+    const client = clientFor({}, context);
+
+    const echoed = await context.runWithContext(
+      { traceId: TRACE, spanId: SPAN, traceFlags: '01' },
+      () => client.get(base) as Promise<Echoed>,
+    );
+    expect(echoed.traceparent).not.toBeNull();
+    expect(echoed.tracestate).toBeNull();
   });
 
   it('sends nothing when no trace is in scope', async () => {

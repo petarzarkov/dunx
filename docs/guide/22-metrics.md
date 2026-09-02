@@ -72,6 +72,10 @@ step and the series count is bounded by the handler count.
 Every path that matched nothing collapses into a single `(unmatched)` series per
 method. A 404's log line still names the concrete path it missed.
 
+An `ignore`d or `ignorePrefix`ed path **is** counted. That option is about log
+volume, and a health check polled every second is the clearest case of something
+worth a metric and not worth an entry.
+
 ### `slowestTraceId`
 
 The trace of the slowest request seen on that route. Every line that request
@@ -91,7 +95,7 @@ It is absent when `requestLogging: { trace: false }` turned tracing off.
       "count": 4210,
       "errors": 0,
       "duration": { "count": 4210, "min": 8000, "p99": 1400000 },
-      "slowest": "select \"id\", \"name\" from \"users\" where \"users\".\"id\" = ?"
+      "slowest": "select \"id\", \"name\" from \"users\" where \"users\".\"id\" = $1"
     }
   ],
   "total": 4380,
@@ -113,6 +117,16 @@ wrapped, so the measurement covers execution without starting it early.
 
 `errors` counts statements that threw or whose promise rejected. They stay in
 `count` as well.
+
+### `slowest` is a shape, not a query
+
+Literals are replaced before the text is stored: `where email = 'ada@example.com'`
+is kept as `where email = '?'`. The snapshot is served over the dashboard's stats
+endpoint, so anything retained is readable by whoever can reach that page.
+
+drizzle parameterises, so a query it built carries no values anyway. The redaction
+is for the `sql` template escape hatch and hand-written statements. Redaction runs
+before truncation, so a long literal cannot survive by being cut off mid-string.
 
 ## On the dashboard
 

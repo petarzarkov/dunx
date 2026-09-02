@@ -1,5 +1,9 @@
 import { Logger, RequestContext } from '@dunx/core';
-import { TRACEPARENT_HEADER, TraceContext } from '../server/trace-context.js';
+import {
+  TRACEPARENT_HEADER,
+  TRACESTATE_HEADER,
+  TraceContext,
+} from '../server/trace-context.js';
 import { UrlHelper, type ParamsType } from '@arkv/shared';
 import type { HttpMethod } from '../route/marker.js';
 import { FetchError, FetchTransportError } from './errors.js';
@@ -402,6 +406,12 @@ export class HttpService extends UrlHelper {
               flags:
                 typeof trace.traceFlags === 'string' ? trace.traceFlags : '01',
             }),
+            // Forwarded unchanged alongside it, which the standard requires of a
+            // participant: this service does not read the vendor data, and
+            // dropping it would strip whatever an upstream put there.
+            ...(typeof trace.traceState === 'string'
+              ? { [TRACESTATE_HEADER]: trace.traceState }
+              : {}),
           }
         : {}),
       ...config.headerFactory?.({

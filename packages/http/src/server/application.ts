@@ -22,7 +22,11 @@ import type { SocketMiddleware } from '../ws/middleware.js';
 import type { PubSubRelay, RelayOptions, RelayPhase } from '../ws/relay.js';
 import type { SocketData, SocketOptions } from '../ws/socket.js';
 import { attachAddressSource, ClientAddress } from './client-address.js';
-import { MetricsMiddleware, RequestMetrics } from './metrics.js';
+import {
+  MetricsMiddleware,
+  RequestMetrics,
+  usesMetricsMiddleware,
+} from './metrics.js';
 import type { CorsOptions } from './cors.js';
 import {
   errorMapper,
@@ -175,9 +179,7 @@ export class HttpApplication implements HttpApp {
       ...(options.requestLogging === false ? [] : [RequestLoggingMiddleware]),
       // Only when nothing else is timing the request. Request logging observes
       // from the `.then` it already allocates, so both would double-count.
-      ...(options.metrics === true && options.requestLogging === false
-        ? [MetricsMiddleware]
-        : []),
+      ...(usesMetricsMiddleware(options) ? [MetricsMiddleware] : []),
       ...(options.middleware ?? []),
     ];
     // A filter class is resolved here rather than per request, so a missing

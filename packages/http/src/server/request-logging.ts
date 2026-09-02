@@ -148,6 +148,20 @@ export class RequestLoggingMiddleware implements Middleware {
     const path =
       from === -1 ? '/' : mark === -1 ? url.slice(from) : url.slice(from, mark);
     if (this.#ignored(path)) {
+      // `ignore` is about log volume, not about counting. A health check polled
+      // every second is the clearest case of something worth a metric and not
+      // worth an entry, so metrics are observed here even though nothing is
+      // logged. Costs two `Bun.nanoseconds()` reads, and only under `metrics`.
+      if (this.#metrics !== undefined) {
+        const started = Bun.nanoseconds();
+        const observed = (response: Response): Response => {
+          this.#observe(req, ctx, response.status, started);
+          return response;
+        };
+        return this.#correlateIgnored
+          ? this.#correlated(req, ctx, path, next).then(observed)
+          : next().then(observed);
+      }
       return this.#correlateIgnored
         ? this.#correlated(req, ctx, path, next)
         : next();
@@ -168,6 +182,7 @@ export class RequestLoggingMiddleware implements Middleware {
       if (trace.parentSpanId !== undefined) {
         scope.parentSpanId = trace.parentSpanId;
       }
+      if (trace.state !== undefined) scope.traceState = trace.state;
     }
 
     // The same fields either way: into the store under `correlate`, else merged
@@ -246,6 +261,7 @@ export class RequestLoggingMiddleware implements Middleware {
               ...(trace.parentSpanId === undefined
                 ? {}
                 : { parentSpanId: trace.parentSpanId }),
+              ...(trace.state === undefined ? {} : { traceState: trace.state }),
             }),
         method: ctx.method,
         event: path,

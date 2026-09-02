@@ -19,6 +19,12 @@ export interface RequestFields {
   spanId?: string;
   parentSpanId?: string;
   traceFlags?: string;
+  /**
+   * `tracestate` verbatim. Vendor data this service does not read but must pass
+   * on: the standard requires a participant to forward it unchanged, and dropping
+   * it loses whatever an upstream vendor put there.
+   */
+  traceState?: string;
   userId?: string;
   method?: string;
   event?: string;

@@ -123,6 +123,22 @@ describe('request logging', () => {
     expect(entry?.['parentSpanId']).toBeUndefined();
   });
 
+  it('puts an inbound tracestate in the scope, for the client to forward', async () => {
+    const entries = await captured(async () => {
+      await withApp(async (_app, url) => {
+        await fetch(new URL('things', url), {
+          headers: {
+            traceparent: `00-${INBOUND_TRACE}-${INBOUND_SPAN}-01`,
+            tracestate: 'vendor=opaque',
+          },
+        });
+      });
+    });
+
+    const entry = entries.find((e) => e['traceId'] === INBOUND_TRACE);
+    expect(entry?.['traceState']).toBe('vendor=opaque');
+  });
+
   it('carries no trace at all under trace: false', async () => {
     const seen: { header?: string | undefined } = {};
     const entries = await captured(async () => {

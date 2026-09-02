@@ -1,4 +1,4 @@
-import { Badge, Group, SimpleGrid, Table, Text } from '@mantine/core';
+import { Alert, Badge, Group, SimpleGrid, Table, Text } from '@mantine/core';
 import { EmptyState, Panel, StatCard } from '@dunx/ui';
 import type { JSX } from 'react';
 import type {
@@ -204,9 +204,20 @@ const Queries = ({ db }: { db: StatsHalf<DbStatsReport> }): JSX.Element => {
 
 export const Stats = ({
   report,
+  error,
 }: {
   report: StatsReport | undefined;
+  error?: string | undefined;
 }): JSX.Element => {
+  // Distinguished from loading: a failed poll left `report` undefined too, and
+  // showing "Loading" forever is the worst of the three states to show.
+  if (error !== undefined) {
+    return (
+      <Alert color="red" title="Could not read the counters">
+        {error}
+      </Alert>
+    );
+  }
   if (report === undefined) {
     return (
       <Panel title="Stats">
