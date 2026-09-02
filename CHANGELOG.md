@@ -4,6 +4,84 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.2.0 - 2026-09-02
+
+Trace context replaces the request id, plus request and query stats
+
+W3C Trace Context is now the only correlation id, adopted on every request by
+default, and per-route and per-query metrics arrive behind one flag each.
+
+**Breaking, despite the minor.** Four things that were public in 3.1.3 are gone,
+so check for them before upgrading:
+
+| Removed                     | From                | Use instead                                  |
+| --------------------------- | ------------------- | -------------------------------------------- |
+| `REQUEST_ID_HEADER`         | `@dunx/http`        | `TRACEPARENT_HEADER`, `TRACERESPONSE_HEADER` |
+| `DEFAULT_REQUEST_ID_HEADER` | `@dunx/http/client` | nothing; `traceparent` is fixed              |
+| `propagateRequestId`        | `HttpClientOptions` | `propagateTrace`, already on by default      |
+| `RequestFields.requestId`   | `@dunx/core`        | `traceId`, `spanId`, `traceFlags`            |
+
+Two behavioural changes with it. `requestLogging.trace` now defaults to `true`,
+so every log line carries `traceId`, `spanId` and `traceFlags` where it used to
+carry `requestId`; a log pipeline filtering on `requestId` needs repointing.
+And the response header is `traceresponse` rather than `x-request-id`.
+
+`requestLogging: { trace: false }` removes tracing outright, and
+`{ traceResponse: false }` keeps it while dropping the header, which is ~500 ns
+of the 4.7 us the path costs.
+
+Minting is cheaper than what it replaced: 49.2 ns for a trace id and a span id
+together through `Uint8Array.prototype.toHex`, against 260.5 ns for a
+`crypto.randomUUID()` pair. An inbound sampling decision and `tracestate` are
+both forwarded unchanged, so a trace an upstream sampler declined is not
+re-sampled at this hop.
+
+**Metrics.** `metrics: true` on `HttpFactory.create` counts and times every
+request per route pattern, at +35.2 ns folded into the entry request logging
+already builds. `DbModule.forRoot(options, { metrics: true })` times every query
+at the driver, since drizzle's `logQuery` fires before the statement runs and
+cannot supply a duration. `@dunx/core` gains `Durations`, `Counter`, `Gauge`,
+`RuntimeStats` and `EventLoopLag` on `node:perf_hooks`, so it still has zero
+dependencies. `@dunx/dashboard` gains a Stats panel, and the query shapes it
+shows have their literals redacted.
+
+There is no Prometheus endpoint and no metrics dependency: the numbers are JSON,
+and the guide carries a `prom-client` recipe.
+
+Also in this release: zod 4.5 support in `@dunx/openapi`, which now follows the
+`$ref` root zod 4.5 emits for a named schema; `@arkv/logger` 0.13.0, halving a
+log call for anyone on `LoggerModule`; exact dependency versions across every
+manifest; and `bunx @dunx/create-app --stats`.
+
+### Features
+
+- **create-app**: a stats feature, and what the arkv bump actually buys ([`99e7e21`](https://github.com/petarzarkov/dunx/commit/99e7e216bd655cb3f610a08b42d6a0cf90f9f499))
+- **http,core,infra**: trace context by default, and request and query stats ([`e552919`](https://github.com/petarzarkov/dunx/commit/e5529198abe07a638a8feb2980547a25249b3480))
+- **bench**: a dunx-logging-arkv subject, so the production logger is measured ([`2ab2e4e`](https://github.com/petarzarkov/dunx/commit/2ab2e4e25d9e9f36fc9df438d355ece419d28deb))
+- **http**: requestIdHeader, the 11% that leaves the process ([`53a8345`](https://github.com/petarzarkov/dunx/commit/53a83452834ed10e336f9941baf1a126749d3b65))
+- **bench**: an in-process rig for the request-logging path, and --only ([`7126a5a`](https://github.com/petarzarkov/dunx/commit/7126a5add85af4e5c4125681c4cdffa040d84665))
+
+### Fixes
+
+- metrics leaked into every scaffold that picked http ([`4148bf9`](https://github.com/petarzarkov/dunx/commit/4148bf989951bfa0f6e0375dbad8c9b0c9bc7bf3))
+- the second review round, two of them security or correctness ([`02e39cb`](https://github.com/petarzarkov/dunx/commit/02e39cb689a3b399619c224376550db0786df7b4))
+- **http,infra,core**: address the review on trace context and stats ([`1cc6b11`](https://github.com/petarzarkov/dunx/commit/1cc6b113bbce3846be41e66926b4ff34ff2f5972))
+- **bench**: rotate the variant order, and rebuild every figure from one run ([`806e84f`](https://github.com/petarzarkov/dunx/commit/806e84fc2183f52f68c9ffeab866d802fa65f8a8))
+- **docs**: split overlong paragraph in openapi README (437 > 420 budget) ([`0e1002a`](https://github.com/petarzarkov/dunx/commit/0e1002a8e6e1c385921a60aa65fa7b6175cdf733))
+- **docs**: address CodeRabbit review comments on PR #27 ([`0292c86`](https://github.com/petarzarkov/dunx/commit/0292c860d503c2bbac4176b453967abc747accdf))
+
+### Documentation
+
+- **architecture**: the arkv figure is a ratio, not a percentage of bun-serve ([`831ba68`](https://github.com/petarzarkov/dunx/commit/831ba688ad066f7d5e1d6b90ad808b65a5550656))
+- **architecture**: where request logging's 4.8 us actually goes ([`533decd`](https://github.com/petarzarkov/dunx/commit/533decd4e1a645b865d7272952598d7a694c8675))
+- humanize and improve readability across all documentation ([`2e008f7`](https://github.com/petarzarkov/dunx/commit/2e008f78bb454cbc72537fbfff3ba75d0490bad6))
+
+### Other changes
+
+- **repo**: exact versions, latest dependencies, and stagelint for husky ([`0a4bd9d`](https://github.com/petarzarkov/dunx/commit/0a4bd9d2374aea9a8912cee3d456e49827bd1554))
+- **infra**: @arkv/logger 0.13.0, for a third off a log call ([`cb2a0bc`](https://github.com/petarzarkov/dunx/commit/cb2a0bc8858c2965d3629d9c1a46002b4b849b29))
+- **deps**: zod 4.5, and the $ref root it now emits ([`8d812ef`](https://github.com/petarzarkov/dunx/commit/8d812ef742d8b3b0510117e5e3a73ba62850fa4f))
+
 ## 3.1.3 - 2026-08-30
 
 A worker that cannot reach its broker no longer floods
