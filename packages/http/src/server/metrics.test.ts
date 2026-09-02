@@ -311,6 +311,25 @@ describe('metrics against a real server', () => {
     );
   });
 
+  it('counts an ignored path that fails, which nothing else would see', async () => {
+    await withApp(
+      {
+        metrics: true,
+        bootLogging: false,
+        requestLogging: { ignore: ['/things/boom'] },
+      },
+      async (app, url) => {
+        await fetch(new URL('things/boom', url));
+        const series = app
+          .get(RequestMetrics)
+          .snapshot()
+          .routes.find((r) => r.route === '/things/boom');
+        // The status the mapper will send, the same one `#failed` records.
+        expect(series?.byStatus).toEqual({ '418': 1 });
+      },
+    );
+  });
+
   it('installs exactly one observer, so a request is not counted twice', async () => {
     await withApp({ metrics: true, bootLogging: false }, async (app, url) => {
       await fetch(new URL('things', url));

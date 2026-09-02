@@ -166,14 +166,7 @@ export class RequestLoggingMiddleware implements Middleware {
       // worth an entry, so metrics are observed here even though nothing is
       // logged. Costs two `Bun.nanoseconds()` reads, and only under `metrics`.
       if (this.#metrics !== undefined) {
-        const started = Bun.nanoseconds();
-        const observed = (response: Response): Response => {
-          this.#observe(req, ctx, response.status, started);
-          return response;
-        };
-        return this.#correlateIgnored
-          ? this.#correlated(req, ctx, path, next).then(observed)
-          : next().then(observed);
+        return this.#ignoredWithMetrics(req, ctx, path, next);
       }
       return this.#correlateIgnored
         ? this.#correlated(req, ctx, path, next)
@@ -247,6 +240,47 @@ export class RequestLoggingMiddleware implements Middleware {
     if (text === undefined) return;
     const value = parse(text, this.#limit);
     if (value !== undefined) request['body'] = value;
+  }
+
+  /**
+   * An ignored path under `metrics`. Both settlements are observed with the same
+   * status mapping `#failed` uses, so an ignored route that throws is counted
+   * rather than silently missing: with request logging on, `MetricsMiddleware` is
+   * not installed and nothing else would see it.
+   */
+  #ignoredWithMetrics(
+    req: BunRequest,
+    ctx: RouteContext,
+    path: string,
+    next: Next,
+  ): Promise<Response> {
+    const started = Bun.nanoseconds();
+    const failed = (error: unknown): never => {
+      this.#observe(
+        req,
+        ctx,
+        error instanceof HttpError
+          ? error.status
+          : HttpStatusCode.INTERNAL_SERVER_ERROR,
+        started,
+      );
+      throw error;
+    };
+
+    let settled: Promise<Response>;
+    try {
+      settled = this.#correlateIgnored
+        ? this.#correlated(req, ctx, path, next)
+        : next();
+    } catch (error) {
+      // A user middleware ahead of the route may throw out of `handle`
+      // synchronously, which never reaches the rejection handler below.
+      return failed(error);
+    }
+    return settled.then((response) => {
+      this.#observe(req, ctx, response.status, started);
+      return response;
+    }, failed);
   }
 
   /**

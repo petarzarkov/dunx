@@ -100,6 +100,26 @@ describe('QueryMetrics classification', () => {
     expect(slowest).toBe("select * from t where a = '?' and b = '?'");
   });
 
+  it('redacts a Postgres dollar-quoted literal, tagged or not', () => {
+    const metrics = new QueryMetrics();
+    metrics.observe('select * from t where e = $$ada@example.com$$', 9_000);
+    metrics.observe('select * from t where e = $tag$other@secret.io$tag$', 1);
+    const shapes = metrics
+      .snapshot()
+      .operations.flatMap((o) => (o.slowest === undefined ? [] : [o.slowest]));
+    expect(shapes.join(' ')).not.toContain('ada@example.com');
+    expect(shapes.join(' ')).not.toContain('other@secret.io');
+  });
+
+  it("redacts an E'...' string, where a backslash hides the closing quote", () => {
+    const metrics = new QueryMetrics();
+    // The plain rule would stop at the escaped quote and leak the rest.
+    metrics.observe("select * from t where e = E'ada\\'@secret.com'", 9_000);
+    const slowest = String(metrics.snapshot().operations[0]?.slowest);
+    expect(slowest).not.toContain('secret.com');
+    expect(slowest).toBe("select * from t where e = E'?'");
+  });
+
   it('leaves a parameterised statement readable', () => {
     const metrics = new QueryMetrics();
     metrics.observe('select "id" from "users" where "id" = $1', 1);

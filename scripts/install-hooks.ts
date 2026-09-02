@@ -62,11 +62,20 @@ const PRE_PUSH = `#!/usr/bin/env sh
 #
 # pre-commit only sees staged files, so an unformatted file can still reach CI
 # and fail \`bun run format:check\`. Catch it here instead.
-unformatted=$(${BIN}/oxfmt --list-different .)
+# The status is checked before the emptiness: oxfmt failing with no output would
+# otherwise read as "nothing to format" and let the push through.
+if ! unformatted=$(${BIN}/oxfmt --list-different .); then
+  echo "pre-push: oxfmt --list-different failed, so nothing was checked."
+  exit 1
+fi
 
 [ -z "$unformatted" ] && exit 0
 
-${BIN}/oxfmt --write . >/dev/null
+if ! ${BIN}/oxfmt --write . >/dev/null; then
+  echo "pre-push: these files are not formatted, and oxfmt could not fix them:"
+  echo "$unformatted" | sed 's/^/  /'
+  exit 1
+fi
 
 echo "pre-push: these files were not formatted, and CI would have failed on them:"
 echo "$unformatted" | sed 's/^/  /'
@@ -86,10 +95,27 @@ for (const [name, body] of [
   chmodSync(path, 0o755);
 }
 
-// husky set this; leaving it pointed at a directory that no longer exists would
-// disable every hook.
-if (git('config', '--get', 'core.hooksPath') !== '') {
-  Bun.spawnSync(['git', 'config', '--unset', 'core.hooksPath']);
+/**
+ * husky set this repository-locally; leaving it pointed at a directory that no
+ * longer exists would disable every hook.
+ *
+ * A value inherited from global or system config is a different problem and
+ * cannot be fixed from here: `--unset` only touches the repository's own file, so
+ * clearing it silently would leave git still reading the inherited directory and
+ * the hooks written above would never run. Said out loud instead.
+ */
+if (git('config', '--local', '--get', 'core.hooksPath') !== '') {
+  Bun.spawnSync(['git', 'config', '--local', '--unset', 'core.hooksPath']);
+}
+const inherited = git('config', '--get', 'core.hooksPath');
+if (inherited !== '') {
+  console.error(
+    `install-hooks: core.hooksPath is set to "${inherited}" outside this ` +
+      'repository, so git will look there and the hooks just written will not ' +
+      'run. Clear it with `git config --global --unset core.hooksPath`, or ' +
+      `point it at ${hooks}.`,
+  );
+  process.exit(1);
 }
 
 console.log(`install-hooks: pre-commit and pre-push -> ${hooks}`);

@@ -572,9 +572,9 @@ fields, so more of the call is the part that got cheaper.
 
 **None of it reaches the default path.** `ConsoleLogger` in `@dunx/core` is what
 `AppFactory` binds when nothing else claims `Logger`, and it is dunx's own. The
-ladder above measures that one. `@arkv/logger` arrives only through
-`@dunx/infra/logger`, so the bump moves an app that imported `LoggerModule` and
-nothing else.
+step decomposition at the top of this document measures that one, not the two rows
+here. `@arkv/logger` arrives only through `@dunx/infra/logger`, so the bump moves
+an app that imported `LoggerModule` and nothing else.
 
 What it costs to import it, same route and same discarded output, 32 connections,
 three rounds, median:

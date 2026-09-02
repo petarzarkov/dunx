@@ -33,6 +33,17 @@ export interface DbStatsReport {
 /** Enough of the statement to recognise, without putting a 4 KB query in a payload. */
 const SLOWEST_TEXT_LIMIT = 200;
 
+/**
+ * Postgres dollar quoting: `$$body$$` or `$tag$body$tag$`. The tag has to match,
+ * hence the backreference, and the body may contain anything including quotes.
+ * Replaced first, or the quote rules below would read into it.
+ */
+const DOLLAR_QUOTED = /\$([A-Za-z_]\w*)?\$[\s\S]*?\$\1\$/g;
+/**
+ * An `E'...'` escape string, where a backslash escapes the next character. Also
+ * matched before the plain rule, which would stop at the first `'` a `\'` hid.
+ */
+const ESCAPE_STRING = /[eE]'(?:[^'\\]|\\[\s\S]|'')*'/g;
 /** A single-quoted literal, `''` escapes included. */
 const STRING_LITERAL = /'(?:[^']|'')*'/g;
 /** A bare number that is not part of an identifier or a `$1` placeholder. */
@@ -49,6 +60,8 @@ const NUMBER_LITERAL = /(?<![\w$.])\d+(?:\.\d+)?/g;
  */
 const redact = (sql: string): string =>
   sql
+    .replace(DOLLAR_QUOTED, '$$?$$')
+    .replace(ESCAPE_STRING, "E'?'")
     .replace(STRING_LITERAL, "'?'")
     .replace(NUMBER_LITERAL, '?')
     .slice(0, SLOWEST_TEXT_LIMIT);
