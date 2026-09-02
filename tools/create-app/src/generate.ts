@@ -3,9 +3,9 @@ import { BASE_CONFIG, CONFIG_GROUPS, type Feature } from './features.js';
 /**
  * The wiring, generated from a feature selection.
  *
- * The full example states every feature at once in four files - `app.module.ts`,
- * `config.ts`, `bootstrap.ts` and `main.ts` - so those are the ones a subset cannot
- * copy. Everything else is the feature's own directory, copied verbatim.
+ * The full example states every feature at once in three files - `app.module.ts`,
+ * `config.ts` and `main.ts` - so those are the ones a subset cannot copy.
+ * Everything else is the feature's own directory, copied verbatim.
  *
  * Generated rather than assembled by editing a copy on purpose: an edited copy
  * cannot be checked against the example it came from, and the byte-for-byte parity
@@ -45,15 +45,15 @@ export const manifest = (features: readonly Feature[]): string => {
     dependencies[dep] = DUNX.test(dep) ? '__DUNX_VERSION__' : versionOf(dep);
   }
 
+  // `--watch` restarts the process on a change rather than swapping modules in
+  // place: a container is built once at boot, so `--hot` would leave the old
+  // providers holding the sockets the new ones are trying to bind.
   const scripts: Record<string, string> = {
+    dev: 'bun --watch src/main.ts',
     start: 'bun src/main.ts',
     test: 'bun test',
     typecheck: 'tsc --noEmit',
   };
-  // A queue needs a process to drain it, and it is not the web one.
-  if (features.some((feature) => feature.name === 'jobs')) {
-    scripts['worker'] = 'bun src/worker.ts';
-  }
 
   return `${JSON.stringify(
     {
@@ -99,7 +99,7 @@ export const appModule = (
 ): string => {
   const needsLogger = true;
   // `OpenApiModule` wraps this module rather than being imported by it, so its
-  // factory resolves `Auth` from here - see `bootstrap`.
+  // factory resolves `Auth` from here - see `main`.
   const documentsAuth = has(features, 'openapi') && has(features, 'auth');
   const imports = [
     ...(documentsAuth ? ["import { Auth } from '@dunx/auth';"] : []),
@@ -219,13 +219,11 @@ ${chosen.map(([, group]) => `    ${group.map}`).join('\n')}
 const has = (features: readonly Feature[], name: string): boolean =>
   features.some((feature) => feature.name === name);
 
-export const bootstrap = (
-  name: string,
-  features: readonly Feature[],
-): string => {
+export const main = (name: string, features: readonly Feature[]): string => {
   const openapi = has(features, 'openapi');
   const websockets = has(features, 'websockets');
   const http = has(features, 'http');
+  const health = has(features, 'health');
   const documentsAuth = openapi && has(features, 'auth');
   // Both bind a middleware class that the **app** registers rather than the module:
   // position in the chain is the app's decision, so it is generated here.
@@ -236,6 +234,7 @@ export const bootstrap = (
     ...(documentsAuth
       ? ["import { Auth, betterAuthDocument } from '@dunx/auth';"]
       : []),
+    "import { Logger } from '@dunx/core';",
     `import { ${[
       'HttpFactory',
       ...(websockets ? ['RedisRelay'] : []),
@@ -245,14 +244,11 @@ export const bootstrap = (
     ].join(', ')} } from '@dunx/http';`,
     ...(openapi ? ["import { OpenApiModule } from '@dunx/openapi';"] : []),
     "import { AppModule } from './app.module.js';",
-    `import { ${[
-      ...(http ? ['AppConfigService'] : []),
-      ...(websockets ? ['RELAY_CHANNEL'] : []),
-    ].join(', ')} } from './config.js';`,
+    `import { ${['AppConfigService', ...(websockets ? ['RELAY_CHANNEL'] : [])].join(', ')} } from './config.js';`,
     ...(http
       ? ["import { RequestTrailMiddleware } from './http/request-trail.js';"]
       : []),
-  ].filter((line) => !line.includes('{  }'));
+  ];
 
   /**
    * `forRootAsync` once Better Auth is in: it answers `/api/auth/*` from its own
@@ -300,7 +296,7 @@ export const bootstrap = (
   /**
    * Everything between `create()` and `listen()`. The prefix is set whatever is
    * selected, because the copied controllers declare paths under it and the URLs
-   * `main.ts` prints assume it.
+   * printed at boot assume it.
    *
    * `app.use` takes the middleware **class**, not an instance: the container
    * constructs it, which is what lets it have dependencies of its own.
@@ -327,11 +323,24 @@ export const bootstrap = (
     ...(throttle ? ['app.use(ThrottleGuard);'] : []),
   ];
 
+  const urls = [
+    ...(openapi
+      ? [
+          "logger.info(`docs    ${new URL('api/docs', url).href}`);",
+          "logger.info(`openapi ${new URL('api/openapi.json', url).href}`);",
+        ]
+      : []),
+    ...(health
+      ? ["logger.info(`health  ${new URL('api/health', url).href}`);"]
+      : []),
+  ];
+
   return `${HEADER(name)}${imports.join('\n')}
 
 /**
- * One app, built the same way for \`bun start\` and for the tests - so what the
- * tests exercise is what actually serves.
+ * One app for \`bun run start\`, \`bun run dev\` and the tests, and one file:
+ * \`createApp\` is exported for a caller that wants the shape without a server, and
+ * the block at the bottom serves it when this file is the entry point.
  *
  * \`create()\` boots the container and discovers routes and gateways; \`listen()\` is
  * what builds the \`Bun.serve\` route table. Everything between the two still gets to
@@ -353,30 +362,8 @@ ${shaping.map((line) => `  ${line}`).join('\n')}
 
   return app;
 };
-`;
-};
 
-export const main = (name: string, features: readonly Feature[]): string => {
-  const health = has(features, 'health');
-  const openapi = has(features, 'openapi');
-
-  const lines = [
-    ...(openapi
-      ? [
-          "logger.info(`docs    ${new URL('api/docs', url).href}`);",
-          "logger.info(`openapi ${new URL('api/openapi.json', url).href}`);",
-        ]
-      : []),
-    ...(health
-      ? ["logger.info(`health  ${new URL('api/health', url).href}`);"]
-      : []),
-  ];
-
-  return `${HEADER(name)}import { Logger } from '@dunx/core';
-import { createApp } from './bootstrap.js';
-import { AppConfigService } from './config.js';
-
-async function bootstrap(): Promise<void> {
+const start = async (): Promise<void> => {
   const app = await createApp();
   app.enableShutdownHooks();
 
@@ -385,32 +372,22 @@ async function bootstrap(): Promise<void> {
   const url = await app.listen(config.get('port'));
 
   logger.info(\`listening on \${url}\`);
-${lines.map((line) => `  ${line}`).join('\n')}${lines.length > 0 ? '\n' : ''}
+${urls.map((line) => `  ${line}`).join('\n')}${urls.length > 0 ? '\n' : ''}
   // Nothing else to do: the server holds the process open, and the shutdown hooks
   // resolve this once a signal arrives.
   await app.closed;
-}
-
-bootstrap().catch((error: unknown) => {
-  console.error('failed to start', error);
-  process.exit(1);
-});
-`;
 };
 
-/** The queue worker, only when a queue was asked for. */
-export const worker = (name: string): string =>
-  `${HEADER(name)}import { AppFactory } from '@dunx/core';
-import { AppModule } from './app.module.js';
-
-/**
- * A queue needs a process to drain it, and it is deliberately not the web one: a
- * worker that shares the server's event loop competes with request handling.
- */
-const app = await AppFactory.create(AppModule);
-app.enableShutdownHooks();
-await app.closed;
+// False when a test imports this file for \`createApp\` alone, which is what lets one
+// module be both the entry point and the app's definition.
+if (import.meta.main) {
+  start().catch((error: unknown) => {
+    console.error('failed to start', error);
+    process.exit(1);
+  });
+}
 `;
+};
 
 export const envExample = (groups: readonly string[]): string => {
   const lines = groups
@@ -431,6 +408,7 @@ Scaffolded with \`bunx @dunx/create-app\`.
 
 \`\`\`bash
 bun install
+bun run dev     # restarts on a change
 bun run start
 \`\`\`
 
@@ -457,16 +435,18 @@ ${services.map((feature) => `- **${feature.name}** needs ${feature.service}`).jo
 `
 }## Layout
 
-- \`src/main.ts\` - the entry point
-- \`src/bootstrap.ts\` - builds the app; shared by \`start\` and the tests
+- \`src/main.ts\` - exports \`createApp\`, and serves it when run directly
 - \`src/app.module.ts\` - the root module, importing every feature
 - \`src/config.ts\` - one validation function, flat env in and a shaped object out
 ${features.map((feature) => `- \`src/${feature.source}/\` - ${feature.name}`).join('\n')}
 
-\`main.ts\`, \`bootstrap.ts\`, \`app.module.ts\` and \`config.ts\` were generated for the
-features you chose; everything else is copied from dunx's \`examples/full\`, which is
-run and toured in CI on every push. The \`*.demo.ts\` files are that example's
-scripted walkthroughs - delete one and its \`providers\` entry when you do not want it.
+\`main.ts\`, \`app.module.ts\` and \`config.ts\` were generated for the features you
+chose; everything else is copied from dunx's \`examples/full\`, which is run and
+toured in CI on every push. The \`*.demo.ts\` files are that example's scripted
+walkthroughs - delete one and its \`providers\` entry when you do not want it.
+
+A test imports \`createApp\` from \`./main.js\` and never starts a server: the
+\`import.meta.main\` block at the bottom of the file is false for an import.
 
 ## Constructor injection
 

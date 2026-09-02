@@ -1,10 +1,10 @@
 # Files and images
 
-Two subpaths, both built entirely on Bun primitives. `@dunx/infra/files` is one
+Two subpaths, both built on Bun primitives. `@dunx/infra/files` is one
 storage contract over `Bun.file`, `Bun.write`, `Bun.Glob` and `Bun.S3Client`.
-`@dunx/infra/images` is decode, inspect and transform on `Bun.Image`.
+`@dunx/infra/images` decodes, inspects and transforms images on `Bun.Image`.
 
-Neither needs an install. No `@aws-sdk/*`, no `sharp`, no `jimp`, no
+Both work with no extra install: no `@aws-sdk/*`, no `sharp`, no `jimp`, no
 `image-size`, no native module to compile.
 
 ## Storage
@@ -22,8 +22,8 @@ export class Uploads {
 ```
 
 `Storage` is an abstract class, so it is both the injectable contract and the
-token. Whether the bytes land on a disk or in a bucket is decided in one `forRoot`
-call, and nothing above changes.
+token. Which backend gets used, disk or bucket, is decided in one `forRoot`
+call. The code above stays the same either way.
 
 ### Setup
 
@@ -53,12 +53,12 @@ FilesModule.forRoot(
 
 Anything omitted from the client options falls back to the environment:
 `S3_BUCKET` or `AWS_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
-`AWS_REGION`, `AWS_ENDPOINT`. That is `Bun.S3Client`'s own resolution, and this
+`AWS_REGION`, `AWS_ENDPOINT`. That is `Bun.S3Client`'s own resolution; this
 package adds none of its own.
 
-`forRootAsync` when the configuration has to be loaded, or injected. The root
-existing before `LocalStorageOptions` names it is a real case, and creating it is
-async, so the factory may await:
+Use `forRootAsync` when the configuration has to be loaded or injected first.
+Creating the storage root before `LocalStorageOptions` can name it is a real
+case, and that setup can be async, so the factory may await it:
 
 ```ts
 FilesModule.forRootAsync({
@@ -69,14 +69,14 @@ FilesModule.forRootAsync({
 ```
 
 Both bind the same two tokens: `Storage`, and the `StorageOptions` that selected
-it. The module never branches on the backend, because the backend is whichever
-`StorageOptions` subclass got configured and `options.create()` is what builds it.
+it. The module never branches on the backend: the backend is whichever
+`StorageOptions` subclass got configured, and `options.create()` builds it.
 Adding a backend means writing a subclass.
 
 ### `LocalStorageOptions`
 
 The constructor is `(root: string, createPath = true)`. `root` is resolved to an
-absolute path, every key is resolved against it and may not escape it, and
+absolute path, and every key is resolved against it and may not escape it.
 `createPath` creates missing parent directories on write.
 
 ### The contract
@@ -102,16 +102,7 @@ key that was never there is not an error. A missing key raises
 
 Keys are always relative to the storage root: the configured directory locally,
 the configured prefix on S3. What `write` takes is what `list` and `stat` give
-back, so putting a bucket behind a prefix does not ripple into call sites.
-
-### Errors
-
-| Class                       | When                                       |
-| --------------------------- | ------------------------------------------ |
-| `FileNotFoundError`         | A backend-neutral ENOENT, mapped from both |
-| `PathTraversalError`        | A key that escapes the storage root        |
-| `UnsupportedOperationError` | `presign()` on a local disk                |
-| `StorageError`              | The base for all three                     |
+back. Putting a bucket behind a prefix does not ripple into call sites.
 
 ### Listing
 
@@ -143,17 +134,16 @@ Details:
 ### presign
 
 S3 signs; a local disk cannot. `LocalStorage.presign()` throws
-`UnsupportedOperationError` naming the key and what to do instead, rather than
-returning a URL that does not work:
+`UnsupportedOperationError`, naming the key and what to do instead:
 
-```
+```text
 LocalStorage does not support presign(). Nothing signs "report.pdf" on a local
 disk. Configure S3StorageOptions, or serve the bytes through your own route.
 ```
 
-Signing is HMAC over the canonical request, so `S3Storage.presign()` is
-**synchronous and never touches the network**, returning a `string` rather than
-a promise.
+Signing is HMAC over the canonical request. `S3Storage.presign()` is
+**synchronous and never touches the network**, so it returns a `string` rather
+than a promise:
 
 ```ts
 const url = storage.presign('invoices/2026-01.pdf', {
@@ -163,9 +153,49 @@ const url = storage.presign('invoices/2026-01.pdf', {
 });
 ```
 
+### Streaming stays streaming
+
+Nothing here buffers a whole file to satisfy the contract. `readStream` returns
+`Bun.file().stream()`, or the S3 `GET` body, unread. A `ReadableStream` passed to
+`write` is pumped chunk by chunk into a sink: a `FileSink` locally, a multipart
+`NetworkSink` on S3. A file larger than memory transfers either way.
+
+The sink exists because of two `Bun.write` behaviours, both measured on Bun
+1.3.14:
+
+- **`Bun.write(path, stream)` silently writes the wrong bytes.** It matches no
+  overload, so the stream is stringified and the file contains the 23 bytes
+  `[object ReadableStream]`. No error, no warning.
+- **`Bun.write(path, new Response(stream))` never settles** when the response body
+  is itself a stream. `new Response('string')` settles normally.
+
+A third behaviour forces a streaming local write to do an empty `Bun.write` first:
+**`Bun.file(path).writer()` does not truncate and does not create parent
+directories.** Writing `"bb"` over a 20-byte file leaves
+`bbAAAAAAAAAAAAAAAAAA`. The empty write handles truncation and directory
+creation, then the sink streams in over the top.
+
+Two places where a call costs more than it looks:
+
+- **`readStream` does one `exists()` first**, so a missing key rejects the promise
+  instead of handing back a stream that fails on the consumer's first `read()`.
+  On S3 that is one extra `HEAD`. The `GET` has not started; the returned stream
+  is still lazy.
+- `Bun.file().stream()` is itself lazy, opening on the first read, which the
+  `exists()` check compensates for.
+
+### Errors
+
+| Class                       | When                                       |
+| --------------------------- | ------------------------------------------ |
+| `FileNotFoundError`         | A backend-neutral ENOENT, mapped from both |
+| `PathTraversalError`        | A key that escapes the storage root        |
+| `UnsupportedOperationError` | `presign()` on a local disk                |
+| `StorageError`              | The base for all three                     |
+
 ### Path traversal is rejected rather than sanitised
 
-Every key is resolved against the configured root, and one that lands outside it
+Every key is resolved against the configured root. One that lands outside it
 raises `PathTraversalError` **before any syscall**:
 
 ```ts
@@ -179,7 +209,7 @@ Two checks run, and the order matters. A key is accepted or refused
 **identically on every platform**: `..\..\etc` is one legal filename to POSIX
 `resolve` but three segments to Windows, so `..` is checked as a segment on
 **both separators** before the path is resolved at all. The boundary check then
-catches what segments cannot, which is an absolute key or a root-relative one that
+catches what segments cannot: an absolute key, or a root-relative one that
 resolves out.
 
 S3 keys get the same treatment. A key is opaque to S3, so a `..` in one was meant
@@ -191,38 +221,9 @@ symlink **inside** the root pointing outside it is still followed. Detecting tha
 needs `realpath`, which cannot answer for a file that does not exist yet. Do not
 make the root writable by anything you would not trust with its contents.
 
-### Streaming stays streaming
-
-Nothing here buffers a whole file to satisfy the contract. `readStream` returns
-`Bun.file().stream()`, or the S3 `GET` body, unread. A `ReadableStream` passed to
-`write` is pumped chunk by chunk into a sink: a `FileSink` locally, a multipart
-`NetworkSink` on S3. A file larger than memory transfers either way.
-
-The sink is not a stylistic choice. Two `Bun.write` behaviours forced it, both
-measured on Bun 1.3.14:
-
-- **`Bun.write(path, stream)` silently writes the wrong bytes.** It matches no
-  overload, so the stream is stringified and the file contains the 23 bytes
-  `[object ReadableStream]`. No error, no warning.
-- **`Bun.write(path, new Response(stream))` never settles** when the response body
-  is itself a stream. `new Response('string')` settles normally.
-
-A third forces a streaming local write to do an empty `Bun.write` first:
-**`Bun.file(path).writer()` does not truncate and does not create parent
-directories.** Writing `"bb"` over a 20-byte file leaves
-`bbAAAAAAAAAAAAAAAAAA`. The empty write does both jobs, then the sink streams in
-over the top.
-
-Two places where a call costs more than it looks:
-
-- **`readStream` does one `exists()` first**, so a missing key rejects the promise
-  instead of handing back a stream that fails on the consumer's first `read()`.
-  On S3 that is one extra `HEAD`. The `GET` has not started; the returned stream
-  is still lazy.
-- `Bun.file().stream()` is itself lazy, opening on the first read, which the
-  `exists()` check compensates for.
-
 ## Images
+
+Storage moves bytes; the images subpath reads and transforms them.
 
 ```ts
 import { Images, ImagesModule, ImageFit } from '@dunx/infra/images';
@@ -251,7 +252,8 @@ nothing extra:
 ImagesModule.forRoot(async () => ({ quality: await settings.imageQuality() }));
 ```
 
-`forRootAsync` is for the one thing that cannot do, which is **injecting**:
+`forRootAsync` is for the one thing `forRoot` cannot do: **injecting** a
+dependency into the factory.
 
 ```ts
 ImagesModule.forRootAsync({
@@ -282,9 +284,9 @@ unresolved. Inject it to read the effective configuration.
 | `maxWidth`       | `undefined`               | Clamps every requested resize width              |
 | `maxHeight`      | `undefined`               | Clamps every requested resize height             |
 
-`maxPixels` matches Bun's own default, and is checked after the header is parsed
-but **before any pixel buffer is allocated**, so a small file declaring an enormous
-canvas is rejected cheaply.
+`maxPixels` matches Bun's own default. It is checked after the header is parsed
+but **before any pixel buffer is allocated**, so a small file declaring an
+enormous canvas is rejected cheaply.
 
 `maxWidth` and `maxHeight` **clamp** rather than refuse, so a request larger than
 the ceiling is served smaller.
@@ -333,8 +335,9 @@ const hero = source.resize(1200); // and still 'source'
 This is the single most important difference between `ImagePipeline` and
 `Bun.Image` underneath it. **`Bun.Image` mutates and returns `this`**, so two
 callers holding one instance silently reconfigure each other's transform. An
-`ImagePipeline` returns a new value from every operation, can be shared and forked
-freely, and re-runs the whole recipe from the original bytes on each terminal.
+`ImagePipeline` returns a new value from every operation. It can be shared and
+forked freely, and re-runs the whole recipe from the original bytes on each
+terminal.
 
 **Operations:** `resize`, `rotate`, `flip`, `flop`, `modulate`, `to`.
 
@@ -390,42 +393,6 @@ A ThumbHash low-quality placeholder of the **source**, as a
 `data:image/png;base64,...` URL. Roughly 1.4 KB for a photo, at most 32px on the
 long edge.
 
-### Errors
-
-Everything throws `ImageError extends AppError`, carrying a `code` and the
-original throw as `cause`:
-
-```ts
-try {
-  await images.verify(upload);
-} catch (error) {
-  if (
-    error instanceof ImageError &&
-    error.code === ImageErrorCode.DECODE_FAILED
-  ) {
-    // truncated or corrupted payload
-  }
-}
-```
-
-Bun's own codes pass through unchanged. Two are added here:
-`ERR_IMAGE_UNREADABLE_SOURCE` for a source that could not be read at all, and
-`ERR_IMAGE_FORMAT_NOT_ALLOWED` for one excluded by `allowedFormats`.
-
-| Condition                                    | Type        | `code`                          |
-| -------------------------------------------- | ----------- | ------------------------------- |
-| No container signature matched               | `Error`     | `ERR_IMAGE_UNKNOWN_FORMAT`      |
-| Header valid, pixels truncated or corrupt    | `Error`     | `ERR_IMAGE_DECODE_FAILED`       |
-| HEIC/AVIF/TIFF with no OS codec              | `Error`     | `ERR_IMAGE_FORMAT_UNSUPPORTED`  |
-| Over `maxPixels` (raised even by `metadata`) | `Error`     | `ERR_IMAGE_TOO_MANY_PIXELS`     |
-| Rotation not a multiple of 90                | `TypeError` | `ERR_INVALID_ARG_TYPE`          |
-| Unknown resize `filter`                      | `TypeError` | `ERR_INVALID_ARG_TYPE`          |
-| Input is a `Response`/`ReadableStream`       | `TypeError` | `ERR_INVALID_ARG_TYPE`          |
-| Missing path or directory                    | `Error`     | raw syscall: `ENOENT`, `ENODEV` |
-
-`ERR_IMAGE_ENCODE_FAILED` and `ERR_INVALID_STATE` are declared in Bun's types but
-were not reachable in probing.
-
 ### What `Bun.Image` does that will surprise you
 
 `Bun.Image` is barely documented upstream. Everything here was measured on Bun
@@ -456,7 +423,7 @@ fails with `ERR_IMAGE_FORMAT_UNSUPPORTED`, and setting `backend = 'system'` does
 not change either. The clipboard statics are inert there too.
 
 `allowedFormats` defaults to every container Bun can identify, including HEIC and
-AVIF, because a machine with the codec can use them and the runtime's own
+AVIF: a machine with the codec can use them, and the runtime's own
 `ERR_IMAGE_FORMAT_UNSUPPORTED` is the honest answer where it cannot. Narrow it if
 you want the refusal to be a policy decision instead.
 
@@ -464,6 +431,42 @@ you want the refusal to be a policy decision instead.
 both exist and return a `Bun.Image`. `linear` works as a resize filter, an alias
 for `bilinear`, even though it is missing from the error message listing the valid
 names.
+
+### Errors
+
+Everything throws `ImageError extends AppError`, carrying a `code` and the
+original throw as `cause`:
+
+```ts
+try {
+  await images.verify(upload);
+} catch (error) {
+  if (
+    error instanceof ImageError &&
+    error.code === ImageErrorCode.DECODE_FAILED
+  ) {
+    // truncated or corrupted payload
+  }
+}
+```
+
+Bun's own codes pass through unchanged. Two are added here:
+`ERR_IMAGE_UNREADABLE_SOURCE` for a source that could not be read at all, and
+`ERR_IMAGE_FORMAT_NOT_ALLOWED` for one excluded by `allowedFormats`.
+
+| Condition                                    | Cause         | `code`                         |
+| -------------------------------------------- | ------------- | ------------------------------ |
+| No container signature matched               | `Error`       | `ERR_IMAGE_UNKNOWN_FORMAT`     |
+| Header valid, pixels truncated or corrupt    | `Error`       | `ERR_IMAGE_DECODE_FAILED`      |
+| HEIC/AVIF/TIFF with no OS codec              | `Error`       | `ERR_IMAGE_FORMAT_UNSUPPORTED` |
+| Over `maxPixels` (raised even by `metadata`) | `Error`       | `ERR_IMAGE_TOO_MANY_PIXELS`    |
+| Rotation not a multiple of 90                | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
+| Unknown resize `filter`                      | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
+| Input is a `Response`/`ReadableStream`       | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
+| Missing path or directory                    | syscall error | `ERR_IMAGE_UNREADABLE_SOURCE`  |
+
+`ERR_IMAGE_ENCODE_FAILED` and `ERR_INVALID_STATE` are declared in Bun's types but
+were not reachable in probing.
 
 ## Related
 

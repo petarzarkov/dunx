@@ -4,8 +4,8 @@ A benchmark harness comparing `@dunx/http` with other backend frameworks and
 runtimes. Private workspace, never published.
 
 The point of this harness is not that dunx wins. The single most useful number it
-produces is the gap between `@dunx/http` and **raw `Bun.serve`**, because dunx is a
-layer on top of that exact API - the gap is dunx's own overhead and nothing else.
+produces is the gap between `@dunx/http` and **raw `Bun.serve`**. dunx is a layer
+on top of that exact API, so the gap is dunx's own overhead and nothing else.
 Everything below is written so that number, and the places dunx loses, are as hard
 to hide as the places it wins.
 
@@ -22,8 +22,8 @@ with the validator held constant. `validation` does the opposite: one framework 
 time, one step of work at a time, and every validator swapped through the same
 Standard Schema seam - which is how the `validate` scenario's cost gets split into
 parsing, the validator, and dunx. `db-modes` holds the framework, the SQL and the
-bytes on the wire constant and varies only whether the handler awaits its way to the
-row; it writes `results/db-modes.json`, and what it found is recorded in
+bytes on the wire constant, and varies only whether the handler awaits its way to
+the row. It writes `results/db-modes.json`, and what it found is recorded in
 `docs/architecture/constraints.md` under "Synchronous SQLite mode".
 
 ## What is measured
@@ -179,7 +179,7 @@ What the published run says: MVC costs **16% of `aspnet-minimal` on `plaintext`,
 20% on `json` and 31% on both `params` and `validate`**. Against the same figure
 for Nest on Fastify (12%, 14%, 18%, 15%) and for dunx on `Bun.serve` (2.0%, 4.5%,
 4.1%, 8.8%), MVC is the most expensive of the three programming models relative to
-its own floor - and still 2.4x NestJS-on-Fastify and 1.6x Spring in absolute
+its own floor. It is still 2.4x NestJS-on-Fastify and 1.6x Spring in absolute
 throughput, because the floor it is paying that tax on is a different height.
 `params` is where it costs most, which is route-value plus action-parameter model
 binding rather than dispatch.
@@ -191,9 +191,9 @@ startup number away and is what a .NET benchmark usually ships; it is not what
 either.
 
 Neither row logs. ASP.NET Core's hosting layer writes two Information entries per
-request out of the box, which is what the default template's `appsettings.json`
-turns off; both subjects do the same in the file you are reading, for the reason
-the `dunx` and `dunx-logging` split exists.
+request by default, which is what the default template's `appsettings.json` turns
+off. Both subjects do the same in the file you are reading, for the reason the
+`dunx` and `dunx-logging` split exists.
 
 #### Reading the Go, Rust, JVM and .NET rows fairly
 
@@ -221,8 +221,8 @@ so the pinning cannot be lost by launching the process another way.
 Without any of this a 32-core Go server would be measured against a
 single-threaded JavaScript one, which ranks the machine and not the framework.
 With them, the ranking is per-thread dispatch cost, which is the only thing the
-rest of this table has ever measured - and which is **not** what anyone deploying
-Go, Rust or .NET actually gets. Measured on the machine below at the same 64
+rest of this table has ever measured. It is **not** what anyone deploying Go, Rust
+or .NET actually gets. Measured on the machine below at the same 64
 connections: raw `net/http` goes from about 73k req/s at `GOMAXPROCS(1)` to about
 230k with all 32 cores, Axum from about 121k to about 503k, and `aspnet-minimal`
 from about 88k to about 377k. Neither Bun subject can move at all, because
@@ -238,13 +238,13 @@ for the JVM and .NET too - class or assembly loading and a JIT-free first reques
 are real costs both pay every boot, and they stay in the number.
 
 **JIT warmup.** Three seconds warms neither a JVM nor a .NET runtime, so `spring`,
-`aspnet-minimal` and `aspnet-mvc` get a 30-second unmeasured warmup instead,
-recorded per subject in the report and printed above the tables. Reporting a cold
-JVM would be exactly the kind of flattering measurement this file exists to avoid,
-pointed the other way, and .NET turned out to need it just as badly: measured,
-`aspnet-minimal` served 40k req/s on the `json` scenario after a 3-second warmup,
-was still climbing 20 seconds later and plateaued near 88k. Quoting the first
-number would have understated it by 2.2x.
+`aspnet-minimal` and `aspnet-mvc` get a 30-second unmeasured warmup instead. That
+figure is recorded per subject in the report and printed above the tables.
+Reporting a cold JVM would be exactly the kind of flattering measurement this file
+exists to avoid, pointed the other way. .NET turned out to need it just as badly:
+measured, `aspnet-minimal` served 40k req/s on the `json` scenario after a
+3-second warmup, was still climbing 20 seconds later and plateaued near 88k.
+Quoting the first number would have understated it by 2.2x.
 
 **The validator is not held constant across languages.** Inside JavaScript every
 subject validates with zod, which is what makes `validate` minus `json` readable.
@@ -837,26 +837,28 @@ AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.0 | oha oha 1.15
 records: the differences are a few percent and the machine drifts by more than that
 over a run. Read anything under about **±0.5 µs** as unresolvable.
 
-> Measured before trace context replaced the request id. The `crypto.randomUUID()`
-> row is now `TraceContext.adopt` and the two `x-request-id` rows are `traceparent`
-> and `traceresponse`; the next run regenerates the table with those labels.
+> Rows relabelled: the correlation id is W3C Trace Context, so the ids row is
+> `TraceContext.adopt` and the two header rows are `traceparent` and
+> `traceresponse`. The figures are from the run before that change, and adopting a
+> trace is cheaper than the `crypto.randomUUID()` pair measured here, so those
+> three are upper bounds until the next run.
 
 | Step | req/s | µs/req | this step adds | total |
 | ---- | ----: | -----: | -------------: | ----: |
 | `requestLogging: false` | 125,312 | 7.98 | - | - |
 | one middleware that only calls `next()` | 116,537 | 8.58 | +0.60 µs | +0.60 µs |
 | + the pathname sliced out of `req.url` | 107,411 | 9.31 | +0.73 µs | +1.33 µs |
-| + `x-request-id` and `user-agent` read | 97,232 | 10.28 | +0.97 µs | +2.30 µs |
-| + `crypto.randomUUID()` | 100,161 | 9.98 | −0.30 µs | +2.00 µs |
+| + `traceparent` and `user-agent` read | 97,232 | 10.28 | +0.97 µs | +2.30 µs |
+| + `TraceContext.adopt` | 100,161 | 9.98 | −0.30 µs | +2.00 µs |
 | + `runWithContext` around the handler | 97,814 | 10.22 | +0.24 µs | +2.24 µs |
-| + `x-request-id` set on the response | 95,558 | 10.46 | +0.24 µs | +2.48 µs |
+| + `traceresponse` set on the response | 95,558 | 10.46 | +0.24 µs | +2.48 µs |
 | + the real middleware, `Logger` discards | 92,200 | 10.85 | +0.38 µs | +2.87 µs |
 | + `new Date().toISOString()` | 90,465 | 11.05 | +0.21 µs | +3.07 µs |
 | + the entry and `JSON.stringify`, string dropped | 77,950 | 12.83 | +1.77 µs | +4.85 µs |
 | batched instead - **the shipped default** | 78,377 | 12.76 | −0.07 µs | +4.78 µs |
 
 Reading it: the middleware chain, `crypto.randomUUID()` and setting
-`x-request-id` on the response are each at or below what this harness can resolve.
+`traceresponse` on the response are each at or below what this harness can resolve.
 What costs is the **first touch of `req.headers`**, the `AsyncLocalStorage`
 scope, and **building and serialising the entry** - and, before it was batched, the
 write.

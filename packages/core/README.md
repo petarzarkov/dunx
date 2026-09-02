@@ -5,8 +5,8 @@ The dependency injection container, modules, lifecycle, configuration, and the
 [dunx](https://github.com/petarzarkov/dunx).
 
 **Zero dependencies.** That is a constraint rather than a coincidence: it lets
-`@dunx/http` inject a logger without pulling a logging implementation in behind
-it.
+`@dunx/http` inject a logger without pulling in a logging implementation
+behind it.
 
 ## Install
 
@@ -59,14 +59,15 @@ preload = ["@dunx/transform/preload"]
 ## Notes
 
 - **The container is scoped.** Every module reference is a scope holding what it
-  declares, `exports` is its public surface, and `global: true` publishes those
-  exports app-wide. An absent `exports` exports nothing.
+  declares. `exports` is its public surface, and `global: true` publishes
+  those exports app-wide. An absent `exports` exports nothing.
 - A parameter whose type erases - an interface, a primitive, a union, a
   type-only import - is a **boot error naming that parameter**, not a silent
   `undefined`. A parameter with a default keeps its default instead.
-- Two contracts are always resolvable: `Logger` defaults to `ConsoleLogger` and
-  `RequestContext` to `AsyncLocalStorage`, so `@dunx/http` can log every request
-  in an app that imported no logging module. A module binding either one wins.
+- Two contracts are always resolvable: `Logger` defaults to `ConsoleLogger`, and
+  `RequestContext` to `AsyncLocalStorage`. This lets `@dunx/http` log every
+  request in an app that imported no logging module. A module binding either
+  one wins.
 - `ConsoleLogger` batches `info` and below into one write per event-loop turn;
   `warn` and above are never batched and flush what is queued behind them.
 - The stats primitives are `node:perf_hooks` and `process`, both platform

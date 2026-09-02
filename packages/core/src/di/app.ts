@@ -218,6 +218,19 @@ export interface AppOptions {
    * is never instantiated. `@dunx/testing` is the intended caller.
    */
   readonly overrides?: readonly Registration[];
+
+  /**
+   * Extra always-bound contracts, promoted the same way `Logger` and
+   * `RequestContext` are: laid into every scope that has no view of its own, and
+   * shadowed - without a rebinding warning - by any module that declares the same
+   * token.
+   *
+   * For a framework layer that wraps the app root and needs a contract resolvable
+   * everywhere while still letting the app replace it. `@dunx/http` promotes
+   * `HttpOptionsProvider` through this. An application has no reason to reach for
+   * it; declare the provider in a module instead.
+   */
+  readonly promote?: readonly Registration[];
 }
 
 export class AppFactory {
@@ -266,7 +279,10 @@ export class AppFactory {
      * view of its own. Without this a `Logger` bound in a feature module would be
      * invisible to `@dunx/infra`'s scopes, which import nothing of the app's.
      */
-    for (const registration of defaults(root)) {
+    for (const registration of [
+      ...defaults(root),
+      ...(options.promote ?? []),
+    ]) {
       const substituted = overrides.get(registration.token);
       if (substituted) replaced.add(registration.token);
 

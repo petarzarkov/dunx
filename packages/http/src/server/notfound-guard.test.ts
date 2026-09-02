@@ -63,16 +63,25 @@ const statusFor = async (
 };
 
 /*
- * The default is unchanged and deliberate: a 404 on a miss while every real path
- * answers 401 enumerates the surface a prober just failed to find. `@dunx/auth`'s
- * handler test asserts this too, with that reasoning in its comment.
+ * The default is `'public'`, and the trade is worth stating because it used to run
+ * the other way.
+ *
+ * `'guarded'` has a real security property: behind a global auth guard every real
+ * path answers 401, so a miss answering 404 tells a prober which paths exist. It
+ * was the default for that reason. It was also the wrong default for the far more
+ * common app, which has no global auth guard and got a 401 where every other
+ * framework returns a 404 - and `dunx-template` overrode it on its first day.
+ *
+ * So: conventional by default, and an app behind a global guard sets
+ * `notFound: 'guarded'` to get the property back. `@dunx/auth`'s handler test
+ * asserts the guarded case explicitly for that reason.
  */
-test('a miss is guarded by default, so it answers the guard status', async () => {
-  expect(await statusFor(DenyGuard, '/nope')).toBe(401);
+test('a miss is a conventional 404 by default', async () => {
+  expect(await statusFor(DenyGuard, '/nope')).toBe(404);
 });
 
-test("notFound: 'public' opts into the conventional 404", async () => {
-  expect(await statusFor(DenyGuard, '/nope', 'public')).toBe(404);
+test("notFound: 'guarded' hides the miss behind the guard", async () => {
+  expect(await statusFor(DenyGuard, '/nope', 'guarded')).toBe(401);
 });
 
 test('a matched route is guarded under either setting', async () => {

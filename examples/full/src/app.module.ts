@@ -3,7 +3,11 @@ import { ConfigModule, Module } from '@dunx/core';
 import {
   ConsoleTransport,
   FileTransport,
+  jsonFormat,
+  logfmtFormat,
+  type LogFormatter,
   LoggerModule,
+  textFormat,
   type Transport,
 } from '@dunx/infra/logger';
 import { AccountsModule } from './auth/auth.module.js';
@@ -29,14 +33,31 @@ import { Tour } from './tour/tour.service.js';
 import { UsersModule } from './users/users.module.js';
 import { WiringModule } from './wiring/wiring.module.js';
 
+/**
+ * JSON is what a log shipper reads; the other two are for a person and for a
+ * `key=value` reader. `undefined` leaves `ConsoleTransport` on its own default,
+ * which is coloured JSON at a terminal and plain JSON anywhere else.
+ */
+const formatters: Record<string, LogFormatter | undefined> = {
+  json: undefined,
+  text: textFormat,
+  logfmt: logfmtFormat,
+};
+
 /** `transports` replaces the console sink, so keeping stdout means naming it. */
-const fileAndConsole = (path: string): Transport[] => [
-  new ConsoleTransport(),
+const fileAndConsole = (
+  path: string,
+  format: LogFormatter | undefined,
+): Transport[] => [
+  new ConsoleTransport(format === undefined ? {} : { format }),
   new FileTransport({
     path,
     interval: 'daily',
     maxFiles: 7,
     bufferBytes: 16 * 1024,
+    // A file is read by a machine even when the console is not, so it never
+    // takes the terminal formatter.
+    format: format === logfmtFormat ? logfmtFormat : jsonFormat,
   }),
 ];
 
@@ -51,12 +72,15 @@ const fileAndConsole = (path: string): Transport[] => [
       {
         useFactory: (config: AppConfigService) => {
           const log = config.get('log');
+          const format = formatters[log.format];
           return {
             name: config.get('appName'),
             level: log.level,
             ...(log.file === undefined
-              ? {}
-              : { transports: fileAndConsole(log.file) }),
+              ? format === undefined
+                ? {}
+                : { transports: [new ConsoleTransport({ format })] }
+              : { transports: fileAndConsole(log.file, format) }),
           };
         },
         inject: [AppConfigService] as const,

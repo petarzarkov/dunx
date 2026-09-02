@@ -5,7 +5,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import {
   buildGuide,
   renderDoc,
@@ -250,8 +250,8 @@ const targets = linkTargets(guideFiles(), tourFiles(), dirNames);
 
 await startHighlighter();
 
-const render = (markdown: string, self = ''): string =>
-  markdown === '' ? '' : renderDoc(markdown, targets, self).html;
+const render = (markdown: string, self = '', from = ''): string =>
+  markdown === '' ? '' : renderDoc(markdown, targets, self, from).html;
 
 /**
  * A README, minus the sections that document the repo rather than the package.
@@ -260,9 +260,11 @@ const render = (markdown: string, self = ''): string =>
  * scrolls instead of navigating away - a bare `#` replaces the route in a
  * hash-routed site.
  */
-const renderReadme = (file: string, dir: string): string => {
+const renderReadme = (file: string, dir: string, source: string): string => {
   const markdown = read(file);
-  return markdown === '' ? '' : render(siteMarkdown(markdown), `#/api/${dir}`);
+  return markdown === ''
+    ? ''
+    : render(siteMarkdown(markdown), `#/api/${dir}`, source);
 };
 
 const packages: PackageDoc[] = dirs.map((packageDir) => {
@@ -274,7 +276,11 @@ const packages: PackageDoc[] = dirs.map((packageDir) => {
     repoRoot: REPO_ROOT,
     packageDir,
     manifest,
-    readme: renderReadme(join(packageDir, 'README.md'), basename(packageDir)),
+    readme: renderReadme(
+      join(packageDir, 'README.md'),
+      basename(packageDir),
+      `${relative(REPO_ROOT, packageDir)}/README.md`,
+    ),
     render,
   });
 });

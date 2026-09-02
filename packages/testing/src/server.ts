@@ -6,6 +6,7 @@ import {
 } from '@dunx/core';
 import {
   HttpFactory,
+  HttpOptionsProvider,
   type HttpApp,
   type HttpOptions,
   type Middleware,
@@ -79,17 +80,18 @@ const scopedGuards = (
  * The one silent way this harness can lie: `middleware` and `onError` default
  * away, so a suite that forgets them boots a server with no global guards and the
  * default error mapper, which still answers 200 where the application answers 401.
- * A first integration run of 12 pass / 10 fail is the reported cost of finding
- * that out by hand.
  *
- * So a `Middleware` implementation that is in the graph, is not attached by
- * `@UseGuards`, and was not passed here is worth one line on `console.warn` -
- * `console`, not the bound `Logger`, because a suite asserting on a
- * `RecordingLogger` should not see an entry the application never wrote.
+ * So a `Middleware` implementation in the graph, not attached by `@UseGuards`, and
+ * reaching the chain from neither the argument nor an `HttpOptionsProvider` is
+ * worth one line on `console.warn` - `console`, not the bound `Logger`, so a suite
+ * asserting on a `RecordingLogger` sees nothing the application never wrote.
+ *
+ * `mapperIsDefault` is passed because `onError` resolves from the same two places.
  */
 const warnAboutGlobals = (
   app: HttpApp,
   modules: readonly ResolvedModule[],
+  mapperIsDefault: boolean,
 ): void => {
   const declared = declaredMiddleware(modules);
   if (declared.length === 0) return;
@@ -102,9 +104,10 @@ const warnAboutGlobals = (
   console.warn(
     `createTestServer: ${orphaned.map((ctor) => ctor.name).join(', ')} ` +
       'implement Middleware and are in the graph under test, but no `middleware` ' +
-      'was supplied. If they are global in main.ts then this fixture is not the ' +
-      'application: no global guard runs and `onError` is the default mapper. ' +
-      'Export one httpOptions(config) and give it to both, or pass ' +
+      'was supplied and no HttpOptionsProvider bound any. If they are global in ' +
+      'main.ts then this fixture is not the application: no global guard runs' +
+      (mapperIsDefault ? ' and `onError` is the default mapper' : '') +
+      '. Bind the same HttpOptionsProvider the application binds, or pass ' +
       '`middleware: []` to say the omission is deliberate.',
   );
 };
@@ -144,8 +147,20 @@ export const createTestServer = async (
     bootLogging: bootLogging ?? false,
     port: 0,
   });
-  if (http.middleware === undefined)
-    warnAboutGlobals(app, collectModules(root));
+  // The argument is not the only source since 3.1.0: `resolveHttpOptions` runs
+  // inside `HttpFactory.create` and reconciles it with the bound
+  // `HttpOptionsProvider`, so reading the argument alone warned at applications
+  // that had done the better thing.
+  const settings = app.get(HttpOptionsProvider);
+  if (http.middleware === undefined && settings.middleware.length === 0)
+    warnAboutGlobals(
+      app,
+      collectModules(root),
+      // `in`, not `??`: `resolveHttpOptions` merges by `Object.keys(given)`, so an
+      // explicit `onError: undefined` is a caller saying "no filter" and the
+      // default mapper is what runs.
+      ('onError' in http ? http.onError : settings.onError) === undefined,
+    );
   if (prefix !== undefined) app.setGlobalPrefix(prefix);
 
   return {

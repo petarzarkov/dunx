@@ -9,7 +9,7 @@ Where Bun ships the primitive, the primitive is what runs: `Bun.SQL`,
 `Bun.Image`, `Bun.cron`. No `pg`, no `better-sqlite3`, no `ioredis`, no
 `@aws-sdk`, no `glob`, no `sharp`.
 
-Three areas integrate a mature library rather than hand-rolling one, and each of
+Three areas integrate a mature library rather than hand-rolling one. Each of
 those drives a Bun API underneath. `drizzle-orm` and `bullmq` are **optional peer
 dependencies**, so an app using only `/files` installs neither.
 

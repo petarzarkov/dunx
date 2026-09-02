@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'bun:test';
-import { Module } from '@dunx/core';
-import { HttpFactory, type HttpApp } from '../server/factory.js';
-import { Gateway, OnOpen } from './decorators.js';
 import { PubSub } from './pubsub.js';
 import { RedisRelay } from './redis-relay.js';
-import type { PubSubRelay } from './relay.js';
-import type { Socket } from './socket.js';
+import {
+  open,
+  released,
+  stop,
+  TOPIC,
+  twoNodes,
+  until,
+  AppModule,
+  socketFor,
+  opened,
+} from './relay.fixture.js';
+import { HttpFactory } from '../server/factory.js';
 
 /**
  * `RedisRelay` against a broker that is not there, and against a real one when
@@ -14,85 +21,7 @@ import type { Socket } from './socket.js';
  * past `close()`, and only a subprocess's exit code can see that.
  */
 
-const TOPIC = 'lobby';
 const RELAY_URL = 'redis://localhost:6379';
-
-@Gateway('/live')
-class LiveGateway {
-  @OnOpen()
-  opened(socket: Socket): void {
-    socket.subscribe(TOPIC);
-    socket.send('ready');
-  }
-}
-
-@Module({ providers: [LiveGateway] })
-class AppModule {}
-
-/** A client that keeps every frame, so a *second* delivery is visible. */
-interface Client {
-  readonly frames: string[];
-  close(): void;
-}
-
-const open = async (base: string): Promise<Client> => {
-  const socket = new WebSocket(
-    new URL('/live', base).href.replace(/^http/, 'ws'),
-  );
-  const frames: string[] = [];
-  socket.addEventListener('message', (event: MessageEvent) => {
-    frames.push(String(event.data));
-  });
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error('the socket never opened')),
-      2000,
-    );
-    socket.addEventListener(
-      'open',
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
-  });
-  // 'ready' is sent from @OnOpen and would otherwise be counted as a delivery.
-  await until(() => frames.length === 1);
-  frames.length = 0;
-  return { frames, close: () => socket.close() };
-};
-
-const until = async (done: () => boolean, ms = 2000): Promise<void> => {
-  const deadline = Date.now() + ms;
-  while (!done()) {
-    if (Date.now() > deadline) throw new Error('timed out');
-    await Bun.sleep(5);
-  }
-};
-
-const twoNodes = async (
-  relayA: PubSubRelay,
-  relayB: PubSubRelay,
-  channel: string,
-): Promise<{ apps: HttpApp[]; urls: string[] }> => {
-  const apps: HttpApp[] = [];
-  const urls: string[] = [];
-  for (const relay of [relayA, relayB]) {
-    const app = await HttpFactory.create(AppModule, {
-      requestLogging: false,
-      relay,
-      relayChannel: channel,
-    });
-    urls.push(await app.listen(0));
-    apps.push(app);
-  }
-  return { apps, urls };
-};
-
-const stop = async (apps: readonly HttpApp[]): Promise<void> => {
-  for (const app of apps) await app.shutdown();
-};
 
 const redisReachable = async (): Promise<boolean> => {
   const client = new Bun.RedisClient(RELAY_URL, { maxRetries: 0 });
@@ -160,33 +89,14 @@ describe('RedisRelay when Redis is not there', () => {
     // `maxRetries: 0`, so `RedisRelay` connects first. Without that this times out.
     expect(
       await released(
+        './redis-relay.ts',
+        'RedisRelay',
         "const relay = new RedisRelay({ url: 'redis://127.0.0.1:1', connectionTimeout: 500 });\n" +
           "try { await relay.subscribe('ch', () => {}); } catch (error) { void error; }\n",
       ),
     ).toBe(0);
   });
 });
-
-/**
- * Runs `body` against a real `RedisRelay` in a subprocess, calls `close()`, and
- * answers the exit code - `0` only if nothing kept the event loop alive.
- */
-const released = async (body: string): Promise<number> => {
-  const module = new URL('./redis-relay.ts', import.meta.url).pathname;
-  const proc = Bun.spawn(
-    [
-      'bun',
-      '-e',
-      `const { RedisRelay } = await import(${JSON.stringify(module)});\n` +
-        `${body}await relay.close();\nconsole.log('released');\n`,
-    ],
-    { stdout: 'ignore', stderr: 'ignore' },
-  );
-  const timer = setTimeout(() => proc.kill(), 8000);
-  const code = await proc.exited;
-  clearTimeout(timer);
-  return code;
-};
 
 describe.skipIf(!HAS_REDIS)('two nodes over real Redis', () => {
   it('leaves subscriber mode on close, so the process exits', async () => {
@@ -195,6 +105,8 @@ describe.skipIf(!HAS_REDIS)('two nodes over real Redis', () => {
     // unsubscribes first. Without that this times out too.
     expect(
       await released(
+        './redis-relay.ts',
+        'RedisRelay',
         `const relay = new RedisRelay({ url: ${JSON.stringify(RELAY_URL)} });\n` +
           `await relay.subscribe('dunx:test:exit', () => {});\n`,
       ),
@@ -256,9 +168,7 @@ describe.skipIf(!HAS_REDIS)('two nodes over real Redis', () => {
     if (!first || !urlB) throw new Error('two nodes expected');
 
     try {
-      const socket = new WebSocket(
-        new URL('/live', urlB).href.replace(/^http/, 'ws'),
-      );
+      const socket = socketFor(urlB);
       socket.binaryType = 'arraybuffer';
       const received: number[][] = [];
       socket.addEventListener('message', (event: MessageEvent) => {
@@ -266,17 +176,7 @@ describe.skipIf(!HAS_REDIS)('two nodes over real Redis', () => {
           received.push([...new Uint8Array(event.data)]);
         }
       });
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('never opened')), 2000);
-        socket.addEventListener(
-          'open',
-          () => {
-            clearTimeout(timer);
-            resolve();
-          },
-          { once: true },
-        );
-      });
+      await opened(socket);
 
       first.get(PubSub).publish(TOPIC, new Uint8Array([1, 2, 3, 250]));
       await until(() => received.length > 0);

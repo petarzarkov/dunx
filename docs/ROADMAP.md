@@ -20,7 +20,7 @@ other.
 | `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0                                    |
 | `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing                                 |
 | `@dunx/dashboard`  | Opt-in ops page, one middleware, bull-board mounted for queues                              |
-| `@dunx/create-app` | `bunx @dunx/create-app my-api` - base template plus feature folders                         |
+| `@dunx/create-app` | `bunx @dunx/create-app my-api` - an arrow-key feature list, base template plus folders      |
 | `@dunx/mcp`        | MCP server that reads an app's routes, providers and modules                                |
 
 Five of those are a library wired in rather than dunx code - never invent what a
@@ -29,7 +29,9 @@ drives `bun:sqlite`/`Bun.SQL` through its own Bun adapters; `bullmq` is one too 
 reaches Redis through `createBunRedisClient`; `swagger-ui-dist` is the `/docs` page
 and is optional too; `better-auth` is a required peer of `@dunx/auth`; `@arkv/logger`
 is a `dependency` and satisfies core's `Logger` contract structurally, with no
-adapter class in between.
+adapter class in between - and since 0.12 it brings the HTTP, syslog and sampling
+transports, `textFormat`/`logfmtFormat`, `setLevel` and `stats()`, all of which
+`@dunx/infra/logger` re-exports rather than restates.
 
 ## Priority: the core three, until someone who is not the owner files an issue
 
@@ -284,11 +286,11 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                            | Shape                                                                        |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [class-modules-and-opt-in-config](../internal/notes/roadmap/class-modules-and-opt-in-config.md) | **P1.** Requested. Partly shipped; W1, W1b, W2 and W6 remain.                |
-| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                   | One upstream defect left, in bullmq's Bun adapter. Bun 1.4 fixed the other.  |
-| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                               | Five adopt items, one rejected on measurement, four defects closed for free. |
+| Item                                                                                          | Shape                                                                               |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.       |
+| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined.    |
+| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Queue, cache and fan-out with no Redis. All three measured; three verdicts to take. |
 
 Delivered and moved out of this folder rather than left here marked done:
 
@@ -296,6 +298,17 @@ Delivered and moved out of this folder rather than left here marked done:
   in [architecture/benchmarks.md](./architecture/benchmarks.md).
 - **the MCP server** - shipped as `@dunx/mcp`; the reasoning is in
   [architecture/mcp.md](./architecture/mcp.md).
+- **class modules and opt-in config** - every option a class, every setting a
+  provider. `HttpOptionsProvider` and the argument-wins ordering are in
+  [architecture/http.md](./architecture/http.md); the named-instance subclasses,
+  the config schema and the document contributors are in
+  [Upgrading](./guide/22-upgrading.md). Three items were withdrawn rather than
+  built: the imperative `app.*` methods stay
+  ([architecture/http.md](./architecture/http.md)), a decorated module that also
+  configures itself keeps its override
+  ([architecture/dependency-injection.md](./architecture/dependency-injection.md)),
+  and `openapi.config.ts` stays
+  ([architecture/tooling.md](./architecture/tooling.md)).
 - **module-scoped DI** - shipped in 1.0.0, with `dunx-template` on 1.0.1. The scope
   model is in
   [architecture/dependency-injection.md](./architecture/dependency-injection.md), and
@@ -309,6 +322,16 @@ Delivered and moved out of this folder rather than left here marked done:
 - **the landing page** - the hero, the lifecycle drawing, the motion and the light
   palette are built; what remains is judgement about the benchmark panel rather than
   work.
+- **the scaffolder's interface** - `bunx @dunx/create-app` asks with an arrow-key
+  list instead of taking `--with`, `--all`, `--list` and `--template`. The list shows
+  what a selection pulls in and what needs a service running, which a flag cannot.
+  Built on `setRawMode` and tested through `Bun.spawn({ terminal })`, a real PTY;
+  both are recorded in [bun-apis.md](./bun-apis.md).
+- **`@arkv/logger` 0.12** - the upstream work landed there rather than here, which is
+  the "improvements go into the `@arkv` repo" rule doing its job. What dunx changed is
+  one line: `LoggerLifecycle.onShutdown` drains with `closeAsync`, because a transport
+  whose sink is a network discards its queue on a synchronous `close()` and an app
+  shipping to a collector lost its last batch on every deploy.
 
 ### From porting nestjs-template to dunx-template
 
@@ -322,10 +345,11 @@ deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, an
 **queue dashboard page** is bull-board, mounted by `@dunx/dashboard`.
 
 `OpenApiModule.forRootAsync` closed the half of the options-before-container problem
-that `OpenApiModule` owned. The `HttpOptions` half is still open - it is
-[class-modules W1](../internal/notes/roadmap/class-modules-and-opt-in-config.md#w1---httpoptionsprovider-keystone),
-which absorbed the analysis when that item stopped being a file of its own - and the
-template still validates its config twice because of it.
+that `OpenApiModule` owned, and `HttpOptionsProvider` closed the other:
+a subclass resolved from the container, so the template no longer validates its
+config twice. See [Upgrading](./guide/22-upgrading.md) for what each imperative
+call maps to, and
+[architecture/http.md](./architecture/http.md) for why the argument still wins.
 
 **What held up under a clean-room consume,** which is worth as much as the bug list:
 all 13 working subpath exports resolve at runtime and under `nodenext`;
@@ -480,8 +504,11 @@ one earns its place, and it is why several plausible candidates were rejected:
 - **An auth example.** It would be `full`'s `src/auth/` copied with the rest deleted:
   same better-auth config, same schema, same guard, no new question answered.
 - **A queue / background-worker example.** Its entire subject needs Redis, so in CI
-  it would skip and demonstrate nothing. `full`'s `bun run worker` already isolates
-  the two-process shape, which is the part that is genuinely hard to see.
+  it would skip and demonstrate nothing. `full`'s `jobs/jobs.processor.ts` already
+  shows the isolated shape, and shows it the way it should be reached for: bullmq
+  forks that file for a `background: true` handler, so there is no second process to
+  run. The `bun run worker` script this line used to cite is gone, along with the
+  `src/worker.ts` the scaffolder generated next to it.
 - **An OpenAPI-first example.** `full` already generates the document from the zod
   schemas its routes validate against; a second app would only have fewer routes in
   it.

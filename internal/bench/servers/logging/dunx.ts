@@ -20,6 +20,7 @@ import {
 } from '@dunx/http';
 import type { BunRequest } from 'bun';
 import { echo, jsonPayload, personSchema, PLAINTEXT, port } from '../shared.js';
+import { FastJsonLogger, NoMergeLogger, TextLogger } from './formats.js';
 import {
   DiscardLogger,
   isLoggingVariant,
@@ -165,6 +166,14 @@ class BenchController {
   }
 }
 
+const FORMATS: Partial<
+  Record<LoggingVariant, new (context: RequestContext) => Logger>
+> = {
+  text: TextLogger,
+  nomerge: NoMergeLogger,
+  fastjson: FastJsonLogger,
+};
+
 const loggerOverride = (): ReturnType<typeof provide<Logger>> | undefined => {
   if (variant === 'entry') return provide(Logger, { useClass: DiscardLogger });
   if (variant === 'timestamp') {
@@ -182,6 +191,15 @@ const loggerOverride = (): ReturnType<typeof provide<Logger>> | undefined => {
     return provide(Logger, {
       useFactory: (context: RequestContext) =>
         new ConsoleLogger(context, 'info', false),
+      inject: [RequestContext] as const,
+    });
+  }
+  // The format experiment. Same middleware, same batching, same route - only the
+  // line-building differs, so each is `default` plus one variable.
+  const format = FORMATS[variant];
+  if (format !== undefined) {
+    return provide(Logger, {
+      useFactory: (context: RequestContext) => new format(context),
       inject: [RequestContext] as const,
     });
   }

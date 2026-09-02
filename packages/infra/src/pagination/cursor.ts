@@ -19,19 +19,23 @@ export interface CursorPayload {
 }
 
 /**
- * Raised for a cursor that does not decode. Extends `AppError`, not an HTTP error:
- * `@dunx/infra` must not depend on the web layer, and a bad cursor is the caller's
- * to map - usually to a 400.
+ * Raised for a cursor that does not decode.
  *
- * ```ts
- * catch (error) {
- *   if (error instanceof CursorError) throw new HttpError(400, error.message);
- *   throw error;
- * }
- * ```
+ * Extends `AppError` and not an HTTP error, because `@dunx/infra` must not depend
+ * on the web layer. It carries `status = 400` instead, which is an integer rather
+ * than a dependency, and `@dunx/http`'s default mapper turns that into the
+ * response. Nothing in an application has to catch it to get a 400.
  */
 export class CursorError extends AppError {
   override readonly name = 'CursorError';
+  /**
+   * A cursor the caller sent and got wrong, so a 400 rather than a 500.
+   *
+   * An integer, not an `HttpError`: `@dunx/infra` must not depend on the web
+   * layer, and this is how it says what the failure means without doing so.
+   * `@dunx/http`'s default mapper honours it.
+   */
+  override readonly status = 400;
 }
 
 export const encodeCursor = (

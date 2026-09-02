@@ -17,14 +17,15 @@ The Bun.serve adapter, how routes are discovered, and multi-node websocket fan-o
    already folded in
 6. Hand to `Bun.serve`
 
-Step 2 needs the instance, not just the class, so that the handler can be bound off
-it - which is what makes an undecorated override in a subclass dispatch correctly.
-That ordering is guaranteed: container resolution is eager and completes first.
+Step 2 needs the instance, not just the class, so the handler can be bound off it.
+Binding off the instance is what makes an undecorated override in a subclass
+dispatch correctly. That ordering is guaranteed: container resolution is eager
+and completes first.
 
-Field-initialized routes are part of **Route discovery** but not yet implemented:
-the thing that produces them is the `route.*` builder, which exists to sidestep the
-decorator inference limit, so it lands with Phase 3 rather than as a scan with no
-producer.
+Field-initialized routes are part of **Route discovery** but not yet
+implemented. The thing that produces them is the `route.*` builder, which
+sidesteps the decorator inference limit. It lands with Phase 3 rather than
+as a scan with no producer.
 
 Middleware is a **class** with `handle(req, ctx, next)`, resolved from the container
 so it gets constructor injection. It has three homes, one per scope it can belong
@@ -59,11 +60,13 @@ That second one is the first concrete cost the "no ancestor layer" decision has 
 and it is still the right decision: the alternative surprise - importing a module
 changes the importer's request path - is worse and unbounded.
 
-What did move was something the design never named. The app's queue controller had a
-private `degrades()` helper wrapped around all five of its route bodies, translating
-an unreachable broker into a 503. That is a per-controller `@Catch` filter written by
-hand, it is the one thing `HttpOptions.middleware` could not express, and it is now
-one `@Module({ middleware })` line.
+What did move was something the design never named. The app's queue
+controller had a private `degrades()` helper wrapped around all five of its
+route bodies, translating an unreachable broker into a 503.
+
+That is a per-controller `@Catch` filter written by hand: the one thing
+`HttpOptions.middleware` could not express. It is now one
+`@Module({ middleware })` line.
 
 **The generalisation: the first real use of module middleware was a filter, not a
 guard.** A guard that applies to exactly one feature is uncommon, because a global
@@ -74,23 +77,25 @@ sense for one feature's routes is common, and had nowhere to live.
 
 `HttpFactory` wraps the app's root in a `global: true` module that binds and
 exports `PubSub`, `ClientAddress` and `RequestLoggingMiddleware`. Two of those
-could be left to self-binding under the flat container and cannot be under
-scoping: an unbound class self-binds into **whichever scope asks first**, so a
-second module injecting `ClientAddress` was a boot error naming the first
-module, and even with one consumer `listen()` could attach the live server to
-an instance nothing else held.
+could be left to self-binding under the flat container, but not under scoping.
 
-They are framework services with no module for an app to import, which is
-exactly what the global scope is for.
-`@dunx/http`'s client-address suite pins it.
+An unbound class self-binds into **whichever scope asks first**. A second
+module injecting `ClientAddress` was therefore a boot error naming the first
+module, and even with a single consumer, `listen()` could attach the live
+server to an instance nothing else held.
+
+They are framework services with no module for an app to import, and the
+global scope exists for exactly that. `@dunx/http`'s client-address suite
+pins it.
 
 Per request the framework does exactly four things: validate declared schemas,
 call the method, pass a `Response` through or wrap the return in
-`Response.json()`, and map thrown errors. No lookup, no DI, no metadata read -
-route metadata and the `RouteContext` join the **boot-time** set, not the
-per-request one. The context is frozen and shared by every request to its route, and
-`ctx.get` is a `Map` lookup over an already-merged record rather than a prototype
-walk.
+`Response.json()`, and map thrown errors. No lookup, no DI, no metadata read
+happens on that path: route metadata and the `RouteContext` join the
+**boot-time** set, not the per-request one.
+
+The context is frozen and shared by every request to its route. `ctx.get` is
+a `Map` lookup over an already-merged record, rather than a prototype walk.
 
 ## Route discovery
 
@@ -136,17 +141,19 @@ No `Symbol.metadata`, no polyfill, no import-order dependence.
 
 ### Declined: trailing-slash normalisation
 
-`GET /t` is a 200 and `GET /t/` is a 404, and Nest, Express and Fastify all
-normalise, so it is the one thing that breaks a ported client - as a 404 that reads
-like a missing route. It stays a 404, and the reason is where the two candidate
-implementations would have to live.
+`GET /t` is a 200, and `GET /t/` is a 404. Nest, Express and Fastify all
+normalise, so this is the one thing that breaks a ported client - it shows up
+as a 404 that reads like a missing route. It stays a 404 here, because of
+where the two candidate implementations would have to live.
 
-`joinPath` already normalises the **declared** side, so `@Get('sub/')` is
-`/t/sub` and both spellings are never live at once. The inbound side is Bun's:
-by the time anything in dunx can see that nothing matched, it is inside the
-`fetch` fallback, which holds middleware and the error mapper and **no route
-patterns**. Stripping the slash and re-dispatching there means matching `/t/7/`
-against `/t/:id` in JavaScript, which is the router this repo will not write.
+`joinPath` already normalises the **declared** side, so `@Get('sub/')`
+becomes `/t/sub`, and both spellings are never live at once.
+
+The inbound side belongs to Bun. By the time anything in dunx can see that
+nothing matched, it is inside the `fetch` fallback, which holds middleware
+and the error mapper and **no route patterns**. Stripping the slash and
+re-dispatching there would mean matching `/t/7/` against `/t/:id` in
+JavaScript: exactly the router this repo will not write.
 
 Registering `/t/` as a second entry in the `Bun.serve` table was the other
 option - native, and free per request - and was rejected as blast radius: it
@@ -182,25 +189,95 @@ carries one, `@arkv/shared`, for the outbound client behind `./client`; the rela
 does not touch it.
 
 **The rejected alternative was putting it in `@dunx/infra/redis`**, where the
-connection handling, retry policy and error classification already exist. It was
-rejected on the dependency direction: the relay has to be reachable from `PubSub`,
-`PubSub` is `@dunx/http`, and `@dunx/infra` must not depend on the web layer. That
-coupling has now been refused three times - for the request logger, for `@dunx/auth`,
-and here - for the same reason each time: `@dunx/infra` is what a CLI script, a
-seeder or a queue worker imports, and none of those have an HTTP server.
+connection handling, retry policy and error classification already exist. It
+was rejected on the dependency direction: the relay has to be reachable from
+`PubSub`, `PubSub` is `@dunx/http`, and `@dunx/infra` must not depend on the
+web layer.
+
+That coupling has now been refused three times - for the request logger, for
+`@dunx/auth`, and here - and for the same reason each time. `@dunx/infra` is
+what a CLI script, a seeder or a queue worker imports, and none of those have
+an HTTP server.
 
 The cost accepted is a small amount of **relay-specific connection glue** that does
 not reuse `@dunx/infra/redis`'s general-purpose client: URL validation, the
 `maxRetries` default, lazy client creation, and unsubscribe-before-close. That is
 about 60 lines, and it buys a package with one dependency.
 
-An app that would rather reuse its existing connections satisfies the two methods
-itself - and `@dunx/infra`'s `RedisConnection` **already does, structurally**:
-`publish(channel, message)` and `subscribe(channel, listener)` are its own names and
-shapes, so `app.get(PubSub).relayThrough(app.get(RedisConnection))` typechecks with
-no adapter between them. That is the `@dunx/auth` `RedisStore` precedent - declare
-the shape, let the app supply anything that fits - and `examples/full` runs its
-second node that way on purpose.
+An app that would rather reuse its existing connections can satisfy the two
+methods itself. `@dunx/infra`'s `RedisConnection` **already does, structurally**:
+`publish(channel, message)` and `subscribe(channel, listener)` are its own names
+and shapes, so `app.get(PubSub).relayThrough(app.get(RedisConnection))` typechecks
+with no adapter between them.
+
+This is the same `@dunx/auth` `RedisStore` precedent: declare the shape, and
+let the app supply anything that fits. `examples/full` runs its second node
+that way on purpose.
+
+### A Postgres relay over `LISTEN`/`NOTIFY`
+
+`Bun.SQL` has both of `PubSubRelay`'s operations under other names: `notify` for
+publish, `listen` for subscribe, and `unlisten` on the returned handle for close. So
+this is not the structural fit `RedisConnection` is, where the names already match.
+It is a class of about thirty lines holding one `Bun.SQL` and renaming three calls.
+`Bun.SQL` is a global, so it would add no dependency to `@dunx/http`.
+
+Measured on Bun 1.4.0 (rev 34cbb9a40) against Postgres 17, with two real nodes: a
+gateway on each, a client connected to node B alone, `publishEvent` called on node A,
+and `relayChannel` left at its default:
+
+```
+frames on the node-b client: [ "{\"event\":\"greet\",\"data\":{\"from\":\"node-a\"}}" ]
+local fan-out on node a:     0
+```
+
+The `0` carries the result. Node A had no local subscriber, so the frame reached that
+client across the channel or not at all. `dunx:ws` needs no respelling for Postgres;
+Bun quotes the identifier.
+
+One behaviour differs from the Redis relay, and an app moving between the two has to
+size its frames for it. Postgres caps a `NOTIFY` payload at 7999 bytes, and the relay
+envelope adds an origin id and a topic on top of the frame:
+
+```
+frame 7925 bytes -> relayed
+frame 7935 bytes -> refused
+```
+
+The refusal is reported. `notify()` rejects with `ERR_POSTGRES_SERVER_ERROR` and
+`22023`, `#outbound` takes its promise branch because `Query` extends `Promise`, and
+the app gets one `logger.warn` per degradation:
+
+```
+the websocket relay could not publish. Fan-out is local to this process until it recovers.
+```
+
+Redis has no comparable ceiling.
+
+### The backend is a method, not a field
+
+`PostgresRelay` ships beside `RedisRelay`, and `WsRelayModule` grew
+`forPostgres`/`forPostgresAsync` beside `forRoot`/`forRootAsync`. Both relays
+extend **`WsRelay`**, an abstract class the module binds to whichever one it built,
+so an `HttpOptionsProvider` naming `WsRelay` does not change when the backend does.
+
+The choice sits in the method name, and one measurement forces it.
+**Providers are instantiated eagerly**: a factory bound to a token runs during
+`AppFactory.create`, measured on a module whose unused factory threw at boot.
+
+A single `forRootAsync` reading its backend from the resolved settings would
+still declare both bindings up front, so the unpicked one would be a
+`RedisRelay` constructed against a Postgres url. Two methods declare two
+static binding sets instead.
+
+The cost is that the backend cannot come from validated config, since config is
+resolved after the module graph is built. An app deciding at run time reads the
+environment where it declares the import.
+
+`PostgresRelay` holds `max + 1` connections while it listens. `Bun.SQL` dedicates
+one to the `LISTEN` and leaves the pool to answer `notify`: with `max: 1`,
+`pg_stat_activity` shows two rows for the relay and one once it closes. Budget two
+connections per replica at the default.
 
 ### One channel, because `psubscribe` does not work
 
@@ -214,9 +291,9 @@ Two reasons, both forced:
 - `psubscribe` is unusable on Bun 1.3.14 (see [bun-apis.md](../bun-apis.md)), so a
   wildcard subscription is not available either.
 
-The cost is that every node reads every relayed frame and drops the ones for topics
-it has no local subscriber on - a `server.publish` returning `0`. Two apps sharing
-one Redis need two channels, which is what `relayChannel` is for.
+The cost is that every node reads every relayed frame and drops the ones for
+topics it has no local subscriber on - a `server.publish` returning `0`. Two
+apps sharing one Redis need two channels. `relayChannel` exists for that.
 
 ### Duplicate delivery is the failure mode, and an origin id is the defence
 
@@ -264,10 +341,11 @@ symptom of both is a service that shut down cleanly and then hangs forever:
   rescue this one, because the client is not in subscriber mode.
 
 Both were already latent in `@dunx/infra/redis` and are fixed there too. The
-measurements are in [bun-apis.md](../bun-apis.md). The guards have to be **spawn-based
-tests**: `bun test` exits the runner process itself, so a held-open event loop is
-invisible from inside the suite - which is exactly why this survived until an example
-app tried to shut down.
+measurements are in [bun-apis.md](../bun-apis.md).
+
+The guards have to be **spawn-based tests**, because `bun test` exits the
+runner process itself and a held-open event loop is invisible from inside
+the suite. This bug went unnoticed until an example app tried to shut down.
 
 Absence is tolerated at every step: a failed subscribe reports once and leaves local
 fan-out untouched; a failed publish reports once and not again until one succeeds;
@@ -281,3 +359,43 @@ fan-out nobody notices.
 through `PubSub`, so it stays local. Anything that must cross nodes goes through
 `PubSub`. `subscriberCount` is local too - Bun counts its own sockets and cannot
 count another node's.
+
+## HTTP options as a provider
+
+`HttpFactory.create(root, options)` builds the container, so its `options`
+argument has to be complete before a single provider exists. An app whose request
+logging follows its own configuration therefore validated that configuration
+twice: once in `main.ts` to build the argument, and once through `ConfigModule`
+for everything else. `examples/full` opened with `validate(Bun.env).log`, and the
+container had no view of that second copy.
+
+`HttpOptionsProvider` carries the same settings and is resolved from the
+container. `HttpFactory` promotes a default binding; a module binding a subclass
+replaces it, and that subclass injects `ConfigService` like anything else.
+
+Three decisions in it:
+
+**The argument wins, field by field.** A `create()` argument already meant
+something before this existed, so a provider that outranked it would change what
+an existing app does. A field the argument omits is the provider's to answer,
+which lets configuration move into the container one field at a time.
+
+**Promoted rather than bound in the HTTP scope.** `AppOptions.promote` is the
+mechanism core already used for `Logger` and `RequestContext`: the binding is
+laid into every scope holding no view of its own, and a module declaring the
+token replaces it with no shadowing warning.
+
+Binding it in `HttpModule`'s own providers was tried first, and failed
+differently. It put the token in that scope's `own` map, which warned every
+app that declared a subclass, while the HTTP scope kept resolving its own
+default because a scope prefers what it owns.
+
+**The imperative methods are unchanged.** `setGlobalPrefix`, `enableCors`, `set`
+and `enableShutdownHooks` all still work, and each now has a field alongside it.
+The fields are applied in the constructor, so a later method call overrides one.
+
+Both logging middlewares are now bound unconditionally. `requestLogging: false`
+used to decide whether the middleware provider was bound at all, and that decision
+had to be made before the container existed; whether the middleware sits in the
+chain is read off the resolved options at `listen()`. Binding one that goes unused
+costs a constructor call at boot.

@@ -4,8 +4,8 @@
  * rots. `bun run sync:templates` copies them in and `features.test.ts` fails on
  * drift.
  *
- * The wiring is not copied: `app.module.ts`, `config.ts`, `bootstrap.ts` and
- * `main.ts` name every feature at once, so they are generated from the selection.
+ * The wiring is not copied: `app.module.ts`, `config.ts` and `main.ts` name every
+ * feature at once, so they are generated from the selection.
  */
 export interface Feature {
   /** Flag name, and the directory under `templates/features/`. */
@@ -64,17 +64,36 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
         'LOG_LEVEL: z.enum(LogLevel).default(LogLevel.INFO),',
         '/** Unset means console only. Set it to also append JSON to a rotating file. */',
         'LOG_FILE: z.string().optional(),',
+        '/** Both cost a `req.clone().text()` on the hot path, so off in production. */',
+        'LOG_REQUEST_BODY: z.stringbool().default(false),',
+        'LOG_RESPONSE_BODY: z.stringbool().default(false),',
       ],
       field:
-        'readonly log: { readonly level: LogLevel; readonly file: string | undefined };',
-      map: 'log: { level: value.LOG_LEVEL, file: value.LOG_FILE },',
+        'readonly log: { readonly level: LogLevel; readonly file: string | undefined; ' +
+        'readonly requestBody: boolean; readonly responseBody: boolean };',
+      map:
+        'log: { level: value.LOG_LEVEL, file: value.LOG_FILE, ' +
+        'requestBody: value.LOG_REQUEST_BODY, responseBody: value.LOG_RESPONSE_BODY },',
       env: [{ name: 'LOG_LEVEL', value: 'info' }],
     },
     corsOrigin: {
-      schema: ["CORS_ORIGIN: z.string().default('https://example.com'),"],
-      field: 'readonly corsOrigin: string;',
-      map: 'corsOrigin: value.CORS_ORIGIN,',
-      env: [{ name: 'CORS_ORIGIN', value: 'https://example.com' }],
+      schema: [
+        "CORS_ORIGIN: z.string().default('https://example.com'),",
+        '/**',
+        ' * Whether `x-forwarded-for` is believed. Off unless a trusted proxy is in',
+        ' * front: with nothing stripping the header, any caller picks its own',
+        ' * address, which fakes both rate limiting and the logged client address.',
+        ' */',
+        'TRUST_PROXY: z.stringbool().default(false),',
+      ],
+      field: 'readonly corsOrigin: string;\n  readonly trustProxy: boolean;',
+      map: 'corsOrigin: value.CORS_ORIGIN,\n    trustProxy: value.TRUST_PROXY,',
+      env: [
+        { name: 'CORS_ORIGIN', value: 'https://example.com' },
+        // Written to `.env.example` so the setting is visible rather than only
+        // implied by the schema default.
+        { name: 'TRUST_PROXY', value: 'false' },
+      ],
     },
     database: {
       schema: [
@@ -195,7 +214,10 @@ export const FEATURES: readonly Feature[] = [
     requires: [],
     module: { klass: 'HttpModule', from: './http/http.module.js' },
     dependencies: [],
-    config: ['corsOrigin'],
+    // `redis` because this feature wires the websocket relay, whose url comes
+    // from the same place. REDIS_URL is optional and the relay connects lazily,
+    // so an app that never opens a socket pays nothing for it.
+    config: ['corsOrigin', 'redis'],
   },
   {
     name: 'guards',
@@ -278,7 +300,7 @@ export const FEATURES: readonly Feature[] = [
   {
     name: 'jobs',
     source: 'jobs',
-    summary: 'bullmq queues and a worker, over Bun.RedisClient.',
+    summary: 'bullmq queues over Bun.RedisClient, background handlers forked.',
     requires: ['images'],
     module: { klass: 'JobsModule', from: './jobs/jobs.module.js' },
     dependencies: ['@dunx/infra', 'bullmq', 'ioredis', 'zod'],

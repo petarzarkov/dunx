@@ -97,10 +97,9 @@ it('generates a JSON Schema from the same zod schema', () => {
   // its `title` when there is one and by its `components/schemas` key otherwise,
   // so a prose title makes the Schemas list read as sentences rather than type
   // names. Verified against Swagger UI 5.32.14.
-  //
-  // zod 4.5 puts a root carrying `.meta({ id })` into `$defs` as well and refs it
-  // from the root, where 4.4 inlined that root. `@dunx/openapi` follows the ref,
-  // so both shapes document the same way.
+  // zod 4.5 hoists the **root** into `$defs` too and leaves a `$ref` behind it,
+  // where 4.4 emitted the root inline and only named children were hoisted. The
+  // named child is still there; what moved is the top of the document.
   expect(tour.text).toContain('"$ref":"#/$defs/CreateUser"');
   expect(tour.text).toContain(
     '"Tag":{"type":"object","properties":{"label":{"type":"string",' +
@@ -400,6 +399,14 @@ it('serves static assets with two cache policies', () => {
   );
   // Anything outside the mount falls through untouched.
   expect(tour.text).toContain('GET /api/notes -> 200 (outside /assets');
+});
+
+it('reaches a second outbound client through a constructor parameter', () => {
+  // `HealthClient extends HttpService`, registered with `forRootAsync(config,
+  // HealthClient)`. A subclass is a token and a parameter type, so `UpstreamDemo`
+  // takes it as an argument - `httpClient('health')` would return a `Token`, and
+  // a token can only be reached with `inject()` in a field.
+  expect(tour.text).toContain('HealthClient -> up');
 });
 
 it('retries an outbound 503, and does not retry a 404 or an abort', () => {

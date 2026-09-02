@@ -10,9 +10,9 @@ coverage report as the Pages root; coverage is now a page inside it.
 
 **The bundler was `Bun.build` and was moved back to Vite, by measuring rather than
 by preference.** The original swap traded ~25% more gzipped JS for a 41 ms build
-against Vite 5's 1.7 s. Vite 8 ships Rolldown, which removed the speed argument,
-and the size argument had grown as Mantine and `@mantine/charts`/recharts entered
-the graph. Same site, same content, both bundlers, gzip -9:
+against Vite 5's 1.7 s. Vite 8 ships Rolldown, which removed the speed argument.
+The size argument had also grown, as Mantine and `@mantine/charts`/recharts
+entered the graph. Same site, same content, both bundlers, gzip -9:
 
 | Bundler           | JS raw    | JS gzip      | CSS raw  | CSS gzip | Build   |
 | ----------------- | --------- | ------------ | -------- | -------- | ------- |
@@ -30,17 +30,17 @@ it is ever reversed:
 - `public/` copying and the `dist/` clean are Vite's; `scripts/build.ts` is gone.
 
 **Every `@mantine/*` is on one major, and it is 8.** `@mantine/charts` had
-drifted to 9.5.0 against core 8.3.18, which its own `peerDependencies` forbids
-(it pins `@mantine/core` and `@mantine/hooks` to an exact version). The fix was
-pinning `charts` back to `^8.3.6` rather than moving the whole site to Mantine
-9, and the reason it works is that `charts@8.3.18` peers `recharts` at
-`>=2.13.3`, so the installed recharts 3.10.1 satisfies both majors.
+drifted to 9.5.0 against core 8.3.18, which its own `peerDependencies` forbids:
+it pins `@mantine/core` and `@mantine/hooks` to an exact version. The fix was
+pinning `charts` back to `^8.3.6` rather than moving the whole site to Mantine 9.
+That works because `charts@8.3.18` peers `recharts` at `>=2.13.3`, so the
+installed recharts 3.10.1 satisfies both majors.
 
-`BarChart` in 8 carries every prop `BenchChart.tsx` passes, and a
-headless-Chrome render of `#/benchmarks` produced 5 recharts surfaces with 55
-bars and the focus colour on `@dunx/http`, so this is verified rather than
-assumed. `@mantine/code-highlight` went with it: highlighting happens at
-generate time now, and nothing under `internal/docs` imported it.
+`BarChart` in 8 carries every prop `BenchChart.tsx` passes. A headless-Chrome
+render of `#/benchmarks` produced 5 recharts surfaces with 55 bars and the focus
+colour on `@dunx/http`, so this is verified rather than assumed.
+`@mantine/code-highlight` went with it: highlighting happens at generate time
+now, and nothing under `internal/docs` imported it.
 
 **The model is one file per route, and the landing page carries none of them.**
 `site.json` was imported into the entry chunk, so `#/` downloaded all 21 guide
@@ -82,10 +82,10 @@ the site's shape, and a field surviving the projection means something renders i
 **A README is rendered minus its repo-plumbing sections.** A package page
 showed `## Install`, `## License` and the monorepo's own build instructions,
 which are for someone working in this repository and not for someone reading
-the docs. `siteMarkdown` in `scripts/content.ts` drops a `##` section whose
-slug matches `EXCLUDED_SECTIONS` with a `-` word boundary - so `## Install it
-as a devDependency` goes with `## Install` - plus the centered title-and-badges
-block every README opens with.
+the docs. `siteMarkdown` in `scripts/content.ts` drops a `##` section whose slug
+matches `EXCLUDED_SECTIONS` with a `-` word boundary, so `## Install it as a
+devDependency` goes with `## Install`. It also drops the centered
+title-and-badges block every README opens with.
 
 The list is published in `internal/docs/README.md`, and an author decides which
 side a section falls on by naming it. Guides under `docs/` are exempt: they
@@ -134,6 +134,82 @@ standalone: the model to `internal/docs/src/generated/coverage.json`, the badges
 rebuilds the site after `test:cov`, because the first build (inside
 `bun run build`) predates the coverage data.
 
+## `@dunx/create-app` asks with an arrow-key list, and takes no prompt library
+
+The scaffolder used to print a numbered list and read one line of stdin. The
+comment above that read said a full-screen selector "means owning cursor movement,
+terminal restore on signal and a fallback for every terminal that does not do what
+it claims - which is a library's job". That was wrong twice over, and both halves
+were settled by probing Bun rather than arguing.
+
+**The library half.** Every prompt package is a dependency in a tool whose appeal
+is that `bunx @dunx/create-app` resolves almost nothing.
+
+Bun ships the platform here: `process.stdin.setRawMode` (a `node:tty` built-in it
+implements natively), `Bun.stringWidth` and `Bun.sliceAnsi` for measuring and
+cutting by terminal columns, `Bun.stripANSI`, `Bun.color` for the palette, and
+`Bun.enableANSIColors` as the capability check. What was left to own is a key
+decoder and a repaint: `keys.ts` and `prompt.ts`, together under 250 lines.
+
+**The "cannot be tested" half, which was the real argument.** `Bun.spawn(cmd,
+{ terminal })` gives a child a real PTY: it reports `isTTY === true`, gets the
+`cols` and `rows` the parent declared, and reads the bytes the parent writes. So
+`interactive.test.ts` answers the CLI with arrow keys the way a person does, with
+no `node-pty` and no browser download. The measurements are in
+[bun-apis.md](../bun-apis.md), "Raw-mode stdin".
+
+### Where the split falls, and why
+
+A spawned process reports no coverage, so a design that only worked through the PTY
+would have put the whole feature outside the 90% gate. The split is:
+
+| Piece                       | Knows about                    | Tested by     |
+| --------------------------- | ------------------------------ | ------------- |
+| `KeyDecoder`                | bytes                          | in-process    |
+| `Prompt` and its subclasses | state and frames, no I/O       | in-process    |
+| `PromptRunner`              | a `Tty`, repainting            | in-process    |
+| `ProcessTty`                | raw mode, two injected streams | in-process    |
+| the CLI end to end          | an actual terminal             | a spawned PTY |
+
+`Tty` is an abstract class with five members; `MemoryTty` in `tty.fixture.ts` is the
+other implementation. `ProcessTty` takes its input and output streams as
+constructor arguments defaulting to `process.stdin` and `process.stdout`, which is
+what lets its raw-mode handling be asserted without a terminal. The PTY suite is
+left with the one question a fake cannot answer: whether a real terminal behaves
+the way the fake assumes.
+
+### The generated app lost two files
+
+`src/bootstrap.ts` exported `createApp` and `src/main.ts` declared a local function
+called `bootstrap` that imported it. Two files, and the names crossed over. It is
+one file now: `main.ts` exports `createApp` and serves it under
+`if (import.meta.main)`, which is false for the import a test makes. Measured on Bun
+1.4.0 as the entry, under `bun --watch`, and from a `bun test` import.
+
+`src/worker.ts` and its `worker` script are gone, and they were dead on arrival.
+`QueueModule` is given `consume: true`, so the container opens the bullmq workers at
+`onInit` and closes them before the connections the handlers use; a handler marked
+`background: true` is forked by bullmq into `jobs/jobs.processor.ts`.
+
+`examples/full` had neither file, and the vendored `jobs.processor.ts` said so in its
+own comment: "its own module rather than `worker.ts`, which has a `run()` that would
+boot a second worker inside every child." The generator was the only thing that still
+believed in it.
+
+`WorkerFactory` remains a real `@dunx/infra/queue` capability for a deployment that
+wants a separate process, and the queues guide documents all three ways to consume.
+
+### What the flags lost
+
+`--with`, `--all`, `--list` and `--template` are gone. A flag cannot show which
+features a selection pulls in, or which of them need Redis running, and both are
+lines the list updates as the cursor moves. `scaffold({ target, features })` is the
+scripted path, and it is the one the repo's own `check:scaffolds` already used.
+
+A run with no terminal - piped, redirected, CI - still asks nothing and writes the
+minimal template, because a scaffolder that blocks on a question there hangs the
+job.
+
 ## The API explorer: built, measured, then replaced by Swagger UI
 
 **`internal/openapi-ui` is deleted and `@dunx/openapi` mounts `swagger-ui-dist`.**
@@ -170,10 +246,10 @@ decision rather than a footnote to it. Two things follow, and both are in the co
 - **It is an optional peer, resolved on the first request for the page.** An app
   serving only `/openapi.json` neither installs nor loads it.
 
-Two measurements from the explorer era that are still the reason things are shaped
-as they are: **per-component Mantine CSS** beat the `styles.css` barrel 381 KiB to
-517 KiB, and dropping `Tooltip` and `ScrollArea` for `title=` and `overflow: auto`
-took 490 KiB to 434 KiB because `Tooltip` drags in floating-ui. Both applied to
+Two measurements from the explorer era still shape things as they are:
+**per-component Mantine CSS** beat the `styles.css` barrel 381 KiB to 517 KiB, and
+dropping `Tooltip` and `ScrollArea` for `title=` and `overflow: auto` took 490 KiB
+to 434 KiB, because `Tooltip` drags in floating-ui. Both applied to
 `internal/dashboard-ui`, which still exists and still follows them.
 
 ### `splitting: true`, which outlived the thing that needed it
@@ -216,7 +292,7 @@ being reachable and guarded the same way, and the server already has the bytes.
 
 ### The no-external-requests guarantee narrowed, and the test says so
 
-The old page fetched nothing at all, and the assertion had already had to move once
+The old page fetched nothing at all, and the assertion had already had to move once:
 
 - `expect(page).not.toContain('src=')` is sound over hand-written HTML and
   meaningless over a minified React bundle that contains `.src=`, `href="` and the
@@ -231,8 +307,31 @@ the immutable header, and the page requests nothing off-origin.
 
 ### Vite in `internal/dashboard-ui`, `bun build` in `internal/docs`
 
-The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms and
-took Bun's ~25 % larger output, which is right for a site. Both numbers have since
-been re-measured and reversed - see "Documentation site" above. The dashboard bundle
-is inlined into a page a backend serves, so Rollup's tree-shaking wins there and the
-~1.5 s is paid once per package build.
+The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms
+and took Bun's ~25 % larger output, which was right for a site. Both numbers have
+since been re-measured. The speed gap narrowed but Bun.build remains faster,
+while the bundle-size result reversed - see "Documentation site" above. The
+dashboard bundle is inlined into a page a backend serves, so Rollup's
+tree-shaking wins there, and the ~1.5 s is paid once per package build.
+
+## Why `openapi.config.ts` stays
+
+`bunx dunx-openapi` takes either a bare module or a config file:
+
+```
+bunx dunx-openapi ./src/app.module.ts
+bunx dunx-openapi ./src/openapi.config.ts --out public/openapi.json
+```
+
+The first form needs no config file at all: `findRootModule` and `describeRoutes`
+read the routes statically, and no server is constructed.
+
+The file was proposed for deletion, on the theory that a root module plus a
+document contributor could be read statically the way `@dunx/mcp` reads routes. A
+contributor cannot. It describes endpoints some library owns, and asking
+better-auth for its schema means constructing better-auth, so there is nothing
+static to read.
+
+So the split is: routes are static and need no file, contributions are not and do.
+`DocumentSource` improved the file rather than removing it, since a config file
+can now hand over a provider instead of a thunk.

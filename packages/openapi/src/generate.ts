@@ -55,15 +55,58 @@ export interface DocumentInfo {
  * through unvalidated, which is the honest contract - dunx did not generate them
  * and cannot vouch for them.
  */
-interface DocumentFragment {
+export interface DocumentFragment {
   readonly paths?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   readonly schemas?: Readonly<Record<string, unknown>>;
   readonly tags?: readonly TagObject[];
 }
 
-type DocumentContributor =
+/**
+ * Something the container resolved that knows how to describe its own endpoints.
+ *
+ * A class rather than an interface, so it is an injection token as well as a
+ * type - a contributor is normally a provider, reached through
+ * `forRootAsync`'s `inject`:
+ *
+ * ```ts
+ * export class AuthDocs extends DocumentSource {
+ *   constructor(private readonly auth: Auth) {
+ *     super();
+ *   }
+ *
+ *   override async contribute(): Promise<DocumentFragment> {
+ *     // `betterAuthDocument` defers: asking for the schema is async.
+ *     return betterAuthDocument(this.auth, { basePath: '/api/auth' })();
+ *   }
+ * }
+ *
+ * OpenApiModule.forRootAsync({
+ *   root: AppModule,
+ *   inject: [AuthDocs],
+ *   useFactory: (docs: AuthDocs) => ({ contribute: [docs] }),
+ * });
+ * ```
+ *
+ * Anything with a `contribute()` method satisfies it structurally, so extending
+ * this class is optional and no adapter is needed either way.
+ */
+export abstract class DocumentSource {
+  abstract contribute(): DocumentFragment | Promise<DocumentFragment>;
+}
+
+export type DocumentContributor =
   | DocumentFragment
+  | DocumentSource
   | (() => DocumentFragment | Promise<DocumentFragment>);
+
+/**
+ * A fragment carries `paths`, `schemas` or `tags`; a source carries a
+ * `contribute` method. Testing for the method rather than for the absence of the
+ * others keeps an empty fragment - `{}`, which a contributor with nothing to add
+ * legitimately returns - from being mistaken for one.
+ */
+const isSource = (entry: DocumentContributor): entry is DocumentSource =>
+  typeof (entry as Partial<DocumentSource>).contribute === 'function';
 
 export interface GeneratedDocument {
   readonly document: OpenApiDocument;
@@ -229,8 +272,11 @@ const mergeContributions = async (
   for (const contributor of contributors) {
     let fragment: DocumentFragment;
     try {
-      fragment =
-        typeof contributor === 'function' ? await contributor() : contributor;
+      fragment = isSource(contributor)
+        ? await contributor.contribute()
+        : typeof contributor === 'function'
+          ? await contributor()
+          : contributor;
     } catch (error) {
       // Best effort by design: a library that cannot produce its schema costs
       // some documentation, never the boot.

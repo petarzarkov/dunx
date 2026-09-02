@@ -407,19 +407,6 @@
   .feature:hover {
     transform: none;
   }
-
-  /* The reveal attribute still lands, so everything must be at its final
-     opacity here rather than merely transitioning to it instantly. */
-  .onion-layer,
-  .onion-core {
-    transition: none;
-  }
-
-  .onion:not([data-revealed='true']) .onion-layer,
-  .onion:not([data-revealed='true']) .onion-core {
-    opacity: 1;
-    translate: none;
-  }
 }
 
 /* Vertical tablist for the code tour. */
@@ -481,6 +468,11 @@
    instead of only asserted in the prose beside it. */
 .onion {
   --onion-inset: clamp(0.55rem, 1.6vw, 1.15rem);
+  /* One beat per boundary crossed, and one cycle for the whole trip. Every
+     animated part below shares the cycle and differs only in its delay, so the
+     five layers, the handler and the three return legs stay in step. */
+  --beat: 0.34s;
+  --cycle: 4.2s;
   display: flow-root;
 }
 
@@ -546,6 +538,7 @@
 }
 
 .onion-core {
+  position: relative;
   margin-left: var(--onion-inset);
   padding: 0.85rem;
   border-radius: 0.7rem;
@@ -568,6 +561,171 @@
 .onion:not([data-revealed='true']) .onion-core {
   opacity: 0;
   translate: 0 0.6rem;
+}
+
+/* One request, on a loop. The entrance above traces the path once as the section
+   arrives; this keeps tracing it, so "each layer wraps the one inside it" is
+   something a reader watches rather than a sentence beside a static diagram.
+
+   Direction is the colour: indigo going in, cyan coming back out, which is the
+   pairing the arrows and the return rows already use.
+
+   The delay is the whole schedule. Inbound, a layer lights at `depth * beat`, so
+   the flash descends. The handler lights one beat past the innermost layer. The
+   response then unwinds through the layers that call `next()`, `(8 - depth) * beat`
+   putting the global middleware first and the socket write last. Nothing here
+   animates a property that reflows: three pseudo-element rings and two arrows, on
+   opacity and translate.
+
+   Applied only under `[data-running='true']`, so leaving the section removes the
+   animation rather than pausing it mid-flash. */
+@keyframes onion-cross {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  12% {
+    opacity: 0.35;
+  }
+  22% {
+    opacity: 0;
+  }
+}
+
+@keyframes onion-arrow-in {
+  0%,
+  100% {
+    opacity: 0.75;
+    translate: 0 0;
+  }
+  2% {
+    opacity: 1;
+    translate: 0 0.18rem;
+  }
+  14% {
+    opacity: 0.75;
+    translate: 0 0;
+  }
+}
+
+@keyframes onion-arrow-out {
+  0%,
+  100% {
+    opacity: 0.75;
+    translate: 0 0;
+  }
+  2% {
+    opacity: 1;
+    translate: 0 -0.18rem;
+  }
+  14% {
+    opacity: 0.75;
+    translate: 0 0;
+  }
+}
+
+@keyframes onion-land {
+  0%,
+  100% {
+    opacity: 0;
+    scale: 0.985;
+  }
+  3% {
+    opacity: 1;
+    scale: 1;
+  }
+  26% {
+    opacity: 0;
+    scale: 1.015;
+  }
+}
+
+/* The boundary itself, drawn just outside the layer's own border so a flash reads
+   as that edge being crossed. No fill: a tint would wash over every layer nested
+   inside this one. */
+.onion-layer::after,
+.onion-layer[data-wraps='true']::before,
+.onion-core::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  border: 2px solid color-mix(in srgb, var(--accent-a) 80%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent-a) 22%, transparent);
+}
+
+/* Only the layers that see the response get an outbound ring, which is the same
+   three that carry a return row. */
+.onion-layer[data-wraps='true']::before {
+  border-color: color-mix(in srgb, var(--accent-c) 80%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent-c) 22%, transparent);
+}
+
+.onion-core::after {
+  inset: -3px;
+  border-radius: 0.85rem;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent-a) 40%, transparent);
+}
+
+.onion[data-running='true'] .onion-layer::after {
+  animation: onion-cross var(--cycle) linear infinite;
+  animation-delay: calc(var(--depth, 0) * var(--beat));
+}
+
+.onion[data-running='true'] .onion-head .onion-arrow {
+  animation: onion-arrow-in var(--cycle) linear infinite;
+  animation-delay: calc(var(--depth, 0) * var(--beat));
+}
+
+.onion[data-running='true'] .onion-core::after {
+  animation: onion-land var(--cycle) linear infinite;
+  animation-delay: calc(5 * var(--beat));
+}
+
+.onion[data-running='true'] .onion-layer[data-wraps='true']::before {
+  animation: onion-cross var(--cycle) linear infinite;
+  animation-delay: calc((8 - var(--depth, 0)) * var(--beat));
+}
+
+.onion[data-running='true'] .onion-return .onion-arrow {
+  animation: onion-arrow-out var(--cycle) linear infinite;
+  animation-delay: calc((8 - var(--depth, 0)) * var(--beat));
+}
+
+/* After the rules above rather than in the block up by `.feature`, and that is
+   the whole reason this second block exists. These selectors carry the same
+   specificity as the ones they turn off, so source order decides, and every
+   `.onion` rule in this file is declared below that block: the entrance
+   transitions had been overriding their own reduced-motion override since they
+   were written. */
+@media (prefers-reduced-motion: reduce) {
+  /* The reveal attribute still lands, so everything must be at its final opacity
+     here rather than merely transitioning to it instantly. */
+  .onion-layer,
+  .onion-core {
+    transition: none;
+  }
+
+  .onion:not([data-revealed='true']) .onion-layer,
+  .onion:not([data-revealed='true']) .onion-core {
+    opacity: 1;
+    translate: none;
+  }
+
+  /* The pulse is the one piece here that repeats, so it stops outright rather
+     than landing instantly. */
+  .onion[data-running='true'] .onion-layer::after,
+  .onion[data-running='true'] .onion-layer[data-wraps='true']::before,
+  .onion[data-running='true'] .onion-core::after,
+  .onion[data-running='true'] .onion-head .onion-arrow,
+  .onion[data-running='true'] .onion-return .onion-arrow {
+    animation: none;
+  }
 }
 
 /* Block, not flex. Mantine's Container centres with `margin-inline: auto`, and

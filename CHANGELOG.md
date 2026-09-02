@@ -4,6 +4,234 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.1.3 - 2026-08-30
+
+A worker that cannot reach its broker no longer floods
+
+Three fixes in @dunx/infra/queue, all on the failed-start path.
+
+`QueueConsumer.start()` opened every worker before awaiting any of them. A
+bullmq `Worker` reconnects the moment it is constructed, so against an absent
+broker each retry emits `error` and the guard that force-closes on a failed
+`waitUntilReady()` could not run until the first worker had finished failing.
+One queue hid it; a second flooded 21,950,586 log lines in two minutes and the
+process stopped making progress. Workers are opened and awaited one at a time
+now, which is what the comment above the loop always claimed.
+
+The failed-start path also force-closed workers that were already consuming.
+bullmq starts consuming at readiness, so a worker that became ready while a
+later one was still starting may hold a job, and `close(true)` abandons it for
+stalled recovery to run its side effects again. A worker that never became ready
+is still force-closed; one that did gets a graceful close, waited on for at most
+five seconds.
+
+That wait cannot escalate, and the first attempt at it was wrong. bullmq's
+`Worker.close` returns the `closing` promise it already started, so a second
+call with `force` is the same pending promise. The bound stops waiting instead.
+
+The error log is throttled to one report per queue per 30s rather than gated on
+recovery: bullmq emits `Worker`'s `ready` once, so a flag cleared on that event
+would have silenced every outage after the first.
+
+### Fixes
+
+- **queue**: a close bullmq cannot escalate, and a throttle that does not latch ([`9980d87`](https://github.com/petarzarkov/dunx/commit/9980d8700f1652ef2eb5b301f7e293e5aa4cbbe2))
+- **queue**: drain a ready worker on a failed start rather than forcing it ([`02dfa5d`](https://github.com/petarzarkov/dunx/commit/02dfa5d22e5390f79813fd80d7c15020da984741))
+- **queue**: open each worker in turn, so a second queue cannot flood ([`7fe6d23`](https://github.com/petarzarkov/dunx/commit/7fe6d23033b95702e0699fba44d9d59099d3e684))
+
+## 3.1.2 - 2026-08-30
+
+A Postgres websocket relay, and the createTestServer globals warning
+
+Stated as patch outright rather than derived, which would have read the
+feat(http) in this range as a minor.
+
+Since 3.1.1, in @dunx/http, @dunx/testing and @dunx/create-app:
+
+`PostgresRelay` carries websocket frames over Bun.SQL's LISTEN/NOTIFY, so an app
+already running Postgres needs no broker for multi-node fan-out. `WsRelay` is the
+contract both relays extend and `WsRelayModule` binds, with
+forPostgres/forPostgresAsync beside the Redis pair. Additive throughout:
+`RedisRelay` stays bound and exported on the Redis path.
+
+`createTestServer` stopped warning that global middleware was missing when an
+HttpOptionsProvider had supplied it, which fired on every suite of an app that
+took the 3.1.0 advice and told it to undo that. The onError half of the same
+message is now conditional on the resolved handler rather than asserted.
+
+A relative link on a published docs page resolved against the repo root instead
+of the page's own directory, so architecture/http.md's link to bun-apis.md was a
+404 on the site.
+
+### Features
+
+- **http**: a Postgres websocket relay, and WsRelay as the contract both bind ([`c93cfbf`](https://github.com/petarzarkov/dunx/commit/c93cfbf29bc07086462b2ba8ea043df6ae3ed4a4))
+
+### Fixes
+
+- **testing**: match resolveHttpOptions on an explicitly overridden onError ([`9eec298`](https://github.com/petarzarkov/dunx/commit/9eec298abb1c83b2a09d932cd24f477d6cbc7226))
+- **testing**: read the resolved middleware, not the argument, before warning ([`ec7d27e`](https://github.com/petarzarkov/dunx/commit/ec7d27ece19586af1aa2e0ecdb07745ac87be354))
+- **docs**: resolve a relative link against the page it was written on ([`c094db3`](https://github.com/petarzarkov/dunx/commit/c094db3af99926ccec319cbe24c16da7a25f79ed))
+
+### Documentation
+
+- **http**: a listening PostgresRelay holds max + 1 connections ([`b2c147d`](https://github.com/petarzarkov/dunx/commit/b2c147dbe1fcf74dcfbe98a0e1727d2988802b63))
+- record the JSON binding bug as oven-sh/bun#40942 ([`cfe9ec1`](https://github.com/petarzarkov/dunx/commit/cfe9ec1c1dc94cb1b659b91b06134ecc26766598))
+- **queues**: the latency turns on notification support, not the other flags ([`e5a8d7d`](https://github.com/petarzarkov/dunx/commit/e5a8d7dc89e1c25a2fbf5daefca4c77cdb4a65b7))
+- **queues**: name the backend the pg-boss figures were measured on ([`337aa59`](https://github.com/petarzarkov/dunx/commit/337aa59425a6e7d5d859ddd08197345feb2fc9b4))
+- **architecture**: a Postgres relay renames three calls, it does not fit as it is ([`ef837f3`](https://github.com/petarzarkov/dunx/commit/ef837f30fdf4ac79fa989aa8eca6d9234d4062b5))
+- **architecture**: measure a queue, a cache and websocket fan-out with no Redis ([`39adda1`](https://github.com/petarzarkov/dunx/commit/39adda153a4a414c0a8bf30b7ab1b4492e33027f))
+
+## 3.1.1 - 2026-08-29
+
+A config schema, and contributions as providers
+
+`ConfigModule.forRoot` takes either `validate` or `schema`, and the type makes it
+exactly one. A Standard Schema is validated directly, so zod, Valibot and ArkType
+all work with no wrapper; its issues become a `ConfigError` naming each path.
+`StandardSchemaV1` moved from `@dunx/http` down to `@dunx/core`, which both
+needed, and `@dunx/http` re-exports the three names unchanged.
+
+`contribute` in `@dunx/openapi` also takes anything with a `contribute()` method,
+so a contributor that needs an injected instance is a provider rather than a
+closure over one. `DocumentSource` is the class to extend, and anything with the
+method satisfies it structurally.
+
+Both are additive: every existing `validate` and every fragment or thunk keeps
+working.
+
+### Features
+
+- **core,openapi**: a Standard Schema for config, and contributions as providers ([`cd3fbf8`](https://github.com/petarzarkov/dunx/commit/cd3fbf87c8e962a0076fa71c05c339b3912493a2))
+
+### Documentation
+
+- retire the class-modules note, per the folder's own rule ([`3eb567c`](https://github.com/petarzarkov/dunx/commit/3eb567c5fc00b8ca3dc244c7e905249fff349322))
+
+## 3.1.0 - 2026-08-29
+
+Options as providers, constraint statuses, and the 1.4 fetch options
+
+`HttpOptionsProvider` carries every HTTP setting and is resolved from the
+container, so a subclass injects `ConfigService` and answers from validated
+config. `AppOptions.promote` in `@dunx/core` is what binds it: core's own
+mechanism for `Logger` and `RequestContext`, now callable by a framework layer.
+An argument to `create()` still wins field by field, and `setGlobalPrefix`,
+`enableCors`, `set` and `enableShutdownHooks` are unchanged, each with a field
+alongside it applied at construction.
+
+`WsRelayModule` binds the websocket relay as a provider and closes it at
+shutdown, which `PubSub.close()` does not do for an app that never opened a
+socket.
+
+A named instance can be a subclass rather than a token, in both packages that had
+a token function: `HttpModule.forRoot(init, EmailClient)` in `@dunx/http/client`
+and `RedisModule.forRoot(init, SessionsRedis)` in `@dunx/infra/redis`. A subclass
+is a token and a parameter type, so it resolves as a constructor parameter.
+`Redis` is newly exported as the base to extend. Both string forms still work.
+
+`toDatabaseError` in `@dunx/infra/db` turns a driver constraint error into a
+`ConstraintError` carrying a status, 409 for unique and foreign key and 400 for
+not-null and check, through `AppError.status`, so nothing there imports the web
+layer. The driver's message stays on `cause` rather than in the response body.
+
+`HttpClientOptionsInit` passes `compress`, `protocol` and `maxRedirects` to
+fetch, and `proxy` widens to Bun's object form.
+
+One behaviour change: an unmatched path answers 404 rather than 401 in an app
+behind a global guard. `notFound: 'guarded'` restores it. `docs/guide/22-upgrading.md`
+covers each item.
+
+### Features
+
+- **http**: WsRelayModule, so the websocket relay is a provider ([`1092aa5`](https://github.com/petarzarkov/dunx/commit/1092aa564a3850c8c74552644b7ea6c0feea5936))
+- **infra**: a named Redis connection can be a subclass, and CodeRabbit's findings ([`ba4d788`](https://github.com/petarzarkov/dunx/commit/ba4d7885aa291583b8f24dec45f5f53812e74e87))
+- **bench,http**: the 1.4 fetch options, profiling in the harness, and A1/A5 measured ([`093fafe`](https://github.com/petarzarkov/dunx/commit/093fafe56a741351a2c7c12375c5a32008c38c17))
+- **http**: a named outbound client can be a subclass, not only a token ([`16caace`](https://github.com/petarzarkov/dunx/commit/16caacec92bcce496c610a9ae8d10cebdf462eda))
+- **http,infra**: HTTP options as a provider, and constraint errors that carry a status ([`073bed3`](https://github.com/petarzarkov/dunx/commit/073bed38d4448c9b081d9579064cbd82cd393d8f))
+
+### Fixes
+
+- **examples,create-app**: isolate the sessions database, and write every env entry ([`8f096b3`](https://github.com/petarzarkov/dunx/commit/8f096b306cada16b4b981ba3f6b8c5127aabbaf1))
+- **bench,http**: unprofiled startup samples, and a provider that can express shutdownHooks ([`ad1add5`](https://github.com/petarzarkov/dunx/commit/ad1add54ab333e8d96515d3fd884f11d3c90cf6d))
+
+### Documentation
+
+- **roadmap**: assign trustProxy in the W1b snippet, as the real example does ([`2e1ae4c`](https://github.com/petarzarkov/dunx/commit/2e1ae4c109a9cd9f5bc9193cd72d8d9cff771844))
+- link the filed bullmq issue for the worker shutdown hang ([`7494647`](https://github.com/petarzarkov/dunx/commit/7494647b7bd06ffbba5ab8234146c941e165b60c))
+- **roadmap**: record W1/W2/W6/W0 shipped, W1b withdrawn, A1-A5 settled ([`c733f30`](https://github.com/petarzarkov/dunx/commit/c733f3024a13cc128d9289771f954af6f3ac9338))
+- an upgrading guide, and leak B narrowed out of Bun ([`1c564db`](https://github.com/petarzarkov/dunx/commit/1c564db451ed2fe07e337df8907f7d6bc5bf3317))
+
+## 3.0.5 - 2026-08-29
+
+Errors carry their own status, and the logger drains on the way out
+
+`AppError` gained an optional `status`, and `@dunx/http`'s default mapper honours
+any error that names one. An integer is not the web layer, which is what lets
+`@dunx/infra` say what a failure means without importing `@dunx/http` to say it:
+`CursorError` and `PageOptionsError` declare 400, so a bad cursor is a 400 in an
+app that wrote no `catch`. The status is range-checked, because it is typed by hand
+in a package that never sees a `Response` and a typo would otherwise throw a
+`RangeError` from the error path itself. A 4xx is no longer logged as an incident.
+
+`@arkv/logger` moved to 0.12, which brings the HTTP, syslog and sampling transports
+and the `textFormat`/`logfmtFormat` renderings, all re-exported from
+`@dunx/infra/logger` rather than restated. `LoggerLifecycle.onShutdown` now drains
+with `closeAsync`: a transport whose sink is a network discards its queue on a
+synchronous `close()`, so an app shipping to a collector lost its last batch on
+every deploy.
+
+`examples/full` reads `LOG_FORMAT` and asserts the 400 end to end.
+
+### Features
+
+- **core**: an error carries the status it means, whoever raised it ([`57e0fb5`](https://github.com/petarzarkov/dunx/commit/57e0fb5661d21964ea99079af22b1dd143d8749f))
+- **infra**: @arkv/logger 0.12, and drain the logger on the way out ([`d557dd7`](https://github.com/petarzarkov/dunx/commit/d557dd7f7661df07f82cd3add7078c16ccc29750))
+
+## 3.0.4 - 2026-08-29
+
+A scaffolder you answer, not one you configure
+
+`bunx @dunx/create-app my-api` opens an arrow-key list instead of taking flags for
+what the app should do. Space toggles a feature, Enter takes the selection, and the
+two lines under the list recompute as the cursor moves: which features the selection
+pulls in, and which of them need Redis or Postgres running to do anything. Neither
+is something a flag could show.
+
+`--with`, `--all`, `--list` and `--template` are gone. `scaffold({ target, features })`
+is the scripted path, and `FEATURES` is exported beside it. `--name`, `--force`,
+`--yes` and `--help` remain, none of which chooses anything about the app. Piped or
+in CI it asks nothing and writes the minimal template, so a script never blocks on a
+question nothing can answer.
+
+No prompt library arrived with it. `setRawMode` is a `node:tty` built-in Bun
+implements natively, `Bun.stringWidth` and `Bun.sliceAnsi` measure and cut by
+terminal columns, `Bun.color` paints and `Bun.enableANSIColors` is the capability
+check. Bun 1.4 also ships `Bun.Terminal`, an undocumented PTY, so the suite answers
+the real CLI with real arrow keys rather than asserting against a mock of a terminal.
+
+A generated app also gains `bun run dev` and loses two files. `src/bootstrap.ts`
+exported `createApp` while `src/main.ts` declared a local function called `bootstrap`
+that imported it; there is one file now, serving under `import.meta.main`.
+`src/worker.ts` and its `worker` script were dead on arrival: `QueueModule` opens the
+bullmq workers itself and a `background: true` handler is forked into
+`jobs/jobs.processor.ts`.
+
+Note for anyone scripting the CLI: the four removed flags exit with "Unknown option"
+rather than being ignored, so a pinned range that expected them needs the
+programmatic `scaffold` call instead.
+
+### Features
+
+- **create-app**: pick what the app does from a list, not from flags ([`4d1df4d`](https://github.com/petarzarkov/dunx/commit/4d1df4d3bbf7ac1e978cceca1bdc9ed46c005bb5))
+- **docs**: a spark that laps the hero headline ([`8ad9894`](https://github.com/petarzarkov/dunx/commit/8ad98946b8217cd63bea90101e0f8f4576b3e1e5))
+- **docs**: run a request through the landing page's onion diagram ([`13d7673`](https://github.com/petarzarkov/dunx/commit/13d76732f68850e11771b91fad5feda569332248))
+
+### Fixes
+
+- **ci**: keep a gitignored tmp/ scaffold out of the test sweep ([`f6df3c8`](https://github.com/petarzarkov/dunx/commit/f6df3c8c428a67a7d6f6f06c909d322448abbf62))
+- **docs**: guard the sheen variable, and the observer stub's own contract ([`6e304e5`](https://github.com/petarzarkov/dunx/commit/6e304e588a717f1f8e064f55f14164bb43773418))
+
 ## 3.0.3 - 2026-08-27
 
 The scaffolder exits, and setup instructions an agent can fetch

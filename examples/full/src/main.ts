@@ -1,7 +1,90 @@
 import { Logger } from '@dunx/core';
-import { HealthRegistry } from '@dunx/http';
-import { createApp } from './bootstrap.js';
+import { DashboardMiddleware } from '@dunx/dashboard';
+import {
+  Compression,
+  HealthRegistry,
+  HttpFactory,
+  StaticFiles,
+  ThrottleGuard,
+  type HttpApp,
+} from '@dunx/http';
+import { OpenApiModule } from '@dunx/openapi';
+import { AppModule } from './app.module.js';
+import { AuthDocs, AuthDocsModule } from './auth-docs.js';
 import { AppConfigService } from './config.js';
+import { RequestTrailMiddleware } from './http/request-trail.js';
+
+/**
+ * One app for `bun start`, `bun run tour` and the tests, and one file: `createApp`
+ * is exported for the callers that only want the shape, and the block at the
+ * bottom serves it when this file is the entry point.
+ *
+ * Everything between `create()` and `listen()` may still shape the server; after
+ * `listen()` each of these throws.
+ */
+export const createApp = async (): Promise<HttpApp> => {
+  const app = await HttpFactory.create(
+    // `forRootAsync` because `contribute` needs `AuthDocs`, which the container
+    // owns and the graph cannot supply synchronously.
+    OpenApiModule.forRootAsync({
+      root: AppModule,
+      // Its own scope, so the module exporting `AuthDocs` goes in *these*
+      // imports; importing it into the root does not reach the factory.
+      imports: [AuthDocsModule],
+      inject: [AuthDocs] as const,
+      useFactory: (authDocs: AuthDocs) => ({
+        title: 'dunx full example',
+        version: '0.1.0',
+        description:
+          'Every part of dunx in one service. Generated from the same zod schemas the routes validate against.',
+        // A provider, asked for its fragment when the document is generated.
+        contribute: [authDocs],
+        /**
+         * Every Swagger UI parameter is available; these are a sample.
+         * `requestInterceptor` takes the source of an expression, not a
+         * function - the page is rendered server-side, so a closure cannot travel.
+         */
+        ui: {
+          title: 'dunx full example - API',
+          docExpansion: 'list',
+          filter: true,
+          tryItOutEnabled: true,
+          persistAuthorization: true,
+          displayRequestDuration: true,
+          operationsSorter: 'alpha',
+          tagsSorter: 'alpha',
+          syntaxHighlight: { theme: 'nord' },
+          requestInterceptor:
+            '(req) => { req.headers["x-dunx-example"] = "1"; return req; }',
+        },
+      }),
+    }),
+    {
+      /**
+       * Everything else is a provider now. `requestLogging`, `cors`, `prefix`,
+       * `trustProxy`, `relay` and `relayChannel` all read from validated config
+       * or from the container, so `AppHttpOptions` answers them
+       * (`http/http-options.ts`). This is the last literal.
+       */
+      websocket: { idleTimeout: 30 },
+    },
+  );
+
+  // The imperative half, unchanged and still supported: `use`, `set`,
+  // `enableCors` and `setGlobalPrefix` all still work, and a call here wins over
+  // the provider because it happens after construction.
+  //
+  // First, ahead of everything. Its `authorize` answers 404 to a stranger; a
+  // guard running earlier would answer 401 and confirm the mount exists.
+  app.use(DashboardMiddleware);
+  app.use(Compression);
+  // Before the rate limit: twenty hashed bundles must not spend a request budget.
+  app.use(StaticFiles);
+  app.use(RequestTrailMiddleware);
+  // After anything that establishes the caller, since that decides the subject.
+  app.use(ThrottleGuard);
+  return app;
+};
 
 /**
  * One service, every part of dunx, and it stays up. `bun run tour` is the
@@ -9,10 +92,11 @@ import { AppConfigService } from './config.js';
  *
  * **There is nothing here about queues.** `JobsModule` sets `consume: true` on its
  * `QueueModule`, so the container starts the workers at `onInit` and stops them at
- * `onShutdown` - before the database they depend on. One command, and the wiring
- * lives next to the jobs rather than in the entrypoint.
+ * `onShutdown` - before the database they depend on. A queue with a `background`
+ * handler is forked by bullmq into `jobs/jobs.processor.ts`, so there is no second
+ * process to run and no second command to remember.
  */
-async function bootstrap(): Promise<void> {
+const start = async (): Promise<void> => {
   const app = await createApp();
   app.enableShutdownHooks();
 
@@ -40,9 +124,13 @@ async function bootstrap(): Promise<void> {
   // Nothing else to do: the server holds the process open, and the shutdown
   // hooks resolve this once a signal arrives.
   await app.closed;
-}
+};
 
-bootstrap().catch((error: unknown) => {
-  console.error('[full] failed to start', error);
-  process.exit(1);
-});
+// False when a test or the tour imports this file for `createApp` alone, which is
+// what lets one module be both the entry point and the app's definition.
+if (import.meta.main) {
+  start().catch((error: unknown) => {
+    console.error('[full] failed to start', error);
+    process.exit(1);
+  });
+}

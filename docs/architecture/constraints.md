@@ -5,10 +5,10 @@ What was measured on real Bun, and what each measurement rules out. Every other 
 ## Why this exists
 
 Elysia and Hono own Bun's web-framework space and are mature. Neither offers
-dependency injection, modules, or class-based controllers, and Elysia's chained
-builder API is precisely what NestJS refugees bounce off. That gap is the whole
-product. dunx should stay a **DI + structure** framework that happens to serve
-HTTP - not drift into a general web framework.
+dependency injection, modules, or class-based controllers. Elysia's chained
+builder API is precisely what NestJS refugees bounce off, and that gap is the
+whole product. dunx should stay a **DI + structure** framework that happens to
+serve HTTP - not drift into a general web framework.
 
 ## Verified constraints
 
@@ -26,10 +26,10 @@ There is no reason to build a radix tree in JavaScript. dunx's job is to _emit_
 the `routes` object at boot and hand it to Bun.
 
 **`server.upgrade(req)` works from inside a `routes` handler.** Bun's own types
-bless it - `Serve.RoutesWithUpgrade` allows `Response | undefined | void` when
+bless it: `Serve.RoutesWithUpgrade` allows `Response | undefined | void` when
 `websocket` is present. So a WebSocket gateway is mounted as a native `GET`
-route rather than needing a hand-written `fetch` fallback, which means **Bun's
-router does run on the upgrade path** and a gateway path may be a pattern
+route rather than needing a hand-written `fetch` fallback. That means **Bun's
+router does run on the upgrade path**, and a gateway path may be a pattern
 (`/room/:room`, with `req.params.room` readable in `@OnUpgrade`).
 
 An earlier note claiming the opposite was wrong and is retired. With no `fetch`
@@ -65,8 +65,8 @@ server.requestIP(req) -> {"address":"::ffff:127.0.0.1","family":"IPv6","port":41
 
 That is what `'trust proxy'` chooses between: the first `X-Forwarded-For` entry
 when trusted, this address otherwise. `Response` headers are also mutable after
-construction, which is what lets CORS headers be applied outside the error mapper
-so a mapped 500 still carries them.
+construction. This lets CORS headers be applied outside the error mapper, so a
+mapped 500 still carries them.
 
 **`emitDecoratorMetadata` is lossy.** With `experimentalDecorators` +
 `emitDecoratorMetadata`, `constructor(db: Db, cache: Cache, n: number)` yields:
@@ -93,8 +93,8 @@ member list   member one   class Users
 
 **`ctx.metadata` is write-only in Bun, and leaks in both directions.** Bun 1.3.14
 hands a `ctx.metadata` object to decorators but leaves `Symbol.metadata`
-undefined, so nothing can read it back off the class without a polyfill - the
-exact "must be the first import" fragility being escaped. Polyfill it and each
+undefined. Nothing can read it back off the class without a polyfill - the exact
+"must be the first import" fragility being escaped. Polyfilling it means each
 class's metadata object gets its parent's as its **prototype**, so `routes ??= []`
 in a subclass resolves through the chain and mutates the _parent's_ array:
 
@@ -141,8 +141,8 @@ Orphan: GET /leaked <- proto Orphan.leaked  # found, but in no other class's cha
 ```
 
 Two subclasses of one undecorated abstract base both resolve the base's route. A
-field handler's arrow captures `this` (`users.one`), and a field declared before
-the field it reads still works, because handlers run per request (`late-value`).
+field handler's arrow captures `this` (`users.one`). A field declared before the
+field it reads still works too, because handlers run per request (`late-value`).
 
 **A route decorator can _check_ a handler's input type but cannot _infer_ it.**
 Measured with `tsc`, because this is a type-level claim `bun` cannot answer. Given
@@ -155,10 +155,10 @@ unannotated parameter          -> TS7006: Parameter 'input' implicitly has an 'a
 annotated with the wrong type  -> TS1241 + TS1270, naming the mismatched property
 ```
 
-A standard method decorator is `(value: V, ctx: ClassMethodDecoratorContext) => V | void`,
-so it can reject a mismatched `V` but has no way to contextually type an
-unannotated parameter. Input must therefore be annotated - and the annotation is a
-type-level function over the options object, so each type is still written once:
+A standard method decorator is `(value: V, ctx: ClassMethodDecoratorContext) => V | void`.
+It can reject a mismatched `V` but has no way to contextually type an unannotated
+parameter, so input must be annotated. The annotation is a type-level function
+over the options object, so each type is still written once:
 
 ```ts
 const createNote = { body: CreateNote, status: HttpStatusCode.CREATED } as const;
@@ -202,16 +202,16 @@ Four results worth keeping:
   every array in the declared shape to `readonly`, which the mutable one still
   satisfies. Only arrays need it: TypeScript already ignores a property's `readonly`
   modifier when checking assignability, so the object branch exists to reach nested
-  arrays, and a function is returned untouched because mapping over one discards its
+  arrays. A function is returned untouched, because mapping over one discards its
   call signature.
-- **`infer R extends ResponseMap` is load bearing.** Without the constraint the
+- **`infer R extends ResponseMap` is load-bearing.** Without the constraint the
   narrowed `O` in the branch is `{ response: R } & O`, whose `response` no longer
   satisfies `RouteSchemas`, and the nested `SuccessStatus<O, M>` fails with
   `TS2344`. Measured both ways.
 - **A plain `JsonSchema` entry turns the check off for that route**, becoming
-  `unknown`, which absorbs any return type. There is no type to infer from JSON, and
-  that is the deliberate escape hatch for a response no schema value describes.
-  Options widened by a missing `as const` do the same thing.
+  `unknown`, which absorbs any return type. There is no type to infer from JSON, so
+  this is the escape hatch for a response no schema value describes. Options
+  widened by a missing `as const` do the same thing.
 
 It found a real defect on the first run: `examples/full` documented `User` with a
 `tags: string[]` the `users` table has no column for, so every user response
@@ -221,8 +221,8 @@ advertised an array no handler returned.
 closed.** `@dunx/transform` is `oxc-parser`: a single-file syntax parser with no
 program and no checker. It reads a return type's syntax fine, but
 `Promise<UserDto>` is a name that needs cross-file resolution, generics and mapped
-types to become a schema - a type checker, which is what `@nestjs/swagger`'s plugin
-runs during `nest build`.
+types to become a schema. That requires a type checker, the same kind
+`@nestjs/swagger`'s plugin runs during `nest build`.
 
 A class return type gives a runtime value whose field annotations are erased, and
 the two things Nest leans on for that (`emitDecoratorMetadata`, parameter
@@ -231,9 +231,9 @@ decorators) are both banned here.
 Probed: the one extractable case is a return type whose syntax names a runtime
 value, as `z.infer<typeof User>` does, where `TSTypeQuery.exprName` is the schema.
 It was rejected anyway. `Promise<z.infer<typeof User>[]>` silently yields `User`,
-losing the array, and fixing that means implementing `[]`, `Array<>`, `Partial<>`
-and `Pick<>` as operations over a runtime schema value. It also only helps someone
-who already holds the schema value they could have written into `response`.
+losing the array. Fixing that means implementing `[]`, `Array<>`, `Partial<>` and
+`Pick<>` as operations over a runtime schema value. It also only helps someone who
+already holds the schema value they could have written into `response`.
 
 **`drizzle-orm/bun-sql` is Postgres, not `Bun.SQL`.** `Bun.SQL` speaks four
 dialects - `postgres`, `mysql`, `mariadb`, `sqlite`, quoted from its own rejection
@@ -245,7 +245,7 @@ const dialect = new PgDialect({ casing: config.casing });
 ```
 
 Unconditional, with no branch on `client.options.adapter` anywhere in the module.
-Pointed at a `sqlite://` client it does not error - it compiles `$1` placeholders
+Pointed at a `sqlite://` client it does not error. It compiles `$1` placeholders
 and Postgres identifier quoting against SQLite, and the trivial cases pass, which
 is worse than failing.
 
@@ -272,8 +272,8 @@ nativeTx[config.behavior ?? 'deferred']();
 ```
 
 Measured on Bun 1.3.14: insert, `await Bun.sleep(1)`, throw, catch - the row is
-still there. So `drizzle` being a mature library does not make this one safe,
-and `@dunx/infra/db` exports a standalone `transaction(db, fn)` that issues
+still there. So `drizzle` being a mature library does not make this one safe.
+`@dunx/infra/db` exports a standalone `transaction(db, fn)` that issues
 `BEGIN`/`COMMIT`/`ROLLBACK` itself. There is one connection, so overlapping
 top-level transactions queue rather than nest a second `BEGIN`; a nested call
 is already inside the holder's turn and takes a savepoint instead.
@@ -297,8 +297,8 @@ cannot tell the type system it is there.
 This is why **entity decorators were rejected**. drizzle's whole value is the table
 object's _type_ carrying column types into every query; a decorator could build a
 working table at runtime while every query degraded to `unknown`. Recovering the
-types would mean hand-writing a mapped type mirroring drizzle's `BuildColumns` - a
-second source of truth that drifts from the first, which is exactly the duplication
+types would mean hand-writing a mapped type mirroring drizzle's `BuildColumns`: a
+second source of truth that drifts from the first, undoing the duplication
 decorators were meant to remove. drizzle's native `sqliteTable` object schema is the
 supported path.
 
@@ -307,6 +307,9 @@ annotation but not _infer_ it. Decorators observe; they do not type. Note the
 contrast with `@Controller`, `@Get`, `@Module`, `@Gateway` and `@Roles`, which all
 work fine - they only _record_ metadata read back at boot, and publish nothing to
 the type system.
+
+The constraints above cover the request path and dependency injection. The one
+below covers testing the dashboard itself.
 
 ## `Bun.WebView` drives the dashboard headlessly, on Bun 1.4.0
 
@@ -334,10 +337,10 @@ screenshot bytes: 67832
 What each number rules out. 227 nodes means the inlined bundle ran, since the
 served shell is a handful of elements. 8 `<style>` tags and a computed
 `background-color` of `rgb(36, 36, 36)` matching `--mantine-color-body: #242424`
-mean the cascade resolved, which is the assertion happy-dom cannot make at all. The
-panel text and a 67 KB screenshot cover the render.
+mean the cascade resolved: happy-dom cannot make that assertion at all. The panel
+text and a 67 KB screenshot cover the render.
 
-Three things worth knowing before building on it:
+Three things to consider before building on it:
 
 - **No display is needed and none is used.** The same probe produces a
   byte-identical 3,510-byte screenshot of a trivial page with `DISPLAY=:0` and with
@@ -356,4 +359,5 @@ The surface is `navigate`, `evaluate`, `screenshot`, `cdp`, `click`, `type`,
 **Playwright was not measured, because this answered the question first.** It is
 permitted here - `internal/*` is exempt from Rule 1 - and would be the fallback if
 a test needed more than the list above. `Bun.WebView` costs no dependency and no
-browser download, so it is what a dashboard smoke test should be written against.
+browser download. That makes it what a dashboard smoke test should be written
+against.

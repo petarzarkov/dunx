@@ -12,11 +12,7 @@ import {
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
 import { ClientAddress } from './client-address.js';
-import {
-  MetricsMiddleware,
-  RequestMetrics,
-  usesMetricsMiddleware,
-} from './metrics.js';
+import { MetricsMiddleware, RequestMetrics } from './metrics.js';
 import { buildWebSocket } from '../ws/adapter.js';
 import { discoverGateways } from '../ws/discover.js';
 import { SocketLoggingMiddleware } from '../ws/logging.js';
@@ -27,6 +23,11 @@ import {
   type HttpApp,
   type HttpOptions,
 } from './application.js';
+import {
+  DefaultHttpOptions,
+  HttpOptionsProvider,
+  resolveHttpOptions,
+} from './options-provider.js';
 import type { Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
 import { assertNoCollisions } from './routes.js';
@@ -43,6 +44,19 @@ export type { HttpApp, HttpOptions } from './application.js';
 // these bindings would be invisible to every module in the app, which is the opposite
 // of the intent. They are framework services with no module for an app to import.
 class HttpModule {}
+
+/**
+ * The caller's logging options if it gave any, else the provider's, and `{}` for
+ * either `false` - which switches the middleware off in the chain rather than
+ * changing how it behaves once it is there.
+ */
+const pick = <T extends object>(
+  given: boolean | T | undefined,
+  fallback: boolean | T,
+): T | Record<string, never> => {
+  const chosen = given ?? fallback;
+  return typeof chosen === 'object' ? chosen : {};
+};
 
 export class HttpFactory {
   /**
@@ -62,19 +76,26 @@ export class HttpFactory {
       useFactory: (
         logger: Logger,
         context: RequestContext,
+        settings: HttpOptionsProvider,
         metrics: RequestMetrics,
       ) =>
         new RequestLoggingMiddleware(
           logger,
           context,
-          typeof options.requestLogging === 'object'
-            ? options.requestLogging
-            : {},
+          // The same precedence the merge below uses, applied here because this
+          // provider is constructed during resolution and the merged object does
+          // not exist until after it.
+          pick(options.requestLogging, settings.requestLogging),
           // Handed in only when asked for, so the observe call is a branch the
-          // default configuration never takes.
-          options.metrics === true ? metrics : undefined,
+          // default configuration never takes. Same precedence again.
+          (options.metrics ?? settings.metrics) ? metrics : undefined,
         ),
-      inject: [Logger, RequestContext, RequestMetrics] as const,
+      inject: [
+        Logger,
+        RequestContext,
+        HttpOptionsProvider,
+        RequestMetrics,
+      ] as const,
     });
 
     // `ClientAddress` belongs here for the same reason `PubSub` does: `listen()`
@@ -95,15 +116,17 @@ export class HttpFactory {
     // Bound for the same reason: its constructor takes an options object as well
     // as two injectables, so it cannot self-bind.
     const socketLogging = provide(SocketLoggingMiddleware, {
-      useFactory: (logger: Logger, context: RequestContext) =>
+      useFactory: (
+        logger: Logger,
+        context: RequestContext,
+        settings: HttpOptionsProvider,
+      ) =>
         new SocketLoggingMiddleware(
           logger,
           context,
-          typeof options.socketLogging === 'object'
-            ? options.socketLogging
-            : {},
+          pick(options.socketLogging, settings.socketLogging),
         ),
-      inject: [Logger, RequestContext] as const,
+      inject: [Logger, RequestContext, HttpOptionsProvider] as const,
     });
 
     // `RequestMetrics` is bound here rather than left to self-bind for the
@@ -111,12 +134,15 @@ export class HttpFactory {
     // and a second scope resolving its own would read `pendingRequests` off no
     // server at all.
     const services = [PubSub, ClientAddress, RequestMetrics];
-    const providers = [
-      ...services,
-      ...(options.requestLogging === false ? [] : [logging]),
-      ...(usesMetricsMiddleware(options) ? [metricsMiddleware] : []),
-      ...(options.socketLogging === false ? [] : [socketLogging]),
-    ];
+    /**
+     * Every middleware is bound unconditionally, which is what unties the
+     * ordering knot the options provider was blocked on: `requestLogging: false`
+     * used to decide whether the provider was bound at all, and that decision had
+     * to be made before the container existed. Whether one is in the chain is now
+     * `HttpApplication`'s to read off the resolved options. Binding one that is
+     * never used costs a constructor call at boot.
+     */
+    const providers = [...services, logging, metricsMiddleware, socketLogging];
     const scope: DynamicModule = {
       module: HttpModule,
       global: true,
@@ -128,9 +154,23 @@ export class HttpFactory {
     };
     // Spread rather than passed through, because `exactOptionalPropertyTypes`
     // separates an absent `overrides` from one explicitly set to undefined.
-    const app = await AppFactory.create(
-      scope,
-      options.overrides ? { overrides: options.overrides } : {},
+    const app = await AppFactory.create(scope, {
+      ...(options.overrides ? { overrides: options.overrides } : {}),
+      /**
+       * Promoted rather than bound in this scope, which is what core does with
+       * `Logger`. Binding it here would put it in `HttpModule`'s own map and
+       * export it to the root, so an app declaring its own subclass would be
+       * warned for shadowing a token it is meant to shadow - and the http scope
+       * would keep resolving its own default anyway.
+       */
+      promote: [provide(HttpOptionsProvider, { useClass: DefaultHttpOptions })],
+    });
+    // Resolved after the container, which is the whole point: a subclass can inject
+    // `ConfigService` and answer from validated config. Anything the caller passed
+    // to `create` still wins, field by field.
+    const resolved = resolveHttpOptions(
+      app.get(HttpOptionsProvider, root),
+      options,
     );
     const modules = collectModules(scope);
 
@@ -179,8 +219,8 @@ export class HttpFactory {
       gateways.length > 0
         ? buildWebSocket(
             gateways,
-            options.websocket,
-            HttpFactory.#socketMiddleware(app, root, options),
+            resolved.websocket,
+            HttpFactory.#socketMiddleware(app, root, resolved),
           )
         : undefined;
 
@@ -192,7 +232,7 @@ export class HttpFactory {
 
     // `root` is the app's own module, so global middleware and the error filter
     // resolve as the app sees them rather than as this wrapper does.
-    return new HttpApplication(app, discovered, options, root, websocket);
+    return new HttpApplication(app, discovered, resolved, root, websocket);
   }
 
   /**

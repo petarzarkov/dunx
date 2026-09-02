@@ -2,6 +2,336 @@
 
 Where the default path's microseconds go, why `write(2)` per entry is the largest single cost, and what batching trades away.
 
+## Where the 4.8 us goes, measured without a socket, 2026-08-31
+
+`bun run logging` resolves a step to about half a microsecond, and the section
+below already records that six of its eleven steps land inside that. So the ladder
+could say request logging costs +4.78 us without saying which part. `bun run
+inproc` answers that: it drives `RequestLoggingMiddleware.handle` directly, one
+variant per process, round-robin. A step there resolves to about 50 ns.
+
+The floor row runs the same loop with no middleware, so every other row minus the
+floor is what logging costs. That came to 4708 ns against the socket ladder's
+4780 ns, which is the check that the rig measures the same thing.
+
+**These figures come from one run of twenty-eight variants**, floor 1153 ns, seven
+rounds, the variant order rotated by round. Assembling these tables
+from several runs is what put two contradictory write costs on this page and a
+running total that disagreed with its own steps: the machine drifts by more than
+most of these rows are worth, so a number is only comparable to the numbers
+measured beside it.
+
+| Step                                        | this step | running total |
+| ------------------------------------------- | --------: | ------------: |
+| the middleware chain                        |    +13 ns |         13 ns |
+| the pathname sliced out of `req.url`        |    +20 ns |         33 ns |
+| the `ignore` and `ignorePrefix` checks      |    +13 ns |         46 ns |
+| `Bun.nanoseconds()`                         |    +97 ns |        143 ns |
+| `traceparent` read                          |    +80 ns |        223 ns |
+| `TraceContext.adopt`                        |   +151 ns |        374 ns |
+| the scope object                            |    +28 ns |        402 ns |
+| `runWithContext` around the handler         |   +100 ns |        502 ns |
+| `user-agent` and the request object         |   +143 ns |        645 ns |
+| `.then` and `traceresponse` on the response |   +676 ns |       1321 ns |
+| the `logger.info` call                      |  +3387 ns |       4708 ns |
+
+The running total is the measured figure and the step is the difference between
+two of them, so the column adds up rather than carrying a rounding error per row.
+Three steps differ by 1 ns from what `bun run inproc` prints for the same run,
+which rounds both columns independently; standard deviations here run 17 to 141 ns.
+
+Two things in that table were not where anyone was looking. The `logger.info` call
+is 72% of request logging on its own. The `.then` continuation plus one
+`Headers.set` is 676 ns, the second largest item, and nothing has ever tried to
+reduce it.
+
+### The logger call, split further
+
+| What the logger does                    | over doing nothing |
+| --------------------------------------- | -----------------: |
+| take the arguments and discard them     |                  - |
+| build the merged entry object           |           +1155 ns |
+| build and serialise it, about 250 bytes |           +2270 ns |
+| and write it, batched                   |           +2555 ns |
+
+So the object is 1155 ns, `JSON.stringify` over it 1115, and **the write 285 ns of
+4708**, which is 6% of request logging. Batching already took that cost, and that
+is what makes a worker thread the wrong tool: `pino` moves the write off the main
+thread with `thread-stream` and keeps serialising on it, so the half that would
+move is the half already paid for. Moving serialisation instead means
+`postMessage`, whose structured clone costs more than the `JSON.stringify` it
+would replace.
+
+### Rejected: a text format, and a compiled serialiser
+
+Building the line was measured five ways against a `merge` control that runs
+`ConsoleLogger`'s own line-building on the same dispatch and batching, so a row
+differs from the control by one thing. Numbers are logging cost, floor subtracted:
+
+| Variant                                           | ns/req | vs the control |
+| ------------------------------------------------- | -----: | -------------: |
+| the shipped `ConsoleLogger`                       |   4823 |         +20 ns |
+| the `merge` control                               |   4803 |              - |
+| `trim`, dropping `pid`, `flow` and `userAgent`    |   4449 |        -354 ns |
+| `lean`, about 120 bytes rather than 250           |   3943 |        -860 ns |
+| the same JSON built without a merged entry object |   4912 |        +109 ns |
+| that JSON written out longhand                    |   4998 |        +195 ns |
+| a serialiser compiled with `new Function`         |   5013 |        +210 ns |
+| logfmt instead of JSON                            |   6002 |       +1199 ns |
+
+Text is 25% dearer than the JSON it replaces. `JSON.stringify` is native, and no
+per-key walk in JavaScript beats it. A serialiser compiled for the known shape,
+which is the technique `pino` uses, is not faster either.
+
+The reason every reformatting lands within a couple of hundred nanoseconds is that
+the formatter was never the cost. `lean` goes through the same `JSON.stringify`
+and is 860 ns cheaper for writing about 120 bytes rather than 250, so what is being
+paid for is the size of the line and the objects behind it.
+
+That leaves one lever, and it has a price rather than being free. `lean` buys 18%
+of request logging by halving the entry: out go `method`, `event`, `context` and
+`statusCode`, which `message` already spells as "GET /json 200". Those are the
+fields a log pipeline filters and groups on, so the saving is observability spent
+on throughput. `trim` keeps all of them and drops only `pid`, `flow` and
+`request.userAgent`, for 354 ns against standard deviations of 59 to 85.
+
+`fastjson` is the row that moved most since it was first measured, from 148 ns
+under the control to 195 ns over it, because four of its scope strings were being
+interpolated raw. Escaping them costs what the row was previously appearing to
+save, which is its own answer to whether hand-rolled JSON is worth writing.
+
+### The header lever did not survive being measured
+
+The socket ladder puts +0.97 us on the first touch of `req.headers`, which would
+make it the second largest item on the path. In the rig above the two header reads
+cost 224 ns together, 80 for `traceparent` and 144 for `user-agent` with the
+request object built around it. Probed directly on `Bun.serve`, a handler reading one header
+was within noise of one reading none.
+
+The ladder's step is measured against its own +-0.5 us floor, and the section below
+already records that one of its steps reads negative. Treat the +0.97 us as an
+artifact until the 5950X says otherwise, and do not design an option around it.
+
+### Getting to 80% of `bun-serve`, and what it costs
+
+`results/latest.json` on the 5950X has `dunx-logging` at 60.6% of `bun-serve` on
+plaintext and 61.8% on json. Reaching 80% means cutting 3.46 us and 3.29 us
+respectively, which is 63% and 64% of what request logging costs.
+
+Most of the line is the same on every request. `level`, `pid` and `flow` are
+constant for the process; `method`, `event` and `context` are constant for the
+route; `message` is "GET /json 200", so it is constant for the route and the
+status together. Only the timestamp, the trace, the user agent and the elapsed
+milliseconds vary. So the line can be cut into fragments once and roped
+together per request, which is what the `precomp` rows do.
+
+| Variant                                 | logging ns | saved | % of `bun-serve`, json |
+| --------------------------------------- | ---------: | ----: | ---------------------: |
+| the shipped path                        |       4708 |     - |                  61.8% |
+| fragments, all twelve fields kept       |       3266 | 30.6% |                  69.3% |
+| fragments, `request.userAgent` dropped  |       2912 | 38.1% |                  71.4% |
+| emit a **constant** line every request  |       1716 | 63.6% |                  79.7% |
+| a five-field line, correlation given up |       1211 | 74.3% |                  83.8% |
+
+The constant-line row is the bound worth keeping in mind: it does no per-request
+work at all and still writes 250 bytes, and it lands at 63.6%, against the 63% and
+64% the target needs. So 80% is not a formatting problem and no faster serialiser
+reaches it. What reaches it is writing less.
+
+The last row does reach it, at 83.8%, and its bill is the whole feature set: no
+`AsyncLocalStorage` scope, so nothing else the request logs carries its trace; no
+inbound `traceparent` honoured and a process-local counter instead of 16 random
+bytes, so an id does not span two services; no `user-agent`; no `traceresponse` on
+the response; and five fields where there were twelve.
+
+Keeping every field that a log pipeline filters or groups on, the reachable figure
+is **69.3% on json and 68.6% on plaintext**. Dropping only `user-agent` takes it
+to 71.4% and 70.9%.
+
+### `@dunx/infra/logger` costs about twice what the benchmark measures
+
+Every other figure here is `ConsoleLogger`, because that is what `internal/bench`
+binds. Driven through the rig above, arkv's logger cost 10147 ns of request logging
+against `ConsoleLogger`'s 4923, so **about 2.06x**. Both numbers come from the same
+run on the same machine, which is what makes the ratio worth stating.
+
+**The ratio is measured; a percentage of `bun-serve` is not, and an earlier version
+of this page gave one anyway.** It read 46%, reached by adding this laptop's arkv
+figure to the 5950X's no-logging baseline, which sums two machines. The rig also
+has no socket under it, and the giveaway is in the numbers already here: it puts
+`ConsoleLogger` logging at 4923 ns where the 5950X's socket run implies 5100. A
+slower machine measuring less is only possible because the rig leaves out what
+`Bun.serve` itself does, so its absolute figures are a subset of the path rather
+than the path.
+
+The error also runs one way. A socket adds its cost to both loggers, and
+`(10147 + s) / (4923 + s)` falls as `s` grows, so the true ratio through a socket
+is below 2.06 and the true percentage is above the 46% that was published. It made
+production look worse than it is.
+
+What can be said is the ratio, and that `internal/bench` measures neither side of
+it: there is no arkv subject in the socket harness, so the configuration
+`packages/infra/README.md` recommends has never been benchmarked end to end. That
+is the gap worth closing, on the 5950X, before any figure for it goes in a
+sentence with a percent sign.
+
+It is consistent rather than surprising: arkv's own `bench.ts` put `Logger.info`
+at 1474 ns against `ConsoleLogger`'s 543 in the same kind of tight loop. The extra
+buys sanitization, async context and the transport stack.
+
+**Fixed upstream** rather than here, since that is where a fix reaches the other
+projects using it: `petarzarkov/arkv#9`, released as **`@arkv/logger@0.13.0`**.
+Two builds of the package compared in one process, alternating by round:
+
+| arkv operation           | before | after | change |
+| ------------------------ | -----: | ----: | -----: |
+| `Logger.info`            |   1474 |   959 | -35.0% |
+| `Logger.info` in a scope |   1801 |  1260 | -30.0% |
+| `Logger.error`           |   1995 |  1584 | -20.6% |
+| `sanitizePrepared`       |    567 |   339 | -40.2% |
+| `logfmtFormat`           |    921 |   812 | -11.9% |
+| `serializeError`         |    526 |   473 |  -9.9% |
+| `createLogEntry`         |    420 |   393 |  -6.5% |
+
+What was in them, all allocation rather than algorithm:
+
+- `sanitizePrepared` walked the entry through `safeEntries`, which is
+  `Object.keys(obj).map((key) => [key, obj[key]])`: a pair array per key on top of
+  the key array, so a twelve-field entry allocated fourteen arrays per call and
+  discarded all of them.
+- `extractErrorAndExtra` copied the caller's object field by field into a fresh
+  `extra` that `createLogEntry` then spread again. Where there is one plain object
+  and no error hiding in `err`/`error`, it is handed through instead.
+- Two `...(x ? { x } : {})` spreads at the `createLogEntry` call site allocated an
+  empty object each, on every call by a logger configured with neither.
+- `serializeError` ran a global regex with an unused capture group over the whole
+  stack, and allocated a `WeakSet` for a cycle check that only descending needs.
+- `logfmt`'s `quote` ran four `replaceAll` passes over every quoted value; most
+  are quoted for containing a space and have nothing for the other three to do.
+
+Through the same rig, before and after, that is 10147 ns to 9117 ns, **-10.2%**.
+A relative figure from one machine and one rig, which is what a before-and-after
+in the same harness supports; it is not a claim about a socket. Less than the 35%
+the tight loop shows, for the reason the rest of this page keeps finding: what was
+removed is short-lived nursery garbage, and the path is paced by the retained
+strings.
+
+Two things measured and **not** adopted, both recorded because the reasoning is
+worth more than the change would have been:
+
+- **`ContextStore.peekContext`.** The logger already prefers a copy-free read
+  where the reader offers one, and `ContextStore` does not implement it. That is
+  deliberate upstream: the class is public and subclassable, and a subclass
+  overriding `getContext` to redact a field would be silently bypassed. The prize
+  is one shallow spread, about 22 ns.
+- **Batching `ConsoleTransport`.** It is implemented and opt-in, and no throughput
+  win was reproducible for it: 10267 ns unbatched against 11106 ns batched with
+  stdout on /dev/null, 22.9 us against 23.8 us into a pipe nobody drains. A write
+  to /dev/null costs about 100 ns, so there is little to save, and against a
+  blocked consumer the limit is bytes rather than calls. An earlier single
+  measurement said 889 ns and did not survive being repeated.
+
+### The fragment approach needs the middleware and the logger co-designed
+
+`nomerge`, `aot` and `fastjson` all left `ConsoleLogger` to build the line from
+what `logger.info(message, fields)` was handed, and all three landed within a few
+hundred nanoseconds of the shipped path. The saving in the `precomp` rows comes
+from the middleware not building the `fields` object and not calling
+`JSON.stringify` at all, which the current contract has no way to express.
+
+That matters for who benefits. A fast path only `ConsoleLogger` implements helps
+the default logger and this benchmark; an app on `@dunx/infra/logger` keeps the
+generic path, because `@arkv/logger` cannot take an already-serialised line and
+still redact it. A leaner entry, by contrast, is worth 5% to 17% and is worth it
+to every logger.
+
+### Designing `logger.bind(shape)`, and what measuring it said
+
+The fragment rows above need the middleware and the logger co-designed, so the
+shape proposed for that was a bound writer: the caller declares the entry's shape
+once, the logger compiles what is per-shape, and a request passes values
+positionally instead of building an object.
+
+`@arkv/logger`'s transports each format for themselves. `Transport.write(entry,
+level)` hands over the entry and lets the transport render it, which is what lets
+one console be coloured while a file beside it stays plain JSON. A bound writer
+therefore cannot hand over a pre-serialised line; it has to produce the entry
+object. The `bound` row measures exactly that: the caller's fields object gone,
+the `getContext()` copy gone, the merge gone, `JSON.stringify` still there.
+
+| Variant                                  | logging ns | saved |
+| ---------------------------------------- | ---------: | ----: |
+| the shipped path                         |       4708 |     - |
+| `bound`, the entry object built directly |       4368 |  7.2% |
+| `precomp`, fragments and no object       |       3266 | 30.6% |
+
+**So a bound writer is worth 7.2%, and the merge was never the cost.** Building a
+twelve-key object costs about what merging two spreads into one costs, and `bound`
+still builds it. Only the fragment rows escape the object, and they escape the
+generic `JSON.stringify` with it. The gap between the two rows, 1102 ns of the
+1442 available, is what `Transport.write(entry, level)` costs.
+
+That splits the design in two, and only the second half is worth anything.
+
+**A bound writer alone** would still be a real API: mask decisions resolved per
+field name once instead of per entry, reserved-name collisions raised at bind time
+rather than filed per entry, and a declared primitive type letting `makeSafeForJson`
+be skipped behind a `typeof` guard that falls back when the value is not what was
+declared. That last part matters: a `trusted` flag would be a hole in redaction,
+where a declared type is checkable. All of it buys 7.2%.
+
+**A bound writer that emits a line** needs `Transport` to grow an optional
+`writeLine(line, level)`, and it can only be used when every transport offers one
+and would have rendered the same bytes. In practice that means exactly one
+transport whose formatter is the one the writer compiled for, and fragments are
+JSON, so `jsonFormat` and nothing else. That is narrower than it sounds and also
+the production default: `new Logger({})` outside development is one
+`ConsoleTransport` writing `jsonFormat`.
+
+Two behaviours would have to survive it, and both are cheap rather than hard. The
+async store can hold keys the shape does not declare, and today they reach the
+line, so the writer has to compare what the store holds against what it compiled
+for and fall back per entry when they differ. And an error is per-call and cannot
+be compiled at all, so `error` stays on the generic path.
+
+What it is worth, end to end: 30.6% of request logging, which is 61.8% of
+`bun-serve` to about 69.3%. Not the 80% that started this, which needs the
+five-field line and the loss of correlation recorded above.
+
+**Not built.** Two repos, a new contract in each, a fast path that applies to one
+transport and one formatter, and a fallback per entry to keep behaviour, for seven
+points of a benchmark. The 7.2% version is not worth a public API at all. Recorded
+here so the next person costs it from these numbers rather than from the guess this
+started as.
+
+### What this rig cannot see
+
+There is no socket under it, so it prices the middleware and the logger and
+nothing about `Bun.serve`'s own request handling. Anything lazy on a real
+`BunRequest` is already materialised on the pooled `Request` objects it drives,
+which is why the header question needs the socket harness and got the answer above
+instead.
+
+Three measurement traps are worth keeping, because each produced a confident wrong
+answer first.
+
+A `for` loop of `await`s never lets the macrotask queue run, so the batched
+writer's flush never fires. Measured: 50,000 emits produced zero flushes and a
+10 MB pending rope, and every row was then scored on how fast it grew a rope.
+
+Yielding with `setTimeout(resolve, 0)` replaces that with a different artifact.
+Bun clamps a zero timeout to about a millisecond, which put every row at 21 us of
+idle timer. `setImmediate` is the yield that measures the work.
+
+Measuring several loggers in one process is the third. The shared `handle` and
+`info` call sites go polymorphic and the rows contaminate each other, seen here as
+a 1.8 us swing on identical code between two orderings.
+
+These runs are from a 12700H under WSL2, where the socket ladder cannot be read at
+all: a full run put `default` ahead of `unbatched` and a blocked pipe ahead of
+`/dev/null`, both impossible. `--only` was added to `bun run logging` so a
+comparison can hold five units up rather than nineteen.
+
 ## Re-measured on Bun 1.4.0, 2026-08-22
 
 ### The body options, which this harness could not reach until it had a POST ladder
@@ -22,13 +352,15 @@ and a `GET` has no body. `bun run logging:bodies` adds a ladder on `POST /valida
 
 The two request-body rows differ by one `Request.clone()`. Decomposed on raw
 `Bun.serve`, cloning a request whose body is an unread network stream costs ~8 µs
-before either half is read and ~20 µs once one is; the second buffer and the second
-`JSON.parse` are 0.32 µs together, and putting the body in the entry is 0.27 µs.
+before either half is read and ~20 µs once one is. The second buffer and the
+second `JSON.parse` are 0.32 µs together, and putting the body in the entry is
+0.27 µs.
 
-**So the expensive part was never the parsing, which is where everyone looks.** A
-route declaring a `body` schema now has its buffered text handed to the logger
-through `RawBody`, and only an unvalidated route still clones. The old figure was
-right about the old code and only ever described the unvalidated case.
+**So the expensive part was never the parsing, which is where everyone looks.**
+For a JSON route declaring a `body` schema, `RawBody` records the buffered text
+when request-body logging is enabled. Only an unvalidated route still clones.
+The old figure was right about the old code and only ever described the
+unvalidated case.
 
 ### The default path, re-measured
 
@@ -64,11 +396,11 @@ largest step overall before the write.
 
 ## The cost of request logging on Bun 1.3.14 (`internal/bench` logging harness)
 
-`bun run logging` is the third harness, and it exists because `dunx-logging` in the
+`bun run logging` is the third harness. It exists because `dunx-logging` in the
 main suite was **one number for at least eight different things**. It sat at 40-45%
 of raw `Bun.serve` while `dunx` sat at 90-98%, so dunx's _default_ configuration -
-the one nearly every user runs - cost more than half the throughput, and nothing said
-which half.
+the one nearly every user runs - cost more than half the throughput, and nothing
+said which half.
 
 `servers/logging/dunx.ts` is one app whose middleware is truncated at a step chosen
 by `$LOGGING_VARIANT`, plus three stand-in `Logger` bindings that stop after the
@@ -100,11 +432,11 @@ subsequent write until the kernel finds room. Seven of the eight subjects log
 nothing, so only `dunx-logging` ever hit it - the one row where it mattered.
 
 Measured, on the `json` scenario: an unbatched writer into an unread pipe cost
-**2.68 µs/request** more than the same writer into `/dev/null`. Subjects now write to
-`/dev/null` (`StdoutSink` in `src/subject-process.ts`), which is a real `write(2)`
-that can never block, and the blocked-pipe case survives as an explicit row rather
-than as the default. The docstring in `servers/dunx-logging.ts` claimed the harness
-drained that pipe; it never did.
+**2.68 µs/request** more than the same writer into `/dev/null`. Subjects now write
+to `/dev/null` (`StdoutSink` in `src/subject-process.ts`), which is a real
+`write(2)` that can never block. The blocked-pipe case survives as an explicit row
+rather than as the default. The docstring in `servers/dunx-logging.ts` claimed the
+harness drained that pipe; it never did.
 
 ### Where the time went
 
@@ -125,10 +457,9 @@ floor is about ±0.5 µs, so three of these steps are not resolvable at all.
 | building and serialising the line                | +2.05 µs |
 | the write, batched                               | −0.62 µs |
 
-The three id rows were measured while the middleware minted a UUID request id.
-`TraceContext.adopt` replaced that and is cheaper - 49.2 ns for a trace id and a
-span id together, against 260.5 ns for `crypto.randomUUID()` plus a span - so all
-three are upper bounds now.
+The three id rows were measured against a `crypto.randomUUID()` pair.
+`TraceContext.adopt` is cheaper - 49.2 ns for a trace id and a span id together,
+against 260.5 ns - so all three are upper bounds.
 
 Three suspicions were wrong, recorded here as wrong:
 
@@ -151,12 +482,12 @@ serialising the entry** (2.05 µs, most of it `JSON.stringify`).
 
 ### The write was the largest single component, and batching removed it
 
-One `console.log` per request measured **+1.24 µs** against not writing at all - more
-than the `JSON.stringify` that produced the line. `ConsoleLogger` now concatenates
-entries at `info` and below into one string and writes it once per event-loop turn,
-and the write becomes **unmeasurable** (−0.62 µs against the serialise-only row, i.e.
-inside the noise floor). It also largely defuses the blocked-pipe case: with batching
-an unread pipe costs 1.16 µs instead of 2.68.
+One `console.log` per request measured **+1.24 µs** against not writing at all -
+more than the `JSON.stringify` that produced the line. `ConsoleLogger` now
+concatenates entries at `info` and below into one string and writes it once per
+event-loop turn. The write becomes **unmeasurable** (−0.62 µs against the
+serialise-only row, i.e. inside the noise floor). It also largely defuses the
+blocked-pipe case: with batching an unread pipe costs 1.16 µs instead of 2.68.
 
 Things that were measured and did **not** work, all in a real `Bun.serve` handler:
 
@@ -174,8 +505,8 @@ Things that were measured and did **not** work, all in a real `Bun.serve` handle
 this work preferred a library to the platform primitive. A `FileSink.write()`
 encodes into its own
 buffer on every call, so it pays per entry exactly what it was meant to save; a JS
-string concatenation is a rope and pays almost nothing. Only the _flush_ is a write,
-and once per turn it does not matter which API performs it - so the flush goes
+string concatenation is a rope and pays almost nothing. Only the _flush_ is a
+write, and once per turn it does not matter which API performs it. The flush goes
 through `console.log`, which is also what keeps `console` interception working in
 tests.
 
@@ -205,7 +536,7 @@ things bound it, and they are asserted in `packages/core/src/logger/console.test
 they returned `{}` immediately, so every request paid two async frames and two
 `await`s on values that were never promises. They now return `Promise<unknown>
 | undefined`, where `undefined` means there is nothing to read and the caller
-stays synchronous, and the scope callback passed to `runWithContext` is a plain
+stays synchronous. The scope callback passed to `runWithContext` is now a plain
 function using `.then` rather than an `async` arrow.
 
 This is the same fault the input reader had, found the same way, and an
@@ -217,8 +548,8 @@ one. The pathname and the query string now come out of **one** pair of
 shape every framework call has. The general path spends two array allocations (the
 rest parameter, then `[message, ...rest]`), a third object and an `Object.assign` to
 reach an entry the fast path builds as one literal. The timestamp is cached by
-millisecond: at any rate worth logging, `Date.now()` has not moved since the previous
-entry, and `new Date().toISOString()` measured ~170 ns.
+millisecond: at any rate worth logging, `Date.now()` has not moved since the
+previous entry. `new Date().toISOString()` measured ~170 ns.
 
 ### `@arkv/logger` 0.13.0 halves the entry, and is still dearer than `ConsoleLogger`
 
@@ -262,60 +593,53 @@ per-entry figure above.
 
 `Logger` exposes `logLevel`, so `RequestLoggingMiddleware` could check at
 construction whether `info` survives and skip building the `request` object. It was
-not done. The default level _is_ `info`, so the gate never fires in the configuration
-being optimised; and a 4xx logs at `warn` and a 5xx at `error`, both of which need
-the same `request` object, which is not known until after `next()` resolves. The
-branch would add a field and a condition to buy nothing on the default path.
+not done. The default level _is_ `info`, so the gate never fires in the
+configuration being optimised. A 4xx logs at `warn` and a 5xx at `error`, both of
+which need the same `request` object, which is not known until after `next()`
+resolves. The branch would add a field and a condition to buy nothing on the
+default path.
 
 ### Rejected: a cheaper id
 
 Covered above - minting measured at 0.04 µs, and a counter-based id would trade an
 unmeasurable saving for leaking request volume in a header returned to the caller.
 
-### `x-request-id` was removed, and W3C Trace Context replaced it
+### One correlation id, and it is W3C Trace Context
 
-The two did the same job and only one of them is a standard. `requestId` was a
-UUID minted per request, validated on the way in and echoed on the way out;
-`traceId` is 32 hex digits carried in `traceparent`, understood by every
-OpenTelemetry collector, and already had to be minted alongside it once tracing
-existed. Carrying both meant two correlation ids per line that always agreed.
+There is no second id beside `traceId`. Anything a service needs to correlate by
+is in `traceparent` on the way in, in the async scope while the request runs, and
+in `traceresponse` on the way out. A private id alongside it would be a second
+value per line that always agreed with the first.
 
-What the removal cost, and what it bought:
+Three things about the shape are decisions rather than details:
 
-- **Minting got cheaper.** `Uint8Array.prototype.toHex` produces a trace id and a
-  span id in **49.2 ns**, against **260.5 ns** for `crypto.randomUUID()` plus a
-  `getRandomValues(8)` span. `toHex` exists on Bun 1.4.0 and typechecks under the
-  root tsconfig's `lib: ESNext`.
-- **The trust boundary moved rather than disappearing.** An inbound `x-request-id`
-  was validated as a UUID because it is a caller-supplied string that reaches every
-  line the request writes. `traceparent` gets the stricter version of the same
-  treatment, and the standard specifies it: a malformed header is **discarded, not
-  repaired**, and an all-zero trace id, an all-zero span id and the reserved
-  version `ff` are each rejected.
-- **The response header changed from `x-request-id` to `traceresponse`**, carrying
-  the span that answered. Same purpose and same wire cost. It is a W3C Distributed
-  Tracing Working Group proposal rather than a ratified standard - the published
-  Trace Context Level 2 draft covers `traceparent` and `tracestate`, both request
-  headers - so this is a specified format with thin adoption, not a guarantee that
-  a caller reads it. `x-request-id` had neither.
-- **A bug went with it.** The outbound client hardcoded `flags: '01'` when building
-  `traceparent`, so a trace an upstream sampler had declined was re-sampled at every
-  dunx hop. `traceFlags` is in the async scope now and forwarded as it arrived,
-  which is why `RequestFields` gained a fourth trace field.
+- **Minting is 49.2 ns** for a trace id and a span id together, through
+  `Uint8Array.prototype.toHex`, against 260.5 ns for a `crypto.randomUUID()` pair.
+  `toHex` exists on Bun 1.4.0 and typechecks under the root tsconfig's
+  `lib: ESNext`.
+- **A malformed `traceparent` is discarded, not repaired**, which the standard
+  requires and which is also the trust boundary: it is a caller-supplied string
+  that reaches every line the request writes. An all-zero trace id, an all-zero
+  span id and the reserved version `ff` are each rejected.
+- **The response header is `traceresponse`**, carrying the span that answered. It
+  is a W3C Distributed Tracing Working Group proposal rather than a ratified
+  standard - the published Trace Context Level 2 draft covers `traceparent` and
+  `tracestate`, both request headers - so it is a specified format with thin
+  adoption, not a guarantee that a caller reads it. `traceResponse: false` drops
+  it, which is ~500 ns.
 
-`@dunx/http` exports no `REQUEST_ID_HEADER` and `@dunx/http/client` no
-`propagateRequestId`. There is no compatibility shim: two ids that always agreed is
-exactly the thing being removed.
+The sampling decision travels as it arrived: `traceFlags` is in the scope and the
+outbound client forwards it, so a trace an upstream sampler declined is not
+re-sampled at this hop. `tracestate` is forwarded unchanged for the same reason.
 
 ### `ignore` skips everything, and `correlateIgnored` buys back the half worth having
 
-`ignore` returns `next()` before anything else happens, which makes it
-free and also means an ignored path has no `traceresponse` and no
-`AsyncLocalStorage` scope - so a health check's own log lines were
-uncorrelated, and guide 12 claimed the id was "always set on the response".
-Splitting `ignore` into two lists was rejected: the cost is not the path list,
-it is the work, and a second list would still not say which work.
-`correlateIgnored: boolean` names the work instead.
+`ignore` returns `next()` before anything else happens, which makes it free. It
+also means an ignored path has no `traceresponse` and no `AsyncLocalStorage`
+scope, so a health check's own log lines were uncorrelated, and guide 12 claimed
+the trace was "always set on the response". Splitting `ignore` into two lists was
+rejected: the cost is not the path list, it is the work, and a second list would
+still not say which work. `correlateIgnored: boolean` names the work instead.
 
 On an ignored path it pays for the header read, the trace, the scope and one
 `Headers.set` - the four rows above that sum to ~2.2 µs of the ~5.4 the full
@@ -325,10 +649,10 @@ path costs, and never for the entry, the expensive half. Default
 ### The 500's stack goes through the bound `Logger`
 
 `defaultErrorMapper` wrote it with `console.error`. In a JSON-only service that
-is one structured entry from request logging plus a multi-line, Bun-formatted
-dump that a collector reads as several broken records, and a custom `onError`
-was the only way to suppress it. `errorMapper(logger)` is now the real
-implementation and `HttpApplication` builds the default from `app.get(Logger)`,
+means one structured entry from request logging plus a multi-line, Bun-formatted
+dump that a collector reads as several broken records. A custom `onError` was
+the only way to suppress it. `errorMapper(logger)` is now the real
+implementation, and `HttpApplication` builds the default from `app.get(Logger)`,
 so the stack lands in the same stream and the same shape as everything else.
 
 `defaultErrorMapper` remains as `errorMapper(new ConsoleLogger())` for

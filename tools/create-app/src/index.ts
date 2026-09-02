@@ -1,4 +1,7 @@
+export { FEATURES, featureNames, type Feature } from './features.js';
 export {
+  blockingEntries,
+  isValidPackageName,
   scaffold,
   ScaffoldError,
   TEMPLATES,

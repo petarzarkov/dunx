@@ -1,5 +1,6 @@
 import { AppFactory, inject, Module, provide, token } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
+import { Redis } from './client.js';
 import { RedisConnection } from './connection.js';
 import { RedisError, RedisErrorCode } from './errors.js';
 import { redisConnection, RedisModule } from './module.js';
@@ -333,6 +334,112 @@ describe('lifecycle', () => {
     // No subscriber connection exists yet, so this must not dial one just to
     // send UNSUBSCRIBE - Bun would throw ERR_REDIS_INVALID_STATE.
     await app.get(RedisConnection).unsubscribe('never');
+    await app.shutdown();
+  });
+});
+
+/**
+ * W6 applied to `@dunx/infra/redis`: a named connection as a subclass, so it can
+ * be a constructor parameter. A `Token` never can, which forced `inject()` in a
+ * field on every consumer.
+ */
+describe('a connection registered as a subclass', () => {
+  class SessionsRedis extends Redis {}
+  class CacheRedis extends Redis {}
+
+  it('resolves as a constructor parameter, as the subclass', async () => {
+    class Sessions {
+      constructor(readonly redis: SessionsRedis) {}
+    }
+
+    @Module({
+      imports: [RedisModule.forRoot({ url: unreachable }, SessionsRedis)],
+      providers: [
+        // The suite runs without `@dunx/transform`, so the parameter type is not
+        // recorded. An app with the preload writes `providers: [Sessions]`.
+        provide(Sessions, {
+          useFactory: (redis: SessionsRedis) => new Sessions(redis),
+          inject: [SessionsRedis] as const,
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    // The instance is the subclass, not a `Redis` under a subclass token.
+    expect(app.get(Sessions).redis).toBeInstanceOf(SessionsRedis);
+    expect(app.get(Sessions).redis).toBeInstanceOf(RedisConnection);
+    await app.shutdown();
+  });
+
+  it('does not claim RedisConnection, so a default coexists', async () => {
+    @Module({
+      imports: [
+        RedisModule.forRoot({ url: unreachable }),
+        RedisModule.forRoot({ url: unreachable }, SessionsRedis),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(RedisConnection)).not.toBeInstanceOf(SessionsRedis);
+    expect(app.get(SessionsRedis)).toBeInstanceOf(SessionsRedis);
+    await app.shutdown();
+  });
+
+  it('gives two subclasses their own options and their own client', async () => {
+    @Module({
+      imports: [
+        RedisModule.forRoot({ url: unreachable }, SessionsRedis),
+        RedisModule.forRootAsync(() => ({ url: unreachable }), CacheRedis),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    // Each binds its own `RedisOptions(<class name>)` token, which is what stops
+    // the second registration reading as a duplicate binding.
+    expect(app.get(SessionsRedis)).not.toBe(app.get(CacheRedis));
+    expect(app.get(CacheRedis)).toBeInstanceOf(CacheRedis);
+    await app.shutdown();
+  });
+
+  it('reaches a factory’s own imports', async () => {
+    const URL_TOKEN = token<string>('SubclassRedisUrl');
+
+    @Module({
+      providers: [provide(URL_TOKEN, { useValue: unreachable })],
+      exports: [URL_TOKEN],
+    })
+    class UrlModule {}
+
+    @Module({
+      imports: [
+        RedisModule.forRootAsync(
+          {
+            imports: [UrlModule],
+            useFactory: (from: string) => ({ url: from }),
+            inject: [URL_TOKEN],
+          },
+          CacheRedis,
+        ),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(CacheRedis)).toBeInstanceOf(CacheRedis);
+    await app.shutdown();
+  });
+
+  it('leaves the string form working', async () => {
+    @Module({
+      imports: [RedisModule.forRoot({ url: unreachable, name: 'legacy' })],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(redisConnection('legacy'))).toBeInstanceOf(RedisConnection);
     await app.shutdown();
   });
 });

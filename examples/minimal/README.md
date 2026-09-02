@@ -34,9 +34,9 @@ Constructor injection needs no decorator and no `@Inject()`, because
 records them for the container. That preload is how it runs.
 
 Leave it out and boot fails with an error naming the class and telling you to add
-it - never a silent `undefined`. Same for a parameter whose type is erased (an
-interface, a primitive, a union): that is a boot error naming the parameter, which
-is the wart `emitDecoratorMetadata` has and dunx does not.
+it - never a silent `undefined`. The same is true for a parameter whose type is
+erased (an interface, a primitive, a union): that is a boot error naming the
+parameter. `emitDecoratorMetadata` has this wart; dunx does not.
 
 ## A provider
 
@@ -74,11 +74,11 @@ export class GreetingsController {
 }
 ```
 
-`Bun.serve` does the routing. dunx does not ship a JavaScript router - path
-params, per-method dispatch and method-miss 404s are Bun's, natively.
+`Bun.serve` does the routing, natively: path params, per-method dispatch and
+method-miss 404s are Bun's. dunx does not ship a JavaScript router.
 
-Without a `params` schema a path param arrives as a string on `input.req.params`.
-Declare one and it is validated and typed instead - see
+Declare a `params` schema and a path param is validated and typed; without one,
+it arrives as a plain string on `input.req.params`. See
 [`examples/full/src/users`](../full/src/users) for that.
 
 ## A module
@@ -101,8 +101,8 @@ await app.closed;
 ```
 
 `create()` builds the container and discovers routes. `listen()` builds the
-`Bun.serve` route table - everything between the two (`setGlobalPrefix`, `use`,
-`enableCors`) still gets to shape it, and after it every one of them throws.
+`Bun.serve` route table. Everything between the two (`setGlobalPrefix`, `use`,
+`enableCors`) still gets to shape it; after it, every one of them throws.
 
 You get request logging for free: one JSON line per request carrying the request
 and the response together, at `warn` for a 4xx and `error` for a 5xx.

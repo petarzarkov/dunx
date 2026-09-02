@@ -1,8 +1,9 @@
 # @dunx/http
 
-`Bun.serve` adapter for [dunx](https://github.com/petarzarkov/dunx). Class-based
-controllers **and WebSocket gateways**, standard decorators, and no JavaScript
-router - Bun's native `routes` does path params and per-method dispatch in Zig.
+`Bun.serve` adapter for [dunx](https://github.com/petarzarkov/dunx): class-based
+controllers, **WebSocket gateways**, and standard decorators. There is no
+JavaScript router - Bun's native `routes` does path params and per-method
+dispatch in Zig.
 
 `Bun.serve` takes `routes` and `websocket` in one call, so both live here: one
 `listen()`, one server, one port. No `express`, no `ws`, no `socket.io`.
@@ -91,11 +92,12 @@ from, and it may change in any release.
 - Handlers may return a `Response`, any JSON-serialisable value, or `undefined`
   for a 204.
 - Schemas, parsers and the status resolve at boot into the same closure the
-  middleware chain folds into, so a request reads no metadata and does no lookup.
+  middleware chain folds into. A request reads no metadata and does no lookup.
 - Every request adopts W3C Trace Context, so `traceId`, `spanId`, `parentSpanId`
   and `traceFlags` reach every line it writes and `traceresponse` goes out on the
-  response. `requestLogging: { trace: false }` removes it. There is no
-  `x-request-id`: it did the same job without a standard behind it.
+  response. `requestLogging: { trace: false }` removes both;
+  `{ traceResponse: false }` keeps the trace and drops the header, which is ~500
+  ns. W3C Trace Context is the only correlation id; there is no second one.
 - `metrics: true` adds per-route counts and a nanosecond histogram at +35.2 ns a
   request, folded into the `.then` request logging already allocates.
 

@@ -367,7 +367,7 @@ place that would have needed one, a db ping needing drizzle's `sql` tag, is why
   need zod, and zod is a peer of `@dunx/openapi`, never of `@dunx/http`.
 - **No log-ignore default.** The module cannot reach `HttpOptions`: options are read
   before the container exists, which is W1 in
-  `internal/notes/roadmap/class-modules-and-opt-in-config.md`. The app writes
+  `docs/architecture/http.md`, "HTTP options as a provider". The app writes
   `requestLogging: { ignorePrefix: ['/health'] }`; defaulting it inside
   `RequestLoggingMiddleware` would silently stop logging an existing app's own
   `/health*` routes.

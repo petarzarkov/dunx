@@ -3,7 +3,7 @@ import { HttpError, Readiness, type HttpApp } from '@dunx/http';
 import { FetchError, HttpService } from '@dunx/http/client';
 import { ScheduleRegistry } from '@dunx/infra/schedule';
 import { testClient, type JsonInit, type TestClient } from '@dunx/testing';
-import { createApp } from './bootstrap.js';
+import { createApp } from './main.js';
 import { Maintenance } from './schedule/maintenance.service.js';
 
 /**
@@ -12,7 +12,7 @@ import { Maintenance } from './schedule/maintenance.service.js';
  *
  * `@dunx/testing`'s client owns the fetch-and-parse plumbing. `createTestServer`
  * is not used here on purpose: the point of this suite is that `createApp()` - the
- * real bootstrap, with its prefix, CORS and middleware - is what answers.
+ * real `createApp`, with its prefix, CORS and middleware - is what answers.
  */
 let app: HttpApp;
 let client: TestClient;
@@ -111,6 +111,37 @@ it('serves the ledger over drizzle, seeded at onInit', async () => {
   expect(status).toBe(200);
   expect(page.entries.length).toBeGreaterThan(0);
   expect(typeof page.balance).toBe('number');
+});
+
+it('answers a bad cursor with a 400 that nothing in this app maps', async () => {
+  const { status, body } = await json<{ error: string; status: number }>(
+    'ledger/page?cursor=not-a-cursor',
+  );
+
+  // `CursorError` is raised by `@dunx/infra/pagination`, which must not depend on
+  // the web layer and so cannot raise an `HttpError`. It carries `status = 400`
+  // instead, and `@dunx/http`'s default mapper reads it. No controller here
+  // catches anything: that `catch` used to be the app's to write.
+  expect(status).toBe(400);
+  expect(body.status).toBe(400);
+});
+
+it('walks the ledger by cursor', async () => {
+  const first = await json<{
+    data: unknown[];
+    meta: { nextCursor: string | null };
+  }>('ledger/page?take=1');
+
+  expect(first.status).toBe(200);
+  expect(first.body.data).toHaveLength(1);
+
+  const cursor = first.body.meta.nextCursor;
+  if (cursor !== null) {
+    const second = await json<{ data: unknown[] }>(
+      `ledger/page?take=1&cursor=${encodeURIComponent(cursor)}`,
+    );
+    expect(second.status).toBe(200);
+  }
 });
 
 it('rolls a transfer back as one unit, observably', async () => {
@@ -390,7 +421,7 @@ it('documents the routes Better Auth serves', async () => {
 });
 
 /**
- * `Compression` is registered by `bootstrap.ts`, so these run against the same
+ * `Compression` is registered by `createApp`, so these run against the same
  * chain that serves. `fetch` decodes the body itself but leaves
  * `content-encoding` and the encoded `content-length` in place, so one request
  * shows both what went over the wire and what arrived.
@@ -460,4 +491,26 @@ it('leaves a defaulted constructor parameter to its default', async () => {
 
   expect(status).toBe(200);
   expect(body.retries).toBe(3);
+});
+
+it('answers 409 for a duplicate, from the driver error alone', async () => {
+  const name = `dup-${Date.now()}`;
+
+  const created = await json<{ id: number }>('users', post({ name }));
+  expect(created.status).toBe(201);
+
+  // `name` is UNIQUE. The repository rethrows through `toDatabaseError`, which
+  // turns SQLite's `SQLITE_CONSTRAINT_UNIQUE` into a `ConstraintError` carrying
+  // a 409; `@dunx/http` reads the status off `AppError`. No error filter is
+  // registered, and `@dunx/infra` never imports the web layer.
+  const again = await json<{ error: string; status: number }>(
+    'users',
+    post({ name }),
+  );
+  expect(again.status).toBe(409);
+  expect(again.body.status).toBe(409);
+
+  // The driver's message names the table and the column, so it stays on `cause`
+  // and out of the body.
+  expect(again.body.error).not.toContain('users.name');
 });

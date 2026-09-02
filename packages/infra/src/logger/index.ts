@@ -10,8 +10,14 @@ export {
   type LogMessage,
   type SerializedError,
 } from '@dunx/core';
-// The implementation's own surface. dunx restates none of it.
+// The implementation's own surface. dunx restates none of it, which is what keeps
+// a new transport upstream reachable here by adding a name rather than a wrapper.
+// `StreamTransport` was missing from this list and unreachable through the subpath
+// despite shipping, which is the failure mode a hand-written re-export has.
 export {
+  BatchTransport,
+  type BatchedEntry,
+  type BatchTransportOptions,
   type CaptureGlobalErrorsOptions,
   captureGlobalErrors,
   ConsoleTransport,
@@ -20,7 +26,11 @@ export {
   DEFAULT_MASK_FIELDS,
   FileTransport,
   type FileTransportOptions,
+  HttpDeliveryError,
+  HttpTransport,
+  type HttpTransportOptions,
   jsonFormat,
+  logfmtFormat,
   type LogFormatter,
   type LoggerConfig,
   prettyFormat,
@@ -28,7 +38,16 @@ export {
   RESERVED_ENTRY_KEYS,
   type RotationInterval,
   type RunWithContextOptions,
+  SamplingTransport,
+  type SamplingOptions,
+  StreamTransport,
+  type StreamTransportOptions,
+  type SyslogProtocol,
+  SyslogTransport,
+  type SyslogTransportOptions,
+  textFormat,
   type Transport,
+  type TransportStats,
 } from '@arkv/logger';
 export {
   BackingLogger,

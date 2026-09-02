@@ -16,11 +16,23 @@ const envSchema = z.object({
    * `req.clone().text()`, and the pair costs about two thirds of the throughput
    * on `internal/bench`'s `validate` scenario.
    */
+  /**
+   * How an entry is rendered. `json` is what a shipper reads, `text` is the
+   * human line for a terminal, `logfmt` is the `key=value` shape Loki and Splunk
+   * parse without a schema.
+   */
+  LOG_FORMAT: z.enum(['json', 'text', 'logfmt']).default('json'),
   LOG_REQUEST_BODY: z.stringbool().default(true),
   LOG_RESPONSE_BODY: z.stringbool().default(true),
   CORS_ORIGIN: z.string().default('https://example.com'),
   /** `:memory:` needs no server and leaves nothing behind, so restarts are clean. */
   DATABASE_FILE: z.string().default(':memory:'),
+  /**
+   * Whether `x-forwarded-for` is believed. **Off unless a trusted proxy is in
+   * front**: with nothing stripping the header, any caller picks its own address,
+   * which fakes the throttle subject and the address in every log line.
+   */
+  TRUST_PROXY: z.stringbool().default(false),
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
@@ -45,10 +57,12 @@ export interface AppConfig {
   readonly appName: string;
   readonly port: number;
   readonly corsOrigin: string;
+  readonly trustProxy: boolean;
   readonly seedUsers: readonly string[];
   readonly log: {
     readonly level: LogLevel;
     readonly file: string | undefined;
+    readonly format: 'json' | 'text' | 'logfmt';
     readonly requestBody: boolean;
     readonly responseBody: boolean;
   };
@@ -82,10 +96,12 @@ export const validate = (env: ConfigSource): AppConfig => {
     appName: 'dunx-full',
     port: value.PORT,
     corsOrigin: value.CORS_ORIGIN,
+    trustProxy: value.TRUST_PROXY,
     seedUsers: ['ada', 'grace'],
     log: {
       level: value.LOG_LEVEL,
       file: value.LOG_FILE,
+      format: value.LOG_FORMAT,
       requestBody: value.LOG_REQUEST_BODY,
       responseBody: value.LOG_RESPONSE_BODY,
     },

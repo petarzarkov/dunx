@@ -24,7 +24,7 @@ export class FetchError extends AppError {
   override readonly name = 'FetchError';
 
   constructor(
-    readonly status: number,
+    override readonly status: number,
     readonly statusText: string,
     /** The response body, parsed as JSON when it was, else text, else undefined. */
     readonly body: unknown,

@@ -40,13 +40,29 @@ export interface HttpClientOptionsInit {
    * ported one cannot: talk through a proxy, pin a certificate, or reach a unix
    * socket, with no dependency.
    */
-  readonly proxy?: string;
+  /**
+   * The object form carries `Proxy-Authorization` to the proxy rather than to the
+   * target, which the string form cannot express.
+   */
+  readonly proxy?: BunFetchRequestInit['proxy'];
   readonly tls?: Bun.TLSOptions;
   readonly unix?: string;
   /** @default true - Bun decompresses by default. */
   readonly decompress?: boolean;
   /** Bun's own request/response tracing on stderr. Never on in production. */
   readonly verbose?: boolean;
+  /**
+   * Compress the request body. A string names the encoding; the object form sets
+   * the level too.
+   */
+  readonly compress?: BunFetchRequestInit['compress'];
+  /**
+   * `'http2'` lets concurrent requests to one origin share a connection, which is
+   * what a service calling a single upstream in a loop wants.
+   */
+  readonly protocol?: BunFetchRequestInit['protocol'];
+  /** How many redirects to follow before rejecting. */
+  readonly maxRedirects?: number;
 }
 
 /**
@@ -81,6 +97,9 @@ export class HttpClientOptions {
           ['unix', init.unix],
           ['decompress', init.decompress],
           ['verbose', init.verbose],
+          ['compress', init.compress],
+          ['protocol', init.protocol],
+          ['maxRedirects', init.maxRedirects],
         ] as const
       ).filter(([, value]) => value !== undefined),
     );

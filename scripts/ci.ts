@@ -102,8 +102,11 @@ export const PHASES: readonly Phase[] = Object.freeze([
           './tools',
           './scripts',
           '--parallel',
-          // templates/ holds a working app whose test cannot resolve from here.
+          // templates/ holds a working app whose test cannot resolve from here,
+          // and a scaffold written into a gitignored `tmp/` is one of those apps
+          // too - `bunx @dunx/create-app tmp/test` used to fail this phase.
           '--path-ignore-patterns=**/templates/**',
+          '--path-ignore-patterns=**/tmp/**',
         ],
       },
       // The sweep above is ./packages ./tools ./scripts. These three are the

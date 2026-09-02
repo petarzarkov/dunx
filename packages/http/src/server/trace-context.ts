@@ -3,7 +3,7 @@ export const TRACESTATE_HEADER = 'tracestate';
 /**
  * The span that answered, sent back so a caller can record which of the callee's
  * spans its own span points at. Same four fields as `traceparent`, and the
- * replacement for the `x-request-id` this used to echo.
+ * the one correlation id a response carries.
  *
  * A W3C Distributed Tracing Working Group proposal rather than a ratified
  * standard: `traceparent` and `tracestate` are the Recommendation, and the
@@ -40,6 +40,7 @@ export interface Trace {
 
 interface Traced {
   [TRACE]?: Trace;
+  [EXPOSE]?: true;
 }
 
 /**
@@ -52,9 +53,16 @@ interface Traced {
 const TRACE: unique symbol = Symbol.for('dunx.http.trace');
 
 /**
+ * Whether {@link TraceContext.stamp} may answer for this request. Separate from
+ * {@link TRACE} because the trace is read back internally - the metrics exemplar
+ * takes its `traceId` from it - so "do not send the header" cannot be expressed
+ * by not recording.
+ */
+const EXPOSE: unique symbol = Symbol.for('dunx.http.trace.expose');
+
+/**
  * `n` random bytes as hex. `Uint8Array.prototype.toHex` is 49.2 ns for a trace id
- * and a span id together, against 260.5 ns for the `crypto.randomUUID()` this
- * derived a trace id from while there was still a request id to derive it from.
+ * and a span id together, against 260.5 ns for a `crypto.randomUUID()` pair.
  */
 const mint = (bytes: number): string =>
   crypto.getRandomValues(new Uint8Array(bytes)).toHex();
@@ -84,8 +92,13 @@ export class TraceContext {
    *
    * A trace that arrived is continued with a span of this server's own, and the
    * caller's sampling decision is kept rather than overridden.
+   *
+   * `expose: false` adopts the trace without marking it for {@link stamp}, so no
+   * `traceresponse` is written - by this middleware or by the error mapper, which
+   * builds its own `Response` from what was recorded here. Everything inward is
+   * unchanged: the scope, the log lines, the metrics exemplar.
    */
-  static adopt(req: Request): Trace {
+  static adopt(req: Request, expose = true): Trace {
     const inbound = TraceContext.#parse(req.headers.get(TRACEPARENT_HEADER));
     const state = req.headers.get(TRACESTATE_HEADER);
     const trace: Trace =
@@ -99,6 +112,7 @@ export class TraceContext {
             ...(state === null ? {} : { state }),
           };
     (req as Traced)[TRACE] = trace;
+    if (expose) (req as Traced)[EXPOSE] = true;
     return trace;
   }
 
@@ -125,8 +139,9 @@ export class TraceContext {
    * which an app writes its own of.
    */
   static stamp(response: Response, req: Request): Response {
-    const trace = (req as Traced)[TRACE];
-    if (trace !== undefined) {
+    const traced = req as Traced;
+    const trace = traced[TRACE];
+    if (trace !== undefined && traced[EXPOSE] === true) {
       response.headers.set(TRACERESPONSE_HEADER, TraceContext.header(trace));
     }
     return response;

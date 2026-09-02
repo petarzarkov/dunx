@@ -110,6 +110,9 @@ provider with a constructor parameter.
 
 ## How the DI differs
 
+The constructor injection above reads like NestJS. The mechanism resolving it
+underneath is different, in four places.
+
 **No `reflect-metadata`, and no `experimentalDecorators`.** dunx uses standard
 TC39 decorators. `@dunx/transform` reads each class's constructor parameter
 types at load time with [`oxc-parser`](https://github.com/oxc-project/oxc), a
@@ -147,8 +150,9 @@ specifier is a compile error rather than a runtime surprise.
 ## Performance
 
 Structure on Bun does not have to cost throughput. `@dunx/http` is a layer over
-`Bun.serve({ routes })` and lands at 85-100% of the raw server, within noise of
-Elysia, and 3.3-4.7x NestJS on Fastify. Boot is 55 ms against 287 ms.
+`Bun.serve({ routes })`. It lands at 85-100% of the raw server's throughput,
+within noise of Elysia, and 3.3-4.7x NestJS on Fastify. Boot is 55 ms against
+287 ms.
 
 Median req/s, 64 connections, 5 runs:
 
@@ -160,12 +164,12 @@ Median req/s, 64 connections, 5 runs:
 | NestJS (Fastify)   | 37,075      | 36,219      | 32,967      | 16,033          |
 | _Bun.serve (raw)_  | _136,940_   | _133,311_   | _128,930_   | _89,047_        |
 
-The harness runs Go, Rust and JVM subjects alongside these, and the NestJS
-subject is real NestJS with real `reflect-metadata`. It also states what it
-cannot measure: the load generator shares a machine with the subject, and the
+The harness also runs Go, Rust and JVM subjects alongside these. The NestJS
+subject is real NestJS with real `reflect-metadata`. It states what it cannot
+measure, too: the load generator shares a machine with the subject, and the
 closed-loop design is subject to coordinated omission.
 
-Reproduce it with `bun run --filter '@dunx/bench' start`; the methodology is in
+Reproduce it with `bun run --filter '@dunx/bench' start`. The methodology is in
 [internal/bench/README.md](internal/bench/README.md).
 
 ## When not to use it
@@ -194,7 +198,7 @@ backend files, on `@dunx/core`, `@dunx/http`, `@dunx/infra`, `@dunx/auth`,
 
 ## Examples
 
-Each is kept alive by CI, and each exits 0 with no database, Redis or S3
+Each is kept alive by CI. Each also exits 0 with no database, Redis or S3
 installed.
 
 | Example                                      | Answers                                                              |

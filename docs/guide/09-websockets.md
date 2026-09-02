@@ -118,8 +118,8 @@ opened(socket: Socket<{ nickname: string }>): void {
 ```
 
 Returning a `Response` refuses the upgrade, and it is the only place a connection
-can be refused. There is no `@UseGuards` for a gateway: the request has not become
-a socket yet, so the thing to run is a plain function call in `@OnUpgrade`.
+can be refused. A gateway has no `@UseGuards`: the request has not become a
+socket yet, so the thing to run is a plain function call inside `@OnUpgrade`.
 
 ## `Socket`
 
@@ -279,9 +279,9 @@ The return types are `unknown` because the implementations disagree: Bun's
 in-memory bus resolves nothing at all. A returned promise is awaited by `subscribe` and watched for rejection by
 `publish`; anything else is taken as having succeeded.
 
-`close?` is optional, and omitting it is how a relay says the connections are not
-its to close. A relay that is the application's own shared `RedisConnection` must
-leave that to the container.
+`close?` is optional. Omitting it is how a relay says it does not own the
+connections and should not close them: a relay built on the application's own
+shared `RedisConnection` must leave that to the container.
 
 ### The batteries-included one
 
@@ -293,6 +293,72 @@ const app = await HttpFactory.create(AppModule, {
   relayChannel: 'my-app:ws',
 });
 ```
+
+### The same relay from the container
+
+`WsRelayModule` binds the relay as a provider, so its url comes off
+`ConfigService` like everything else and the container closes it at shutdown:
+
+```ts
+@Module({
+  imports: [
+    WsRelayModule.forRootAsync({
+      useFactory: (config: AppConfigService) => ({
+        url: config.get('redis').url,
+        connectionTimeout: 500,
+      }),
+      inject: [AppConfigService],
+    }),
+  ],
+  providers: [provide(HttpOptionsProvider, { useClass: AppHttpOptions })],
+})
+export class HttpConfigModule {}
+```
+
+```ts
+import { HttpOptionsProvider, WsRelay, type PubSubRelay } from '@dunx/http';
+
+export class AppHttpOptions extends HttpOptionsProvider {
+  constructor(private readonly bus: WsRelay) {
+    super();
+  }
+
+  override get relay(): PubSubRelay {
+    return this.bus;
+  }
+}
+```
+
+A relay of your own needs no module: extend `WsRelay`, bind it, and return it from
+that same getter. See [Configuration](./12-configuration.md) for the options
+provider.
+
+### Postgres instead of Redis
+
+`WsRelayModule.forPostgres` and `forPostgresAsync` bind `PostgresRelay`, which
+carries the same frames over `LISTEN`/`NOTIFY` on `Bun.SQL`. An app already running
+Postgres needs no broker for fan-out:
+
+```ts
+WsRelayModule.forPostgresAsync({
+  useFactory: (config: AppConfigService) => ({
+    url: config.get('database').url,
+  }),
+  inject: [AppConfigService],
+});
+```
+
+The factory changes with the method: `PostgresRelayOptions` is `url` and `max`, so
+Redis-only settings like `connectionTimeout` do not carry across. The injection site
+does not change, because both relays are bound under `WsRelay`. Which method you
+call has to be decided up front, though: a binding is fixed once the module graph
+is built, so it cannot be read from config the container resolves later.
+
+Switching from Redis changes two things. **A frame over about 7.9 KB does not
+cross**, because Postgres caps a `NOTIFY` payload at 7999 bytes and the envelope
+adds a topic and an origin id to it; `PubSub` logs one warning and fan-out stays
+local for that message. And `LISTEN`/`NOTIFY` is Postgres only, so `Bun.SQL`'s
+SQLite and MySQL adapters reject it.
 
 `RedisRelay` is built on `Bun.RedisClient`, a Bun global, so the relay itself costs
 `@dunx/http` **no new dependency**. The package's one runtime dependency is
@@ -444,8 +510,8 @@ with gateways force-stops:
 await this.#server?.stop(this.#websocket !== undefined);
 ```
 
-Those clients observe close code **1006**. There is no way around it that does not
-hang, and an app that hangs on `SIGTERM` gets `SIGKILL` anyway.
+Those clients observe close code **1006**. There is no way around it without
+hanging, and an app that hangs on `SIGTERM` gets `SIGKILL` anyway.
 
 `PubSub.close()` runs **before** the container tears down. A relay this app owns
 holds two Redis sockets and, with `maxRetries: 0`, nothing else would ever close

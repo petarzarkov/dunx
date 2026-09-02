@@ -1,9 +1,8 @@
 # Logging
 
 dunx logs every HTTP request by default, in an app that imported no logging
-module at all, and it does that without `@dunx/core` taking a single dependency.
-This page explains how, what it costs, and what you get by swapping the default
-out.
+module at all, and it does that without `@dunx/core` taking a single
+dependency.
 
 ## The contract lives in core
 
@@ -22,10 +21,10 @@ export abstract class Logger {
 }
 ```
 
-An abstract class rather than an `interface`, because `@dunx/transform` records
-constructor parameter **types**, and an interface has no runtime value to record.
-An interface here would be a boot error at every injection site. That is the same
-trick `RequestContext`, `Storage`, `DbOptions` and `Auth` all use.
+An abstract class rather than an `interface`: `@dunx/transform` records
+constructor parameter **types**, and an interface has no runtime value to
+record. An interface here would be a boot error at every injection site. That is
+the same trick `RequestContext`, `Storage`, `DbOptions` and `Auth` all use.
 
 Inject it like anything else:
 
@@ -119,14 +118,14 @@ That missing list is what `@dunx/infra/logger` buys.
 
 `ConsoleLogger` **batches `info` and below into one write per event-loop turn.**
 
-A `console.log` per entry is a `write(2)` per entry, and measured, that was the
+A `console.log` per entry is a `write(2)` per entry. Measured, that was the
 largest single component of request logging: **1.84 µs**, more than the
-`JSON.stringify` that produced the line. Concatenating into one string and writing it once per
-event-loop turn costs **0.27 µs**.
+`JSON.stringify` that produced the line. Concatenating into one string and
+writing it once per event-loop turn costs **0.27 µs**.
 
-The trade is real and worth stating plainly: **a line still sitting in the buffer
-is lost if the process dies without unwinding** - a `SIGKILL`, an OOM kill, a
-segfault - which is exactly when the log matters most.
+The trade matters: **a line still sitting in the buffer is lost if the process
+dies without unwinding** - a `SIGKILL`, an OOM kill, a segfault - and a crash is
+when the log is needed most.
 
 Three things bound it:
 
@@ -288,10 +287,57 @@ const fileAndConsole = (path: string): Transport[] => [
 ```
 
 `FileTransport` buffers, which is safe here because `LoggerModule` registers a
-lifecycle provider that flushes and closes it from `onShutdown`. That hook runs
-late: `App.shutdown` walks instances in reverse resolution order and the logger
-resolves before anything that depends on it, so services can still log while they
-close.
+lifecycle provider that drains it from `onShutdown`. That hook runs late:
+`App.shutdown` walks instances in reverse resolution order and the logger resolves
+before anything that depends on it, so services can still log while they close.
+
+It drains with `closeAsync`, and the await matters for anything reached over a
+network. A file is written synchronously and either form finishes it; a collector
+cannot answer synchronously at all, so a plain `close()` discards whatever it was
+holding and every deploy loses its last batch.
+
+### Shipping somewhere other than a file
+
+`HttpTransport` covers the collectors that differ only in the shape of the body:
+
+```ts
+import { HttpTransport, SamplingTransport } from '@dunx/infra/logger';
+
+new HttpTransport({
+  url: 'https://logs.example.com/ingest',
+  headers: { authorization: `Bearer ${token}` },
+  batchSize: 200,
+  flushIntervalMs: 2000,
+});
+```
+
+`encode` is the seam: Datadog wants a JSON array, Splunk HEC concatenated objects,
+Loki streams and values. `SyslogTransport` speaks RFC 5424 over UDP or TCP, and
+anything else that batches is a subclass of `BatchTransport`, which owns the
+bounded queue, the retry and the drop accounting.
+
+`SamplingTransport` wraps another transport to thin what reaches it. Warnings and
+worse are never sampled, and every discard is announced in the stream rather than
+being silent.
+
+`logger.stats()` on the `BackingLogger` token reports what each transport is
+holding and what it has dropped - the numbers an alert on "we are losing logs"
+reads.
+
+### Output formats
+
+`format` on any transport takes one of four:
+
+| Formatter      | Emits                                               |
+| -------------- | --------------------------------------------------- |
+| `jsonFormat`   | `{"level":"info","message":"order placed",…}`       |
+| `prettyFormat` | the same JSON, ANSI-coloured for a terminal         |
+| `textFormat`   | `09:00:15.123 INFO  order placed  traceId=4bf92f35` |
+| `logfmtFormat` | `level=info msg="order placed" order.id=ord_1`      |
+
+`examples/full` reads `LOG_FORMAT` and wires whichever you name. A file always
+takes a machine format even when the console does not, since nothing reads a log
+file with its eyes first.
 
 ### `captureGlobalErrors`
 
@@ -322,11 +368,11 @@ final path and every gateway with the messages it claims:
 }
 ```
 
-This is the answer to "is my route registered", and a service that logs nothing at
-boot cannot answer it from production. Nest emits a line per controller and a line
-per route to say the same thing; one structured entry is the same content in the
-shape a collector wants, and it is what `WorkerFactory` already does for the
-consuming side with `Consuming N job(s) on M queue(s)`.
+This is the answer to "is my route registered"; a service that logs nothing at
+boot cannot answer it from production. Nest emits a line per controller and a
+line per route to say the same thing. One structured entry carries the same
+content in the shape a collector wants, and it is what `WorkerFactory` already
+does for the consuming side, with `Consuming N job(s) on M queue(s)`.
 
 It is at `listen()` rather than `create()` because `setGlobalPrefix` runs in between,
 and a table listing unprefixed paths would name routes that do not exist.
@@ -345,10 +391,10 @@ what an import already exports to it, or imports one token from two modules that
 disagree, is legal and warned.
 
 They used to sit on `app.warnings` and be logged by nobody, on the reasoning that
-core had no logger. It has one, `Logger` is always bound, and the reference app
-never read the property, so a shadowed binding would have been silent in the app
-most likely to hit one. The list is still public for an app that would rather
-fail boot on it.
+core had no logger. It has one now: `Logger` is always bound, and the reference
+app never read the property, so a shadowed binding would have been silent in the
+app most likely to hit one. The list is still public for an app that would
+rather fail boot on it.
 
 ## Request logging
 
@@ -387,11 +433,12 @@ The entry carries the request and its response together:
 }
 ```
 
-A framework whose middleware cannot see the response needs a middleware for the inbound half and an interceptor for the outbound
-one, because they are different classes and the interceptor cannot see what the
-middleware saw. dunx does not, because middleware wraps `next()` and both halves
-are the same closure. There is no pair to correlate by `traceId` just to find out
-how a call ended.
+dunx writes both halves from one middleware, because middleware wraps `next()`
+and both halves are the same closure. A framework whose middleware cannot see
+the response needs a middleware for the inbound half and an interceptor for the
+outbound one instead: different classes, and the interceptor cannot see what
+the middleware saw. There is no pair to correlate by `traceId` just to find
+out how a call ended.
 
 - A **4xx** is the same line at `warn`.
 - A **5xx** is the same line at `error`.
@@ -488,12 +535,35 @@ interface RequestLoggingOptions {
   requestBody?: boolean; // default false
   responseBody?: boolean; // default false
   ignore?: readonly string[]; // paths skipped entirely - see below
-  ignorePrefix?: readonly string[]; // a whole mount rather than one path
+  ignorePrefix?: readonly string[]; // prefixes skipped, for a whole mount
   correlateIgnored?: boolean; // default false; keep the trace on an ignored path
   correlate?: boolean; // default true; false drops the async scope - see below
   trace?: boolean; // default true; W3C Trace Context - see above
+  traceResponse?: boolean; // default true; false stops `traceresponse` going out
 }
 ```
+
+### `traceResponse`
+
+The response header is the only part of request logging that leaves the process,
+and it is about 500 ns of the 4.7 µs the path costs, which is 11%. It is the
+largest single thing you can turn off without losing a field from a log line.
+
+```ts
+requestLogging: {
+  traceResponse: false;
+}
+```
+
+What you keep: the trace is still adopted, still on every line the middleware
+writes, still in the `AsyncLocalStorage` scope, and still on the metrics exemplar.
+
+What you lose is the outward half, a caller quoting the answering span back at
+you. That includes failures: the error mapper stamps a fresh `Response` from what
+`TraceContext.adopt` marked, and `false` stops it marking.
+
+Turn it off on a service nothing correlates from the outside. Leave it on at an
+edge.
 
 **Both body options default to `false`**, and the request body is the field most
 likely to contain a password. Turn them on in development.
@@ -583,9 +653,8 @@ a dunx tax; it is the cost of the work itself, and the breakdown says where it g
 Each row below is the same app on the same route with one more piece of the
 default path switched on. Read anything under about **±0.5 µs** as unresolvable:
 
-The two trace rows were measured while the middleware minted a UUID request id
-instead. Adopting a trace is 49.2 ns against that path's 260.5 ns, so both rows are
-now upper bounds.
+The two trace rows were measured against a `crypto.randomUUID()` pair. Adopting a
+trace is 49.2 ns against that path's 260.5 ns, so both rows are upper bounds.
 
 | Step                                            | µs/req | this step adds |
 | ----------------------------------------------- | -----: | -------------: |

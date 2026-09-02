@@ -1,34 +1,15 @@
+import type { StandardSchemaV1 } from '@dunx/core';
 import type { BunRequest } from 'bun';
 import type { DefaultStatus, HttpMethod } from './marker.js';
 
-/**
- * Standard Schema v1, restated rather than depended on: the spec is an interface,
- * so restating it keeps `@dunx/http` at zero dependencies. Zod 4, Valibot and
- * ArkType all satisfy this shape already.
- */
-export interface StandardSchemaV1<In = unknown, Out = In> {
-  readonly '~standard': {
-    readonly version: 1;
-    readonly vendor: string;
-    readonly validate: (
-      value: unknown,
-    ) => StandardSchemaResult<Out> | Promise<StandardSchemaResult<Out>>;
-    readonly types?: { readonly input: In; readonly output: Out } | undefined;
-  };
-}
-
-/** Success carries `value`; failure carries `issues`. `issues` discriminates. */
-export type StandardSchemaResult<Out> =
-  | { readonly value: Out; readonly issues?: undefined }
-  | { readonly issues: readonly StandardSchemaIssue[] };
-
-export interface StandardSchemaIssue {
-  readonly message: string;
-  /** Zod yields bare keys, Valibot `{ key }` objects. The spec allows both. */
-  readonly path?:
-    | readonly (PropertyKey | { readonly key: PropertyKey })[]
-    | undefined;
-}
+// Standard Schema v1 lives in `@dunx/core`: `ConfigModule` takes a schema too,
+// and core is the package both share. Re-exported here so every import site and
+// the public surface of `@dunx/http` are unchanged.
+export type {
+  StandardSchemaIssue,
+  StandardSchemaResult,
+  StandardSchemaV1,
+} from '@dunx/core';
 
 /** The validated output of a schema - `InferOutput<typeof CreateNote>` is `Note`. */
 export type InferOutput<S> =

@@ -14,34 +14,50 @@ import { validate, AppConfigService } from './config.js';
 export class AppModule {}
 ```
 
-## One validation function in place of a schema DSL
+## A schema, or a function
 
-`ConfigModule.forRoot` takes exactly one required option:
+`forRoot` takes exactly one of the two, and the type enforces it.
 
 ```ts
-interface ConfigModuleOptions<T extends object> {
-  validate: (env: ConfigSource) => T | Promise<T>;
+ConfigModule.forRoot({ schema: envSchema, as: AppConfigService });
+```
+
+`schema` is any Standard Schema, so zod 4, Valibot and ArkType all work and dunx
+names no vendor. A failure fails boot with a `ConfigError` listing every issue and
+its path, rather than whatever shape the library throws.
+
+## One validation function in place of a schema DSL
+
+`ConfigModule.forRoot` takes one required option, in either spelling:
+
+```ts
+type ConfigModuleOptions<T extends object> = {
   source?: ConfigSource;
   as?: new (values: T) => ConfigService<T>;
-}
+} & (
+  | { validate: (env: ConfigSource) => T | Promise<T>; schema?: undefined }
+  | { schema: StandardSchemaV1<unknown, T>; validate?: undefined }
+);
 ```
 
 `validate` receives the raw key/value pairs and returns the shaped, typed object.
 Whatever it throws is what boot fails with, so throw something whose message says
-which keys are wrong.
+which keys are wrong. `schema` is the same step handed to a Standard Schema
+instead, and its issues become a `ConfigError` naming each path.
 
 That is the whole contract. There is no `envFilePath`, no `load: [...]`, no
-`validationSchema`, no `expandVariables`.
+`expandVariables`.
 
 A schema DSL can only express what its author anticipated; a function expresses
 everything. Grouping flat variables into nested objects, deriving one value from
 two others, reading a secret out of a file, calling a secret manager: each is
 ordinary code inside `validate`, and none needs an option added to dunx.
 
-With zod it is one line:
+With zod it is one line, or none at all if the schema is the whole of it:
 
 ```ts
 const validate = (env: ConfigSource): AppConfig => envSchema.parse(env);
+// or: ConfigModule.forRoot({ schema: envSchema, as: AppConfigService })
 ```
 
 A hand-written function works identically and costs no dependency:
@@ -148,10 +164,10 @@ export class Notifier {
   or `null` at run time. It throws `ConfigError` naming the whole path.
 - `values` is the whole validated object, for destructuring or passing on.
 
-Paths stop at three segments, and `config.values.a.b.c.d` is what reaches past
-them. Each depth is a separate overload rather than one recursive type: a
-conditional type over `T` anywhere on this class makes its variance unmeasurable,
-and `app.get(ConfigService)` then stops compiling. A top-level key that itself
+Paths stop at three segments. `config.values.a.b.c.d` is what reaches past them.
+Each depth is a separate overload rather than one recursive type: a conditional
+type over `T` anywhere on this class makes its variance unmeasurable, and
+`app.get(ConfigService)` then stops compiling. A top-level key that itself
 contains a dot is read whole, so it keeps winning over a path that spells it.
 
 ## Why `as` exists
@@ -169,9 +185,9 @@ bare type name of a constructor parameter and discards the type argument, so
 `constructor(private readonly config: ConfigService<AppConfig>)` resolves the
 `ConfigService` token while the annotation keeps the precise type.
 
-It breaks in a **factory's `inject` array**, which is why `as` is on the API at
-all. `inject: [ConfigService]` resolves to
-`ConfigService<Record<string, unknown>>`, the token being a plain runtime value
+It breaks in a **factory's `inject` array**, and `as` exists on the API because
+of that gap. `inject: [ConfigService]` resolves to
+`ConfigService<Record<string, unknown>>`: the token is a plain runtime value,
 carrying no type argument to recover.
 
 A factory annotating its parameter as `ConfigService<AppConfig>` is then
@@ -196,9 +212,9 @@ LoggerModule.forRootAsync({
 });
 ```
 
-A subclass serves as both a precise token and a usable annotation, which is what
-the factory case needs. Every `forRootAsync` in dunx exists so options can be read
-off config, so `as` comes up almost immediately.
+A subclass serves as both a precise token and a usable annotation - exactly what
+the factory case needs. Every `forRootAsync` in dunx exists so options can be
+read off config, so `as` comes up almost immediately.
 
 `ConfigService` stays bound to the same instance when `as` is used, so either name
 injects. That matters for library code, which only knows the base contract.
@@ -235,18 +251,18 @@ The raw source is bound too, under the `ConfigInput` token, but it is **not**
 exported: `validate` is what reads it, and everything downstream reads the shaped
 object instead.
 
-## Two things that are absent
+## No `isGlobal`, no `forRootAsync`
 
-**No `isGlobal`.** `ConfigModule.forRoot` is already `global: true`, and exports
-`ConfigService` plus whatever `as` names. Configuration is the one thing every
-module reads, so a flag to turn that on would only ever be turned on. `ConfigInput`
-stays private: it is the raw environment, and nothing outside the module should read
+`ConfigModule.forRoot` is already `global: true`, and exports `ConfigService`
+plus whatever `as` names. Configuration is the one thing every module reads, so
+a flag to turn that on would only ever be turned on. `ConfigInput` stays
+private: it is the raw environment, and nothing outside the module should read
 it.
 
-**No `forRootAsync`.** Every other module has one; `ConfigModule` needs none.
-`validate` may already return a promise, and the container settles every factory
-before the first constructor runs, so an async validation has finished by the
-time anything can read it.
+Every other module offers `forRootAsync`; `ConfigModule` needs none. `validate`
+may already return a promise, and the container settles every factory before the
+first constructor runs, so an async validation has finished by the time anything
+can read it.
 
 `forRootAsync` exists elsewhere to let a factory **inject**, the one thing a
 zero-argument function cannot do. `validate` runs before everything and has
@@ -270,3 +286,37 @@ See [Logging](./13-logging.md), [Database](./14-database.md),
 [Queues](./15-queues.md), [Authentication](./17-authentication.md) and
 [Files and images](./18-files-and-images.md) for the rest, and
 [Providers](./03-providers.md) for how a factory provider resolves in general.
+
+## The HTTP server's own settings
+
+`HttpFactory.create(root, options)` builds the container, so its `options` argument
+is assembled before `ConfigService` exists. `HttpOptionsProvider` is the same
+settings as a provider, which can inject:
+
+```ts
+export class AppHttpOptions extends HttpOptionsProvider {
+  constructor(private readonly config: AppConfigService) {
+    super();
+  }
+
+  override get prefix(): string {
+    return this.config.get('prefix');
+  }
+}
+
+@Module({
+  providers: [provide(HttpOptionsProvider, { useClass: AppHttpOptions })],
+  exports: [HttpOptionsProvider],
+})
+export class HttpConfigModule {}
+```
+
+Every member has a default, so a subclass overrides only what differs. Anything
+passed to `create()` wins field by field, and `setGlobalPrefix`, `enableCors` and
+`set` still work and win over both, since they run after construction.
+
+Override a field with a field and a getter with a getter - TypeScript rejects the
+other pairing (`TS2611`, `TS2610`). To derive a field from config, declare
+`override trustProxy: boolean` and assign it in the constructor.
+
+See [Upgrading](./22-upgrading.md) for what each imperative call maps to.

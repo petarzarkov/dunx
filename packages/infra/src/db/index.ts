@@ -6,7 +6,12 @@ export {
   type BackendName,
   type DialectName,
 } from './dialect.js';
-export { DatabaseError } from './errors.js';
+export {
+  ConstraintError,
+  ConstraintKind,
+  DatabaseError,
+  toDatabaseError,
+} from './errors.js';
 export { DbModule, type DbModuleSettings } from './module.js';
 export {
   QueryMetrics,

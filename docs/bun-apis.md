@@ -65,9 +65,10 @@ Use the links in the table to jump to the associated documentation.
 
 ## Re-probed on Bun 1.4.0 (rev 34cbb9a40)
 
-Everything below this heading was first measured on 1.3.14. Re-running the probes on
-1.4 moved five entries and added three; the rest still reproduce. **Fixed** means the
-probe that used to fail now passes, not that the note was wrong.
+Everything below this heading was first measured on Bun 1.3.14. Re-running the probes
+on 1.4 moved five entries and added three; the rest still reproduce. **Fixed** here
+means the probe that used to fail now passes. It does not mean the earlier note was
+wrong.
 
 | Finding                                                           | On 1.4                                                            |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -105,12 +106,15 @@ bun -e "console.log(Object.getOwnPropertyNames(Bun.Image.prototype))"
 
 ### Present and undocumented
 
-| API                 | Notes                                                            |
-| ------------------- | ---------------------------------------------------------------- |
-| `Bun.S3Client`      | Absent from the table above. Native S3 - no `@aws-sdk/*` needed. |
-| `Bun.embeddedFiles` | Files embedded by `bun build --compile`.                         |
-| `Bun.openInEditor`  | Opens a path in the user's editor.                               |
-| `Bun.mmap`          | Listed above only as "low-level"; it is a plain function.        |
+| API                 | Notes                                                             |
+| ------------------- | ----------------------------------------------------------------- |
+| `Bun.S3Client`      | Absent from the table above. Native S3 - no `@aws-sdk/*` needed.  |
+| `Bun.embeddedFiles` | Files embedded by `bun build --compile`.                          |
+| `Bun.openInEditor`  | Opens a path in the user's editor.                                |
+| `Bun.mmap`          | Listed above only as "low-level"; it is a plain function.         |
+| `Bun.Terminal`      | A PTY. `Bun.spawn(cmd, { terminal })` gives the child a real one. |
+| `Bun.sliceAnsi`     | Slices by terminal columns without severing an escape sequence.   |
+| `Bun.stripANSI`     | The inverse, for asserting on what a frame says.                  |
 
 ### `Bun.Image` surface
 
@@ -182,27 +186,27 @@ wrong. Same process each time - construct, attempt one operation, tear down, the
 
 The black-holed row is Bun's, and is the "connect that never completes" entry in the
 table above - no framework involved. The refused row is bullmq's: its adapter runs a
-`setTimeout` reconnect chain, and both `disconnect()` and `quit()` return early when
-`closed` is already `true`, which is exactly when a reconnect is pending. Nothing on
+`setTimeout` reconnect chain. Both `disconnect()` and `quit()` return early when
+`closed` is already `true`, which is when a reconnect is pending, and nothing on
 `IRedisClient` can cancel it. Reproductions for both, ready to file, are in
 internal/notes/roadmap/queue-shutdown-sigterm.md.
 
-The healthy row is clean at every layer, which is why no normal deployment sees this.
-Consequence: a container that touched a Redis it could not reach will not exit on
-`SIGTERM` and will be `SIGKILL`ed. It serves correctly throughout - the route answers
-503 in single-digit milliseconds - so this is a shutdown defect, not an availability
-one.
+The healthy row is clean at every layer, so no normal deployment sees this. The
+consequence: a container that touched a Redis it could not reach will not exit on
+`SIGTERM`, and gets `SIGKILL`ed instead. It serves correctly throughout - the route
+answers 503 in single-digit milliseconds. This is a shutdown defect, not an
+availability one.
 
-Two neighbouring leaks in `Bun.RedisClient` itself, both fixed in
+Two neighbouring leaks live in `Bun.RedisClient` itself, and both are fixed in
 `@dunx/infra/redis`: a client that entered subscriber mode needs `unsubscribe()`
 before `close()`, and a `subscribe()` that failed to connect needs `connect()` first.
-`bun test` cannot observe either, because the runner exits the process itself - they
-need a spawned process to catch, which is what `@dunx/infra/redis` now has.
+`bun test` cannot observe either, because the runner exits the process itself.
+Catching them needs a spawned process, and `@dunx/infra/redis` now has one.
 
 **bullmq 6.0.5 has no `exports` map and no `"type": "module"`, so Bun resolves it to
-`main` - the CJS build.** The imported namespace carries `__esModule` and a `default`
-holding `Queue`, which is how you tell. This matters because a previous note here
-claimed the ESM build was the safe one: both builds statically import `ioredis` and
+`main`, the CJS build.** The imported namespace carries `__esModule` and a `default`
+holding `Queue`; that is how you can tell. A previous note here claimed the ESM build
+was the safe one. It was not: both builds statically import `ioredis` and
 `ioredis/built/utils`, ioredis 6.0.0 still ships that path, and no pin is needed.
 Full measurement in architecture/queues.md, "Not pinning ioredis 5".
 
@@ -222,26 +226,28 @@ Measured on `internal/bench`'s validation harness (`bun run validation`), four r
 | `POST` + `await req.json()`              |  12.14 | +3.10 µs |
 | `POST` + `req.json()` + zod              |  13.09 | +0.94 µs |
 
-**Putting a body on the wire is near-free; reading it is not, and reading it costs
+**Putting a body on the wire is near-free. Reading it is not, and reading it costs
 ~3.3x what validating it costs.** So the framework-level advice - "pick a faster
 validator" - is aimed at the smaller half. Every validator measured (zod, Valibot,
 ArkType, TypeBox's compiled checker, ajv) lands between 0.0 µs and 0.94 µs, all of
 them under the parse.
 
 **The primitive Bun is missing is a validating parser.** `req.json()` allocates a
-full JavaScript object graph which the validator then walks a second time, and
-Bun ships nothing that fuses the two: no `Bun.JSON` with a schema, no JSON Schema
-validator, no way to validate the body bytes without materialising them first.
-`Bun.TOML` and `Bun.markdown` exist; a `Bun.json(bytes, schema)` that answered from
-one pass over the buffer would remove most of what a validated POST costs today, and
-it is the kind of thing only the runtime can do - a userland library cannot avoid
-the intermediate object.
+full JavaScript object graph, and the validator then walks that same graph a second
+time. Bun ships nothing that fuses the two steps: no `Bun.JSON` with a schema, no
+JSON Schema validator, no way to validate the body bytes without materialising them
+first.
 
-Until then this is a floor, not a dunx cost, and **dunx must not try to fill it**:
-Not inventing what a mature library solves rules out writing a validator, and a
-hand-rolled JSON parser
-would be a JavaScript reimplementation of a JSC primitive, which the first half
-rules out. Recorded here so the ceiling is known rather than rediscovered.
+`Bun.TOML` and `Bun.markdown` exist, so the gap is not that Bun avoids parsers. A
+`Bun.json(bytes, schema)` that answered from one pass over the buffer would remove
+most of what a validated POST costs today. It is also the kind of thing only the
+runtime can do: a userland library cannot avoid building the intermediate object.
+
+Until then this is a floor, not a dunx cost. **dunx must not try to fill it**: not
+inventing what a mature library already solves rules out writing a validator, and a
+hand-rolled JSON parser would be a JavaScript reimplementation of a JSC primitive,
+which the first half of Rule 1 already rules out. Recorded here so the ceiling is
+known rather than rediscovered.
 
 ### `Bun.cron` - 1.4 honours `{ tz }` and changed the default zone
 
@@ -300,7 +306,7 @@ Three things it does not do, and the first is the one that decides an adoption:
 | **Every HTTP method is served**               | `GET`, `HEAD`, `POST`, `PUT`, `DELETE`, `PATCH` and `OPTIONS` all return **200 with the file body**. So `DELETE /assets/app.js` answers with the script, and `OPTIONS` cannot carry CORS preflight headers.       |
 | No `x-content-type-options: nosniff`          | Not set, and not settable for the same reason as `cache-control`.                                                                                                                                                 |
 
-One more shape worth knowing: `index` is **half-implemented**. It is type-checked at
+One more shape to flag: `index` is **half-implemented**. It is type-checked at
 `Bun.serve` (`index: false` throws `The "index" property must be of type string`),
 undeclared in `bun-types`, and then ignored - `{ dir, index: 'a.txt' }` still serves
 `index.html`. A validated-but-inert option is worse than an unknown one, which Bun
@@ -508,7 +514,7 @@ Fully typed in `bun-types` (`bun.d.ts` ~8180-8408), just undocumented on the sit
   `.resize(10,10).resize(20,20)` yields 20×20. Execution order is fixed at
   `autoOrient → rotate → flip/flop → resize → modulate` regardless of call order.
   A shared instance therefore lets one caller silently reconfigure another's
-  transform, which is why a wrapper should be immutable.
+  transform, so a wrapper should be immutable.
 - **`metadata()` ignores the chain** and only reads the header, so it reports the
   _source_ dimensions and format. It also succeeds on a truncated file - it is
   **not** a validity check.
@@ -637,10 +643,77 @@ names nothing. The explicit argument loses to the ambient variable.
 | `MYSQL_URL`                 | ok → `adapter: mysql`              |
 
 Three forms are unaffected, all verified: `new Bun.SQL(urlString)`,
-`new Bun.SQL(new URL(url))`, and `new Bun.SQL({ url, adapter: 'mysql' })`. Note
-that `@dunx/infra/db`'s `SqlOptions` uses the options-object form - harmless there,
-because that backend is Postgres by construction, but any non-Postgres backend
-built on `Bun.SQL` must name its `adapter`.
+`new Bun.SQL(new URL(url))`, and `new Bun.SQL({ url, adapter: 'mysql' })`.
+`@dunx/infra/db`'s `SqlOptions` uses the options-object form, which is harmless
+there because that backend is Postgres by construction. Any non-Postgres backend
+built on `Bun.SQL` must name its `adapter` explicitly.
+
+#### `LISTEN`/`NOTIFY` on the Postgres adapter, and the 7999-byte cap
+
+Measured on 1.4.0 (rev 34cbb9a40) against Postgres 17. `sql.listen(channel, cb, onReconnect)`
+resolves once the server acknowledges the `LISTEN`; `sql.notify(channel, payload)`
+publishes. Delivery between two clients works, and `unlisten()` ends it:
+
+```
+handle:                    { own: ["channel"], unlisten: fn, asyncDispose: fn }
+cross-connection delivery: [ "first" ]
+after unlisten:            [ "first" ]
+```
+
+The payload has a hard ceiling, and the boundary is exact:
+
+```
+7998 -> accepted
+7999 -> accepted
+8000 -> payload string too long
+```
+
+Postgres only. The SQLite adapter answers `LISTEN/NOTIFY is not supported by this
+adapter (PostgreSQL only)`.
+
+`notify()` returns a `Query`, and `Query` extends `Promise`, so `result instanceof
+Promise` is `true` and a rejection reaches a `.then(onOk, onErr)` pair. `PubSub`'s
+`#outbound` branches on that test, so a relay built on `notify` reports its failures
+through the normal degrade path rather than raising an unhandled rejection.
+
+#### Three parameter-binding gaps between `Bun.SQL` and a `pg`-shaped library
+
+Measured on 1.4.0 while running pg-boss over `Bun.SQL`. Each is something `pg` does
+that `Bun.SQL` does not, so any library written against `pg`'s parameter handling
+meets all three.
+
+**Transaction control is refused on a pooled connection.** A multi-statement string
+opening with `BEGIN` throws `Only use sql.begin, sql.reserved or max: 1`. The same
+string through `sql.reserve()` runs and returns one result array per statement, so a
+caller reading `rows` takes the last of them.
+
+**A JS array parameter is comma-joined rather than made into an array literal.** Both
+forms fail identically:
+
+```
+sql.unsafe('SELECT $1::text[]', [['probe','other']]) -> malformed array literal: "probe,other"
+sql`SELECT ${['probe','other']}::text[]`             -> malformed array literal: "probe,other"
+```
+
+The literal Postgres spelling binds correctly: `'{probe,other}'` reads back as
+`[ "probe", "other" ]`. Reported upstream and open:
+[#16840](https://github.com/oven-sh/bun/issues/16840),
+[#17798](https://github.com/oven-sh/bun/issues/17798),
+[#18775](https://github.com/oven-sh/bun/issues/18775),
+[#22165](https://github.com/oven-sh/bun/issues/22165).
+
+**A JSON string bound to a `::json` cast arrives as a JSON scalar.** Postgres reports
+what it was handed:
+
+```
+$1 = JSON.stringify([{ id: 1 }])   json_typeof -> string
+$1 = [{ id: 1 }]                   json_typeof -> array
+```
+
+So `json_to_recordset($1::json)` fails with `cannot call json_to_recordset on a
+scalar` against a string that a `pg`-based library already stringified, and succeeds
+against the raw value. Filed as
+[#40942](https://github.com/oven-sh/bun/issues/40942).
 
 #### An in-flight MySQL query does not hold the event loop open
 
@@ -662,7 +735,8 @@ MySQL URL through it emits `$1` placeholders and double-quoted identifiers) and
 `bun-sqlite`. Its MySQL drivers are `mysql2` and `mysql-proxy`.
 
 `drizzle-orm/mysql-proxy` over `Bun.SQL` works and keeps the split: drizzle owns the
-dialect, Bun owns the socket, `mysql2` is never installed. Verified against MySQL 8 inserts, selects, `where`, ordering, updates, deletes, aggregates,
+dialect, Bun owns the socket, and `mysql2` is never installed. Verified against
+MySQL 8: inserts, selects, `where`, ordering, updates, deletes, aggregates,
 `$returningId()` single and multi-row, inner and left joins, `placeholder()`
 prepared statements, and the `mysql-proxy` migrator.
 
@@ -758,12 +832,68 @@ iterator's `return()`, and the three explicit calls do the same job by hand.
 
 **A piped test never sees this.** `printf 'notes\n' | bun cli.ts` closes stdin
 straight away, the iteration ends on EOF, and the process exits. The hang needs
-something holding the other end open, which is every real terminal. That is how it
-reached a release: `bunx @dunx/create-app my-api` wrote the app, printed its next
-steps and then sat there until the user pressed Ctrl+C, reported from a real run
-after the piped CLI suite had been green for weeks. `tools/create-app/src/stdin.ts`
-is the one-line read, and its test spawns the reader with a pipe it deliberately
-does not close.
+something holding the other end open, and every real terminal does.
+
+That is how it reached a release: `bunx @dunx/create-app my-api` wrote the app,
+printed its next steps, and then sat there until the user pressed Ctrl+C. It was
+reported from a real run, after the piped CLI suite had been green for weeks.
+
+The line read is gone - `@dunx/create-app` reads keys in raw mode now, and
+`ProcessTty.close()` in `tools/create-app/src/tty.ts` is the same release by hand,
+measured again in the section below. The rule outlives the call it was found in:
+**a read of stdin that is not ended holds the process open**, whatever API opened
+it.
+
+### Raw-mode stdin, and driving it from a test with `Bun.Terminal`
+
+Probed on Bun 1.4.0, because `@dunx/create-app` asks its questions with an arrow-key
+list rather than a line of text. Five facts, all of them load bearing for
+`tools/create-app/src/tty.ts`:
+
+```
+process.stdin.setRawMode              undefined on a pipe, a function on a TTY
+arrow key, raw mode on                one chunk: 1b 5b 41
+Ctrl+C, raw mode on                   one chunk: 03      no SIGINT handler fired
+off('data') + setRawMode(false) + pause()      exited 0, no process.exit() needed
+write('a\nb\n') while raw            arrives as a<CR><LF>b<CR><LF>
+```
+
+- **`setRawMode` is absent, not failing, on a pipe.** Checking `isTTY` on both
+  streams is the capability test; there is nothing to catch.
+- **An escape sequence arrives whole.** Three bytes arrive in one read, so a decoder
+  can treat a chunk holding nothing but `0x1b` as the Escape key rather than
+  waiting on a timer.
+- **`ISIG` is off, so Ctrl+C is a byte.** A `SIGINT` handler installed alongside
+  never ran. Nothing ends the process unless the reader does, so the cancel path
+  exits 130 itself.
+- **Restoring is enough to exit.** No `process.exit`, no `unref`.
+- **`OPOST` and `ONLCR` survive raw mode**, so a frame written with `\n` still
+  returns the carriage. Node's `setRawMode` only clears input and local flags.
+
+The last one is what makes the suite possible. **`Bun.spawn(cmd, { terminal })` is
+a real PTY**: the child reports `isTTY === true`, gets the `cols`/`rows` the parent
+declared, and reads keys the parent writes with `terminal.write()`. So
+`interactive.test.ts` answers the CLI's prompts the way a person does, with no
+`node-pty` and no browser.
+
+```ts
+await using terminal = new Bun.Terminal({ cols: 100, rows: 30, data(_t, bytes) { … } });
+const proc = Bun.spawn(['bun', CLI, 'billing'], { cwd, terminal });
+terminal.write('\u001b[B');
+```
+
+Two things to know before writing one:
+
+- The `data` callback receives the **stream**, not a rendered screen: every repaint
+  is in there, one after another. Assert on the last frame, or on a substring that
+  only the state you are testing produces.
+- `exit` on `TerminalOptions` is the **PTY's** lifecycle, not the child's. The
+  child's code comes from `subprocess.exited`.
+
+A spawned process reports no coverage, so the classes underneath take a stream pair
+as constructor arguments and the suite drives them in-process. The PTY suite is
+there for the half a fake cannot answer: whether a real terminal behaves the way
+the fake assumes.
 
 ### Decorators - a compound assignment to a private field is a `SyntaxError`
 
@@ -794,15 +924,15 @@ Three things about the shape of it:
 - Nothing to do with `@dunx/transform`. Reproduced in `/tmp` with no preload, no
   `bunfig.toml` and a two-line local decorator.
 
-This one is worth knowing rather than filing and forgetting, because dunx makes it
-easy to hit: **every controller, gateway, `@JobHandler` and scheduled service is a
-decorated class**, and `#count++` is the obvious way to keep a counter in one.
+dunx makes this easy to hit: **every controller, gateway, `@JobHandler` and
+scheduled service is a decorated class**, and `#count++` is the obvious way to keep
+a counter in one.
 
-It also sits under an idiom already in shipped code. `this.#x ??= ...` is how six
+It also sits under an idiom already in shipped code: `this.#x ??= ...` is how six
 classes do lazy init - `DashboardMiddleware`, `RedisRelay`, `QueueProcessor`,
 `QueueWorker`, `Workspace`, `Application`. None of them is decorated today, so none
-is broken; adding one decorator to any of them turns the file into a parse error
-with a message that names neither the field nor the decorator.
+is broken. Adding one decorator to any of them would turn the file into a parse
+error, with a message that names neither the field nor the decorator.
 
 Found while writing `examples/full/src/schedule/maintenance.service.ts`, whose
 `@Cron`/`@Interval`/`@OnceOnBoot` handlers each incremented a private counter.
@@ -880,10 +1010,12 @@ N defaulting to the core count.
 Two behaviours change with it.
 
 **A `?raw` import suffix does not survive a worker.** `internal/docs/src/data.ts`
-has `import indexRaw from './generated/index.json?raw'`. In one process that is the
-file's text. In a `--parallel` worker it is the parsed object, so `JSON.parse` on it
-throws `SyntaxError: JSON Parse error: Unexpected identifier "object"` and 7 of the
-suite's 10 files bail: **91 tests sequentially against 30 passing and 7 failing**.
+has `import indexRaw from './generated/index.json?raw'`. In one process that import
+is the file's text. In a `--parallel` worker it is the parsed object instead, so
+`JSON.parse` on it throws `SyntaxError: JSON Parse error: Unexpected identifier
+"object"`, and 7 of the suite's 10 files bail: **91 tests sequentially against 30
+passing and 7 failing**.
+
 It fails loudly, so opting in per workspace is safe. `internal/docs` is the one
 exclusion, in the `docs` phase of `scripts/ci.ts`.
 
@@ -908,7 +1040,7 @@ suite's 17.4s**, with the other nine files summing to 4.3s.
 `bun-types` declares every matcher `: void` and `rejects: Matchers<unknown>`, and the
 runtime agrees: `expect(Promise.reject(x)).rejects.toThrow()` evaluates to
 `undefined`, not a promise. `await expect(...).rejects.toThrow()` therefore awaits
-nothing, which is what `typescript/await-thenable` fires on at 19 sites here.
+nothing; `typescript/await-thenable` fires on that at 19 sites here.
 
 The assertion holds without the `await`. Probed all four combinations, settled or
 pending promise against correct or wrong expectation, awaited or not: Bun tracks the
@@ -965,13 +1097,14 @@ default (remap to source)       28   11    39.3%
 coverageIgnoreSourcemaps = true 17   15    88.2%
 ```
 
-The 17 lines Bun cannot reach in the first column are the `import` statement,
-the interface members and the abstract member signatures: none of them emit
-anything, so they are unhittable by construction. `packages/core/src/logger/context.ts`
-was the live case, `DA:1,0` through `DA:46,0` over its imports and its two
-interfaces, reading as 32.35% for a file whose class is exercised on every boot.
-Repo-wide the remapping costs about 1.8 points of line coverage: 93.55% against
-95.33%.
+The 17 lines Bun cannot reach in the first column are the `import` statement, the
+interface members and the abstract member signatures. None of them emit anything,
+so they are unhittable by construction.
+
+`packages/core/src/logger/context.ts` was the live case: `DA:1,0` through `DA:46,0`
+over its imports and its two interfaces, reading as 32.35% for a file whose class
+is exercised on every boot. Repo-wide the remapping costs about 1.8 points of line
+coverage: 93.55% against 95.33%.
 
 `coverageIgnoreSourcemaps = true` is **not** set here. It fixes the ratio and
 breaks the thing the ratio is for: the uncovered line ranges the coverage page
@@ -1007,9 +1140,10 @@ rarely declare a constructor.
 That is as far as it can be pinned down, and not far enough to correct for. The
 counts do not add up at scale: `@dunx/core` has 15 unhit functions against roughly
 43 classes with no explicit constructor, so something else marks most of them hit.
-**Do not try to subtract this from the denominator** - a correction built on a rule
+
+**Do not try to subtract this from the denominator.** A correction built on a rule
 this shaky would be wrong in a way that is harder to notice than the artifact it
-replaces, and it would be baked into the gate.
+replaces, and it would get baked into the gate.
 
 Two other things no test can reach, for the same tally: `di/scope.ts:289` is a
 throw its own comment calls unreachable by construction, and
@@ -1042,11 +1176,13 @@ route reads as an empty document.
 Neither obvious escape works. `bun test -c other-bunfig.toml` still ran the
 preload (probed both ways: happy-dom reported `isRegistered` either way), and
 `GlobalRegistrator.unregister()` in a `beforeAll` does not hand the native
-`Response` back. What does work is **a `bunfig.toml` next to the working
-directory**: Bun picks the config beside the cwd, so the suite lives in
-`browser/` with an empty `[test]` there and its script does `cd browser && bun test`.
-Then `Response` is `function Response() { [native code] }`, `document` is
-undefined, and the server serves.
+`Response` back.
+
+What does work is **a `bunfig.toml` next to the working directory**: Bun picks the
+config beside the cwd, so the suite lives in `browser/` with an empty `[test]`
+there, and its script does `cd browser && bun test`. Then `Response` is
+`function Response() { [native code] }`, `document` is undefined, and the server
+serves.
 
 **`Bun.WebView` has no `colorScheme` or `deviceScaleFactor` option.**
 `ConstructorOptions` is `width`, `height`, `headless`, `backend`, `url`,
@@ -1067,11 +1203,11 @@ await view.cdp('Emulation.setDeviceMetricsOverride', {
 
 Verified against the built site: the body background goes `rgb(255, 255, 255)` to
 `rgb(36, 36, 36)`, `devicePixelRatio` reads 2, and the PNG comes out 2880x1800 for
-a 1440x900 viewport. The `console` option is a
-`(type, ...args) => void` callback, which is how the suite catches a page-side
-error no happy-dom test can see. 29 tests over 7 routes, 2 viewports and 2 schemes,
-writing 28 PNGs as they go, take 15.4s against a playwright install that was 150 MB
-of browser for the same work.
+a 1440x900 viewport. The `console` option is a `(type, ...args) => void` callback,
+and that is how the suite catches a page-side error no happy-dom test can see.
+
+29 tests over 7 routes, 2 viewports and 2 schemes, writing 28 PNGs as they go, take
+15.4s, against a playwright install that was 150 MB of browser for the same work.
 
 Both emulations are per-target and survive a navigation, so re-applying the one
 already in force is worth skipping: `setEmulatedMedia` needs a repaint wait, and 28
@@ -1080,15 +1216,16 @@ shots would otherwise spend 4.2s re-setting what was already set.
 ### `render()` has no auto-cleanup under `bun test`
 
 `@testing-library/react` registers its own `afterEach(cleanup)` only when it finds
-Jest's globals, and it does not find them here. Nothing in `internal/docs` called
-`cleanup`, so no `render` was ever unmounted, and `useRoute`'s `hashchange`
-listener outlived the test that created it. `mount()` sets `window.location.hash`
-first thing, so each new test re-rendered every detached tree every earlier file
-had left behind.
+Jest's globals, and it does not find them here.
+
+Nothing in `internal/docs` called `cleanup`, so no `render` was ever unmounted, and
+`useRoute`'s `hashchange` listener outlived the test that created it. `mount()`
+sets `window.location.hash` first thing, so each new test re-rendered every
+detached tree every earlier file had left behind.
 
 The cost was quadratic and hidden in one file: `symbol-anchor.test.tsx` measured
 **1.7s alone and 12.5s behind the other nine**. Pairs of files never reproduced it,
-which is what made it look like a slow test rather than a leak.
+so it looked like a slow test rather than a leak.
 
 `afterEach(cleanup)` registered from the **preload** fixes it for every file, and a
 preload-registered hook does run for every test in every file (probed). The whole
@@ -1115,9 +1252,10 @@ produced it. `scripts/ci.ts` drains both pipes into one buffer as the chunks arr
 
 Pointing the live `@dunx/infra/files` suite at MinIO by exporting `S3_ENDPOINT`
 broke two tests that had nothing to do with it. `S3StorageOptions` passes its
-options straight through, and anything omitted falls back to the environment, so
-the offline `presign` suite - which sets explicit fake credentials and region but
-no endpoint - started signing URLs against `localhost:9000` and failed its
+options straight through, and anything omitted falls back to the environment.
+
+The offline `presign` suite sets explicit fake credentials and region but no
+endpoint, so it started signing URLs against `localhost:9000` and failed its
 assertions on `s3.eu-west-1.amazonaws.com`.
 
 The live block takes `DUNX_S3_TEST_ENDPOINT` instead and passes it explicitly, so
@@ -1127,3 +1265,84 @@ nothing.
 
 Against MinIO the whole suite passes as written, no path-style flag needed, and
 `files/s3.ts` goes from 35.1% lines to 87.8% on one round-trip test.
+
+### Database drivers put the server's error code in `errno`, not `code`
+
+Measured on Bun 1.4.0 against `bun:sqlite`, Postgres 16 and MySQL 8.0, by
+provoking each violation rather than reading a reference. `packages/infra/src/db/errors.ts`
+maps these; `errors.test.ts` provokes them again rather than asserting a fixture.
+
+The two `Bun.SQL` backends put their own label in `code` and the server's code in
+`errno`, which is the reverse of every Node client - `pg` and `mysql2` both keep
+the SQLSTATE in `.code`. Reading `code` gets `ERR_POSTGRES_SERVER_ERROR` for a
+unique violation, a missing table and a bad cast alike.
+
+| Driver       | class                            | `code`                      | `errno`             |
+| ------------ | -------------------------------- | --------------------------- | ------------------- |
+| `bun:sqlite` | `Error`, `name` is `SQLiteError` | `SQLITE_CONSTRAINT_UNIQUE`  | `2067`, an integer  |
+| Postgres     | `PostgresError`                  | `ERR_POSTGRES_SERVER_ERROR` | `'23505'`, a string |
+| MySQL        | `MySQLError`                     | `ERR_MYSQL_SERVER_ERROR`    | `1062`, a number    |
+
+Three further differences that a single code path has to absorb:
+
+- **`bun:sqlite` is the one that puts the useful code in `code`**, and its error is
+  a plain `Error` with `name` set - `instanceof` finds nothing to narrow on.
+- **`errno` is a string on Postgres and a number on MySQL.** The two spaces do not
+  collide, so one lookup table works, but it has to be keyed by `String(errno)`.
+- **Only Postgres names the constraint on a field.** `constraint` holds
+  `users_email_key`; SQLite has to be read out of the message
+  (`UNIQUE constraint failed: users.email`), and MySQL names it in the message
+  only for a duplicate index or a check.
+
+MySQL reports a duplicate primary key as `1062`, the same as any other duplicate
+index entry, where SQLite and Postgres both distinguish it
+(`SQLITE_CONSTRAINT_PRIMARYKEY`, and `23505` with a `_pkey` constraint name).
+
+### `fetch` with `protocol: 'http2'` throws rather than falling back
+
+Bun 1.4 added `protocol` to `BunFetchRequestInit`: `'http2' | 'http1.1' | 'h2' | 'h1'`.
+`'http2'` lets concurrent requests to one origin share a connection.
+
+Against a cleartext `http://` origin it does not negotiate down. Both `'http2'` and
+`'h2'` reject with a `TypeError` whose `code` is `HTTP2Unsupported`, where
+`'http1.1'` and an unset `protocol` both return 200 from the same `Bun.serve`.
+
+So it is not a safe default to switch on, and an app calling a plain-HTTP upstream
+must leave it unset. `examples/full` calls itself over HTTP and does exactly that.
+`@dunx/http/client` passes it through and does not interpret it.
+
+Found by setting it in `examples/full`, where it turned the tour into a
+`HTTP2Unsupported` at the first outbound call.
+
+### `--parallel` implies `--isolate`, and `--isolate` re-runs a shared test module
+
+`bun test --help` states it: `--parallel` implies `--isolate`, and `--no-isolate`
+opts back out. So the `unit` phase has been isolating since `--parallel` was
+adopted, and adding `--isolate` to it changes nothing.
+
+Adding it to the sequential `coverage` phase does two things, both measured on
+1.4.0 over this repo's 160 files:
+
+- **16.6s to 17.9s**, about 8%.
+- **1874 tests become 1879.** The five are one test, run five times. It is declared
+  in `packages/infra/src/images/fixture.test.ts`, which five other test files
+  import for its exported sources. A fresh module registry per file re-evaluates
+  that module per importer, so its own `it()` re-registers each time. Nothing is
+  recovered; the count inflates.
+
+A shared module that exports fixtures and also declares tests is what triggers it.
+The name has to end in `.test.ts` for `coverageSkipTestFiles` to drop it, so the
+combination is not easily avoided here.
+
+### `--timings` cannot beat the slowest single file
+
+`--timings=<file>` plus `--update-timings` records per-file durations and makes
+`--parallel` start the slowest first. Measured over three runs each: 3.12-3.17s
+with, 3.13-3.16s without.
+
+The reason is in the file it writes. The slowest test file is 3045 ms of a 21161 ms
+total across 160 files, and the wall clock is ~3150 ms - the run is already bounded
+by that one file, so no scheduling order can improve it. `--shard` is bounded by
+the same file for the same reason.
+
+Worth re-measuring only if that file gets faster or another gets slower.

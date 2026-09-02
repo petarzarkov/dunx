@@ -1,8 +1,8 @@
 # Testing
 
 `@dunx/testing` is two functions and a logger. It builds the container your
-application would have, with the bindings you name replaced, and optionally binds
-a real `Bun.serve` in front of it.
+application would have, with the bindings you name replaced, and it can put a
+real `Bun.serve` in front of that container too.
 
 ```ts
 import {
@@ -52,30 +52,31 @@ describe('createTestApp', () => {
 });
 ```
 
-`modules` takes one module ref or several; they become the `imports` of one
+`modules` takes one module ref or several. They become the `imports` of one
 synthetic root, so no fixture module has to be written by hand. What comes back is
 a plain `App`: `get`, `shutdown`, `closed`, `enableShutdownHooks`. Providers are
-resolved eagerly and `onInit` has already run by the time the promise settles,
+resolved eagerly, and `onInit` has already run by the time the promise settles,
 exactly as in production.
 
-The fake above is a class the test wrote. There is no mocking framework, no
-interface, and no `jest.mock`. A subclass with an `override` is enough, and it
-typechecks against the real thing, which a hand-built object literal would not.
+The fake above is a class the test wrote: a subclass with an `override`, nothing
+more. It typechecks against the real thing. A hand-built object literal would
+not, and there is no mocking framework, interface, or `jest.mock` involved either.
 
 ### Overrides replace in place
 
-This is the part worth understanding, because it is what makes the harness safe.
+`AppFactory.create` builds the scope graph it always would, then substitutes by
+token **in every scope that binds it**, before anything resolves. That reach is
+what makes the harness safe to use: a test that stubs `Logger` never has to know
+how many modules bind it.
 
 An override is **not** an extra module appended at the end that wins. A module
-appended at the end would be its own scope, invisible to everything already wired,
-so it would win nothing. Instead, `AppFactory.create` builds the scope graph it
-always does and substitutes by token **in every scope that binds it**, before
-anything resolves.
+appended at the end would be its own scope, invisible to everything already
+wired, so it would win nothing.
 
-Every scope, so a test that stubs `Logger` never has to know how many modules
-bind it; making it name a scope would push container topology into every suite.
-Where two scopes genuinely bind a token differently and only one is meant,
-resolve through the module that matters instead of overriding.
+Naming a scope for the override would push container topology into every suite,
+so the substitution runs across every scope instead. Where two scopes genuinely
+bind a token differently and only one is meant, resolve through the module that
+matters rather than overriding.
 
 The consequence that matters:
 
@@ -106,16 +107,17 @@ test('the discarded provider is never constructed', async () => {
 });
 ```
 
-Because the replacement happens before anything resolves, the discarded provider's
-constructor never runs, its `useFactory` never runs, and its `onInit` never fires.
-That is the guarantee a hand-rolled fixture usually misses: with an "append and
-win" model, the real database provider is still in the list, still gets
-instantiated, and still opens a connection that nothing under test uses.
+Because the replacement happens before anything resolves, the discarded
+provider's constructor never runs. Its `useFactory` never runs, and its
+`onInit` never fires. That is the guarantee a hand-rolled fixture usually
+misses: with an "append and win" model, the real database provider is still in
+the list, still gets instantiated, and still opens a connection that nothing
+under test uses.
 
-The seam lives in `@dunx/core` as `AppFactory.create(root, { overrides })` rather
-than in the testing package, and it is not a test-shaped API. It says "compose
-this graph with these bindings replaced", which is also how a deployment variant
-would be expressed. `HttpOptions extends AppOptions`, so
+The seam lives in `@dunx/core`, as `AppFactory.create(root, { overrides })`,
+rather than in the testing package. It is not a test-shaped API: it says
+"compose this graph with these bindings replaced", the same statement a
+deployment variant would make. `HttpOptions extends AppOptions`, so
 `HttpFactory.create` inherits it without a second mechanism.
 
 ### An unmatched override is an error - unless it is a class
@@ -143,20 +145,20 @@ The full message, and the second clause is the important one:
 > cannot add one, because a token nobody bound is a token nothing under test
 > resolves.
 
-A silent no-op here is the worst possible failure, because it leaves a suite
-asserting against the real provider it believed it had swapped, and it passes. The
-check names **every** unmatched token rather than the first, so a renamed token does
-not turn into three rounds of the same error.
+A silent no-op here is the worst possible failure. It leaves a suite asserting
+against the real provider it believed it had swapped, and the suite passes. The
+check names **every** unmatched token rather than the first, so a renamed token
+does not turn into three rounds of the same error.
 
-**A class is deliberately exempt, and that is a real gap in the safety net.** A class
-self-binds: it needs no declaration to be resolvable, so an override for one is
-replacing the binding that _would_ have happened on demand, and registering it
-eagerly would construct a stub for a collaborator the graph under test never reaches.
-That is why `Injector.registerLazy` exists.
+**A class is exempt from that check, and that is a real gap in the safety net.**
+A class self-binds: it needs no declaration to be resolvable. An override for one
+replaces the binding that _would_ have happened on demand, so registering it
+eagerly would construct a stub for a collaborator the graph under test never
+reaches. `Injector.registerLazy` exists to avoid exactly that.
 
-The cost is that a **typo'd class override is accepted in silence** - there is no
-binding for it to fail to match, and nothing under test asks for it, so it simply
-never fires. Measured:
+The cost is that a **typo'd class override is accepted in silence**: there is no
+binding for it to fail to match, and nothing under test asks for it, so it
+simply never fires. Measured:
 
 ```
 override a declared class      -> resolves, replacement used
@@ -265,8 +267,8 @@ decide what the application _is_: `middleware` holds the global guards, `onError
 the error mapper.
 
 A suite that forgets them gets a server with no global guards and the default
-mapper. It boots fine and answers 200 where production answers 401, which is a
-fixture quietly testing a different application.
+mapper. It boots fine and answers 200 where production answers 401. That fixture
+is quietly testing a different application.
 
 So define the options once, export them, and give the same function to `main.ts`
 and to every suite:
@@ -386,10 +388,10 @@ const server = await createTestServer({
 ## Testing a guard through the real request path
 
 A guard is worth testing through the server rather than by calling
-`guard.handle()` directly, because what it reads is route metadata that only
-exists once routes have been discovered. `ctx.get(PUBLIC)` has no meaning outside
-a built route table, and a hand-constructed `RouteContext` would be testing your
-construction of it.
+`guard.handle()` directly. What it reads is route metadata that only exists once
+routes have been discovered: `ctx.get(PUBLIC)` has no meaning outside a built
+route table, and a hand-constructed `RouteContext` would be testing your
+construction of it rather than the guard.
 
 ```ts
 class KnownKeys extends ApiKeys {
@@ -457,14 +459,10 @@ const url = await app.listen(0);
 `testClient(url)` is exported too, so the same `request`/`json` pair can be
 pointed at an app booted any other way.
 
-## There is no `providers` option
+## `{ modules, overrides }`, and nothing more
 
-`{ modules, overrides }` is the documented shape and stays that shape.
-
-A `providers` list would let the harness assemble graphs that do not exist in the
-application, which is how a suite ends up asserting against a container the
-production app never builds. A fixture class that needs binding goes in a two-line
-`@Module`, where it would live if it were real:
+A fixture class that needs binding goes in a two-line `@Module`, exactly where
+it would live if it were real:
 
 ```ts
 @Module({
@@ -474,6 +472,11 @@ class FixedTime {}
 
 const app = await createTestApp({ modules: [BillingModule, FixedTime] });
 ```
+
+That two-line module is also why the harness has no `providers` option: the
+documented shape stays `{ modules, overrides }`. A `providers` list would let it
+assemble graphs that do not exist in the application, and a suite would end up
+asserting against a container the production app never builds.
 
 ## Sharp edges
 

@@ -57,6 +57,17 @@ export interface RequestLoggingOptions {
    */
   readonly correlate?: boolean;
   /**
+   * Put `traceresponse` on the response. Default `true`, and ~500 ns of the 4.7 us
+   * the path costs, which is the largest thing here that can go without losing a
+   * field from a line.
+   *
+   * `false` keeps the trace on this middleware's own lines, in the async scope and
+   * on the metrics exemplar, and withholds the header from every response
+   * including a failure's: the error mapper stamps from what `TraceContext.adopt`
+   * marked, and this stops it marking.
+   */
+  readonly traceResponse?: boolean;
+  /**
    * Adopt W3C Trace Context, putting `traceId`, `spanId`, `parentSpanId` and
    * `traceFlags` on every line the request writes and `traceresponse` on its
    * response. Default `true`, at 49.2 ns to mint both ids plus one header read.
@@ -105,6 +116,7 @@ export class RequestLoggingMiddleware implements Middleware {
   readonly #correlateIgnored: boolean;
   readonly #correlate: boolean;
   readonly #trace: boolean;
+  readonly #traceResponse: boolean;
 
   /**
    * Present only under `metrics: true`. The observation folds into the `.then`
@@ -129,6 +141,7 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#correlateIgnored = options.correlateIgnored ?? false;
     this.#correlate = options.correlate ?? true;
     this.#trace = options.trace ?? true;
+    this.#traceResponse = options.traceResponse ?? true;
     this.#metrics = metrics;
   }
 
@@ -175,7 +188,7 @@ export class RequestLoggingMiddleware implements Middleware {
       context: `${ctx.controller}.${ctx.handler}`,
     };
     if (this.#trace) {
-      const trace = TraceContext.adopt(req);
+      const trace = TraceContext.adopt(req, this.#traceResponse);
       scope.traceId = trace.traceId;
       scope.spanId = trace.spanId;
       scope.traceFlags = trace.flags;
@@ -246,7 +259,11 @@ export class RequestLoggingMiddleware implements Middleware {
     path: string,
     next: Next,
   ): Promise<Response> {
-    const trace = this.#trace ? TraceContext.adopt(req) : undefined;
+    const trace = this.#trace
+      ? TraceContext.adopt(req, this.#traceResponse)
+      : undefined;
+    // `stamp` reads the mark `adopt` left, so `traceResponse: false` needs no
+    // condition here or in the error mapper.
     const stamp = (response: Response): Response =>
       trace === undefined ? response : TraceContext.stamp(response, req);
     if (!this.#correlate) return next().then(stamp);

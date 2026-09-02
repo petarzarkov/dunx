@@ -4,9 +4,10 @@ An OpenAPI 3.1 document generated from the routes an app already has, with
 **Swagger UI** served from the same `Bun.serve` as everything else.
 
 The difference from a reflection-based generator is what it reads. A route's
-schemas are the objects the request path validates against, and its metadata is
-what its guards enforce. Both are already on the route, so the document is not a
-second description that can drift from the first.
+schemas are the objects the request path validates against. Its security
+metadata (`@Public()`, `@Roles()`) is what its guards enforce. Both are already
+on the route, so the document is not a second description that can drift from
+the first.
 
 ## Install
 
@@ -14,11 +15,13 @@ second description that can drift from the first.
 bun add @dunx/openapi zod
 ```
 
-`zod` is a peer dependency: route validation targets Standard Schema, so Valibot
-and ArkType work for validation, but hoisting a schema into
-`components/schemas` needs `z.toJSONSchema`, which is zod's. `swagger-ui-dist` is
-a regular dependency - nobody writes code against it, so nobody has a version
-opinion about it.
+`zod` is a peer dependency. Route validation targets Standard Schema, so Valibot
+and ArkType work for validation too, but the OpenAPI document needs JSON Schema,
+and only zod has `z.toJSONSchema`. A non-zod schema validates at runtime and
+appears as a permissive entry in the document, with a warning at generation time.
+
+`swagger-ui-dist` is a regular dependency - nobody writes code against it, so
+nobody has a version opinion about it.
 
 ## Usage
 
@@ -39,8 +42,8 @@ await app.listen(3000);
 // GET /api/openapi.json  the document
 ```
 
-`forRootAsync` takes a factory that may inject, which is what an app needs to
-read its title off `ConfigService` or to contribute another library's schema.
+`forRootAsync` takes a factory that may inject, so an app can read its title off
+`ConfigService` or contribute another library's schema.
 
 ## What is here
 
@@ -64,7 +67,7 @@ return type to it at compile time instead of validating every response.
 ## Notes
 
 - `.meta({ id })` on a zod schema is what hoists it into `components/schemas`.
-  Without an id it is inlined at every use site, and `.strict()` after `.meta()`
+  Without an id it is inlined at every use site. `.strict()` after `.meta()`
   discards the metadata, so put `.meta()` last.
 - Prose belongs in `description`. Swagger UI labels a schema by `title`, which
   `@dunx/openapi` fills with the component name.

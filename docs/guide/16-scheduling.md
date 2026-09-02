@@ -93,8 +93,8 @@ and logged at `warn` with the name and how long that run has been going.
 
 `Overlap.CONCURRENT` starts the new run anyway.
 
-There is no queue mode. An overrun that must not be dropped is a job, which is
-`@JobHandler` and [queues](./15-queues.md).
+An overrun that must not be dropped is a job, which is `@JobHandler` and
+[queues](./15-queues.md). There is no queue mode here.
 
 A throwing handler is reported and never rethrown, so one bad run does not disarm the
 schedule. Its message lands on the entry's `lastError`.

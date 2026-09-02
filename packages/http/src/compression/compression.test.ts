@@ -321,9 +321,9 @@ describe('Compression', () => {
   it('preserves the status and the other headers', async () => {
     const res = await run(
       request('gzip'),
-      json({ status: 201, headers: { 'x-request-id': 'abc123' } }),
+      json({ status: 201, headers: { 'x-served-by': 'abc123' } }),
     );
     expect(res.status).toBe(201);
-    expect(res.headers.get('x-request-id')).toBe('abc123');
+    expect(res.headers.get('x-served-by')).toBe('abc123');
   });
 });

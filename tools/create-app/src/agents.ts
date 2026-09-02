@@ -54,17 +54,19 @@ const layout = (features: readonly Feature[]): string =>
 - \`src/app.test.ts\` - the whole app behind a real server on port 0
 - \`bunfig.toml\` - the preload line constructor injection needs
 `
-    : `- \`src/main.ts\` - the entry point
-- \`src/bootstrap.ts\` - builds the app; shared by \`start\` and the tests
+    : `- \`src/main.ts\` - exports \`createApp\`, and serves it when run directly
 - \`src/app.module.ts\` - the root module, importing every feature
 - \`src/config.ts\` - one validation function, flat env in and a shaped object out
 ${features.map((feature) => `- \`src/${feature.source}/\` - ${feature.name}`).join('\n')}
 - \`bunfig.toml\` - the preload line constructor injection needs
 
-\`main.ts\`, \`bootstrap.ts\`, \`app.module.ts\` and \`config.ts\` were generated for the
-features chosen at scaffold time. Everything else was copied from dunx's
-\`examples/full\`. The \`*.demo.ts\` files are that example's scripted walkthroughs;
-delete one and its \`providers\` entry to drop it.
+\`main.ts\`, \`app.module.ts\` and \`config.ts\` were generated for the features chosen
+at scaffold time. Everything else was copied from dunx's \`examples/full\`. The
+\`*.demo.ts\` files are that example's scripted walkthroughs; delete one and its
+\`providers\` entry to drop it.
+
+A test imports \`createApp\` from \`./main.js\`; the \`import.meta.main\` block at the
+bottom is what stops that starting a server.
 `;
 
 export const agents = (name: string, features: readonly Feature[]): string => {
@@ -81,10 +83,20 @@ Notes for an agent working in this application. It is a
 
 \`\`\`bash
 bun install
-bun run start        # http://localhost:3000
+bun run dev          # http://localhost:3000, restarting on a change
+bun run start
 bun test
 bun run typecheck
-${hasJobs ? 'bun run worker      # drains the queues; the web process does not\n' : ''}\`\`\`
+\`\`\`${
+    hasJobs
+      ? `
+
+**There is no worker command.** \`QueueModule\` is given \`consume: true\`, so the
+container opens the workers at \`onInit\` and closes them before the connections they
+use. A handler marked \`background: true\` is forked by bullmq into
+\`src/jobs/jobs.processor.ts\`, which nobody runs by hand.`
+      : ''
+  }
 
 ## Layout
 

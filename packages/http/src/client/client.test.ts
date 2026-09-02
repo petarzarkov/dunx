@@ -101,7 +101,7 @@ afterAll(async () => {
 /**
  * A real logger and a real context, not stubs - `ConsoleLogger` takes the context as
  * its first argument and reads it on every entry, so passing one is the only way the
- * request-id propagation is being tested rather than mocked. `'fatal'` silences the
+ * header propagation is being tested rather than mocked. `'fatal'` silences the
  * output without silencing the calls.
  */
 const clientFor = (

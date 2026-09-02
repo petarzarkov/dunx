@@ -73,9 +73,9 @@ could not take effect.
 belongs to one feature goes on that feature's module instead - see
 [Module middleware](#module-middleware) below.
 
-Both resolve as your root module sees them, which for a middleware class means
-"the single module that declares it". Listing a guard here does not oblige your
-root to import or re-export the feature module that provides it.
+Both resolve the way your root module sees them: for a middleware class, that
+means the single module that declares it. Listing a guard here does not oblige
+your root to import or re-export the feature module that provides it.
 
 ## `next()` is a function you call
 
@@ -179,9 +179,9 @@ export const compose = (
 ```
 
 One `reduceRight` per route at `listen()`, after which a request is a call into a
-closure. No array iteration, no metadata lookup, no container access on the
-request path, so a guard costs a `Map` lookup where Nest's `Reflector` costs a
-per-request reflection call.
+closure. A guard costs a `Map` lookup where Nest's `Reflector` costs a
+per-request reflection call, because there is no array iteration, no metadata
+lookup and no container access left on the request path.
 
 A route with **no middleware and no CORS** skips even that, taking a direct
 dispatch path that allocates no async frame unless something genuinely has to be
@@ -193,8 +193,9 @@ middleware. Install the middleware you need.
 
 ## `RouteContext`
 
-The second argument tells a middleware which route it is running for and what that
-route's decorators declared:
+Every middleware in that chain runs against one fixed route. The second
+argument tells it which route that is, and what that route's decorators
+declared:
 
 ```ts
 export interface RouteContext {
@@ -261,8 +262,8 @@ export class RolesGuard implements Middleware {
 }
 ```
 
-Refusing a request is `throw`. Allowing it is `return next()`. Against a
-boolean-returning guard that buys two things: the guard says _why_ in the same
+Refusing a request is `throw`. Allowing it is `return next()`. Compared to a
+boolean-returning guard, this buys two things: the guard says _why_ in the same
 statement that rejects, and the rejection travels the ordinary error path, so the
 mapper, the logger and CORS all treat it like any other failure. A `403` from a
 guard is `{"error":"Requires one of: admin","status":403}`.
@@ -367,7 +368,7 @@ export class ReportsModule {}
 for these routes, built from providers only these routes can see - is the reason
 module scoping exists.
 
-Three things module middleware does not have:
+Module middleware differs from Nest's `configure(consumer)` in three ways:
 
 **No `forRoutes()`.** Nest needs a path-matching mini-language because
 `configure(consumer)` registers middleware against paths. A dunx module already owns
@@ -389,7 +390,8 @@ A guard that genuinely applies everywhere stays global. `@dunx/auth`'s
 
 ## The error mapper
 
-One function, for the whole app:
+A guard's `throw` needs somewhere to land as a response. The error mapper is
+that place: one function, for the whole app:
 
 ```ts
 export type ErrorMapper = (error: unknown, req: Request) => Response;
@@ -408,6 +410,14 @@ export const errorMapper =
       );
     }
     if (error instanceof HttpError) {
+      return Response.json(
+        { error: error.message, status: error.status },
+        { status: error.status },
+      );
+    }
+    // Any `AppError` that named a status, whoever raised it.
+    if (error instanceof AppError && isStatus(error.status)) {
+      if (error.status >= 500) logger.error('Unhandled error', error);
       return Response.json(
         { error: error.message, status: error.status },
         { status: error.status },
@@ -453,12 +463,44 @@ const app = await HttpFactory.create(AppModule, {
 
 Falling through to `defaultErrorMapper` is the normal way to handle the rest.
 
+### An error is mapped by whoever raised it
+
+`AppError` carries an optional `status`, and that is how a package with no business
+importing the web layer still says what its failure means:
+
+```ts
+export class CursorError extends AppError {
+  override readonly name = 'CursorError';
+  override readonly status = 400;
+}
+```
+
+An integer is not a dependency. `@dunx/infra` must not import `@dunx/http`, so it
+cannot raise an `HttpError` or ship a filter that constructs one; it can set a
+number, and the default mapper reads it. `CursorError` and `PageOptionsError` in
+`@dunx/infra/pagination` already do, so a bad cursor is a 400 in an app that wrote
+no `catch` at all.
+
+Two details that follow from where the number is set:
+
+- **A 4xx is not logged as an incident.** It is the caller's mistake, and logging
+  one at error level is how a log fills with entries nobody can act on. A status of
+  500 or above still logs.
+- **The value is range-checked.** It is set by hand in a package that never sees a
+  `Response`, so a typo would otherwise reach `Response.json` as `status: 4000` and
+  throw a `RangeError` from the error path itself. Anything outside 200 to 599 falls
+  back to a 500.
+
+An `AppError` with no status is a 500 with its message withheld, which is the right
+answer for something like `CircularDependencyError`: a boot failure is not a
+response.
+
 ### `ErrorFilter`, when the mapper needs dependencies
 
-A mapper is a function, so it cannot inject - and the interesting ones need the
-app's config to decide how much of an error to reveal, or its `Logger` to record the
+A mapper is a function, so it cannot inject. The interesting ones need the app's
+config to decide how much of an error to reveal, or its `Logger` to record the
 ones that became a 500. dunx's own default proves it: `errorMapper(logger)` is
-curried because currying was the only way to hand a function a dependency.
+curried, because currying was the only way to hand a function a dependency.
 
 `onError` also takes a **class**, resolved from the container like any middleware:
 
@@ -496,8 +538,8 @@ structural, so any class with a matching `catch` is accepted. The method is name
 
 ### Scoping one, without a second concept
 
-There is no `@Catch`, no per-controller filter and no per-route filter, because
-middleware already is one:
+Middleware already is a scoped filter, so there is no separate `@Catch`, no
+per-controller filter and no per-route filter:
 
 ```ts
 export class ReportErrors implements Middleware {
@@ -567,12 +609,13 @@ two thirds of the throughput on the `validate` benchmark scenario, and the reque
 body is the field most likely to contain a password. Turn them on in development,
 where seeing the payload is the point.
 
-An inbound `x-request-id` is honoured so a trace survives across services, but
-only if it is a UUID: it is caller-supplied and ends up in every line the request
-writes. Anything else is replaced by a fresh `crypto.randomUUID()`.
+An inbound `traceparent` is continued so one trace spans both services, but only
+if it parses: it is caller-supplied and ends up in every line the request writes,
+so a malformed one is discarded rather than repaired and the request starts a
+trace of its own.
 
-Either way it comes back on the response header, unless the path is in `ignore`
-and `correlateIgnored` is off; see
+Either way the answering span comes back as `traceresponse`, unless the path is in
+`ignore` and `correlateIgnored` is off; see
 [Logging](./13-logging.md#what-ignore-costs-and-how-to-buy-part-of-it-back).
 
 ### The 404 is logged too

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { provide } from '@dunx/core';
 import { createTestServer } from '@dunx/testing';
+import { HttpModule } from './http/http.module.js';
 import { ApiKeys } from './reports/api-keys.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { ForecastClient } from './weather/forecast.client.js';
@@ -92,5 +93,41 @@ describe('a guard, through the real request path', () => {
     expect((await server.json('reports/health')).status).toBe(200);
 
     await server.close();
+  });
+});
+
+/**
+ * Global middleware reaches a fixture only if the fixture includes the module that
+ * binds the `HttpOptionsProvider`. Include it and `createTestServer` runs the same
+ * chain production runs, with nothing restated here and no warning about globals.
+ */
+describe('global middleware from an HttpOptionsProvider', () => {
+  test('runs in the fixture, and the harness says nothing about it', async () => {
+    const lines: string[] = [];
+    const { warn } = console;
+    console.warn = (...args: unknown[]) => {
+      lines.push(args.map(String).join(' '));
+    };
+
+    let server: Awaited<ReturnType<typeof createTestServer>>;
+    try {
+      server = await createTestServer({
+        modules: [HttpModule, WeatherModule],
+        overrides: [provide(ForecastClient, { useValue: new FixedForecast() })],
+      });
+    } finally {
+      // Restored even if boot throws, or every later test in this file reports
+      // into a dead array.
+      console.warn = warn;
+    }
+
+    try {
+      const { headers } = await server.request('weather/oslo');
+      expect(headers.get('server-timing')).toMatch(/^handler;dur=/);
+      // Omitting `middleware` is correct here: the provider supplies it.
+      expect(lines).toEqual([]);
+    } finally {
+      await server.close();
+    }
   });
 });

@@ -22,8 +22,8 @@ with no error. Extracting a `bigint` value and stringifying that throws. Silent
 loss rather than a loud failure, which is worse, and `percentile(n)` returning a
 `number` is the answer either way.
 
-**The exemplar is `slowestTraceId`, not `slowestRequestId`.** `x-request-id` was
-removed in the same change; the record is in
+**The exemplar is `slowestTraceId`.** The note named it for a correlation id that
+no longer exists; W3C Trace Context is the only one, and the record is in
 [cost-of-logging.md](./cost-of-logging.md).
 
 **Keying misses on the route context does not work.** The note says `observe`

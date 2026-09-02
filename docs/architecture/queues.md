@@ -4,13 +4,12 @@ bullmq over `Bun.RedisClient`, and how the ioredis question resolved by measurin
 
 ## Queues (`@dunx/infra/queue`)
 
-**bullmq is the queue.** Never invent what a mature library solves, again: retries,
-backoff,
-priorities, rate limiting, delayed jobs, schedulers and stall recovery are bullmq's,
-and a dunx implementation of any of them would be a worse one. `bullmq` is an
-optional `peerDependency`. What the area contributes is the four things bullmq has
-no opinion about - where a handler lives, how it is found, how it is injected, and
-when it stops.
+**bullmq is the queue.** Never invent what a mature library already solves:
+retries, backoff, priorities, rate limiting, delayed jobs, schedulers and stall
+recovery are already bullmq's, and a dunx implementation of any of them would be
+a worse one. `bullmq` is an optional `peerDependency`. What this area contributes
+is the four things bullmq has no opinion about: where a handler lives, how it is
+found, how it is injected, and when it stops.
 
 ### The ioredis boundary, as it actually resolved
 
@@ -84,29 +83,97 @@ happen. It is not applied, and the advice is removed from the guide and from
 
 What the error actually reports is **ioredis absent**, which is not fixable from
 this side. `bullmq/dist/{cjs,esm}/classes/queue.js` both fail without it, because
-everything routes through `utils/index`; only `classes/bun-redis-client.js` loads
-standalone, and it is useless without `Queue` and `Worker`. So the barrel is not at
-fault and there is no deep-import escape - **`/queue` cannot be imported without
-ioredis, and cannot be made to be.**
+everything routes through `utils/index`. Only `classes/bun-redis-client.js` loads
+standalone, and it is useless without `Queue` and `Worker`. So the barrel is not
+at fault, and there is no deep-import escape: **`/queue` cannot be imported
+without ioredis, and cannot be made to be.**
 
-`ioredis` nonetheless stays an **optional** peer, because it is optional in exactly
-the sense `bullmq` is: needed if and only if `/queue` is used. Requiring it would
-put ioredis in the install of every consumer of `/db`, `/files`, `/images`,
-`/logger` and `/redis`, the outcome the ban exists to prevent. npm cannot
-express "optional, but in lockstep with bullmq", so `packages/infra/src/index.test.ts`
-does: one test asserts both peers carry `optional: true`, and guide 14 says
-`bun add bullmq ioredis`.
+`ioredis` nonetheless stays an **optional** peer, because it is optional in
+exactly the sense `bullmq` is: needed if and only if `/queue` is used. Requiring
+it would put ioredis in the install of every consumer of `/db`, `/files`,
+`/images`, `/logger` and `/redis`, the outcome the ban exists to prevent. npm
+cannot express "optional, but in lockstep with bullmq." `packages/infra/src/index.test.ts`
+does that instead: one test asserts both peers carry `optional: true`, and guide
+14 says `bun add bullmq ioredis`.
 
 The range is **bullmq's rather than dunx's**. dunx never imports ioredis, so it
-has no opinion that could be better informed than the library that does, and
-the peer therefore mirrors bullmq's own `>=5.0.0` rather than narrowing to the
-major CI happens to resolve. The second test in that file asserts the two
-ranges are equal, so bullmq changing its requirement fails here instead of
-leaving dunx advertising a stale one - the same guard shape as the `LOG_LEVELS`
-test.
+has no opinion that could be better informed than the library that does. The
+peer therefore mirrors bullmq's own `>=5.0.0` rather than narrowing to the major
+CI happens to resolve. The second test in that file asserts the two ranges are
+equal, so bullmq changing its requirement fails here instead of leaving dunx
+advertising a stale one, the same guard shape as the `LOG_LEVELS` test.
 
 The `devDependency` was `^6.0.0` against a `>=5.0.0` peer; it now matches the
 peer, as `bullmq`'s and `drizzle-orm`'s already did.
+
+### A Postgres-backed queue, measured and not adopted
+
+Rails 8 moved its queue, cache and websocket fan-out onto the application's own
+database and dropped Redis. The question that raises here is whether
+`@dunx/infra/queue` should have a second backend needing no broker.
+
+**pg-boss is the library, on the rule that made bullmq the queue.** Retries,
+backoff, cron, singleton queues, dead letters and archival are already its, and
+building them over `Bun.SQL` is the failure Rule 1's second half names.
+graphile-worker is the other candidate and was not measured. pg-boss took the
+first look, for publishing a `Db` interface aimed at this case.
+
+pg-boss 12.28.1 takes a `db` implementing `executeSql(text, values)`, and its types
+say a custom adapter may also implement `listen` to enable `useListenNotify`.
+`Bun.SQL` satisfies both through three shims, one per gap recorded in
+[bun-apis.md](../bun-apis.md): reserve a connection for the `BEGIN` blocks, spell a
+JS array as a Postgres array literal, and parse a stringified JSON parameter before
+binding it. The `$n::type` cast pg-boss writes beside each placeholder says which
+applies, so the shim is about 20 lines.
+
+Measured on Bun 1.4.0 (rev 34cbb9a40), pg-boss 12.28.1, Postgres 17:
+
+```
+migration + start:                  75 ms (2 reserved connections)
+warnings:                           none
+pg_stat_activity:                   10 conns, application_name "" on all of them
+dispatch -> handler, notify: true   10 ms
+dispatch -> handler, notify: false  2012 ms
+retries with retryLimit 3:          succeeded on attempt 3
+```
+
+The connection census is the load-bearing line. pg-boss's own `Db` sets
+`application_name` to `pgboss` on the pool it opens, so ten unnamed connections and
+no `pgboss` among them means that pool was never constructed and every statement
+went through `Bun.SQL`. An empty `warnings` list says the same about the listener:
+pg-boss emits `listen_notify_unavailable` when it falls back to polling, and the
+200x gap between the two dispatch figures is what the fallback costs.
+
+`pg` still has to be installed. `dist/db.js` imports it statically and
+`dist/index.js` imports `db.js`, so the barrel pulls it in whether or not a custom
+adapter replaces it. That is the shape of bullmq's `ioredis` import above, and it
+would be an optional peer for the same reason.
+
+Two costs stand against adopting this, and the measurement settles neither:
+
+- **The shim reads pg-boss's own SQL.** A cast that changes spelling upstream breaks
+  binding with no compile error, and the fix would live here rather than in either
+  project. Its home is Bun, or an adapter pg-boss ships.
+- **pg-boss is not a bullmq drop-in.** `JobPublisher.for()` returns bullmq's `Queue`
+  so that `addBulk`, `upsertJobScheduler` and `getJobCounts` need no restating. A
+  pg-boss backend has a different job model, so it is a second surface rather than a
+  driver swap behind the existing one.
+
+Both figures above are PostgreSQL 17 through `Bun.SQL`'s Postgres adapter, and
+nothing else was measured. pg-boss carries four other backend profiles, and the
+latency does not carry to them: the only thing separating 10 ms from 2012 ms is
+whether a notification arrives. `cockroachdb` sets `noListenNotify` and polls,
+`yugabytedb` has it early-access behind `ysql_yb_enable_listen_notify` and off by
+default, and `citus` and `pglite` have it. Their other flags, `noAdvisoryLocks`
+and `noTablePartitioning`, bear on migration and table layout rather than on
+dispatch.
+
+SQLite and MySQL are not pg-boss backends at all, and `Bun.SQL` answers
+`LISTEN`/`NOTIFY` on the Postgres adapter alone, so an app on either has no candidate
+here.
+
+Recorded here rather than built; the open item is in
+[ROADMAP.md](../ROADMAP.md), "Open items".
 
 ### Job discovery
 
@@ -117,21 +184,21 @@ ordering dependence and no cross-file leak. `WorkerFactory` walks
 `Object.getPrototypeOf` from the prototype of each class the modules already declare
 in `providers`/`controllers`, exactly as `discoverGateways` does.
 
-What that buys, and it is the same list routes get: no second registration key, no
+What that buys is the same list routes get: no second registration key, no
 `@Processor` class decorator, an abstract base's handlers inherited by every
-subclass, an undecorated override still dispatched to because the handler is bound
-off the instance, and a duplicate `(queue, name)` as a boot error naming both
-methods rather than traffic silently split between them.
+subclass, an undecorated override still dispatched to because the handler is
+bound off the instance, and a duplicate `(queue, name)` as a boot error naming
+both methods rather than traffic silently split between them.
 
 One asymmetry with gateways is deliberate. `discoverGateways` throws when a class
 declares a handler but is not marked `@Gateway`, because such a handler could never
 receive a frame. There is no class-level marker here, so there is no such orphan
 state and no such error.
 
-A factory- or value-provided instance is **not** scanned. There is no class to read a
-prototype chain from until it has been built, and building every factory provider to
-find out whether it was worth building is the ordering trap the marker technique
-exists to avoid.
+A factory- or value-provided instance is **not** scanned. There is no class to
+read a prototype chain from until it has been built. Building every factory
+provider just to find out whether it was worth building is the ordering trap the
+marker technique exists to avoid.
 
 ### Publish and consume are different processes, so they are different objects
 
@@ -142,18 +209,18 @@ exists to avoid.
 discover by inspection, validate eagerly, and return an object wrapping `App` whose
 `shutdown()` sequences its own resource ahead of the container's.
 
-`create` discovers and validates; `start()` opens connections. That split is what
-makes a wiring mistake - no `QueueModule`, no handlers, a misspelled name in
-`queues` - fail before anything consumes, and what lets `worker.jobs` be asserted in
+`create` discovers and validates; `start()` opens connections. That split makes a
+wiring mistake - no `QueueModule`, no handlers, a misspelled name in `queues` -
+fail before anything consumes. It is also what lets `worker.jobs` be asserted in
 a test with no server running.
 
-The "no `QueueModule`" check reads the **module graph** rather than the container, and the
-reason generalises past queues: **every class self-binds, so a class whose
-constructor arguments are all optional resolves successfully when nothing bound it.**
-`app.get(QueueOptions)` on a container with no `QueueModule` returns defaults - a
-worker silently pointed at `localhost` - rather than throwing. Any presence check for
-a class-shaped token has the same hole; `collectModules(root)` and a token comparison
-do not.
+The "no `QueueModule`" check reads the **module graph** rather than the
+container. The reason generalises past queues: **every class self-binds, so a
+class whose constructor arguments are all optional resolves successfully when
+nothing bound it.** `app.get(QueueOptions)` on a container with no `QueueModule`
+returns defaults - a worker silently pointed at `localhost` - rather than
+throwing. Any presence check for a class-shaped token has the same hole;
+`collectModules(root)` and a token comparison do not.
 
 `JobPublisher` returns bullmq's own `Queue` and `Job` rather than wrappers, for the
 same reason `/db` returns drizzle's database class: the library is the interface, and
@@ -161,11 +228,11 @@ a wrapper would be a surface to outgrow.
 
 ### The one behaviour that is dunx's rather than bullmq's
 
-`jobTimeoutMs`. bullmq has `lockDuration` and stall detection, which answer _did the
-worker die_ rather than _is this handler stuck_ - a handler hung on an external call renews
-its lock and never finishes. The dispatcher races the handler against a timer and
-clears it in a `finally`, since an uncleared timer would hold the loop open for its
-full duration after a fast job. Off by default.
+`jobTimeoutMs`. bullmq has `lockDuration` and stall detection, which answer _did
+the worker die_ rather than _is this handler stuck_: a handler hung on an
+external call renews its lock and never finishes. The dispatcher races the
+handler against a timer and clears it in a `finally`, since an uncleared timer
+would hold the loop open for its full duration after a fast job. Off by default.
 
 ### Shutdown ordering
 
@@ -184,7 +251,7 @@ plus zero open sockets afterwards.
 ### A forked child's colour, which is the parent's question
 
 bullmq forks a sandboxed processor with `stdio: 'pipe'` and pipes the child's
-stdout into the parent's (`classes/child.js`), so the child's stdout is a pipe and
+stdout into the parent's (`classes/child.js`). The child's stdout is a pipe, and
 the terminal the lines actually reach belongs to the parent. Everything on the
 colour path asks the child's own stream: `Bun.enableANSIColors`, which
 `LoggerModule` defaults `isDevelopment` from, and `@arkv/colors`' `isColorSupported`,
@@ -201,13 +268,13 @@ after    parent pid 1148355  COLOURED   Started [background] worker for queue: .
          child  pid 1148371  COLOURED   Sandboxed worker ready, 1 handler(s)
 ```
 
-`childColourEnv` in `worker.ts` is the fix: `FORCE_COLOR=1` in `workerForkOptions.env`
-when this process has colour, since that is the one variable both checks read and
-the only thing that crosses a fork. Nothing is added when `NO_COLOR` or
-`FORCE_COLOR` is already set - it crosses in `process.env` unchanged and is the
-consumer's answer rather than a terminal check - and nothing is added when the
-consumer passed `workerForkOptions` of their own, which would have to be merged
-into.
+`childColourEnv` in `worker.ts` is the fix: `FORCE_COLOR=1` in
+`workerForkOptions.env` when this process has colour, since that is the one
+variable both checks read and the only thing that crosses a fork. Nothing is
+added when `NO_COLOR` or `FORCE_COLOR` is already set: it crosses in
+`process.env` unchanged, and it is the consumer's answer rather than a terminal
+check. Nothing is added when the consumer passed `workerForkOptions` of their own,
+since dunx's defaults would have to be merged into the consumer's options.
 
 `isolation: 'thread'` needs none of this: Bun ignores the `stdout`/`stderr` options
 bullmq passes `new Worker`, so a thread writes to the process's real stdout.

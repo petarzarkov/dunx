@@ -27,7 +27,7 @@
     "build": "bun scripts/build-all.ts",
     "ci": "bun ./scripts/ci.ts",
     "test": "bun run --parallel --filter '*' test",
-    "test:cov": "bun test ./packages ./tools ./scripts --coverage --path-ignore-patterns='**/templates/**' && bun run gen:cov",
+    "test:cov": "bun test ./packages ./tools ./scripts --coverage --path-ignore-patterns='**/templates/**' --path-ignore-patterns='**/tmp/**' && bun run gen:cov",
     "lint": "oxlint --fix .",
     "lint:check": "oxlint --max-warnings 0 .",
     "format": "oxfmt --write .",
