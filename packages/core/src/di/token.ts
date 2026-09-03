@@ -15,6 +15,16 @@ export type Ctor<T> = new (...args: never[]) => T;
 // injected without needing token() at all.
 export type AbstractCtor<T> = abstract new (...args: never[]) => T;
 
+/**
+ * A method a decorator may mark, whatever it takes. `never[]` for the same reason
+ * `Ctor` uses it: it is what makes an arbitrary method signature assignable, so a
+ * handler declares the payload type it expects rather than the widest one.
+ *
+ * `@dunx/http`'s gateways and `@dunx/infra`'s job and schedule decorators all
+ * mark methods, and each used to declare this line itself.
+ */
+export type HandlerMethod = (...args: never[]) => unknown;
+
 export type InjectionToken<T> = AbstractCtor<T> | Token<T>;
 
 export const token = <T>(description: string): Token<T> => ({ description });

@@ -76,7 +76,8 @@ const connectionFrom = (
 
 /**
  * A named connection binds its own options token, so two of them do not collide
- * on `RedisOptions` - the flat container reports that as a duplicate binding.
+ * on `RedisOptions` - a scope reports a duplicate when it binds that class
+ * twice.
  */
 const namedModule = (
   target: ConnectionTarget,

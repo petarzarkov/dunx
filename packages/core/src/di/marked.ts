@@ -70,3 +70,17 @@ export const classOf = (
     ? { token: entry.token, ctor: entry.provider.ctor }
     : undefined;
 };
+
+/**
+ * An instance of `ctor` with its prototype chain and nothing behind it: every
+ * method is reachable and `instance.constructor` still resolves to the class, but
+ * no constructor runs, so a class whose dependencies are absent can still be read.
+ *
+ * This is what makes route, gateway and OpenAPI discovery constructing-free. Three
+ * call sites across `@dunx/http` and `@dunx/openapi` each cast to a local
+ * `Prototyped` interface to do it.
+ */
+export const inertInstance = (ctor: Ctor<unknown>): object =>
+  Object.create(
+    (ctor as unknown as { readonly prototype: object }).prototype,
+  ) as object;

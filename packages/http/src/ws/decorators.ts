@@ -1,9 +1,7 @@
 import { HandlerKind, markGateway, markHandler } from './marker.js';
+import type { HandlerMethod } from '@dunx/core';
 
 type GatewayTarget = abstract new (...args: never[]) => object;
-// never[] is what makes an arbitrary method signature assignable, so a handler
-// may declare the payload type it expects. See the README, "Typed payloads".
-type HandlerMethod = (...args: never[]) => unknown;
 
 export const Gateway =
   (path = '/') =>

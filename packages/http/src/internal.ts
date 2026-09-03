@@ -26,4 +26,5 @@ export {
   type RouteNode,
 } from './inspect.js';
 export { buildContext } from './server/context.js';
+export { embedJson } from './server/html.js';
 export { isGateway } from './ws/marker.js';

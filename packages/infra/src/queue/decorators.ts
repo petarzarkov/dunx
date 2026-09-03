@@ -1,8 +1,5 @@
 import { markJobHandler, type JobMeta } from './marker.js';
-
-// never[] is what makes an arbitrary method signature assignable, so a handler may
-// declare the `Job<T>` payload type it expects rather than the widest one.
-type HandlerMethod = (...args: never[]) => unknown;
+import type { HandlerMethod } from '@dunx/core';
 
 /**
  * Marks a method as the consumer of `name` on `queue`.

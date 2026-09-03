@@ -24,7 +24,12 @@ export { inject } from './inject.js';
 // twice, for routes and for gateway handlers, and `@dunx/infra` a third time for
 // `@JobHandler`. Three copies meant a fix to the dedup or the `Object.prototype`
 // stop landing in one of them.
-export { classOf, markedMethods, type MarkedMethod } from './marked.js';
+export {
+  classOf,
+  inertInstance,
+  markedMethods,
+  type MarkedMethod,
+} from './marked.js';
 // `teardownError` and `teardownFailures` are exported because every application
 // class runs its own teardown phase - @dunx/http stops a server between two of
 // them, @dunx/infra stops queue workers - and each has to collect failures the same
@@ -40,7 +45,11 @@ export {
 // own an application class with its own `enableShutdownHooks`, and three copies of
 // "drain, then make sure the process actually ends" is three chances to fix the
 // hang in one of them and not the others - which is how it got missed the first time.
-export { ShutdownHooks, type ShutdownHookOptions } from './shutdown-hooks.js';
+export {
+  ShutdownAware,
+  ShutdownHooks,
+  type ShutdownHookOptions,
+} from './shutdown-hooks.js';
 // collectModules + readControllers are the adapter seam: an HTTP package walks the
 // import graph and finds which instances to scan. Injector, readModule and the
 // lifecycle guards stay internal - exporting Injector would freeze the container's
@@ -105,6 +114,7 @@ export {
   token,
   type AbstractCtor,
   type Ctor,
+  type HandlerMethod,
   type InjectionToken,
   type Token,
 } from './token.js';

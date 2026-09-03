@@ -1,5 +1,6 @@
 import { metaOf } from './api/snapshot.js';
 import type { DashboardOptions } from './options.js';
+import { embedJson } from '@dunx/http/internal';
 
 /**
  * The page is a shell: a boot stylesheet, the mount's metadata as JSON, and the
@@ -26,15 +27,6 @@ html, body { margin: 0; padding: 0; background: #fff; }
   font: 15px/1.6 ui-sans-serif, system-ui, sans-serif; }
 `;
 
-const escape = (value: string): string => Bun.escapeHTML(value);
-
-/**
- * `<` is the only character that can end the data block early, and escaping it as
- * `<` keeps the text valid JSON. The parser sees the same document either way.
- */
-const embed = (model: unknown): string =>
-  JSON.stringify(model).replaceAll('<', '\\u003c');
-
 /** The id the bundle reads its meta from. Shared with `internal/dashboard-ui`. */
 export const META_ELEMENT_ID = 'dunx-dashboard-meta';
 
@@ -52,16 +44,16 @@ export const renderShell = (
     // reach a search index or a referrer log if it is ever exposed by mistake.
     '<meta name="robots" content="noindex, nofollow">' +
     '<meta name="referrer" content="no-referrer">' +
-    `<title>${escape(title)}</title>` +
+    `<title>${Bun.escapeHTML(title)}</title>` +
     // A `data:` URI, so the tab icon costs no request either. Same mark as the
     // documentation site and the API explorer - `@dunx/ui` declares it once and
     // the bundle build emits it next to the script.
-    `<link rel="icon" type="image/svg+xml" href="${escape(favicon)}">` +
+    `<link rel="icon" type="image/svg+xml" href="${Bun.escapeHTML(favicon)}">` +
     `<style>${BOOT}</style></head><body><div id="root"></div>` +
     '<noscript><p class="no-js">This dashboard needs JavaScript. Every panel ' +
-    `also answers as JSON under <code>${escape(options.path)}/api</code>.</p></noscript>` +
+    `also answers as JSON under <code>${Bun.escapeHTML(options.path)}/api</code>.</p></noscript>` +
     `<script type="application/json" id="${META_ELEMENT_ID}">` +
-    `${embed(metaOf(options))}</script>` +
+    `${embedJson(metaOf(options))}</script>` +
     `<script>${ui}</script></body></html>`
   );
 };

@@ -1,6 +1,7 @@
 import type { SwaggerAssets } from './swagger.js';
 import type { OpenApiDocument } from './types.js';
 import { renderUiOptions, type SwaggerUiOptions } from './ui-options.js';
+import { embedJson } from '@dunx/http/internal';
 
 /**
  * A Swagger UI shell: its stylesheet, its bundle, the document embedded as JSON,
@@ -30,15 +31,6 @@ html, body { margin: 0; padding: 0; background: #fafafa; }
 .no-js { padding: 3rem 1.5rem; text-align: center;
   font: 15px/1.6 ui-sans-serif, system-ui, sans-serif; }
 `;
-
-const escape = (value: string): string => Bun.escapeHTML(value);
-
-/**
- * `<` is the only character that can end the data block early, and escaping it as
- * `<` keeps the text valid JSON. The parser sees the same document either way.
- */
-const embed = (value: unknown): string =>
-  JSON.stringify(value).replaceAll('<', '\\u003c');
 
 export interface PageOptions {
   /** Where the JSON document is served, so the page can link to it. */
@@ -76,16 +68,16 @@ export const renderShell = (
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    `<title>${escape(title)}</title>` +
-    `<link rel="stylesheet" href="${escape(style)}">` +
-    (icon === false ? '' : `<link rel="icon" href="${escape(icon)}">`) +
+    `<title>${Bun.escapeHTML(title)}</title>` +
+    `<link rel="stylesheet" href="${Bun.escapeHTML(style)}">` +
+    (icon === false ? '' : `<link rel="icon" href="${Bun.escapeHTML(icon)}">`) +
     `<style>${BOOT}</style></head><body><div id="${MOUNT_ELEMENT_ID}"></div>` +
     '<noscript><p class="no-js">This API explorer needs JavaScript. ' +
-    `The document itself is at <a href="${escape(options.jsonHref)}">` +
-    `${escape(options.jsonHref)}</a>.</p></noscript>` +
+    `The document itself is at <a href="${Bun.escapeHTML(options.jsonHref)}">` +
+    `${Bun.escapeHTML(options.jsonHref)}</a>.</p></noscript>` +
     `<script type="application/json" id="${DOCUMENT_ELEMENT_ID}">` +
-    `${embed(document)}</script>` +
-    `<script src="${escape(script)}"></script>` +
+    `${embedJson(document)}</script>` +
+    `<script src="${Bun.escapeHTML(script)}"></script>` +
     // `defer` is not enough on its own: the bundle defines `SwaggerUIBundle` as a
     // global, so this has to run after it and a plain trailing script does.
     // The options object carries `spec` last so a caller cannot replace the
@@ -93,7 +85,7 @@ export const renderShell = (
     // `BaseLayout`: the standalone one needs a second ~1 MiB preset file and all it
     // adds is a URL bar for loading other documents.
     '<script>(function(){' +
-    `var node=document.getElementById(${embed(DOCUMENT_ELEMENT_ID)});` +
+    `var node=document.getElementById(${embedJson(DOCUMENT_ELEMENT_ID)});` +
     `var options=${renderUiOptions({ layout: 'BaseLayout', ...ui }, MOUNT_ELEMENT_ID)};` +
     'options.spec=JSON.parse(node.textContent);' +
     'window.ui=SwaggerUIBundle(options);' +

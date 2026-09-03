@@ -2,15 +2,13 @@ import {
   AppFactory,
   collectModules,
   Logger,
-  ShutdownHooks,
+  ShutdownAware,
   teardownError,
   teardownFailures,
   type App,
   type InjectionToken,
   type ModuleRef,
   type ResolvedModule,
-  type ShutdownHookOptions,
-  type ShutdownSignal,
 } from '@dunx/core';
 import { Worker, type Job } from 'bullmq';
 import { QueueConnection } from './connection.js';
@@ -315,7 +313,7 @@ export class QueueConsumer {
 }
 
 /** A worker process: a {@link QueueConsumer} plus the container it owns. */
-class WorkerApplication implements WorkerApp {
+class WorkerApplication extends ShutdownAware implements WorkerApp {
   readonly closed: Promise<void>;
   /** Forwarded from the container, so a worker reports scope warnings too. */
   readonly warnings: readonly string[];
@@ -323,9 +321,9 @@ class WorkerApplication implements WorkerApp {
   readonly #consumer: QueueConsumer;
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
-  readonly #hooks = new ShutdownHooks();
 
   constructor(app: App, consumer: QueueConsumer) {
+    super();
     this.warnings = app.warnings;
     this.#app = app;
     this.#consumer = consumer;
@@ -383,14 +381,6 @@ class WorkerApplication implements WorkerApp {
       if (failures.length > 0) throw teardownError(failures);
     })();
     return this.#shuttingDown;
-  }
-
-  enableShutdownHooks(
-    signals: readonly ShutdownSignal[] = ['SIGTERM', 'SIGINT'],
-    options: ShutdownHookOptions = {},
-  ): this {
-    this.#hooks.install(() => this.shutdown(), signals, options);
-    return this;
   }
 }
 

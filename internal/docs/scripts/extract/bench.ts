@@ -62,13 +62,24 @@ export const readBench = (file: string): BenchModel | null => {
     return null;
   }
 
-  const report = JSON.parse(readFileSync(file, 'utf8')) as BenchReport;
-  if (report.schemaVersion !== BENCH_SCHEMA_VERSION) {
+  // Read the version off untyped JSON, not off `BenchReport`. The harness types
+  // `schemaVersion` as the literal `1`, so checking it through that type narrows the
+  // mismatch branch to `never` and the guard stops guarding - while the file on disk
+  // is whatever a previous version of the harness wrote.
+  const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
+  // `null` is valid JSON and reading a property off it throws, which would turn a
+  // truncated report into a crashed build rather than a skipped section.
+  const version =
+    typeof raw === 'object' && raw !== null
+      ? (raw as { schemaVersion?: unknown }).schemaVersion
+      : undefined;
+  if (version !== BENCH_SCHEMA_VERSION) {
     console.warn(
-      `docs: benchmark schemaVersion ${report.schemaVersion}, expected ${BENCH_SCHEMA_VERSION} - skipping`,
+      `docs: benchmark schemaVersion ${String(version)}, expected ${BENCH_SCHEMA_VERSION} - skipping`,
     );
     return null;
   }
+  const report = raw as BenchReport;
 
   return projectBench(report);
 };
