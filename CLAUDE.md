@@ -985,6 +985,16 @@ New repeatable workflow → new skill. Do not grow this file instead.
 - Do not add a `Co-Authored-By` trailer, or any other attribution trailer, to a
   commit message. This overrides the default instruction to add one. The commit
   message describes the change; who or what typed it is not part of the record.
+- Do not sign a pull request description either - no "Generated with", no tool
+  footer, no attribution line. Same reason, and it overrides the default
+  instruction to add one.
+- **Do not write a long pull request description.** State what changed and why, in
+  the fewest lines that survive review. A reviewer reads the diff; the description
+  points at it. Specifically, leave out: a restatement of the goal you were given,
+  per-commit narration, tables of everything considered, a "deliberately not done"
+  inventory, measurements that belong in `docs/architecture/`, and anything already
+  said in a commit message. A finding that needs more than a line belongs in an
+  issue or a `docs/` page the description links to.
 - Do not use section-divider comments (e.g. `// ─── Section ───`, `// --- Section ---`, `// === Section ===`) - if a file needs sections, split it into separate files instead
 
 ## Do
