@@ -13,7 +13,7 @@ import {
 import { ROOT_MODULE, type ModuleRef } from './module.js';
 import { buildScopes, type Binding } from './scope.js';
 import { provide, type Registration } from './provider.js';
-import { ShutdownHooks, type ShutdownHookOptions } from './shutdown-hooks.js';
+import { ShutdownAware, type ShutdownHookOptions } from './shutdown-hooks.js';
 import { describeToken, isCtor, type InjectionToken } from './token.js';
 
 /**
@@ -84,7 +84,7 @@ export interface App {
   ): this;
 }
 
-class Application implements App {
+class Application extends ShutdownAware implements App {
   readonly closed: Promise<void>;
   /** Shadowing notices from the scope graph. Surfaced, not logged: core has no logger. */
   readonly warnings: readonly string[];
@@ -92,9 +92,9 @@ class Application implements App {
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
   #draining: Promise<void> | undefined;
-  readonly #hooks = new ShutdownHooks();
 
   constructor(injector: Injector, warnings: readonly string[] = []) {
+    super();
     this.#injector = injector;
     this.warnings = warnings;
     this.closed = new Promise<void>((resolve) => {
@@ -197,14 +197,6 @@ class Application implements App {
     } catch {
       console.error(`[dunx] ${name ?? 'A provider'}.${phase}() failed`, error);
     }
-  }
-
-  enableShutdownHooks(
-    signals: readonly ShutdownSignal[] = ['SIGTERM', 'SIGINT'],
-    options: ShutdownHookOptions = {},
-  ): this {
-    this.#hooks.install(() => this.shutdown(), signals, options);
-    return this;
   }
 }
 

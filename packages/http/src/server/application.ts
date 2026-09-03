@@ -3,7 +3,7 @@ import {
   AppError,
   Logger,
   runtimeInfo,
-  ShutdownHooks,
+  ShutdownAware,
   teardownError,
   teardownFailures as toFailures,
   type App,
@@ -160,7 +160,7 @@ export interface HttpApp extends App {
   listen(port?: number): Promise<string>;
 }
 
-export class HttpApplication implements HttpApp {
+export class HttpApplication extends ShutdownAware implements HttpApp {
   /** Forwarded from the container so an app can log scope warnings at boot. */
   readonly warnings: readonly string[];
   /**
@@ -188,7 +188,6 @@ export class HttpApplication implements HttpApp {
   #server: Server<SocketData> | undefined;
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
-  readonly #hooks = new ShutdownHooks();
 
   constructor(
     app: App,
@@ -197,6 +196,7 @@ export class HttpApplication implements HttpApp {
     root: ModuleRef,
     websocket?: WebSocketRuntime,
   ) {
+    super();
     this.#app = app;
     this.#root = root;
     this.warnings = app.warnings;
@@ -442,14 +442,6 @@ export class HttpApplication implements HttpApp {
       if (failures.length > 0) throw teardownError(failures);
     })();
     return this.#shuttingDown;
-  }
-
-  enableShutdownHooks(
-    signals: readonly ShutdownSignal[] = ['SIGTERM', 'SIGINT'],
-    options: ShutdownHookOptions = {},
-  ): this {
-    this.#hooks.install(() => this.shutdown(), signals, options);
-    return this;
   }
 
   // Collision detection re-runs inside buildRoutes on these final paths.

@@ -40,7 +40,11 @@ export {
 // own an application class with its own `enableShutdownHooks`, and three copies of
 // "drain, then make sure the process actually ends" is three chances to fix the
 // hang in one of them and not the others - which is how it got missed the first time.
-export { ShutdownHooks, type ShutdownHookOptions } from './shutdown-hooks.js';
+export {
+  ShutdownAware,
+  ShutdownHooks,
+  type ShutdownHookOptions,
+} from './shutdown-hooks.js';
 // collectModules + readControllers are the adapter seam: an HTTP package walks the
 // import graph and finds which instances to scan. Injector, readModule and the
 // lifecycle guards stay internal - exporting Injector would freeze the container's

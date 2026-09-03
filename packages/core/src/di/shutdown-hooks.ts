@@ -94,3 +94,29 @@ export class ShutdownHooks {
     }, afterMs).unref();
   }
 }
+
+/**
+ * The half of an application class that is the same in every one of them: hold a
+ * {@link ShutdownHooks}, and install it against this object's own `shutdown()`.
+ *
+ * `@dunx/core`, `@dunx/http` and `@dunx/infra` each own an application class, and
+ * each used to carry an identical copy of the installer. Three copies of "drain,
+ * then make sure the process actually ends" is three chances to fix a hang in one
+ * and not the others, which is how it was missed the first time.
+ *
+ * `shutdown` is abstract rather than assumed, so a subclass that does not have one
+ * is a compile error rather than a handler installed against `undefined`.
+ */
+export abstract class ShutdownAware {
+  readonly #hooks = new ShutdownHooks();
+
+  abstract shutdown(): Promise<void>;
+
+  enableShutdownHooks(
+    signals: readonly ShutdownSignal[] = ['SIGTERM', 'SIGINT'],
+    options: ShutdownHookOptions = {},
+  ): this {
+    this.#hooks.install(() => this.shutdown(), signals, options);
+    return this;
+  }
+}

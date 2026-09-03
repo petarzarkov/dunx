@@ -1,3 +1,15 @@
+import type {
+  BenchConfig,
+  MachineInfo,
+  Report,
+  Runtime,
+  Scenario,
+  ScenarioResult,
+  Spread,
+  StartupResult,
+  SubjectInfo,
+} from '../../../bench/src/types.js';
+
 export const SymbolKind = Object.freeze({
   Class: 'class',
   Function: 'function',
@@ -176,105 +188,26 @@ export interface CoverageModel {
 /**
  * The benchmark report, as `internal/bench` writes it to `results/latest.json`.
  * The shape is that harness's contract, documented in `internal/bench/README.md`
- * and versioned by `schemaVersion`; this is a mirror of it, not a re-derivation.
- * A build with no run emits `null` in its place.
+ * and versioned by `schemaVersion`. A build with no run emits `null` in its place.
  */
 export const BENCH_SCHEMA_VERSION = 1;
 
-export type BenchRuntime =
-  | 'bun'
-  | 'node'
-  | 'go'
-  | 'rust'
-  | 'jvm'
-  | 'dotnet'
-  | 'python';
-
-export interface BenchMachine {
-  readonly cpuModel: string;
-  readonly cores: number;
-  readonly ramGiB: number;
-  readonly platform: string;
-  readonly kernel: string;
-  readonly arch: string;
-  readonly bun: string;
-  readonly node: string;
-}
-
-export interface BenchLoadGenerator {
-  readonly id: string;
-  readonly version: string;
-  readonly binary: string | null;
-  readonly limitations: readonly string[];
-}
-
-export interface BenchConfig {
-  readonly connections: number;
-  readonly durationSeconds: number;
-  readonly warmupSeconds: number;
-  readonly runs: number;
-  readonly startupSamples: number;
-}
-
-export interface BenchSpread {
-  readonly median: number;
-  readonly min: number;
-  readonly max: number;
-  readonly stddev: number;
-}
-
-export interface ReportSubject {
-  readonly id: string;
-  readonly label: string;
-  readonly runtime: BenchRuntime;
-  readonly version: string;
-  readonly validator: string;
-  readonly notes: readonly string[];
-  readonly entry: string;
-  readonly preload: readonly string[];
-  readonly versionOf: string | null;
-}
-
-export interface ReportScenario {
-  readonly id: string;
-  readonly title: string;
-  readonly description: string;
-  readonly method: string;
-  readonly path: string;
-  readonly body?: string | undefined;
-  readonly contentType?: string | undefined;
-  readonly expectStatus: number;
-  readonly expectBody: string;
-  readonly expectMime: string;
-}
-
-export interface ReportResult {
-  readonly subject: string;
-  readonly scenario: string;
-  readonly rps: BenchSpread;
-  readonly latencyP50Ms: BenchSpread;
-  readonly latencyP99Ms: BenchSpread;
-  readonly totalErrors: number;
-  readonly totalNon2xx: number;
-}
-
-export interface ReportStartup {
-  readonly subject: string;
-  readonly samplesMs: readonly number[];
-  readonly medianMs: number;
-}
-
-export interface BenchReport {
-  readonly schemaVersion: number;
-  readonly generatedAt: string;
-  readonly machine: BenchMachine;
-  readonly loadGenerator: BenchLoadGenerator;
-  readonly config: BenchConfig;
-  readonly subjects: readonly ReportSubject[];
-  readonly scenarios: readonly ReportScenario[];
-  readonly results: readonly ReportResult[];
-  readonly startup: readonly ReportStartup[];
-}
+/**
+ * Aliases onto the harness's own types. It owns the shape because it writes the
+ * file, so a field added or renamed there is a compile error here rather than a
+ * silent mismatch - which is how `toolchains` came to be in the file and not in
+ * the nine interfaces that used to sit here.
+ */
+export type BenchRuntime = Runtime;
+export type BenchMachine = MachineInfo;
+export type BenchLoadGenerator = Report['loadGenerator'];
+export type BenchSpread = Spread;
+export type ReportSubject = SubjectInfo;
+export type ReportScenario = Scenario;
+export type ReportResult = ScenarioResult;
+export type ReportStartup = StartupResult;
+export type BenchReport = Report;
+export type { BenchConfig };
 
 /**
  * What the *site* carries, which is strictly what it renders.
