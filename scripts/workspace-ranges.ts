@@ -24,6 +24,13 @@ export const DEPENDENCY_FIELDS = [
   'optionalDependencies',
 ] as const;
 
+/**
+ * The workspace parents whose packages publish. This is the one place that
+ * decides it: a fifth copy of the list is how one script learns about a new
+ * parent and the others do not.
+ */
+export const PUBLISHED_DIRS = ['packages', 'tools'] as const;
+
 export interface Manifest {
   name?: string;
   [field: string]: unknown;

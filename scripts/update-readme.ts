@@ -17,6 +17,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BLURB, CAPABILITIES, lead, SHOWCASE } from './positioning.js';
+import { PUBLISHED_DIRS } from './workspace-ranges.js';
 
 const ROOT = join(import.meta.dir, '..');
 /**
@@ -24,7 +25,6 @@ const ROOT = join(import.meta.dir, '..');
  * `tools/` for the CLIs. `internal/` is deliberately absent - it is the private
  * half and has nothing to put in a table of things people install.
  */
-const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 const README_PATH = join(ROOT, 'README.md');
 const CONTRIBUTING_PATH = join(ROOT, 'CONTRIBUTING.md');
 

@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import type { CoverageModel } from '../internal/docs/scripts/extract/model.js';
+import { PUBLISHED_DIRS } from './workspace-ranges.js';
 
 /**
  * Turns the root `bun test --coverage` lcov into the model the documentation
@@ -22,7 +23,6 @@ import type { CoverageModel } from '../internal/docs/scripts/extract/model.js';
 
 const ROOT_DIR = resolve(import.meta.dir, '..');
 /** Every parent that holds a published workspace, so a tool gets a badge too. */
-const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 const COVERAGE_DIR = join(ROOT_DIR, 'coverage');
 /**
  * The floor every published workspace clears, on lines **and** on functions.

@@ -197,10 +197,12 @@ ships.** `packages/*` is the framework a consumer imports. `tools/*` is the CLIs
 consumer _runs_ - `bunx @dunx/create-app`, `bunx @dunx/mcp` - published exactly like
 a package. `internal/*` is the private half.
 
-Two scripts encode which parents publish, and they are the only places that decide
-it: `PUBLISHABLE_DIRS` in `scripts/version.ts` and `PUBLISHED_DIRS` in
-`scripts/update-readme.ts`. A `private: true` manifest is still what actually stops
-a publish, so a workspace in the wrong parent fails safe rather than leaking.
+One constant encodes which parents publish: `PUBLISHED_DIRS` in
+`scripts/workspace-ranges.ts`, imported by `version.ts`, `update-readme.ts`,
+`coverage-report.ts` and the docs generator. It used to be four copies of
+`['packages', 'tools']`, and this paragraph claimed there were two. A `private: true`
+manifest is still what actually stops a publish, so a workspace in the wrong parent
+fails safe rather than leaking.
 
 `internal/*` may depend on anything it likes; Rule 1 governs what dunx _ships_, not
 what builds its website or measures it. That is why `internal/bench` may devDepend on

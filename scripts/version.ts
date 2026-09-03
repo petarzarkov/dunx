@@ -23,6 +23,7 @@ import {
 } from './changelog.js';
 import { createGitHubRelease, pushTag } from './github-release.js';
 import { isVersionPublished, publishPackage } from './publish.js';
+import { PUBLISHED_DIRS } from './workspace-ranges.js';
 
 const isDryRun = process.env['DRY_RUN'] === 'true';
 
@@ -38,10 +39,9 @@ const ROOT_DIR = resolve(import.meta.dir, '..');
  * mistake in either direction is caught by the filter below rather than by this
  * array.
  */
-const PUBLISHABLE_DIRS = ['packages', 'tools'] as const;
 
 /** What `publish.ts` resolves a `workspace:` range against. */
-const WORKSPACE_ROOTS = PUBLISHABLE_DIRS.map((dir) => join(ROOT_DIR, dir));
+const WORKSPACE_ROOTS = PUBLISHED_DIRS.map((dir) => join(ROOT_DIR, dir));
 
 const REPO = process.env['GITHUB_REPOSITORY'] ?? 'petarzarkov/dunx';
 const REPO_URL = `https://github.com/${REPO}`;
@@ -62,7 +62,7 @@ const findPublishablePackages = (): {
     packageJsonPath: string;
   }[] = [];
 
-  for (const parent of PUBLISHABLE_DIRS) {
+  for (const parent of PUBLISHED_DIRS) {
     const parentDir = join(ROOT_DIR, parent);
     if (!existsSync(parentDir)) continue;
     for (const entry of readdirSync(parentDir, { withFileTypes: true })) {
