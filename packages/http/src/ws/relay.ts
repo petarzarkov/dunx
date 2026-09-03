@@ -29,6 +29,41 @@ export interface PubSubRelay {
   close?(): unknown;
 }
 
+/**
+ * Both relays take a URL, and a wrong scheme has to fail here rather than at
+ * connect time: an absence-tolerant relay swallows the connection error, so a
+ * typo would degrade silently to single-node fan-out.
+ */
+export const assertRelayUrl = (
+  url: string,
+  protocols: readonly string[],
+  example: string,
+): string => {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new AppError(
+      `${JSON.stringify(url)} is not a valid URL for the websocket relay. ` +
+        `Expected something like ${example}.`,
+    );
+  }
+  if (!protocols.includes(parsed.protocol)) {
+    throw new AppError(
+      `Unsupported protocol ${JSON.stringify(parsed.protocol)} in ` +
+        `${JSON.stringify(url)}. Expected one of ${protocols.join(', ')}.`,
+    );
+  }
+  return url;
+};
+
+/** The URL with any password removed, for logs and error messages. */
+export const redactUrl = (url: string): string => {
+  const parsed = new URL(url);
+  if (parsed.password) parsed.password = '***';
+  return parsed.toString();
+};
+
 /** Which relay call failed, so one message can say what degraded. */
 export type RelayPhase = 'publish' | 'subscribe' | 'close';
 

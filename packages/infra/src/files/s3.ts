@@ -1,6 +1,6 @@
 import type { S3Client, S3FilePresignOptions, S3Options } from 'bun';
 import { FileNotFoundError } from './errors.js';
-import { isMissing, normalizeKey, normalizePrefix } from './path.js';
+import { guardMissing, normalizeKey, normalizePrefix } from './path.js';
 import { pump } from './stream.js';
 import {
   Storage,
@@ -69,25 +69,14 @@ export class S3Storage extends Storage {
       : objectKey;
   }
 
-  async #guard<T>(key: string, read: () => Promise<T>): Promise<T> {
-    try {
-      return await read();
-    } catch (error) {
-      if (isMissing(error)) {
-        throw new FileNotFoundError(key, { cause: error });
-      }
-      throw error;
-    }
-  }
-
   async read(key: string): Promise<string> {
-    return this.#guard(key, () =>
+    return guardMissing(key, () =>
       this.#client.file(this.objectKey(key)).text(),
     );
   }
 
   async readBytes(key: string): Promise<Uint8Array> {
-    return this.#guard(key, () =>
+    return guardMissing(key, () =>
       this.#client.file(this.objectKey(key)).bytes(),
     );
   }
@@ -166,7 +155,7 @@ export class S3Storage extends Storage {
   }
 
   async stat(key: string): Promise<FileStat> {
-    const stats = await this.#guard(key, () =>
+    const stats = await guardMissing(key, () =>
       this.#client.stat(this.objectKey(key)),
     );
     return {

@@ -84,6 +84,13 @@ export const assertRedisUrl = (url: string): string => {
  * A class, not an interface, so it is a runtime value and can therefore be a
  * constructor parameter type that `@dunx/transform` can record.
  */
+/** Strips the password from a URL, for logs and error messages. */
+export const redactUrl = (url: string): string => {
+  const parsed = new URL(url);
+  if (parsed.password) parsed.password = '***';
+  return parsed.toString();
+};
+
 export class RedisOptions {
   readonly url: string;
   readonly name: string | undefined;
@@ -111,9 +118,7 @@ export class RedisOptions {
 
   /** The URL with any password removed, for logs and error messages. */
   get redactedUrl(): string {
-    const parsed = new URL(this.url);
-    if (parsed.password) parsed.password = '***';
-    return parsed.toString();
+    return redactUrl(this.url);
   }
 
   /**

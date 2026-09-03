@@ -1,5 +1,5 @@
 import { resolve, sep } from 'node:path';
-import { PathTraversalError } from './errors.js';
+import { FileNotFoundError, PathTraversalError } from './errors.js';
 
 /**
  * Both separators, so a `..\\..` key cannot walk past a check that only knows
@@ -72,4 +72,21 @@ export const isMissing = (error: unknown): boolean => {
   if (typeof error !== 'object' || error === null) return false;
   const code = 'code' in error ? error.code : undefined;
   return code === 'ENOENT' || code === 'NoSuchKey';
+};
+
+/**
+ * Runs `read`, turning a backend's own "not found" into `FileNotFoundError`.
+ * Both storage backends need it and neither can inherit it: `#private` members
+ * are unreachable from a subclass.
+ */
+export const guardMissing = async <T>(
+  key: string,
+  read: () => Promise<T>,
+): Promise<T> => {
+  try {
+    return await read();
+  } catch (error) {
+    if (isMissing(error)) throw new FileNotFoundError(key, { cause: error });
+    throw error;
+  }
 };

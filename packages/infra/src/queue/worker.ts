@@ -55,7 +55,7 @@ interface Closable {
  * before `start()` stops waiting for it. Workers drain concurrently, so this
  * bounds the whole teardown rather than each one.
  */
-export const DRAIN_ON_FAILED_START_MS = 5_000;
+const DRAIN_ON_FAILED_START_MS = 5_000;
 
 /**
  * A graceful close, waited on for at most `ms`.
@@ -90,7 +90,7 @@ export const closeWithin = async (
 };
 
 /** How often one queue's worker may report a connection error. */
-export const ERROR_LOG_INTERVAL_MS = 30_000;
+const ERROR_LOG_INTERVAL_MS = 30_000;
 
 /**
  * Answers whether this error is the one to report, at most once per interval.

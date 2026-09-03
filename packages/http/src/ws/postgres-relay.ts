@@ -1,11 +1,10 @@
-import { AppError } from '@dunx/core';
-import { WsRelay } from './relay.js';
+import { assertRelayUrl, redactUrl, WsRelay } from './relay.js';
 
 /** The schemes `Bun.SQL` accepts for its Postgres adapter. */
 const PROTOCOLS: readonly string[] = ['postgres:', 'postgresql:'];
 
 /** The same fallback chain `Bun.SQL` uses when given no URL. */
-export const defaultPostgresRelayUrl = (): string =>
+const defaultPostgresRelayUrl = (): string =>
   process.env['POSTGRES_URL'] ??
   process.env['DATABASE_URL'] ??
   'postgres://localhost:5432';
@@ -22,25 +21,6 @@ export interface PostgresRelayOptions {
    */
   readonly max?: number;
 }
-
-const assertUrl = (url: string): string => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new AppError(
-      `${JSON.stringify(url)} is not a valid URL for the websocket relay. ` +
-        'Expected something like postgres://localhost:5432/app.',
-    );
-  }
-  if (!PROTOCOLS.includes(parsed.protocol)) {
-    throw new AppError(
-      `Unsupported protocol ${JSON.stringify(parsed.protocol)} in ` +
-        `${JSON.stringify(url)}. Expected one of ${PROTOCOLS.join(', ')}.`,
-    );
-  }
-  return url;
-};
 
 /**
  * A {@link WsRelay} on `Bun.SQL`'s `LISTEN`/`NOTIFY`, a Bun global, so it costs
@@ -64,15 +44,17 @@ export class PostgresRelay extends WsRelay {
 
   constructor(options: PostgresRelayOptions = {}) {
     super();
-    this.#url = assertUrl(options.url ?? defaultPostgresRelayUrl());
+    this.#url = assertRelayUrl(
+      options.url ?? defaultPostgresRelayUrl(),
+      PROTOCOLS,
+      'postgres://localhost:5432/app',
+    );
     this.#max = options.max ?? 1;
   }
 
   /** The URL with any password removed, for logs and error messages. */
   get url(): string {
-    const parsed = new URL(this.#url);
-    if (parsed.password) parsed.password = '***';
-    return parsed.toString();
+    return redactUrl(this.#url);
   }
 
   #client(): Bun.SQL {

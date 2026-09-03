@@ -1,11 +1,11 @@
 import {
+  classOf,
   collectModules,
   dependenciesOf,
   readControllers,
   type Ctor,
   type Dependency,
   type ModuleRef,
-  type ProviderEntry,
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from './route/discover.js';
 import { HIDDEN, PUBLIC, ROLES } from './route/metadata.js';
@@ -152,16 +152,10 @@ const gatewayFor = (ctor: Ctor<unknown>, module: string): GatewayNode => {
   };
 };
 
-/** The class a `providers` entry would construct, or nothing for value/factory. */
-const classOf = (entry: ProviderEntry): Ctor<unknown> | undefined => {
-  if (typeof entry === 'function') return entry;
-  return entry.provider.kind === 'class' ? entry.provider.ctor : undefined;
-};
-
 export const gatewaysOf = (root: ModuleRef): readonly GatewayNode[] =>
   collectModules(root).flatMap((module) =>
     (module.options.providers ?? [])
-      .map(classOf)
+      .map((entry) => classOf(entry)?.ctor)
       .filter((ctor): ctor is Ctor<unknown> => ctor !== undefined)
       .filter(isGateway)
       .map((ctor) => gatewayFor(ctor, module.name)),
