@@ -22,6 +22,7 @@ contradicts it is a decision made without measuring.
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | [Dependency injection](./architecture/dependency-injection.md) | The decorator dialect, recording constructor types without metadata, and the scope each module gets |
 | [The HTTP layer](./architecture/http.md)                       | The `Bun.serve` adapter, route discovery, and multi-node websocket fan-out                          |
+| [Metrics](./architecture/metrics.md)                           | What the counters cost, where database timing comes from, and what is still not built               |
 
 ## The integrations
 

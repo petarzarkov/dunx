@@ -155,7 +155,10 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
       'files-and-images',
     ],
   ],
-  ['Going live', ['deployment', 'health-checks', 'agent-tooling']],
+  [
+    'Going live',
+    ['deployment', 'health-checks', 'agent-tooling', 'metrics', 'upgrading'],
+  ],
 ];
 
 const sectionOf = (slug: string): string => {
