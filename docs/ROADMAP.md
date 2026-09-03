@@ -412,19 +412,7 @@ Open follow-ups, none blocking:
 
 - Pin the generator and the subject to disjoint CPU sets. Not needed on 32 cores;
   needed on a smaller machine.
-- ~~**Gin at ~56% of `bun-serve` against Axum at ~92% does not add up.**~~ **Closed:
-  the premise was wrong, and the pin it blamed is sound.** It was never a Gin
-  question - `nethttp` sits at the same 52-56%, and Gin is 99-104% of it across all
-  four scenarios, so the Go framework adds nothing measurable. A second full run on
-  the same machine and the same go1.25.3, eight days after the first, reproduces
-  every ratio: Go 53-56% of `bun-serve`, Axum 90-101%. Two mechanisms were then
-  tested directly and **both were eliminated**, which is in
-  [architecture/benchmarks.md](./architecture/benchmarks.md), "What the Go rows
-  actually measure": `GOMAXPROCS(1)` is not pathological, since lifting it scales
-  1.67x at two threads and 4.2x at eight, and the garbage collector is not the cost,
-  since `GOGC=off` is consistently **slower**. What remains is per-request work in
-  `net/http` itself, unisolated. **The Go and Rust rows are quotable with the stated
-  handicap.**
+- ~~The Gin/Axum ratio.~~ **Closed**, with the measurements in [architecture/benchmarks.md](./architecture/benchmarks.md), "What the Go rows actually measure". Do not reopen it as a Gin question.
 - Open-loop latency via oha's `-q` plus `--latency-correction`, which would remove
   the coordinated-omission caveat the closed-loop numbers currently carry.
 - ~~The `params` gap against Elysia.~~ **Withdrawn: the numbers were wrong.** They

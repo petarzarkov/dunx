@@ -192,7 +192,7 @@ number about `wsgiref` rather than about Django.
 
 The suite's Go subjects sit at 52-56% of `bun-serve` while Axum sits at 90-101%, and
 that gap was carried in the roadmap for months as an unexplained anomaly attributed
-to Gin. It is neither Gin's nor the harness's.
+to Gin. Gin is not the variable, and neither of the two mechanisms tested below is.
 
 **Gin is not the variable.** `nethttp` measures the same 52-56%, and Gin is 99-104%
 of `nethttp` across all four scenarios, so the framework costs nothing detectable
@@ -230,7 +230,8 @@ with the stated single-thread handicap, since nothing about the handicap is brok
 And "two compiled subjects should land near each other" is the wrong intuition:
 compilation is not what predicts per-thread dispatch cost.
 
-The standalone 74k also reconciles a discrepancy in this file. The README quotes
-about 73k for `nethttp` at `GOMAXPROCS(1)`, while the in-harness figure is nearer
-60k. The README number is the subject alone; the harness runs the generator beside
-it and reports the lower one.
+Read the ratios rather than the absolute figures. In-harness `nethttp` plaintext
+measured 75,510, 60,074 and 70,985 on three runs whose `bun-serve` baselines were
+136,940, 115,298 and 131,837 - the whole machine moves between runs, and the
+standalone 74k above is not comparable with any of them. The ratio held at 55%, 52%
+and 54%.

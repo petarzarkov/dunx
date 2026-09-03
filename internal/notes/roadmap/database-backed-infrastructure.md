@@ -49,13 +49,12 @@ The blocker is not performance. Three `Bun.SQL` binding gaps
 ([bun-apis.md](../../../docs/bun-apis.md)) sit between pg-boss and Bun, and the
 adapter closes them by reading the `$n::type` casts out of pg-boss's own SQL. That
 is a driver-compat layer maintained here, against another project's queries, failing
-silently if either side changes. All three are still live on 1.4.0; the JSON one is
-filed as #40942 and the array one is filed as #41242, since the four issues that
-covered it are closed.
+silently if either side changes. All three are still live on 1.4.0.
 
-The honest sequence is upstream first, and half of it is done: the JSON scalar bug is
-filed and open. The array binding did land in a Bun release, as `sql.array()`, and it
-does not cover a cast - see "Filed upstream" below. Both gaps closing turns the
+**Two of the three are the gate; the third is not.** Transaction control on a pooled
+connection has a workaround the adapter already uses, `sql.reserve()`, so it costs a
+few lines rather than blocking. The array binding (#41242) and the JSON cast
+(#40942) have none, and both are filed and open. Those two closing is what turns the
 adapter into `executeSql` plus `listen`, which is small enough to own.
 
 The second cost does not expire: pg-boss has its own job model, and
@@ -109,5 +108,5 @@ than the failure the original four described. The evidence is in
 [bun-apis.md](../../../docs/bun-apis.md), "Three parameter-binding gaps".
 
 pg-boss writes its own `$n::type` casts, so `sql.array()` does not close the gap for
-it. Both gaps closing is still what turns the queue adapter from a driver-compat layer
-into `executeSql` plus `listen`, which is the size worth owning.
+it. Those two closing is still what turns the queue adapter from a driver-compat
+layer into `executeSql` plus `listen`, which is the size worth owning.
