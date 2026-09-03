@@ -26,6 +26,7 @@ import {
   type Verdict,
 } from '../bench';
 import { StartupChart, ThroughputChart } from '../components/BenchChart';
+import { Stat } from '../components/Stat';
 import {
   RuntimeLegend,
   StartupTable,
@@ -35,28 +36,6 @@ import { bench, site } from '../data';
 import type { BenchModel } from '../../scripts/extract/model';
 
 const BENCH_README = 'blob/main/internal/bench/README.md';
-
-const Stat = ({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-}): React.JSX.Element => (
-  <Card withBorder radius="md" padding="md">
-    <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
-      {label}
-    </Text>
-    <Text fz={30} fw={700} lh={1.2}>
-      {value}
-    </Text>
-    <Text size="xs" c="dimmed">
-      {hint}
-    </Text>
-  </Card>
-);
 
 const Headlines = ({ model }: { model: BenchModel }): React.JSX.Element => {
   const scenarios = scenarioHeadlines(model);
