@@ -77,7 +77,8 @@ const serviceFrom = (
 
 /**
  * A named client binds its own options token, so two of them do not collide on
- * `HttpClientOptions` - a scope binding that class twice reports a duplicate.
+ * `HttpClientOptions` - a scope reports a duplicate when it binds that class
+ * twice.
  */
 const namedModule = (
   target: ClientTarget,
