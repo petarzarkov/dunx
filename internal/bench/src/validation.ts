@@ -21,14 +21,8 @@ import { selectGenerator, type LoadGeneratorChoice } from './loadgen/index.js';
 import { readMachine } from './machine.js';
 import { resultsDir } from './paths.js';
 import { spread } from './stats.js';
-import {
-  bunCommand,
-  startSubject,
-  type SubjectProcess,
-} from './subject-process.js';
+import { bunCommand, startSubject } from './subject-process.js';
 import type {
-  LoadRequest,
-  LoadSample,
   Scenario,
   Subject,
   ValidationReport,
@@ -39,6 +33,7 @@ import {
   validatorIds,
   type ValidatorId,
 } from '../servers/validation/schemas.js';
+import { driveUnits, note, num, type Live } from './driver.js';
 
 const EXPECT_BODY = '{"name":"Ada Lovelace","age":36}';
 
@@ -178,22 +173,11 @@ const unitsFor = (chosen: readonly ValidatorId[]): readonly Unit[] => {
   return [...decompose, ...perValidator];
 };
 
-const note = (message: string): void => {
-  process.stderr.write(`${message}\n`);
-};
-
-interface Live {
-  readonly unit: Unit;
-  readonly server: SubjectProcess;
-  readonly request: LoadRequest;
-  readonly samples: LoadSample[];
-}
-
 /**
  * Spawns the unit, checks it answers the exact expected bytes, and warms it up.
  * The process is then left running, because the measured rounds are interleaved.
  */
-const bring = async (unit: Unit): Promise<Live> => {
+const bring = async (unit: Unit): Promise<Live<Unit>> => {
   const server = await startSubject(unit.subject, bunCommand(unit.subject), {
     VALIDATOR: unit.validator,
   });
@@ -227,7 +211,7 @@ const bring = async (unit: Unit): Promise<Live> => {
   };
 };
 
-const collect = (live: Live): ValidationUnit => ({
+const collect = (live: Live<Unit>): ValidationUnit => ({
   id: live.unit.id,
   group: live.unit.group,
   label: live.unit.label,
@@ -278,9 +262,6 @@ if (values.help === true) {
   process.exit(0);
 }
 
-const num = (raw: string | undefined, fallback: number): number =>
-  raw === undefined ? fallback : Number(raw);
-
 const chosen: readonly ValidatorId[] =
   values.validators === undefined
     ? validatorIds
@@ -315,33 +296,7 @@ const units = unitsFor(chosen);
  * first attempt at this had `raw:parse` come out *slower* than `raw:noop`, which does
  * strictly more work. Interleaving spreads the drift across every row instead.
  */
-const live: Live[] = [];
-try {
-  for (const unit of units) {
-    live.push(await bring(unit));
-    note(`up   ${unit.id}`);
-  }
-
-  const options = {
-    connections: config.connections,
-    durationSeconds: config.durationSeconds,
-  };
-  for (const entry of live) {
-    await generator.run(entry.request, {
-      ...options,
-      durationSeconds: config.warmupSeconds,
-    });
-  }
-
-  for (let round = 0; round < config.runs; round += 1) {
-    note(`round ${round + 1} of ${config.runs}`);
-    for (const entry of live) {
-      entry.samples.push(await generator.run(entry.request, options));
-    }
-  }
-} finally {
-  for (const entry of live) await entry.server.stop();
-}
+const live = await driveUnits(units, bring, generator, config);
 
 const results = live.map(collect);
 for (const result of results) {

@@ -23,16 +23,9 @@ import {
   bunCommand,
   startSubject,
   type StdoutSink,
-  type SubjectProcess,
 } from './subject-process.js';
-import type {
-  LoadRequest,
-  LoadSample,
-  LoggingReport,
-  LoggingUnit,
-  Scenario,
-  Subject,
-} from './types.js';
+import type { LoggingReport, LoggingUnit, Scenario, Subject } from './types.js';
+import { driveUnits, note, num, type Live } from './driver.js';
 
 const subject: Subject = {
   id: 'dunx',
@@ -229,18 +222,7 @@ const units: readonly Unit[] = [
   },
 ];
 
-const note = (message: string): void => {
-  process.stderr.write(`${message}\n`);
-};
-
-interface Live {
-  readonly unit: Unit;
-  readonly server: SubjectProcess;
-  readonly request: LoadRequest;
-  readonly samples: LoadSample[];
-}
-
-const bring = async (unit: Unit, scenario: Scenario): Promise<Live> => {
+const bring = async (unit: Unit, scenario: Scenario): Promise<Live<Unit>> => {
   const server = await startSubject(
     subject,
     bunCommand(subject),
@@ -277,7 +259,7 @@ const bring = async (unit: Unit, scenario: Scenario): Promise<Live> => {
   };
 };
 
-const collect = (live: Live): LoggingUnit => ({
+const collect = (live: Live<Unit>): LoggingUnit => ({
   id: live.unit.id,
   label: live.unit.label,
   adds: live.unit.adds,
@@ -325,9 +307,6 @@ if (values.help === true) {
   console.log(usage);
   process.exit(0);
 }
-
-const num = (raw: string | undefined, fallback: number): number =>
-  raw === undefined ? fallback : Number(raw);
 
 const chosenId = values.scenario ?? 'json';
 const scenario = scenarios.find((entry) => entry.id === chosenId);
@@ -395,33 +374,12 @@ if (skipped > 0 && wanted === undefined) {
 }
 if (chosenUnits.length === 0) throw new Error('--only matched no units');
 
-const live: Live[] = [];
-try {
-  for (const unit of chosenUnits) {
-    live.push(await bring(unit, scenario));
-    note(`up   ${unit.id}`);
-  }
-
-  const options = {
-    connections: config.connections,
-    durationSeconds: config.durationSeconds,
-  };
-  for (const entry of live) {
-    await generator.run(entry.request, {
-      ...options,
-      durationSeconds: config.warmupSeconds,
-    });
-  }
-
-  for (let round = 0; round < config.runs; round += 1) {
-    note(`round ${round + 1} of ${config.runs}`);
-    for (const entry of live) {
-      entry.samples.push(await generator.run(entry.request, options));
-    }
-  }
-} finally {
-  for (const entry of live) await entry.server.stop();
-}
+const live = await driveUnits(
+  chosenUnits,
+  (unit) => bring(unit, scenario),
+  generator,
+  config,
+);
 
 const results = live.map(collect);
 const baseline = results[0]?.rps.median ?? 0;

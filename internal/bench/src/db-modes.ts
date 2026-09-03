@@ -32,14 +32,8 @@ import {
   startSubject,
   type SubjectProcess,
 } from './subject-process.js';
-import type {
-  LoadRequest,
-  LoadSample,
-  MachineInfo,
-  Scenario,
-  Spread,
-  Subject,
-} from './types.js';
+import type { MachineInfo, Scenario, Spread, Subject } from './types.js';
+import { driveUnits, note, num, type Live } from './driver.js';
 
 type Mode = 'async' | 'sync';
 
@@ -90,17 +84,6 @@ const units: readonly Unit[] = [
   { id: 'write:sync', mode: 'sync', scenario: WRITE },
 ];
 
-const note = (message: string): void => {
-  process.stderr.write(`${message}\n`);
-};
-
-interface Live {
-  readonly unit: Unit;
-  readonly server: SubjectProcess;
-  readonly request: LoadRequest;
-  readonly samples: LoadSample[];
-}
-
 interface Result {
   readonly id: string;
   readonly scenario: string;
@@ -133,7 +116,7 @@ interface Report {
  */
 const servers = new Map<Mode, SubjectProcess>();
 
-const bring = async (unit: Unit): Promise<Live> => {
+const bring = async (unit: Unit): Promise<Live<Unit>> => {
   let server = servers.get(unit.mode);
   if (server === undefined) {
     const chosen = subject(unit.mode);
@@ -165,7 +148,7 @@ const bring = async (unit: Unit): Promise<Live> => {
   };
 };
 
-const collect = (live: Live): Result => ({
+const collect = (live: Live<Unit>): Result => ({
   id: live.unit.id,
   scenario: live.unit.scenario.id,
   mode: live.unit.mode,
@@ -209,9 +192,6 @@ if (values.help === true) {
   process.exit(0);
 }
 
-const num = (raw: string | undefined, fallback: number): number =>
-  raw === undefined ? fallback : Number(raw);
-
 const config = {
   connections: num(values.connections, 64),
   durationSeconds: num(values.duration, 4),
@@ -231,33 +211,7 @@ const machine = await readMachine('node');
  * throughput drifts by more than such a gap over the minutes a run takes. Measuring
  * each unit to completion in turn would map that drift onto unit identity.
  */
-const live: Live[] = [];
-try {
-  for (const unit of units) {
-    live.push(await bring(unit));
-    note(`up   ${unit.id}`);
-  }
-
-  const options = {
-    connections: config.connections,
-    durationSeconds: config.durationSeconds,
-  };
-  for (const entry of live) {
-    await generator.run(entry.request, {
-      ...options,
-      durationSeconds: config.warmupSeconds,
-    });
-  }
-
-  for (let round = 0; round < config.runs; round += 1) {
-    note(`round ${round + 1} of ${config.runs}`);
-    for (const entry of live) {
-      entry.samples.push(await generator.run(entry.request, options));
-    }
-  }
-} finally {
-  for (const server of servers.values()) await server.stop();
-}
+const live = await driveUnits(units, bring, generator, config);
 
 const results = live.map(collect);
 for (const result of results) {
