@@ -326,8 +326,10 @@ client would have done with a working connection, and it logs a line saying so.
 ## Options left
 
 - **Leak A needs nothing: Bun 1.4 fixed it.** Do not file it.
-- File leak B with bullmq, using the **dunx app** from the re-measurement above
-  rather than the two-line snippet, which no longer hangs.
+- **Leak B is filed and needs nothing:**
+  [taskforcesh/bullmq#4656](https://github.com/taskforcesh/bullmq/issues/4656), open,
+  with the **dunx app** from the re-measurement above as the reproduction rather than
+  the two-line snippet, which no longer hangs. Verified still open 2026-09-03.
 - Re-measure on every Bun and bullmq bump, by natural exit rather than by `SIGTERM`.
   When leak B lands, the forced exit stops firing for this cause - the warning it
   logs is how you would notice.

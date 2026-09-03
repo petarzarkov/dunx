@@ -286,11 +286,11 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                          | Shape                                                                               |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | One upstream defect left, in bullmq itself. To file. Bun 1.4 fixed the other.       |
-| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined.    |
-| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Queue, cache and fan-out with no Redis. All three measured; three verdicts to take. |
+| Item                                                                                          | Shape                                                                            |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | Filed as bullmq#4656 and open there. Nothing left here but the re-measure.       |
+| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined. |
+| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Fan-out shipped in 3.1.2. Queue and cache both held, the queue on a Bun gap.     |
 
 Delivered and moved out of this folder rather than left here marked done:
 
@@ -412,12 +412,19 @@ Open follow-ups, none blocking:
 
 - Pin the generator and the subject to disjoint CPU sets. Not needed on 32 cores;
   needed on a smaller machine.
-- **Gin at ~56% of `bun-serve` against Axum at ~92% does not add up**, and it
-  reproduces across runs rather than being noise. Two single-threaded compiled
-  subjects should not sit 1.7x apart on plain dispatch. First suspect is how
-  `GOMAXPROCS(1)` handicaps the Go subjects, per the falsification rule in
-  [architecture/benchmarks.md](./architecture/benchmarks.md). Until it is understood,
-  the Go and Rust rows are not quotable.
+- ~~**Gin at ~56% of `bun-serve` against Axum at ~92% does not add up.**~~ **Closed:
+  the premise was wrong, and the pin it blamed is sound.** It was never a Gin
+  question - `nethttp` sits at the same 52-56%, and Gin is 99-104% of it across all
+  four scenarios, so the Go framework adds nothing measurable. A second full run on
+  the same machine and the same go1.25.3, eight days after the first, reproduces
+  every ratio: Go 53-56% of `bun-serve`, Axum 90-101%. Two mechanisms were then
+  tested directly and **both were eliminated**, which is in
+  [architecture/benchmarks.md](./architecture/benchmarks.md), "What the Go rows
+  actually measure": `GOMAXPROCS(1)` is not pathological, since lifting it scales
+  1.67x at two threads and 4.2x at eight, and the garbage collector is not the cost,
+  since `GOGC=off` is consistently **slower**. What remains is per-request work in
+  `net/http` itself, unisolated. **The Go and Rust rows are quotable with the stated
+  handicap.**
 - Open-loop latency via oha's `-q` plus `--latency-correction`, which would remove
   the coordinated-omission caveat the closed-loop numbers currently carry.
 - ~~The `params` gap against Elysia.~~ **Withdrawn: the numbers were wrong.** They

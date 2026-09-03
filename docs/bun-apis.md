@@ -695,8 +695,30 @@ sql.unsafe('SELECT $1::text[]', [['probe','other']]) -> malformed array literal:
 sql`SELECT ${['probe','other']}::text[]`             -> malformed array literal: "probe,other"
 ```
 
-The literal Postgres spelling binds correctly: `'{probe,other}'` reads back as
-`[ "probe", "other" ]`. Reported upstream and open:
+An `int[]` cast fails harder, with a wire-protocol error rather than a value one:
+`SELECT $1::int[]` bound to `[1, 2]` answers `insufficient data left in message`.
+
+`sql.array()` is the supported path, and it is what the four issues below shipped -
+all are closed as completed, the last two on 2025-09-27 and 2025-09-30, before 1.4.0.
+It binds `json[]`, which holds only while nothing casts it:
+
+```
+sql`SELECT ${sql.array(['a','b'])}`             -> [ "a", "b" ]
+sql`SELECT ${sql.array([1,2])}::int[]`          -> cannot cast type json[] to integer[]
+sql`SELECT ${sql.array(['a','b'])}::text[]`     -> [ "\"a\"", "\"b\"" ]
+```
+
+The third one is the one to watch: each element arrives three characters long,
+carrying the JSON quotes, and an `INSERT` into a real `text[]` column stores them
+that way. No error on either side. So a library that writes its own `$n::type` casts
+meets this on every array parameter, which is what keeps the pg-boss adapter from
+shrinking to `executeSql` plus `listen`.
+
+The literal Postgres spelling still binds correctly: `'{probe,other}'` reads back as
+`[ "probe", "other" ]`. Measured on 1.4.0 rev `34cbb9a40` against Postgres 17.11.
+The `sql.array()` cast defect is filed as
+[#41242](https://github.com/oven-sh/bun/issues/41242). The four below are closed, and
+the raw-array and cast paths above still fail:
 [#16840](https://github.com/oven-sh/bun/issues/16840),
 [#17798](https://github.com/oven-sh/bun/issues/17798),
 [#18775](https://github.com/oven-sh/bun/issues/18775),
