@@ -2,7 +2,6 @@ import {
   Accordion,
   Anchor,
   Badge,
-  Card,
   Container,
   Group,
   Progress,
@@ -12,6 +11,7 @@ import {
   Text,
   Title,
 } from '@mantine/core';
+import { Stat } from '../components/Stat';
 import type { CoveragePackage } from '../../scripts/extract/model';
 import { coverage, hasCoverage, site } from '../data';
 
@@ -23,30 +23,6 @@ const format = (value: number): string =>
 
 const color = (value: number): string =>
   value >= 90 ? 'green' : value >= 75 ? 'yellow' : 'red';
-
-const Stat = ({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}): React.JSX.Element => (
-  <Card withBorder radius="md" padding="md">
-    <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
-      {label}
-    </Text>
-    <Text fz={32} fw={700} lh={1.2}>
-      {value}
-    </Text>
-    {hint ? (
-      <Text size="xs" c="dimmed">
-        {hint}
-      </Text>
-    ) : null}
-  </Card>
-);
 
 const PackagePanel = ({ pkg }: { pkg: CoveragePackage }): React.JSX.Element => {
   const lines = pct(pkg.linesHit, pkg.lines);

@@ -157,9 +157,6 @@ export {
   OnPong,
   OnUpgrade,
 } from './ws/decorators.js';
-// `discoverGateways` resolves every gateway through the container; `discoverGateway`
-// takes one instance, and `Object.create(Gateway.prototype)` satisfies it - which is
-// how a reader inspects gateways without booting the app.
 export type { Envelope } from './ws/envelope.js';
 // The socket half of the middleware chain. One interface with one method wrapping
 // `next()`, the same shape the HTTP `Middleware` has - and `SocketLoggingMiddleware`
@@ -176,9 +173,6 @@ export {
   SocketLoggingMiddleware,
   type SocketLoggingOptions,
 } from './ws/logging.js';
-// `isGateway` is the filter that pairs with `discoverGateway` when walking a
-// module's providers, exported for the same reason `guardsOf` and `metaOf` are: a
-// reader outside this package needs the same channel the runtime uses.
 export { PubSub } from './ws/pubsub.js';
 // Multi-node fan-out. `PubSubRelay` is two methods, so `@dunx/infra`'s
 // RedisConnection satisfies it structurally; both relays shipped here are a Bun

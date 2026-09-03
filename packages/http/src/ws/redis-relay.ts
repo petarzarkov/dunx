@@ -1,5 +1,4 @@
-import { AppError } from '@dunx/core';
-import { WsRelay } from './relay.js';
+import { assertRelayUrl, redactUrl, WsRelay } from './relay.js';
 
 /**
  * The schemes `Bun.RedisClient` accepts. Checked here because Bun takes any string
@@ -40,25 +39,6 @@ export interface RedisRelayOptions {
   readonly tls?: boolean | Bun.TLSOptions;
 }
 
-const assertUrl = (url: string): string => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new AppError(
-      `${JSON.stringify(url)} is not a valid URL for the websocket relay. ` +
-        'Expected something like redis://localhost:6379.',
-    );
-  }
-  if (!PROTOCOLS.includes(parsed.protocol)) {
-    throw new AppError(
-      `Unsupported protocol ${JSON.stringify(parsed.protocol)} in ` +
-        `${JSON.stringify(url)}. Expected one of ${PROTOCOLS.join(', ')}.`,
-    );
-  }
-  return url;
-};
-
 /**
  * A {@link WsRelay} on `Bun.RedisClient`, a Bun global, so it costs
  * `@dunx/http` no dependency.
@@ -77,7 +57,11 @@ export class RedisRelay extends WsRelay {
 
   constructor(options: RedisRelayOptions = {}) {
     super();
-    this.#url = assertUrl(options.url ?? defaultRelayUrl());
+    this.#url = assertRelayUrl(
+      options.url ?? defaultRelayUrl(),
+      PROTOCOLS,
+      'redis://localhost:6379',
+    );
     this.#options = {
       maxRetries: options.maxRetries ?? 0,
       ...(options.connectionTimeout !== undefined && {
@@ -89,9 +73,7 @@ export class RedisRelay extends WsRelay {
 
   /** The URL with any password removed, for logs and error messages. */
   get url(): string {
-    const parsed = new URL(this.#url);
-    if (parsed.password) parsed.password = '***';
-    return parsed.toString();
+    return redactUrl(this.#url);
   }
 
   async publish(channel: string, message: string): Promise<number> {

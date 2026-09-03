@@ -1,7 +1,13 @@
 import { resolve } from 'node:path';
 import type { BunFile } from 'bun';
 import { FileNotFoundError, UnsupportedOperationError } from './errors.js';
-import { isMissing, resolveDirWithin, resolveWithin, toPosix } from './path.js';
+import {
+  guardMissing,
+  isMissing,
+  resolveDirWithin,
+  resolveWithin,
+  toPosix,
+} from './path.js';
 import { pump } from './stream.js';
 import {
   Storage,
@@ -54,23 +60,12 @@ export class LocalStorage extends Storage {
     return Bun.file(resolveWithin(this.#root, key));
   }
 
-  async #guard<T>(key: string, read: () => Promise<T>): Promise<T> {
-    try {
-      return await read();
-    } catch (error) {
-      if (isMissing(error)) {
-        throw new FileNotFoundError(key, { cause: error });
-      }
-      throw error;
-    }
-  }
-
   async read(key: string): Promise<string> {
-    return this.#guard(key, () => this.#file(key).text());
+    return guardMissing(key, () => this.#file(key).text());
   }
 
   async readBytes(key: string): Promise<Uint8Array> {
-    return this.#guard(key, () => this.#file(key).bytes());
+    return guardMissing(key, () => this.#file(key).bytes());
   }
 
   async readStream(key: string): Promise<ReadableStream<Uint8Array>> {
@@ -135,7 +130,7 @@ export class LocalStorage extends Storage {
 
   async stat(key: string): Promise<FileStat> {
     const file = this.#file(key);
-    const stats = await this.#guard(key, () => file.stat());
+    const stats = await guardMissing(key, () => file.stat());
     return {
       key,
       size: stats.size,

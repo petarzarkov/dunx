@@ -16,7 +16,7 @@ import type { Feature } from './features.js';
 const SETUP_URL = 'https://petarzarkov.github.io/dunx/setup.md';
 const LLMS_URL = 'https://petarzarkov.github.io/dunx/llms.txt';
 
-export const CLAUDE_POINTER = `# CLAUDE.md
+const CLAUDE_POINTER = `# CLAUDE.md
 
 The instructions for this application live in \`AGENTS.md\`, imported below so every
 agent reads one file.

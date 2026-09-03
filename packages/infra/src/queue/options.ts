@@ -1,5 +1,9 @@
 import type { JobsOptions, WorkerOptions as BullWorkerOptions } from 'bullmq';
-import { assertRedisUrl, defaultRedisUrl } from '../redis/options.js';
+import {
+  assertRedisUrl,
+  defaultRedisUrl,
+  redactUrl,
+} from '../redis/options.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 
 /**
@@ -132,8 +136,6 @@ export class QueueOptions {
 
   /** The URL with any password removed, for logs and error messages. */
   get redactedUrl(): string {
-    const parsed = new URL(this.url);
-    if (parsed.password) parsed.password = '***';
-    return parsed.toString();
+    return redactUrl(this.url);
   }
 }

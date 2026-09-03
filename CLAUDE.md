@@ -197,10 +197,12 @@ ships.** `packages/*` is the framework a consumer imports. `tools/*` is the CLIs
 consumer _runs_ - `bunx @dunx/create-app`, `bunx @dunx/mcp` - published exactly like
 a package. `internal/*` is the private half.
 
-Two scripts encode which parents publish, and they are the only places that decide
-it: `PUBLISHABLE_DIRS` in `scripts/version.ts` and `PUBLISHED_DIRS` in
-`scripts/update-readme.ts`. A `private: true` manifest is still what actually stops
-a publish, so a workspace in the wrong parent fails safe rather than leaking.
+One constant encodes which parents publish: `PUBLISHED_DIRS` in
+`scripts/workspace-ranges.ts`, imported by `version.ts`, `update-readme.ts`,
+`coverage-report.ts` and the docs generator. It used to be four copies of
+`['packages', 'tools']`, and this paragraph claimed there were two. A `private: true`
+manifest is still what actually stops a publish, so a workspace in the wrong parent
+fails safe rather than leaking.
 
 `internal/*` may depend on anything it likes; Rule 1 governs what dunx _ships_, not
 what builds its website or measures it. That is why `internal/bench` may devDepend on
@@ -983,6 +985,16 @@ New repeatable workflow → new skill. Do not grow this file instead.
 - Do not add a `Co-Authored-By` trailer, or any other attribution trailer, to a
   commit message. This overrides the default instruction to add one. The commit
   message describes the change; who or what typed it is not part of the record.
+- Do not sign a pull request description either - no "Generated with", no tool
+  footer, no attribution line. Same reason, and it overrides the default
+  instruction to add one.
+- **Do not write a long pull request description.** State what changed and why, in
+  the fewest lines that survive review. A reviewer reads the diff; the description
+  points at it. Specifically, leave out: a restatement of the goal you were given,
+  per-commit narration, tables of everything considered, a "deliberately not done"
+  inventory, measurements that belong in `docs/architecture/`, and anything already
+  said in a commit message. A finding that needs more than a line belongs in an
+  issue or a `docs/` page the description links to.
 - Do not use section-divider comments (e.g. `// ─── Section ───`, `// --- Section ---`, `// === Section ===`) - if a file needs sections, split it into separate files instead
 
 ## Do

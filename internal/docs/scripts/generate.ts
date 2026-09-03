@@ -32,14 +32,10 @@ import type {
   ReleaseNote,
   SiteIndex,
 } from './extract/model';
+import { PUBLISHED_DIRS } from '../../../scripts/workspace-ranges.js';
 
 const TOOL_ROOT = resolve(import.meta.dir, '..');
 const REPO_ROOT = resolve(TOOL_ROOT, '../..');
-/**
- * Both parents that hold a published workspace. `tools/` holds the CLIs, which are
- * published and therefore documented; `internal/` is the private half and is not.
- */
-const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 const DOCS_DIR = join(REPO_ROOT, 'docs');
 const OUT_DIR = join(TOOL_ROOT, 'src', 'generated');
 const GUIDES_OUT = join(OUT_DIR, 'guides');
@@ -155,7 +151,10 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
       'files-and-images',
     ],
   ],
-  ['Going live', ['deployment', 'health-checks', 'agent-tooling']],
+  [
+    'Going live',
+    ['deployment', 'health-checks', 'agent-tooling', 'metrics', 'upgrading'],
+  ],
 ];
 
 const sectionOf = (slug: string): string => {
