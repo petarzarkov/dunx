@@ -2,6 +2,7 @@ import {
   classOf,
   collectModules,
   dependenciesOf,
+  inertInstance,
   readControllers,
   type Ctor,
   type Dependency,
@@ -22,10 +23,6 @@ import { isGateway } from './ws/marker.js';
  * `Object.create(Controller.prototype)` is that chain with nothing behind it, so
  * no constructor or dependency of one has to exist.
  */
-interface Prototyped {
-  readonly prototype: object;
-}
-
 export interface RouteInputs {
   readonly body?: string;
   readonly query?: string;
@@ -100,8 +97,7 @@ const nodeFor = (route: DiscoveredRoute, module: string): RouteNode => ({
 export const routesOf = (root: ModuleRef): readonly RouteNode[] =>
   collectModules(root).flatMap((module) =>
     readControllers(module).flatMap((controller) => {
-      const { prototype } = controller as unknown as Prototyped;
-      return discoverRoutes(Object.create(prototype) as object).map((route) =>
+      return discoverRoutes(inertInstance(controller)).map((route) =>
         nodeFor(route, module.name),
       );
     }),
@@ -135,9 +131,7 @@ export interface GatewayNode {
 }
 
 const gatewayFor = (ctor: Ctor<unknown>, module: string): GatewayNode => {
-  const { name, path, handlers } = discoverGateway(
-    Object.create((ctor as unknown as Prototyped).prototype) as object,
-  );
+  const { name, path, handlers } = discoverGateway(inertInstance(ctor));
 
   return {
     name,

@@ -24,7 +24,12 @@ export { inject } from './inject.js';
 // twice, for routes and for gateway handlers, and `@dunx/infra` a third time for
 // `@JobHandler`. Three copies meant a fix to the dedup or the `Object.prototype`
 // stop landing in one of them.
-export { classOf, markedMethods, type MarkedMethod } from './marked.js';
+export {
+  classOf,
+  inertInstance,
+  markedMethods,
+  type MarkedMethod,
+} from './marked.js';
 // `teardownError` and `teardownFailures` are exported because every application
 // class runs its own teardown phase - @dunx/http stops a server between two of
 // them, @dunx/infra stops queue workers - and each has to collect failures the same
@@ -109,6 +114,7 @@ export {
   token,
   type AbstractCtor,
   type Ctor,
+  type HandlerMethod,
   type InjectionToken,
   type Token,
 } from './token.js';

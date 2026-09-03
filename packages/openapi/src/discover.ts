@@ -1,10 +1,11 @@
-import { collectModules, readControllers, type ModuleRef } from '@dunx/core';
+import {
+  collectModules,
+  inertInstance,
+  readControllers,
+  type ModuleRef,
+} from '@dunx/core';
 import { HIDDEN } from '@dunx/http';
 import { discoverRoutes, type DiscoveredRoute } from '@dunx/http/internal';
-
-interface Prototyped {
-  readonly prototype: object;
-}
 
 /**
  * Every route a module graph declares, read without constructing a thing.
@@ -20,8 +21,7 @@ export const describeRoutes = (root: ModuleRef): readonly DiscoveredRoute[] => {
 
   for (const module of collectModules(root)) {
     for (const controller of readControllers(module)) {
-      const { prototype } = controller as unknown as Prototyped;
-      for (const route of discoverRoutes(Object.create(prototype) as object)) {
+      for (const route of discoverRoutes(inertInstance(controller))) {
         if (route.meta?.get(HIDDEN.id) === true) continue;
         routes.push(route);
       }

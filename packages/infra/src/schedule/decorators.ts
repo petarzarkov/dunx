@@ -6,10 +6,7 @@ import {
   type Overlap,
   type ScheduleMeta,
 } from './marker.js';
-
-// never[] is what makes an arbitrary method signature assignable, so a handler may
-// declare whatever parameters it wants rather than the widest ones.
-type HandlerMethod = (...args: never[]) => unknown;
+import type { HandlerMethod } from '@dunx/core';
 
 /**
  * The largest delay `setTimeout` can hold. Bun clamps anything above it to 1 ms and
