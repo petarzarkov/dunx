@@ -33,6 +33,10 @@ export interface DriverConfig {
  * busier over the run then moves every subject together instead of penalising
  * whichever went last. `db-modes`, `logging` and `validation` each had a copy of
  * this loop, which is three places for the measurement to drift apart.
+ *
+ * **`bring` owns what it starts until it returns.** Teardown here can only reach a
+ * server that reached a `Live` entry, so a `bring` that starts a process and then
+ * throws - a failed probe, most likely - must stop that process itself.
  */
 export const driveUnits = async <U extends { readonly id: string }>(
   units: readonly U[],

@@ -118,6 +118,9 @@ const servers = new Map<Mode, SubjectProcess>();
 
 const bring = async (unit: Unit): Promise<Live<Unit>> => {
   let server = servers.get(unit.mode);
+  // Only this call's own server is this call's to clean up: a later unit reusing
+  // one must not stop it out from under the entry that already holds it.
+  const started = server === undefined;
   if (server === undefined) {
     const chosen = subject(unit.mode);
     server = await startSubject(chosen, bunCommand(chosen), {
@@ -126,26 +129,34 @@ const bring = async (unit: Unit): Promise<Live<Unit>> => {
     servers.set(unit.mode, server);
   }
 
-  const url = `${server.baseUrl}${unit.scenario.path}`;
-  const probe = await fetch(url, { method: unit.scenario.method });
-  const body = await probe.text();
-  const matches =
-    unit.scenario.expectBody === ''
-      ? body.startsWith('{')
-      : body === unit.scenario.expectBody;
-  if (probe.status !== unit.scenario.expectStatus || !matches) {
-    throw new Error(
-      `${unit.id} answered ${probe.status} ${JSON.stringify(body)}, expected ` +
-        `${unit.scenario.expectStatus} ${JSON.stringify(unit.scenario.expectBody)}`,
-    );
-  }
+  try {
+    const url = `${server.baseUrl}${unit.scenario.path}`;
+    const probe = await fetch(url, { method: unit.scenario.method });
+    const body = await probe.text();
+    const matches =
+      unit.scenario.expectBody === ''
+        ? body.startsWith('{')
+        : body === unit.scenario.expectBody;
+    if (probe.status !== unit.scenario.expectStatus || !matches) {
+      throw new Error(
+        `${unit.id} answered ${probe.status} ${JSON.stringify(body)}, expected ` +
+          `${unit.scenario.expectStatus} ${JSON.stringify(unit.scenario.expectBody)}`,
+      );
+    }
 
-  return {
-    unit,
-    server,
-    request: { url, method: unit.scenario.method },
-    samples: [],
-  };
+    return {
+      unit,
+      server,
+      request: { url, method: unit.scenario.method },
+      samples: [],
+    };
+  } catch (error) {
+    if (started) {
+      await server.stop();
+      servers.delete(unit.mode);
+    }
+    throw error;
+  }
 };
 
 const collect = (live: Live<Unit>): Result => ({
