@@ -54,6 +54,30 @@ Three findings that shaped the code:
   unhandled `error`. Shutdown would fail on its last step. The adapter gets a no-op
   `error` listener at construction.
 
+### A reconnect has to construct, not duplicate
+
+Bun fires `onconnect` on a constructed client and not on one returned by
+`duplicate()`. bullmq's `_scheduleReconnect` wires that callback and then calls
+`connect()`, so it is the only thing that runs `_handleConnected()` on a
+replacement socket. Without it the adapter never re-sends `CLIENT SETNAME`,
+never flips `ready` and never resolves `readying`, while the socket underneath
+answers `PING` perfectly well.
+
+A worker awaiting that readiness issues no further `BZPOPMIN`, so its queue
+stops consuming. Nothing on the path rejects, so no `error` is emitted and
+`Worker error on <queue>` never prints.
+
+Measured on bullmq 6.3.4 + Bun 1.4.0 + Redis 8.4.0: a connection at
+`tot-cmds=1 cmd=hello` idle for 20 hours, jobs accumulating in `wait` with
+`active=0` and `failed=0`, and the stalled-check timer still refreshing every
+30 s, so the worker looked alive throughout. A restart drained the backlog and
+wedged again on the next dropped socket.
+
+6.0.5 rebuilt the socket with `new (this.raw.constructor)(this.raw.url)`, which
+is why `boundClientClass` began as a constructor fix. 6.3.4 rebuilds by
+duplication instead, and the caret on bullmq's peer range is enough to land an
+app on it. The class overrides `duplicate()` to construct, which covers both.
+
 `@dunx/infra/queue` is **not re-exported from the package barrel**,
 unlike every other area. `src/index.ts` re-exporting it would put bullmq's static
 `ioredis` import behind `import '@dunx/infra'` for every consumer, queue or no
