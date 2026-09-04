@@ -54,3 +54,51 @@ describe('the duplicate wrapper', () => {
     source.onShutdown();
   });
 });
+
+describe('the raw client bullmq reconnects with', () => {
+  it('duplicates by construction, so the reconnect keeps its onconnect callback', async () => {
+    // bullmq's `_duplicateRaw` prefers `src.duplicate()` over construction, and
+    // Bun does not fire `onconnect` on a natively duplicated client. Its
+    // `_scheduleReconnect` wires `onconnect` and calls `connect()`, so a native
+    // duplicate leaves `_handleConnected()` unrun: no `CLIENT SETNAME`, `ready`
+    // never flips, and the worker awaiting readiness never blocks on the marker
+    // again. Silently - nothing on that path rejects.
+    const source = connection();
+    const adapter = source.client() as unknown as { raw: Bun.RedisClient };
+    const raw = adapter.raw;
+
+    const duplicated = await raw.duplicate();
+
+    // Constructed, not natively duplicated: same bound class, same target.
+    expect(duplicated).toBeInstanceOf(
+      raw.constructor as new (url?: string) => Bun.RedisClient,
+    );
+    expect((duplicated as { url?: string }).url).toBe('redis://127.0.0.1:1');
+
+    duplicated.close();
+    source.onShutdown();
+  });
+
+  it('survives a second reconnect, which is where a socket drop lands twice', async () => {
+    // One dropped socket is not the failure - the replacement has to be able to
+    // drop and be replaced too. A natively duplicated client is a plain
+    // `Bun.RedisClient`, so the override is gone from it and the *next*
+    // reconnect is the one that wedges. Measured in production: the first drop
+    // recovered, the second left the queue silent until a restart.
+    const source = connection();
+    const adapter = source.client() as unknown as { raw: Bun.RedisClient };
+    const bound = adapter.raw.constructor as new (
+      url?: string,
+    ) => Bun.RedisClient;
+
+    const first = await adapter.raw.duplicate();
+    const second = await first.duplicate();
+
+    expect(second).toBeInstanceOf(bound);
+    expect((second as { url?: string }).url).toBe('redis://127.0.0.1:1');
+
+    second.close();
+    first.close();
+    source.onShutdown();
+  });
+});

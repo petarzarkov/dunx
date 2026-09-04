@@ -21,6 +21,40 @@ const boundClientClass = (
     constructor(given?: string) {
       super(given ?? url, connection);
     }
+
+    /**
+     * A newly **constructed** client, rather than the one Bun's native
+     * `duplicate()` returns, because Bun does not fire `onconnect` on a natively
+     * duplicated client:
+     *
+     * ```
+     * fresh client   -> onconnect fired: true
+     * duplicated raw -> onconnect fired: false | connected: true
+     * ```
+     *
+     * Which decides whether a dropped socket ever comes back. bullmq 6.0.5 built
+     * its replacement with `new (this.raw.constructor)(this.raw.url)`, so the
+     * constructor above was the whole fix; 6.3.4 rebuilds through `_duplicateRaw`,
+     * which prefers `src.duplicate()`, and the caret on its peer range is enough
+     * to land an app on that.
+     *
+     * The initial connection survives either way - the adapter's `connect()` calls
+     * `_handleConnected()` itself. `_scheduleReconnect` does not: it wires
+     * `onconnect` and calls `connect()` on the raw client, so with a native
+     * duplicate `_handleConnected()` never runs. The adapter never re-sends
+     * `CLIENT SETNAME`, never flips `ready`, and never resolves `readying`, while
+     * the socket underneath is fine - measured against a real Redis as a
+     * connection sitting at `tot-cmds=1 cmd=hello`, idle for 20 hours, with the
+     * worker awaiting readiness and never issuing another `BZPOPMIN`.
+     *
+     * Nothing on that path rejects, so no `error` is emitted and no `Worker error
+     * on <queue>` is logged: the queue stops consuming silently and stays that way
+     * until the process restarts, which drains the backlog and then wedges again
+     * on the next dropped socket.
+     */
+    override duplicate(): Promise<Bun.RedisClient> {
+      return Promise.resolve(new BoundRedisClient(url));
+    }
   };
 };
 
