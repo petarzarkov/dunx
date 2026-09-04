@@ -4,6 +4,61 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.2.1 - 2026-09-04
+
+A dropped queue socket no longer silences a worker
+
+Since 3.2.0.
+
+@dunx/infra/queue: a reconnect rebuilt by duplication never became ready, so a
+worker that lost its blocking socket stopped consuming and stayed that way.
+bullmq rebuilds through `_duplicateRaw`, which prefers `duplicate()`, and Bun
+fires `onconnect` on a constructed client and not on a duplicated one. That
+callback is the only thing that runs `_handleConnected()` on the replacement, so
+without it the adapter never re-sent `CLIENT SETNAME`, never flipped `ready` and
+never resolved `readying`, while the socket underneath answered `PING`.
+
+Nothing on that path rejects, so the queue went quiet with no `error` emitted
+and no `Worker error on &lt;queue>` logged. Measured on bullmq 6.3.4 + Bun 1.4.0 +
+Redis 8.4.0: a connection at `tot-cmds=1 cmd=hello` idle for 20 hours, jobs
+accumulating in `wait` with `active=0` and `failed=0`, and the stalled-check
+timer still refreshing every 30s so the worker looked alive throughout. A
+restart drained the backlog and wedged again on the next drop.
+
+6.0.5 rebuilt the socket by construction, which is why `boundClientClass` began
+as a constructor fix, and why this only surfaced once a consumer floated to
+6.3.4 through the peer range. `duplicate()` constructs now, which covers both.
+
+Also in this range: a reuse pass across the packages, tools and scripts, with
+`HandlerMethod` and `inertInstance` moving into @dunx/core; a bench harness that
+stops a server whose probe failed rather than leaving it running; and docs
+corrections, including four stale claims and the duplicate-binding rule.
+
+### Fixes
+
+- **queue**: construct the reconnect socket, or a queue consumes nothing ([`ae1056b`](https://github.com/petarzarkov/dunx/commit/ae1056b47fe14dbf7338971fcadb8222b1cc48f1))
+- **bench**: stop a server whose probe failed, and guard a null report ([`30028e4`](https://github.com/petarzarkov/dunx/commit/30028e450dcf5056763749c107d3586d40737b17))
+
+### Refactors
+
+- **http**: one JSON embedder for the two pages that inline a model ([`c1b0c98`](https://github.com/petarzarkov/dunx/commit/c1b0c98bb2b9ce01fd0508effcc1412c90c171d2))
+- **core**: own HandlerMethod and inertInstance ([`8d82dbb`](https://github.com/petarzarkov/dunx/commit/8d82dbb5bf8e605a61d4a9a6f2506dc3b7e22ae1))
+- **bench**: one measurement loop for the three side harnesses ([`1265492`](https://github.com/petarzarkov/dunx/commit/126549235bccc304b04a67e59af34c62fd3199d4))
+- couple the docs model to the harness, and share the shutdown installer ([`d9ba5d9`](https://github.com/petarzarkov/dunx/commit/d9ba5d99c5ff1a6835a30caf35c4b6ad91bb1028))
+- **http**: narrow the internal subpath to what imports it ([`0523f5a`](https://github.com/petarzarkov/dunx/commit/0523f5a54347e5d0c636638f14f8e1cdfd18a732))
+- **scripts**: one PUBLISHED_DIRS, not four ([`42a3331`](https://github.com/petarzarkov/dunx/commit/42a33315222f6d6c18e61c119b7191e092a0406a))
+- **docs**: one Stat card for the coverage and benchmark pages ([`eab266e`](https://github.com/petarzarkov/dunx/commit/eab266ef065fc40aa2011c6b44ba33325c6ad359))
+- share four duplicated helpers and delete an orphaned module ([`9097f49`](https://github.com/petarzarkov/dunx/commit/9097f49fd775c21062948c102eba1e86122e95c6))
+
+### Documentation
+
+- **queue**: move the reconnect argument out of the JSDoc ([`ce5e578`](https://github.com/petarzarkov/dunx/commit/ce5e57882fe99aaa3d4629f4768c7483447e7226))
+- say the duplicate-binding rule as a sentence ([`edc832b`](https://github.com/petarzarkov/dunx/commit/edc832b6e34d6b80d8f60dc7bdb70e14c560490c))
+- the container has not been flat since 1.0.0 ([`d1775ba`](https://github.com/petarzarkov/dunx/commit/d1775ba9e13e54cc863bd0756a1fa2f51cd8693d))
+- act on review, and drop a claim that did not hold ([`2d08f37`](https://github.com/petarzarkov/dunx/commit/2d08f37e9daef40e58bf4c69612a4531f0f63681))
+- index metrics.md and place the two unsectioned guides ([`100d7fc`](https://github.com/petarzarkov/dunx/commit/100d7fceb8e774b1d0aa74cece837d9eeacd4d6b))
+- correct four stale claims and record what was measured ([`58b4d16`](https://github.com/petarzarkov/dunx/commit/58b4d16c981e26eac6e7d242b5e5223b9ee3619c))
+
 ## 3.2.0 - 2026-09-02
 
 Trace context replaces the request id, plus request and query stats
