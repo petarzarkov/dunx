@@ -21,6 +21,20 @@ const boundClientClass = (
     constructor(given?: string) {
       super(given ?? url, connection);
     }
+
+    /**
+     * A newly **constructed** client, rather than the one Bun's native
+     * `duplicate()` returns, because Bun fires `onconnect` on the first and not
+     * on the second. bullmq rebuilds a dropped socket through `_duplicateRaw`,
+     * which prefers `duplicate()`, and that callback is the only thing that runs
+     * `_handleConnected()` on the replacement: without it the adapter never
+     * re-sends `CLIENT SETNAME`, never flips `ready`, and a worker awaiting
+     * readiness issues no further `BZPOPMIN`. Silently, since nothing on that
+     * path rejects. See docs/architecture/queues.md.
+     */
+    override duplicate(): Promise<Bun.RedisClient> {
+      return Promise.resolve(new BoundRedisClient(url));
+    }
   };
 };
 
