@@ -1,6 +1,6 @@
 ---
 name: coverage-report
-description: Regenerate the coverage report and badges, or diagnose a wrong percentage, a 404ing badge, or a package showing 0%. Use after adding a package, when coverage numbers look implausible, or when the GitHub Pages coverage site is stale or broken.
+description: Regenerate the coverage report and badges, or diagnose a wrong percentage, a 404ing badge, or a package showing 0%. Use after adding a package, when coverage numbers look implausible, or when the published coverage site is stale or broken.
 ---
 
 # /coverage-report
@@ -48,5 +48,5 @@ column to add.
 | Badges 404 but the site loads         | They are at `/badges/coverage-<pkg>.svg` now, not the Pages root. Check `scripts/update-readme.ts`'s `DOCS_SITE`.                                                            |
 
 `ci.yml` publishes `internal/docs/dist/` to Pages from a separate `pages` job on
-`main`: <https://petarzarkov.github.io/dunx>, with the report at
-<https://petarzarkov.github.io/dunx/#/coverage>.
+`main`: <https://dunx.win>, with the report at
+<https://dunx.win/coverage>.

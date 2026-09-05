@@ -364,8 +364,8 @@ its test.
 
 ### `internal/docs` - the documentation site - **built**
 
-React + Mantine bundled by **Vite**, static output, deployed to **GitHub Pages** as the Pages
-root. Coverage is a page inside it. Design and the parser decision:
+React + Mantine bundled by **Vite**, static output, deployed to **Cloudflare Pages** at
+dunx.win. Coverage is a page inside it. Design and the parser decision:
 [architecture/tooling.md](./architecture/tooling.md), "Documentation site"; the extractor's own
 limits: `internal/docs/README.md`.
 

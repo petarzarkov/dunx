@@ -107,7 +107,7 @@ const Scoreboard = ({ model }: { model: BenchModel }): React.JSX.Element => (
         {scenarioHeadlines(model).map((scenario) => (
           <Table.Tr key={scenario.id}>
             <Table.Td>
-              <Anchor href={`#/benchmarks?h=scenario-${scenario.id}`}>
+              <Anchor href={`/benchmarks?h=scenario-${scenario.id}`}>
                 {scenario.title}
               </Anchor>
             </Table.Td>

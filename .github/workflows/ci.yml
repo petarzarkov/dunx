@@ -292,28 +292,123 @@ jobs:
       - name: Build the documentation site
         run: bun run docs:build
 
-      - name: Upload the documentation site
-        uses: actions/upload-pages-artifact@v3
+      # Actions are pinned to a commit when they are third-party or hold
+      # something worth stealing - this one takes the Cloudflare deploy token. A
+      # moving tag is a moving tag holding a credential. GitHub's own read-only
+      # actions stay on a major, since pinning those without Dependabot only
+      # makes them rot quietly.
+      - name: Deploy the documentation site to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
         with:
-          path: ./internal/docs/dist
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Pinned rather than installed as a devDependency: only these two jobs
+          # deploy, and a root dependency would download wrangler in all six.
+          wranglerVersion: '4.128.0'
+          command: >-
+            pages deploy internal/docs/dist
+            --project-name=dunx
+            --branch=main
 
-  # Separate job so the `github-pages` environment (and any branch protection on
-  # it) never gates a check job. PR runs must not need it.
-  pages:
-    name: Deploy the site
-    needs: release
+      - name: Summarise
+        run: |
+          echo "Deployed to ${{ steps.deploy.outputs.deployment-url }}" >> $GITHUB_STEP_SUMMARY
+
+  # The same site on a pull request, at a per-branch preview URL. It needs the
+  # coverage model the `coverage` job uploads, exactly as the release path does:
+  # without it the preview renders an empty coverage page and reviewers read it
+  # as a regression.
+  #
+  # Skipped for a fork, which gets no secrets and would fail the deploy step
+  # rather than the review.
+  preview:
+    name: Preview the site
+    needs: [static, unit, examples, browser, coverage, docs]
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
-      pages: write
-      id-token: write
-    concurrency:
-      group: pages
-      cancel-in-progress: false
+      contents: read
+      deployments: write
+      # Only so the preview comment below can be written as github-actions[bot].
+      pull-requests: write
     environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-
+      name: preview
+      url: ${{ steps.deploy.outputs.deployment-url }}
     steps:
-      - name: Deploy the documentation site to GitHub Pages
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: bun run ci build
+
+      - name: Download the coverage model and badges
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-model
+          path: internal/docs
+
+      - name: Build the documentation site
+        run: bun run docs:build
+
+      # Pinned for the same reason as the production deploy above.
+      - name: Deploy the preview to Cloudflare Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Pinned rather than installed as a devDependency: only these two jobs
+          # deploy, and a root dependency would download wrangler in all six.
+          wranglerVersion: '4.128.0'
+          command: >-
+            pages deploy internal/docs/dist
+            --project-name=dunx
+            --branch=${{ github.head_ref }}
+
+      # One comment per pull request, rewritten in place rather than appended: a
+      # fresh comment on every push buries the conversation under a stack of
+      # near-identical links. The marker is how the next run finds the comment it
+      # left last time.
+      - name: Comment the preview URL
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          # The alias follows the branch and survives the next push, so it is the
+          # one worth clicking twice; the deployment URL is immutable and pins the
+          # exact build, so it is the one worth citing.
+          ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
+        with:
+          script: |
+            const MARKER = '<!-- cloudflare-preview -->';
+            const { ALIAS_URL, DEPLOY_URL } = process.env;
+            const sha = context.payload.pull_request.head.sha.slice(0, 7);
+
+            const body = [
+              MARKER,
+              '### Documentation preview',
+              '',
+              `**${ALIAS_URL || DEPLOY_URL}**`,
+              '',
+              `\`${sha}\` · [this exact build](${DEPLOY_URL})`,
+            ].join('\n');
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { ...context.repo, issue_number: context.issue.number },
+            );
+            const mine = comments.find(
+              (c) => c.user.type === 'Bot' && c.body.startsWith(MARKER),
+            );
+
+            await (mine
+              ? github.rest.issues.updateComment({
+                  ...context.repo,
+                  comment_id: mine.id,
+                  body,
+                })
+              : github.rest.issues.createComment({
+                  ...context.repo,
+                  issue_number: context.issue.number,
+                  body,
+                }));

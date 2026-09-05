@@ -267,7 +267,7 @@ Roughly twice raw `Bun.serve`, from the `oxc-parser` preload and eager dependenc
 resolution. It beats every Node framework measured here by a wide margin, but if
 you are deploying somewhere that pays cold start per request, it is the number to
 watch. The current figures are on the
-[benchmarks page](https://petarzarkov.github.io/dunx/#/benchmarks), regenerated
+[benchmarks page](https://dunx.win/benchmarks), regenerated
 from a real run rather than written down.
 
 Eager resolution is a trade: every provider is constructed at boot, so a missing

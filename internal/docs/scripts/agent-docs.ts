@@ -9,12 +9,12 @@ import type { GuideMeta } from './extract/model';
  * serves the file the repository's own guards check. `llms.txt` is the index
  * described by <https://llmstxt.org>, generated from the same guide list the nav
  * is built from, with each entry pointing at raw markdown rather than at a
- * hash-routed page a fetch cannot render.
+ * rendered page a fetch cannot read.
  *
  * Both land in `public/`, which Vite copies to the output root, so they are served
- * from https://petarzarkov.github.io/dunx/ alongside the coverage badges.
+ * from https://dunx.win/ alongside the coverage badges.
  */
-export const SITE_URL = 'https://petarzarkov.github.io/dunx/';
+export const SITE_URL = 'https://dunx.win/';
 
 const RAW_URL = 'https://raw.githubusercontent.com/petarzarkov/dunx/main/';
 

@@ -305,7 +305,7 @@ const Header = ({
  * The landing page drops the sidebar and runs full width; every other route
  * keeps it. A marketing page constrained to the documentation gutter looks like
  * a documentation page, which is the thing being fixed - and it means the
- * footer is the only navigation landmark on `#/`.
+ * footer is the only navigation landmark on `/`.
  */
 export const App = (): React.JSX.Element => {
   const route = useRoute();

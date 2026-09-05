@@ -26,21 +26,23 @@ const KINDS: Record<string, RouteKind> = {
   releases: RouteKind.Releases,
 };
 
-export const parseRoute = (hash: string): Route => {
-  const [path = '', query = ''] = hash.replace(/^#\/?/, '').split('?');
+/** The pathname and search a link carries: `/guide/controllers?h=nesting`. */
+export const parseRoute = (url: string): Route => {
+  const [pathname = '', query = ''] = url.split('?');
   const anchor = new URLSearchParams(query).get('h');
-  const [head = '', slug = ''] = path.split('/');
+  const path = pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+  const [head = '', ...rest] = path.split('/');
 
   if (head === '') return { kind: RouteKind.Home, slug: '', anchor };
 
   const kind = KINDS[head];
   if (!kind) return { kind: RouteKind.NotFound, slug: path, anchor };
 
-  return { kind, slug: decodeURIComponent(slug), anchor };
+  return { kind, slug: decodeURIComponent(rest.join('/')), anchor };
 };
 
 export const href = (kind: RouteKind, slug = ''): string =>
-  kind === RouteKind.Home ? '#/' : `#/${kind}${slug ? `/${slug}` : ''}`;
+  kind === RouteKind.Home ? '/' : `/${kind}${slug ? `/${slug}` : ''}`;
 
 /**
  * A package on npm, optionally pinned to one version.
@@ -73,20 +75,78 @@ export const anchoredSymbol = (anchor: string | null): string | null =>
     ? anchor.slice(SYMBOL_PREFIX.length)
     : null;
 
+/** `pushState` fires no event of its own, so navigation announces itself. */
+const NAVIGATED = 'dunx:navigated';
+
+const currentUrl = (): string =>
+  `${window.location.pathname}${window.location.search}`;
+
+export const navigate = (target: string): void => {
+  if (target === currentUrl()) return;
+  window.history.pushState(null, '', target);
+  window.dispatchEvent(new Event(NAVIGATED));
+};
+
+/**
+ * The pathname a click should navigate to without a page load, or `null` to
+ * leave the click to the browser.
+ *
+ * One delegated listener rather than a `<Link>` component: every link on the
+ * site is a Mantine `Anchor` or `NavLink` rendering a plain `<a href>`, and
+ * wrapping each one would add a prop at every call site for behaviour the
+ * document supplies once.
+ *
+ * Everything but an unmodified left click on a same-origin anchor is left
+ * alone, which is what keeps middle-click, cmd-click and "open in new tab"
+ * opening a real tab.
+ */
+const interceptable = (event: MouseEvent): string | null => {
+  if (event.defaultPrevented || event.button !== 0) return null;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return null;
+  }
+
+  const anchor =
+    event.target instanceof Element ? event.target.closest('a') : null;
+  const raw = anchor?.getAttribute('href');
+  if (!anchor || raw === null || raw === undefined) return null;
+  if (anchor.hasAttribute('download')) return null;
+  if (anchor.target !== '' && anchor.target !== '_self') return null;
+  // A bare `#id` is a fragment the browser scrolls to on its own. The site uses
+  // `?h=` instead, so anything reaching here is a link nothing else handles.
+  if (raw.startsWith('#')) return null;
+
+  const url = new URL(anchor.href, window.location.href);
+  if (url.origin !== window.location.origin) return null;
+
+  return `${url.pathname}${url.search}`;
+};
+
 export const useRoute = (): Route => {
-  const [route, setRoute] = useState(() => parseRoute(window.location.hash));
+  const [route, setRoute] = useState(() => parseRoute(currentUrl()));
 
   useEffect(() => {
-    const update = (): void => setRoute(parseRoute(window.location.hash));
-    window.addEventListener('hashchange', update);
-    return () => window.removeEventListener('hashchange', update);
+    const update = (): void => setRoute(parseRoute(currentUrl()));
+    window.addEventListener('popstate', update);
+    window.addEventListener(NAVIGATED, update);
+    return () => {
+      window.removeEventListener('popstate', update);
+      window.removeEventListener(NAVIGATED, update);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onClick = (event: MouseEvent): void => {
+      const target = interceptable(event);
+      if (target === null) return;
+      event.preventDefault();
+      navigate(target);
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
   }, []);
 
   return route;
-};
-
-export const navigate = (target: string): void => {
-  window.location.hash = target;
 };
 
 /** Frames to keep looking for the target before giving up. */

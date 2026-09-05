@@ -5,8 +5,21 @@ dependency rules do not govern.
 
 ## Documentation site (`internal/docs`)
 
-React + Mantine over **Vite**, static output, deployed to GitHub Pages. It replaced the
-coverage report as the Pages root; coverage is now a page inside it.
+React + Mantine over **Vite**, static output, deployed to **Cloudflare Pages** at
+dunx.win. It replaced the coverage report as the site root; coverage is now a page
+inside it.
+
+It was on GitHub Pages at `petarzarkov.github.io/dunx` until the domain was bought.
+The build is unchanged: `wrangler pages deploy internal/docs/dist` replaced the
+Pages artifact upload in the same `release` job, so the coverage model that job
+downloads still reaches `docs:build` before the deploy. What moved with it is the
+base path, from `/dunx/` to `/`, and the router - see below. A pull request gets a
+per-branch preview URL, which GitHub Pages had no equivalent of.
+
+`.github/workflows/pages-redirect.yml` still owns the old origin: a fixed redirect
+plus `setup.md` and `llms.txt`, because every `@dunx/create-app` already published
+writes the GitHub Pages URL for those two into the AGENTS.md it scaffolds, and an
+agent fetching raw markdown runs no script a redirect could use.
 
 **The bundler was `Bun.build` and was moved back to Vite, by measuring rather than
 by preference.** The original swap traded ~25% more gzipped JS for a 41 ms build
@@ -37,17 +50,17 @@ That works because `charts@8.3.18` peers `recharts` at `>=2.13.3`, so the
 installed recharts 3.10.1 satisfies both majors.
 
 `BarChart` in 8 carries every prop `BenchChart.tsx` passes. A headless-Chrome
-render of `#/benchmarks` produced 5 recharts surfaces with 55 bars and the focus
+render of `/benchmarks` produced 5 recharts surfaces with 55 bars and the focus
 colour on `@dunx/http`, so this is verified rather than assumed.
 `@mantine/code-highlight` went with it: highlighting happens at generate time
 now, and nothing under `internal/docs` imported it.
 
 **The model is one file per route, and the landing page carries none of them.**
-`site.json` was imported into the entry chunk, so `#/` downloaded all 21 guide
+`site.json` was imported into the entry chunk, so `/` downloaded all 21 guide
 bodies and all eight package readmes before rendering a page that shows neither.
 `generate.ts` now writes `index.json` (nav, landing page, footer, search index),
 `guides/<slug>.json` and `packages/<dir>.json`. Measured on the entry chunk, which
-is all `#/` fetches, `gzip -9`:
+is all `/` fetches, `gzip -9`:
 
 | Entry chunk     | JS raw    | JS gzip      |
 | --------------- | --------- | ------------ |
@@ -116,9 +129,15 @@ one entry per overload set.
 
 Two details worth not re-deriving:
 
-- **Routing is hash-based** (`#/api/core`). GitHub Pages serves static files
-  with no SPA fallback, so a path router 404s on every deep link. A symbol is
-  `#/api/core?h=symbol-ConsoleLogger`, and three things have to hold together
+- **Routing is path-based** (`/api/core`), and was hash-based until the move off
+  GitHub Pages, which serves static files with no SPA fallback and answered every
+  deep link with a 404. Cloudflare takes a `_redirects` file, so `/* /index.html
+200` is the whole cost of the change on the hosting side; `scripts/preview.ts`
+  serves the same fallback, which is what keeps the browser suite honest about
+  what the edge does. Navigation is one delegated click listener rather than a
+  `<Link>` component, since every link on the site is already a Mantine `Anchor`
+  or `NavLink` rendering a plain `<a href>`. A symbol is
+  `/api/core?h=symbol-ConsoleLogger`, and three things have to hold together
   for that to land: the search action has to emit the `?h=`, the package page
   has to open its API tab in response to it (`Tabs` is `keepMounted={false}`, so
   the card does not exist on the readme tab), and the scroll has to keep looking

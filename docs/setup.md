@@ -1,7 +1,7 @@
 # Setting up dunx
 
 Instructions for an agent setting up a dunx application. Served raw at
-<https://petarzarkov.github.io/dunx/setup.md>, so it can be fetched and followed
+<https://dunx.win/setup.md>, so it can be fetched and followed
 without cloning anything.
 
 dunx is a Bun-native dependency injection framework: modules, controllers,
@@ -272,8 +272,8 @@ graph and never boots the app.
 
 ## More
 
-- <https://petarzarkov.github.io/dunx/llms.txt> - every document, as raw markdown
-- <https://petarzarkov.github.io/dunx/> - the guide, the API reference, benchmarks
+- <https://dunx.win/llms.txt> - every document, as raw markdown
+- <https://dunx.win/> - the guide, the API reference, benchmarks
 - <https://github.com/petarzarkov/dunx/blob/main/docs/MIGRATION-FROM-NEST.md> -
   coming from NestJS
 - <https://github.com/petarzarkov/dunx/tree/main/examples> - `minimal`,

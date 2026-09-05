@@ -1,0 +1,44 @@
+name: Pages redirect
+
+# Manual, and it should stay manual: the GitHub Pages deployment is no longer a
+# build output. It is a fixed redirect to dunx.win, plus the two documents an
+# agent fetches raw, and it changes only when one of those does.
+#
+# Run it once after the Cloudflare deploy is answering on dunx.win. It replaces
+# whatever the last CI run left at petarzarkov.github.io/dunx.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy the redirect to GitHub Pages
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      # `setup.md` and `llms.txt` are copied from the built site rather than
+      # written here, so the frozen copies say what the current release says.
+      - name: Generate the agent documents
+        run: bun run --filter '@dunx/docs' generate
+
+      - name: Build the redirect site
+        run: bun scripts/pages-redirect.ts
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./.pages-redirect
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

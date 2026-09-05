@@ -9,15 +9,18 @@ import { defineConfig } from 'vite';
  * speed that bought `Bun.build` the job originally has stopped being a
  * difference worth having: 0.3 s against 0.15 s, both irrelevant in CI.
  *
- * Served from https://petarzarkov.github.io/dunx/, so every asset URL needs the
- * repository name as its prefix. `DOCS_BASE=/` builds for a local server.
+ * Served from https://dunx.win/, so the base is the root. It was `/dunx/` for
+ * GitHub Pages, and a build carrying that prefix onto Cloudflare asks for
+ * `/dunx/assets/...`, which no file answers: the SPA fallback returns
+ * `index.html` and the browser refuses it as CSS on a MIME check. `DOCS_BASE`
+ * is what a fork serving from a subpath sets.
  *
  * `public/` is copied to the output root by Vite itself, which is where the
- * coverage badges `gen:cov` writes come from. It may not exist on a clean
- * checkout; Vite tolerates that.
+ * coverage badges `gen:cov` writes come from, along with `_headers` and
+ * `_redirects`. It may not exist on a clean checkout; Vite tolerates that.
  */
 export default defineConfig({
-  base: process.env['DOCS_BASE'] ?? '/dunx/',
+  base: process.env['DOCS_BASE'] ?? '/',
   plugins: [react()],
   build: {
     sourcemap: false,

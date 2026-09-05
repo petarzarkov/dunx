@@ -3,15 +3,18 @@ import { act, configure, render } from '@testing-library/react';
 import { App } from './App';
 
 /**
- * Shared by the site suites: mounting the app at a hash is the setup every one of
+ * Shared by the site suites: mounting the app at a path is the setup every one of
  * them needs, and a second copy would drift from the provider configuration the real
  * entry uses.
+ *
+ * `replaceState` rather than an assignment, since the router reads
+ * `location.pathname` and that is not writable.
  *
  * Not a `.test.` file, so `bun test` does not collect it. It lives in `tools/`, which
  * is never published.
  */
-export const mount = (hash: string) => {
-  window.location.hash = hash;
+export const mount = (path: string) => {
+  window.history.replaceState(null, '', path);
   return render(
     <MantineProvider defaultColorScheme="light">
       <App />

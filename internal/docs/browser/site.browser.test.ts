@@ -93,11 +93,11 @@ describe('colour scheme', () => {
     await preview.view(1440, 900, 1);
 
     await preview.scheme('light');
-    await preview.open('#/');
+    await preview.open('/');
     const light = await preview.background();
 
     await preview.scheme('dark');
-    await preview.open('#/');
+    await preview.open('/');
     const dark = await preview.background();
 
     expect(light).toBe('rgb(255, 255, 255)');

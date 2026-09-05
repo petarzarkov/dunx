@@ -4,7 +4,7 @@ import { mount } from './harness';
 import { loadReleases } from './data';
 
 beforeEach(() => {
-  window.location.hash = '';
+  window.history.replaceState(null, '', '/');
 });
 
 afterEach(() => {
@@ -20,7 +20,7 @@ const newest = async () => {
 
 describe('the releases index', () => {
   test('renders the changelog the release script wrote', async () => {
-    mount('#/releases');
+    mount('/releases');
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       'Releases',
     );
@@ -41,7 +41,7 @@ describe('the releases index', () => {
 describe('one release', () => {
   test('renders the version it was asked for', async () => {
     const { first } = await newest();
-    mount(`#/releases/${first.version}`);
+    mount(`/releases/${first.version}`);
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
@@ -52,7 +52,7 @@ describe('one release', () => {
 
   test('accepts the v-prefixed form a git tag would use', async () => {
     const { first } = await newest();
-    mount(`#/releases/v${first.version}`);
+    mount(`/releases/v${first.version}`);
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
@@ -62,7 +62,7 @@ describe('one release', () => {
   });
 
   test('says which version was missing rather than redirecting', async () => {
-    mount('#/releases/9.9.9');
+    mount('/releases/9.9.9');
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(
@@ -79,7 +79,7 @@ describe('one release', () => {
     const middle = releases[at];
     if (!middle || releases.length < 3) return;
 
-    mount(`#/releases/${middle.version}`);
+    mount(`/releases/${middle.version}`);
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
@@ -87,23 +87,23 @@ describe('one release', () => {
       );
     });
 
-    const links = [...document.querySelectorAll('a[href^="#/releases/"]')].map(
+    const links = [...document.querySelectorAll('a[href^="/releases/"]')].map(
       (link) => link.getAttribute('href'),
     );
     const versions = new Set(releases.map((release) => release.version));
     for (const link of links) {
-      expect(versions.has((link ?? '').replace('#/releases/', ''))).toBe(true);
+      expect(versions.has((link ?? '').replace('/releases/', ''))).toBe(true);
     }
     // The newest release has no next, so the middle one having both is the case
     // worth asserting.
-    expect(links).toContain(`#/releases/${releases[at + 1]?.version}`);
-    expect(links).toContain(`#/releases/${releases[at - 1]?.version}`);
+    expect(links).toContain(`/releases/${releases[at + 1]?.version}`);
+    expect(links).toContain(`/releases/${releases[at - 1]?.version}`);
     expect(first.version).not.toBe(middle.version);
   });
 
   test('links every package at that version on npm', async () => {
     const { first } = await newest();
-    mount(`#/releases/${first.version}`);
+    mount(`/releases/${first.version}`);
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(

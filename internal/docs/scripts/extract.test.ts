@@ -228,16 +228,16 @@ describe('markdown content', () => {
 
   test('links resolve to in-site routes, or back to GitHub', () => {
     const targets = {
-      guides: new Map([['ARCHITECTURE.md', '#/guide/architecture']]),
-      packages: new Map([['core', '#/api/core']]),
+      guides: new Map([['ARCHITECTURE.md', '/guide/architecture']]),
+      packages: new Map([['core', '/api/core']]),
     };
     expect(rewriteHref('./ARCHITECTURE.md', targets)).toBe(
-      '#/guide/architecture',
+      '/guide/architecture',
     );
     expect(rewriteHref('../docs/ARCHITECTURE.md', targets)).toBe(
-      '#/guide/architecture',
+      '/guide/architecture',
     );
-    expect(rewriteHref('./packages/core', targets)).toBe('#/api/core');
+    expect(rewriteHref('./packages/core', targets)).toBe('/api/core');
     expect(rewriteHref('./CLAUDE.md', targets)).toBe(
       'https://github.com/petarzarkov/dunx/blob/main/CLAUDE.md',
     );
@@ -247,7 +247,7 @@ describe('markdown content', () => {
 
   test('a `../` link resolves against the page it was written on', () => {
     const targets = {
-      guides: new Map([['architecture/http.md', '#/guide/http']]),
+      guides: new Map([['architecture/http.md', '/guide/http']]),
       packages: new Map<string, string>(),
     };
     // `docs/architecture/http.md` links to `../bun-apis.md`, which is
@@ -269,7 +269,7 @@ describe('markdown content', () => {
         '',
         'docs/guide/05-controllers.md',
       ),
-    ).toBe('#/guide/http');
+    ).toBe('/guide/http');
     // `relative()` and `Bun.Glob` hand back `\` on Windows; a link target does not.
     expect(
       rewriteHref('./usage.md', targets, '', 'packages\\infra/README.md'),

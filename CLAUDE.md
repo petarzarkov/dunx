@@ -635,7 +635,7 @@ then not cover it.
   artifact rather than regenerating them: regenerating ran the whole suite again and
   needed a second copy of the services the gate depends on. One place declares the
   services, one job runs the gate.
-- Coverage report, badges, and the GitHub Pages site: `/coverage-report`
+- Coverage report, badges, and the published site: `/coverage-report`
 
 ## Typecheck
 

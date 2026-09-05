@@ -54,16 +54,20 @@ const hrefs = (html: string): string[] =>
     match[1] === undefined ? [] : [match[1]],
   );
 
-const internal = (href: string): boolean => href.startsWith('#');
+const internal = (href: string): boolean =>
+  href.startsWith('/') && !href.startsWith('//');
 
 describe('internal links', () => {
   test('no link is a bare fragment', async () => {
     const offenders: string[] = [];
     for (const page of [...(await pages()), ...(await packagePages())]) {
       for (const href of hrefs(page.html)) {
-        // `#/...` is a route. `#anything-else` is a fragment that would replace
-        // the route rather than scroll within it.
-        if (href.startsWith('#') && !href.startsWith('#/')) {
+        // A bare `#id` would scroll natively, but a guide body is a separate
+        // chunk that arrives after the document does, so the fragment resolves
+        // against a page that has not rendered yet and lands nowhere. `?h=` is
+        // retried across frames by `useScrollTo`, which is why every anchor on
+        // the site is written that way.
+        if (href.startsWith('#')) {
           offenders.push(`${page.slug}: ${href}`);
         }
       }
@@ -82,7 +86,7 @@ describe('internal links', () => {
     for (const page of [...(await pages()), ...(await packagePages())]) {
       for (const href of hrefs(page.html)) {
         if (!internal(href)) continue;
-        const [route = ''] = href.slice(2).split('?');
+        const [route = ''] = href.slice(1).split('?');
         const [kind = '', slug = ''] = route.split('/');
 
         if (SLUGLESS.has(kind)) continue;
@@ -115,7 +119,7 @@ describe('internal links', () => {
     for (const page of [...all, ...(await packagePages())]) {
       for (const href of hrefs(page.html)) {
         if (!internal(href) || !href.includes('?h=')) continue;
-        const [route = '', query = ''] = href.slice(2).split('?');
+        const [route = '', query = ''] = href.slice(1).split('?');
         const [kind = '', slug = ''] = route.split('/');
         if (kind !== 'guide') continue;
 
@@ -124,7 +128,7 @@ describe('internal links', () => {
         // A page with fewer than three headings renders no contents list, but its
         // ids are still in the index, so this stays checkable either way.
         if (anchor !== null && known && !known.has(anchor)) {
-          offenders.push(`${page.slug} -> #/guide/${slug}?h=${anchor}`);
+          offenders.push(`${page.slug} -> /guide/${slug}?h=${anchor}`);
         }
       }
     }

@@ -1,7 +1,7 @@
 # @dunx/docs
 
 The documentation site for dunx: **React + Mantine over Vite**, built to static
-output and deployed to GitHub Pages at <https://petarzarkov.github.io/dunx>.
+output and deployed to Cloudflare Pages at <https://dunx.win>.
 
 Private, never published. Per CLAUDE.md, `tools/*` may depend on anything: the
 dependency rules govern what dunx _ships_, not what builds its website.
@@ -57,7 +57,7 @@ directories are gitignored - they are build output.
 ## One file per route, not one model
 
 The model used to be a single `site.json` imported into the entry chunk, so
-opening `#/` downloaded all 21 guide bodies and all eight package readmes to
+opening `/` downloaded all 21 guide bodies and all eight package readmes to
 render a page that shows none of them. `generate.ts` now writes:
 
 | File                            | Holds                                                        |
@@ -67,7 +67,7 @@ render a page that shows none of them. `generate.ts` now writes:
 | `packages/<dir>.json`           | one package's readme and its full symbol documentation       |
 | `chunks.ts`                     | a `slug -> () => import(...)` table over the two above       |
 
-Measured, `gzip -9`, entry chunk only - which is all `#/` downloads:
+Measured, `gzip -9`, entry chunk only - which is all `/` downloads:
 
 | Entry chunk       | JS raw     | JS gzip      |
 | ----------------- | ---------- | ------------ |
@@ -213,7 +213,7 @@ scripts/
     model.ts           # the JSON model both sides share
 src/
   App.tsx              # shell, navigation
-  router.ts            # hash router, symbol anchors, scroll restoration
+  router.ts            # history router, symbol anchors, scroll restoration
   data.ts              # the index, parsed once, plus the per-route body loaders
   chunk.ts             # useChunk: a per-route body as it arrives
   bench.ts             # ranking, baseline percentages, verdicts, scoreboard
@@ -221,10 +221,17 @@ src/
   pages/               # Benchmarks, Home, Guide, PackagePage, Coverage, Releases, NotFound
 ```
 
-Routing is hash-based (`#/api/core`) on purpose: GitHub Pages serves static
-files with no SPA fallback, so a path-based router would 404 on every deep link.
+Routing is path-based (`/api/core`). It was hash-based while the site was on
+GitHub Pages, which serves static files with no SPA fallback and answered every
+deep link with a 404. `public/_redirects` carries the `/* /index.html 200` rule
+that replaced it, and `scripts/preview.ts` serves the same fallback, so the
+browser suite exercises what the edge does.
 
-`#/releases` is the whole history and `#/releases/<version>` is one release, which
+Navigation is one delegated click listener in `router.ts` rather than a `<Link>`
+component: every link on the site is a Mantine `Anchor` or `NavLink` rendering a
+plain `<a href>`. A modified click still opens a tab.
+
+`/releases` is the whole history and `/releases/<version>` is one release, which
 is what a GitHub release note links at. The version may carry the `v` a git tag
 uses. A version that is not in the history renders the Not found panel rather than
 redirecting, so a link published against a later release still says which one it
@@ -232,7 +239,7 @@ wanted when it reaches an older deploy.
 
 ## Deep-linking a symbol
 
-`#/api/core?h=symbol-ConsoleLogger` is what a search hit navigates to, and three
+`/api/core?h=symbol-ConsoleLogger` is what a search hit navigates to, and three
 things have to hold for it to land - all three were wrong at once, which is why
 clicking a symbol used to open the package readme:
 
