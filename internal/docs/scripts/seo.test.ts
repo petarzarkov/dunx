@@ -83,11 +83,30 @@ describe('pagesOf', () => {
     );
   });
 
-  test('a guide whose source is missing still gets a page', () => {
-    const [, , , , guide] = pagesOf(INDEX, RELEASES, () => '', 'home');
+  /*
+   * It cannot happen today: the model is generated from these same files moments
+   * before this runs. The fallback is here because `content=""` is a worse
+   * signal than no description tag at all, and a search result should not rest
+   * on a file still being readable.
+   */
+  test('a guide whose source is unreadable falls back rather than shipping an empty description', () => {
+    const all = pagesOf(INDEX, RELEASES, () => '', 'home');
+    const guide = all.find((page) => page.path === '/guide/controllers');
 
-    expect(guide?.path).toBe('/guide/controllers');
-    expect(guide?.description).toBe('');
+    expect(guide?.description).toBe('Controllers, from the dunx guide.');
+    expect(all.every((page) => page.description.trim() !== '')).toBe(true);
+  });
+
+  test('a package with no description falls back to its name', () => {
+    const bare = {
+      ...INDEX,
+      packages: [{ name: '@dunx/core', dir: 'core', description: '' }],
+    };
+    const pkg = pagesOf(bare, RELEASES, read, 'home').find(
+      (page) => page.path === '/api/core',
+    );
+
+    expect(pkg?.description).toBe('API reference for @dunx/core.');
   });
 });
 

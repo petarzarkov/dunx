@@ -87,6 +87,17 @@ const FIXED: readonly Page[] = [
 ];
 
 /**
+ * A description is never empty.
+ *
+ * A page shipping `content=""` is a worse signal than one carrying no tag at
+ * all, and a guide's summary depends on its source being readable at build time.
+ * That holds today - the model is generated from those same files moments
+ * earlier - but a search result should not rest on it.
+ */
+const descriptionOr = (summary: string, fallback: string): string =>
+  summary.trim() === '' ? fallback : summary.trim();
+
+/**
  * Every page the site serves, in sitemap order.
  *
  * `read` takes a path under `docs/` and returns its markdown, or `''` when it is
@@ -110,13 +121,19 @@ export const pagesOf = (
   ...index.guides.map((guide) => ({
     path: `/guide/${guide.slug}`,
     title: `${guide.title} | dunx`,
-    description: summaryOf(read(sourcePath(guide.source))),
+    description: descriptionOr(
+      summaryOf(read(sourcePath(guide.source))),
+      `${guide.title}, from the dunx guide.`,
+    ),
     kind: 'article' as const,
   })),
   ...index.packages.map((pkg) => ({
     path: `/api/${pkg.dir}`,
     title: `${pkg.name} | dunx`,
-    description: pkg.description,
+    description: descriptionOr(
+      pkg.description,
+      `API reference for ${pkg.name}.`,
+    ),
     kind: 'article' as const,
   })),
   ...releases.map((release) => ({
