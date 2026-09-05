@@ -4,6 +4,33 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.3.1 - 2026-09-05
+
+The documentation moves to dunx.win
+
+A scaffolded app now points at https://dunx.win/setup.md and llms.txt rather than
+the GitHub Pages URLs, which is the only change reaching npm. The old origin
+keeps serving both files, so apps scaffolded by an earlier version still resolve
+them.
+
+The site deploy becomes its own job rather than the tail of the release job. A
+failed `bun run version` took the documentation down with it, and a docs change
+and a publish are not the same event. It checks out `main` instead of the
+triggering commit, which is what picks up the `[skip ci]` release commit, so the
+Releases page carries the section that release just wrote.
+
+The redirect workflow and its script are deleted now that they have run once and
+been verified. The deployment stays live on its own; the consequence is that the
+two documents it serves are frozen at this release.
+
+### Fixes
+
+- **create-app**: point the scaffolded agent documents at dunx.win ([`5b96907`](https://github.com/petarzarkov/dunx/commit/5b96907caf1e0f0fb33a3fbea769bf3de99a3dcb))
+
+### Other changes
+
+- **site**: move the documentation site to dunx.win on Cloudflare Pages ([`1898ed1`](https://github.com/petarzarkov/dunx/commit/1898ed17f3640896de656f725c85d18f3713c4f2))
+
 ## 3.3.0 - 2026-09-05
 
 Bun 1.4.1, an HTTP/2 test client, and gatewayPort
