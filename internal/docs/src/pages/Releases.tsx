@@ -93,7 +93,7 @@ export const Releases = (): React.JSX.Element => {
 const stripTag = (slug: string): string => slug.replace(/^v/, '');
 
 /**
- * One release, at `#/releases/<version>`, so a GitHub release note has a stable
+ * One release, at `/releases/<version>`, so a GitHub release note has a stable
  * URL to point at. It reads the same chunk the index does, so the duplicated body
  * costs no bytes.
  */

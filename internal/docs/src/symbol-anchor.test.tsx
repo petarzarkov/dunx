@@ -1,8 +1,8 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { loadPackage } from './data';
 import { mount } from './harness';
-import { anchoredSymbol, parseRoute, symbolHref } from './router';
+import { anchoredSymbol, navigate, parseRoute, symbolHref } from './router';
 
 /**
  * Reported: search `Logger`, click the `ConsoleLogger` hit, and the page that opens
@@ -49,7 +49,7 @@ const awaitCard = async (id: string): Promise<void> => {
 };
 
 beforeEach(() => {
-  window.location.hash = '';
+  window.history.replaceState(null, '', '/');
   scrolled.length = 0;
   frames.length = 0;
   globalThis.requestAnimationFrame = (callback: FrameRequestCallback) =>
@@ -74,9 +74,9 @@ afterAll(() => {
 describe('a symbol search hit', () => {
   test('routes to the symbol, not to the top of its package', () => {
     expect(symbolHref('core', 'ConsoleLogger')).toBe(
-      '#/api/core?h=symbol-ConsoleLogger',
+      '/api/core?h=symbol-ConsoleLogger',
     );
-    expect(parseRoute('#/api/core?h=symbol-ConsoleLogger')).toEqual({
+    expect(parseRoute('/api/core?h=symbol-ConsoleLogger')).toEqual({
       kind: 'api',
       slug: 'core',
       anchor: 'symbol-ConsoleLogger',
@@ -86,7 +86,7 @@ describe('a symbol search hit', () => {
   });
 
   test('opens the API tab and marks the card on a cold load', async () => {
-    mount('#/api/core?h=symbol-ConsoleLogger');
+    mount('/api/core?h=symbol-ConsoleLogger');
     await awaitCard('symbol-ConsoleLogger');
 
     const card = document.getElementById('symbol-ConsoleLogger');
@@ -96,7 +96,7 @@ describe('a symbol search hit', () => {
   });
 
   test('scrolls the card into view', async () => {
-    mount('#/api/core?h=symbol-ConsoleLogger');
+    mount('/api/core?h=symbol-ConsoleLogger');
     await awaitCard('symbol-ConsoleLogger');
 
     flushFrames();
@@ -109,17 +109,16 @@ describe('a symbol search hit', () => {
     );
     if (!internal) throw new Error('no internal symbol in @dunx/core');
 
-    mount(`#/api/core?h=symbol-${internal.name}`);
+    mount(`/api/core?h=symbol-${internal.name}`);
     await awaitCard(`symbol-${internal.name}`);
   });
 
   test('lands on the symbol when the package page is already open', async () => {
-    mount('#/api/core');
+    mount('/api/core');
     await screen.findByRole('tab', { name: /API reference/i });
     expect(document.getElementById('symbol-ConsoleLogger')).toBe(null);
 
-    window.location.hash = '#/api/core?h=symbol-ConsoleLogger';
-    fireEvent(window, new window.HashChangeEvent('hashchange'));
+    act(() => navigate('/api/core?h=symbol-ConsoleLogger'));
 
     await awaitCard('symbol-ConsoleLogger');
     expect(

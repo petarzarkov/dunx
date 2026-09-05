@@ -205,7 +205,7 @@ const tourSlug = (file: string): { slug: string; order: number } => {
  * source document might plausibly link it by. A tour page written as
  * `./03-providers.md` from a sibling, as `guide/03-providers.md` from the repo
  * root, or as `docs/guide/03-providers.md` from a package README all have to
- * land on the same `#/guide/providers`.
+ * land on the same `/guide/providers`.
  */
 const linkTargets = (
   reference: string[],
@@ -215,7 +215,7 @@ const linkTargets = (
   const guides = new Map<string, string>();
 
   for (const file of reference) {
-    const href = `#/guide/${referenceSlug(file)}`;
+    const href = `/guide/${referenceSlug(file)}`;
     guides.set(file, href);
     guides.set(basename(file), href);
     guides.set(`docs/${file}`, href);
@@ -223,7 +223,7 @@ const linkTargets = (
   }
 
   for (const file of tour) {
-    const href = `#/guide/${tourSlug(file).slug}`;
+    const href = `/guide/${tourSlug(file).slug}`;
     guides.set(file, href);
     guides.set(basename(file), href);
     guides.set(`docs/${file}`, href);
@@ -231,7 +231,7 @@ const linkTargets = (
 
   return {
     guides,
-    packages: new Map(packages.map((dir) => [dir, `#/api/${dir}`])),
+    packages: new Map(packages.map((dir) => [dir, `/api/${dir}`])),
   };
 };
 
@@ -263,7 +263,7 @@ const renderReadme = (file: string, dir: string, source: string): string => {
   const markdown = read(file);
   return markdown === ''
     ? ''
-    : render(siteMarkdown(markdown), `#/api/${dir}`, source);
+    : render(siteMarkdown(markdown), `/api/${dir}`, source);
 };
 
 const packages: PackageDoc[] = dirs.map((packageDir) => {
@@ -327,7 +327,7 @@ writeFileSync(join(OUT_DIR, 'samples.json'), `${JSON.stringify(samples)}\n`);
 
 /**
  * One file per route, plus an index holding only what the shell reads. The whole
- * model used to be one `site.json` imported into the entry chunk, so opening `#/`
+ * model used to be one `site.json` imported into the entry chunk, so opening `/`
  * downloaded all 21 guide bodies and all eight package readmes to render a page
  * that shows none of them.
  */
@@ -401,7 +401,7 @@ const releases: ReleaseNote[] = parseChangelog(
     version,
     date,
     anchor,
-    html: render(body, '#/releases').replace(/ id="/g, ` id="${anchor}-`),
+    html: render(body, '/releases').replace(/ id="/g, ` id="${anchor}-`),
   };
 });
 

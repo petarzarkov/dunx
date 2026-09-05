@@ -13,8 +13,8 @@ import type { Feature } from './features.js';
  * `CLAUDE.md` is a pointer, not a second copy. Claude Code resolves an `@path`
  * import, and the sentence above it says where to look for a tool that does not.
  */
-const SETUP_URL = 'https://petarzarkov.github.io/dunx/setup.md';
-const LLMS_URL = 'https://petarzarkov.github.io/dunx/llms.txt';
+const SETUP_URL = 'https://dunx.win/setup.md';
+const LLMS_URL = 'https://dunx.win/llms.txt';
 
 const CLAUDE_POINTER = `# CLAUDE.md
 

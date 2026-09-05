@@ -14,19 +14,10 @@
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { CHANGELOG_PATH, parseChangelog } from './changelog.js';
+import { releasePageUrl } from './site.js';
 
 /** `v` prefixed, which is the form `internal/docs`'s release route strips. */
 export const tagFor = (version: string): string => `v${version}`;
-
-/**
- * The page that renders one release, derived from `owner/repo` so a fork points at
- * its own Pages site rather than this one. Mirrors `internal/docs`'s hash route and
- * its `/dunx/` base.
- */
-export const releasePageUrl = (repo: string, version: string): string => {
-  const [owner = '', name = ''] = repo.split('/');
-  return `https://${owner}.github.io/${name}/#/releases/${version}`;
-};
 
 /**
  * A release's notes: the changelog section for that version, then a link to the
@@ -133,7 +124,7 @@ export const createGitHubRelease = async (
       body: releaseBody(
         readFileSync(CHANGELOG_PATH, 'utf-8'),
         version,
-        releasePageUrl(repo, version),
+        releasePageUrl(version),
       ),
       draft: false,
       prerelease: false,

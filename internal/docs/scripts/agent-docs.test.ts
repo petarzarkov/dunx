@@ -31,7 +31,7 @@ describe('the agent-facing assets', () => {
     const llms = await Bun.file(join(PUBLIC_DIR, 'llms.txt')).text();
 
     expect(llms.startsWith('# dunx\n')).toBe(true);
-    expect(llms).toContain('https://petarzarkov.github.io/dunx/setup.md');
+    expect(llms).toContain('https://dunx.win/setup.md');
 
     for (const guide of index.guides) {
       expect(llms, `${guide.slug} is missing from llms.txt`).toContain(

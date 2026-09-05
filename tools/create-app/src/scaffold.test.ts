@@ -92,7 +92,7 @@ describe('scaffold', () => {
     // The rules an agent breaks first, and where the framework's own instructions
     // live rather than a copy of them frozen at scaffold time.
     expect(agents).toContain('@Injectable()');
-    expect(agents).toContain('https://petarzarkov.github.io/dunx/setup.md');
+    expect(agents).toContain('https://dunx.win/setup.md');
     expect(agents).toContain('bunx @dunx/mcp');
 
     // A pointer, so Claude Code and everything else read one file.

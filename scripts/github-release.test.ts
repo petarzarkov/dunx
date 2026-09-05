@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { releaseBody, releasePageUrl, tagFor } from './github-release.js';
+import { releaseBody, tagFor } from './github-release.js';
+import { releasePageUrl } from './site.js';
 
 const CHANGELOG = `# Changelog
 
@@ -26,25 +27,16 @@ describe('tagFor', () => {
 
 describe('releasePageUrl', () => {
   /*
-   * Derived from `owner/repo` rather than hardcoded, so a fork's tag points at the
-   * fork's own Pages site. The hash form is what `internal/docs` serves; a path URL
-   * would 404 on GitHub Pages, which is why that router is hash based.
+   * A path rather than the `#/releases/2.0.1` GitHub Pages needed: the site is on
+   * a history router behind a `_redirects` fallback, so the path resolves.
    */
   it('points at the docs route for that version', () => {
-    expect(releasePageUrl('petarzarkov/dunx', '2.0.1')).toBe(
-      'https://petarzarkov.github.io/dunx/#/releases/2.0.1',
-    );
-  });
-
-  it('follows the owner of a fork', () => {
-    expect(releasePageUrl('someone/dunx', '1.0.0')).toBe(
-      'https://someone.github.io/dunx/#/releases/1.0.0',
-    );
+    expect(releasePageUrl('2.0.1')).toBe('https://dunx.win/releases/2.0.1');
   });
 });
 
 describe('releaseBody', () => {
-  const url = 'https://petarzarkov.github.io/dunx/#/releases/2.0.1';
+  const url = 'https://dunx.win/releases/2.0.1';
 
   it('carries that release section and nothing from the next one', () => {
     const body = releaseBody(CHANGELOG, '2.0.1', url);

@@ -121,13 +121,13 @@ optional peer, loaded only when `dunx_openapi` is called.
 
 Two files are served for an agent to fetch rather than render:
 
-| URL                                           | Holds                                                                   |
-| --------------------------------------------- | ----------------------------------------------------------------------- |
-| <https://petarzarkov.github.io/dunx/setup.md> | Install, wire and verify an app, plus the rules dunx fails at boot over |
-| <https://petarzarkov.github.io/dunx/llms.txt> | Every dunx document, linked as raw markdown                             |
+| URL                         | Holds                                                                   |
+| --------------------------- | ----------------------------------------------------------------------- |
+| <https://dunx.win/setup.md> | Install, wire and verify an app, plus the rules dunx fails at boot over |
+| <https://dunx.win/llms.txt> | Every dunx document, linked as raw markdown                             |
 
 Hand the first one to an agent as an instruction: "set up my project using
-<https://petarzarkov.github.io/dunx/setup.md>". It is the same content the
+<https://dunx.win/setup.md>". It is the same content the
 repository's guards check, copied to that URL by each build, so it states the
 version being served.
 

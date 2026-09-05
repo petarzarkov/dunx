@@ -12,7 +12,7 @@ import {
 import { bench, loadGuide, loadPackage, site } from './data';
 
 beforeEach(() => {
-  window.location.hash = '';
+  window.history.replaceState(null, '', '/');
 });
 
 afterEach(() => {
@@ -90,7 +90,7 @@ describe('the generated model', () => {
   });
 
   /**
-   * The whole model used to be one `site.json` in the entry chunk, so `#/`
+   * The whole model used to be one `site.json` in the entry chunk, so `/`
    * downloaded 21 guide bodies and eight package readmes to render a page that
    * shows none of them. The index must keep carrying what the shell and the
    * search reach for, and nothing that only a route reads.
@@ -171,7 +171,7 @@ describe('the generated model', () => {
   });
 
   test('the nav renders a heading per section', () => {
-    mount('#/guide/providers');
+    mount('/guide/providers');
     // A guide page has two navigation landmarks: the sidebar and the page's own
     // prev/next links. The sidebar is the first, since AppShell renders it before
     // the main content.
@@ -215,7 +215,7 @@ describe('the benchmark model', () => {
     const dunx = rows.find((row) => row.id === 'dunx');
     if (!dunx) return;
 
-    mount('#/benchmarks');
+    mount('/benchmarks');
     const text = document.body.textContent ?? '';
     expect(text).toContain(integer(dunx.rps));
     expect(text).toContain(bench.machine.cpuModel);
@@ -224,7 +224,7 @@ describe('the benchmark model', () => {
 
   test.if(bench !== null)('summarises on the landing page', () => {
     if (!bench) return;
-    mount('#/');
+    mount('/');
     expect(document.body.textContent).toContain('raw ');
     expect(screen.getAllByText(/See the full results/).length).toBe(1);
   });
@@ -248,7 +248,7 @@ describe('the benchmark model', () => {
     () => {
       if (!bench) return;
       const board = scoreboard(bench);
-      mount('#/benchmarks');
+      mount('/benchmarks');
       const text = document.body.textContent ?? '';
       expect(text).toContain(`${board.ahead}W ${board.tied}T ${board.behind}L`);
       // Cold start is a loss, and the page has to keep saying so.
@@ -259,7 +259,7 @@ describe('the benchmark model', () => {
 
 describe('the landing page', () => {
   test('leads with dependency injection that needs no decorators', () => {
-    mount('#/');
+    mount('/');
     const text = document.body.textContent ?? '';
     expect(text).toContain(
       'constructor(private readonly repo: UsersRepository)',
@@ -269,7 +269,7 @@ describe('the landing page', () => {
   });
 
   test('states the measurable claims and links every package to npm', () => {
-    mount('#/');
+    mount('/');
     const text = document.body.textContent ?? '';
     expect(text).toContain('zero dependencies');
     expect(text).toContain('Bun.serve');
@@ -291,7 +291,7 @@ describe('the landing page', () => {
       if (!bench) return;
       const plaintext = scenarioHeadlines(bench)[0];
       if (plaintext?.loggingPct == null) return;
-      mount('#/');
+      mount('/');
       expect(document.body.textContent).toContain(
         `${plaintext.loggingPct.toFixed(1)}%`,
       );
@@ -301,7 +301,7 @@ describe('the landing page', () => {
 
 describe('navigation', () => {
   test('the landing page lists the packages', () => {
-    mount('#/');
+    mount('/');
     const nav = screen.getByRole('navigation');
     for (const pkg of site.packages) {
       expect(within(nav).getAllByText(pkg.name).length).toBeGreaterThan(0);
@@ -310,7 +310,7 @@ describe('navigation', () => {
   });
 
   test('a guide route renders the markdown that Bun produced', async () => {
-    mount('#/guide/migration-from-nest');
+    mount('/guide/migration-from-nest');
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings[0]?.textContent).toContain('Migrating from NestJS');
     // The document's own `# Title` is dropped, so the page shows exactly one h1.
@@ -325,7 +325,7 @@ describe('navigation', () => {
   });
 
   test('a package route renders its readme and its API reference', async () => {
-    mount('#/api/core');
+    mount('/api/core');
     expect(screen.getAllByText('@dunx/core').length).toBeGreaterThan(0);
     await waitFor(() => {
       if (!document.querySelector('.prose')) throw new Error('no readme yet');
@@ -339,27 +339,27 @@ describe('navigation', () => {
   });
 
   test('an unknown route falls through to Not found', () => {
-    mount('#/api/nope');
+    mount('/api/nope');
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       'Not found',
     );
   });
 
   test('benchmarks lead the navigation', () => {
-    mount('#/');
+    mount('/');
     const links = within(screen.getByRole('navigation')).getAllByRole('link');
     expect(links[0]?.textContent).toContain('Benchmarks');
   });
 
   test('the benchmarks page renders whatever model the build had', () => {
-    mount('#/benchmarks');
+    mount('/benchmarks');
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       'Benchmarks',
     );
   });
 
   test('the coverage page renders whatever model the build had', () => {
-    mount('#/coverage');
+    mount('/coverage');
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       'Coverage',
     );

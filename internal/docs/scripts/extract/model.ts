@@ -269,7 +269,7 @@ export interface BenchModel {
 /**
  * Everything the shell renders before a route is chosen: the nav, the landing
  * page, the footer and the search index. It carries no guide body and no symbol
- * documentation, because none of `#/` reads either - those load per route from
+ * documentation, because none of `/` reads either - those load per route from
  * `generated/guides/<slug>.json` and `generated/packages/<dir>.json`.
  */
 /**

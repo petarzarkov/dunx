@@ -1,0 +1,4 @@
+# SPA fallback. Required now that the app is on a history router rather than a
+# hash one: a direct link to any route but `/` is a path no file in `dist/`
+# answers, and without this the edge returns a 404 for it.
+/*  /index.html  200

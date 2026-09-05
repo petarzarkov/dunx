@@ -64,7 +64,7 @@ export const loadPackage = (dir: string): Promise<PackageBody | undefined> =>
   load(PACKAGE_BODIES, 'package', dir);
 
 /**
- * The whole release history, in one chunk loaded when `#/releases` opens. It is
+ * The whole release history, in one chunk loaded when `/releases` opens. It is
  * the largest generated file and no other route reads a byte of it, so it is not
  * in the index.
  */

@@ -18,6 +18,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BLURB, CAPABILITIES, lead, SHOWCASE } from './positioning.js';
 import { PUBLISHED_DIRS } from './workspace-ranges.js';
+import { SITE_URL } from './site.js';
 
 const ROOT = join(import.meta.dir, '..');
 /**
@@ -62,9 +63,7 @@ function discoverPackages(): PackageEntry[] {
       }),
   );
 }
-
-const DOCS_SITE = 'https://petarzarkov.github.io/dunx';
-const COVERAGE_PAGE = `${DOCS_SITE}/#/coverage`;
+const COVERAGE_PAGE = `${SITE_URL}/coverage`;
 
 function npmBadges(name: string): string {
   const encoded = encodeURIComponent(name);
@@ -81,7 +80,7 @@ function npmBadges(name: string): string {
  * documentation site.
  */
 function coverageBadge(folder: string): string {
-  return `[![cov](${DOCS_SITE}/badges/coverage-${folder}.svg)](${COVERAGE_PAGE})`;
+  return `[![cov](${SITE_URL}/badges/coverage-${folder}.svg)](${COVERAGE_PAGE})`;
 }
 
 function buildPackagesTable(entries: PackageEntry[]): string {

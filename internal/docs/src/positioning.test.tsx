@@ -21,7 +21,7 @@ const README = readFileSync(
 
 describe('positioning', () => {
   test('the hero renders the shared headline, blurb and chips', () => {
-    const { container, getByRole } = mount('#/');
+    const { container, getByRole } = mount('/');
 
     expect(getByRole('heading', { level: 1 }).textContent).toBe(
       HEADLINE.join(''),

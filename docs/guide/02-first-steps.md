@@ -523,8 +523,8 @@ the features it carries and the services they want running.
 instructions and there is one file to edit.
 
 Neither restates the framework. They link
-[setup.md](https://petarzarkov.github.io/dunx/setup.md) and
-[llms.txt](https://petarzarkov.github.io/dunx/llms.txt), which are served from the
+[setup.md](https://dunx.win/setup.md) and
+[llms.txt](https://dunx.win/llms.txt), which are served from the
 documentation site and move with each release.
 
 ## Run it

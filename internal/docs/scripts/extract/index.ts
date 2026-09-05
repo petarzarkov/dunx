@@ -127,7 +127,7 @@ export const extractPackage = (options: ExtractOptions): PackageDoc => {
   return {
     name: manifest.name,
     // The leaf, not a path relative to one parent: published workspaces live
-    // under `packages/` and `tools/`, and the site keys pages and `#/api/<dir>`
+    // under `packages/` and `tools/`, and the site keys pages and `/api/<dir>`
     // links on the bare name, so this stays stable across the move.
     dir: basename(packageDir),
     description: manifest.description ?? '',

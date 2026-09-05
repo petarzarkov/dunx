@@ -13,17 +13,14 @@
  * The trade is recorded in docs/bun-apis.md.
  */
 
-/** Vite writes absolute `/dunx/...` asset urls, so the server has to mount there. */
-const BASE = '/dunx';
-
 export const ROUTES = [
-  ['landing', '#/'],
-  ['guide', '#/guide/introduction'],
-  ['guide-long', '#/guide/controllers'],
-  ['api', '#/api/http'],
-  ['benchmarks', '#/benchmarks'],
-  ['releases', '#/releases'],
-  ['coverage', '#/coverage'],
+  ['landing', '/'],
+  ['guide', '/guide/introduction'],
+  ['guide-long', '/guide/controllers'],
+  ['api', '/api/http'],
+  ['benchmarks', '/benchmarks'],
+  ['releases', '/releases'],
+  ['coverage', '/coverage'],
 ] as const;
 
 export const VIEWPORTS = [
@@ -36,8 +33,8 @@ export const SCHEMES = ['light', 'dark'] as const;
 export type Scheme = (typeof SCHEMES)[number];
 
 export interface Preview {
-  /** Navigate to a hash route and wait for it to have rendered a heading. */
-  open(hash: string): Promise<void>;
+  /** Navigate to a route and wait for it to have rendered a heading. */
+  open(path: string): Promise<void>;
   /** Emulate a viewport and a device pixel ratio. */
   view(width: number, height: number, ratio: number): Promise<void>;
   /** Emulate `prefers-color-scheme`. The site is `defaultColorScheme="auto"`. */
@@ -69,11 +66,13 @@ export const startPreview = async (dist: string): Promise<Preview> => {
   const server = Bun.serve({
     port: 0,
     async fetch(request) {
-      const path = new URL(request.url).pathname.replace(BASE, '');
+      const { pathname } = new URL(request.url);
       const file = Bun.file(
-        `${dist}${path === '' || path === '/' ? 'index.html' : path.slice(1)}`,
+        `${dist}${pathname === '/' ? 'index.html' : pathname.slice(1)}`,
       );
       if (await file.exists()) return new Response(file);
+      // The `public/_redirects` rule, so a route with no file of its own
+      // behaves here the way it does at the edge.
       return new Response(Bun.file(`${dist}index.html`));
     },
   });
@@ -93,16 +92,17 @@ export const startPreview = async (dist: string): Promise<Preview> => {
   let loads = 0;
 
   /**
-   * A cache-busting query rather than the bare hash. `navigate()` never resolves
-   * when only the hash changes, so a loop over routes hangs on the second one
-   * (measured on Bun 1.4.0, in docs/bun-apis.md). Varying the search makes each
-   * route a real navigation, which also means every shot is a cold load - the
-   * path a reader following a link actually takes.
+   * Every route is its own path now, so each `navigate` is a real navigation
+   * rather than the hash change that used to hang the loop on its second route
+   * (measured on Bun 1.4.0, in docs/bun-apis.md). The `n=` query stays: it is
+   * what makes every shot a cold load, which is the path a reader following a
+   * link actually takes.
    */
-  const open = async (hash: string): Promise<void> => {
+  const open = async (path: string): Promise<void> => {
     logged = [];
     loads += 1;
-    await view.navigate(`${server.url.origin}${BASE}/?n=${loads}${hash}`);
+    const separator = path.includes('?') ? '&' : '?';
+    await view.navigate(`${server.url.origin}${path}${separator}n=${loads}`);
 
     for (let attempt = 0; attempt < 200; attempt += 1) {
       if ((await view.evaluate<string>(HEADING)) !== '') break;
@@ -113,7 +113,7 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     await Bun.sleep(250);
   };
 
-  await open('#/');
+  await open('/');
 
   return {
     open,

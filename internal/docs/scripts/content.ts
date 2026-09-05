@@ -243,7 +243,7 @@ export const buildGuide = (
   const { html, headings } = renderDoc(
     markdown,
     targets,
-    `#/guide/${slug}`,
+    `/guide/${slug}`,
     source,
   );
   return {

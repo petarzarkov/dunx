@@ -1,0 +1,26 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+# Vite fingerprints everything under /assets/, so the immutable year is honest
+# here and only here. `index.html` keeps Cloudflare's default short cache, which
+# is what makes a deploy visible immediately.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Regenerated on every release and read by the README and by npm's image proxy,
+# which caches on its own. Five minutes at the edge is enough to absorb a burst
+# without pinning a stale number to the front page.
+/badges/*
+  Cache-Control: public, max-age=300
+
+# Both are fetched by agents rather than browsers, so the content type is worth
+# stating: an agent handed `application/octet-stream` may decline to read it.
+/setup.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=300
+
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300

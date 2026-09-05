@@ -55,7 +55,7 @@ const toggle = (): HTMLElement =>
 beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.removeAttribute('data-mantine-color-scheme');
-  window.location.hash = '';
+  window.history.replaceState(null, '', '/');
 });
 
 afterEach(() => {
