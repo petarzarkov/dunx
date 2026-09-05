@@ -2,13 +2,15 @@ import type { FileSink } from 'bun';
 
 /**
  * Drains `source` into `sink` one chunk at a time, returning the byte count.
- * Neither write path takes a stream: `Bun.write(path, stream)` matches no
- * overload and persists `"[object ReadableStream]"`, and its `Response` overload
- * never settles on a streamed body. A sink also keeps one chunk resident, so a
- * file larger than memory still transfers.
+ * `S3Client`'s write takes a `Request`, `Response`, `Blob` or `BunFile` and no
+ * `ReadableStream`, so the upload goes through the `NetworkSink`, which
+ * multiparts it - the stream never has to be buffered to learn its length.
+ * `LocalStorage` needs none of this: `Bun.write(path, stream)` streams to disk
+ * on Bun 1.4.1.
  *
- * The await is backpressure: `FileSink.write` returns a promise once its buffer
- * fills. Its return is a buffered-bytes counter, so the total comes from chunks.
+ * The await is backpressure: `NetworkSink.write` returns a promise once its
+ * buffer fills. Its return is a buffered-bytes counter, so the total comes from
+ * chunks.
  */
 export const pump = async (
   sink: FileSink,

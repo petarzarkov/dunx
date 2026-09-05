@@ -437,7 +437,7 @@ it('arms three schedules and triggers two off their cadence', () => {
 });
 
 it('serves HTTP and WebSocket from one Bun.serve', () => {
-  expect(tour.text).toContain('gateway paths: ["/chat"]');
+  expect(tour.text).toContain('gateway paths: ["/chat","/telemetry"]');
   expect(tour.text).toContain('two clients connected: welcome / welcome');
   expect(tour.text).toContain(
     'grace <- {"event":"said","data":"one server, two protocols"}',
@@ -447,6 +447,26 @@ it('serves HTTP and WebSocket from one Bun.serve', () => {
     'the same server still answers GET /api/notes -> 200',
   );
   expect(tour.text).toContain('/chat closed with 1000');
+});
+
+it('serves the same routes over HTTP/2 and HTTP/1.1 on one port', () => {
+  // node:http2 opens with the connection preface, so a 200 here is the wire
+  // protocol rather than an option having been stored. Bun's own fetch will not
+  // speak h2c, which is why the demo does not use it.
+  expect(tour.text).toMatch(
+    /GET \/api\/notes over HTTP\/2 -> 200, \d+ bytes \(h2c, prior knowledge/,
+  );
+  expect(tour.text).toContain(
+    'GET /api/notes over HTTP/1.1 -> 200, same port, same routes',
+  );
+});
+
+it('delivers a binary frame as the configured binaryType', () => {
+  // Bun's default is a Buffer; 'blob' is what main.ts asked for, and 1.4.1 is
+  // what added it to the three a server socket already took.
+  expect(tour.text).toContain(
+    'telemetry <- Blob(3) -> [21, 34, 55], 3 recorded',
+  );
 });
 
 it('fans a publish out to a second node exactly once, or says it is skipping', () => {

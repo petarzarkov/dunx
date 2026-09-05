@@ -265,7 +265,9 @@ export const buildWebSocket = (
     options.onError !== undefined ||
     middleware.some((entry) => entry.reportsErrors === true);
   // The rest is exactly the set of keys Bun's WebSocketHandler accepts.
-  const { onError: _onError, ...socketOptions } = options;
+  // `binaryType` is not one of them - Bun takes it per socket, so it is stripped
+  // here and assigned in `open` instead.
+  const { onError: _onError, binaryType, ...socketOptions } = options;
 
   const run = (
     invoke: Invoke,
@@ -315,8 +317,13 @@ export const buildWebSocket = (
       }
     },
 
-    ...(someHandler(gateways, (g) => g.open) && {
+    // Also installed for `binaryType` alone: the property lives on the socket, so
+    // the connection has to exist before anything can set it. Assigned before the
+    // gateway's own `@OnOpen` runs, so that handler already sees the configured
+    // type.
+    ...((someHandler(gateways, (g) => g.open) || binaryType !== undefined) && {
       open(ws: Socket) {
+        if (binaryType !== undefined) ws.binaryType = binaryType;
         const { open } = runtimeOf(ws);
         if (open) run(open, [ws], ws, undefined);
       },

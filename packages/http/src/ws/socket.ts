@@ -57,4 +57,20 @@ export type SocketOptions = Readonly<
    * nothing replaced it.
    */
   readonly onError?: SocketErrorHandler;
+  /**
+   * What a binary frame arrives as: `'nodebuffer'` (Bun's default),
+   * `'arraybuffer'`, `'uint8array'` or `'blob'`. Bun 1.4.1 added `'blob'` and
+   * accepts all four on a server socket.
+   *
+   * Not one of the `Pick`ed keys above, because Bun does not take it as a handler
+   * option - it is a mutable property on each `ServerWebSocket`. Declaring it
+   * here and assigning it as each connection opens is what makes it a
+   * server-wide setting rather than a line in every gateway's `@OnOpen`. The type
+   * is read off the socket, so the accepted values cannot drift from the runtime.
+   *
+   * It changes what `message` and the ping/pong payloads are at run time. Bun
+   * types them as the default's, so a gateway that sets this narrows the value
+   * itself.
+   */
+  readonly binaryType?: Socket['binaryType'];
 };

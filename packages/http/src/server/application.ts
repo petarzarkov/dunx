@@ -138,6 +138,27 @@ export interface HttpOptions extends AppOptions {
    * @default 'guarded'
    */
   readonly notFound?: 'guarded' | 'public';
+  /**
+   * Serve HTTP/2 on the same port, through the same routes and the same
+   * `fetch` fallback. Without TLS that is h2c: a client opening with the HTTP/2
+   * preface gets HTTP/2 and everyone else gets HTTP/1.1, which is what a proxy
+   * in front of the app speaks. Bun marks the option experimental.
+   *
+   * Gateways are unaffected and keep working, because a websocket upgrade is an
+   * HTTP/1.1 request and Bun serves both protocols on the one socket. There is
+   * no websocket over HTTP/2.
+   *
+   * @default false
+   */
+  readonly http2?: boolean;
+  /**
+   * Serve HTTP/1.1. `false` alongside `http2` refuses HTTP/1.x with a 505, which
+   * **disables every gateway**: a websocket upgrade is an HTTP/1.1 request, so
+   * nothing can connect to one. Only for a port that is HTTP/2 or nothing.
+   *
+   * @default true
+   */
+  readonly http1?: boolean;
 }
 
 /**
@@ -182,6 +203,8 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
   readonly #relayResubscribe: RelayOptions['resubscribe'];
   readonly #notFound: 'guarded' | 'public';
   readonly #bootLogging: boolean;
+  readonly #http2: boolean | undefined;
+  readonly #http1: boolean | undefined;
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -222,6 +245,8 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     this.#relayResubscribe = options.relayResubscribe;
     this.#notFound = options.notFound ?? 'public';
     this.#bootLogging = options.bootLogging ?? true;
+    this.#http2 = options.http2;
+    this.#http1 = options.http1;
     this.gatewayPaths = websocket?.paths ?? [];
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
@@ -325,16 +350,25 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       this.#notFound,
     );
 
+    // Spread rather than always present: `exactOptionalPropertyTypes` makes an
+    // explicit `undefined` a different thing from an absent key, and Bun's
+    // defaults for these two are not ours to restate.
+    const protocols = {
+      ...(this.#http2 === undefined ? {} : { http2: this.#http2 }),
+      ...(this.#http1 === undefined ? {} : { http1: this.#http1 }),
+    };
+
     // One call: a route that may answer `undefined` because it upgraded is only
     // a valid table when `websocket` is there, and Bun's types say so.
     const options: Bun.Serve.Options<SocketData> = ws
       ? {
           port,
           fetch,
+          ...protocols,
           routes: withUpgradeRoutes(routes, ws.routes),
           websocket: ws.websocket,
         }
-      : { port, fetch, routes };
+      : { port, fetch, ...protocols, routes };
     this.#server = Bun.serve(options);
 
     attachAddressSource(this.#app.get(ClientAddress), {

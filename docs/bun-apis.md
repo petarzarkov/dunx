@@ -63,6 +63,112 @@ Use the links in the table to jump to the associated documentation.
 | Parsing & Formatting             | [`Bun.semver`](/docs/runtime/semver), [`Bun.TOML.parse`](/docs/runtime/toml), [`Bun.markdown`](/docs/runtime/markdown), [`Bun.color`](/docs/runtime/color), [`Bun.Image`](/docs/runtime/image)                                                                                                                                             |
 | Low-level / Internals            | `Bun.mmap`, `Bun.gc`, `Bun.generateHeapSnapshot`, [`bun:jsc`](https://bun.com/reference/bun/jsc)                                                                                                                                                                                                                                           |
 
+## Re-probed on Bun 1.4.1 (rev 4661e494f)
+
+Run against 1.4.0 rev `34cbb9a40` side by side, on the same machine, rather than
+compared with the numbers below. Three findings moved and one new one is recorded
+here; everything else in this file still reproduces.
+
+| Finding                                                          | On 1.4.1                                                                     |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `Bun.write(path, stream)` writes `[object ReadableStream]`       | **fixed** - streams, truncates, honours `createPath`, returns the byte count |
+| `Bun.write(path, new Response(stream))` never settles            | **fixed** - and `Request` works too                                          |
+| `--coverage --parallel` reports low, and differently each run    | **fixed** - agrees with sequential to the digit, per package and in total    |
+| `server.upgrade()` after an `await`, on an HTTP/1.0 request      | **new, and 1.4.0-only** - leaked the socket, so the process never exited     |
+| `Bun.file(path).writer()` does not truncate or create parents    | reproduces                                                                   |
+| A `?raw` import resolves as JSON inside a `--parallel` worker    | reproduces                                                                   |
+| Subscriber mode leaks past `close()` without `unsubscribe()`     | reproduces                                                                   |
+| A failed `subscribe()` leaks past `close()`                      | reproduces                                                                   |
+| `fetch` with `protocol: 'http2'` throws against a cleartext peer | reproduces, and `Bun.serve({ http2: true })` does not change it              |
+
+New in 1.4.1 and reachable: `Bun.serve({ http2, http1 })`, `binaryType: 'blob'` on a
+`ServerWebSocket`, `WebSocket.prototype.pause`/`resume`/`isPaused`, and
+`crypto.argon2`/`argon2Sync` in `node:crypto`. `http2` and `http1` are marked
+`@experimental` in `bun-types`; `http3` is declared alongside them and was not probed.
+
+### `Bun.write` takes a stream, and it is the whole local write path
+
+Three write traps were recorded below against 1.4.0. Two are gone:
+
+```
+1) write(stream)          -> "hello stream" (12 bytes returned)
+2) write(Response(stream))-> settled: 14 "hello response"
+2b) write(Request)        -> settled: 13 "hello request"
+3) writer() truncate      -> "bbAAAAAAAAAAAAAAAAAA"   (reproduces)
+3b) writer() parents      -> ENOENT                    (reproduces)
+```
+
+`Bun.write(path, stream)` also truncates a longer existing file, honours
+`createPath` in both directions, and rejects with the source's own error when the
+stream fails part way. It leaves the partial file behind, which is what the
+`FileSink` it replaced did too. A 4 MiB multi-chunk stream writes 4194304 bytes.
+
+`LocalStorage` was an empty `Bun.write` to create and truncate, then a `FileSink`
+pumped over the top; it is now one call. **`S3Client`'s write still takes no
+`ReadableStream`** - `string | ArrayBufferView | ArrayBuffer | Request | Response |
+BunFile | S3File | Blob | Archive` - so the `NetworkSink` multipart upload stays,
+and `pump` with it.
+
+Removing the local caller exposed that `pump` had **never been tested where it
+runs**: `stream.ts` read 100% only because `LocalStorage`'s suite shared the helper,
+and the S3 upload path it exists for had no test at all. `s3.test.ts` now has two.
+
+### `--coverage --parallel` agrees with sequential
+
+The reason the `coverage` phase of `scripts/ci.ts` was sequential is gone. Measured
+on the whole `./packages ./tools ./scripts` sweep, 170 files:
+
+```
+sequential  91.11 funcs / 95.30 lines   13.5s
+parallel 1  91.11 funcs / 95.30 lines    2.6s
+parallel 2  91.11 funcs / 95.30 lines
+parallel 3  91.11 funcs / 95.30 lines
+```
+
+Not just the total: the per-package model `scripts/coverage-report.ts` builds is
+identical for all ten workspaces, on lines and on functions. The `lcov.info` files
+differ - hit counts and file order - and the percentages derived from them do not.
+
+On 1.4.0 the same sweep read 87.21/88.52, then 87.10/88.23, then 87.24/88.27
+against a sequential 87.80/93.92.
+
+### `server.upgrade()` after an `await` leaked an HTTP/1.0 socket on 1.4.0
+
+`@dunx/http`'s `upgradeHandler` takes an async branch whenever a gateway's
+`@OnUpgrade` returns a promise, which is the authenticating case. On 1.4.0 that
+combination leaked the socket for one request shape, so `server.stop(true)`
+returned and **the process never exited**. Bisected by variant, both runtimes,
+same script:
+
+| Request                             | upgrade after `await`          | synchronous upgrade |
+| ----------------------------------- | ------------------------------ | ------------------- |
+| HTTP/1.1, `Connection: Upgrade`     | exits on both                  | exits on both       |
+| HTTP/1.1, `Connection: keep-alive`  | exits on both                  | exits on both       |
+| HTTP/1.1, `Connection: close`       | exits on both                  | exits on both       |
+| **HTTP/1.0**, `Connection: Upgrade` | **1.4.0 hangs**, 1.4.1 exits 0 | exits on both       |
+
+All four answer `101 Switching Protocols` on both versions, so nothing about the
+response says anything is wrong. `engines.bun` is `>=1.4.1` partly for this.
+
+### `Bun.serve({ http2: true })` serves h2c, and `fetch` still cannot speak it
+
+Probed with `node:http2` as the client, since it opens with the connection preface:
+routes match, `req.url` is the full URL, a POST body streams, the `fetch` fallback
+answers a miss, and HTTP/1.1 keeps working on the same port. A websocket upgrade
+still succeeds alongside it.
+
+`http1: false` answers **505** to every HTTP/1.x request, which takes every gateway
+with it - a websocket upgrade is an HTTP/1.1 request. `@dunx/http` warns at boot
+when the pair is set with a gateway declared.
+
+`Bun.serve` accepts an unknown option silently, so acceptance of `http2` proves
+nothing on its own. That is why the probe asserts on the wire.
+
+The `fetch` entry below is unchanged and is not the server's fault: against a
+cleartext origin, `protocol: 'http2'` and `'h2'` reject with `HTTP2Unsupported`
+**even when that origin is a `Bun.serve` with `http2: true`** and `node:http2`
+talks to it happily.
+
 ## Re-probed on Bun 1.4.0 (rev 34cbb9a40)
 
 Everything below this heading was first measured on Bun 1.3.14. Re-running the probes
@@ -448,6 +554,10 @@ encoders; this is `deflate` alone.
 - **`websocket` options**: `message` (required), `open`, `close`, `drain`, `ping`,
   `pong`, `data`, `idleTimeout`, `maxPayloadLength`, `backpressureLimit`,
   `closeOnBackpressureLimit`, `perMessageDeflate`, `publishToSelf`, `sendPings`.
+  **`binaryType` is not one of them**, though a `ServerWebSocket` carries it: it is
+  a mutable property on each socket, so a server-wide setting has to be assigned as
+  each connection opens. `@dunx/http` does that in its `open` handler. 1.4.1 added
+  `'blob'` to the `'nodebuffer' | 'arraybuffer' | 'uint8array'` it already took.
 
 Quirks:
 
@@ -463,17 +573,17 @@ Quirks:
 Native pub/sub (`socket.subscribe(topic)` / `server.publish(topic, data)`) is real and
 should be used instead of a JavaScript topic registry.
 
-### `Bun.file` / `Bun.write` - three data-loss traps
+### `Bun.file` / `Bun.write` - three data-loss traps, one left on 1.4.1
 
-All three reproduced independently, not just reported:
+All three reproduced independently, not just reported, and all three reproduced on
+1.4.0. **The first two are fixed on 1.4.1** - see the re-probe section at the top.
+The third is not.
 
-All three still reproduce on Bun 1.4.0.
-
-| Behaviour                                                             | Detail                                                                                                                                |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `Bun.write(path, readableStream)` **silently writes the wrong bytes** | It matches no overload, so the stream is stringified: the file contains the 23 bytes `[object ReadableStream]`. No error, no warning. |
-| `Bun.write(path, new Response(stream))` **never settles**             | Hangs forever when the `Response` body is a stream. `new Response('string')` settles normally.                                        |
-| `Bun.file(path).writer()` **does not truncate**                       | Writing `"bb"` over a 20-byte file leaves `bbAAAAAAAAAAAAAAAAAA`. It also does not create parent directories.                         |
+| Behaviour                                                             | Detail                                                                                                                                                           |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Bun.write(path, readableStream)` **silently writes the wrong bytes** | Fixed in 1.4.1. Through 1.4.0 it matched no overload, so the stream was stringified: the file held the 23 bytes `[object ReadableStream]`. No error, no warning. |
+| `Bun.write(path, new Response(stream))` **never settles**             | Fixed in 1.4.1. Through 1.4.0 it hung forever when the `Response` body was a stream; `new Response('string')` settled normally.                                  |
+| `Bun.file(path).writer()` **does not truncate**                       | Still true on 1.4.1. Writing `"bb"` over a 20-byte file leaves `bbAAAAAAAAAAAAAAAAAA`. It also does not create parent directories.                               |
 
 Measured:
 
@@ -484,9 +594,10 @@ Measured:
    control Response("plain") -> settled
 ```
 
-A streaming write therefore has to go through a sink (`FileSink` locally,
-`NetworkSink` for S3), preceded by an empty `Bun.write` to create parents and
-truncate.
+Through 1.4.0 a streaming write therefore had to go through a sink (`FileSink`
+locally, `NetworkSink` for S3), preceded by an empty `Bun.write` to create parents
+and truncate. On 1.4.1 the local half is `Bun.write(path, stream)`; the S3 half is
+still a `NetworkSink`, because `S3Client`'s write takes no `ReadableStream`.
 
 ### `Bun.S3Client` - the undocumented surface
 
@@ -1041,10 +1152,11 @@ passing and 7 failing**.
 It fails loudly, so opting in per workspace is safe. `internal/docs` is the one
 exclusion, in the `docs` phase of `scripts/ci.ts`.
 
-**`--coverage --parallel` reports low, and a different figure each run.** The same
-sweep sequentially is 87.80% lines / 93.92% functions on every run. With
-`--parallel`: 87.21/88.52, then 87.10/88.23, then 87.24/88.27. Functions is the
-number that moves, about 5.5 points under. The `coverage` phase stays sequential.
+**`--coverage --parallel` reported low, and a different figure each run.** The same
+sweep sequentially was 87.80% lines / 93.92% functions on every run. With
+`--parallel`: 87.21/88.52, then 87.10/88.23, then 87.24/88.27. Functions was the
+number that moved, about 5.5 points under. **Fixed in 1.4.1**, measured at the top
+of this file, and the `coverage` phase runs `--parallel` since.
 
 One difference that is not a bug: `packages/infra` is 538 pass sequentially against
 543 under `--parallel`, with the same 5 skips. `describe.if(live)` in
@@ -1328,6 +1440,8 @@ Bun 1.4 added `protocol` to `BunFetchRequestInit`: `'http2' | 'http1.1' | 'h2' |
 Against a cleartext `http://` origin it does not negotiate down. Both `'http2'` and
 `'h2'` reject with a `TypeError` whose `code` is `HTTP2Unsupported`, where
 `'http1.1'` and an unset `protocol` both return 200 from the same `Bun.serve`.
+Re-probed on 1.4.1 against a `Bun.serve({ http2: true })`, which `node:http2` speaks
+to over h2c: unchanged, so this is the client and not the server.
 
 So it is not a safe default to switch on, and an app calling a plain-HTTP upstream
 must leave it unset. `examples/full` calls itself over HTTP and does exactly that.

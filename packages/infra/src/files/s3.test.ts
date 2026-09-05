@@ -211,5 +211,51 @@ describe.skipIf(liveBucket === undefined)(
       await storageUnderTest.delete(key);
       expect(await storageUnderTest.exists(key)).toBe(false);
     });
+
+    // The only test of `pump`. `LocalStorage` shared it until Bun 1.4.1 gave
+    // `Bun.write` a stream overload, and its suite was what covered the helper;
+    // the upload path it exists for had never been run.
+    it('multiparts a ReadableStream through the NetworkSink', async () => {
+      const storageUnderTest = live();
+      const streamKey = `${crypto.randomUUID()}.bin`;
+      const chunk = 'dunx'.repeat(16);
+      let remaining = 8;
+
+      const written = await storageUnderTest.write(
+        streamKey,
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (remaining === 0) return controller.close();
+            remaining -= 1;
+            controller.enqueue(new TextEncoder().encode(chunk));
+          },
+        }),
+      );
+
+      expect(written).toBe(chunk.length * 8);
+      expect(await storageUnderTest.read(streamKey)).toBe(chunk.repeat(8));
+      await storageUnderTest.delete(streamKey);
+    });
+
+    // A source that fails part way must end the sink in a failed state, so the
+    // multipart upload is aborted rather than committed at whatever it had.
+    it('aborts the upload when the source errors', async () => {
+      const storageUnderTest = live();
+      const streamKey = `${crypto.randomUUID()}.bin`;
+
+      const failing = storageUnderTest.write(
+        streamKey,
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('partial'));
+          },
+          pull(controller) {
+            controller.error(new Error('source failed'));
+          },
+        }),
+      );
+
+      expect(failing).rejects.toThrow('source failed');
+    });
   },
 );

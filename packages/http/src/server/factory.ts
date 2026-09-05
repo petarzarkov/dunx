@@ -229,6 +229,18 @@ export class HttpFactory {
     for (const warning of websocket?.warnings ?? []) {
       app.get(Logger).warn(warning);
     }
+    // A websocket upgrade is an HTTP/1.1 request, so refusing HTTP/1.x refuses
+    // every gateway. Bun answers 505 and the connection never opens, which is
+    // silent from the server side.
+    if (resolved.http1 === false && websocket !== undefined) {
+      app
+        .get(Logger)
+        .warn(
+          `http1: false refuses HTTP/1.x with a 505, and a websocket upgrade is ` +
+            `an HTTP/1.1 request - so nothing can connect to ${websocket.paths.join(', ')}. ` +
+            `Drop http1: false, or serve the gateways from a port that keeps HTTP/1.1.`,
+        );
+    }
 
     // `root` is the app's own module, so global middleware and the error filter
     // resolve as the app sees them rather than as this wrapper does.

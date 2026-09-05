@@ -65,10 +65,10 @@ export const manifest = (features: readonly Feature[]): string => {
       dependencies,
       devDependencies: {
         '@dunx/testing': '__DUNX_VERSION__',
-        '@types/bun': '>=1.4.0',
+        '@types/bun': '>=1.4.1',
         typescript: '^5.7.0',
       },
-      engines: { bun: '>=1.4.0' },
+      engines: { bun: '>=1.4.1' },
     },
     null,
     2,

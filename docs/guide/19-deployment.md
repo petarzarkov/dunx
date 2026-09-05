@@ -40,6 +40,30 @@ That is the whole command. `HttpFactory.create` builds the container,
 process open. There is no cluster module to configure, see the note on
 horizontal scaling below.
 
+## HTTP/2
+
+`http2: true` serves HTTP/2 on the same port as HTTP/1.1, through the same routes
+and the same 404 fallback:
+
+```ts
+await HttpFactory.create(AppModule, { http2: true });
+```
+
+Without TLS that is h2c: a client opening with the HTTP/2 preface gets HTTP/2, and
+everything else gets HTTP/1.1. That is what a reverse proxy in front of the app
+speaks, which is the deployment this is for. Bun marks the option experimental.
+
+Gateways keep working, because a websocket upgrade is an HTTP/1.1 request and both
+protocols share the socket. There is no websocket over HTTP/2.
+
+`http1: false` is the pair to it and refuses HTTP/1.x with a 505. **It disables
+every gateway**, since nothing can then send the upgrade; dunx warns at boot if you
+set it with a gateway declared. Only use it on a port that is HTTP/2 or nothing.
+
+Bun's own `fetch` cannot call an h2c origin: `protocol: 'http2'` rejects with
+`HTTP2Unsupported` against any cleartext peer, whatever that peer serves. Leave
+`protocol` unset for a plain-HTTP upstream.
+
 ## Shutting down cleanly
 
 ```ts

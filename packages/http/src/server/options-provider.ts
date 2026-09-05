@@ -131,6 +131,20 @@ export abstract class HttpOptionsProvider {
   get relayResubscribe(): RelayOptions['resubscribe'] {
     return undefined;
   }
+
+  /**
+   * Serve HTTP/2 alongside HTTP/1.1 on the same port. `undefined` rather than
+   * `false` so an absent answer leaves Bun's own default in place instead of
+   * restating it. See {@link HttpOptions.http2}.
+   */
+  get http2(): boolean | undefined {
+    return undefined;
+  }
+
+  /** See {@link HttpOptions.http1}. `false` disables every gateway. */
+  get http1(): boolean | undefined {
+    return undefined;
+  }
 }
 
 /**
@@ -175,6 +189,8 @@ export function resolveHttpOptions(
     websocket: settings.websocket,
     relay: settings.relay,
     relayResubscribe: settings.relayResubscribe,
+    http2: settings.http2,
+    http1: settings.http1,
   };
   // `exactOptionalPropertyTypes` separates an absent key from one set to
   // `undefined`, and only the first should defer to the provider: passing

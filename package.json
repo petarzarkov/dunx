@@ -27,7 +27,7 @@
     "build": "bun scripts/build-all.ts",
     "ci": "bun ./scripts/ci.ts",
     "test": "bun run --parallel --filter '*' test",
-    "test:cov": "bun test ./packages ./tools ./scripts --coverage --path-ignore-patterns='**/templates/**' --path-ignore-patterns='**/tmp/**' && bun run gen:cov",
+    "test:cov": "bun test ./packages ./tools ./scripts --coverage --parallel --path-ignore-patterns='**/templates/**' --path-ignore-patterns='**/tmp/**' && bun run gen:cov",
     "lint": "oxlint --fix .",
     "lint:check": "oxlint --max-warnings 0 .",
     "format": "oxfmt --write .",
@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@stagelint/stagelint": "0.1.4",
-    "@types/bun": "1.4.0",
+    "@types/bun": "1.4.1",
     "@types/node": "26.4.1",
     "oxfmt": "0.66.0",
     "oxlint": "1.81.0",
