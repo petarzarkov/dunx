@@ -260,6 +260,36 @@ describe.skipIf(liveBucket === undefined)(
       expect(await rejection(failing)).toBe(sourceError);
     });
 
+    /**
+     * A failed replacement destroys what was there, and that happens inside the
+     * sink before any cleanup runs - so removing the delete below does not save
+     * the original, it only swaps an absent object for a truncated one.
+     * Measured: a 24-byte object replaced by a stream that dies after 7 bytes
+     * leaves a 7-byte object when nothing cleans up.
+     */
+    it('leaves no object rather than a truncated one, replacing or not', async () => {
+      const storageUnderTest = live();
+      const streamKey = `${crypto.randomUUID()}.bin`;
+      await storageUnderTest.write(streamKey, 'ORIGINAL-CONTENT-KEEP-ME');
+      expect((await storageUnderTest.stat(streamKey)).size).toBe(24);
+
+      const failing = storageUnderTest.write(
+        streamKey,
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('partial'));
+          },
+          pull(controller) {
+            controller.error(new Error('source failed'));
+          },
+        }),
+      );
+
+      await rejection(failing);
+      // Not 7 bytes, which is what the sink committed on its way out.
+      expect(await storageUnderTest.exists(streamKey)).toBe(false);
+    });
+
     // `end(error)` commits what was written whatever it is handed, so the write
     // removes the object rather than leaving a truncated one behind.
     it.each([

@@ -172,6 +172,14 @@ A `delete` after the failed `end` does clear it, so `S3Storage.write` removes th
 key on failure and rethrows the source's own error. The comment that used to sit
 on `pump` claimed `end(error)` aborted the multipart upload; it never did.
 
+**A failed replacement destroys the previous version too, inside the sink.** A
+24-byte object overwritten by a stream that dies after 7 bytes is a 7-byte object
+before any cleanup runs, at both chunk sizes above. So the delete is not choosing
+between an absent object and the original - the original is already gone either
+way, and the choice is between absent and silently truncated. Preserving it would
+need a temporary key and a publish step, and `Bun.S3Client` exposes no
+server-side copy to publish with.
+
 ### `--coverage --parallel` agrees with sequential
 
 The reason the `coverage` phase of `scripts/ci.ts` was sequential is gone. Measured

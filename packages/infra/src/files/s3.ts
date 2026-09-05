@@ -142,10 +142,19 @@ export class S3Storage extends Storage {
     try {
       return await pump(this.#client.file(objectKey).writer(), data);
     } catch (error) {
-      // A failed sink leaves the bytes it already wrote as a complete object,
-      // whatever is passed to `end` - so a source that died mid-stream would
-      // otherwise leave a silently truncated object behind a rejected write.
-      // Best effort: the original failure is what the caller needs to see.
+      /**
+       * A failed sink commits the bytes it already wrote, whatever is passed to
+       * `end`, so a rejected write would otherwise leave a truncated object.
+       *
+       * **This does not destroy a previous version - the sink already did.**
+       * Measured: a 24-byte object replaced by a stream that dies after 7 bytes
+       * is a 7-byte object before any cleanup runs. So the choice here is an
+       * absent object against a silently truncated one, not against the
+       * original. Preserving that would need a temporary key and a publish, and
+       * `Bun.S3Client` has no server-side copy to publish with.
+       *
+       * Best effort: the source's own failure is what the caller needs to see.
+       */
       await this.#client.delete(objectKey).catch(() => undefined);
       throw error;
     }
