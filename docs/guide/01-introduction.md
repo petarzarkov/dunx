@@ -184,7 +184,7 @@ or class-based controllers, and that gap is the whole reason dunx exists. If you
 would not use the DI, you are paying its boot cost and its concepts for nothing.
 
 **Boot time is the number that matters.** A short-lived process, a serverless
-function billed per invocation, or a CLI will feel the ~55 ms. dunx is built for a
+function billed per invocation, or a CLI will feel the ~43 ms. dunx is built for a
 service that starts once and stays up. Note also that the startup numbers were
 taken on an idle 32-core desktop, which is not what a constrained serverless CPU
 looks like.

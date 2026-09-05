@@ -150,19 +150,19 @@ specifier is a compile error rather than a runtime surprise.
 ## Performance
 
 Structure on Bun does not have to cost throughput. `@dunx/http` is a layer over
-`Bun.serve({ routes })`. It lands at 85-100% of the raw server's throughput,
-within noise of Elysia, and 3.3-4.7x NestJS on Fastify. Boot is 55 ms against
-287 ms.
+`Bun.serve({ routes })`. It lands at 88-99% of the raw server's throughput,
+within noise of Elysia, and 3.8-5.5x NestJS on Fastify. Boot is 43 ms against
+294 ms.
 
 Median req/s, 64 connections, 5 runs:
 
-| Framework          | Plain text  | JSON        | Path param  | Body validation |
-| ------------------ | ----------- | ----------- | ----------- | --------------- |
-| **@dunx/http**     | **137,539** | **119,912** | **124,867** | **75,769**      |
-| Elysia             | 135,907     | 127,524     | 129,497     | 74,858          |
-| Hono (Bun)         | 106,793     | 91,586      | 86,031      | 51,576          |
-| NestJS (Fastify)   | 37,075      | 36,219      | 32,967      | 16,033          |
-| _Bun.serve (raw)_  | _136,940_   | _133,311_   | _128,930_   | _89,047_        |
+| Framework         | Plain text  | JSON        | Path param  | Body validation |
+| ----------------- | ----------- | ----------- | ----------- | --------------- |
+| **@dunx/http**    | **134,864** | **127,776** | **126,206** | **81,631**      |
+| Elysia            | 136,766     | 123,937     | 127,885     | 78,649          |
+| Hono (Bun)        | 126,987     | 111,301     | 108,403     | 60,513          |
+| NestJS (Fastify)  | 31,623      | 33,748      | 29,606      | 14,953          |
+| _Bun.serve (raw)_ | _136,500_   | _131,077_   | _130,479_   | _92,616_        |
 
 The harness also runs Go, Rust and JVM subjects alongside these. The NestJS
 subject is real NestJS with real `reflect-metadata`. It states what it cannot
@@ -176,7 +176,7 @@ Reproduce it with `bun run --filter '@dunx/bench' start`. The methodology is in
 
 - **You do not want DI.** Elysia and Hono own that space, they are mature, and
   they are faster to learn.
-- **Boot time is your critical number.** 55 ms is fine for a service that starts
+- **Boot time is your critical number.** 43 ms is fine for a service that starts
   once and stays up, and wrong for a per-invocation serverless function.
 - **You need request-scoped or transient providers.** Not supported, rejected
   with measurements.

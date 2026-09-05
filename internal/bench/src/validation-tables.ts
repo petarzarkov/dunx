@@ -197,7 +197,6 @@ The reader is the fourth row minus the third, and it is now at or below zero: th
 framework's reader costs no more than writing \`validate(await req.json())\` in the
 handler yourself. It used to cost **2.05 µs more**, which was twice what zod itself
 cost - the reason is in
-[\`docs/ARCHITECTURE.md\`](../../docs/ARCHITECTURE.md), "The cost of request
-validation".
+[\`docs/architecture/cost-of-validation.md\`](../../docs/architecture/cost-of-validation.md).
 `;
 };
