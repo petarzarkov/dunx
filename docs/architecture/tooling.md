@@ -16,10 +16,17 @@ downloads still reaches `docs:build` before the deploy. What moved with it is th
 base path, from `/dunx/` to `/`, and the router - see below. A pull request gets a
 per-branch preview URL, which GitHub Pages had no equivalent of.
 
-`.github/workflows/pages-redirect.yml` still owns the old origin: a fixed redirect
-plus `setup.md` and `llms.txt`, because every `@dunx/create-app` already published
-writes the GitHub Pages URL for those two into the AGENTS.md it scaffolds, and an
-agent fetching raw markdown runs no script a redirect could use.
+The old origin still answers, from a one-shot deployment: a fixed redirect plus
+`setup.md` and `llms.txt`, because every `@dunx/create-app` published before the
+move writes the GitHub Pages URL for those two into the AGENTS.md it scaffolds, and
+an agent fetching raw markdown runs no script a redirect could use. The workflow and
+the script that built it were deleted once it was deployed and verified, so those two
+documents are frozen at the release that moved the domain; `git log -- scripts/pages-redirect.ts`
+is where they come back from if the deployment is ever lost.
+
+The deploy is its own job rather than the tail of the release job. A failed
+`bun run version` used to take the documentation down with it, and a docs change and
+a publish are not the same event.
 
 **The bundler was `Bun.build` and was moved back to Vite, by measuring rather than
 by preference.** The original swap traded ~25% more gzipped JS for a 41 ms build

@@ -160,7 +160,3 @@ HANDOFF.md
 # never linted or formatted - they are copies of the repo, not part of it.
 .claude/worktrees/
 packages/*/cli-fixture-*/
-
-# Built by `scripts/pages-redirect.ts` and deployed by the `Pages redirect`
-# workflow. Never edited by hand.
-.pages-redirect/

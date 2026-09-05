@@ -221,7 +221,7 @@ jobs:
   # Live as of 0.1.0, which was published by hand because a package with no
   # versions on npm has no trusted-publisher settings page to configure yet.
   release:
-    name: Release and build the site
+    name: Release
     needs: [static, unit, examples, browser, coverage, docs]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
@@ -233,6 +233,59 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/setup
+
+      - name: Build
+        run: bun run ci build
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Release (on a `release:` commit)
+        run: bun run version
+        env:
+          FORCE_PUBLISH: ${{ contains(github.event.head_commit.message, '[force-publish]') }}
+          # Needed by `scripts/github-release.ts` to create the GitHub release.
+          # Actions does not put this in the environment on its own, and 2.1.0 is
+          # what proved it: the tag appeared and the release did not. The tag push
+          # falls back to the credential `actions/checkout` persists, so that half
+          # worked and hid the other half.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Husky's pre-push hook refuses any push oxfmt would change, and what gets
+          # pushed here is this script's own generated commit. CI already ran
+          # format:check over the source, so the hook can only produce a false
+          # negative, which it did on 2.2.0: it blocked a release that had already
+          # reached npm and left main a version behind the registry.
+          HUSKY: '0'
+
+  # Its own job, and it runs whether or not the release step succeeded. The
+  # deploy used to be the tail of `release`, which meant a failed `bun run
+  # version` also took the documentation down with it - a docs change and a
+  # publish are not the same event and should not fail together.
+  #
+  # `needs: release` is ordering, not a condition: a release writes CHANGELOG.md
+  # and pushes it as a `[skip ci]` commit, so deploying alongside it would ship a
+  # Releases page one version behind, and nothing would rebuild until the next
+  # push.
+  deploy:
+    name: Deploy the site
+    needs: [release]
+    if: always() && contains(fromJSON('["success", "failure"]'), needs.release.result)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      # `main` rather than the commit that triggered the run, which is what picks
+      # up the release commit the job before this one may just have pushed.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: ./.github/actions/setup
 
@@ -264,31 +317,6 @@ jobs:
           test -d internal/docs/public/badges
           echo "coverage model $(wc -c < internal/docs/src/generated/coverage.json) bytes, $(ls internal/docs/public/badges | wc -l) badges"
 
-      - name: Configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Release (on a `release:` commit)
-        run: bun run version
-        env:
-          FORCE_PUBLISH: ${{ contains(github.event.head_commit.message, '[force-publish]') }}
-          # Needed by `scripts/github-release.ts` to create the GitHub release.
-          # Actions does not put this in the environment on its own, and 2.1.0 is
-          # what proved it: the tag appeared and the release did not. The tag push
-          # falls back to the credential `actions/checkout` persists, so that half
-          # worked and hid the other half.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Husky's pre-push hook refuses any push oxfmt would change, and what gets
-          # pushed here is this script's own generated commit. CI already ran
-          # format:check over the source, so the hook can only produce a false
-          # negative, which it did on 2.2.0: it blocked a release that had already
-          # reached npm and left main a version behind the registry.
-          HUSKY: '0'
-
-      # After the release, not before it. The release step writes the
-      # CHANGELOG.md the Releases page is generated from, and the release commit
-      # is `[skip ci]`, so nothing would rebuild until the next push.
       - name: Build the documentation site
         run: bun run docs:build
 
@@ -303,8 +331,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Pinned rather than installed as a devDependency: only these two jobs
-          # deploy, and a root dependency would download wrangler in all six.
+          # Pinned rather than installed as a devDependency: only this job and the
+          # preview below deploy, and a root dependency would download wrangler in
+          # all six.
           wranglerVersion: '4.128.0'
           command: >-
             pages deploy internal/docs/dist
@@ -316,7 +345,7 @@ jobs:
           echo "Deployed to ${{ steps.deploy.outputs.deployment-url }}" >> $GITHUB_STEP_SUMMARY
 
   # The same site on a pull request, at a per-branch preview URL. It needs the
-  # coverage model the `coverage` job uploads, exactly as the release path does:
+  # coverage model the `coverage` job uploads, exactly as the deploy job does:
   # without it the preview renders an empty coverage page and reviewers read it
   # as a regression.
   #
