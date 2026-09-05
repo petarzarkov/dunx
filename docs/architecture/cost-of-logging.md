@@ -394,6 +394,27 @@ The two things that did not change: the **first touch of `req.headers`** is stil
 largest non-entry step, and **building and serialising the entry** is still the
 largest step overall before the write.
 
+### Bun 1.4.1 moves none of it, and the reason is worth writing down
+
+1.4.1 rewrote `AsyncLocalStorage` so that an active store costs no allocation per
+`await`. Measured directly, the per-await charge went from **6.5 ns to 0**, leaving a
+flat ~9 ns to enter `run()`: a body with sixteen awaits pays 5.44 ns of store
+overhead against 103.60 ns on 1.4.0. Numbers and method in
+[bun-apis.md](../bun-apis.md).
+
+**No figure in the table above moves.** The `als` unit wraps a handler with one
+await, so the saving there is about 3 ns against a step this harness measures at
+240 to 560 ns. Re-run on 1.4.1, five focused rows and five runs put `als - trace` at
++0.27 µs against the +0.24 µs recorded for 1.4.0, and a full ladder in the same
+session read +0.56 µs for the same step while putting `respheader` above `entry`.
+Both are the harness floor, not a change.
+
+The reason to record it anyway: **the conclusion above now holds for a different
+reason than it did.** `requestLogging: { correlate: false }` bought nothing on 1.4.0
+because the scope was already cheap for one await. On 1.4.1 it buys nothing for a
+handler of any depth, which is the stronger claim and the one an app with a chain of
+awaited calls actually depends on.
+
 ## The cost of request logging on Bun 1.3.14 (`internal/bench` logging harness)
 
 `bun run logging` is the third harness. It exists because `dunx-logging` in the

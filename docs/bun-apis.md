@@ -113,6 +113,42 @@ Removing the local caller exposed that `pump` had **never been tested where it
 runs**: `stream.ts` read 100% only because `LocalStorage`'s suite shared the helper,
 and the S3 upload path it exists for had no test at all. `s3.test.ts` now has two.
 
+### `AsyncLocalStorage` stopped charging per `await`, and the ladder cannot see it
+
+1.4.1 claims `AsyncLocalStorage.run()` is about 2x faster and that "an active
+store no longer costs an extra allocation on every await". The second half is the
+one that matters here, because `RequestContext` holds a store across a whole
+request handler. Measured by timing the same body with and without a store around
+it, at a growing number of awaits, both runtimes on one machine:
+
+```
+        1.4.0                        1.4.1
+awaits  store cost   per await       store cost   per await
+     1       12.20       12.20             9.34        9.34
+     2       17.01        8.51             9.34        4.67
+     4       30.49        7.62             8.83        2.21
+     8       51.95        6.49             8.46        1.06
+    16      103.60        6.48             5.44        0.34
+```
+
+**On 1.4.0 the store cost ~6.5 ns per `await`. On 1.4.1 it is a flat ~9 ns
+entry cost however many there are**, so a handler that awaits sixteen times pays
+5.44 ns instead of 103.60. Synchronous `als.run(v, fn)` went 11.10 ns to 9.54 ns,
+and three nested `run()`s 35.21 to 34.22.
+
+**`bun run logging` does not resolve any of this**, and that is the useful half of
+the finding. Its `als` row adds `runWithContext` around a handler with one await,
+where the saving is about 3 ns against a step the harness measures at 240 to 560
+ns with a standard deviation larger than the effect. Five focused rows, five runs:
+`als - trace` came out **+0.27 µs** against the +0.24 µs recorded for 1.4.0. The
+full ladder in the same session read +0.56 µs for the same step and put
+`respheader` above `entry`, which is the ladder's known behaviour at this
+resolution.
+
+The conclusion for dunx: **no recorded logging figure moves**, and an app whose
+handlers await many times gets a real but small saving that this harness is the
+wrong instrument for.
+
 ### `--coverage --parallel` agrees with sequential
 
 The reason the `coverage` phase of `scripts/ci.ts` was sequential is gone. Measured
@@ -168,6 +204,34 @@ The `fetch` entry below is unchanged and is not the server's fault: against a
 cleartext origin, `protocol: 'http2'` and `'h2'` reject with `HTTP2Unsupported`
 **even when that origin is a `Bun.serve` with `http2: true`** and `node:http2`
 talks to it happily.
+
+#### What h2c is worth, and why the number is server CPU rather than req/s
+
+oha 1.15.0, 64 requests in flight both ways (`-c 64` against `-c 4 -p 16
+--http2`), 5s per cell, median of three runs on a 32-core Linux box. The subject
+is an `@dunx/http` app with `requestLogging: false`.
+
+**Throughput alone cannot answer this.** oha's HTTP/1.1 client burns **210% CPU
+to put the server at 85%** of its single event-loop core, so a bare req/s
+comparison is partly measuring the load generator. Server CPU per request is read
+from `/proc/<pid>/stat` for the server process alone and does not have that
+problem. The two ratios agreeing to within about 7% is what says the throughput
+figure is mostly real.
+
+| Route             | h1 req/s | h2 req/s | ratio | h1 CPU/req | h2 CPU/req | ratio | h1 p99  | h2 p99  |
+| ----------------- | -------- | -------- | ----- | ---------- | ---------- | ----- | ------- | ------- |
+| GET, 13-byte body | 131,202  | 378,281  | 2.88x | 7.88 µs    | 2.90 µs    | 2.70x | 0.94 ms | 0.30 ms |
+| GET, JSON         | 127,556  | 365,152  | 2.86x | 8.07 µs    | 2.97 µs    | 2.71x | 0.96 ms | 0.30 ms |
+| POST, 4 KiB body  | 80,589   | 169,178  | 2.10x | 13.45 µs   | 6.77 µs    | 1.96x | 1.48 ms | 0.74 ms |
+| GET, 64 KiB body  | 36,501   | 46,884   | 1.29x | 31.67 µs   | 25.42 µs   | 1.24x | 3.34 ms | 2.38 ms |
+
+**The win is per-request overhead, so it shrinks as the body grows**: 2.9x on a
+13-byte response and 1.3x on a 64 KiB one, where the cost is moving bytes and the
+framing barely registers.
+
+Raw `Bun.serve` on the same driver runs the same shape a little higher - 3.16x,
+2.98x, 2.22x, 1.40x - so the ratio is Bun's and not something `@dunx/http` adds
+or removes.
 
 ## Re-probed on Bun 1.4.0 (rev 34cbb9a40)
 
