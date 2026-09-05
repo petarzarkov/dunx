@@ -58,11 +58,11 @@ describe('the duplicate wrapper', () => {
 describe('the raw client bullmq reconnects with', () => {
   it('duplicates by construction, so the reconnect keeps its onconnect callback', async () => {
     // bullmq's `_duplicateRaw` prefers `src.duplicate()` over construction, and
-    // Bun does not fire `onconnect` on a natively duplicated client. Its
-    // `_scheduleReconnect` wires `onconnect` and calls `connect()`, so a native
-    // duplicate leaves `_handleConnected()` unrun: no `CLIENT SETNAME`, `ready`
-    // never flips, and the worker awaiting readiness never blocks on the marker
-    // again. Silently - nothing on that path rejects.
+    // Bun's `duplicate()` resolves an already-connected client, so `onconnect`
+    // assigned after it never fires. A clean reset does not wedge 6.3.4, whose
+    // `connect()` runs `_handleConnected()` itself; the override stays for the
+    // production trigger a reset does not simulate. docs/architecture/queues.md
+    // has both measurements. What this asserts is the part that is provable.
     const source = connection();
     const adapter = source.client() as unknown as { raw: Bun.RedisClient };
     const raw = adapter.raw;

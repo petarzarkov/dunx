@@ -5,8 +5,9 @@ import { Controller, Get, Post } from '../route/decorators.js';
 import type { RouteInput } from '../route/schema.js';
 import { Gateway, OnMessage, OnOpen } from '../ws/decorators.js';
 import { PubSub } from '../ws/pubsub.js';
-import type { Socket } from '../ws/socket.js';
+import type { Socket, SocketOptions } from '../ws/socket.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import { RequestMetrics } from './metrics.js';
 
 @Controller('/echo')
 class EchoController {
@@ -101,6 +102,19 @@ const connect = async (url: string, path: string): Promise<WebSocket> => {
   return socket;
 };
 
+const until = async (
+  condition: () => boolean,
+  what: string,
+  timeoutMs = 2000,
+): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await Bun.sleep(10);
+  }
+  throw new Error(`timed out waiting for ${what}`);
+};
+
 const roundTrip = async (socket: WebSocket, frame: Uint8Array) => {
   const reply = new Promise<string>((resolve) => {
     socket.addEventListener(
@@ -176,7 +190,7 @@ describe('http2 and http1', () => {
 
   it('leaves HTTP/2 off by default', async () => {
     const url = await boot({});
-    expect(overHttp2(new URL(url).origin, '/echo')).rejects.toThrow();
+    await expect(overHttp2(new URL(url).origin, '/echo')).rejects.toThrow();
   });
 
   it('keeps gateways working alongside HTTP/2', async () => {
@@ -201,8 +215,8 @@ describe('http2 and http1', () => {
     // healthy while nothing could connect to it.
     const booting = boot({ http2: true, http1: false, gateway: true });
 
-    expect(booting).rejects.toThrow(/nothing could ever connect to \/ws/);
-    expect(booting).rejects.toThrow(/Set gatewayPort/);
+    await expect(booting).rejects.toThrow(/nothing could ever connect to \/ws/);
+    await expect(booting).rejects.toThrow(/Set gatewayPort/);
   });
 
   it('boots with http1: false and no gateway', async () => {
@@ -225,6 +239,7 @@ describe('http2 and http1', () => {
 
 describe('gatewayPort', () => {
   let app: HttpApp | undefined;
+  let routesUrl = '';
 
   afterEach(async () => {
     await app?.shutdown();
@@ -244,7 +259,7 @@ describe('gatewayPort', () => {
       bootLogging: false,
       requestLogging: false,
     });
-    await app.listen(0);
+    routesUrl = await app.listen(0);
     return app;
   };
 
@@ -289,6 +304,36 @@ describe('gatewayPort', () => {
     b.close();
   });
 
+  it('answers a miss on the gateway port through the same fallback', async () => {
+    // A hand-written 404 here would skip request logging, CORS and `notFound`.
+    // The body and the content type come from the shared error mapper, so a
+    // difference between the two ports shows up as a diff.
+    const booted = await boot({});
+    const [onRoutes, onGateway] = await Promise.all([
+      fetch(new URL('/nothing-here', routesUrl)),
+      fetch(new URL('/nothing-here', booted.gatewayUrl as string)),
+    ]);
+
+    expect(onGateway.status).toBe(onRoutes.status);
+    expect(onGateway.headers.get('content-type')).toBe(
+      onRoutes.headers.get('content-type'),
+    );
+    expect(await onGateway.json()).toEqual(await onRoutes.json());
+  });
+
+  it('counts sockets on the gateway server in the metrics gauge', async () => {
+    // `pendingWebSockets` is per Bun.serve, and the sockets live on the second
+    // one, so reading it off the routes server alone reports 0 forever.
+    const booted = await boot({});
+    const socket = await connect(booted.gatewayUrl as string, '/ws');
+
+    await until(
+      () => booted.get(RequestMetrics).snapshot().pendingWebSockets === 1,
+      'the gauge to see the socket',
+    );
+    socket.close();
+  });
+
   it('leaves gatewayUrl undefined when the ports are not split', async () => {
     @Module({ providers: [BinaryGateway] })
     class AppModule {}
@@ -311,7 +356,7 @@ describe('websocket binaryType', () => {
   });
 
   const boot = async (
-    binaryType?: 'nodebuffer' | 'arraybuffer' | 'uint8array' | 'blob',
+    binaryType?: SocketOptions['binaryType'],
   ): Promise<string> => {
     @Module({ providers: [BinaryGateway] })
     class AppModule {}
@@ -338,6 +383,45 @@ describe('websocket binaryType', () => {
   ] as const)('delivers %s frames as %s', async (binaryType, expected) => {
     const socket = await connect(await boot(binaryType), '/ws');
     expect(await roundTrip(socket, new Uint8Array([1, 2, 3]))).toBe(expected);
+    socket.close();
+  });
+
+  it('echoes a blob frame back as bytes, not as JSON', async () => {
+    // `replyRaw` used to treat a Blob as a plain object, so a handler returning
+    // its own frame sent the two characters `{}`.
+    @Gateway('/echo-ws')
+    class EchoGateway {
+      @OnMessage()
+      raw(message: string | Buffer): string | Buffer {
+        return message;
+      }
+    }
+    @Module({ providers: [EchoGateway] })
+    class EchoModule {}
+
+    app = await HttpFactory.create(EchoModule, {
+      bootLogging: false,
+      requestLogging: false,
+      websocket: { binaryType: 'blob' },
+    });
+    const socket = await connect(await app.listen(0), '/echo-ws');
+    const reply = new Promise<unknown>((resolve) => {
+      socket.addEventListener(
+        'message',
+        (event: MessageEvent) => resolve(event.data),
+        { once: true },
+      );
+    });
+
+    socket.send(new Uint8Array([21, 34, 55]));
+    // The client's own binaryType is nodebuffer, so what matters is that the
+    // frame is binary at all: the bug sent the two text characters `{}`.
+    const echoed = await reply;
+    expect(typeof echoed).not.toBe('string');
+    const bytes = new Uint8Array(
+      echoed instanceof Blob ? await echoed.arrayBuffer() : (echoed as Buffer),
+    );
+    expect([...bytes]).toEqual([21, 34, 55]);
     socket.close();
   });
 

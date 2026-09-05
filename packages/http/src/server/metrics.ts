@@ -1,5 +1,6 @@
 import { Durations, type HistogramSnapshot } from '@dunx/core';
-import type { BunRequest, Server } from 'bun';
+import type { BunRequest } from 'bun';
+import type { ServerGauges } from './binding.js';
 import { UNMATCHED } from '../route/metadata.js';
 import type { RouteContext } from './context.js';
 import { HttpError } from './errors.js';
@@ -83,7 +84,7 @@ export class RequestMetrics {
    */
   readonly #unmatched = new Map<string, Series>();
   #since = new Date();
-  #server: Server<unknown> | undefined;
+  #server: ServerGauges | undefined;
 
   observe(
     ctx: RouteContext,
@@ -152,8 +153,12 @@ export class RequestMetrics {
     this.#since = new Date();
   }
 
-  /** Internal: `listen()` hands the bound server to the resolved singleton. */
-  attach(server: Server<unknown>): void {
+  /**
+   * Internal: `listen()` hands the bound server's counters to the resolved
+   * singleton. Structural, so an app serving from two ports can hand over the
+   * sum rather than one server's half of it.
+   */
+  attach(server: ServerGauges): void {
     this.#server = server;
   }
 }

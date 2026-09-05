@@ -53,19 +53,13 @@ Without TLS that is h2c: a client opening with the HTTP/2 preface gets HTTP/2, a
 everything else gets HTTP/1.1. That is what a reverse proxy in front of the app
 speaks, which is the deployment this is for. Bun marks the option experimental.
 
-What it is worth, at 64 requests in flight either way:
+What it is worth, at 64 requests in flight either way: **2.9x** the requests per
+second on a small JSON body, **2.1x** on a 4 KiB POST, **1.3x** on a 64 KiB one.
 
-| Response          | HTTP/1.1   | HTTP/2     |          |
-| ----------------- | ---------- | ---------- | -------- |
-| 13 bytes          | 131k req/s | 378k req/s | **2.9x** |
-| a small JSON body | 128k req/s | 365k req/s | **2.9x** |
-| a 4 KiB POST      | 81k req/s  | 169k req/s | **2.1x** |
-| 64 KiB            | 37k req/s  | 47k req/s  | **1.3x** |
-
-The saving is per-request framing, so it shrinks as the body grows: turn it on for
-an API serving small JSON, and expect little from it if you mostly serve large
-payloads. Server CPU per request falls by the same ratios, so this is not an
-artefact of the load generator.
+The saving is per-request framing, so it shrinks as the body grows. Turn it on
+for an API serving small JSON; expect little from it if you mostly serve large
+payloads. Server CPU per request falls by the same ratios, and the method behind
+that is in `docs/bun-apis.md`.
 
 Gateways keep working, because a websocket upgrade is an HTTP/1.1 request and both
 protocols share the socket. There is no websocket over HTTP/2.

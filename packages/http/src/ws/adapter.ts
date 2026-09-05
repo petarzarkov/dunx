@@ -94,8 +94,13 @@ const unreported = (middleware: readonly SocketMiddleware[]): string =>
 const runtimeOf = (socket: Socket): GatewayRuntime =>
   (socket.data as Routed)[RUNTIME];
 
-const isBinary = (value: unknown): value is Bun.BufferSource =>
-  value instanceof ArrayBuffer || ArrayBuffer.isView(value);
+// A Blob is what `binaryType: 'blob'` delivers, and `ws.send` takes one, so a
+// handler echoing its frame sends bytes rather than the `{}` JSON.stringify makes
+// of it.
+const isBinary = (value: unknown): value is Bun.BufferSource | Blob =>
+  value instanceof ArrayBuffer ||
+  ArrayBuffer.isView(value) ||
+  value instanceof Blob;
 
 const replyRaw = (socket: Socket, value: unknown): void => {
   if (value === undefined) return;
@@ -266,8 +271,12 @@ export const buildWebSocket = (
     middleware.some((entry) => entry.reportsErrors === true);
   // The rest is exactly the set of keys Bun's WebSocketHandler accepts.
   // `binaryType` is not one of them - Bun takes it per socket, so it is stripped
-  // here and assigned in `open` instead.
+  // here and assigned in `open` instead. The annotation is the guard: a dunx-owned
+  // key added to `SocketOptions` and not stripped here fails to type, rather than
+  // riding the spread into a handler that ignores unknown keys silently.
   const { onError: _onError, binaryType, ...socketOptions } = options;
+  const handlerOptions: Omit<SocketOptions, 'onError' | 'binaryType'> =
+    socketOptions;
 
   const run = (
     invoke: Invoke,
@@ -283,7 +292,7 @@ export const buildWebSocket = (
   };
 
   const websocket: WebSocketHandler<SocketData> = {
-    ...socketOptions,
+    ...handlerOptions,
 
     message(ws, message) {
       const gateway = runtimeOf(ws);

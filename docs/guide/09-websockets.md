@@ -83,15 +83,15 @@ controller routes, and a gateway path stays what the decorator said.
 
 ## The lifecycle decorators
 
-| Decorator            | Handler signature                                | Notes                                                        |
-| -------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
-| `@OnUpgrade()`       | `(req: BunRequest) => Response \| unknown`       | Before the socket exists. Return a `Response` to refuse.     |
-| `@OnOpen()`          | `(socket: Socket) => void`                       | The socket is live.                                          |
-| `@OnMessage(event?)` | `(data, socket) => unknown`                      | With a name, routed by envelope; without, the raw catch-all. |
-| `@OnClose()`         | `(socket, code: number, reason: string) => void` |                                                              |
-| `@OnDrain()`         | `(socket: Socket) => void`                       | Backpressure relieved; safe to resume sending.               |
-| `@OnPing()`          | `(data: Buffer, socket: Socket) => void`         | Observation only; Bun still answers with a pong.             |
-| `@OnPong()`          | `(data: Buffer, socket: Socket) => void`         |                                                              |
+| Decorator            | Handler signature                                | Notes                                                                         |
+| -------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `@OnUpgrade()`       | `(req: BunRequest) => Response \| unknown`       | Before the socket exists. Return a `Response` to refuse.                      |
+| `@OnOpen()`          | `(socket: Socket) => void`                       | The socket is live.                                                           |
+| `@OnMessage(event?)` | `(data, socket) => unknown`                      | With a name, routed by envelope; without, the raw catch-all.                  |
+| `@OnClose()`         | `(socket, code: number, reason: string) => void` |                                                                               |
+| `@OnDrain()`         | `(socket: Socket) => void`                       | Backpressure relieved; safe to resume sending.                                |
+| `@OnPing()`          | `(data: Buffer, socket: Socket) => void`         | Observation only; Bun still answers with a pong. `data` follows `binaryType`. |
+| `@OnPong()`          | `(data: Buffer, socket: Socket) => void`         | `data` follows `binaryType` too.                                              |
 
 Every handler may be synchronous or `async`. A returned promise is adopted, and a
 rejection goes to the same error handler a synchronous throw does.

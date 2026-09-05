@@ -1,4 +1,4 @@
-import type { BunRequest, Server } from 'bun';
+import type { BunRequest } from 'bun';
 import {
   AppError,
   Logger,
@@ -15,7 +15,6 @@ import { joinPath, type DiscoveredRoute } from '../route/discover.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import { PubSub } from '../ws/pubsub.js';
 import type { PubSubRelay, RelayOptions, RelayPhase } from '../ws/relay.js';
-import type { SocketData } from '../ws/socket.js';
 import { attachAddressSource, ClientAddress } from './client-address.js';
 import {
   MetricsMiddleware,
@@ -79,10 +78,8 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
   readonly #relayResubscribe: RelayOptions['resubscribe'];
   readonly #notFound: 'guarded' | 'public';
   readonly #bootLogging: boolean;
-  readonly #http2: boolean | undefined;
-  readonly #http1: boolean | undefined;
-  readonly #gatewayPort: number | undefined;
-  readonly #binding = new ServerBinding();
+  readonly #binding: ServerBinding;
+  readonly #split: boolean;
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -122,9 +119,12 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     this.#relayResubscribe = options.relayResubscribe;
     this.#notFound = options.notFound ?? 'public';
     this.#bootLogging = options.bootLogging ?? true;
-    this.#http2 = options.http2;
-    this.#http1 = options.http1;
-    this.#gatewayPort = options.gatewayPort;
+    this.#binding = new ServerBinding({
+      http2: options.http2,
+      http1: options.http1,
+      gatewayPort: options.gatewayPort,
+    });
+    this.#split = options.gatewayPort !== undefined && websocket !== undefined;
     this.gatewayPaths = websocket?.paths ?? [];
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
@@ -217,7 +217,9 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     );
 
     const ws = this.#websocket;
-    if (ws) assertNoGatewayCollisions(prefixed, ws.paths);
+    // Only when the upgrades share the routes table. Under `gatewayPort` a
+    // route and a gateway on one path sit on different ports and nothing drops.
+    if (ws && !this.#split) assertNoGatewayCollisions(prefixed, ws.paths);
 
     // Bun's own 404 never reaches the middleware chain. This runs only after Bun
     // has matched nothing, so Bun is still the router.
@@ -228,28 +230,21 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       this.#notFound,
     );
 
-    this.#binding.bind({
-      port,
-      routes,
-      fetch,
-      websocket: ws,
-      http2: this.#http2,
-      http1: this.#http1,
-      gatewayPort: this.#gatewayPort,
-    });
-    const server = this.#binding.main as Server<SocketData>;
+    const bound = this.#binding.bind({ port, routes, fetch, websocket: ws });
 
     attachAddressSource(this.#app.get(ClientAddress), {
-      server,
+      server: bound.main,
       trustProxy: this.#settings['trust proxy'],
     });
-    // `pendingRequests` and `pendingWebSockets` are readable only from the bound
-    // server, so the singleton gets it the same way `ClientAddress` does.
-    this.#app.get(RequestMetrics).attach(server);
+    // `pendingRequests` and `pendingWebSockets` are readable only from a bound
+    // server, so the singleton gets them the same way `ClientAddress` does. The
+    // gauges sum both servers when the ports are split: the sockets live on the
+    // gateway one, and reading them off the routes server would always say 0.
+    this.#app.get(RequestMetrics).attach(bound.gauges);
     const pubsub = this.#app.get(PubSub);
     // The server that owns the sockets, which is the gateway one when the ports
     // are split. Publishing on the other would fan out to nothing.
-    pubsub.attach(this.#binding.sockets as Server<SocketData>);
+    pubsub.attach(bound.sockets);
     // After attach, so a frame arriving during the subscribe has a server to fan
     // out on. Awaited, so a two-node deployment is subscribed by listen().
     if (this.#relay) {
@@ -271,7 +266,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       });
     }
     this.#logServed(prefixed, ws);
-    return this.#binding.url as string;
+    return bound.main.url.href;
   }
 
   /** The gateway port's own url, when `gatewayPort` split them. */
@@ -298,6 +293,11 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     this.#app.get(Logger).info(`Serving ${subject}`, {
       // Under `bun test` `main` is the test file rather than the app entry.
       ...runtimeInfo(),
+      // Only when the gateways are on a port of their own: a reader building a
+      // socket address from the routes url and a path would otherwise get a 404.
+      ...(this.#binding.gatewayUrl === undefined
+        ? {}
+        : { gatewayUrl: this.#binding.gatewayUrl }),
       routes: routes.map((route) => `${route.method} ${route.path}`),
       ...(gateways.length === 0
         ? {}

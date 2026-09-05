@@ -98,7 +98,7 @@ them are now measured on this repo, and `--parallel` is the only one adopted.
 - **`--parallel`** is in the `unit` phase: 3.2s against 14.6s.
 - **`--isolate`** needs nothing done. `bun test --help` states that `--parallel`
   implies it, so the `unit` phase has isolated since `--parallel` landed. Adding it
-  to the sequential `coverage` phase costs 8% (16.6s to 17.9s) and inflates the
+  to the then-sequential `coverage` phase cost 8% (16.6s to 17.9s) and inflated the
   count by five, because a fresh module registry re-evaluates
   `packages/infra/src/images/fixture.test.ts` once per importing file and its own
   `it()` re-registers each time. Numbers in [../../bun-apis.md](../../../docs/bun-apis.md).

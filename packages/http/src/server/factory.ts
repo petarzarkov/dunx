@@ -227,6 +227,21 @@ export class HttpFactory {
     for (const warning of websocket?.warnings ?? []) {
       app.get(Logger).warn(warning);
     }
+    // A second port needs something to serve on it. Silently binding nothing
+    // would leave an operator's firewall rule pointing at a closed port.
+    if (
+      resolved.gatewayPort !== undefined &&
+      resolved.gatewayPort !== 0 &&
+      websocket === undefined
+    ) {
+      app
+        .get(Logger)
+        .warn(
+          `gatewayPort is set and no gateway is declared, so no second server ` +
+            `binds and gatewayUrl stays undefined. Declare a @Gateway in a ` +
+            `module's providers, or drop gatewayPort.`,
+        );
+    }
     /**
      * A websocket upgrade is an HTTP/1.1 request, so a server refusing HTTP/1.x
      * refuses every gateway on it. Bun answers 505 and the connection never
@@ -242,7 +257,9 @@ export class HttpFactory {
       websocket !== undefined &&
       resolved.gatewayPort === undefined
     ) {
-      await app.shutdown();
+      // Best effort: a provider whose `onShutdown` rejects must not replace the
+      // configuration error with a teardown one.
+      await app.shutdown().catch(() => undefined);
       throw new AppError(
         `http1: false refuses HTTP/1.x with a 505, and a websocket upgrade is an ` +
           `HTTP/1.1 request - so nothing could ever connect to ` +

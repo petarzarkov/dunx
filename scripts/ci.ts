@@ -92,10 +92,8 @@ export const PHASES: readonly Phase[] = Object.freeze([
      */
     onRequest: true,
     steps: [
-      // One process over every suite with `--parallel`, which is 2.7s against
-      // 13.5s for the same files run in one worker. Coverage is not on it
-      // because the `coverage` phase runs these same files with the backing
-      // services attached, which is the denominator the 90% floor was set from.
+      // The same files as `coverage`, without the backing services, so this is
+      // the fast signal and that is the gate.
       {
         name: 'test',
         run: [
@@ -180,11 +178,9 @@ export const PHASES: readonly Phase[] = Object.freeze([
     name: 'coverage',
     summary: 'The coverage model and the badges the site renders',
     concurrent: false,
-    // `test:cov` runs `--parallel`. It could not until Bun 1.4.1, which fixed
-    // `--coverage --parallel` under-reporting functions for a file whose
-    // functions ran in different workers. Re-measured on the whole sweep: three
-    // parallel runs and one sequential run agree to the digit, per package and
-    // in total, and the phase went 13.5s to 2.6s. See docs/bun-apis.md.
+    // `test:cov` runs `--parallel`, which it could not until Bun 1.4.1. The
+    // measurement: docs/bun-apis.md, "--coverage --parallel agrees with
+    // sequential".
     steps: [{ name: 'test:cov', run: ['bun', 'run', 'test:cov'], echo: 20 }],
   },
   {

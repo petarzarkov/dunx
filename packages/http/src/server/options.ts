@@ -109,7 +109,7 @@ export interface HttpOptions extends AppOptions {
    * a 404 from a 401. `'public'` reports it as `@Public()` for a conventional 404.
    * Either way `UNMATCHED` is set, which no real route sets.
    *
-   * @default 'guarded'
+   * @default 'public'
    */
   readonly notFound?: 'guarded' | 'public';
   /**
@@ -138,15 +138,12 @@ export interface HttpOptions extends AppOptions {
    * upgrades move here, on a second `Bun.serve` that takes no protocol
    * overrides, so it speaks HTTP/1.1 whatever the main port is set to.
    *
-   * This is what makes `http2` with `http1: false` usable at all: a websocket
-   * upgrade is an HTTP/1.1 request, so one port can serve HTTP/2-only routes or
-   * gateways and never both. Setting `http1: false` with a gateway declared and
-   * no `gatewayPort` is a boot error.
+   * This is what makes `http2` with `http1: false` usable: a websocket upgrade
+   * is an HTTP/1.1 request, so one port serves HTTP/2-only routes or gateways
+   * and never both. The pair without a `gatewayPort` is a boot error.
    *
-   * Both ports come out of one container, which is why this is an option rather
-   * than a second `HttpFactory.create`: a second app would build a second
-   * container, and the gateways would inject different singletons than the
-   * controllers.
+   * `0` takes any free port and is the one value that does not warn when no
+   * gateway is declared. See docs/guide/19-deployment.md.
    */
   readonly gatewayPort?: number;
 }

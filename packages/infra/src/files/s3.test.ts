@@ -255,7 +255,10 @@ describe.skipIf(liveBucket === undefined)(
         }),
       );
 
-      expect(failing).rejects.toThrow('source failed');
+      expect((await rejection(failing)) as Error).toHaveProperty(
+        'message',
+        'source failed',
+      );
     });
   },
 );

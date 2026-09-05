@@ -47,6 +47,16 @@ export class LocalStorage extends Storage {
 
   constructor(options: LocalStorageOptions) {
     super();
+    // `bun install` does not enforce `engines.bun`, and below 1.4.1
+    // `Bun.write(path, stream)` persists the 23 bytes `[object ReadableStream]`
+    // with no error. Checked once here, the way `CompressionOptions` checks its
+    // encoders, so the floor is a boot error and not a silently wrong file.
+    if (!Bun.semver.satisfies(Bun.version, '>=1.4.1')) {
+      throw new Error(
+        `LocalStorage needs Bun 1.4.1 or later to stream a write to disk, and ` +
+          `this is ${Bun.version}. Upgrade Bun.`,
+      );
+    }
     this.#root = options.root;
     this.#createPath = options.createPath;
   }
@@ -77,11 +87,7 @@ export class LocalStorage extends Storage {
   }
 
   async write(key: string, data: WriteData): Promise<number> {
-    // Bun 1.4.1 streams a ReadableStream to disk rather than stringifying it, so
-    // every branch of WriteData is one call. It truncates, it honours
-    // createPath, and it returns the byte count - the three jobs the empty-write
-    // plus FileSink pump this replaced had to do by hand. Measured, and the
-    // reason `engines.bun` is `>=1.4.1`.
+    // `Bun.write` streams a ReadableStream since 1.4.1 (docs/bun-apis.md).
     return Bun.write(resolveWithin(this.#root, key), data, {
       createPath: this.#createPath,
     });

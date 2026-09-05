@@ -586,9 +586,10 @@ then not cover it.
 - **`bun test --parallel` is 4.6x** and the `unit` phase uses it. Two things it
   changes, both measured in
   [docs/bun-apis.md](./docs/bun-apis.md): a `?raw` import resolves as JSON inside a
-  worker, which is why `internal/docs` is the one workspace excluded, and
-  `--coverage --parallel` reports low and differently every run, which is why the
-  `coverage` phase is sequential.
+  worker, which is why `internal/docs` is the one workspace excluded. `--coverage
+--parallel` reported low and differently every run on 1.4.0 and agrees with
+  sequential on 1.4.1, so the `coverage` phase runs `--parallel` too; the
+  measurement is in that file.
 - `bun run test:cov` - one root run over `./packages ./tools ./scripts` (excluding
   `**/templates/**`, which holds a working app whose test cannot resolve from there)
   so everything lands in

@@ -16,7 +16,9 @@ import { appOptions, testRoot, type TestAppOptions } from './app.js';
 import { testClient, type TestClient } from './client.js';
 
 export interface TestServerOptions
-  extends TestAppOptions, Omit<HttpOptions, 'port' | 'overrides'> {
+  extends
+    TestAppOptions,
+    Omit<HttpOptions, 'port' | 'gatewayPort' | 'overrides'> {
   /**
    * `setGlobalPrefix`, applied before `listen()` so the client's URLs carry it.
    *
@@ -146,6 +148,11 @@ export const createTestServer = async (
     // route table per file. A suite asserting on the table asks for it.
     bootLogging: bootLogging ?? false,
     port: 0,
+    // Forced like `port`: an `HttpOptionsProvider` answering a fixed gateway port
+    // from config would otherwise have every test server bind the same one, and
+    // two files under `bun test --parallel` collide on it. `0` splits the ports
+    // when a gateway exists and is ignored without one.
+    gatewayPort: 0,
   });
   // The argument is not the only source since 3.1.0: `resolveHttpOptions` runs
   // inside `HttpFactory.create` and reconciles it with the bound

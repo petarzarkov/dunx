@@ -194,8 +194,8 @@ answers a miss, and HTTP/1.1 keeps working on the same port. A websocket upgrade
 still succeeds alongside it.
 
 `http1: false` answers **505** to every HTTP/1.x request, which takes every gateway
-with it - a websocket upgrade is an HTTP/1.1 request. `@dunx/http` warns at boot
-when the pair is set with a gateway declared.
+with it - a websocket upgrade is an HTTP/1.1 request. `@dunx/http` refuses to boot
+when the pair is set with a gateway declared and no `gatewayPort` to move it to.
 
 `Bun.serve` accepts an unknown option silently, so acceptance of `http2` proves
 nothing on its own. That is why the probe asserts on the wire.
@@ -1520,7 +1520,8 @@ Found by setting it in `examples/full`, where it turned the tour into a
 opts back out. So the `unit` phase has been isolating since `--parallel` was
 adopted, and adding `--isolate` to it changes nothing.
 
-Adding it to the sequential `coverage` phase does two things, both measured on
+Adding it to the `coverage` phase, which was sequential until 1.4.1 (see the
+re-probe at the top of this file), does two things, both measured on
 1.4.0 over this repo's 160 files:
 
 - **16.6s to 17.9s**, about 8%.

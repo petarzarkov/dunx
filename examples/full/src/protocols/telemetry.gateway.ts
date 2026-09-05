@@ -6,7 +6,12 @@ import { Gateway, OnMessage, type Socket } from '@dunx/http';
  */
 @Gateway('/telemetry')
 export class TelemetryGateway {
-  readonly readings: number[] = [];
+  /** A count, not the bytes: this gateway outlives every frame it sees. */
+  #recorded = 0;
+
+  get recorded(): number {
+    return this.#recorded;
+  }
 
   @OnMessage()
   async record(message: string | Buffer, socket: Socket): Promise<string> {
@@ -18,11 +23,13 @@ export class TelemetryGateway {
     // configured one narrows it here. A Blob is the one that needs an await.
     const blob = message as unknown as Blob;
     const bytes = new Uint8Array(await blob.arrayBuffer());
-    this.readings.push(...bytes);
+    // Not `+=`: Bun refuses to parse a read-modify-write on a private field in a
+    // class that has a decorated member. See docs/bun-apis.md.
+    this.#recorded = this.#recorded + bytes.length;
 
     return (
       `${blob.constructor.name}(${blob.size}) -> ` +
-      `[${[...bytes].join(', ')}], ${this.readings.length} recorded on ` +
+      `[${[...bytes].join(', ')}], ${this.#recorded} recorded on ` +
       `socket ${socket.data.id.slice(0, 8)}`
     );
   }

@@ -11,7 +11,7 @@ import { TelemetryGateway } from './telemetry.gateway.js';
 const overHttp2 = (
   origin: string,
   path: string,
-): Promise<{ status: number; text: string; alpn: string }> =>
+): Promise<{ status: number; text: string }> =>
   new Promise((resolve, reject) => {
     const client = http2.connect(origin);
     const timer = setTimeout(() => {
@@ -39,7 +39,7 @@ const overHttp2 = (
     request.on('end', () => {
       clearTimeout(timer);
       client.close();
-      resolve({ status, text, alpn: client.alpnProtocol ?? 'h2c' });
+      resolve({ status, text });
     });
     request.end();
   });
@@ -58,7 +58,7 @@ export class ProtocolsDemo {
 
     logger.info(
       `GET /api/notes over HTTP/2 -> ${viaH2.status}, ${viaH2.text.length} bytes ` +
-        `(${viaH2.alpn}, prior knowledge - no TLS, so no ALPN to negotiate with)`,
+        '(h2c, prior knowledge - no TLS, so no ALPN to negotiate with)',
     );
     logger.info(
       `GET /api/notes over HTTP/1.1 -> ${viaH1.status}, same port, same routes`,
@@ -84,12 +84,17 @@ export class ProtocolsDemo {
     @Module({ providers: [TelemetryGateway] })
     class SplitNode {}
 
-    const refused = await HttpFactory.create(SplitNode, {
+    // The same options both times, so the only difference the demo shows is the
+    // port. `binaryType` matches main.ts, because TelemetryGateway reads a Blob.
+    const options = {
       http2: true,
       http1: false,
       requestLogging: false,
       bootLogging: false,
-    }).then(
+      websocket: { binaryType: 'blob' },
+    } as const;
+
+    const refused = await HttpFactory.create(SplitNode, options).then(
       () => null,
       (error: unknown) => (error as Error).message,
     );
@@ -98,17 +103,18 @@ export class ProtocolsDemo {
     // The same options plus a port for the upgrades, which is the shape that
     // works: one container, two Bun.serve instances.
     const split = await HttpFactory.create(SplitNode, {
-      http2: true,
-      http1: false,
+      ...options,
       gatewayPort: 0,
-      requestLogging: false,
-      bootLogging: false,
     });
     try {
       const routes = await split.listen(0);
+      const gatewayUrl = split.gatewayUrl;
+      if (gatewayUrl === undefined) {
+        throw new Error('gatewayPort was set and no gateway server bound');
+      }
       logger.info(
         `routes on ${new URL(routes).port} (HTTP/2 only), gateways on ` +
-          `${new URL(split.gatewayUrl ?? '').port} (HTTP/1.1) - one container, two servers`,
+          `${new URL(gatewayUrl).port} (HTTP/1.1) - one container, two servers`,
       );
 
       const overHttp1 = await fetch(routes);
@@ -116,33 +122,41 @@ export class ProtocolsDemo {
         `GET / on the routes port over HTTP/1.1 -> ${overHttp1.status} (505, refused)`,
       );
 
-      const socket = new WebSocket(
-        new URL('telemetry', split.gatewayUrl).href.replace('http', 'ws'),
-      );
-      await new Promise<void>((resolve, reject) => {
-        socket.addEventListener('open', () => resolve(), { once: true });
-        setTimeout(
-          () => reject(new Error('the split socket never opened')),
-          2000,
-        );
-      });
+      const socket = await this.#open(gatewayUrl, 'telemetry');
       logger.info('the gateway accepted an upgrade on its own port');
       socket.close();
-      await Bun.sleep(20);
     } finally {
       await split.shutdown();
     }
   }
 
-  /** `binaryType: 'blob'` in `main.ts`, against Bun's default `Buffer`. */
-  async #binaryFrame(url: string): Promise<void> {
+  /** Open a socket, or fail on the refusal rather than on the deadline. */
+  async #open(base: string, path: string): Promise<WebSocket> {
     const socket = new WebSocket(
-      new URL('telemetry', url).href.replace('http', 'ws'),
+      new URL(path, base).href.replace('http', 'ws'),
     );
     await new Promise<void>((resolve, reject) => {
-      socket.addEventListener('open', () => resolve(), { once: true });
-      setTimeout(() => reject(new Error('the socket never opened')), 2000);
+      const timer = setTimeout(
+        () => reject(new Error(`${path} never opened`)),
+        2000,
+      );
+      const settle = (run: () => void) => {
+        clearTimeout(timer);
+        run();
+      };
+      socket.addEventListener('open', () => settle(resolve), { once: true });
+      socket.addEventListener(
+        'error',
+        () => settle(() => reject(new Error(`${path} refused the upgrade`))),
+        { once: true },
+      );
     });
+    return socket;
+  }
+
+  /** `binaryType: 'blob'` in `main.ts`, against Bun's default `Buffer`. */
+  async #binaryFrame(url: string): Promise<void> {
+    const socket = await this.#open(url, 'telemetry');
 
     const reply = new Promise<string>((resolve, reject) => {
       const timer = setTimeout(
