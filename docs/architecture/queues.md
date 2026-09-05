@@ -56,12 +56,13 @@ Three findings that shaped the code:
 
 ### A reconnect has to construct, not duplicate
 
-Bun fires `onconnect` on a constructed client and not on one returned by
-`duplicate()`. bullmq's `_scheduleReconnect` wires that callback and then calls
-`connect()`, so it is the only thing that runs `_handleConnected()` on a
-replacement socket. Without it the adapter never re-sends `CLIENT SETNAME`,
-never flips `ready` and never resolves `readying`, while the socket underneath
-answers `PING` perfectly well.
+`Bun.RedisClient.duplicate()` resolves to an **already-connected** client, so
+there is no connect event left for a caller to observe: assigning `onconnect`
+after it never fires. bullmq's `_scheduleReconnect` wires that callback and then
+calls `connect()`, which is a no-op on a client that is already up, so nothing
+runs `_handleConnected()` on the replacement. The adapter then never re-sends
+`CLIENT SETNAME`, never flips `ready` and never resolves `readying`, while the
+socket underneath answers `PING` perfectly well.
 
 A worker awaiting that readiness issues no further `BZPOPMIN`, so its queue
 stops consuming. Nothing on the path rejects, so no `error` is emitted and
@@ -77,6 +78,49 @@ wedged again on the next dropped socket.
 is why `boundClientClass` began as a constructor fix. 6.3.4 rebuilds by
 duplication instead, and the caret on bullmq's peer range is enough to land an
 app on it. The class overrides `duplicate()` to construct, which covers both.
+
+**A clean socket reset does not reproduce the wedge on 6.3.4, and the override
+is kept anyway.** Re-probed on Bun 1.4.1 against a live Redis, driving
+`CLIENT KILL TYPE normal SKIPME yes` at an adapter built on a plain
+`Bun.RedisClient`:
+
+| Raw client options     | `_scheduleReconnect` | raw swapped | end state     |
+| ---------------------- | -------------------- | ----------- | ------------- |
+| defaults               | 0 calls              | no          | `ready`, PONG |
+| `autoReconnect: false` | 1 call               | yes         | `ready`, PONG |
+| `maxRetries: 0`        | 1 call               | yes         | `ready`, PONG |
+| both                   | 1 call               | yes         | `ready`, PONG |
+
+Two things stand out. On default options **Bun heals the socket itself** and
+re-fires `onconnect`, so bullmq's reconnect path is never entered at all. And
+when it is entered, 6.3.4's `connect()` carries a guard the mechanism above does
+not account for:
+
+```js
+if (!this.ready) {
+  await (this.readying ?? this._handleConnected());
+}
+```
+
+That runs `_handleConnected()` directly for an already-connected raw client, which
+is exactly the case `duplicate()` produces. So the wedge measured below was **not
+reproduced from a clean reset**, and its mechanism is not fully explained by the
+paragraph above it. The likely difference is the trigger: a connection idle for 20
+hours is a blackholed NAT or firewall timeout rather than a reset, and that is not
+what `CLIENT KILL` simulates. The override costs one constructed client per
+reconnect and is kept until the production trigger can be reproduced.
+
+**There is no integration test for this**, and the measurement above is why.
+
+A test that kills the socket and asserts the worker recovers **passes with the
+override removed**: 6.3.4 recovers from a clean reset either way, so it would
+guard nothing while looking like it guarded something.
+
+It is destructive as well. `CLIENT KILL TYPE normal` is server-wide, and it took
+an unrelated test in the same file down with it when tried.
+
+`connection.test.ts` covers what can be asserted honestly: that `duplicate()`
+returns a constructed client carrying the url.
 
 `@dunx/infra/queue` is **not re-exported from the package barrel**,
 unlike every other area. `src/index.ts` re-exporting it would put bullmq's static

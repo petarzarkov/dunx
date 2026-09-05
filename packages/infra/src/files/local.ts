@@ -8,7 +8,6 @@ import {
   resolveWithin,
   toPosix,
 } from './path.js';
-import { pump } from './stream.js';
 import {
   Storage,
   StorageOptions,
@@ -48,6 +47,16 @@ export class LocalStorage extends Storage {
 
   constructor(options: LocalStorageOptions) {
     super();
+    // `bun install` does not enforce `engines.bun`, and below 1.4.1
+    // `Bun.write(path, stream)` persists the 23 bytes `[object ReadableStream]`
+    // with no error. Checked once here, the way `CompressionOptions` checks its
+    // encoders, so the floor is a boot error and not a silently wrong file.
+    if (!Bun.semver.satisfies(Bun.version, '>=1.4.1')) {
+      throw new Error(
+        `LocalStorage needs Bun 1.4.1 or later to stream a write to disk, and ` +
+          `this is ${Bun.version}. Upgrade Bun.`,
+      );
+    }
     this.#root = options.root;
     this.#createPath = options.createPath;
   }
@@ -78,16 +87,10 @@ export class LocalStorage extends Storage {
   }
 
   async write(key: string, data: WriteData): Promise<number> {
-    const path = resolveWithin(this.#root, key);
-    if (!(data instanceof ReadableStream)) {
-      return Bun.write(path, data, { createPath: this.#createPath });
-    }
-
-    // A FileSink neither creates parent directories nor truncates - it writes
-    // over the existing bytes from offset 0 and leaves any tail behind. An empty
-    // Bun.write does both jobs first, then the sink streams in over the top.
-    await Bun.write(path, '', { createPath: this.#createPath });
-    return pump(Bun.file(path).writer(), data);
+    // `Bun.write` streams a ReadableStream since 1.4.1 (docs/bun-apis.md).
+    return Bun.write(resolveWithin(this.#root, key), data, {
+      createPath: this.#createPath,
+    });
   }
 
   async exists(key: string): Promise<boolean> {

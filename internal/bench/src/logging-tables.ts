@@ -166,11 +166,12 @@ over a run. Read anything under about **±0.5 µs** as unresolvable.
 
 ${ladderTable(report)}
 
-Reading it: the middleware chain, \`TraceContext.adopt\` and setting
-\`traceresponse\` on the response are each at or below what this harness can resolve.
-What costs is the **first touch of \`req.headers\`**, the \`AsyncLocalStorage\`
-scope, and **building and serialising the entry** - and, before it was batched, the
-write.
+Reading it: the middleware chain and \`TraceContext.adopt\` are at or below what
+this harness can resolve. What costs is **building and serialising the entry**, the
+\`.then\` that sets \`traceresponse\` on the response, the **first touch of
+\`req.headers\`**, the \`AsyncLocalStorage\` scope - and, before it was batched, the
+write. Read the total rather than a single row: six of the eleven steps sit inside
+the harness's own resolution and one of them reads negative.
 
 ### The write, and the pipe nobody was reading
 

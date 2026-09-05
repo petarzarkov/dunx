@@ -437,7 +437,7 @@ it('arms three schedules and triggers two off their cadence', () => {
 });
 
 it('serves HTTP and WebSocket from one Bun.serve', () => {
-  expect(tour.text).toContain('gateway paths: ["/chat"]');
+  expect(tour.text).toContain('gateway paths: ["/chat","/telemetry"]');
   expect(tour.text).toContain('two clients connected: welcome / welcome');
   expect(tour.text).toContain(
     'grace <- {"event":"said","data":"one server, two protocols"}',
@@ -447,6 +447,43 @@ it('serves HTTP and WebSocket from one Bun.serve', () => {
     'the same server still answers GET /api/notes -> 200',
   );
   expect(tour.text).toContain('/chat closed with 1000');
+});
+
+it('serves the same routes over HTTP/2 and HTTP/1.1 on one port', () => {
+  // node:http2 opens with the connection preface, so a 200 here is the wire
+  // protocol rather than an option having been stored. Bun's own fetch will not
+  // speak h2c, which is why the demo does not use it.
+  expect(tour.text).toMatch(
+    /GET \/api\/notes over HTTP\/2 -> 200, \d+ bytes \(h2c, prior knowledge/,
+  );
+  expect(tour.text).toContain(
+    'GET /api/notes over HTTP/1.1 -> 200, same port, same routes',
+  );
+});
+
+it('refuses http1: false with a gateway, and serves both once ports split', () => {
+  // The boot error names the stranded path rather than starting an app whose
+  // gateways nothing could reach.
+  expect(tour.text).toContain(
+    'nothing could ever connect to /telemetry. Set gatewayPort',
+  );
+  expect(tour.text).toMatch(
+    /routes on \d+ \(HTTP\/2 only\), gateways on \d+ \(HTTP\/1\.1\) - one container, two servers/,
+  );
+  // The status, not just the line: the demo logs whatever it got, so without
+  // this the test passes when the routes port answers 200.
+  expect(tour.text).toContain('GET / on the routes port over HTTP/1.1 -> 505');
+  expect(tour.text).toContain(
+    'the gateway accepted an upgrade on its own port',
+  );
+});
+
+it('delivers a binary frame as the configured binaryType', () => {
+  // Bun's default is a Buffer; 'blob' is what main.ts asked for, and 1.4.1 is
+  // what added it to the three a server socket already took.
+  expect(tour.text).toContain(
+    'telemetry <- Blob(3) -> [21, 34, 55], 3 recorded',
+  );
 });
 
 it('fans a publish out to a second node exactly once, or says it is skipping', () => {

@@ -13,6 +13,7 @@ import {
 import { AccountsModule } from './auth/auth.module.js';
 import { CacheModule } from './cache/cache.module.js';
 import { ChatModule } from './chat/chat.module.js';
+import { ProtocolsModule } from './protocols/protocols.module.js';
 import { AppConfigService, validate } from './config.js';
 import { OpsModule } from './dashboard/dashboard.module.js';
 import { StatsModule } from './stats/stats.module.js';
@@ -95,6 +96,7 @@ const fileAndConsole = (
     UsersModule,
     NotesModule,
     ChatModule,
+    ProtocolsModule,
     JobsModule,
     // After CacheModule, which binds the connection its counter writes to.
     LimitsModule,

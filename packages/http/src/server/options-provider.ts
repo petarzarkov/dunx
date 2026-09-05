@@ -1,5 +1,5 @@
 import type { Ctor } from '@dunx/core';
-import type { HttpOptions } from './application.js';
+import type { HttpOptions } from './options.js';
 import type { SocketLoggingOptions } from '../ws/logging.js';
 import type { SocketMiddleware } from '../ws/middleware.js';
 import type { PubSubRelay, RelayOptions } from '../ws/relay.js';
@@ -131,6 +131,28 @@ export abstract class HttpOptionsProvider {
   get relayResubscribe(): RelayOptions['resubscribe'] {
     return undefined;
   }
+
+  /**
+   * Serve HTTP/2 alongside HTTP/1.1 on the same port. `undefined` rather than
+   * `false` so an absent answer leaves Bun's own default in place instead of
+   * restating it. See {@link HttpOptions.http2}.
+   */
+  get http2(): boolean | undefined {
+    return undefined;
+  }
+
+  /** See {@link HttpOptions.http1}. `false` disables every gateway. */
+  get http1(): boolean | undefined {
+    return undefined;
+  }
+
+  /**
+   * A port of its own for the gateways, which is what makes `http1: false`
+   * usable with one. See {@link HttpOptions.gatewayPort}.
+   */
+  get gatewayPort(): number | undefined {
+    return undefined;
+  }
 }
 
 /**
@@ -175,6 +197,9 @@ export function resolveHttpOptions(
     websocket: settings.websocket,
     relay: settings.relay,
     relayResubscribe: settings.relayResubscribe,
+    http2: settings.http2,
+    http1: settings.http1,
+    gatewayPort: settings.gatewayPort,
   };
   // `exactOptionalPropertyTypes` separates an absent key from one set to
   // `undefined`, and only the first should defer to the provider: passing

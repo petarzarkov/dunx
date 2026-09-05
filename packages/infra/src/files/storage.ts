@@ -1,7 +1,7 @@
 /**
  * What `write()` accepts. A `ReadableStream` is listed deliberately: it is the
  * one input neither `Bun.write` nor `S3Client.write` takes, and the backends
- * route it through a sink instead of buffering it - see stream.ts.
+ * route it through a sink instead of buffering it - see `pump` in s3.ts.
  */
 export type WriteData =
   | string

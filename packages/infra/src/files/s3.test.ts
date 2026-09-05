@@ -211,5 +211,111 @@ describe.skipIf(liveBucket === undefined)(
       await storageUnderTest.delete(key);
       expect(await storageUnderTest.exists(key)).toBe(false);
     });
+
+    // The only test of `pump`. `LocalStorage` shared it until Bun 1.4.1 gave
+    // `Bun.write` a stream overload, and its suite was what covered the helper;
+    // the upload path it exists for had never been run.
+    it('multiparts a ReadableStream through the NetworkSink', async () => {
+      const storageUnderTest = live();
+      const streamKey = `${crypto.randomUUID()}.bin`;
+      const chunk = 'dunx'.repeat(16);
+      let remaining = 8;
+
+      const written = await storageUnderTest.write(
+        streamKey,
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (remaining === 0) return controller.close();
+            remaining -= 1;
+            controller.enqueue(new TextEncoder().encode(chunk));
+          },
+        }),
+      );
+
+      expect(written).toBe(chunk.length * 8);
+      expect(await storageUnderTest.read(streamKey)).toBe(chunk.repeat(8));
+      await storageUnderTest.delete(streamKey);
+    });
+
+    // A source that fails part way must end the sink in a failed state, so the
+    // multipart upload is aborted rather than committed at whatever it had.
+    it('aborts the upload when the source errors', async () => {
+      const storageUnderTest = live();
+      const streamKey = `${crypto.randomUUID()}.bin`;
+
+      // The same object, so a wrapper carrying the same message cannot pass.
+      const sourceError = new Error('source failed');
+      const failing = storageUnderTest.write(
+        streamKey,
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('partial'));
+          },
+          pull(controller) {
+            controller.error(sourceError);
+          },
+        }),
+      );
+
+      expect(await rejection(failing)).toBe(sourceError);
+    });
+
+    /**
+     * A failed replacement destroys what was there, and that happens inside the
+     * sink before any cleanup runs - so removing the delete below does not save
+     * the original, it only swaps an absent object for a truncated one.
+     * Measured: a 24-byte object replaced by a stream that dies after 7 bytes
+     * leaves a 7-byte object when nothing cleans up.
+     */
+    it('leaves no object rather than a truncated one, replacing or not', async () => {
+      const storageUnderTest = live();
+      const streamKey = `${crypto.randomUUID()}.bin`;
+      await storageUnderTest.write(streamKey, 'ORIGINAL-CONTENT-KEEP-ME');
+      expect((await storageUnderTest.stat(streamKey)).size).toBe(24);
+
+      const failing = storageUnderTest.write(
+        streamKey,
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('partial'));
+          },
+          pull(controller) {
+            controller.error(new Error('source failed'));
+          },
+        }),
+      );
+
+      await rejection(failing);
+      // Not 7 bytes, which is what the sink committed on its way out.
+      expect(await storageUnderTest.exists(streamKey)).toBe(false);
+    });
+
+    // `end(error)` commits what was written whatever it is handed, so the write
+    // removes the object rather than leaving a truncated one behind.
+    it.each([
+      ['an Error', new Error('source failed')],
+      ['a non-Error', 'source failed'],
+    ])(
+      'leaves no object when the source errors with %s',
+      async (_l, reason) => {
+        const storageUnderTest = live();
+        const streamKey = `${crypto.randomUUID()}.bin`;
+
+        const failing = storageUnderTest.write(
+          streamKey,
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('partial'));
+            },
+            pull(controller) {
+              controller.error(reason);
+            },
+          }),
+        );
+
+        expect(await rejection(failing)).toBe(reason);
+        expect(await storageUnderTest.exists(streamKey)).toBe(false);
+      },
+    );
   },
 );

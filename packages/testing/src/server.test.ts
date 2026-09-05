@@ -2,9 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { inject, Logger, LogLevel, Module, provide } from '@dunx/core';
 import {
   Controller,
+  Gateway,
   Get,
   HttpError,
   HttpOptionsProvider,
+  OnMessage,
   Post,
   UseGuards,
   type ErrorHandler,
@@ -402,5 +404,59 @@ describe('createTestServer() global middleware', () => {
     } finally {
       await fixture?.close();
     }
+  });
+});
+
+describe('createTestServer() and gateways', () => {
+  @Gateway('/chat')
+  class ChatGateway {
+    @OnMessage()
+    raw(message: string | Buffer): string {
+      return `echo:${String(message)}`;
+    }
+  }
+
+  @Module({ providers: [ChatGateway] })
+  class GatewayModule {}
+
+  /** Open a socket, or say which way it failed rather than hanging. */
+  const open = (base: string, path: string): Promise<string> => {
+    const socket = new WebSocket(
+      new URL(path, base).href.replace('http', 'ws'),
+    );
+    return new Promise<string>((resolve) => {
+      const timer = setTimeout(() => settle('TIMEOUT'), 2000);
+      const settle = (outcome: string) => {
+        clearTimeout(timer);
+        socket.close();
+        resolve(outcome);
+      };
+      socket.addEventListener('open', () => settle('opened'), { once: true });
+      socket.addEventListener('error', () => settle('refused'), { once: true });
+    });
+  };
+
+  it('serves a gateway on the url it returned', async () => {
+    // `gatewayPort` is not forced: forcing it moved the upgrades to a second
+    // server, so a fixture opening a socket on `server.url` was refused.
+    const server = await createTestServer({ modules: [GatewayModule] });
+
+    expect(server.gatewayUrl).toBeUndefined();
+    expect(await open(server.url, '/chat')).toBe('opened');
+    await server.close();
+  });
+
+  it('splits the ports when a suite asks for it', async () => {
+    const server = await createTestServer({
+      modules: [GatewayModule],
+      gatewayPort: 0,
+    });
+
+    expect(server.gatewayUrl).toBeString();
+    expect(server.gatewayUrl).not.toBe(server.url);
+    // Isolated both ways: the upgrades moved off the routes port entirely.
+    expect(await open(server.url, '/chat')).toBe('refused');
+    expect(await open(server.gatewayUrl as string, '/chat')).toBe('opened');
+    await server.close();
   });
 });

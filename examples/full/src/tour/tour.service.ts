@@ -3,6 +3,7 @@ import type { HttpApp } from '@dunx/http';
 import { AuthDemo } from '../auth/auth.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
+import { ProtocolsDemo } from '../protocols/protocols.demo.js';
 import { CompressionDemo } from '../http/compression.demo.js';
 import { TraceDemo } from '../http/trace.demo.js';
 import { DashboardDemo } from '../dashboard/dashboard.demo.js';
@@ -38,6 +39,7 @@ export class Tour {
     private readonly compression: CompressionDemo,
     private readonly trace: TraceDemo,
     private readonly chat: ChatDemo,
+    private readonly protocols: ProtocolsDemo,
     private readonly guards: GuardsDemo,
     private readonly health: HealthDemo,
     private readonly throttle: ThrottleDemo,
@@ -81,6 +83,9 @@ export class Tour {
 
     this.group('@dunx/http - @Gateway("/chat"), same Bun.serve as the routes');
     await this.chat.demonstrate(app, url);
+
+    this.group('@dunx/http - HTTP/2 on the same port, and a binary frame');
+    await this.protocols.demonstrate(url);
 
     this.group('@dunx/http - the websocket relay, two nodes, one topic');
     await this.chat.relayed(url);

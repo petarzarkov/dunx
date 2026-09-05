@@ -177,6 +177,9 @@ export class SocketLoggingMiddleware implements SocketMiddleware {
     if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
       return `[${data.byteLength} bytes]`;
     }
+    // What `binaryType: 'blob'` delivers. Without this branch it would fall
+    // through to `JSON.stringify`, which makes `{}` of a Blob of any size.
+    if (data instanceof Blob) return `[${data.size} bytes]`;
     const text = JSON.stringify(data) ?? '';
     return text.length > this.#limit ? `[${text.length} chars]` : data;
   }

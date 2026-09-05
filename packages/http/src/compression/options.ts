@@ -104,9 +104,10 @@ export class CompressionOptions {
       CompressionEncoding.ZSTD,
       CompressionEncoding.GZIP,
     ];
-    // `engines.bun` allows 1.3, where `zstd` may be missing from either encoder.
-    // Checked once here so an unsupported runtime is a boot error naming the
-    // coding, rather than a TypeError on the first request that negotiates it.
+    // `engines.bun` is not enforced by `bun install`, so a 1.3 runtime where
+    // `zstd` is missing from either encoder can still boot this. Checked once
+    // here so it is a boot error naming the coding, rather than a TypeError on
+    // the first request that negotiates it.
     const missing = this.encodings.filter((encoding) => !encodable(encoding));
     if (missing.length > 0) {
       throw new Error(

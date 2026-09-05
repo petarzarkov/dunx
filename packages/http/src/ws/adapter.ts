@@ -94,8 +94,13 @@ const unreported = (middleware: readonly SocketMiddleware[]): string =>
 const runtimeOf = (socket: Socket): GatewayRuntime =>
   (socket.data as Routed)[RUNTIME];
 
-const isBinary = (value: unknown): value is Bun.BufferSource =>
-  value instanceof ArrayBuffer || ArrayBuffer.isView(value);
+// A Blob is what `binaryType: 'blob'` delivers, and `ws.send` takes one, so a
+// handler echoing its frame sends bytes rather than the `{}` JSON.stringify makes
+// of it.
+const isBinary = (value: unknown): value is Bun.BufferSource | Blob =>
+  value instanceof ArrayBuffer ||
+  ArrayBuffer.isView(value) ||
+  value instanceof Blob;
 
 const replyRaw = (socket: Socket, value: unknown): void => {
   if (value === undefined) return;
@@ -264,8 +269,52 @@ export const buildWebSocket = (
   const reports =
     options.onError !== undefined ||
     middleware.some((entry) => entry.reportsErrors === true);
-  // The rest is exactly the set of keys Bun's WebSocketHandler accepts.
-  const { onError: _onError, ...socketOptions } = options;
+  /**
+   * Every key of `SocketOptions`, named. `onError` and `binaryType` are dunx's -
+   * Bun takes `binaryType` per socket, so it is assigned in `open` instead - and
+   * the rest are Bun's, rebuilt below rather than spread.
+   *
+   * `rest` is the guard, and it is the only shape that works: annotating a rest
+   * object as the Bun subset still assigns, because excess-property checking
+   * applies to object literals and not to variables. A key added to
+   * `SocketOptions` and not named here lands in `rest` and fails
+   * `Record<string, never>`, instead of riding a spread into a handler that
+   * ignores what it does not know.
+   */
+  const {
+    onError: _onError,
+    binaryType,
+    backpressureLimit,
+    closeOnBackpressureLimit,
+    idleTimeout,
+    maxPayloadLength,
+    perMessageDeflate,
+    publishToSelf,
+    sendPings,
+    ...rest
+  } = options;
+  void (rest satisfies Record<string, never>);
+
+  // Conditional per key, because `exactOptionalPropertyTypes` separates an absent
+  // key from one set to `undefined`, and Bun's defaults are not ours to restate.
+  const handlerOptions: Pick<
+    WebSocketHandler<SocketData>,
+    | 'backpressureLimit'
+    | 'closeOnBackpressureLimit'
+    | 'idleTimeout'
+    | 'maxPayloadLength'
+    | 'perMessageDeflate'
+    | 'publishToSelf'
+    | 'sendPings'
+  > = {
+    ...(backpressureLimit !== undefined && { backpressureLimit }),
+    ...(closeOnBackpressureLimit !== undefined && { closeOnBackpressureLimit }),
+    ...(idleTimeout !== undefined && { idleTimeout }),
+    ...(maxPayloadLength !== undefined && { maxPayloadLength }),
+    ...(perMessageDeflate !== undefined && { perMessageDeflate }),
+    ...(publishToSelf !== undefined && { publishToSelf }),
+    ...(sendPings !== undefined && { sendPings }),
+  };
 
   const run = (
     invoke: Invoke,
@@ -281,7 +330,7 @@ export const buildWebSocket = (
   };
 
   const websocket: WebSocketHandler<SocketData> = {
-    ...socketOptions,
+    ...handlerOptions,
 
     message(ws, message) {
       const gateway = runtimeOf(ws);
@@ -315,8 +364,13 @@ export const buildWebSocket = (
       }
     },
 
-    ...(someHandler(gateways, (g) => g.open) && {
+    // Also installed for `binaryType` alone: the property lives on the socket, so
+    // the connection has to exist before anything can set it. Assigned before the
+    // gateway's own `@OnOpen` runs, so that handler already sees the configured
+    // type.
+    ...((someHandler(gateways, (g) => g.open) || binaryType !== undefined) && {
       open(ws: Socket) {
+        if (binaryType !== undefined) ws.binaryType = binaryType;
         const { open } = runtimeOf(ws);
         if (open) run(open, [ws], ws, undefined);
       },

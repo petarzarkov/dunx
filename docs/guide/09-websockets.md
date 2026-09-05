@@ -83,15 +83,15 @@ controller routes, and a gateway path stays what the decorator said.
 
 ## The lifecycle decorators
 
-| Decorator            | Handler signature                                | Notes                                                        |
-| -------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
-| `@OnUpgrade()`       | `(req: BunRequest) => Response \| unknown`       | Before the socket exists. Return a `Response` to refuse.     |
-| `@OnOpen()`          | `(socket: Socket) => void`                       | The socket is live.                                          |
-| `@OnMessage(event?)` | `(data, socket) => unknown`                      | With a name, routed by envelope; without, the raw catch-all. |
-| `@OnClose()`         | `(socket, code: number, reason: string) => void` |                                                              |
-| `@OnDrain()`         | `(socket: Socket) => void`                       | Backpressure relieved; safe to resume sending.               |
-| `@OnPing()`          | `(data: Buffer, socket: Socket) => void`         | Observation only; Bun still answers with a pong.             |
-| `@OnPong()`          | `(data: Buffer, socket: Socket) => void`         |                                                              |
+| Decorator            | Handler signature                                | Notes                                                                                                      |
+| -------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `@OnUpgrade()`       | `(req: BunRequest) => Response \| unknown`       | Before the socket exists. Return a `Response` to refuse.                                                   |
+| `@OnOpen()`          | `(socket: Socket) => void`                       | The socket is live.                                                                                        |
+| `@OnMessage(event?)` | `(data, socket) => unknown`                      | With a name, routed by envelope; without, the raw catch-all.                                               |
+| `@OnClose()`         | `(socket, code: number, reason: string) => void` |                                                                                                            |
+| `@OnDrain()`         | `(socket: Socket) => void`                       | Backpressure relieved; safe to resume sending.                                                             |
+| `@OnPing()`          | `(data, socket: Socket) => void`                 | Observation only; Bun still answers with a pong. `data` is a `Buffer` by default and follows `binaryType`. |
+| `@OnPong()`          | `(data, socket: Socket) => void`                 | `data` follows `binaryType` the same way.                                                                  |
 
 Every handler may be synchronous or `async`. A returned promise is adopted, and a
 rejection goes to the same error handler a synchronous throw does.
@@ -153,9 +153,35 @@ await HttpFactory.create(AppModule, {
 ```
 
 `backpressureLimit`, `closeOnBackpressureLimit`, `idleTimeout`,
-`maxPayloadLength`, `perMessageDeflate`, `publishToSelf` and `sendPings`, plus one
-addition: `onError`, where a throwing or rejecting handler goes. It defaults to
+`maxPayloadLength`, `perMessageDeflate`, `publishToSelf` and `sendPings`, plus two
+additions. `onError` is where a throwing or rejecting handler goes; it defaults to
 `console.error` with the gateway path in the line.
+
+`binaryType` is the other, and it says what a binary frame arrives as:
+
+```ts
+await HttpFactory.create(AppModule, {
+  websocket: { binaryType: 'blob' },
+});
+```
+
+`'nodebuffer'` (the default, a `Buffer`), `'arraybuffer'`, `'uint8array'` or
+`'blob'`. Bun takes it per socket rather than as a handler option, so dunx assigns
+it as each connection opens, before that gateway's `@OnOpen` runs. It selects what a
+**binary** frame is and never what a text frame is, so a gateway exchanging JSON is
+unaffected.
+
+Bun types `message` as the default's, because the runtime type is chosen at run
+time. A gateway that set this narrows the value itself:
+
+```ts
+@OnMessage()
+async record(message: string | Buffer): Promise<number> {
+  if (typeof message === 'string') return 0;
+  const blob = message as unknown as Blob;
+  return blob.size;
+}
+```
 
 They are server-wide rather than per gateway because Bun's `websocket` object is
 server-wide. Gateways themselves are declared in `@Module({ providers })`.

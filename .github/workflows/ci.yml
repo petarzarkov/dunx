@@ -160,10 +160,10 @@ jobs:
       - name: Build
         run: bun run ci build
 
-      # Sequential on purpose: `--coverage --parallel` reports a lower figure and
-      # a different one each run (docs/bun-apis.md). The step writes a per-package
-      # table into the job summary and fails any workspace under 90% on lines or
-      # on functions.
+      # The step writes a per-package table into the job summary and fails any
+      # workspace under 90% on lines or on functions. It runs `--parallel` since
+      # Bun 1.4.1; before that the same flag reported a lower figure and a
+      # different one each run (docs/bun-apis.md).
       - name: Coverage
         run: bun run ci coverage
 

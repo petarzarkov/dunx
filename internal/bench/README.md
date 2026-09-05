@@ -508,9 +508,9 @@ transcribed by hand.
 
 ```
 AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
-linux 7.0.0-30-generic x64 | bun 1.4.0 | node v20.20.2 | oha oha 1.15.0
-64 connections | 3s warmup | 5 x 5s measured | 2026-08-26
-dunx-logging 3.0.1 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1 | gin v1.12.0 | axum 0.8.9 | spring 4.1.0 | aspnet-minimal net10.0 | aspnet-mvc net10.0 | django 6.1 | fastapi 0.141.1
+linux 7.0.0-31-generic x64 | bun 1.4.1 | node v20.20.2 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 5s measured | 2026-09-05
+dunx-logging 3.2.1 | dunx-logging-arkv 3.2.1 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1 | gin v1.12.0 | axum 0.8.9 | spring 4.1.0 | aspnet-minimal net10.0 | aspnet-mvc net10.0 | django 6.1 | fastapi 0.141.1
 ```
 
 Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
@@ -519,121 +519,126 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 115,298 | 1,990 | 0.527 | 1.077 | 100.0% |
-| **@dunx/http** | **113,030** | 2,409 | 0.535 | 1.088 | **98.0%** |
-| Elysia | 111,396 | 3,935 | 0.551 | 1.117 | 96.6% |
-| Axum (Rust) | 109,690 | 4,524 | 0.572 | 0.786 | 95.1% |
-| Hono (Bun) | 104,270 | 1,939 | 0.590 | 1.184 | 90.4% |
-| ASP.NET Core minimal APIs | 94,487 | 3,255 | 0.658 | 0.932 | 82.0% |
-| ASP.NET Core MVC | 79,449 | 2,151 | 0.774 | 1.107 | 68.9% |
-| @dunx/http (+ request logging) | 69,909 | 2,769 | 0.860 | 1.677 | 60.6% |
-| Gin (Go) | 65,671 | 2,543 | 0.971 | 2.157 | 57.0% |
-| net/http (Go) | 60,074 | 2,816 | 1.058 | 2.263 | 52.1% |
-| Spring Boot (JVM) | 43,797 | 1,140 | 1.408 | 2.095 | 38.0% |
-| node:http (raw) | 38,841 | 816 | 1.607 | 3.015 | 33.7% |
-| Fastify (Node) | 35,387 | 2,405 | 1.794 | 2.308 | 30.7% |
-| Hono (Node) | 34,017 | 934 | 1.802 | 2.418 | 29.5% |
-| NestJS (Fastify) | 31,225 | 405 | 1.971 | 2.898 | 27.1% |
-| Express (Node) | 11,816 | 177 | 5.004 | 7.455 | 10.2% |
-| NestJS (Express) | 9,230 | 130 | 6.429 | 9.655 | 8.0% |
-| FastAPI (Python) | 7,057 | 89 | 8.996 | 9.631 | 6.1% |
-| Django (Python) | 4,221 | 41 | 15.229 | 16.507 | 3.7% |
+| Elysia | 136,766 | 2,388 | 0.444 | 0.900 | 100.2% |
+| Bun.serve (raw) | 136,500 | 1,788 | 0.446 | 0.897 | 100.0% |
+| **@dunx/http** | **134,864** | 933 | 0.450 | 0.909 | **98.8%** |
+| Hono (Bun) | 126,987 | 2,710 | 0.484 | 0.974 | 93.0% |
+| Axum (Rust) | 125,217 | 953 | 0.503 | 0.605 | 91.7% |
+| ASP.NET Core minimal APIs | 110,484 | 1,956 | 0.560 | 0.786 | 80.9% |
+| ASP.NET Core MVC | 90,251 | 268 | 0.689 | 0.961 | 66.1% |
+| @dunx/http (+ request logging) | 81,931 | 1,131 | 0.751 | 1.489 | 60.0% |
+| Gin (Go) | 75,374 | 970 | 0.845 | 1.903 | 55.2% |
+| net/http (Go) | 75,230 | 1,026 | 0.848 | 1.884 | 55.1% |
+| @dunx/http (+ request logging, @arkv/logger) | 60,054 | 588 | 1.015 | 2.028 | 44.0% |
+| Spring Boot (JVM) | 50,593 | 2,775 | 1.228 | 1.764 | 37.1% |
+| node:http (raw) | 44,428 | 1,161 | 1.397 | 1.991 | 32.5% |
+| Fastify (Node) | 40,143 | 922 | 1.562 | 1.856 | 29.4% |
+| Hono (Node) | 37,083 | 1,419 | 1.687 | 2.008 | 27.2% |
+| NestJS (Fastify) | 31,623 | 1,165 | 2.026 | 2.369 | 23.2% |
+| Express (Node) | 12,226 | 57 | 4.927 | 7.063 | 9.0% |
+| NestJS (Express) | 9,332 | 70 | 6.326 | 9.568 | 6.8% |
+| FastAPI (Python) | 7,260 | 13 | 8.781 | 9.004 | 5.3% |
+| Django (Python) | 4,545 | 34 | 13.937 | 14.801 | 3.3% |
 
 **JSON** - `GET /json`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 111,883 | 1,024 | 0.544 | 1.097 | 100.0% |
-| Elysia | 107,020 | 282 | 0.567 | 1.145 | 95.7% |
-| **@dunx/http** | **106,867** | 1,563 | 0.567 | 1.149 | **95.5%** |
-| Axum (Rust) | 104,493 | 3,153 | 0.599 | 0.814 | 93.4% |
-| Hono (Bun) | 93,598 | 1,531 | 0.642 | 1.288 | 83.7% |
-| ASP.NET Core minimal APIs | 91,573 | 2,331 | 0.692 | 0.890 | 81.8% |
-| ASP.NET Core MVC | 73,097 | 1,767 | 0.868 | 1.180 | 65.3% |
-| @dunx/http (+ request logging) | 69,164 | 1,605 | 0.868 | 1.722 | 61.8% |
-| net/http (Go) | 61,779 | 2,468 | 1.033 | 2.255 | 55.2% |
-| Gin (Go) | 61,016 | 972 | 1.044 | 2.355 | 54.5% |
-| Spring Boot (JVM) | 46,073 | 1,088 | 1.371 | 1.643 | 41.2% |
-| node:http (raw) | 38,379 | 546 | 1.602 | 3.150 | 34.3% |
-| Fastify (Node) | 35,002 | 826 | 1.768 | 2.609 | 31.3% |
-| Hono (Node) | 31,045 | 750 | 2.003 | 2.573 | 27.7% |
-| NestJS (Fastify) | 30,234 | 375 | 2.069 | 2.758 | 27.0% |
-| Express (Node) | 11,331 | 191 | 5.248 | 7.839 | 10.1% |
-| NestJS (Express) | 8,958 | 169 | 6.664 | 9.954 | 8.0% |
-| FastAPI (Python) | 7,122 | 108 | 8.943 | 10.316 | 6.4% |
-| Django (Python) | 4,020 | 58 | 15.755 | 17.167 | 3.6% |
+| Bun.serve (raw) | 131,077 | 1,209 | 0.466 | 0.939 | 100.0% |
+| **@dunx/http** | **127,776** | 914 | 0.478 | 0.964 | **97.5%** |
+| Elysia | 123,937 | 3,173 | 0.487 | 0.986 | 94.6% |
+| Axum (Rust) | 121,724 | 1,564 | 0.515 | 0.629 | 92.9% |
+| Hono (Bun) | 111,301 | 1,349 | 0.545 | 1.099 | 84.9% |
+| ASP.NET Core minimal APIs | 103,899 | 1,467 | 0.596 | 0.845 | 79.3% |
+| ASP.NET Core MVC | 83,110 | 2,478 | 0.749 | 1.037 | 63.4% |
+| @dunx/http (+ request logging) | 78,439 | 5,121 | 0.785 | 1.549 | 59.8% |
+| net/http (Go) | 74,164 | 517 | 0.862 | 1.889 | 56.6% |
+| Gin (Go) | 72,991 | 1,272 | 0.873 | 1.972 | 55.7% |
+| @dunx/http (+ request logging, @arkv/logger) | 55,342 | 1,460 | 1.087 | 2.164 | 42.2% |
+| Spring Boot (JVM) | 52,795 | 1,601 | 1.193 | 1.464 | 40.3% |
+| Fastify (Node) | 39,291 | 628 | 1.563 | 2.018 | 30.0% |
+| node:http (raw) | 39,249 | 1,393 | 1.627 | 2.154 | 29.9% |
+| NestJS (Fastify) | 33,748 | 528 | 1.856 | 2.362 | 25.7% |
+| Hono (Node) | 33,010 | 1,076 | 1.945 | 2.265 | 25.2% |
+| Express (Node) | 11,880 | 140 | 5.039 | 7.237 | 9.1% |
+| NestJS (Express) | 9,098 | 111 | 6.570 | 9.317 | 6.9% |
+| FastAPI (Python) | 7,388 | 98 | 8.648 | 8.897 | 5.6% |
+| Django (Python) | 4,456 | 80 | 14.216 | 15.395 | 3.4% |
 
 **Path parameter** - `GET /params/42`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 111,212 | 3,820 | 0.550 | 1.106 | 100.0% |
-| Elysia | 107,220 | 1,586 | 0.560 | 1.143 | 96.4% |
-| **@dunx/http** | **106,634** | 2,299 | 0.563 | 1.134 | **95.9%** |
-| Axum (Rust) | 100,799 | 2,101 | 0.617 | 0.905 | 90.6% |
-| ASP.NET Core minimal APIs | 91,330 | 4,559 | 0.671 | 0.969 | 82.1% |
-| Hono (Bun) | 88,063 | 5,004 | 0.704 | 1.403 | 79.2% |
-| @dunx/http (+ request logging) | 68,620 | 2,157 | 0.857 | 1.916 | 61.7% |
-| ASP.NET Core MVC | 62,901 | 1,333 | 0.986 | 1.359 | 56.6% |
-| Gin (Go) | 61,822 | 495 | 1.031 | 2.273 | 55.6% |
-| net/http (Go) | 60,265 | 1,892 | 1.056 | 2.266 | 54.2% |
-| node:http (raw) | 38,399 | 693 | 1.626 | 3.197 | 34.5% |
-| Spring Boot (JVM) | 37,943 | 945 | 1.667 | 2.199 | 34.1% |
-| Fastify (Node) | 33,523 | 586 | 1.881 | 2.363 | 30.1% |
-| Hono (Node) | 29,861 | 805 | 2.076 | 2.735 | 26.9% |
-| NestJS (Fastify) | 27,462 | 473 | 2.253 | 3.328 | 24.7% |
-| Express (Node) | 11,212 | 310 | 5.311 | 7.796 | 10.1% |
-| NestJS (Express) | 8,575 | 58 | 6.920 | 10.349 | 7.7% |
-| FastAPI (Python) | 6,415 | 86 | 9.898 | 10.722 | 5.8% |
-| Django (Python) | 4,081 | 41 | 15.439 | 17.151 | 3.7% |
+| Bun.serve (raw) | 130,479 | 1,407 | 0.471 | 0.947 | 100.0% |
+| Elysia | 127,885 | 1,803 | 0.476 | 0.964 | 98.0% |
+| **@dunx/http** | **126,206** | 1,294 | 0.486 | 0.976 | **96.7%** |
+| Axum (Rust) | 120,759 | 391 | 0.522 | 0.672 | 92.6% |
+| Hono (Bun) | 108,403 | 514 | 0.564 | 1.134 | 83.1% |
+| ASP.NET Core minimal APIs | 103,050 | 1,667 | 0.597 | 0.836 | 79.0% |
+| @dunx/http (+ request logging) | 75,566 | 2,235 | 0.810 | 1.585 | 57.9% |
+| Gin (Go) | 72,217 | 1,232 | 0.883 | 1.983 | 55.3% |
+| net/http (Go) | 71,903 | 2,836 | 0.887 | 1.938 | 55.1% |
+| ASP.NET Core MVC | 69,699 | 996 | 0.900 | 1.237 | 53.4% |
+| @dunx/http (+ request logging, @arkv/logger) | 55,751 | 685 | 1.082 | 2.153 | 42.7% |
+| Spring Boot (JVM) | 46,300 | 242 | 1.363 | 1.643 | 35.5% |
+| node:http (raw) | 38,733 | 1,597 | 1.619 | 1.892 | 29.7% |
+| Fastify (Node) | 38,248 | 1,379 | 1.623 | 2.121 | 29.3% |
+| Hono (Node) | 32,160 | 1,228 | 1.991 | 2.306 | 24.6% |
+| NestJS (Fastify) | 29,606 | 948 | 2.150 | 2.637 | 22.7% |
+| Express (Node) | 11,447 | 150 | 5.209 | 7.517 | 8.8% |
+| NestJS (Express) | 8,818 | 41 | 6.776 | 9.979 | 6.8% |
+| FastAPI (Python) | 6,727 | 40 | 9.487 | 9.766 | 5.2% |
+| Django (Python) | 4,415 | 30 | 14.399 | 14.906 | 3.4% |
 
 **Body validation** - `POST /validate`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 77,297 | 2,024 | 0.781 | 1.557 | 100.0% |
-| Axum (Rust) | 76,226 | 1,331 | 0.823 | 1.108 | 98.6% |
-| ASP.NET Core minimal APIs | 70,869 | 1,917 | 0.870 | 1.220 | 91.7% |
-| **@dunx/http** | **70,514** | 2,585 | 0.854 | 1.694 | **91.2%** |
-| Elysia | 65,773 | 3,949 | 0.918 | 1.836 | 85.1% |
-| Hono (Bun) | 56,556 | 1,432 | 1.065 | 2.107 | 73.2% |
-| @dunx/http (+ request logging) | 50,688 | 3,522 | 1.194 | 2.304 | 65.6% |
-| ASP.NET Core MVC | 49,098 | 461 | 1.268 | 1.713 | 63.5% |
-| net/http (Go) | 43,727 | 762 | 1.466 | 3.113 | 56.6% |
-| Gin (Go) | 42,781 | 806 | 1.498 | 3.286 | 55.3% |
-| Spring Boot (JVM) | 28,671 | 1,331 | 2.267 | 2.826 | 37.1% |
-| node:http (raw) | 28,200 | 419 | 2.234 | 4.323 | 36.5% |
-| Hono (Node) | 18,585 | 341 | 3.367 | 6.542 | 24.0% |
-| Fastify (Node) | 16,793 | 218 | 3.481 | 6.818 | 21.7% |
-| NestJS (Fastify) | 14,210 | 357 | 4.100 | 8.044 | 18.4% |
-| Express (Node) | 8,754 | 41 | 6.785 | 9.989 | 11.3% |
-| NestJS (Express) | 7,174 | 265 | 8.305 | 12.036 | 9.3% |
-| FastAPI (Python) | 4,195 | 105 | 15.063 | 16.406 | 5.4% |
-| Django (Python) | 3,852 | 57 | 16.344 | 18.958 | 5.0% |
+| Bun.serve (raw) | 92,616 | 768 | 0.666 | 1.335 | 100.0% |
+| Axum (Rust) | 86,228 | 3,221 | 0.726 | 0.812 | 93.1% |
+| **@dunx/http** | **81,631** | 1,410 | 0.752 | 1.491 | **88.1%** |
+| ASP.NET Core minimal APIs | 80,863 | 2,158 | 0.775 | 1.046 | 87.3% |
+| Elysia | 78,649 | 2,342 | 0.763 | 1.536 | 84.9% |
+| Hono (Bun) | 60,513 | 2,310 | 1.007 | 1.954 | 65.3% |
+| @dunx/http (+ request logging) | 57,025 | 1,958 | 1.064 | 2.000 | 61.6% |
+| ASP.NET Core MVC | 53,116 | 724 | 1.178 | 1.585 | 57.4% |
+| net/http (Go) | 49,402 | 746 | 1.297 | 2.831 | 53.3% |
+| Gin (Go) | 48,539 | 438 | 1.323 | 2.918 | 52.4% |
+| @dunx/http (+ request logging, @arkv/logger) | 43,667 | 874 | 1.411 | 2.800 | 47.1% |
+| Spring Boot (JVM) | 33,566 | 567 | 1.852 | 2.386 | 36.2% |
+| node:http (raw) | 29,674 | 852 | 2.104 | 4.086 | 32.0% |
+| Hono (Node) | 20,237 | 469 | 3.069 | 6.025 | 21.9% |
+| Fastify (Node) | 17,743 | 117 | 3.283 | 6.484 | 19.2% |
+| NestJS (Fastify) | 14,953 | 186 | 3.917 | 7.214 | 16.1% |
+| Express (Node) | 8,977 | 89 | 6.670 | 9.709 | 9.7% |
+| NestJS (Express) | 7,266 | 43 | 8.171 | 11.696 | 7.8% |
+| FastAPI (Python) | 4,493 | 20 | 14.212 | 14.502 | 4.9% |
+| Django (Python) | 4,163 | 52 | 15.254 | 16.590 | 4.5% |
 
 **Startup** - cold process to first served request, 7 samples
 
 | Subject | median ms | min ms | max ms |
 | ------- | --------: | -----: | -----: |
-| Axum (Rust) | 1.8 | 1.6 | 7.0 |
-| net/http (Go) | 4.1 | 3.9 | 4.3 |
-| Gin (Go) | 4.2 | 3.9 | 5.4 |
-| Bun.serve (raw) | 18.3 | 16.9 | 19.9 |
-| Hono (Bun) | 23.6 | 22.6 | 24.5 |
-| @dunx/http (+ request logging) | 41.8 | 41.3 | 44.6 |
-| **@dunx/http** | **42.7** | 40.5 | 45.0 |
-| Elysia | 47.4 | 45.5 | 49.5 |
-| node:http (raw) | 70.2 | 66.1 | 72.8 |
-| Hono (Node) | 93.6 | 91.4 | 98.4 |
-| Express (Node) | 121.6 | 118.1 | 124.0 |
-| Django (Python) | 131.1 | 127.1 | 144.5 |
-| Fastify (Node) | 147.6 | 142.9 | 159.8 |
-| FastAPI (Python) | 246.9 | 240.1 | 253.3 |
-| NestJS (Express) | 277.4 | 271.4 | 355.4 |
-| ASP.NET Core minimal APIs | 280.4 | 269.6 | 289.3 |
-| ASP.NET Core MVC | 292.5 | 284.4 | 306.4 |
-| NestJS (Fastify) | 293.1 | 279.3 | 329.8 |
-| Spring Boot (JVM) | 1285.6 | 1256.3 | 1540.6 |
+| Axum (Rust) | 1.6 | 1.5 | 1.8 |
+| net/http (Go) | 4.1 | 3.8 | 4.4 |
+| Gin (Go) | 5.0 | 3.8 | 5.3 |
+| Bun.serve (raw) | 19.4 | 18.6 | 19.6 |
+| Hono (Bun) | 23.9 | 22.6 | 25.7 |
+| **@dunx/http** | **42.6** | 40.3 | 45.2 |
+| @dunx/http (+ request logging) | 42.8 | 40.2 | 44.6 |
+| Elysia | 47.6 | 45.7 | 48.2 |
+| @dunx/http (+ request logging, @arkv/logger) | 55.6 | 53.6 | 56.9 |
+| node:http (raw) | 80.4 | 69.4 | 83.6 |
+| Hono (Node) | 101.0 | 91.3 | 105.4 |
+| Express (Node) | 126.5 | 123.6 | 132.6 |
+| Django (Python) | 132.1 | 128.6 | 140.5 |
+| Fastify (Node) | 154.6 | 151.4 | 156.1 |
+| FastAPI (Python) | 245.5 | 241.9 | 247.5 |
+| NestJS (Express) | 278.8 | 273.5 | 284.8 |
+| ASP.NET Core minimal APIs | 280.6 | 274.6 | 291.0 |
+| NestJS (Fastify) | 293.6 | 287.5 | 300.4 |
+| ASP.NET Core MVC | 297.8 | 287.7 | 308.0 |
+| Spring Boot (JVM) | 1263.7 | 1241.4 | 1276.4 |
 
 ### What these say, including where dunx loses
 
@@ -641,10 +646,10 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Scenario | Bun.serve | @dunx/http | dunx costs |
 | -------- | --------: | ---------: | ---------: |
-| `plaintext` | 115,298 | 113,030 | −2.0% |
-| `json` | 111,883 | 106,867 | −4.5% |
-| `params` | 111,212 | 106,634 | −4.1% |
-| `validate` | 77,297 | 70,514 | −8.8% |
+| `plaintext` | 136,500 | 134,864 | −1.2% |
+| `json` | 131,077 | 127,776 | −2.5% |
+| `params` | 130,479 | 126,206 | −3.3% |
+| `validate` | 92,616 | 81,631 | −11.9% |
 
 **A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
 *through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
@@ -704,8 +709,8 @@ costs into one number: what parsing and validating cost *at all*, and what
 `@dunx/http` adds on top. This section separates them.
 
 ```
-AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.3.14 | oha oha 1.15.0
-64 connections | 3s warmup | 5 x 4s measured | 2026-08-01
+AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.1 | oha oha 1.15.0
+64 connections | 3s warmup | 3 x 4s measured | 2026-09-05
 ```
 
 **Every row is one fresh process, and the measured rounds are interleaved across all
@@ -721,10 +726,10 @@ it, all answering the same bytes:
 
 | Step | req/s | µs/req | this step adds |
 | ---- | ----: | -----: | -------------: |
-| `GET /json` - no request body at all | 113,881 | 8.78 | - |
-| `POST`, body on the wire, never read | 110,537 | 9.05 | +0.27 µs |
-| `POST` + `await req.json()` | 82,341 | 12.14 | +3.10 µs |
-| `POST` + `req.json()` + zod | 76,412 | 13.09 | +0.94 µs |
+| `GET /json` - no request body at all | 132,020 | 7.57 | - |
+| `POST`, body on the wire, never read | 125,518 | 7.97 | +0.39 µs |
+| `POST` + `await req.json()` | 97,214 | 10.29 | +2.32 µs |
+| `POST` + `req.json()` + zod | 93,836 | 10.66 | +0.37 µs |
 
 **`req.json()` is the expensive step by a wide margin**, and putting the body on the
 wire is near-free - the difference between *sending* it and *reading* it is what
@@ -740,19 +745,19 @@ row's µs/req above the `req.json()`-only row.
 
 | Validator | costs | raw `Bun.serve` req/s | `@dunx/http` req/s | dunx vs raw |
 | --------- | ----: | --------------------: | -----------------: | ----------: |
-| typebox | -0.01 µs | 82,376 | 71,640 | 87.0% |
-| ajv | 0.34 µs | 80,098 | 71,996 | 89.9% |
-| arktype | 0.42 µs | 79,568 | 72,600 | 91.2% |
-| valibot | 0.89 µs | 76,735 | 67,663 | 88.2% |
-| zod | 0.94 µs | 76,412 | 68,843 | 90.1% |
-| noop | 0.04 µs | 82,056 | 71,239 | 86.8% |
-| noop-async | 0.72 µs | 77,719 | 69,725 | 89.7% |
+| typebox | 0.06 µs | 96,688 | 91,919 | 95.1% |
+| ajv | 0.26 µs | 94,825 | 87,872 | 92.7% |
+| zod | 0.37 µs | 93,836 | 85,119 | 90.7% |
+| arktype | 0.61 µs | 91,758 | 86,610 | 94.4% |
+| valibot | 0.92 µs | 89,200 | 83,762 | 93.9% |
+| noop | -0.09 µs | 98,058 | 90,592 | 92.4% |
+| noop-async | -0.03 µs | 97,489 | 88,405 | 90.7% |
 
-**zod, Valibot and ArkType are within noise of each other**, and the two compiled
-options are at or below what this harness can resolve at this payload size. Every one
-of them is cheaper than `req.json()`, so **there is no throughput argument for
-choosing between them** - pick on API, error quality and ecosystem. If a profile
-genuinely points at validation, the compiled route is there.
+The three schema libraries span about half a microsecond, which is at the edge of
+what this harness resolves, and the compiled options sit below it at this payload
+size. **Every one of them is cheaper than `req.json()`**, so there is no throughput
+argument for choosing between them - pick on API, error quality and ecosystem. If a
+profile genuinely points at validation, the compiled route is there.
 
 `noop` and `noop-async` are the last two rows and are not validators: `noop` is a
 hand-written pass-through, which is dunx's plumbing with the validator's cost taken
@@ -769,10 +774,10 @@ interface rather than a library.
 
 | Subject | req/s | µs/req |
 | ------- | ----: | -----: |
-| raw `Bun.serve`, parse in the handler | 82,341 | 12.14 |
-| `@dunx/http`, no schemas, parse in the handler | 76,813 | 13.02 |
-| `@dunx/http`, no schemas, validate in the handler | 67,932 | 14.72 |
-| `@dunx/http`, `body` declared - the framework does it | 68,843 | 14.53 |
+| raw `Bun.serve`, parse in the handler | 97,214 | 10.29 |
+| `@dunx/http`, no schemas, parse in the handler | 91,404 | 10.94 |
+| `@dunx/http`, no schemas, validate in the handler | 85,011 | 11.76 |
+| `@dunx/http`, `body` declared - the framework does it | 85,119 | 11.75 |
 
 The two `manual` rows declare no schemas and do the work inside the handler, which
 keeps them on the synchronous dispatch path - so they separate dunx's **dispatch**
@@ -782,8 +787,7 @@ The reader is the fourth row minus the third, and it is now at or below zero: th
 framework's reader costs no more than writing `validate(await req.json())` in the
 handler yourself. It used to cost **2.05 µs more**, which was twice what zod itself
 cost - the reason is in
-[`docs/architecture/cost-of-logging.md`](../../docs/architecture/cost-of-logging.md), "The cost of request
-validation".
+[`docs/architecture/cost-of-validation.md`](../../docs/architecture/cost-of-validation.md).
 
 ## How the validation harness works
 
@@ -829,48 +833,43 @@ same app on the same `json` route, in its own process, with one more
 piece of the default logging path switched on than the row above it.
 
 ```
-AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.0 | oha oha 1.15.0
-64 connections | 3s warmup | 3 x 4s measured | 2026-08-22
+AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.1 | oha oha 1.15.0
+64 connections | 3s warmup | 3 x 4s measured | 2026-09-05
 ```
 
 **Measured round-robin across all rows**, for the reason the validation harness
 records: the differences are a few percent and the machine drifts by more than that
 over a run. Read anything under about **±0.5 µs** as unresolvable.
 
-> Rows relabelled: the correlation id is W3C Trace Context, so the ids row is
-> `TraceContext.adopt` and the two header rows are `traceparent` and
-> `traceresponse`. The figures are from the run before that change, and adopting a
-> trace is cheaper than the `crypto.randomUUID()` pair measured here, so those
-> three are upper bounds until the next run.
-
 | Step | req/s | µs/req | this step adds | total |
 | ---- | ----: | -----: | -------------: | ----: |
-| `requestLogging: false` | 125,312 | 7.98 | - | - |
-| one middleware that only calls `next()` | 116,537 | 8.58 | +0.60 µs | +0.60 µs |
-| + the pathname sliced out of `req.url` | 107,411 | 9.31 | +0.73 µs | +1.33 µs |
-| + `traceparent` and `user-agent` read | 97,232 | 10.28 | +0.97 µs | +2.30 µs |
-| + `TraceContext.adopt` | 100,161 | 9.98 | −0.30 µs | +2.00 µs |
-| + `runWithContext` around the handler | 97,814 | 10.22 | +0.24 µs | +2.24 µs |
-| + `traceresponse` set on the response | 95,558 | 10.46 | +0.24 µs | +2.48 µs |
-| + the real middleware, `Logger` discards | 92,200 | 10.85 | +0.38 µs | +2.87 µs |
-| + `new Date().toISOString()` | 90,465 | 11.05 | +0.21 µs | +3.07 µs |
-| + the entry and `JSON.stringify`, string dropped | 77,950 | 12.83 | +1.77 µs | +4.85 µs |
-| batched instead - **the shipped default** | 78,377 | 12.76 | −0.07 µs | +4.78 µs |
+| `requestLogging: false` | 125,319 | 7.98 | - | - |
+| one middleware that only calls `next()` | 120,290 | 8.31 | +0.33 µs | +0.33 µs |
+| + the pathname sliced out of `req.url` | 115,531 | 8.66 | +0.34 µs | +0.68 µs |
+| + `traceparent` and `user-agent` read | 106,859 | 9.36 | +0.70 µs | +1.38 µs |
+| + `TraceContext.adopt` | 104,551 | 9.56 | +0.21 µs | +1.59 µs |
+| + `runWithContext` around the handler | 98,827 | 10.12 | +0.55 µs | +2.14 µs |
+| + `traceresponse` set on the response | 90,770 | 11.02 | +0.90 µs | +3.04 µs |
+| + the real middleware, `Logger` discards | 91,157 | 10.97 | −0.05 µs | +2.99 µs |
+| + `new Date().toISOString()` | 92,093 | 10.86 | −0.11 µs | +2.88 µs |
+| + the entry and `JSON.stringify`, string dropped | 80,570 | 12.41 | +1.55 µs | +4.43 µs |
+| batched instead - **the shipped default** | 76,101 | 13.14 | +0.73 µs | +5.16 µs |
 
-Reading it: the middleware chain, `crypto.randomUUID()` and setting
-`traceresponse` on the response are each at or below what this harness can resolve.
-What costs is the **first touch of `req.headers`**, the `AsyncLocalStorage`
-scope, and **building and serialising the entry** - and, before it was batched, the
-write.
+Reading it: the middleware chain and `TraceContext.adopt` are at or below what
+this harness can resolve. What costs is **building and serialising the entry**, the
+`.then` that sets `traceresponse` on the response, the **first touch of
+`req.headers`**, the `AsyncLocalStorage` scope - and, before it was batched, the
+write. Read the total rather than a single row: six of the eleven steps sit inside
+the harness's own resolution and one of them reads negative.
 
 ### The write, and the pipe nobody was reading
 
 | Write | req/s | µs/req |
 | ----- | ----: | -----: |
-| batched, `/dev/null` | 78,377 | 12.76 |
-| one `console.log` per entry, `/dev/null` | 65,960 | 15.16 |
-| batched, into a pipe nobody reads | 77,030 | 12.98 |
-| one per entry, into a pipe nobody reads | 58,232 | 17.17 |
+| batched, `/dev/null` | 76,101 | 13.14 |
+| one `console.log` per entry, `/dev/null` | 70,524 | 14.18 |
+| batched, into a pipe nobody reads | 76,092 | 13.14 |
+| one per entry, into a pipe nobody reads | 57,434 | 17.41 |
 
 The last row is what this harness was reporting before either fix, and neither of
 its two costs is a property of `@dunx/http`. Subjects were spawned with

@@ -1,7 +1,11 @@
-import type { S3Client, S3FilePresignOptions, S3Options } from 'bun';
+import type {
+  NetworkSink,
+  S3Client,
+  S3FilePresignOptions,
+  S3Options,
+} from 'bun';
 import { FileNotFoundError } from './errors.js';
 import { guardMissing, normalizeKey, normalizePrefix } from './path.js';
-import { pump } from './stream.js';
 import {
   Storage,
   StorageOptions,
@@ -43,6 +47,44 @@ export class S3StorageOptions extends StorageOptions {
  * takes is what `list()` and `stat()` give back, so moving a bucket under a
  * prefix does not ripple into call sites.
  */
+/**
+ * Drains `source` into `sink` one chunk at a time, returning the byte count.
+ * `S3Client`'s write takes no `ReadableStream`, so an upload goes through the
+ * `NetworkSink`, which multiparts it. Module-private because `LocalStorage` needs
+ * none of it: `Bun.write(path, stream)` streams to disk on Bun 1.4.1.
+ *
+ * The await is backpressure: `NetworkSink.write` returns a promise once its
+ * buffer fills, and its return is a buffered-bytes counter.
+ */
+const pump = async (
+  sink: NetworkSink,
+  source: ReadableStream<Uint8Array>,
+): Promise<number> => {
+  let written = 0;
+
+  try {
+    // `for await` rather than `getReader()` and a `for (;;)` reading until
+    // `done`: a `ReadableStream` is async-iterable, and iterating it acquires the
+    // reader and releases it on completion, `break` **and** throw - all measured.
+    // The manual form was the same loop plus a `done` check and two
+    // `releaseLock()` calls that had to be kept in step by hand.
+    for await (const chunk of source) {
+      written += chunk.byteLength;
+      await sink.write(chunk);
+    }
+  } catch (error) {
+    // `end(error)` does not abort. Measured on Bun 1.4.1 against MinIO, with an
+    // `Error` and with a string, at 7 bytes and at 6 MiB: every one committed
+    // the bytes written so far. So this only closes the sink, and the caller
+    // removes what it committed - see `S3Storage.write`.
+    await sink.end(error instanceof Error ? error : new Error(String(error)));
+    throw error;
+  }
+
+  await sink.end();
+  return written;
+};
+
 export class S3Storage extends Storage {
   readonly #client: S3Client;
   readonly #prefix: string;
@@ -97,7 +139,25 @@ export class S3Storage extends Storage {
 
     // The NetworkSink multiparts the upload, so the stream never has to be
     // buffered to learn its content length.
-    return pump(this.#client.file(objectKey).writer(), data);
+    try {
+      return await pump(this.#client.file(objectKey).writer(), data);
+    } catch (error) {
+      /**
+       * A failed sink commits the bytes it already wrote, whatever is passed to
+       * `end`, so a rejected write would otherwise leave a truncated object.
+       *
+       * **This does not destroy a previous version - the sink already did.**
+       * Measured: a 24-byte object replaced by a stream that dies after 7 bytes
+       * is a 7-byte object before any cleanup runs. So the choice here is an
+       * absent object against a silently truncated one, not against the
+       * original. Preserving that would need a temporary key and a publish, and
+       * `Bun.S3Client` has no server-side copy to publish with.
+       *
+       * Best effort: the source's own failure is what the caller needs to see.
+       */
+      await this.#client.delete(objectKey).catch(() => undefined);
+      throw error;
+    }
   }
 
   async exists(key: string): Promise<boolean> {

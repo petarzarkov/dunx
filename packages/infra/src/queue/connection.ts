@@ -24,13 +24,14 @@ const boundClientClass = (
 
     /**
      * A newly **constructed** client, rather than the one Bun's native
-     * `duplicate()` returns, because Bun fires `onconnect` on the first and not
-     * on the second. bullmq rebuilds a dropped socket through `_duplicateRaw`,
-     * which prefers `duplicate()`, and that callback is the only thing that runs
-     * `_handleConnected()` on the replacement: without it the adapter never
-     * re-sends `CLIENT SETNAME`, never flips `ready`, and a worker awaiting
-     * readiness issues no further `BZPOPMIN`. Silently, since nothing on that
-     * path rejects. See docs/architecture/queues.md.
+     * `duplicate()` returns. That one resolves already connected, so a caller
+     * assigning `onconnect` after it never sees the event, and bullmq rebuilds a
+     * dropped socket through `_duplicateRaw`, which prefers `duplicate()`.
+     *
+     * A clean `CLIENT KILL` does not reproduce a wedge on bullmq 6.3.4, whose
+     * `connect()` runs `_handleConnected()` itself for an already-connected raw
+     * client. Kept for the production trigger that did wedge, which a reset does
+     * not simulate. Measured both ways in docs/architecture/queues.md.
      */
     override duplicate(): Promise<Bun.RedisClient> {
       return Promise.resolve(new BoundRedisClient(url));

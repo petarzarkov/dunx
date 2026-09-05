@@ -61,12 +61,17 @@ export const createApp = async (): Promise<HttpApp> => {
     }),
     {
       /**
-       * Everything else is a provider now. `requestLogging`, `cors`, `prefix`,
-       * `trustProxy`, `relay` and `relayChannel` all read from validated config
-       * or from the container, so `AppHttpOptions` answers them
-       * (`http/http-options.ts`). This is the last literal.
+       * What is left. `requestLogging`, `cors`, `prefix`, `trustProxy`, `relay`
+       * and `relayChannel` all read from validated config or from the container,
+       * so `AppHttpOptions` answers those (`http/http-options.ts`).
+       *
+       * `binaryType` is server-wide and selects what a *binary* frame is, so
+       * chat's JSON text is unaffected and `TelemetryGateway` gets Blobs.
        */
-      websocket: { idleTimeout: 30 },
+      websocket: { idleTimeout: 30, binaryType: 'blob' },
+      // h2c alongside HTTP/1.1 on one port, which is what a proxy in front
+      // speaks. `http1: false` would refuse HTTP/1.x, and every gateway with it.
+      http2: true,
       // Not on `AppHttpOptions`: that file is vendored into `@dunx/create-app`'s
       // `http` feature, and an override there would turn metrics on for every
       // scaffold that picked `http` without picking `stats`.

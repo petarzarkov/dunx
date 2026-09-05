@@ -168,11 +168,11 @@ row's µs/req above the \`req.json()\`-only row.
 
 ${validatorTable(report)}
 
-**zod, Valibot and ArkType are within noise of each other**, and the two compiled
-options are at or below what this harness can resolve at this payload size. Every one
-of them is cheaper than \`req.json()\`, so **there is no throughput argument for
-choosing between them** - pick on API, error quality and ecosystem. If a profile
-genuinely points at validation, the compiled route is there.
+The three schema libraries span about half a microsecond, which is at the edge of
+what this harness resolves, and the compiled options sit below it at this payload
+size. **Every one of them is cheaper than \`req.json()\`**, so there is no throughput
+argument for choosing between them - pick on API, error quality and ecosystem. If a
+profile genuinely points at validation, the compiled route is there.
 
 \`noop\` and \`noop-async\` are the last two rows and are not validators: \`noop\` is a
 hand-written pass-through, which is dunx's plumbing with the validator's cost taken
@@ -197,7 +197,6 @@ The reader is the fourth row minus the third, and it is now at or below zero: th
 framework's reader costs no more than writing \`validate(await req.json())\` in the
 handler yourself. It used to cost **2.05 µs more**, which was twice what zod itself
 cost - the reason is in
-[\`docs/ARCHITECTURE.md\`](../../docs/ARCHITECTURE.md), "The cost of request
-validation".
+[\`docs/architecture/cost-of-validation.md\`](../../docs/architecture/cost-of-validation.md).
 `;
 };

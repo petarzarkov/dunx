@@ -40,6 +40,63 @@ That is the whole command. `HttpFactory.create` builds the container,
 process open. There is no cluster module to configure, see the note on
 horizontal scaling below.
 
+## HTTP/2
+
+`http2: true` serves HTTP/2 on the same port as HTTP/1.1, through the same routes
+and the same 404 fallback:
+
+```ts
+await HttpFactory.create(AppModule, { http2: true });
+```
+
+Without TLS that is h2c: a client opening with the HTTP/2 preface gets HTTP/2, and
+everything else gets HTTP/1.1. That is what a reverse proxy in front of the app
+speaks, which is the deployment this is for. Bun marks the option experimental.
+
+What it is worth, at 64 requests in flight either way: **2.9x** the requests per
+second on a small JSON body, **2.1x** on a 4 KiB POST, **1.3x** on a 64 KiB one.
+
+The saving is per-request framing, so it shrinks as the body grows. Turn it on
+for an API serving small JSON; expect little from it if you mostly serve large
+payloads. Server CPU per request falls by the same ratios, and the method behind
+that is in `docs/bun-apis.md`.
+
+Gateways keep working, because a websocket upgrade is an HTTP/1.1 request and both
+protocols share the socket. There is no websocket over HTTP/2.
+
+### http1: false, and gateways
+
+`http1: false` is the pair to it and refuses HTTP/1.x with a 505. A websocket
+upgrade **is** an HTTP/1.1 request, so a port with it set can serve HTTP/2 routes
+or gateways and never both. Setting it with a gateway declared and no second port
+is a boot error naming the stranded paths, because the app would otherwise start
+healthy and never accept a socket.
+
+`gatewayPort` is the way to have both. The routes keep `port` and the upgrades
+move to a second `Bun.serve` that takes no protocol overrides:
+
+```ts
+const app = await HttpFactory.create(AppModule, {
+  http2: true,
+  http1: false,
+  gatewayPort: 3001,
+});
+
+await app.listen(3000); // HTTP/2 only, the controllers
+app.gatewayUrl; // http://localhost:3001, HTTP/1.1, the gateways
+```
+
+Both ports come out of **one container**, which is why this is an option rather
+than a second `HttpFactory.create`: a second app would build a second container,
+and the gateways would inject different singletons than the controllers.
+
+`gatewayPort` works without `http1: false` too, for a deployment that wants the
+socket port behind a different firewall rule. An HTTP request to it answers 404.
+
+Bun's own `fetch` cannot call an h2c origin: `protocol: 'http2'` rejects with
+`HTTP2Unsupported` against any cleartext peer, whatever that peer serves. Leave
+`protocol` unset for a plain-HTTP upstream.
+
 ## Shutting down cleanly
 
 ```ts
@@ -101,7 +158,7 @@ running service returning 500s. See [Configuration](./12-configuration.md).
 ## Container image
 
 ```dockerfile
-FROM oven/bun:1.3-alpine
+FROM oven/bun:1.4.1-alpine
 WORKDIR /app
 
 # Dependencies first, so a source change does not reinstall them.

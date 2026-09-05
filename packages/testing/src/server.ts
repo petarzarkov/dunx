@@ -30,6 +30,11 @@ export interface TestServerOptions
 
 export interface TestServer extends TestClient {
   readonly app: HttpApp;
+  /**
+   * Where the gateways answer, when `gatewayPort` split them off `url`.
+   * `undefined` otherwise, which is when they are on `url` itself.
+   */
+  readonly gatewayUrl: string | undefined;
   /** `app.shutdown()` - stops the server, then tears the container down. */
   close(): Promise<void>;
 }
@@ -146,6 +151,11 @@ export const createTestServer = async (
     // route table per file. A suite asserting on the table asks for it.
     bootLogging: bootLogging ?? false,
     port: 0,
+    // `gatewayPort` is **not** forced the way `port` is. Setting it splits the
+    // ports, and a fixture opening a socket on `server.url` would then be
+    // refused: the upgrades moved to the other server. Pass it to opt in, and
+    // read `server.app.gatewayUrl` for the address. A provider answering a fixed
+    // one should answer `0` under test, so parallel files cannot collide.
   });
   // The argument is not the only source since 3.1.0: `resolveHttpOptions` runs
   // inside `HttpFactory.create` and reconciles it with the bound
@@ -166,6 +176,7 @@ export const createTestServer = async (
   return {
     ...testClient(await app.listen()),
     app,
+    gatewayUrl: app.gatewayUrl,
     close: () => app.shutdown(),
   };
 };
