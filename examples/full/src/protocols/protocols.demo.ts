@@ -1,5 +1,7 @@
 import http2 from 'node:http2';
-import { Logger } from '@dunx/core';
+import { Logger, Module } from '@dunx/core';
+import { HttpFactory } from '@dunx/http';
+import { TelemetryGateway } from './telemetry.gateway.js';
 
 /**
  * `node:http2` rather than `fetch`: Bun's client will not speak h2c, so both
@@ -62,11 +64,74 @@ export class ProtocolsDemo {
       `GET /api/notes over HTTP/1.1 -> ${viaH1.status}, same port, same routes`,
     );
     logger.info(
-      'http1: false would refuse the second one with a 505 - and every gateway ' +
-        'with it, since a websocket upgrade is an HTTP/1.1 request',
+      'http1: false would refuse the second one with a 505, and every gateway ' +
+        'with it - see the split below',
     );
 
     await this.#binaryFrame(url);
+    await this.#splitPorts();
+  }
+
+  /**
+   * `http1: false` refuses every HTTP/1.x request, and a websocket upgrade is
+   * one - so it strands every gateway on that port. Declaring both without
+   * `gatewayPort` is a boot error rather than an app that starts and never
+   * accepts a socket.
+   */
+  async #splitPorts(): Promise<void> {
+    const { logger } = this;
+
+    @Module({ providers: [TelemetryGateway] })
+    class SplitNode {}
+
+    const refused = await HttpFactory.create(SplitNode, {
+      http2: true,
+      http1: false,
+      requestLogging: false,
+      bootLogging: false,
+    }).then(
+      () => null,
+      (error: unknown) => (error as Error).message,
+    );
+    logger.info(`http1: false with a gateway and no gatewayPort -> ${refused}`);
+
+    // The same options plus a port for the upgrades, which is the shape that
+    // works: one container, two Bun.serve instances.
+    const split = await HttpFactory.create(SplitNode, {
+      http2: true,
+      http1: false,
+      gatewayPort: 0,
+      requestLogging: false,
+      bootLogging: false,
+    });
+    try {
+      const routes = await split.listen(0);
+      logger.info(
+        `routes on ${new URL(routes).port} (HTTP/2 only), gateways on ` +
+          `${new URL(split.gatewayUrl ?? '').port} (HTTP/1.1) - one container, two servers`,
+      );
+
+      const overHttp1 = await fetch(routes);
+      logger.info(
+        `GET / on the routes port over HTTP/1.1 -> ${overHttp1.status} (505, refused)`,
+      );
+
+      const socket = new WebSocket(
+        new URL('telemetry', split.gatewayUrl).href.replace('http', 'ws'),
+      );
+      await new Promise<void>((resolve, reject) => {
+        socket.addEventListener('open', () => resolve(), { once: true });
+        setTimeout(
+          () => reject(new Error('the split socket never opened')),
+          2000,
+        );
+      });
+      logger.info('the gateway accepted an upgrade on its own port');
+      socket.close();
+      await Bun.sleep(20);
+    } finally {
+      await split.shutdown();
+    }
   }
 
   /** `binaryType: 'blob'` in `main.ts`, against Bun's default `Buffer`. */

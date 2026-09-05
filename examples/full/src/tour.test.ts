@@ -461,6 +461,20 @@ it('serves the same routes over HTTP/2 and HTTP/1.1 on one port', () => {
   );
 });
 
+it('refuses http1: false with a gateway, and serves both once ports split', () => {
+  // The boot error names the stranded path rather than starting an app whose
+  // gateways nothing could reach.
+  expect(tour.text).toContain(
+    'nothing could ever connect to /telemetry. Set gatewayPort',
+  );
+  expect(tour.text).toMatch(
+    /routes on \d+ \(HTTP\/2 only\), gateways on \d+ \(HTTP\/1\.1\) - one container, two servers/,
+  );
+  expect(tour.text).toContain(
+    'the gateway accepted an upgrade on its own port',
+  );
+});
+
 it('delivers a binary frame as the configured binaryType', () => {
   // Bun's default is a Buffer; 'blob' is what main.ts asked for, and 1.4.1 is
   // what added it to the three a server socket already took.

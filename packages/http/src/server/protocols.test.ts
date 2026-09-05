@@ -3,9 +3,10 @@ import http2 from 'node:http2';
 import { Module } from '@dunx/core';
 import { Controller, Get, Post } from '../route/decorators.js';
 import type { RouteInput } from '../route/schema.js';
-import { Gateway, OnMessage } from '../ws/decorators.js';
+import { Gateway, OnMessage, OnOpen } from '../ws/decorators.js';
+import { PubSub } from '../ws/pubsub.js';
+import type { Socket } from '../ws/socket.js';
 import { HttpFactory, type HttpApp } from './factory.js';
-import { captured } from './request-logging.fixture.test.js';
 
 @Controller('/echo')
 class EchoController {
@@ -23,6 +24,13 @@ class EchoController {
 
 @Gateway('/ws')
 class BinaryGateway {
+  // Subscribed on open, so a `PubSub.publish` has somewhere to land - which is
+  // what proves the publish reached the server that owns the sockets.
+  @OnOpen()
+  opened(socket: Socket): void {
+    socket.subscribe('room');
+  }
+
   @OnMessage()
   raw(message: string | Buffer): string {
     // What the frame arrived as, which is exactly what `binaryType` selects.
@@ -117,6 +125,7 @@ describe('http2 and http1', () => {
     http2?: boolean;
     http1?: boolean;
     gateway?: boolean;
+    gatewayPort?: number;
   }): Promise<string> => {
     @Module({
       providers: options.gateway === true ? [BinaryGateway] : [],
@@ -187,29 +196,109 @@ describe('http2 and http1', () => {
     expect((await fetch(`${origin}/echo`)).status).toBe(505);
   });
 
-  it('warns at boot when http1: false would strand a gateway', async () => {
-    const entries = await captured(async () => {
-      await boot({ http2: true, http1: false, gateway: true });
-    });
+  it('refuses to boot when http1: false would strand a gateway', async () => {
+    // Not a warning: the upgrade never reaches dunx, so the app would look
+    // healthy while nothing could connect to it.
+    const booting = boot({ http2: true, http1: false, gateway: true });
 
-    const warning = entries.find((entry) =>
-      String(entry['message']).includes('http1: false'),
-    );
-    expect(warning).toBeDefined();
-    expect(warning?.['level']).toBe('warn');
-    expect(String(warning?.['message'])).toContain('/ws');
+    expect(booting).rejects.toThrow(/nothing could ever connect to \/ws/);
+    expect(booting).rejects.toThrow(/Set gatewayPort/);
   });
 
-  it('says nothing when http1: false serves no gateway', async () => {
-    const entries = await captured(async () => {
-      await boot({ http2: true, http1: false });
+  it('boots with http1: false and no gateway', async () => {
+    const url = await boot({ http2: true, http1: false });
+    expect((await overHttp2(new URL(url).origin, '/echo')).status).toBe(200);
+  });
+
+  it('boots with http1: false once gatewayPort takes the upgrades', async () => {
+    const url = await boot({
+      http2: true,
+      http1: false,
+      gateway: true,
+      gatewayPort: 0,
+    });
+    expect((await overHttp2(new URL(url).origin, '/echo')).status).toBe(200);
+    // The routes port refuses HTTP/1.x, which is what http1: false asked for.
+    expect((await fetch(`${new URL(url).origin}/echo`)).status).toBe(505);
+  });
+});
+
+describe('gatewayPort', () => {
+  let app: HttpApp | undefined;
+
+  afterEach(async () => {
+    await app?.shutdown();
+    app = undefined;
+  });
+
+  const boot = async (options: {
+    http2?: boolean;
+    http1?: boolean;
+  }): Promise<HttpApp> => {
+    @Module({ providers: [BinaryGateway], controllers: [EchoController] })
+    class AppModule {}
+
+    app = await HttpFactory.create(AppModule, {
+      ...options,
+      gatewayPort: 0,
+      bootLogging: false,
+      requestLogging: false,
+    });
+    await app.listen(0);
+    return app;
+  };
+
+  it('serves the gateway on its own port, and not on the routes port', async () => {
+    const booted = await boot({});
+    expect(booted.gatewayUrl).toBeString();
+
+    const socket = await connect(booted.gatewayUrl as string, '/ws');
+    expect(await roundTrip(socket, new Uint8Array([9]))).toBe('Buffer');
+    socket.close();
+  });
+
+  it('answers a plain HTTP request on the gateway port with 404', async () => {
+    const booted = await boot({});
+    const response = await fetch(new URL('/echo', booted.gatewayUrl as string));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: 'NOT_FOUND' });
+  });
+
+  it('carries a PubSub publish, since the sockets live on the second server', async () => {
+    const booted = await boot({});
+    const [a, b] = await Promise.all([
+      connect(booted.gatewayUrl as string, '/ws'),
+      connect(booted.gatewayUrl as string, '/ws'),
+    ]);
+    const seen = new Promise<string>((resolve) => {
+      b.addEventListener(
+        'message',
+        (event: MessageEvent) => resolve(String(event.data)),
+        { once: true },
+      );
     });
 
+    // Both sockets subscribed on open. Publishing on the routes server would
+    // fan out to nothing, since the sockets are not on it.
+    booted.get(PubSub).publish('room', 'broadcast');
+    a.close();
     expect(
-      entries.filter((entry) =>
-        String(entry['message']).includes('http1: false'),
-      ),
-    ).toEqual([]);
+      await Promise.race([seen, Bun.sleep(500).then(() => 'TIMEOUT')]),
+    ).toBe('broadcast');
+    b.close();
+  });
+
+  it('leaves gatewayUrl undefined when the ports are not split', async () => {
+    @Module({ providers: [BinaryGateway] })
+    class AppModule {}
+    app = await HttpFactory.create(AppModule, {
+      bootLogging: false,
+      requestLogging: false,
+    });
+    await app.listen(0);
+
+    expect(app.gatewayUrl).toBeUndefined();
   });
 });
 

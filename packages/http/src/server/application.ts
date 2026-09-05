@@ -7,20 +7,15 @@ import {
   teardownError,
   teardownFailures as toFailures,
   type App,
-  type AppOptions,
   type Ctor,
   type InjectionToken,
   type ModuleRef,
-  type ShutdownHookOptions,
-  type ShutdownSignal,
 } from '@dunx/core';
 import { joinPath, type DiscoveredRoute } from '../route/discover.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import { PubSub } from '../ws/pubsub.js';
-import type { SocketLoggingOptions } from '../ws/logging.js';
-import type { SocketMiddleware } from '../ws/middleware.js';
 import type { PubSubRelay, RelayOptions, RelayPhase } from '../ws/relay.js';
-import type { SocketData, SocketOptions } from '../ws/socket.js';
+import type { SocketData } from '../ws/socket.js';
 import { attachAddressSource, ClientAddress } from './client-address.js';
 import {
   MetricsMiddleware,
@@ -28,138 +23,17 @@ import {
   usesMetricsMiddleware,
 } from './metrics.js';
 import type { CorsOptions } from './cors.js';
-import {
-  errorMapper,
-  toErrorMapper,
-  type ErrorHandler,
-  type ErrorMapper,
-} from './errors.js';
+import { errorMapper, toErrorMapper, type ErrorMapper } from './errors.js';
 import type { Middleware } from './middleware.js';
-import {
-  RequestLoggingMiddleware,
-  type RequestLoggingOptions,
-} from './request-logging.js';
+import { RequestLoggingMiddleware } from './request-logging.js';
 import {
   assertNoGatewayCollisions,
   buildFallback,
   buildRoutes,
-  withUpgradeRoutes,
 } from './routes.js';
+import { ServerBinding } from './binding.js';
 import { defaultSettings, type AppSettings } from './settings.js';
-
-export interface HttpOptions extends AppOptions {
-  readonly port?: number;
-  /**
-   * Prefixes every discovered route, the same thing {@link HttpApp.setGlobalPrefix}
-   * does. Both exist: the method is what NestJS offers and what a script reaches
-   * for, the field is what an `HttpOptionsProvider` can answer from validated
-   * config. A later `setGlobalPrefix` call still wins, because it happens after.
-   *
-   * Explicitly `| undefined`, unlike the rest: a suite running one fixture both
-   * prefixed and unprefixed passes a variable here, and under
-   * `exactOptionalPropertyTypes` that would otherwise need a conditional spread.
-   * "No prefix" and "absent" mean the same thing. `@dunx/testing` relies on it.
-   */
-  readonly prefix?: string | undefined;
-  /** Mounts an `OPTIONS` preflight per path, as {@link HttpApp.enableCors} does. */
-  readonly cors?: CorsOptions;
-  /** `app.set('trust proxy', ...)` as a field. */
-  readonly trustProxy?: boolean;
-  /**
-   * Calls `enableShutdownHooks` at construction. `true` takes the default signals;
-   * an object names them and tunes the force-exit.
-   */
-  readonly shutdownHooks?:
-    | boolean
-    | {
-        readonly signals?: readonly ShutdownSignal[];
-        readonly options?: ShutdownHookOptions;
-      };
-  /** Resolved from the container, so middleware can inject(). */
-  readonly middleware?: readonly Ctor<Middleware>[];
-  /**
-   * Replaces the default mapper. Prefer an `ErrorFilter` class over a bare
-   * `ErrorMapper`: a class is resolved from the container and can inject.
-   */
-  readonly onError?: ErrorHandler;
-  /**
-   * One structured entry per request, on by default and outermost, so a request
-   * a guard rejected is still logged with the status it got.
-   * See {@link RequestLoggingMiddleware}.
-   */
-  readonly requestLogging?: boolean | RequestLoggingOptions;
-  /**
-   * Count requests and time them per route, readable through
-   * {@link RequestMetrics}. Off by default; `+35.2 ns` per request when
-   * `requestLogging` is on, because the entry it already builds shares the
-   * timing. With `requestLogging: false` a `MetricsMiddleware` pays for its own
-   * `.then` instead, at +175.9 ns.
-   */
-  readonly metrics?: boolean;
-  /**
-   * One entry at `listen()` naming every route and gateway served. On by default,
-   * and switched separately from `requestLogging`: one is per process, the other
-   * per request. `@dunx/testing` defaults it off.
-   */
-  readonly bootLogging?: boolean;
-  /** Bun's `websocket` options, plus where a throwing handler goes. Server-wide;
-   * gateways themselves are declared in `@Module({ providers })`. */
-  readonly websocket?: SocketOptions;
-  /**
-   * The socket half of `middleware`. Each entry wraps every dispatched gateway
-   * handler; `socketLogging`'s runs outermost, ahead of anything here.
-   */
-  readonly socketMiddleware?: readonly Ctor<SocketMiddleware>[];
-  /**
-   * One structured entry per socket frame, on by default at `debug` - a gateway
-   * can take a frame per connection per tick, so it writes nothing until an app
-   * lowers its level. See {@link SocketLoggingMiddleware}.
-   */
-  readonly socketLogging?: boolean | SocketLoggingOptions;
-  /**
-   * Multi-node websocket fan-out. Absent means `PubSub` publishes to this process
-   * only. Anything with `publish` and `subscribe` fits; one that has to come out
-   * of the container goes through `app.get(PubSub).relayThrough(...)` instead.
-   */
-  readonly relay?: PubSubRelay;
-  /** The broker channel the relay carries frames on. @default 'dunx:ws' */
-  readonly relayChannel?: string;
-  /**
-   * How hard to retry a failed subscribe. Bounded, doubling, on an unref'd timer,
-   * so a broker that never returns cannot hold the process open.
-   */
-  readonly relayResubscribe?: RelayOptions['resubscribe'];
-  /**
-   * What an unmatched path looks like to global middleware. `'guarded'` gives the
-   * miss no route metadata, so a global guard refuses it and a prober cannot tell
-   * a 404 from a 401. `'public'` reports it as `@Public()` for a conventional 404.
-   * Either way `UNMATCHED` is set, which no real route sets.
-   *
-   * @default 'guarded'
-   */
-  readonly notFound?: 'guarded' | 'public';
-  /**
-   * Serve HTTP/2 on the same port, through the same routes and the same
-   * `fetch` fallback. Without TLS that is h2c: a client opening with the HTTP/2
-   * preface gets HTTP/2 and everyone else gets HTTP/1.1, which is what a proxy
-   * in front of the app speaks. Bun marks the option experimental.
-   *
-   * Gateways are unaffected and keep working, because a websocket upgrade is an
-   * HTTP/1.1 request and Bun serves both protocols on the one socket. There is
-   * no websocket over HTTP/2.
-   *
-   * @default false
-   */
-  readonly http2?: boolean;
-  /**
-   * Serve HTTP/1.1. `false` alongside `http2` refuses HTTP/1.x with a 505, which
-   * **disables every gateway**: a websocket upgrade is an HTTP/1.1 request, so
-   * nothing can connect to one. Only for a port that is HTTP/2 or nothing.
-   *
-   * @default true
-   */
-  readonly http1?: boolean;
-}
+import type { HttpOptions } from './options.js';
 
 /**
  * Everything below `listen()` configures the route table, built once when the
@@ -178,6 +52,8 @@ export interface HttpApp extends App {
   clientIp(req: BunRequest): string | undefined;
   /** Every gateway path this app upgrades on, exactly as mounted. */
   readonly gatewayPaths: readonly string[];
+  /** The gateway port's own url, `undefined` unless `gatewayPort` split them. */
+  readonly gatewayUrl: string | undefined;
   listen(port?: number): Promise<string>;
 }
 
@@ -205,10 +81,11 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
   readonly #bootLogging: boolean;
   readonly #http2: boolean | undefined;
   readonly #http1: boolean | undefined;
+  readonly #gatewayPort: number | undefined;
+  readonly #binding = new ServerBinding();
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
-  #server: Server<SocketData> | undefined;
   #resolveClosed: (() => void) | undefined;
   #shuttingDown: Promise<void> | undefined;
 
@@ -247,6 +124,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     this.#bootLogging = options.bootLogging ?? true;
     this.#http2 = options.http2;
     this.#http1 = options.http1;
+    this.#gatewayPort = options.gatewayPort;
     this.gatewayPaths = websocket?.paths ?? [];
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
@@ -350,36 +228,28 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       this.#notFound,
     );
 
-    // Spread rather than always present: `exactOptionalPropertyTypes` makes an
-    // explicit `undefined` a different thing from an absent key, and Bun's
-    // defaults for these two are not ours to restate.
-    const protocols = {
-      ...(this.#http2 === undefined ? {} : { http2: this.#http2 }),
-      ...(this.#http1 === undefined ? {} : { http1: this.#http1 }),
-    };
-
-    // One call: a route that may answer `undefined` because it upgraded is only
-    // a valid table when `websocket` is there, and Bun's types say so.
-    const options: Bun.Serve.Options<SocketData> = ws
-      ? {
-          port,
-          fetch,
-          ...protocols,
-          routes: withUpgradeRoutes(routes, ws.routes),
-          websocket: ws.websocket,
-        }
-      : { port, fetch, ...protocols, routes };
-    this.#server = Bun.serve(options);
+    this.#binding.bind({
+      port,
+      routes,
+      fetch,
+      websocket: ws,
+      http2: this.#http2,
+      http1: this.#http1,
+      gatewayPort: this.#gatewayPort,
+    });
+    const server = this.#binding.main as Server<SocketData>;
 
     attachAddressSource(this.#app.get(ClientAddress), {
-      server: this.#server,
+      server,
       trustProxy: this.#settings['trust proxy'],
     });
     // `pendingRequests` and `pendingWebSockets` are readable only from the bound
     // server, so the singleton gets it the same way `ClientAddress` does.
-    this.#app.get(RequestMetrics).attach(this.#server);
+    this.#app.get(RequestMetrics).attach(server);
     const pubsub = this.#app.get(PubSub);
-    pubsub.attach(this.#server);
+    // The server that owns the sockets, which is the gateway one when the ports
+    // are split. Publishing on the other would fan out to nothing.
+    pubsub.attach(this.#binding.sockets as Server<SocketData>);
     // After attach, so a frame arriving during the subscribe has a server to fan
     // out on. Awaited, so a two-node deployment is subscribed by listen().
     if (this.#relay) {
@@ -401,7 +271,12 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       });
     }
     this.#logServed(prefixed, ws);
-    return this.#server.url.href;
+    return this.#binding.url as string;
+  }
+
+  /** The gateway port's own url, when `gatewayPort` split them. */
+  get gatewayUrl(): string | undefined {
+    return this.#binding.gatewayUrl;
   }
 
   /**
@@ -464,8 +339,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       // While the port is still open: a readiness probe has to fail before the
       // server stops. Memoized, so `App.shutdown()` below cannot drain twice.
       await step(() => this.#app.drain());
-      await step(async () => this.#server?.stop(this.#websocket !== undefined));
-      this.#server = undefined;
+      await step(() => this.#binding.stop(this.#websocket !== undefined));
       // Before the container: a relay this app owns holds two Redis sockets.
       await step(() => this.#app.get(PubSub).close());
       try {

@@ -18,11 +18,8 @@ import { discoverGateways } from '../ws/discover.js';
 import { SocketLoggingMiddleware } from '../ws/logging.js';
 import type { SocketMiddleware } from '../ws/middleware.js';
 import { PubSub } from '../ws/pubsub.js';
-import {
-  HttpApplication,
-  type HttpApp,
-  type HttpOptions,
-} from './application.js';
+import { HttpApplication, type HttpApp } from './application.js';
+import type { HttpOptions } from './options.js';
 import {
   DefaultHttpOptions,
   HttpOptionsProvider,
@@ -32,7 +29,8 @@ import type { Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
 import { assertNoCollisions } from './routes.js';
 
-export type { HttpApp, HttpOptions } from './application.js';
+export type { HttpApp } from './application.js';
+export type { HttpOptions } from './options.js';
 
 // Bound around the user's root so `PubSub` is injectable without importing
 // anything. Its name is what a duplicate binding of PubSub would be reported
@@ -229,17 +227,28 @@ export class HttpFactory {
     for (const warning of websocket?.warnings ?? []) {
       app.get(Logger).warn(warning);
     }
-    // A websocket upgrade is an HTTP/1.1 request, so refusing HTTP/1.x refuses
-    // every gateway. Bun answers 505 and the connection never opens, which is
-    // silent from the server side.
-    if (resolved.http1 === false && websocket !== undefined) {
-      app
-        .get(Logger)
-        .warn(
-          `http1: false refuses HTTP/1.x with a 505, and a websocket upgrade is ` +
-            `an HTTP/1.1 request - so nothing can connect to ${websocket.paths.join(', ')}. ` +
-            `Drop http1: false, or serve the gateways from a port that keeps HTTP/1.1.`,
-        );
+    /**
+     * A websocket upgrade is an HTTP/1.1 request, so a server refusing HTTP/1.x
+     * refuses every gateway on it. Bun answers 505 and the connection never
+     * opens, and the upgrade never reaches dunx, so nothing is logged per
+     * request either: the app looks healthy and its gateways are unreachable.
+     *
+     * An error rather than a warning because the configuration cannot be right.
+     * `gatewayPort` moves the upgrades to a second `Bun.serve` that keeps
+     * HTTP/1.1, which is the one shape that makes the pair work.
+     */
+    if (
+      resolved.http1 === false &&
+      websocket !== undefined &&
+      resolved.gatewayPort === undefined
+    ) {
+      await app.shutdown();
+      throw new AppError(
+        `http1: false refuses HTTP/1.x with a 505, and a websocket upgrade is an ` +
+          `HTTP/1.1 request - so nothing could ever connect to ` +
+          `${websocket.paths.join(', ')}. Set gatewayPort to serve the gateways ` +
+          'from a second port that keeps HTTP/1.1, or drop http1: false.',
+      );
     }
 
     // `root` is the app's own module, so global middleware and the error filter

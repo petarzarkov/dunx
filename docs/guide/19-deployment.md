@@ -70,9 +70,34 @@ artefact of the load generator.
 Gateways keep working, because a websocket upgrade is an HTTP/1.1 request and both
 protocols share the socket. There is no websocket over HTTP/2.
 
-`http1: false` is the pair to it and refuses HTTP/1.x with a 505. **It disables
-every gateway**, since nothing can then send the upgrade; dunx warns at boot if you
-set it with a gateway declared. Only use it on a port that is HTTP/2 or nothing.
+### http1: false, and gateways
+
+`http1: false` is the pair to it and refuses HTTP/1.x with a 505. A websocket
+upgrade **is** an HTTP/1.1 request, so a port with it set can serve HTTP/2 routes
+or gateways and never both. Setting it with a gateway declared and no second port
+is a boot error naming the stranded paths, because the app would otherwise start
+healthy and never accept a socket.
+
+`gatewayPort` is the way to have both. The routes keep `port` and the upgrades
+move to a second `Bun.serve` that takes no protocol overrides:
+
+```ts
+const app = await HttpFactory.create(AppModule, {
+  http2: true,
+  http1: false,
+  gatewayPort: 3001,
+});
+
+await app.listen(3000); // HTTP/2 only, the controllers
+app.gatewayUrl; // http://localhost:3001, HTTP/1.1, the gateways
+```
+
+Both ports come out of **one container**, which is why this is an option rather
+than a second `HttpFactory.create`: a second app would build a second container,
+and the gateways would inject different singletons than the controllers.
+
+`gatewayPort` works without `http1: false` too, for a deployment that wants the
+socket port behind a different firewall rule. An HTTP request to it answers 404.
 
 Bun's own `fetch` cannot call an h2c origin: `protocol: 'http2'` rejects with
 `HTTP2Unsupported` against any cleartext peer, whatever that peer serves. Leave
