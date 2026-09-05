@@ -40,10 +40,10 @@ tell the two apart. Reinstate it if upstream teaches it about type-space merges.
 
 **Bun's own break is one renamed error code.** An error Redis itself returned arrived
 as `ERR_REDIS_INVALID_RESPONSE` on 1.3 and arrives as `ERR_REDIS_SERVER_ERROR` on 1.4.
-The rename is correct: the response parsed fine and the command did not. Because
-`@types/bun` is a `>=1.3.0` peer, `RedisErrorCode` lists both and
+The rename is correct: the response parsed fine and the command did not. `RedisErrorCode` lists both and
 `@dunx/infra/redis` exports `isServerError()` for the check a consumer should write
-instead of either constant.
+instead of either constant. The peer was `>=1.3.0` when this was written; 3.3.0
+raised it and `engines.bun` to 1.4.1, so only the 1.4 name can now arrive.
 
 ## The one user-visible behaviour change dunx absorbed
 

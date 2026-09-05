@@ -5,9 +5,10 @@ import { AppError } from '@dunx/core';
  * ours for URL validation. Frozen object rather than an `enum` - see CLAUDE.md.
  *
  * An error the *server* returned - `WRONGTYPE`, `ERR unknown command`, a wrong
- * argument count - arrives as `SERVER_ERROR` on Bun 1.4 and as
- * `INVALID_RESPONSE` on 1.3. Both are listed because `@types/bun` is a `>=1.3.0`
- * peer, and `serverError()` is the check to write instead of either constant.
+ * argument count - arrives as `SERVER_ERROR` on Bun 1.4 and arrived as
+ * `INVALID_RESPONSE` on 1.3. The floor is 1.4.1, so only the first can reach a
+ * consumer; the second stays listed because removing an exported constant is a
+ * breaking change. `isServerError()` is the check to write instead of either.
  */
 export const RedisErrorCode = Object.freeze({
   CONNECTION_CLOSED: 'ERR_REDIS_CONNECTION_CLOSED',

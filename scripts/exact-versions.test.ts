@@ -35,6 +35,14 @@ interface Manifest {
   readonly json: Record<string, Record<string, string> | undefined>;
 }
 
+/** The `>=X.Y.Z` a range opens at, as one comparable number, or null for none. */
+const floorOf = (spec: string): number | null => {
+  const match = /^>=\s*(\d+)\.(\d+)\.(\d+)/.exec(spec);
+  if (!match) return null;
+  const [, major, minor, patch] = match;
+  return Number(major) * 1e6 + Number(minor) * 1e3 + Number(patch);
+};
+
 const manifests = async (): Promise<Manifest[]> => {
   const paths = [
     'package.json',
@@ -133,6 +141,29 @@ describe('dependency versions are exact', () => {
           }
         }
       }
+    }
+
+    expect(offences).toEqual([]);
+  });
+
+  /**
+   * `@types/bun` types the runtime `engines.bun` names, so a peer floor below the
+   * engines floor lets a consumer typecheck a 1.4 API against 1.3 types and watch
+   * it pass. The move to Bun 1.4.1 raised `engines` and the generated app's own
+   * types floor on every workspace, and left eight peers at `>=1.3.0`.
+   */
+  it('floors @types/bun no lower than engines.bun', async () => {
+    const offences: string[] = [];
+
+    for (const { path, json } of await manifests()) {
+      const engines = json['engines']?.['bun'];
+      const peer = json['peerDependencies']?.['@types/bun'];
+      if (engines === undefined || peer === undefined) continue;
+
+      const runtime = floorOf(engines);
+      const types = floorOf(peer);
+      if (runtime === null || types === null || types >= runtime) continue;
+      offences.push(`${path} engines.bun ${engines} but @types/bun ${peer}`);
     }
 
     expect(offences).toEqual([]);
