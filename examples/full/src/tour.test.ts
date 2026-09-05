@@ -470,6 +470,9 @@ it('refuses http1: false with a gateway, and serves both once ports split', () =
   expect(tour.text).toMatch(
     /routes on \d+ \(HTTP\/2 only\), gateways on \d+ \(HTTP\/1\.1\) - one container, two servers/,
   );
+  // The status, not just the line: the demo logs whatever it got, so without
+  // this the test passes when the routes port answers 200.
+  expect(tour.text).toContain('GET / on the routes port over HTTP/1.1 -> 505');
   expect(tour.text).toContain(
     'the gateway accepted an upgrade on its own port',
   );

@@ -243,6 +243,8 @@ describe.skipIf(liveBucket === undefined)(
       const storageUnderTest = live();
       const streamKey = `${crypto.randomUUID()}.bin`;
 
+      // The same object, so a wrapper carrying the same message cannot pass.
+      const sourceError = new Error('source failed');
       const failing = storageUnderTest.write(
         streamKey,
         new ReadableStream<Uint8Array>({
@@ -250,15 +252,12 @@ describe.skipIf(liveBucket === undefined)(
             controller.enqueue(new TextEncoder().encode('partial'));
           },
           pull(controller) {
-            controller.error(new Error('source failed'));
+            controller.error(sourceError);
           },
         }),
       );
 
-      expect((await rejection(failing)) as Error).toHaveProperty(
-        'message',
-        'source failed',
-      );
+      expect(await rejection(failing)).toBe(sourceError);
     });
   },
 );

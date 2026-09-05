@@ -364,9 +364,10 @@ unvalidated case.
 
 ### The default path, re-measured
 
-Everything below this section was measured on Bun 1.3.14 and is kept, because most of
-it is the record of what a **dunx** code change was worth rather than what Bun does.
-Re-running `bun run logging` on 1.4 moved three of its conclusions.
+The table below, and everything after the 1.4.1 note that follows it, was measured
+on Bun 1.3.14 and is kept: most of that is the record of what a **dunx** code change
+was worth rather than what Bun does. Re-running `bun run logging` on 1.4 moved three
+of its conclusions.
 
 | Figure                                              | 1.3.14   | 1.4.0    |
 | --------------------------------------------------- | -------- | -------- |

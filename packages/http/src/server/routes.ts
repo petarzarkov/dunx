@@ -131,8 +131,9 @@ export const withUpgradeRoutes = (
  * route metadata, so a global guard refuses it and an anonymous caller sees 401
  * rather than 404 - a 404 among 401s tells a prober which paths exist.
  *
- * `'public'`, the default, reports it as `@Public()` for the conventional 404.
- * Either way `UNMATCHED` is
+ * `'public'` reports it as `@Public()` for the conventional 404. It is the
+ * application-level default; this function's own parameter defaults to
+ * `'guarded'`. Either way `UNMATCHED` is
  * set and no real route sets it, so a guard can tell the two apart.
  */
 const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>

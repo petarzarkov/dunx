@@ -135,18 +135,17 @@ Startup is the clearest loss, and it is a real one:
 
 | Subject          | cold start to first served request (median of 7) |
 | ---------------- | -----------------------------------------------: |
-| raw `Bun.serve`  |                                          18.6 ms |
-| **`@dunx/http`** |                                      **39.6 ms** |
-| Elysia           |                                          46.5 ms |
-| raw `node:http`  |                                          71.1 ms |
-| Express          |                                         122.2 ms |
-| Fastify          |                                         150.8 ms |
-| NestJS (Express) |                                         273.7 ms |
+| raw `Bun.serve`  |                                          19.4 ms |
+| **`@dunx/http`** |                                      **42.6 ms** |
+| Elysia           |                                          47.6 ms |
+| raw `node:http`  |                                          80.4 ms |
+| Express          |                                         126.5 ms |
+| Fastify          |                                         154.6 ms |
+| NestJS (Express) |                                         278.8 ms |
 
-Both Bun figures roughly halved on Bun 1.4, from 54.8 ms and 28.7 ms. Every Node
-subject in the table stayed within 1% of its previous number. The ratio has not
-changed: dunx boots in about twice raw `Bun.serve`'s time, for the `oxc-parser`
-preload plus eager DI resolution and route discovery.
+Both Bun figures roughly halved on Bun 1.4, from 54.8 ms and 28.7 ms. The ratio has
+not changed since: dunx boots in about twice raw `Bun.serve`'s time, for the
+`oxc-parser` preload plus eager DI resolution and route discovery.
 
 That cost is paid once at boot, never per request. It is a real cost on a
 short-lived process.

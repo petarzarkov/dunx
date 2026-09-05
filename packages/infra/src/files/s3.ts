@@ -1,7 +1,11 @@
-import type { S3Client, S3FilePresignOptions, S3Options } from 'bun';
+import type {
+  NetworkSink,
+  S3Client,
+  S3FilePresignOptions,
+  S3Options,
+} from 'bun';
 import { FileNotFoundError } from './errors.js';
 import { guardMissing, normalizeKey, normalizePrefix } from './path.js';
-import { pump } from './stream.js';
 import {
   Storage,
   StorageOptions,
@@ -43,6 +47,42 @@ export class S3StorageOptions extends StorageOptions {
  * takes is what `list()` and `stat()` give back, so moving a bucket under a
  * prefix does not ripple into call sites.
  */
+/**
+ * Drains `source` into `sink` one chunk at a time, returning the byte count.
+ * `S3Client`'s write takes no `ReadableStream`, so an upload goes through the
+ * `NetworkSink`, which multiparts it. Module-private because `LocalStorage` needs
+ * none of it: `Bun.write(path, stream)` streams to disk on Bun 1.4.1.
+ *
+ * The await is backpressure: `NetworkSink.write` returns a promise once its
+ * buffer fills, and its return is a buffered-bytes counter.
+ */
+const pump = async (
+  sink: NetworkSink,
+  source: ReadableStream<Uint8Array>,
+): Promise<number> => {
+  let written = 0;
+
+  try {
+    // `for await` rather than `getReader()` and a `for (;;)` reading until
+    // `done`: a `ReadableStream` is async-iterable, and iterating it acquires the
+    // reader and releases it on completion, `break` **and** throw - all measured.
+    // The manual form was the same loop plus a `done` check and two
+    // `releaseLock()` calls that had to be kept in step by hand.
+    for await (const chunk of source) {
+      written += chunk.byteLength;
+      await sink.write(chunk);
+    }
+  } catch (error) {
+    // Ends the sink in a failed state so a partial multipart upload is aborted
+    // rather than committed.
+    await sink.end(error instanceof Error ? error : undefined);
+    throw error;
+  }
+
+  await sink.end();
+  return written;
+};
+
 export class S3Storage extends Storage {
   readonly #client: S3Client;
   readonly #prefix: string;

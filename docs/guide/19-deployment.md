@@ -158,7 +158,7 @@ running service returning 500s. See [Configuration](./12-configuration.md).
 ## Container image
 
 ```dockerfile
-FROM oven/bun:1.3-alpine
+FROM oven/bun:1.4.1-alpine
 WORKDIR /app
 
 # Dependencies first, so a source change does not reinstall them.

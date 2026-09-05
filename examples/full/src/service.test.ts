@@ -2,7 +2,12 @@ import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { HttpError, Readiness, type HttpApp } from '@dunx/http';
 import { FetchError, HttpService } from '@dunx/http/client';
 import { ScheduleRegistry } from '@dunx/infra/schedule';
-import { testClient, type JsonInit, type TestClient } from '@dunx/testing';
+import {
+  http2Client,
+  testClient,
+  type JsonInit,
+  type TestClient,
+} from '@dunx/testing';
 import { createApp } from './main.js';
 import { Maintenance } from './schedule/maintenance.service.js';
 
@@ -513,4 +518,15 @@ it('answers 409 for a duplicate, from the driver error alone', async () => {
   // The driver's message names the table and the column, so it stays on `cause`
   // and out of the body.
   expect(again.body.error).not.toContain('users.name');
+});
+
+it('serves the same route over HTTP/2, since createApp sets http2', async () => {
+  // Bun's own `fetch` cannot call an h2c origin, so this goes through
+  // `@dunx/testing`'s HTTP/2 client rather than the one above.
+  const h2 = http2Client(baseUrl);
+  const overH2 = await h2.json<unknown[]>('/api/notes');
+  const overH1 = await json<unknown[]>('notes');
+
+  expect(overH2.status).toBe(overH1.status);
+  expect(overH2.body).toEqual(overH1.body);
 });

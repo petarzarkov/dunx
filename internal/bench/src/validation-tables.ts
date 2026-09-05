@@ -168,11 +168,11 @@ row's µs/req above the \`req.json()\`-only row.
 
 ${validatorTable(report)}
 
-**zod, Valibot and ArkType are within noise of each other**, and the two compiled
-options are at or below what this harness can resolve at this payload size. Every one
-of them is cheaper than \`req.json()\`, so **there is no throughput argument for
-choosing between them** - pick on API, error quality and ecosystem. If a profile
-genuinely points at validation, the compiled route is there.
+The three schema libraries span about half a microsecond, which is at the edge of
+what this harness resolves, and the compiled options sit below it at this payload
+size. **Every one of them is cheaper than \`req.json()\`**, so there is no throughput
+argument for choosing between them - pick on API, error quality and ecosystem. If a
+profile genuinely points at validation, the compiled route is there.
 
 \`noop\` and \`noop-async\` are the last two rows and are not validators: \`noop\` is a
 hand-written pass-through, which is dunx's plumbing with the validator's cost taken

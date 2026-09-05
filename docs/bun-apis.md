@@ -110,7 +110,7 @@ BunFile | S3File | Blob | Archive` - so the `NetworkSink` multipart upload stays
 and `pump` with it.
 
 Removing the local caller exposed that `pump` had **never been tested where it
-runs**: `stream.ts` read 100% only because `LocalStorage`'s suite shared the helper,
+runs**: `pump` read 100% only because `LocalStorage`'s suite shared the helper,
 and the S3 upload path it exists for had no test at all. `s3.test.ts` now has two.
 
 ### `AsyncLocalStorage` stopped charging per `await`, and the ladder cannot see it

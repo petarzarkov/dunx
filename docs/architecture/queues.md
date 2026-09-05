@@ -91,7 +91,7 @@ is kept anyway.** Re-probed on Bun 1.4.1 against a live Redis, driving
 | `maxRetries: 0`        | 1 call               | yes         | `ready`, PONG |
 | both                   | 1 call               | yes         | `ready`, PONG |
 
-Two things that says. On default options **Bun heals the socket itself** and
+Two things stand out. On default options **Bun heals the socket itself** and
 re-fires `onconnect`, so bullmq's reconnect path is never entered at all. And
 when it is entered, 6.3.4's `connect()` carries a guard the mechanism above does
 not account for:

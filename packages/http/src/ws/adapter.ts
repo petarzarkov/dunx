@@ -275,8 +275,20 @@ export const buildWebSocket = (
   // key added to `SocketOptions` and not stripped here fails to type, rather than
   // riding the spread into a handler that ignores unknown keys silently.
   const { onError: _onError, binaryType, ...socketOptions } = options;
-  const handlerOptions: Omit<SocketOptions, 'onError' | 'binaryType'> =
-    socketOptions;
+  // Annotated as the Bun-owned subset rather than `Omit<SocketOptions, ...>`,
+  // which would still contain a new dunx key and assign cleanly. A dunx-owned
+  // key added to `SocketOptions` and not destructured above fails here instead
+  // of riding the spread into a handler that ignores unknown keys silently.
+  const handlerOptions: Pick<
+    WebSocketHandler<SocketData>,
+    | 'backpressureLimit'
+    | 'closeOnBackpressureLimit'
+    | 'idleTimeout'
+    | 'maxPayloadLength'
+    | 'perMessageDeflate'
+    | 'publishToSelf'
+    | 'sendPings'
+  > = socketOptions;
 
   const run = (
     invoke: Invoke,

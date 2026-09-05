@@ -709,8 +709,8 @@ costs into one number: what parsing and validating cost *at all*, and what
 `@dunx/http` adds on top. This section separates them.
 
 ```
-AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.0 | oha oha 1.15.0
-64 connections | 1s warmup | 2 x 1s measured | 2026-09-03
+AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores | bun 1.4.1 | oha oha 1.15.0
+64 connections | 3s warmup | 3 x 4s measured | 2026-09-05
 ```
 
 **Every row is one fresh process, and the measured rounds are interleaved across all
@@ -726,10 +726,10 @@ it, all answering the same bytes:
 
 | Step | req/s | µs/req | this step adds |
 | ---- | ----: | -----: | -------------: |
-| `GET /json` - no request body at all | 126,931 | 7.88 | - |
-| `POST`, body on the wire, never read | 119,718 | 8.35 | +0.47 µs |
-| `POST` + `await req.json()` | 87,138 | 11.48 | +3.12 µs |
-| `POST` + `req.json()` + zod | 81,610 | 12.25 | +0.78 µs |
+| `GET /json` - no request body at all | 132,020 | 7.57 | - |
+| `POST`, body on the wire, never read | 125,518 | 7.97 | +0.39 µs |
+| `POST` + `await req.json()` | 97,214 | 10.29 | +2.32 µs |
+| `POST` + `req.json()` + zod | 93,836 | 10.66 | +0.37 µs |
 
 **`req.json()` is the expensive step by a wide margin**, and putting the body on the
 wire is near-free - the difference between *sending* it and *reading* it is what
@@ -745,19 +745,19 @@ row's µs/req above the `req.json()`-only row.
 
 | Validator | costs | raw `Bun.serve` req/s | `@dunx/http` req/s | dunx vs raw |
 | --------- | ----: | --------------------: | -----------------: | ----------: |
-| ajv | -0.11 µs | 87,989 | 78,204 | 88.9% |
-| zod | 0.78 µs | 81,610 | 72,390 | 88.7% |
-| typebox | 0.92 µs | 80,658 | 74,752 | 92.7% |
-| valibot | 0.92 µs | 80,657 | 74,914 | 92.9% |
-| arktype | 1.44 µs | 77,395 | 78,042 | 100.8% |
-| noop-async | -0.07 µs | 87,670 | 83,138 | 94.8% |
-| noop | 0.11 µs | 86,305 | 87,160 | 101.0% |
+| typebox | 0.06 µs | 96,688 | 91,919 | 95.1% |
+| ajv | 0.26 µs | 94,825 | 87,872 | 92.7% |
+| zod | 0.37 µs | 93,836 | 85,119 | 90.7% |
+| arktype | 0.61 µs | 91,758 | 86,610 | 94.4% |
+| valibot | 0.92 µs | 89,200 | 83,762 | 93.9% |
+| noop | -0.09 µs | 98,058 | 90,592 | 92.4% |
+| noop-async | -0.03 µs | 97,489 | 88,405 | 90.7% |
 
-**zod, Valibot and ArkType are within noise of each other**, and the two compiled
-options are at or below what this harness can resolve at this payload size. Every one
-of them is cheaper than `req.json()`, so **there is no throughput argument for
-choosing between them** - pick on API, error quality and ecosystem. If a profile
-genuinely points at validation, the compiled route is there.
+The three schema libraries span about half a microsecond, which is at the edge of
+what this harness resolves, and the compiled options sit below it at this payload
+size. **Every one of them is cheaper than `req.json()`**, so there is no throughput
+argument for choosing between them - pick on API, error quality and ecosystem. If a
+profile genuinely points at validation, the compiled route is there.
 
 `noop` and `noop-async` are the last two rows and are not validators: `noop` is a
 hand-written pass-through, which is dunx's plumbing with the validator's cost taken
@@ -774,10 +774,10 @@ interface rather than a library.
 
 | Subject | req/s | µs/req |
 | ------- | ----: | -----: |
-| raw `Bun.serve`, parse in the handler | 87,138 | 11.48 |
-| `@dunx/http`, no schemas, parse in the handler | 79,691 | 12.55 |
-| `@dunx/http`, no schemas, validate in the handler | 76,126 | 13.14 |
-| `@dunx/http`, `body` declared - the framework does it | 72,390 | 13.81 |
+| raw `Bun.serve`, parse in the handler | 97,214 | 10.29 |
+| `@dunx/http`, no schemas, parse in the handler | 91,404 | 10.94 |
+| `@dunx/http`, no schemas, validate in the handler | 85,011 | 11.76 |
+| `@dunx/http`, `body` declared - the framework does it | 85,119 | 11.75 |
 
 The two `manual` rows declare no schemas and do the work inside the handler, which
 keeps them on the synchronous dispatch path - so they separate dunx's **dispatch**
@@ -855,11 +855,12 @@ over a run. Read anything under about **±0.5 µs** as unresolvable.
 | + the entry and `JSON.stringify`, string dropped | 80,570 | 12.41 | +1.55 µs | +4.43 µs |
 | batched instead - **the shipped default** | 76,101 | 13.14 | +0.73 µs | +5.16 µs |
 
-Reading it: the middleware chain, `TraceContext.adopt` and setting
-`traceresponse` on the response are each at or below what this harness can resolve.
-What costs is the **first touch of `req.headers`**, the `AsyncLocalStorage`
-scope, and **building and serialising the entry** - and, before it was batched, the
-write.
+Reading it: the middleware chain and `TraceContext.adopt` are at or below what
+this harness can resolve. What costs is **building and serialising the entry**, the
+`.then` that sets `traceresponse` on the response, the **first touch of
+`req.headers`**, the `AsyncLocalStorage` scope - and, before it was batched, the
+write. Read the total rather than a single row: six of the eleven steps sit inside
+the harness's own resolution and one of them reads negative.
 
 ### The write, and the pipe nobody was reading
 
