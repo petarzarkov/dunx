@@ -1,6 +1,6 @@
 {
   "name": "@dunx/create-app",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "description": "Scaffold a new dunx application - bunx @dunx/create-app my-api",
   "keywords": [
     "bun",

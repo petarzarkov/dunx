@@ -4,6 +4,93 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.3.0 - 2026-09-05
+
+Bun 1.4.1, an HTTP/2 test client, and gatewayPort
+
+Since 3.2.1.
+
+**`engines.bun` is now `>=1.4.1`**, and two of the four things 1.4.1 changed are
+relied on directly. `Bun.write(path, stream)` streams to disk, which is what
+`LocalStorage.write` now is, and a `server.upgrade()` after an `await` no longer
+leaks an HTTP/1.0 socket - dunx takes that branch whenever `@OnUpgrade` is async,
+and on 1.4.0 the process then never exited. `bun install` does not enforce
+`engines`, and below 1.4.1 a streamed write silently persists
+`[object ReadableStream]`, so `LocalStorage` checks the floor at construction.
+
+The `@types/bun` peer now states that floor too, on the eight packages that
+declare it. It had stayed at `>=1.3.0` while `engines` and the generated app's
+own types floor both moved, so a consumer on 1.3 types would have typechecked
+`http2: true` against a Bun whose types have no such option and seen it pass.
+`scripts/exact-versions.test.ts` pins the two floors together.
+
+**`gatewayPort` in `@dunx/http`, and one config that no longer boots.**
+`http1: false` answers 505 to every HTTP/1.x request and a websocket upgrade is
+one, so a port with it set can serve HTTP/2 routes or gateways and never both.
+An app declaring a gateway with `http1: false` and no `gatewayPort` used to
+start and serve, and now fails at boot naming the stranded paths. Nothing that
+worked is taken away: Bun answered those upgrades with a 505, so the gateways
+were already unreachable and the app only looked healthy, with no per-request
+log to say otherwise because the upgrade never reached dunx.
+
+`gatewayPort` is the way to have both. The routes keep `port`, the upgrades move
+to a second `Bun.serve` that takes no protocol overrides, and `app.gatewayUrl`
+reports it. Both come out of one container, which is why it is an option rather
+than a second `HttpFactory.create`.
+
+`HttpOptions.http2` serves h2c on the same port as HTTP/1.1, through the same
+routes and the same 404 fallback: 2.9x on a small JSON body, 2.1x on a 4 KiB
+POST, 1.3x on 64 KiB. The saving is per-request framing, so it shrinks as the
+body grows. `websocket.binaryType` selects what a binary frame is, including
+1.4.1's new `'blob'`.
+
+**`http2Client` in `@dunx/testing`**, because Bun's own `fetch` cannot call an
+h2c origin: `protocol: 'http2'` rejects with `HTTP2Unsupported` against any
+cleartext peer, whatever it serves. It mirrors `testClient` over `node:http2`.
+
+**A data-integrity fix in `@dunx/infra/files`.** A failed S3 stream left a
+truncated object in the bucket while the caller saw a rejection. Measured on
+1.4.1 against MinIO, `end(error)` does not abort the multipart upload: an
+`Error` and a bare string, at 7 bytes and at 6 MiB, all four committed the bytes
+written so far. `S3Storage.write` deletes the key and rethrows the source's own
+error. A replacement is destroyed inside the sink before any cleanup runs, so
+the delete swaps a silently truncated object for an absent one rather than
+saving the original; preserving it would need a temporary key and a publish
+step, and `Bun.S3Client` exposes no server-side copy.
+
+Two smaller behavioural notes. `createTestServer` does not force `gatewayPort`
+the way it forces `port`, so a fixture opening a socket on the url it returns is
+not refused; pass it to split the ports, and read `gatewayUrl` for the address.
+And `stop(force)` forces only the socket-owning server, where it used to abort
+in-flight requests on a server that holds none.
+
+Also in this range: `bullmq` 6.3.4, the version a consumer's caret already
+resolves; the full 20-subject benchmark re-run on 1.4.1, with the cross-run
+deltas attributed to the machine rather than to Bun; and the measurement that
+1.4.1's AsyncLocalStorage rewrite takes a sixteen-await handler from 103.60 ns
+of store overhead to 5.44 ns, which moves no recorded logging figure but retires
+`correlate: false` as an optimisation at any await depth.
+
+### Features
+
+- **testing**: an HTTP/2 client, and act on the CodeRabbit review ([`341d69a`](https://github.com/petarzarkov/dunx/commit/341d69aa06f67dd95047347c6e2fc08b6b538315))
+- **http**: gatewayPort, and refuse http1: false with a stranded gateway ([`61368d1`](https://github.com/petarzarkov/dunx/commit/61368d15abf06b5cb4bdeaa0fcf8f6ec92e2b90e))
+
+### Fixes
+
+- **infra**: a failed S3 stream left a truncated object, and act on round two ([`e3a6dc9`](https://github.com/petarzarkov/dunx/commit/e3a6dc991ce08e92ed32c8e1488bedca642d241f))
+- **http**: act on review - split-port metrics, the Blob reply, and a failed bind ([`accfe06`](https://github.com/petarzarkov/dunx/commit/accfe06aa94e7225446bf5b565c00f216e96ec9e))
+
+### Documentation
+
+- **bench**: measure the ALS rewrite and h2c, and record what each is worth ([`341febc`](https://github.com/petarzarkov/dunx/commit/341febc546ff92dc670444de5569dcb7aec1add3))
+
+### Other changes
+
+- **infra**: pin that a failed S3 replacement leaves nothing, not a truncation ([`1ac763d`](https://github.com/petarzarkov/dunx/commit/1ac763d8dcc61470eddd03ba30c37d752899c70e))
+- re-run every subject on 1.4.1, and correct the Redis reconnect record ([`78ea8f1`](https://github.com/petarzarkov/dunx/commit/78ea8f158428b6505a48ba838bb076cb39de2165))
+- move to Bun 1.4.1, and take the four things it changed here ([`cefd869`](https://github.com/petarzarkov/dunx/commit/cefd869ef8a9833b26065f8dc79dc0e49ff98926))
+
 ## 3.2.1 - 2026-09-04
 
 A dropped queue socket no longer silences a worker
