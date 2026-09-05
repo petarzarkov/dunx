@@ -149,6 +149,29 @@ The conclusion for dunx: **no recorded logging figure moves**, and an app whose
 handlers await many times gets a real but small saving that this harness is the
 wrong instrument for.
 
+### `NetworkSink.end(error)` commits the upload rather than aborting it
+
+`S3File.writer()` returns a `NetworkSink`, and the way to fail one is documented
+as passing an error to `end`. It does not abort. Measured on 1.4.1 against MinIO,
+writing one chunk and then erroring the source:
+
+```
+reason            size     rejected with        object after
+Error('boom')     7 B      Error: boom          exists, 7 bytes
+'failed'          7 B      failed               exists, 7 bytes
+Error('boom')     6 MiB    Error: boom          exists, 6291456 bytes
+'failed'          6 MiB    failed               exists, 6291456 bytes
+```
+
+Both sides of the 5 MiB multipart threshold, and with a proper `Error` rather
+than only a bare string. **The caller sees a rejection and the bucket keeps a
+truncated object**, which is the worst pairing: nothing in the failure says the
+key was written.
+
+A `delete` after the failed `end` does clear it, so `S3Storage.write` removes the
+key on failure and rethrows the source's own error. The comment that used to sit
+on `pump` claimed `end(error)` aborted the multipart upload; it never did.
+
 ### `--coverage --parallel` agrees with sequential
 
 The reason the `coverage` phase of `scripts/ci.ts` was sequential is gone. Measured

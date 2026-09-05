@@ -269,16 +269,34 @@ export const buildWebSocket = (
   const reports =
     options.onError !== undefined ||
     middleware.some((entry) => entry.reportsErrors === true);
-  // The rest is exactly the set of keys Bun's WebSocketHandler accepts.
-  // `binaryType` is not one of them - Bun takes it per socket, so it is stripped
-  // here and assigned in `open` instead. The annotation is the guard: a dunx-owned
-  // key added to `SocketOptions` and not stripped here fails to type, rather than
-  // riding the spread into a handler that ignores unknown keys silently.
-  const { onError: _onError, binaryType, ...socketOptions } = options;
-  // Annotated as the Bun-owned subset rather than `Omit<SocketOptions, ...>`,
-  // which would still contain a new dunx key and assign cleanly. A dunx-owned
-  // key added to `SocketOptions` and not destructured above fails here instead
-  // of riding the spread into a handler that ignores unknown keys silently.
+  /**
+   * Every key of `SocketOptions`, named. `onError` and `binaryType` are dunx's -
+   * Bun takes `binaryType` per socket, so it is assigned in `open` instead - and
+   * the rest are Bun's, rebuilt below rather than spread.
+   *
+   * `rest` is the guard, and it is the only shape that works: annotating a rest
+   * object as the Bun subset still assigns, because excess-property checking
+   * applies to object literals and not to variables. A key added to
+   * `SocketOptions` and not named here lands in `rest` and fails
+   * `Record<string, never>`, instead of riding a spread into a handler that
+   * ignores what it does not know.
+   */
+  const {
+    onError: _onError,
+    binaryType,
+    backpressureLimit,
+    closeOnBackpressureLimit,
+    idleTimeout,
+    maxPayloadLength,
+    perMessageDeflate,
+    publishToSelf,
+    sendPings,
+    ...rest
+  } = options;
+  void (rest satisfies Record<string, never>);
+
+  // Conditional per key, because `exactOptionalPropertyTypes` separates an absent
+  // key from one set to `undefined`, and Bun's defaults are not ours to restate.
   const handlerOptions: Pick<
     WebSocketHandler<SocketData>,
     | 'backpressureLimit'
@@ -288,7 +306,15 @@ export const buildWebSocket = (
     | 'perMessageDeflate'
     | 'publishToSelf'
     | 'sendPings'
-  > = socketOptions;
+  > = {
+    ...(backpressureLimit !== undefined && { backpressureLimit }),
+    ...(closeOnBackpressureLimit !== undefined && { closeOnBackpressureLimit }),
+    ...(idleTimeout !== undefined && { idleTimeout }),
+    ...(maxPayloadLength !== undefined && { maxPayloadLength }),
+    ...(perMessageDeflate !== undefined && { perMessageDeflate }),
+    ...(publishToSelf !== undefined && { publishToSelf }),
+    ...(sendPings !== undefined && { sendPings }),
+  };
 
   const run = (
     invoke: Invoke,

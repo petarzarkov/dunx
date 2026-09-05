@@ -425,7 +425,7 @@ describe('createTestServer() and gateways', () => {
       new URL(path, base).href.replace('http', 'ws'),
     );
     return new Promise<string>((resolve) => {
-      const timer = setTimeout(() => resolve('TIMEOUT'), 2000);
+      const timer = setTimeout(() => settle('TIMEOUT'), 2000);
       const settle = (outcome: string) => {
         clearTimeout(timer);
         socket.close();
@@ -453,6 +453,9 @@ describe('createTestServer() and gateways', () => {
     });
 
     expect(server.gatewayUrl).toBeString();
+    expect(server.gatewayUrl).not.toBe(server.url);
+    // Isolated both ways: the upgrades moved off the routes port entirely.
+    expect(await open(server.url, '/chat')).toBe('refused');
     expect(await open(server.gatewayUrl as string, '/chat')).toBe('opened');
     await server.close();
   });

@@ -259,5 +259,33 @@ describe.skipIf(liveBucket === undefined)(
 
       expect(await rejection(failing)).toBe(sourceError);
     });
+
+    // `end(error)` commits what was written whatever it is handed, so the write
+    // removes the object rather than leaving a truncated one behind.
+    it.each([
+      ['an Error', new Error('source failed')],
+      ['a non-Error', 'source failed'],
+    ])(
+      'leaves no object when the source errors with %s',
+      async (_l, reason) => {
+        const storageUnderTest = live();
+        const streamKey = `${crypto.randomUUID()}.bin`;
+
+        const failing = storageUnderTest.write(
+          streamKey,
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('partial'));
+            },
+            pull(controller) {
+              controller.error(reason);
+            },
+          }),
+        );
+
+        expect(await rejection(failing)).toBe(reason);
+        expect(await storageUnderTest.exists(streamKey)).toBe(false);
+      },
+    );
   },
 );

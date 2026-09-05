@@ -73,9 +73,11 @@ const pump = async (
       await sink.write(chunk);
     }
   } catch (error) {
-    // Ends the sink in a failed state so a partial multipart upload is aborted
-    // rather than committed.
-    await sink.end(error instanceof Error ? error : undefined);
+    // `end(error)` does not abort. Measured on Bun 1.4.1 against MinIO, with an
+    // `Error` and with a string, at 7 bytes and at 6 MiB: every one committed
+    // the bytes written so far. So this only closes the sink, and the caller
+    // removes what it committed - see `S3Storage.write`.
+    await sink.end(error instanceof Error ? error : new Error(String(error)));
     throw error;
   }
 
@@ -137,7 +139,16 @@ export class S3Storage extends Storage {
 
     // The NetworkSink multiparts the upload, so the stream never has to be
     // buffered to learn its content length.
-    return pump(this.#client.file(objectKey).writer(), data);
+    try {
+      return await pump(this.#client.file(objectKey).writer(), data);
+    } catch (error) {
+      // A failed sink leaves the bytes it already wrote as a complete object,
+      // whatever is passed to `end` - so a source that died mid-stream would
+      // otherwise leave a silently truncated object behind a rejected write.
+      // Best effort: the original failure is what the caller needs to see.
+      await this.#client.delete(objectKey).catch(() => undefined);
+      throw error;
+    }
   }
 
   async exists(key: string): Promise<boolean> {

@@ -11,6 +11,11 @@ class ThingsController {
     return { things: ['one', 'two'] };
   }
 
+  @Get('search')
+  search({ req }: RouteInput): { limit: string | null } {
+    return { limit: new URL(req.url).searchParams.get('limit') };
+  }
+
   @Get('text')
   text(): Response {
     return new Response('plain', { headers: { 'x-shape': 'raw' } });
@@ -75,6 +80,33 @@ describe('http2Client', () => {
 
     expect(overH2.status).toBe(overH1.status);
     expect(overH2.body).toEqual(overH1.body);
+  });
+
+  it('keeps the query string on the request target', async () => {
+    const response = await h2.json<{ limit: string | null }>(
+      '/things/search?limit=7',
+    );
+
+    expect(response.body.limit).toBe('7');
+  });
+
+  it('sends a bytes body rather than dropping it', async () => {
+    const response = await h2.json<{ got: unknown }>('/things', {
+      method: 'POST',
+      body: new TextEncoder().encode('{"a":2}'),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(response.body.got).toEqual({ a: 2 });
+  });
+
+  it('refuses a body shape it cannot frame, rather than sending nothing', async () => {
+    const form = new FormData();
+    form.set('a', '1');
+
+    await expect(
+      h2.request('/things', { method: 'POST', body: form }),
+    ).rejects.toThrow(/string, bytes, or `json`/);
   });
 
   it('rejects rather than hanging when the origin does not speak h2c', async () => {

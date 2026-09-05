@@ -29,14 +29,36 @@ export interface Http2Response {
   readonly text: string;
 }
 
+/** What `request.end()` takes, once a caller's body has been narrowed to it. */
+type SendBody = string | ArrayBufferView;
+
+/**
+ * `json` wins, then a string or bytes. Anything else throws rather than being
+ * dropped: a `FormData` or a stream needs a boundary or a framing this client
+ * does not do, and silently sending nothing turned a POST into a GET.
+ */
+const toBody = (init: JsonInit): SendBody | undefined => {
+  if (init.json !== undefined) return JSON.stringify(init.json);
+  const { body } = init;
+  if (body === undefined || body === null) return undefined;
+  if (typeof body === 'string' || ArrayBuffer.isView(body)) return body;
+  if (body instanceof ArrayBuffer) return new Uint8Array(body);
+  throw new TypeError(
+    'http2Client takes a string, bytes, or `json` - not ' +
+      `${body.constructor.name}. Serialise it first, or use \`testClient\` ` +
+      'over HTTP/1.1.',
+  );
+};
+
 /** `:method`, `:path` and the caller's own headers, as one HTTP/2 header block. */
 const headerBlock = (
   path: string,
   init: JsonInit,
-  body: string | undefined,
+  body: SendBody | undefined,
 ): Record<string, string> => {
   const headers = new Headers(init.headers);
-  if (body !== undefined && !headers.has('content-type')) {
+  // Only for `json`: a caller passing raw bytes owns its own content type.
+  if (init.json !== undefined && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
   }
   const block: Record<string, string> = {
@@ -56,12 +78,13 @@ const send = (
   timeoutMs: number,
 ): Promise<Http2Response> =>
   new Promise((resolve, reject) => {
-    const body =
-      init.json === undefined
-        ? typeof init.body === 'string'
-          ? init.body
-          : undefined
-        : JSON.stringify(init.json);
+    let body: SendBody | undefined;
+    try {
+      body = toBody(init);
+    } catch (error) {
+      reject(error as Error);
+      return;
+    }
 
     const client = http2.connect(origin);
     const timer = setTimeout(() => {
@@ -110,7 +133,11 @@ const send = (
  */
 export const http2Client = (url: string, timeoutMs = 4000): Http2Client => {
   const origin = new URL(url).origin;
-  const at = (path: string): string => new URL(path, url).pathname;
+  // `pathname` alone would drop the query, so `?limit=1` never reached the route.
+  const at = (path: string): string => {
+    const target = new URL(path, url);
+    return `${target.pathname}${target.search}`;
+  };
 
   const request = (path = '/', init: JsonInit = {}): Promise<Http2Response> =>
     send(origin, at(path), init, timeoutMs);
