@@ -67,13 +67,17 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     port: 0,
     async fetch(request) {
       const { pathname } = new URL(request.url);
-      const file = Bun.file(
-        `${dist}${pathname === '/' ? 'index.html' : pathname.slice(1)}`,
-      );
-      if (await file.exists()) return new Response(file);
-      // The `public/_redirects` rule, so a route with no file of its own
-      // behaves here the way it does at the edge.
-      return new Response(Bun.file(`${dist}index.html`));
+      const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
+      // `scripts/seo.ts` writes `guide/controllers.html`, and Cloudflare serves
+      // it for the extensionless request. Both spellings are tried here for the
+      // same reason.
+      for (const candidate of [relative, `${relative}.html`]) {
+        const file = Bun.file(`${dist}${candidate}`);
+        if (await file.exists()) return new Response(file);
+      }
+      // What the edge does now that `_redirects` carries no catch-all: a real
+      // status, and the shell renders its own Not found panel.
+      return new Response(Bun.file(`${dist}404.html`), { status: 404 });
     },
   });
 

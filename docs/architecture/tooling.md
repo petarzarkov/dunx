@@ -24,6 +24,14 @@ the script that built it were deleted once it was deployed and verified, so thos
 documents are frozen at the release that moved the domain; `git log -- scripts/pages-redirect.ts`
 is where they come back from if the deployment is ever lost.
 
+`scripts/seo.ts` writes a real HTML file per route after `vite build`, from the
+same generated model the nav is built from. It exists for two reasons rather than
+one: a client-routed bundle gave all 96 routes the same title and description, and
+the `/* /index.html 200` fallback that made deep links work also answered every
+miss with a 200 and a page, which is an unbounded supply of soft 404s for a crawler
+and a renamed document that fails silently. Files for known routes let that rule go,
+so `404.html` can answer the rest with a real status.
+
 The deploy is its own job rather than the tail of the release job. A failed
 `bun run version` used to take the documentation down with it, and a docs change and
 a publish are not the same event.

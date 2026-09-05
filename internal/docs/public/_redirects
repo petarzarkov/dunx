@@ -1,4 +1,12 @@
-# SPA fallback. Required now that the app is on a history router rather than a
-# hash one: a direct link to any route but `/` is a path no file in `dist/`
-# answers, and without this the edge returns a 404 for it.
-/*  /index.html  200
+# `/releases/v3.3.1` is the git-tag spelling `router.ts` tolerates. The edge
+# resolves a path before the router ever sees it, so the alias has to exist here
+# too - as a redirect to the canonical form rather than a second page carrying
+# the same release notes.
+/releases/v:version  /releases/:version  301
+
+# There is deliberately no `/* /index.html 200` catch-all. It answered every
+# miss with the shell, so a typo, a renamed guide and a request for
+# `/sitemap.xml` all returned 200 and a page: unlimited soft 404s for a crawler
+# to index, and a moved document that failed silently. `scripts/seo.ts` writes a
+# real file for every known route instead, which leaves `404.html` to answer the
+# rest with a real status.
