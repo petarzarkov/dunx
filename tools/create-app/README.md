@@ -112,7 +112,7 @@ fails if the two ever drift.
 
 Every app also gets an `AGENTS.md` naming its layout, its commands and the rules
 dunx fails at boot over, plus a `CLAUDE.md` pointing at it. Both link
-<https://petarzarkov.github.io/dunx/setup.md>, which is served per release, rather
+<https://dunx.win/setup.md>, which is served per release, rather
 than copying the framework's own instructions into your repository.
 
 The example is the one CI boots, so keeping them identical makes the template
