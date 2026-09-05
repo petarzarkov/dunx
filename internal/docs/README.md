@@ -202,6 +202,9 @@ happydom.ts            # test preload: a DOM, plus Vite's ?raw for bun test
 scripts/
   generate.ts          # entrypoint: writes src/generated/ - index, bodies, chunks.ts
   content.ts           # markdown -> HTML, heading ids, links, siteMarkdown
+  agent-docs.ts        # setup.md and llms.txt into public/, plus summaryOf
+  seo.ts               # post-build: a file per route, sitemap, robots, 404
+  preview.ts           # the built site in real Chrome, for the browser suite
   extract/
     ast.ts             # structural views over oxc's ESTree output
     jsdoc.ts           # doc-comment binding and tag parsing
@@ -223,9 +226,24 @@ src/
 
 Routing is path-based (`/api/core`). It was hash-based while the site was on
 GitHub Pages, which serves static files with no SPA fallback and answered every
-deep link with a 404. `public/_redirects` carries the `/* /index.html 200` rule
-that replaced it, and `scripts/preview.ts` serves the same fallback, so the
-browser suite exercises what the edge does.
+deep link with a 404.
+
+`scripts/seo.ts` is what replaced that fallback. It runs after `vite build` and
+writes a real `index.html` per route - 96 of them - each carrying its own title,
+description, canonical and Open Graph tags, plus `sitemap.xml`, `robots.txt` and
+`404.html`. The route set comes from `src/generated/index.json` and
+`releases.json`, the same model the nav is built from, and a guide's description
+is `summaryOf` from `agent-docs.ts`, the sentence `llms.txt` already uses.
+
+Two things follow from emitting files rather than rewriting every path to the
+shell. Search results and link unfurls say which page they are, where a single
+`index.html` made all 96 read "dunx | fastest web DI framework". And a miss is a
+real 404: `_redirects` used to carry `/* /index.html 200`, so a typo, a renamed
+guide and a request for `/sitemap.xml` all returned 200 and a page. `robots.txt`
+and `sitemap.xml` looked like they existed for that reason alone.
+
+`scripts/preview.ts` resolves paths the way Cloudflare does, `404.html` and all,
+so the browser suite exercises what the edge does.
 
 Navigation is one delegated click listener in `router.ts` rather than a `<Link>`
 component: every link on the site is a Mantine `Anchor` or `NavLink` rendering a

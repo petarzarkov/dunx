@@ -18,8 +18,14 @@ export const SITE_URL = 'https://dunx.win/';
 
 const RAW_URL = 'https://raw.githubusercontent.com/petarzarkov/dunx/main/';
 
-/** The first paragraph under the title, flattened to one line. */
-const summaryOf = (markdown: string): string => {
+/**
+ * The first paragraph under the title, flattened to one line.
+ *
+ * Exported because `seo.ts` needs the same sentence for a meta description: a
+ * second extractor would give a page one summary in `llms.txt` and a different
+ * one in a search result.
+ */
+export const summaryOf = (markdown: string): string => {
   const body = markdown.replace(/^#[^\n]*\n+/, '');
   const paragraph = (body.split(/\n\s*\n/)[0] ?? '')
     .replace(/\s+/g, ' ')
