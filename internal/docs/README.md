@@ -229,7 +229,7 @@ GitHub Pages, which serves static files with no SPA fallback and answered every
 deep link with a 404.
 
 `scripts/seo.ts` is what replaced that fallback. It runs after `vite build` and
-writes a real `index.html` per route - 96 of them - each carrying its own title,
+writes a real HTML file per route - 96 of them - each carrying its own title,
 description, canonical and Open Graph tags, plus `sitemap.xml`, `robots.txt` and
 `404.html`. The route set comes from `src/generated/index.json` and
 `releases.json`, the same model the nav is built from, and a guide's description
@@ -242,8 +242,12 @@ real 404: `_redirects` used to carry `/* /index.html 200`, so a typo, a renamed
 guide and a request for `/sitemap.xml` all returned 200 and a page. `robots.txt`
 and `sitemap.xml` looked like they existed for that reason alone.
 
-`scripts/preview.ts` resolves paths the way Cloudflare does, `404.html` and all,
-so the browser suite exercises what the edge does.
+A route is written as `guide/controllers.html`, not `guide/controllers/index.html`.
+Measured on a preview deployment: Cloudflare answers a directory index with a 308
+to the trailing-slash form, which put a redirect in front of every deep link and
+left the rendered URL disagreeing with the canonical. `scripts/preview.ts` resolves
+paths the same way, `404.html` and all, so the browser suite exercises what the edge
+does.
 
 Navigation is one delegated click listener in `router.ts` rather than a `<Link>`
 component: every link on the site is a Mantine `Anchor` or `NavLink` rendering a

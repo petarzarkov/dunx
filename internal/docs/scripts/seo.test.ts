@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { clamp, pagesOf, renderPage, robots, sitemapOf } from './seo';
+import { clamp, fileFor, pagesOf, renderPage, robots, sitemapOf } from './seo';
 
 const INDEX = {
   generatedAt: '2026-09-05T06:11:22.551Z',
@@ -156,6 +156,22 @@ describe('renderPage', () => {
       'content="A &quot;quoted&quot; &amp; &lt;angled&gt; title"',
     );
     expect(html).not.toContain('<angled>');
+  });
+});
+
+describe('fileFor', () => {
+  /*
+   * A directory-index file is answered with a 308 to the trailing-slash form,
+   * which put a redirect hop in front of every deep link and left the rendered
+   * URL disagreeing with the canonical. Measured on a preview deployment.
+   */
+  test('is a sibling .html, not a directory index', () => {
+    expect(fileFor('/guide/controllers')).toBe('guide/controllers.html');
+    expect(fileFor('/api/core')).toBe('api/core.html');
+  });
+
+  test('the landing page keeps the name the bundler wrote', () => {
+    expect(fileFor('/')).toBe('index.html');
   });
 });
 

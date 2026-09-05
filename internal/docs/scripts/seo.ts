@@ -198,9 +198,17 @@ export const sitemapOf = (pages: readonly Page[], lastmod: string): string =>
 export const robots = (): string =>
   `User-agent: *\nAllow: /\n\nSitemap: ${ORIGIN}/sitemap.xml\n`;
 
-/** `/guide/controllers` becomes `guide/controllers/index.html`. */
-const fileFor = (path: string): string =>
-  path === '/' ? 'index.html' : `${path.replace(/^\//, '')}/index.html`;
+/**
+ * `/guide/controllers` becomes `guide/controllers.html`, not
+ * `guide/controllers/index.html`.
+ *
+ * Measured on a preview deployment: Cloudflare answers a directory-index file
+ * with a **308 to the trailing-slash form**, so every deep link cost a redirect
+ * hop and the URL that finally rendered disagreed with the canonical this file
+ * writes. The `.html` sibling is served at the extensionless path directly.
+ */
+export const fileFor = (path: string): string =>
+  path === '/' ? 'index.html' : `${path.replace(/^\//, '')}.html`;
 
 export interface WriteOptions {
   readonly distDir: string;

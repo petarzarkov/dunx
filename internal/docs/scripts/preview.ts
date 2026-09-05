@@ -68,10 +68,10 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     async fetch(request) {
       const { pathname } = new URL(request.url);
       const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
-      // `scripts/seo.ts` writes `guide/controllers/index.html`, and Cloudflare
-      // resolves the extensionless request to it. Both spellings are tried here
-      // for the same reason.
-      for (const candidate of [relative, `${relative}/index.html`]) {
+      // `scripts/seo.ts` writes `guide/controllers.html`, and Cloudflare serves
+      // it for the extensionless request. Both spellings are tried here for the
+      // same reason.
+      for (const candidate of [relative, `${relative}.html`]) {
         const file = Bun.file(`${dist}${candidate}`);
         if (await file.exists()) return new Response(file);
       }
