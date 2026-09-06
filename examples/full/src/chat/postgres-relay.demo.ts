@@ -19,6 +19,16 @@ import { connect } from './ws-client.js';
 const POSTGRES_URL =
   Bun.env['POSTGRES_URL'] ?? 'postgres://dunx:dunx@localhost:5432/dunx';
 
+/** Host and database only. The url carries a password and a log outlives it. */
+const where = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.host}${parsed.pathname}`;
+  } catch {
+    return 'the configured Postgres';
+  }
+};
+
 /**
  * The same fan-out as the Redis relay, over `Bun.SQL`'s `LISTEN`/`NOTIFY`, for an
  * app that already has Postgres and would rather not run a broker.
@@ -58,6 +68,12 @@ class NodeHttpOptions extends HttpOptionsProvider {
 })
 class PostgresNode {}
 
+interface Node {
+  readonly app: Awaited<ReturnType<typeof HttpFactory.create>>;
+  readonly url: string;
+  readonly pubsub: PubSub;
+}
+
 /** Postgres caps a `NOTIFY` payload at 7999 bytes, envelope included. */
 const OVER_THE_NOTIFY_CAP = 9000;
 
@@ -68,14 +84,19 @@ export class PostgresRelayDemo {
     const { logger } = this;
     if (!(await this.#postgresUp())) {
       logger.warn(
-        `skipping the Postgres relay demo: nothing answering at ${POSTGRES_URL}`,
+        `skipping the Postgres relay demo: nothing answering at ${where(POSTGRES_URL)}`,
       );
       logger.info('`bun run services:up` starts it, and CI runs the same file');
       return;
     }
 
-    const [a, b] = await Promise.all([this.#node(), this.#node()]);
+    // Started one at a time and collected as they come up. `Promise.all` rejects
+    // on the first failure and abandons a peer that had already bound a port,
+    // which keeps the process alive after the demo has given up.
+    const nodes: Node[] = [];
     try {
+      nodes.push(await this.#node(), await this.#node());
+      const [a, b] = nodes as [Node, Node];
       logger.info(
         `two nodes on LISTEN/NOTIFY, origins …${a.pubsub.origin.slice(-6)} / …${b.pubsub.origin.slice(-6)}`,
       );
@@ -114,20 +135,22 @@ export class PostgresRelayDemo {
       onB.close();
       await Bun.sleep(20);
     } finally {
-      await Promise.all([a.app.shutdown(), b.app.shutdown()]);
+      await Promise.all(nodes.map((node) => node.app.shutdown()));
     }
   }
 
-  async #node(): Promise<{
-    app: Awaited<ReturnType<typeof HttpFactory.create>>;
-    url: string;
-    pubsub: PubSub;
-  }> {
+  async #node(): Promise<Node> {
     const app = await HttpFactory.create(PostgresNode, {
       requestLogging: false,
     });
-    const url = await app.listen(0);
-    return { app, url, pubsub: app.get(PubSub) };
+    try {
+      const url = await app.listen(0);
+      return { app, url, pubsub: app.get(PubSub) };
+    } catch (error) {
+      // The container is up even when the port is not, so it is ours to close.
+      await app.shutdown();
+      throw error;
+    }
   }
 
   /** A relay demo needs its backend; an absent one is a skip, not a failure. */

@@ -74,6 +74,27 @@ class Session {
     }
   }
 
+  /**
+   * Writes a key until the process goes away, or gives up.
+   *
+   * `waitFor` returns when the prompt's text is on screen, which is not the same
+   * moment the CLI starts reading raw bytes. On a loaded runner the gap is wide
+   * enough to swallow a keystroke, and a swallowed `\u0003` means nothing ever
+   * ends the process: this test failed that way in CI while passing on its own.
+   * Repeating is safe because the second one lands after the first has already
+   * torn the prompt down.
+   */
+  async pressUntilExit(key: string, attempts = 10): Promise<void> {
+    for (let i = 0; i < attempts; i += 1) {
+      this.#terminal.write(key);
+      const done = await Promise.race([
+        this.#process.exited.then(() => true),
+        Bun.sleep(250).then(() => false),
+      ]);
+      if (done) return;
+    }
+  }
+
   /** The exit code, or a failure naming what was on screen when it hung. */
   async exited(): Promise<number> {
     const code = await Promise.race([
@@ -126,8 +147,9 @@ describe('the CLI through a real terminal', () => {
 
     await session.waitFor('Space toggles');
     // Raw mode delivers this as a byte rather than a signal, so nothing ends the
-    // process unless the CLI does.
-    await session.press('\u0003');
+    // process unless the CLI does - and nothing at all if the byte arrives before
+    // the CLI is reading, which is why this repeats rather than pressing once.
+    await session.pressUntilExit('\u0003');
 
     expect(await session.exited()).toBe(130);
     expect(existsSync(join(cwd, 'billing'))).toBe(false);

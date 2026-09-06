@@ -43,14 +43,20 @@ export const connect = async (base: string): Promise<Client> => {
           resolve(queued);
           return;
         }
-        const timer = setTimeout(
-          () => reject(new Error('no frame arrived')),
-          2000,
-        );
-        waiting.push((frame) => {
+        const waiter = (frame: string): void => {
           clearTimeout(timer);
           resolve(frame);
-        });
+        };
+        // Dropped from the queue before rejecting, or the next frame is handed to
+        // this dead promise and discarded, and every later `next()` waits one
+        // frame behind. Only shows up after a timeout, which is when the test is
+        // already trying to explain itself.
+        const timer = setTimeout(() => {
+          const at = waiting.indexOf(waiter);
+          if (at !== -1) waiting.splice(at, 1);
+          reject(new Error('no frame arrived'));
+        }, 2000);
+        waiting.push(waiter);
       }),
     send: (event, data) => socket.send(JSON.stringify({ event, data })),
     close: () => socket.close(),
