@@ -433,7 +433,9 @@ bun run build   # -> dist/${bin} (the Bun runtime plus the app, one file)
 
 \`scripts/build.ts\` hands \`Bun.build\` the \`@dunx/transform\` plugin and \`compile\`
 together, so the constructor-dependency records the container needs are baked into
-the executable. Copy \`dist/${bin}\` to a host and run it; it needs nothing installed.
+the executable. This needs Bun >= 1.4.1, the version \`package.json\` already
+requires: an earlier one dropped the records. Copy \`dist/${bin}\` to a host and run
+it; it needs nothing installed.
 
 Run it from a directory without this app's \`bunfig.toml\`. A standalone bun
 executable still reads \`preload\` from the working directory's bunfig and would try

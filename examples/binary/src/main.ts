@@ -35,7 +35,18 @@ export const run = async (argv: readonly string[]): Promise<number> => {
     return 0;
   }
 
-  const app = await AppFactory.create(CliModule);
+  // Boot can fail before there is a logger to report with - an invalid
+  // `LOG_LEVEL` makes `validate` throw while the container resolves config - so
+  // this failure goes to stderr by hand and returns a status rather than
+  // rejecting out of an unhandled `create`.
+  const app = await AppFactory.create(CliModule).catch((error: unknown) => {
+    console.error(
+      `failed to start: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return undefined;
+  });
+  if (app === undefined) return 1;
+
   const logger = app.get(Logger);
   try {
     switch (command) {

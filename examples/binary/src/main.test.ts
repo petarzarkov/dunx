@@ -92,4 +92,21 @@ describe('compiled binary', () => {
     expect(report.version).toBe(CLI_VERSION);
     expect(report.bun).toBe(Bun.version);
   });
+
+  test('reports a boot failure on stderr and exits 1', async () => {
+    // An invalid `LOG_LEVEL` makes config validation throw as the container
+    // resolves, which is before there is a logger to report it.
+    const proc = Bun.spawn([BINARY, 'greet', 'ada'], {
+      cwd: tmpdir(),
+      env: { ...process.env, LOG_LEVEL: 'bogus' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const [stderr, code] = await Promise.all([
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(code).toBe(1);
+    expect(stderr).toContain('failed to start');
+  });
 });
