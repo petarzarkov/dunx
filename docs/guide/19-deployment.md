@@ -158,7 +158,7 @@ running service returning 500s. See [Configuration](./12-configuration.md).
 ## Container image
 
 ```dockerfile
-FROM oven/bun:1.4.1-alpine
+FROM oven/bun:1.4.2-alpine
 WORKDIR /app
 
 # Dependencies first, so a source change does not reinstall them.
@@ -171,8 +171,11 @@ EXPOSE 3000
 CMD ["bun", "src/main.ts"]
 ```
 
-Two details worth getting right:
+Three details worth getting right:
 
+- **Pin the patch, not `1.4-alpine`.** 1.4.2 fixes a crash on musl that
+  `Array.prototype.splice`, `shift` or a shrinking `length` on an array of objects
+  could hit while the collector was marking.
 - **`--frozen-lockfile`**, so a deploy can never silently resolve a different
   version than the one that was tested.
 - **`bunfig.toml` must be in the image.** It is easy to miss because it is not
