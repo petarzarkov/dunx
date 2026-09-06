@@ -570,3 +570,20 @@ it('leaves every other route reachable without credentials', () => {
   );
   expect(tour.text).toContain('GET /api/users -> 200 [{"id":1,"name":"ada"}');
 });
+
+/**
+ * The Postgres backend, which was named in a comment and called by nothing until
+ * the soak audit went looking. Both halves are asserted: fan-out reaching the
+ * other node exactly once, and the 7999-byte `NOTIFY` cap degrading to a local
+ * delivery plus a warning rather than a silent drop.
+ */
+it('relays over Postgres LISTEN/NOTIFY, and reports a frame over the cap', () => {
+  expect(tour.text).toMatch(
+    /(deliveries: A 1, B 1|skipping the Postgres relay demo)/,
+  );
+  if (tour.text.includes('skipping the Postgres relay demo')) return;
+  expect(tour.text).toContain('two nodes on LISTEN/NOTIFY');
+  // A keeps it, B never sees it, and the relay says why.
+  expect(tour.text).toContain('a 9000-byte frame: A 1, B 0');
+  expect(tour.text).toMatch(/the websocket relay could not publish/);
+});

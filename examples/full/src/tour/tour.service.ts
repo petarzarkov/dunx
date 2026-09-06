@@ -3,6 +3,7 @@ import type { HttpApp } from '@dunx/http';
 import { AuthDemo } from '../auth/auth.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
+import { PostgresRelayDemo } from '../chat/postgres-relay.demo.js';
 import { ProtocolsDemo } from '../protocols/protocols.demo.js';
 import { CompressionDemo } from '../http/compression.demo.js';
 import { TraceDemo } from '../http/trace.demo.js';
@@ -39,6 +40,7 @@ export class Tour {
     private readonly compression: CompressionDemo,
     private readonly trace: TraceDemo,
     private readonly chat: ChatDemo,
+    private readonly postgresRelay: PostgresRelayDemo,
     private readonly protocols: ProtocolsDemo,
     private readonly guards: GuardsDemo,
     private readonly health: HealthDemo,
@@ -89,6 +91,9 @@ export class Tour {
 
     this.group('@dunx/http - the websocket relay, two nodes, one topic');
     await this.chat.relayed(url);
+    // The same fan-out on the other backend, so both are proven rather than one
+    // being proven and the other named in a comment.
+    await this.postgresRelay.demonstrate();
 
     this.group('@dunx/http - @Public, @Roles and @UseGuards');
     await this.guards.demonstrate(url);
