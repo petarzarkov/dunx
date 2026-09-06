@@ -69,15 +69,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
+      - name: Build
+        run: bun run ci build
+
       # `examples/full/compose.yml` rather than a `services:` block, so what the
       # example needs is described once and the same command brings it up on a
       # laptop. It also gets the images from public.ecr.aws, which a `services:`
       # block would too but nobody would notice was load bearing.
+      #
+      # **After the build, and it has to be.** The script runs from
+      # `examples/full`, so Bun reads that directory's bunfig and tries to preload
+      # `@dunx/transform/preload` - which is `packages/transform/dist`, and does
+      # not exist until the build has run. Before it, this step died with
+      # `preload not found` having pulled nothing.
       - name: Start the services the example needs
         run: bun run --filter '@dunx/example-full' services:up
-
-      - name: Build
-        run: bun run ci build
 
       # Every example is a bootstrap that rots the moment nobody runs it. An
       # example whose backing service is absent (Redis, Postgres, MySQL, S3)
