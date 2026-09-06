@@ -587,3 +587,14 @@ it('relays over Postgres LISTEN/NOTIFY, and reports a frame over the cap', () =>
   expect(tour.text).toContain('a 9000-byte frame: A 1, B 0');
   expect(tour.text).toMatch(/the websocket relay could not publish/);
 });
+
+/**
+ * `overlap: 'skip'` is the default and every other schedule here takes it, so the
+ * concurrent branch had no exercise at all. Two triggers inside one run's own
+ * sleep: `skip` would hold this at one in flight.
+ */
+it('runs a concurrent-overlap schedule twice at once', () => {
+  expect(tour.text).toContain(
+    'overlap: concurrent -> 2 runs, 2 in flight at once',
+  );
+});

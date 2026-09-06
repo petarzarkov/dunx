@@ -41,6 +41,18 @@ export class ScheduleDemo {
         'neither waited for a clock',
     );
 
+    // Two triggers inside one run's own sleep. `concurrent` lets the second start,
+    // so both are in flight at once; the default would have skipped it.
+    await Promise.all([
+      this.registry.trigger('maintenance.overlapping'),
+      this.registry.trigger('maintenance.overlapping'),
+    ]);
+    const overlapping = this.maintenance.overlapping;
+    this.logger.info(
+      `overlap: concurrent -> ${overlapping.runs} runs, ` +
+        `${overlapping.maxInFlight} in flight at once (skip would hold it at 1)`,
+    );
+
     const entry = this.registry.get('maintenance.compact');
     this.logger.info(
       `runs recorded on the entry -> ${entry?.runs ?? 0}, lastError ` +

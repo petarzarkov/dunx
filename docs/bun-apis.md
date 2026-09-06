@@ -77,9 +77,15 @@ against 1.4.1 rev `4661e494f` on the same machine.
 | `Bun.file(path).writer()` does not truncate or create parents                 | reproduces                                                             |
 | `fetch` with `protocol: 'http2'` throws against a cleartext peer              | reproduces                                                             |
 | `internal/docs` under `bun test --parallel`                                   | reproduces - 38 of 92 fail, so the `docs` phase keeps its exclusion    |
+| A compound assignment to a private field beside a decorated member            | reproduces - `SyntaxError: Left side of assignment is not a reference` |
 
 `engines.bun` stays `>=1.4.1`. Nothing dunx ships depends on 1.4.2 behaviour; CI
 pins it and the deployment guide's image names it.
+
+The last row was not on the release notes' list; it turned up by writing
+`this.#inFlight += 1` in a class that already had a decorated method, in the one
+example file whose header warns about exactly that. `Gauge` from `@dunx/core` is
+the way around it and is what `ChatGateway` already uses.
 
 ### A nested `AsyncLocalStorage.run()` held the enclosing store
 
