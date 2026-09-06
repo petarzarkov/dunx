@@ -33,8 +33,8 @@ export class ImagesController {
 
   /** Returns the encoded image itself, so a browser renders it inline. */
   @Get('/render', render)
-  async render(input: Input<typeof render>): Promise<Response> {
-    const encoded = await this.thumbnails.render(input.query);
+  async render({ query }: Input<typeof render>): Promise<Response> {
+    const encoded = await this.thumbnails.render(query);
     return new Response(encoded.bytes, {
       headers: {
         'content-type': encoded.mimeType,
@@ -45,14 +45,14 @@ export class ImagesController {
 
   /** The same render, described rather than returned - easier to read in swagger. */
   @Get('/metadata', render)
-  async metadata(input: Input<typeof render>): Promise<{
+  async metadata({ query }: Input<typeof render>): Promise<{
     width: number;
     height: number;
     format: string;
     mimeType: string;
     bytes: number;
   }> {
-    const encoded = await this.thumbnails.render(input.query);
+    const encoded = await this.thumbnails.render(query);
     return {
       width: encoded.width,
       height: encoded.height,
@@ -67,11 +67,11 @@ export class ImagesController {
    * is a header read rather than a decode, so a truncated file still answers.
    */
   @Post('/describe', describe)
-  describe(input: Input<typeof describe>): Promise<{
+  describe({ body }: Input<typeof describe>): Promise<{
     width: number;
     height: number;
     format: string;
   }> {
-    return this.thumbnails.describe(input.body.base64);
+    return this.thumbnails.describe(body.base64);
   }
 }

@@ -33,11 +33,13 @@ export class JobsController {
   constructor(private readonly publisher: JobPublisher) {}
 
   @Post('/thumbnails', enqueue)
-  async enqueue(
-    input: Input<typeof enqueue>,
-  ): Promise<{ id: string; queue: string; state: string }> {
+  async enqueue({ body }: Input<typeof enqueue>): Promise<{
+    id: string;
+    queue: string;
+    state: string;
+  }> {
     const job = await this.degrades(() =>
-      this.publisher.publish(THUMBNAIL_QUEUE, 'render', input.body),
+      this.publisher.publish(THUMBNAIL_QUEUE, 'render', body),
     );
 
     return {
@@ -50,24 +52,24 @@ export class JobsController {
   /** `returnvalue` is whatever the handler returned, so this is how the web
    * process reads a result computed elsewhere. */
   @Get('/thumbnails/:id', oneJob)
-  async status(input: Input<typeof oneJob>): Promise<{
+  async status({ params }: Input<typeof oneJob>): Promise<{
     id: string;
     state: string;
     result: RenderResult | null;
     failedReason: string | null;
   }> {
     const job = await this.degrades(() =>
-      this.publisher.queue(THUMBNAIL_QUEUE).getJob(input.params.id),
+      this.publisher.queue(THUMBNAIL_QUEUE).getJob(params.id),
     );
     if (job === undefined) {
       throw new HttpError(
         HttpStatusCode.NOT_FOUND,
-        `No job ${input.params.id} on "${THUMBNAIL_QUEUE}"`,
+        `No job ${params.id} on "${THUMBNAIL_QUEUE}"`,
       );
     }
 
     return {
-      id: job.id ?? input.params.id,
+      id: job.id ?? params.id,
       state: await job.getState(),
       result: (job.returnvalue as RenderResult | null) ?? null,
       failedReason: job.failedReason ?? null,

@@ -55,15 +55,15 @@ export class ReportsController {
   // Method-scoped guard, reading the class-level @Roles('admin').
   @UseGuards(RolesGuard)
   @Post('/', createReport)
-  create(input: Input<typeof createReport>): readonly string[] {
-    return this.reports.add(input.body.title);
+  create({ body }: Input<typeof createReport>): readonly string[] {
+    return this.reports.add(body.title);
   }
 
   // A method-level @Roles wins over the class-level one.
   @Roles('editor')
   @UseGuards(RolesGuard)
   @Patch('/:id', renameReport)
-  rename(input: Input<typeof renameReport>): readonly string[] {
-    return this.reports.rename(input.params.id, input.body.title);
+  rename({ body, params }: Input<typeof renameReport>): readonly string[] {
+    return this.reports.rename(params.id, body.title);
   }
 }

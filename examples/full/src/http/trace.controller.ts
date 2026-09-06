@@ -14,7 +14,7 @@ export class TraceController {
   constructor(private readonly context: RequestContext) {}
 
   @Get('/')
-  current(input: Input<RouteSchemas>): {
+  current({ req }: Input<RouteSchemas>): {
     traceId: string | undefined;
     spanId: string | undefined;
     parentSpanId: string | undefined;
@@ -28,7 +28,7 @@ export class TraceController {
       spanId: spanId as string | undefined,
       parentSpanId: parentSpanId as string | undefined,
       traceFlags: traceFlags as string | undefined,
-      inbound: input.req.headers.get('traceparent'),
+      inbound: req.headers.get('traceparent'),
     };
   }
 }
