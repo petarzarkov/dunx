@@ -55,7 +55,7 @@ export class ThrottleOptions {
   readonly store: ThrottleStore | undefined;
 
   constructor(init: ThrottleOptionsInit) {
-    if (init.prefix.trim() === '') {
+    if (typeof init.prefix !== 'string' || init.prefix.trim() === '') {
       throw new AppError(
         'ThrottleModule needs a prefix naming this application, and it has no ' +
           'default: two apps sharing one Redis with one throttle namespace each ' +
