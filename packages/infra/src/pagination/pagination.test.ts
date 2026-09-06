@@ -143,6 +143,19 @@ describe('parsePageOptions', () => {
     });
   });
 
+  /**
+   * Raw query values are strings, but a route that validated first with
+   * `z.coerce.number()` hands over a number. Returning undefined for it made
+   * `take` revert to the default with nothing to notice: the caller asked for 1
+   * and got 20 rows back. Found by wiring the example's keyset route to a
+   * validated query.
+   */
+  it('reads a take that a validator already turned into a number', () => {
+    expect(parsePageOptions({ take: 5 }).take).toBe(5);
+    expect(parsePageOptions({ take: [5] }).take).toBe(5);
+    expect(parsePageOptions({ take: '5' }).take).toBe(5);
+  });
+
   it('reads a plain object and a URLSearchParams the same way', () => {
     const expected = {
       take: 5,

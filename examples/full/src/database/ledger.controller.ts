@@ -7,7 +7,14 @@ import {
   Post,
   type Input,
 } from '@dunx/http';
-import { PAGINATION, type Page } from '@dunx/infra/pagination';
+import {
+  decodeCursor,
+  encodeCursor,
+  PAGINATION,
+  pageOf,
+  parsePageOptions,
+  type Page,
+} from '@dunx/infra/pagination';
 import { z } from 'zod';
 import { Ledger } from './ledger.service.js';
 import type { Entry } from './schema.js';
@@ -69,6 +76,18 @@ const pageQuery = z
   });
 
 const pagedEntries = { query: pageQuery } as const;
+const keyset = {
+  query: z.object({
+    take: z.coerce
+      .number()
+      .int()
+      .min(PAGINATION.MIN_TAKE)
+      .max(PAGINATION.MAX_TAKE)
+      .optional(),
+    cursor: z.string().max(PAGINATION.MAX_CURSOR).optional(),
+  }),
+} as const;
+
 const oneEntry = { params: EntryIndex } as const;
 const createEntry = { body: CreateEntry } as const;
 const transfer = { body: Transfer } as const;
@@ -150,6 +169,62 @@ export class LedgerController {
         `${(error as Error).message} - rolled back, still ${this.ledger.rows()} rows`,
       );
     }
+  }
+
+  /**
+   * Keyset pagination without the service: `parsePageOptions` reads the query the
+   * way the module's own docs suggest a schema does, `pageOf` shapes the envelope
+   * from rows the caller already has, and a cursor round-trips through
+   * `encodeCursor`/`decodeCursor`.
+   *
+   * The cursor is opaque on purpose and every malformed one collapses to the same
+   * `CursorError`, so `?cursor=not-a-cursor` answers 400 rather than telling the
+   * caller which layer rejected it.
+   */
+  @Get('/keyset', keyset)
+  keyset({ query }: Input<typeof keyset>): {
+    options: { take: number; direction: string; order: string };
+    page: Page<Entry>;
+    roundTrip: { encoded: string; decoded: { s: string; i: string } } | null;
+  } {
+    // Throws PageOptionsError on a take outside the range, which the framework
+    // renders as a 400 because the class carries the status.
+    const options = parsePageOptions(query as Record<string, unknown>);
+    // A cursor handed back in is decoded first, which is where a hand-written one
+    // fails, and it is what the next page is keyed from.
+    const roundTrip =
+      query.cursor === undefined
+        ? null
+        : { encoded: query.cursor, decoded: decodeCursor(query.cursor) };
+
+    const cursorOf = (row: Entry): string =>
+      // No timestamp on this table, so the id is both sort value and tiebreak.
+      encodeCursor(row.id, String(row.id));
+
+    // Descending ids, so the page after a cursor is everything below it. One row
+    // more than asked for is what answers `hasNextPage` without a second count.
+    const after = roundTrip === null ? undefined : Number(roundTrip.decoded.i);
+    const scanned = this.ledger
+      .list(PAGINATION.MAX_TAKE)
+      .filter((row) => after === undefined || row.id < after);
+    const rows = scanned.slice(0, options.take);
+
+    const page = pageOf(rows, {
+      take: options.take,
+      hasNextPage: scanned.length > options.take,
+      hasPreviousPage: after !== undefined,
+      cursorOf,
+    });
+
+    return {
+      options: {
+        take: options.take,
+        direction: options.direction,
+        order: options.order,
+      },
+      page,
+      roundTrip,
+    };
   }
 
   @Delete('/:id', oneEntry)

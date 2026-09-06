@@ -149,6 +149,52 @@ it('walks the ledger by cursor', async () => {
   }
 });
 
+/**
+ * `/ledger/page` goes through the service; this goes through the primitives the
+ * module exports and nothing else used: `parsePageOptions`, `pageOf`, and a cursor
+ * round-tripped by `encodeCursor`/`decodeCursor`. Writing it found `take` reverting
+ * to the default whenever a validator had already turned it into a number.
+ */
+it('pages the ledger with the cursor primitives, and refuses a forged cursor', async () => {
+  interface Keyset {
+    options: { take: number };
+    page: { data: { id: number }[]; meta: { nextCursor: string | null } };
+    roundTrip: { decoded: { i: string } } | null;
+  }
+
+  // Seeds its own rows: this file shares one app, and the tests above it delete
+  // ledger entries, so paging cannot assume what the seeder left behind.
+  for (const memo of [
+    'keyset one',
+    'keyset two',
+    'keyset three',
+    'keyset four',
+  ]) {
+    expect((await json('ledger', post({ memo, amount: 1 }))).status).toBe(201);
+  }
+
+  const first = await json<Keyset>('ledger/keyset?take=2');
+  expect(first.status).toBe(200);
+  // The take asked for, not the default, which is the part that regressed.
+  expect(first.body.options.take).toBe(2);
+  expect(first.body.page.data).toHaveLength(2);
+
+  const cursor = first.body.page.meta.nextCursor;
+  expect(cursor).not.toBeNull();
+  const second = await json<Keyset>(
+    `ledger/keyset?take=2&cursor=${encodeURIComponent(cursor as string)}`,
+  );
+  expect(second.status).toBe(200);
+  // A real keyset step: every id on page two is below every id on page one.
+  const highest = Math.min(...first.body.page.data.map((row) => row.id));
+  expect(second.body.page.data.every((row) => row.id < highest)).toBe(true);
+  expect(second.body.roundTrip?.decoded.i).toBe(String(highest));
+
+  // Every malformed cursor collapses to one 400, naming no internal layer.
+  const forged = await json('ledger/keyset?cursor=not-a-cursor');
+  expect(forged.status).toBe(400);
+});
+
 it('rolls a transfer back as one unit, observably', async () => {
   const entries = async (): Promise<number> =>
     (await json<{ entries: unknown[] }>('ledger')).body.entries.length;
