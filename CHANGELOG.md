@@ -4,6 +4,51 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.3.2 - 2026-09-06
+
+Http and infra fixes, a compiled-binary example, and the create-app binary option
+
+### Features
+
+- **create-app**: a standalone-binary build option ([`adcefa6`](https://github.com/petarzarkov/dunx/commit/adcefa63d963ba8ff39ba86257671164c3113730))
+- **examples**: a compiled-binary example ([`d4065f1`](https://github.com/petarzarkov/dunx/commit/d4065f1cbf048314fc89219e55cd1763218297c6))
+- **examples**: exercise the concurrent overlap policy, and record the trap it hit ([`c824ddc`](https://github.com/petarzarkov/dunx/commit/c824ddc8b03b1c158f2c101af661585d59e5e2cb))
+- **examples**: prove the Postgres relay, both halves of it ([`438196a`](https://github.com/petarzarkov/dunx/commit/438196aaf3bce6f9cb9e0d2c40770fa028b4b723))
+- **examples**: compose the services from public ECR, and warn on queue sprawl ([`3a01823`](https://github.com/petarzarkov/dunx/commit/3a0182309acfd8ad349c4fa9ad9ce8e4bc4449a1))
+- **examples**: soak the rest of the surface, and record the handoff ([`e1033e3`](https://github.com/petarzarkov/dunx/commit/e1033e35665a82d1bdaf16752daa5cfdfcc347bf))
+- **examples**: a soak harness, and the two unbounded stores it found ([`5730e6d`](https://github.com/petarzarkov/dunx/commit/5730e6db09154cd4de2893ad785fda671e9e6d6c))
+
+### Fixes
+
+- **examples**: handle a boot failure in the binary, and note the Bun floor ([`2becfb8`](https://github.com/petarzarkov/dunx/commit/2becfb8d44061415c8d572a1c04c7c48695c0763))
+- update funding.yml to specify GitHub and Ko-fi usernames ([`b777fd5`](https://github.com/petarzarkov/dunx/commit/b777fd5a17930982d5a77a35833fd5c397835678))
+- **ci**: start the services after the build, not before it ([`dbc69c1`](https://github.com/petarzarkov/dunx/commit/dbc69c15da80d192712f6e84449227c29f8f92b1))
+- **ci**: retry the image pull, which is the step that fails for no reason ([`06b460b`](https://github.com/petarzarkov/dunx/commit/06b460b9e426648fa14c825b69f08378b335761c))
+- the CI flake, and three findings from the review ([`c3c60fd`](https://github.com/petarzarkov/dunx/commit/c3c60fd985ec8c693d4e10ffd5c1467ffc0b1928))
+- **infra**: honour a take a validator already turned into a number ([`28136bd`](https://github.com/petarzarkov/dunx/commit/28136bdd67902696061058e9d1ea72ea491b5760))
+- take the review's three findings, including one against my own fix ([`fc6a0eb`](https://github.com/petarzarkov/dunx/commit/fc6a0ebe129d2f9fe9453f5b4e4fab33a82d26cf))
+- **infra**: repair two cleanup paths that only ran on success ([`2133080`](https://github.com/petarzarkov/dunx/commit/2133080fa4a9019d0a275663cc79a1fb8ddb2f13))
+- **http**: keep a global throttle away from the health probes ([`be04a29`](https://github.com/petarzarkov/dunx/commit/be04a29f797aeec256a9ee4d32ab888cba89abaf))
+- **http**: stop the named-client test racing its own 11 ms timeout ([`312421f`](https://github.com/petarzarkov/dunx/commit/312421f88d91d6ca6d6fa47ce54027726415cc3c))
+- **site**: fall back rather than ship an empty description, per the review ([`4ed2c31`](https://github.com/petarzarkov/dunx/commit/4ed2c3140578c68618b7a5225cfdb906df0af553))
+- **site**: a sibling .html per route, not a directory index ([`353f099`](https://github.com/petarzarkov/dunx/commit/353f099c768e8216e73cc8956da67b393044ad12))
+
+### Refactors
+
+- **examples**: destructure handler input at the parameter ([`ccfa0c2`](https://github.com/petarzarkov/dunx/commit/ccfa0c2cec3209eaa83947cd97a791f8d6974d89))
+
+### Documentation
+
+- add a GitHub Sponsors button to the site and README ([`3ad7799`](https://github.com/petarzarkov/dunx/commit/3ad7799f61076635a7d3fccd01da7509267ff47a))
+- add examples/binary as the fifth rung of the ladder ([`ce2d100`](https://github.com/petarzarkov/dunx/commit/ce2d100beac55a4c0d73d05049af4bc160071967))
+- name both handler shapes, and show the Nest side-by-side ([`6e2ad92`](https://github.com/petarzarkov/dunx/commit/6e2ad9270cddbad2f9a3f8bdc6b8fc10da005eef))
+
+### Other changes
+
+- give the examples job the services it never had, and a soak step ([`ca80d28`](https://github.com/petarzarkov/dunx/commit/ca80d28c688adef561075743f7ed1d255ea2ff52))
+- move to Bun 1.4.2, and re-probe what its notes touch ([`54f9de6`](https://github.com/petarzarkov/dunx/commit/54f9de6f1e6309349da5628f84d7fa41d80af4cf))
+- **site**: a real HTML file per route, with its own metadata and a real 404 ([`3a76f38`](https://github.com/petarzarkov/dunx/commit/3a76f385854c501bc42b063fd74441958ceb6d1e))
+
 ## 3.3.1 - 2026-09-05
 
 The documentation moves to dunx.win
