@@ -207,6 +207,7 @@ installed.
 | [`examples/databases`](./examples/databases) | How do I set up a database? SQLite (async and sync), Postgres, MySQL  |
 | [`examples/testing`](./examples/testing)     | How do I test it? Overrides, a real server on port 0, a guard         |
 | [`examples/full`](./examples/full)           | Does it compose? Every package in one long-running service            |
+| [`examples/binary`](./examples/binary)       | How do I ship it? A CLI app compiled to one standalone executable     |
 
 ```bash
 bun install

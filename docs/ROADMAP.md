@@ -475,7 +475,7 @@ it.
 The original decision - recorded here as "seven apps meant seven bootstraps to keep
 alive and nowhere that showed the packages composing" - **stands, and was not
 reversed.** What changed is that "one example" turned out to be the wrong reading of
-it. There are now four, and the distinction is that they are not one per package:
+it. There are now five, and the distinction is that they are not one per package:
 
 | Example              | Answers                                                         |
 | -------------------- | --------------------------------------------------------------- |
@@ -483,9 +483,11 @@ it. There are now four, and the distinction is that they are not one per package
 | `examples/databases` | "how do I set up my database?" - SQLite ×2, Postgres, MySQL     |
 | `examples/testing`   | "how do I test it?" - overrides, a real server, a guard         |
 | `examples/full`      | "does it all actually compose?" - every package, one service    |
+| `examples/binary`    | "how do I ship it?" - a CLI compiled to one standalone binary   |
 
 Each is a **question an evaluator asks in order**, not a package with a demo bolted
-on. `@dunx/http` has no example of its own and never will; it appears in all four.
+on. `@dunx/http` has no example of its own and never will; every HTTP example uses
+it, and `examples/binary` is the CLI that has no HTTP surface.
 `full` is still the only place the packages are shown composing, which is what the
 original objection was about, and it did not shrink to make room for the others.
 
