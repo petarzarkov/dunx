@@ -16,6 +16,7 @@ import { Fragment } from 'react';
 import { spotlight } from '@mantine/spotlight';
 import { ColorSchemeToggle, LogoMark, Wordmark } from '@dunx/ui';
 import { Footer } from './components/Footer';
+import { SponsorButton } from './components/SponsorButton';
 import { Search } from './components/Search';
 import { bench, site } from './data';
 import { Benchmarks } from './pages/Benchmarks';
@@ -222,6 +223,7 @@ const DocsFooter = (): React.JSX.Element => (
         <Anchor href={site.repoUrl} target="_blank" size="sm" c="dimmed">
           GitHub
         </Anchor>
+        <SponsorButton />
       </Group>
     </Group>
   </Box>

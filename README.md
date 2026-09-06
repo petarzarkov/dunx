@@ -19,6 +19,7 @@ together, on Bun's own primitives.
 [![docs](https://img.shields.io/badge/docs-dunx.win-blue)](https://dunx.win)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.4-black.svg)](https://bun.sh)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA.svg?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/petarzarkov)
 
 </div>
 
