@@ -118,6 +118,9 @@ describe('the CLI through a real terminal', () => {
     await session.waitFor('Space toggles');
     // Down onto `openapi`, toggle it, take the selection.
     await session.press(DOWN, ' ', ENTER);
+    // The binary question follows the features; Enter takes its default, no.
+    await session.waitFor('standalone binary');
+    await session.press(ENTER);
 
     expect(await session.exited()).toBe(0);
     expect(session.screen).toContain('Features  openapi');
@@ -135,6 +138,8 @@ describe('the CLI through a real terminal', () => {
     // `users` is the sixth entry, and it needs the database above it.
     await session.press(DOWN, DOWN, DOWN, DOWN, DOWN, ' ');
     await session.waitFor('comes along as a requirement');
+    await session.press(ENTER);
+    await session.waitFor('standalone binary');
     await session.press(ENTER);
 
     expect(await session.exited()).toBe(0);
@@ -163,10 +168,26 @@ describe('the CLI through a real terminal', () => {
     await session.press(ENTER);
     await session.waitFor('Space toggles');
     await session.press(ENTER);
+    await session.waitFor('standalone binary');
+    await session.press(ENTER);
 
     expect(await session.exited()).toBe(0);
     expect(session.screen).toContain('Directory  my-api');
     expect(existsSync(join(cwd, 'my-api', 'src', 'main.ts'))).toBe(true);
+  }, 30_000);
+
+  test('answering yes to the binary question generates the build script', async () => {
+    const cwd = workspace();
+    const session = new Session(cwd, ['billing']);
+
+    await session.waitFor('Space toggles');
+    await session.press(ENTER);
+    await session.waitFor('standalone binary');
+    // `y` takes yes without moving the highlight off the default.
+    await session.press('y');
+
+    expect(await session.exited()).toBe(0);
+    expect(existsSync(join(cwd, 'billing', 'scripts', 'build.ts'))).toBe(true);
   }, 30_000);
 
   test('a pipe is not a terminal, so it answers nothing and writes the minimum', async () => {

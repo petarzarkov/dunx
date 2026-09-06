@@ -89,6 +89,7 @@ export interface WizardAnswers {
   readonly target: string;
   readonly name: string;
   readonly features: readonly string[];
+  readonly binary: boolean;
   readonly force: boolean;
 }
 
@@ -97,6 +98,8 @@ export interface WizardDefaults {
   readonly target: string | undefined;
   readonly name: string | undefined;
   readonly features: readonly string[];
+  /** `undefined` asks; a boolean skips the question, the way `target` does. */
+  readonly binary: boolean | undefined;
   readonly force: boolean;
   readonly cwd: string;
 }
@@ -104,10 +107,11 @@ export interface WizardDefaults {
 /**
  * The questions, in the order the answers are needed.
  *
- * Each one is skipped when there is nothing to ask: a target given on the command
- * line, a package name that is already legal, a directory that is already empty.
- * Running `bunx @dunx/create-app my-api` in a clean directory therefore asks one
- * question, the one nothing else can answer.
+ * The directory, package name and force questions are skipped when there is
+ * nothing to ask: a target given on the command line, a package name that is
+ * already legal, a directory that is already empty. Running
+ * `bunx @dunx/create-app my-api` in a clean directory therefore asks the two that
+ * nothing else can answer, features and the binary build.
  */
 export class Wizard {
   readonly #runner: PromptRunner;
@@ -129,9 +133,17 @@ export class Wizard {
     const features = await this.#runner.ask(
       new FeaturePrompt(this.#style, defaults.features),
     );
+    const binary = await this.#binary(defaults);
     const force = await this.#force(defaults, target);
 
-    return { target, name, features, force };
+    return { target, name, features, binary, force };
+  }
+
+  async #binary(defaults: WizardDefaults): Promise<boolean> {
+    if (defaults.binary !== undefined) return defaults.binary;
+    return this.#runner.ask(
+      new ConfirmPrompt(this.#style, 'Compile to a standalone binary?', false),
+    );
   }
 
   async #name(defaults: WizardDefaults, target: string): Promise<string> {

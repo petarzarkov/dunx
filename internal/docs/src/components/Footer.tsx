@@ -1,6 +1,7 @@
 import { Anchor, Box, Container, Group, Stack, Text } from '@mantine/core';
 import { site } from '../data';
 import { href, RouteKind } from '../router';
+import { SponsorButton } from './SponsorButton';
 
 const Column = ({
   title,
@@ -77,6 +78,9 @@ export const Footer = (): React.JSX.Element => (
               ships is reimplemented, nothing a mature library solves is
               invented.
             </Text>
+            <Box mt="xs">
+              <SponsorButton />
+            </Box>
           </Stack>
 
           <Group

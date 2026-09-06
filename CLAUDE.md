@@ -819,8 +819,9 @@ What "updating the example" means, concretely:
 
 The guide under `docs/guide/` is documentation, not a substitute: prose cannot fail.
 
-Four examples, and they are a **ladder of questions an evaluator asks in order** - not
-one per package. `@dunx/http` has no example of its own; it is in all four.
+Five examples, and they are a **ladder of questions an evaluator asks in order** - not
+one per package. `@dunx/http` has no example of its own; every one with an HTTP
+surface uses it, and `examples/binary` is the CLI that has none.
 
 | Workspace            | Answers                                                    |
 | -------------------- | ---------------------------------------------------------- |
@@ -828,10 +829,11 @@ one per package. `@dunx/http` has no example of its own; it is in all four.
 | `examples/databases` | how do I set up a database? SQLite ×2, Postgres, MySQL     |
 | `examples/testing`   | how do I test it? Overrides, a real server, a guard        |
 | `examples/full`      | does it compose? Every package, one long-running service   |
+| `examples/binary`    | how do I ship it? A CLI compiled to one standalone binary  |
 
 Package names are `@dunx/example-<dir>`, so `bun run --filter '@dunx/example-*'`
 addresses them all - which is how CI keeps them alive. **Every example must be in
-CI**; that is the whole test for whether a fifth one earns its place. Per-package
+CI**; that is the whole test for whether another one earns its place. Per-package
 examples were tried and reverted and that reversal still holds - see
 docs/ROADMAP.md, Phase 1, which also records which candidates were rejected.
 

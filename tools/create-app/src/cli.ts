@@ -86,6 +86,8 @@ const byAsking = async (): Promise<ScaffoldOptions> => {
     target,
     name: values.name,
     features: [],
+    // Asked, not flagged: nothing about the app is chosen by a flag.
+    binary: undefined,
     force: values.force === true,
     cwd: process.cwd(),
   });
@@ -139,6 +141,11 @@ try {
   console.log(
     `  bun run dev  ${style.muted('# or `start`, which does not watch')}`,
   );
+  if (result.binary) {
+    console.log(
+      `  bun run build  ${style.muted('# compile to one standalone binary')}`,
+    );
+  }
 } catch (error) {
   if (error instanceof CancelledError) {
     console.log(style.muted(error.message));

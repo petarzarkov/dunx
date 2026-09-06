@@ -43,6 +43,12 @@ There is no flag for choosing features. The command opens a list:
 two lines under the list update as you go: one shows what your selection drags in,
 the other shows which of it needs Redis or Postgres running to do anything.
 
+After the list, one more question: whether to compile the app to a single
+standalone binary. Yes adds a `scripts/build.ts` and a `build` script, so
+`bun run build` writes one executable with `bun build --compile` that a host runs
+with nothing installed. It needs Bun >= 1.4.1, the floor the generated
+`package.json` already declares.
+
 Three more questions appear only when there is something to ask: a directory, when
 the command line named none; a package name, when the directory's is one npm would
 reject; and whether to write into a directory that already has files in it.
@@ -152,7 +158,9 @@ const { directory, files } = await scaffold({
 
 This is the scripted path the removed `--with` flag used to be. `features` takes
 the same names the list shows, in any order, and pulls in what they require.
-`FEATURES` exports the set. Omitting it writes the minimal template.
+`FEATURES` exports the set. Omitting it writes the minimal template. `binary: true`
+adds the standalone-binary build, and forces the generation path so it works with
+no features too.
 
 `scaffold` throws `ScaffoldError` for anything the caller can fix - an unknown
 template, an unusable package name, a non-empty target without `force` - and lets

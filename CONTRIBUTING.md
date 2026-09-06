@@ -127,12 +127,13 @@ the wrong parent fails safe rather than leaking.
 **`examples/*`** is a ladder of the questions an evaluator asks in order rather than one
 example per package.
 
-| Example              | Answers                                                                                |
-| -------------------- | -------------------------------------------------------------------------------------- |
-| `examples/minimal`   | What does it look like? Five files. Valuable because it is small, so do not add to it  |
-| `examples/databases` | How do I set up a database? SQLite twice, Postgres, MySQL                              |
-| `examples/testing`   | How do I test it? Overrides, a real server, a guard                                    |
-| `examples/full`      | Does it compose? Every package in one long-running service. This is the one that grows |
+| Example              | Answers                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `examples/minimal`   | What does it look like? Five files. Valuable because it is small, so do not add to it    |
+| `examples/databases` | How do I set up a database? SQLite twice, Postgres, MySQL                                |
+| `examples/testing`   | How do I test it? Overrides, a real server, a guard                                      |
+| `examples/full`      | Does it compose? Every package in one long-running service. This is the one that grows   |
+| `examples/binary`    | How do I ship it? A CLI compiled to one standalone executable with `bun build --compile` |
 
 Every example is kept alive by CI, and every example exits 0 with no database,
 Redis or S3 installed: a part whose backing service is absent prints that it is

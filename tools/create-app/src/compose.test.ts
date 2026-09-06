@@ -255,4 +255,56 @@ describe('a composed app', () => {
     expect(readme).toContain('**images**');
     expect(readme).toContain('Redis or Valkey');
   });
+
+  const composeBinary = async (features: readonly string[]) => {
+    const cwd = workspace();
+    const result = await scaffold({
+      target: 'billing',
+      cwd,
+      features,
+      binary: true,
+      version: '^9.9.9',
+    });
+    const read = (path: string): Promise<string> =>
+      Bun.file(join(result.directory, path)).text();
+    return { result, read };
+  };
+
+  test('adds a build script and scripts/build.ts when binary is asked for', async () => {
+    const { result, read } = await composeBinary(['notes']);
+
+    expect(result.binary).toBe(true);
+    expect(result.files).toContain('scripts/build.ts');
+
+    const manifest = JSON.parse(await read('package.json')) as {
+      scripts: Record<string, string>;
+    };
+    expect(manifest.scripts['build']).toBe('bun scripts/build.ts');
+
+    const build = await read('scripts/build.ts');
+    // The plugin and `compile` in one pass, and the binary named for the app.
+    expect(build).toContain('depsPlugin');
+    expect(build).toContain('compile: { outfile }');
+    expect(build).toContain("join(DIR, 'dist', 'billing')");
+  });
+
+  test('generates the binary build even with no features chosen', async () => {
+    const { result, read } = await composeBinary([]);
+
+    expect(result.template).toBe('composed');
+    expect(result.features).toEqual([]);
+    expect(result.binary).toBe(true);
+    expect(result.files).toContain('scripts/build.ts');
+    expect(await read('README.md')).toContain('## Compile to a binary');
+  });
+
+  test('adds no build script by default', async () => {
+    const { result, read } = await compose(['notes']);
+    expect(result.binary).toBe(false);
+    expect(result.files).not.toContain('scripts/build.ts');
+    const manifest = JSON.parse(await read('package.json')) as {
+      scripts: Record<string, string>;
+    };
+    expect(manifest.scripts['build']).toBeUndefined();
+  });
 });

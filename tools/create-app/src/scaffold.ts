@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Glob } from 'bun';
 import { agentFiles } from './agents.js';
 import { resolveFeatures, type Feature } from './features.js';
+import { buildScript } from './build-template.js';
 import {
   appModule,
   config,
@@ -87,6 +88,12 @@ export interface ScaffoldOptions {
    * what it was.
    */
   readonly features?: readonly string[];
+  /**
+   * Add a `scripts/build.ts` and a `build` script that compile the app to one
+   * standalone executable. Forces the generation path, so it works with no
+   * features chosen too.
+   */
+  readonly binary?: boolean;
   /** Write into a directory that already has files in it. */
   readonly force?: boolean;
   readonly cwd?: string;
@@ -100,6 +107,8 @@ export interface ScaffoldResult {
   readonly template: TemplateName | 'composed';
   /** Resolved feature names, in import order. Empty for a fixed template. */
   readonly features: readonly string[];
+  /** Whether a standalone-binary build was generated. */
+  readonly binary: boolean;
   readonly files: readonly string[];
 }
 
@@ -149,15 +158,17 @@ const fill = (contents: string, name: string, version: string): string =>
 const generated = (
   name: string,
   features: readonly Feature[],
+  binary: boolean,
 ): Readonly<Record<string, string>> => {
   const groups = configGroupsFor(features);
   return {
-    'package.json': manifest(features),
-    'README.md': readme(name, features),
+    'package.json': manifest(features, binary),
+    'README.md': readme(name, features, binary),
     '.env.example': envExample(groups),
     'src/main.ts': main(name, features),
     'src/app.module.ts': appModule(name, features),
     'src/config.ts': config(name, groups),
+    ...(binary ? { 'scripts/build.ts': buildScript(name) } : {}),
   };
 };
 
@@ -182,7 +193,11 @@ export const scaffold = async (
       error instanceof Error ? error.message : String(error),
     );
   }
-  const composing = features.length > 0;
+  // A binary build needs the generated manifest and `scripts/build.ts`, so it
+  // takes the generation path even with no features - the fixed template is copied
+  // verbatim and cannot carry a build script.
+  const binary = options.binary === true;
+  const composing = features.length > 0 || binary;
 
   const directory = resolve(options.cwd ?? process.cwd(), options.target);
   const name = options.name ?? basename(directory);
@@ -259,6 +274,7 @@ export const scaffold = async (
       name,
       template,
       features: [],
+      binary: false,
       files: written.sort(),
     };
   }
@@ -285,7 +301,7 @@ export const scaffold = async (
   }
 
   await writeAll({
-    ...generated(name, features),
+    ...generated(name, features, binary),
     ...agentFiles(name, features),
   });
 
@@ -294,6 +310,7 @@ export const scaffold = async (
     name,
     template: 'composed',
     features: features.map((feature) => feature.name),
+    binary,
     files: written.sort(),
   };
 };
