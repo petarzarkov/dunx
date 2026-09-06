@@ -399,9 +399,20 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
       this.#listeners.set(channel, new Set([listener]));
     }
 
-    await this.#run('SUBSCRIBE', async () => {
-      await client.subscribe(channel, listener);
-    });
+    try {
+      await this.#run('SUBSCRIBE', async () => {
+        await client.subscribe(channel, listener);
+      });
+    } catch (error) {
+      // The registry is what `close()` walks and what a reconnect replays, so an
+      // entry with no subscription behind it is a permanent one: the key is
+      // caller-supplied, and per-room or per-user fan-out against a broker that
+      // flaps leaves one behind for every channel that ever failed.
+      const set = this.#listeners.get(channel);
+      set?.delete(listener);
+      if (set !== undefined && set.size === 0) this.#listeners.delete(channel);
+      throw error;
+    }
   }
 
   async unsubscribe(
@@ -413,19 +424,27 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
     // Nothing was ever subscribed here; Bun would throw ERR_REDIS_INVALID_STATE.
     if (!client || !registered) return;
 
+    // Both branches tidy in a `finally`: a rejected UNSUBSCRIBE used to leave the
+    // channel key behind, and in the listener branch an empty `Set` with it.
     if (listener) {
       registered.delete(listener);
-      await this.#run('UNSUBSCRIBE', async () => {
-        await client.unsubscribe(channel, listener);
-      });
-      if (registered.size > 0) return;
-    } else {
+      try {
+        await this.#run('UNSUBSCRIBE', async () => {
+          await client.unsubscribe(channel, listener);
+        });
+      } finally {
+        if (registered.size === 0) this.#listeners.delete(channel);
+      }
+      return;
+    }
+
+    try {
       await this.#run('UNSUBSCRIBE', async () => {
         await client.unsubscribe(channel);
       });
+    } finally {
+      this.#listeners.delete(channel);
     }
-
-    this.#listeners.delete(channel);
   }
 
   send(command: string, args: readonly RedisArg[] = []): Promise<unknown> {

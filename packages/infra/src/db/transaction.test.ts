@@ -388,3 +388,85 @@ describe('overlapping top-level transactions', () => {
     expect(names()).toEqual(['nested']);
   });
 });
+
+describe('a BEGIN that fails', () => {
+  /** Strands the depth counter if the throw escapes before the `finally`. */
+  const failABegin = async (): Promise<void> => {
+    db.run(sql.raw('BEGIN'));
+    const error = await rejection(transaction(db, () => insert('never')));
+    expect(error.message).toMatch(/BEGIN/);
+    db.run(sql.raw('ROLLBACK'));
+  };
+
+  /**
+   * The counter is incremented before `BEGIN` runs and decremented in a `finally`
+   * that `BEGIN` is not inside, so a throw there strands it above zero for the
+   * life of the handle. Every later call then reads `depth > 0`, skips the queue
+   * and issues `SAVEPOINT dunx_sp_N` instead of `BEGIN`.
+   *
+   * That turns two unrelated top-level transactions into nested savepoints on one
+   * connection, and the outer one rolling back discards the inner one's committed
+   * work. `SQLITE_BUSY` from a second writer on a file-backed database reaches
+   * this in production; opening a transaction by hand is the same failure without
+   * the race.
+   */
+  it('does not let a later rollback discard another transaction', async () => {
+    await failABegin();
+
+    const failing = rejection(
+      transaction(db, async (tx) => {
+        tx.insert(entries).values({ name: 'discarded' }).run();
+        await Bun.sleep(5);
+        throw new Error('nope');
+      }),
+    );
+    const succeeding = transaction(db, async (tx) => {
+      await Bun.sleep(1);
+      tx.insert(entries).values({ name: 'kept' }).run();
+    });
+
+    await Promise.all([failing, succeeding]);
+    expect(names()).toEqual(['kept']);
+  });
+});
+
+describe('a BEGIN that fails', () => {
+  /** Strands the depth counter if the throw escapes before the `finally`. */
+  const failABegin = async (): Promise<void> => {
+    db.run(sql.raw('BEGIN'));
+    const error = await rejection(transaction(db, () => insert('never')));
+    expect(error.message).toMatch(/BEGIN/);
+    db.run(sql.raw('ROLLBACK'));
+  };
+
+  /**
+   * The counter is incremented before `BEGIN` runs and decremented in a `finally`
+   * that `BEGIN` is not inside, so a throw there strands it above zero for the
+   * life of the handle. Every later call then reads `depth > 0`, skips the queue
+   * and issues `SAVEPOINT dunx_sp_N` instead of `BEGIN`.
+   *
+   * That turns two unrelated top-level transactions into nested savepoints on one
+   * connection, and the outer one rolling back discards the inner one's committed
+   * work. `SQLITE_BUSY` from a second writer on a file-backed database reaches
+   * this in production; opening a transaction by hand is the same failure without
+   * the race.
+   */
+  it('does not let a later rollback discard another transaction', async () => {
+    await failABegin();
+
+    const failing = rejection(
+      transaction(db, async (tx) => {
+        tx.insert(entries).values({ name: 'discarded' }).run();
+        await Bun.sleep(5);
+        throw new Error('nope');
+      }),
+    );
+    const succeeding = transaction(db, async (tx) => {
+      await Bun.sleep(1);
+      tx.insert(entries).values({ name: 'kept' }).run();
+    });
+
+    await Promise.all([failing, succeeding]);
+    expect(names()).toEqual(['kept']);
+  });
+});

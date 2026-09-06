@@ -44,6 +44,13 @@ export class ScheduleEntry {
  * feature flag or a per-tenant schedule has nowhere else to live, and without it a
  * schedule changes only by redeploying. `trigger` also makes a schedule testable
  * without waiting for a minute boundary, which is `Bun.cron`'s resolution.
+ *
+ * **A one-shot is held until it is removed.** A `TIMEOUT` entry is marked
+ * `finished` when it fires and stays in the map, so `get` and `list` can still
+ * report it, and `remove(name)` is what reclaims it. Adding one per tenant or per
+ * event without removing it grows the map for the life of the process. dunx's own
+ * schedules are all added once at boot, so this only reaches an app calling `add`
+ * at runtime.
  */
 export class ScheduleRegistry {
   readonly #armed = new Map<string, Armed>();

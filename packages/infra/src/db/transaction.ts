@@ -70,8 +70,22 @@ const scoped = async <TSchema extends Record<string, unknown>, T>(
   const depth = scope.depth++;
   const savepoint = `dunx_sp_${depth}`;
 
-  exec(db, depth === 0 ? 'BEGIN' : `SAVEPOINT ${savepoint}`);
+  /**
+   * `BEGIN` itself throws - `SQLITE_BUSY` against a second writer, or a
+   * transaction something else already opened - and it has to be inside the
+   * `try`, or the `finally` never runs and the depth is stranded above zero for
+   * the life of the handle. Every later call then reads `depth > 0`, skips the
+   * queue and issues a savepoint, so two unrelated top-level transactions nest
+   * and one rolling back discards the other's work.
+   *
+   * `opened` is what keeps the rollback honest once it is inside: there is
+   * nothing to roll back from a transaction that never started, and trying
+   * replaces the real error with a second one.
+   */
+  let opened = false;
   try {
+    exec(db, depth === 0 ? 'BEGIN' : `SAVEPOINT ${savepoint}`);
+    opened = true;
     // The same handle, not a derived one: there is exactly one connection, so
     // every statement issued anywhere is already inside this transaction. That is
     // also why the schema type survives a transaction unchanged.
@@ -79,6 +93,9 @@ const scoped = async <TSchema extends Record<string, unknown>, T>(
     exec(db, depth === 0 ? 'COMMIT' : `RELEASE ${savepoint}`);
     return result;
   } catch (error) {
+    if (!opened) {
+      throw error;
+    }
     if (depth === 0) {
       exec(db, 'ROLLBACK');
     } else {
