@@ -84,3 +84,37 @@ if (failed > 0) {
 }
 
 console.log(`\n${SELECTIONS.length} scaffolded selections typecheck.`);
+
+/**
+ * The generated `scripts/build.ts` is a template string nothing else compiles, and
+ * the app's own tsconfig covers `src` alone - so this scaffolds a `binary` app and
+ * runs the real compile, which fails loudly on any error the string introduced.
+ */
+const binaryDir = join(HOST, 'scaffold-check-binary');
+await rm(binaryDir, { recursive: true, force: true });
+try {
+  const result = await scaffold({
+    target: binaryDir,
+    name: 'scaffold-check-binary',
+    features: ['notes'],
+    binary: true,
+    version: 'workspace:*',
+  });
+
+  const build = Bun.spawnSync(['bun', 'scripts/build.ts'], {
+    cwd: result.directory,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+
+  if (build.exitCode === 0) {
+    console.log('  ok  binary compile');
+  } else {
+    console.error('fail  binary compile');
+    console.error(build.stdout.toString().trimEnd());
+    console.error(build.stderr.toString().trimEnd());
+    process.exit(1);
+  }
+} finally {
+  await rm(binaryDir, { recursive: true, force: true });
+}

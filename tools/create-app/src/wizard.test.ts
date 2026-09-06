@@ -45,6 +45,9 @@ const start = async (
     target: 'my-api',
     name: undefined,
     features: [],
+    // Skipped by default, so a flow that does not test it answers no question for
+    // it; a test that does passes `binary: undefined`.
+    binary: false,
     force: false,
     cwd,
     ...defaults,
@@ -78,6 +81,36 @@ describe('Wizard', () => {
     const result = await answers;
     expect(result.target).toBe('billing');
     expect(result.name).toBe('billing');
+  });
+
+  test('asks whether to compile a binary, and yes is carried through', async () => {
+    const { tty, answers } = await start(workspace(), { binary: undefined });
+
+    tty.send(Press.enter);
+    await settle();
+    expect(tty.output()).toContain('Compile to a standalone binary?');
+
+    tty.send('y');
+    expect((await answers).binary).toBe(true);
+  });
+
+  test('the binary question defaults to no', async () => {
+    const { tty, answers } = await start(workspace(), { binary: undefined });
+
+    tty.send(Press.enter);
+    await settle();
+    tty.send(Press.enter);
+
+    expect((await answers).binary).toBe(false);
+  });
+
+  test('does not ask about a binary when the answer is already set', async () => {
+    const { tty, answers } = await start(workspace(), { binary: false });
+
+    tty.send(Press.enter);
+
+    expect((await answers).binary).toBe(false);
+    expect(tty.output()).not.toContain('standalone binary');
   });
 
   test('asks for a package name only when the directory is not one', async () => {
