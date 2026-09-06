@@ -1,0 +1,19 @@
+{
+  "name": "@dunx/example-binary",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A dunx CLI app compiled to a single self-contained executable with bun build --compile",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "build": "bun scripts/build.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dunx/core": "workspace:*",
+    "@dunx/infra": "workspace:*",
+    "@dunx/transform": "workspace:*"
+  }
+}

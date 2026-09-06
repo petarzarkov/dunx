@@ -14,6 +14,15 @@
         "typescript": "7.0.2",
       },
     },
+    "examples/binary": {
+      "name": "@dunx/example-binary",
+      "version": "0.1.0",
+      "dependencies": {
+        "@dunx/core": "workspace:*",
+        "@dunx/infra": "workspace:*",
+        "@dunx/transform": "workspace:*",
+      },
+    },
     "examples/databases": {
       "name": "@dunx/example-databases",
       "version": "0.0.0",
@@ -400,6 +409,8 @@
     "@dunx/dashboard-ui": ["@dunx/dashboard-ui@workspace:internal/dashboard-ui"],
 
     "@dunx/docs": ["@dunx/docs@workspace:internal/docs"],
+
+    "@dunx/example-binary": ["@dunx/example-binary@workspace:examples/binary"],
 
     "@dunx/example-databases": ["@dunx/example-databases@workspace:examples/databases"],
 
