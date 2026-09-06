@@ -194,13 +194,22 @@ export class Soak {
   /** Shutdown is itself under test: it has to finish, and it has to be quiet. */
   async #shutdown(app: HttpApp, failures: string[]): Promise<void> {
     const started = performance.now();
-    const timeout = new Promise<'timeout'>((resolve) =>
-      setTimeout(() => resolve('timeout'), 15_000),
-    );
-    const outcome = await Promise.race([
-      app.shutdown().then(() => 'done' as const),
-      timeout,
-    ]);
+    // The handle is kept and cleared: the loser of the race is still a live timer,
+    // and leaving it pending held the process open for 15 seconds after a clean
+    // shutdown, which is 15 seconds on every CI run.
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      handle = setTimeout(() => resolve('timeout'), 15_000);
+    });
+    let outcome: 'done' | 'timeout';
+    try {
+      outcome = await Promise.race([
+        app.shutdown().then(() => 'done' as const),
+        timeout,
+      ]);
+    } finally {
+      if (handle !== undefined) clearTimeout(handle);
+    }
     if (outcome === 'timeout') {
       failures.push('shutdown did not finish within 15s');
       return;

@@ -39,7 +39,13 @@ const call = async (
   accept: ReadonlySet<number>,
   init?: RequestInit,
 ): Promise<string> => {
-  const res = await fetch(new URL(path, base), init);
+  // Without a deadline a hung route parks its worker for the whole run, so the
+  // soak quietly loses concurrency instead of reporting the route that stopped
+  // answering. Well above the slowest observed route on a loaded 2-core runner.
+  const res = await fetch(new URL(path, base), {
+    ...init,
+    signal: AbortSignal.timeout(10_000),
+  });
   // The body must be drained or the socket is held until GC.
   await res.arrayBuffer();
   if (!accept.has(res.status)) {

@@ -393,6 +393,10 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
     }
 
     const existing = this.#listeners.get(channel);
+    // Only what this call adds is this call's to undo: subscribing the same
+    // listener twice must not let the second attempt's failure retract the first
+    // attempt's live subscription.
+    const added = existing === undefined || !existing.has(listener);
     if (existing) {
       existing.add(listener);
     } else {
@@ -404,13 +408,16 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
         await client.subscribe(channel, listener);
       });
     } catch (error) {
-      // The registry is what `close()` walks and what a reconnect replays, so an
-      // entry with no subscription behind it is a permanent one: the key is
-      // caller-supplied, and per-room or per-user fan-out against a broker that
-      // flaps leaves one behind for every channel that ever failed.
-      const set = this.#listeners.get(channel);
-      set?.delete(listener);
-      if (set !== undefined && set.size === 0) this.#listeners.delete(channel);
+      // A failed SUBSCRIBE leaves nothing on the wire, so the registration it was
+      // for has to go too. The key is caller-supplied, and per-room fan-out
+      // against a broker that flaps would otherwise leave one entry behind for
+      // every channel that ever failed, with nothing to sweep it.
+      if (added) {
+        const set = this.#listeners.get(channel);
+        set?.delete(listener);
+        if (set !== undefined && set.size === 0)
+          this.#listeners.delete(channel);
+      }
       throw error;
     }
   }
@@ -424,27 +431,23 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
     // Nothing was ever subscribed here; Bun would throw ERR_REDIS_INVALID_STATE.
     if (!client || !registered) return;
 
-    // Both branches tidy in a `finally`: a rejected UNSUBSCRIBE used to leave the
-    // channel key behind, and in the listener branch an empty `Set` with it.
+    // The registry is dropped only once the command has succeeded, which is what
+    // keeps a retry working: the guard above returns early for a channel with no
+    // entry, so tidying on failure would turn the caller's second attempt into a
+    // silent no-op while the wire stayed subscribed.
     if (listener) {
+      await this.#run('UNSUBSCRIBE', async () => {
+        await client.unsubscribe(channel, listener);
+      });
       registered.delete(listener);
-      try {
-        await this.#run('UNSUBSCRIBE', async () => {
-          await client.unsubscribe(channel, listener);
-        });
-      } finally {
-        if (registered.size === 0) this.#listeners.delete(channel);
-      }
-      return;
-    }
-
-    try {
+      if (registered.size > 0) return;
+    } else {
       await this.#run('UNSUBSCRIBE', async () => {
         await client.unsubscribe(channel);
       });
-    } finally {
-      this.#listeners.delete(channel);
     }
+
+    this.#listeners.delete(channel);
   }
 
   send(command: string, args: readonly RedisArg[] = []): Promise<unknown> {
