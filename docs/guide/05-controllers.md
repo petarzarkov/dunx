@@ -23,13 +23,13 @@ export class UsersController {
   }
 
   @Get('/:id', oneUser)
-  one(input: Input<typeof oneUser>): Promise<User | null> {
-    return this.users.find(input.params.id);
+  one({ params }: Input<typeof oneUser>): Promise<User | null> {
+    return this.users.find(params.id);
   }
 
   @Post('/', createUser)
-  create(input: Input<typeof createUser>): Promise<User> {
-    return this.users.create(input.body.name);
+  create({ body }: Input<typeof createUser>): Promise<User> {
+    return this.users.create(body.name);
   }
 }
 ```
@@ -172,27 +172,27 @@ CORS preflight handler.
 ## Path parameters
 
 Bun's own syntax, because Bun does the matching. Without a `params` schema they
-arrive as strings on `input.req.params`:
+arrive as strings on `req.params`:
 
 ```ts
 @Get('/:name')
-one(input: Input<RouteSchemas>): { greeting: string } {
-  return { greeting: `hello, ${input.req.params['name'] ?? 'world'}` };
+one({ req }: Input<RouteSchemas>): { greeting: string } {
+  return { greeting: `hello, ${req.params['name'] ?? 'world'}` };
 }
 ```
 
 Declare a `params` schema and they arrive typed, validated and coerced on
-`input.params`:
+`params`:
 
 ```ts
 const oneUser = { params: z.object({ id: z.coerce.number().int().min(1) }) } as const;
 
 @Get('/:id', oneUser)
-async one(input: Input<typeof oneUser>): Promise<User> {
+async one({ params }: Input<typeof oneUser>): Promise<User> {
   // Already a number. The schema coerced it before this ran.
-  const user = await this.users.find(input.params.id);
+  const user = await this.users.find(params.id);
   if (user === null) {
-    throw new HttpError(HttpStatusCode.NOT_FOUND, `No user ${input.params.id}`);
+    throw new HttpError(HttpStatusCode.NOT_FOUND, `No user ${params.id}`);
   }
   return user;
 }
@@ -218,12 +218,27 @@ export interface RouteSchemas {
 }
 ```
 
-| Field          | Source                                   | Present when      |
-| -------------- | ---------------------------------------- | ----------------- |
-| `input.req`    | the `BunRequest`                         | always            |
-| `input.body`   | parsed by `content-type`, then validated | `body` declared   |
-| `input.query`  | the query string, then validated         | `query` declared  |
-| `input.params` | `req.params`, then validated             | `params` declared |
+| Field    | Source                                   | Present when      |
+| -------- | ---------------------------------------- | ----------------- |
+| `req`    | the `BunRequest`                         | always            |
+| `body`   | parsed by `content-type`, then validated | `body` declared   |
+| `query`  | the query string, then validated         | `query` declared  |
+| `params` | `req.params`, then validated             | `params` declared |
+
+The parameter takes either shape. Destructuring is the usual one, and a handler
+that passes the request on names the whole object instead:
+
+```ts
+@Post('/', createNote)
+create({ body }: Input<typeof createNote>): Note {
+  return this.notes.add(body.text);
+}
+
+@Post('/', createNote)
+record(input: Input<typeof createNote>): Note {
+  return this.audit.write(input);
+}
+```
 
 Validation targets the **Standard Schema** spec (`~standard.validate`), restated
 in `@dunx/http`'s own types rather than depended on: the spec is an interface and
@@ -248,11 +263,12 @@ mismatched `V`, but it has no way to contextually type an unannotated parameter.
 Decorators observe; they do not type. Measured with `tsc`, because this is a
 type-level claim `bun` cannot answer:
 
-| Handler                       | Result                                                   |
-| ----------------------------- | -------------------------------------------------------- |
-| annotated correctly           | compiles                                                 |
-| unannotated parameter         | `TS7006: Parameter 'input' implicitly has an 'any' type` |
-| annotated with the wrong type | `TS1241` + `TS1270`, naming the mismatched property      |
+| Handler                       | Result                                                        |
+| ----------------------------- | ------------------------------------------------------------- |
+| annotated correctly           | compiles                                                      |
+| unannotated parameter         | `TS7006: Parameter 'input' implicitly has an 'any' type`      |
+| unannotated destructured      | `TS7031: Binding element 'body' implicitly has an 'any' type` |
+| annotated with the wrong type | `TS1241` + `TS1270`, naming the mismatched property           |
 
 So the annotation is required. What makes it cheap is that `Input<O>` is a
 type-level function over the options object, so every field type still comes from
@@ -262,8 +278,8 @@ the schema and nothing is declared twice:
 const createNote = { body: CreateNote, status: HttpStatusCode.CREATED } as const;
 
 @Post('/', createNote)
-create(input: Input<typeof createNote>): Note {
-  return this.notes.add(input.body.text); // input.body.text is string
+create({ body }: Input<typeof createNote>): Note {
+  return this.notes.add(body.text); // body.text is string
 }
 ```
 
@@ -272,7 +288,7 @@ not do is annotate that constant as `RouteSchemas`:
 
 ```ts
 // Wrong. RouteSchemas.body is optional, so Input<typeof createNote> degrades to
-// bare { req } and input.body is a compile error at every handler.
+// bare { req } and body is a compile error at every handler.
 const createNote: RouteSchemas = { body: CreateNote };
 
 // Right. `satisfies` checks the shape without replacing the type.
@@ -281,7 +297,7 @@ const createNote = { body: CreateNote } as const satisfies RouteSchemas;
 
 `as const satisfies RouteSchemas` is the convention throughout the codebase.
 `satisfies` catches a misspelled field at the declaration rather than as a missing
-`input` field in the handler, and `as const` keeps `status` a literal. Options
+field in the handler, and `as const` keeps `status` a literal. Options
 passed inline need neither, because the decorator's own `const O` type parameter
 stops them widening on the way in.
 
@@ -292,7 +308,7 @@ at all.
 
 Only when `body` is declared, and by media type:
 
-| `content-type`                      | `input.body` before validation          |
+| `content-type`                      | `body` before validation                |
 | ----------------------------------- | --------------------------------------- |
 | `application/json`, `*+json`, none  | `req.json()`                            |
 | `application/x-www-form-urlencoded` | fields; a repeated key becomes an array |
@@ -559,8 +575,8 @@ export class ReportsController {
 
   @UseGuards(RolesGuard)
   @Post('/', createReport)
-  create(input: Input<typeof createReport>): readonly string[] {
-    return this.reports.add(input.body.title);
+  create({ body }: Input<typeof createReport>): readonly string[] {
+    return this.reports.add(body.title);
   }
 }
 ```
