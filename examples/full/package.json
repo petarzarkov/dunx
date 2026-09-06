@@ -6,11 +6,13 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/main.ts",
+    "services:down": "docker compose down -v",
+    "services:up": "docker compose up -d --wait",
+    "soak": "bun src/soak/soak.ts",
     "start": "bun src/main.ts",
     "test": "bun test",
     "tour": "bun src/tour.ts",
-    "typecheck": "tsc --noEmit",
-    "soak": "bun src/soak/soak.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@bull-board/api": "8.6.0",

@@ -116,6 +116,38 @@ describe('QueueModule.forRoot', () => {
     expect(queue.listenerCount('error')).toBeGreaterThan(0);
   });
 
+  /**
+   * A queue name is memoised and holds a Redis connection until shutdown, so a
+   * name derived from data - `emails:${tenantId}` - reserves one of each per
+   * tenant the process ever sees. The warning is the whole mitigation: evicting a
+   * `Queue` means an async `close()` racing a publish, and a hard cap would be
+   * wrong for the rare app that really has hundreds.
+   */
+  it('warns once when the queue names look derived from data', async () => {
+    const warnings: unknown[] = [];
+    const logger = new ConsoleLogger(undefined, 'fatal');
+    logger.warn = (message: unknown): void => {
+      warnings.push(message);
+    };
+
+    @Module({
+      imports: [QueueModule.forRoot({ url })],
+      providers: [provide(Logger, { useValue: logger })],
+    })
+    class Root {}
+
+    app = await AppFactory.create(Root);
+    const publisher = app.get(JobPublisher);
+    for (let i = 0; i < 70; i += 1) publisher.queue(`tenant-${i}`);
+
+    const crossed = warnings.filter(
+      (entry) =>
+        typeof entry === 'string' && entry.includes('distinct queue names'),
+    );
+    expect(crossed).toHaveLength(1);
+    expect(publisher.opened).toHaveLength(70);
+  });
+
   it('reports a queue error through the bound Logger, with the error', async () => {
     const entries: { message: unknown; params: unknown[] }[] = [];
     // A real ConsoleLogger with `warn` shadowed. Spreading one copied `logLevel`

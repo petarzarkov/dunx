@@ -65,32 +65,16 @@ jobs:
     env:
       REDIS_URL: redis://localhost:6379
       DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
-    services:
-      valkey:
-        image: valkey/valkey:8-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: dunx
-          POSTGRES_PASSWORD: dunx
-          POSTGRES_DB: dunx
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U dunx"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+
+      # `examples/full/compose.yml` rather than a `services:` block, so what the
+      # example needs is described once and the same command brings it up on a
+      # laptop. It also gets the images from public.ecr.aws, which a `services:`
+      # block would too but nobody would notice was load bearing.
+      - name: Start the services the example needs
+        run: bun run --filter '@dunx/example-full' services:up
 
       - name: Build
         run: bun run ci build
