@@ -54,6 +54,40 @@ jobs:
   examples:
     name: Examples, tour and scaffolds
     runs-on: ubuntu-latest
+    # This job had no services, so every part of `examples/full` that needs one
+    # printed that it was skipping and CI went green on the rest: the websocket
+    # relay's cross-node fan-out, the queue workers, the Redis cache and the
+    # rate limiter's shared store. The end-to-end job was exercising the paths
+    # that need nothing, which is the opposite of what it is for.
+    #
+    # The coverage job still owns the *gate*'s services and its denominator;
+    # nothing here is measured for coverage, so the two do not interact.
+    env:
+      REDIS_URL: redis://localhost:6379
+      DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
+    services:
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: dunx
+          POSTGRES_PASSWORD: dunx
+          POSTGRES_DB: dunx
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dunx"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup

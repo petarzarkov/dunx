@@ -607,8 +607,16 @@ then not cover it.
   `docker run` step, since a `services:` block cannot pass the command MinIO needs.
   `@dunx/infra`'s suites skip when their service does not answer, so without them
   the gate measures a different denominator than the machine that set it. **A new
-  live-service suite adds its service there, and nowhere else** - declaring them on
-  two jobs is what once left the release job running the gate with none.
+  live-service suite adds its service to the `coverage` job** - the release job
+  taking the model as an artifact, rather than re-declaring the services and
+  running the gate again, is what fixed it once running with none.
+- **`examples` declares valkey and postgres too, and that is not a second copy of
+  the gate.** It measures no coverage, so it cannot move the denominator. It had no
+  services at all, which meant the end-to-end job silently skipped the websocket
+  relay's cross-node fan-out, the queue workers, the Redis cache and the shared
+  throttle store on every run: the job that exists to exercise the whole framework
+  was exercising only the parts that need nothing. MinIO is still coverage-only,
+  since no example asserts against a bucket.
 - `unit` deliberately has **no** services: those suites skip without one, `coverage`
   runs the same files with all of them, and `unit` is the fast signal.
 - `S3_ENDPOINT` is **not** exported, even though `Bun.S3Client` reads it for every
