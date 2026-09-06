@@ -9,7 +9,8 @@
     "start": "bun src/main.ts",
     "test": "bun test",
     "tour": "bun src/tour.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "soak": "bun src/soak/soak.ts"
   },
   "dependencies": {
     "@bull-board/api": "8.6.0",

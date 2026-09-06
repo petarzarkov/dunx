@@ -1,9 +1,26 @@
 import type { BunRequest } from 'bun';
 import type { Middleware, Next, RouteContext } from '@dunx/http';
 
-/** The observable side effect: whatever the middleware saw is readable after. */
+/**
+ * The observable side effect: whatever the middleware saw is readable after.
+ *
+ * Capped, because this grows by one entry on **every request** and this folder is
+ * vendored into `@dunx/create-app`'s `http` feature. Unbounded it put 46 MiB on
+ * the heap across 3.1 million requests in the soak run and read as a framework
+ * leak until a heap census named the strings. A demo that keeps the last few
+ * hundred shows the same thing and survives production traffic.
+ */
+const KEEP = 500;
+
 export class RequestTrail {
   readonly entries: string[] = [];
+
+  record(entry: string): void {
+    this.entries.push(entry);
+    if (this.entries.length > KEEP) {
+      this.entries.splice(0, this.entries.length - KEEP);
+    }
+  }
 }
 
 /**
@@ -23,7 +40,7 @@ export class RequestTrailMiddleware implements Middleware {
     next: Next,
   ): Promise<Response> {
     const response = await next();
-    this.trail.entries.push(
+    this.trail.record(
       `${req.method} ${new URL(req.url).pathname} -> ${response.status} ` +
         `(${ctx.controller}.${ctx.handler})`,
     );
