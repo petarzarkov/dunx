@@ -452,8 +452,8 @@ export class GreetingsController {
   }
 
   @Get('/:name')
-  one(input: Input<RouteSchemas>): { greeting: string; served: number } {
-    return this.greetings.greet(input.req.params['name'] ?? 'world');
+  one({ req }: Input<RouteSchemas>): { greeting: string; served: number } {
+    return this.greetings.greet(req.params['name'] ?? 'world');
   }
 }
 ```
@@ -466,7 +466,7 @@ There is no `res` to forget to send, and returning a `Response` yourself passes
 through untouched when you need the escape hatch.
 
 `@Get('/:name')` declares no schemas, so the path parameter stays on
-`input.req.params` as a string. `noUncheckedIndexedAccess` is why the `?? 'world'`
+`req.params` as a string. `noUncheckedIndexedAccess` is why the `?? 'world'`
 is there. Declaring a `params` schema is what makes it typed and coerced, and
 [Controllers](./05-controllers.md) shows that.
 
@@ -576,13 +576,16 @@ export class GreetingsController {
   constructor(private readonly greetings: GreetingsService) {}
 
   @Get('/:name', oneGreeting)
-  one(input: Input<typeof oneGreeting>): { greeting: string; served: number } {
-    return this.greetings.greet(input.params.name);
+  one({ params }: Input<typeof oneGreeting>): {
+    greeting: string;
+    served: number;
+  } {
+    return this.greetings.greet(params.name);
   }
 }
 ```
 
-`input.params.name` is now a `string` the schema has already checked, and the
+`params.name` is now a `string` the schema has already checked, and the
 `?? 'world'` is gone because the field cannot be missing. A request that fails the
 schema never reaches the handler; it gets a 400 whose body carries every issue.
 

@@ -147,13 +147,55 @@ keeps refusing.
 | Per-controller / per-route middleware   | `@UseGuards`                                                            | done         |
 | `@SetMetadata` + `Reflector`            | `meta` / `metaKey` + `ctx.get`                                          | done         |
 | `@UseGuards` / `@Roles` / `@Public`     | same names                                                              | done         |
-| `@Body` / `@Query` / `@Param`           | [schemas on the route decorator](./guide/06-validation.md)              | done         |
-| `createParamDecorator` (`@CurrentUser`) | -                                                                       | undesigned   |
+| `@Body` / `@Query` / `@Param`           | [one input object, typed by the schema](#handler-parameters)            | done         |
+| `createParamDecorator` (`@CurrentUser`) | [no successor, two answers](#custom-param-decorators)                   | n/a          |
 | `setGlobalPrefix`                       | `app.setGlobalPrefix()`                                                 | done         |
 | `enableCors`                            | `app.enableCors()`                                                      | done         |
 | `app.getUrl()`                          | `listen()` returns the URL                                              | done         |
 | `app.use(expressMiddleware)`            | -                                                                       | out of scope |
 | `@HttpCode` / `@Header` / `@Redirect`   | `status` in the options, `Response`                                     | n/a          |
+
+### Handler parameters
+
+Nest names each part of a request with its own parameter decorator. dunx passes
+one object, typed by the schema on the route decorator:
+
+```ts
+// Nest
+@Post()
+create(@Body() dto: CreateUserDto): Promise<User> {
+  return this.users.create(dto.name);
+}
+
+// dunx
+@Post('/', createUser)
+create({ body }: Input<typeof createUser>): Promise<User> {
+  return this.users.create(body.name);
+}
+```
+
+| Nest                      | dunx                                    |
+| ------------------------- | --------------------------------------- |
+| `@Body() dto: CreateUser` | `{ body }: Input<typeof createUser>`    |
+| `@Query() q: ListQuery`   | `{ query }: Input<typeof listUsers>`    |
+| `@Param('id') id: string` | `{ params }: Input<typeof oneUser>`     |
+| `@Req() req: Request`     | `{ req }: Input<RouteSchemas>`          |
+| `@Res() res: Response`    | return a `Response`                     |
+| `@Headers('x-trace') v`   | `req.headers.get('x-trace')`            |
+| `@Ip() ip: string`        | `ClientAddress`, then `address.of(req)` |
+
+Destructuring at the parameter is the usual shape; naming the whole object types
+the same. One schema constant covers what Nest splits between a DTO class,
+`ValidationPipe` and `@ApiProperty`: it validates the request, types the handler,
+and describes the route in the OpenAPI document.
+
+`@Res()` has no counterpart. A handler returns a `Response` when it wants to set
+the status, headers or body directly, and a route that does so keeps its
+middleware, guards and error handling.
+
+TC39 standard decorators have no parameter position.
+[Custom param decorators](#custom-param-decorators) covers the two classes of
+`createParamDecorator` usage and what each becomes.
 
 ## Ecosystem
 

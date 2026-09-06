@@ -230,8 +230,8 @@ export class NotesController {
     deprecated: true,
   })
   @Get('/whoami')
-  whoami(input: Input<RouteSchemas>): { ip: string | undefined } {
-    return { ip: this.address.of(input.req) };
+  whoami({ req }: Input<RouteSchemas>): { ip: string | undefined } {
+    return { ip: this.address.of(req) };
   }
 }
 ```
