@@ -21,13 +21,13 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Post('/', createUser)
-  create(input: Input<typeof createUser>): Promise<User> {
-    return this.users.create(input.body.name);
+  create({ body }: Input<typeof createUser>): Promise<User> {
+    return this.users.create(body.name);
   }
 }
 ```
 
-The body arrives parsed and validated: `input.body.name` is already a `string`,
+The body arrives parsed and validated: `body.name` is already a `string`,
 and a POST answers 201, all without writing `await req.json()`, `Response.json()`
 or a status code by hand. A request that fails the schema never reaches the
 handler.
@@ -123,7 +123,7 @@ instead, so this does not compile:
 
 ```ts
 @Get('/:id', oneUser)
-one(input: Input<typeof oneUser>): { id: number } {
+one({ params }: Input<typeof oneUser>): { id: number } {
   //                                ^ TS1241: property 'name' is missing
 }
 ```
@@ -166,15 +166,14 @@ a `params` schema validates that object and replaces it with the schema's output
 
 ```ts
 @Get('/:id', oneUser)
-async one(input: Input<typeof oneUser>): Promise<User> {
-  const user = await this.users.find(input.params.id);
+async one({ params }: Input<typeof oneUser>): Promise<User> {
+  const user = await this.users.find(params.id);
   ...
 }
 ```
 
-Without a `params` schema the raw values are still reachable at
-`input.req.params`. The framework does not hide them; it just does not type or
-check them.
+Without a `params` schema the raw values are still reachable at `req.params`. The
+framework does not hide them; it just does not type or check them.
 
 ### Query strings
 
@@ -226,17 +225,17 @@ export const UserIndex = z.object({ id: z.coerce.number().int().min(1) });
 ```
 
 `z.coerce.number()` turns `"42"` into `42` before `.int().min(1)` runs, so by the
-time the handler executes `input.params.id` is a `number` at runtime **and** in
+time the handler executes `params.id` is a `number` at runtime **and** in
 the type, because `Input<>` reads the schema's _output_ type rather than its
 input:
 
 ```ts
 @Get('/:id', oneUser)
-async one(input: Input<typeof oneUser>): Promise<User> {
+async one({ params }: Input<typeof oneUser>): Promise<User> {
   // Already a number. The params schema coerced it before this ran.
-  const user = await this.users.find(input.params.id);
+  const user = await this.users.find(params.id);
   if (user === null) {
-    throw new HttpError(HttpStatusCode.NOT_FOUND, `No user ${input.params.id}`);
+    throw new HttpError(HttpStatusCode.NOT_FOUND, `No user ${params.id}`);
   }
   return user;
 }
@@ -296,8 +295,8 @@ A route with no schemas at all still gets the request:
 
 ```ts
 @Get('/whoami')
-whoami(input: Input<RouteSchemas>): { ip: string | undefined } {
-  return { ip: this.address.of(input.req) };
+whoami({ req }: Input<RouteSchemas>): { ip: string | undefined } {
+  return { ip: this.address.of(req) };
 }
 ```
 
@@ -436,8 +435,8 @@ it used to be level.
 - **`as const` is not optional.** Drop it and the handler's `input` silently
   becomes `{ req }`. `satisfies RouteSchemas` is what catches a typo in a key
   name without re-widening the object.
-- **A `params` schema replaces `req.params` on `input` only.**
-  `input.req.params` is still the raw string record.
+- **A `params` schema replaces `req.params` on the input object only.**
+  `req.params` is still the raw string record.
 - **The framework validates input and never output.** A handler's return value is
   serialised as it is, `response` schemas included: they document the answer for
   `@dunx/openapi` and nothing checks them at runtime. If a response shape matters,

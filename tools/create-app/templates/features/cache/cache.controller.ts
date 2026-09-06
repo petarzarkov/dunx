@@ -42,33 +42,35 @@ export class CacheController {
   }
 
   @Get('/:id', oneSession)
-  async read(
-    input: Input<typeof oneSession>,
-  ): Promise<{ id: string; data: unknown; ttl: number }> {
-    const found = await this.degrades(() =>
-      this.sessions.read(input.params.id),
-    );
+  async read({ params }: Input<typeof oneSession>): Promise<{
+    id: string;
+    data: unknown;
+    ttl: number;
+  }> {
+    const found = await this.degrades(() => this.sessions.read(params.id));
     if (found === null) {
       throw new HttpError(
         HttpStatusCode.NOT_FOUND,
-        `No session "${input.params.id}"`,
+        `No session "${params.id}"`,
       );
     }
     return found;
   }
 
   @Put('/:id', putSession)
-  store(
-    input: Input<typeof putSession>,
-  ): Promise<{ id: string; ttl: number; visits: number }> {
+  store({ body, params }: Input<typeof putSession>): Promise<{
+    id: string;
+    ttl: number;
+    visits: number;
+  }> {
     return this.degrades(() =>
-      this.sessions.store(input.params.id, input.body.data, input.body.ttl),
+      this.sessions.store(params.id, body.data, body.ttl),
     );
   }
 
   @Delete('/:id', oneSession)
-  remove(input: Input<typeof oneSession>): Promise<{ removed: number }> {
-    return this.degrades(() => this.sessions.remove(input.params.id));
+  remove({ params }: Input<typeof oneSession>): Promise<{ removed: number }> {
+    return this.degrades(() => this.sessions.remove(params.id));
   }
 
   private async degrades<T>(run: () => Promise<T>): Promise<T> {

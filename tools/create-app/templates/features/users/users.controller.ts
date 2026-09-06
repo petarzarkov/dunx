@@ -24,21 +24,18 @@ export class UsersController {
   // accepted against a schema inferring `User[]` - mutability does not survive
   // serialisation.
   @Get('/', listUsers)
-  list(input: Input<typeof listUsers>): Promise<readonly User[]> {
-    return this.users.findAll(input.query.limit, input.query.q);
+  list({ query }: Input<typeof listUsers>): Promise<readonly User[]> {
+    return this.users.findAll(query.limit, query.q);
   }
 
   // Only the success status is checked - the 404 in `oneUser.response` leaves via
   // a thrown HttpError, which no return type can describe.
   @Get('/:id', oneUser)
-  async one(input: Input<typeof oneUser>): Promise<User> {
+  async one({ params }: Input<typeof oneUser>): Promise<User> {
     // Already a number: the params schema coerced it before this ran.
-    const user = await this.users.find(input.params.id);
+    const user = await this.users.find(params.id);
     if (user === null) {
-      throw new HttpError(
-        HttpStatusCode.NOT_FOUND,
-        `No user ${input.params.id}`,
-      );
+      throw new HttpError(HttpStatusCode.NOT_FOUND, `No user ${params.id}`);
     }
     return user;
   }
@@ -46,10 +43,10 @@ export class UsersController {
   // No req.json(), no Response.json(), no status - the body arrives validated and
   // typed, and 201 is the POST default.
   @Post('/', createUser)
-  create(input: Input<typeof createUser>): Promise<User> {
+  create({ body }: Input<typeof createUser>): Promise<User> {
     return this.users.create(
-      input.body.name,
-      input.body.tags.map((tag) => tag.label),
+      body.name,
+      body.tags.map((tag) => tag.label),
     );
   }
 }

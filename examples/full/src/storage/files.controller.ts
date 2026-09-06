@@ -40,13 +40,14 @@ export class FilesController {
   constructor(private readonly storage: Storage) {}
 
   @Get('/', listFiles)
-  async list(
-    input: Input<typeof listFiles>,
-  ): Promise<{ root: string; keys: readonly string[] }> {
+  async list({ query }: Input<typeof listFiles>): Promise<{
+    root: string;
+    keys: readonly string[];
+  }> {
     const keys: string[] = [];
     for await (const entry of this.storage.list({
-      prefix: input.query.prefix,
-      glob: input.query.glob,
+      prefix: query.prefix,
+      glob: query.glob,
     })) {
       keys.push(entry.key);
     }
@@ -57,10 +58,13 @@ export class FilesController {
   }
 
   @Get('/object', objectKey)
-  async read(
-    input: Input<typeof objectKey>,
-  ): Promise<{ key: string; size: number; type: string; content: string }> {
-    const { key } = input.query;
+  async read({ query }: Input<typeof objectKey>): Promise<{
+    key: string;
+    size: number;
+    type: string;
+    content: string;
+  }> {
+    const { key } = query;
     await this.present(key);
     const stat = await this.storage.stat(key);
     return {
@@ -72,12 +76,13 @@ export class FilesController {
   }
 
   @Put('/object', writeFile)
-  async write(
-    input: Input<typeof writeFile>,
-  ): Promise<{ key: string; bytes: number }> {
-    const { key } = input.query;
+  async write({
+    body,
+    query,
+  }: Input<typeof writeFile>): Promise<{ key: string; bytes: number }> {
+    const { key } = query;
     try {
-      return { key, bytes: await this.storage.write(key, input.body.content) };
+      return { key, bytes: await this.storage.write(key, body.content) };
     } catch (error) {
       if (!(error instanceof PathTraversalError)) throw error;
       throw new HttpError(HttpStatusCode.BAD_REQUEST, error.message);
@@ -85,8 +90,10 @@ export class FilesController {
   }
 
   @Delete('/object', objectKey)
-  async remove(input: Input<typeof objectKey>): Promise<{ deleted: boolean }> {
-    const { key } = input.query;
+  async remove({
+    query,
+  }: Input<typeof objectKey>): Promise<{ deleted: boolean }> {
+    const { key } = query;
     await this.present(key);
     await this.storage.delete(key);
     return { deleted: true };
@@ -95,8 +102,8 @@ export class FilesController {
   /** Nothing signs bytes on a local disk, so this refuses rather than hand back
    * a URL that cannot work. */
   @Get('/presign', objectKey)
-  async presign(input: Input<typeof objectKey>): Promise<{ url: string }> {
-    const { key } = input.query;
+  async presign({ query }: Input<typeof objectKey>): Promise<{ url: string }> {
+    const { key } = query;
     await this.present(key);
     try {
       return { url: this.storage.presign(key) };

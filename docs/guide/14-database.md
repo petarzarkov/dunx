@@ -629,11 +629,11 @@ const pageQuery = z.object({
 const paged = { query: pageQuery } as const;
 
 @Get('/page', paged)
-page(input: Input<typeof paged>): Promise<Page<Entry>> {
+page({ query }: Input<typeof paged>): Promise<Page<Entry>> {
   return paginate<typeof ledger, Entry>({
     db: this.db,
     table: ledger,
-    options: input.query,
+    options: query,
   });
 }
 ```

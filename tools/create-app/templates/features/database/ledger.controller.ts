@@ -78,12 +78,12 @@ export class LedgerController {
   constructor(private readonly ledger: Ledger) {}
 
   @Get('/', listEntries)
-  list(input: Input<typeof listEntries>): {
+  list({ query }: Input<typeof listEntries>): {
     entries: readonly Entry[];
     balance: number;
   } {
     return {
-      entries: this.ledger.list(input.query.limit),
+      entries: this.ledger.list(query.limit),
       balance: this.ledger.balance(),
     };
   }
@@ -91,34 +91,34 @@ export class LedgerController {
   /** Walked by cursor. Declared before `/:id` for readability only: `Bun.serve`
    * matches a static segment ahead of a parameter. */
   @Get('/page', pagedEntries)
-  page(input: Input<typeof pagedEntries>): Page<Entry> {
-    return this.ledger.page(input.query);
+  page({ query }: Input<typeof pagedEntries>): Page<Entry> {
+    return this.ledger.page(query);
   }
 
   @Get('/:id', oneEntry)
-  one(input: Input<typeof oneEntry>): Entry {
-    const entry = this.ledger.find(input.params.id);
+  one({ params }: Input<typeof oneEntry>): Entry {
+    const entry = this.ledger.find(params.id);
     if (entry === undefined) {
       throw new HttpError(
         HttpStatusCode.NOT_FOUND,
-        `No ledger entry ${input.params.id}`,
+        `No ledger entry ${params.id}`,
       );
     }
     return entry;
   }
 
   @Post('/', createEntry)
-  create(input: Input<typeof createEntry>): Entry {
-    return this.ledger.add(input.body.memo, input.body.amount);
+  create({ body }: Input<typeof createEntry>): Entry {
+    return this.ledger.add(body.memo, body.amount);
   }
 
   /** `"fail": true` throws between the two inserts; the 409's unchanged `rows`
    * is proof the first leg rolled back. */
   @Post('/transfer', transfer)
-  async transfer(
-    input: Input<typeof transfer>,
-  ): Promise<{ balance: number; rows: number }> {
-    const { from, to, amount, fail } = input.body;
+  async transfer({
+    body,
+  }: Input<typeof transfer>): Promise<{ balance: number; rows: number }> {
+    const { from, to, amount, fail } = body;
     try {
       const balance = await this.ledger.transfer(from, to, amount, fail);
       return { balance, rows: this.ledger.rows() };
@@ -136,11 +136,11 @@ export class LedgerController {
    * what allows it - `transactionSync` will not compile against the async handle.
    */
   @Post('/transfer-sync', transfer)
-  transferSync(input: Input<typeof transfer>): {
+  transferSync({ body }: Input<typeof transfer>): {
     balance: number;
     rows: number;
   } {
-    const { from, to, amount, fail } = input.body;
+    const { from, to, amount, fail } = body;
     try {
       const balance = this.ledger.transferSync(from, to, amount, fail);
       return { balance, rows: this.ledger.rows() };
@@ -153,12 +153,12 @@ export class LedgerController {
   }
 
   @Delete('/:id', oneEntry)
-  remove(input: Input<typeof oneEntry>): { deleted: boolean } {
-    const deleted = this.ledger.remove(input.params.id);
+  remove({ params }: Input<typeof oneEntry>): { deleted: boolean } {
+    const deleted = this.ledger.remove(params.id);
     if (!deleted) {
       throw new HttpError(
         HttpStatusCode.NOT_FOUND,
-        `No ledger entry ${input.params.id}`,
+        `No ledger entry ${params.id}`,
       );
     }
     return { deleted };
