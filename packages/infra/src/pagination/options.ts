@@ -58,6 +58,11 @@ const one = (value: unknown): string | undefined => {
   // A query string can repeat a key. The first wins, matching how a route's own
   // parser reads `?take=1&take=2`, rather than silently concatenating them.
   if (Array.isArray(value)) return one(value[0]);
+  // A number counts. The input is meant to be raw query values, but a route that
+  // validated first with `z.coerce.number()` hands over a number, and returning
+  // undefined for it meant `take` silently reverted to the default: the caller
+  // asked for 1 and got 20, with no error to notice.
+  if (typeof value === 'number') return String(value);
   return typeof value === 'string' ? value : undefined;
 };
 

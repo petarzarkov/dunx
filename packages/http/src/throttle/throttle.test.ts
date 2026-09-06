@@ -8,7 +8,7 @@ import { HttpFactory } from '../server/factory.js';
 import { SkipThrottle, Throttle } from './decorators.js';
 import { ThrottleGuard } from './guard.js';
 import { ThrottleModule } from './module.js';
-import { ThrottleOptions } from './options.js';
+import { ThrottleOptions, type ThrottleOptionsInit } from './options.js';
 import {
   MemoryThrottleStore,
   RedisThrottleStore,
@@ -61,13 +61,23 @@ class Counting extends ConsoleLogger {
 describe('ThrottleOptions', () => {
   const base = { limit: 2, windowSeconds: 60 };
 
-  it('refuses an empty prefix rather than inventing one', () => {
-    expect(() => new ThrottleOptions({ ...base, prefix: '' })).toThrow(
-      /needs a prefix/,
-    );
-    expect(() => new ThrottleOptions({ ...base, prefix: '   ' })).toThrow(
-      /needs a prefix/,
-    );
+  /**
+   * `undefined` is the case that matters most and was the one that got through:
+   * reading the prefix off `ConfigService` in `forRootAsync` makes it undefined at
+   * runtime whenever the variable is unset, whatever the type says, and the guard
+   * used to call `.trim()` on it and die with `undefined is not an object` before
+   * it could say any of this.
+   */
+  it('refuses a missing or empty prefix rather than inventing one', () => {
+    for (const prefix of [undefined, '', '   ']) {
+      expect(
+        () =>
+          new ThrottleOptions({
+            ...base,
+            prefix,
+          } as unknown as ThrottleOptionsInit),
+      ).toThrow(/needs a prefix/);
+    }
   });
 
   it('refuses a limit or a window below one', () => {

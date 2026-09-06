@@ -393,15 +393,33 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
     }
 
     const existing = this.#listeners.get(channel);
+    // Only what this call adds is this call's to undo: subscribing the same
+    // listener twice must not let the second attempt's failure retract the first
+    // attempt's live subscription.
+    const added = existing === undefined || !existing.has(listener);
     if (existing) {
       existing.add(listener);
     } else {
       this.#listeners.set(channel, new Set([listener]));
     }
 
-    await this.#run('SUBSCRIBE', async () => {
-      await client.subscribe(channel, listener);
-    });
+    try {
+      await this.#run('SUBSCRIBE', async () => {
+        await client.subscribe(channel, listener);
+      });
+    } catch (error) {
+      // A failed SUBSCRIBE leaves nothing on the wire, so the registration it was
+      // for has to go too. The key is caller-supplied, and per-room fan-out
+      // against a broker that flaps would otherwise leave one entry behind for
+      // every channel that ever failed, with nothing to sweep it.
+      if (added) {
+        const set = this.#listeners.get(channel);
+        set?.delete(listener);
+        if (set !== undefined && set.size === 0)
+          this.#listeners.delete(channel);
+      }
+      throw error;
+    }
   }
 
   async unsubscribe(
@@ -413,11 +431,15 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
     // Nothing was ever subscribed here; Bun would throw ERR_REDIS_INVALID_STATE.
     if (!client || !registered) return;
 
+    // The registry is dropped only once the command has succeeded, which is what
+    // keeps a retry working: the guard above returns early for a channel with no
+    // entry, so tidying on failure would turn the caller's second attempt into a
+    // silent no-op while the wire stayed subscribed.
     if (listener) {
-      registered.delete(listener);
       await this.#run('UNSUBSCRIBE', async () => {
         await client.unsubscribe(channel, listener);
       });
+      registered.delete(listener);
       if (registered.size > 0) return;
     } else {
       await this.#run('UNSUBSCRIBE', async () => {

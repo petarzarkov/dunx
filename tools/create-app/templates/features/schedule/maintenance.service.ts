@@ -1,5 +1,5 @@
-import { Counter, Logger } from '@dunx/core';
-import { Cron, Interval, OnceOnBoot } from '@dunx/infra/schedule';
+import { Counter, Gauge, Logger } from '@dunx/core';
+import { Cron, Interval, OnceOnBoot, Overlap } from '@dunx/infra/schedule';
 
 /**
  * The three schedule decorators on one class, discovered off the prototype chain
@@ -41,6 +41,44 @@ export class Maintenance {
     await Bun.sleep(1);
     this.#compactions.inc();
     return this.#compactions.value;
+  }
+
+  readonly #slow = new Counter();
+  /**
+   * A `Gauge`, not `#inFlight += 1`. A compound assignment to a private field in
+   * a class that also has a decorated member is a `SyntaxError` in Bun's parser,
+   * still on 1.4.2 - which is what the note at the top of this class is about,
+   * and which this method walked straight into before it was written this way.
+   */
+  readonly #inFlight = new Gauge();
+  readonly #peak = new Gauge();
+
+  /**
+   * `overlap: Overlap.CONCURRENT`, which is the half `skip` hides.
+   *
+   * The default refuses to start a run while the last one is still going, so a
+   * handler that outlives its own cadence quietly runs at the rate it can finish.
+   * `concurrent` starts anyway, and `maxInFlight` is how you can tell: triggered
+   * twice inside its own sleep it reaches 2, where the sweep above stays at 1.
+   */
+  @Interval(600_000, {
+    name: 'maintenance.overlapping',
+    overlap: Overlap.CONCURRENT,
+  })
+  async overlappingWork(): Promise<number> {
+    this.#inFlight.inc();
+    this.#peak.set(Math.max(this.#peak.value, this.#inFlight.value));
+    try {
+      await Bun.sleep(40);
+      this.#slow.inc();
+      return this.#slow.value;
+    } finally {
+      this.#inFlight.dec();
+    }
+  }
+
+  get overlapping(): { runs: number; maxInFlight: number } {
+    return { runs: this.#slow.value, maxInFlight: this.#peak.value };
   }
 
   get counts(): { sweeps: number; compactions: number; warmed: boolean } {

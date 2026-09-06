@@ -1,6 +1,7 @@
 import { inject } from '@dunx/core';
 import { Controller, Get } from '../route/decorators.js';
 import { ApiHidden, Public } from '../route/metadata.js';
+import { SkipThrottle } from '../throttle/decorators.js';
 import { HEALTH_REPORT_SCHEMA } from './report-schema.js';
 import { HealthRegistry, type HealthReport } from './registry.js';
 
@@ -22,8 +23,13 @@ const answer = (report: HealthReport): Response =>
  * finishes every `onInit` before `listen()` binds, so a connection refused *is* "not
  * started yet" and a third endpoint would restate it.
  *
- * `@Public()` because a probe has no credentials. Both routes are documented, under
- * the `Health` tag; `HealthModule.forRoot({ documented: false })` mounts
+ * `@Public()` because a probe has no credentials, and `@SkipThrottle()` for the same
+ * reason: a probe is not a caller with a budget. `app.use(ThrottleGuard)` covers
+ * every route, so without the exemption an orchestrator polling a pod that is
+ * already shedding load reads 429, calls the process unhealthy and restarts it.
+ *
+ * Both routes are documented, under the `Health` tag;
+ * `HealthModule.forRoot({ documented: false })` mounts
  * {@link HiddenHealthController} instead.
  */
 @Controller('health')
@@ -44,6 +50,7 @@ export class HealthController {
    * killing, and reporting `down` invites a SIGKILL mid-drain.
    */
   @Public()
+  @SkipThrottle()
   @Get('/live', probeResponses)
   async live(): Promise<Response> {
     return answer(await this.#health.liveness());
@@ -51,6 +58,7 @@ export class HealthController {
 
   /** Should the process receive traffic. Fails from the moment the drain starts. */
   @Public()
+  @SkipThrottle()
   @Get('/ready', probeResponses)
   async ready(): Promise<Response> {
     return answer(await this.#health.readiness());

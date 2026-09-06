@@ -157,6 +157,34 @@ export const PHASES: readonly Phase[] = Object.freeze([
         run: ['bun', 'run', '--filter', '@dunx/example-databases', 'start'],
       },
       { name: 'scaffolds', run: ['bun', 'run', 'check:scaffolds'] },
+      /**
+       * The whole app under sustained mixed load, which is the only step that
+       * exercises the framework the way a deployment does: connection churn,
+       * concurrent writes, rate limiting, and a shutdown with traffic in flight.
+       * It found `/health/live` answering 429 behind a global `ThrottleGuard`,
+       * which no per-request test can see.
+       *
+       * Short enough that the leak verdict reports rather than judges - that
+       * needs minutes, and `bun run soak` locally is where it gets them. What
+       * this catches in 40 seconds is an unexpected status, a stalled loop, a
+       * subscriber that outlived its socket, and a shutdown that hangs.
+       */
+      {
+        name: 'soak',
+        run: [
+          'bun',
+          'run',
+          '--filter',
+          '@dunx/example-full',
+          'soak',
+          '--',
+          '--seconds',
+          '40',
+          '--concurrency',
+          '12',
+        ],
+        echo: 24,
+      },
     ],
   },
   {

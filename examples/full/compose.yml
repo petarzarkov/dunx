@@ -1,0 +1,48 @@
+# The services `examples/full` degrades without: a broker for the cache, the queue,
+# the rate limiter's shared store and the websocket relay, and Postgres for the
+# relay's LISTEN/NOTIFY backend.
+#
+# Images come from **public.ecr.aws** rather than Docker Hub, which rate limits
+# anonymous pulls by IP. A CI runner shares its IP with every other runner on the
+# host, so a Hub pull is a coin toss that fails as a red build with nothing wrong
+# in the change. ECR throttles anonymous pulls too and it is not a free pass -
+# three rapid pulls while writing this hit `toomanyrequests` - but its budget is
+# far larger and it is not shared with every anonymous puller on the internet.
+#
+# MinIO publishes to neither ECR nor a mirror, which is why S3 is absent here: the
+# example's storage is `LocalStorageOptions` on a temp dir, and the one suite that
+# needs a bucket runs in the coverage job against MinIO from Hub.
+#
+#   bun run services:up      start and wait for both to answer
+#   bun run services:down    stop and remove them, volumes included
+#
+# The same file is what CI's examples job brings up, so there is one description
+# of what this example needs rather than one here and one in `ci.yml`.
+name: dunx-example-full
+
+services:
+  valkey:
+    image: public.ecr.aws/valkey/valkey:8-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 2s
+
+  postgres:
+    image: public.ecr.aws/docker/library/postgres:17-alpine
+    environment:
+      POSTGRES_USER: dunx
+      POSTGRES_PASSWORD: dunx
+      POSTGRES_DB: dunx
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dunx']
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 2s

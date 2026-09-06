@@ -3,6 +3,8 @@ import { Module } from '@dunx/core';
 import { HttpFactory } from '../server/factory.js';
 import { HealthIndicator, type ProbeResult } from './contracts.js';
 import { HealthModule } from './module.js';
+import { ThrottleGuard } from '../throttle/guard.js';
+import { ThrottleModule } from '../throttle/module.js';
 
 class Db extends HealthIndicator {
   readonly name = 'database';
@@ -106,6 +108,41 @@ test('documented: false still serves both probes', async () => {
   // handlers, so what is served is identical - only the document changes.
   expect((await fetch(`${url}health/live`)).status).toBe(200);
   expect((await fetch(`${url}health/ready`)).status).toBe(200);
+
+  await app.shutdown();
+});
+
+/**
+ * A probe is not a caller with a budget.
+ *
+ * `app.use(ThrottleGuard)` is the documented way to rate limit an app, and it runs
+ * for every route including the two this module mounts. An orchestrator polling a
+ * pod that is already at its limit then reads 429 on `/health/live`, decides the
+ * process is unhealthy and restarts it, which is the opposite of what a rate limit
+ * is for: load shedding turns into a restart loop at exactly the wrong moment.
+ * Found by the soak run in `examples/full`, at 10k requests a second.
+ */
+test('a global throttle does not reach the probes', async () => {
+  @Module({
+    imports: [
+      HealthModule.forRoot({ readiness: [new Db()], liveness: [new Db()] }),
+      ThrottleModule.forRoot({
+        prefix: 'probe-test',
+        limit: 1,
+        windowSeconds: 60,
+      }),
+    ],
+  })
+  class Root {}
+
+  const app = await HttpFactory.create(Root, { requestLogging: false });
+  app.use(ThrottleGuard);
+  const url = await app.listen(0);
+
+  for (let i = 0; i < 5; i += 1) {
+    expect((await fetch(`${url}health/live`)).status).toBe(200);
+    expect((await fetch(`${url}health/ready`)).status).toBe(200);
+  }
 
   await app.shutdown();
 });

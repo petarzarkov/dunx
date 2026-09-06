@@ -54,9 +54,27 @@ jobs:
   examples:
     name: Examples, tour and scaffolds
     runs-on: ubuntu-latest
+    # This job had no services, so every part of `examples/full` that needs one
+    # printed that it was skipping and CI went green on the rest: the websocket
+    # relay's cross-node fan-out, the queue workers, the Redis cache and the
+    # rate limiter's shared store. The end-to-end job was exercising the paths
+    # that need nothing, which is the opposite of what it is for.
+    #
+    # The coverage job still owns the *gate*'s services and its denominator;
+    # nothing here is measured for coverage, so the two do not interact.
+    env:
+      REDIS_URL: redis://localhost:6379
+      DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+
+      # `examples/full/compose.yml` rather than a `services:` block, so what the
+      # example needs is described once and the same command brings it up on a
+      # laptop. It also gets the images from public.ecr.aws, which a `services:`
+      # block would too but nobody would notice was load bearing.
+      - name: Start the services the example needs
+        run: bun run --filter '@dunx/example-full' services:up
 
       - name: Build
         run: bun run ci build
