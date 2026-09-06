@@ -237,9 +237,11 @@ describe('named clients', () => {
     @Module({
       imports: [
         HttpModule.forRoot({ baseUrl: base }),
-        HttpModule.forRoot({ name: 'stripe', baseUrl: base, timeoutMs: 11 }),
+        // Distinct per client, and long enough to survive a loaded `--parallel`
+        // worker: at 11 ms and 22 ms the live requests below aborted.
+        HttpModule.forRoot({ name: 'stripe', baseUrl: base, timeoutMs: 1_100 }),
         HttpModule.forRootAsync(
-          () => ({ baseUrl: base, timeoutMs: 22 }),
+          () => ({ baseUrl: base, timeoutMs: 2_200 }),
           'billing',
         ),
       ],
