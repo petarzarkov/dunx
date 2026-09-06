@@ -63,6 +63,70 @@ Use the links in the table to jump to the associated documentation.
 | Parsing & Formatting             | [`Bun.semver`](/docs/runtime/semver), [`Bun.TOML.parse`](/docs/runtime/toml), [`Bun.markdown`](/docs/runtime/markdown), [`Bun.color`](/docs/runtime/color), [`Bun.Image`](/docs/runtime/image)                                                                                                                                             |
 | Low-level / Internals            | `Bun.mmap`, `Bun.gc`, `Bun.generateHeapSnapshot`, [`bun:jsc`](https://bun.com/reference/bun/jsc)                                                                                                                                                                                                                                           |
 
+## Re-probed on Bun 1.4.2 (rev 744846f84)
+
+A patch release, so only the findings its release notes touch were re-run, each
+against 1.4.1 rev `4661e494f` on the same machine.
+
+| Finding                                                                       | On 1.4.2                                                               |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| A nested `run()` retains the enclosing store while a timer or promise is live | **fixed** - and `AsyncRequestContext` is the shape that needed it      |
+| `Bun.Image` fails a 4-component CMYK JPEG with `ERR_IMAGE_DECODE_FAILED`      | **fixed** - decodes to RGB, so every transform and output format works |
+| `bun build` renames a nested `var` onto a `let` in the same block             | **fixed** - 1.4.1 emitted `let exports2` beside `var exports2`         |
+| `.json()` on invalid JSON throws a generic `Failed to parse JSON`             | **fixed** - `SyntaxError: JSON Parse error: Expected '}'`              |
+| `Bun.file(path).writer()` does not truncate or create parents                 | reproduces                                                             |
+| `fetch` with `protocol: 'http2'` throws against a cleartext peer              | reproduces                                                             |
+| `internal/docs` under `bun test --parallel`                                   | reproduces - 38 of 92 fail, so the `docs` phase keeps its exclusion    |
+
+`engines.bun` stays `>=1.4.1`. Nothing dunx ships depends on 1.4.2 behaviour; CI
+pins it and the deployment guide's image names it.
+
+### A nested `AsyncLocalStorage.run()` held the enclosing store
+
+`AsyncRequestContext.runWithContext` reads the enclosing store and calls
+`storage.run` with a merge of it, so every scope after the outermost is a nested
+`run()`. That is the shape 1.4.1 leaked: a timer, immediate or pending promise
+opened inside one kept the **outer** store alive for as long as it existed.
+`getStore()` returned the right value throughout, so retention was the only symptom.
+
+Probed with a `WeakRef` to the outer store, a one-hour timer opened inside the
+nested scope, and `Bun.gc(true)`:
+
+```
+1.4.1  nested run(): RETAINED    exit(): RETAINED
+1.4.2  nested run(): collected   exit(): collected
+```
+
+In dunx that object is a request's `RequestFields`, held by whatever the handler
+left pending.
+
+The fix has a price, and it falls on the scope entry `runWithContext` pays at least
+once per request. Nine interleaved rounds of 50,000 iterations, medians, both
+runtimes on this machine:
+
+| Step                          | 1.4.1   | 1.4.2   |
+| ----------------------------- | ------- | ------- |
+| `als.run(v, fn)`, synchronous | 11.4 ns | 15.6 ns |
+| three nested `run()`s         | 42.1 ns | 59.2 ns |
+| store cost across 16 awaits   | 14.9 ns | 15.3 ns |
+
+The flat entry cost 1.4.1 introduced holds: sixteen awaits still charge about 1 ns
+each against 1.4.0's 6.5 ns. The entry moved instead, +4 ns for one scope and
++17 ns across three, against the 47.2 ns per scope `AsyncRequestContext` records
+and a request measured in microseconds. No published figure moves.
+
+### `Bun.Image` decodes CMYK JPEGs
+
+A 64x48 CMYK JPEG through `resize(32, 24).webp()`:
+
+```
+1.4.1  Error: Image: decode failed (ERR_IMAGE_DECODE_FAILED)
+1.4.2  64x48 jpeg -> 82 bytes of webp
+```
+
+`metadata()` reported `64x48 jpeg` on both, which is the header-only read recorded
+below rather than a decode.
+
 ## Re-probed on Bun 1.4.1 (rev 4661e494f)
 
 Run against 1.4.0 rev `34cbb9a40` side by side, on the same machine, rather than
