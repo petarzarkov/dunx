@@ -41,6 +41,14 @@ export class JobPublisher implements OnShutdown {
    * not a resource to reserve, so there is nothing for a registration step to
    * validate and nothing gained by holding a socket for a queue nobody publishes
    * to.
+   *
+   * **Held once opened, and `name` is whatever the caller passed.** Each miss
+   * constructs a `Queue` and opens a `Bun.RedisClient` that
+   * {@link QueueConnection} keeps until shutdown, so routing per tenant with
+   * `publish(\`emails:${tenantId}\`, ...)` reserves one queue, one socket and one
+   * entry per tenant the process has ever seen. A queue name belongs to the
+   * application's vocabulary, not to its data: keep the set finite and put the
+   * tenant in the job payload.
    */
   queue(name: string): Queue {
     const existing = this.#queues.get(name);

@@ -203,6 +203,99 @@ const OPS: readonly Op[] = [
     weight: 3,
     run: (b) => socketChurn(b, true),
   },
+  /**
+   * The rest of the surface. Each accepts 503 as well, since an absent service is
+   * the app degrading rather than failing: the same run has to be meaningful on a
+   * laptop with nothing up and in CI with valkey and postgres.
+   */
+  {
+    name: 'images.render',
+    weight: 2,
+    run: (b) =>
+      call(
+        b,
+        'api/images/render?width=32&format=webp',
+        okStatuses(200, 429, 503),
+      ),
+  },
+  {
+    name: 'images.metadata',
+    weight: 1,
+    run: (b) =>
+      call(b, 'api/images/metadata?width=32', okStatuses(200, 429, 503)),
+  },
+  {
+    name: 'files.rw',
+    weight: 2,
+    run: async (b) => {
+      const key = `soak/${Math.floor(Math.random() * 32)}.txt`;
+      const q = `key=${encodeURIComponent(key)}`;
+      await call(
+        b,
+        `api/files/object?${q}`,
+        okStatuses(200, 201, 204, 429, 503),
+        {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ content: 'soak' }),
+        },
+      );
+      return call(b, `api/files/object?${q}`, okStatuses(200, 404, 429, 503));
+    },
+  },
+  {
+    name: 'files.list',
+    weight: 1,
+    run: (b) => call(b, 'api/files?prefix=soak', okStatuses(200, 429, 503)),
+  },
+  {
+    name: 'jobs.enqueue',
+    weight: 2,
+    run: (b) =>
+      call(
+        b,
+        'api/jobs/thumbnails',
+        okStatuses(200, 201, 202, 429, 503),
+        json({ width: 64, format: 'webp' }),
+      ),
+  },
+  {
+    name: 'upstream.flaky',
+    weight: 2,
+    run: (b) =>
+      call(b, 'api/upstream/flaky', okStatuses(200, 429, 502, 503, 504)),
+  },
+  {
+    name: 'upstream.missing',
+    weight: 1,
+    run: (b) =>
+      call(b, 'api/upstream/missing', okStatuses(200, 404, 429, 502, 503, 504)),
+  },
+  {
+    name: 'guards.reports',
+    weight: 2,
+    run: (b) => call(b, 'api/reports', okStatuses(200, 401, 403, 429)),
+  },
+  {
+    name: 'auth.profile',
+    weight: 2,
+    run: (b) => call(b, 'api/profile', okStatuses(200, 401, 403, 429)),
+  },
+  {
+    name: 'wiring',
+    weight: 1,
+    run: (b) => call(b, 'api/wiring', okStatuses(200, 429)),
+  },
+  {
+    name: 'dashboard',
+    weight: 1,
+    run: (b) => call(b, 'api/_dunx', okStatuses(200, 404, 429)),
+  },
+  {
+    name: 'docs',
+    weight: 1,
+    run: (b) => call(b, 'api/docs', okStatuses(200, 429)),
+  },
 ];
 
 export class Workload {
