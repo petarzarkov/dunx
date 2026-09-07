@@ -4,6 +4,65 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.4.0 - 2026-09-07
+
+Server-rendered documentation pages, trailing slash routes, a live demo
+
+The documentation site renders every page from the app's own React tree at
+build time, so a reader on a slow connection gets the finished page rather
+than a flatter stand-in that was then replaced. `@dunx/http` serves a
+trailing slash behind `strict: false`, `examples/full` ships a live demo
+with a deploy image, and the dashboard fits a phone.
+
+### Features
+
+- **examples**: issue a guest session instead of taking registrations ([`575c6e8`](https://github.com/petarzarkov/dunx/commit/575c6e86fa9792635919b756eadfedd460c9ee2c))
+- **examples**: a landing page and a deploy image for the live demo ([`0a67edd`](https://github.com/petarzarkov/dunx/commit/0a67edd7b753a4e2131ed08acc2a579d62f6d7ca))
+- **http**: serve a trailing slash behind strict: false ([`31a101d`](https://github.com/petarzarkov/dunx/commit/31a101d0e710599ea76d0f9d98cbe4884d0b6942))
+- **docs**: prerender every page, with structured data and a social card ([`6561a44`](https://github.com/petarzarkov/dunx/commit/6561a443cf9c8ce747894582197038038f926b63))
+
+### Fixes
+
+- **docs**: keep a partial package seed out of the chunk cache ([`a2f4dce`](https://github.com/petarzarkov/dunx/commit/a2f4dce383f1e6dfc1d187884af334869200c7df))
+- **ui**: drop the Role column on a phone rather than squeezing it ([`eb33057`](https://github.com/petarzarkov/dunx/commit/eb330573526f0f81ffd72cde090cf451b92e7a80))
+- **ui**: fit the dashboard tables on a phone ([`b868bc5`](https://github.com/petarzarkov/dunx/commit/b868bc56f5d6de4d12140c89ff37076d3f22de70))
+- **examples**: guard the demo page's reconnect and its 401 branch ([`6bd33ca`](https://github.com/petarzarkov/dunx/commit/6bd33caaf1202f78e73cc9ff99e621789a103d0a))
+- **ui**: group the dashboard navbar the way the documentation site does ([`d58bf24`](https://github.com/petarzarkov/dunx/commit/d58bf244d41d24bcd854ff38f3b36a10d3c7d617))
+- **examples**: re-enable the burst button after a failed request ([`f1acf90`](https://github.com/petarzarkov/dunx/commit/f1acf90fd327698d134b4497feb29db34f8b53ef))
+- **examples**: take better-auth's baseURL from config, not localhost ([`12f1dff`](https://github.com/petarzarkov/dunx/commit/12f1dff0a505a6a6027523e2b35faa34c49add4c))
+- **examples**: build @dunx/testing in the demo image too ([`5648918`](https://github.com/petarzarkov/dunx/commit/5648918046298e2a6d1439929e65179b9ea09a1b))
+- **examples**: skip install scripts in the demo image ([`b0c9649`](https://github.com/petarzarkov/dunx/commit/b0c964940f969917707cd4c175a78bfe0586fb9e))
+- **dashboard**: report the route path the server serves, prefix included ([`958006b`](https://github.com/petarzarkov/dunx/commit/958006bc95e44e0a9f3f95bda16393c8d22a14ac))
+- **infra**: key the job dedupe on JSON, not on a joined pair ([`297406a`](https://github.com/petarzarkov/dunx/commit/297406ab73643492ad10dcb4278395d61cd0c437))
+- **docs**: close the server and the WebView when startPreview fails ([`23cf7f0`](https://github.com/petarzarkov/dunx/commit/23cf7f0e1bb71edf0b77eafd7f7720ffc68b1b2b))
+- **scripts**: list pathnames NUL-delimited in the control-char guard ([`8d5332c`](https://github.com/petarzarkov/dunx/commit/8d5332ce4fd1b46c5634ea49bc18e1dd2e79a9f6))
+- **docs**: address the CodeRabbit review on #48 ([`3a2ce70`](https://github.com/petarzarkov/dunx/commit/3a2ce70e49ccace7ca71915289a344a000c3ae9e))
+- **infra**: write the job dedupe separator as an escape, not a literal NUL ([`8f96769`](https://github.com/petarzarkov/dunx/commit/8f96769f01e37fedffec75b7350db37fcc31f19f))
+
+### Refactors
+
+- **docs**: render the real app per page, not a second layout ([`f2102c0`](https://github.com/petarzarkov/dunx/commit/f2102c02ea3db3fd16784413c08b92d638025014))
+- **examples**: mount the dashboard at /api/dashboard ([`a47b445`](https://github.com/petarzarkov/dunx/commit/a47b4451077102fd0a97dd68909d4b661f0d79f0))
+
+### Documentation
+
+- fix an incomplete sentence in the OpenAPI guide ([`ea95a8e`](https://github.com/petarzarkov/dunx/commit/ea95a8e71025a2d12cfb8c1b498c350cb1a81945))
+- reference the live demo where a reader is already looking ([`e798eaa`](https://github.com/petarzarkov/dunx/commit/e798eaaaac7e94cee35d36f7b69dc3109dadb11c))
+- **http**: state the alias-order invariant plainly ([`5ac689b`](https://github.com/petarzarkov/dunx/commit/5ac689b52e451a013f5da863b6c842dbfd469379))
+- **http**: say what the checks read, not when they run ([`9fe2f2d`](https://github.com/petarzarkov/dunx/commit/9fe2f2d85716d85dda69d6c743d01fdf04df71bb))
+- **http**: name the paths an alias skips, and the version per entry ([`71bf222`](https://github.com/petarzarkov/dunx/commit/71bf2221a63191e504c604411418a746e32d0273))
+- lead the headline with dependency injection for Bun ([`50e6359`](https://github.com/petarzarkov/dunx/commit/50e635906306ac4517cc530a22d006f23bdab12f))
+- **notes**: assess a functional-to-OOP conversion across packages, tools and infra ([`691b722`](https://github.com/petarzarkov/dunx/commit/691b72261ba34f4e59d8372292bcc7919e242dc5))
+
+### Other changes
+
+- **scripts**: skip a dot-prefixed scratch file rather than reading it ([`2adaa05`](https://github.com/petarzarkov/dunx/commit/2adaa05101ae0a1541cee157d68e63fe4f17931b))
+- **docs**: seed a dir no package has, so the order stops mattering ([`aafc8fd`](https://github.com/petarzarkov/dunx/commit/aafc8fdd4078d6c5cfa77c67002990af8f600694))
+- **examples**: decode the spawn cwd, and require both drain markers ([`545271d`](https://github.com/petarzarkov/dunx/commit/545271db7436d019228828c266ac2b15f0c16f27))
+- **examples**: fail a dead spawn fast, and settle traffic on both paths ([`fd8819d`](https://github.com/petarzarkov/dunx/commit/fd8819df0e4119561ad4b170518eb6da87dabe56))
+- **examples**: assert the origin check, and make three tests able to fail ([`8578b77`](https://github.com/petarzarkov/dunx/commit/8578b774c27ed1cd8094e3102f5932a161194b67))
+- **examples**: give the load run an oracle, and cover the negative flows ([`24eafd1`](https://github.com/petarzarkov/dunx/commit/24eafd1698092291cb0ef1f3e596fd6b8d617841))
+
 ## 3.3.2 - 2026-09-06
 
 Http and infra fixes, a compiled-binary example, and the create-app binary option
