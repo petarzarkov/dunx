@@ -186,8 +186,9 @@ it('refuses a second sign-up for the same address', async () => {
 /**
  * better-auth refuses a cookie-bearing state change whose `Origin` is missing or
  * untrusted, and **the whole check is off when `NODE_ENV` is `test`**, which
- * `bun test` sets. So this asserts the exemption rather than the protection: the
- * obvious test, expecting a 403, fails here for that reason alone.
+ * `bun test` sets. So the obvious test, expecting a 403, fails here for that
+ * reason alone. This asserts the exemption; the protection is asserted at the
+ * bottom of the file, against a spawned `NODE_ENV=production`.
  * See docs/architecture/authentication.md, "The origin check is off".
  */
 it('does not enforce the origin check under bun test, which sets NODE_ENV=test', async () => {
@@ -220,3 +221,90 @@ it('stops admitting the cookie after sign-out', async () => {
   const after = await profile({ cookie: session.cookie });
   expect(after.status).toBe(401);
 });
+
+/**
+ * The protection itself, which the suite above cannot reach: `bun test` sets
+ * `NODE_ENV=test` for this process and better-auth reads it. So the app is
+ * spawned with `NODE_ENV=production`, the way `shutdown.test.ts` spawns it, and
+ * the flow is driven over HTTP from here.
+ *
+ * Sign-up and sign-in carry no `Origin` on purpose: the check fires on a
+ * cookie-bearing request, and a *present but untrusted* origin is refused with
+ * or without one. Sending none until there is a cookie is what makes the two
+ * assertions below about the cookie-bearing case specifically.
+ */
+it('enforces the origin check outside test mode', async () => {
+  const proc = Bun.spawn(['bun', 'src/main.ts'], {
+    cwd: new URL('..', import.meta.url).pathname,
+    env: { ...process.env, NODE_ENV: 'production', PORT: '0' },
+    stdout: 'pipe',
+    stderr: 'inherit',
+  });
+
+  try {
+    let text = '';
+    const decoder = new TextDecoder();
+    const reading = (async () => {
+      for await (const chunk of proc.stdout) {
+        text += decoder.decode(chunk, { stream: true });
+      }
+    })();
+    while (!text.includes('ctrl-c to stop')) await Bun.sleep(20);
+    const spawned = /listening on (http:\/\/[^\s"]+)/.exec(text)?.[1] ?? '';
+    expect(spawned).not.toBe('');
+    const origin = new URL(spawned).origin;
+
+    const account = {
+      email: 'origin@example.test',
+      password: 'a long enough password',
+      name: 'Origin',
+    };
+    const call = (
+      endpoint: string,
+      body: unknown,
+      headers: Record<string, string> = {},
+    ): Promise<Response> =>
+      fetch(`${origin}/api/auth/${endpoint}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: JSON.stringify(body),
+      });
+
+    expect((await call('sign-up/email', account)).status).toBe(200);
+    const signIn = await call('sign-in/email', {
+      email: account.email,
+      password: account.password,
+    });
+    expect(signIn.status).toBe(200);
+    const cookie = signIn.headers
+      .getSetCookie()
+      .map((entry) => entry.split(';')[0])
+      .join('; ');
+    expect(cookie).not.toBe('');
+
+    const credentials = {
+      email: account.email,
+      password: account.password,
+    };
+    const missing = await call('sign-in/email', credentials, { cookie });
+    expect(missing.status).toBe(403);
+    expect((await missing.json()) as { code: string }).toMatchObject({
+      code: 'MISSING_OR_NULL_ORIGIN',
+    });
+
+    const untrusted = await call('sign-in/email', credentials, {
+      cookie,
+      origin: 'http://evil.example',
+    });
+    expect(untrusted.status).toBe(403);
+    expect((await untrusted.json()) as { code: string }).toMatchObject({
+      code: 'INVALID_ORIGIN',
+    });
+
+    proc.kill('SIGTERM');
+    await proc.exited;
+    await reading;
+  } finally {
+    if (!proc.killed) proc.kill('SIGKILL');
+  }
+}, 60_000);

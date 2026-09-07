@@ -250,10 +250,17 @@ export class Soak {
       );
     }
 
+    // A cancellable timer for the reason the one above is: `Bun.sleep` cannot be
+    // cleared, so the loser of this race holds the process open for 15 seconds.
+    let settleHandle: ReturnType<typeof setTimeout> | undefined;
     const settled = await Promise.race([
       running.then(() => 'settled' as const),
-      Bun.sleep(15_000).then(() => 'hung' as const),
-    ]);
+      new Promise<'hung'>((resolve) => {
+        settleHandle = setTimeout(() => resolve('hung'), 15_000);
+      }),
+    ]).finally(() => {
+      if (settleHandle !== undefined) clearTimeout(settleHandle);
+    });
     if (settled === 'hung') {
       failures.push(
         'traffic in flight at shutdown never settled: a socket was left open',

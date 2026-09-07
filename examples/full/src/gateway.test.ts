@@ -36,14 +36,20 @@ const socketUrl = (path: string): string =>
  * server's own cleanup: this suite read 2 as its baseline and asserted 3 while
  * the previous test's two sockets were still on their way out.
  */
+const STABLE_READINGS = 4;
+
 const settledCount = async (): Promise<number> => {
   const pubsub = app.get(PubSub);
   let last = pubsub.subscriberCount(Lobby.TOPIC);
-  for (let i = 0; i < 20; i += 1) {
+  let stable = 0;
+  for (let i = 0; i < 40; i += 1) {
     await Bun.sleep(50);
     const now = pubsub.subscriberCount(Lobby.TOPIC);
-    if (now === last) return now;
+    // One unchanged reading is not settled: a close that has not begun to
+    // decrement yet looks exactly like one that finished.
+    stable = now === last ? stable + 1 : 0;
     last = now;
+    if (stable >= STABLE_READINGS) return now;
   }
   return last;
 };

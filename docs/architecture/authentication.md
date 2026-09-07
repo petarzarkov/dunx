@@ -226,7 +226,7 @@ header (`MISSING_OR_NULL_ORIGIN`), so a server-side client has to send one match
 
 ### The origin check is off under `NODE_ENV=test`
 
-Which `bun test` sets, so no suite in this repo can assert it. Measured on
+Which `bun test` sets, so an in-process suite cannot observe it. Measured on
 `examples/full`, signing in with a session cookie and no `Origin`:
 
 | `NODE_ENV`  | status |
@@ -239,8 +239,15 @@ Which `bun test` sets, so no suite in this repo can assert it. Measured on
 A wrong `Origin` behaves the same way: 403 `INVALID_ORIGIN` with `NODE_ENV`
 unset, 200 under `bun test`. Both halves of the check are exempt, not one.
 
-`examples/full/src/auth.test.ts` asserts the 200 and says why. The test worth
-writing is the 403, and it fails: reading that failure as better-auth not
-checking the origin is the way this ends with someone deleting a security
-control. The tour never met it because `auth.demo.ts` sends a trusted `Origin`
-on every call.
+So the suite asserts both halves and needs two processes to do it. In-process
+it asserts the 200 and says why, because the test worth writing is the 403 and
+it fails there: reading that failure as better-auth not checking the origin is
+the way this ends with someone deleting a security control. The 403 is asserted
+against a spawned `NODE_ENV=production`, which is the same spawn the shutdown
+suite uses, and covers `MISSING_OR_NULL_ORIGIN` and `INVALID_ORIGIN` both.
+
+Sign-up and sign-in there carry no `Origin` at all. The check fires on a
+cookie-bearing request, and a present-but-untrusted origin is refused with or
+without one, so sending none until there is a cookie is what keeps the two
+assertions about the cookie-bearing case. The tour never met any of this because
+`auth.demo.ts` sends a trusted `Origin` on every call.

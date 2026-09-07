@@ -366,23 +366,49 @@ it('never counts the health probes against the rate limit', async () => {
 it('releases a request whose client went away mid-flight', async () => {
   const metrics = app.get(RequestMetrics);
   const settled = metrics.snapshot().inFlight;
+  const IN_FLIGHT = 25;
+  /**
+   * Under the handler's 300 ms sleep, so a run where the abort reached nothing
+   * fails here: the requests would still be parked and `inFlight` still 25.
+   * Waiting past 300 ms instead would pass either way, since the handlers
+   * complete on their own and decrement it whatever the client did.
+   */
+  const DEADLINE_MS = 150;
 
-  // `/upstream/slow` sleeps 300ms and is @SkipThrottle, so 25 of them are all
-  // parked in the handler when the aborts land.
-  const aborted = Array.from({ length: 25 }, async () => {
+  const controllers: AbortController[] = [];
+  const calls = Array.from({ length: IN_FLIGHT }, () => {
     const controller = new AbortController();
-    const call = fetch(new URL('api/upstream/slow', client.url), {
+    controllers.push(controller);
+    // `/upstream/slow` sleeps 300ms and is @SkipThrottle, so all 25 are parked
+    // in the handler when the aborts land.
+    return fetch(new URL('api/upstream/slow', client.url), {
       signal: controller.signal,
     }).catch(() => 'aborted');
-    await Bun.sleep(20);
-    controller.abort();
-    return call;
   });
-  await Promise.all(aborted);
-  await Bun.sleep(600);
+
+  // They have to be on the wire before the abort means anything.
+  let reached = 0;
+  for (let i = 0; i < 50 && reached < IN_FLIGHT; i += 1) {
+    await Bun.sleep(10);
+    reached = metrics.snapshot().inFlight - settled;
+  }
+  expect(reached).toBe(IN_FLIGHT);
+
+  for (const controller of controllers) controller.abort();
+  const abortedAt = performance.now();
+  let released = -1;
+  while (performance.now() - abortedAt < DEADLINE_MS) {
+    if (metrics.snapshot().inFlight === settled) {
+      released = performance.now() - abortedAt;
+      break;
+    }
+    await Bun.sleep(5);
+  }
 
   // A client that hangs up is not an error the server has to answer for, but a
   // request it never lets go of is a leak that only shows under load.
-  expect(metrics.snapshot().inFlight).toBe(settled);
+  expect(released).toBeGreaterThanOrEqual(0);
+  expect(released).toBeLessThan(DEADLINE_MS);
+  await Promise.all(calls);
   expect((await json<{ ok: true }>('reports/health')).status).toBe(200);
 });

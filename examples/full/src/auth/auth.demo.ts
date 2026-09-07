@@ -128,8 +128,8 @@ export class AuthDemo {
    * better-auth rejects a cookie-bearing state change with no `Origin`
    * (`MISSING_OR_NULL_ORIGIN`); it has to match `trustedOrigins`.
    *
-   * The check is off when `NODE_ENV` is `test`, so `bun test` cannot see it and
-   * `auth.test.ts` asserts the exemption rather than the protection.
+   * The check is off when `NODE_ENV` is `test`, so `auth.test.ts` asserts the
+   * exemption in-process and the protection in a spawned `NODE_ENV=production`.
    */
   private post(
     base: string,

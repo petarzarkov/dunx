@@ -413,8 +413,9 @@ The run that found `/health/live` answering 429 behind a global `ThrottleGuard`
 can no longer reach the limit on a probe. So the exemption is asserted directly
 instead: a counted route carries `ratelimit-limit` on the response it allowed,
 and a `@SkipThrottle()` route carries no such header at all. `throttle.test.ts`
-covers the policy against a budget of five, where exhausting it is three
-requests rather than a load run.
+covers the policy at a module default of five requests per 60 s, where spending
+a budget is six requests rather than a load run, and `/limits/burst` keeps its
+own `@Throttle` of three so a handler overriding the module is covered too.
 
 ### Shutdown with traffic in flight
 

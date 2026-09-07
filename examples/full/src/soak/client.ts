@@ -64,10 +64,13 @@ export class OpClient {
 
   static #opened(socket: WebSocket): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error('socket never opened')),
-        4000,
-      );
+      const timer = setTimeout(() => {
+        // Closed before rejecting: a handshake that lands after the deadline
+        // would otherwise reach `@OnOpen`, subscribe, and leave a subscriber
+        // behind that the run then reports as a leak.
+        socket.close();
+        reject(new Error('socket never opened'));
+      }, 4000);
       socket.addEventListener(
         'open',
         () => {
