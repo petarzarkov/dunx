@@ -6,7 +6,7 @@
 
 <!-- positioning:start -->
 
-**Everything a service needs. On Bun. One version.**
+**Dependency injection for Bun. Everything a service needs, one version.**
 
 Controllers, dependency injection, validation, OpenAPI, WebSockets, queues, an
 ORM, auth, a test harness and an ops dashboard. Released together, tested
