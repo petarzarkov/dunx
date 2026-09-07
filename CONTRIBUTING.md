@@ -263,6 +263,11 @@ Markdown line turns into a list bullet, so join it to the previous line
 instead, and a placeholder in a table cell is just a character, so `-` is the
 replacement.
 
+- **No literal control character.** Tab, newline and carriage return are the three
+  that belong in a text file. `scripts/no-control-chars.test.ts` scans every
+  tracked and untracked file and reports the first offender as `file:line`. Write
+  the escape instead: a NUL byte sitting in a template literal made `grep` and
+  `ripgrep` treat the whole source file as binary and skip it silently.
 - **Relative imports carry a `.js` extension.** `tsc` copies the specifier verbatim
   into the emitted `.d.ts`, and an extensionless one fails to resolve for consumers
   on `node16`/`nodenext`. `moduleResolution: nodenext` in the root tsconfig makes
