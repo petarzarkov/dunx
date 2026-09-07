@@ -12,15 +12,10 @@ import { Sampler } from './sampler.js';
 import { Workload } from './workload.js';
 
 /**
- * The example defaults to 1,000 requests per 60 s, which a load run exhausts in
- * its first second. A 40 s run at concurrency 12 answered **59.4% of its
- * requests with 429** and reported no failures, because every operation accepted
- * one: the rate limiter was the only thing under test.
- *
+ * Raised so the app rather than the rate limiter is what this measures.
  * `ConfigModule` holds a live reference to `Bun.env` and reads it when
  * `createApp()` runs, so setting it here reaches the app that boots below.
- * `/limits/burst` keeps its own `@Throttle` of 3 per minute and is what proves
- * refusals still happen; `throttle.test.ts` covers the module default.
+ * See docs/architecture/tooling.md, "The load run measured the rate limiter".
  */
 Bun.env['THROTTLE_LIMIT'] ??= '100000';
 
@@ -50,16 +45,8 @@ export interface SoakVerdict {
 const MB = 1024 * 1024;
 
 /**
- * The verdict comes from **settled** heap, not from the in-flight series.
- *
- * An in-flight slope measures the allocator as much as the program: RSS climbed
- * 11 MiB/min on a run whose `heapUsed` was falling and whose settled RSS came back
- * 20 MiB below its own peak, because an arena grows under load and is returned
- * lazily. So the run is split into rounds, each ending with a forced GC and a
- * quiet sample, and the fit is over those. A leak survives a GC; an arena does not.
- *
- * 2 MiB/min is roughly 3 GiB a day, which is a pod restarting on a memory limit
- * inside a week.
+ * Over the per-round settled readings, not the in-flight series. 2 MiB/min is
+ * about 3 GiB a day. See docs/architecture/tooling.md, "The leak verdict".
  */
 const SETTLED_HEAP_LIMIT_PER_MIN = 2 * MB;
 /** RSS is reported rather than judged, for the reason above. */
@@ -162,12 +149,9 @@ export class Soak {
 
   /**
    * A burst at {@link STRESS_FACTOR} times the steady concurrency, then a
-   * recovery round back at it.
-   *
-   * The work floor is **not** applied to the burst: being refused under stress is
-   * the rate limiter doing its job. What must hold is that nothing fails at the
-   * transport, no route answers a status it never answers when idle, and the app
-   * comes back - a server that degrades and stays degraded passes a steady run.
+   * recovery round back at it. No work floor on the burst: being refused under
+   * stress is correct. What must hold is that nothing fails at the transport, no
+   * route answers a status it never answers idle, and the app comes back.
    */
   async #stress(
     url: string,
@@ -215,13 +199,10 @@ export class Soak {
   }
 
   /**
-   * Shutdown with traffic **in flight**, which is the half a request-per-test
-   * suite cannot reach and the half a rolling deploy always hits.
-   *
-   * The traffic is its own `Workload` and its errors are not judged: once the
-   * port closes, an in-flight request failing is the point. What is judged is
-   * that `shutdown()` finishes inside its budget and that the traffic settles
-   * rather than hanging on a socket the server never closed.
+   * Shutdown with traffic **in flight**. The traffic is its own `Workload` and
+   * its errors are not judged: once the port closes, an in-flight request
+   * failing is the point. What is judged is that `shutdown()` finishes inside
+   * its budget and that the traffic settles rather than hanging.
    */
   async #shutdownUnderLoad(
     app: HttpApp,
@@ -251,9 +232,7 @@ export class Soak {
       // the process open for 15 seconds after a clean shutdown.
       if (handle !== undefined) clearTimeout(handle);
     }
-    // The port is closed, or shutdown gave up on closing it. Either way anything
-    // still looping is retrying a refused connection rather than testing
-    // something, and one 8-second window logged 189,803 of those.
+    // Anything still looping is now retrying a refused connection.
     traffic.stop();
     if (outcome === 'timeout') {
       failures.push(
@@ -320,13 +299,8 @@ export class Soak {
       (settledPoints[settledPoints.length - 1]?.[1] ?? 0) -
       (settledPoints[0]?.[1] ?? 0);
     const minutes = elapsed / 60;
-    /**
-     * A settled reading carries about +/-2.5 MiB of GC noise, so a one-minute run
-     * cannot resolve 2 MiB/min from nothing and saying otherwise would be a coin
-     * toss dressed as a gate. Both the fitted slope and the raw first-to-last rise
-     * have to clear the noise before this fails, and a window too short to judge
-     * says so instead of guessing.
-     */
+    // Both the slope and the raw rise must clear the noise floor, and a window
+    // too short to resolve 2 MiB/min says so rather than guessing.
     const judgeable =
       minutes >= MIN_VERDICT_MINUTES && settledPoints.length >= 4;
     report.push(

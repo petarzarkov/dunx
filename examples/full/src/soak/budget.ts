@@ -44,13 +44,8 @@ export interface BudgetResult {
 const NS_PER_MS = 1_000_000;
 
 /**
- * Judges a load run from two sides: what the client saw, and what the server's
- * own `RequestMetrics` recorded.
- *
- * The server side is the half that was missing. A client-side accept-set answers
- * "did anything throw", where the histogram answers "what did each route
- * actually cost and what did it answer", which is the question a load test is
- * for.
+ * Judges a run from two sides: what the client saw, and what the server's own
+ * `RequestMetrics` recorded. The histogram is the half that was missing.
  */
 export class LoadBudget {
   constructor(private readonly limits: BudgetLimits = DEFAULT_LIMITS) {}

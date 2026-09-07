@@ -43,6 +43,11 @@ const envSchema = z.object({
   SCHEDULE_TZ: z.string().default('UTC'),
   /** Per-call budget for the outbound client. */
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(1).default(5000),
+  /**
+   * Guards the ops page when set. Absent by default so `bun start` is
+   * explorable and `@dunx/dashboard` still warns that it is unguarded.
+   */
+  DASHBOARD_TOKEN: z.string().min(1).optional(),
   /** better-auth signs session cookies with this. 32 characters is its own minimum. */
   AUTH_SECRET: z
     .string()
@@ -70,6 +75,7 @@ export interface AppConfig {
   readonly redis: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
   readonly auth: { readonly secret: string };
+  readonly dashboard: { readonly token: string | undefined };
   readonly throttle: { readonly limit: number; readonly windowSeconds: number };
   readonly schedule: { readonly tz: string };
   readonly upstream: { readonly timeoutMs: number };
@@ -109,6 +115,7 @@ export const validate = (env: ConfigSource): AppConfig => {
     redis: { url: value.REDIS_URL },
     images: { quality: value.IMAGE_QUALITY },
     auth: { secret: value.AUTH_SECRET },
+    dashboard: { token: value.DASHBOARD_TOKEN },
     throttle: {
       limit: value.THROTTLE_LIMIT,
       windowSeconds: value.THROTTLE_WINDOW_SECONDS,

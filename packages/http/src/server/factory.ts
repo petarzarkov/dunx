@@ -12,6 +12,7 @@ import {
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
 import { ClientAddress } from './client-address.js';
+import { RoutePrefix } from '../route/prefix.js';
 import { MetricsMiddleware, RequestMetrics } from './metrics.js';
 import { buildWebSocket } from '../ws/adapter.js';
 import { discoverGateways } from '../ws/discover.js';
@@ -131,7 +132,10 @@ export class HttpFactory {
     // reason `ClientAddress` is: `listen()` hands one instance the live server,
     // and a second scope resolving its own would read `pendingRequests` off no
     // server at all.
-    const services = [PubSub, ClientAddress, RequestMetrics];
+    // `RoutePrefix` is here for that reason too, and it is the one a second
+    // instance fails quietly rather than loudly: an unattached one reads as "no
+    // prefix", which is a plausible answer and a wrong one.
+    const services = [PubSub, ClientAddress, RequestMetrics, RoutePrefix];
     /**
      * Every middleware is bound unconditionally, which is what unties the
      * ordering knot the options provider was blocked on: `requestLogging: false`

@@ -1,4 +1,5 @@
 import type { ModuleRef } from '@dunx/core';
+import type { RoutePrefix } from '@dunx/http/internal';
 import { boardNames, matchBoard, type Board } from './board.js';
 import { redisReport } from './api/redis.js';
 import { runtimeReport } from './api/runtime.js';
@@ -31,6 +32,8 @@ const fail = (status: number, error: string): Response =>
 export interface RouterDeps {
   readonly root: ModuleRef;
   readonly options: DashboardOptions;
+  /** The global prefix `listen()` resolved, which the route panel has to add. */
+  readonly prefix: RoutePrefix;
   readonly startedAt: number;
   /** The HTML page, built lazily so importing this package does not load it. */
   readonly page: () => Promise<string>;
@@ -47,7 +50,7 @@ const handleApi = async (
 
   switch (segments[0]) {
     case 'snapshot':
-      return json(snapshotOf(deps.root, deps.options));
+      return json(snapshotOf(deps.root, deps.options, deps.prefix));
     case 'runtime':
       return json(await runtimeReport(deps.options, deps.startedAt));
     case 'redis':

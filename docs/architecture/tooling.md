@@ -369,3 +369,77 @@ static to read.
 So the split is: routes are static and need no file, contributions are not and do.
 `DocumentSource` improved the file rather than removing it, since a config file
 can now hand over a provider instead of a thunk.
+
+## The load run measured the rate limiter, not the app
+
+`examples/full`'s soak is the only step that puts the whole framework under
+sustained traffic, and for its first version the traffic did not reach the
+handlers. Every operation named a set of acceptable statuses and every set
+included 429, so a run that was refused end to end reported no failures.
+
+Reading `RequestMetrics` after a 40 s run at concurrency 12 gave the shape:
+
+| status | share |
+| ------ | ----- |
+| 200    | 28.9% |
+| 201    | 3.4%  |
+| 429    | 59.4% |
+
+The example's `THROTTLE_LIMIT` is 1,000 per 60 s and the run was doing about
+9,000 requests a second, so each route spent its budget inside the first second
+and the remaining 40 s measured refusals. Every route showed exactly 1,000
+non-429 answers and a mean of 1.05 ms, which is the guard's cost rather than a
+handler's.
+
+Three changes, and the third is the one that generalises:
+
+- `THROTTLE_LIMIT` is raised for the run, so the app is what is under load.
+  `/limits/burst` keeps its own `@Throttle` of three per minute and is what
+  proves refusals still happen.
+- Each worker sends its own `x-api-key`. `ThrottleModule`'s `subject` reads that
+  header before falling back to the address, and every worker shared one
+  loopback address, so the whole run shared one budget.
+- An operation now names the statuses that are **work** and the statuses that
+  are a **refusal** separately, and the run floors the ratio. One accept-set per
+  operation cannot tell "the app served 8,000 requests" from "the app declined
+  8,000 requests", and that is the distinction a load test exists to make.
+
+The same window afterwards: 67.6% 200, 13.3% 201, and 4.8% 429 all on
+`/limits/burst`.
+
+### What a raised budget stopped covering
+
+The run that found `/health/live` answering 429 behind a global `ThrottleGuard`
+can no longer reach the limit on a probe. So the exemption is asserted directly
+instead: a counted route carries `ratelimit-limit` on the response it allowed,
+and a `@SkipThrottle()` route carries no such header at all. `throttle.test.ts`
+covers the policy against a budget of five, where exhausting it is three
+requests rather than a load run.
+
+### Shutdown with traffic in flight
+
+The harness awaited every worker before calling `shutdown()`, so the phase named
+after connection churn ran against an idle server. It now starts the traffic,
+waits for the workers to have requests on the wire, shuts down underneath them,
+and asserts that the run settles rather than hanging on a socket the server left
+open. Workers are stopped once the port closes: left running to their deadline
+they retry a refused connection as fast as the loop allows, and one 8-second
+window logged 189,803 of those.
+
+### The leak verdict
+
+An in-flight memory slope measures the allocator as much as the program. RSS
+climbed 11 MiB/min on a run whose `heapUsed` was falling and whose settled RSS
+came back 20 MiB below its own peak, because an arena grows under load and is
+returned lazily.
+
+So the run is split into rounds, each ending with a forced GC and a quiet
+sample, and the least-squares fit is over those. A leak survives a GC; an arena
+does not. RSS is reported rather than judged, for the same reason.
+
+The threshold is 2 MiB/min, which is roughly 3 GiB a day: a pod restarting on a
+memory limit inside a week. A settled reading carries about +/-2.5 MiB of GC
+noise, so both the fitted slope and the raw first-to-last rise have to clear
+that before the run fails, and a window under three minutes reports the trend
+instead of judging it. Saying otherwise would be a coin toss dressed as a gate,
+which is why the CI run at 40 seconds prints the number and does not fail on it.

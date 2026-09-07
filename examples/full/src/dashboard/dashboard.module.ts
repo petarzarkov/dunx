@@ -17,9 +17,11 @@ import { DashboardDemo } from './dashboard.demo.js';
  * comes out of the container: `JobPublisher` satisfies `QueueSource` and
  * `RedisConnection` satisfies `RedisProbe`, with no adapter between them.
  *
- * No `authorize` here, so the page is explorable with `bun start` - the package
- * warns at boot, and the warning is part of the demonstration. A real one gets
- * the raw `Request` and runs before any guard, so it must be self-sufficient.
+ * `authorize` only when `DASHBOARD_TOKEN` is set, which it is not by default: the
+ * page stays explorable with `bun start` and the package's boot warning is part
+ * of the demonstration. Set the variable and a caller without the header gets
+ * **404, not 403** - the mount does not admit it exists. It takes the raw
+ * `Request` and runs before any guard, so it must be self-sufficient.
  */
 @Module({
   imports: [
@@ -55,6 +57,16 @@ import { DashboardDemo } from './dashboard.demo.js';
         // redacted, including the database url and every secret.
         reveal: (key: string) => key === 'appName' || key === 'port',
         openApiPath: '/api/docs',
+        // Spread rather than `authorize: undefined`: `exactOptionalPropertyTypes`
+        // separates an absent option from one explicitly undefined, and the
+        // package's boot warning reads the difference.
+        ...(config.get('dashboard.token') === undefined
+          ? {}
+          : {
+              authorize: (req: Bun.BunRequest) =>
+                req.headers.get('x-dashboard-token') ===
+                config.get('dashboard.token'),
+            }),
       }),
       inject: [
         JobPublisher,

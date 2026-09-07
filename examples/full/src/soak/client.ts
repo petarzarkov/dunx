@@ -9,16 +9,10 @@ export interface CallInit {
 const DEADLINE_MS = 10_000;
 
 /**
- * One virtual user against the app under load.
- *
- * The api key is per worker because `ThrottleModule`'s `subject` reads
- * `x-api-key` before falling back to the address (`throttle/throttle.module.ts`).
- * Every worker shares one loopback address, so without a key the whole run spends
- * one budget and the load test measures the rate limiter.
- *
- * `call` returns the status rather than throwing on one. An unexpected status is
- * a result the run has to classify, not a transport failure, and collapsing the
- * two hid which was which.
+ * One virtual user against the app under load, with its own api key so the
+ * throttle counts it apart. `call` returns the status rather than throwing on
+ * one: an unexpected status is a result to classify, not a transport failure.
+ * See docs/architecture/tooling.md, "The load run measured the rate limiter".
  */
 export class OpClient {
   constructor(
@@ -50,12 +44,8 @@ export class OpClient {
   }
 
   /**
-   * A websocket that opens, exchanges a frame and closes. Connection churn is the
-   * leak-prone half of a gateway: a subscriber map added to on open and tidied
-   * only on a clean close grows on every aborted connection.
-   *
-   * `abort` sends no close frame, which is the half a clean-close-only cleanup
-   * path misses.
+   * Opens, exchanges a frame and closes. `abort` sends no close frame, which is
+   * the half a clean-close-only cleanup path misses.
    */
   async socket(path: string, abort: boolean): Promise<number> {
     const url = new URL(path, this.base).href.replace('http', 'ws');

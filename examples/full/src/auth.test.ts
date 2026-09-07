@@ -183,6 +183,36 @@ it('refuses a second sign-up for the same address', async () => {
   expect(response.status).toBeLessThan(500);
 });
 
+/**
+ * better-auth refuses a cookie-bearing state change whose `Origin` is missing or
+ * untrusted, and **the whole check is off when `NODE_ENV` is `test`**, which
+ * `bun test` sets. So this asserts the exemption rather than the protection: the
+ * obvious test, expecting a 403, fails here for that reason alone.
+ * See docs/architecture/authentication.md, "The origin check is off".
+ */
+it('does not enforce the origin check under bun test, which sets NODE_ENV=test', async () => {
+  expect(Bun.env['NODE_ENV']).toBe('test');
+
+  const signIn = (origin?: string): Promise<Response> =>
+    fetch(`${base}/api/auth/sign-in/email`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: session.cookie,
+        ...(origin === undefined ? {} : { origin }),
+      },
+      body: JSON.stringify({
+        email: CREDENTIALS.email,
+        password: CREDENTIALS.password,
+      }),
+    });
+
+  // Both halves of the check, both exempt: outside test mode these are
+  // MISSING_OR_NULL_ORIGIN and INVALID_ORIGIN respectively.
+  expect((await signIn()).status).toBe(200);
+  expect((await signIn('http://evil.example')).status).toBe(200);
+});
+
 it('stops admitting the cookie after sign-out', async () => {
   const signOut = await authPost('sign-out', {}, { cookie: session.cookie });
   expect(signOut.status).toBe(200);

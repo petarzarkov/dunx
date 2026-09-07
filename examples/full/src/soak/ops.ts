@@ -11,16 +11,9 @@ export interface Op {
   readonly name: string;
   /** Relative share of the traffic. */
   readonly weight: number;
-  /**
-   * The statuses that mean the app **did the work the op asked for**. A 429 is
-   * here only where being refused is the behaviour under test.
-   */
+  /** What means the app did the work. A 429 only where refusal is the point. */
   readonly expect: ReadonlySet<number>;
-  /**
-   * A legitimate refusal rather than work: a rate limit, or a route whose service
-   * is absent. Counted apart from `expect` and floored, because a run where every
-   * op is refused used to report zero failures.
-   */
+  /** A refusal rather than work: a rate limit, or an absent service. Floored. */
   readonly tolerate: ReadonlySet<number>;
   readonly requires: ServiceNeed;
   run(client: OpClient): Promise<number>;
@@ -32,13 +25,9 @@ const NONE: ReadonlySet<number> = new Set<number>();
 const THROTTLED = of(429);
 
 /**
- * The traffic the load run puts through the app.
- *
- * Each op names the statuses that are work and the statuses that are a refusal,
- * separately. The pair is what lets the run tell "the app served 8,000 requests"
- * apart from "the app declined 8,000 requests", which one accept-set per op
- * could not: every op accepting 429 meant a run that was 59% rate-limited
- * reported `0 failed`.
+ * The traffic the load run puts through the app, each op naming what counts as
+ * work and what counts as a refusal.
+ * See docs/architecture/tooling.md, "The load run measured the rate limiter".
  */
 export const OPS: readonly Op[] = [
   {
@@ -121,11 +110,7 @@ export const OPS: readonly Op[] = [
         },
       }),
   },
-  /**
-   * Liveness tolerates nothing. A 429 here is what the first load run of this
-   * app found: `/health/live` behind a global `ThrottleGuard` answers an
-   * orchestrator's probe with a rate limit and the pod is killed under load.
-   */
+  /** Tolerates nothing: a 429 here is an orchestrator killing the pod. */
   {
     name: 'health.live',
     weight: 2,

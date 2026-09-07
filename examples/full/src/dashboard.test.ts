@@ -1,6 +1,15 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
+import { ConfigModule } from '@dunx/core';
+import { DashboardMiddleware } from '@dunx/dashboard';
 import type { HttpApp } from '@dunx/http';
-import { testClient, type TestClient } from '@dunx/testing';
+import {
+  createTestServer,
+  testClient,
+  type TestClient,
+  type TestServer,
+} from '@dunx/testing';
+import { AppConfigService, validate } from './config.js';
+import { OpsModule } from './dashboard/dashboard.module.js';
 import { createApp } from './main.js';
 
 /**
@@ -22,6 +31,8 @@ let client: TestClient;
 const MOUNT = 'api/_dunx';
 /** `config.ts` defaults it, so the suite knows exactly what must not appear. */
 const SECRET = 'dunx-full-example-development-secret-not-for-production';
+/** What the guarded server below expects in `x-dashboard-token`. */
+const TOKEN = 'let-me-in';
 
 beforeAll(async () => {
   app = await createApp();
@@ -58,10 +69,9 @@ it('reports the routes, gateways and providers it discovered', async () => {
   expect(body.routes.length).toBeGreaterThan(20);
   expect(body.providers.length).toBeGreaterThan(0);
   expect(body.modules.length).toBeGreaterThan(0);
-  // The paths here are the discovered ones, **without** the global prefix the
-  // server answers on: this is `/notes`, and the URL that serves it is
-  // `/api/notes`.
-  expect(body.routes.some((route) => route.path === '/notes')).toBe(true);
+  // The path as served, prefix included, so an operator can copy one out of the
+  // panel and have it answer.
+  expect(body.routes.some((route) => route.path === '/api/notes')).toBe(true);
 });
 
 it('redacts every config value outside the reveal list', async () => {
@@ -126,4 +136,85 @@ it('answers 404 for a JSON endpoint it does not have', async () => {
   );
 
   expect(status).toBe(404);
+});
+
+/**
+ * `authorize` with `DASHBOARD_TOKEN` set, which the app above deliberately runs
+ * without. A rejected caller gets **404, not 403**: a 403 confirms the mount is
+ * there, and the point of `authorize` is that a stranger learns nothing.
+ *
+ * Its own server, because the option is read once when the module builds.
+ */
+const guarded = async (): Promise<TestServer> =>
+  createTestServer({
+    modules: [
+      ConfigModule.forRoot({
+        validate,
+        as: AppConfigService,
+        source: { DASHBOARD_TOKEN: TOKEN },
+      }),
+      OpsModule,
+    ],
+    prefix: 'api',
+    middleware: [DashboardMiddleware],
+  });
+
+it('answers 404 to a caller with no dashboard token', async () => {
+  const server = await guarded();
+
+  try {
+    const response = await server.request(`${MOUNT}/api/snapshot`);
+    expect(response.status).toBe(404);
+    // Not the JSON panel either: a body would leak the shape of what is behind it.
+    expect(await response.text()).not.toContain('routes');
+  } finally {
+    await server.app.shutdown();
+  }
+});
+
+it('answers 404 to a caller with the wrong dashboard token', async () => {
+  const server = await guarded();
+
+  try {
+    const response = await server.request(`${MOUNT}/api/snapshot`, {
+      headers: { 'x-dashboard-token': 'not-the-token' },
+    });
+    expect(response.status).toBe(404);
+  } finally {
+    await server.app.shutdown();
+  }
+});
+
+it('serves the panels to a caller holding the token', async () => {
+  const server = await guarded();
+
+  try {
+    const { status, body } = await server.json<{ routes: unknown[] }>(
+      `${MOUNT}/api/snapshot`,
+      { headers: { 'x-dashboard-token': TOKEN } },
+    );
+    expect(status).toBe(200);
+    expect(body.routes.length).toBeGreaterThan(0);
+
+    const page = await server.request(MOUNT, {
+      headers: { 'x-dashboard-token': TOKEN },
+    });
+    expect(page.status).toBe(200);
+  } finally {
+    await server.app.shutdown();
+  }
+});
+
+it('leaves the app’s own routes reachable without the token', async () => {
+  const server = await guarded();
+
+  try {
+    // `authorize` guards the mount, not the app: a 404 here would mean the
+    // middleware had claimed a path that is not its own. `/api/ledger` comes from
+    // `DatabaseModule`, which `OpsModule` imports for the db stats panel.
+    const response = await server.request('api/ledger');
+    expect(response.status).toBe(200);
+  } finally {
+    await server.app.shutdown();
+  }
 });
