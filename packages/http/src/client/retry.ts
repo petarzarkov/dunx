@@ -13,10 +13,7 @@ import { FetchError, FetchTransportError } from './errors.js';
  * is a CSPRNG, and costs nothing.
  */
 const uniform = (): number => {
-  const buffer = new Uint32Array(1);
-  crypto.getRandomValues(buffer);
-  // 2**32 rather than 0xffffffff, so the result is [0, 1) and never exactly 1.
-  return (buffer[0] ?? 0) / 2 ** 32;
+  return Math.random();
 };
 
 export interface BackoffOptions {
@@ -34,7 +31,7 @@ export interface BackoffOptions {
 export const backoffDelay = (
   attempt: number,
   { baseMs, power = 2, jitterMs = 1000, maxMs = 30_000 }: BackoffOptions,
-): number => Math.min(baseMs * power ** attempt + uniform() * jitterMs, maxMs);
+): number => Math.min(baseMs * power ** attempt, maxMs) + uniform() * jitterMs;
 
 /**
  * The wait an upstream asked for, in ms, or undefined.
@@ -52,7 +49,7 @@ export const retryAfterMs = (
   if (header === null) return undefined;
 
   const seconds = Number(header);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  if (!Number.isNaN(seconds)) return Math.max(0, seconds * 1000);
 
   const at = Date.parse(header);
   return Number.isNaN(at) ? undefined : Math.max(0, at - now);
