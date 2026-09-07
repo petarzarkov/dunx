@@ -4,6 +4,43 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.4.1 - 2026-09-07
+
+Dashboard home link, demo favicon, and the queues panel path
+
+The dashboard links back to the app it is mounted in and holds a session for
+the API explorer. The Queues panel moved off bull-board's own path, the demo
+page has a favicon, and a defaulted constructor parameter is no longer
+reported as a boot error.
+
+### Features
+
+- **dashboard**: a link back to the app, and a session for the explorer ([`ff58f46`](https://github.com/petarzarkov/dunx/commit/ff58f46e71fb7a39476a2c04dfe4d25ea85278a2))
+- **examples**: give the demo page a favicon ([`888b988`](https://github.com/petarzarkov/dunx/commit/888b98824af1c22c7b50bf4a42229de65db6f3fc))
+
+### Fixes
+
+- **ci**: give checkout the release token, so the push is not the bot ([`fcc3c6e`](https://github.com/petarzarkov/dunx/commit/fcc3c6e5dc6a7f0b1f01acf15efa47727373499f))
+- **ci**: push the release with an admin PAT, not GITHUB_TOKEN ([`0a258bc`](https://github.com/petarzarkov/dunx/commit/0a258bc6362853e455451cd08c09912532cf3930))
+- **ci**: post a thread reply from a file, not an inline -f body ([`b5d837f`](https://github.com/petarzarkov/dunx/commit/b5d837ffbde3a67b492737a190aafd4d486be48f))
+- **ci**: use the built-in code review, and list dunxonu in CODEOWNERS ([`db522a7`](https://github.com/petarzarkov/dunx/commit/db522a70a6fb017495b3b48799f4737f0f9f3c4a))
+- **ci**: drop the tracking comment, so a reply is one comment not two ([`d0415e3`](https://github.com/petarzarkov/dunx/commit/d0415e3d82f5d8dd2680b76ab017b29b0b411eb1))
+- **ci**: run the review skill's subagents synchronously, and name the gate step ([`92e05c0`](https://github.com/petarzarkov/dunx/commit/92e05c07717bf85380511381531a771e22cb0f67))
+- **ci**: name every tool the review skill declares, and drop the futile Bun setup ([`269cd9a`](https://github.com/petarzarkov/dunx/commit/269cd9a4be81fbe2370d9cf6f829435ee332630a))
+- format CODE_OF_CONDUCT.md ([`e90322e`](https://github.com/petarzarkov/dunx/commit/e90322e2d23e56a3918219f3afd86e1dd46f8191))
+- **ui**: stop calling a defaulted parameter a boot error ([`600f052`](https://github.com/petarzarkov/dunx/commit/600f052c4f468e9fb91ccc1150f62e1061a3736a))
+- **scripts**: close the listing race for any file, not only a dot-prefixed one ([`be274a2`](https://github.com/petarzarkov/dunx/commit/be274a2ea7373a6c894b9ba8016e51515c2d316f))
+- **ui**: move the Queues panel off bull-board's path ([`ef73559`](https://github.com/petarzarkov/dunx/commit/ef735591dabd58ada2bb0cac8421b1cb5863867d))
+
+### Documentation
+
+- add a security policy ([`effbe7f`](https://github.com/petarzarkov/dunx/commit/effbe7f69ba8729f5c7abf09eb5dc6dd0bcb3a29))
+
+### Other changes
+
+- Add Contributor Covenant Code of Conduct ([`b56da2f`](https://github.com/petarzarkov/dunx/commit/b56da2fc54aebb61990b8e00b830c29a7fb2af67))
+- setup dunxonu ([`2df487f`](https://github.com/petarzarkov/dunx/commit/2df487fa14a626a82b5725a229c558687d479aa2))
+
 ## 3.4.0 - 2026-09-07
 
 Server-rendered documentation pages, trailing slash routes, a live demo
