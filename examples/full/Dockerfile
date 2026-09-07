@@ -23,7 +23,12 @@ WORKDIR /app
 # in bun.lock and refuses a checkout where one is missing, so pruning to the
 # example's own transitive set is not worth the breakage.
 COPY . .
-RUN bun install --frozen-lockfile
+# `--ignore-scripts` because the root `prepare` installs git hooks, which needs a
+# `git` the slim image does not carry and a `.git` the .dockerignore correctly
+# excludes. Nothing else here has an install script: the manifest declares no
+# `postinstall` and no `trustedDependencies`, and oxc-parser resolves a prebuilt
+# per-platform binary rather than compiling one.
+RUN bun install --frozen-lockfile --ignore-scripts
 
 # `bun run build` would also build the documentation site and compile
 # `examples/binary` into a 77 MB standalone binary, neither of which this image
