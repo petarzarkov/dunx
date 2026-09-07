@@ -67,7 +67,7 @@ const NAV: readonly { section?: string; items: readonly NavEntry[] }[] = [
   {
     section: 'Runtime',
     items: [
-      { panel: 'queues', label: 'Queues & Redis', icon: <DatabaseIcon /> },
+      { panel: 'broker', label: 'Queues & Redis', icon: <DatabaseIcon /> },
       { panel: 'stats', label: 'Stats', icon: <StackIcon /> },
       { panel: 'config', label: 'Configuration', icon: <DatabaseIcon /> },
     ],
@@ -135,7 +135,7 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
             providers={snapshot.data.providers}
           />
         );
-      case 'queues':
+      case 'broker':
         return <Queues report={queues.data} redis={redis.data} meta={meta} />;
       case 'stats':
         return <Stats report={stats.data} error={stats.error} />;

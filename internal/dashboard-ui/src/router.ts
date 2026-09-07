@@ -19,7 +19,9 @@ export const PANELS = [
   'routes',
   'gateways',
   'graph',
-  'queues',
+  // Not `queues`: that is where `@dunx/dashboard` mounts bull-board, so this
+  // panel's own href would have served the board on any real navigation.
+  'broker',
   'stats',
   'config',
 ] as const;
