@@ -6,6 +6,10 @@ config keys and the process itself, **with bull-board mounted for the queues**.
 
 Every panel reads data dunx already computes, so the page is cheap.
 
+There is one running at
+**[demo.dunx.win/api/dashboard](https://demo.dunx.win/api/dashboard)**, mounted
+by `examples/full` with `commands: false` so the board is read-only.
+
 ## Install
 
 ```bash

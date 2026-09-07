@@ -3,6 +3,14 @@
 One long-running backend service that uses every part of dunx, so you can open it
 and poke at it rather than read about it.
 
+It is running at **[demo.dunx.win](https://demo.dunx.win)**, so you can poke at it
+without cloning anything: [the API explorer](https://demo.dunx.win/api/docs),
+[the dashboard](https://demo.dunx.win/api/dashboard) and
+[bull-board](https://demo.dunx.win/api/dashboard/queues).
+
+The database there is in memory and reseeds on restart, so nothing you create
+lasts. That deployment is this directory's `Dockerfile` and `compose.demo.yml`.
+
 **Start smaller if this is your first look.** [`examples/minimal`](../minimal) is
 five files and two minutes; [`examples/databases`](../databases) is database setup
 on four configurations; [`examples/testing`](../testing) is the test story. This one

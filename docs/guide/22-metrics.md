@@ -149,6 +149,10 @@ The JSON sibling is `GET {path}/api/stats`, behind the same `authorize` as every
 other panel. An unauthenticated endpoint listing every route and its error rate is
 reconnaissance, so there is no public `/metrics`.
 
+The Stats panel is visible at
+[demo.dunx.win/api/dashboard](https://demo.dunx.win/api/dashboard), a demo that
+mounts the page with no `authorize` and a read-only board.
+
 ## What it costs
 
 **+35.2 ns per request** in the shipped configuration. `RequestLoggingMiddleware`

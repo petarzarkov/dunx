@@ -24,6 +24,10 @@ const app = await HttpFactory.create(
 );
 ```
 
+The page that produces is at
+[demo.dunx.win/api/docs](https://demo.dunx.win/api/docs), generated from that
+example's own schemas.
+
 `forRoot` **wraps** the root it documents and returns it, so `HttpFactory.create`
 is still handed one module ref and the root is named once. That is also why the
 document describes the documentation routes: they are routes, and pretending

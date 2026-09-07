@@ -32,6 +32,9 @@ const INTEGRATIONS = [
   { name: 'bullmq', role: 'queues' },
 ];
 
+/** `examples/full`, deployed. Declared once here and used by the button. */
+const DEMO_URL = 'https://demo.dunx.win';
+
 const STEPS = [
   {
     title: 'Install the packages',
@@ -182,6 +185,15 @@ const GetStarted = (): React.JSX.Element => (
       </SimpleGrid>
 
       <Group>
+        <Button
+          component="a"
+          href={DEMO_URL}
+          target="_blank"
+          rel="noreferrer"
+          variant="filled"
+        >
+          Open the live demo
+        </Button>
         <Button
           component="a"
           href={href(RouteKind.Guide, 'migration-from-nest')}
