@@ -452,15 +452,18 @@
         const out = $('burst-out');
         button.disabled = true;
         out.textContent = '';
-        for (let i = 1; i <= 5; i++) {
-          const res = await fetch('/api/limits/burst');
-          const remaining = res.headers.get('ratelimit-remaining') ?? '-';
-          const retry = res.headers.get('retry-after');
-          out.textContent += `${i}. ${res.status} remaining=${remaining}${
-            retry ? ` retry-after=${retry}s` : ''
-          }\n`;
+        try {
+          for (let i = 1; i <= 5; i++) {
+            const res = await fetch('/api/limits/burst');
+            const remaining = res.headers.get('ratelimit-remaining') ?? '-';
+            const retry = res.headers.get('retry-after');
+            out.textContent += `${i}. ${res.status} remaining=${remaining}${
+              retry ? ` retry-after=${retry}s` : ''
+            }\n`;
+          }
+        } finally {
+          button.disabled = false;
         }
-        button.disabled = false;
       });
 
       /** Image, straight into an <img> so the browser decodes what Bun encoded. */
