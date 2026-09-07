@@ -134,9 +134,19 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
       schema: [
         '/** better-auth signs session cookies with this. 32 characters is its own minimum. */',
         "AUTH_SECRET: z.string().min(32).default('dunx-development-secret-not-for-production'),",
+        '/**',
+        ' * No email sign-up, and anonymous sign-in instead: every visitor is issued',
+        ' * a guest account on arrival. What a public demo runs.',
+        ' */',
+        'AUTH_GUEST_ONLY: z.stringbool().default(false),',
+        'AUTH_SESSION_DAYS: z.coerce.number().int().min(1).default(7),',
       ],
-      field: 'readonly auth: { readonly secret: string };',
-      map: 'auth: { secret: value.AUTH_SECRET },',
+      field:
+        'readonly auth: { readonly secret: string; readonly guestOnly: boolean; ' +
+        'readonly sessionDays: number };',
+      map:
+        'auth: { secret: value.AUTH_SECRET, guestOnly: value.AUTH_GUEST_ONLY, ' +
+        'sessionDays: value.AUTH_SESSION_DAYS },',
       env: [
         {
           name: 'AUTH_SECRET',

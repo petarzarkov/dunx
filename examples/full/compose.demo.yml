@@ -74,6 +74,10 @@ services:
       # so this is per visitor rather than per tunnel.
       THROTTLE_LIMIT: '300'
       THROTTLE_WINDOW_SECONDS: '60'
+      # No registrations: every visitor gets a guest account and a 7 day
+      # session from better-auth's anonymous plugin.
+      AUTH_GUEST_ONLY: 'true'
+      AUTH_SESSION_DAYS: '7'
       LOG_LEVEL: info
     mem_limit: 1g
     # The app implements `OnBeforeShutdown`, and the queue workers stop before the

@@ -330,6 +330,21 @@
         </section>
 
         <section>
+          <h2>Session</h2>
+          <p>
+            No sign-up. <code>better-auth</code>'s anonymous plugin issues every
+            visitor a guest account and a seven-day session on arrival, and
+            <code>SessionGuard</code> is what <code>/api/profile</code> is
+            behind.
+          </p>
+          <div class="row">
+            <button id="who">Who am I</button>
+            <button id="audit">Try an admin-only route</button>
+          </div>
+          <pre id="auth-out"></pre>
+        </section>
+
+        <section>
           <h2>Validation</h2>
           <p>
             The route's zod schema is both the validator and the source of the
@@ -361,7 +376,8 @@
     <footer class="wrap">
       Built with <a href="https://github.com/petarzarkov/dunx">dunx</a>, a
       Bun-native dependency injection framework. The database is in-memory and
-      reseeds on every restart, so anything created here is temporary.
+      reseeds on every restart, so your guest account and anything created here
+      are temporary.
     </footer>
 
     <script>
@@ -511,6 +527,42 @@
           'a valid user',
         ),
       );
+
+      /** Session: signed in on arrival, with no form to fill in. */
+      const signedIn = async () => {
+        const res = await fetch('/api/profile', {
+          headers: { accept: 'application/json' },
+        });
+        if (res.ok) return res.json();
+        // Guest mode issues one on demand. Without the plugin this route is not
+        // mounted, which is what `bun start` does by default.
+        const guest = await fetch('/api/auth/sign-in/anonymous', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+        });
+        if (!guest.ok) return { note: 'guest sign-in is not enabled here' };
+        const retry = await fetch('/api/profile', {
+          headers: { accept: 'application/json' },
+        });
+        return retry.ok ? retry.json() : { note: `profile ${retry.status}` };
+      };
+      const readSession = async () => show($('auth-out'), await signedIn());
+      $('who').addEventListener('click', readSession);
+      readSession();
+
+      $('audit').addEventListener('click', async () => {
+        const res = await fetch('/api/profile/audit', {
+          headers: { accept: 'application/json' },
+        });
+        show(
+          $('auth-out'),
+          `GET /api/profile/audit -> ${res.status}\n${JSON.stringify(
+            await res.json(),
+            null,
+            2,
+          )}`,
+        );
+      });
 
       /** Trace context: send a known traceparent and see it adopted. */
       $('trace-go').addEventListener('click', async () => {

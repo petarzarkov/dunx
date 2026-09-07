@@ -7,8 +7,7 @@ import {
 } from '@dunx/http';
 
 /**
- * The page at `/`. `StaticFiles` has no index fallback by design and points an
- * app that wants one at a middleware outside it; this is that middleware. It
+ * The page at `/`, which `StaticFiles` has no index fallback for by design. It
  * answers `/` alone, so every other miss stays the 404 the tour narrates.
  */
 export class LandingMiddleware implements Middleware {

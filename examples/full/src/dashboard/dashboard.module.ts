@@ -57,7 +57,7 @@ import { DashboardDemo } from './dashboard.demo.js';
         // redacted, including the database url and every secret.
         reveal: (key: string) => key === 'appName' || key === 'port',
         // False on the public demo: the board is worth showing, mutating it is not.
-        commands: config.get('dashboard').commands,
+        commands: config.get('dashboard.commands'),
         openApiPath: '/api/docs',
         // Spread rather than `authorize: undefined`: `exactOptionalPropertyTypes`
         // separates an absent option from one explicitly undefined, and the

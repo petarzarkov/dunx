@@ -288,3 +288,52 @@ it('enforces the origin check outside test mode', async () => {
     spawned.kill();
   }
 }, 60_000);
+
+/**
+ * `AUTH_GUEST_ONLY` is what the public demo runs. Spawned rather than built
+ * in-process, because `validate` reads the flag at boot.
+ */
+it('issues a guest session and takes no registration when guest-only', async () => {
+  const spawned = new SpawnedApp({ AUTH_GUEST_ONLY: 'true' });
+
+  try {
+    const base = await spawned.serving();
+    const post = (path: string, body?: unknown) =>
+      fetch(new URL(path, base), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+
+    const refused = await post('api/auth/sign-up/email', {
+      name: 'Nobody',
+      email: 'nobody@example.test',
+      password: 'a long enough password',
+    });
+    expect(refused.ok).toBe(false);
+    expect((await refused.json()) as { code: string }).toMatchObject({
+      code: 'EMAIL_PASSWORD_SIGN_UP_DISABLED',
+    });
+
+    const guest = await post('api/auth/sign-in/anonymous');
+    expect(guest.status).toBe(200);
+    expect(guest.headers.get('set-cookie')).toContain('Max-Age=604800');
+
+    // Reaches a guarded route, and is still refused a role it lacks.
+    const cookie = (guest.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const profile = await fetch(new URL('api/profile', base), {
+      headers: { cookie },
+    });
+    expect(profile.status).toBe(200);
+    expect((await profile.json()) as { roles: string[] }).toMatchObject({
+      roles: ['user'],
+    });
+
+    const audit = await fetch(new URL('api/profile/audit', base), {
+      headers: { cookie },
+    });
+    expect(audit.status).toBe(403);
+  } finally {
+    await spawned.stop();
+  }
+});
