@@ -1,24 +1,5 @@
 name: dunxonu review
 
-# dunxonu reviews every pull request, and re-reviews it on each push. It runs
-# Claude Code through the official action, authenticating with a subscription
-# OAuth token rather than API credit.
-#
-# Two repository secrets, and neither workflow works without both:
-#   CLAUDE_CODE_OAUTH_TOKEN  from `claude setup-token`, an sk-ant-oat01- token
-#                            tied to the subscription of whoever ran it
-#   DUNXONU_TOKEN           a classic PAT owned by the dunxonu machine
-#                            account, carrying the `public_repo` scope and
-#                            nothing else. A fine-grained token cannot reach a
-#                            repository owned by another personal account even
-#                            as a collaborator, and `repo` would additionally
-#                            cover every private repository the account can
-#                            see, so `public_repo` is the narrowest scope that
-#                            works while dunx is public.
-#
-# Passing DUNXONU_TOKEN as `github_token` is what puts dunxonu's name on the
-# review. Omitted, the action posts as the Claude GitHub App instead.
-
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
