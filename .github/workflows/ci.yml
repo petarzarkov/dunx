@@ -277,7 +277,15 @@ jobs:
           # what proved it: the tag appeared and the release did not. The tag push
           # falls back to the credential `actions/checkout` persists, so that half
           # worked and hid the other half.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          #
+          # A PAT rather than GITHUB_TOKEN, because the ruleset on `main` requires
+          # a pull request and `version.ts` pushes the release commit straight to
+          # it. Bypass is granted by repository role, and GitHub Actions cannot be
+          # a bypass actor at all, so a push as github-actions[bot] is rejected
+          # whatever the ruleset says. This token belongs to an admin, so the
+          # bypass applies to it. No extra CI run follows: the commit message
+          # carries [skip ci].
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           # Husky's pre-push hook refuses any push oxfmt would change, and what gets
           # pushed here is this script's own generated commit. CI already ran
           # format:check over the source, so the hook can only produce a false

@@ -1,0 +1,4 @@
+# dunxonu reviews every pull request through .github/workflows/dunxonu-review.yml.
+# Listing it here only auto-requests its review in the Reviewers box: it never
+# submits an approval, so require_code_owner_review must stay false.
+*  @dunxonu

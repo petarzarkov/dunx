@@ -42,7 +42,8 @@ jobs:
       # in_reply_to_id, and the thread is dunxonu's when the comment being
       # replied to is dunxonu's. Both bodies come in through `env` rather than
       # into the script text, so a comment cannot inject shell.
-      - id: addressed
+      - name: Is dunxonu being addressed
+        id: addressed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BODY: ${{ github.event.comment.body || github.event.review.body }}
@@ -67,10 +68,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The toolchain, so an answer that has to run `bun run ci` can. The review
-      # workflow needs none of this; a fix does.
-      - if: steps.addressed.outputs.how != 'no'
-        uses: ./.github/actions/setup
+      # No `./.github/actions/setup` here. The action runs its own nested
+      # oven-sh/setup-bun pinned to a different version, and setup-bun prepends
+      # to PATH, so the action's Bun shadows whatever we installed first. A gate
+      # run here would have used that Bun against a lockfile this repo pins to
+      # another one. CI runs the gates on whatever dunxonu pushes, under the
+      # pinned version, which is where that signal belongs.
 
       # A mention states what it wants, so interactive mode reads it and replies
       # on its own. No prompt: that is what selects interactive mode.
@@ -82,24 +85,29 @@ jobs:
           trigger_phrase: '@dunxonu'
 
       # A bare reply carries no trigger phrase, so interactive mode would ignore
-      # it. A prompt selects automation mode instead, and `track_progress` keeps
-      # the GitHub context and the progress comment a mention would have got.
+      # it. A prompt selects automation mode instead. No `track_progress`: it
+      # posts a tracking comment that restates the answer, so a single reply
+      # became two comments in the thread. Everything it would have injected as
+      # context is in the prompt below, and gh is allowed for the rest.
       - if: steps.addressed.outputs.how == 'reply'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.DUNXONU_TOKEN }}
-          track_progress: true
           prompt: |
             Someone replied to a review comment you left on ${{ github.repository }}
             pull request ${{ github.event.pull_request.number }}. Read the whole
-            thread, then reply in that same thread with:
+            thread, then reply in that same thread.
 
-            gh api --method POST repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/${{ github.event.comment.in_reply_to_id }}/replies -f body='...'
+            Write the reply to /tmp/reply.json as {"body": "..."} and post that
+            file, because -f body='...' breaks on the first apostrophe and
+            ordinary prose is full of them:
+
+            gh api --method POST repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/${{ github.event.comment.in_reply_to_id }}/replies --input /tmp/reply.json
 
             Answer what was asked. If the finding was wrong, say so plainly and
             drop it. Keep it to a few sentences, cite CLAUDE.md by link when the
             answer rests on it, and do not open a new thread or restate the
             original finding.
           claude_args: |
-            --allowedTools "Bash(gh api:*),Bash(gh pr view:*),Bash(gh pr diff:*),Read,Grep,Glob"
+            --allowedTools "Bash(gh api:*),Bash(gh pr view:*),Bash(gh pr diff:*),Read,Grep,Glob,Write"
