@@ -53,6 +53,15 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
       map: 'port: value.PORT,',
       env: [{ name: 'PORT', value: '3000' }],
     },
+    publicUrl: {
+      schema: [
+        '/** The origin a browser reaches this app on. Absent means localhost. */',
+        'PUBLIC_URL: z.url().optional(),',
+      ],
+      field: 'readonly publicUrl: string;',
+      map: 'publicUrl: value.PUBLIC_URL ?? `http://localhost:${value.PORT}`,',
+      env: [{ name: 'PUBLIC_URL', value: 'http://localhost:3000' }],
+    },
     appName: {
       schema: [],
       field: 'readonly appName: string;',
@@ -125,9 +134,19 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
       schema: [
         '/** better-auth signs session cookies with this. 32 characters is its own minimum. */',
         "AUTH_SECRET: z.string().min(32).default('dunx-development-secret-not-for-production'),",
+        '/**',
+        ' * No email sign-up, and anonymous sign-in instead: every visitor is issued',
+        ' * a guest account on arrival. What a public demo runs.',
+        ' */',
+        'AUTH_GUEST_ONLY: z.stringbool().default(false),',
+        'AUTH_SESSION_DAYS: z.coerce.number().int().min(1).default(7),',
       ],
-      field: 'readonly auth: { readonly secret: string };',
-      map: 'auth: { secret: value.AUTH_SECRET },',
+      field:
+        'readonly auth: { readonly secret: string; readonly guestOnly: boolean; ' +
+        'readonly sessionDays: number };',
+      map:
+        'auth: { secret: value.AUTH_SECRET, guestOnly: value.AUTH_GUEST_ONLY, ' +
+        'sessionDays: value.AUTH_SESSION_DAYS },',
       env: [
         {
           name: 'AUTH_SECRET',
@@ -254,7 +273,7 @@ export const FEATURES: readonly Feature[] = [
     requires: ['database'],
     module: { klass: 'AccountsModule', from: './auth/auth.module.js' },
     dependencies: ['@dunx/auth', 'better-auth', 'drizzle-orm'],
-    config: ['auth', 'port'],
+    config: ['auth', 'publicUrl'],
   },
   {
     name: 'cache',

@@ -237,7 +237,7 @@ exercises a 03:00 cron without waiting for 03:00.
 `@dunx/http` writes the entry. `requestLogging` in
 [src/http/http-options.ts](./src/http/http-options.ts) is all this app
 configures: the bodies come
-from `LOG_REQUEST_BODY` and `LOG_RESPONSE_BODY`, and `/api/_dunx` is skipped.
+from `LOG_REQUEST_BODY` and `LOG_RESPONSE_BODY`, and `/api/dashboard` is skipped.
 Nothing here writes a request line by hand;
 [src/http/request-trail.ts](./src/http/request-trail.ts) is a middleware of the
 app's own that records a trail and sets a header.

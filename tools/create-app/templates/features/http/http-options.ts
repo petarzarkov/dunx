@@ -65,7 +65,7 @@ export class AppHttpOptions extends HttpOptionsProvider {
       requestBody: log.requestBody,
       responseBody: log.responseBody,
       // The dashboard polls every five seconds and would bury everything else.
-      ignorePrefix: ['/api/_dunx'],
+      ignorePrefix: ['/api/dashboard'],
       // `trace` and `traceResponse` are not set: both are on by default, and
       // `TraceController` reading the trace back proves it.
     };

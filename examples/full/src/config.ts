@@ -33,6 +33,8 @@ const envSchema = z.object({
    * which fakes the throttle subject and the address in every log line.
    */
   TRUST_PROXY: z.stringbool().default(false),
+  /** The origin a browser reaches this app on. Absent means localhost. */
+  PUBLIC_URL: z.url().optional(),
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
@@ -48,11 +50,16 @@ const envSchema = z.object({
    * explorable and `@dunx/dashboard` still warns that it is unguarded.
    */
   DASHBOARD_TOKEN: z.string().min(1).optional(),
+  /** bull-board's `readOnlyMode`, inverted. The public demo sets it false. */
+  DASHBOARD_COMMANDS: z.stringbool().default(true),
   /** better-auth signs session cookies with this. 32 characters is its own minimum. */
   AUTH_SECRET: z
     .string()
     .min(32)
     .default('dunx-full-example-development-secret-not-for-production'),
+  /** No sign-up; a guest account per visitor instead. The public demo's shape. */
+  AUTH_GUEST_ONLY: z.stringbool().default(false),
+  AUTH_SESSION_DAYS: z.coerce.number().int().min(1).default(7),
 });
 
 /** The broker channel the websocket relay carries every topic on. */
@@ -74,11 +81,19 @@ export interface AppConfig {
   readonly database: { readonly file: string };
   readonly redis: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
-  readonly auth: { readonly secret: string };
-  readonly dashboard: { readonly token: string | undefined };
+  readonly auth: {
+    readonly secret: string;
+    readonly guestOnly: boolean;
+    readonly sessionDays: number;
+  };
+  readonly dashboard: {
+    readonly token: string | undefined;
+    readonly commands: boolean;
+  };
   readonly throttle: { readonly limit: number; readonly windowSeconds: number };
   readonly schedule: { readonly tz: string };
   readonly upstream: { readonly timeoutMs: number };
+  readonly publicUrl: string;
 }
 
 /**
@@ -114,13 +129,21 @@ export const validate = (env: ConfigSource): AppConfig => {
     database: { file: value.DATABASE_FILE },
     redis: { url: value.REDIS_URL },
     images: { quality: value.IMAGE_QUALITY },
-    auth: { secret: value.AUTH_SECRET },
-    dashboard: { token: value.DASHBOARD_TOKEN },
+    auth: {
+      secret: value.AUTH_SECRET,
+      guestOnly: value.AUTH_GUEST_ONLY,
+      sessionDays: value.AUTH_SESSION_DAYS,
+    },
+    dashboard: {
+      token: value.DASHBOARD_TOKEN,
+      commands: value.DASHBOARD_COMMANDS,
+    },
     throttle: {
       limit: value.THROTTLE_LIMIT,
       windowSeconds: value.THROTTLE_WINDOW_SECONDS,
     },
     schedule: { tz: value.SCHEDULE_TZ },
     upstream: { timeoutMs: value.UPSTREAM_TIMEOUT_MS },
+    publicUrl: value.PUBLIC_URL ?? `http://localhost:${value.PORT}`,
   };
 };

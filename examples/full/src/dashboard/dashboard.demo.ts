@@ -8,13 +8,13 @@ import type {
 /**
  * What the ops page shows, and a CI assertion that every panel's endpoint answers
  * against the real container. The JSON endpoints are supported, so
- * `curl $APP/api/_dunx/api/queues` works on a box with no browser.
+ * `curl $APP/api/dashboard/api/queues` works on a box with no browser.
  */
 export class DashboardDemo {
   constructor(private readonly logger: Logger) {}
 
   async demonstrate(url: string): Promise<void> {
-    const base = new URL('api/_dunx', url).href;
+    const base = new URL('api/dashboard', url).href;
 
     // Mounted with no `authorize`, so it is open - the boot warning above. A
     // real service passes one, and a rejected caller gets 404 rather than 403.

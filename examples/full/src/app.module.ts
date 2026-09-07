@@ -21,6 +21,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { DocsModule } from './docs/docs.module.js';
 import { GuardsModule } from './guards/guards.module.js';
 import { AssetsModule } from './assets/assets.module.js';
+import { LandingModule } from './landing/landing.module.js';
 import { ProbesModule } from './health/health.module.js';
 import { HttpModule } from './http/http.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
@@ -102,6 +103,7 @@ const fileAndConsole = (
     LimitsModule,
     MaintenanceModule,
     AssetsModule,
+    LandingModule,
     UpstreamModule,
     GuardsModule,
     // After DatabaseModule, so better-auth reuses the connection it opened.

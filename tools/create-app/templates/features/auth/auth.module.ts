@@ -2,7 +2,7 @@ import { Auth, AuthModule, bunPassword } from '@dunx/auth';
 import { drizzleDatabase } from '@dunx/auth/drizzle';
 import { Module } from '@dunx/core';
 import { DbConnection } from '@dunx/infra/db';
-import { admin, bearer, openAPI } from 'better-auth/plugins';
+import { admin, anonymous, bearer, openAPI } from 'better-auth/plugins';
 import { AppConfigService } from '../config.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { AuthDemo } from './auth.demo.js';
@@ -23,11 +23,14 @@ import { ProfileController } from './profile.controller.js';
         imports: [DatabaseModule],
         useFactory: (config: AppConfigService, connection: DbConnection) => ({
           secret: config.get('auth.secret'),
-          baseURL: `http://localhost:${config.get('port')}`,
+          // better-auth rejects a browser request whose Origin is not this,
+          // with INVALID_ORIGIN, so a deployment behind a domain must say so.
+          baseURL: config.get('publicUrl'),
           // What better-auth matches a pathname against; the global prefix is
           // what makes the mounted `/auth` route answer here.
           basePath: '/api/auth',
           database: drizzleDatabase(connection),
+          session: { expiresIn: config.get('auth.sessionDays') * 86_400 },
           // The default `AuthModule` would apply anyway, named here to be
           // visible. better-auth's own default is JavaScript scrypt; this is
           // `Bun.password`'s native bcrypt.
@@ -35,6 +38,8 @@ import { ProfileController } from './profile.controller.js';
             enabled: true,
             minPasswordLength: 8,
             password: bunPassword,
+            // No registrations; the plugin below issues the session instead.
+            ...(config.get('auth.guestOnly') ? { disableSignUp: true } : {}),
           },
           // `admin` puts `role` on the user for `@Roles()`; `bearer` lets the
           // tour send a token instead of a cookie. `openAPI()` is what makes
@@ -44,6 +49,8 @@ import { ProfileController } from './profile.controller.js';
             admin(),
             bearer(),
             openAPI({ disableDefaultReference: true }),
+            // `sign-in/anonymous` mints a user and session with no credentials.
+            ...(config.get('auth.guestOnly') ? [anonymous()] : []),
           ],
         }),
         inject: [AppConfigService, DbConnection] as const,

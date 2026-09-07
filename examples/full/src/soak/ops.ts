@@ -326,7 +326,7 @@ export const OPS: readonly Op[] = [
     expect: of(200),
     tolerate: THROTTLED,
     requires: 'none',
-    run: (c) => c.call('api/_dunx'),
+    run: (c) => c.call('api/dashboard'),
   },
   {
     name: 'docs',

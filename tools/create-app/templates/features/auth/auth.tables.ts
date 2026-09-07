@@ -22,6 +22,7 @@ const TABLES = [
     banned INTEGER,
     banReason TEXT,
     banExpires INTEGER,
+    isAnonymous INTEGER,
     createdAt INTEGER NOT NULL,
     updatedAt INTEGER NOT NULL
   )`,

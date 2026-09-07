@@ -28,7 +28,7 @@ import { createApp } from './main.js';
 let app: HttpApp;
 let client: TestClient;
 
-const MOUNT = 'api/_dunx';
+const MOUNT = 'api/dashboard';
 /** `config.ts` defaults it, so the suite knows exactly what must not appear. */
 const SECRET = 'dunx-full-example-development-secret-not-for-production';
 /** What the guarded server below expects in `x-dashboard-token`. */

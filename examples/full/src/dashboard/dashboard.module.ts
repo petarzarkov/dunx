@@ -13,7 +13,7 @@ import { JobsModule } from '../jobs/jobs.module.js';
 import { DashboardDemo } from './dashboard.demo.js';
 
 /**
- * The operations page at `/api/_dunx`. `forRootAsync` because everything shown
+ * The operations page at `/api/dashboard`. `forRootAsync` because everything shown
  * comes out of the container: `JobPublisher` satisfies `QueueSource` and
  * `RedisConnection` satisfies `RedisProbe`, with no adapter between them.
  *
@@ -39,7 +39,7 @@ import { DashboardDemo } from './dashboard.demo.js';
       ) => ({
         // Spelled out: the global prefix covers discovered routes, and this is
         // a middleware.
-        path: '/api/_dunx',
+        path: '/api/dashboard',
         title: config.get('appName'),
         queues,
         // Nothing connects until the board is opened, so this still exits 0
@@ -56,6 +56,8 @@ import { DashboardDemo } from './dashboard.demo.js';
         // Keys only, except two that are safe to read. Everything else stays
         // redacted, including the database url and every secret.
         reveal: (key: string) => key === 'appName' || key === 'port',
+        // False on the public demo: the board is worth showing, mutating it is not.
+        commands: config.get('dashboard.commands'),
         openApiPath: '/api/docs',
         // Spread rather than `authorize: undefined`: `exactOptionalPropertyTypes`
         // separates an absent option from one explicitly undefined, and the

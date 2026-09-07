@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>dunx live demo</title>
+    <style>
+      :root {
+        color-scheme: dark light;
+        --bg: #0b0d10;
+        --panel: #14181d;
+        --line: #232a32;
+        --ink: #e6edf3;
+        --dim: #8b98a5;
+        --acc: #4cc38a;
+        --warn: #d29922;
+        --bad: #f85149;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f6f8fa;
+          --panel: #fff;
+          --line: #d8dee4;
+          --ink: #1f2328;
+          --dim: #59636e;
+          --acc: #1a7f37;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          15px/1.55 system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          sans-serif;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        padding: 28px 20px 22px;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 26px;
+        letter-spacing: -0.02em;
+      }
+      h1 span {
+        color: var(--acc);
+      }
+      .sub {
+        color: var(--dim);
+        margin: 0;
+        max-width: 70ch;
+      }
+      .strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .pill {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 999px;
+        padding: 4px 11px;
+        font: 12px/1.6 var(--mono);
+        color: var(--dim);
+      }
+      .pill b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .up {
+        color: var(--acc);
+      }
+      .down {
+        color: var(--bad);
+      }
+      .degraded {
+        color: var(--warn);
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      nav a {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--ink);
+        text-decoration: none;
+        border-radius: 8px;
+        padding: 8px 13px;
+        font-size: 14px;
+      }
+      nav a:hover {
+        border-color: var(--acc);
+      }
+      nav a small {
+        color: var(--dim);
+        display: block;
+        font: 11px/1.4 var(--mono);
+      }
+      main {
+        padding: 22px 20px 60px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
+      }
+      section {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 12px;
+        padding: 16px;
+        min-width: 0;
+      }
+      section h2 {
+        margin: 0 0 4px;
+        font-size: 15px;
+      }
+      section p {
+        margin: 0 0 12px;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--acc);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      button {
+        font:
+          500 13px system-ui,
+          sans-serif;
+        color: var(--ink);
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 7px 12px;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--acc);
+        color: var(--acc);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      input,
+      select {
+        font: 13px var(--mono);
+        color: var(--ink);
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 7px 9px;
+        min-width: 0;
+      }
+      pre {
+        margin: 12px 0 0;
+        padding: 10px;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font: 12px/1.5 var(--mono);
+        max-height: 190px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--dim);
+      }
+      pre:empty {
+        display: none;
+      }
+      img.shot {
+        margin-top: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        image-rendering: pixelated;
+        background: var(--bg);
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 18px 20px;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      footer a {
+        color: var(--acc);
+      }
+      .s200 {
+        color: var(--acc);
+      }
+      .s429,
+      .s400 {
+        color: var(--warn);
+      }
+      .s500 {
+        color: var(--bad);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <h1>dunx <span>live demo</span></h1>
+        <p class="sub">
+          This is <code>examples/full</code> from the dunx repository, running
+          unmodified on a Raspberry Pi 5 behind a Cloudflare tunnel. Every panel
+          below calls the same routes the example's tests and OpenAPI document
+          are generated from.
+        </p>
+        <div class="strip" id="strip">
+          <span class="pill">reading status<b></b></span>
+        </div>
+        <nav>
+          <a href="/api/docs"
+            >API explorer <small>swagger-ui, /api/docs</small></a
+          >
+          <a href="/api/dashboard"
+            >Dashboard <small>routes, providers, config</small></a
+          >
+          <a href="/api/dashboard/queues"
+            >Queues <small>bull-board, read-only</small></a
+          >
+          <a href="/api/openapi.json"
+            >OpenAPI <small>generated from zod</small></a
+          >
+          <a href="/api/health/ready"
+            >Readiness <small>/api/health/ready</small></a
+          >
+          <a href="https://github.com/petarzarkov/dunx"
+            >Source <small>github.com/petarzarkov/dunx</small></a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div class="grid">
+        <section>
+          <h2>Websocket gateway</h2>
+          <p>
+            <code>@Gateway('/chat')</code> on the same <code>Bun.serve</code> as
+            the routes. The broadcast goes through Bun's native pub/sub, so
+            every open tab on this page receives it.
+          </p>
+          <div class="row">
+            <input id="nick" value="visitor" size="10" aria-label="nickname" />
+            <button id="ws-connect">Connect</button>
+            <input id="say" placeholder="say something" aria-label="message" />
+            <button id="ws-say" disabled>Send</button>
+          </div>
+          <pre id="ws-out"></pre>
+        </section>
+
+        <section>
+          <h2>Rate limit</h2>
+          <p>
+            <code>@Throttle({ limit: 3, windowSeconds: 60 })</code> on
+            <code>/api/limits/burst</code>. The fourth call in a window is a 429
+            carrying <code>retry-after</code>. Your window is keyed on your own
+            address.
+          </p>
+          <div class="row">
+            <button id="burst">Send 5 requests</button>
+          </div>
+          <pre id="burst-out"></pre>
+        </section>
+
+        <section>
+          <h2>Image pipeline</h2>
+          <p>
+            <code>Bun.Image</code> behind <code>/api/images/render</code>. The
+            source is generated at runtime from a 4x4 seed, so no binary is
+            committed to the repository.
+          </p>
+          <div class="row">
+            <input
+              id="img-w"
+              type="number"
+              value="192"
+              min="1"
+              max="1024"
+              size="5"
+              aria-label="width"
+            />
+            <select id="img-f" aria-label="format">
+              <option>png</option>
+              <option>webp</option>
+              <option>jpeg</option>
+            </select>
+            <button id="img-go">Render</button>
+          </div>
+          <div><img class="shot" id="img-out" alt="" hidden /></div>
+          <pre id="img-meta"></pre>
+        </section>
+
+        <section>
+          <h2>Queue</h2>
+          <p>
+            <code>POST /api/jobs/thumbnails</code> enqueues on bullmq over
+            <code>Bun.RedisClient</code>, and the handler runs in a forked
+            process. This polls the job until it leaves <code>waiting</code>.
+          </p>
+          <div class="row">
+            <button id="job-go">Enqueue a thumbnail</button>
+          </div>
+          <pre id="job-out"></pre>
+        </section>
+
+        <section>
+          <h2>Session</h2>
+          <p>
+            No sign-up. <code>better-auth</code>'s anonymous plugin issues every
+            visitor a guest account and a seven-day session on arrival, and
+            <code>SessionGuard</code> is what <code>/api/profile</code> is
+            behind.
+          </p>
+          <div class="row">
+            <button id="who">Who am I</button>
+            <button id="audit">Try an admin-only route</button>
+          </div>
+          <pre id="auth-out"></pre>
+        </section>
+
+        <section>
+          <h2>Validation</h2>
+          <p>
+            The route's zod schema is both the validator and the source of the
+            OpenAPI document. This posts a deliberately wrong body to
+            <code>/api/users</code> and shows the issues it returns.
+          </p>
+          <div class="row">
+            <button id="bad-go">Post an invalid user</button>
+            <button id="good-go">Post a valid one</button>
+          </div>
+          <pre id="bad-out"></pre>
+        </section>
+
+        <section>
+          <h2>Trace context</h2>
+          <p>
+            <code>/api/trace</code> adopts an inbound W3C
+            <code>traceparent</code> or starts one. Every log line the request
+            writes carries the same trace id.
+          </p>
+          <div class="row">
+            <button id="trace-go">Request with a traceparent</button>
+          </div>
+          <pre id="trace-out"></pre>
+        </section>
+      </div>
+    </main>
+
+    <footer class="wrap">
+      Built with <a href="https://github.com/petarzarkov/dunx">dunx</a>, a
+      Bun-native dependency injection framework. The database is in-memory and
+      reseeds on every restart, so your guest account and anything created here
+      are temporary.
+    </footer>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const show = (el, value) => {
+        el.textContent =
+          typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      };
+      const append = (el, line) => {
+        el.textContent = `${line}\n${el.textContent}`.slice(0, 4000);
+      };
+
+      /** Status strip, from the app's own readiness report. */
+      const readStatus = async () => {
+        const strip = $('strip');
+        try {
+          const res = await fetch('/api/health/ready', {
+            headers: { accept: 'application/json' },
+          });
+          const body = await res.json();
+          const mins = Math.floor((body.uptimeMs ?? 0) / 60000);
+          const parts = [
+            `<span class="pill">status <b class="${body.status}">${body.status}</b></span>`,
+            `<span class="pill">up <b>${mins} min</b></span>`,
+          ];
+          for (const check of body.checks ?? []) {
+            parts.push(
+              `<span class="pill">${check.name} <b class="${check.state}">${check.state}</b></span>`,
+            );
+          }
+          strip.innerHTML = parts.join('');
+        } catch {
+          strip.innerHTML =
+            '<span class="pill">status <b class="down">unreachable</b></span>';
+        }
+      };
+      readStatus();
+      setInterval(readStatus, 15000);
+
+      /** Websocket. One socket, reconnected on demand. */
+      let socket;
+      $('ws-connect').addEventListener('click', () => {
+        const out = $('ws-out');
+        const say = $('ws-say');
+        // Disabled before the replacement exists: send() on a CONNECTING socket
+        // throws InvalidStateError, and Connect is clickable at any time.
+        say.disabled = true;
+        if (socket) socket.close();
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const nick = encodeURIComponent($('nick').value || 'visitor');
+        const ws = new WebSocket(`${proto}://${location.host}/chat?as=${nick}`);
+        socket = ws;
+        append(out, `connecting as ${nick}`);
+        // Each handler ignores itself once a newer socket has replaced it. The
+        // predecessor's close arrives after the new socket has opened, and
+        // without this it would disable Send on a live connection.
+        const current = () => socket === ws;
+        ws.onopen = () => {
+          if (!current()) return;
+          append(out, 'open');
+          say.disabled = false;
+        };
+        ws.onmessage = (event) => {
+          if (current()) append(out, `<- ${event.data}`);
+        };
+        ws.onclose = (event) => {
+          if (!current()) return;
+          append(out, `closed with ${event.code}`);
+          say.disabled = true;
+        };
+        ws.onerror = () => {
+          if (current()) append(out, 'error');
+        };
+      });
+      $('ws-say').addEventListener('click', () => {
+        const text = $('say').value;
+        if (!text || !socket) return;
+        // The wire format is one JSON object: an event name and a payload.
+        socket.send(JSON.stringify({ event: 'say', data: text }));
+        append($('ws-out'), `-> say ${text}`);
+        $('say').value = '';
+      });
+
+      /** Rate limit, five calls so the fourth shows the 429. */
+      $('burst').addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        const out = $('burst-out');
+        button.disabled = true;
+        out.textContent = '';
+        try {
+          for (let i = 1; i <= 5; i++) {
+            const res = await fetch('/api/limits/burst');
+            const remaining = res.headers.get('ratelimit-remaining') ?? '-';
+            const retry = res.headers.get('retry-after');
+            out.textContent += `${i}. ${res.status} remaining=${remaining}${
+              retry ? ` retry-after=${retry}s` : ''
+            }\n`;
+          }
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      /** Image, straight into an <img> so the browser decodes what Bun encoded. */
+      $('img-go').addEventListener('click', async () => {
+        const width = $('img-w').value;
+        const format = $('img-f').value;
+        const query = `width=${width}&format=${format}`;
+        const img = $('img-out');
+        img.src = `/api/images/render?${query}&t=${Date.now()}`;
+        img.hidden = false;
+        const res = await fetch(`/api/images/metadata?${query}`);
+        show($('img-meta'), await res.json());
+      });
+
+      /** Queue: enqueue, then poll the job until it settles. */
+      $('job-go').addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        const out = $('job-out');
+        button.disabled = true;
+        out.textContent = '';
+        try {
+          const res = await fetch('/api/jobs/thumbnails', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ width: 96, format: 'webp' }),
+          });
+          const job = await res.json();
+          append(out, `${res.status} ${JSON.stringify(job)}`);
+          if (!res.ok) return;
+          for (let i = 0; i < 8; i++) {
+            await new Promise((done) => setTimeout(done, 600));
+            const poll = await fetch(`/api/jobs/thumbnails/${job.id}`);
+            const state = await poll.json();
+            append(out, `poll ${poll.status} ${JSON.stringify(state)}`);
+            if (
+              poll.ok &&
+              state.state !== 'waiting' &&
+              state.state !== 'active'
+            )
+              break;
+          }
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      /** Validation, both directions. */
+      const postUser = async (body, label) => {
+        const out = $('bad-out');
+        const res = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        out.textContent = `${label} -> ${res.status}\n${JSON.stringify(json, null, 2)}`;
+      };
+      $('bad-go').addEventListener('click', () =>
+        postUser({ name: 42 }, 'name: 42'),
+      );
+      $('good-go').addEventListener('click', () =>
+        postUser(
+          { name: `visitor-${Math.floor(Math.random() * 1000)}`, tags: [] },
+          'a valid user',
+        ),
+      );
+
+      /** Session: signed in on arrival, with no form to fill in. */
+      const signedIn = async () => {
+        const res = await fetch('/api/profile', {
+          headers: { accept: 'application/json' },
+        });
+        if (res.ok) return res.json();
+        // Only 401 means there is no session yet. A 429 from the rate limiter or
+        // a 500 is a different fact, and signing in would replace it with a
+        // misleading answer.
+        if (res.status !== 401) return { note: `profile ${res.status}` };
+        // Guest mode issues one on demand. Without the plugin this route is not
+        // mounted, which is what `bun start` does by default.
+        const guest = await fetch('/api/auth/sign-in/anonymous', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+        });
+        if (!guest.ok) return { note: 'guest sign-in is not enabled here' };
+        const retry = await fetch('/api/profile', {
+          headers: { accept: 'application/json' },
+        });
+        return retry.ok ? retry.json() : { note: `profile ${retry.status}` };
+      };
+      const readSession = async () => {
+        try {
+          show($('auth-out'), await signedIn());
+        } catch (error) {
+          // A rejected fetch is a dropped connection, not a status. Reported
+          // rather than left as an unhandled rejection nobody sees.
+          show($('auth-out'), `request failed: ${String(error)}`);
+        }
+      };
+      $('who').addEventListener('click', readSession);
+      readSession();
+
+      $('audit').addEventListener('click', async () => {
+        const res = await fetch('/api/profile/audit', {
+          headers: { accept: 'application/json' },
+        });
+        show(
+          $('auth-out'),
+          `GET /api/profile/audit -> ${res.status}\n${JSON.stringify(
+            await res.json(),
+            null,
+            2,
+          )}`,
+        );
+      });
+
+      /** Trace context: send a known traceparent and see it adopted. */
+      $('trace-go').addEventListener('click', async () => {
+        const traceparent =
+          '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
+        const res = await fetch('/api/trace', { headers: { traceparent } });
+        const body = await res.json();
+        show(
+          $('trace-out'),
+          `sent  ${traceparent}\n\n${JSON.stringify(body, null, 2)}`,
+        );
+      });
+    </script>
+  </body>
+</html>

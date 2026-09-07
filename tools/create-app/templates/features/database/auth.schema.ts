@@ -25,6 +25,8 @@ export const user = sqliteTable('user', {
   banned: integer({ mode: 'boolean' }),
   banReason: text(),
   banExpires: integer({ mode: 'timestamp_ms' }),
+  /** `anonymous` plugin. The adapter reads this schema, not the DDL. */
+  isAnonymous: integer({ mode: 'boolean' }),
   createdAt: stamp(),
   updatedAt: stamp(),
 });

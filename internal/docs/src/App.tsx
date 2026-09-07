@@ -14,7 +14,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { Fragment } from 'react';
 import { spotlight } from '@mantine/spotlight';
-import { ColorSchemeToggle, LogoMark, Wordmark } from '@dunx/ui';
+import { ColorSchemeToggle, LogoMark, NavGroupLabel, Wordmark } from '@dunx/ui';
 import { Footer } from './components/Footer';
 import { SponsorButton } from './components/SponsorButton';
 import { Search } from './components/Search';
@@ -95,17 +95,7 @@ const Navigation = ({
 
     {guideSections().map(([section, pages]) => (
       <Fragment key={section}>
-        <Text
-          size="xs"
-          fw={700}
-          tt="uppercase"
-          c="dimmed"
-          mt="md"
-          mb={4}
-          px="xs"
-        >
-          {section}
-        </Text>
+        <NavGroupLabel>{section}</NavGroupLabel>
         {pages.map((guide) => (
           <NavLink
             key={guide.slug}
@@ -128,17 +118,7 @@ const Navigation = ({
         read as duplicates of the guides. */}
     {referenceSections().map(([section, pages]) => (
       <Fragment key={section || 'reference'}>
-        <Text
-          size="xs"
-          fw={700}
-          tt="uppercase"
-          c="dimmed"
-          mt="md"
-          mb={4}
-          px="xs"
-        >
-          {section || 'Reference'}
-        </Text>
+        <NavGroupLabel>{section || 'Reference'}</NavGroupLabel>
         {pages.map((guide) => (
           <NavLink
             key={guide.slug}
@@ -152,9 +132,7 @@ const Navigation = ({
       </Fragment>
     ))}
 
-    <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
-      Packages
-    </Text>
+    <NavGroupLabel>Packages</NavGroupLabel>
     {site.packages.map((pkg) => (
       <NavLink
         key={pkg.dir}
@@ -167,9 +145,7 @@ const Navigation = ({
       />
     ))}
 
-    <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="md" mb={4} px="xs">
-      Project
-    </Text>
+    <NavGroupLabel>Project</NavGroupLabel>
     <NavLink
       component="a"
       href={href(RouteKind.Releases)}
