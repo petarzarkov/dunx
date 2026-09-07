@@ -9,14 +9,20 @@ import { bytes, count, duration } from '../format';
  * whole page exists for: the route table, the container it built, the queues it
  * drains and whether its dependencies are reachable, above the fold.
  */
-const unresolved = (snapshot: Snapshot): readonly string[] =>
+/**
+ * The parameters that would actually fail boot. A defaulted one is unresolved
+ * too - `number` erases the same way - but a default is the language saying the
+ * parameter may be absent, so the container passes `undefined` and the default
+ * stands. Counting those here put a red boot-error alert on a page whose whole
+ * job is to say whether the container can close, in an app that had closed it.
+ */
+export const unresolved = (snapshot: Snapshot): readonly string[] =>
   snapshot.providers.flatMap((provider) =>
-    provider.dependencies
-      .filter((dependency) => 'unresolved' in dependency)
-      .map(
-        (dependency) =>
-          `${provider.token}.${(dependency as { unresolved: string }).unresolved}`,
-      ),
+    provider.dependencies.flatMap((dependency) =>
+      'unresolved' in dependency && dependency.optional === undefined
+        ? [`${provider.token}.${dependency.unresolved}`]
+        : [],
+    ),
   );
 
 const Probes = ({ runtime }: { runtime: RuntimeReport }): JSX.Element => (
