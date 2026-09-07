@@ -61,6 +61,7 @@ const providerColumns: readonly Column<ProviderNode>[] = [
   },
   {
     key: 'kind',
+    hideBelow: 'md',
     header: 'Bound as',
     width: 90,
     render: (provider) => (
@@ -71,6 +72,7 @@ const providerColumns: readonly Column<ProviderNode>[] = [
   },
   {
     key: 'module',
+    hideBelow: 'md',
     header: 'Module',
     render: (provider) => (
       <Text size="xs" c="dimmed">
@@ -80,6 +82,7 @@ const providerColumns: readonly Column<ProviderNode>[] = [
   },
   {
     key: 'exported',
+    hideBelow: 'md',
     header: 'Exported',
     width: 90,
     render: (provider) =>
@@ -99,6 +102,7 @@ const providerColumns: readonly Column<ProviderNode>[] = [
   },
   {
     key: 'deps',
+    hideBelow: 'sm',
     header: 'Injects',
     render: (provider) => <Dependencies dependencies={provider.dependencies} />,
   },

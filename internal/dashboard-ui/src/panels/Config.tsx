@@ -31,6 +31,7 @@ const columns: readonly Column<ConfigEntry>[] = [
   },
   {
     key: 'type',
+    hideBelow: 'sm',
     header: 'Type',
     width: 100,
     render: (entry) => (

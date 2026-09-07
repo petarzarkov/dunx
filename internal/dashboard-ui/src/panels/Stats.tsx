@@ -92,43 +92,53 @@ const Requests = ({
           reason="No request has completed since the counters were last reset."
         />
       ) : (
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Route</Table.Th>
-              <Table.Th>Count</Table.Th>
-              <Table.Th>p50 / p95 / p99</Table.Th>
-              <Table.Th>Max</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Slowest trace</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {rows.map((row) => (
-              <Table.Tr key={`${row.method} ${row.route}`}>
-                <Table.Td>
-                  <Group gap={6}>
-                    <Badge size="sm" variant="light">
-                      {row.method}
-                    </Badge>
-                    <Text size="sm" ff="monospace">
-                      {row.route}
-                    </Text>
-                  </Group>
-                </Table.Td>
-                <Table.Td>{count(row.count)}</Table.Td>
-                <Table.Td>{percentiles(row.duration)}</Table.Td>
-                <Table.Td>{ms(row.duration.max)}</Table.Td>
-                <Table.Td>{statusBadges(row.byStatus)}</Table.Td>
-                <Table.Td>
-                  <Text size="xs" ff="monospace" c="dimmed">
-                    {row.slowestTraceId ?? '-'}
-                  </Text>
-                </Table.Td>
+        <Table.ScrollContainer minWidth={320}>
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Route</Table.Th>
+                <Table.Th className="dunx-hide-below-sm">Count</Table.Th>
+                <Table.Th>p50 / p95 / p99</Table.Th>
+                <Table.Th className="dunx-hide-below-md">Max</Table.Th>
+                <Table.Th className="dunx-hide-below-md">Status</Table.Th>
+                <Table.Th className="dunx-hide-below-sm">
+                  Slowest trace
+                </Table.Th>
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {rows.map((row) => (
+                <Table.Tr key={`${row.method} ${row.route}`}>
+                  <Table.Td>
+                    <Group gap={6}>
+                      <Badge size="sm" variant="light">
+                        {row.method}
+                      </Badge>
+                      <Text size="sm" ff="monospace">
+                        {row.route}
+                      </Text>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td className="dunx-hide-below-sm">
+                    {count(row.count)}
+                  </Table.Td>
+                  <Table.Td>{percentiles(row.duration)}</Table.Td>
+                  <Table.Td className="dunx-hide-below-md">
+                    {ms(row.duration.max)}
+                  </Table.Td>
+                  <Table.Td className="dunx-hide-below-md">
+                    {statusBadges(row.byStatus)}
+                  </Table.Td>
+                  <Table.Td className="dunx-hide-below-sm">
+                    <Text size="xs" ff="monospace" c="dimmed">
+                      {row.slowestTraceId ?? '-'}
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
     </Panel>
   );
@@ -157,46 +167,52 @@ const Queries = ({ db }: { db: StatsHalf<DbStatsReport> }): JSX.Element => {
           reason="Nothing has run against the database since the counters were last reset."
         />
       ) : (
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Operation</Table.Th>
-              <Table.Th>Count</Table.Th>
-              <Table.Th>Errors</Table.Th>
-              <Table.Th>p50 / p95 / p99</Table.Th>
-              <Table.Th>Max</Table.Th>
-              <Table.Th>Slowest</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {db.operations.map((row) => (
-              <Table.Tr key={row.operation}>
-                <Table.Td>
-                  <Badge size="sm" variant="light">
-                    {row.operation}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>{count(row.count)}</Table.Td>
-                <Table.Td>
-                  {row.errors > 0 ? (
-                    <Text size="sm" c="red">
-                      {count(row.errors)}
-                    </Text>
-                  ) : (
-                    <Text size="sm">{count(row.errors)}</Text>
-                  )}
-                </Table.Td>
-                <Table.Td>{percentiles(row.duration)}</Table.Td>
-                <Table.Td>{ms(row.duration.max)}</Table.Td>
-                <Table.Td>
-                  <Text size="xs" ff="monospace" c="dimmed" lineClamp={1}>
-                    {row.slowest ?? '-'}
-                  </Text>
-                </Table.Td>
+        <Table.ScrollContainer minWidth={320}>
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Operation</Table.Th>
+                <Table.Th className="dunx-hide-below-sm">Count</Table.Th>
+                <Table.Th className="dunx-hide-below-md">Errors</Table.Th>
+                <Table.Th>p50 / p95 / p99</Table.Th>
+                <Table.Th className="dunx-hide-below-md">Max</Table.Th>
+                <Table.Th className="dunx-hide-below-sm">Slowest</Table.Th>
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {db.operations.map((row) => (
+                <Table.Tr key={row.operation}>
+                  <Table.Td>
+                    <Badge size="sm" variant="light">
+                      {row.operation}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td className="dunx-hide-below-sm">
+                    {count(row.count)}
+                  </Table.Td>
+                  <Table.Td className="dunx-hide-below-md">
+                    {row.errors > 0 ? (
+                      <Text size="sm" c="red">
+                        {count(row.errors)}
+                      </Text>
+                    ) : (
+                      <Text size="sm">{count(row.errors)}</Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>{percentiles(row.duration)}</Table.Td>
+                  <Table.Td className="dunx-hide-below-md">
+                    {ms(row.duration.max)}
+                  </Table.Td>
+                  <Table.Td className="dunx-hide-below-sm">
+                    <Text size="xs" ff="monospace" c="dimmed" lineClamp={1}>
+                      {row.slowest ?? '-'}
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
     </Panel>
   );
