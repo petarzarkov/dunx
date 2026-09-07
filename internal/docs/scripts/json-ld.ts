@@ -23,7 +23,11 @@ export interface Entity {
 
 export interface Crumb {
   readonly name: string;
-  readonly path: string;
+  /**
+   * Absent when the section has no page of its own, which is what keeps a
+   * breadcrumb from publishing a URL that answers 404.
+   */
+  readonly path?: string;
 }
 
 /**
@@ -81,30 +85,45 @@ const techArticle = (
 });
 
 /**
- * `/guide/controllers` becomes `dunx > Guide > Controllers`.
+ * The label for a first path segment, and whether that section is a page.
+ *
+ * `pagesOf` writes `/releases`, but there is no `/guide` or `/api` file and
+ * `_redirects` carries no catch-all, so both answer with `404.html`. A crumb
+ * linking one would put a dead URL in the structured data.
+ */
+const SECTIONS: Record<
+  string,
+  { readonly name: string; readonly routable: boolean }
+> = {
+  guide: { name: 'Guide', routable: false },
+  api: { name: 'Reference', routable: false },
+  releases: { name: 'Releases', routable: true },
+};
+
+/**
+ * `/guide/controllers` becomes `dunx > Guide > Controllers`, with `Guide`
+ * carrying no link.
  *
  * Built from the path rather than passed in, so a route added to `pagesOf` gets
- * a trail without a second list to update. The middle crumb has no page of its
- * own, and a breadcrumb item is allowed to carry a name with no `item`.
+ * a trail without a second list to update.
  */
 export const crumbsOf = (path: string, title: string): Crumb[] => {
   const segments = path.split('/').filter((segment) => segment !== '');
-  if (segments.length === 0) return [];
+  const first = segments[0];
+  if (first === undefined) return [];
 
-  const SECTIONS: Record<string, string> = {
-    guide: 'Guide',
-    api: 'Reference',
-    releases: 'Releases',
-  };
-  const section = SECTIONS[segments[0] ?? ''];
+  const section = SECTIONS[first];
   if (section === undefined) return [];
 
-  return segments.length === 1
-    ? [{ name: section, path }]
-    : [
-        { name: section, path: `/${segments[0]}` },
-        { name: title, path },
-      ];
+  // A one-segment path is the section's own page, and having been handed to this
+  // function at all is what says it was rendered.
+  if (segments.length === 1) return [{ name: section.name, path }];
+
+  const parent: Crumb = section.routable
+    ? { name: section.name, path: `/${first}` }
+    : { name: section.name };
+
+  return [parent, { name: title, path }];
 };
 
 const breadcrumbs = (
@@ -124,7 +143,11 @@ const breadcrumbs = (
       '@type': 'ListItem',
       position: index + 2,
       name: crumb.name,
-      item: `${entity.origin}${crumb.path}`,
+      // schema.org allows a ListItem with a name and no `item`, which is the
+      // spelling for a step in the trail that is not itself a page.
+      ...(crumb.path === undefined
+        ? {}
+        : { item: `${entity.origin}${crumb.path}` }),
     })),
   ],
 });

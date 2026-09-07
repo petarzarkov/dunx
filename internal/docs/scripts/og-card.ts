@@ -149,7 +149,9 @@ export const renderCard = async (target: string): Promise<number> => {
 };
 
 if (import.meta.main) {
-  const target = new URL('../public/og.png', import.meta.url).pathname;
+  const target = Bun.fileURLToPath(
+    new URL('../public/og.png', import.meta.url),
+  );
   const bytes = await renderCard(target);
   console.log(`og:image: ${WIDTH}x${HEIGHT}, ${(bytes / 1024).toFixed(1)} KB`);
 }

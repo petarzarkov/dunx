@@ -20,6 +20,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { BLURB, CHIPS, HEADLINE } from '../../../scripts/positioning.js';
 import { SITE_URL, summaryOf } from './agent-docs.js';
 import { jsonLdFor, type Entity } from './json-ld.js';
 import {
@@ -142,18 +143,14 @@ const NO_PAYLOADS: Payloads = {
 };
 
 /**
- * The landing page's copy, defaulting to the hero's own words.
+ * The landing page's copy, out of the model the site renders from.
  *
- * A model written before `generate.ts` carried `positioning` would otherwise
- * prerender a heading-less page, and the guard for that belongs here rather
- * than in every builder.
+ * The fallback is the source those model fields are generated from, rather than
+ * a copy of the words: a literal here would be a second declaration of the
+ * headline, and it would drift the first time the real one moved.
  */
 const positioningOf = (index: SiteIndex): Content['positioning'] =>
-  index.positioning ?? {
-    headline: ['Dependency injection for Bun.'],
-    blurb: '',
-    chips: [],
-  };
+  index.positioning ?? { headline: HEADLINE, blurb: BLURB, chips: CHIPS };
 
 const contentOf = (index: SiteIndex, payloads: Payloads): Content => ({
   positioning: positioningOf(index),
@@ -210,7 +207,10 @@ export const pagesOf = (
       kind: 'article' as const,
       body: guideBody(guide.title, payloads.guideHtml(guide.slug), content),
     })),
-    ...index.packages.map((pkg, position) => ({
+    // `content.packages` rather than `index.packages`: it is the same list with
+    // the export names already flattened, so there is no second reshape here and
+    // no index to reach back through.
+    ...content.packages.map((pkg) => ({
       path: `/api/${pkg.dir}`,
       title: `${pkg.name} | dunx`,
       description: descriptionOr(
@@ -218,17 +218,7 @@ export const pagesOf = (
         `API reference for ${pkg.name}.`,
       ),
       kind: 'article' as const,
-      // The entry `contentOf` already normalised, rather than a second reshape
-      // of the same package here.
-      body: packageBody(
-        content.packages[position] ?? {
-          name: pkg.name,
-          dir: pkg.dir,
-          description: pkg.description,
-          exports: [],
-        },
-        content,
-      ),
+      body: packageBody(pkg, content),
     })),
     ...releases.map((release) => ({
       path: `/releases/${release.version}`,
@@ -463,7 +453,7 @@ export const writeSeoPages = (options: WriteOptions): Page[] => {
 };
 
 if (import.meta.main) {
-  const root = new URL('../../..', import.meta.url).pathname;
+  const root = Bun.fileURLToPath(new URL('../../..', import.meta.url));
   const pages = writeSeoPages({
     distDir: join(root, 'internal/docs/dist'),
     docsDir: join(root, 'docs'),

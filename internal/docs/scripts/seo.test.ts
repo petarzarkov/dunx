@@ -334,6 +334,18 @@ describe('structured data', () => {
     expect(html).toContain('"name":"Guide"');
   });
 
+  /* The `Guide` step is not a page, so linking it would put a 404 in the
+   * structured data. */
+  test('no breadcrumb links a section that has no page', () => {
+    expect(forPage('/guide/controllers')).not.toContain(
+      '"item":"https://dunx.win/guide"',
+    );
+    expect(forPage('/api/core')).not.toContain('"item":"https://dunx.win/api"');
+    expect(forPage('/releases/3.3.1')).toContain(
+      '"item":"https://dunx.win/releases"',
+    );
+  });
+
   test('no page but the landing one claims to be the software', () => {
     for (const page of pages().filter((entry) => entry.path !== '/')) {
       expect(renderPage(TEMPLATE, page, ENTITY)).not.toContain(
@@ -369,10 +381,26 @@ describe('crumbsOf', () => {
     ]);
   });
 
-  test('a document is its section then itself', () => {
+  /*
+   * `pagesOf` writes `/releases` but no `/guide` or `/api`, and `_redirects`
+   * carries no catch-all, so a crumb linking one would publish a URL that
+   * answers 404.
+   */
+  test('a section with no page of its own gets a name and no path', () => {
     expect(crumbsOf('/guide/controllers', 'Controllers | dunx')).toEqual([
-      { name: 'Guide', path: '/guide' },
+      { name: 'Guide' },
       { name: 'Controllers | dunx', path: '/guide/controllers' },
+    ]);
+    expect(crumbsOf('/api/core', '@dunx/core | dunx')).toEqual([
+      { name: 'Reference' },
+      { name: '@dunx/core | dunx', path: '/api/core' },
+    ]);
+  });
+
+  test('a section that is a page keeps its link', () => {
+    expect(crumbsOf('/releases/3.3.1', 'dunx 3.3.1 | Releases')).toEqual([
+      { name: 'Releases', path: '/releases' },
+      { name: 'dunx 3.3.1 | Releases', path: '/releases/3.3.1' },
     ]);
   });
 

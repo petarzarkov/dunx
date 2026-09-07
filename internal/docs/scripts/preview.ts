@@ -119,9 +119,22 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     const separator = path.includes('?') ? '&' : '?';
     await view.navigate(`${server.url.origin}${path}${separator}n=${loads}`);
 
+    let mounted = false;
     for (let attempt = 0; attempt < 200; attempt += 1) {
-      if (await view.evaluate<boolean>(MOUNTED)) break;
+      if (await view.evaluate<boolean>(MOUNTED)) {
+        mounted = true;
+        break;
+      }
       await Bun.sleep(15);
+    }
+    // Exhausting the loop used to resolve anyway. That was survivable while the
+    // signal was an empty `<h1>`, since the assertions then failed on a blank
+    // page; now the prerendered heading satisfies every one of them, so a bundle
+    // that never loads would pass the suite and be screenshotted.
+    if (!mounted) {
+      throw new Error(
+        `the bundle did not mount for ${path}: ${JSON.stringify(logged.slice(0, 3))}`,
+      );
     }
     // Fonts, charts and the syntax highlighter settle a frame or two after the
     // heading is up, and a screenshot taken before that catches the reflow.
