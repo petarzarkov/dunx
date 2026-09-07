@@ -389,6 +389,13 @@ describe('source comments', () => {
         // A template is a working app vendored into the scaffolder, measured where
         // it lives in `examples/full`.
         .filter((f) => !f.includes('/templates/'))
+        // A dot-prefixed name is a tool's scratch file, never shipped source.
+        // `--others` lists them, and `packages/infra/src/queue/sandbox.test.ts`
+        // writes a `.sandbox-child-<uuid>.ts` beside itself and deletes it - so
+        // under the `coverage` phase, which runs every suite at once, this glob
+        // caught one mid-life and `Bun.file` threw ENOENT after `existsSync`
+        // had already said yes. A race the check below cannot close.
+        .filter((f) => !/(^|\/)\.[^/]*$/.test(f))
         // `--cached` lists the index, which still holds a file deleted from the
         // working tree but not yet staged - and reading it threw ENOENT rather
         // than reporting a voice offence.
