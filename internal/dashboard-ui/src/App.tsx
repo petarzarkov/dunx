@@ -4,10 +4,12 @@ import {
   Anchor,
   Badge,
   Burger,
+  Divider,
   Group,
   Loader,
   MantineProvider,
   NavLink,
+  ScrollArea,
   Switch,
   Text,
   VisuallyHidden,
@@ -17,14 +19,16 @@ import {
   ColorSchemeToggle,
   DatabaseIcon,
   LogoMark,
+  NavGroupLabel,
   RefreshIcon,
   RouteIcon,
+  SendIcon,
   StackIcon,
   StatusDot,
   Wordmark,
   theme,
 } from '@dunx/ui';
-import { useMemo, useState, type JSX } from 'react';
+import { Fragment, useMemo, useState, type JSX } from 'react';
 import { Api } from './api';
 import { duration } from './format';
 import type { Meta } from './meta';
@@ -43,18 +47,31 @@ import {
   type Panel as PanelName,
 } from './router';
 
-const NAV: readonly {
+interface NavEntry {
   panel: PanelName;
   label: string;
   icon: JSX.Element;
-}[] = [
-  { panel: 'overview', label: 'Overview', icon: <StackIcon /> },
-  { panel: 'routes', label: 'Routes', icon: <RouteIcon /> },
-  { panel: 'gateways', label: 'Gateways', icon: <RouteIcon /> },
-  { panel: 'graph', label: 'Modules & providers', icon: <StackIcon /> },
-  { panel: 'queues', label: 'Queues & Redis', icon: <DatabaseIcon /> },
-  { panel: 'stats', label: 'Stats', icon: <StackIcon /> },
-  { panel: 'config', label: 'Configuration', icon: <DatabaseIcon /> },
+}
+
+/** Grouped, because seven flat entries read as a list of settings. */
+const NAV: readonly { section?: string; items: readonly NavEntry[] }[] = [
+  { items: [{ panel: 'overview', label: 'Overview', icon: <StackIcon /> }] },
+  {
+    section: 'Application',
+    items: [
+      { panel: 'routes', label: 'Routes', icon: <RouteIcon /> },
+      { panel: 'gateways', label: 'Gateways', icon: <RouteIcon /> },
+      { panel: 'graph', label: 'Modules & providers', icon: <StackIcon /> },
+    ],
+  },
+  {
+    section: 'Runtime',
+    items: [
+      { panel: 'queues', label: 'Queues & Redis', icon: <DatabaseIcon /> },
+      { panel: 'stats', label: 'Stats', icon: <StackIcon /> },
+      { panel: 'config', label: 'Configuration', icon: <DatabaseIcon /> },
+    ],
+  },
 ];
 
 /**
@@ -221,42 +238,57 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
         </AppShell.Header>
 
         <AppShell.Navbar p="xs">
-          {NAV.map((entry) => (
+          <ScrollArea type="scroll">
+            {NAV.map((group, index) => (
+              <Fragment key={group.section ?? 'main'}>
+                {group.section === undefined ? null : (
+                  <NavGroupLabel>{group.section}</NavGroupLabel>
+                )}
+                {group.items.map((entry) => (
+                  <NavLink
+                    key={entry.panel}
+                    component="a"
+                    // A real href, so middle-click and open-in-new-tab work and
+                    // the page still navigates if the bundle fails. Only a plain
+                    // left-click is taken over.
+                    href={hrefFor(entry.panel, meta.basePath)}
+                    label={entry.label}
+                    leftSection={entry.icon}
+                    active={panel === entry.panel}
+                    onClick={(event) => {
+                      if (!isPlainClick(event)) return;
+                      event.preventDefault();
+                      navigate(entry.panel);
+                      close();
+                    }}
+                  />
+                ))}
+                {index === 0 && <Divider my="sm" />}
+              </Fragment>
+            ))}
+
+            <NavGroupLabel>Elsewhere</NavGroupLabel>
             <NavLink
-              key={entry.panel}
               component="a"
-              // A real href, so middle-click and open-in-new-tab work and the page
-              // still navigates if the bundle fails. Only a plain left-click is
-              // taken over.
-              href={hrefFor(entry.panel, meta.basePath)}
-              label={entry.label}
-              leftSection={entry.icon}
-              active={panel === entry.panel}
-              onClick={(event) => {
-                if (!isPlainClick(event)) return;
-                event.preventDefault();
-                navigate(entry.panel);
-                close();
-              }}
+              href={meta.queuesPath}
+              label="bull-board"
+              description="Jobs, flows and metrics"
+              leftSection={<DatabaseIcon />}
             />
-          ))}
-          <NavLink
-            component="a"
-            href={meta.queuesPath}
-            label="bull-board"
-            description="Jobs, flows and metrics"
-            leftSection={<DatabaseIcon />}
-          />
-          {meta.openApiPath !== undefined && (
-            <NavLink
-              component="a"
-              href={meta.openApiPath}
-              target="_blank"
-              label="API explorer"
-              description="What a client can call"
-              rel="noreferrer"
-            />
-          )}
+            {meta.openApiPath !== undefined && (
+              <NavLink
+                component="a"
+                href={meta.openApiPath}
+                target="_blank"
+                label="API explorer"
+                description="What a client can call"
+                // Every other entry has one, and without it this label sat
+                // indented past the rest.
+                leftSection={<SendIcon />}
+                rel="noreferrer"
+              />
+            )}
+          </ScrollArea>
         </AppShell.Navbar>
 
         {/* No Container. The documentation site caps its width because a reading

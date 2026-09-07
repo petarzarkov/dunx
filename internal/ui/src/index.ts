@@ -37,6 +37,7 @@ export { FilterInput } from './components/FilterInput.js';
 export { JsonBlock, stringify } from './components/JsonBlock.js';
 export { LogoMark, Wordmark } from './components/Logo.js';
 export { MethodBadge } from './components/MethodBadge.js';
+export { NavGroupLabel } from './components/NavGroupLabel.js';
 export { Panel } from './components/Panel.js';
 export { Prose } from './components/Prose.js';
 export { StatCard } from './components/StatCard.js';

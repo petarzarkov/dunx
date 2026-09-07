@@ -19,6 +19,7 @@ import '@mantine/core/styles/Button.css';
 import '@mantine/core/styles/CloseButton.css';
 import '@mantine/core/styles/Code.css';
 import '@mantine/core/styles/Container.css';
+import '@mantine/core/styles/Divider.css';
 import '@mantine/core/styles/Drawer.css';
 import '@mantine/core/styles/Flex.css';
 import '@mantine/core/styles/Group.css';

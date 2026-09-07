@@ -508,12 +508,6 @@ body {
   scale: 1.35;
 }
 
-/* Mantine paints the active state itself. This is only the fade between states, so
-   clicking down the sidebar does not flash. */
-.mantine-NavLink-root {
-  transition: background-color 140ms ease;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .page-enter,
   .symbol-card-linked {
@@ -522,8 +516,7 @@ body {
 
   .symbol-card,
   .search-trigger,
-  .toc a::before,
-  .mantine-NavLink-root {
+  .toc a::before {
     transition: none;
   }
 

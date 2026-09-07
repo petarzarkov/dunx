@@ -187,3 +187,15 @@
   font-family: var(--mantine-font-family-monospace);
   font-size: 0.82rem;
 }
+
+/* Mantine paints the active state itself. This is only the fade between states, so
+   clicking down a sidebar does not flash. Shared, because both shells have one. */
+.mantine-NavLink-root {
+  transition: background-color 140ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mantine-NavLink-root {
+    transition: none;
+  }
+}
