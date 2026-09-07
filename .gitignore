@@ -168,3 +168,6 @@ packages/*/cli-fixture-*/
 # visible to a scan for the few hundred milliseconds it exists. That raced
 # `no-em-dash.test.ts` on a compiled bundle carrying an em dash.
 *.bun-build
+
+# The live demo secret, read by examples/full/deploy-demo.sh
+examples/full/.env.demo

@@ -1,0 +1,46 @@
+# The build context is the workspace root, because the lockfile and the workspace
+# list live there.
+#
+# Two things are deliberately NOT excluded:
+#
+# `examples/full/bunfig.toml` carries the `@dunx/transform` preload, which is a
+# runtime input rather than a build-time one - the container transpiles from
+# source at every boot, and without the preload it starts and then dies naming a
+# provider whose constructor it could not read. Bun reads bunfig.toml from the
+# process cwd and does not walk up, so the root copy cannot stand in for it.
+#
+# Every workspace directory named in `bun.lock`, including `internal/*`. A
+# `--frozen-lockfile` install refuses a checkout where a workspace it reads is
+# missing on disk, and `@dunx/dashboard`'s build shells into
+# `internal/dashboard-ui/scripts/build.ts`.
+
+# Reinstalled in the image from the lockfile
+node_modules
+**/node_modules
+
+# Built inside the image
+dist
+**/dist
+internal/docs/src/generated
+internal/docs/public/badges
+
+# Git, CI and editor state
+.git
+.github
+.claude
+.vscode
+
+# Coverage and test output
+coverage
+*.lcov
+**/tmp
+**/cli-fixture-*
+**/.sandbox-child-*
+
+# Local environment and databases
+.env
+.env.*
+!.env.example
+**/data
+**/*.db
+**/*.sqlite

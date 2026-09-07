@@ -1,0 +1,95 @@
+# The deployed shape of demo.dunx.win: this example, its own broker, and nothing
+# else. `compose.yml` beside it is the local development pair; this one is the
+# public demo.
+#
+#   docker compose -f examples/full/compose.demo.yml up -d --build
+#
+# Run it from the **workspace root**, since the image's build context is the root.
+#
+# ## Why its own Redis
+#
+# The host this runs on already serves another dunx app whose broker holds live
+# data. This example claims the queue prefix `dunx-full`, the throttle keys and
+# the relay channel `dunx-full:ws` - all distinct - but a demo is not worth the
+# question, and an isolated broker costs about 12 MB. Nothing here can reach the
+# other one: `REDIS_URL` names this service explicitly.
+#
+# ## Why no published port
+#
+# The only caller is cloudflared, which resolves `dunx-demo` by name over the
+# shared `app-network`. Publishing a host port would also expose the dashboard on
+# the LAN, and there is no reason for it to be reachable except through the
+# tunnel.
+name: dunx-demo
+
+x-logging:
+  &logging # The json-file default has no cap, and this logs one entry per request.
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+services:
+  dunx-demo-redis:
+    # public.ecr.aws rather than Docker Hub, which rate limits anonymous pulls by
+    # IP. Same image the example's own `compose.yml` uses.
+    image: public.ecr.aws/valkey/valkey:8-alpine
+    container_name: dunx-demo-redis
+    logging: *logging
+    restart: unless-stopped
+    # No `ports`: only the app talks to it, over the private network below.
+    # No volume either - the cache, the queue and the throttle counters are all
+    # disposable, and a demo that reseeds on restart has nothing to persist.
+    command: ['valkey-server', '--save', '', '--appendonly', 'no']
+    mem_limit: 192m
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    networks:
+      - demo
+
+  dunx-demo:
+    container_name: dunx-demo
+    logging: *logging
+    restart: unless-stopped
+    build:
+      # The workspace root: the lockfile and the workspace list are there.
+      context: ../..
+      dockerfile: examples/full/Dockerfile
+    environment:
+      # This service name, not the other app's broker.
+      REDIS_URL: redis://dunx-demo-redis:6379
+      # better-auth refuses to mint sessions without one. Supply it in a `.env`
+      # beside this file, or in the environment that runs compose.
+      AUTH_SECRET: ${DEMO_AUTH_SECRET:?set DEMO_AUTH_SECRET, at least 32 characters}
+      CORS_ORIGIN: https://demo.dunx.win
+      # Lower than the example's 1000 default. cloudflared passes the visitor's
+      # address through `x-forwarded-for` and the image sets `TRUST_PROXY=true`,
+      # so this is per visitor rather than per tunnel.
+      THROTTLE_LIMIT: '300'
+      THROTTLE_WINDOW_SECONDS: '60'
+      LOG_LEVEL: info
+    mem_limit: 1g
+    # The app implements `OnBeforeShutdown`, and the queue workers stop before the
+    # database they depend on. Docker's 10s default would cut that short.
+    stop_grace_period: 20s
+    depends_on:
+      dunx-demo-redis:
+        condition: service_healthy
+    networks:
+      - demo
+      # So cloudflared, which lives on this network, can reach `dunx-demo:3000`.
+      - app-network
+
+networks:
+  demo:
+    name: dunx-demo-network
+    driver: bridge
+  app-network:
+    # Created by the other app's compose project. Declared external so this file
+    # never tries to own, recreate or remove it.
+    external: true
+    name: app-network

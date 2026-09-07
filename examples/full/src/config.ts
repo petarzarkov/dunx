@@ -33,6 +33,8 @@ const envSchema = z.object({
    * which fakes the throttle subject and the address in every log line.
    */
   TRUST_PROXY: z.stringbool().default(false),
+  /** bull-board's `readOnlyMode`, inverted. The public demo sets it false. */
+  DASHBOARD_COMMANDS: z.stringbool().default(true),
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
@@ -79,6 +81,7 @@ export interface AppConfig {
   readonly throttle: { readonly limit: number; readonly windowSeconds: number };
   readonly schedule: { readonly tz: string };
   readonly upstream: { readonly timeoutMs: number };
+  readonly dashboard: { readonly commands: boolean };
 }
 
 /**
@@ -122,5 +125,6 @@ export const validate = (env: ConfigSource): AppConfig => {
     },
     schedule: { tz: value.SCHEDULE_TZ },
     upstream: { timeoutMs: value.UPSTREAM_TIMEOUT_MS },
+    dashboard: { commands: value.DASHBOARD_COMMANDS },
   };
 };

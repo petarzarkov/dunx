@@ -12,6 +12,7 @@ import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
 import { AuthDocs, AuthDocsModule } from './auth-docs.js';
 import { AppConfigService } from './config.js';
+import { LandingMiddleware } from './landing/landing.middleware.js';
 import { RequestTrailMiddleware } from './http/request-trail.js';
 
 /**
@@ -90,6 +91,8 @@ export const createApp = async (): Promise<HttpApp> => {
   app.use(Compression);
   // Before the rate limit: twenty hashed bundles must not spend a request budget.
   app.use(StaticFiles);
+  // After the static mount so /assets wins, before the rate limit.
+  app.use(LandingMiddleware);
   app.use(RequestTrailMiddleware);
   // After anything that establishes the caller, since that decides the subject.
   app.use(ThrottleGuard);

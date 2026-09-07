@@ -377,6 +377,19 @@ it('serves assets under /assets, outside the api prefix', async () => {
   expect((await client.request('assets/../../package.json')).status).toBe(404);
 });
 
+it('serves the landing page at / and leaves every other miss a 404', async () => {
+  const page = await client.request('');
+  expect(page.status).toBe(200);
+  expect(page.headers.get('content-type')).toContain('text/html');
+  expect(await page.text()).toContain('dunx live demo');
+
+  // `LandingMiddleware` answers `/` and nothing else. A SPA rewrite here would
+  // swallow this, and the 404 is a behaviour the tour narrates.
+  const missed = await client.request('nope');
+  expect(missed.status).toBe(404);
+  expect(await missed.json()).toEqual({ error: 'NOT_FOUND', status: 404 });
+});
+
 it('arms every schedule and runs one off its own cadence', async () => {
   const registry = app.get(ScheduleRegistry);
   const names = registry.list().map((entry) => entry.name);
