@@ -1,17 +1,37 @@
 import { Logger } from '@dunx/core';
-import { PubSub, type HttpApp } from '@dunx/http';
-import { createApp } from '../main.js';
+import {
+  HealthRegistry,
+  PubSub,
+  RequestMetrics,
+  type HttpApp,
+} from '@dunx/http';
 import { Lobby } from '../chat/lobby.service.js';
+import { createApp } from '../main.js';
+import { LoadBudget } from './budget.js';
 import { Sampler } from './sampler.js';
 import { Workload } from './workload.js';
 
 /**
+ * The example defaults to 1,000 requests per 60 s, which a load run exhausts in
+ * its first second. A 40 s run at concurrency 12 answered **59.4% of its
+ * requests with 429** and reported no failures, because every operation accepted
+ * one: the rate limiter was the only thing under test.
+ *
+ * `ConfigModule` holds a live reference to `Bun.env` and reads it when
+ * `createApp()` runs, so setting it here reaches the app that boots below.
+ * `/limits/burst` keeps its own `@Throttle` of 3 per minute and is what proves
+ * refusals still happen; `throttle.test.ts` covers the module default.
+ */
+Bun.env['THROTTLE_LIMIT'] ??= '100000';
+
+/**
  * A long-running process under sustained mixed load, watched for the things a
  * request-per-test suite cannot see: memory that never comes back, an event loop
- * that stalls, and per-connection state that outlives the connection.
+ * that stalls, per-connection state that outlives the connection, and a route
+ * whose p99 moved.
  *
  * `bun run soak` for the default 30 seconds, `bun run soak -- --seconds 600` for
- * a real one. The bounded version in `soak.test.ts` is what CI runs.
+ * a real one. CI runs 40 seconds at concurrency 12.
  */
 export interface SoakOptions {
   readonly seconds: number;
@@ -48,6 +68,10 @@ const MAX_LAG_MS = 750;
 const MIN_VERDICT_MINUTES = 3;
 /** One settled reading's GC noise, measured across runs at about +/-2.5 MiB. */
 const NOISE_FLOOR = 5 * MB;
+/** The stress burst, as a multiple of the steady concurrency. */
+const STRESS_FACTOR = 4;
+/** Shutdown has this long once traffic is in flight, and no longer. */
+const SHUTDOWN_BUDGET_MS = 10_000;
 
 export class Soak {
   constructor(private readonly options: SoakOptions) {}
@@ -59,6 +83,13 @@ export class Soak {
     const pubsub = app.get(PubSub);
     const failures: string[] = [];
     const report: string[] = [];
+
+    const redisUp = await Soak.#redisUp(app);
+    report.push(
+      redisUp
+        ? 'redis is up: the cache and queue ops are held to the work floor'
+        : 'redis is down: the cache and queue ops report but are not floored',
+    );
 
     const before = pubsub.subscriberCount(Lobby.TOPIC);
     const workload = new Workload(url);
@@ -97,11 +128,172 @@ export class Soak {
     const elapsed = (Date.now() - startedAt) / 1000;
     report.push(
       `${totals.calls} calls in ${elapsed.toFixed(1)}s, ` +
-        `${(totals.calls / elapsed).toFixed(0)}/s, ${totals.failures} failed`,
+        `${(totals.calls / elapsed).toFixed(0)}/s`,
     );
     report.push(...workload.rows());
-    const trends = sampler.trends(this.options.warmupMs);
-    report.push(...trends.map((trend) => Sampler.format(trend)));
+
+    const budget = new LoadBudget();
+    const verdict = budget.check({
+      stats: workload.stats,
+      elapsedSeconds: elapsed,
+      metrics: app.get(RequestMetrics).snapshot(),
+      redisUp,
+    });
+    report.push(...verdict.report);
+    failures.push(...verdict.failures);
+
+    Soak.#reportSampler(sampler, elapsed, settled, report, failures);
+    Soak.#reportLeak(settledPoints, elapsed, report, failures);
+
+    // Every socket the steady phase opened has closed by now, cleanly or not.
+    await Bun.sleep(250);
+    const after = pubsub.subscriberCount(Lobby.TOPIC);
+    report.push(`chat subscribers: ${before} before, ${after} after`);
+    if (after > before) {
+      failures.push(
+        `${after - before} chat subscriber(s) outlived their sockets (was ${before})`,
+      );
+    }
+
+    await this.#stress(url, redisUp, report, failures);
+    await this.#shutdownUnderLoad(app, url, report, failures);
+    return { ok: failures.length === 0, failures, calls: totals.calls, report };
+  }
+
+  /**
+   * A burst at {@link STRESS_FACTOR} times the steady concurrency, then a
+   * recovery round back at it.
+   *
+   * The work floor is **not** applied to the burst: being refused under stress is
+   * the rate limiter doing its job. What must hold is that nothing fails at the
+   * transport, no route answers a status it never answers when idle, and the app
+   * comes back - a server that degrades and stays degraded passes a steady run.
+   */
+  async #stress(
+    url: string,
+    redisUp: boolean,
+    report: string[],
+    failures: string[],
+  ): Promise<void> {
+    const concurrency = this.options.concurrency * STRESS_FACTOR;
+    const burst = new Workload(url);
+    const startedAt = Date.now();
+    await burst.run(Date.now() + 5000, concurrency);
+    const elapsed = (Date.now() - startedAt) / 1000;
+    const totals = burst.totals();
+    report.push(
+      `stress: ${totals.calls} calls at concurrency ${concurrency} in ${elapsed.toFixed(1)}s, ` +
+        `${totals.worked} worked, ${totals.refused} refused, ${totals.bad} bad`,
+    );
+    for (const [name, s] of burst.stats) {
+      if (s.errors > 0) {
+        failures.push(
+          `stress ${name}: ${s.errors}/${s.calls} failed at the transport, last: ${s.lastDetail}`,
+        );
+      }
+      if (s.unexpected.size > 0) {
+        const seen = [...s.unexpected]
+          .map(([status, n]) => `${status} x${n}`)
+          .join(', ');
+        failures.push(`stress ${name}: answered ${seen} under load`);
+      }
+    }
+
+    // Recovery: the same traffic at the steady rate has to meet the floor again.
+    const after = new Workload(url);
+    const recoveryStarted = Date.now();
+    await after.run(Date.now() + 4000, this.options.concurrency);
+    const recovery = new LoadBudget().check({
+      stats: after.stats,
+      elapsedSeconds: (Date.now() - recoveryStarted) / 1000,
+      redisUp,
+    });
+    report.push(
+      `recovery after stress: ${after.totals().worked} calls did work`,
+    );
+    failures.push(...recovery.failures.map((f) => `after stress, ${f}`));
+  }
+
+  /**
+   * Shutdown with traffic **in flight**, which is the half a request-per-test
+   * suite cannot reach and the half a rolling deploy always hits.
+   *
+   * The traffic is its own `Workload` and its errors are not judged: once the
+   * port closes, an in-flight request failing is the point. What is judged is
+   * that `shutdown()` finishes inside its budget and that the traffic settles
+   * rather than hanging on a socket the server never closed.
+   */
+  async #shutdownUnderLoad(
+    app: HttpApp,
+    url: string,
+    report: string[],
+    failures: string[],
+  ): Promise<void> {
+    const traffic = new Workload(url);
+    const running = traffic.run(Date.now() + 8000, this.options.concurrency);
+    // Long enough for every worker to have a request on the wire.
+    await Bun.sleep(500);
+    const inFlight = traffic.totals().calls;
+
+    const started = performance.now();
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      handle = setTimeout(() => resolve('timeout'), 15_000);
+    });
+    let outcome: 'done' | 'timeout';
+    try {
+      outcome = await Promise.race([
+        app.shutdown().then(() => 'done' as const),
+        timeout,
+      ]);
+    } finally {
+      // The loser of the race is still a live timer, and leaving it pending held
+      // the process open for 15 seconds after a clean shutdown.
+      if (handle !== undefined) clearTimeout(handle);
+    }
+    // The port is closed, or shutdown gave up on closing it. Either way anything
+    // still looping is retrying a refused connection rather than testing
+    // something, and one 8-second window logged 189,803 of those.
+    traffic.stop();
+    if (outcome === 'timeout') {
+      failures.push(
+        'shutdown did not finish within 15s with traffic in flight',
+      );
+      return;
+    }
+    const ms = performance.now() - started;
+    report.push(
+      `shutdown took ${ms.toFixed(0)}ms with ${inFlight} calls already made and workers still calling`,
+    );
+    if (ms > SHUTDOWN_BUDGET_MS) {
+      failures.push(
+        `shutdown took ${ms.toFixed(0)}ms under load, over the ${SHUTDOWN_BUDGET_MS}ms budget`,
+      );
+    }
+
+    const settled = await Promise.race([
+      running.then(() => 'settled' as const),
+      Bun.sleep(15_000).then(() => 'hung' as const),
+    ]);
+    if (settled === 'hung') {
+      failures.push(
+        'traffic in flight at shutdown never settled: a socket was left open',
+      );
+      return;
+    }
+    const totals = traffic.totals();
+    report.push(
+      `traffic at shutdown settled: ${totals.calls} calls, ${totals.worked} worked before the port closed`,
+    );
+  }
+
+  static #reportSampler(
+    sampler: Sampler,
+    elapsed: number,
+    settled: ReturnType<typeof process.memoryUsage>,
+    report: string[],
+    failures: string[],
+  ): void {
     report.push(
       `cpu ${sampler.cpuMs().toFixed(0)}ms over ${elapsed.toFixed(1)}s ` +
         `(${((sampler.cpuMs() / (elapsed * 1000)) * 100).toFixed(0)}% of one core), ` +
@@ -110,17 +302,19 @@ export class Soak {
     report.push(
       `settled heap ${(settled.heapUsed / MB).toFixed(1)} MiB, rss ${(settled.rss / MB).toFixed(1)} MiB`,
     );
-
-    if (totals.failures > 0) {
-      for (const [name, s] of workload.stats) {
-        if (s.failures > 0) {
-          failures.push(
-            `${name}: ${s.failures}/${s.calls} failed, last: ${s.lastDetail}`,
-          );
-        }
-      }
+    if (sampler.maxLagMs() > MAX_LAG_MS) {
+      failures.push(
+        `event loop stalled for ${sampler.maxLagMs().toFixed(0)}ms`,
+      );
     }
+  }
 
+  static #reportLeak(
+    settledPoints: readonly (readonly [number, number])[],
+    elapsed: number,
+    report: string[],
+    failures: string[],
+  ): void {
     const growth = Soak.settledSlope(settledPoints);
     const rise =
       (settledPoints[settledPoints.length - 1]?.[1] ?? 0) -
@@ -153,24 +347,6 @@ export class Soak {
           'which a forced GC did not reclaim',
       );
     }
-    if (sampler.maxLagMs() > MAX_LAG_MS) {
-      failures.push(
-        `event loop stalled for ${sampler.maxLagMs().toFixed(0)}ms`,
-      );
-    }
-
-    // Every socket the workload opened has closed by now, cleanly or not.
-    await Bun.sleep(250);
-    const after = pubsub.subscriberCount(Lobby.TOPIC);
-    report.push(`chat subscribers: ${before} before, ${after} after`);
-    if (after > before) {
-      failures.push(
-        `${after - before} chat subscriber(s) outlived their sockets (was ${before})`,
-      );
-    }
-
-    await this.#shutdown(app, failures);
-    return { ok: failures.length === 0, failures, calls: totals.calls, report };
   }
 
   /** Least squares over the per-round quiet readings, in bytes per minute. */
@@ -191,31 +367,12 @@ export class Soak {
     return divisor === 0 ? 0 : (n * sxy - sx * sy) / divisor;
   }
 
-  /** Shutdown is itself under test: it has to finish, and it has to be quiet. */
-  async #shutdown(app: HttpApp, failures: string[]): Promise<void> {
-    const started = performance.now();
-    // The handle is kept and cleared: the loser of the race is still a live timer,
-    // and leaving it pending held the process open for 15 seconds after a clean
-    // shutdown, which is 15 seconds on every CI run.
-    let handle: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<'timeout'>((resolve) => {
-      handle = setTimeout(() => resolve('timeout'), 15_000);
-    });
-    let outcome: 'done' | 'timeout';
-    try {
-      outcome = await Promise.race([
-        app.shutdown().then(() => 'done' as const),
-        timeout,
-      ]);
-    } finally {
-      if (handle !== undefined) clearTimeout(handle);
-    }
-    if (outcome === 'timeout') {
-      failures.push('shutdown did not finish within 15s');
-      return;
-    }
-    const ms = performance.now() - started;
-    if (ms > 10_000) failures.push(`shutdown took ${ms.toFixed(0)}ms`);
+  /** The app's own answer, so the run and the readiness probe cannot disagree. */
+  static async #redisUp(app: HttpApp): Promise<boolean> {
+    const { checks } = await app.get(HealthRegistry).readiness();
+    return checks.some(
+      (check) => check.name.includes('redis') && check.state === 'up',
+    );
   }
 }
 
