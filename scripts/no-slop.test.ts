@@ -82,6 +82,7 @@ const MODES: readonly (readonly [RegExp, Mode])[] = [
   [/^(packages|tools|examples)\/[^/]+\/README\.md$/, Mode.Reference],
   [/^README\.md$/, Mode.Reference],
   [/^CONTRIBUTING\.md$/, Mode.Reference],
+  [/^SECURITY\.md$/, Mode.Reference],
   // Commit subjects, assembled by `scripts/version.ts`. A prose budget over
   // text this file did not write would fail on what someone typed months ago.
   // The dash rule still applies, and the generator applies it.

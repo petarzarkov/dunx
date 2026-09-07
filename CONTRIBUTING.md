@@ -7,6 +7,9 @@ skimming this page first will save you a round trip.
 
 If something in here is wrong or missing, that is a bug too. Open an issue.
 
+A suspected vulnerability goes through [SECURITY.md](./SECURITY.md) instead,
+which routes it to a private advisory rather than a public issue.
+
 ## Prerequisites
 
 **Bun 1.3 or newer, and nothing else.** Bun is the runtime, the test runner, the
