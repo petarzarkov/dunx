@@ -13,7 +13,7 @@ import { JobsModule } from '../jobs/jobs.module.js';
 import { DashboardDemo } from './dashboard.demo.js';
 
 /**
- * The operations page at `/api/_dunx`. `forRootAsync` because everything shown
+ * The operations page at `/api/dashboard`. `forRootAsync` because everything shown
  * comes out of the container: `JobPublisher` satisfies `QueueSource` and
  * `RedisConnection` satisfies `RedisProbe`, with no adapter between them.
  *
@@ -39,7 +39,7 @@ import { DashboardDemo } from './dashboard.demo.js';
       ) => ({
         // Spelled out: the global prefix covers discovered routes, and this is
         // a middleware.
-        path: '/api/_dunx',
+        path: '/api/dashboard',
         title: config.get('appName'),
         queues,
         // Nothing connects until the board is opened, so this still exits 0

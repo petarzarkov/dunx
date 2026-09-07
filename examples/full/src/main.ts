@@ -127,9 +127,9 @@ const start = async (): Promise<void> => {
   logger.info(`openapi   ${new URL('api/openapi.json', url).href}`);
   logger.info(`live      ${new URL('api/health/live', url).href}`);
   logger.info(`ready     ${new URL('api/health/ready', url).href}`);
-  logger.info(`dashboard ${new URL('api/_dunx', url).href}`);
+  logger.info(`dashboard ${new URL('api/dashboard', url).href}`);
   logger.info(
-    `queues    ${new URL('api/_dunx/queues', url).href} (bull-board)`,
+    `queues    ${new URL('api/dashboard/queues', url).href} (bull-board)`,
   );
   logger.info('ctrl-c to stop');
 
