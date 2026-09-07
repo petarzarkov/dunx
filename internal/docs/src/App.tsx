@@ -12,7 +12,7 @@ import {
   VisuallyHidden,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { Fragment } from 'react';
+import { Fragment, useEffect } from 'react';
 import { spotlight } from '@mantine/spotlight';
 import { ColorSchemeToggle, LogoMark, NavGroupLabel, Wordmark } from '@dunx/ui';
 import { Footer } from './components/Footer';
@@ -214,6 +214,21 @@ const DocsFooter = (): React.JSX.Element => (
   </Box>
 );
 
+/**
+ * Marks the document once React has taken the server-rendered markup over.
+ *
+ * Every page is now rendered by this tree at build time, so the HTML a browser
+ * parses and the HTML React draws are the same - which leaves nothing in the
+ * markup for `scripts/preview.ts` to tell "parsed" from "interactive" by. The
+ * screenshot suite waits on this, and it used to wait on the removal of a
+ * `data-prerender` block that no longer exists.
+ */
+const useHydrated = (): void => {
+  useEffect(() => {
+    document.documentElement.dataset['hydrated'] = 'true';
+  }, []);
+};
+
 const Page = ({ route }: { route: Route }): React.JSX.Element => {
   switch (route.kind) {
     case RouteKind.Home:
@@ -289,13 +304,18 @@ const Header = ({
 );
 
 /**
+ * `url` is the route the build is rendering, and is absent in the browser -
+ * `src/entry-server.tsx` renders this tree per page with `react-dom/server`,
+ * where there is no `window.location` to read.
+ *
  * The landing page drops the sidebar and runs full width; every other route
  * keeps it. A marketing page constrained to the documentation gutter looks like
  * a documentation page, which is the thing being fixed - and it means the
  * footer is the only navigation landmark on `/`.
  */
-export const App = (): React.JSX.Element => {
-  const route = useRoute();
+export const App = ({ url }: { url?: string } = {}): React.JSX.Element => {
+  const route = useRoute(url);
+  useHydrated();
   const [opened, { toggle, close }] = useDisclosure(false);
   useScrollTo(route);
   const landing = route.kind === RouteKind.Home;

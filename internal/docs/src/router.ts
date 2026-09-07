@@ -81,6 +81,22 @@ const NAVIGATED = 'dunx:navigated';
 const currentUrl = (): string =>
   `${window.location.pathname}${window.location.search}`;
 
+/**
+ * The route the first render draws, which has to be the one the markup was
+ * built from.
+ *
+ * `vite.config.ts` writes one file per **path**, so the document being
+ * hydrated never saw a `?h=`. Starting from `window.location.pathname` alone
+ * makes the client's first render match it for `/api/http?h=symbol-Get` as well
+ * as for `/api/http`; the query is adopted by the effect below, on the render
+ * after, and `useScrollTo` was always an effect anyway.
+ */
+const initialUrl = (ssr: string | undefined): string =>
+  ssr ?? window.location.pathname;
+
+const same = (a: Route, b: Route): boolean =>
+  a.kind === b.kind && a.slug === b.slug && a.anchor === b.anchor;
+
 export const navigate = (target: string): void => {
   if (target === currentUrl()) return;
   window.history.pushState(null, '', target);
@@ -122,11 +138,19 @@ const interceptable = (event: MouseEvent): string | null => {
   return `${url.pathname}${url.search}`;
 };
 
-export const useRoute = (): Route => {
-  const [route, setRoute] = useState(() => parseRoute(currentUrl()));
+export const useRoute = (ssrUrl?: string): Route => {
+  const [route, setRoute] = useState(() => parseRoute(initialUrl(ssrUrl)));
 
   useEffect(() => {
-    const update = (): void => setRoute(parseRoute(currentUrl()));
+    const update = (): void =>
+      setRoute((prev) => {
+        const next = parseRoute(currentUrl());
+        // Returning the previous object skips the render, so the `update()`
+        // below costs nothing on the pages whose URL carries no query.
+        return same(prev, next) ? prev : next;
+      });
+    // The `?h=` the first render left out.
+    update();
     window.addEventListener('popstate', update);
     window.addEventListener(NAVIGATED, update);
     return () => {

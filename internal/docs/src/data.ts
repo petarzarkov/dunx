@@ -63,6 +63,37 @@ export const loadGuide = (slug: string): Promise<GuideBody | undefined> =>
 export const loadPackage = (dir: string): Promise<PackageBody | undefined> =>
   load(PACKAGE_BODIES, 'package', dir);
 
+export const peekGuide = (slug: string): GuideBody | undefined =>
+  loaded.get(`guide:${slug}`) as GuideBody | undefined;
+
+export const peekPackage = (dir: string): PackageBody | undefined =>
+  loaded.get(`package:${dir}`) as PackageBody | undefined;
+
+/**
+ * Files prose the page was rendered with back into the cache, out of the
+ * document rather than out of a chunk.
+ *
+ * The build renders each page with its body already loaded, so the HTML
+ * carries the prose before the bundle runs. The chunk it came from is a
+ * separate file the client has not fetched, and inlining it alongside the
+ * markup measured at +11.9 KB gzipped a page - so `main.tsx` hands the rendered
+ * element's own `innerHTML` here instead, keyed by the `data-prose-seed` the
+ * `Prose` carries.
+ *
+ * A package seed holds no symbols: only the readme tab is rendered on a cold
+ * load, and `useChunk` replaces the whole value when the real chunk lands.
+ */
+export const seedProse = (seed: string, html: string): void => {
+  const [kind = '', ...rest] = seed.split(':');
+  const id = rest.join(':');
+  if (id === '' || loaded.has(seed)) return;
+
+  if (kind === 'guide') loaded.set(seed, { html } satisfies GuideBody);
+  if (kind === 'package') {
+    loaded.set(seed, { readme: html, symbols: [] } satisfies PackageBody);
+  }
+};
+
 /**
  * The whole release history, in one chunk loaded when `/releases` opens. It is
  * the largest generated file and no other route reads a byte of it, so it is not

@@ -24,10 +24,23 @@ import { useCallback, type JSX, type MouseEvent } from 'react';
 export const Prose = ({
   html,
   size,
+  seed,
 }: {
   html: string | undefined;
   /** Descriptions inside a card read at `sm`; a documentation page at its own. */
   size?: MantineSize;
+  /**
+   * `guide:controllers`, naming the chunk this HTML came out of.
+   *
+   * `internal/docs` renders every page to HTML at build time, so the prose is
+   * in the document before the bundle runs. The chunk it was rendered from is
+   * a separate 65 KB file the client has not loaded yet, and inlining it as
+   * JSON alongside the markup measured at +11.9 KB gzipped per page - so
+   * `main.tsx` reads the payload back out of this element's own `innerHTML`
+   * instead, which costs nothing, and this attribute is how it knows which
+   * chunk to file it under.
+   */
+  seed?: string;
 }): JSX.Element | null => {
   const onClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -67,6 +80,7 @@ export const Prose = ({
     <Box
       className="prose"
       {...(size === undefined ? {} : { fz: size })}
+      {...(seed === undefined ? {} : { 'data-prose-seed': seed })}
       onClick={onClick}
       dangerouslySetInnerHTML={{ __html: html }}
     />

@@ -63,15 +63,14 @@ export interface ConsoleLine {
 const HEADING = 'document.querySelector("h1")?.textContent ?? ""';
 
 /**
- * Whether React has taken `#root` over.
+ * Whether React has taken the server-rendered markup over.
  *
- * A non-empty `<h1>` used to be the signal, and `scripts/seo.ts` now writes one
- * into every page before the bundle is requested, so that test passed on the
- * prerendered markup and each shot caught it rather than the site. The
- * prerendered block carries `data-prerender` and `createRoot().render()` drops
- * it, so its absence is the mount.
+ * A non-empty `<h1>` is no use on its own: `vite.config.ts` renders the whole
+ * app into every page at build time, so the heading, the shell and the nav are
+ * all in the document before the bundle is requested. `App` sets this attribute
+ * from an effect, which only runs once hydration has committed.
  */
-const MOUNTED = `!document.querySelector("[data-prerender]") && (${HEADING}) !== ""`;
+const MOUNTED = `document.documentElement.dataset.hydrated === "true" && (${HEADING}) !== ""`;
 
 export const startPreview = async (dist: string): Promise<Preview> => {
   const server = Bun.serve({
@@ -79,7 +78,7 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     async fetch(request) {
       const { pathname } = new URL(request.url);
       const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
-      // `scripts/seo.ts` writes `guide/controllers.html`, and Cloudflare serves
+      // `vite.config.ts` writes `guide/controllers.html`, and Cloudflare serves
       // it for the extensionless request. Both spellings are tried here for the
       // same reason.
       for (const candidate of [relative, `${relative}.html`]) {
@@ -129,8 +128,8 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     }
     // Exhausting the loop used to resolve anyway. That was survivable while the
     // signal was an empty `<h1>`, since the assertions then failed on a blank
-    // page; now the prerendered heading satisfies every one of them, so a bundle
-    // that never loads would pass the suite and be screenshotted.
+    // page; now the rendered page satisfies every one of them, so a bundle that
+    // never loads would pass the suite and be screenshotted.
     if (!mounted) {
       throw new Error(
         `the bundle did not mount for ${path}: ${JSON.stringify(logged.slice(0, 3))}`,

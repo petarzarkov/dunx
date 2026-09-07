@@ -10,7 +10,7 @@ import {
 import { Prose } from '@dunx/ui';
 import { useChunk } from '../chunk';
 
-import { guideBySlug, loadGuide, site } from '../data';
+import { guideBySlug, loadGuide, peekGuide, site } from '../data';
 import { href, RouteKind } from '../router';
 import { NotFound } from './NotFound';
 
@@ -54,7 +54,11 @@ const TableOfContents = ({
  */
 export const Guide = ({ slug }: { slug: string }): React.JSX.Element => {
   const guide = guideBySlug(slug);
-  const body = useChunk(() => loadGuide(slug), slug);
+  const body = useChunk(
+    () => loadGuide(slug),
+    slug,
+    () => peekGuide(slug),
+  );
 
   if (!guide) return <NotFound what={`guide "${slug}"`} />;
 
@@ -72,7 +76,7 @@ export const Guide = ({ slug }: { slug: string }): React.JSX.Element => {
             Edit {guide.source} on GitHub
           </Anchor>
           {body ? (
-            <Prose html={body.html} />
+            <Prose html={body.html} seed={`guide:${slug}`} />
           ) : (
             <Stack gap="sm" aria-busy="true">
               <Skeleton height={12} radius="sm" />
