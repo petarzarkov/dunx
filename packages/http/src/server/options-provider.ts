@@ -69,6 +69,12 @@ export abstract class HttpOptionsProvider {
   readonly trustProxy: boolean = false;
 
   /**
+   * Match a path exactly as declared, so `/users/1/` is not `/users/1`. On by
+   * default, which is `Bun.serve`'s own behaviour and hono's.
+   */
+  readonly strict: boolean = true;
+
+  /**
    * Install `SIGTERM`/`SIGINT` handlers that shut the app down. Off by default,
    * because installing a signal handler changes how the process terminates and
    * that is the app's decision to make.
@@ -185,6 +191,7 @@ export function resolveHttpOptions(
     notFound: settings.notFound,
     bootLogging: settings.bootLogging,
     trustProxy: settings.trustProxy,
+    strict: settings.strict,
     shutdownHooks: settings.shutdownHooks,
     relayChannel: settings.relayChannel,
     prefix: settings.prefix,

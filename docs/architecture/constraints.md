@@ -12,7 +12,8 @@ serve HTTP - not drift into a general web framework.
 
 ## Verified constraints
 
-These were measured on Bun 1.3.14, not assumed. They drive most decisions below.
+Measured, not assumed, on Bun 1.3.14 unless an entry names its own version.
+They drive most decisions below.
 
 **Bun already has the router.** `Bun.serve({ routes })` handles path params,
 per-method dispatch, static `Response` values, and 404-on-method-miss in native
@@ -24,6 +25,53 @@ param route: 200 { id: "42" }   static route: 200 ok   unmatched method: 404
 
 There is no reason to build a radix tree in JavaScript. dunx's job is to _emit_
 the `routes` object at boot and hand it to Bun.
+
+**That router matches the literal path, so a trailing slash misses**, in both
+directions: with `/users/:id` registered, `/users/1/` reaches the `fetch`
+fallback, and a route declared `/dir/` is not served at `/dir`. Registering both
+spellings is accepted. Bun 1.4.2:
+
+```
+/test  -> 200 R /test     /users/1  -> 200 R /users/:id id=1   /dir/ -> 200 R /dir/
+/test/ -> 404 FALLBACK    /users/1/ -> 404 FALLBACK            /dir  -> 404 FALLBACK
+/both  -> 200 R /both     /both/    -> 200 R /both/
+```
+
+`withTrailingSlashAliases` takes that last line: a second key holding the same
+per-method object, so one set of handlers, one preflight, and one metrics
+series, because `buildContext` froze the pattern into the closure. Every route
+gets one except `/` and a wildcard mount, neither of which has a slashed
+spelling to add. 500
+routes bind in 1.8 ms plain and 3.3 ms aliased, with no per-request difference
+above client overhead. It is opt-in: `strict` defaults to `true`, as hono's does.
+
+The five frameworks, each on its own default:
+
+| Framework                      | `/test/` | `/users/1/` | Option                     |
+| ------------------------------ | -------- | ----------- | -------------------------- |
+| express 5.2.1                  | 200      | 200         | `strict routing`, off      |
+| nest 11.1.28 (express adapter) | 200      | 200         | none of its own            |
+| elysia 1.4.29                  | 200      | 200         | `strictPath`, false        |
+| fastify 5.11.0                 | 404      | 404         | `ignoreTrailingSlash`, off |
+| hono 4.12.33                   | 404      | 404         | `strict`, true             |
+
+None of the five redirects. express and hono strip the slash before lookup,
+which takes being the router; elysia registers both spellings, which is the one
+mechanism open to dunx, since Bun has matched before `fetch` is called.
+
+**Bun resolves dot-segments for `req.url` but matches on the raw target.** Over
+a raw socket, where nothing rewrites the request line:
+
+```
+GET /test      -> 200 MATCHED  seen=/test
+GET /./test    -> 404 FALLBACK seen=/test
+GET /a/../test -> 404 FALLBACK seen=/test
+GET //test     -> 404 FALLBACK seen=//test
+```
+
+The matcher is the stricter of the two, so no request reaches a route whose
+`pathname` disagrees with the path it matched. A probe using `fetch` sees
+`//test` return 200 instead, because `fetch` collapses it before it is sent.
 
 **`server.upgrade(req)` works from inside a `routes` handler.** Bun's own types
 bless it: `Serve.RoutesWithUpgrade` allows `Response | undefined | void` when
