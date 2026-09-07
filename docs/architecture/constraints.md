@@ -12,7 +12,8 @@ serve HTTP - not drift into a general web framework.
 
 ## Verified constraints
 
-These were measured on Bun 1.3.14, not assumed. They drive most decisions below.
+Measured, not assumed, on Bun 1.3.14 unless an entry names its own version.
+They drive most decisions below.
 
 **Bun already has the router.** `Bun.serve({ routes })` handles path params,
 per-method dispatch, static `Response` values, and 404-on-method-miss in native
@@ -36,9 +37,11 @@ spellings is accepted. Bun 1.4.2:
 /both  -> 200 R /both     /both/    -> 200 R /both/
 ```
 
-`withTrailingSlashAliases` takes that last line: a second key per route holding
-the same per-method object, so one set of handlers, one preflight, and one
-metrics series, because `buildContext` froze the pattern into the closure. 500
+`withTrailingSlashAliases` takes that last line: a second key holding the same
+per-method object, so one set of handlers, one preflight, and one metrics
+series, because `buildContext` froze the pattern into the closure. Every route
+gets one except `/` and a wildcard mount, neither of which has a slashed
+spelling to add. 500
 routes bind in 1.8 ms plain and 3.3 ms aliased, with no per-request difference
 above client overhead. It is opt-in: `strict` defaults to `true`, as hono's does.
 

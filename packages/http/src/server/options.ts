@@ -44,8 +44,10 @@ export interface HttpOptions extends AppOptions {
    *
    * **`true` by default**, which is what `Bun.serve({ routes })` matches on its
    * own, and hono's name and default for the same switch. `false` serves both
-   * spellings, as Nest, express and elysia do. Not an `app.set()` setting: the
-   * route table is built once, at `listen()`.
+   * spellings, as Nest, express and elysia do - every route but `/` and a
+   * wildcard mount, which already matches its own trailing slash.
+   *
+   * Not an `app.set()` setting: the route table is built once, at `listen()`.
    */
   readonly strict?: boolean;
   /**

@@ -192,6 +192,10 @@ The alias is a key rather than a route: one per-method object under two names,
 so the metrics series, the request log and the OpenAPI document all say
 `/t/:id`.
 
+`/` and any path holding a `*` are left alone. `//` is a path Bun matches as
+neither, and a wildcard mount already matches its own trailing slash, so
+`@dunx/auth` at `/api/auth/*` serves `/api/auth/` without one.
+
 The default stays strict because that is what `Bun.serve` does. An earlier
 version of this note said "Nest, Express and Fastify all normalise", which is
 wrong about Fastify - its `ignoreTrailingSlash` is off by default, and hono's

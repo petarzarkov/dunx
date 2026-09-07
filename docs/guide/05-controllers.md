@@ -77,11 +77,14 @@ strips it too, so `@Get('sub/')` is `/t/sub`.
 const app = await HttpFactory.create(AppModule, { strict: false });
 ```
 
-It registers a second key per route ending in `/`, pointing at the handlers the
-first one already has, so the request log, the metrics series and the OpenAPI
-document all still say `/t/:id`. `strict` defaults to `true`, which is what
-`Bun.serve` matches on its own and what Hono defaults to. A reverse-proxy
-rewrite in front of dunx does the same job for a caller you do not control.
+It registers a second key ending in `/`, pointing at the handlers the first one
+already has, so the request log, the metrics series and the OpenAPI document all
+still say `/t/:id`. Every route gets one except `/` and a wildcard mount, which
+already matches its own trailing slash.
+
+`strict` defaults to `true`, which is what `Bun.serve` matches on its own and
+what Hono defaults to. A reverse-proxy rewrite in front of dunx does the same
+job for a caller you do not control.
 
 **CORS preflight is mounted, not inferred.** An `OPTIONS` request does reach the
 fallback. Answering preflight there would mean reconstructing which verbs the path
