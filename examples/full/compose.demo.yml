@@ -65,6 +65,9 @@ services:
       # better-auth refuses to mint sessions without one. Supply it in a `.env`
       # beside this file, or in the environment that runs compose.
       AUTH_SECRET: ${DEMO_AUTH_SECRET:?set DEMO_AUTH_SECRET, at least 32 characters}
+      # better-auth matches a browser's Origin against this, so without it every
+      # sign-in from the public domain is INVALID_ORIGIN.
+      PUBLIC_URL: https://demo.dunx.win
       CORS_ORIGIN: https://demo.dunx.win
       # Lower than the example's 1000 default. cloudflared passes the visitor's
       # address through `x-forwarded-for` and the image sets `TRUST_PROXY=true`,

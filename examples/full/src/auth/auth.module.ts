@@ -23,7 +23,9 @@ import { ProfileController } from './profile.controller.js';
         imports: [DatabaseModule],
         useFactory: (config: AppConfigService, connection: DbConnection) => ({
           secret: config.get('auth.secret'),
-          baseURL: `http://localhost:${config.get('port')}`,
+          // better-auth rejects a browser request whose Origin is not this,
+          // with INVALID_ORIGIN, so a deployment behind a domain must say so.
+          baseURL: config.get('publicUrl'),
           // What better-auth matches a pathname against; the global prefix is
           // what makes the mounted `/auth` route answer here.
           basePath: '/api/auth',

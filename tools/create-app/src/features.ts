@@ -53,6 +53,15 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
       map: 'port: value.PORT,',
       env: [{ name: 'PORT', value: '3000' }],
     },
+    publicUrl: {
+      schema: [
+        '/** The origin a browser reaches this app on. Absent means localhost. */',
+        'PUBLIC_URL: z.url().optional(),',
+      ],
+      field: 'readonly publicUrl: string;',
+      map: 'publicUrl: value.PUBLIC_URL ?? `http://localhost:${value.PORT}`,',
+      env: [{ name: 'PUBLIC_URL', value: 'http://localhost:3000' }],
+    },
     appName: {
       schema: [],
       field: 'readonly appName: string;',
@@ -254,7 +263,7 @@ export const FEATURES: readonly Feature[] = [
     requires: ['database'],
     module: { klass: 'AccountsModule', from: './auth/auth.module.js' },
     dependencies: ['@dunx/auth', 'better-auth', 'drizzle-orm'],
-    config: ['auth', 'port'],
+    config: ['auth', 'publicUrl'],
   },
   {
     name: 'cache',
