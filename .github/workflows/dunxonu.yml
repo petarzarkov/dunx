@@ -1,13 +1,5 @@
 name: dunxonu
 
-# The conversational half. dunxonu-review.yml opens the review; this answers
-# when someone talks back. Both need the same two secrets, documented there.
-#
-# Two ways to reach it, because a person replying to an inline review comment
-# does not type a mention:
-#   - any comment, review body, issue body or issue title saying @dunxonu
-#   - a bare reply inside a review thread dunxonu itself started
-
 on:
   issue_comment:
     types: [created]
