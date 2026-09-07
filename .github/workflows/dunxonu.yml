@@ -42,7 +42,8 @@ jobs:
       # in_reply_to_id, and the thread is dunxonu's when the comment being
       # replied to is dunxonu's. Both bodies come in through `env` rather than
       # into the script text, so a comment cannot inject shell.
-      - id: addressed
+      - name: Is dunxonu being addressed
+        id: addressed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BODY: ${{ github.event.comment.body || github.event.review.body }}

@@ -72,6 +72,11 @@ jobs:
             ineligible: count it as already reviewed only if a review covers
             that exact commit. Review the changes since your own last review,
             and do not repeat a finding you have already posted.
+
+            Run every subagent synchronously and use its result in the same
+            turn. This run ends when you stop producing output, so a background
+            agent's completion notification can never reach you: launching one
+            and waiting for it ends the review having done nothing.
           # --allowedTools REPLACES the skill's own allowed-tools frontmatter
           # rather than adding to it, so every tool the skill declares has to be
           # named here or the call is denied in a non-interactive run. Naming
