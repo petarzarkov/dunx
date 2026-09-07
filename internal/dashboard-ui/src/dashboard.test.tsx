@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { ago, bytes, count, duration } from './format';
 import { hrefFor, panelFor } from './router';
 import { readMeta } from './meta';
+import { unresolved } from './panels/Overview';
 
 /**
  * The logic with no DOM: formatting, routing and the meta the server embeds. The
@@ -95,5 +96,44 @@ describe('readMeta', () => {
       readMeta(document.implementation.createHTMLDocument('t')),
     ).toBeUndefined();
     expect(readMeta(withScript('not json'))).toBeUndefined();
+  });
+});
+
+describe('unresolvable parameters', () => {
+  const snapshotWith = (
+    dependencies: readonly Record<string, unknown>[],
+  ): Parameters<typeof unresolved>[0] =>
+    ({
+      providers: [{ token: 'BuildInfo', dependencies }],
+    }) as unknown as Parameters<typeof unresolved>[0];
+
+  it('reports a parameter that names nothing and has no default', () => {
+    expect(unresolved(snapshotWith([{ unresolved: 'config' }]))).toEqual([
+      'BuildInfo.config',
+    ]);
+  });
+
+  /**
+   * `readonly retries = 3` in `examples/full` is the live case. `number` erases,
+   * so it is recorded unresolved, but the default is the language saying the
+   * parameter may be absent and boot succeeds. Counting it put a red boot-error
+   * alert on the demo's own dashboard.
+   */
+  it('leaves a defaulted parameter out, because boot succeeds', () => {
+    expect(
+      unresolved(snapshotWith([{ unresolved: 'retries', optional: true }])),
+    ).toEqual([]);
+  });
+
+  it('keeps a resolvable dependency out either way', () => {
+    expect(
+      unresolved(
+        snapshotWith([
+          { token: 'Logger' },
+          { unresolved: 'retries', optional: true },
+          { unresolved: 'stamp' },
+        ]),
+      ),
+    ).toEqual(['BuildInfo.stamp']);
   });
 });
