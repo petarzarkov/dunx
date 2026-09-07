@@ -171,3 +171,10 @@ packages/*/cli-fixture-*/
 
 # The live demo secret, read by examples/full/deploy-demo.sh
 examples/full/.env.demo
+
+# `packages/infra/src/queue/sandbox.test.ts` writes a `.ts` child beside itself
+# and deletes it when the run ends. It has to live there rather than in a temp
+# directory, or the child resolves its own `@dunx/core` and gets a second
+# `Logger` class. Untracked and unignored, it was visible to every guard that
+# walks `git ls-files --others` for as long as it existed.
+**/.sandbox-child-*.ts
