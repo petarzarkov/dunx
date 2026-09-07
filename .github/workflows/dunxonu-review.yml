@@ -58,6 +58,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.DUNXONU_TOKEN }}
+          show_full_output: true # TEMPORARY: diagnosing the skipped review
           plugin_marketplaces: https://github.com/anthropics/claude-code.git
           plugins: code-review@claude-code-plugins
           # The skill's own eligibility check refuses a pull request it has
