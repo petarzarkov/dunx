@@ -97,13 +97,17 @@ jobs:
           prompt: |
             Someone replied to a review comment you left on ${{ github.repository }}
             pull request ${{ github.event.pull_request.number }}. Read the whole
-            thread, then reply in that same thread with:
+            thread, then reply in that same thread.
 
-            gh api --method POST repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/${{ github.event.comment.in_reply_to_id }}/replies -f body='...'
+            Write the reply to /tmp/reply.json as {"body": "..."} and post that
+            file, because -f body='...' breaks on the first apostrophe and
+            ordinary prose is full of them:
+
+            gh api --method POST repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments/${{ github.event.comment.in_reply_to_id }}/replies --input /tmp/reply.json
 
             Answer what was asked. If the finding was wrong, say so plainly and
             drop it. Keep it to a few sentences, cite CLAUDE.md by link when the
             answer rests on it, and do not open a new thread or restate the
             original finding.
           claude_args: |
-            --allowedTools "Bash(gh api:*),Bash(gh pr view:*),Bash(gh pr diff:*),Read,Grep,Glob"
+            --allowedTools "Bash(gh api:*),Bash(gh pr view:*),Bash(gh pr diff:*),Read,Grep,Glob,Write"
