@@ -1,0 +1,79 @@
+name: dunxonu review
+
+# dunxonu reviews every pull request, and re-reviews it on each push. It runs
+# Claude Code through the official action, authenticating with a subscription
+# OAuth token rather than API credit.
+#
+# Two repository secrets, and neither workflow works without both:
+#   CLAUDE_CODE_OAUTH_TOKEN  from `claude setup-token`, an sk-ant-oat01- token
+#                            tied to the subscription of whoever ran it
+#   DUNXONU_TOKEN           a classic PAT owned by the dunxonu machine
+#                            account, carrying the `public_repo` scope and
+#                            nothing else. A fine-grained token cannot reach a
+#                            repository owned by another personal account even
+#                            as a collaborator, and `repo` would additionally
+#                            cover every private repository the account can
+#                            see, so `public_repo` is the narrowest scope that
+#                            works while dunx is public.
+#
+# Passing DUNXONU_TOKEN as `github_token` is what puts dunxonu's name on the
+# review. Omitted, the action posts as the Claude GitHub App instead.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# A push supersedes the review of the commit before it, so a rapid series of
+# pushes costs one review rather than one per push. Each review posts inline
+# comments and two overlapping runs would post two sets over the same lines.
+concurrency:
+  group: dunxonu-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Review the diff
+    runs-on: ubuntu-latest
+    # The skill skips a draft itself; filtering here saves starting a runner for
+    # one, and `ready_for_review` is what picks it up later. The sender check is
+    # the loop guard: dunxonu must never review a push of its own.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.sender.login != 'dunxonu'
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      # No `bun install` here. A review reads the diff and does not build: the
+      # skill is told not to, because CI runs the gates separately.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.DUNXONU_TOKEN }}
+          plugin_marketplaces: https://github.com/anthropics/claude-code.git
+          plugins: code-review@claude-code-plugins
+          # The skill's own eligibility check refuses a pull request it has
+          # reviewed before, which would make every push after the first a
+          # silent no-op. Scoping that check to the current head commit is what
+          # keeps `synchronize` working.
+          prompt: |
+            /code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+
+            The head commit is ${{ github.event.pull_request.head.sha }}. A
+            review of an earlier commit does not make this pull request
+            ineligible: count it as already reviewed only if a review covers
+            that exact commit. Review the changes since your own last review,
+            and do not repeat a finding you have already posted.
+          # The action starts the inline-comment MCP server only when
+          # --allowedTools names it, even though the skill's own frontmatter
+          # already grants the tool.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment"
