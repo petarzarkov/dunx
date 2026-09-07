@@ -1,4 +1,5 @@
 import { posix } from 'node:path';
+import { summaryOf } from './agent-docs';
 import { highlightFences } from './highlight';
 import type { GuidePage } from './extract/model';
 
@@ -253,6 +254,7 @@ export const buildGuide = (
     order,
     source,
     title: titleOf(markdown, fallbackTitle),
+    summary: summaryOf(markdown),
     html,
     headings,
   };

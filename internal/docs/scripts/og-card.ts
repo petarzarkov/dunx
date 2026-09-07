@@ -23,7 +23,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { BLURB, CHIPS, HEADLINE } from '../../../scripts/positioning.js';
-import { escapeHtml } from './prerender.js';
+import { escapeHtml } from './pages.js';
 
 const WIDTH = 1200;
 const HEIGHT = 630;

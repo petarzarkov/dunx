@@ -6,11 +6,12 @@
     <!-- The full-colour cut, because a tab strip's background is not something
          the page controls and `currentColor` would resolve against it. -->
     <link rel="icon" type="image/svg+xml" href="/logo/logo-mark-color.svg" />
+    <!-- The title and the description are per-page, written by the `dunx:pages`
+         plugin in `vite.config.ts`: it replaces this title and appends the
+         description, canonical, Open Graph and JSON-LD each route needs. A
+         description here would be a second one on every built page, so this
+         title is the dev server's alone. -->
     <title>dunx | fastest web DI framework</title>
-    <meta
-      name="description"
-      content="Documentation and API reference for dunx, a Bun-native dependency injection framework."
-    />
     <!-- Mantine's `ColorSchemeScript`, inlined. `MantineProvider` sets
          `data-mantine-color-scheme` on mount, which is after the first paint, so
          without this the page renders light for a frame and then flips - and the

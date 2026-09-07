@@ -13,30 +13,35 @@ import { MoonIcon, SunIcon } from '../icons.js';
  * click had anywhere to go. `useComputedColorScheme` resolves `auto` against the
  * OS, so the first click always flips what the user is looking at.
  *
- * `getInitialValueInEffect: false` because these are client-only bundles with
- * nothing to hydrate against: the OS preference is readable on the first render,
- * and deferring it to an effect would paint the wrong icon for a frame.
- *
  * The API explorer had the buggy version and the documentation site the fixed
  * one, which is the argument for this file existing at all.
+ *
+ * **Nothing scheme-dependent is rendered.** `internal/docs` now renders every
+ * page to HTML at build time, on a machine with no `matchMedia`, so a scheme
+ * read during render resolved `light` there and `dark` in a dark-OS browser -
+ * one icon in the markup, a different one on the first client render, and a
+ * hydration error on every load. The computed scheme is read for the click
+ * direction only, where it is a closure rather than markup, and the two icons
+ * are switched by Mantine's own `mantine-*-hidden` classes off the
+ * `data-mantine-color-scheme` the inlined head script sets before first paint.
+ * The label stays put for the same reason.
  */
 export const ColorSchemeToggle = (): JSX.Element => {
   const { setColorScheme } = useMantineColorScheme();
-  const dark =
-    useComputedColorScheme('light', { getInitialValueInEffect: false }) ===
-    'dark';
+  const computed = useComputedColorScheme('light', {
+    getInitialValueInEffect: false,
+  });
 
   return (
     <ActionIcon
       variant="default"
       size="lg"
-      title={dark ? 'Light theme' : 'Dark theme'}
-      aria-label={
-        dark ? 'Switch to the light theme' : 'Switch to the dark theme'
-      }
-      onClick={() => setColorScheme(dark ? 'light' : 'dark')}
+      title="Toggle the colour scheme"
+      aria-label="Toggle the colour scheme"
+      onClick={() => setColorScheme(computed === 'dark' ? 'light' : 'dark')}
     >
-      {dark ? <SunIcon /> : <MoonIcon />}
+      <MoonIcon className="mantine-dark-hidden" />
+      <SunIcon className="mantine-light-hidden" />
     </ActionIcon>
   );
 };

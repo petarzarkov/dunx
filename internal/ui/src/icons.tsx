@@ -13,8 +13,10 @@ const svg = (
   children: JSX.Element,
   size: number,
   filled = false,
+  className?: string,
 ): JSX.Element => (
   <svg
+    {...(className === undefined ? {} : { className })}
     width={size}
     height={size}
     viewBox="0 0 24 24"
@@ -31,6 +33,12 @@ const svg = (
 
 export interface IconProps {
   readonly size?: number;
+  /**
+   * Passed through to the `<svg>`, which is what lets a caller hand an icon one
+   * of Mantine's `mantine-light-hidden` / `mantine-dark-hidden` classes and pick
+   * between two of them in CSS rather than in a render.
+   */
+  readonly className?: string;
 }
 
 export const LockIcon = ({ size = 16 }: IconProps): JSX.Element =>
@@ -42,17 +50,24 @@ export const LockIcon = ({ size = 16 }: IconProps): JSX.Element =>
     size,
   );
 
-export const SunIcon = ({ size = 18 }: IconProps): JSX.Element =>
+export const SunIcon = ({ size = 18, className }: IconProps): JSX.Element =>
   svg(
     <>
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
     </>,
     size,
+    false,
+    className,
   );
 
-export const MoonIcon = ({ size = 18 }: IconProps): JSX.Element =>
-  svg(<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />, size);
+export const MoonIcon = ({ size = 18, className }: IconProps): JSX.Element =>
+  svg(
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />,
+    size,
+    false,
+    className,
+  );
 
 export const SendIcon = ({ size = 16 }: IconProps): JSX.Element =>
   svg(<path d="M4 12h14M13 6l6 6-6 6" />, size);

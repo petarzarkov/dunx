@@ -417,7 +417,6 @@ writeFileSync(join(OUT_DIR, 'index.json'), JSON.stringify(site));
 // to the index.
 writeAgentDocs({
   publicDir: PUBLIC_DIR,
-  docsDir: DOCS_DIR,
   setupDoc: join(DOCS_DIR, 'setup.md'),
   blurb: BLURB,
   guides: site.guides,

@@ -197,13 +197,13 @@ types:
 ## Layout
 
 ```
-vite.config.ts         # base path, react plugin - the whole build config
+vite.config.ts         # base path, react plugin, and the page writer
 happydom.ts            # test preload: a DOM, plus Vite's ?raw for bun test
 scripts/
   generate.ts          # entrypoint: writes src/generated/ - index, bodies, chunks.ts
   content.ts           # markdown -> HTML, heading ids, links, siteMarkdown
   agent-docs.ts        # setup.md and llms.txt into public/, plus summaryOf
-  seo.ts               # post-build: a file per route, sitemap, robots, 404
+  pages.ts             # the route list and the head each one gets
   preview.ts           # the built site in real Chrome, for the browser suite
   extract/
     ast.ts             # structural views over oxc's ESTree output
@@ -216,6 +216,7 @@ scripts/
     model.ts           # the JSON model both sides share
 src/
   App.tsx              # shell, navigation
+  entry-server.tsx     # renderToString per route, for the build
   router.ts            # history router, symbol anchors, scroll restoration
   data.ts              # the index, parsed once, plus the per-route body loaders
   chunk.ts             # useChunk: a per-route body as it arrives
@@ -228,19 +229,50 @@ Routing is path-based (`/api/core`). It was hash-based while the site was on
 GitHub Pages, which serves static files with no SPA fallback and answered every
 deep link with a 404.
 
-`scripts/seo.ts` is what replaced that fallback. It runs after `vite build` and
-writes a real HTML file per route - 96 of them - each carrying its own title,
+The `dunx:pages` plugin in `vite.config.ts` is what replaced that fallback. It
+writes a real HTML file per route - 99 of them - each carrying its own title,
 description, canonical and Open Graph tags, plus `sitemap.xml`, `robots.txt` and
-`404.html`. The route set comes from `src/generated/index.json` and
-`releases.json`, the same model the nav is built from, and a guide's description
-is `summaryOf` from `agent-docs.ts`, the sentence `llms.txt` already uses.
+`404.html`. The route set and the head come from `scripts/pages.ts`, which reads
+`src/generated/index.json` and `releases.json`, the same model the nav is built
+from; a guide's description is the `summary` the model records.
 
 Two things follow from emitting files rather than rewriting every path to the
 shell. Search results and link unfurls say which page they are, where a single
-`index.html` made all 96 read "dunx | fastest web DI framework". And a miss is a
+`index.html` made all 99 read "dunx | fastest web DI framework". And a miss is a
 real 404: `_redirects` used to carry `/* /index.html 200`, so a typo, a renamed
 guide and a request for `/sitemap.xml` all returned 200 and a page. `robots.txt`
 and `sitemap.xml` looked like they existed for that reason alone.
+
+**The body of each file is the app.** `bun run build` runs Vite twice: once with
+`--ssr` over `src/entry-server.tsx`, then the client build, whose plugin imports
+that output and calls `renderPage` per route. A reader on a slow connection sees
+the finished page - header, sidebar, contents rail - rather than a frame of
+something else.
+
+What it replaced was a `scripts/prerender.ts` that built a second, flatter layout
+out of the same model: a heading, the guide's prose and two link lists, styled by
+six declarations of its own. Measured on a throttled connection, that frame was
+on screen for the 4.5 s between the two paints, and the swap moved the heading
+and grew the chrome around it. The landing page's LCP went from 6360 ms to
+3192 ms in the same measurement, because the hero is now in the document.
+
+`vite-prerender-plugin` was measured first and rejected. It adds the prerender
+script as a **client** rollup input, so `dist/` carried a 1,011 KB
+`react-dom/server` chunk and all 99 pages carried a `modulepreload` for it -
+every visitor downloading a renderer they never execute. Its build also never
+exited, under Bun and under Node. `vite-react-ssg` avoids both but requires
+`react-router-dom` and its route objects, which is a rewrite of `router.ts`
+rather than a deletion.
+
+Two consequences hold the pages together, and both are easy to undo by accident.
+`useChunk` takes a synchronous `peek`, and `main.tsx` seeds it out of the
+document's own markup before hydrating: a guide's body lives in a 65 KB chunk the
+client has not fetched, so without the seed the first client render draws the
+skeleton and throws the rendered prose away. Inlining that chunk as JSON instead
+measured at +11.9 KB gzipped per page. And nothing scheme-dependent may be
+rendered - `ColorSchemeToggle` reads the computed scheme for its click direction
+only, and switches its two icons in CSS - because the build renders on a machine
+with no `matchMedia`.
 
 A route is written as `guide/controllers.html`, not `guide/controllers/index.html`.
 Measured on a preview deployment: Cloudflare answers a directory index with a 308

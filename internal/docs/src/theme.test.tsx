@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import {
   afterAll,
   afterEach,
@@ -50,7 +50,17 @@ const mountAuto = () =>
   );
 
 const toggle = (): HTMLElement =>
-  screen.getByLabelText(/Switch to the (light|dark) theme/);
+  screen.getByLabelText('Toggle the colour scheme');
+
+/** The icon CSS shows for the scheme on screen, by the class it carries. */
+const visibleIcon = (): string | null => {
+  const shown = toggle().querySelector('svg:not([class])');
+  if (shown) return 'both';
+  return toggle().querySelector('.mantine-dark-hidden') &&
+    toggle().querySelector('.mantine-light-hidden')
+    ? 'css'
+    : null;
+};
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -81,14 +91,35 @@ describe('the colour scheme toggle', () => {
     mountAuto();
 
     expect(scheme()).toBe('dark');
-    // The label is what the click will do, so it doubles as the assertion that
-    // the button knows a dark page is a dark page.
-    expect(toggle().getAttribute('aria-label')).toBe(
-      'Switch to the light theme',
-    );
-
+    // The first click flipping what is on screen is the whole guarantee: the
+    // button reads the *computed* scheme, so `auto` on a dark-OS machine is a
+    // dark page and the click has somewhere to go. Reading the stored value
+    // made this click a no-op.
     fireEvent.click(toggle());
     expect(scheme()).toBe('light');
+  });
+
+  /**
+   * The direction is not in the markup, which is what makes the built pages
+   * hydrate. `entry-server.tsx` renders on a machine with no `matchMedia`, so a
+   * scheme-dependent icon or label resolved light there and dark in a dark-OS
+   * browser: one icon in the document, a different one on the first client
+   * render, and a hydration error on every load.
+   */
+  test('renders both icons and one label, whatever the OS says', () => {
+    prefersDark(true);
+    mountAuto();
+    const dark = toggle().outerHTML;
+
+    cleanup();
+    prefersDark(false);
+    mountAuto();
+
+    expect(toggle().outerHTML).toBe(dark);
+    expect(visibleIcon()).toBe('css');
+    expect(toggle().getAttribute('aria-label')).toBe(
+      'Toggle the colour scheme',
+    );
   });
 
   test('switches to dark on the first click when the OS is light', () => {

@@ -21,9 +21,10 @@ const RAW_URL = 'https://raw.githubusercontent.com/petarzarkov/dunx/main/';
 /**
  * The first paragraph under the title, flattened to one line.
  *
- * Exported because `seo.ts` needs the same sentence for a meta description: a
- * second extractor would give a page one summary in `llms.txt` and a different
- * one in a search result.
+ * Called once per guide by `content.ts`, which records the result on the page as
+ * `summary`. Both this file and the page head want that sentence, and a second
+ * extractor would give a page one summary in `llms.txt` and a different one in a
+ * search result.
  */
 export const summaryOf = (markdown: string): string => {
   const body = markdown.replace(/^#[^\n]*\n+/, '');
@@ -44,17 +45,16 @@ const entry = (title: string, url: string, summary: string): string =>
 
 interface AgentDocsOptions {
   readonly publicDir: string;
-  readonly docsDir: string;
   readonly setupDoc: string;
   readonly blurb: string;
-  /** The site's guides, in nav order, each with the source path it was read from. */
+  /** The site's guides, in nav order, each carrying its own summary. */
   readonly guides: readonly GuideMeta[];
   /** Reads a repository-relative file, returning '' when it is absent. */
   readonly read: (file: string) => string;
 }
 
 export const writeAgentDocs = (options: AgentDocsOptions): void => {
-  const { publicDir, docsDir, setupDoc, blurb, guides, read } = options;
+  const { publicDir, setupDoc, blurb, guides, read } = options;
 
   copyFileSync(setupDoc, join(publicDir, 'setup.md'));
 
@@ -65,14 +65,9 @@ export const writeAgentDocs = (options: AgentDocsOptions): void => {
     const lines = guides
       .filter((guide) => guide.category === category)
       .sort((a, b) => a.order - b.order)
-      .map((guide) => {
-        const source = guide.source.replace(/^docs\//, '');
-        return entry(
-          guide.title,
-          `${RAW_URL}docs/${source}`,
-          summaryOf(read(join(docsDir, source))),
-        );
-      });
+      .map((guide) =>
+        entry(guide.title, `${RAW_URL}${guide.source}`, guide.summary),
+      );
     const heading = category === 'guide' ? 'Guide' : 'Reference';
     return `## ${heading}\n\n${lines.join('\n')}`;
   });

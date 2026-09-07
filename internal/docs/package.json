@@ -5,7 +5,7 @@
   "description": "The dunx documentation site. Private tooling, never published.",
   "type": "module",
   "scripts": {
-    "build": "bun run generate && vite build && bun ./scripts/seo.ts",
+    "build": "bun run generate && vite build --ssr src/entry-server.tsx --outDir .ssr && vite build",
     "dev": "bun run generate && vite",
     "generate": "bun ./scripts/generate.ts",
     "gen:og": "bun ./scripts/og-card.ts",

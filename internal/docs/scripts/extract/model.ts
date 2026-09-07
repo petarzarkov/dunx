@@ -119,6 +119,15 @@ export interface GuideMeta {
   /** Position within the category. Reference pages sort alphabetically. */
   readonly order: number;
   readonly title: string;
+  /**
+   * The page's first sentence, for `llms.txt` and for its meta description.
+   *
+   * Extracted here rather than by each consumer: `agent-docs.ts` and the head
+   * `entry-server.tsx` writes both wanted it, and both were re-reading the
+   * source markdown to get it - which is two extractors that can disagree about
+   * what a page is about.
+   */
+  readonly summary: string;
   /** Repo-relative path the page was rendered from. */
   readonly source: string;
   readonly headings: readonly { readonly id: string; readonly text: string }[];

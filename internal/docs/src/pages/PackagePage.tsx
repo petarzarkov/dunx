@@ -17,7 +17,7 @@ import type { DocSymbol, PackageBody } from '../../scripts/extract/model';
 import { useChunk } from '../chunk';
 
 import { SymbolCard } from '../components/SymbolCard';
-import { loadPackage, packageByDir, site } from '../data';
+import { loadPackage, packageByDir, peekPackage, site } from '../data';
 import { anchoredSymbol } from '../router';
 import { NotFound } from './NotFound';
 
@@ -120,7 +120,11 @@ export const PackagePage = ({
   anchor: string | null;
 }): React.JSX.Element => {
   const pkg = packageByDir(dir);
-  const body = useChunk(() => loadPackage(dir), dir);
+  const body = useChunk(
+    () => loadPackage(dir),
+    dir,
+    () => peekPackage(dir),
+  );
   const linked = anchoredSymbol(anchor);
   /**
    * A `?h=symbol-…` route has to open the API tab, or the card it names is
@@ -171,7 +175,7 @@ export const PackagePage = ({
             {body === undefined ? (
               <Text c="dimmed">Loading the readme…</Text>
             ) : body.readme ? (
-              <Prose html={body.readme} />
+              <Prose html={body.readme} seed={`package:${dir}`} />
             ) : (
               <Text c="dimmed">This package has no README.</Text>
             )}

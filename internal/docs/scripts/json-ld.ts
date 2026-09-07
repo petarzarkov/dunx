@@ -38,9 +38,6 @@ export interface Crumb {
 const embed = (value: unknown): string =>
   JSON.stringify(value).replace(/</g, '\\u003c');
 
-const script = (value: unknown): string =>
-  `    <script type="application/ld+json">${embed(value)}</script>`;
-
 const softwareApplication = (
   entity: Entity,
   description: string,
@@ -153,8 +150,11 @@ const breadcrumbs = (
 });
 
 /**
- * The blocks for one page, already wrapped in `<script>` and indented for the
- * head they are appended to.
+ * The JSON-LD payloads for one page, serialized but not wrapped.
+ *
+ * `entry-server.tsx` puts each in a `<script type="application/ld+json">` head
+ * element, so the wrapping belongs to whatever is building the head rather than
+ * here.
  *
  * The landing page describes the software; every other page describes itself and
  * its position in the site. Nothing emits both, because two `SoftwareApplication`
@@ -166,11 +166,11 @@ export const jsonLdFor = (options: {
   readonly title: string;
   readonly description: string;
   readonly kind: 'article' | 'website';
-}): string => {
+}): string[] => {
   const { entity, path, title, description, kind } = options;
 
   if (path === '/') {
-    return script(softwareApplication(entity, description));
+    return [embed(softwareApplication(entity, description))];
   }
 
   const crumbs = crumbsOf(path, title);
@@ -182,5 +182,5 @@ export const jsonLdFor = (options: {
     blocks.push(breadcrumbs(entity, crumbs));
   }
 
-  return blocks.map(script).join('\n');
+  return blocks.map(embed);
 };
