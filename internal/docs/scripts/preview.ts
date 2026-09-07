@@ -141,7 +141,17 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     await Bun.sleep(250);
   };
 
-  await open('/');
+  // The one `open` whose failure the caller cannot clean up after: it runs
+  // before the `Preview` exists, so there is no `close()` to reach and a throw
+  // would leave both a listening server and a Chrome process behind. Every later
+  // `open` is the caller's, and `afterAll` closes those.
+  try {
+    await open('/');
+  } catch (error) {
+    view.close();
+    await server.stop(true);
+    throw error;
+  }
 
   return {
     open,
