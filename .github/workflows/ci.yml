@@ -253,10 +253,17 @@ jobs:
       contents: write
       id-token: write
     steps:
+      # RELEASE_TOKEN here, not just in the step env below. checkout persists its
+      # token as an `http.extraheader` git config, and that header authenticates
+      # every request to github.com, so the credential helper `version.ts` builds
+      # is never consulted: a helper only answers a 401 challenge, and the header
+      # means none arrives. With GITHUB_TOKEN here the release push was evaluated
+      # as github-actions[bot], which cannot be a ruleset bypass actor, and was
+      # rejected with GH013 after the packages were already on npm.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - uses: ./.github/actions/setup
 
