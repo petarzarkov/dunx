@@ -21,8 +21,8 @@
  * README joins them, so there is one sentence rather than two spellings of it.
  */
 export const HEADLINE: readonly [string, string] = [
-  'Everything a service needs.',
-  'On Bun. One version.',
+  'Dependency injection for Bun.',
+  'Everything a service needs, one version.',
 ];
 
 /** The bundle, as prose. Rendered verbatim in both places. */

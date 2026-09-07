@@ -62,6 +62,17 @@ export interface ConsoleLine {
 
 const HEADING = 'document.querySelector("h1")?.textContent ?? ""';
 
+/**
+ * Whether React has taken `#root` over.
+ *
+ * A non-empty `<h1>` used to be the signal, and `scripts/seo.ts` now writes one
+ * into every page before the bundle is requested, so that test passed on the
+ * prerendered markup and each shot caught it rather than the site. The
+ * prerendered block carries `data-prerender` and `createRoot().render()` drops
+ * it, so its absence is the mount.
+ */
+const MOUNTED = `!document.querySelector("[data-prerender]") && (${HEADING}) !== ""`;
+
 export const startPreview = async (dist: string): Promise<Preview> => {
   const server = Bun.serve({
     port: 0,
@@ -108,16 +119,39 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     const separator = path.includes('?') ? '&' : '?';
     await view.navigate(`${server.url.origin}${path}${separator}n=${loads}`);
 
+    let mounted = false;
     for (let attempt = 0; attempt < 200; attempt += 1) {
-      if ((await view.evaluate<string>(HEADING)) !== '') break;
+      if (await view.evaluate<boolean>(MOUNTED)) {
+        mounted = true;
+        break;
+      }
       await Bun.sleep(15);
+    }
+    // Exhausting the loop used to resolve anyway. That was survivable while the
+    // signal was an empty `<h1>`, since the assertions then failed on a blank
+    // page; now the prerendered heading satisfies every one of them, so a bundle
+    // that never loads would pass the suite and be screenshotted.
+    if (!mounted) {
+      throw new Error(
+        `the bundle did not mount for ${path}: ${JSON.stringify(logged.slice(0, 3))}`,
+      );
     }
     // Fonts, charts and the syntax highlighter settle a frame or two after the
     // heading is up, and a screenshot taken before that catches the reflow.
     await Bun.sleep(250);
   };
 
-  await open('/');
+  // The one `open` whose failure the caller cannot clean up after: it runs
+  // before the `Preview` exists, so there is no `close()` to reach and a throw
+  // would leave both a listening server and a Chrome process behind. Every later
+  // `open` is the caller's, and `afterAll` closes those.
+  try {
+    await open('/');
+  } catch (error) {
+    view.close();
+    await server.stop(true);
+    throw error;
+  }
 
   return {
     open,

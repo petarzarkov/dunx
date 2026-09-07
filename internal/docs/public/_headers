@@ -15,6 +15,12 @@
 /badges/*
   Cache-Control: public, max-age=300
 
+# Committed rather than fingerprinted, and rewritten only when the headline
+# changes. The unfurlers cache it themselves, so a day at the edge is enough that
+# a burst of shares does not each fetch 495 KB from the origin.
+/og.png
+  Cache-Control: public, max-age=86400
+
 # Both are fetched by agents rather than browsers, so the content type is worth
 # stating: an agent handed `application/octet-stream` may decline to read it.
 /setup.md
