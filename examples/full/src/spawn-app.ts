@@ -1,6 +1,8 @@
 /** What `main.ts` prints once every listener is bound. */
 const READY = 'ctrl-c to stop';
-const APP_DIR = new URL('..', import.meta.url).pathname;
+/** Decoded: `URL.pathname` keeps percent-encoding, so a checkout under a path
+ * with a space in it is not a directory `Bun.spawn` can enter. */
+const APP_DIR = Bun.fileURLToPath(new URL('..', import.meta.url));
 
 const spawn = (env: Record<string, string>) =>
   Bun.spawn(['bun', 'src/main.ts'], {
@@ -12,9 +14,8 @@ const spawn = (env: Record<string, string>) =>
   });
 
 /**
- * `bun src/main.ts` in a process of its own, for the two things an in-process
- * `createApp()` cannot show: that a service stays up until a signal, and that
- * a library reads the real `NODE_ENV` rather than the one `bun test` set.
+ * `bun src/main.ts` in a process of its own: for a service that stays up until a
+ * signal, and for a library reading the real `NODE_ENV` rather than `bun test`'s.
  */
 export class SpawnedApp {
   readonly #proc: ReturnType<typeof spawn>;
@@ -32,7 +33,6 @@ export class SpawnedApp {
     })();
   }
 
-  /** Everything the app has written so far. */
   get output(): string {
     return this.#text;
   }
