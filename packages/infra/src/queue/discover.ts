@@ -63,7 +63,10 @@ export const assertNoDuplicateJobs = (
   const claimed = new Map<string, DiscoveredJob>();
 
   for (const job of jobs) {
-    const key = `${job.queue}\u0000${job.name}`;
+    // JSON rather than a joined pair: `queue` and `name` are unvalidated
+    // strings, so any single separator makes ("a", "b<sep>c") and ("a<sep>b",
+    // "c") one key and one of the two a phantom duplicate at boot.
+    const key = JSON.stringify([job.queue, job.name]);
     const existing = claimed.get(key);
     if (existing) {
       throw new QueueError(

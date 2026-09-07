@@ -50,13 +50,19 @@ describe('no literal control characters', () => {
     for (const file of listed.split(String.fromCharCode(0)).filter(Boolean)) {
       if (BINARY.has(file.slice(file.lastIndexOf('.')))) continue;
 
-      // A listed path can vanish before it is read, and `exists()` is false for
-      // a directory too. Anything past this point that fails to read fails the
-      // guard rather than counting as clean.
-      const handle = Bun.file(file);
-      if (!(await handle.exists())) continue;
+      // A listed path can be gone by the time it is read, so ENOENT is skipped
+      // rather than failed. Checking `exists()` first would not fix that, it
+      // would only move the window. Every other read error propagates: a file
+      // this guard cannot open must not count as clean.
+      let bytes: Uint8Array;
+      try {
+        bytes = await Bun.file(file).bytes();
+      } catch (error) {
+        if ((error as { code?: string }).code === 'ENOENT') continue;
+        throw error;
+      }
 
-      const found = locate(file, await handle.bytes());
+      const found = locate(file, bytes);
       if (found !== undefined) offenders.push(found);
     }
 

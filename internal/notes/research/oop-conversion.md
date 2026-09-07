@@ -160,9 +160,14 @@ all treated it as binary: every commit that ever touched the file rendered as
 `Bin N -> M bytes`, and repo-wide searches skipped it without reporting
 anything.
 
-Fixed independently of any of the above. The source now spells the byte as a
-unicode escape and the runtime separator is still NUL, which is what the
-`(queue, name)` key needs: NUL cannot occur in a queue or job name, so a
-printable separator would risk collisions between distinct pairs.
+Fixed independently of any of the above, and the first attempt was wrong in a
+way worth recording. Escaping the byte kept a joined `(queue, name)` key, and
+the argument for keeping NUL was that it cannot occur in a queue or job name.
+`JobMeta.queue` and `JobMeta.name` are unvalidated `string`s, so it can: review
+pointed this out, and `("a", "b<NUL>c")` and `("a<NUL>b", "c")` both key as
+`a<NUL>b<NUL>c`, which rejects two distinct handlers as one at boot. No choice
+of separator character fixes that. The key is now
+`JSON.stringify([job.queue, job.name])`, which is injective for any pair of
+strings and leaves no control byte in the source at all.
 `scripts/no-control-chars.test.ts` guards the C0 range across every tracked and
 untracked file.
