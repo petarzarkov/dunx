@@ -37,7 +37,8 @@ export const createApp = async (): Promise<HttpApp> => {
         title: 'dunx full example',
         version: '0.1.0',
         description:
-          'Every part of dunx in one service. Generated from the same zod schemas the routes validate against.',
+          'Every part of dunx in one service. Generated from the same zod schemas ' +
+          'the routes validate against.\n\n[Back to the demo](/)',
         // A provider, asked for its fragment when the document is generated.
         contribute: [authDocs],
         /**
@@ -55,8 +56,26 @@ export const createApp = async (): Promise<HttpApp> => {
           operationsSorter: 'alpha',
           tagsSorter: 'alpha',
           syntaxHighlight: { theme: 'nord' },
-          requestInterceptor:
-            '(req) => { req.headers["x-dunx-example"] = "1"; return req; }',
+          // Async because swagger-ui awaits it: opening `/api/docs` directly
+          // ran no sign-in, so every guarded route answered 401.
+          requestInterceptor: `(() => {
+            let ready;
+            const ensure = () => (ready ??= (async () => {
+              const me = await fetch('/api/profile', {
+                headers: { accept: 'application/json' },
+              });
+              if (me.status !== 401) return;
+              await fetch('/api/auth/sign-in/anonymous', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+              });
+            })());
+            return async (req) => {
+              await ensure();
+              req.headers['x-dunx-example'] = '1';
+              return req;
+            };
+          })()`,
         },
       }),
     }),

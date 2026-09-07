@@ -40,6 +40,8 @@ export interface Meta {
    * derived so the page never builds a URL the server did not agree to.
    */
   readonly queuesPath: string;
+  /** `homeHref`, absent when the app did not set one. */
+  readonly homeHref?: string;
 }
 
 export interface ConfigEntry {

@@ -137,6 +137,8 @@ interface BoardUiConfig {
   readonly boardLogo: { path: string; width?: number; height?: number };
   /** The tab icon. Two cuts, because bull-board offers an SVG/PNG pair. */
   readonly favIcon: { default: string; alternative: string };
+  /** bull-board's own header links. Empty unless the app set `homeHref`. */
+  readonly miscLinks: readonly { text: string; url: string }[];
 }
 
 const uiConfigFor = (
@@ -150,6 +152,12 @@ const uiConfigFor = (
   // a different product someone linked to.
   boardLogo: { path: favicon, width: 26, height: 26 },
   favIcon: { default: favicon, alternative: favicon },
+  // The way back. bull-board is a different UI and its header is the only place
+  // in it that can carry one.
+  miscLinks:
+    options.homeHref === undefined
+      ? []
+      : [{ text: options.title, url: options.homeHref }],
 });
 
 export const buildBoard = async (

@@ -88,6 +88,16 @@ export interface DashboardOptionsInit {
    * @default true
    */
   readonly commands?: boolean;
+  /**
+   * A link back to the app this dashboard is watching. It appears in the
+   * dashboard's own navigation and in bull-board's header, which is the page a
+   * visitor is most likely to be stranded on: it is a different UI, and nothing
+   * in it knows the app exists.
+   *
+   * Absent by default. An ops page that invents a link to `/` would be wrong for
+   * every app whose front end is somewhere else.
+   */
+  readonly homeHref?: string;
 }
 
 /** A class rather than an interface, so it is a runtime value the transform can
@@ -108,6 +118,7 @@ export class DashboardOptions {
   readonly pollMs: number;
   readonly probeTimeoutMs: number;
   readonly commands: boolean;
+  readonly homeHref: string | undefined;
 
   constructor(init: DashboardOptionsInit = {}) {
     this.path = normalizeMount(init.path ?? '/_dunx');
@@ -125,6 +136,7 @@ export class DashboardOptions {
     this.pollMs = init.pollMs ?? 5000;
     this.probeTimeoutMs = init.probeTimeoutMs ?? 2000;
     this.commands = init.commands ?? true;
+    this.homeHref = init.homeHref;
   }
 }
 

@@ -59,6 +59,7 @@ import { DashboardDemo } from './dashboard.demo.js';
         // False on the public demo: the board is worth showing, mutating it is not.
         commands: config.get('dashboard.commands'),
         openApiPath: '/api/docs',
+        homeHref: '/',
         // Spread rather than `authorize: undefined`: `exactOptionalPropertyTypes`
         // separates an absent option from one explicitly undefined, and the
         // package's boot warning reads the difference.

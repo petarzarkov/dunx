@@ -16,6 +16,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
+  BoxIcon,
   ColorSchemeToggle,
   DatabaseIcon,
   LogoMark,
@@ -268,6 +269,15 @@ export const App = ({ meta }: { meta: Meta }): JSX.Element => {
             ))}
 
             <NavGroupLabel>Elsewhere</NavGroupLabel>
+            {meta.homeHref !== undefined && (
+              <NavLink
+                component="a"
+                href={meta.homeHref}
+                label={meta.title}
+                description="Back to the app"
+                leftSection={<BoxIcon />}
+              />
+            )}
             <NavLink
               component="a"
               href={meta.queuesPath}

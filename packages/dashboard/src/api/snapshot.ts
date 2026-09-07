@@ -51,6 +51,9 @@ export const metaOf = (options: DashboardOptions): Meta => ({
   openApiPath: options.openApiPath,
   pollMs: options.pollMs,
   queuesPath: `${options.path}/queues`,
+  // Spread rather than `homeHref: undefined`: `exactOptionalPropertyTypes`
+  // refuses the second, and the page checks for the key.
+  ...(options.homeHref === undefined ? {} : { homeHref: options.homeHref }),
 });
 
 export const snapshotOf = (
