@@ -109,6 +109,7 @@ const columns = (meta: Meta): readonly Column<RouteNode>[] => [
   {
     key: 'handler',
     header: 'Handler',
+    hideBelow: 'md',
     render: (route) => (
       <Text size="xs" className="dunx-mono">
         {route.controller}.{route.handler}
@@ -117,6 +118,7 @@ const columns = (meta: Meta): readonly Column<RouteNode>[] => [
   },
   {
     key: 'module',
+    hideBelow: 'md',
     header: 'Module',
     render: (route) => (
       <Text size="xs" c="dimmed">
@@ -124,10 +126,11 @@ const columns = (meta: Meta): readonly Column<RouteNode>[] => [
       </Text>
     ),
   },
-  { key: 'access', header: 'Access', render: guardLabel },
-  { key: 'validates', header: 'Validates', render: validates },
+  { key: 'access', header: 'Access', render: guardLabel, hideBelow: 'md' },
+  { key: 'validates', header: 'Validates', render: validates, hideBelow: 'md' },
   {
     key: 'flags',
+    hideBelow: 'sm',
     header: '',
     render: (route) =>
       route.hidden ? (

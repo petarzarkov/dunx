@@ -199,3 +199,18 @@
     transition: none;
   }
 }
+
+/* `DataTable`'s `hideBelow`. The widths are Mantine's own `sm` and `md`, so a
+   column dropped here disappears at the same point the shell collapses its
+   navbar. */
+@media (max-width: 47.99em) {
+  .dunx-hide-below-sm {
+    display: none;
+  }
+}
+
+@media (max-width: 61.99em) {
+  .dunx-hide-below-md {
+    display: none;
+  }
+}

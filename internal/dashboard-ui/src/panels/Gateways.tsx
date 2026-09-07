@@ -48,6 +48,7 @@ const columns: readonly Column<GatewayNode>[] = [
   },
   {
     key: 'module',
+    hideBelow: 'md',
     header: 'Module',
     render: (gateway) => (
       <Text size="xs" c="dimmed">
@@ -55,9 +56,10 @@ const columns: readonly Column<GatewayNode>[] = [
       </Text>
     ),
   },
-  { key: 'handlers', header: 'Handles', render: handlers },
+  { key: 'handlers', header: 'Handles', render: handlers, hideBelow: 'sm' },
   {
     key: 'deps',
+    hideBelow: 'md',
     header: 'Injects',
     render: (gateway) => <Dependencies dependencies={gateway.dependencies} />,
   },
