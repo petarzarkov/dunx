@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { clamp, fileFor, pagesOf, renderPage, robots, sitemapOf } from './seo';
+import {
+  clamp,
+  fileFor,
+  pagesOf,
+  renderPage,
+  robots,
+  sitemapOf,
+  type Payloads,
+} from './seo';
+import { crumbsOf, type Entity } from './json-ld';
 
 const INDEX = {
   generatedAt: '2026-09-05T06:11:22.551Z',
@@ -15,8 +24,33 @@ const INDEX = {
       name: '@dunx/core',
       dir: 'core',
       description: 'DI container and modules',
+      exports: [{ name: 'AppFactory' }],
     },
   ],
+  positioning: {
+    headline: [
+      'Dependency injection for Bun.',
+      'Everything a service needs, one version.',
+    ],
+    blurb: 'Controllers, dependency injection, and the rest of it.',
+    chips: ['Bun-native'],
+  },
+  repoUrl: 'https://github.com/petarzarkov/dunx',
+};
+
+const ENTITY: Entity = {
+  origin: 'https://dunx.win',
+  repoUrl: 'https://github.com/petarzarkov/dunx',
+  version: '3.3.1',
+};
+
+/** The rendered payloads `writeSeoPages` reads out of `src/generated/`. */
+const PAYLOADS: Payloads = {
+  guideHtml: (slug) =>
+    slug === 'controllers'
+      ? '<p>A controller is a class whose methods are routes.</p>'
+      : '',
+  packageReadme: (dir) => (dir === 'core' ? '<p>The container.</p>' : ''),
 };
 
 const RELEASES = [{ version: '3.3.1', date: '2026-09-05' }];
@@ -27,7 +61,7 @@ const read = (file: string): string =>
     : '';
 
 const pages = (): ReturnType<typeof pagesOf> =>
-  pagesOf(INDEX, RELEASES, read, 'The landing description.');
+  pagesOf(INDEX, RELEASES, read, 'The landing description.', PAYLOADS);
 
 /** The shape `vite build` emits, trimmed to the parts this rewrites. */
 const TEMPLATE = `<!doctype html>
@@ -163,18 +197,190 @@ describe('renderPage', () => {
     expect(rendered()).toContain('src="/assets/index-abc.js"');
   });
 
+  /* There was no og:image at all: every image the site ships is an SVG, which
+   * the unfurlers decline, so a share produced a bare link. */
+  test('points at the raster card at the size it declares', () => {
+    const html = rendered();
+
+    expect(html).toContain(
+      '<meta property="og:image" content="https://dunx.win/og.png" />',
+    );
+    expect(html).toContain('<meta property="og:image:width" content="1200" />');
+    expect(html).toContain(
+      '<meta name="twitter:card" content="summary_large_image" />',
+    );
+  });
+
   test('escapes a title that would otherwise close the attribute', () => {
     const html = renderPage(TEMPLATE, {
       path: '/guide/x',
       title: 'A "quoted" & <angled> title',
       description: 'Fine.',
       kind: 'article',
+      body: '',
     });
 
     expect(html).toContain(
       'content="A &quot;quoted&quot; &amp; &lt;angled&gt; title"',
     );
     expect(html).not.toContain('<angled>');
+  });
+});
+
+describe('the prerendered body', () => {
+  const rendered = (): string => {
+    const guide = pages().find((page) => page.path === '/guide/controllers');
+    if (!guide) throw new Error('no guide page');
+    return renderPage(TEMPLATE, guide, ENTITY);
+  };
+
+  /*
+   * The whole reason for it: `https://dunx.win/` fetched without JavaScript
+   * answered with a title and an empty `<div id="root">`, so the first
+   * unrendered pass a crawler takes had no text to read and no link to follow.
+   */
+  test('goes inside #root, which createRoot empties on its first render', () => {
+    const html = rendered();
+
+    expect(html.match(/<div id="root">/g)).toHaveLength(1);
+    expect(html).toContain('<div id="root"><div data-prerender><article>');
+    expect(html).not.toContain('<div id="root"></div>');
+  });
+
+  test("carries the guide's own rendered prose", () => {
+    expect(rendered()).toContain(
+      '<p>A controller is a class whose methods are routes.</p>',
+    );
+  });
+
+  test('links every guide and package, so no page is a dead end without the bundle', () => {
+    const html = rendered();
+
+    expect(html).toContain('href="/guide/controllers"');
+    expect(html).toContain('href="/api/core"');
+  });
+
+  test('the landing page renders the shared headline as its one h1', () => {
+    const home = pages().find((page) => page.path === '/');
+
+    expect(home?.body).toContain(
+      '<h1>Dependency injection for Bun. Everything a service needs, one version.</h1>',
+    );
+    expect(home?.body.match(/<h1>/g)).toHaveLength(1);
+  });
+
+  test('a reference page names what it exports, for the long tail', () => {
+    const pkg = pages().find((page) => page.path === '/api/core');
+
+    expect(pkg?.body).toContain('<code>AppFactory</code>');
+    expect(pkg?.body).toContain('<p>The container.</p>');
+  });
+
+  /* `preview.ts` waits for this attribute to go away to know the bundle has
+   * mounted, so a page with no body must not emit an empty one. */
+  test('a page with no body keeps the shell exactly as Vite wrote it', () => {
+    const html = renderPage(
+      TEMPLATE,
+      {
+        path: '/404',
+        title: 'Not found | dunx',
+        description: 'Gone.',
+        kind: 'website',
+        body: '',
+      },
+      ENTITY,
+    );
+
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).not.toContain('data-prerender');
+  });
+
+  test('a missing payload leaves the heading rather than throwing', () => {
+    const bare = pagesOf(INDEX, RELEASES, read, 'home');
+    const guide = bare.find((page) => page.path === '/guide/controllers');
+
+    expect(guide?.body).toContain('<h1>Controllers</h1>');
+  });
+});
+
+describe('structured data', () => {
+  const forPage = (path: string): string => {
+    const page = pages().find((entry) => entry.path === path);
+    if (!page) throw new Error(`no page ${path}`);
+    return renderPage(TEMPLATE, page, ENTITY);
+  };
+
+  /*
+   * Searching the framework by name returned other people's Bun frameworks and
+   * a suggestion that it might be spelled differently, which is what an
+   * unrecognised entity looks like from the outside.
+   */
+  test('the landing page describes the software, once', () => {
+    const html = forPage('/');
+
+    expect(html.match(/application\/ld\+json/g)).toHaveLength(1);
+    expect(html).toContain('"@type":"SoftwareApplication"');
+    expect(html).toContain(
+      '"codeRepository":"https://github.com/petarzarkov/dunx"',
+    );
+    expect(html).toContain('"softwareVersion":"3.3.1"');
+  });
+
+  test('a guide is a TechArticle under a breadcrumb trail', () => {
+    const html = forPage('/guide/controllers');
+
+    expect(html).toContain('"@type":"TechArticle"');
+    expect(html).toContain('"@type":"BreadcrumbList"');
+    expect(html).toContain('"name":"Guide"');
+  });
+
+  test('no page but the landing one claims to be the software', () => {
+    for (const page of pages().filter((entry) => entry.path !== '/')) {
+      expect(renderPage(TEMPLATE, page, ENTITY)).not.toContain(
+        'SoftwareApplication',
+      );
+    }
+  });
+
+  /* JSON has no other way out of a script element, and `Bun.serve<T>` in a
+   * package description is not hypothetical. */
+  test('escapes a < so the payload cannot close the script that carries it', () => {
+    const html = renderPage(
+      TEMPLATE,
+      {
+        path: '/api/http',
+        title: 'x | dunx',
+        description: 'Generic over Bun.serve<T> handlers.',
+        kind: 'article',
+        body: '',
+      },
+      ENTITY,
+    );
+
+    expect(html).toContain('\\u003c');
+    expect(html).not.toContain('serve<T>');
+  });
+});
+
+describe('crumbsOf', () => {
+  test('a section index is one crumb', () => {
+    expect(crumbsOf('/releases', 'Releases')).toEqual([
+      { name: 'Releases', path: '/releases' },
+    ]);
+  });
+
+  test('a document is its section then itself', () => {
+    expect(crumbsOf('/guide/controllers', 'Controllers | dunx')).toEqual([
+      { name: 'Guide', path: '/guide' },
+      { name: 'Controllers | dunx', path: '/guide/controllers' },
+    ]);
+  });
+
+  /* `/benchmarks` and `/coverage` are panels, not a hierarchy, so a trail
+   * naming them twice would be noise in the result. */
+  test('a page with no section gets no trail', () => {
+    expect(crumbsOf('/benchmarks', 'Benchmarks')).toEqual([]);
+    expect(crumbsOf('/', 'dunx')).toEqual([]);
   });
 });
 

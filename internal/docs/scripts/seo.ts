@@ -21,17 +21,36 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { SITE_URL, summaryOf } from './agent-docs.js';
+import { jsonLdFor, type Entity } from './json-ld.js';
+import {
+  escapeHtml,
+  guideBody,
+  homeBody,
+  packageBody,
+  panelBody,
+  PRERENDER_STYLE,
+  type Content,
+} from './prerender.js';
 
 /** No trailing slash, so `${ORIGIN}${page.path}` is never `//guide`. */
 const ORIGIN = SITE_URL.replace(/\/$/, '');
 
-export interface Page {
+/** A page's head, before {@link pagesOf} gives it a body to go with it. */
+export interface PageMeta {
   /** Absolute path, `/` for the landing page. */
   readonly path: string;
   readonly title: string;
   readonly description: string;
   /** `article` for a document, `website` for a landing or index page. */
   readonly kind: 'article' | 'website';
+}
+
+export interface Page extends PageMeta {
+  /**
+   * The markup written inside `#root`, so the file carries the page's text and
+   * its links before the bundle runs. See `prerender.ts`.
+   */
+  readonly body: string;
 }
 
 interface GuideEntry {
@@ -44,12 +63,21 @@ interface PackageEntry {
   readonly name: string;
   readonly dir: string;
   readonly description: string;
+  /** Absent in a fixture; the generator writes it for every package. */
+  readonly exports?: readonly { readonly name: string }[];
 }
 
 interface SiteIndex {
   readonly generatedAt: string;
   readonly guides: readonly GuideEntry[];
   readonly packages: readonly PackageEntry[];
+  /** The hero's own copy, which the prerendered landing page reuses. */
+  readonly positioning?: {
+    readonly headline: readonly string[];
+    readonly blurb: string;
+    readonly chips: readonly string[];
+  };
+  readonly repoUrl?: string;
 }
 
 interface ReleaseEntry {
@@ -63,7 +91,7 @@ interface ReleaseEntry {
  */
 const sourcePath = (source: string): string => source.replace(/^docs\//, '');
 
-const FIXED: readonly Page[] = [
+const FIXED: readonly PageMeta[] = [
   {
     path: '/benchmarks',
     title: 'Benchmarks',
@@ -98,6 +126,52 @@ const descriptionOr = (summary: string, fallback: string): string =>
   summary.trim() === '' ? fallback : summary.trim();
 
 /**
+ * The two payload lookups `prerender.ts` needs, which a fixture can stub.
+ *
+ * Separate from `read` because these return HTML the generator has already
+ * rendered, out of `src/generated/`, rather than markdown out of `docs/`.
+ */
+export interface Payloads {
+  readonly guideHtml: (slug: string) => string;
+  readonly packageReadme: (dir: string) => string;
+}
+
+const NO_PAYLOADS: Payloads = {
+  guideHtml: () => '',
+  packageReadme: () => '',
+};
+
+/**
+ * The landing page's copy, defaulting to the hero's own words.
+ *
+ * A model written before `generate.ts` carried `positioning` would otherwise
+ * prerender a heading-less page, and the guard for that belongs here rather
+ * than in every builder.
+ */
+const positioningOf = (index: SiteIndex): Content['positioning'] =>
+  index.positioning ?? {
+    headline: ['Dependency injection for Bun.'],
+    blurb: '',
+    chips: [],
+  };
+
+const contentOf = (index: SiteIndex, payloads: Payloads): Content => ({
+  positioning: positioningOf(index),
+  guides: index.guides.map((guide) => ({
+    slug: guide.slug,
+    title: guide.title,
+  })),
+  packages: index.packages.map((pkg) => ({
+    name: pkg.name,
+    dir: pkg.dir,
+    description: pkg.description,
+    exports: (pkg.exports ?? []).map((symbol) => symbol.name),
+  })),
+  guideHtml: payloads.guideHtml,
+  packageReadme: payloads.packageReadme,
+});
+
+/**
  * Every page the site serves, in sitemap order.
  *
  * `read` takes a path under `docs/` and returns its markdown, or `''` when it is
@@ -110,39 +184,65 @@ export const pagesOf = (
   read: (file: string) => string,
   /** The landing page's own line, read out of `index.html` rather than restated. */
   homeDescription: string,
-): Page[] => [
-  {
-    path: '/',
-    title: 'dunx | fastest web DI framework',
-    description: homeDescription,
-    kind: 'website',
-  },
-  ...FIXED,
-  ...index.guides.map((guide) => ({
-    path: `/guide/${guide.slug}`,
-    title: `${guide.title} | dunx`,
-    description: descriptionOr(
-      summaryOf(read(sourcePath(guide.source))),
-      `${guide.title}, from the dunx guide.`,
-    ),
-    kind: 'article' as const,
-  })),
-  ...index.packages.map((pkg) => ({
-    path: `/api/${pkg.dir}`,
-    title: `${pkg.name} | dunx`,
-    description: descriptionOr(
-      pkg.description,
-      `API reference for ${pkg.name}.`,
-    ),
-    kind: 'article' as const,
-  })),
-  ...releases.map((release) => ({
-    path: `/releases/${release.version}`,
-    title: `dunx ${release.version} | Releases`,
-    description: `What shipped in dunx ${release.version}, released ${release.date}.`,
-    kind: 'article' as const,
-  })),
-];
+  payloads: Payloads = NO_PAYLOADS,
+): Page[] => {
+  const content = contentOf(index, payloads);
+
+  return [
+    {
+      path: '/',
+      title: 'dunx | fastest web DI framework',
+      description: homeDescription,
+      kind: 'website',
+      body: homeBody(content),
+    },
+    ...FIXED.map((page) => ({
+      ...page,
+      body: panelBody(page.title, page.description, content),
+    })),
+    ...index.guides.map((guide) => ({
+      path: `/guide/${guide.slug}`,
+      title: `${guide.title} | dunx`,
+      description: descriptionOr(
+        summaryOf(read(sourcePath(guide.source))),
+        `${guide.title}, from the dunx guide.`,
+      ),
+      kind: 'article' as const,
+      body: guideBody(guide.title, payloads.guideHtml(guide.slug), content),
+    })),
+    ...index.packages.map((pkg, position) => ({
+      path: `/api/${pkg.dir}`,
+      title: `${pkg.name} | dunx`,
+      description: descriptionOr(
+        pkg.description,
+        `API reference for ${pkg.name}.`,
+      ),
+      kind: 'article' as const,
+      // The entry `contentOf` already normalised, rather than a second reshape
+      // of the same package here.
+      body: packageBody(
+        content.packages[position] ?? {
+          name: pkg.name,
+          dir: pkg.dir,
+          description: pkg.description,
+          exports: [],
+        },
+        content,
+      ),
+    })),
+    ...releases.map((release) => ({
+      path: `/releases/${release.version}`,
+      title: `dunx ${release.version} | Releases`,
+      description: `What shipped in dunx ${release.version}, released ${release.date}.`,
+      kind: 'article' as const,
+      body: panelBody(
+        `dunx ${release.version}`,
+        `What shipped in dunx ${release.version}, released ${release.date}.`,
+        content,
+      ),
+    })),
+  ];
+};
 
 /**
  * Google renders about 160 characters of a description and drops the rest, so a
@@ -157,28 +257,41 @@ export const clamp = (text: string, limit = 160): string => {
   return `${(space > limit / 2 ? cut.slice(0, space) : cut).replace(/[,;:.\s]+$/, '')}\u2026`;
 };
 
-/** Attribute-safe. A guide title carrying an ampersand would end the value. */
-const attr = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+/**
+ * The social card, at the 1.91:1 the unfurlers crop to.
+ *
+ * There used to be no `og:image` at all, because every image the site had was an
+ * SVG and the major unfurlers decline to render one. `scripts/og-card.ts` draws
+ * a PNG through the `Bun.WebView` the screenshot suite already uses, so the tag
+ * points at a raster file and `summary_large_image` is honest.
+ */
+const OG_IMAGE = `${ORIGIN}/og.png`;
 
 /**
- * The head for one page, built from the page Vite emitted.
+ * The default entity, for a model with no `repoUrl` and a caller with no
+ * release list. `writeSeoPages` passes the real one.
+ */
+const DEFAULT_ENTITY: Entity = {
+  origin: ORIGIN,
+  repoUrl: 'https://github.com/petarzarkov/dunx',
+  version: null,
+};
+
+/**
+ * The head and body for one page, built from the page Vite emitted.
  *
  * A rewrite of the built document rather than a template of its own: the asset
  * URLs, the colour-scheme script and the icon are all in there already, and a
  * second copy of that head would go stale the first time one of them changed.
- *
- * No `og:image`. Every image the site has is an SVG, which the major unfurlers
- * decline to render, so a tag pointing at one buys a broken preview rather than
- * no preview.
  */
-export const renderPage = (template: string, page: Page): string => {
+export const renderPage = (
+  template: string,
+  page: Page,
+  entity: Entity = DEFAULT_ENTITY,
+): string => {
   const url = `${ORIGIN}${page.path}`;
   const description = clamp(page.description);
+  const attr = escapeHtml;
 
   const meta = [
     `    <link rel="canonical" href="${attr(url)}" />`,
@@ -187,10 +300,24 @@ export const renderPage = (template: string, page: Page): string => {
     `    <meta property="og:title" content="${attr(page.title)}" />`,
     `    <meta property="og:description" content="${attr(description)}" />`,
     `    <meta property="og:url" content="${attr(url)}" />`,
-    `    <meta name="twitter:card" content="summary" />`,
+    `    <meta property="og:image" content="${attr(OG_IMAGE)}" />`,
+    `    <meta property="og:image:width" content="1200" />`,
+    `    <meta property="og:image:height" content="630" />`,
+    `    <meta name="twitter:card" content="summary_large_image" />`,
     `    <meta name="twitter:title" content="${attr(page.title)}" />`,
     `    <meta name="twitter:description" content="${attr(description)}" />`,
-  ].join('\n');
+    `    <meta name="twitter:image" content="${attr(OG_IMAGE)}" />`,
+    jsonLdFor({
+      entity,
+      path: page.path,
+      title: page.title,
+      description,
+      kind: page.kind,
+    }),
+    page.body === '' ? '' : PRERENDER_STYLE,
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
 
   const titled = template.replace(
     /<title>[\s\S]*?<\/title>/,
@@ -201,14 +328,30 @@ export const renderPage = (template: string, page: Page): string => {
     `<meta name="description" content="${attr(description)}" />`,
   );
 
-  return described.replace('  </head>', `${meta}\n  </head>`);
+  const headed = described.replace('  </head>', `${meta}\n  </head>`);
+
+  if (page.body === '') return headed;
+
+  // Inside `#root`, which `createRoot().render()` empties on its first render.
+  // Matching Vite's exact spelling rather than a regex: if the emitted shell
+  // ever stops carrying that div, the replace is a no-op and the prerender test
+  // fails, which is better than a loose pattern quietly matching something else.
+  //
+  // `data-prerender` is what tells the two of them apart once the page is live.
+  // `preview.ts` used to treat any non-empty `<h1>` as "the app has mounted",
+  // and the prerendered heading is there before the bundle is even requested, so
+  // every screenshot would have caught this markup instead of the site.
+  return headed.replace(
+    '<div id="root"></div>',
+    `<div id="root"><div data-prerender>${page.body}</div></div>`,
+  );
 };
 
 export const sitemapOf = (pages: readonly Page[], lastmod: string): string =>
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${pages
     .map(
       (page) =>
-        `  <url>\n    <loc>${attr(`${ORIGIN}${page.path}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`,
+        `  <url>\n    <loc>${escapeHtml(`${ORIGIN}${page.path}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`,
     )
     .join('\n')}\n</urlset>\n`;
 
@@ -250,31 +393,64 @@ export const writeSeoPages = (options: WriteOptions): Page[] => {
     return existsSync(full) ? readFileSync(full, 'utf8') : '';
   };
 
+  /**
+   * The rendered payloads, read one at a time. Together the guides come to about
+   * 1 MB, and each page needs one of them.
+   */
+  const payload = (dir: string, name: string, field: string): string => {
+    const full = join(generatedDir, dir, `${name}.json`);
+    if (!existsSync(full)) return '';
+    const parsed = JSON.parse(readFileSync(full, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    const value = parsed[field];
+    return typeof value === 'string' ? value : '';
+  };
+
+  const payloads: Payloads = {
+    guideHtml: (slug) => payload('guides', slug, 'html'),
+    packageReadme: (dir) => payload('packages', dir, 'readme'),
+  };
+
   // The description Vite emitted, which is the one hand-written in `index.html`.
   // Taking it from there rather than repeating it here is what stops the landing
   // page having two descriptions that disagree.
   const home =
     /<meta\s+name="description"\s+content="([^"]*)"/.exec(template)?.[1] ?? '';
 
-  const pages = pagesOf(index, releases, read, home);
+  const pages = pagesOf(index, releases, read, home, payloads);
+  const entity: Entity = {
+    origin: ORIGIN,
+    repoUrl: index.repoUrl ?? DEFAULT_ENTITY.repoUrl,
+    version: releases[0]?.version ?? null,
+  };
 
   for (const page of pages) {
     const target = join(distDir, fileFor(page.path));
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, renderPage(template, page));
+    writeFileSync(target, renderPage(template, page, entity));
   }
 
   // The shell with no route-specific head, served by Cloudflare with a 404
   // status for anything the loop above did not write. The router renders its
   // own Not found panel once it boots.
+  //
+  // Its body stays empty on purpose: a 404 carrying the site's whole nav is a
+  // soft-404 signal, and `_redirects` was rewritten to stop producing those.
   writeFileSync(
     join(distDir, '404.html'),
-    renderPage(template, {
-      path: '/404',
-      title: 'Not found | dunx',
-      description: 'That page does not exist on the dunx documentation site.',
-      kind: 'website',
-    }),
+    renderPage(
+      template,
+      {
+        path: '/404',
+        title: 'Not found | dunx',
+        description: 'That page does not exist on the dunx documentation site.',
+        kind: 'website',
+        body: '',
+      },
+      entity,
+    ),
   );
 
   writeFileSync(

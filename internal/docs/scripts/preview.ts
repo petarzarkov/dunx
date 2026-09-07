@@ -62,6 +62,17 @@ export interface ConsoleLine {
 
 const HEADING = 'document.querySelector("h1")?.textContent ?? ""';
 
+/**
+ * Whether React has taken `#root` over.
+ *
+ * A non-empty `<h1>` used to be the signal, and `scripts/seo.ts` now writes one
+ * into every page before the bundle is requested, so that test passed on the
+ * prerendered markup and each shot caught it rather than the site. The
+ * prerendered block carries `data-prerender` and `createRoot().render()` drops
+ * it, so its absence is the mount.
+ */
+const MOUNTED = `!document.querySelector("[data-prerender]") && (${HEADING}) !== ""`;
+
 export const startPreview = async (dist: string): Promise<Preview> => {
   const server = Bun.serve({
     port: 0,
@@ -109,7 +120,7 @@ export const startPreview = async (dist: string): Promise<Preview> => {
     await view.navigate(`${server.url.origin}${path}${separator}n=${loads}`);
 
     for (let attempt = 0; attempt < 200; attempt += 1) {
-      if ((await view.evaluate<string>(HEADING)) !== '') break;
+      if (await view.evaluate<boolean>(MOUNTED)) break;
       await Bun.sleep(15);
     }
     // Fonts, charts and the syntax highlighter settle a frame or two after the
