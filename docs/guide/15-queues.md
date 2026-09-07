@@ -543,6 +543,9 @@ release and was deleted; bull-board 8.6.0 ships a `Bun.serve` adapter, which
 removed the only reason to hand-roll one. `commands: false` maps onto
 bull-board's `readOnlyMode`.
 
+A read-only one is at
+[demo.dunx.win/api/dashboard/queues](https://demo.dunx.win/api/dashboard/queues).
+
 The board is built on the **first request for the queues page**, never at boot, so
 an app that never opens it holds no broker socket and exits cleanly against an
 absent Redis.

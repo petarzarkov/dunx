@@ -17,6 +17,7 @@ together, on Bun's own primitives.
 [![CI](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml/badge.svg)](https://github.com/petarzarkov/dunx/actions/workflows/ci.yml)
 [![coverage](https://dunx.win/badges/coverage.svg)](https://dunx.win/coverage)
 [![docs](https://img.shields.io/badge/docs-dunx.win-blue)](https://dunx.win)
+[![demo](https://img.shields.io/badge/demo-demo.dunx.win-brightgreen)](https://demo.dunx.win)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.4-black.svg)](https://bun.sh)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA.svg?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/petarzarkov)
@@ -134,6 +135,10 @@ specifier is a compile error rather than a runtime surprise.
 
 ## Documentation
 
+- **[The live demo](https://demo.dunx.win)** - `examples/full` running on a
+  Raspberry Pi 5: the API explorer, the ops dashboard, bull-board, and a page
+  that drives the websocket gateway, the rate limiter and the queue from a
+  browser
 - **[The guide](https://dunx.win)** - twenty-one pages,
   introduction through agent tooling
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and

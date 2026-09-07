@@ -4,6 +4,10 @@ dunx is a dependency injection framework for [Bun](https://bun.com). It gives yo
 modules, constructor injection, class-based controllers, lifecycle hooks and
 guards. HTTP is served through `Bun.serve`, not through a server dunx wrote.
 
+There is a running app at [demo.dunx.win](https://demo.dunx.win) if you would
+rather click than read: it is `examples/full`, which uses every package in this
+guide, and its API explorer, ops dashboard and queue board are all open.
+
 The architecture follows the pattern Spring and Angular established. A container
 owns object lifetimes. Metadata replaces wiring code. Modules draw domain
 boundaries. If you have worked with either framework, the shape is familiar:
