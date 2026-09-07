@@ -16,8 +16,9 @@ import { useEffect, useState } from 'react';
  * into the same cache out of the document's own markup before hydrating, so a
  * synchronous read here draws the body React is looking at rather than the
  * skeleton - which would otherwise replace a rendered guide on its first client
- * render. The real chunk is still fetched: for a package page the seed carries
- * the readme and no symbols, and the fetch is what fills the API tab in.
+ * render. A package's seed is only its readme, so `load` is still what fills the
+ * API tab in; a guide's is its whole body, so `load` resolves to it. See
+ * `seedProse`.
  */
 export const useChunk = <T>(
   load: () => Promise<T | undefined>,

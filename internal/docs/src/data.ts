@@ -40,6 +40,18 @@ type Chunk = () => Promise<{ default: string }>;
 /** Parsed once per key. A route revisited in the same session refetches nothing. */
 const loaded = new Map<string, unknown>();
 
+/**
+ * A body taken out of the document that is **not** what its chunk holds.
+ *
+ * Only a package needs this. A cold package page renders the readme tab alone -
+ * `Tabs` is `keepMounted={false}` - so the markup carries no symbols, and the
+ * seed is a `PackageBody` with an empty `symbols`. Kept out of `loaded` because
+ * `load` answers from there: the seed satisfied `loadPackage`, so the API tab
+ * had zero symbols for the life of the page and a `?h=symbol-*` link, which
+ * opens that tab on arrival, landed on nothing.
+ */
+const seeded = new Map<string, unknown>();
+
 const load = async <T>(
   table: Record<string, Chunk>,
   kind: string,
@@ -66,8 +78,11 @@ export const loadPackage = (dir: string): Promise<PackageBody | undefined> =>
 export const peekGuide = (slug: string): GuideBody | undefined =>
   loaded.get(`guide:${slug}`) as GuideBody | undefined;
 
+/** The loaded chunk when it has arrived, and the partial seed until it does. */
 export const peekPackage = (dir: string): PackageBody | undefined =>
-  loaded.get(`package:${dir}`) as PackageBody | undefined;
+  (loaded.get(`package:${dir}`) ?? seeded.get(`package:${dir}`)) as
+    | PackageBody
+    | undefined;
 
 /**
  * Files prose the page was rendered with back into the cache, out of the
@@ -80,17 +95,20 @@ export const peekPackage = (dir: string): PackageBody | undefined =>
  * element's own `innerHTML` here instead, keyed by the `data-prose-seed` the
  * `Prose` carries.
  *
- * A package seed holds no symbols: only the readme tab is rendered on a cold
- * load, and `useChunk` replaces the whole value when the real chunk lands.
+ * A guide's seed is its whole body, so it goes in `loaded` and the 65 KB chunk
+ * is never fetched. A package's is partial, so it goes in `seeded` and the
+ * chunk still loads to fill the API tab - see the note on that map.
  */
 export const seedProse = (seed: string, html: string): void => {
   const [kind = '', ...rest] = seed.split(':');
   const id = rest.join(':');
-  if (id === '' || loaded.has(seed)) return;
+  if (id === '') return;
 
-  if (kind === 'guide') loaded.set(seed, { html } satisfies GuideBody);
-  if (kind === 'package') {
-    loaded.set(seed, { readme: html, symbols: [] } satisfies PackageBody);
+  if (kind === 'guide' && !loaded.has(seed)) {
+    loaded.set(seed, { html } satisfies GuideBody);
+  }
+  if (kind === 'package' && !seeded.has(seed)) {
+    seeded.set(seed, { readme: html, symbols: [] } satisfies PackageBody);
   }
 };
 
