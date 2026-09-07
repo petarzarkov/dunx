@@ -139,6 +139,29 @@ Consequences, all measured:
 
 No `Symbol.metadata`, no polyfill, no import-order dependence.
 
+### Who knows the global prefix
+
+`routesOf` walks prototypes, so it reads the path a `@Get` declared. The prefix is
+applied at `listen()`, and neither of the two places it could come from answers
+what the router ended up with: `HttpOptionsProvider.prefix` is a getter read once
+during option resolution, and `setGlobalPrefix()` may run after `create()`.
+
+So `listen()` attaches the resolved value to `RoutePrefix`, which is bound in the
+global wrapper for the reason above. `@dunx/dashboard` injects it and its route
+panel reported `/notes` for a route served at `/api/notes` without it, which an
+operator would copy and get a 404 from. That package's own suite pins both
+halves.
+
+Gateways are the half that must not be prefixed. `listen()` builds the upgrade
+table from the gateway paths untouched, so `@Gateway('/chat')` is served at
+`/chat` whatever the routes carry. Applying the prefix to both would have broken
+the panel it was fixing, which is why that suite asserts a socket upgrade against
+the path the panel reports.
+
+`@dunx/mcp` reads the same routes and cannot do this: it never boots the app, so
+there is no `listen()` to have resolved anything. It reports what the code
+declares.
+
 ### Declined: trailing-slash normalisation
 
 `GET /t` is a 200, and `GET /t/` is a 404. Nest, Express and Fastify all

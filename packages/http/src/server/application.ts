@@ -11,7 +11,8 @@ import {
   type InjectionToken,
   type ModuleRef,
 } from '@dunx/core';
-import { joinPath, type DiscoveredRoute } from '../route/discover.js';
+import type { DiscoveredRoute } from '../route/discover.js';
+import { RoutePrefix } from '../route/prefix.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import { PubSub } from '../ws/pubsub.js';
 import type { PubSubRelay, RelayOptions, RelayPhase } from '../ws/relay.js';
@@ -205,7 +206,10 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     const middleware = this.#middleware.map((entry) =>
       this.#app.get(entry, this.#root),
     );
-    const prefixed = this.#prefixed();
+    // Before `#prefixed()`, which now reads the same object the dashboard does.
+    const prefix = this.#app.get(RoutePrefix);
+    prefix.attach(this.#globalPrefix);
+    const prefixed = this.#prefixed(prefix);
     const routes = buildRoutes(
       prefixed,
       middleware,
@@ -353,11 +357,11 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
   }
 
   // Collision detection re-runs inside buildRoutes on these final paths.
-  #prefixed(): readonly DiscoveredRoute[] {
-    if (this.#globalPrefix === '') return this.#discovered;
+  #prefixed(prefix: RoutePrefix): readonly DiscoveredRoute[] {
+    if (prefix.value === '') return this.#discovered;
     return this.#discovered.map((route) => ({
       ...route,
-      path: joinPath(this.#globalPrefix, route.path),
+      path: prefix.apply(route.path),
     }));
   }
 

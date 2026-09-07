@@ -1,5 +1,10 @@
 import { modulesOf, providersOf, type ModuleRef } from '@dunx/core';
-import { gatewaysOf, isGateway, routesOf } from '@dunx/http/internal';
+import {
+  gatewaysOf,
+  isGateway,
+  routesOf,
+  type RoutePrefix,
+} from '@dunx/http/internal';
 import type { DashboardOptions } from '../options.js';
 import type { ConfigEntry, Meta, Snapshot } from './types.js';
 
@@ -51,9 +56,19 @@ export const metaOf = (options: DashboardOptions): Meta => ({
 export const snapshotOf = (
   root: ModuleRef,
   options: DashboardOptions,
+  prefix: RoutePrefix,
 ): Snapshot => ({
   meta: metaOf(options),
-  routes: routesOf(root),
+  /**
+   * Prefixed, because `routesOf` reads the path off a prototype and the global
+   * prefix is applied at `listen()`. Without this the panel reported `/notes` for
+   * a route served at `/api/notes`, so an operator copying a path got a 404.
+   */
+  routes: routesOf(root).map((route) => ({
+    ...route,
+    path: prefix.apply(route.path),
+  })),
+  // Not prefixed: `listen()` builds the upgrade table from these untouched.
   gateways: gatewaysOf(root),
   // Core cannot import `@dunx/http`, so the gateway marker arrives as an option.
   // Without it a gateway would be listed as an ordinary provider here while the

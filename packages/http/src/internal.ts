@@ -16,6 +16,7 @@ export {
   joinPath,
   type DiscoveredRoute,
 } from './route/discover.js';
+export { RoutePrefix } from './route/prefix.js';
 export { defaultStatusFor } from './route/marker.js';
 export {
   gatewaysOf,

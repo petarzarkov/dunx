@@ -7,9 +7,10 @@ import type { OpenApiDocument } from './types.js';
  * evidence: declared at `/openapi.json`, answered at `/api/openapi.json`, therefore
  * every other route in the table moved by the same `/api`.
  *
- * That inference exists because the global prefix lives on the `HttpApp` and is not
- * readable from inside the container. Given `HttpApp.routes`, this would be the
- * paths themselves and the guess would be gone.
+ * `RoutePrefix` now carries the resolved prefix in the container, so this guess
+ * has an alternative it did not have when it was written. It stays for now
+ * because it also covers `mountAt`, and swapping it is a change to a path with
+ * its own suite rather than a comment fix.
  */
 export const mountPrefix = (pathname: string, declared: string): string => {
   if (pathname === declared || !pathname.endsWith(declared)) return '';

@@ -9,16 +9,22 @@
 export interface Client {
   next(): Promise<string>;
   send(event: string, data: unknown): void;
+  /** An unwrapped frame: binary, or text a gateway is meant to refuse. */
+  sendRaw(frame: string | Uint8Array): void;
   close(): void;
   /** Every frame this socket ever received, so a *second* delivery is visible. */
   readonly received: readonly string[];
 }
 
-/** A real `new WebSocket()`, with a deadline so a stall fails instead of hanging. */
-export const connect = async (base: string): Promise<Client> => {
-  const socket = new WebSocket(
-    new URL('chat', base).href.replace('http', 'ws'),
-  );
+/**
+ * A real `new WebSocket()`, with a deadline so a stall fails instead of hanging.
+ *
+ * `path` so the same helper reaches `/telemetry`, which speaks binary frames.
+ * A second copy of the frame queue for the sake of one segment is what Rule 2
+ * is about.
+ */
+export const connect = async (base: string, path = 'chat'): Promise<Client> => {
+  const socket = new WebSocket(new URL(path, base).href.replace('http', 'ws'));
   const frames: string[] = [];
   const received: string[] = [];
   const waiting: ((frame: string) => void)[] = [];
@@ -59,6 +65,7 @@ export const connect = async (base: string): Promise<Client> => {
         waiting.push(waiter);
       }),
     send: (event, data) => socket.send(JSON.stringify({ event, data })),
+    sendRaw: (frame) => socket.send(frame),
     close: () => socket.close(),
     received,
   };

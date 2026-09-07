@@ -1,3 +1,4 @@
+import type { RoutePrefix } from '@dunx/http/internal';
 import { Logger, type ModuleRef } from '@dunx/core';
 import type { Middleware, Next, RouteContext } from '@dunx/http';
 import type { BunRequest } from 'bun';
@@ -24,7 +25,12 @@ export class DashboardMiddleware implements Middleware {
   #page: Promise<string> | undefined;
   #board: Promise<Board> | undefined;
 
-  constructor(options: DashboardOptions, root: ModuleRef, logger: Logger) {
+  constructor(
+    options: DashboardOptions,
+    root: ModuleRef,
+    logger: Logger,
+    prefix: RoutePrefix,
+  ) {
     this.#options = options;
     // With the trailing slash, so `/_dunxious` cannot match a `/_dunx` mount. The
     // bare mount is matched separately.
@@ -32,6 +38,7 @@ export class DashboardMiddleware implements Middleware {
     this.#deps = {
       root,
       options,
+      prefix,
       startedAt: performance.now(),
       page: () => this.#renderPage(),
       board: () => this.#buildBoard(),

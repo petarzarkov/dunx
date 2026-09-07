@@ -1,43 +1,30 @@
 import { expect, it } from 'bun:test';
-
-const APP_DIR = new URL('..', import.meta.url).pathname;
+import { SpawnedApp } from './spawn-app.js';
 
 /**
  * `bun start` is a service: it holds the process open until a signal arrives.
  * That is exactly what the tour cannot check, so it gets its own spawn.
  */
 it('stays up until a signal, then drains in reverse order', async () => {
-  const proc = Bun.spawn(['bun', 'src/main.ts'], {
-    cwd: APP_DIR,
-    // Port 0 so the suite cannot collide with a real `bun start` on 3000.
-    env: { ...process.env, NODE_ENV: 'production', PORT: '0' },
-    stdout: 'pipe',
-    stderr: 'inherit',
-  });
+  const app = new SpawnedApp();
 
-  let text = '';
-  const decoder = new TextDecoder();
-  const drained = (async () => {
-    for await (const chunk of proc.stdout) {
-      text += decoder.decode(chunk, { stream: true });
-    }
-  })();
+  try {
+    expect(await app.serving()).toContain('http://');
+    // Still running: a service does not exit once it has finished starting.
+    expect(app.killed).toBe(false);
 
-  while (!text.includes('ctrl-c to stop')) await Bun.sleep(20);
-
-  // Still running: a service does not exit once it has finished starting.
-  expect(proc.killed).toBe(false);
-  expect(text).toContain('listening on http://');
-
-  proc.kill('SIGTERM');
-  const code = await proc.exited;
-  await drained;
-
-  expect(code).toBe(0);
-  // Reverse dependency order: the service drains before the database it needs.
-  expect(text.indexOf('users draining')).toBeLessThan(
-    text.indexOf('database closed'),
-  );
-  // The temp dir is removed on the signal path too.
-  expect(text).toContain('workspace removed:');
+    expect(await app.stop()).toBe(0);
+    // Both present first: an absent marker is -1, which is less than any real
+    // index, so the order check passed when the hook had not run at all.
+    const draining = app.output.indexOf('users draining');
+    const closed = app.output.indexOf('database closed');
+    expect(draining).toBeGreaterThanOrEqual(0);
+    expect(closed).toBeGreaterThanOrEqual(0);
+    // Reverse dependency order: the service drains before the database it needs.
+    expect(draining).toBeLessThan(closed);
+    // The temp dir is removed on the signal path too.
+    expect(app.output).toContain('workspace removed:');
+  } finally {
+    app.kill();
+  }
 }, 30_000);
