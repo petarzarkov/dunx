@@ -182,11 +182,11 @@ option, and the one `strict: false` takes. It was first rejected as blast
 radius: it doubles a table that collision detection, gateway-path checking and
 the CORS `OPTIONS` mounting all walk.
 
-None of the three walk it. Collisions and gateway paths are checked against the
-discovered routes, before the table exists, and the preflight is mounted while
-the table is built. An alias added after all of them inherits the preflight and
-is walked by nothing, and `withUpgradeRoutes` still assigns each gateway path
-outright, so an upgrade wins a key an alias took.
+None of the three walk it. Collision detection and the gateway-path check both
+read the discovered routes rather than the table, so when they run relative to
+the alias does not matter. The preflight is mounted while the table is built, so
+an alias added afterwards inherits it. `withUpgradeRoutes` then assigns each
+gateway path outright, so an upgrade wins a key an alias took.
 
 The alias is a key rather than a route: one per-method object under two names,
 so the metrics series, the request log and the OpenAPI document all say
