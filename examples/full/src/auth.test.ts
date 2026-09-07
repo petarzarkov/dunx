@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import type * as schema from './database/schema.js';
 import { user } from './database/schema.js';
 import { createApp } from './main.js';
+import { SpawnedApp } from './spawn-app.js';
 
 /**
  * better-auth mounted, and `SessionGuard` in front of `/api/profile`.
@@ -234,26 +235,10 @@ it('stops admitting the cookie after sign-out', async () => {
  * assertions below about the cookie-bearing case specifically.
  */
 it('enforces the origin check outside test mode', async () => {
-  const proc = Bun.spawn(['bun', 'src/main.ts'], {
-    cwd: new URL('..', import.meta.url).pathname,
-    env: { ...process.env, NODE_ENV: 'production', PORT: '0' },
-    stdout: 'pipe',
-    stderr: 'inherit',
-  });
+  const spawned = new SpawnedApp();
 
   try {
-    let text = '';
-    const decoder = new TextDecoder();
-    const reading = (async () => {
-      for await (const chunk of proc.stdout) {
-        text += decoder.decode(chunk, { stream: true });
-      }
-    })();
-    while (!text.includes('ctrl-c to stop')) await Bun.sleep(20);
-    const spawned = /listening on (http:\/\/[^\s"]+)/.exec(text)?.[1] ?? '';
-    expect(spawned).not.toBe('');
-    const origin = new URL(spawned).origin;
-
+    const origin = new URL(await spawned.serving()).origin;
     const account = {
       email: 'origin@example.test',
       password: 'a long enough password',
@@ -282,10 +267,7 @@ it('enforces the origin check outside test mode', async () => {
       .join('; ');
     expect(cookie).not.toBe('');
 
-    const credentials = {
-      email: account.email,
-      password: account.password,
-    };
+    const credentials = { email: account.email, password: account.password };
     const missing = await call('sign-in/email', credentials, { cookie });
     expect(missing.status).toBe(403);
     expect((await missing.json()) as { code: string }).toMatchObject({
@@ -301,10 +283,8 @@ it('enforces the origin check outside test mode', async () => {
       code: 'INVALID_ORIGIN',
     });
 
-    proc.kill('SIGTERM');
-    await proc.exited;
-    await reading;
+    expect(await spawned.stop()).toBe(0);
   } finally {
-    if (!proc.killed) proc.kill('SIGKILL');
+    spawned.kill();
   }
 }, 60_000);

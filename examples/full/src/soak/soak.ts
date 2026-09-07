@@ -234,13 +234,21 @@ export class Soak {
     }
     // Anything still looping is now retrying a refused connection.
     traffic.stop();
+    const ms = performance.now() - started;
+    // On the timeout path too: `stop()` ends a worker's loop but not the call
+    // inside it, so returning before this leaves fetches outstanding.
+    const settled = await Soak.#settle(running);
+    if (settled === 'hung') {
+      failures.push(
+        'traffic in flight at shutdown never settled: a socket was left open',
+      );
+    }
     if (outcome === 'timeout') {
       failures.push(
         'shutdown did not finish within 15s with traffic in flight',
       );
       return;
     }
-    const ms = performance.now() - started;
     report.push(
       `shutdown took ${ms.toFixed(0)}ms with ${inFlight} calls already made and workers still calling`,
     );
@@ -249,28 +257,28 @@ export class Soak {
         `shutdown took ${ms.toFixed(0)}ms under load, over the ${SHUTDOWN_BUDGET_MS}ms budget`,
       );
     }
+    if (settled === 'settled') {
+      const totals = traffic.totals();
+      report.push(
+        `traffic at shutdown settled: ${totals.calls} calls, ${totals.worked} worked before the port closed`,
+      );
+    }
+  }
 
-    // A cancellable timer for the reason the one above is: `Bun.sleep` cannot be
-    // cleared, so the loser of this race holds the process open for 15 seconds.
-    let settleHandle: ReturnType<typeof setTimeout> | undefined;
-    const settled = await Promise.race([
+  /**
+   * The bounded wait for traffic to stop. The timer is cleared either way:
+   * `Bun.sleep` cannot be, and the loser of the race held the process open.
+   */
+  static #settle(running: Promise<void>): Promise<'settled' | 'hung'> {
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
       running.then(() => 'settled' as const),
       new Promise<'hung'>((resolve) => {
-        settleHandle = setTimeout(() => resolve('hung'), 15_000);
+        handle = setTimeout(() => resolve('hung'), 15_000);
       }),
     ]).finally(() => {
-      if (settleHandle !== undefined) clearTimeout(settleHandle);
+      if (handle !== undefined) clearTimeout(handle);
     });
-    if (settled === 'hung') {
-      failures.push(
-        'traffic in flight at shutdown never settled: a socket was left open',
-      );
-      return;
-    }
-    const totals = traffic.totals();
-    report.push(
-      `traffic at shutdown settled: ${totals.calls} calls, ${totals.worked} worked before the port closed`,
-    );
   }
 
   static #reportSampler(
