@@ -154,6 +154,20 @@ describe('assertNoDuplicateJobs', () => {
       ]),
     ).toHaveLength(2);
   });
+
+  it('separates two pairs that differ only in where the split falls', () => {
+    // `queue` and `name` are unvalidated strings, so joining them with one
+    // separator makes ("a", "b<sep>c") and ("a<sep>b", "c") the same key and
+    // one of the two a phantom duplicate. Held with the separator this used to
+    // join on, which no argument about the character can rule out.
+    const sep = String.fromCharCode(0);
+    expect(
+      assertNoDuplicateJobs([
+        { ...entry('A', `b${sep}c`), queue: 'a' },
+        { ...entry('B', 'c'), queue: `a${sep}b` },
+      ]),
+    ).toHaveLength(2);
+  });
 });
 
 describe('discoverJobs across modules', () => {
