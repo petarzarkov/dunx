@@ -49,6 +49,7 @@ const providerColumns: readonly Column<ProviderNode>[] = [
     key: 'role',
     header: 'Role',
     width: 110,
+    hideBelow: 'sm',
     render: (provider) => (
       <Badge
         size="xs"
