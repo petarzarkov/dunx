@@ -39,9 +39,15 @@ RUN bun install --frozen-lockfile --ignore-scripts
 # `tsc --emitDeclarationOnly` before `@dunx/core` has emitted the types it reads.
 # `scripts/build-all.ts` exists for exactly that reason; this is its ordering for
 # the seven packages the example imports.
+#
+# `@dunx/testing` is in the list although the demo never imports it: a package's
+# build emits declarations with `tsc`, whose program includes that package's own
+# `*.test.ts`, and `@dunx/openapi`'s suite imports `@dunx/testing`. Skipping it
+# failed openapi's build on `TS2307` for a module the image does not run.
 RUN bun run --filter '@dunx/core' build \
   && bun run --filter '@dunx/transform' build \
   && bun run --filter '@dunx/http' build \
+  && bun run --filter '@dunx/testing' build \
   && bun run --filter '@dunx/infra' build \
   && bun run --filter '@dunx/openapi' build \
   && bun run --filter '@dunx/auth' build \
