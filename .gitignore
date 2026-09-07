@@ -160,3 +160,11 @@ HANDOFF.md
 # never linted or formatted - they are copies of the repo, not part of it.
 .claude/worktrees/
 packages/*/cli-fixture-*/
+
+# Transient scratch files `bun build --compile` writes beside its output, as
+# `.<hash>-<n>.bun-build`. The guards that walk `git ls-files --others` are the
+# reason this matters: `bun run ci` runs the `examples` phase, which compiles
+# `examples/binary`, at the same time as `coverage`, so an unignored artifact is
+# visible to a scan for the few hundred milliseconds it exists. That raced
+# `no-em-dash.test.ts` on a compiled bundle carrying an em dash.
+*.bun-build

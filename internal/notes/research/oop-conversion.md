@@ -154,7 +154,15 @@ its measurable ceiling.
 
 ## Incidental finding
 
-`infra/src/queue/discover.ts:66` embeds a literal NUL byte in a dedupe key
-template. `file` reports the source as `data`, so `grep` and `ripgrep` treat it as
-binary and silently skip it in repo-wide searches. Worth replacing with a
-printable separator independently of any of the above.
+`infra/src/queue/discover.ts:66` embedded a literal NUL byte in a dedupe key
+template. `file` reported the source as `data`, so `grep`, `ripgrep` and `git`
+all treated it as binary: every commit that ever touched the file rendered as
+`Bin N -> M bytes`, and repo-wide searches skipped it without reporting
+anything.
+
+Fixed independently of any of the above. The source now spells the byte as a
+unicode escape and the runtime separator is still NUL, which is what the
+`(queue, name)` key needs: NUL cannot occur in a queue or job name, so a
+printable separator would risk collisions between distinct pairs.
+`scripts/no-control-chars.test.ts` guards the C0 range across every tracked and
+untracked file.

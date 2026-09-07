@@ -38,19 +38,25 @@ const locate = (file: string, bytes: Uint8Array): string | undefined => {
 
 describe('no literal control characters', () => {
   it('across every tracked and untracked file', async () => {
-    // Same listing as `no-em-dash.test.ts`: `git ls-files` alone would miss a
-    // brand-new file that nobody has staged yet.
+    // `--others --exclude-standard` so a brand-new file counts before anyone
+    // stages it, and `-z` because without it git quotes a pathname holding a
+    // newline: splitting that on newlines yields `"a\nb.ts"`, which opens as
+    // nothing, and the file escapes the scan. Fittingly, the delimiter that
+    // fixes it is the byte this guard exists to ban.
     const listed =
-      await $`git ls-files --cached --others --exclude-standard`.text();
+      await $`git ls-files --cached --others --exclude-standard -z`.text();
     const offenders: string[] = [];
 
-    for (const file of listed.split('\n').filter(Boolean)) {
+    for (const file of listed.split(String.fromCharCode(0)).filter(Boolean)) {
       if (BINARY.has(file.slice(file.lastIndexOf('.')))) continue;
 
-      const bytes = await Bun.file(file)
-        .bytes()
-        .catch(() => new Uint8Array());
-      const found = locate(file, bytes);
+      // A listed path can vanish before it is read, and `exists()` is false for
+      // a directory too. Anything past this point that fails to read fails the
+      // guard rather than counting as clean.
+      const handle = Bun.file(file);
+      if (!(await handle.exists())) continue;
+
+      const found = locate(file, await handle.bytes());
       if (found !== undefined) offenders.push(found);
     }
 
