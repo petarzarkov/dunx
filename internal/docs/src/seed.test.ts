@@ -33,20 +33,27 @@ test('a guide seed answers a peek and stands in for the chunk', async () => {
  * a `?h=symbol-*` link, which opens that tab on arrival.
  */
 test('a package seed answers a peek but never satisfies the chunk', async () => {
-  seedProse('package:http', '<p>seeded readme</p>');
+  // A dir no package has. The caches are module state and `bun test` shares one
+  // process, so a real dir is already warm by the time this runs whenever
+  // `site.test.tsx` got there first - which made asserting the peek here pass
+  // locally and fail in CI on a different file order.
+  seedProse('package:seed-fixture', '<p>seeded readme</p>');
 
-  const seeded = peekPackage('http');
+  const seeded = peekPackage('seed-fixture');
   expect(seeded?.readme).toBe('<p>seeded readme</p>');
   expect(seeded?.symbols).toEqual([]);
 
-  const loadedBody = await loadPackage('http');
-  expect(loadedBody?.symbols.length).toBeGreaterThan(0);
-  expect(loadedBody?.readme).not.toBe('<p>seeded readme</p>');
+  // `load` used to answer from the map the seed was written to and hand back
+  // that partial body. Nothing has a `seed-fixture` chunk, so the honest answer
+  // is `undefined`.
+  expect(await loadPackage('seed-fixture')).toBeUndefined();
+});
 
-  // And the loaded chunk is what a later peek sees, so navigating away and back
-  // does not fall back to the partial one - which is also what keeps this test
-  // from leaving a stub behind for another file in the same process.
-  expect(peekPackage('http')?.symbols.length).toBeGreaterThan(0);
+/** The outcome the bug denied: the API tab has its symbols. */
+test('a seeded package still gets its symbols from the chunk', async () => {
+  seedProse('package:http', '<p>seeded readme</p>');
+
+  expect((await loadPackage('http'))?.symbols.length).toBeGreaterThan(0);
 });
 
 test('an unknown seed kind is ignored rather than cached', () => {
