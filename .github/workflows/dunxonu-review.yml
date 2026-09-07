@@ -72,8 +72,11 @@ jobs:
             ineligible: count it as already reviewed only if a review covers
             that exact commit. Review the changes since your own last review,
             and do not repeat a finding you have already posted.
-          # The action starts the inline-comment MCP server only when
-          # --allowedTools names it, even though the skill's own frontmatter
-          # already grants the tool.
+          # --allowedTools REPLACES the skill's own allowed-tools frontmatter
+          # rather than adding to it, so every tool the skill declares has to be
+          # named here or the call is denied in a non-interactive run. Naming
+          # only the MCP tool cost a whole review: 13 turns, one denial, nothing
+          # posted. The first eight are the skill's frontmatter verbatim; the
+          # git commands are what its blame-and-history reviewer needs.
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*)"
