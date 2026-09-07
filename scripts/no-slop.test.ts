@@ -197,6 +197,22 @@ interface Offence {
   readonly detail: string;
 }
 
+/**
+ * A path listed by `git ls-files --others` can be gone by the time it is read.
+ * `packages/infra/src/queue/sandbox.test.ts` writes a `.ts` child beside itself
+ * and deletes it, and this suite crashed on the gap between the listing and the
+ * open. Only a vanished file is skipped: anything else still fails, so a file
+ * the guard cannot read is never counted as clean.
+ */
+const readOrSkip = async (file: string): Promise<string | undefined> => {
+  try {
+    return await Bun.file(file).text();
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') return undefined;
+    throw error;
+  }
+};
+
 describe('documentation voice', () => {
   const files = async (): Promise<string[]> => {
     const listed =
@@ -211,9 +227,8 @@ describe('documentation voice', () => {
     const offences: Offence[] = [];
 
     for (const file of await files()) {
-      const text = await Bun.file(file)
-        .text()
-        .catch(() => '');
+      const text = await readOrSkip(file);
+      if (text === undefined) continue;
       const prose = readProse(text).lines.join('\n');
 
       for (const [label, pattern] of [
@@ -233,9 +248,8 @@ describe('documentation voice', () => {
     const offences: Offence[] = [];
 
     for (const file of await files()) {
-      const text = await Bun.file(file)
-        .text()
-        .catch(() => '');
+      const text = await readOrSkip(file);
+      if (text === undefined) continue;
       const { lines } = readProse(text);
       const prose = lines.join('\n');
       const budget = BUDGETS[modeOf(file)].slopPer100;
@@ -264,9 +278,8 @@ describe('documentation voice', () => {
     const offences: Offence[] = [];
 
     for (const file of await files()) {
-      const text = await Bun.file(file)
-        .text()
-        .catch(() => '');
+      const text = await readOrSkip(file);
+      if (text === undefined) continue;
       const budget = BUDGETS[modeOf(file)].paragraphChars;
 
       for (const paragraph of readProse(text).paragraphs) {
@@ -409,7 +422,9 @@ describe('source comments', () => {
 
     for (const file of await sources()) {
       const budget = budgetFor(file) as SourceBudget;
-      const { blocks } = countComments(await Bun.file(file).text());
+      const text = await readOrSkip(file);
+      if (text === undefined) continue;
+      const { blocks } = countComments(text);
 
       for (const [line, prose] of blocks) {
         if (prose > budget.blockLines) {
@@ -429,7 +444,9 @@ describe('source comments', () => {
 
     for (const file of await sources()) {
       const { density } = budgetFor(file) as SourceBudget;
-      const counted = countComments(await Bun.file(file).text());
+      const text = await readOrSkip(file);
+      if (text === undefined) continue;
+      const counted = countComments(text);
       const running = totals.get(density) ?? { lines: 0, comment: 0 };
       totals.set(density, {
         lines: running.lines + counted.lines,
