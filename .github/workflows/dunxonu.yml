@@ -67,10 +67,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The toolchain, so an answer that has to run `bun run ci` can. The review
-      # workflow needs none of this; a fix does.
-      - if: steps.addressed.outputs.how != 'no'
-        uses: ./.github/actions/setup
+      # No `./.github/actions/setup` here. The action runs its own nested
+      # oven-sh/setup-bun pinned to a different version, and setup-bun prepends
+      # to PATH, so the action's Bun shadows whatever we installed first. A gate
+      # run here would have used that Bun against a lockfile this repo pins to
+      # another one. CI runs the gates on whatever dunxonu pushes, under the
+      # pinned version, which is where that signal belongs.
 
       # A mention states what it wants, so interactive mode reads it and replies
       # on its own. No prompt: that is what selects interactive mode.
