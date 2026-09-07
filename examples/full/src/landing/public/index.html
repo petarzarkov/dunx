@@ -4,6 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>dunx live demo</title>
+    <!--
+      The mark, inlined so the page fetches nothing for its own icon. Its
+      geometry is declared once, in internal/ui/src/logo.ts. An example cannot
+      import a private workspace, and @dunx/dashboard exports the same string
+      from its ./ui subpath only, which carries the 456 KB dashboard bundle
+      beside it - the one thing that subpath exists to keep out of a process
+      that has not opened the page.
+    -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2032%2032%22%20width=%2232%22%20height=%2232%22%20fill=%22none%22%20role=%22img%22%20aria-label=%22dunx%22%3E%3ClinearGradient%20id=%22dunx-c%22%20x1=%224%22%20y1=%224%22%20x2=%2228%22%20y2=%2228%22%20gradientUnits=%22userSpaceOnUse%22%3E%3Cstop%20offset=%220%22%20stop-color=%22%2322b8cf%22/%3E%3Cstop%20offset=%22.5%22%20stop-color=%22%234c6ef5%22/%3E%3Cstop%20offset=%221%22%20stop-color=%22%237950f2%22/%3E%3C/linearGradient%3E%3Cg%20stroke=%22url(%23dunx-c)%22%20stroke-width=%224%22%20stroke-linecap=%22round%22%3E%3Cpath%20d=%22M5.9%205.6H15.7a10.4%2010.4%200%200%201%200%2020.8H5.9%22/%3E%3Cpath%20d=%22m9.7%2011.4%209.2%209.2m0-9.2-9.2%209.2%22/%3E%3C/g%3E%3C/svg%3E"
+    />
     <style>
       :root {
         color-scheme: dark light;
