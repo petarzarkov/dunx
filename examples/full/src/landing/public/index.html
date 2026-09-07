@@ -421,21 +421,36 @@
       let socket;
       $('ws-connect').addEventListener('click', () => {
         const out = $('ws-out');
+        const say = $('ws-say');
+        // Disabled before the replacement exists: send() on a CONNECTING socket
+        // throws InvalidStateError, and Connect is clickable at any time.
+        say.disabled = true;
         if (socket) socket.close();
         const proto = location.protocol === 'https:' ? 'wss' : 'ws';
         const nick = encodeURIComponent($('nick').value || 'visitor');
-        socket = new WebSocket(`${proto}://${location.host}/chat?as=${nick}`);
+        const ws = new WebSocket(`${proto}://${location.host}/chat?as=${nick}`);
+        socket = ws;
         append(out, `connecting as ${nick}`);
-        socket.onopen = () => {
+        // Each handler ignores itself once a newer socket has replaced it. The
+        // predecessor's close arrives after the new socket has opened, and
+        // without this it would disable Send on a live connection.
+        const current = () => socket === ws;
+        ws.onopen = () => {
+          if (!current()) return;
           append(out, 'open');
-          $('ws-say').disabled = false;
+          say.disabled = false;
         };
-        socket.onmessage = (event) => append(out, `<- ${event.data}`);
-        socket.onclose = (event) => {
+        ws.onmessage = (event) => {
+          if (current()) append(out, `<- ${event.data}`);
+        };
+        ws.onclose = (event) => {
+          if (!current()) return;
           append(out, `closed with ${event.code}`);
-          $('ws-say').disabled = true;
+          say.disabled = true;
         };
-        socket.onerror = () => append(out, 'error');
+        ws.onerror = () => {
+          if (current()) append(out, 'error');
+        };
       });
       $('ws-say').addEventListener('click', () => {
         const text = $('say').value;
@@ -537,6 +552,10 @@
           headers: { accept: 'application/json' },
         });
         if (res.ok) return res.json();
+        // Only 401 means there is no session yet. A 429 from the rate limiter or
+        // a 500 is a different fact, and signing in would replace it with a
+        // misleading answer.
+        if (res.status !== 401) return { note: `profile ${res.status}` };
         // Guest mode issues one on demand. Without the plugin this route is not
         // mounted, which is what `bun start` does by default.
         const guest = await fetch('/api/auth/sign-in/anonymous', {
@@ -549,7 +568,15 @@
         });
         return retry.ok ? retry.json() : { note: `profile ${retry.status}` };
       };
-      const readSession = async () => show($('auth-out'), await signedIn());
+      const readSession = async () => {
+        try {
+          show($('auth-out'), await signedIn());
+        } catch (error) {
+          // A rejected fetch is a dropped connection, not a status. Reported
+          // rather than left as an unhandled rejection nobody sees.
+          show($('auth-out'), `request failed: ${String(error)}`);
+        }
+      };
       $('who').addEventListener('click', readSession);
       readSession();
 
