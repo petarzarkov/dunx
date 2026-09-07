@@ -334,3 +334,28 @@ export const buildRoutes = (
 
   return routes;
 };
+
+/**
+ * A second key per route ending in `/`, holding the handlers the first one has.
+ *
+ * `Bun.serve({ routes })` matches the literal path, so `/users/1/` misses when
+ * `/users/:id` is what was registered. Opt in with `strict: false`. The
+ * measurements, and what the other frameworks do, are in
+ * docs/architecture/http.md.
+ *
+ * A key rather than a copy: one per-method object under two names, so the
+ * pattern `buildContext` froze still labels the metrics series and the log line.
+ * It runs after the CORS preflight is mounted, so the alias carries `OPTIONS`.
+ *
+ * `/` and any `*` path are skipped - `//` is neither, and a wildcard already
+ * matches its own trailing slash.
+ */
+export const withTrailingSlashAliases = (routes: BunRoutes): BunRoutes => {
+  const aliased: BunRoutes = { ...routes };
+  for (const [path, byMethod] of Object.entries(routes)) {
+    if (path.endsWith('/') || path.includes('*')) continue;
+    // `??=`, so a declared route always wins over an alias for the same key.
+    aliased[`${path}/`] ??= byMethod;
+  }
+  return aliased;
+};

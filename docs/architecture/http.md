@@ -162,12 +162,10 @@ the path the panel reports.
 there is no `listen()` to have resolved anything. It reports what the code
 declares.
 
-### Declined: trailing-slash normalisation
+### Declined as the default: trailing-slash normalisation
 
-`GET /t` is a 200, and `GET /t/` is a 404. Nest, Express and Fastify all
-normalise, so this is the one thing that breaks a ported client - it shows up
-as a 404 that reads like a missing route. It stays a 404 here, because of
-where the two candidate implementations would have to live.
+`GET /t` is a 200 and `GET /t/` is a 404. That is still the default, and
+`strict: false` on `HttpFactory.create` is how an app changes it.
 
 `joinPath` already normalises the **declared** side, so `@Get('sub/')`
 becomes `/t/sub`, and both spellings are never live at once.
@@ -176,15 +174,30 @@ The inbound side belongs to Bun. By the time anything in dunx can see that
 nothing matched, it is inside the `fetch` fallback, which holds middleware
 and the error mapper and **no route patterns**. Stripping the slash and
 re-dispatching there would mean matching `/t/7/` against `/t/:id` in
-JavaScript: exactly the router this repo will not write.
+JavaScript: exactly the router this repo will not write. That half stays
+declined, and it is what express and hono do internally.
 
-Registering `/t/` as a second entry in the `Bun.serve` table was the other
-option - native, and free per request - and was rejected as blast radius: it
-doubles a table that collision detection, gateway-path checking and the CORS
-`OPTIONS` mounting all walk, to buy an alias a proxy rewrite can supply.
+Registering `/t/` as a second entry in the `Bun.serve` table is the other
+option, and the one `strict: false` takes. It was first rejected as blast
+radius: it doubles a table that collision detection, gateway-path checking and
+the CORS `OPTIONS` mounting all walk.
 
-So it is documented in guide 05 and pinned by a test in `server.test.ts`, which is
-what makes it a decision rather than an oversight.
+None of the three walk it. Collisions and gateway paths are checked against the
+discovered routes, before the table exists, and the preflight is mounted while
+the table is built. An alias added after all of them inherits the preflight and
+is walked by nothing, and `withUpgradeRoutes` still assigns each gateway path
+outright, so an upgrade wins a key an alias took.
+
+The alias is a key rather than a route: one per-method object under two names,
+so the metrics series, the request log and the OpenAPI document all say
+`/t/:id`.
+
+The default stays strict because that is what `Bun.serve` does. An earlier
+version of this note said "Nest, Express and Fastify all normalise", which is
+wrong about Fastify - its `ignoreTrailingSlash` is off by default, and hono's
+`strict` is on. The field is three to two, and `strict` is hono's name for this
+switch. The per-framework table is in
+[constraints](./constraints.md).
 
 ## Multi-node websocket fan-out (`@dunx/http`)
 

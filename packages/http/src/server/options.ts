@@ -40,6 +40,15 @@ export interface HttpOptions extends AppOptions {
   /** `app.set('trust proxy', ...)` as a field. */
   readonly trustProxy?: boolean;
   /**
+   * Match a path exactly as declared, so `/users/1/` is not `/users/1`.
+   *
+   * **`true` by default**, which is what `Bun.serve({ routes })` matches on its
+   * own, and hono's name and default for the same switch. `false` serves both
+   * spellings, as Nest, express and elysia do. Not an `app.set()` setting: the
+   * route table is built once, at `listen()`.
+   */
+  readonly strict?: boolean;
+  /**
    * Calls `enableShutdownHooks` at construction. `true` takes the default signals;
    * an object names them and tunes the force-exit.
    */

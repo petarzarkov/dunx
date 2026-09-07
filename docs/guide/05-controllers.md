@@ -63,20 +63,25 @@ request logging, throttling and CORS all get a look at a method miss.
 
 **Paths are matched exactly, so a trailing slash is a different path.** `GET /t`
 is a 200 and `GET /t/` is a 404. The same goes for `/t/sub/` and `POST /t/`.
-Most frameworks normalise this, so it is the common break in a ported client. It
-shows up as a 404 that reads like a missing route.
+Nest, Express and Elysia accept both spellings; Fastify and Hono do not. A
+client ported from one of the first three hits a 404 that reads like a missing
+route.
 
 The declared side is already normalised: `@Get('/')` inside `@Controller('t')` is
 `/t`, never `/t/`, so both spellings are never live at once. Route discovery
 strips it too, so `@Get('sub/')` is `/t/sub`.
 
-Send the path without the trailing slash. For a caller you do not control, put
-the normalisation in front of dunx, where a reverse-proxy rewrite is one line.
+`strict: false` serves both:
 
-The inbound URL is the only remaining half, and dunx could only touch it in the
-`fetch` fallback below. That runs after Bun has matched nothing, so it holds no
-patterns to try `/t/7/` against. Matching there would mean a second JavaScript
-router beside Bun's.
+```ts
+const app = await HttpFactory.create(AppModule, { strict: false });
+```
+
+It registers a second key per route ending in `/`, pointing at the handlers the
+first one already has, so the request log, the metrics series and the OpenAPI
+document all still say `/t/:id`. `strict` defaults to `true`, which is what
+`Bun.serve` matches on its own and what Hono defaults to. A reverse-proxy
+rewrite in front of dunx does the same job for a caller you do not control.
 
 **CORS preflight is mounted, not inferred.** An `OPTIONS` request does reach the
 fallback. Answering preflight there would mean reconstructing which verbs the path

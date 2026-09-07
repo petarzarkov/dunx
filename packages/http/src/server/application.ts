@@ -30,6 +30,7 @@ import {
   assertNoGatewayCollisions,
   buildFallback,
   buildRoutes,
+  withTrailingSlashAliases,
 } from './routes.js';
 import { ServerBinding } from './binding.js';
 import { defaultSettings, type AppSettings } from './settings.js';
@@ -78,6 +79,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
   readonly #relayChannel: string | undefined;
   readonly #relayResubscribe: RelayOptions['resubscribe'];
   readonly #notFound: 'guarded' | 'public';
+  readonly #strict: boolean;
   readonly #bootLogging: boolean;
   readonly #binding: ServerBinding;
   readonly #split: boolean;
@@ -119,6 +121,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     this.#relayChannel = options.relayChannel;
     this.#relayResubscribe = options.relayResubscribe;
     this.#notFound = options.notFound ?? 'public';
+    this.#strict = options.strict ?? true;
     this.#bootLogging = options.bootLogging ?? true;
     this.#binding = new ServerBinding({
       http2: options.http2,
@@ -210,7 +213,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     const prefix = this.#app.get(RoutePrefix);
     prefix.attach(this.#globalPrefix);
     const prefixed = this.#prefixed(prefix);
-    const routes = buildRoutes(
+    const built = buildRoutes(
       prefixed,
       middleware,
       this.#onError,
@@ -219,6 +222,9 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       (guard, from) =>
         from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
     );
+    // Before `withUpgradeRoutes` merges the gateways in `bind`, which assigns
+    // each gateway path outright, so an upgrade still wins a key an alias took.
+    const routes = this.#strict ? built : withTrailingSlashAliases(built);
 
     const ws = this.#websocket;
     // Only when the upgrades share the routes table. Under `gatewayPort` a

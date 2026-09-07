@@ -76,6 +76,7 @@ export const createApp = async (): Promise<HttpApp> => {
       // `http` feature, and an override there would turn metrics on for every
       // scaffold that picked `http` without picking `stats`.
       metrics: true,
+      strict: false,
     },
   );
 

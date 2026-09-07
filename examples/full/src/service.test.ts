@@ -118,6 +118,14 @@ it('serves the ledger over drizzle, seeded at onInit', async () => {
   expect(typeof page.balance).toBe('number');
 });
 
+it('serves a trailing slash, under the global prefix, on strict: false', async () => {
+  const plain = await json<{ balance: number }>('ledger');
+  const slashed = await json<{ balance: number }>('ledger/');
+
+  expect(slashed.status).toBe(200);
+  expect(slashed.body.balance).toBe(plain.body.balance);
+});
+
 it('answers a bad cursor with a 400 that nothing in this app maps', async () => {
   const { status, body } = await json<{ error: string; status: number }>(
     'ledger/page?cursor=not-a-cursor',
