@@ -85,14 +85,15 @@ jobs:
           trigger_phrase: '@dunxonu'
 
       # A bare reply carries no trigger phrase, so interactive mode would ignore
-      # it. A prompt selects automation mode instead, and `track_progress` keeps
-      # the GitHub context and the progress comment a mention would have got.
+      # it. A prompt selects automation mode instead. No `track_progress`: it
+      # posts a tracking comment that restates the answer, so a single reply
+      # became two comments in the thread. Everything it would have injected as
+      # context is in the prompt below, and gh is allowed for the rest.
       - if: steps.addressed.outputs.how == 'reply'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.DUNXONU_TOKEN }}
-          track_progress: true
           prompt: |
             Someone replied to a review comment you left on ${{ github.repository }}
             pull request ${{ github.event.pull_request.number }}. Read the whole
