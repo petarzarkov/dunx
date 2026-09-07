@@ -24,7 +24,7 @@ const app = await HttpFactory.create(
 );
 ```
 
-The page that produces is at
+The page it produces is at
 [demo.dunx.win/api/docs](https://demo.dunx.win/api/docs), generated from that
 example's own schemas.
 
