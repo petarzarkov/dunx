@@ -167,7 +167,7 @@ dunx/
 │   └── transform       # Load-time transform that records constructor dependencies for the dunx container
 ├── tools/              # Published CLIs - the scaffolder and the MCP server
 │   ├── create-app      # Scaffold a new dunx application - bunx @dunx/create-app my-api
-│   └── mcp             # A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts
+│   └── mcp             # A Model Context Protocol server for dunx: the written guide and scaffold catalogue with no app, plus your routes, providers and modules once you point it at one
 ├── internal/           # Private workspaces, never published - docs site, benchmarks, API explorer, shared UI
 ├── examples/           # Private apps that consume the packages
 ├── docs/               # Architecture and design docs

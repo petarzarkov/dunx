@@ -1,9 +1,11 @@
 # The MCP server (`@dunx/mcp`)
 
-**Shipped as `tools/mcp`.** Six read-only tools: `dunx_overview`, `dunx_routes`,
-`dunx_providers`, `dunx_gateways`, `dunx_modules`, `dunx_openapi`. What follows is
-the reasoning that produced it, kept because the decisions are still load-bearing.
-The answers to the four questions it opened are recorded at the bottom.
+**Shipped as `tools/mcp`.** Nine read-only tools. Six read an app -
+`dunx_overview`, `dunx_routes`, `dunx_providers`, `dunx_gateways`, `dunx_modules`,
+`dunx_openapi` - and three need none: `dunx_start`, `dunx_guide`, `dunx_scaffold`.
+What follows is the reasoning that produced the first six, kept because the
+decisions are still load-bearing, then the answers to the four questions it opened.
+The three that need no app came later; their reasoning is the last section.
 
 Two of those decisions are now load-bearing for a second consumer. The
 static-not-boot rule is the one `@dunx/dashboard` inverts. The readers behind
@@ -124,3 +126,81 @@ version of this package did restate them. It rendered a `token()` binding as
    **The benchmark results are still out.** `internal/bench/results/latest.json`
    describes this repo rather than the app being read, so a tool exposing it would answer a
    question nobody holding a dunx app is asking.
+
+## The entry became optional
+
+The server required a root module. Every tool read one, so `bunx @dunx/mcp` with no
+argument printed usage and exited 1.
+
+That made it unreachable during adoption. Someone installing dunx for the first time
+has no root module to point at, and an agent asked to add dunx to an existing project
+has nothing to point at either. The server's answers were all conditioned on having
+already succeeded at the part that is hardest to get right.
+
+Three tools now answer with no app, and are served whether or not an entry was given:
+
+- **`dunx_start`** - the runtime, the scaffold command, the two install commands and
+  the `bunfig.toml` that add dunx to a project that already exists, an index of the
+  guide, and `BOOT_RULES`. Those are the failures with no compiler behind them, and
+  `tools/create-app/src/rules.ts` is the list: the missing preload heads it, and the
+  scaffolded `AGENTS.md` renders the same one. It is 4 KB. The first version was
+  17 KB, because it embedded each
+  chapter's summary and section headings into a map whose job is to say which
+  chapter to ask for next; `Guide.titles()` is what replaced `Guide.index()` there,
+  and `adopt.test.ts` holds it under 6 KB.
+- **`dunx_guide`** - every chapter of `docs/guide`. No arguments returns the index;
+  `search` returns matching lines with chapter and line number, capped at five per
+  chapter and forty overall so a common word is not answered entirely out of
+  `01-introduction`, and reporting how many it omitted; `topic`
+  returns one chapter in full, resolving an exact slug, then a slug substring, then a
+  title substring.
+- **`dunx_scaffold`** - `@dunx/create-app`'s own catalogue, and the starter files.
+
+### The corpus is bundled, not fetched
+
+`docs/guide`, `examples/minimal` and `tools/create-app` are all outside the package,
+and `files` cannot reach outside a package directory. So `scripts/gen-mcp-corpus.ts`
+writes `tools/mcp/src/generated.ts`, committed and rewritten by `bun run gen:mcp`.
+Same arrangement as `packages/dashboard/src/ui-bundle.ts`, and 439 KB against its
+445 KB.
+
+**`build` does not regenerate it, and that is the whole point.** It did, and `build`
+is the first phase of `bun run ci`, so `gen-mcp-corpus.test.ts` compared a file the
+build had rewritten seconds earlier: a guide edit committed without regenerating was
+never flagged, by the test written to flag exactly that. `gen:readme --check` is the
+pattern that works, and it works because nothing writes the file before the check.
+
+Fetching from `dunx.win` was the alternative and it is worse in three ways: it fails
+offline, it fails behind a network policy an agent does not control, and it can serve
+a guide for a version other than the installed one.
+
+`scripts/gen-mcp-corpus.test.ts` re-renders and compares against the committed file,
+because a guide edit that never ran the generator would ship a corpus describing the
+previous release and nothing else would notice - it compiles, and it answers
+confidently. That is the failure `gen:readme --check` exists for.
+
+The whole corpus is three `JSON.parse` calls over one string literal each, which
+keeps the file at 13 lines. An object literal spanning ten thousand lines would give
+`max-lines` and `oxfmt` an opinion about generated data.
+
+Every input is something CI already builds, boots or tours. The starter is
+`examples/minimal/src` plus the base template's `bunfig.toml` and `tsconfig.json`,
+which is exactly what `bunx @dunx/create-app` writes for an empty selection.
+
+### Resources, and the note that said to take the SDK
+
+`protocol.ts` carried a note saying to take `@modelcontextprotocol/sdk` if the server
+ever grew resources. It grew them and the note was wrong: `resources/list` and
+`resources/read` are two more methods of the shape the other four already have, about
+forty lines, and a dependency would have bought nothing.
+
+`resources/templates/list` is answered with an empty list rather than left to
+`-32601`. Declaring the `resources` capability is what makes a client ask, and
+several log the method-not-found as a broken server.
+
+What would still justify the SDK: sampling, elicitation, progress, or a transport
+that is not stdio. Each of those is a session and a lifetime rather than another
+request and response.
+
+`handle` and `serve` take resources as an optional trailing argument, so a caller
+that serves none keeps working unchanged.

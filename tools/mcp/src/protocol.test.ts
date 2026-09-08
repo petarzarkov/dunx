@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   handle,
   PROTOCOL_VERSION,
+  type ResourceDefinition,
   RpcError,
   serve,
   type ToolDefinition,
@@ -40,12 +41,14 @@ const ask = async (
 };
 
 describe('the protocol subset', () => {
-  it('answers initialize with a version and the tools capability', async () => {
+  it('answers initialize with a version and only the capabilities it serves', async () => {
     const result = (await ask('initialize'))['result'] as Record<
       string,
       unknown
     >;
     expect(result['protocolVersion']).toBe(PROTOCOL_VERSION);
+    // No resources were given to this caller, so none are advertised. Claiming
+    // them made a client expect documents that `resources/read` then refused.
     expect(result['capabilities']).toEqual({ tools: {} });
     expect(result['serverInfo']).toEqual(INFO);
   });
@@ -95,7 +98,9 @@ describe('the protocol subset', () => {
   });
 
   it('rejects an unsupported method', async () => {
-    const error = (await ask('resources/list'))['error'] as { code: number };
+    // `prompts/list` rather than `resources/list`, which this used to use and
+    // which is now answered.
+    const error = (await ask('prompts/list'))['error'] as { code: number };
     expect(error.code).toBe(-32601);
   });
 
@@ -310,5 +315,124 @@ describe('malformed input', () => {
     const response = JSON.parse(written[0] ?? '{}') as Record<string, unknown>;
     expect(response['id']).toBeNull();
     expect(errorOf(response)['code']).toBe(RpcError.PARSE_ERROR);
+  });
+});
+
+const RESOURCES: readonly ResourceDefinition[] = [
+  {
+    uri: 'dunx://guide/01-introduction',
+    name: 'Introduction',
+    description: 'What dunx is.',
+    mimeType: 'text/markdown',
+    read: () => '# Introduction\n',
+  },
+];
+
+/**
+ * Resources are the half `handle` takes as an optional argument, so a caller that
+ * serves none - and every caller before this existed - keeps working unchanged.
+ */
+describe('resources', () => {
+  const askFor = async (
+    method: string,
+    params?: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> => {
+    const line = await handle(
+      { jsonrpc: '2.0', id: 1, method, ...(params ? { params } : {}) },
+      TOOLS,
+      INFO,
+      RESOURCES,
+    );
+    return JSON.parse(line ?? '{}') as Record<string, unknown>;
+  };
+
+  it('is advertised at initialize once resources are served', async () => {
+    const line = await handle(
+      { jsonrpc: '2.0', id: 1, method: 'initialize' },
+      TOOLS,
+      INFO,
+      RESOURCES,
+    );
+    const parsed = JSON.parse(line ?? '{}') as {
+      result: { capabilities: unknown };
+    };
+    expect(parsed.result.capabilities).toEqual({ tools: {}, resources: {} });
+  });
+
+  it('lists them without their readers', async () => {
+    const { resources } = (await askFor('resources/list'))['result'] as {
+      resources: Record<string, unknown>[];
+    };
+    expect(resources).toHaveLength(1);
+    expect(resources[0]).toEqual({
+      uri: 'dunx://guide/01-introduction',
+      name: 'Introduction',
+      description: 'What dunx is.',
+      mimeType: 'text/markdown',
+    });
+    expect(resources[0]).not.toHaveProperty('read');
+  });
+
+  it('lists none when the caller serves none', async () => {
+    const line = await handle(
+      { jsonrpc: '2.0', id: 1, method: 'resources/list' },
+      TOOLS,
+      INFO,
+    );
+    const parsed = JSON.parse(line ?? '{}') as {
+      result: { resources: unknown[] };
+    };
+    expect(parsed.result.resources).toEqual([]);
+  });
+
+  it('reads one by uri', async () => {
+    const { contents } = (
+      await askFor('resources/read', { uri: 'dunx://guide/01-introduction' })
+    )['result'] as { contents: Record<string, unknown>[] };
+    expect(contents[0]).toEqual({
+      uri: 'dunx://guide/01-introduction',
+      mimeType: 'text/markdown',
+      text: '# Introduction\n',
+    });
+  });
+
+  /**
+   * The guide's own chapter links carry `#section`, and an exact-match-only
+   * lookup answered `Unknown resource` for every one of them.
+   */
+  it('reads one by a uri carrying a fragment', async () => {
+    const { contents } = (
+      await askFor('resources/read', {
+        uri: 'dunx://guide/01-introduction#what-it-is-built-on',
+      })
+    )['result'] as { contents: Record<string, unknown>[] };
+    // The canonical uri comes back, not the one with the fragment on it.
+    expect(contents[0]?.['uri']).toBe('dunx://guide/01-introduction');
+    expect(contents[0]?.['text']).toBe('# Introduction\n');
+  });
+
+  it('still rejects a fragment on a uri that names no resource', async () => {
+    const error = (
+      await askFor('resources/read', { uri: 'dunx://guide/nope#anything' })
+    )['error'] as { code: number };
+    expect(error.code).toBe(RpcError.INVALID_PARAMS);
+  });
+
+  it('rejects an unknown uri as invalid params, naming it', async () => {
+    const error = (
+      await askFor('resources/read', { uri: 'dunx://guide/nope' })
+    )['error'] as { code: number; message: string };
+    expect(error.code).toBe(RpcError.INVALID_PARAMS);
+    expect(error.message).toContain('dunx://guide/nope');
+  });
+
+  /**
+   * Declaring the `resources` capability is what makes a client ask. Left to
+   * `-32601`, several log the method-not-found as a broken server.
+   */
+  it('answers the template listing with an empty one', async () => {
+    expect((await askFor('resources/templates/list'))['result']).toEqual({
+      resourceTemplates: [],
+    });
   });
 });

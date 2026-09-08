@@ -5,11 +5,16 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 # A push supersedes the review of the commit before it, so a rapid series of
-# pushes costs one review rather than one per push. Each review posts inline
-# comments and two overlapping runs would post two sets over the same lines.
+# pushes costs one review rather than one per push. Each run submits one pull
+# request review, and two overlapping runs would submit two against the same
+# commit, one of them from a diff already superseded.
 concurrency:
   group: dunxonu-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
+
+# Nothing at the workflow level, so a job that forgets its own block gets none
+# rather than the repository default.
+permissions: {}
 
 jobs:
   review:
@@ -32,11 +37,34 @@ jobs:
       # No `bun install` here, and no `./.github/actions/setup`: a review reads
       # the diff rather than building, and the action prepends its own Bun to
       # PATH after ours anyway. CI runs the gates.
+      #
+      # Full history, not `fetch-depth: 1`. Three of the tools named below are
+      # `git log`, `git blame` and `git show`, and a single-commit checkout gives
+      # them nothing to read: the review reported reading `main...HEAD`, a range
+      # that does not exist locally at depth 1.
+      #
+      # `persist-credentials: false` because the reviewer can read files and the
+      # pull request it reads is attacker-controlled text. checkout@v4 leaves the
+      # workflow token in `.git/config`, inside the workspace, so a prompt
+      # injection that got the agent to print that file would disclose a token
+      # holding `pull-requests: write`. Nothing here needs credentials after the
+      # fetch: `git log`, `git show` and `git diff` all read local history.
+      #
+      # Narrowing `cat` and `find` was the other suggestion and is not the fix.
+      # `grep`, `sed`, `awk`, `head` and `tail` all read files too, so the
+      # exposure was the credential sitting in the workspace, not the command
+      # that would have read it.
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: anthropics/claude-code-action@v1
+      # Pinned, like `actions/github-script` and `cloudflare/wrangler-action`
+      # elsewhere in this repository. A tag is mutable and this job hands the
+      # action two secrets, so retargeting `v1` would run unreviewed code with
+      # them.
+      - id: review
+        uses: anthropics/claude-code-action@b7912aeeb535234e3e9385ff49e8237f689b5f14 # v1
         env:
           # Belt and braces for the failure the marketplace plugin hit: a
           # background task in a headless run never reports back, because the
@@ -46,15 +74,68 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.DUNXONU_TOKEN }}
+          # `track_progress` is deliberately absent, having been on for two runs.
+          # It delivers the run through the action's own tracking comment, whose
+          # body is assembled in the action's `comment-logic.ts` and always opens
+          # with a hardcoded `**Claude finished @<user>'s task in <duration>**`
+          # and a job link. Nothing configures that away, so dropping the tracking
+          # comment is the only way to lose the header, so the step below submits
+          # the review instead.
+          #
+          # `--comment` is absent for a different reason: it posts each finding
+          # through the inline-comment tool, which put six separate top-level
+          # comments on #63 seconds apart.
+          #
           # The built-in review, not code-review@claude-code-plugins. It needs
           # no marketplace clone, runs in the foreground under `-p`, and takes
           # an effort level: medium reports only what it is confident in, which
           # is the dial the plugin did not have. Raise it to high for broader
           # coverage and a longer run.
-          prompt: /code-review medium --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+          prompt: /code-review medium ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
           # --allowedTools REPLACES the skill's own allowed-tools rather than
-          # adding to it, so anything it reaches for has to be named. A review
-          # of a workflow diff was denied 18 calls and still reported no issues,
-          # so gh api is named here too.
+          # adding to it, so anything it reaches for has to be named. `Read`,
+          # `Grep` and `Glob` need no entry - they are permitted without one, and
+          # a run under this exact list was measured denying only `Bash`.
+          #
+          # The text commands are here because that measurement caught the review
+          # reaching for `cat -n`, `grep -nE` and `awk` on eight calls and being
+          # refused each time, which is what left it verifying findings by
+          # inference. `bun test` was refused too and is deliberately still
+          # absent: it executes the code under review, and this workflow carries
+          # an OAuth token. Add `Bash(bun test:*)` to trade that for a reviewer
+          # that can run the suite it is reasoning about.
+          #
+          # The model is asked to change as little about its output as possible.
+          # Telling it to run `gh pr review` was measured twice and ignored both
+          # times, and telling it to write prose instead of its findings list is
+          # the same bet: the slash command's own instructions say how to report,
+          # and an appended system prompt loses to them. So it reports the way it
+          # reports, and `scripts/post-review.ts` formats and posts, which is
+          # the half that has to be deterministic.
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*)"
+            --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else reads your final message and posts it as a pull request review, so open with no preamble naming the job, the run, the duration or yourself. Report your findings as the typed list you normally would. If you write prose instead, end the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did."
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
+
+      # One review per run, which is one per push: the cadence CodeRabbit uses.
+      # The findings go on the lines they are about and the body stays a count,
+      # because the whole review in the body put a screen of prose in the
+      # conversation on every push. GitHub takes the inline comments with the
+      # review in one POST, so this is still one review rather than a comment per
+      # finding.
+      #
+      # An empty review is a hard failure rather than a green check. That is the
+      # original defect this workflow had: it reported success while discarding
+      # nine findings, and a review gate that can pass without reviewing is worse
+      # than no gate.
+      - name: Submit the review
+        env:
+          GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+        run: |
+          set -euo pipefail
+          # Bun is on PATH because the action put it there.
+          bun scripts/post-review.ts \
+            "$EXECUTION_FILE" \
+            "${{ github.repository }}" \
+            "${{ github.event.pull_request.number }}" \
+            "${{ github.event.pull_request.head.sha }}"

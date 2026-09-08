@@ -46,9 +46,15 @@ So, until there is external demand:
 - **`@dunx/core`, `@dunx/transform` and `@dunx/http` take the work.** They are what
   the pitch is about and what a reader evaluates. Correctness, docs and stability
   there beat a new capability anywhere else.
-- **`auth`, `dashboard`, `mcp`, `infra/images`, `infra/files` are frozen to
+- **`auth`, `dashboard`, `infra/images`, `infra/files` are frozen to
   maintenance.** They keep building, keep passing CI and get fixes; they do not get
   features. A feature there needs an issue from someone who is not the owner.
+- **`mcp` came off the freeze once**, for the adoption tools. The freeze exists so
+  that surface area does not grow ahead of demand, and this change was the opposite
+  case: the server answered only questions an existing dunx app raises, so the one
+  audience it could not serve was the one deciding whether to adopt. It is back on
+  the freeze now. See [architecture/mcp.md](./architecture/mcp.md), "The entry
+  became optional".
 - **A new package needs a user first.** `@dunx/queue-dashboard` was built, found to be
   a worse bull-board, and deleted - the cost of that round trip is the argument.
 

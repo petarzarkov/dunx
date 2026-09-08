@@ -1,12 +1,16 @@
 /**
- * The slice of the Model Context Protocol a read-only tool server needs:
- * `initialize`, `tools/list`, `tools/call`, and the notification after initialize.
+ * The slice of the Model Context Protocol a read-only server needs: `initialize`,
+ * `ping`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, and the
+ * notification after initialize.
  *
- * Hand-written rather than `@modelcontextprotocol/sdk`: this is
- * newline-delimited JSON-RPC 2.0 with three methods and about sixty lines, and
- * staying dependency-free is what lets `bunx @dunx/mcp` resolve nothing.
+ * Hand-written rather than `@modelcontextprotocol/sdk`: this is newline-delimited
+ * JSON-RPC 2.0 with a handful of methods, and staying dependency-free is what lets
+ * `bunx @dunx/mcp` resolve nothing.
  *
- * Take the SDK if this ever grows resources, prompts, sampling or progress.
+ * Resources were the case the earlier note here said to take the SDK for. They cost
+ * two more methods of the same shape, so they did not pay for a dependency. What
+ * still would: sampling, elicitation, progress, or a transport that is not stdio -
+ * each of those is a session and a lifetime rather than another request/response.
  */
 export const PROTOCOL_VERSION = '2025-06-18';
 
@@ -23,6 +27,19 @@ export interface ToolDefinition {
   readonly inputSchema: Record<string, unknown>;
   /** Sync or async - `unknown` covers a promise, and the caller awaits either. */
   readonly run: (args: Record<string, unknown>) => unknown;
+}
+
+/**
+ * A document a client can attach without calling a tool. Everything served this way
+ * is also reachable through a tool, because a client that supports only tools is
+ * still the common case.
+ */
+export interface ResourceDefinition {
+  readonly uri: string;
+  readonly name: string;
+  readonly description: string;
+  readonly mimeType: string;
+  readonly read: () => string;
 }
 
 /** JSON-RPC error codes this server can raise. */
@@ -44,6 +61,14 @@ const fail = (
   message: string,
 ): string =>
   `${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`;
+
+/**
+ * RFC 3986 separates the fragment before dereferencing: `#section` names a place
+ * inside a resource rather than a different resource. The guide's chapter links
+ * carry one, so an exact-match-only lookup answered `Unknown resource` for six of
+ * the twenty-five links a reader can follow.
+ */
+const withoutFragment = (uri: string): string => uri.split('#')[0] ?? uri;
 
 /** An id is echoed back only if it is one JSON-RPC allows; otherwise `null`. */
 const readableId = (value: unknown): JsonRpcRequest['id'] =>
@@ -102,6 +127,7 @@ export const handle = async (
   request: unknown,
   tools: readonly ToolDefinition[],
   serverInfo: { name: string; version: string },
+  resources: readonly ResourceDefinition[] = [],
 ): Promise<string | null> => {
   const rejected = rejection(request);
   if (rejected !== null) return rejected;
@@ -112,7 +138,13 @@ export const handle = async (
   if (call.method === 'initialize') {
     return reply(call.id, {
       protocolVersion: PROTOCOL_VERSION,
-      capabilities: { tools: {} },
+      // Only what this caller actually serves. Advertising `resources`
+      // unconditionally told an embedder's client to expect documents that a
+      // following `resources/read` then answered `Unknown resource` for.
+      capabilities: {
+        tools: {},
+        ...(resources.length > 0 ? { resources: {} } : {}),
+      },
       serverInfo,
     });
   }
@@ -132,6 +164,51 @@ export const handle = async (
         description,
         inputSchema,
       })),
+    });
+  }
+
+  if (call.method === 'resources/list') {
+    return reply(call.id, {
+      resources: resources.map(({ uri, name, description, mimeType }) => ({
+        uri,
+        name,
+        description,
+        mimeType,
+      })),
+    });
+  }
+
+  /**
+   * Answered rather than left to `-32601`, because declaring the `resources`
+   * capability is what makes a client ask: several call this immediately after
+   * `resources/list` and log the method-not-found as a broken server.
+   */
+  if (call.method === 'resources/templates/list') {
+    return reply(call.id, { resourceTemplates: [] });
+  }
+
+  if (call.method === 'resources/read') {
+    const uri = call.params?.['uri'];
+    const resource =
+      resources.find((candidate) => candidate.uri === uri) ??
+      (typeof uri === 'string'
+        ? resources.find((candidate) => candidate.uri === withoutFragment(uri))
+        : undefined);
+    if (!resource) {
+      return fail(
+        call.id,
+        RpcError.INVALID_PARAMS,
+        `Unknown resource: ${String(uri)}`,
+      );
+    }
+    return reply(call.id, {
+      contents: [
+        {
+          uri: resource.uri,
+          mimeType: resource.mimeType,
+          text: resource.read(),
+        },
+      ],
     });
   }
 
@@ -190,6 +267,7 @@ export const serve = async (
   write: (line: string) => void | Promise<void>,
   tools: readonly ToolDefinition[],
   serverInfo: { name: string; version: string },
+  resources: readonly ResourceDefinition[] = [],
 ): Promise<void> => {
   const decoder = new TextDecoder();
   let buffer = '';
@@ -209,7 +287,7 @@ export const serve = async (
       );
       return;
     }
-    const answer = await handle(request, tools, serverInfo);
+    const answer = await handle(request, tools, serverInfo, resources);
     if (answer !== null) await write(answer);
   };
 

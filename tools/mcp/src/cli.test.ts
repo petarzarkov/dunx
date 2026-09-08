@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { main } from './cli.js';
+import { assemble, main } from './cli.js';
 
 const PACKAGE = `${import.meta.dir}/..`;
 const CLI = `${import.meta.dir}/cli.ts`;
@@ -35,10 +35,36 @@ describe('the command line', () => {
     expect(errors[0]).toMatch(/^\d+\.\d+\.\d+/);
   });
 
-  it('prints usage and fails when given no entry', async () => {
+  /**
+   * It used to print usage and exit 1. Someone adopting dunx has no root module to
+   * point at, so the one moment the guide tools are worth most was the one moment
+   * the server refused to start.
+   */
+  it('serves the tools that need no app when given no entry', async () => {
     capture();
-    expect(await main([])).toBe(1);
-    expect(errors.join('\n')).toContain('Usage: bunx @dunx/mcp');
+    const tools = await assemble([]);
+    if (typeof tools === 'number') throw new Error('assemble refused to start');
+    expect(tools.map((tool) => tool.name)).toEqual([
+      'dunx_start',
+      'dunx_guide',
+      'dunx_scaffold',
+    ]);
+    expect(errors.join('\n')).toContain('No entry given');
+  });
+
+  it('refuses --export when there is no entry for it to select from', async () => {
+    capture();
+    expect(await assemble(['--export=AppModule'])).toBe(1);
+    expect(errors.join('\n')).toContain(
+      '--export names an export of the entry',
+    );
+  });
+
+  it('adds the readers to them when given one', async () => {
+    const tools = await assemble([`${import.meta.dir}/app.fixture.ts`]);
+    if (typeof tools === 'number') throw new Error('assemble refused to start');
+    expect(tools.map((tool) => tool.name)).toContain('dunx_start');
+    expect(tools.map((tool) => tool.name)).toContain('dunx_routes');
   });
 
   it('names the entry and the directory when it cannot be resolved', async () => {
@@ -92,14 +118,18 @@ describe('the command line', () => {
 describe('the server over stdio', () => {
   const ask = async (
     requests: readonly Record<string, unknown>[],
-    entry = 'src/app.fixture.ts',
+    /** `null` runs it with no entry at all, which is a supported invocation. */
+    entry: string | null = 'src/app.fixture.ts',
   ): Promise<Record<string, unknown>[]> => {
-    const proc = Bun.spawn(['bun', CLI, entry], {
-      cwd: PACKAGE,
-      stdin: 'pipe',
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
+    const proc = Bun.spawn(
+      entry === null ? ['bun', CLI] : ['bun', CLI, entry],
+      {
+        cwd: PACKAGE,
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
+    );
 
     for (const request of requests) {
       void proc.stdin.write(
@@ -120,9 +150,10 @@ describe('the server over stdio', () => {
   /** The first answer, asserted present so the reads below are not optional. */
   const first = async (
     requests: readonly Record<string, unknown>[],
-    entry?: string,
+    entry?: string | null,
   ): Promise<Record<string, unknown>> => {
-    const [answer] = entry ? await ask(requests, entry) : await ask(requests);
+    const [answer] =
+      entry === undefined ? await ask(requests) : await ask(requests, entry);
     if (!answer) throw new Error('the server answered nothing');
     return answer;
   };
@@ -195,6 +226,67 @@ describe('the server over stdio', () => {
     expect(routes).toHaveLength(1);
     expect(routes[0]?.path).toBe('/ping');
     expect(routes[0]?.controller).toBe('PingController');
+  }, 20_000);
+
+  it('starts with no entry, serving the guide as tools and as resources', async () => {
+    const answers = await ask(
+      [
+        { id: 1, method: 'tools/list' },
+        { id: 2, method: 'resources/list' },
+      ],
+      null,
+    );
+
+    const list = answers[0];
+    if (!list) throw new Error('the server did not answer tools/list');
+    const { tools } = list['result'] as { tools: { name: string }[] };
+    const names = tools.map((tool) => tool.name);
+    expect(names).toContain('dunx_start');
+    // Nothing was given to read, so the readers must not be advertised.
+    expect(names).not.toContain('dunx_routes');
+
+    const listed = answers[1];
+    if (!listed) throw new Error('the server did not answer resources/list');
+    const { resources } = listed['result'] as { resources: { uri: string }[] };
+    expect(resources.length).toBeGreaterThan(20);
+    expect(resources[0]?.uri).toStartWith('dunx://guide/');
+  }, 20_000);
+
+  it('reads a guide chapter as a resource', async () => {
+    const answer = await first(
+      [
+        {
+          id: 1,
+          method: 'resources/read',
+          params: { uri: 'dunx://guide/02-first-steps' },
+        },
+      ],
+      null,
+    );
+    const { contents } = answer['result'] as {
+      contents: { text: string; mimeType: string }[];
+    };
+    expect(contents[0]?.mimeType).toBe('text/markdown');
+    expect(contents[0]?.text).toContain('# First steps');
+  }, 20_000);
+
+  it('reads a chapter through a link carrying a section fragment', async () => {
+    const answer = await first(
+      [
+        {
+          id: 1,
+          method: 'resources/read',
+          params: { uri: 'dunx://guide/06-validation#routeschemas' },
+        },
+      ],
+      null,
+    );
+    expect(answer).not.toHaveProperty('error');
+    const { contents } = answer['result'] as {
+      contents: { uri: string; text: string }[];
+    };
+    expect(contents[0]?.uri).toBe('dunx://guide/06-validation');
+    expect(contents[0]?.text).toContain('# Validation');
   }, 20_000);
 
   it('accepts a relative entry with no leading ./ from the shell', async () => {
