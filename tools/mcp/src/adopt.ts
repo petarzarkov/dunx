@@ -43,13 +43,13 @@ export const adoptionTools = (): readonly ToolDefinition[] => [
   },
   {
     name: 'dunx_guide',
-    description: `The written guide, bundled in this package: ${GUIDE.length} chapters covering providers, modules, controllers, validation, lifecycle, middleware and guards, websockets, OpenAPI, testing, configuration, logging, database, queues, scheduling, authentication, files, deployment, health checks and metrics. No arguments returns the index. \`topic\` returns one chapter in full; \`search\` returns matching lines across every chapter, which is the cheaper first call when the question does not name a chapter.`,
+    description: `The written guide, bundled in this package: ${GUIDE.length} chapters covering providers, modules, controllers, validation, lifecycle, middleware and guards, websockets, OpenAPI, testing, configuration, logging, database, queues, scheduling, authentication, files, deployment, health checks and metrics. No arguments returns the index. \`topic\` returns one chapter in full; \`search\` matches literal text and returns the matching lines, plus the chapters the query's words point at - which is the cheaper first call when the question does not name a chapter.`,
     inputSchema: schema({
       topic: str(
         'One chapter, by slug (06-validation) or by name (validation). Returns the whole chapter.',
       ),
       search: str(
-        'Matching lines across every chapter, with the chapter and line number of each. Takes precedence over `topic` when both are given.',
+        'Matching lines across every chapter, with the chapter and line number of each. Literal text, not a phrase match: a question written as a sentence matches no line, so `suggested` names the chapters its words point at. Takes precedence over `topic` when both are given.',
       ),
     }),
     run: (raw) => {
@@ -96,9 +96,11 @@ export const adoptionTools = (): readonly ToolDefinition[] => [
     description:
       'What `bunx @dunx/create-app` can generate: every feature, what it demonstrates, the features it pulls in with it, the dependencies it adds, and the backing service it needs to do anything. `starter: true` also returns the source of the smallest working app, which is what to copy when adding dunx to a project that already exists. Writes nothing.',
     inputSchema: schema({
-      feature: str('Only features whose name contains this.'),
+      feature: str(
+        'Only features whose name or summary contains this, so `queue` finds `jobs`.',
+      ),
       starter: bool(
-        'Include the source of the minimal app: five TypeScript files, one route, plus bunfig.toml and tsconfig.json.',
+        'Include the source of the minimal app: five TypeScript files, one route, plus package.json, bunfig.toml and tsconfig.json - everything needed to install, boot, test and typecheck it.',
       ),
     }),
     run: (raw) => {

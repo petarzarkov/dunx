@@ -72,6 +72,57 @@ describe('the guide reader', () => {
     expect(twins.chapter('22-upgrading')?.title).toBe('Upgrading');
   });
 
+  /**
+   * `search` is literal, so a question written as a sentence matched no line in any
+   * chapter and answered `hits: []` with nowhere to go. These are the words a
+   * caller actually types.
+   */
+  it('suggests the chapter a sentence points at, though no line matches it', () => {
+    const result = guide.search('how do I validate a request body');
+    expect(result.hits).toEqual([]);
+    expect(result.suggested[0]).toBe('06-validation');
+  });
+
+  /**
+   * `validate` is not a substring of `Validation` in either direction, which is why
+   * the words are compared five characters at a time.
+   */
+  it('matches a word against the form the chapter title uses', () => {
+    expect(guide.suggest('validating')[0]).toBe('06-validation');
+    expect(guide.suggest('validation')[0]).toBe('06-validation');
+  });
+
+  /**
+   * Every chapter mentions `route` somewhere, so scoring bodies alone ranked the
+   * whole guide against any query and the tail was guide order wearing a score. A
+   * chapter has to name the subject in its title, a heading or its summary to be
+   * suggested at all; the body only breaks ties between those.
+   */
+  it('does not suggest a chapter that only mentions the word in passing', () => {
+    // `zod` is in both fixture bodies and in neither title, heading or summary.
+    expect(guide.suggest('zod')).toEqual([]);
+    // Named in a heading, so the body's two mentions now count.
+    const named = new Guide([docs[0]!, { ...docs[1]!, sections: ['zod'] }]);
+    expect(named.suggest('zod')).toEqual(['06-validation']);
+  });
+
+  it('scores nothing when the query is all stopwords or punctuation', () => {
+    expect(guide.suggest('how do I')).toEqual([]);
+    expect(guide.suggest('   ...   ')).toEqual([]);
+    expect(guide.search('how do I').suggested).toEqual([]);
+  });
+
+  it('caps the suggestions rather than ranking the whole guide', () => {
+    const many = new Guide(
+      Array.from({ length: 12 }, (_, index) => ({
+        ...docs[1]!,
+        slug: `${index}-chapter`,
+        title: 'Validation',
+      })),
+    );
+    expect(many.suggest('validation')).toHaveLength(5);
+  });
+
   it('treats a blank topic as no topic rather than as a match on everything', () => {
     expect(guide.chapter('   ')).toBeUndefined();
     expect(guide.candidates('  ')).toEqual([]);
@@ -160,6 +211,25 @@ describe('the scaffold reader', () => {
     expect(scaffold.features()).toHaveLength(2);
     expect(scaffold.features('cach').map((f) => f.name)).toEqual(['cache']);
     expect(scaffold.features('nope')).toEqual([]);
+  });
+
+  /**
+   * A caller asks for a capability and the catalogue is keyed by folder, so
+   * `queue` found nothing while `jobs` was described as "bullmq queues over
+   * Bun.RedisClient". `redis` found nothing either, against four features that
+   * need one.
+   */
+  it('matches the summary as well as the name', () => {
+    expect(scaffold.features('redis').map((f) => f.name)).toEqual(['cache']);
+    expect(scaffold.features('crud').map((f) => f.name)).toEqual(['notes']);
+  });
+
+  it('finds the real catalogue by what a feature does, not what it is called', () => {
+    const real = new Scaffold(SCAFFOLD, MINIMAL);
+    expect(real.features('queue').map((f) => f.name)).toContain('jobs');
+    expect(real.features('rate limit').map((f) => f.name)).toContain(
+      'throttle',
+    );
   });
 
   it('returns the starter as given', () => {
@@ -284,10 +354,16 @@ describe('the tools that need no app', () => {
     expect(miss['error']).toContain('kubernetes');
     expect(miss['chapters']).toContain('01-introduction');
 
-    // Two chapters are numbered 22, so this is ambiguous against the real corpus.
-    const ambiguous = await call('dunx_guide', { topic: '22' });
-    expect(ambiguous['error']).toContain('matches 2 chapters');
-    expect(ambiguous['candidates']).toEqual(['22-metrics', '22-upgrading']);
+    // Every chapter is numbered uniquely, so a full number is one chapter.
+    const numbered = (await call('dunx_guide', { topic: '22' }))['chapter'] as {
+      slug: string;
+    };
+    expect(numbered.slug).toBe('22-metrics');
+
+    // A partial number is not, and the answer names them rather than picking one.
+    const ambiguous = await call('dunx_guide', { topic: '2' });
+    expect(ambiguous['error']).toContain('matches');
+    expect((ambiguous['candidates'] as string[]).length).toBeGreaterThan(1);
 
     // Whitespace is not a topic, so it falls through to the index.
     expect(await call('dunx_guide', { topic: '   ' })).toHaveProperty(
