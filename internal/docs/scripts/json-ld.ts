@@ -10,8 +10,8 @@
  *
  * A guide or a reference page gets `TechArticle` plus the breadcrumb trail its
  * URL already implies. Neither is a ranking factor on its own; both change how
- * the result is drawn, and the breadcrumb is what puts `dunx.win > Guide` under
- * the title instead of a bare URL.
+ * the result is drawn, and the breadcrumb is what puts `dunx.win > Releases`
+ * under the title instead of a bare URL.
  */
 
 export interface Entity {
@@ -24,10 +24,14 @@ export interface Entity {
 export interface Crumb {
   readonly name: string;
   /**
-   * Absent when the section has no page of its own, which is what keeps a
-   * breadcrumb from publishing a URL that answers 404.
+   * Required, so a crumb cannot reach {@link breadcrumbs} without one. Google
+   * treats a `ListItem` with no `item` as a critical Breadcrumbs error on every
+   * position but the last, and it reported one against dunx.win: `/guide` and
+   * `/api` have no page of their own, and the section crumb was being published
+   * with a name and nothing to click. A section like that is left out of the
+   * trail now rather than published without a URL.
    */
-  readonly path?: string;
+  readonly path: string;
 }
 
 /**
@@ -82,24 +86,34 @@ const techArticle = (
 });
 
 /**
- * The label for a first path segment, and whether that section is a page.
+ * The first path segments the site serves, and the crumb each one contributes.
  *
  * `pagesOf` writes `/releases`, but there is no `/guide` or `/api` file and
  * `_redirects` carries no catch-all, so both answer with `404.html`. A crumb
- * linking one would put a dead URL in the structured data.
+ * linking one would put a dead URL in the structured data, and a crumb naming
+ * one without a URL is the error Google raised. Neither contributes a crumb:
+ * `Record<string, Crumb | undefined>` and no entry is how a known section says
+ * it has no page.
  */
-const SECTIONS: Record<
-  string,
-  { readonly name: string; readonly routable: boolean }
-> = {
-  guide: { name: 'Guide', routable: false },
-  api: { name: 'Reference', routable: false },
-  releases: { name: 'Releases', routable: true },
+const SECTIONS: Record<string, Crumb | undefined> = {
+  guide: undefined,
+  api: undefined,
+  releases: { name: 'Releases', path: '/releases' },
 };
 
 /**
- * `/guide/controllers` becomes `dunx > Guide > Controllers`, with `Guide`
- * carrying no link.
+ * A page title as a breadcrumb label: `Controllers | dunx` is the `<title>`, and
+ * a trail reading `dunx > Controllers | dunx` says the site name twice. Only the
+ * last ` | ` segment goes, so `@dunx/http` keeps its slash and `dunx 3.4.1 |
+ * Releases` becomes `dunx 3.4.1`.
+ */
+const label = (title: string): string =>
+  title.replace(/\s*\|\s*[^|]+$/, '').trim() || title;
+
+/**
+ * `/releases/3.4.1` becomes `dunx > Releases > 3.4.1`, and
+ * `/guide/controllers` becomes `dunx > Controllers`, because the guide has no
+ * index page to point the middle crumb at.
  *
  * Built from the path rather than passed in, so a route added to `pagesOf` gets
  * a trail without a second list to update.
@@ -107,20 +121,18 @@ const SECTIONS: Record<
 export const crumbsOf = (path: string, title: string): Crumb[] => {
   const segments = path.split('/').filter((segment) => segment !== '');
   const first = segments[0];
-  if (first === undefined) return [];
+  if (first === undefined || !Object.hasOwn(SECTIONS, first)) return [];
 
   const section = SECTIONS[first];
-  if (section === undefined) return [];
 
   // A one-segment path is the section's own page, and having been handed to this
   // function at all is what says it was rendered.
-  if (segments.length === 1) return [{ name: section.name, path }];
+  if (segments.length === 1) {
+    return section === undefined ? [] : [{ name: section.name, path }];
+  }
 
-  const parent: Crumb = section.routable
-    ? { name: section.name, path: `/${first}` }
-    : { name: section.name };
-
-  return [parent, { name: title, path }];
+  const leaf: Crumb = { name: label(title), path };
+  return section === undefined ? [leaf] : [section, leaf];
 };
 
 const breadcrumbs = (
@@ -140,11 +152,7 @@ const breadcrumbs = (
       '@type': 'ListItem',
       position: index + 2,
       name: crumb.name,
-      // schema.org allows a ListItem with a name and no `item`, which is the
-      // spelling for a step in the trail that is not itself a page.
-      ...(crumb.path === undefined
-        ? {}
-        : { item: `${entity.origin}${crumb.path}` }),
+      item: `${entity.origin}${crumb.path}`,
     })),
   ],
 });
