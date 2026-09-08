@@ -52,11 +52,25 @@ describe.skipIf(!built)('the built pages', () => {
     expect(page).toContain('name="twitter:card" content="summary_large_image"');
     const blocks = page.match(/application\/ld\+json/g) ?? [];
     expect(blocks.length).toBeGreaterThan(0);
+    let trails = 0;
     for (const json of page.matchAll(
       /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g,
     )) {
       expect(() => JSON.parse(json[1] ?? '')).not.toThrow();
+      const block = JSON.parse(json[1] ?? '') as {
+        '@type': string;
+        itemListElement?: { item?: string }[];
+      };
+      if (block['@type'] !== 'BreadcrumbList') continue;
+      trails++;
+      // Search Console raised `Missing field "item" (in "itemListElement")`
+      // against these pages. `crumbsOf` is what fixed it; this is the document
+      // Google fetches.
+      for (const item of block.itemListElement ?? []) {
+        expect(item).toHaveProperty('item');
+      }
     }
+    expect(trails).toBe(1);
   });
 
   /**
