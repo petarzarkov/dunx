@@ -91,6 +91,15 @@ export const assemble = async (
 
   const entry = argv.find((arg) => !arg.startsWith('-'));
   if (entry === undefined) {
+    // `--export=` selects an export of the entry, so with no entry it selects
+    // nothing. Saying so beats accepting it and answering as if it had applied.
+    if (named(argv) !== undefined) {
+      console.error(
+        '--export names an export of the entry, and no entry was given. Pass the ' +
+          'file that declares your root module, or drop --export.',
+      );
+      return 1;
+    }
     console.error(
       'No entry given, so this server answers about dunx itself: dunx_start, ' +
         'dunx_guide, dunx_scaffold, and the guide as resources. Pass the file ' +

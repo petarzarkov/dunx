@@ -28,6 +28,18 @@ export interface Step {
   readonly why: string;
 }
 
+/**
+ * A rule a dunx app breaks by omission. The list is declared by
+ * `@dunx/create-app` and bundled at generation time; the shape is restated here so
+ * this package's `.d.ts` does not make `@dunx/create-app` a typing peer. The
+ * generator annotates its return with this type, so the two cannot drift without a
+ * compile error.
+ */
+export interface BootRule {
+  readonly rule: string;
+  readonly detail: string;
+}
+
 export interface Bunfig {
   readonly path: string;
   readonly contents: string;

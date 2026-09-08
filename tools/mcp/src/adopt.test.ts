@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { adoptionResources, adoptionTools } from './adopt.js';
-import { GUIDE, MINIMAL, SCAFFOLD } from './generated.js';
+import { GUIDE, MINIMAL, RULES, SCAFFOLD } from './generated.js';
 import { Guide, GUIDE_SCHEME, type GuideDoc } from './guide.js';
 import { handle } from './protocol.js';
 import { Scaffold, type Starter } from './scaffold.js';
@@ -226,7 +226,7 @@ describe('the tools that need no app', () => {
       'preload = ["@dunx/transform/preload"]',
     );
     expect(adopt.bunfig.contents).toContain('[test]');
-    expect(start['rules']).toHaveLength(4);
+    expect(start['rules']).toHaveLength(RULES.length);
     expect(start['guide']).toHaveLength(GUIDE.length);
   });
 

@@ -1,4 +1,5 @@
 export { FEATURES, featureNames, type Feature } from './features.js';
+export { BOOT_RULES, type BootRule } from './rules.js';
 export {
   blockingEntries,
   isValidPackageName,

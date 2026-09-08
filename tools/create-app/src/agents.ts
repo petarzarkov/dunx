@@ -1,4 +1,5 @@
 import type { Feature } from './features.js';
+import { BOOT_RULES } from './rules.js';
 
 /**
  * `AGENTS.md` and `CLAUDE.md` for the scaffolded app.
@@ -24,26 +25,14 @@ agent reads one file.
 @AGENTS.md
 `;
 
+/**
+ * `BOOT_RULES` rendered as markdown. The list is shared with `@dunx/mcp`, which
+ * bundles the same rules into `dunx_start`; a second copy here had already drifted
+ * to a different set.
+ */
 const RULES = `## Rules that produce a boot error when broken
 
-- **No \`@Injectable()\`, no \`@Inject()\`.** Listing a class in a module's
-  \`providers\` is what makes it injectable. dunx uses TC39 standard decorators,
-  which have no parameter decorators. For a value with no constructor parameter to
-  hang off, use \`inject(Token)\` in a field initializer.
-- **Do not add \`reflect-metadata\`, \`experimentalDecorators\` or
-  \`emitDecoratorMetadata\`.** \`bunfig.toml\` preloads \`@dunx/transform\`, which
-  records each class's constructor parameter types. Removing that line makes every
-  provider fail at boot.
-- **A constructor parameter whose type is erased fails at boot, naming the
-  parameter.** An interface, a primitive, a union, a class type parameter, or a
-  \`import type\` at an injection site all record as \`unresolved\`. Inject a class,
-  and drop \`type\` from the import.
-- **Relative imports carry \`.js\`**: \`'./users.service.js'\`, never
-  \`'./users.service'\`.
-- **A module's \`exports\` is its public surface.** The container is scoped per
-  module, so a provider another module injects has to be exported by the module that
-  declares it.
-- **\`bun\` only.** No \`npm\`, \`npx\`, \`yarn\` or \`pnpm\`; run tools with \`bunx\`.
+${BOOT_RULES.map(({ rule, detail }) => `- **${rule}** ${detail}`).join('\n')}
 `;
 
 const layout = (features: readonly Feature[]): string =>

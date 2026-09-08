@@ -50,6 +50,24 @@ describe('the bundled corpus', () => {
     );
   });
 
+  /**
+   * `agents.ts` and `adopt.ts` each spelled out the boot-error rules for the same
+   * audience and had already drifted to six against four.
+   */
+  it('takes the boot rules from create-app rather than restating them', async () => {
+    const { BOOT_RULES } = await import('../tools/create-app/src/rules.js');
+    const { RULES } = await import('../tools/mcp/src/generated.js');
+    expect(RULES).toEqual(BOOT_RULES);
+    expect(RULES.length).toBeGreaterThan(4);
+  });
+
+  it('renders those same rules into the scaffolded AGENTS.md', async () => {
+    const { BOOT_RULES } = await import('../tools/create-app/src/rules.js');
+    const { agentFiles } = await import('../tools/create-app/src/agents.js');
+    const written = agentFiles('demo', [])['AGENTS.md'] ?? '';
+    for (const { rule } of BOOT_RULES) expect(written).toContain(rule);
+  });
+
   it('takes the starter from examples/minimal, which CI boots', async () => {
     const { MINIMAL } = await import('../tools/mcp/src/generated.js');
     const paths = MINIMAL.files.map((file) => file.path);

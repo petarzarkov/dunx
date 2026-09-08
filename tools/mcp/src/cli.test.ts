@@ -52,6 +52,14 @@ describe('the command line', () => {
     expect(errors.join('\n')).toContain('No entry given');
   });
 
+  it('refuses --export when there is no entry for it to select from', async () => {
+    capture();
+    expect(await assemble(['--export=AppModule'])).toBe(1);
+    expect(errors.join('\n')).toContain(
+      '--export names an export of the entry',
+    );
+  });
+
   it('adds the readers to them when given one', async () => {
     const tools = await assemble([`${import.meta.dir}/app.fixture.ts`]);
     if (typeof tools === 'number') throw new Error('assemble refused to start');

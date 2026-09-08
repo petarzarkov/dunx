@@ -1,5 +1,5 @@
 import { Args, bool, NO_ARGS, schema, str } from './args.js';
-import { GUIDE, MINIMAL, SCAFFOLD } from './generated.js';
+import { GUIDE, MINIMAL, RULES, SCAFFOLD } from './generated.js';
 import { Guide } from './guide.js';
 import type { ToolDefinition } from './protocol.js';
 import { Scaffold } from './scaffold.js';
@@ -11,35 +11,6 @@ import { Scaffold } from './scaffold.js';
  */
 const guide = new Guide(GUIDE);
 const scaffold = new Scaffold(SCAFFOLD, MINIMAL);
-
-/**
- * The four things an agent writing dunx gets wrong with no compiler to stop it.
- * Each one is a boot error or a resolution failure rather than a preference, and
- * each is asserted against the repo in `adopt.test.ts` so it cannot rot into
- * advice that used to be true.
- */
-const RULES: readonly { readonly rule: string; readonly detail: string }[] = [
-  {
-    rule: 'Constructor injection needs the preload.',
-    detail:
-      'Add `preload = ["@dunx/transform/preload"]` to bunfig.toml, and again under `[test]`. It records each class\'s constructor parameter types at load time. Without it a class with constructor parameters is a boot error naming the preload.',
-  },
-  {
-    rule: 'There are no parameter decorators.',
-    detail:
-      'dunx uses TC39 standard decorators, which have none, so `@Inject()` does not exist. A parameter whose type is erased - an interface, a primitive, a union, a type-only import - is recorded as unresolved and fails at boot naming that parameter. Use a class as the type, or `inject(TOKEN)` in a field initializer.',
-  },
-  {
-    rule: 'Relative imports carry a .js extension.',
-    detail:
-      '`import { UsersService } from \'./users.service.js\'`. The manifest is `"type": "module"` and resolution is nodenext, so an extensionless relative specifier does not resolve.',
-  },
-  {
-    rule: 'Modules encapsulate.',
-    detail:
-      'A module reference is a scope holding what it declares. `exports` is its public surface and absent means nothing is exported; `global: true` publishes those exports app-wide. Importing a module is what makes its exports resolvable, not declaring a provider anywhere in the app.',
-  },
-];
 
 export const adoptionTools = (): readonly ToolDefinition[] => [
   {
