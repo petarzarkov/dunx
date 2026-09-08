@@ -52,7 +52,8 @@ export class QueueConnection implements OnShutdown {
   readonly #options: QueueOptions;
   readonly #logger: Logger;
   readonly #client: new (url?: string) => Bun.RedisClient;
-  readonly #open: { adapter: IRedisClient; raw: Bun.RedisClient }[] = [];
+  /** Every adapter this connection handed out or bullmq derived from one. */
+  readonly #open: IRedisClient[] = [];
 
   constructor(options: QueueOptions, logger: Logger) {
     this.#options = options;
@@ -68,6 +69,12 @@ export class QueueConnection implements OnShutdown {
    * `QueueBase` forwards connection errors onto the `Queue`, so that needs one too.
    */
   #handleErrors(adapter: IRedisClient): IRedisClient {
+    // Recorded here rather than in `client()`, which is what gives a duplicate a
+    // teardown owner: bullmq calls `duplicate()` for anything it may block on -
+    // `Worker` and `QueueEvents` each once, `Queue` never - and that socket used
+    // to belong to nobody. Duplicates of duplicates land here too.
+    this.#open.push(adapter);
+
     adapter.on('error', (error: unknown) => {
       this.#logger.warn('the queue connection reported an error', error);
     });
@@ -103,14 +110,29 @@ export class QueueConnection implements OnShutdown {
     // it closes a connection it did not create, and an 'error' on a listener-less
     // emitter throws rather than being ignored - which used to fail shutdown on
     // its last step. Measured on bullmq 6.0.5.
-    const adapter = this.#handleErrors(createBunRedisClient(raw));
-    this.#open.push({ adapter, raw });
-    return adapter;
+    return this.#handleErrors(createBunRedisClient(raw));
   }
 
-  /** How many sockets this connection currently holds open. */
+  /**
+   * The socket an adapter holds, if it has one yet.
+   *
+   * Read at teardown rather than captured when the client is handed out. A
+   * duplicate is constructed with no `raw` at all - bullmq builds it from a
+   * `rawFactory` on first connect, which is how it stopped sending duplicates to
+   * the default server (taskforcesh/bullmq#4582) - so there is nothing to
+   * capture at the time the wrapper sees it. Measured: `undefined` immediately,
+   * a `Bun.RedisClient` once connected.
+   */
+  #socketOf(adapter: IRedisClient): Bun.RedisClient | undefined {
+    const { raw } = adapter as { raw?: unknown };
+    return raw instanceof Bun.RedisClient ? raw : undefined;
+  }
+
+  /** How many sockets this connection currently holds open, duplicates included. */
   get open(): number {
-    return this.#open.filter(({ raw }) => raw.connected).length;
+    return this.#open.filter(
+      (adapter) => this.#socketOf(adapter)?.connected === true,
+    ).length;
   }
 
   /**
@@ -124,10 +146,13 @@ export class QueueConnection implements OnShutdown {
    * internal/notes/roadmap/queue-shutdown-sigterm.md.
    */
   onShutdown(): void {
-    for (const { adapter, raw } of this.#open) {
+    // Drained first: `disconnect()` can schedule a reconnect, and a reconnect
+    // duplicates, so iterating the live array could append to what it is walking.
+    for (const adapter of this.#open.splice(0)) {
       adapter.disconnect();
-      raw.close();
+      // `disconnect()` is raw-safe and closes nothing for a duplicate that never
+      // connected, so this is the half that releases a socket either way.
+      this.#socketOf(adapter)?.close();
     }
-    this.#open.length = 0;
   }
 }

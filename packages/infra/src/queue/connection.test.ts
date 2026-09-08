@@ -102,3 +102,93 @@ describe('the raw client bullmq reconnects with', () => {
     source.onShutdown();
   });
 });
+
+/**
+ * bullmq calls `duplicate()` for any connection it may block on - `Worker` and
+ * `QueueEvents` each once, `Queue` never - and `#open` used to hold only the
+ * clients `client()` built, so that socket had no teardown owner.
+ *
+ * Nothing here waits on a broker: a duplicate reports its own `disconnect`, and
+ * whether it ever connected is irrelevant to who owns it.
+ */
+describe('duplicate ownership', () => {
+  /** Replaces `disconnect` with a recorder, returning what it recorded. */
+  const watchDisconnect = (client: unknown): { calls: number } => {
+    const spy = { calls: 0 };
+    const target = client as { disconnect: () => void };
+    const inner = target.disconnect.bind(target);
+    target.disconnect = (): void => {
+      spy.calls += 1;
+      inner();
+    };
+    return spy;
+  };
+
+  it('tears down a duplicate, which used to belong to nobody', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => unknown;
+    };
+    const copy = client.duplicate({ connectionName: 'bull:cXVldWU=' });
+
+    const watched = watchDisconnect(copy);
+    source.onShutdown();
+
+    expect(watched.calls).toBe(1);
+  });
+
+  it('tears down a duplicate of a duplicate', () => {
+    const source = connection();
+    const first = source.client() as unknown as {
+      duplicate: (options: unknown) => { duplicate: (o: unknown) => unknown };
+    };
+    const second = first.duplicate({});
+    const third = second.duplicate({});
+
+    const watched = [watchDisconnect(second), watchDisconnect(third)];
+    source.onShutdown();
+
+    expect(watched.map((w) => w.calls)).toEqual([1, 1]);
+  });
+
+  it('tears down a duplicate that never got a socket', () => {
+    // A duplicate is built with no `raw`: bullmq creates one from a `rawFactory`
+    // on first connect. So teardown has to cope with there being nothing to
+    // close, which is the case for every duplicate that never connected.
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => { raw?: unknown };
+    };
+    const copy = client.duplicate({});
+
+    expect(copy.raw).toBeUndefined();
+    expect(() => source.onShutdown()).not.toThrow();
+  });
+
+  it('does not count an unconnected duplicate as an open socket', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => unknown;
+    };
+    client.duplicate({});
+
+    // Nothing reached the broker at `127.0.0.1:1`, so nothing is open - the
+    // count is sockets, not adapters.
+    expect(source.open).toBe(0);
+    source.onShutdown();
+  });
+
+  it('forgets every adapter once shut down, so a second call is a no-op', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => unknown;
+    };
+    const copy = client.duplicate({});
+
+    source.onShutdown();
+    const watched = watchDisconnect(copy);
+    source.onShutdown();
+
+    expect(watched.calls).toBe(0);
+  });
+});
