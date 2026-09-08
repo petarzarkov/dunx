@@ -59,13 +59,19 @@ export const toRedisError = (command: string, cause: unknown): RedisError => {
   return new RedisError(codeOf(cause), message, command, cause);
 };
 
-/** True when the failure means "no usable connection", not "bad command". */
+/**
+ * True when the failure means "no usable connection", not "bad command".
+ *
+ * Keyed on the code rather than on `RedisError`, because the codes above are
+ * Bun's own: an error that never passed through `toRedisError` carries the right
+ * code on the wrong class. That is not hypothetical - bullmq talks to Bun's
+ * client itself, so a broker outage reaches a caller as Bun's `RedisError`, and
+ * this answered `false` for the one failure it exists to name.
+ */
 export const isConnectionError = (error: unknown): boolean =>
-  error instanceof RedisError &&
-  error.code === RedisErrorCode.CONNECTION_CLOSED;
+  codeOf(error) === RedisErrorCode.CONNECTION_CLOSED;
 
 /** True when Redis itself rejected the command, on either Bun 1.3 or 1.4. */
 export const isServerError = (error: unknown): boolean =>
-  error instanceof RedisError &&
-  (error.code === RedisErrorCode.SERVER_ERROR ||
-    error.code === RedisErrorCode.INVALID_RESPONSE);
+  codeOf(error) === RedisErrorCode.SERVER_ERROR ||
+  codeOf(error) === RedisErrorCode.INVALID_RESPONSE;

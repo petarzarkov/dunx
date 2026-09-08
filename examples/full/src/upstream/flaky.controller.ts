@@ -4,6 +4,8 @@ import {
   HttpError,
   HttpStatusCode,
   SkipThrottle,
+  type Input,
+  type RouteSchemas,
 } from '@dunx/http';
 
 /**
@@ -13,18 +15,42 @@ import {
  * failures. `@SkipThrottle()` because a retry loop is exactly the traffic shape the
  * rate limit exists to refuse.
  */
+/** How many calls on a key fail before it recovers. Exported because
+ * `RetryController` sizes its retry budget from it: bumping this would otherwise
+ * flip that panel to "gave up on 503" for every visitor. */
+export const FLAKY_FAILURES = 2;
+
 @Controller('upstream')
 @SkipThrottle()
 export class FlakyController {
   readonly #failures = new Map<string, number>();
 
-  /** 503 for the first two calls on a key, then 200. */
+  /** The key is caller-supplied and this route is unthrottled, so an unbounded
+   * map grows for the life of the process. `Map` keeps insertion order, so the
+   * oldest goes first and an evicted key starts its two failures over. */
+  static readonly #MAX_KEYS = 256;
+
+  /**
+   * 503 for the first two calls on a key, then 200.
+   *
+   * The key comes from `?key=`, which is what makes the sentence above true: it
+   * read a constant, so the tour, the suites and every landing-page visitor
+   * shared one counter and only the first caller after boot ever saw a retry.
+   */
   @Get('/flaky')
-  flaky(): { recovered: true; after: number } {
-    const key = 'default';
+  flaky({ req }: Input<RouteSchemas>): { recovered: true; after: number } {
+    const key = new URL(req.url).searchParams.get('key') ?? 'default';
     const seen = (this.#failures.get(key) ?? 0) + 1;
+    if (
+      !this.#failures.has(key) &&
+      this.#failures.size >= FlakyController.#MAX_KEYS
+    ) {
+      // `keys()` yields in insertion order, so this is the least recently added.
+      const oldest = this.#failures.keys().next();
+      if (!oldest.done) this.#failures.delete(oldest.value);
+    }
     this.#failures.set(key, seen);
-    if (seen <= 2) {
+    if (seen <= FLAKY_FAILURES) {
       throw new HttpError(
         HttpStatusCode.SERVICE_UNAVAILABLE,
         `not ready yet (attempt ${seen})`,

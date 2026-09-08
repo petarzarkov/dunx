@@ -12,6 +12,8 @@ import {
   Text,
   Title,
 } from '@mantine/core';
+import { SOAK } from '../../../../scripts/positioning.js';
+import { href, RouteKind } from '../router';
 import {
   configLine,
   decimal,
@@ -172,6 +174,23 @@ const Method = (): React.JSX.Element => (
   </Alert>
 );
 
+const SoakStat = ({
+  value,
+  label,
+}: {
+  value: string;
+  label: string;
+}): React.JSX.Element => (
+  <Card withBorder padding="sm" radius="md">
+    <Text fw={600} size="lg" ff="monospace">
+      {value}
+    </Text>
+    <Text size="xs" c="dimmed">
+      {label}
+    </Text>
+  </Card>
+);
+
 export const Benchmarks = (): React.JSX.Element => {
   if (!bench) {
     return (
@@ -265,6 +284,48 @@ export const Benchmarks = (): React.JSX.Element => {
           </Text>
           <StartupChart rows={startupRows(model)} />
           <StartupTable rows={startupRows(model)} />
+        </Stack>
+
+        <Stack gap="xs">
+          <Title order={2} size="h3">
+            Stability
+          </Title>
+          <Text size="sm" c="dimmed" maw="74ch">
+            Throughput answers how fast one request is. This answers whether the
+            process survives the night.{' '}
+            <Text span ff="monospace">
+              bun run soak
+            </Text>{' '}
+            drives {SOAK.operations} weighted operations against{' '}
+            <Anchor href={href(RouteKind.Guide, 'introduction')}>
+              the full example
+            </Anchor>{' '}
+            - HTTP, websocket churn, SQLite, Redis, S3, the queue, the outbound
+            client, guards, auth, validation failures and rate limiting - and
+            fits the settled heap across rounds rather than the in-flight
+            series, which measures the allocator instead of a leak.
+          </Text>
+          <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
+            <SoakStat
+              value={integer(SOAK.calls)}
+              label={`calls in ${SOAK.seconds}s`}
+            />
+            <SoakStat
+              value={`${integer(SOAK.perSecond)}/s`}
+              label="sustained"
+            />
+            <SoakStat value={String(SOAK.failures)} label="failures" />
+            <SoakStat
+              value={`${SOAK.heap[0].toFixed(1)} to ${SOAK.heap[1].toFixed(1)} MiB`}
+              label={`settled heap, ${SOAK.rounds} rounds`}
+            />
+          </SimpleGrid>
+          <Text size="xs" c="dimmed">
+            The same harness runs in CI at 40 seconds and concurrency 12, which
+            is too short for a leak verdict and long enough to catch an
+            unexpected status, a stalled loop, a subscriber that outlived its
+            socket, and a shutdown that hangs.
+          </Text>
         </Stack>
       </Stack>
     </Container>

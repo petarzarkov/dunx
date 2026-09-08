@@ -13,6 +13,10 @@ export {
   type JobHandlerFn,
 } from './discover.js';
 export { QueueError, QueueErrorCode } from './errors.js';
+// `JobEvents` hands out bullmq's own `QueueEvents`, which
+// `Job.waitUntilFinished(events, ttl)` takes: the connection and the lifetime are
+// dunx's, the waiting is bullmq's.
+export { JobEvents } from './events.js';
 export { type JobMeta } from './marker.js';
 export { QueueModule } from './module.js';
 export {

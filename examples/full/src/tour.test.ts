@@ -598,3 +598,25 @@ it('runs a concurrent-overlap schedule twice at once', () => {
     'overlap: concurrent -> 2 runs, 2 in flight at once',
   );
 });
+
+it('narrates the queue, which spans two processes', () => {
+  expect(tour.text).toContain(
+    '@dunx/infra/queue - bullmq over Bun.RedisClient, the handler forked',
+  );
+
+  // With a broker the job completes elsewhere; without one the step says so and
+  // the tour still exits 0.
+  const published = tour.messages.some((line) =>
+    line.includes('published render to thumbnails as job'),
+  );
+  const skipped = tour.messages.some((line) =>
+    line.includes('no broker reachable - skipping the queue'),
+  );
+  expect(published || skipped).toBe(true);
+
+  if (published) {
+    expect(tour.text).toContain(
+      'completed in a process this one never started',
+    );
+  }
+});

@@ -14,6 +14,7 @@ import { DocsDemo } from '../docs/docs.demo.js';
 import { AssetsDemo } from '../assets/assets.demo.js';
 import { GuardsDemo } from '../guards/guards.demo.js';
 import { HealthDemo } from '../health/health.demo.js';
+import { JobsDemo } from '../jobs/jobs.demo.js';
 import { HttpDemo } from '../http/http.demo.js';
 import { Thumbnails } from '../pictures/thumbnails.service.js';
 import { ScheduleDemo } from '../schedule/schedule.demo.js';
@@ -45,6 +46,7 @@ export class Tour {
     private readonly guards: GuardsDemo,
     private readonly health: HealthDemo,
     private readonly throttle: ThrottleDemo,
+    private readonly jobs: JobsDemo,
     private readonly schedule: ScheduleDemo,
     private readonly assets: AssetsDemo,
     private readonly upstream: UpstreamDemo,
@@ -109,6 +111,11 @@ export class Tour {
 
     this.group('@dunx/http/client - the outbound half, with retry');
     await this.upstream.demonstrate(url);
+
+    this.group(
+      '@dunx/infra/queue - bullmq over Bun.RedisClient, the handler forked',
+    );
+    await this.jobs.demonstrate();
 
     this.group('@dunx/infra/schedule - @Cron, @Interval and @OnceOnBoot');
     await this.schedule.demonstrate();

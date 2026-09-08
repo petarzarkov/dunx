@@ -93,7 +93,7 @@ export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
   zod: '4.5.4',
   'drizzle-orm': '0.45.2',
   'better-auth': '1.6.25',
-  bullmq: '6.0.5',
+  bullmq: '6.3.4',
   ioredis: '6.0.0',
 });
 

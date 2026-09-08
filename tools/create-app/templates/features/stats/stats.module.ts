@@ -9,6 +9,8 @@ import { StatsDemo } from './stats.demo.js';
 @Module({
   imports: [DatabaseModule],
   providers: [EventLoopLag, StatsDemo],
-  exports: [StatsDemo],
+  /** `EventLoopLag` is exported rather than provided a second time: a module
+   * that provides it again gets its own instance and its own `onInit`. */
+  exports: [StatsDemo, EventLoopLag],
 })
 export class StatsModule {}

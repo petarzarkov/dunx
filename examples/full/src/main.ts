@@ -13,6 +13,7 @@ import { AppModule } from './app.module.js';
 import { AuthDocs, AuthDocsModule } from './auth-docs.js';
 import { AppConfigService } from './config.js';
 import { LandingMiddleware } from './landing/landing.middleware.js';
+import { SelfOrigin } from './landing/self-origin.js';
 import { RequestTrailMiddleware } from './http/request-trail.js';
 
 /**
@@ -134,6 +135,8 @@ const start = async (): Promise<void> => {
   const config = app.get(AppConfigService);
   const logger = app.get(Logger);
   const url = await app.listen(config.get('port'));
+  // The one thing a provider cannot work out for itself.
+  app.get(SelfOrigin).set(url);
   // The readiness report the orchestrator will read, printed once at boot so the
   // first thing in the log is what is actually working.
   for (const check of (await app.get(HealthRegistry).readiness()).checks) {

@@ -8,6 +8,8 @@ import {
   type JsonInit,
   type TestClient,
 } from '@dunx/testing';
+import { SelfOrigin } from './landing/self-origin.js';
+import { FLAKY_FAILURES } from './upstream/flaky.controller.js';
 import { createApp } from './main.js';
 import { Maintenance } from './schedule/maintenance.service.js';
 
@@ -40,6 +42,7 @@ beforeAll(async () => {
   app = await createApp();
   // Port 0: the suite must not collide with a `bun start` already on 3000.
   baseUrl = await app.listen(0);
+  app.get(SelfOrigin).set(baseUrl);
   client = testClient(baseUrl);
 });
 
@@ -596,4 +599,157 @@ it('serves the same route over HTTP/2, since createApp sets http2', async () => 
 
   expect(overH2.status).toBe(overH1.status);
   expect(overH2.body).toEqual(overH1.body);
+});
+
+it('reports the running process at /api/demo/vitals', async () => {
+  const { status, body } = await json<{
+    uptimeMs: number;
+    http: {
+      requests: number;
+      routes: readonly { route: string; count: number }[];
+    };
+    db: { queries: number };
+    loop: { samples: number };
+  }>('demo/vitals');
+
+  expect(status).toBe(200);
+  expect(body.uptimeMs).toBeGreaterThan(0);
+  expect(body.http.requests).toBeGreaterThan(0);
+  expect(body.db.queries).toBeGreaterThan(0);
+  // A second `EventLoopLag` with its own `onInit` would show zero samples here.
+  expect(body.loop.samples).toBeGreaterThan(0);
+
+  // The page's own assets are served off the unmatched path, so this would
+  // otherwise top the table on every visit.
+  expect(body.http.routes.map((route) => route.route)).not.toContain(
+    '(unmatched)',
+  );
+});
+
+it('reads a real constructor off disk for the DI panel', async () => {
+  const { status, body } = await json<{ path: string; code: string }>(
+    'demo/source/ledger',
+  );
+
+  expect(status).toBe(200);
+  expect(body.path).toBe('examples/full/src/database/ledger.service.ts');
+  expect(body.code).toStartWith('export class Ledger');
+  expect(body.code).toContain('private readonly db: SyncDatabase');
+  expect(body.code.trimEnd()).toEndWith(') {}');
+  // The claim the panel makes.
+  expect(body.code).not.toContain('@Inject');
+  expect(body.code).not.toContain('@Injectable');
+  // The doc comment between the class line and the constructor is cut.
+  expect(body.code).not.toContain('BunSQLiteDatabase');
+});
+
+it('refuses a source name that is not on the allow-list', async () => {
+  const { status } = await json('demo/source/../../../etc/passwd');
+  // `Bun.serve` never matches a traversal onto the parameter, and a name that
+  // does match is still refused unless `SOURCES` holds it.
+  expect([400, 404]).toContain(status);
+
+  const unknown = await json('demo/source/nope');
+  expect(unknown.status).toBe(404);
+
+  // Each answered 500 while `SOURCES` was an object literal.
+  for (const key of ['__proto__', 'constructor', 'toString']) {
+    const probe = await json(`demo/source/${key}`);
+    expect(probe.status).toBe(404);
+  }
+});
+
+it('fails a flaky upstream twice per key, not twice per process', async () => {
+  // The counter read a constant key, so the first caller after boot spent the
+  // only two failures and every later one saw a 200 on the first attempt.
+  const key = `test-${Date.now()}`;
+  const first = await raw(`upstream/flaky?key=${key}`);
+  const second = await raw(`upstream/flaky?key=${key}`);
+  const third = await raw(`upstream/flaky?key=${key}`);
+
+  expect([first.status, second.status, third.status]).toEqual([503, 503, 200]);
+
+  // A different key starts over, which is the half that was broken.
+  const other = await raw(`upstream/flaky?key=${key}-other`);
+  expect(other.status).toBe(503);
+});
+
+it('bounds the flaky key map, so a caller cannot grow it without limit', async () => {
+  // The cap is not observable; an evicted key restarting its failures is.
+  const victim = `evict-${Date.now()}`;
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(503);
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(503);
+  // Recovered, and remembered as such.
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(200);
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(200);
+
+  // Enough distinct keys to push it past the cap, oldest first.
+  const pushes: Promise<Response>[] = [];
+  for (let i = 0; i < 300; i += 1) {
+    pushes.push(raw(`upstream/flaky?key=${victim}-filler-${i}`));
+  }
+  await Promise.all(pushes);
+
+  // Evicted, so it owes its two failures again. Unbounded, it would answer 200.
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(503);
+});
+
+it('retries the flaky upstream through HttpService and reports each attempt', async () => {
+  const { status, body } = await json<{
+    attempts: readonly { attempt: number; retry: boolean; atMs: number }[];
+    outcome: string;
+  }>('demo/retry');
+
+  expect(status).toBe(200);
+  // The first attempt plus one retry per failure the upstream owes.
+  expect(body.attempts).toHaveLength(FLAKY_FAILURES + 1);
+  expect(body.attempts[0]?.retry).toBe(false);
+  expect(body.attempts[1]?.retry).toBe(true);
+  expect(body.outcome).toContain('recovered');
+  // A retry at 0 ms would mean no backoff, with the attempt count still right.
+  expect(body.attempts[1]?.atMs).toBeGreaterThan(0);
+});
+
+it('serves the landing page, its assets and its social card', async () => {
+  // Not under the global prefix: `LandingMiddleware` answers these four off the
+  // unmatched path, so they are reached through `baseUrl` rather than `json()`.
+  const at = (path: string) => fetch(new URL(path, baseUrl));
+
+  const page = await at('/');
+  expect(page.status).toBe(200);
+  expect(page.headers.get('content-type')).toContain('text/html');
+
+  const html = await page.text();
+  // Without these a paste of the demo url renders as a bare link.
+  expect(html).toContain('property="og:image"');
+  expect(html).toContain('/og.png');
+  expect(html).toContain('name="twitter:card"');
+  expect(html).toContain('name="description"');
+  // A visitor arriving from a link needs a route back to the documentation.
+  expect(html).toContain('https://dunx.win');
+
+  for (const [path, type] of [
+    ['/landing.css', 'text/css'],
+    ['/landing.js', 'text/javascript'],
+    ['/og.png', 'image/png'],
+  ] as const) {
+    const asset = await at(path);
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get('content-type')).toContain(type);
+  }
+
+  // Everything else still misses, which is what the tour's 404 step narrates.
+  expect((await at('/not-a-page')).status).toBe(404);
+});
+
+it('ignores the Host header when calling its own flaky route', async () => {
+  // Rebuilt from `req.url` this was a loopback port scanner.
+  const res = await fetch(new URL('api/demo/retry', baseUrl), {
+    headers: { host: 'scanner.example:6379' },
+  });
+  const body = (await res.json()) as { outcome: string; attempts: unknown[] };
+
+  expect(res.status).toBe(200);
+  expect(body.outcome).toContain('recovered');
+  expect(body.attempts).toHaveLength(FLAKY_FAILURES + 1);
 });

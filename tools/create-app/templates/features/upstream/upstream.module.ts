@@ -1,5 +1,5 @@
 import { Module } from '@dunx/core';
-import { HttpModule as HttpClientModule } from '@dunx/http/client';
+import { HttpModule as HttpClientModule, HttpService } from '@dunx/http/client';
 import { AppConfigService } from '../config.js';
 import { FlakyController } from './flaky.controller.js';
 import { HealthClient } from './health.client.js';
@@ -58,6 +58,9 @@ import { UpstreamDemo } from './upstream.demo.js';
   ],
   controllers: [FlakyController],
   providers: [UpstreamDemo],
-  exports: [UpstreamDemo, HealthClient],
+  /** `HttpService` is the default client `HttpClientModule.forRootAsync` bound
+   * above. Exported so `LandingModule` can show the retry policy working; without
+   * it the token stays inside this scope and the panel is a boot error. */
+  exports: [UpstreamDemo, HealthClient, HttpService],
 })
 export class UpstreamModule {}

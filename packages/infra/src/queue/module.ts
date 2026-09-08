@@ -10,6 +10,7 @@ import {
   type Registration,
 } from '@dunx/core';
 import { QueueConnection } from './connection.js';
+import { JobEvents } from './events.js';
 import { QueueOptions, type QueueOptionsInit } from './options.js';
 import { JobPublisher } from './publisher.js';
 import { QueueRunner } from './runner.js';
@@ -23,10 +24,11 @@ import { QueueRunner } from './runner.js';
  */
 /**
  * The public surface: `JobPublisher` is what an app publishes through,
- * `QueueOptions` reports the redacted broker url, and `QueueConnection` is what a
- * `WorkerFactory` in the same process needs.
+ * `JobEvents` is how it learns a job finished, `QueueOptions` reports the
+ * redacted broker url, and `QueueConnection` is what a `WorkerFactory` in the
+ * same process needs.
  */
-const surface = [QueueOptions, QueueConnection, JobPublisher];
+const surface = [QueueOptions, QueueConnection, JobPublisher, JobEvents];
 
 /**
  * Always bound, and idle unless `consume` is set - checked in `onInit`, since
@@ -68,11 +70,21 @@ const bindings: readonly Registration[] = [
     ) => new JobPublisher(connection, options, logger),
     inject: [QueueConnection, QueueOptions, Logger] as const,
   }),
+  // After the connection, so reverse-order teardown closes the event streams
+  // before the sockets they borrowed. It opens none until something waits.
+  provide(JobEvents, {
+    useFactory: (
+      connection: QueueConnection,
+      options: QueueOptions,
+      logger: Logger,
+    ) => new JobEvents(connection, options, logger),
+    inject: [QueueConnection, QueueOptions, Logger] as const,
+  }),
 ];
 
 /**
- * Binds `QueueOptions`, `QueueConnection` and `JobPublisher` - the publish side,
- * which is all a web process needs.
+ * Binds `QueueOptions`, `QueueConnection`, `JobPublisher` and `JobEvents` - the
+ * publish side, which is all a web process needs.
  *
  * A worker process imports the same module and adds `WorkerFactory.create`, which
  * is what discovers the handlers and opens the bullmq `Worker`s. Importing this

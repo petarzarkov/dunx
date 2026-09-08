@@ -59,7 +59,7 @@
     "@bull-board/ui": "8.6.0",
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
-    "bullmq": "6.0.5"
+    "bullmq": "6.3.4"
   },
   "peerDependencies": {
     "@bull-board/api": "^8.6.0",
