@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { IO_POOL_SIZE } from '../servers/io/contract.js';
 import { root } from './paths.js';
 import { scenarios } from './scenarios.js';
 import { subjects } from './subjects.js';
@@ -26,6 +27,33 @@ describe('subjects', () => {
   test('every subject records which validator it runs, so the validate scenario is readable', () => {
     for (const subject of subjects)
       expect(subject.validator.length).toBeGreaterThan(0);
+  });
+
+  /*
+   * The io scenario cannot hold one client constant across seven languages the
+   * way `validate` holds zod constant across the JavaScript ones. So the report
+   * names the pair each row was produced with, and a subject that does not say
+   * would be a row nobody can read.
+   */
+  test('every subject records which database and cache clients answer the io scenario', () => {
+    for (const subject of subjects) {
+      expect(subject.io.length).toBeGreaterThan(0);
+      expect(subject.io).toMatch(/\+/);
+    }
+  });
+
+  /*
+   * Every client that exposes a pool is given the same size, because with 64
+   * connections against one worker thread the pool is what sets how many queries
+   * are in flight. A row with a different one would be measured on its
+   * configuration.
+   */
+  test('every pooled io client is pinned to the same size', () => {
+    for (const subject of subjects) {
+      for (const [, size] of subject.io.matchAll(/pool (\d+)/g)) {
+        expect(Number(size)).toBe(IO_POOL_SIZE);
+      }
+    }
   });
 
   test('compiled subjects sit where their toolchain looks for them', () => {
@@ -139,6 +167,18 @@ describe('scenarios', () => {
     expect(new Set(scenarios.map((scenario) => scenario.id)).size).toBe(
       scenarios.length,
     );
+  });
+
+  /*
+   * `io` is the only scenario needing a service outside the subject process, and
+   * `planIo` is what drops it when Redis or Postgres does not answer. A second
+   * scenario growing that need without the gate would fail a whole run on a
+   * machine with neither.
+   */
+  test('only the io scenario needs a backing service', () => {
+    const needsService = scenarios.filter((scenario) => scenario.id === 'io');
+    expect(needsService).toHaveLength(1);
+    expect(needsService[0]?.path).toBe('/io');
   });
 
   test('declare the exact response every subject must produce', () => {

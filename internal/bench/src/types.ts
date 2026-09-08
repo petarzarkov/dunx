@@ -36,6 +36,13 @@ export interface Subject {
   readonly preload: readonly string[];
   readonly versionOf: string | null;
   readonly validator: string;
+  /**
+   * The Redis and Postgres clients this subject answers the `io` scenario with,
+   * and how each one is pooled. Held here for the reason `validator` is: the
+   * clients cannot be the same across seven languages, so the report says which
+   * one produced each row instead of implying they match.
+   */
+  readonly io: string;
   readonly notes: readonly string[];
   /**
    * The importable package this subject needs, for a `python` subject only. Two
@@ -110,6 +117,27 @@ export interface ScenarioResult {
   readonly latencyP99Ms: Spread;
   readonly totalErrors: number;
   readonly totalNon2xx: number;
+}
+
+/**
+ * What one subject cost on one scenario, alongside the rate it achieved.
+ *
+ * `cpuMsPerKiloRequests` is the column to read. Every subject here is one thread
+ * under saturating load, so `cpuPercent` is near 100 for all of them and ranks
+ * nothing; CPU per request is what separates a subject that spends its time
+ * computing from one that spends it waiting.
+ */
+export interface ResourceUsage {
+  readonly subject: string;
+  readonly scenario: string;
+  /** Resident set right after the first request, before any load. */
+  readonly rssBootMiB: number | null;
+  readonly rssPeakMiB: Spread;
+  readonly rssMeanMiB: Spread;
+  readonly cpuPercent: Spread;
+  readonly cpuMsPerKiloRequests: Spread;
+  /** Processes in the tree, so `gunicorn`'s master plus worker is visible. */
+  readonly processes: number;
 }
 
 export interface StartupResult {
@@ -226,5 +254,10 @@ export interface Report {
   readonly subjects: readonly SubjectInfo[];
   readonly scenarios: readonly Scenario[];
   readonly results: readonly ScenarioResult[];
+  /**
+   * Empty where `/proc` did not answer, which is every platform that is not
+   * Linux. The tables then omit the columns rather than printing zeroes.
+   */
+  readonly resources: readonly ResourceUsage[];
   readonly startup: readonly StartupResult[];
 }

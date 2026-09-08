@@ -7,6 +7,19 @@
 // of the box rather than a benchmark build.
 using Bench;
 
+// Connected before the pinning, and blocking rather than awaiting. Both halves
+// are measured decisions:
+//
+// - Before, because `ConnectionMultiplexer.ConnectAsync` does not complete on a
+//   thread pool capped at one worker, and a pinned process never reached
+//   `app.Run()`.
+// - Blocking, because a top-level `await` puts everything after it on a thread
+//   pool continuation - so `app.Run()` occupied the one worker the pinning
+//   leaves, and Kestrel had nothing to serve on. `GetAwaiter().GetResult()`
+//   keeps the whole file on the main thread, which is where it was before the
+//   scenario existed.
+var io = Io.ConnectAsync().GetAwaiter().GetResult();
+
 // One thread, because every other subject in this suite is single-threaded. See
 // the README, "Threads".
 Shared.PinToOneThread();
@@ -36,5 +49,12 @@ app.MapPost("/validate", (Person? person) =>
     person is null || !Shared.IsValid(person)
         ? Results.Json(Shared.BadBody, statusCode: 400)
         : Results.Json(new Echo(person.Name, person.Age)));
+
+// Mapped only when the harness enabled the scenario, so the other four run a
+// process that has opened no socket.
+if (io.Enabled)
+{
+    app.MapGet("/io", async () => Results.Json(await io.ReadAsync()));
+}
 
 app.Run();

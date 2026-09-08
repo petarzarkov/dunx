@@ -1,6 +1,8 @@
 import { buildNodeEntries } from './build.js';
+import { ioEnvFor, planIo } from './io-fixture.js';
 import { repoRoot, root } from './paths.js';
 import { describeSubjects, readMachine } from './machine.js';
+import { ResourceSampler, type ResourceSample } from './resources.js';
 import { spread } from './stats.js';
 import {
   bunCommand,
@@ -24,6 +26,7 @@ import type {
   LoadRequest,
   LoadSample,
   Report,
+  ResourceUsage,
   Scenario,
   ScenarioResult,
   StartupResult,
@@ -42,7 +45,7 @@ const measureStartup = async (
 ): Promise<StartupResult> => {
   const samplesMs: number[] = [];
   for (let index = 0; index < samples; index += 1) {
-    const process_ = await startSubject(subject, exec, subject.env ?? {});
+    const process_ = await startSubject(subject, exec);
     samplesMs.push(process_.startupMs);
     await process_.stop();
   }
@@ -63,6 +66,47 @@ const summarise = (
   totalErrors: runs.reduce((total, run) => total + run.errors, 0),
   totalNon2xx: runs.reduce((total, run) => total + run.non2xx, 0),
 });
+
+const MIB = 1024 * 1024;
+
+/**
+ * Paired with the load samples by index: round `n`'s CPU is divided by round
+ * `n`'s request count, never by a median of the other rounds. A round the
+ * sampler could not read is dropped from both sides rather than paired with the
+ * wrong one.
+ */
+const summariseResources = (
+  subject: Subject,
+  scenario: Scenario,
+  runs: readonly LoadSample[],
+  usage: readonly (ResourceSample | null)[],
+  rssBootBytes: number | null,
+): ResourceUsage | null => {
+  const paired = usage
+    .map((sample, index) => ({ sample, load: runs[index] }))
+    .filter(
+      (entry): entry is { sample: ResourceSample; load: LoadSample } =>
+        entry.sample !== null && entry.load !== undefined,
+    );
+  if (paired.length === 0) return null;
+
+  return {
+    subject: subject.id,
+    scenario: scenario.id,
+    rssBootMiB: rssBootBytes === null ? null : rssBootBytes / MIB,
+    rssPeakMiB: spread(paired.map((one) => one.sample.rssPeakBytes / MIB)),
+    rssMeanMiB: spread(paired.map((one) => one.sample.rssMeanBytes / MIB)),
+    cpuPercent: spread(
+      paired.map((one) => (one.sample.cpuMs / one.sample.elapsedMs) * 100),
+    ),
+    cpuMsPerKiloRequests: spread(
+      paired
+        .filter((one) => one.load.requests > 0)
+        .map((one) => (one.sample.cpuMs / one.load.requests) * 1000),
+    ),
+    processes: Math.max(...paired.map((one) => one.sample.processes)),
+  };
+};
 
 /**
  * Measures one scenario across **every** subject, interleaved: all subjects are
@@ -93,8 +137,12 @@ const measureScenarioAcrossSubjects = async (
   generator: LoadGenerator,
   config: BenchConfig,
   exec: ReadonlyMap<string, readonly string[]>,
+  extraEnv: Readonly<Record<string, string>>,
   profile?: { readonly kind: ProfileKind; readonly dir: string },
-): Promise<readonly ScenarioResult[]> => {
+): Promise<{
+  readonly results: readonly ScenarioResult[];
+  readonly resources: readonly ResourceUsage[];
+}> => {
   const options = {
     connections: config.connections,
     durationSeconds: config.durationSeconds,
@@ -104,6 +152,7 @@ const measureScenarioAcrossSubjects = async (
     server: SubjectProcess;
     request: LoadRequest;
     runs: LoadSample[];
+    usage: (ResourceSample | null)[];
   }[] = [];
 
   try {
@@ -114,7 +163,7 @@ const measureScenarioAcrossSubjects = async (
       const server = await startSubject(
         subject,
         exec.get(subject.id) ?? [],
-        subject.env ?? {},
+        extraEnv,
         'null',
         // Only the measured runs are worth profiling, and only a graceful stop
         // writes one. The startup samples above stay on SIGKILL: they start and
@@ -133,6 +182,7 @@ const measureScenarioAcrossSubjects = async (
           contentType: scenario.contentType,
         },
         runs: [],
+        usage: [],
       });
     }
 
@@ -148,17 +198,41 @@ const measureScenarioAcrossSubjects = async (
 
     for (let round = 0; round < config.runs; round += 1) {
       for (const entry of live) {
-        entry.runs.push(await generator.run(entry.request, options));
+        // Started and stopped around this one subject's own window, so a
+        // reading never spans another subject's turn. The sampler reads
+        // `/proc` at 20 Hz, which is under a millisecond of work per second.
+        const sampler = new ResourceSampler(entry.server.pid);
+        sampler.start();
+        try {
+          entry.runs.push(await generator.run(entry.request, options));
+        } finally {
+          entry.usage.push(sampler.stop());
+        }
       }
     }
 
-    return live.map((entry) => summarise(entry.subject, scenario, entry.runs));
+    return {
+      results: live.map((entry) =>
+        summarise(entry.subject, scenario, entry.runs),
+      ),
+      resources: live
+        .map((entry) =>
+          summariseResources(
+            entry.subject,
+            scenario,
+            entry.runs,
+            entry.usage,
+            entry.server.rssBootBytes,
+          ),
+        )
+        .filter((one): one is ResourceUsage => one !== null),
+    };
   } finally {
     for (const entry of live) await entry.server.stop();
   }
 };
 
-interface Prepared {
+export interface Prepared {
   readonly runnable: readonly Subject[];
   readonly exec: ReadonlyMap<string, readonly string[]>;
   /**
@@ -181,7 +255,7 @@ interface Prepared {
  * Rust, the JVM and .NET from an artifact compiled here. A subject whose
  * toolchain is missing is dropped with a line saying so, and the run continues.
  */
-const prepare = async (
+export const prepare = async (
   chosen: readonly Subject[],
   nodeBinary: string,
   nodeAvailable: boolean,
@@ -321,7 +395,12 @@ export const runSuite = async (
       profile,
     );
 
+  const plan = await planIo(chosenScenarios, chosenSubjects.length);
+  if (plan.note !== null) note(plan.note);
+  const scenarios = plan.scenarios;
+
   const results: ScenarioResult[] = [];
+  const resources: ResourceUsage[] = [];
   const startup: StartupResult[] = [];
 
   // Startup first and on its own: it spawns and stops one process at a time by
@@ -340,7 +419,7 @@ export const runSuite = async (
     );
   }
 
-  for (const scenario of chosenScenarios) {
+  for (const scenario of scenarios) {
     note(`\n${scenario.id} - ${runnable.length} subjects, interleaved`);
     const measured = await measureScenarioAcrossSubjects(
       runnable,
@@ -348,14 +427,23 @@ export const runSuite = async (
       generator,
       config,
       exec,
+      ioEnvFor(scenario, plan.services),
       profile,
     );
-    results.push(...measured);
-    for (const result of measured) {
+    results.push(...measured.results);
+    resources.push(...measured.resources);
+    for (const result of measured.results) {
       const subject = runnable.find((one) => one.id === result.subject);
+      const cost = measured.resources.find(
+        (one) => one.subject === result.subject,
+      );
       note(
         `  ${(subject?.label ?? result.subject).padEnd(30)} ${Math.round(result.rps.median).toLocaleString('en-US').padStart(10)} req/s` +
           `  p99 ${result.latencyP99Ms.median.toFixed(3)} ms` +
+          (cost === undefined
+            ? ''
+            : `  rss ${cost.rssPeakMiB.median.toFixed(0).padStart(4)} MiB` +
+              `  cpu ${cost.cpuMsPerKiloRequests.median.toFixed(2)} ms/kreq`) +
           (result.totalErrors + result.totalNon2xx > 0
             ? `  errors ${result.totalErrors} non-2xx ${result.totalNon2xx}`
             : ''),
@@ -383,8 +471,9 @@ export const runSuite = async (
     // The probe's versions are passed through because `node_modules` holds no
     // Python package, so `packageVersion` would report `unknown` for both rows.
     subjects: await describeSubjects(runnable, pythonVersions),
-    scenarios: chosenScenarios,
+    scenarios,
     results,
+    resources,
     startup,
   };
 };

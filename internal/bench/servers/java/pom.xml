@@ -32,6 +32,23 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
+    <!-- The io scenario's clients. Direct dependencies rather than
+         spring-boot-starter-data-redis and spring-boot-starter-jdbc: a starter
+         adds autoconfiguration to every scenario's Spring context, and the four
+         scenarios that predate this one keep the context they were measured on.
+         Versions come from the spring-boot-starter-parent BOM. -->
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.lettuce</groupId>
+      <artifactId>lettuce-core</artifactId>
+    </dependency>
   </dependencies>
 
   <build>

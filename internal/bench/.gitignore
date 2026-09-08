@@ -17,3 +17,5 @@ results/*
 # README's "Request logging cost" section from it, and a checkout without it would
 # regenerate that section as "no run recorded".
 !results/logging.json
+# Python writes these next to the subject sources.
+servers/python/__pycache__/

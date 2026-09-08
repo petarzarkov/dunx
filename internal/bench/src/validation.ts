@@ -45,6 +45,7 @@ const rawSubject: Subject = {
   preload: [],
   versionOf: null,
   validator: 'varies',
+  io: 'none',
   notes: [],
 };
 
@@ -56,6 +57,7 @@ const dunxSubject: Subject = {
   preload: ['@dunx/transform/preload'],
   versionOf: '@dunx/http',
   validator: 'varies',
+  io: 'none',
   notes: [],
 };
 
@@ -208,6 +210,7 @@ const bring = async (unit: Unit): Promise<Live<Unit>> => {
       contentType: unit.scenario.contentType,
     },
     samples: [],
+    usage: [],
   };
 };
 

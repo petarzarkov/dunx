@@ -11,24 +11,35 @@ to hide as the places it wins.
 
 ```bash
 bun run setup       # downloads oha into .bin/ (optional, but read "Load generator")
-bun run start       # full suite: 19 subjects x 4 scenarios, minus any whose toolchain is absent
+bun run smoke       # does every subject start and answer every scenario? no load, no timing
+bun run start       # full suite: 20 subjects x 5 scenarios, minus any whose toolchain is absent
+bun run drivers     # Bun.SQL/Bun.RedisClient against pg/ioredis - see "Driver cost"
 bun run validation  # the validation-cost harness - see "Validation cost"
 bun run db-modes    # @dunx/infra/db async vs synchronous SQLite, end to end
 bun run start --help
 ```
 
-Three harnesses, and they answer different questions. `start` compares frameworks
-with the validator held constant. `validation` does the opposite: one framework at a
-time, one step of work at a time, and every validator swapped through the same
-Standard Schema seam - which is how the `validate` scenario's cost gets split into
-parsing, the validator, and dunx. `db-modes` holds the framework, the SQL and the
-bytes on the wire constant, and varies only whether the handler awaits its way to
-the row. It writes `results/db-modes.json`, and what it found is recorded in
+**Run `bun run smoke` first.** It starts every subject once per scenario and checks
+the contract, with no load and no timing, so a subject that fails to build or
+answers the wrong bytes says so in a couple of minutes rather than forty. It found
+two real defects the day it was written: the .NET subjects refuse to start without
+`DOTNET_PROCESSOR_COUNT=1`, and two Node subjects took themselves down on an
+unhandled pool rejection.
+
+Four measuring harnesses, and they answer different questions. `start` compares
+frameworks with the validator held constant. `drivers` holds the framework, the
+runtime and the server constant and swaps only the database and cache client, which
+is the only way to separate "Bun's client is faster" from "Bun is faster".
+`validation` swaps every validator through the same Standard Schema seam - which is
+how the `validate` scenario's cost gets split into parsing, the validator, and dunx.
+`db-modes` holds the framework, the SQL and the bytes on the wire constant, and
+varies only whether the handler awaits its way to the row. It writes
+`results/db-modes.json`, and what it found is recorded in
 `docs/architecture/constraints.md` under "Synchronous SQLite mode".
 
 ## What is measured
 
-Four scenarios, each implemented the same way in every subject:
+Five scenarios, each implemented the same way in every subject:
 
 | Scenario    | Request              | Response                          | What it adds                  |
 | ----------- | -------------------- | --------------------------------- | ----------------------------- |
@@ -36,6 +47,20 @@ Four scenarios, each implemented the same way in every subject:
 | `json`      | `GET /json`          | `{"message":"Hello, World!"}`     | + JSON serialisation          |
 | `params`    | `GET /params/42`     | `{"id":"42"}`                     | + route matching with a param |
 | `validate`  | `POST /validate`     | `{"name":"Ada Lovelace","age":36}` | + body parse and validation  |
+| `io`        | `GET /io`            | `{"cached":"Hello, World!","id":1,...}` | + a Redis `GET` and a Postgres `SELECT` |
+
+The first four are CPU and dispatch. `io` is the one that leaves the process: one
+`GET bench:greeting` against Redis, then one
+`SELECT id, memo, amount FROM bench_ledger WHERE id = $1` against Postgres with the
+id **bound**, because a bound parameter is the prepare-and-bind path where clients
+differ. Sequential, not concurrent - a cache read that gates a database read is the
+shape the scenario is named for, and issuing both at once would measure the client's
+concurrency primitives instead.
+
+`io` needs Redis and Postgres. **It is opt-in on them answering**: the harness seeds
+the fixture before anything is measured and drops the scenario with a line saying so
+if either is absent, the same way a missing toolchain drops its subjects. See
+"Running the io scenario".
 
 Before any scenario is measured, the harness sends one request and asserts the
 subject returned **the same status, the same body bytes and the same media type**
@@ -43,17 +68,44 @@ as the contract in `src/scenarios.ts`. A subject that answers differently is doi
 different amount of work, and the run fails rather than producing a number nobody
 can compare. See `verifySubject` in `src/subject-process.ts`.
 
-Two things are reported per subject and scenario:
+Four things are reported per subject and scenario:
 
 - **Throughput** - requests per second, median of N runs, with the standard
   deviation across those runs.
 - **Latency** - p50 and p99, medians across runs, as the load generator measured
   them.
+- **Peak resident set** - the highest reading taken during the measured window, for
+  the subject's **whole process tree**. `gunicorn` is a master and a worker, and
+  charging Django only the master's 12 MiB would be wrong by the size of the thing
+  actually serving.
+- **CPU per request** - milliseconds of user plus system time per thousand requests.
 
-And one thing per subject:
+And two things per subject:
 
 - **Startup** - cold process spawn to first served request, median of N samples.
   Polled at 1 ms, so treat anything under about 5 ms as a tie.
+- **Boot footprint** - resident set the moment the subject answered its first
+  request, before any load. The only reading taken with nothing in flight.
+
+### Memory and CPU, and how to read them
+
+They come from `/proc/<pid>/stat` for every process in the tree, sampled at 20 Hz
+inside the measured window and nowhere else. There is no `Bun.*` API for another
+process's usage and no package involved: `pidusage` and friends shell out to `ps`
+per sample, and the kernel already publishes the two numbers. `src/resources.ts`.
+
+**`cpu ms/kreq` is the column to read, not `cpu %`.** Every subject here is one
+thread under saturating load, so every percentage sits near 100 and ranks nothing.
+CPU per request is what separates a subject that spends its time computing from one
+that spends it waiting - which is why the `io` scenario is where it earns its place
+and the `plaintext` scenario is where it is roughly the reciprocal of throughput.
+
+**Peak RSS is the peak of the samples.** A collection that happens between two reads
+is missed. 50 ms against a 5-second round is 100 readings, which finds a steady
+state and will under-report a spike.
+
+**Neither says anything about hour six.** Runs are seconds long, and nothing here is
+a statement about heap growth or a leak.
 
 ### Subjects
 
@@ -288,6 +340,37 @@ These are choices that move the numbers. They are listed here rather than buried
 - **Spring Boot runs with no JVM flags, no AOT, no CDS and no native image.** That
   understates what a tuned Spring deployment does, and it is what `spring init`
   produces.
+- **Every `io` pool is pinned to 8**, including the ones whose default is larger.
+  With 64 connections against one worker thread the pool is what sets how many
+  queries are in flight, so a subject on its own default would be measured on its
+  configuration. The clients that multiplex one connection instead of pooling -
+  `Bun.RedisClient`, `ioredis`, StackExchange.Redis, Lettuce, redis-rs - are
+  recorded as doing so, per subject, in `results/latest.json`.
+- **The `io` clients are not held constant across languages**, and cannot be, for
+  the same reason the validators are not. Each subject uses its ecosystem's choice:
+  `Bun.SQL`/`Bun.RedisClient`, `pg`/`ioredis`, pgx/go-redis, tokio-postgres/redis-rs,
+  HikariCP/Lettuce, Npgsql/StackExchange.Redis, psycopg/redis-py. Compare an `io` row
+  to its own `json` row before comparing it across languages, and read "Driver cost"
+  for the one comparison where the client is the only thing that changes.
+
+### Blocking subjects on the io scenario
+
+**`spring` and `django` are the two blocking stacks, and one worker thread means one
+request in flight for the whole round trip.** JDBC, Lettuce's synchronous commands,
+psycopg and redis-py all park the worker until the server answers. Every other
+subject is async and has eight queries in flight against the same pool.
+
+This is the thread pinning meaning something different on `io` than it does on the
+other four. On `plaintext` "one thread" is the same handicap for everybody, because
+everybody is computing. On `io` it caps a blocking stack's concurrency at one and an
+async stack's at its pool size, and the gap between those two numbers is in the
+result.
+
+It is left as it is rather than given the blocking subjects eight threads, because
+every table in this file rests on "every subject is one process on one thread" and
+forking that per scenario would need re-justifying all of them. So: read `spring`
+against `django`, and read either against its own `json` row. Do not read either as
+what a Spring or Django deployment does, which runs many workers.
 
 ## What is not measured
 
@@ -301,14 +384,53 @@ These are choices that move the numbers. They are listed here rather than buried
   all scale across cores in one process and the JavaScript runtimes do not, so a
   per-thread ranking flatters Bun by exactly the factor the reader is not being
   shown. See "Reading the Go, Rust and JVM rows fairly".
-- **Anything with I/O.** No database, no cache, no filesystem, no upstream calls. In
-  an application that talks to Postgres, all of these differences are rounding error
-  next to one query. That is the honest framing for every result below.
-- **Memory, and behaviour under sustained load.** Runs are seconds long. Nothing here
-  says anything about heap growth or a leak at hour six.
+- **Anything with I/O, on the first four scenarios.** No database, no cache, no
+  filesystem, no upstream calls. In an application that talks to Postgres, all of
+  those differences are rounding error next to one query - which is what the `io`
+  scenario now shows rather than asserts: the spread from top to bottom of the
+  JavaScript rows collapses on it, and Axum's lead over `Bun.serve` on `plaintext`
+  is a different number there.
+- **The filesystem, and upstream HTTP.** `io` reaches Redis and Postgres and nothing
+  else.
+- **Behaviour under sustained load.** Runs are seconds long. Peak resident set is
+  reported per round; nothing here says anything about heap growth or a leak at hour
+  six.
 - **TLS, HTTP/2, HTTP/3, websockets, streaming, large bodies, file uploads.**
 - **Cold-start under a constrained CPU**, which is what actually matters on a
   serverless platform. The startup numbers here are from an idle 32-core desktop.
+
+## Running the io scenario
+
+Two services, and the harness seeds both before anything is measured. A subject
+must not seed its own fixture, or two subjects could be reading different rows.
+
+| Variable            | Default                                    |
+| ------------------- | ------------------------------------------ |
+| `$BENCH_REDIS_URL`  | `redis://127.0.0.1:6379`                   |
+| `$BENCH_PG_URL`     | `postgres://dunx:dunx@127.0.0.1:5432/dunx` |
+
+```bash
+docker run -d --name bench-valkey -p 6379:6379 valkey/valkey:8-alpine
+docker run -d --name bench-pg -p 5432:5432 \
+  -e POSTGRES_USER=dunx -e POSTGRES_PASSWORD=dunx -e POSTGRES_DB=dunx \
+  postgres:17-alpine -c max_connections=200
+```
+
+**`max_connections=200` is not decoration, and this is the scenario's hardest
+precondition.** Measured rounds are interleaved, so every subject is up and pooled
+at the same time: twenty subjects at a pool of 8 want 160 connections against
+Postgres' default of 100. What that produced was not an error, it was a table. Two
+Node subjects died of an unhandled pool rejection and were recorded at **560,964
+req/s of pure connection failures, sorted above raw `Bun.serve`**; four more served
+5xx for a fifth of their requests; every one of those rows had a number in it.
+
+Two things came out of that and both are in the code. The harness now reads
+`SHOW max_connections` before the run and drops the `io` scenario with the figure to
+set if the budget does not fit, and a row with any error or non-2xx is sorted last
+and shown with no ratio. `src/io-fixture.ts` and `src/report.ts`.
+
+The seed is 500 rows in `bench_ledger` and one Redis key, written with `Bun.SQL` and
+`Bun.RedisClient`, so the harness needs no driver of its own.
 
 ## Methodology
 
@@ -689,7 +811,15 @@ subject by a wide margin, but it is the number to watch if boot time matters.
 - **Standard deviation** is across whole runs. If it is a large fraction of the
   median, the machine was busy and the run should be repeated.
 - **`bad`** counts non-2xx responses plus transport errors across all measured runs.
-  Anything other than 0 invalidates that row.
+  Anything other than 0 invalidates that row, and such a row is now sorted last and
+  shown with no ratio rather than being allowed to rank.
+- **`cpu ms/kreq` before `peak MiB`.** CPU per request separates a subject that
+  computes from one that waits; peak resident set is a footprint and moves with the
+  runtime's allocator far more than with the framework. `cpu %` is not in the tables
+  because every subject saturates one thread and every figure would read near 100.
+- **On `io`, compare each row to its own `json` row first.** The clients differ per
+  language and the two blocking subjects are capped at one request in flight. For
+  the client comparison with everything else held still, read "Driver cost".
 - **Differences under about 3 points are noise on this setup, and that was measured
   rather than assumed.** Two full runs on the same idle machine, same code, moved
   `@dunx/http`'s `vs bun-serve` figure by up to **3.2 points** (`params` 96.2% ->
@@ -698,6 +828,11 @@ subject by a wide margin, but it is the number to watch if boot time matters.
   nothing, and do not quote an absolute as capacity. Nothing external was competing -
   `oha` and the subject were the only things on the CPU - so this is the machine's own
   frequency behaviour, not contention.
+
+## Driver cost
+
+No run recorded. `bun run drivers` writes `results/drivers.json`, and
+`bun src/readme-tables.ts` renders this section from it.
 
 ## Validation cost
 
@@ -924,6 +1059,9 @@ rest of the README.
 `src/logging-tables.ts` for the "Request logging cost" section. Its shape is
 `LoggingReport` in `src/types.ts`.
 
+`results/drivers.json` is the fourth, written by `bun run drivers` and read by
+`src/drivers-tables.ts` for the "Driver cost" section.
+
 **A subject's stdout goes to `/dev/null`** (`StdoutSink` in
 `src/subject-process.ts`). It used to be a pipe nobody read, which meant a subject
 that logged parked on a full 64 KiB pipe - worth 2.68 µs/request, and a property of
@@ -960,8 +1098,9 @@ as an explicit row so the difference stays visible.
   }],
   "subjects": [{
     "id": "string", "label": "string",
-    "runtime": "bun" | "node" | "go" | "rust" | "jvm",
+    "runtime": "bun" | "node" | "go" | "rust" | "jvm" | "dotnet" | "python",
     "version": "string", "validator": "string",
+    "io": "string",                   // the Postgres and Redis clients behind its io row
     "notes": ["string"],              // the handicaps above, per subject
     "entry": "string", "preload": ["string"], "versionOf": "string | null",
     "warmupFloorSeconds": 0           // optional; only `spring` sets it
@@ -985,14 +1124,25 @@ as an explicit row so the difference stays visible.
     "latencyP99Ms": { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
     "totalErrors": 0, "totalNon2xx": 0
   }],
+  "resources": [{                     // empty off Linux, where /proc does not answer
+    "subject": "string",              // Subject.id
+    "scenario": "string",             // Scenario.id
+    "rssBootMiB": 0.0,                // after the first request, before any load
+    "rssPeakMiB":  { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
+    "rssMeanMiB":  { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
+    "cpuPercent":  { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
+    "cpuMsPerKiloRequests": { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
+    "processes": 0                    // largest tree seen; gunicorn is 2
+  }],
   "startup": [{
     "subject": "string", "samplesMs": [0.0], "medianMs": 0.0
   }]
 }
 ```
 
-`results` is a flat list; join on `subject` and `scenario`. A `(subject, scenario)`
-pair missing from it was not run.
+`results` and `resources` are flat lists; join both on `subject` and `scenario`. A
+`(subject, scenario)` pair missing from `results` was not run; one missing from
+`resources` was run on a machine with no `/proc`.
 
 ## Layout
 
@@ -1000,6 +1150,15 @@ pair missing from it was not run.
 internal/bench/
   servers/            one file per subject, each readable end to end
     shared.ts         the payloads and the one zod schema every subject validates with
+    io/               the io scenario's clients, one module per ecosystem
+      contract.ts     the key, the SQL, the pool size and the payload shape
+      bun.ts          Bun.SQL and Bun.RedisClient, for the Bun subjects
+      node.ts         pg and ioredis, for the Node subjects
+      lazy.ts         the await import() that keeps those two out of the other scenarios
+    drivers/          the driver harness: one client pair per cell
+      pair.ts         the four clients, chosen by environment
+      bun.ts          Bun.serve, for the four Bun cells
+      node.ts         node:http, for the reference cell
     validation/       the validation harness's two subjects
       raw.ts          raw Bun.serve, one route per step of the decomposition
       dunx.ts         the dunx app, declared and hand-written variants
@@ -1007,33 +1166,45 @@ internal/bench/
     logging/          the request-logging harness's one subject
       dunx.ts         the app, with the middleware truncated at $LOGGING_VARIANT
       variants.ts     the step list and the three stand-in Logger bindings
+    python/           one file per Python subject
+      app.py          Django on gunicorn
+      fastapi_app.py  FastAPI on uvicorn
+      bench_io.py     psycopg and redis-py, sync for Django and async for FastAPI
     go/               one Go module, one command per subject
-      shared/         the payloads and the one validator both Go subjects use
+      shared/         the payloads, the validator, and the io clients (pgx, go-redis)
       cmd/nethttp/    net/http and http.ServeMux, the Go floor
       cmd/gin/        Gin
     rust/             one Cargo package, one [[bin]] per subject
       src/axum.rs     Axum on tokio, single-threaded
+      src/io.rs       tokio-postgres behind deadpool, redis-rs multiplexed
     java/             one Maven project
       src/main/java/bench/App.java   Spring Boot, MVC over Tomcat
+      src/main/java/bench/Io.java    HikariCP and Lettuce, both blocking
     dotnet/           one solution-less directory, one project per subject
       Directory.Build.props          the target framework and where builds land
-      shared/         the payloads, the validator and the thread pinning
+      shared/         the payloads, the validator, the thread pinning, Npgsql + StackExchange.Redis
       aspnet-minimal/ minimal APIs on Kestrel, the .NET floor
       aspnet-mvc/     the same server with MVC on top
   src/
     index.ts          entrypoint for the framework suite
+    smoke.ts          does every subject start and answer? no load, no timing
+    drivers.ts        entrypoint for the driver harness
     validation.ts     entrypoint for the validation harness
     logging.ts        entrypoint for the request-logging harness
     cli.ts            flags
     run.ts            orchestration: startup, warmup, measured runs
+    driver.ts         the round-robin loop the four side harnesses share
     subject-process.ts  spawn, readiness, contract verification, stop
+    resources.ts      resident set and CPU for a process tree, out of /proc
+    io-fixture.ts     seeds Redis and Postgres, and checks the connection budget
     build.ts          Bun.build transpile of the Node subjects
     toolchains.ts     probe, compile and skip for the Go, Rust, JVM and .NET subjects
-    scenarios.ts      the four workloads and their exact expected responses
+    scenarios.ts      the five workloads and their exact expected responses
     subjects.ts       the subject registry, including each one's handicaps
     loadgen/          oha adapter, Bun fetch driver, worker, histogram
     report.ts         the stdout table
     readme-tables.ts  regenerates every generated README section
+    drivers-tables.ts     the "Driver cost" section
     validation-tables.ts  the "Validation cost" section
     logging-tables.ts     the "Request logging cost" section
     machine.ts        CPU/RAM/OS/runtime/package versions
@@ -1043,11 +1214,19 @@ internal/bench/
 ## Adding a subject
 
 1. Write `servers/<name>.ts`. It must read `PORT` from the environment and answer all
-   four scenarios with byte-identical responses. Copy `servers/hono.ts`.
-2. Add an entry to `src/subjects.ts`, including a `validator` string and a `notes`
-   array naming anything that flatters or handicaps it.
-3. `bun run start --subjects <name>`. The contract check will tell you what does
-   not match.
+   five scenarios with byte-identical responses. Copy `servers/hono.ts`.
+2. Add an entry to `src/subjects.ts`, including a `validator` string, an `io` string
+   naming the two clients it answers `/io` with, and a `notes` array naming anything
+   that flatters or handicaps it.
+3. `bun run smoke --subjects <name>`. The contract check will tell you what does not
+   match, without waiting for a measured run.
+
+**The `/io` route connects only when `$BENCH_IO_PG_URL` and `$BENCH_IO_REDIS_URL`
+are both set**, which the harness passes for that scenario and no other. A subject
+spawns fresh per scenario, so the other four must open no socket and pay no client
+module load - the Node subjects reach `pg` and `ioredis` through an `await import()`
+in `servers/io/lazy.ts` for exactly that reason, and `src/build.ts` transpiles them
+with `splitting` on so the dynamic import stays one.
 
 Node subjects need nothing extra - `src/build.ts` finds them by `runtime: 'node'`.
 
@@ -1085,6 +1264,14 @@ none of them.
 | .NET SDK 10+             | `aspnet-minimal`, `aspnet-mvc` | `PATH`, or `$BENCH_DOTNET`  |
 | Python 3.10+, Django, gunicorn | `django`           | `PATH`, or `$BENCH_PYTHON`       |
 | Python 3.10+, FastAPI, uvicorn | `fastapi`          | `PATH`, or `$BENCH_PYTHON`       |
+| Redis **and** Postgres   | the `io` scenario, `bun run drivers` | `$BENCH_REDIS_URL`, `$BENCH_PG_URL` |
+
+The `io` scenario also needs a client library per language, and unlike the rows
+above those are declared rather than probed: `pg` and `ioredis` in this workspace's
+`package.json`, pgx and go-redis in `servers/go/go.mod`, tokio-postgres and redis-rs
+in `Cargo.toml`, HikariCP, the Postgres JDBC driver and Lettuce in `pom.xml`, Npgsql
+and StackExchange.Redis in `shared/Shared.csproj`, and psycopg plus redis-py for
+Python. A toolchain that resolves builds them; nothing extra is opt-in.
 
 Each package has to be **importable**, not merely on disk: the probe runs
 `import <name>` and skips that subject with a clear line if it fails, rather than
@@ -1098,7 +1285,8 @@ server - gunicorn for Django, uvicorn for FastAPI - so the shortest route is pip
 with `--target`:
 
 ```bash
-python3 -m pip install --target pylib django gunicorn 'fastapi[standard]' uvicorn
+python3 -m pip install --target pylib django gunicorn 'fastapi[standard]' uvicorn \
+  redis 'psycopg[binary,pool]'
 BENCH_PYTHONPATH=$PWD/pylib bun run start --subjects django,fastapi
 ```
 

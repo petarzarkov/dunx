@@ -1,0 +1,110 @@
+/**
+ * Renders the `## Driver cost` section of `README.md` from `results/drivers.json`.
+ * Called by `src/readme-tables.ts`; returns `null` when no driver run has been
+ * recorded, so a checkout without one still builds.
+ */
+import { resultsDir } from './paths.js';
+import type { MachineInfo, Spread } from './types.js';
+
+interface Unit {
+  readonly id: string;
+  readonly label: string;
+  readonly runtime: string;
+  readonly sql: string;
+  readonly redis: string;
+  readonly rps: Spread;
+  readonly latencyP50Ms: Spread;
+  readonly latencyP99Ms: Spread;
+  readonly rssPeakMiB: number;
+  readonly cpuMsPerKiloRequests: number;
+  readonly bad: number;
+}
+
+interface DriversReport {
+  readonly generatedAt: string;
+  readonly machine: MachineInfo;
+  readonly loadGenerator: { readonly id: string; readonly version: string };
+  readonly config: {
+    readonly connections: number;
+    readonly durationSeconds: number;
+    readonly warmupSeconds: number;
+    readonly runs: number;
+  };
+  readonly units: readonly Unit[];
+}
+
+const int = (value: number): string =>
+  Math.round(value).toLocaleString('en-US');
+
+const signed = (value: number): string =>
+  `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(1)}%`;
+
+const table = (report: DriversReport): string => {
+  const base = report.units.find((unit) => unit.id === 'bun:native');
+  const rows = report.units.map((unit) => {
+    const delta =
+      base === undefined || base.rps.median === 0
+        ? '-'
+        : signed((unit.rps.median / base.rps.median - 1) * 100);
+    return (
+      `| \`${unit.id}\` | ${unit.runtime} | ${unit.sql} | ${unit.redis} | ` +
+      `${int(unit.rps.median)} | ${int(unit.rps.stddev)} | ` +
+      `${unit.latencyP50Ms.median.toFixed(3)} | ${unit.rssPeakMiB.toFixed(1)} | ` +
+      `${unit.cpuMsPerKiloRequests.toFixed(2)} | ${delta} |`
+    );
+  });
+  return [
+    '| Cell | Runtime | Postgres | Redis | req/s | stddev | p50 ms | peak MiB | cpu ms/kreq | vs native |',
+    '| ---- | ------- | -------- | ----- | ----: | -----: | -----: | -------: | ----------: | --------: |',
+    ...rows,
+  ].join('\n');
+};
+
+/** One row minus another, as a percentage of the first. */
+const gap = (report: DriversReport, from: string, to: string): string => {
+  const a = report.units.find((unit) => unit.id === from);
+  const b = report.units.find((unit) => unit.id === to);
+  if (a === undefined || b === undefined || a.rps.median === 0) return '-';
+  return signed((b.rps.median / a.rps.median - 1) * 100);
+};
+
+export const driversSection = async (): Promise<string | null> => {
+  const file = Bun.file(`${resultsDir}/drivers.json`);
+  if (!(await file.exists())) return null;
+  const report = (await file.json()) as DriversReport;
+  const { machine: m, config: c, loadGenerator: g } = report;
+
+  return `## Driver cost
+
+What Bun's own database and cache clients are worth against the two a Node service
+reaches for. Generated from \`results/drivers.json\` by \`bun src/readme-tables.ts\`.
+
+The \`io\` scenario in the main table cannot answer this. Its Bun subjects run
+\`Bun.SQL\` and \`Bun.RedisClient\` and its Node subjects run \`pg\` and \`ioredis\`, so
+every gap there is a driver difference **and** a runtime difference. So this harness
+runs \`pg\` and \`ioredis\` **on Bun**, next to the native pair on the same runtime, the
+same \`Bun.serve\`, the same SQL, the same pool of 8 and the same bytes on the wire.
+
+\`\`\`
+${m.cpuModel}, ${m.cores} logical cores, ${m.ramGiB} GiB RAM
+${m.platform} ${m.kernel} ${m.arch} | bun ${m.bun} | node ${m.node} | ${g.id} ${g.version}
+${c.connections} connections | ${c.warmupSeconds}s warmup | ${c.runs} x ${c.durationSeconds}s measured | ${report.generatedAt.slice(0, 10)}
+\`\`\`
+
+${table(report)}
+
+Reproduce with \`bun run drivers\`.
+
+**Read the first four rows and then the fifth, separately.** The first four differ
+only in the client, so their differences are the client. \`node:classic\` changes the
+runtime and the server as well, and is the reference point rather than a term in the
+comparison.
+
+| Swap | On the same Bun runtime |
+| ---- | ----------------------: |
+| \`Bun.SQL\` → \`pg\` | ${gap(report, 'bun:native', 'bun:pg')} |
+| \`Bun.RedisClient\` → \`ioredis\` | ${gap(report, 'bun:native', 'bun:ioredis')} |
+| both → \`pg\` + \`ioredis\` | ${gap(report, 'bun:native', 'bun:classic')} |
+| and then Bun → Node | ${gap(report, 'bun:classic', 'node:classic')} |
+`;
+};

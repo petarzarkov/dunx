@@ -1,7 +1,10 @@
 import { serve } from '@hono/node-server';
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
+import { connectLazyIo, readLazyIo } from './io/lazy.js';
 import { echo, jsonPayload, personSchema, PLAINTEXT, port } from './shared.js';
+
+const ioReady = await connectLazyIo();
 
 // Deliberately a copy of servers/hono.ts rather than an import of it: the point of
 // this subject is that the app is identical and only the runtime differs, and that
@@ -13,5 +16,7 @@ const app = new Hono()
   .post('/validate', zValidator('json', personSchema), (c) =>
     c.json(echo(c.req.valid('json'))),
   );
+
+if (ioReady) app.get('/io', async (c) => c.json(await readLazyIo()));
 
 serve({ fetch: app.fetch, port: port() });

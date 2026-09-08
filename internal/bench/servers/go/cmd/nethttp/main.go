@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"runtime"
@@ -65,6 +66,14 @@ func main() {
 		}
 		writeJSON(w, http.StatusOK, shared.Echo{Name: person.Name, Age: person.Age})
 	})
+
+	io, err := shared.NewIo(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	if io != nil {
+		mux.HandleFunc("GET /io", io.WriteTo)
+	}
 
 	server := &http.Server{Addr: shared.Addr(), Handler: mux}
 	if err := server.ListenAndServe(); err != nil {

@@ -1,7 +1,10 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { connectLazyIo } from '../io/lazy.js';
 import { port } from '../shared.js';
+
+await connectLazyIo();
 
 /**
  * NestJS on its default Express adapter - the configuration most Nest apps ship.

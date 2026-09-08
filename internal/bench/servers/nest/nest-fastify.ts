@@ -5,7 +5,10 @@ import {
   type NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
+import { connectLazyIo } from '../io/lazy.js';
 import { port } from '../shared.js';
+
+await connectLazyIo();
 
 /**
  * The same Nest application on the Fastify adapter. Paired with `nest-express` it

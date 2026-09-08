@@ -3,6 +3,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
+import { connectLazyIo, readLazyIo } from './io/lazy.js';
 import {
   echo,
   invalid,
@@ -11,6 +12,8 @@ import {
   PLAINTEXT,
   port,
 } from './shared.js';
+
+const ioReady = await connectLazyIo();
 
 const TEXT = { 'content-type': 'text/plain; charset=utf-8' };
 const JSON_TYPE = { 'content-type': 'application/json; charset=utf-8' };
@@ -59,6 +62,23 @@ createServer((req, res) => {
   }
   if (url === '/validate' && req.method === 'POST') {
     void validate(req, res);
+    return;
+  }
+  if (ioReady && url === '/io') {
+    // Caught, not left to the default unhandled-rejection handler, which exits
+    // the process. A pool that cannot hand out a connection then took this
+    // subject down mid-run and the harness recorded the connection failures as
+    // 560,964 req/s. Every other subject answers 5xx and stays up; so does this.
+    void readLazyIo().then(
+      (payload) => {
+        res.writeHead(200, JSON_TYPE);
+        res.end(JSON.stringify(payload));
+      },
+      (error: unknown) => {
+        res.writeHead(500, JSON_TYPE);
+        res.end(JSON.stringify({ error: String(error) }));
+      },
+    );
     return;
   }
   res.writeHead(404, TEXT);

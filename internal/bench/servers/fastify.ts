@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import type { z } from 'zod';
+import { connectLazyIo, readLazyIo } from './io/lazy.js';
 import {
   echo,
   jsonPayload,
@@ -10,6 +11,8 @@ import {
 } from './shared.js';
 
 const app = Fastify({ logger: false });
+
+const ioReady = await connectLazyIo();
 
 // Swaps Fastify's ajv/JSON-Schema path for the same zod schema every other subject
 // runs, so the validate scenario compares frameworks and not validators. Ajv
@@ -37,5 +40,7 @@ app.post<{ Body: Person }>(
   { schema: { body: personSchema } },
   (req) => echo(req.body),
 );
+
+if (ioReady) app.get('/io', () => readLazyIo());
 
 await app.listen({ port: port(), host: '127.0.0.1' });

@@ -12,9 +12,10 @@
  * It replaces everything between the `## Results` heading and the next `##`, and
  * touches nothing else.
  */
+import { driversSection } from './drivers-tables.js';
 import { loggingSection } from './logging-tables.js';
 import { median, stddev } from './stats.js';
-import type { Report } from './types.js';
+import type { Report, ResourceUsage } from './types.js';
 import { validationSection } from './validation-tables.js';
 
 const BASELINE = 'bun-serve';
@@ -29,6 +30,14 @@ const readmePath = new URL('../README.md', import.meta.url).pathname;
 
 const report = (await Bun.file(reportPath).json()) as Report;
 
+const costFor = (
+  scenario: string,
+  subject: string,
+): ResourceUsage | undefined =>
+  report.resources.find(
+    (usage) => usage.scenario === scenario && usage.subject === subject,
+  );
+
 const cellsFor = (scenario: string) => {
   const rows = report.results.filter((row) => row.scenario === scenario);
   const rpsOf = (row: (typeof rows)[number]): number =>
@@ -36,37 +45,92 @@ const cellsFor = (scenario: string) => {
   const baseline = rows.find((row) => row.subject === BASELINE);
   const base = baseline === undefined ? 0 : rpsOf(baseline);
 
-  return rows
-    .map((row) => {
-      const label =
-        report.subjects.find((subject) => subject.id === row.subject)?.label ??
-        row.subject;
-      const rps = rpsOf(row);
-      return {
-        id: row.subject,
-        label: row.subject === FOCUS ? `**${label}**` : label,
-        rps,
-        stddev: stddev(row.runs.map((run) => run.rps)),
-        p50: median(row.runs.map((run) => run.latencyP50Ms)),
-        p99: median(row.runs.map((run) => run.latencyP99Ms)),
-        pct: base === 0 ? 0 : (rps / base) * 100,
-        bad: row.runs.reduce((sum, run) => sum + run.non2xx + run.errors, 0),
-      };
-    })
-    .sort((a, b) => b.rps - a.rps);
+  return (
+    rows
+      .map((row) => {
+        const label =
+          report.subjects.find((subject) => subject.id === row.subject)
+            ?.label ?? row.subject;
+        const rps = rpsOf(row);
+        return {
+          id: row.subject,
+          label: row.subject === FOCUS ? `**${label}**` : label,
+          rps,
+          stddev: stddev(row.runs.map((run) => run.rps)),
+          p50: median(row.runs.map((run) => run.latencyP50Ms)),
+          p99: median(row.runs.map((run) => run.latencyP99Ms)),
+          pct: base === 0 ? 0 : (rps / base) * 100,
+          bad: row.runs.reduce((sum, run) => sum + run.non2xx + run.errors, 0),
+          cost: costFor(scenario, row.subject),
+        };
+      })
+      // A row whose requests failed sorts last and is never ranked: connection
+      // failures come back faster than responses do.
+      .sort((a, b) => Number(a.bad > 0) - Number(b.bad > 0) || b.rps - a.rps)
+  );
 };
 
 const throughputTable = (scenario: string): string => {
   const rows = cellsFor(scenario);
   const head =
-    '| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |\n' +
-    '| ------- | -------------: | -----: | -----: | -----: | -------------: |';
+    '| Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |\n' +
+    '| ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |';
   const body = rows
     .map((row) => {
       const rps = row.id === FOCUS ? `**${int(row.rps)}**` : int(row.rps);
       const pct =
-        row.id === FOCUS ? `**${dec(row.pct, 1)}%**` : `${dec(row.pct, 1)}%`;
-      return `| ${row.label} | ${rps} | ${int(row.stddev)} | ${dec(row.p50)} | ${dec(row.p99)} | ${pct} |`;
+        row.bad > 0
+          ? `- (${int(row.bad)} bad)`
+          : row.id === FOCUS
+            ? `**${dec(row.pct, 1)}%**`
+            : `${dec(row.pct, 1)}%`;
+      const rss =
+        row.cost === undefined ? '-' : dec(row.cost.rssPeakMiB.median, 1);
+      const cpu =
+        row.cost === undefined
+          ? '-'
+          : dec(row.cost.cpuMsPerKiloRequests.median, 2);
+      return `| ${row.label} | ${rps} | ${int(row.stddev)} | ${dec(row.p50)} | ${dec(row.p99)} | ${rss} | ${cpu} | ${pct} |`;
+    })
+    .join('\n');
+  return `${head}\n${body}`;
+};
+
+/**
+ * One row per subject, across every scenario. `boot MiB` is the only reading
+ * taken with nothing in flight, so it is the footprint; `peak MiB` is what it
+ * grew to under load.
+ */
+const footprintTable = (): string => {
+  const bySubject = new Map<string, ResourceUsage[]>();
+  for (const usage of report.resources) {
+    bySubject.set(usage.subject, [
+      ...(bySubject.get(usage.subject) ?? []),
+      usage,
+    ]);
+  }
+  const rows = [...bySubject]
+    .map(([subject, list]) => ({
+      id: subject,
+      label:
+        report.subjects.find((one) => one.id === subject)?.label ?? subject,
+      boot: median(
+        list
+          .map((one) => one.rssBootMiB)
+          .filter((one): one is number => one !== null),
+      ),
+      peak: Math.max(...list.map((one) => one.rssPeakMiB.max)),
+      processes: Math.max(...list.map((one) => one.processes)),
+    }))
+    .sort((a, b) => a.peak - b.peak);
+
+  const head =
+    '| Subject | boot MiB | peak MiB | processes |\n' +
+    '| ------- | -------: | -------: | --------: |';
+  const body = rows
+    .map((row) => {
+      const label = row.id === FOCUS ? `**${row.label}**` : row.label;
+      return `| ${label} | ${row.boot === 0 ? '-' : dec(row.boot, 1)} | ${dec(row.peak, 1)} | ${row.processes} |`;
     })
     .join('\n');
   return `${head}\n${body}`;
@@ -118,6 +182,21 @@ const taxTable = (): string => {
   return `${head}\n${body}`;
 };
 
+const ranIo = report.scenarios.some((scenario) => scenario.id === 'io');
+const ioSection = ranIo
+  ? `
+**Cache and database** - \`GET /io\`, one Redis \`GET\` then one Postgres \`SELECT\`
+
+${throughputTable('io')}
+
+Each subject uses its own ecosystem's clients, every pool pinned to 8 - the
+\`SUBJECTS\` block in \`results/latest.json\` names the pair behind each row. \`spring\`
+and \`django\` are blocking stacks and their one worker means one request in flight;
+see "Blocking subjects on the io scenario". For the client comparison with the
+runtime held still, see "Driver cost".
+`
+  : '';
+
 const { machine: m, config: c, loadGenerator: g } = report;
 const versions = report.subjects
   .filter((subject) => subject.version !== 'n/a' && subject.id !== FOCUS)
@@ -153,10 +232,14 @@ ${throughputTable('params')}
 **Body validation** - \`POST /validate\`
 
 ${throughputTable('validate')}
-
+${ioSection}
 **Startup** - cold process to first served request, ${c.startupSamples} samples
 
 ${startupTable()}
+
+**Resource footprint** - resident set of the whole process tree, read from \`/proc\`
+
+${footprintTable()}
 
 ### What these say, including where dunx loses
 
@@ -215,6 +298,14 @@ if (validation === null) {
 } else {
   readme = replaceSection(readme, '## Validation cost', validation);
   console.log('README validation section regenerated.');
+}
+
+const drivers = await driversSection();
+if (drivers === null) {
+  console.log('No results/drivers.json - driver section left as it is.');
+} else {
+  readme = replaceSection(readme, '## Driver cost', drivers);
+  console.log('README driver section regenerated.');
 }
 
 const logging = await loggingSection();

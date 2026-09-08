@@ -7,6 +7,8 @@ import {
   Post,
   type RouteSchemas,
 } from '@dunx/http';
+import { connectBunIo, readBunIo } from './io/bun.js';
+import { type IoPayload, ioEnabled } from './io/contract.js';
 import { echo, jsonPayload, personSchema, PLAINTEXT, port } from './shared.js';
 
 /**
@@ -37,6 +39,7 @@ class Greeter {
 }
 
 const plain = {} as const satisfies RouteSchemas;
+const declared = { status: 200 } as const satisfies RouteSchemas;
 const validate = {
   body: personSchema,
   status: 200,
@@ -65,10 +68,20 @@ class BenchController {
   validate(input: Input<typeof validate>): { name: string; age: number } {
     return echo(input.body);
   }
+
+  // A declared route rather than a conditional one: a controller's routes are read
+  // off the class at boot. `readBunIo` throws unless the harness enabled the
+  // scenario, and only the `io` scenario asks for this path.
+  @Get('/io', declared)
+  io(): Promise<IoPayload> {
+    return readBunIo();
+  }
 }
 
 @Module({ controllers: [BenchController], providers: [Greeter] })
 class AppModule {}
+
+if (ioEnabled()) await connectBunIo();
 
 const app = await HttpFactory.create(AppModule, { port: port() });
 await app.listen();

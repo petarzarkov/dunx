@@ -53,4 +53,15 @@ export const scenarios: readonly Scenario[] = [
     expectBody: '{"name":"Ada Lovelace","age":36}',
     expectMime: 'application/json',
   },
+  {
+    id: 'io',
+    title: 'Cache and database',
+    description:
+      'GET reading one key from Redis and then one indexed row from Postgres with a bound parameter, merged into one JSON object.',
+    method: 'GET',
+    path: '/io',
+    expectStatus: 200,
+    expectBody: '{"cached":"Hello, World!","id":1,"memo":"row 1","amount":100}',
+    expectMime: 'application/json',
+  },
 ];

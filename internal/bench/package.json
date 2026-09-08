@@ -17,8 +17,10 @@
   "type": "module",
   "scripts": {
     "setup": "bun src/setup.ts",
+    "smoke": "bun src/smoke.ts",
     "start": "bun src/index.ts",
     "db-modes": "bun src/db-modes.ts",
+    "drivers": "bun src/drivers.ts",
     "validation": "bun src/validation.ts",
     "logging": "bun src/logging.ts",
     "test": "bun test --bail",
@@ -40,6 +42,8 @@
     "express": "5.2.1",
     "fastify": "5.11.0",
     "hono": "4.12.33",
+    "ioredis": "6.0.0",
+    "pg": "8.23.0",
     "valibot": "1.4.2",
     "zod": "4.5.4"
   },
@@ -48,6 +52,7 @@
     "@nestjs/core": "11.1.28",
     "@nestjs/platform-fastify": "11.1.28",
     "@types/express": "5.0.6",
+    "@types/pg": "8.23.1",
     "reflect-metadata": "0.2.2"
   },
   "engines": {
