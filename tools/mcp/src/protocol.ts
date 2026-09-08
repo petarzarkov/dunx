@@ -62,6 +62,14 @@ const fail = (
 ): string =>
   `${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`;
 
+/**
+ * RFC 3986 separates the fragment before dereferencing: `#section` names a place
+ * inside a resource rather than a different resource. The guide's chapter links
+ * carry one, so an exact-match-only lookup answered `Unknown resource` for six of
+ * the twenty-five links a reader can follow.
+ */
+const withoutFragment = (uri: string): string => uri.split('#')[0] ?? uri;
+
 /** An id is echoed back only if it is one JSON-RPC allows; otherwise `null`. */
 const readableId = (value: unknown): JsonRpcRequest['id'] =>
   typeof value === 'string' || typeof value === 'number' ? value : null;
@@ -175,7 +183,11 @@ export const handle = async (
 
   if (call.method === 'resources/read') {
     const uri = call.params?.['uri'];
-    const resource = resources.find((candidate) => candidate.uri === uri);
+    const resource =
+      resources.find((candidate) => candidate.uri === uri) ??
+      (typeof uri === 'string'
+        ? resources.find((candidate) => candidate.uri === withoutFragment(uri))
+        : undefined);
     if (!resource) {
       return fail(
         call.id,

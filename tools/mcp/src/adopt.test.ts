@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { adoptionResources, adoptionTools } from './adopt.js';
 import { GUIDE, MINIMAL, SCAFFOLD } from './generated.js';
 import { Guide, GUIDE_SCHEME, type GuideDoc } from './guide.js';
+import { handle } from './protocol.js';
 import { Scaffold, type Starter } from './scaffold.js';
 
 const REPO = `${import.meta.dir}/../../..`;
@@ -187,6 +188,44 @@ describe('the tools that need no app', () => {
 
   it('serves every chapter as a resource', () => {
     expect(adoptionResources()).toHaveLength(GUIDE.length);
+  });
+
+  /**
+   * The generator rewrites a chapter link to `dunx://guide/<slug>`, keeping any
+   * `#section` on it. Six of the twenty-five links carried one and `resources/read`
+   * matched exactly, so following one answered `Unknown resource`.
+   */
+  it('reads every chapter link the corpus contains', async () => {
+    const linked = new Set<string>();
+    // Only a markdown link. The agent-tooling chapter names the scheme in prose,
+    // and `dunx://guide/<slug>` is not something anything should resolve.
+    for (const doc of GUIDE) {
+      for (const match of doc.body.matchAll(
+        /\]\((dunx:\/\/guide\/[^)\s]+)\)/g,
+      )) {
+        if (match[1] !== undefined) linked.add(match[1]);
+      }
+    }
+
+    expect(linked.size).toBeGreaterThan(0);
+    // The fragment case has to be present, or this asserts nothing.
+    expect([...linked].some((uri) => uri.includes('#'))).toBe(true);
+
+    const unreadable: string[] = [];
+    for (const uri of linked) {
+      const line = await handle(
+        { jsonrpc: '2.0', id: 1, method: 'resources/read', params: { uri } },
+        [],
+        { name: '@dunx/mcp', version: '0.0.0' },
+        adoptionResources(),
+      );
+      if (
+        (JSON.parse(line ?? '{}') as { error?: unknown }).error !== undefined
+      ) {
+        unreadable.push(uri);
+      }
+    }
+    expect(unreadable).toEqual([]);
   });
 });
 

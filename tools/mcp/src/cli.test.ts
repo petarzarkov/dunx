@@ -262,6 +262,25 @@ describe('the server over stdio', () => {
     expect(contents[0]?.text).toContain('# First steps');
   }, 20_000);
 
+  it('reads a chapter through a link carrying a section fragment', async () => {
+    const answer = await first(
+      [
+        {
+          id: 1,
+          method: 'resources/read',
+          params: { uri: 'dunx://guide/06-validation#routeschemas' },
+        },
+      ],
+      null,
+    );
+    expect(answer).not.toHaveProperty('error');
+    const { contents } = answer['result'] as {
+      contents: { uri: string; text: string }[];
+    };
+    expect(contents[0]?.uri).toBe('dunx://guide/06-validation');
+    expect(contents[0]?.text).toContain('# Validation');
+  }, 20_000);
+
   it('accepts a relative entry with no leading ./ from the shell', async () => {
     const answer = await first(
       [{ id: 1, method: 'tools/call', params: { name: 'dunx_overview' } }],

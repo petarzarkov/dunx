@@ -381,6 +381,28 @@ describe('resources', () => {
     });
   });
 
+  /**
+   * The guide's own chapter links carry `#section`, and an exact-match-only
+   * lookup answered `Unknown resource` for every one of them.
+   */
+  it('reads one by a uri carrying a fragment', async () => {
+    const { contents } = (
+      await askFor('resources/read', {
+        uri: 'dunx://guide/01-introduction#what-it-is-built-on',
+      })
+    )['result'] as { contents: Record<string, unknown>[] };
+    // The canonical uri comes back, not the one with the fragment on it.
+    expect(contents[0]?.['uri']).toBe('dunx://guide/01-introduction');
+    expect(contents[0]?.['text']).toBe('# Introduction\n');
+  });
+
+  it('still rejects a fragment on a uri that names no resource', async () => {
+    const error = (
+      await askFor('resources/read', { uri: 'dunx://guide/nope#anything' })
+    )['error'] as { code: number };
+    expect(error.code).toBe(RpcError.INVALID_PARAMS);
+  });
+
   it('rejects an unknown uri as invalid params, naming it', async () => {
     const error = (
       await askFor('resources/read', { uri: 'dunx://guide/nope' })
