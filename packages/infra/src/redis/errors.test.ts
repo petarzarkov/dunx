@@ -117,3 +117,24 @@ describe('isConnectionError', () => {
     expect(isConnectionError(undefined)).toBe(false);
   });
 });
+
+describe('the predicates against an unnormalised error', () => {
+  // bullmq holds its own `Bun.RedisClient`, so nothing calls `toRedisError` on
+  // the way out and the raw Bun error is what a caller catches. Both predicates
+  // read the code, which is Bun's, so the class it arrives on does not matter.
+  it('recognises what Bun raises without toRedisError', () => {
+    expect(
+      isConnectionError(bunError(RedisErrorCode.CONNECTION_CLOSED, 'closed')),
+    ).toBe(true);
+    expect(
+      isServerError(bunError(RedisErrorCode.SERVER_ERROR, 'WRONGTYPE')),
+    ).toBe(true);
+  });
+
+  it('still refuses anything carrying no redis code', () => {
+    expect(isConnectionError(new Error('closed'))).toBe(false);
+    expect(isConnectionError({ code: 'ENOENT' })).toBe(false);
+    expect(isServerError(null)).toBe(false);
+    expect(isConnectionError('ERR_REDIS_CONNECTION_CLOSED')).toBe(false);
+  });
+});
