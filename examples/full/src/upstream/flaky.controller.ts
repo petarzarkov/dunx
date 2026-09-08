@@ -4,6 +4,8 @@ import {
   HttpError,
   HttpStatusCode,
   SkipThrottle,
+  type Input,
+  type RouteSchemas,
 } from '@dunx/http';
 
 /**
@@ -18,10 +20,16 @@ import {
 export class FlakyController {
   readonly #failures = new Map<string, number>();
 
-  /** 503 for the first two calls on a key, then 200. */
+  /**
+   * 503 for the first two calls on a key, then 200.
+   *
+   * The key comes from `?key=`, which is what makes the sentence above true: it
+   * read a constant, so the tour, the suites and every landing-page visitor
+   * shared one counter and only the first caller after boot ever saw a retry.
+   */
   @Get('/flaky')
-  flaky(): { recovered: true; after: number } {
-    const key = 'default';
+  flaky({ req }: Input<RouteSchemas>): { recovered: true; after: number } {
+    const key = new URL(req.url).searchParams.get('key') ?? 'default';
     const seen = (this.#failures.get(key) ?? 0) + 1;
     this.#failures.set(key, seen);
     if (seen <= 2) {
