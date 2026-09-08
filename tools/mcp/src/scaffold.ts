@@ -15,6 +15,21 @@ export interface StarterFile {
   readonly body: string;
 }
 
+import { ownVersion } from './own-version.js';
+
+/**
+ * Every `@dunx/*` version in the starter manifest is this placeholder, resolved
+ * when the starter is served rather than when the corpus is generated.
+ *
+ * Versioning is lockstep, so the right version to install is the one that
+ * answered. Writing the version in at generation time made the committed corpus
+ * a release behind the moment `scripts/version.ts` bumped the manifests: 3.5.1
+ * would have shipped a starter pinning 3.5.0, and the corpus drift test would
+ * have failed on the next push to main. `@dunx/create-app` spells the same string
+ * for the same reason; `gen-mcp-corpus.test.ts` holds the two to each other.
+ */
+export const VERSION_PLACEHOLDER = '__DUNX_VERSION__';
+
 export interface Starter {
   /** From this package's own `engines.bun`, so it cannot claim a version it is not built against. */
   readonly runtime: string;
@@ -59,6 +74,14 @@ export class Scaffold {
   constructor(
     private readonly catalogue: readonly ScaffoldFeature[],
     private readonly minimal: Starter,
+    /**
+     * What {@link VERSION_PLACEHOLDER} resolves to. Defaults to this package's own
+     * version, which is the answer in every real use; it is a parameter so a test
+     * can assert the substitution without reading a manifest, and defaulted rather
+     * than required because `Scaffold` is exported and a third argument would be a
+     * breaking change.
+     */
+    private readonly version: string = ownVersion(),
   ) {}
 
   /**
@@ -76,8 +99,19 @@ export class Scaffold {
     );
   }
 
+  /** The starter with its `@dunx/*` versions resolved to this release's. */
   starter(): Starter {
-    return this.minimal;
+    return {
+      ...this.minimal,
+      files: this.minimal.files.map((file) =>
+        file.body.includes(VERSION_PLACEHOLDER)
+          ? {
+              ...file,
+              body: file.body.replaceAll(VERSION_PLACEHOLDER, this.version),
+            }
+          : file,
+      ),
+    };
   }
 
   /**
@@ -117,7 +151,7 @@ export class Scaffold {
    * what `bunx @dunx/create-app` writes.
    */
   bunfig(): Bunfig | undefined {
-    const file = this.minimal.files.find(
+    const file = this.starter().files.find(
       (entry) => entry.path === 'bunfig.toml',
     );
     if (file === undefined) return undefined;

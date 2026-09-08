@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { findRootModule } from '@dunx/core';
 import { adoptionResources, adoptionTools } from './adopt.js';
+import { ownVersion } from './own-version.js';
 import { serve, type ToolDefinition } from './protocol.js';
 import { toolsFor } from './tools.js';
 
@@ -41,13 +42,6 @@ type Exported = Record<string, unknown>;
  */
 const named = (argv: readonly string[]): string | undefined =>
   argv.find((arg) => arg.startsWith('--export='))?.slice('--export='.length);
-
-const version = async (): Promise<string> => {
-  const manifest = Bun.file(`${import.meta.dir}/../package.json`);
-  return (await manifest.exists())
-    ? (((await manifest.json()) as { version?: string }).version ?? '0.0.0')
-    : '0.0.0';
-};
 
 /**
  * `Bun.resolveSync` rather than string-munging a path, so every specifier `import`
@@ -149,7 +143,7 @@ export const main = async (argv: readonly string[]): Promise<number> => {
     return 0;
   }
   if (argv.includes('--version')) {
-    console.error(await version());
+    console.error(ownVersion());
     return 0;
   }
 
@@ -173,7 +167,7 @@ export const main = async (argv: readonly string[]): Promise<number> => {
       await sink.flush();
     },
     tools,
-    { name: '@dunx/mcp', version: await version() },
+    { name: '@dunx/mcp', version: ownVersion() },
     adoptionResources(),
   );
   return 0;

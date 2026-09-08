@@ -3,7 +3,7 @@ import { adoptionResources, adoptionTools } from './adopt.js';
 import { GUIDE, MINIMAL, RULES, SCAFFOLD } from './generated.js';
 import { Guide, GUIDE_SCHEME, type GuideDoc } from './guide.js';
 import { handle } from './protocol.js';
-import { Scaffold, type Starter } from './scaffold.js';
+import { Scaffold, VERSION_PLACEHOLDER, type Starter } from './scaffold.js';
 
 const REPO = `${import.meta.dir}/../../..`;
 
@@ -232,8 +232,44 @@ describe('the scaffold reader', () => {
     );
   });
 
-  it('returns the starter as given', () => {
-    expect(scaffold.starter()).toBe(starter);
+  it('returns the starter as given when it holds no placeholder', () => {
+    // Content, not identity: `starter()` maps the file list to resolve
+    // `VERSION_PLACEHOLDER`, so the object is a new one either way.
+    expect(scaffold.starter()).toEqual(starter);
+  });
+
+  /**
+   * The corpus stores the placeholder because it is committed and the release job
+   * bumps every manifest after it was generated. Resolving on the way out is what
+   * keeps a published starter from pinning the previous release.
+   */
+  it('resolves the version placeholder when it serves the starter', () => {
+    const pinned = new Scaffold(
+      [],
+      {
+        ...starter,
+        files: [
+          {
+            path: 'package.json',
+            body: `{"dependencies":{"@dunx/core":"${VERSION_PLACEHOLDER}"}}`,
+          },
+        ],
+      },
+      '9.9.9',
+    );
+    const body = pinned.starter().files[0]?.body ?? '';
+    expect(body).toContain('"9.9.9"');
+    expect(body).not.toContain(VERSION_PLACEHOLDER);
+  });
+
+  it('defaults the version to the one this package reports', async () => {
+    const own = Bun.file(`${import.meta.dir}/../package.json`);
+    const { version } = (await own.json()) as { version: string };
+    const pinned = new Scaffold([], {
+      ...starter,
+      files: [{ path: 'package.json', body: VERSION_PLACEHOLDER }],
+    });
+    expect(pinned.starter().files[0]?.body).toBe(version);
   });
 
   it('builds the install steps out of the starter manifest', () => {

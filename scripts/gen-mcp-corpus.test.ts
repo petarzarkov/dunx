@@ -146,11 +146,60 @@ describe('the bundled corpus', () => {
       ...Object.values(manifest.devDependencies ?? {}),
     ];
     expect(ranges).not.toContain('workspace:*');
+  });
 
+  /**
+   * The corpus is committed and `scripts/version.ts` bumps every manifest after it
+   * was generated, so a version written into the starter ships a release behind:
+   * 3.5.1 would have handed an agent a starter pinning 3.5.0, and this file's own
+   * drift test would have failed on the next push to main.
+   */
+  it('stores the version as a placeholder, so a release cannot stale it', async () => {
+    const { MINIMAL } = await import('../tools/mcp/src/generated.js');
+    const { Scaffold, VERSION_PLACEHOLDER } =
+      await import('../tools/mcp/src/scaffold.js');
+    const { SCAFFOLD } = await import('../tools/mcp/src/generated.js');
+    const body = (starter: {
+      files: readonly { path: string; body: string }[];
+    }) =>
+      starter.files.find((file) => file.path === 'package.json')?.body ?? '{}';
+
+    const stored = JSON.parse(body(MINIMAL)) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    // No `@dunx/*` range is a concrete version, whichever list it is in.
+    const dunx = [
+      ...Object.entries(stored.dependencies ?? {}),
+      ...Object.entries(stored.devDependencies ?? {}),
+    ].filter(([name]) => name.startsWith('@dunx/'));
+    expect(dunx.length).toBeGreaterThan(0);
+    for (const [, range] of dunx) expect(range).toBe(VERSION_PLACEHOLDER);
+
+    // Served, it is this release's version and no placeholder survives.
     const own = (await Bun.file('tools/mcp/package.json').json()) as {
       version: string;
     };
-    expect(manifest.dependencies?.['@dunx/core']).toBe(own.version);
+    const served = new Scaffold(SCAFFOLD, MINIMAL).starter();
+    const resolved = JSON.parse(body(served)) as {
+      dependencies?: Record<string, string>;
+    };
+    expect(resolved.dependencies?.['@dunx/core']).toBe(own.version);
+    for (const file of served.files) {
+      expect(file.body).not.toContain(VERSION_PLACEHOLDER);
+    }
+  });
+
+  /**
+   * Two packages spell the same placeholder for the same reason and neither can
+   * import the other's: `@dunx/create-app` exports its own as public API, and
+   * `@dunx/mcp` must not gain a runtime dependency on create-app - bundling the
+   * corpus is what avoids reaching outside the package at all.
+   */
+  it('spells the placeholder the same way create-app does', async () => {
+    const mcp = await import('../tools/mcp/src/scaffold.js');
+    const createApp = await import('../tools/create-app/src/scaffold.js');
+    expect(mcp.VERSION_PLACEHOLDER).toBe(createApp.VERSION_PLACEHOLDER);
   });
 
   /**

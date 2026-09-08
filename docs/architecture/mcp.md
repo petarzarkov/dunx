@@ -208,7 +208,18 @@ to resolve.
 
 It cannot be copied from `examples/minimal` either. That manifest's `@dunx/*`
 ranges are `workspace:*` and its toolchain comes from the repo root, so the names
-and scripts are the example's and the versions are the answering release's.
+and scripts are the example's.
+
+The versions are the answering release's, and they get there through
+`VERSION_PLACEHOLDER` rather than being written in. The first version wrote this
+checkout's version into the corpus, which is committed - and `scripts/version.ts`
+bumps every manifest _after_ it was generated, so 3.5.1 would have handed an agent
+a starter pinning 3.5.0 and failed the drift test on the next push.
+
+Building first does not help, since the release job runs `bun run ci build`
+before `bun run version`, so an inlined version is a release behind too.
+`Scaffold.starter()` substitutes at request time from `ownVersion()`, one
+`readFileSync` of the package's own manifest, which npm publishes already bumped.
 
 `@types/bun` and typescript come from `DEV_TOOLCHAIN` in
 `tools/create-app/src/generate.ts`, which `manifest()` spreads into every generated
