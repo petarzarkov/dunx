@@ -9,9 +9,8 @@ const SETTLE_MS = 8_000;
 const POLL_MS = 150;
 
 /**
- * The queue, end to end: publish from this process, let bullmq fork the handler
- * into another one, and read back what it returned. Skips rather than fails when
- * the broker is absent, the way every other service-backed step here does.
+ * The queue, end to end: publish here, let bullmq fork the handler into another
+ * process, read back what it returned. Skips when the broker is absent.
  */
 export class JobsDemo {
   constructor(
@@ -23,12 +22,10 @@ export class JobsDemo {
     try {
       await this.publishAndWait();
     } catch (error) {
-      // Broadly, the way `JobsController.degrades` does: bullmq surfaces a
-      // broker failure through its own client, so what arrives is Bun's
-      // `RedisError` rather than the one `isConnectionError` knows.
-      const reason = isConnectionError(error)
-        ? 'nothing answering'
-        : (error as Error).message;
+      // Only a broker failure is a skip. Anything else is a real defect, and
+      // "no broker" is how it would go unnoticed: the tour exits 0 either way.
+      if (!isConnectionError(error)) throw error;
+      const reason = error instanceof Error ? error.message : String(error);
       this.logger.info(`no broker reachable - skipping the queue: ${reason}`);
     }
   }
@@ -49,16 +46,15 @@ export class JobsDemo {
     // Re-fetched rather than polled on the handle publish returned: `returnvalue`
     // is filled at load time, so the original handle never sees it.
     const deadline = Date.now() + SETTLE_MS;
-    let job = await queue.getJob(id);
-    let state = job === undefined ? 'missing' : await job.getState();
-    while (
-      (state === 'waiting' || state === 'active' || state === 'delayed') &&
-      Date.now() < deadline
-    ) {
-      await Bun.sleep(POLL_MS);
+    let job;
+    let state;
+    do {
       job = await queue.getJob(id);
       state = job === undefined ? 'missing' : await job.getState();
-    }
+      if (state !== 'waiting' && state !== 'active' && state !== 'delayed')
+        break;
+      await Bun.sleep(POLL_MS);
+    } while (Date.now() < deadline);
 
     if (state !== 'completed') {
       this.logger.info(

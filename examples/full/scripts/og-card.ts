@@ -1,10 +1,7 @@
 /**
- * The demo's social card, committed as `src/landing/public/og.png` and served by
- * `LandingMiddleware` at `/og.png`. Drawn through `scripts/og-card.ts`, which the
- * documentation site's card also uses; only the words below differ.
- *
- * Every string is a literal, so there is nothing to escape. `bun run gen:og`
- * regenerates it.
+ * The demo's card, committed as `src/landing/public/og.png` and served at
+ * `/og.png`. Drawn through `scripts/og-card.ts`, which the site's card also
+ * uses; only the words differ. `bun run gen:og` regenerates it.
  */
 
 import {

@@ -21,6 +21,17 @@ export class FlakyController {
   readonly #failures = new Map<string, number>();
 
   /**
+   * The key is caller-supplied and this route is unthrottled on a public demo,
+   * so without a bound a visitor walking `?key=` grows the map for the life of
+   * the process. `Map` keeps insertion order, so the oldest goes first; an
+   * evicted key starts its two failures over.
+   */
+  static readonly #MAX_KEYS = 256;
+
+  /** How many calls on a key fail before it recovers. */
+  static readonly #FAILURES = 2;
+
+  /**
    * 503 for the first two calls on a key, then 200.
    *
    * The key comes from `?key=`, which is what makes the sentence above true: it
@@ -31,8 +42,16 @@ export class FlakyController {
   flaky({ req }: Input<RouteSchemas>): { recovered: true; after: number } {
     const key = new URL(req.url).searchParams.get('key') ?? 'default';
     const seen = (this.#failures.get(key) ?? 0) + 1;
+    if (
+      !this.#failures.has(key) &&
+      this.#failures.size >= FlakyController.#MAX_KEYS
+    ) {
+      // `keys()` yields in insertion order, so this is the least recently added.
+      const oldest = this.#failures.keys().next();
+      if (!oldest.done) this.#failures.delete(oldest.value);
+    }
     this.#failures.set(key, seen);
-    if (seen <= 2) {
+    if (seen <= FlakyController.#FAILURES) {
       throw new HttpError(
         HttpStatusCode.SERVICE_UNAVAILABLE,
         `not ready yet (attempt ${seen})`,

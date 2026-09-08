@@ -665,6 +665,27 @@ it('fails a flaky upstream twice per key, not twice per process', async () => {
   expect(other.status).toBe(503);
 });
 
+it('bounds the flaky key map, so a caller cannot grow it without limit', async () => {
+  // The per-key fix replaced one hardcoded entry with unbounded growth. The cap
+  // is not observable; an evicted key restarting its two failures is.
+  const victim = `evict-${Date.now()}`;
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(503);
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(503);
+  // Recovered, and remembered as such.
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(200);
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(200);
+
+  // Enough distinct keys to push it past the cap, oldest first.
+  const pushes: Promise<Response>[] = [];
+  for (let i = 0; i < 300; i += 1) {
+    pushes.push(raw(`upstream/flaky?key=${victim}-filler-${i}`));
+  }
+  await Promise.all(pushes);
+
+  // Evicted, so it owes its two failures again. Unbounded, it would answer 200.
+  expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(503);
+});
+
 it('retries the flaky upstream through HttpService and reports each attempt', async () => {
   const { status, body } = await json<{
     attempts: readonly { attempt: number; retry: boolean; atMs: number }[];

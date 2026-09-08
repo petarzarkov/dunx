@@ -6,23 +6,14 @@ import {
   UNMATCHED,
 } from '@dunx/http';
 
-/**
- * What `/` answers with, and the three files that page pulls. An allow-list
- * rather than a directory: `StaticFiles` handles trees, and these four sit at
- * the root because an unfurler reads `og:image` before anything else.
- */
+/** What `/` answers with, and the three files that page pulls. An allow-list
+ * rather than a directory: these four sit at the root, because an unfurler reads
+ * `og:image` before anything else. */
 const FILES: Readonly<Record<string, string>> = {
   '/': 'index.html',
   '/landing.css': 'landing.css',
   '/landing.js': 'landing.js',
   '/og.png': 'og.png',
-};
-
-const TYPES: Readonly<Record<string, string>> = {
-  html: 'text/html; charset=utf-8',
-  css: 'text/css; charset=utf-8',
-  js: 'text/javascript; charset=utf-8',
-  png: 'image/png',
 };
 
 /**
@@ -49,7 +40,11 @@ export class LandingMiddleware implements Middleware {
 
     return new Response(file, {
       headers: {
-        'content-type': TYPES[name.split('.').pop() ?? ''] ?? 'text/plain',
+        // Bun sets content-type from the extension, the way `StaticFiles` leaves
+        // it to. A map here was a second, hand-maintained copy of that.
+        ...(file.type === ''
+          ? { 'content-type': 'application/octet-stream' }
+          : {}),
         // The card is committed; the page is redeployed and must not be held.
         'cache-control':
           name === 'og.png' ? 'public, max-age=86400' : 'no-cache',

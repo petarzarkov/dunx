@@ -11,6 +11,7 @@ import {
 import { QueryMetrics } from '@dunx/infra/db';
 import { ApiDoc } from '@dunx/openapi';
 import { z } from 'zod';
+import { constructorExcerpt } from './source-excerpt.js';
 
 /** Nanoseconds to milliseconds, or null where the histogram has no sample yet. */
 const ms = (nanoseconds: number | undefined): number | null =>
@@ -22,11 +23,6 @@ const SOURCES: Readonly<Record<string, string>> = {
   ledger: new URL('../database/ledger.service.ts', import.meta.url).pathname,
   gateway: new URL('../chat/chat.gateway.ts', import.meta.url).pathname,
 };
-
-/** Where an excerpt starts and stops. Whatever sits between the two is dropped,
- * so a doc comment does not bury the parameter list the panel is about. */
-const CONSTRUCTOR_OPEN = /^\s*constructor\(/;
-const CONSTRUCTOR_END = /^\s*\)\s*\{\}?\s*$/;
 
 /** Declared, so the parameter reaches the OpenAPI document and `Input` carries
  * its type. `SOURCES` still decides which names resolve. */
@@ -71,10 +67,9 @@ interface Vitals {
 }
 
 /**
- * What the running process knows about itself, as JSON the landing page renders.
- *
- * The public slice of what the dashboard shows: counters and timings, no
- * configuration and no route bodies. `@SkipThrottle()` because the page polls it.
+ * What the running process knows about itself, as JSON the landing page renders:
+ * the public slice of what the dashboard shows, with no configuration and no
+ * route bodies. `@SkipThrottle()` because the page polls it.
  */
 @ApiDoc({
   tags: ['Demo'],
@@ -138,11 +133,8 @@ export class VitalsController {
     };
   }
 
-  /**
-   * A class the container built, read off the disk with `Bun.file` and cut at the
-   * end of its constructor. Carrying the snippet as markup would have drifted the
-   * first time someone added a parameter.
-   */
+  /** A class the container built, read off disk with `Bun.file`. Carrying the
+   * snippet as markup would have drifted on the first added parameter. */
   @Get('/source/:name', sourceParams)
   async source({ params }: Input<typeof sourceParams>): Promise<{
     name: string;
@@ -158,23 +150,10 @@ export class VitalsController {
       );
     }
 
-    const lines = (await Bun.file(path).text()).split('\n');
-    const opens = lines.findIndex((line) => line.startsWith('export class '));
-    const ctor = lines.findIndex(
-      (line, index) => index > opens && CONSTRUCTOR_OPEN.test(line),
-    );
-    const closes = lines.findIndex(
-      (line, index) => index > ctor && CONSTRUCTOR_END.test(line),
-    );
     return {
       name,
       path: `examples/full/src/${path.split('/src/')[1] ?? path}`,
-      // No constructor of its own leaves `ctor` at -1; the declaration alone is
-      // still the honest answer.
-      code:
-        ctor === -1 || closes === -1
-          ? (lines[opens] ?? '')
-          : [lines[opens], ...lines.slice(ctor, closes + 1)].join('\n'),
+      code: constructorExcerpt(await Bun.file(path).text()),
     };
   }
 }

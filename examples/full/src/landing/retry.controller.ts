@@ -15,11 +15,9 @@ interface Attempt {
 }
 
 /**
- * `@dunx/http/client` retrying a 503, from the browser's side of the glass.
- *
- * Calling `/api/upstream/flaky` from JavaScript would show a flaky upstream, not
- * dunx retrying one. This goes through `HttpService` and hands back what
- * `onAttempt` saw. `@SkipThrottle()` for the reason `FlakyController` has it.
+ * `@dunx/http/client` retrying a 503. Calling `/api/upstream/flaky` from
+ * JavaScript would show a flaky upstream, not dunx retrying one, so this goes
+ * through `HttpService` and hands back what `onAttempt` saw.
  */
 @ApiDoc({
   tags: ['Demo'],

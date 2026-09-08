@@ -9,9 +9,8 @@ import { VitalsController } from './vitals.controller.js';
 /**
  * The page at `/` and the routes only that page calls. Here rather than in a
  * feature folder because `@dunx/create-app` vendors those wholesale, and a
- * `/api/demo` mount is right for a public demo and wrong for a scaffold.
- *
- * `RequestMetrics` is not imported: `@dunx/http` binds it globally.
+ * `/api/demo` mount is wrong for a scaffold. `RequestMetrics` is not imported:
+ * `@dunx/http` binds it globally.
  */
 @Module({
   imports: [
