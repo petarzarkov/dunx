@@ -112,10 +112,12 @@ jobs:
             --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else reads your final message and posts it as a pull request review, so open with no preamble naming the job, the run, the duration or yourself. Report your findings as the typed list you normally would. If you write prose instead, end the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did."
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
 
-      # One review per run, which is one per push: the cadence CodeRabbit uses,
-      # landing in the Files-changed UI rather than as another issue comment. The
-      # body is the model's final message and nothing else, which is what drops
-      # the tracking comment's header.
+      # One review per run, which is one per push: the cadence CodeRabbit uses.
+      # The findings go on the lines they are about and the body stays a count,
+      # because the whole review in the body put a screen of prose in the
+      # conversation on every push. GitHub takes the inline comments with the
+      # review in one POST, so this is still one review rather than a comment per
+      # finding.
       #
       # An empty review is a hard failure rather than a green check. That is the
       # original defect this workflow had: it reported success while discarding
@@ -125,12 +127,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
-          PR: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          # `scripts/render-review.ts` turns the run into the body and prints the
-          # verdict. It exits non-zero on an empty review rather than posting one.
           # Bun is on PATH because the action put it there.
-          verdict="$(bun scripts/render-review.ts "$EXECUTION_FILE" body.md)"
-          gh pr review "$PR" --repo "$REPO" "--$verdict" --body-file body.md
+          bun scripts/post-review.ts \
+            "$EXECUTION_FILE" \
+            "${{ github.repository }}" \
+            "${{ github.event.pull_request.number }}"
