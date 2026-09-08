@@ -4,6 +4,32 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.5.1 - 2026-09-08
+
+Queue teardown, and a starter an agent can use
+
+`@dunx/infra` gives bullmq's duplicate connections a teardown owner, and one
+adapter's failing teardown no longer abandons the ones queued behind it.
+
+`@dunx/mcp` was driven from an empty directory the way an outside agent would
+drive it, and answers five things it could not before.
+
+The starter ships the `package.json` and the `@types/bun` it was missing, so
+writing down what it answers now produces an app that installs, typechecks,
+tests and boots with nothing added by hand. Guide search carries `suggested`,
+the chapters a question's own words point at, for a query phrased as a sentence
+rather than a term. `dunx_scaffold`'s feature filter matches what a feature
+does and not only what it is called, so `queue` finds `jobs`. And the guide no
+longer numbers two chapters 22.
+
+### Fixes
+
+- **mcp**: resolve the starter's version when it is served, not when it is generated ([`c39c283`](https://github.com/petarzarkov/dunx/commit/c39c283650ec9c72f38af21cc7f54d8957888985))
+- **mcp**: the five gaps a clean-room agent hit ([`cf5232a`](https://github.com/petarzarkov/dunx/commit/cf5232a0a755d3bb9f12ee53fdcd3e866f9b39cf))
+- **infra**: assert the late adapter directly, and bound the note's claim ([`866780e`](https://github.com/petarzarkov/dunx/commit/866780e85e6b7a19b77b08476f9d1e75745a932d))
+- **infra**: let no adapter's teardown abandon the ones after it ([`fcccad6`](https://github.com/petarzarkov/dunx/commit/fcccad600c15907e7b2c852abbd6210bb628c229))
+- **infra**: give bullmq's duplicate connections a teardown owner ([`a3d7dcf`](https://github.com/petarzarkov/dunx/commit/a3d7dcfdbaa4692713f956551ac7852a0fbe1088))
+
 ## 3.5.0 - 2026-09-08
 
 MCP adoption tools, and JobEvents for awaiting a job
