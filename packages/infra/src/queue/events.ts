@@ -26,9 +26,9 @@ const CLOSE_TIMEOUT_MS = 2_000;
  * A process that publishes a job had no way to learn it finished. The handler
  * runs elsewhere, and `returnvalue` on the handle `add()` returned is filled at
  * load time, so the only option left was polling `getState()` on a timer. bullmq
- * broadcasts completion over Redis pub/sub and `Job.waitUntilFinished(events,
- * ttl)` already waits on it; nothing exposed a correctly-connected `QueueEvents`
- * to pass it.
+ * writes each event to a Redis stream and `Job.waitUntilFinished(events, ttl)`
+ * already blocks on it; nothing exposed a correctly-connected `QueueEvents` to
+ * pass it.
  *
  * So this contributes the two things bullmq cannot know: a client over
  * `Bun.RedisClient`, and a lifetime that ends before those sockets close. The
@@ -106,10 +106,13 @@ export class JobEvents implements OnShutdown {
    * the rest of shutdown, which is what closes the socket under it. */
   async #close(name: string, events: QueueEvents): Promise<void> {
     const timedOut = Symbol('timed out');
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const outcome = await Promise.race([
         events.close(),
-        Bun.sleep(CLOSE_TIMEOUT_MS).then(() => timedOut),
+        new Promise<symbol>((resolve) => {
+          timer = setTimeout(() => resolve(timedOut), CLOSE_TIMEOUT_MS);
+        }),
       ]);
       if (outcome === timedOut) {
         this.#logger.warn(
@@ -118,6 +121,12 @@ export class JobEvents implements OnShutdown {
       }
     } catch (error) {
       this.#logger.warn(`the "${name}" queue events failed to close`, error);
+    } finally {
+      // The loser of the race stays pending. A `Bun.sleep` here held the loop
+      // open for the whole window whenever `close()` won, so a clean shutdown
+      // took 2.37s against 0.36s - the delay this exists to prevent, caused by
+      // the code preventing it.
+      clearTimeout(timer);
     }
   }
 }

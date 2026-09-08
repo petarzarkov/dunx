@@ -597,7 +597,8 @@ export class Thumbnails {
 }
 ```
 
-bullmq broadcasts completion over Redis pub/sub, so this costs no polling. The
+bullmq writes each event to a Redis stream and `QueueEvents` blocks on `XREAD`,
+so this costs no polling. The
 alternative is `queue.getJob(id)` on a timer, which is what a status endpoint
 does instead: an HTTP request cannot hold a socket open for eight seconds, so
 `GET /jobs/:id` reports the state it finds and the caller asks again.
