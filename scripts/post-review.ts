@@ -133,12 +133,17 @@ export const buildReview = (
     findings.length === 0 &&
     proseOutside(result) === '';
 
+  /**
+   * Approving needs both signals to agree. The sentinel alone would approve a
+   * review that listed five findings and ended `VERDICT: APPROVE`, and the list
+   * alone was already shown to approve on a stray empty fence. Either one saying
+   * there is something to fix is enough to withhold the approval.
+   */
+  const nothingFound = findings === undefined ? false : findings.length === 0;
   const event: Review['event'] =
-    sentinel === undefined
-      ? clean
-        ? 'APPROVE'
-        : 'COMMENT'
-      : sentinel === 'APPROVE'
+    sentinel === 'COMMENT' || (findings !== undefined && !nothingFound)
+      ? 'COMMENT'
+      : sentinel === 'APPROVE' || clean
         ? 'APPROVE'
         : 'COMMENT';
 

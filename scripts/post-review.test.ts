@@ -88,6 +88,20 @@ describe('building a review', () => {
     expect(review.body).toContain('Found a problem.');
   });
 
+  /**
+   * The sentinel alone would approve a review that listed findings and then said
+   * APPROVE; the list alone was already shown to approve on a stray empty fence.
+   * Approving needs both to agree.
+   */
+  it('refuses to approve while findings exist, whatever the sentinel says', () => {
+    const review = buildReview(
+      `\`\`\`json\n${listed(finding())}\n\`\`\`\n\nVERDICT: APPROVE\n`,
+      diff({ 'a.ts': [10] }),
+    );
+    expect(review.event).toBe('COMMENT');
+    expect(review.comments).toHaveLength(1);
+  });
+
   it('takes prose as the body, with the verdict from the sentinel', () => {
     const review = buildReview('Looks fine.\n\nVERDICT: APPROVE\n', diff({}));
     expect(review.event).toBe('APPROVE');

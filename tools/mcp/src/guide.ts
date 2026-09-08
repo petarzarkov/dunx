@@ -96,12 +96,11 @@ export class Guide {
     const exact = this.docs.find((doc) => doc.slug.toLowerCase() === wanted);
     if (exact !== undefined) return exact;
 
-    const matches = this.docs.filter(
-      (doc) =>
-        doc.slug.toLowerCase().includes(wanted) ||
-        doc.title.toLowerCase().includes(wanted),
-    );
-    return matches.length === 1 ? matches[0] : undefined;
+    // Through `candidates`, so the two cannot disagree about what matches.
+    const matches = this.candidates(topic);
+    return matches.length === 1
+      ? this.docs.find((doc) => doc.slug === matches[0])
+      : undefined;
   }
 
   /** Every chapter whose slug or title matches, so an ambiguous topic is nameable. */
