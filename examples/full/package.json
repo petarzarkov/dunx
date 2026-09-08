@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/main.ts",
+    "gen:og": "bun ./scripts/og-card.ts",
     "services:down": "docker compose down -v",
     "services:up": "bun services.ts",
     "soak": "bun src/soak/soak.ts",
