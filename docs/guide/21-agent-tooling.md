@@ -6,8 +6,13 @@ module bound a provider, why boot fails. `@dunx/mcp` answers those over the
 [Model Context Protocol](https://modelcontextprotocol.io) so the agent can ask
 instead of grepping.
 
+It answers before the app exists too. Three of its tools carry the written guide,
+the smallest working app, and the feature catalogue inside the package, so an agent
+that has been asked to adopt dunx has something to read.
+
 ```bash
-bunx @dunx/mcp ./src/app.module.ts
+bunx @dunx/mcp                        # the guide, the starter, the catalogue
+bunx @dunx/mcp ./src/app.module.ts    # those, plus the readers for your app
 ```
 
 ## Wiring it into a client
@@ -23,9 +28,13 @@ bunx @dunx/mcp ./src/app.module.ts
 }
 ```
 
-Point it at the file that declares your root module. No naming convention applies:
-`@Module` leaves a marker, so a module exported only by name is found on its own.
-`bunx @dunx/create-app` scaffolds a module exported exactly this way.
+The entry is optional. Without one the server starts with the three tools that
+need no app, which is the state a project has before dunx is installed in it.
+
+Point it at the file that declares your root module once there is one. No naming
+convention applies: `@Module` leaves a marker, so a module exported only by name is
+found on its own. `bunx @dunx/create-app` scaffolds a module exported exactly this
+way.
 
 `default` and `root` win if present. `--export=<name>` settles a file that
 declares several. The path is resolved with `Bun.resolveSync`, so anything
@@ -33,6 +42,16 @@ declares several. The path is resolved with `Bun.resolveSync`, so anything
 extensionless specifier, or a package name.
 
 ## The tools
+
+Three need no app:
+
+| Tool            | Answers                                                                             |
+| --------------- | ----------------------------------------------------------------------------------- |
+| `dunx_start`    | The runtime, the two ways to get an app, and the four rules that are boot errors    |
+| `dunx_guide`    | The written guide: the index, one chapter in full, or a search across every chapter |
+| `dunx_scaffold` | Every feature `bunx @dunx/create-app` generates, and the source of the smallest app |
+
+Six read the app, and are served once an entry is given:
 
 | Tool             | Answers                                                                                                         |
 | ---------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -54,9 +73,26 @@ still gets a useful first answer:
 The filters exist because a large app's full route table is a lot of tokens to hand a
 model that asked about one path. Omitting them means everything.
 
-### Start with the overview
+### Start with dunx_start, then the overview
 
-`dunx_overview` is the call worth making first. It says how big the app is and
+`dunx_start` is the call worth making before writing any dunx. It costs about 4 KB
+and carries the runtime, the scaffold command, the three commands that add dunx to a
+project that already exists, an index of the guide, and the rules that fail at boot
+rather than at review:
+
+```json
+{
+  "rule": "Constructor injection needs the preload.",
+  "detail": "Add `preload = [\"@dunx/transform/preload\"]` to bunfig.toml, and again under `[test]`."
+}
+```
+
+`dunx_guide` then answers the chapter-level questions. With no arguments it returns
+the index; `search` returns matching lines with the chapter and line number of each,
+which is the cheaper first call when the question does not name a chapter; `topic`
+returns one chapter in full.
+
+`dunx_overview` is the call worth making first once there is an app. It says how big the app is and
 whether it would boot, without returning the graph:
 
 ```json
@@ -114,12 +150,21 @@ Schema vendor. It does not report the schema:
 
 Turning a schema into JSON Schema is zod-specific work; `@dunx/openapi` already
 does it properly, so `dunx_openapi` is where it lives. That split keeps the other
-five tools working in an app with no OpenAPI setup at all. `@dunx/openapi` is an
+eight tools working in an app with no OpenAPI setup at all. `@dunx/openapi` is an
 optional peer, loaded only when `dunx_openapi` is called.
+
+## Resources
+
+The guide chapters are served as MCP resources as well, at `dunx://guide/<slug>`,
+for a client that attaches documents rather than calling tools. A chapter link
+inside one points at the same scheme; a link to anything else in the repository
+becomes absolute.
 
 ## Starting a project with an agent
 
-Two files are served for an agent to fetch rather than render:
+An agent with the server wired up already has all of this: `dunx_start` for the
+rules, `dunx_scaffold` for the features and the starter files, `dunx_guide` for
+everything written. Two files are served over HTTP for an agent that does not:
 
 | URL                         | Holds                                                                   |
 | --------------------------- | ----------------------------------------------------------------------- |

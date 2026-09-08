@@ -121,15 +121,17 @@ ${services.map((feature) => `- **${feature.name}** needs ${feature.service}`).jo
 
 `
   }${RULES}
-## Reading this app instead of grepping it
+## Asking the framework instead of grepping it
 
 \`\`\`bash
 bunx @dunx/mcp ./src/app.module.ts
 \`\`\`
 
-An MCP server over stdio answering what routes, providers, modules and gateways
-exist, and which constructor parameters would fail to resolve. It reads the module
-graph and never boots the app.
+An MCP server over stdio. Six tools answer what routes, providers, modules and
+gateways exist, and which constructor parameters would fail to resolve; it reads
+the module graph and never boots the app. Three more carry the written guide, the
+feature catalogue and the rules that fail at boot, so \`dunx_guide\` answers
+"how do I add auth" without a search.
 
 ## The framework's own instructions
 
