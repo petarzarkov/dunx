@@ -17,8 +17,7 @@ import { constructorExcerpt } from './source-excerpt.js';
 const ms = (nanoseconds: number | undefined): number | null =>
   nanoseconds === undefined ? null : Number((nanoseconds / 1e6).toFixed(3));
 
-/** What the DI panel may read. An allow-list rather than a path: a `?file=`
- * would be a traversal with a nice name. */
+/** What the DI panel may read. A `?file=` would be a traversal with a name. */
 const SOURCES: Readonly<Record<string, string>> = {
   ledger: new URL('../database/ledger.service.ts', import.meta.url).pathname,
   gateway: new URL('../chat/chat.gateway.ts', import.meta.url).pathname,

@@ -160,7 +160,9 @@ export const SHOWCASE: readonly Showcase[] = [
  */
 export interface Soak {
   readonly calls: number;
+  /** Rounded to the second, so `calls / seconds` lands a unit off `perSecond`. */
   readonly seconds: number;
+  /** The run's own figure, over its unrounded elapsed time. */
   readonly perSecond: number;
   readonly failures: number;
   /** Settled heap at the first and last round, in MiB. */

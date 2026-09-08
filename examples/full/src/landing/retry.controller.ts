@@ -40,7 +40,15 @@ export class RetryController {
     // A fresh key per call, so the upstream fails its first two every time
     // rather than only for the first visitor after a deploy.
     const key = Math.random().toString(36).slice(2, 10);
-    const target = new URL(`/api/upstream/flaky?key=${key}`, req.url);
+    // Loopback plus the request's port, not `req.url` whole: `Host` decides
+    // that url, so a caller could choose which host this server calls. The port
+    // still comes from the request, since the app's own url is unknown until
+    // `listen()` has run - the reason `UpstreamModule` sets no `baseUrl`. So a
+    // caller can steer the port within loopback, on a demo route.
+    const { port } = new URL(req.url);
+    const target = new URL(
+      `http://127.0.0.1${port === '' ? '' : `:${port}`}/api/upstream/flaky?key=${key}`,
+    );
 
     const attempts: Attempt[] = [];
     const started = Bun.nanoseconds();

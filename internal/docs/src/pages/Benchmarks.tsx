@@ -13,6 +13,7 @@ import {
   Title,
 } from '@mantine/core';
 import { SOAK } from '../../../../scripts/positioning.js';
+import { href, RouteKind } from '../router';
 import {
   configLine,
   decimal,
@@ -296,8 +297,10 @@ export const Benchmarks = (): React.JSX.Element => {
               bun run soak
             </Text>{' '}
             drives {SOAK.operations} weighted operations against{' '}
-            <Anchor href="#/guide/01-introduction">the full example</Anchor> -
-            HTTP, websocket churn, SQLite, Redis, S3, the queue, the outbound
+            <Anchor href={href(RouteKind.Guide, 'introduction')}>
+              the full example
+            </Anchor>{' '}
+            - HTTP, websocket churn, SQLite, Redis, S3, the queue, the outbound
             client, guards, auth, validation failures and rate limiting - and
             fits the settled heap across rounds rather than the in-flight
             series, which measures the allocator instead of a leak.

@@ -43,9 +43,10 @@ export class JobsDemo {
         'the publish side, and bullmq forks jobs.processor.ts to run the handler',
     );
 
-    // Re-fetched rather than polled on the handle publish returned: `returnvalue`
-    // is filled at load time, so the original handle never sees it.
-    const deadline = Date.now() + SETTLE_MS;
+    // Re-fetched, not polled on the handle publish returned: `returnvalue` is
+    // filled at load time, so that handle never sees it.
+    const startedAt = Date.now();
+    const deadline = startedAt + SETTLE_MS;
     let job;
     let state;
     do {
@@ -58,7 +59,7 @@ export class JobsDemo {
 
     if (state !== 'completed') {
       this.logger.info(
-        `job ${id} is ${state} after ${SETTLE_MS} ms - not waiting longer`,
+        `job ${id} is ${state} after ${Date.now() - startedAt} ms - not waiting longer`,
       );
       return;
     }

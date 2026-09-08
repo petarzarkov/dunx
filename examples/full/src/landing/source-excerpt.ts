@@ -9,19 +9,25 @@ const CONSTRUCTOR_OPEN = /^\s*constructor\(/;
 
 /**
  * Whatever sits between the class line and the constructor is dropped, so a doc
- * comment does not bury the parameter list. A class with no constructor yields
- * the declaration alone.
- *
- * The end pattern does not require `) {}`: it used to, so a constructor with a
- * body truncated the excerpt to the class line with nothing reporting it.
+ * comment does not bury the parameter list; a class with no constructor yields
+ * the declaration alone. The end pattern does not require `) {}`, which used to
+ * truncate a bodied constructor to the class line with nothing reporting it.
  */
 export const constructorExcerpt = (source: string): string => {
   const lines = source.split('\n');
   const opens = lines.findIndex((line) => line.startsWith('export class '));
   if (opens === -1) return '';
 
+  // Bounded by the class body's close: unbounded, a first class with no
+  // constructor borrowed the next class's.
+  const ends = lines.findIndex(
+    (line, index) => index > opens && line.startsWith('}'),
+  );
+  const limit = ends === -1 ? lines.length : ends;
+
   const ctor = lines.findIndex(
-    (line, index) => index > opens && CONSTRUCTOR_OPEN.test(line),
+    (line, index) =>
+      index > opens && index < limit && CONSTRUCTOR_OPEN.test(line),
   );
   if (ctor === -1) return lines[opens] ?? '';
 

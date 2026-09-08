@@ -30,8 +30,7 @@ it('keeps the class line and the constructor, and drops what is between', () => 
 });
 
 it('cuts a constructor that has a body, rather than truncating to the class', () => {
-  // Both classes in `SOURCES` have empty constructors, so the old `) {}` pattern
-  // worked and would have broken silently on the third one added.
+  // Both classes in `SOURCES` are empty-bodied, so `) {}` worked until a third.
   const source = [
     'export class Workspace {',
     '  constructor(',
@@ -75,4 +74,19 @@ it('yields the declaration alone for a class with no constructor', () => {
 
 it('yields nothing when there is no exported class', () => {
   expect(constructorExcerpt('const x = 1;\n')).toBe('');
+});
+
+it('does not borrow a later class constructor for an earlier one', () => {
+  // The search ran to the end of the file, so the wrong constructor was shown.
+  const source = [
+    'export class Marker {',
+    '  run(): void {}',
+    '}',
+    '',
+    'export class Real {',
+    '  constructor(private readonly logger: Logger) {}',
+    '}',
+  ].join('\n');
+
+  expect(constructorExcerpt(source)).toBe('export class Marker {');
 });
