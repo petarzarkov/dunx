@@ -232,28 +232,30 @@ describe('teardown robustness', () => {
 
     // `disconnect()` with no argument cannot reconnect, but a `close`/`end`
     // listener could duplicate, and that adapter still needs an owner.
+    //
+    // Recorded as it is created, not afterwards: asserting that a second
+    // `onShutdown` disconnects nothing would also pass for a regression that
+    // dropped the late adapter from `#open` without tearing it down.
     let late: { disconnect: () => void } | undefined;
+    let lateCalls = 0;
     const inner = first.disconnect.bind(first);
     first.disconnect = (): void => {
-      late ??= client.duplicate({});
+      if (late === undefined) {
+        const derived = client.duplicate({}) as { disconnect: () => void };
+        const derivedInner = derived.disconnect.bind(derived);
+        derived.disconnect = (): void => {
+          lateCalls += 1;
+          derivedInner();
+        };
+        late = derived;
+      }
       inner();
     };
 
     source.onShutdown();
 
-    let closed = 0;
-    const lateInner = late?.disconnect.bind(late);
-    if (late && lateInner) {
-      late.disconnect = (): void => {
-        closed += 1;
-        lateInner();
-      };
-      // Already disconnected by the second pass, so a further call is the no-op
-      // bullmq's `closed` guard makes it.
-      source.onShutdown();
-    }
     expect(late).toBeDefined();
-    expect(closed).toBe(0);
+    expect(lateCalls).toBe(1);
   });
 
   it('stops rather than livelocking on an adapter that always duplicates', () => {

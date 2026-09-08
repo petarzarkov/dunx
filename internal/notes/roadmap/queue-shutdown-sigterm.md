@@ -226,9 +226,16 @@ down without a socket to close.
 
 **This does not touch leak B.** A `Worker` on an unreachable broker still holds
 the loop after `close()`, `ShutdownHooks`' forced exit still stands, and the
-numbers above are sockets released rather than a process that now exits. What
-changed is ownership: every adapter a `QueueConnection` hands out or bullmq
-derives from one is now disconnected and closed by it.
+numbers above are sockets released rather than a process that now exits.
+
+What changed is ownership: every adapter a `QueueConnection` hands out or bullmq
+derives from one is disconnected and closed by it, within a bounded teardown.
+`onShutdown` makes at most `TEARDOWN_PASSES` passes, taking each pass's adapters
+out before walking them, so one derived during a pass belongs to the next. The
+bound is what iterating the live array lacked: an adapter that derived another on
+every `disconnect()` would have been walked forever, and a livelocked shutdown is
+worse than a leaked socket. Anything still arriving after the last pass is logged
+and left to the runtime, which is the one case ownership does not cover.
 
 ## Defect C - no connection is ever named, so `getWorkers()` is always empty
 
