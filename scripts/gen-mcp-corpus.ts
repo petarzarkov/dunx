@@ -18,6 +18,7 @@
 import { join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FEATURES } from '../tools/create-app/src/features.js';
+import { DEV_TOOLCHAIN } from '../tools/create-app/src/generate.js';
 import { BOOT_RULES } from '../tools/create-app/src/rules.js';
 import type { BootRule as CreateAppBootRule } from '../tools/create-app/src/rules.js';
 import { summaryOf } from './guide-summary.js';
@@ -100,10 +101,64 @@ const readGuide = async (): Promise<readonly GuideDoc[]> => {
 };
 
 /**
- * `examples/minimal/src` plus the base template's `bunfig.toml` and
- * `tsconfig.json`, which together are exactly what `bunx @dunx/create-app` writes
- * for an empty selection. The example is booted and tested in CI; the base files
- * are what a generated app receives.
+ * The manifest the starter is written with.
+ *
+ * `examples/minimal/package.json` is a workspace manifest: its `@dunx/*` ranges are
+ * `workspace:*` and its toolchain comes from the repo root, neither of which a
+ * consumer has. So the names and scripts are the example's, the versions are this
+ * release's, and the toolchain is `@dunx/create-app`'s own {@link DEV_TOOLCHAIN}.
+ *
+ * It exists at all because the starter used to ship seven files and no manifest,
+ * leaving an agent to invent the one file where guessing wrong is silent:
+ * `"type": "module"` absent turns every relative import into a resolution error.
+ */
+const starterManifest = (
+  minimal: MinimalManifest,
+  version: string,
+  bun: string,
+): string => {
+  // Lockstep versioning, so the right version to install is the one that answered.
+  // Same rule as `VERSION_PLACEHOLDER` in `@dunx/create-app`, resolved at
+  // generation time here because the corpus is committed.
+  const pin = (deps: Record<string, string>): Record<string, string> =>
+    Object.fromEntries(
+      Object.keys(deps).map((name) => [
+        name,
+        name.startsWith('@dunx/') ? version : (deps[name] ?? 'latest'),
+      ]),
+    );
+
+  return `${JSON.stringify(
+    {
+      // The name `dunx_start` tells an agent to scaffold with.
+      name: 'my-api',
+      version: '0.1.0',
+      private: true,
+      type: 'module',
+      scripts: minimal.scripts,
+      dependencies: pin(minimal.dependencies ?? {}),
+      devDependencies: {
+        ...pin(minimal.devDependencies ?? {}),
+        ...DEV_TOOLCHAIN,
+      },
+      engines: { bun },
+    },
+    null,
+    2,
+  )}\n`;
+};
+
+interface MinimalManifest {
+  readonly scripts: Record<string, string>;
+  readonly dependencies?: Record<string, string>;
+  readonly devDependencies?: Record<string, string>;
+}
+
+/**
+ * `examples/minimal/src` plus a manifest, the base template's `bunfig.toml` and its
+ * `tsconfig.json`: together the smallest app that installs, boots, tests and
+ * typechecks. The example is booted and tested in CI; the base files are what a
+ * generated app receives.
  */
 const readStarter = async (): Promise<Starter> => {
   const files: StarterFile[] = [];
@@ -132,20 +187,27 @@ const readStarter = async (): Promise<Starter> => {
 
   const manifest = (await Bun.file(
     join(ROOT, 'examples/minimal/package.json'),
-  ).json()) as {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-  };
-  const engines = (await Bun.file(
-    join(ROOT, 'tools/mcp/package.json'),
-  ).json()) as {
+  ).json()) as MinimalManifest;
+  const own = (await Bun.file(join(ROOT, 'tools/mcp/package.json')).json()) as {
+    version: string;
     engines?: Record<string, string>;
   };
+  const bun = own.engines?.['bun'] ?? '>=1.4.1';
+
+  files.unshift({
+    path: 'package.json',
+    body: starterManifest(manifest, own.version, bun),
+  });
 
   return {
-    runtime: `bun ${engines.engines?.['bun'] ?? '>=1.4.1'}`,
+    runtime: `bun ${bun}`,
     dependencies: Object.keys(manifest.dependencies ?? {}),
-    devDependencies: Object.keys(manifest.devDependencies ?? {}),
+    // The toolchain is not in the example's manifest - the workspace root supplies
+    // it there - and `tsc --noEmit` needs it here.
+    devDependencies: [
+      ...Object.keys(manifest.devDependencies ?? {}),
+      ...Object.keys(DEV_TOOLCHAIN),
+    ],
     files,
   };
 };

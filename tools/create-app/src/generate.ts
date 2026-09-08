@@ -39,6 +39,17 @@ const dependenciesFor = (features: readonly Feature[]): readonly string[] =>
 
 const DUNX = /^@dunx\//;
 
+/**
+ * The toolchain every generated app needs, exported because
+ * `scripts/gen-mcp-corpus.ts` puts the same two in `@dunx/mcp`'s starter manifest.
+ * The base `tsconfig.json` declares `types: ["bun"]`, so a starter without
+ * `@types/bun` fails its first `tsc --noEmit` with TS2688.
+ */
+export const DEV_TOOLCHAIN: Readonly<Record<string, string>> = Object.freeze({
+  '@types/bun': '>=1.4.1',
+  typescript: '^5.7.0',
+});
+
 export const manifest = (
   features: readonly Feature[],
   binary = false,
@@ -71,8 +82,7 @@ export const manifest = (
       dependencies,
       devDependencies: {
         '@dunx/testing': '__DUNX_VERSION__',
-        '@types/bun': '>=1.4.1',
-        typescript: '^5.7.0',
+        ...DEV_TOOLCHAIN,
       },
       engines: { bun: '>=1.4.1' },
     },

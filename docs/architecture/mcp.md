@@ -154,7 +154,21 @@ Three tools now answer with no app, and are served whether or not an entry was g
   `01-introduction`, and reporting how many it omitted; `topic`
   returns one chapter in full, resolving an exact slug, then a slug substring, then a
   title substring.
+
+  `search` is literal, so `validate a request body` matched no line in any chapter
+  and answered `hits: []` with nowhere to go. `suggested` rides along on every
+  search: the query's words, compared five characters at a time so `validate` and
+  `Validation` agree, scored 8 on a title, 4 on a section heading, 3 on the summary
+  and 1 on a body mention. A chapter that only mentions a word in its body does not
+  qualify at all - every chapter mentions `route` somewhere, so scoring bodies
+  alone ranked the whole guide against any query. Measured over ten questions an
+  agent would type: the right chapter first in eight, and the two misses are
+  vocabulary, `throttle` against `rate limit`.
+
 - **`dunx_scaffold`** - `@dunx/create-app`'s own catalogue, and the starter files.
+  `feature` filters on name **or** summary: `queue` matched nothing while `jobs`
+  read "bullmq queues over Bun.RedisClient", and so did `redis` against the four
+  features that need one.
 
 ### The corpus is bundled, not fetched
 
@@ -184,8 +198,23 @@ keeps the file at 13 lines. An object literal spanning ten thousand lines would 
 `max-lines` and `oxfmt` an opinion about generated data.
 
 Every input is something CI already builds, boots or tours. The starter is
-`examples/minimal/src` plus the base template's `bunfig.toml` and `tsconfig.json`,
-which is exactly what `bunx @dunx/create-app` writes for an empty selection.
+`examples/minimal/src` plus a manifest, the base template's `bunfig.toml` and its
+`tsconfig.json`.
+
+The manifest is the correction. The starter shipped seven files and no
+`package.json`, leaving an agent to invent the one file where a wrong guess is
+silent: without `"type": "module"` every relative import in those five files fails
+to resolve.
+
+It cannot be copied from `examples/minimal` either. That manifest's `@dunx/*`
+ranges are `workspace:*` and its toolchain comes from the repo root, so the names
+and scripts are the example's and the versions are the answering release's.
+
+`@types/bun` and typescript come from `DEV_TOOLCHAIN` in
+`tools/create-app/src/generate.ts`, which `manifest()` spreads into every generated
+app. Without them the base `tsconfig.json`'s `types: ["bun"]` fails the starter's
+first `tsc --noEmit` with TS2688, measured against the published 3.5.0 in a clean
+directory.
 
 ### Resources, and the note that said to take the SDK
 

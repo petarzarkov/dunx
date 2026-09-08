@@ -61,11 +61,18 @@ export class Scaffold {
     private readonly minimal: Starter,
   ) {}
 
+  /**
+   * Name or summary, because a caller asks for a capability and the catalogue is
+   * keyed by folder. `queue` matched nothing while `jobs` was described as
+   * "bullmq queues over Bun.RedisClient"; so did `redis`, twice over.
+   */
   features(name?: string): readonly ScaffoldFeature[] {
     if (name === undefined) return this.catalogue;
     const wanted = name.toLowerCase();
-    return this.catalogue.filter((feature) =>
-      feature.name.toLowerCase().includes(wanted),
+    return this.catalogue.filter(
+      (feature) =>
+        feature.name.toLowerCase().includes(wanted) ||
+        feature.summary.toLowerCase().includes(wanted),
     );
   }
 
@@ -94,7 +101,7 @@ export class Scaffold {
       ...install(
         '-d ',
         this.minimal.devDependencies,
-        'A test app with overrides, against a real server on port 0.',
+        'A test app with overrides against a real server on port 0, plus the toolchain the starter tsconfig.json needs.',
       ),
     ];
   }

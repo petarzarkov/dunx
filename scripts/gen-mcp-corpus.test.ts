@@ -119,4 +119,71 @@ describe('the bundled corpus', () => {
       await Bun.file('examples/minimal/src/main.ts').text(),
     );
   });
+
+  /**
+   * The starter shipped seven files and no manifest, so an agent following it had
+   * to invent the one file where a wrong guess is silent: without
+   * `"type": "module"` every relative import in those five files fails to resolve.
+   */
+  it('ships a manifest, and one a consumer can install', async () => {
+    const { MINIMAL } = await import('../tools/mcp/src/generated.js');
+    const file = MINIMAL.files.find((entry) => entry.path === 'package.json');
+    expect(file).toBeDefined();
+
+    const manifest = JSON.parse(file?.body ?? '{}') as {
+      type?: string;
+      scripts?: Record<string, string>;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(manifest.type).toBe('module');
+    expect(manifest.scripts?.['typecheck']).toBe('tsc --noEmit');
+
+    // No `workspace:*` survives: the example resolves those from this repo and a
+    // consumer installing one gets an unresolvable specifier.
+    const ranges = [
+      ...Object.values(manifest.dependencies ?? {}),
+      ...Object.values(manifest.devDependencies ?? {}),
+    ];
+    expect(ranges).not.toContain('workspace:*');
+
+    const own = (await Bun.file('tools/mcp/package.json').json()) as {
+      version: string;
+    };
+    expect(manifest.dependencies?.['@dunx/core']).toBe(own.version);
+  });
+
+  /**
+   * The base `tsconfig.json` declares `types: ["bun"]`, so a starter without
+   * `@types/bun` fails its first `tsc --noEmit` with TS2688. It did, and the
+   * example's own manifest cannot say so - the workspace root supplies it there.
+   */
+  it('gives the starter the toolchain its tsconfig needs', async () => {
+    const { MINIMAL } = await import('../tools/mcp/src/generated.js');
+    const { DEV_TOOLCHAIN } =
+      await import('../tools/create-app/src/generate.js');
+    const manifest = JSON.parse(
+      MINIMAL.files.find((entry) => entry.path === 'package.json')?.body ??
+        '{}',
+    ) as { devDependencies?: Record<string, string> };
+
+    for (const [name, range] of Object.entries(DEV_TOOLCHAIN)) {
+      expect(manifest.devDependencies?.[name]).toBe(range);
+      // And in the list `Scaffold.steps()` renders `bun add -d` from, or an
+      // existing project adopting dunx installs the tsconfig but not its types.
+      expect(MINIMAL.devDependencies).toContain(name);
+    }
+  });
+
+  /**
+   * Two chapters numbered 22 made `topic: "22"` ambiguous. `Guide.chapter` answers
+   * that with candidates rather than a coin flip, so this is the other half: the
+   * numbering itself stays unique.
+   */
+  it('numbers every chapter exactly once', async () => {
+    const { GUIDE } = await import('../tools/mcp/src/generated.js');
+    const numbers = GUIDE.map((doc) => /^(\d+)-/.exec(doc.slug)?.[1]);
+    expect(numbers.filter((number) => number === undefined)).toEqual([]);
+    expect([...new Set(numbers)]).toHaveLength(numbers.length);
+  });
 });

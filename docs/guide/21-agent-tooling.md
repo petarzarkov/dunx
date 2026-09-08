@@ -92,6 +92,19 @@ the index; `search` returns matching lines with the chapter and line number of e
 capped at five per chapter so a common word still reaches the chapter that answers
 it, and reports how many it left out; `topic` returns one chapter in full.
 
+`search` matches literal text, so a question written as a sentence matches no line
+anywhere. Every result also carries `suggested`, the chapters the query's own words
+point at, scored highest on a title and lowest on a body mention:
+
+```json
+{
+  "query": "how do I validate a request body",
+  "hits": [],
+  "omitted": 0,
+  "suggested": ["06-validation", "08-middleware-and-guards", "05-controllers"]
+}
+```
+
 `dunx_overview` is the call worth making first once there is an app. It says how big the app is and
 whether it would boot, without returning the graph:
 
