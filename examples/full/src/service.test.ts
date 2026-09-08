@@ -670,8 +670,7 @@ it('fails a flaky upstream twice per key, not twice per process', async () => {
 });
 
 it('bounds the flaky key map, so a caller cannot grow it without limit', async () => {
-  // The per-key fix replaced one hardcoded entry with unbounded growth. The cap
-  // is not observable; an evicted key restarting its two failures is.
+  // The cap is not observable; an evicted key restarting its failures is.
   const victim = `evict-${Date.now()}`;
   expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(503);
   expect((await raw(`upstream/flaky?key=${victim}`)).status).toBe(503);
@@ -739,8 +738,7 @@ it('serves the landing page, its assets and its social card', async () => {
 });
 
 it('ignores the Host header when calling its own flaky route', async () => {
-  // Rebuilt from `req.url` this was a loopback port scanner: the response tells
-  // a refused connection from a served one. It reads `SelfOrigin` alone now.
+  // Rebuilt from `req.url` this was a loopback port scanner.
   const res = await fetch(new URL('api/demo/retry', baseUrl), {
     headers: { host: 'scanner.example:6379' },
   });

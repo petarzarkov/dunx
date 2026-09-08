@@ -7,12 +7,9 @@ import { RetryController } from './retry.controller.js';
 import { SelfOrigin } from './self-origin.js';
 import { VitalsController } from './vitals.controller.js';
 
-/**
- * The page at `/` and the routes only that page calls. Here rather than in a
- * feature folder because `@dunx/create-app` vendors those wholesale, and a
- * `/api/demo` mount is wrong for a scaffold. `RequestMetrics` is not imported:
- * `@dunx/http` binds it globally.
- */
+/** The page at `/` and the routes only it calls. Here rather than in a feature
+ * folder because `@dunx/create-app` vendors those wholesale and a `/api/demo`
+ * mount is wrong for a scaffold. `RequestMetrics` is bound globally. */
 @Module({
   imports: [
     // `EventLoopLag`, exported rather than re-provided so there is one sampler.

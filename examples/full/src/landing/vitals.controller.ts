@@ -65,11 +65,9 @@ interface Vitals {
   };
 }
 
-/**
- * What the running process knows about itself, as JSON the landing page renders:
- * the public slice of what the dashboard shows, with no configuration and no
- * route bodies. `@SkipThrottle()` because the page polls it.
- */
+/** What the running process knows about itself, as JSON the landing page
+ * renders: the public slice of what the dashboard shows, with no configuration
+ * and no route bodies. `@SkipThrottle()` because the page polls it. */
 @ApiDoc({
   tags: ['Demo'],
   description:
@@ -131,8 +129,7 @@ export class VitalsController {
     };
   }
 
-  /** A class the container built, read off disk with `Bun.file`. Carrying the
-   * snippet as markup would have drifted on the first added parameter. */
+  /** A class the container built, read off disk. Markup would have drifted. */
   @Get('/source/:name', sourceParams)
   async source({ params }: Input<typeof sourceParams>): Promise<{
     name: string;

@@ -30,7 +30,7 @@ it('keeps the class line and the constructor, and drops what is between', () => 
 });
 
 it('cuts a constructor that has a body, rather than truncating to the class', () => {
-  // Both classes in `SOURCES` are empty-bodied, so `) {}` worked until a third.
+  // `SOURCES` is empty-bodied throughout, so `) {}` worked until a third.
   const source = [
     'export class Workspace {',
     '  constructor(',
@@ -92,8 +92,7 @@ it('does not borrow a later class constructor for an earlier one', () => {
 });
 
 it('is not bounded by a brace that closes at column zero', () => {
-  // A column-0 `}` cut the search off above the constructor, and the panel fell
-  // back to the class line.
+  // A column-0 `}` cut the search off above the constructor.
   const source = [
     'export class Wide {',
     '  readonly shape = {',
@@ -113,8 +112,7 @@ it('is not bounded by a brace that closes at column zero', () => {
 });
 
 it('finds an abstract class, which the start and end checks used to disagree on', () => {
-  // `opens` matched a literal and the end bound a wider regex, so this rendered
-  // nothing at all.
+  // `opens` matched a literal, the end bound a wider regex: this rendered ''.
   const source = [
     'export abstract class Base {',
     '  constructor(protected readonly logger: Logger) {}',

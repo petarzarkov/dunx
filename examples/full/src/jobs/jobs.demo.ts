@@ -20,8 +20,8 @@ export class JobsDemo {
     try {
       await this.publishAndWait();
     } catch (error) {
-      // Only a broker failure is a skip. Anything else is a real defect, and
-      // "no broker" is how it would go unnoticed: the tour exits 0 either way.
+      // Only a broker failure is a skip: the tour exits 0 either way, so
+      // anything else would go unnoticed under a "no broker" label.
       if (!isConnectionError(error)) throw error;
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.info(`no broker reachable - skipping the queue: ${reason}`);
@@ -41,8 +41,8 @@ export class JobsDemo {
         'the publish side, and bullmq forks jobs.processor.ts to run the handler',
     );
 
-    // Re-fetched, not polled on the handle publish returned: `returnvalue` is
-    // filled at load time, so that handle never sees it.
+    // Re-fetched: `returnvalue` is filled at load time, so the handle publish
+    // returned never sees it.
     const startedAt = Date.now();
     const deadline = startedAt + SETTLE_MS;
     let job;

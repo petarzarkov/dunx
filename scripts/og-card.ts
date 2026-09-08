@@ -49,6 +49,119 @@ export const ogLogo = (size = 64): string =>
 </svg>`;
 
 /**
+ * The paint. Two cards differ in colour and copy and in nothing else, so this is
+ * what each one supplies instead of a second stylesheet.
+ */
+export interface CardStyle {
+  /** The layered background, as one `background` value. */
+  readonly background: string;
+  readonly ink: string;
+  readonly dim: string;
+  /** The gradient the second headline line is cut out of. */
+  readonly accent: string;
+  /** Border and text for the first chip, which reads as the primary one. */
+  readonly chipAccent: string;
+  readonly chipInk: string;
+}
+
+/**
+ * The words. Every field is inserted verbatim, so a caller passing anything but
+ * a literal escapes it first - `internal/docs` runs `positioning.ts` through its
+ * own `escapeHtml`, and the demo card is literals throughout.
+ */
+export interface CardContent {
+  /** A pill beside the wordmark. The site's card has none. */
+  readonly badge?: string;
+  /** Two lines: the second is set in `style.accent`. */
+  readonly headline: readonly [string, string];
+  readonly blurb: string;
+  readonly chips: readonly string[];
+}
+
+/**
+ * The shell both cards render through.
+ *
+ * `scripts/og-card.ts` was meant to be the shared half and only held the
+ * screenshot: the 50-line stylesheet stayed duplicated in both generators, so
+ * the lattice, the layout classes and the chip rules were two copies to keep in
+ * step. The sizes are one set now rather than two that drifted by 4px.
+ */
+export const cardHtml = (style: CardStyle, content: CardContent): string =>
+  `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: ${OG_WIDTH}px; height: ${OG_HEIGHT}px; }
+  body {
+    position: relative;
+    overflow: hidden;
+    background: ${style.background};
+    color: ${style.ink};
+    font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* A 54px lattice, faded out towards the bottom so the chips sit on flat ink. */
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 184, 0.10) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.10) 1px, transparent 1px);
+    background-size: 54px 54px;
+    mask-image: radial-gradient(120% 100% at 50% 0%, #000 35%, transparent 78%);
+  }
+  /* space-between rather than a pair of auto margins, which fought each other
+     and pushed the chips off the 630px canvas. */
+  .card {
+    position: relative; height: 100%; padding: 56px 68px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .brand span { font-size: 46px; font-weight: 700; letter-spacing: -0.02em; }
+  .badge {
+    margin-left: 10px; padding: 7px 16px; border-radius: 999px;
+    font: 600 19px ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    color: ${style.chipAccent}; border: 1px solid ${style.chipAccent};
+    background: rgba(148, 163, 184, 0.08);
+  }
+  h1 { font-size: 58px; line-height: 1.1; font-weight: 800; letter-spacing: -0.03em; }
+  .accent {
+    background-image: ${style.accent};
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  p { margin-top: 20px; font-size: 24px; line-height: 1.45; color: ${style.dim}; max-width: 53ch; }
+  p b { color: ${style.ink}; font-weight: 600; }
+  .chips { display: flex; gap: 12px; }
+  .chip {
+    padding: 9px 18px; border-radius: 9px; font-size: 21px;
+    border: 1px solid rgba(148, 163, 184, 0.28); color: ${style.chipInk};
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+  .chip:first-child { border-color: ${style.chipAccent}; color: ${style.chipAccent}; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="card">
+    <div class="brand">${ogLogo()}<span>dunx</span>${
+      content.badge === undefined
+        ? ''
+        : `<span class="badge">${content.badge}</span>`
+    }</div>
+    <div>
+      <h1>${content.headline[0]}<br /><span class="accent">${content.headline[1]}</span></h1>
+      <p>${content.blurb}</p>
+    </div>
+    <div class="chips">
+      ${content.chips.map((chip) => `<span class="chip">${chip}</span>`).join('')}
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+/**
  * Serve `html` to a headless Chrome, shoot it at exactly the declared size, and
  * write the PNG. Returns the byte length so a caller can print it.
  */
