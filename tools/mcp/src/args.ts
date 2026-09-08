@@ -37,10 +37,17 @@ export const bool = (description: string): Record<string, unknown> => ({
 export class Args {
   constructor(private readonly raw: Record<string, unknown>) {}
 
-  /** An empty string is treated as absent: a client clearing a field sends one. */
+  /**
+   * Blank is absent, trimmed. A client clearing a field sends `''`, and a model
+   * filling a template sends `'   '`; untrimmed, the second reached `Guide.chapter`
+   * as a query that every chapter matched, so the first one came back looking like
+   * a hit with all twenty-two others listed as near misses.
+   */
   text(key: string): string | undefined {
     const value = this.raw[key];
-    return typeof value === 'string' && value !== '' ? value : undefined;
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
   }
 
   flag(key: string): boolean {

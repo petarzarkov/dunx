@@ -101,10 +101,16 @@ export const adoptionTools = (): readonly ToolDefinition[] => [
 
       const chapter = guide.chapter(topic);
       if (chapter === undefined) {
-        return {
-          error: `No chapter matches "${topic}".`,
-          chapters: guide.index().map((entry) => entry.slug),
-        };
+        const candidates = guide.candidates(topic);
+        return candidates.length > 1
+          ? {
+              error: `"${topic}" matches ${candidates.length} chapters. Call again with one of them.`,
+              candidates,
+            }
+          : {
+              error: `No chapter matches "${topic}".`,
+              chapters: guide.index().map((entry) => entry.slug),
+            };
       }
       return {
         chapter,

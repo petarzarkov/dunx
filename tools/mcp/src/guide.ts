@@ -80,22 +80,34 @@ export class Guide {
   }
 
   /**
-   * Exact slug first, then a slug substring, then a title substring. A caller that
+   * Exact slug first, then the single chapter a substring matches. A caller that
    * has read the index passes a slug; one that has not passes `validation`, and
    * both land on the same chapter.
+   *
+   * A substring matching several is `undefined` rather than the first of them:
+   * `docs/guide/` holds both `22-metrics` and `22-upgrading`, so `topic: "22"`
+   * used to spend a whole chapter body on a coin flip. {@link candidates} is what
+   * the caller is given instead.
    */
   chapter(topic: string): GuideDoc | undefined {
     const wanted = topic.toLowerCase().trim();
-    return (
-      this.docs.find((doc) => doc.slug.toLowerCase() === wanted) ??
-      this.docs.find((doc) => doc.slug.toLowerCase().includes(wanted)) ??
-      this.docs.find((doc) => doc.title.toLowerCase().includes(wanted))
+    if (wanted === '') return undefined;
+
+    const exact = this.docs.find((doc) => doc.slug.toLowerCase() === wanted);
+    if (exact !== undefined) return exact;
+
+    const matches = this.docs.filter(
+      (doc) =>
+        doc.slug.toLowerCase().includes(wanted) ||
+        doc.title.toLowerCase().includes(wanted),
     );
+    return matches.length === 1 ? matches[0] : undefined;
   }
 
   /** Every chapter whose slug or title matches, so an ambiguous topic is nameable. */
   candidates(topic: string): readonly string[] {
     const wanted = topic.toLowerCase().trim();
+    if (wanted === '') return [];
     return this.docs
       .filter(
         (doc) =>

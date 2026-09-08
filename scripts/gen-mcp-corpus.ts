@@ -15,6 +15,7 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FEATURES } from '../tools/create-app/src/features.js';
+import { summaryOf } from './guide-summary.js';
 import type { GuideDoc } from '../tools/mcp/src/guide.js';
 import type {
   ScaffoldFeature,
@@ -40,26 +41,6 @@ const rewriteLinks = (markdown: string): string =>
     .replace(/\]\(\.\.\/\.\.\//g, `](${BLOB}/`)
     .replace(/\]\(\.\.\//g, `](${BLOB}/docs/`);
 
-/** The first paragraph after the `#` heading, which is what the index shows. */
-const summarize = (lines: readonly string[]): string => {
-  const start = lines.findIndex((line) => line.startsWith('# '));
-  // No heading means no summary. Reading from line 0 instead took the badge row.
-  if (start === -1) return '';
-  const paragraph: string[] = [];
-
-  for (const line of lines.slice(start + 1)) {
-    const trimmed = line.trim();
-    if (trimmed === '') {
-      if (paragraph.length > 0) break;
-      continue;
-    }
-    if (trimmed.startsWith('#') || trimmed.startsWith('```')) break;
-    paragraph.push(trimmed);
-  }
-
-  return paragraph.join(' ');
-};
-
 const readGuide = async (): Promise<readonly GuideDoc[]> => {
   const dir = join(ROOT, 'docs/guide');
   const slugs: string[] = [];
@@ -79,7 +60,7 @@ const readGuide = async (): Promise<readonly GuideDoc[]> => {
           .find((line) => line.startsWith('# '))
           ?.slice(2)
           .trim() ?? slug,
-      summary: summarize(lines),
+      summary: summaryOf(body),
       sections: lines
         .filter((line) => line.startsWith('## '))
         .map((line) => line.slice(3).trim()),

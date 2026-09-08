@@ -57,6 +57,26 @@ describe('the guide reader', () => {
     expect(guide.chapter('queues')).toBeUndefined();
   });
 
+  /**
+   * `docs/guide/` really does hold two chapters numbered 22, so `topic: "22"`
+   * used to return the first of them and spend a whole chapter body on it.
+   */
+  it('refuses to guess when a substring matches several chapters', () => {
+    const twins = new Guide([
+      { ...docs[0]!, slug: '22-metrics', title: 'Metrics' },
+      { ...docs[1]!, slug: '22-upgrading', title: 'Upgrading' },
+    ]);
+    expect(twins.chapter('22')).toBeUndefined();
+    expect(twins.candidates('22')).toEqual(['22-metrics', '22-upgrading']);
+    // An exact slug is still answered.
+    expect(twins.chapter('22-upgrading')?.title).toBe('Upgrading');
+  });
+
+  it('treats a blank topic as no topic rather than as a match on everything', () => {
+    expect(guide.chapter('   ')).toBeUndefined();
+    expect(guide.candidates('  ')).toEqual([]);
+  });
+
   it('names every candidate, so an ambiguous topic is answerable', () => {
     expect(guide.candidates('0')).toEqual(['01-introduction', '06-validation']);
     expect(guide.candidates('nothing')).toEqual([]);
@@ -248,6 +268,16 @@ describe('the tools that need no app', () => {
     const miss = await call('dunx_guide', { topic: 'kubernetes' });
     expect(miss['error']).toContain('kubernetes');
     expect(miss['chapters']).toContain('01-introduction');
+
+    // Two chapters are numbered 22, so this is ambiguous against the real corpus.
+    const ambiguous = await call('dunx_guide', { topic: '22' });
+    expect(ambiguous['error']).toContain('matches 2 chapters');
+    expect(ambiguous['candidates']).toEqual(['22-metrics', '22-upgrading']);
+
+    // Whitespace is not a topic, so it falls through to the index.
+    expect(await call('dunx_guide', { topic: '   ' })).toHaveProperty(
+      'chapters',
+    );
   });
 
   it('answers dunx_scaffold with the catalogue, and the starter only when asked', async () => {

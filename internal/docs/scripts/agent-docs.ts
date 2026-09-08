@@ -1,6 +1,12 @@
 import { copyFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+// One extractor, shared with `scripts/gen-mcp-corpus.ts`, which bundles the same
+// summary into `@dunx/mcp`'s guide corpus. Re-exported so `content.ts` and the
+// page head keep importing it from here.
+import { summaryOf } from '../../../scripts/guide-summary';
 import type { GuideMeta } from './extract/model';
+
+export { summaryOf };
 
 /**
  * The two files an agent fetches instead of reading the site.
@@ -17,28 +23,6 @@ import type { GuideMeta } from './extract/model';
 export const SITE_URL = 'https://dunx.win/';
 
 const RAW_URL = 'https://raw.githubusercontent.com/petarzarkov/dunx/main/';
-
-/**
- * The first paragraph under the title, flattened to one line.
- *
- * Called once per guide by `content.ts`, which records the result on the page as
- * `summary`. Both this file and the page head want that sentence, and a second
- * extractor would give a page one summary in `llms.txt` and a different one in a
- * search result.
- */
-export const summaryOf = (markdown: string): string => {
-  const body = markdown.replace(/^#[^\n]*\n+/, '');
-  const paragraph = (body.split(/\n\s*\n/)[0] ?? '')
-    .replace(/\s+/g, ' ')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/\*\*/g, '')
-    .trim();
-  if (paragraph === '' || paragraph.startsWith('```')) return '';
-  const sentence = (
-    /^(.+?\.)(?:\s|$)/.exec(paragraph)?.[1] ?? paragraph
-  ).replace(/[:\-\s]+$/, '');
-  return sentence.length > 200 ? `${sentence.slice(0, 197)}...` : sentence;
-};
 
 const entry = (title: string, url: string, summary: string): string =>
   summary === '' ? `- [${title}](${url})` : `- [${title}](${url}): ${summary}`;
