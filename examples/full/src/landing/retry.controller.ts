@@ -1,6 +1,7 @@
 import { Controller, Get } from '@dunx/http';
 import { FetchError, HttpService } from '@dunx/http/client';
 import { ApiDoc } from '@dunx/openapi';
+import { FLAKY_FAILURES } from '../upstream/flaky.controller.js';
 import { SelfOrigin } from './self-origin.js';
 
 interface Attempt {
@@ -9,11 +10,9 @@ interface Attempt {
   readonly atMs: number;
 }
 
-/**
- * `@dunx/http/client` retrying a 503. Calling `/api/upstream/flaky` from
+/** `@dunx/http/client` retrying a 503. Calling `/api/upstream/flaky` from
  * JavaScript would show a flaky upstream, not dunx retrying one, so this goes
- * through `HttpService` and hands back what `onAttempt` saw.
- */
+ * through `HttpService` and hands back what `onAttempt` saw. */
 @ApiDoc({
   tags: ['Demo'],
   description:
@@ -54,7 +53,8 @@ export class RetryController {
         target,
         {
           retry: {
-            maxRetries: 3,
+            // One more than the upstream owes, so there is a spare attempt.
+            maxRetries: FLAKY_FAILURES + 1,
             retryDelayMs: 40,
             backoff: { jitterMs: 20, maxMs: 400 },
             onAttempt: (attempt, isRetry) =>

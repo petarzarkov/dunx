@@ -8,10 +8,8 @@ import { THUMBNAIL_QUEUE, type RenderResult } from './thumbnail.jobs.js';
 const SETTLE_MS = 8_000;
 const POLL_MS = 150;
 
-/**
- * The queue, end to end: publish here, let bullmq fork the handler into another
- * process, read back what it returned. Skips when the broker is absent.
- */
+/** The queue, end to end: publish here, let bullmq fork the handler into
+ * another process, read back what it returned. Skips with no broker. */
 export class JobsDemo {
   constructor(
     private readonly logger: Logger,

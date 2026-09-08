@@ -1,10 +1,9 @@
-/**
- * The class line and the constructor, cut out of a source file for the DI panel.
- * Separate from `VitalsController` so the shapes can be tested without a server.
- */
+/** The class line and the constructor, cut out of a source file for the DI
+ * panel. Separate from `VitalsController` so the shapes are testable. */
 
-/** Where the previous class's body ends. A column-0 `}` is not anchored to brace
- * depth: a re-wrapped object literal closing there bounded the search short. */
+/** A top-level class declaration: where the excerpt starts and where the class
+ * before it ended. The bound was a column-0 `}`, which is not anchored to brace
+ * depth. */
 const CLASS_DECLARATION = /^(?:export\s+)?(?:abstract\s+)?class\s/;
 
 /** The close of a parameter list, whether or not the body is empty. */
@@ -19,7 +18,7 @@ const CONSTRUCTOR_OPEN = /^\s*constructor\(/;
  */
 export const constructorExcerpt = (source: string): string => {
   const lines = source.split('\n');
-  const opens = lines.findIndex((line) => line.startsWith('export class '));
+  const opens = lines.findIndex((line) => CLASS_DECLARATION.test(line));
   if (opens === -1) return '';
 
   // Unbounded, a first class with no constructor borrowed the next class's.

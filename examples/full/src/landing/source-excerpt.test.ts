@@ -111,3 +111,20 @@ it('is not bounded by a brace that closes at column zero', () => {
     ].join('\n'),
   );
 });
+
+it('finds an abstract class, which the start and end checks used to disagree on', () => {
+  // `opens` matched a literal and the end bound a wider regex, so this rendered
+  // nothing at all.
+  const source = [
+    'export abstract class Base {',
+    '  constructor(protected readonly logger: Logger) {}',
+    '}',
+  ].join('\n');
+
+  expect(constructorExcerpt(source)).toBe(
+    [
+      'export abstract class Base {',
+      '  constructor(protected readonly logger: Logger) {}',
+    ].join('\n'),
+  );
+});

@@ -9,6 +9,7 @@ import {
   type TestClient,
 } from '@dunx/testing';
 import { SelfOrigin } from './landing/self-origin.js';
+import { FLAKY_FAILURES } from './upstream/flaky.controller.js';
 import { createApp } from './main.js';
 import { Maintenance } from './schedule/maintenance.service.js';
 
@@ -696,8 +697,8 @@ it('retries the flaky upstream through HttpService and reports each attempt', as
   }>('demo/retry');
 
   expect(status).toBe(200);
-  // Two 503s, so three attempts: the first and two retries.
-  expect(body.attempts).toHaveLength(3);
+  // The first attempt plus one retry per failure the upstream owes.
+  expect(body.attempts).toHaveLength(FLAKY_FAILURES + 1);
   expect(body.attempts[0]?.retry).toBe(false);
   expect(body.attempts[1]?.retry).toBe(true);
   expect(body.outcome).toContain('recovered');
@@ -747,5 +748,5 @@ it('ignores the Host header when calling its own flaky route', async () => {
 
   expect(res.status).toBe(200);
   expect(body.outcome).toContain('recovered');
-  expect(body.attempts).toHaveLength(3);
+  expect(body.attempts).toHaveLength(FLAKY_FAILURES + 1);
 });

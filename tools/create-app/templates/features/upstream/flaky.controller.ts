@@ -15,6 +15,11 @@ import {
  * failures. `@SkipThrottle()` because a retry loop is exactly the traffic shape the
  * rate limit exists to refuse.
  */
+/** How many calls on a key fail before it recovers. Exported because
+ * `RetryController` sizes its retry budget from it: bumping this would otherwise
+ * flip that panel to "gave up on 503" for every visitor. */
+export const FLAKY_FAILURES = 2;
+
 @Controller('upstream')
 @SkipThrottle()
 export class FlakyController {
@@ -24,9 +29,6 @@ export class FlakyController {
    * map grows for the life of the process. `Map` keeps insertion order, so the
    * oldest goes first and an evicted key starts its two failures over. */
   static readonly #MAX_KEYS = 256;
-
-  /** How many calls on a key fail before it recovers. */
-  static readonly #FAILURES = 2;
 
   /**
    * 503 for the first two calls on a key, then 200.
@@ -48,7 +50,7 @@ export class FlakyController {
       if (!oldest.done) this.#failures.delete(oldest.value);
     }
     this.#failures.set(key, seen);
-    if (seen <= FlakyController.#FAILURES) {
+    if (seen <= FLAKY_FAILURES) {
       throw new HttpError(
         HttpStatusCode.SERVICE_UNAVAILABLE,
         `not ready yet (attempt ${seen})`,
