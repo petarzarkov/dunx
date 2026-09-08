@@ -140,10 +140,11 @@ already succeeded at the part that is hardest to get right.
 Three tools now answer with no app, and are served whether or not an entry was given:
 
 - **`dunx_start`** - the runtime, the scaffold command, the two install commands and
-  the `bunfig.toml` that add dunx to a project that already exists, an index of the guide, and four rules. The
-  rules are the failures with no compiler behind them: the missing preload, the
-  absent parameter decorators, the mandatory `.js` on a relative import, and module
-  encapsulation. It is 4 KB. The first version was 17 KB, because it embedded each
+  the `bunfig.toml` that add dunx to a project that already exists, an index of the
+  guide, and `BOOT_RULES`. Those are the failures with no compiler behind them, and
+  `tools/create-app/src/rules.ts` is the list: the missing preload heads it, and the
+  scaffolded `AGENTS.md` renders the same one. It is 4 KB. The first version was
+  17 KB, because it embedded each
   chapter's summary and section headings into a map whose job is to say which
   chapter to ask for next; `Guide.titles()` is what replaced `Guide.index()` there,
   and `adopt.test.ts` holds it under 6 KB.

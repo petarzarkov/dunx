@@ -47,7 +47,7 @@ Three need no app:
 
 | Tool            | Answers                                                                             |
 | --------------- | ----------------------------------------------------------------------------------- |
-| `dunx_start`    | The runtime, the two ways to get an app, and the four rules that are boot errors    |
+| `dunx_start`    | The runtime, the two ways to get an app, and the rules that are boot errors         |
 | `dunx_guide`    | The written guide: the index, one chapter in full, or a search across every chapter |
 | `dunx_scaffold` | Every feature `bunx @dunx/create-app` generates, and the source of the smallest app |
 

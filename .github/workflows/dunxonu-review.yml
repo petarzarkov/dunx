@@ -12,6 +12,10 @@ concurrency:
   group: dunxonu-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Nothing at the workflow level, so a job that forgets its own block gets none
+# rather than the repository default.
+permissions: {}
+
 jobs:
   review:
     name: Review the diff
@@ -38,9 +42,22 @@ jobs:
       # `git log`, `git blame` and `git show`, and a single-commit checkout gives
       # them nothing to read: the review reported reading `main...HEAD`, a range
       # that does not exist locally at depth 1.
+      #
+      # `persist-credentials: false` because the reviewer can read files and the
+      # pull request it reads is attacker-controlled text. checkout@v4 leaves the
+      # workflow token in `.git/config`, inside the workspace, so a prompt
+      # injection that got the agent to print that file would disclose a token
+      # holding `pull-requests: write`. Nothing here needs credentials after the
+      # fetch: `git log`, `git show` and `git diff` all read local history.
+      #
+      # Narrowing `cat` and `find` was the other suggestion and is not the fix.
+      # `grep`, `sed`, `awk`, `head` and `tail` all read files too, so the
+      # exposure was the credential sitting in the workspace, not the command
+      # that would have read it.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - id: review
         uses: anthropics/claude-code-action@v1
@@ -90,7 +107,7 @@ jobs:
           # appended system prompt loses to them. It writes the review and the
           # step below posts it, which is the half that has to be deterministic.
           claude_args: |
-            --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else posts your final message verbatim as a pull request review, so write it as the review itself, with no preamble naming the job, the run, the duration or yourself. End the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did."
+            --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else posts your final message verbatim as a pull request review. Write that message as GitHub-flavoured markdown prose that a person reads: a sentence on what you reviewed, then each finding as a bullet naming file:line and stating the defect. Never emit the findings as a JSON array or any other machine format, and open with no preamble naming the job, the run, the duration or yourself. End the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did."
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
 
       # One review per run, which is one per push: the cadence CodeRabbit uses,

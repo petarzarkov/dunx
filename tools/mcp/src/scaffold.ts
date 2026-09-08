@@ -78,15 +78,24 @@ export class Scaffold {
    * project adopting dunx, which is the case `bunx @dunx/create-app` does not cover.
    */
   steps(): readonly Step[] {
+    // An empty list would render `bun add ` with nothing after it, which is a
+    // command an agent would run and a person would have to diagnose.
+    const install = (flag: string, names: readonly string[], why: string) =>
+      names.length === 0
+        ? []
+        : [{ run: `bun add ${flag}${names.join(' ')}`, why }];
+
     return [
-      {
-        run: `bun add ${this.minimal.dependencies.join(' ')}`,
-        why: 'The container, the Bun.serve adapter, and the constructor-dependency transform.',
-      },
-      {
-        run: `bun add -d ${this.minimal.devDependencies.join(' ')}`,
-        why: 'A test app with overrides, against a real server on port 0.',
-      },
+      ...install(
+        '',
+        this.minimal.dependencies,
+        'The container, the Bun.serve adapter, and the constructor-dependency transform.',
+      ),
+      ...install(
+        '-d ',
+        this.minimal.devDependencies,
+        'A test app with overrides, against a real server on port 0.',
+      ),
     ];
   }
 

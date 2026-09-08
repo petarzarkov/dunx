@@ -173,6 +173,21 @@ describe('the scaffold reader', () => {
     expect(steps[1]?.run).toBe('bun add -d @dunx/testing');
   });
 
+  /** `bun add ` with nothing after it is a command an agent would run. */
+  it('omits an install step rather than emitting a bare bun add', () => {
+    const bare = new Scaffold([], {
+      ...starter,
+      dependencies: [],
+      devDependencies: [],
+    });
+    expect(bare.steps()).toEqual([]);
+
+    const devOnly = new Scaffold([], { ...starter, dependencies: [] });
+    expect(devOnly.steps().map((step) => step.run)).toEqual([
+      'bun add -d @dunx/testing',
+    ]);
+  });
+
   /**
    * It used to be a third step: `echo 'preload = [...]' >> bunfig.toml`. An append
    * writes a bare key onto the end of the file, so a bunfig ending inside a table
