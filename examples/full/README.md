@@ -4,7 +4,8 @@ One long-running backend service that uses every part of dunx, so you can open i
 and poke at it rather than read about it.
 
 It is running at **[demo.dunx.win](https://demo.dunx.win)**, so you can poke at it
-without cloning anything: [the API explorer](https://demo.dunx.win/api/docs),
+without cloning anything: [the landing page](https://demo.dunx.win),
+[the API explorer](https://demo.dunx.win/api/docs),
 [the dashboard](https://demo.dunx.win/api/dashboard) and
 [bull-board](https://demo.dunx.win/api/dashboard/queues).
 
@@ -33,6 +34,7 @@ listed, typed and callable from the browser.
 | `/assets/`               | a static directory, on `Bun.file`               |
 | `/api/health/live`       | liveness - is this process working              |
 | `/api/health/ready`      | readiness - should it receive traffic           |
+| `/`                      | the landing page, one panel per capability      |
 
 It stays up until you stop it. `ctrl-c` drains in reverse construction order: the
 services first, then the database and the temp directory they were using.
@@ -67,6 +69,7 @@ that check, because a service never exits.
 | `/api/jobs`       | `@dunx/infra/queue` - bullmq; published and consumed by this process       |
 | `/api/auth/*`     | `@dunx/auth` - better-auth mounted, with `Bun.password` hashing          |
 | `/api/wiring`     | `@dunx/core` - `token()`, `inject()` and the three `provide()` shapes    |
+| `/api/demo/*`     | what the landing page renders - vitals, a source excerpt, a retry        |
 | `/chat`           | a websocket gateway on the **same** `Bun.serve` as the routes            |
 
 ### Things worth trying
@@ -102,7 +105,27 @@ done
 # max-age=60 on a name that can change, immutable on a content-addressed one.
 curl -sI localhost:3000/assets/site.css        | grep -i cache-control
 curl -sI localhost:3000/assets/app.a1b2c3d4.js | grep -i cache-control
+
+# What the process knows about itself: request, query and event-loop timings.
+curl -s localhost:3000/api/demo/vitals
+
+# The constructor the container resolved, read off disk. No annotation on it.
+curl -s localhost:3000/api/demo/source/ledger
+
+# The outbound client retrying a 503, with the millisecond of each attempt.
+curl -s localhost:3000/api/demo/retry
 ```
+
+## The landing page
+
+`/` is one panel per capability, and each panel calls the routes above rather than
+describing them. It is served by `LandingMiddleware` off the unmatched path, so
+`/`, `/landing.css`, `/landing.js` and `/og.png` are answered and every other miss
+is still the 404 the tour narrates.
+
+`og.png` is the social card. `bun run gen:og` redraws it through the shared
+renderer in `scripts/og-card.ts`, which screenshots HTML in `Bun.WebView`; it is
+committed, so no deploy needs a Chrome.
 
 `ctrl-c` shows the ordering that makes readiness worth having: `/api/health/ready`
 starts answering `503` while the port is still open, waits `drainDelayMs`, and only
@@ -286,3 +309,31 @@ An unmatched path is logged too. Bun answers a miss itself, and the middleware
 chain would never see it, so `@dunx/http` installs one `fetch` fallback that puts
 the global middleware in front of a `{"error":"NOT_FOUND","status":404}`. Bun is
 still the router.
+
+## The soak harness
+
+`bun run soak` drives 28 weighted operations across HTTP, websocket churn, SQLite,
+Redis, S3, the queue, the outbound client, guards, auth, the dashboard, validation
+failures, unmatched paths and rate limiting. Every operation names the statuses it
+accepts, so a 429 and a 404 are traffic rather than errors and an absent service
+degrades instead of failing the run.
+
+```bash
+bun run soak -- --seconds 300 --concurrency 32
+```
+
+The widest clean run over all 28 operations, on the machine that wrote this:
+**3,668,137 calls in 365s at 10,051/s, 0 failures, settled heap 25.1 to 25.0 MiB
+across twelve rounds.**
+
+The leak verdict is the settled heap across rounds, not the in-flight series. An
+in-flight slope measures the allocator: RSS climbed 11 MiB/min on a run whose
+`heapUsed` was falling and whose settled RSS came back 20 MiB below its own peak.
+
+Each round ends with `Bun.gc(true)` and a quiet sample, and the fit is over those.
+Under three minutes the window cannot resolve the +/-2.5 MiB of GC noise, so the
+run reports the trend and says it is not judging it.
+
+CI runs 40 seconds at concurrency 12. That is too short for the leak verdict and
+long enough to catch an unexpected status, a stalled loop, a subscriber that
+outlived its socket, and a shutdown that hangs.

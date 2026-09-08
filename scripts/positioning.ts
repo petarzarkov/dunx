@@ -149,3 +149,32 @@ export const SHOWCASE: readonly Showcase[] = [
     ],
   },
 ];
+
+/**
+ * The soak result, declared here for the reason everything else in this file is:
+ * the documentation site states it and `examples/full/README.md` describes the
+ * harness that produced it, and the two had no way to stay in step.
+ *
+ * Produced by `bun run soak -- --seconds 300 --concurrency 32` in
+ * `examples/full`, over all 28 weighted operations. Re-measure before editing.
+ */
+export interface Soak {
+  readonly calls: number;
+  readonly seconds: number;
+  readonly perSecond: number;
+  readonly failures: number;
+  /** Settled heap at the first and last round, in MiB. */
+  readonly heap: readonly [number, number];
+  readonly rounds: number;
+  readonly operations: number;
+}
+
+export const SOAK: Soak = {
+  calls: 3_668_137,
+  seconds: 365,
+  perSecond: 10_051,
+  failures: 0,
+  heap: [25.1, 25.0],
+  rounds: 12,
+  operations: 28,
+};

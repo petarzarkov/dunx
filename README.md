@@ -137,8 +137,9 @@ specifier is a compile error rather than a runtime surprise.
 
 - **[The live demo](https://demo.dunx.win)** - `examples/full` running on a
   Raspberry Pi 5: the API explorer, the ops dashboard, bull-board, and a page
-  that drives the websocket gateway, the rate limiter and the queue from a
-  browser
+  that drives twelve capabilities from a browser, including a transaction
+  rolling back, the outbound client retrying a 503, and the process's own
+  request, query and event-loop timings
 - **[The guide](https://dunx.win)** - twenty-one pages,
   introduction through agent tooling
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and
