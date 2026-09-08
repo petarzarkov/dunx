@@ -5,8 +5,9 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 # A push supersedes the review of the commit before it, so a rapid series of
-# pushes costs one review rather than one per push. The review lands in one
-# sticky comment, and two overlapping runs would race to rewrite it.
+# pushes costs one review rather than one per push. Each run submits one pull
+# request review, and two overlapping runs would submit two against the same
+# commit, one of them from a diff already superseded.
 concurrency:
   group: dunxonu-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -51,16 +52,18 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.DUNXONU_TOKEN }}
-          # One comment carrying the whole review, updated in place across pushes,
-          # rather than one inline comment per finding. `--comment` is what fanned
-          # them out: it posts each finding through the inline-comment tool, which
-          # put six separate top-level comments on #63 seconds apart. Dropping it
-          # leaves the review as a single report, and `track_progress` is the
-          # channel that report is posted through - without it the run is agent
-          # mode, which has no output channel to the PR at all and threw nine
-          # findings away on #64 while reporting success.
-          track_progress: true
-          use_sticky_comment: true
+          # `track_progress` is deliberately absent, having been on for two runs.
+          # It delivers the run through the action's own tracking comment, whose
+          # body is assembled in the action's `comment-logic.ts` and always opens
+          # with a hardcoded `**Claude finished @<user>'s task in <duration>**`
+          # and a job link. Nothing configures that away, so dropping the tracking
+          # comment is the only way to lose the header, and the review posts
+          # itself instead - see the system prompt below.
+          #
+          # `--comment` is absent for a different reason: it posts each finding
+          # through the inline-comment tool, which put six separate top-level
+          # comments on #63 seconds apart.
+          #
           # The built-in review, not code-review@claude-code-plugins. It needs
           # no marketplace clone, runs in the foreground under `-p`, and takes
           # an effort level: medium reports only what it is confident in, which
@@ -79,5 +82,13 @@ jobs:
           # absent: it executes the code under review, and this workflow carries
           # an OAuth token. Add `Bash(bun test:*)` to trade that for a reviewer
           # that can run the suite it is reasoning about.
+          #
+          # The posting instruction is a system prompt rather than text appended
+          # to the prompt, where a slash command would read it as its own
+          # arguments. One review per run is one per push, which is the cadence
+          # CodeRabbit uses, and it lands in the Files-changed UI rather than as
+          # another issue comment. Approving is what makes the check meaningful
+          # on a clean run instead of silent.
           claude_args: |
-            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
+            --append-system-prompt "End by submitting exactly one pull request review on ${{ github.repository }} pull request ${{ github.event.pull_request.number }} using the gh CLI. Run: gh pr review ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --approve --body '<report>' when you found nothing worth changing, or the same command with --comment instead of --approve when you did. Never use --request-changes. Never use gh pr comment, and never post inline comments. Submit the review once and only once. The body is the review itself: no preamble naming the job, the run, the duration or yourself."
+            --allowedTools "Bash(gh pr review:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
