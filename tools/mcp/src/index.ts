@@ -13,7 +13,7 @@ export { adoptionResources, adoptionTools } from './adopt.js';
 export { GUIDE, MINIMAL, RULES, SCAFFOLD } from './generated.js';
 export { Guide, GUIDE_SCHEME } from './guide.js';
 export type { GuideDoc, GuideEntry, GuideHit, GuideSearch } from './guide.js';
-export { Scaffold } from './scaffold.js';
+export { Scaffold, VERSION_PLACEHOLDER } from './scaffold.js';
 export type {
   BootRule,
   Bunfig,

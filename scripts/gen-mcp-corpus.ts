@@ -23,6 +23,7 @@ import { BOOT_RULES } from '../tools/create-app/src/rules.js';
 import type { BootRule as CreateAppBootRule } from '../tools/create-app/src/rules.js';
 import { summaryOf } from './guide-summary.js';
 import type { GuideDoc } from '../tools/mcp/src/guide.js';
+import { VERSION_PLACEHOLDER } from '../tools/mcp/src/scaffold.js';
 import type {
   BootRule,
   ScaffoldFeature,
@@ -112,19 +113,18 @@ const readGuide = async (): Promise<readonly GuideDoc[]> => {
  * leaving an agent to invent the one file where guessing wrong is silent:
  * `"type": "module"` absent turns every relative import into a resolution error.
  */
-const starterManifest = (
-  minimal: MinimalManifest,
-  version: string,
-  bun: string,
-): string => {
-  // Lockstep versioning, so the right version to install is the one that answered.
-  // Same rule as `VERSION_PLACEHOLDER` in `@dunx/create-app`, resolved at
-  // generation time here because the corpus is committed.
+const starterManifest = (minimal: MinimalManifest, bun: string): string => {
+  // The placeholder rather than this checkout's version. The corpus is committed
+  // and the release job bumps every manifest after it was generated, so a version
+  // written in here ships a release behind: 3.5.1 would have handed an agent a
+  // starter pinning 3.5.0. `Scaffold.starter()` resolves it.
   const pin = (deps: Record<string, string>): Record<string, string> =>
     Object.fromEntries(
       Object.keys(deps).map((name) => [
         name,
-        name.startsWith('@dunx/') ? version : (deps[name] ?? 'latest'),
+        name.startsWith('@dunx/')
+          ? VERSION_PLACEHOLDER
+          : (deps[name] ?? 'latest'),
       ]),
     );
 
@@ -189,14 +189,13 @@ const readStarter = async (): Promise<Starter> => {
     join(ROOT, 'examples/minimal/package.json'),
   ).json()) as MinimalManifest;
   const own = (await Bun.file(join(ROOT, 'tools/mcp/package.json')).json()) as {
-    version: string;
     engines?: Record<string, string>;
   };
   const bun = own.engines?.['bun'] ?? '>=1.4.1';
 
   files.unshift({
     path: 'package.json',
-    body: starterManifest(manifest, own.version, bun),
+    body: starterManifest(manifest, bun),
   });
 
   return {
