@@ -4,6 +4,60 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.5.0 - 2026-09-08
+
+MCP adoption tools, and JobEvents for awaiting a job
+
+### Features
+
+- **mcp**: serve the guide, the starter and the catalogue with no app ([`8fe4153`](https://github.com/petarzarkov/dunx/commit/8fe4153c24c45c865ad976af0dc1940ea9eeae57))
+- **mcp**: answer resources/list and resources/read ([`82230bf`](https://github.com/petarzarkov/dunx/commit/82230bf13cde1aa7e8a072a0d2bcc8b0a76a3043))
+- **infra**: expose JobEvents, so a publisher can await a job ([`6f08e8d`](https://github.com/petarzarkov/dunx/commit/6f08e8dd91900d6dada27cce38a057decf7f628f))
+- **example**: five landing panels, and the demo routes they call ([`551631c`](https://github.com/petarzarkov/dunx/commit/551631cb12bc42d9fe6b313c47ac78aaef32542e))
+- **example**: narrate the queue in the tour ([`41e166d`](https://github.com/petarzarkov/dunx/commit/41e166dc3b823a5d4255cf885c902c6096be1542))
+- **og**: give the demo a social card, through one shared renderer ([`50a8d70`](https://github.com/petarzarkov/dunx/commit/50a8d7035f2f0c949c57cdd28a3c3bdb4d6d543a))
+
+### Fixes
+
+- **docs**: an item on every breadcrumb crumb ([`e54366c`](https://github.com/petarzarkov/dunx/commit/e54366cdc7331478c0accfc539a7f618070ad3ec))
+- **review**: approving needs both signals, and links resolve per chapter ([`e2ed0cc`](https://github.com/petarzarkov/dunx/commit/e2ed0cc47310468552d4a6b8b92f932993305618))
+- **review**: pin the action, read the last verdict, refuse a moved head ([`cc966c3`](https://github.com/petarzarkov/dunx/commit/cc966c3f966850a0d97c71f8e120bfc6517316ff))
+- **review**: findings on the lines they are about, not in the body ([`2f1db80`](https://github.com/petarzarkov/dunx/commit/2f1db80e4b1634e5257af6ce3c6a97ac5a3660b5))
+- **review**: a stray empty fence must not approve a flagged review ([`31a0f01`](https://github.com/petarzarkov/dunx/commit/31a0f0173c4ac741bb814199cadb4dc8f129e98c))
+- **review**: render the findings list instead of posting it as JSON ([`45b6ecc`](https://github.com/petarzarkov/dunx/commit/45b6ecc050a2fbfec21ab3db6743e34ab86df16c))
+- **review**: drop the checkout credential, and post prose rather than JSON ([`6bea6a5`](https://github.com/petarzarkov/dunx/commit/6bea6a57e17fc052adac8964213a9a1da0b21e2b))
+- **mcp**: one boot-rule list, and resolve chapter links by path ([`0b82554`](https://github.com/petarzarkov/dunx/commit/0b825549c1655bf1ab607eaf29593dd02759a5d7))
+- **mcp**: one summary extractor, and stop guessing at an ambiguous topic ([`90fe33a`](https://github.com/petarzarkov/dunx/commit/90fe33ac2833b48969349927d961408c00cb7dd8))
+- **mcp**: ten review findings, and a drift guard that could not fire ([`e8b0dc1`](https://github.com/petarzarkov/dunx/commit/e8b0dc13ccf458a37ff193b6b4b587dab52b62b5))
+- **mcp**: read a guide chapter through a link carrying a fragment ([`c2d9e19`](https://github.com/petarzarkov/dunx/commit/c2d9e19f7794dea44f7b08c85591cf40139922bd))
+- **example**: the source allow-list resolved through the prototype chain ([`51e730e`](https://github.com/petarzarkov/dunx/commit/51e730e8734fbf5e794212871614147e5c25bf07))
+- **infra**: clear the close timer, and call the event transport a stream ([`1788b75`](https://github.com/petarzarkov/dunx/commit/1788b75f07410cf5eb180ec756bb5a575a285c55))
+- **example**: one class-declaration check, and derive the retry budget ([`d9a89cb`](https://github.com/petarzarkov/dunx/commit/d9a89cb84a43ebff4650835707641ca8217741a2))
+- **example**: stop the retry route reaching an origin the caller chose ([`71c0491`](https://github.com/petarzarkov/dunx/commit/71c04916df985d7f46968de0050b89ad2e52f070))
+- **example**: the CodeRabbit findings, including a real one in the excerpt ([`aee4215`](https://github.com/petarzarkov/dunx/commit/aee4215964dfbc44363e5024ae9e7fafb057a490))
+- **example**: bound the flaky key map, and four smaller review findings ([`e97f6b2`](https://github.com/petarzarkov/dunx/commit/e97f6b2c9dc54c1fb81054db3cd6d22808b221a5))
+- **infra**: key the redis predicates on the code, not the wrapper class ([`29baae5`](https://github.com/petarzarkov/dunx/commit/29baae510327e516447f62630b967305390e694f))
+- **example**: count flaky-upstream failures per key, not per process ([`b2ec60f`](https://github.com/petarzarkov/dunx/commit/b2ec60f855f3ecff1c3585cda605de0a4c70f45d))
+
+### Refactors
+
+- **mcp**: share one argument reader between the tool sets ([`14e006b`](https://github.com/petarzarkov/dunx/commit/14e006b27ae9cf32b7ebf786789d080f3ebc679b))
+- **og**: put the card shell in the shared renderer, not in both cards ([`77dd6f2`](https://github.com/petarzarkov/dunx/commit/77dd6f2b4ef7867555fa4bd8362bb55a88915787))
+
+### Documentation
+
+- **mcp**: correct the tool table, and record the adoption tools ([`0600c5d`](https://github.com/petarzarkov/dunx/commit/0600c5db85687e45e0495b45dd47b13aa25363e3))
+- state the soak result, and what the demo page now shows ([`a30fb64`](https://github.com/petarzarkov/dunx/commit/a30fb646bec1f4caa437f5115b55c03fb9920364))
+
+### Other changes
+
+- **review**: post the review from the workflow, not from the model ([`3489d05`](https://github.com/petarzarkov/dunx/commit/3489d05329802702bd7b51116df960f032a8bf6c))
+- **review**: dunxonu submits a pull request review, and approves a clean one ([`d36d84d`](https://github.com/petarzarkov/dunx/commit/d36d84d92f0934980a834ff2543f84f1f47c32ba))
+- **mcp**: regenerate the corpus for the queues guide change on main ([`3c1c737`](https://github.com/petarzarkov/dunx/commit/3c1c7370824f6cfa0627e698a529a33e284a02ed))
+- **review**: one comment per review, and a channel to post it through ([`b296802`](https://github.com/petarzarkov/dunx/commit/b296802c042dd2d0ccb6114d23846fd13df5d940))
+- Update dunxonu.yml ([`1016b27`](https://github.com/petarzarkov/dunx/commit/1016b27d2590532791605c077183dcf26568de3e))
+- Update dunxonu-review.yml ([`d384ae4`](https://github.com/petarzarkov/dunx/commit/d384ae4833d6969c069de502b1a63b80e5617d96))
+
 ## 3.4.1 - 2026-09-07
 
 Dashboard home link, demo favicon, and the queues panel path
