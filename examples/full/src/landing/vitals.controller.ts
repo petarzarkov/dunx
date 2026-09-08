@@ -17,11 +17,16 @@ import { constructorExcerpt } from './source-excerpt.js';
 const ms = (nanoseconds: number | undefined): number | null =>
   nanoseconds === undefined ? null : Number((nanoseconds / 1e6).toFixed(3));
 
-/** What the DI panel may read. A `?file=` would be a traversal with a name. */
-const SOURCES: Readonly<Record<string, string>> = {
-  ledger: new URL('../database/ledger.service.ts', import.meta.url).pathname,
-  gateway: new URL('../chat/chat.gateway.ts', import.meta.url).pathname,
-};
+/** What the DI panel may read. A `Map`, not an object: `SOURCES['__proto__']` on
+ * a literal is `Object.prototype` rather than `undefined`, as are `constructor`
+ * and `toString`, so each walked past the 404 into `Bun.file`. */
+const SOURCES = new Map<string, string>([
+  [
+    'ledger',
+    new URL('../database/ledger.service.ts', import.meta.url).pathname,
+  ],
+  ['gateway', new URL('../chat/chat.gateway.ts', import.meta.url).pathname],
+]);
 
 /** Declared so the parameter reaches the OpenAPI document. `SOURCES` still
  * decides which names resolve. */
@@ -137,11 +142,11 @@ export class VitalsController {
     code: string;
   }> {
     const { name } = params;
-    const path = SOURCES[name];
+    const path = SOURCES.get(name);
     if (path === undefined) {
       throw new HttpError(
         HttpStatusCode.NOT_FOUND,
-        `no such source - try ${Object.keys(SOURCES).join(' or ')}`,
+        `no such source - try ${[...SOURCES.keys()].join(' or ')}`,
       );
     }
 

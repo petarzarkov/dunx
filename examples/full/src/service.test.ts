@@ -42,7 +42,6 @@ beforeAll(async () => {
   app = await createApp();
   // Port 0: the suite must not collide with a `bun start` already on 3000.
   baseUrl = await app.listen(0);
-  // `main.ts` does this after its own listen; without it the route answers 503.
   app.get(SelfOrigin).set(baseUrl);
   client = testClient(baseUrl);
 });
@@ -652,6 +651,12 @@ it('refuses a source name that is not on the allow-list', async () => {
 
   const unknown = await json('demo/source/nope');
   expect(unknown.status).toBe(404);
+
+  // Each answered 500 while `SOURCES` was an object literal.
+  for (const key of ['__proto__', 'constructor', 'toString']) {
+    const probe = await json(`demo/source/${key}`);
+    expect(probe.status).toBe(404);
+  }
 });
 
 it('fails a flaky upstream twice per key, not twice per process', async () => {

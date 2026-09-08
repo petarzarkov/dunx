@@ -1,9 +1,8 @@
 import { HttpError, HttpStatusCode } from '@dunx/http';
 
 /** The origin this process is reachable at, handed in once `listen()` resolved.
- * Nothing else can tell `RetryController` where the app's own routes are:
- * `config.get('port')` is 0 under a suite, `req.url` is built from `Host`, and
- * the live server reaches `ClientAddress` privately with no post-`listen` hook. */
+ * Nothing else knows it: `config.get('port')` is 0 under a suite, `req.url` is
+ * built from `Host`, and the live server reaches `ClientAddress` privately. */
 export class SelfOrigin {
   #origin: string | undefined;
 

@@ -36,8 +36,7 @@ export class RetryController {
     // A fresh key per call, so the upstream fails its first two every time
     // rather than only for the first visitor after a deploy.
     const key = Math.random().toString(36).slice(2, 10);
-    // Nothing the caller sent reaches this: `req.url`'s port made the route a
-    // loopback port scanner.
+    // Nothing the caller sent reaches this: `req.url`'s port made it a scanner.
     const target = new URL(
       `/api/upstream/flaky?key=${key}`,
       this.origin.require(),
