@@ -1,12 +1,7 @@
-import {
-  Controller,
-  Get,
-  SkipThrottle,
-  type Input,
-  type RouteSchemas,
-} from '@dunx/http';
+import { Controller, Get } from '@dunx/http';
 import { FetchError, HttpService } from '@dunx/http/client';
 import { ApiDoc } from '@dunx/openapi';
+import { SelfOrigin } from './self-origin.js';
 
 interface Attempt {
   readonly attempt: number;
@@ -26,12 +21,14 @@ interface Attempt {
     'the retry policy made, with the delay between them.',
 })
 @Controller('demo')
-@SkipThrottle()
 export class RetryController {
-  constructor(private readonly http: HttpService) {}
+  constructor(
+    private readonly http: HttpService,
+    private readonly origin: SelfOrigin,
+  ) {}
 
   @Get('/retry')
-  async retry({ req }: Input<RouteSchemas>): Promise<{
+  async retry(): Promise<{
     key: string;
     attempts: readonly Attempt[];
     elapsedMs: number;
@@ -40,14 +37,11 @@ export class RetryController {
     // A fresh key per call, so the upstream fails its first two every time
     // rather than only for the first visitor after a deploy.
     const key = Math.random().toString(36).slice(2, 10);
-    // Loopback plus the request's port, not `req.url` whole: `Host` decides
-    // that url, so a caller could choose which host this server calls. The port
-    // still comes from the request, since the app's own url is unknown until
-    // `listen()` has run - the reason `UpstreamModule` sets no `baseUrl`. So a
-    // caller can steer the port within loopback, on a demo route.
-    const { port } = new URL(req.url);
+    // Nothing the caller sent reaches this. Deriving the port from `req.url`
+    // made the route a loopback port scanner.
     const target = new URL(
-      `http://127.0.0.1${port === '' ? '' : `:${port}`}/api/upstream/flaky?key=${key}`,
+      `/api/upstream/flaky?key=${key}`,
+      this.origin.require(),
     );
 
     const attempts: Attempt[] = [];

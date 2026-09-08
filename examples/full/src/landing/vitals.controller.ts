@@ -102,8 +102,7 @@ export class VitalsController {
         sockets: http.pendingWebSockets,
         since: http.since,
         routes: http.routes
-          // The page's own assets are served off the unmatched path, so this
-          // would otherwise top the table on every visit. Still in the snapshot.
+          // Served off the unmatched path, so it would top the table always. Still in the snapshot.
           .filter((route) => route.route !== '(unmatched)')
           .sort((a, b) => b.count - a.count)
           .slice(0, 6)

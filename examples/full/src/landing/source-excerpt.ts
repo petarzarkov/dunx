@@ -3,6 +3,10 @@
  * Separate from `VitalsController` so the shapes can be tested without a server.
  */
 
+/** Where the previous class's body ends. A column-0 `}` is not anchored to brace
+ * depth: a re-wrapped object literal closing there bounded the search short. */
+const CLASS_DECLARATION = /^(?:export\s+)?(?:abstract\s+)?class\s/;
+
 /** The close of a parameter list, whether or not the body is empty. */
 const CONSTRUCTOR_END = /^\s*\)\s*(?:\{|$)/;
 const CONSTRUCTOR_OPEN = /^\s*constructor\(/;
@@ -18,10 +22,9 @@ export const constructorExcerpt = (source: string): string => {
   const opens = lines.findIndex((line) => line.startsWith('export class '));
   if (opens === -1) return '';
 
-  // Bounded by the class body's close: unbounded, a first class with no
-  // constructor borrowed the next class's.
+  // Unbounded, a first class with no constructor borrowed the next class's.
   const ends = lines.findIndex(
-    (line, index) => index > opens && line.startsWith('}'),
+    (line, index) => index > opens && CLASS_DECLARATION.test(line),
   );
   const limit = ends === -1 ? lines.length : ends;
 

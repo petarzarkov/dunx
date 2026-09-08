@@ -4,6 +4,7 @@ import { StatsModule } from '../stats/stats.module.js';
 import { UpstreamModule } from '../upstream/upstream.module.js';
 import { LandingMiddleware } from './landing.middleware.js';
 import { RetryController } from './retry.controller.js';
+import { SelfOrigin } from './self-origin.js';
 import { VitalsController } from './vitals.controller.js';
 
 /**
@@ -22,7 +23,7 @@ import { VitalsController } from './vitals.controller.js';
     UpstreamModule,
   ],
   controllers: [VitalsController, RetryController],
-  providers: [LandingMiddleware],
-  exports: [LandingMiddleware],
+  providers: [LandingMiddleware, SelfOrigin],
+  exports: [LandingMiddleware, SelfOrigin],
 })
 export class LandingModule {}

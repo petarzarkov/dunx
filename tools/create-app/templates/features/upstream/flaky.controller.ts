@@ -20,12 +20,9 @@ import {
 export class FlakyController {
   readonly #failures = new Map<string, number>();
 
-  /**
-   * The key is caller-supplied and this route is unthrottled on a public demo,
-   * so without a bound a visitor walking `?key=` grows the map for the life of
-   * the process. `Map` keeps insertion order, so the oldest goes first; an
-   * evicted key starts its two failures over.
-   */
+  /** The key is caller-supplied and this route is unthrottled, so an unbounded
+   * map grows for the life of the process. `Map` keeps insertion order, so the
+   * oldest goes first and an evicted key starts its two failures over. */
   static readonly #MAX_KEYS = 256;
 
   /** How many calls on a key fail before it recovers. */

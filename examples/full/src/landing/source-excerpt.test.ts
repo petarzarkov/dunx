@@ -90,3 +90,24 @@ it('does not borrow a later class constructor for an earlier one', () => {
 
   expect(constructorExcerpt(source)).toBe('export class Marker {');
 });
+
+it('is not bounded by a brace that closes at column zero', () => {
+  // A column-0 `}` cut the search off above the constructor, and the panel fell
+  // back to the class line.
+  const source = [
+    'export class Wide {',
+    '  readonly shape = {',
+    '    a: 1,',
+    '};',
+    '',
+    '  constructor(private readonly logger: Logger) {}',
+    '}',
+  ].join('\n');
+
+  expect(constructorExcerpt(source)).toBe(
+    [
+      'export class Wide {',
+      '  constructor(private readonly logger: Logger) {}',
+    ].join('\n'),
+  );
+});
