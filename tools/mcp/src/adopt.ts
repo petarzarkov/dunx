@@ -54,7 +54,10 @@ export const adoptionTools = (): readonly ToolDefinition[] => [
         detail:
           'Asks which features to include and writes them. Piped or in CI it asks nothing and writes the minimal template. Call dunx_scaffold for the feature list.',
       },
-      addToExistingProject: scaffold.steps(),
+      addToExistingProject: {
+        commands: scaffold.steps(),
+        bunfig: scaffold.bunfig(),
+      },
       rules: RULES,
       guide: guide.titles(),
       thenCall: {
@@ -69,24 +72,31 @@ export const adoptionTools = (): readonly ToolDefinition[] => [
   },
   {
     name: 'dunx_guide',
-    description:
-      'The written guide, bundled in this package: 23 chapters covering providers, modules, controllers, validation, lifecycle, middleware and guards, websockets, OpenAPI, testing, configuration, logging, database, queues, scheduling, authentication, files, deployment, health checks and metrics. No arguments returns the index. `topic` returns one chapter in full; `search` returns matching lines across every chapter, which is the cheaper first call when the question does not name a chapter.',
+    description: `The written guide, bundled in this package: ${GUIDE.length} chapters covering providers, modules, controllers, validation, lifecycle, middleware and guards, websockets, OpenAPI, testing, configuration, logging, database, queues, scheduling, authentication, files, deployment, health checks and metrics. No arguments returns the index. \`topic\` returns one chapter in full; \`search\` returns matching lines across every chapter, which is the cheaper first call when the question does not name a chapter.`,
     inputSchema: schema({
       topic: str(
         'One chapter, by slug (06-validation) or by name (validation). Returns the whole chapter.',
       ),
       search: str(
-        'Matching lines across every chapter, with the chapter and line number of each.',
+        'Matching lines across every chapter, with the chapter and line number of each. Takes precedence over `topic` when both are given.',
       ),
     }),
     run: (raw) => {
       const args = new Args(raw);
       const search = args.text('search');
+      const topic = args.text('topic');
       if (search !== undefined) {
-        return { query: search, hits: guide.search(search) };
+        return {
+          query: search,
+          ...guide.search(search),
+          ...(topic === undefined
+            ? {}
+            : {
+                note: `\`topic\` was ignored: \`search\` takes precedence. Call again with only \`topic: "${topic}"\` for the chapter itself.`,
+              }),
+        };
       }
 
-      const topic = args.text('topic');
       if (topic === undefined) return { chapters: guide.index() };
 
       const chapter = guide.chapter(topic);
@@ -111,7 +121,7 @@ export const adoptionTools = (): readonly ToolDefinition[] => [
     inputSchema: schema({
       feature: str('Only features whose name contains this.'),
       starter: bool(
-        'Include the source of the minimal app - five files, one route.',
+        'Include the source of the minimal app: five TypeScript files, one route, plus bunfig.toml and tsconfig.json.',
       ),
     }),
     run: (raw) => {

@@ -9,7 +9,16 @@ import { CORPUS_PATH, renderCorpus } from './gen-mcp-corpus.js';
 describe('the bundled corpus', () => {
   it('matches what the generator renders from the sources today', async () => {
     const committed = await Bun.file(CORPUS_PATH).text();
-    expect(committed).toBe(await renderCorpus());
+    const rendered = await renderCorpus();
+    // Hashed rather than compared directly: the two are 440 KB each, and a failing
+    // `toBe` prints both. The message is the actionable half.
+    const digest = (text: string): string =>
+      new Bun.CryptoHasher('sha256').update(text).digest('hex');
+    expect(
+      digest(committed) === digest(rendered)
+        ? 'up to date'
+        : 'stale - a source changed since the corpus was generated, run `bun run gen:mcp`',
+    ).toBe('up to date');
   });
 
   it('carries every guide chapter', async () => {

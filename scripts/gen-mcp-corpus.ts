@@ -13,6 +13,7 @@
  * describe a template that stopped working.
  */
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FEATURES } from '../tools/create-app/src/features.js';
 import type { GuideDoc } from '../tools/mcp/src/guide.js';
 import type {
@@ -21,7 +22,9 @@ import type {
   StarterFile,
 } from '../tools/mcp/src/scaffold.js';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// `fileURLToPath` rather than `.pathname`, which leaves a space as `%20` and
+// makes every read below fail on a checkout path that has one.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BLOB = 'https://github.com/petarzarkov/dunx/blob/main';
 const OUT = join(ROOT, 'tools/mcp/src/generated.ts');
 
@@ -40,6 +43,8 @@ const rewriteLinks = (markdown: string): string =>
 /** The first paragraph after the `#` heading, which is what the index shows. */
 const summarize = (lines: readonly string[]): string => {
   const start = lines.findIndex((line) => line.startsWith('# '));
+  // No heading means no summary. Reading from line 0 instead took the badge row.
+  if (start === -1) return '';
   const paragraph: string[] = [];
 
   for (const line of lines.slice(start + 1)) {
@@ -148,7 +153,7 @@ const readScaffold = (): readonly ScaffoldFeature[] =>
 
 /**
  * `JSON.parse` of one string literal rather than an object literal spanning ten
- * thousand lines: it keeps the file at six lines, which is what keeps `max-lines`
+ * thousand lines: it keeps the file at thirteen lines, which is what keeps `max-lines`
  * and `oxfmt` from having an opinion about generated data. Bun parses the whole
  * corpus in under a millisecond.
  */

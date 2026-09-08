@@ -46,7 +46,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun ../../scripts/gen-mcp-corpus.ts && bun ../../scripts/build-package.ts",
+    "build": "bun ../../scripts/build-package.ts",
     "test": "bun test --bail",
     "test:cov": "bun test --coverage",
     "typecheck": "tsc --noEmit"

@@ -37,7 +37,7 @@ Three answer with no app, and are served whether or not an entry was given:
 | Tool             | Answers                                                                      |
 | ---------------- | ---------------------------------------------------------------------------- |
 | `dunx_start`     | The runtime, the two ways to get an app, and the rules that fail at boot     |
-| `dunx_guide`     | The 23 written chapters: the index, one chapter, or a search across them all |
+| `dunx_guide`     | Every written chapter: the index, one chapter, or a search across them all  |
 | `dunx_scaffold`  | Every feature `bunx @dunx/create-app` generates, and the smallest app        |
 
 Six read the app, and appear once an entry is given:
@@ -70,10 +70,10 @@ absolute.
 - It reads through the framework's own readers - `providersOf`, `modulesOf`,
   `routesOf`, `gatewaysOf` - so an answer cannot drift from what the container and
   the router actually do.
-- The guide, the starter and the feature catalogue are bundled at build time from
+- The guide, the starter and the feature catalogue are bundled into the package from
   `docs/guide`, `examples/minimal` and `@dunx/create-app`. All three are what CI
-  builds and boots, and a test fails when the bundle no longer matches them. Nothing
-  is fetched at run time.
+  builds and boots, and a test fails when the committed bundle no longer matches
+  them. Nothing is fetched at run time.
 - No dependencies. `bunx @dunx/mcp` resolves nothing.
 - `@dunx/openapi` is an optional peer, reached with `await import()`. Without it the
   other eight tools work and `dunx_openapi` reports what to install.

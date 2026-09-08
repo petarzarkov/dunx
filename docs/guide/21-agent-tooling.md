@@ -76,9 +76,9 @@ model that asked about one path. Omitting them means everything.
 ### Start with dunx_start, then the overview
 
 `dunx_start` is the call worth making before writing any dunx. It costs about 4 KB
-and carries the runtime, the scaffold command, the three commands that add dunx to a
-project that already exists, an index of the guide, and the rules that fail at boot
-rather than at review:
+and carries the runtime, the scaffold command, the two install commands and the
+`bunfig.toml` that add dunx to a project that already exists, an index of the guide,
+and the rules that fail at boot rather than at review:
 
 ```json
 {
@@ -89,8 +89,8 @@ rather than at review:
 
 `dunx_guide` then answers the chapter-level questions. With no arguments it returns
 the index; `search` returns matching lines with the chapter and line number of each,
-which is the cheaper first call when the question does not name a chapter; `topic`
-returns one chapter in full.
+capped at five per chapter so a common word still reaches the chapter that answers
+it, and reports how many it left out; `topic` returns one chapter in full.
 
 `dunx_overview` is the call worth making first once there is an app. It says how big the app is and
 whether it would boot, without returning the graph:

@@ -41,13 +41,15 @@ const ask = async (
 };
 
 describe('the protocol subset', () => {
-  it('answers initialize with a version and both capabilities', async () => {
+  it('answers initialize with a version and only the capabilities it serves', async () => {
     const result = (await ask('initialize'))['result'] as Record<
       string,
       unknown
     >;
     expect(result['protocolVersion']).toBe(PROTOCOL_VERSION);
-    expect(result['capabilities']).toEqual({ tools: {}, resources: {} });
+    // No resources were given to this caller, so none are advertised. Claiming
+    // them made a client expect documents that `resources/read` then refused.
+    expect(result['capabilities']).toEqual({ tools: {} });
     expect(result['serverInfo']).toEqual(INFO);
   });
 
@@ -343,6 +345,19 @@ describe('resources', () => {
     );
     return JSON.parse(line ?? '{}') as Record<string, unknown>;
   };
+
+  it('is advertised at initialize once resources are served', async () => {
+    const line = await handle(
+      { jsonrpc: '2.0', id: 1, method: 'initialize' },
+      TOOLS,
+      INFO,
+      RESOURCES,
+    );
+    const parsed = JSON.parse(line ?? '{}') as {
+      result: { capabilities: unknown };
+    };
+    expect(parsed.result.capabilities).toEqual({ tools: {}, resources: {} });
+  });
 
   it('lists them without their readers', async () => {
     const { resources } = (await askFor('resources/list'))['result'] as {

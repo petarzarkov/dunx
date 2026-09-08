@@ -6,15 +6,16 @@ export type {
 } from './protocol.js';
 export { toolsFor } from './tools.js';
 // The half that needs no app: how to start, the written guide, and what
-// `bunx @dunx/create-app` can generate. The data is bundled at build time from
+// `bunx @dunx/create-app` can generate. The data is bundled into this package from
 // `docs/guide`, `examples/minimal` and `tools/create-app`, so a server of your own
 // can serve the same corpus without shipping a second copy of it.
 export { adoptionResources, adoptionTools } from './adopt.js';
 export { GUIDE, MINIMAL, SCAFFOLD } from './generated.js';
 export { Guide, GUIDE_SCHEME } from './guide.js';
-export type { GuideDoc, GuideEntry, GuideHit } from './guide.js';
+export type { GuideDoc, GuideEntry, GuideHit, GuideSearch } from './guide.js';
 export { Scaffold } from './scaffold.js';
 export type {
+  Bunfig,
   ScaffoldFeature,
   Starter,
   StarterFile,

@@ -31,10 +31,22 @@ export interface GuideHit {
 
 /** Long enough to answer, short enough that a search is not a whole chapter. */
 const MAX_HITS = 40;
+/**
+ * Per chapter, so the overall cap cannot be spent inside `01-introduction` before
+ * the search reaches the chapter that answers the question. A flat cap did exactly
+ * that for any common word.
+ */
+const MAX_HITS_PER_DOC = 5;
 const MAX_HIT_LENGTH = 200;
 
+export interface GuideSearch {
+  readonly hits: readonly GuideHit[];
+  /** Hits found beyond the ones returned. Zero means the list is everything. */
+  readonly omitted: number;
+}
+
 /**
- * The written guide, bundled at build time from `docs/guide/`.
+ * The written guide, bundled into this package from `docs/guide/`.
  *
  * It is here rather than fetched because the question it answers is asked before
  * there is an app to read, often before there is a network policy that allows
@@ -98,24 +110,30 @@ export class Guide {
    * is usually one paragraph, so the hit plus its chapter slug is what lets a
    * caller decide whether to spend the tokens on `topic`.
    */
-  search(query: string, limit = MAX_HITS): readonly GuideHit[] {
+  search(query: string, limit = MAX_HITS): GuideSearch {
     const needle = query.toLowerCase();
     const hits: GuideHit[] = [];
+    let omitted = 0;
 
     for (const doc of this.docs) {
+      let taken = 0;
       const lines = doc.body.split('\n');
       for (const [index, line] of lines.entries()) {
         if (!line.toLowerCase().includes(needle)) continue;
+        if (taken >= MAX_HITS_PER_DOC || hits.length >= limit) {
+          omitted += 1;
+          continue;
+        }
         hits.push({
           slug: doc.slug,
           line: index + 1,
           text: line.trim().slice(0, MAX_HIT_LENGTH),
         });
-        if (hits.length >= limit) return hits;
+        taken += 1;
       }
     }
 
-    return hits;
+    return { hits, omitted };
   }
 
   /**

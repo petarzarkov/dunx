@@ -28,9 +28,15 @@ export interface Step {
   readonly why: string;
 }
 
+export interface Bunfig {
+  readonly path: string;
+  readonly contents: string;
+  readonly why: string;
+}
+
 /**
  * What `bunx @dunx/create-app` can generate, and the smallest app it generates,
- * bundled at build time from `tools/create-app`'s own catalogue and from
+ * bundled into this package from `tools/create-app`'s own catalogue and from
  * `examples/minimal`. Both are what CI builds and boots, so neither can describe a
  * template that no longer works.
  *
@@ -56,12 +62,8 @@ export class Scaffold {
   }
 
   /**
-   * The commands, in order, for an app that is not being scaffolded - an existing
+   * The install commands for an app that is not being scaffolded - an existing
    * project adopting dunx, which is the case `bunx @dunx/create-app` does not cover.
-   *
-   * The preload is the step with no substitute and the one an agent skips:
-   * `@dunx/transform` records each class's constructor parameter types at load
-   * time, and without it a provider is constructed with no arguments.
    */
   steps(): readonly Step[] {
     return [
@@ -73,10 +75,28 @@ export class Scaffold {
         run: `bun add -d ${this.minimal.devDependencies.join(' ')}`,
         why: 'A test app with overrides, against a real server on port 0.',
       },
-      {
-        run: 'echo \'preload = ["@dunx/transform/preload"]\' >> bunfig.toml',
-        why: 'Constructor injection needs it. Without it the container fails at boot naming the parameter it could not resolve, and `[test]` needs its own copy of the line.',
-      },
     ];
+  }
+
+  /**
+   * The file rather than a command that appends to it. `echo 'preload = [...]' >>
+   * bunfig.toml` writes a bare key onto the end, so a file ending inside `[install]`
+   * or `[run]` takes the key into that table and the top-level preload never
+   * applies: every provider with constructor parameters then fails at boot. It also
+   * left out the `[test]` copy, which is a second boot failure under `bun test`.
+   *
+   * The contents are the starter's own `bunfig.toml`, so this cannot drift from
+   * what `bunx @dunx/create-app` writes.
+   */
+  bunfig(): Bunfig | undefined {
+    const file = this.minimal.files.find(
+      (entry) => entry.path === 'bunfig.toml',
+    );
+    if (file === undefined) return undefined;
+    return {
+      path: 'bunfig.toml',
+      contents: file.body,
+      why: 'Constructor injection needs the preload, and `[test]` needs its own copy. Merge these keys into an existing bunfig.toml at the top level rather than appending them, or a trailing table captures them.',
+    };
   }
 }

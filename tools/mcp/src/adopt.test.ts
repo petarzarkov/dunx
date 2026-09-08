@@ -62,15 +62,48 @@ describe('the guide reader', () => {
     expect(guide.candidates('nothing')).toEqual([]);
   });
 
-  it('searches lines rather than chapters, and stops at the limit', () => {
-    const hits = guide.search('zod');
+  it('searches lines rather than chapters, and reports what it left out', () => {
+    const { hits, omitted } = guide.search('zod');
     expect(hits).toHaveLength(3);
+    expect(omitted).toBe(0);
     expect(hits[0]).toEqual({
       slug: '01-introduction',
       line: 3,
       text: 'A line about zod.',
     });
-    expect(guide.search('zod', 1)).toHaveLength(1);
+
+    const capped = guide.search('zod', 1);
+    expect(capped.hits).toHaveLength(1);
+    expect(capped.omitted).toBe(2);
+  });
+
+  /**
+   * A flat cap was spent inside the first chapter, so a common word never reached
+   * the chapter that answers the question.
+   */
+  it('caps hits per chapter so a later chapter is still reachable', () => {
+    const noisy = new Guide([
+      {
+        slug: '01-introduction',
+        title: 'Introduction',
+        summary: '',
+        sections: [],
+        body: Array.from({ length: 40 }, () => 'zod').join('\n'),
+      },
+      {
+        slug: '06-validation',
+        title: 'Validation',
+        summary: '',
+        sections: [],
+        body: 'zod lives here\n',
+      },
+    ]);
+    const { hits, omitted } = noisy.search('zod');
+    expect(hits.filter((hit) => hit.slug === '01-introduction')).toHaveLength(
+      5,
+    );
+    expect(hits.some((hit) => hit.slug === '06-validation')).toBe(true);
+    expect(omitted).toBe(35);
   });
 
   it('serves each chapter as a markdown resource', () => {
@@ -115,9 +148,31 @@ describe('the scaffold reader', () => {
 
   it('builds the install steps out of the starter manifest', () => {
     const steps = scaffold.steps();
+    expect(steps).toHaveLength(2);
     expect(steps[0]?.run).toBe('bun add @dunx/core');
     expect(steps[1]?.run).toBe('bun add -d @dunx/testing');
-    expect(steps[2]?.run).toContain('@dunx/transform/preload');
+  });
+
+  /**
+   * It used to be a third step: `echo 'preload = [...]' >> bunfig.toml`. An append
+   * writes a bare key onto the end of the file, so a bunfig ending inside a table
+   * takes the key into that table and the top-level preload never applies.
+   */
+  it('hands over the bunfig file rather than a command that appends to it', () => {
+    const withBunfig = new Scaffold([], {
+      ...starter,
+      files: [
+        {
+          path: 'bunfig.toml',
+          body: 'preload = ["@dunx/transform/preload"]\n',
+        },
+      ],
+    });
+    expect(withBunfig.bunfig()).toMatchObject({ path: 'bunfig.toml' });
+    expect(withBunfig.bunfig()?.contents).toContain('@dunx/transform/preload');
+    for (const step of withBunfig.steps()) expect(step.run).not.toContain('>>');
+    // Absent from the starter is answerable rather than a crash.
+    expect(scaffold.bunfig()).toBeUndefined();
   });
 });
 
@@ -140,7 +195,17 @@ describe('the tools that need no app', () => {
     expect(start['scaffold']).toMatchObject({
       command: 'bunx @dunx/create-app my-api',
     });
-    expect(start['addToExistingProject']).toHaveLength(3);
+    const adopt = start['addToExistingProject'] as {
+      commands: unknown[];
+      bunfig: { contents: string };
+    };
+    expect(adopt.commands).toHaveLength(2);
+    // Both the top-level preload and the `[test]` copy, which the old shell
+    // append never wrote.
+    expect(adopt.bunfig.contents).toContain(
+      'preload = ["@dunx/transform/preload"]',
+    );
+    expect(adopt.bunfig.contents).toContain('[test]');
     expect(start['rules']).toHaveLength(4);
     expect(start['guide']).toHaveLength(GUIDE.length);
   });
@@ -151,6 +216,12 @@ describe('the tools that need no app', () => {
    */
   it('keeps dunx_start under 6 KB', async () => {
     expect(JSON.stringify(await call('dunx_start')).length).toBeLessThan(6144);
+  });
+
+  it('states the real chapter count in the description a model reads', () => {
+    expect(tool('dunx_guide').description).toContain(
+      `${GUIDE.length} chapters`,
+    );
   });
 
   it('answers dunx_guide with the index, a chapter, a search, and a miss', async () => {
@@ -165,6 +236,14 @@ describe('the tools that need no app', () => {
 
     const search = await call('dunx_guide', { search: 'RouteSchemas' });
     expect((search['hits'] as unknown[]).length).toBeGreaterThan(0);
+    expect(search['omitted']).toBeNumber();
+
+    // Both given is answerable rather than silently dropping one of them.
+    const both = await call('dunx_guide', {
+      search: 'zod',
+      topic: 'validation',
+    });
+    expect(both['note']).toContain('topic');
 
     const miss = await call('dunx_guide', { topic: 'kubernetes' });
     expect(miss['error']).toContain('kubernetes');
@@ -241,11 +320,9 @@ describe('the rules dunx_start states', () => {
     expect(bunfig).toContain('preload = ["@dunx/transform/preload"]');
 
     const start = (await call('dunx_start')) as {
-      addToExistingProject: { run: string }[];
+      addToExistingProject: { bunfig: { contents: string } };
     };
-    expect(start.addToExistingProject[2]?.run).toContain(
-      'preload = ["@dunx/transform/preload"]',
-    );
+    expect(start.addToExistingProject.bunfig.contents).toBe(bunfig);
   });
 
   it('installs what the minimal example depends on, and nothing else', async () => {

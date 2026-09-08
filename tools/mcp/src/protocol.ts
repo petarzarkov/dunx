@@ -138,7 +138,13 @@ export const handle = async (
   if (call.method === 'initialize') {
     return reply(call.id, {
       protocolVersion: PROTOCOL_VERSION,
-      capabilities: { tools: {}, resources: {} },
+      // Only what this caller actually serves. Advertising `resources`
+      // unconditionally told an embedder's client to expect documents that a
+      // following `resources/read` then answered `Unknown resource` for.
+      capabilities: {
+        tools: {},
+        ...(resources.length > 0 ? { resources: {} } : {}),
+      },
       serverInfo,
     });
   }
