@@ -80,11 +80,12 @@ bisecting the stack a layer at a time found a leak in `Bun.RedisClient` on its o
 and a second, separate one in bullmq's Bun adapter. Neither is reachable from
 userland. All three have a minimal reproduction, ready to file.
 
-| #                                                                          | Symptom                                                                       | Layer  |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------ |
-| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | ~~a pending connect outlives `close()`~~ **fixed in Bun 1.4**                 | Bun    |
-| [B](#leak-b---bullmq-disconnect-cannot-cancel-its-own-reconnect)           | a `Worker` on an unreachable server holds the loop after `close()`            | bullmq |
-| [C](#defect-c---no-connection-is-ever-named-so-getworkers-is-always-empty) | ~~`getWorkers()` always `[]`~~ **fixed - was dunx's own `duplicate` wrapper** | dunx   |
+| #                                                                          | Symptom                                                                               | Layer  |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------ |
+| [A](#leak-a---bun-a-connect-that-never-completes-outlives-close)           | ~~a pending connect outlives `close()`~~ **fixed in Bun 1.4**                         | Bun    |
+| [B](#leak-b---bullmq-disconnect-cannot-cancel-its-own-reconnect)           | a `Worker` on an unreachable server holds the loop after `close()`                    | bullmq |
+| [C](#defect-c---no-connection-is-ever-named-so-getworkers-is-always-empty) | ~~`getWorkers()` always `[]`~~ **fixed - was dunx's own `duplicate` wrapper**         | dunx   |
+| [D](#defect-d---a-duplicate-connection-had-no-teardown-owner)              | ~~a duplicate socket outlived shutdown~~ **fixed - dunx's `duplicate` wrapper again** | dunx   |
 
 ## The measurement that separated them
 
@@ -187,6 +188,54 @@ A userland escape hatch exists but is a cast through `unknown` into a field bull
 does not export - `closing = true` plus `clearTimeout(reconnectTimer)`. That is a
 fork by another name and it would break on a patch release, so it is **not** in
 `@dunx/infra/queue`. Fix it upstream, or wait for it.
+
+## Defect D - a duplicate connection had no teardown owner
+
+> **FIXED, and dunx's own, in the same wrapper as C.** `QueueConnection` recorded
+> only the clients `client()` built. bullmq calls `duplicate()` for any connection
+> it may block on, so that socket belonged to nobody: `onShutdown` never reached
+> it, and `open` under-reported by one per blocking object.
+
+Measured against a live broker, counting `duplicate()` calls on the client handed
+over:
+
+| bullmq object | `duplicate()` calls |
+| ------------- | ------------------- |
+| `Queue`       | 0                   |
+| `Worker`      | 1                   |
+| `QueueEvents` | 1                   |
+
+So this predates `JobEvents` by as long as `WorkerFactory` has existed. Sockets
+held by one `QueueConnection`, before and after `onShutdown`:
+
+| object        | before | after |
+| ------------- | ------ | ----- |
+| `Worker`      | 2      | 0     |
+| `QueueEvents` | 2      | 0     |
+
+Both read 1 before the fix, and the second socket was left open.
+
+The fix is not a force-close of a captured `raw`, which is what the review first
+suggested. A duplicate is constructed with **no `raw` at all**: bullmq builds one
+from a `rawFactory` on first connect, which is how it stopped sending duplicates
+to the default server ([#4582](https://github.com/taskforcesh/bullmq/issues/4582)).
+So the socket is read off the adapter at teardown instead of captured when the
+client is handed out - `undefined` immediately, a `Bun.RedisClient` once
+connected. `disconnect()` is raw-safe, so a duplicate that never connected tears
+down without a socket to close.
+
+**This does not touch leak B.** A `Worker` on an unreachable broker still holds
+the loop after `close()`, `ShutdownHooks`' forced exit still stands, and the
+numbers above are sockets released rather than a process that now exits.
+
+What changed is ownership: every adapter a `QueueConnection` hands out or bullmq
+derives from one is disconnected and closed by it, within a bounded teardown.
+`onShutdown` makes at most `TEARDOWN_PASSES` passes, taking each pass's adapters
+out before walking them, so one derived during a pass belongs to the next. The
+bound is what iterating the live array lacked: an adapter that derived another on
+every `disconnect()` would have been walked forever, and a livelocked shutdown is
+worse than a leaked socket. Anything still arriving after the last pass is logged
+and left to the runtime, which is the one case ownership does not cover.
 
 ## Defect C - no connection is ever named, so `getWorkers()` is always empty
 

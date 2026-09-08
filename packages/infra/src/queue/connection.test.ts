@@ -102,3 +102,184 @@ describe('the raw client bullmq reconnects with', () => {
     source.onShutdown();
   });
 });
+
+/**
+ * bullmq calls `duplicate()` for any connection it may block on - `Worker` and
+ * `QueueEvents` each once, `Queue` never - and `#open` used to hold only the
+ * clients `client()` built, so that socket had no teardown owner.
+ *
+ * Nothing here waits on a broker: a duplicate reports its own `disconnect`, and
+ * whether it ever connected is irrelevant to who owns it.
+ */
+describe('duplicate ownership', () => {
+  /** Replaces `disconnect` with a recorder, returning what it recorded. */
+  const watchDisconnect = (client: unknown): { calls: number } => {
+    const spy = { calls: 0 };
+    const target = client as { disconnect: () => void };
+    const inner = target.disconnect.bind(target);
+    target.disconnect = (): void => {
+      spy.calls += 1;
+      inner();
+    };
+    return spy;
+  };
+
+  it('tears down a duplicate, which used to belong to nobody', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => unknown;
+    };
+    const copy = client.duplicate({ connectionName: 'bull:cXVldWU=' });
+
+    const watched = watchDisconnect(copy);
+    source.onShutdown();
+
+    expect(watched.calls).toBe(1);
+  });
+
+  it('tears down a duplicate of a duplicate', () => {
+    const source = connection();
+    const first = source.client() as unknown as {
+      duplicate: (options: unknown) => { duplicate: (o: unknown) => unknown };
+    };
+    const second = first.duplicate({});
+    const third = second.duplicate({});
+
+    const watched = [watchDisconnect(second), watchDisconnect(third)];
+    source.onShutdown();
+
+    expect(watched.map((w) => w.calls)).toEqual([1, 1]);
+  });
+
+  it('tears down a duplicate that never got a socket', () => {
+    // A duplicate is built with no `raw`: bullmq creates one from a `rawFactory`
+    // on first connect. So teardown has to cope with there being nothing to
+    // close, which is the case for every duplicate that never connected.
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => { raw?: unknown };
+    };
+    const copy = client.duplicate({});
+
+    expect(copy.raw).toBeUndefined();
+    expect(() => source.onShutdown()).not.toThrow();
+  });
+
+  it('does not count an unconnected duplicate as an open socket', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => unknown;
+    };
+    client.duplicate({});
+
+    // Nothing reached the broker at `127.0.0.1:1`, so nothing is open - the
+    // count is sockets, not adapters.
+    expect(source.open).toBe(0);
+    source.onShutdown();
+  });
+
+  it('forgets every adapter once shut down, so a second call is a no-op', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => unknown;
+    };
+    const copy = client.duplicate({});
+
+    source.onShutdown();
+    const watched = watchDisconnect(copy);
+    source.onShutdown();
+
+    expect(watched.calls).toBe(0);
+  });
+});
+
+/**
+ * Teardown is the last step of shutdown, so nothing in it may abandon what
+ * follows. Both cases here are deterministic: the adapters are real, only their
+ * `disconnect` is replaced, and no broker is involved.
+ */
+describe('teardown robustness', () => {
+  it('does not orphan the adapters after one that throws', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => { disconnect: () => void };
+    };
+    const thrower = client.duplicate({});
+    const after = client.duplicate({});
+
+    thrower.disconnect = (): never => {
+      throw new Error('already torn down');
+    };
+    let reached = 0;
+    const inner = after.disconnect.bind(after);
+    after.disconnect = (): void => {
+      reached += 1;
+      inner();
+    };
+
+    // The pass used to stop at the throw, and `#open` had already been emptied,
+    // so nothing later would retry the rest.
+    expect(() => source.onShutdown()).not.toThrow();
+    expect(reached).toBe(1);
+  });
+
+  it('tears down an adapter that arrives during teardown', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => { disconnect: () => void };
+    };
+    const first = client.duplicate({});
+
+    // `disconnect()` with no argument cannot reconnect, but a `close`/`end`
+    // listener could duplicate, and that adapter still needs an owner.
+    //
+    // Recorded as it is created, not afterwards: asserting that a second
+    // `onShutdown` disconnects nothing would also pass for a regression that
+    // dropped the late adapter from `#open` without tearing it down.
+    let late: { disconnect: () => void } | undefined;
+    let lateCalls = 0;
+    const inner = first.disconnect.bind(first);
+    first.disconnect = (): void => {
+      if (late === undefined) {
+        const derived = client.duplicate({}) as { disconnect: () => void };
+        const derivedInner = derived.disconnect.bind(derived);
+        derived.disconnect = (): void => {
+          lateCalls += 1;
+          derivedInner();
+        };
+        late = derived;
+      }
+      inner();
+    };
+
+    source.onShutdown();
+
+    expect(late).toBeDefined();
+    expect(lateCalls).toBe(1);
+  });
+
+  it('stops rather than livelocking on an adapter that always duplicates', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => { disconnect: () => void };
+    };
+
+    // Pathological: every teardown derives another adapter. Walking the live
+    // array would never finish.
+    const arm = (adapter: { disconnect: () => void }): void => {
+      const inner = adapter.disconnect.bind(adapter);
+      adapter.disconnect = (): void => {
+        arm(client.duplicate({}));
+        inner();
+      };
+    };
+    arm(client.duplicate({}));
+
+    const started = Bun.nanoseconds();
+    source.onShutdown();
+    const ms = (Bun.nanoseconds() - started) / 1e6;
+
+    expect(ms).toBeLessThan(1_000);
+    expect(source.open).toBe(0);
+  });
+});
