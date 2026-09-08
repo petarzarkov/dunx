@@ -95,6 +95,29 @@ describe('building a review', () => {
     expect(review.comments).toEqual([]);
   });
 
+  /**
+   * `exec` returns the first match. A review that quotes the instruction before
+   * ending on `VERDICT: COMMENT` would have been read from the quote.
+   */
+  it('reads the last sentinel, not the first', () => {
+    const review = buildReview(
+      'VERDICT: APPROVE\n\nOn reflection, it is not clean.\n\nVERDICT: COMMENT\n',
+      diff({}),
+    );
+    expect(review.event).toBe('COMMENT');
+    // Both whole-line sentinels are gone, wherever they sat.
+    expect(review.body).toBe('On reflection, it is not clean.');
+  });
+
+  it('leaves a sentinel mentioned inside a sentence alone', () => {
+    const review = buildReview(
+      'The runner writes VERDICT: APPROVE when clean.\n\nVERDICT: COMMENT\n',
+      diff({}),
+    );
+    expect(review.event).toBe('COMMENT');
+    expect(review.body).toBe('The runner writes VERDICT: APPROVE when clean.');
+  });
+
   it('comments when prose carries no sentinel', () => {
     expect(buildReview('Notes, no verdict.', diff({})).event).toBe('COMMENT');
   });

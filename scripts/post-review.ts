@@ -2,7 +2,7 @@
  * Posts a `/code-review` run as one pull request review: a short summary, and each
  * finding as an inline comment on the line it is about.
  *
- * `bun scripts/post-review.ts <execution-file> <owner/repo> <number>`
+ * `bun scripts/post-review.ts <execution-file> <owner/repo> <number> <sha>`
  *
  * The whole review used to go in the body, which put a screen of prose in the
  * conversation for every push. GitHub takes the comments with the review in one
@@ -32,7 +32,19 @@ export interface Review {
 /** Line numbers on the right-hand side of the diff, which are the commentable ones. */
 export type Commentable = ReadonlyMap<string, ReadonlySet<number>>;
 
-const VERDICT = /^VERDICT: (APPROVE|COMMENT)$/m;
+const VERDICT = /^VERDICT: (APPROVE|COMMENT)$/gm;
+
+/**
+ * The last sentinel, not the first. The instruction says to end the message with
+ * one, and a review that quotes the instruction before ending on
+ * `VERDICT: COMMENT` would otherwise be read from the quote and approved.
+ */
+const verdictIn = (text: string): string | undefined =>
+  [...text.matchAll(VERDICT)].at(-1)?.[1];
+
+/** Only the sentinel lines, wherever they are, so none is left in the body. */
+const withoutVerdict = (text: string): string =>
+  text.replace(VERDICT, '').trim();
 const FENCE = /^```(?:json)?[ \t]*\n([\s\S]*?)\n```[ \t]*$/gm;
 
 const resultOf = (raw: string): string => {
@@ -115,7 +127,7 @@ export const buildReview = (
   commentable: Commentable,
 ): Review => {
   const findings = findingsIn(result);
-  const sentinel = VERDICT.exec(result)?.[1];
+  const sentinel = verdictIn(result);
   const clean =
     findings !== undefined &&
     findings.length === 0 &&
@@ -134,7 +146,7 @@ export const buildReview = (
   // is not the whole message lands here too, or a write-up carrying an
   // illustrative empty fence would be summarised away as a clean review.
   if (findings === undefined || (findings.length === 0 && !clean)) {
-    return { event, body: result.replace(VERDICT, '').trim(), comments: [] };
+    return { event, body: withoutVerdict(result), comments: [] };
   }
   if (findings.length === 0) {
     return {
@@ -228,14 +240,15 @@ const gh = async (args: readonly string[]): Promise<string> => {
 };
 
 if (import.meta.main) {
-  const [executionFile, repo, number] = Bun.argv.slice(2);
+  const [executionFile, repo, number, reviewed] = Bun.argv.slice(2);
   if (
     executionFile === undefined ||
     repo === undefined ||
-    number === undefined
+    number === undefined ||
+    reviewed === undefined
   ) {
     console.error(
-      'Usage: bun scripts/post-review.ts <execution-file> <owner/repo> <number>',
+      'Usage: bun scripts/post-review.ts <execution-file> <owner/repo> <number> <reviewed-sha>',
     );
     process.exit(2);
   }
@@ -246,12 +259,25 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  const files = JSON.parse(
-    await gh(['api', '--paginate', `repos/${repo}/pulls/${number}/files`]),
-  ) as { filename: string; patch?: string }[];
+  /**
+   * A push during the run moves the head, and a review posted against the new one
+   * attaches findings to lines that were read from the old one. `concurrency`
+   * cancels a superseded run, but not reliably before it reaches this point.
+   * Being superseded is not a failure, so this exits 0.
+   */
   const head = (
     await gh(['api', `repos/${repo}/pulls/${number}`, '--jq', '.head.sha'])
   ).trim();
+  if (head !== reviewed) {
+    console.log(
+      `Head moved from ${reviewed.slice(0, 7)} to ${head.slice(0, 7)} during the run. Not posting a review of the commit before it.`,
+    );
+    process.exit(0);
+  }
+
+  const files = JSON.parse(
+    await gh(['api', '--paginate', `repos/${repo}/pulls/${number}/files`]),
+  ) as { filename: string; patch?: string }[];
 
   const review = buildReview(result, commentableLines(files));
   if (review.body === '' && review.comments.length === 0) {
@@ -259,7 +285,7 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  const payload = JSON.stringify({ commit_id: head, ...review });
+  const payload = JSON.stringify({ commit_id: reviewed, ...review });
   const proc = Bun.spawn(
     [
       'gh',

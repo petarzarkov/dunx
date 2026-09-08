@@ -59,8 +59,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Pinned, like `actions/github-script` and `cloudflare/wrangler-action`
+      # elsewhere in this repository. A tag is mutable and this job hands the
+      # action two secrets, so retargeting `v1` would run unreviewed code with
+      # them.
       - id: review
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@b7912aeeb535234e3e9385ff49e8237f689b5f14 # v1
         env:
           # Belt and braces for the failure the marketplace plugin hit: a
           # background task in a headless run never reports back, because the
@@ -106,7 +110,7 @@ jobs:
           # times, and telling it to write prose instead of its findings list is
           # the same bet: the slash command's own instructions say how to report,
           # and an appended system prompt loses to them. So it reports the way it
-          # reports, and `scripts/render-review.ts` formats and posts, which is
+          # reports, and `scripts/post-review.ts` formats and posts, which is
           # the half that has to be deterministic.
           claude_args: |
             --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else reads your final message and posts it as a pull request review, so open with no preamble naming the job, the run, the duration or yourself. Report your findings as the typed list you normally would. If you write prose instead, end the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did."
@@ -133,4 +137,5 @@ jobs:
           bun scripts/post-review.ts \
             "$EXECUTION_FILE" \
             "${{ github.repository }}" \
-            "${{ github.event.pull_request.number }}"
+            "${{ github.event.pull_request.number }}" \
+            "${{ github.event.pull_request.head.sha }}"
