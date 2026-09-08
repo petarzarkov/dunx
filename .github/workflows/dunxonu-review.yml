@@ -42,7 +42,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: anthropics/claude-code-action@v1
+      - id: review
+        uses: anthropics/claude-code-action@v1
         env:
           # Belt and braces for the failure the marketplace plugin hit: a
           # background task in a headless run never reports back, because the
@@ -57,8 +58,8 @@ jobs:
           # body is assembled in the action's `comment-logic.ts` and always opens
           # with a hardcoded `**Claude finished @<user>'s task in <duration>**`
           # and a job link. Nothing configures that away, so dropping the tracking
-          # comment is the only way to lose the header, and the review posts
-          # itself instead - see the system prompt below.
+          # comment is the only way to lose the header, so the step below submits
+          # the review instead.
           #
           # `--comment` is absent for a different reason: it posts each finding
           # through the inline-comment tool, which put six separate top-level
@@ -83,12 +84,44 @@ jobs:
           # an OAuth token. Add `Bash(bun test:*)` to trade that for a reviewer
           # that can run the suite it is reasoning about.
           #
-          # The posting instruction is a system prompt rather than text appended
-          # to the prompt, where a slash command would read it as its own
-          # arguments. One review per run is one per push, which is the cadence
-          # CodeRabbit uses, and it lands in the Files-changed UI rather than as
-          # another issue comment. Approving is what makes the check meaningful
-          # on a clean run instead of silent.
+          # The model is asked for a verdict word, not for a shell call. Telling
+          # it to run `gh pr review` itself was measured twice and ignored both
+          # times: the slash command's own instructions say how to report, and an
+          # appended system prompt loses to them. It writes the review and the
+          # step below posts it, which is the half that has to be deterministic.
           claude_args: |
-            --append-system-prompt "End by submitting exactly one pull request review on ${{ github.repository }} pull request ${{ github.event.pull_request.number }} using the gh CLI. Run: gh pr review ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --approve --body '<report>' when you found nothing worth changing, or the same command with --comment instead of --approve when you did. Never use --request-changes. Never use gh pr comment, and never post inline comments. Submit the review once and only once. The body is the review itself: no preamble naming the job, the run, the duration or yourself."
-            --allowedTools "Bash(gh pr review:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
+            --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else posts your final message verbatim as a pull request review, so write it as the review itself, with no preamble naming the job, the run, the duration or yourself. End the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did."
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
+
+      # One review per run, which is one per push: the cadence CodeRabbit uses,
+      # landing in the Files-changed UI rather than as another issue comment. The
+      # body is the model's final message and nothing else, which is what drops
+      # the tracking comment's header.
+      #
+      # An empty review is a hard failure rather than a green check. That is the
+      # original defect this workflow had: it reported success while discarding
+      # nine findings, and a review gate that can pass without reviewing is worse
+      # than no gate.
+      - name: Submit the review
+        env:
+          GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          jq -r 'if type == "array" then (map(select(.type == "result")) | last) else . end | .result // ""' \
+            "$EXECUTION_FILE" > review.md
+          # Approve only on the sentinel. A missing or malformed verdict posts a
+          # comment, so a model that forgets the line cannot approve by accident.
+          verdict=comment
+          if grep -qx 'VERDICT: APPROVE' review.md; then verdict=approve; fi
+          # `|| true` because grep exits 1 when it filters everything out, which is
+          # a review that was nothing but the sentinel. The guard below is what
+          # catches that, and it has to run after the strip rather than before it.
+          grep -vx 'VERDICT: \(APPROVE\|COMMENT\)' review.md > body.md || true
+          if [ ! -s body.md ]; then
+            echo "The reviewer produced no review. Not posting an empty one." >&2
+            exit 1
+          fi
+          gh pr review "$PR" --repo "$REPO" "--$verdict" --body-file body.md
