@@ -6,6 +6,7 @@ import {
   type ProviderNode,
 } from '@dunx/core';
 import { gatewaysOf, isGateway, routesOf } from '@dunx/http/internal';
+import { Args, NO_ARGS, schema, str } from './args.js';
 import { documentOf } from './openapi.js';
 import type { ToolDefinition } from './protocol.js';
 
@@ -29,41 +30,9 @@ const modulesOf = (root: ModuleRef): readonly ModuleNode[] =>
  * tool whose description says it boots the app.
  *
  * Every filter is optional and omitting it means everything, so a caller that
- * knows nothing still gets a useful first answer.
+ * knows nothing still gets a useful first answer. {@link Args} is where that rule
+ * lives, shared with the tools that need no app.
  */
-const NO_ARGS = Object.freeze({ type: 'object', properties: {} });
-
-const schema = (
-  properties: Record<string, unknown>,
-): Record<string, unknown> => ({
-  type: 'object',
-  properties,
-  additionalProperties: false,
-});
-
-const str = (description: string): Record<string, unknown> => ({
-  type: 'string',
-  description,
-});
-
-const text = (
-  args: Record<string, unknown>,
-  key: string,
-): string | undefined => {
-  const value = args[key];
-  return typeof value === 'string' && value !== '' ? value : undefined;
-};
-
-const flag = (args: Record<string, unknown>, key: string): boolean =>
-  args[key] === true;
-
-/** Case-insensitive substring, which is what a caller guessing a name wants. */
-const like = (haystack: string, needle: string | undefined): boolean =>
-  needle === undefined || haystack.toLowerCase().includes(needle.toLowerCase());
-
-const eq = (value: string, wanted: string | undefined): boolean =>
-  wanted === undefined || value.toLowerCase() === wanted.toLowerCase();
-
 export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
   {
     name: 'dunx_overview',
@@ -116,16 +85,19 @@ export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
           'Only routes marked @Public() - the unauthenticated surface.',
       },
     }),
-    run: (args) => ({
-      routes: routesOf(root).filter(
-        (route) =>
-          eq(route.method, text(args, 'method')) &&
-          like(route.path, text(args, 'path')) &&
-          like(route.controller, text(args, 'controller')) &&
-          like(route.module, text(args, 'module')) &&
-          (!flag(args, 'publicOnly') || route.public),
-      ),
-    }),
+    run: (raw) => {
+      const args = new Args(raw);
+      return {
+        routes: routesOf(root).filter(
+          (route) =>
+            args.eq(route.method, 'method') &&
+            args.like(route.path, 'path') &&
+            args.like(route.controller, 'controller') &&
+            args.like(route.module, 'module') &&
+            (!args.flag('publicOnly') || route.public),
+        ),
+      };
+    },
   },
   {
     name: 'dunx_providers',
@@ -145,16 +117,19 @@ export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
           'Only registrations with at least one erased dependency - the set that would fail at boot.',
       },
     }),
-    run: (args) => ({
-      providers: providersOf(root).filter(
-        (provider) =>
-          like(provider.module, text(args, 'module')) &&
-          like(provider.token, text(args, 'token')) &&
-          eq(provider.role, text(args, 'role')) &&
-          (!flag(args, 'unresolvedOnly') ||
-            provider.dependencies.some((dep) => 'unresolved' in dep)),
-      ),
-    }),
+    run: (raw) => {
+      const args = new Args(raw);
+      return {
+        providers: providersOf(root).filter(
+          (provider) =>
+            args.like(provider.module, 'module') &&
+            args.like(provider.token, 'token') &&
+            args.eq(provider.role, 'role') &&
+            (!args.flag('unresolvedOnly') ||
+              provider.dependencies.some((dep) => 'unresolved' in dep)),
+        ),
+      };
+    },
   },
   {
     name: 'dunx_gateways',
@@ -164,12 +139,13 @@ export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
       path: str('Only gateways whose path contains this.'),
       event: str('Only gateways declaring a message handler for this event.'),
     }),
-    run: (args) => {
-      const event = text(args, 'event');
+    run: (raw) => {
+      const args = new Args(raw);
+      const event = args.text('event');
       return {
         gateways: gatewaysOf(root).filter(
           (gateway) =>
-            like(gateway.path, text(args, 'path')) &&
+            args.like(gateway.path, 'path') &&
             (event === undefined ||
               gateway.handlers.some((handler) => handler.event === event)),
         ),
@@ -183,11 +159,14 @@ export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
     inputSchema: schema({
       name: str('Only modules whose name contains this.'),
     }),
-    run: (args) => ({
-      modules: modulesOf(root).filter((module) =>
-        like(module.name, text(args, 'name')),
-      ),
-    }),
+    run: (raw) => {
+      const args = new Args(raw);
+      return {
+        modules: modulesOf(root).filter((module) =>
+          args.like(module.name, 'name'),
+        ),
+      };
+    },
   },
   {
     name: 'dunx_openapi',
@@ -197,12 +176,14 @@ export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
       title: str('Document title. Defaults to the root module name.'),
       version: str('Document version. Defaults to 0.0.0.'),
     }),
-    run: (args) =>
-      documentOf(root, {
+    run: (raw) => {
+      const args = new Args(raw);
+      return documentOf(root, {
         title:
-          text(args, 'title') ??
+          args.text('title') ??
           (typeof root === 'function' ? root.name : root.module.name),
-        version: text(args, 'version') ?? '0.0.0',
-      }),
+        version: args.text('version') ?? '0.0.0',
+      });
+    },
   },
 ];
