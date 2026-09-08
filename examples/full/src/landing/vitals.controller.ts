@@ -23,8 +23,8 @@ const SOURCES: Readonly<Record<string, string>> = {
   gateway: new URL('../chat/chat.gateway.ts', import.meta.url).pathname,
 };
 
-/** Declared, so the parameter reaches the OpenAPI document and `Input` carries
- * its type. `SOURCES` still decides which names resolve. */
+/** Declared so the parameter reaches the OpenAPI document. `SOURCES` still
+ * decides which names resolve. */
 const sourceParams = {
   params: z.object({
     name: z

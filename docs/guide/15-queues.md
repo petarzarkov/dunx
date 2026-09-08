@@ -571,6 +571,46 @@ even while workers drained jobs.
 the `{ connectionName }` bullmq's Bun adapter names a connection through. One
 line, fixed; `CLIENT SETNAME` runs and the worker appears.
 
+## Waiting for a job to finish
+
+The process that published a job does not run it, so `job.returnvalue` on the
+handle `publish` returned stays empty: it is filled when the job is loaded, and
+that load happened in the worker.
+
+`JobEvents` hands over bullmq's `QueueEvents` for a queue, which is what
+`waitUntilFinished` waits on:
+
+```ts
+import { JobEvents, JobPublisher } from '@dunx/infra/queue';
+
+export class Thumbnails {
+  constructor(
+    private readonly jobs: JobPublisher,
+    private readonly events: JobEvents,
+  ) {}
+
+  async render(width: number): Promise<Rendered> {
+    const job = await this.jobs.publish('thumbnails', 'render', { width });
+    // Resolves when the worker completes it, rejects on a failure or the ttl.
+    return await job.waitUntilFinished(this.events.events('thumbnails'), 8_000);
+  }
+}
+```
+
+bullmq broadcasts completion over Redis pub/sub, so this costs no polling. The
+alternative is `queue.getJob(id)` on a timer, which is what a status endpoint
+does instead: an HTTP request cannot hold a socket open for eight seconds, so
+`GET /jobs/:id` reports the state it finds and the caller asks again.
+
+Two things to know about the stream:
+
+- **A queue's stream opens on the first `events()` call**, not at boot. bullmq
+  starts a blocking read in the constructor, so a process that publishes and
+  never waits holds no extra connection.
+- **It is closed for you** at shutdown, before the sockets it borrowed. A stream
+  that will not close within two seconds is logged and abandoned rather than
+  waited on, because `close()` against an unreachable broker never settles.
+
 ## Related
 
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
