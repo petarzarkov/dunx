@@ -182,6 +182,22 @@ const taxTable = (): string => {
   return `${head}\n${body}`;
 };
 
+/** A subject's boot resident set, median across the scenarios it was measured on. */
+const bootMiB = (subject: string): string => {
+  const readings = report.resources
+    .filter((usage) => usage.subject === subject)
+    .map((usage) => usage.rssBootMiB)
+    .filter((one): one is number => one !== null);
+  return readings.length === 0 ? '-' : dec(median(readings), 1);
+};
+
+const cpuPerK = (subject: string, scenario: string): string => {
+  const usage = report.resources.find(
+    (one) => one.subject === subject && one.scenario === scenario,
+  );
+  return usage === undefined ? '-' : dec(usage.cpuMsPerKiloRequests.median, 2);
+};
+
 const ranIo = report.scenarios.some((scenario) => scenario.id === 'io');
 const ioSection = ranIo
   ? `
@@ -196,6 +212,19 @@ see "Blocking subjects on the io scenario". For the client comparison with the
 runtime held still, see "Driver cost".
 `
   : '';
+
+/** Only rendered when the io scenario ran; the numbers are the point of it. */
+const ioProse = `
+**The framework tax disappears on \`io\`, and that is the most useful thing in this
+file.** dunx and raw \`Bun.serve\` land at ${int(cellsFor('io').find((row) => row.id === FOCUS)?.rps ?? 0)} and ${int(cellsFor('io').find((row) => row.id === BASELINE)?.rps ?? 0)} req/s,
+inside each other's spread, where on \`plaintext\` the same two are
+${int(cellsFor('plaintext').find((row) => row.id === FOCUS)?.rps ?? 0)} and
+${int(cellsFor('plaintext').find((row) => row.id === BASELINE)?.rps ?? 0)}. One Redis
+round trip and one Postgres query cost more than every framework difference above
+them put together. This file used to assert that under "What is not measured"; it is
+now measured, and it is the number to quote at anyone choosing a framework on a
+dispatch benchmark.
+`;
 
 const { machine: m, config: c, loadGenerator: g } = report;
 const versions = report.subjects
@@ -270,6 +299,19 @@ Elysia on this scenario. What remains is dispatch, not validation.
 **Cold start is dunx's clearest loss**: roughly twice raw \`Bun.serve\`, from the
 \`oxc-parser\` preload and eager DI resolution. It does beat Elysia, and every Node
 subject by a wide margin, but it is the number to watch if boot time matters.
+
+**Memory is the second one.** \`@dunx/http\` boots at ${bootMiB('dunx')} MiB against
+raw \`Bun.serve\`'s ${bootMiB('bun-serve')} MiB, for the container and the resolved
+provider graph, and the gap holds under load. It is small next to the Node subjects
+and tiny next to \`spring\`, and it is still a cost the ceiling does not pay.
+${ranIo ? ioProse : ''}
+**CPU per request tracks throughput on the first four scenarios and stops on the
+fifth.** On \`plaintext\` dunx spends ${cpuPerK('dunx', 'plaintext')} ms per thousand
+requests against the baseline's ${cpuPerK('bun-serve', 'plaintext')}, which is the
+same gap the rate shows from the other side. On \`io\` both sit near
+${cpuPerK('bun-serve', 'io')} while Axum spends ${cpuPerK('axum', 'io')} - the
+JavaScript subjects are burning CPU that Rust is not, on a workload where it buys
+neither of them any throughput because both are waiting on the same two sockets.
 `;
 
 /** Replaces one `## ` section in place, leaving everything around it untouched. */

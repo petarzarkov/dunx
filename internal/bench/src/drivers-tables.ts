@@ -68,6 +68,31 @@ const gap = (report: DriversReport, from: string, to: string): string => {
   return signed((b.rps.median / a.rps.median - 1) * 100);
 };
 
+/**
+ * Each client swapped **twice**, once against each setting of the other one.
+ *
+ * A single path through the cells would let either client be quoted from
+ * whichever pairing flattered it. Measured, that is not hypothetical: the Redis
+ * swap comes out positive against `Bun.SQL` and negative against `pg`, so a table
+ * showing only the first row would report a result whose sign the second row
+ * disagrees with.
+ */
+const swapTable = (report: DriversReport): string =>
+  [
+    '| Swap, same runtime and same server | with the other client native | with the other client classic |',
+    '| ---------------------------------- | ---------------------------: | ----------------------------: |',
+    `| \`Bun.SQL\` -> \`pg\` | ${gap(report, 'bun:native', 'bun:pg')} | ${gap(report, 'bun:ioredis', 'bun:classic')} |`,
+    `| \`Bun.RedisClient\` -> \`ioredis\` | ${gap(report, 'bun:native', 'bun:ioredis')} | ${gap(report, 'bun:pg', 'bun:classic')} |`,
+  ].join('\n');
+
+/** The largest run-to-run spread in the set, as a percentage of its own median. */
+const worstSpread = (report: DriversReport): string => {
+  const spreads = report.units
+    .filter((unit) => unit.rps.median > 0)
+    .map((unit) => (unit.rps.stddev / unit.rps.median) * 100);
+  return spreads.length === 0 ? '-' : `${Math.max(...spreads).toFixed(1)}%`;
+};
+
 export const driversSection = async (): Promise<string | null> => {
   const file = Bun.file(`${resultsDir}/drivers.json`);
   if (!(await file.exists())) return null;
@@ -100,11 +125,21 @@ only in the client, so their differences are the client. \`node:classic\` change
 runtime and the server as well, and is the reference point rather than a term in the
 comparison.
 
-| Swap | On the same Bun runtime |
-| ---- | ----------------------: |
-| \`Bun.SQL\` → \`pg\` | ${gap(report, 'bun:native', 'bun:pg')} |
-| \`Bun.RedisClient\` → \`ioredis\` | ${gap(report, 'bun:native', 'bun:ioredis')} |
-| both → \`pg\` + \`ioredis\` | ${gap(report, 'bun:native', 'bun:classic')} |
-| and then Bun → Node | ${gap(report, 'bun:classic', 'node:classic')} |
+${swapTable(report)}
+
+**The Postgres client is the term that resolves. The Redis client is not.** Swapping
+\`Bun.SQL\` for \`pg\` costs in both pairings, by far more than the run-to-run spread,
+which tops out here at ${worstSpread(report)}. Swapping \`Bun.RedisClient\` for
+\`ioredis\` comes out **positive against \`Bun.SQL\` and negative against \`pg\`**. A
+sign change is what an unresolvable difference looks like, so the statement this
+supports is that the two Redis clients are the same speed on this workload - not
+that either one wins.
+
+**The runtime is a larger term than either client.** \`pg\` and \`ioredis\` on Bun
+against the same two on Node is ${gap(report, 'bun:classic', 'node:classic')}, where
+swapping both clients on one runtime is
+${gap(report, 'bun:native', 'bun:classic')}. Quote the first four rows for what the
+native clients are worth; most of what a Bun service gains on this workload, it
+gains before it picks a client.
 `;
 };

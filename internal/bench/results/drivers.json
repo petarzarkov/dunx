@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-08T19:14:21.708Z",
+  "machine": {
+    "cpuModel": "AMD Ryzen 9 5950X 16-Core Processor",
+    "cores": 32,
+    "ramGiB": 62.7,
+    "platform": "linux",
+    "kernel": "7.0.0-31-generic",
+    "arch": "x64",
+    "bun": "1.4.2",
+    "node": "v20.20.2"
+  },
+  "loadGenerator": {
+    "id": "oha",
+    "version": "oha 1.15.0"
+  },
+  "config": {
+    "connections": 64,
+    "durationSeconds": 5,
+    "warmupSeconds": 3,
+    "runs": 5
+  },
+  "units": [
+    {
+      "id": "bun:native",
+      "label": "Bun.SQL + Bun.RedisClient",
+      "runtime": "bun",
+      "sql": "Bun.SQL",
+      "redis": "Bun.RedisClient",
+      "rps": {
+        "median": 27465.756498484825,
+        "min": 27160.32385576976,
+        "max": 27793.19377180565,
+        "stddev": 226.3391360774799
+      },
+      "latencyP50Ms": {
+        "median": 2.339157,
+        "min": 2.282597,
+        "max": 2.3471889999999997,
+        "stddev": 0.026626882769111328
+      },
+      "latencyP99Ms": {
+        "median": 3.5452909999999997,
+        "min": 3.484122,
+        "max": 3.626755,
+        "stddev": 0.0551448597649862
+      },
+      "rssPeakMiB": 59.82421875,
+      "cpuMsPerKiloRequests": 38.424312110207914,
+      "bad": 0
+    },
+    {
+      "id": "bun:pg",
+      "label": "pg + Bun.RedisClient",
+      "runtime": "bun",
+      "sql": "pg",
+      "redis": "Bun.RedisClient",
+      "rps": {
+        "median": 23898.62062610745,
+        "min": 22987.518650202863,
+        "max": 23941.07107895317,
+        "stddev": 406.5287632106338
+      },
+      "latencyP50Ms": {
+        "median": 2.619721,
+        "min": 2.575862,
+        "max": 2.719192,
+        "stddev": 0.05603516393123165
+      },
+      "latencyP99Ms": {
+        "median": 4.351374,
+        "min": 4.171399,
+        "max": 4.383754,
+        "stddev": 0.11047883651948885
+      },
+      "rssPeakMiB": 78.61328125,
+      "cpuMsPerKiloRequests": 44.985534391357426,
+      "bad": 0
+    },
+    {
+      "id": "bun:ioredis",
+      "label": "Bun.SQL + ioredis",
+      "runtime": "bun",
+      "sql": "Bun.SQL",
+      "redis": "ioredis",
+      "rps": {
+        "median": 28900.740026061732,
+        "min": 28532.970599673747,
+        "max": 29532.08124215904,
+        "stddev": 381.0319327976134
+      },
+      "latencyP50Ms": {
+        "median": 2.156795,
+        "min": 2.113566,
+        "max": 2.187185,
+        "stddev": 0.027463867620930532
+      },
+      "latencyP99Ms": {
+        "median": 3.547321,
+        "min": 3.476191,
+        "max": 3.560952,
+        "stddev": 0.035841306212246175
+      },
+      "rssPeakMiB": 81.7734375,
+      "cpuMsPerKiloRequests": 37.59137274521249,
+      "bad": 0
+    },
+    {
+      "id": "bun:classic",
+      "label": "pg + ioredis (on Bun)",
+      "runtime": "bun",
+      "sql": "pg",
+      "redis": "ioredis",
+      "rps": {
+        "median": 23117.15211573437,
+        "min": 22914.6086231379,
+        "max": 23303.60201192293,
+        "stddev": 160.1743705082965
+      },
+      "latencyP50Ms": {
+        "median": 2.645381,
+        "min": 2.625212,
+        "max": 2.7167630000000003,
+        "stddev": 0.03524290910665592
+      },
+      "latencyP99Ms": {
+        "median": 4.378412,
+        "min": 4.309149,
+        "max": 4.612054,
+        "stddev": 0.12043991884628608
+      },
+      "rssPeakMiB": 86.53515625,
+      "cpuMsPerKiloRequests": 46.14737997821295,
+      "bad": 0
+    },
+    {
+      "id": "node:classic",
+      "label": "pg + ioredis (on Node)",
+      "runtime": "node",
+      "sql": "pg",
+      "redis": "ioredis",
+      "rps": {
+        "median": 13272.190009943912,
+        "min": 13092.525201167078,
+        "max": 13654.182353049755,
+        "stddev": 239.67886388021142
+      },
+      "latencyP50Ms": {
+        "median": 4.559933,
+        "min": 4.486544,
+        "max": 4.8355999999999995,
+        "stddev": 0.1509901568305031
+      },
+      "latencyP99Ms": {
+        "median": 6.594238,
+        "min": 6.269132,
+        "max": 7.131723,
+        "stddev": 0.3398460376725025
+      },
+      "rssPeakMiB": 95.2890625,
+      "cpuMsPerKiloRequests": 76.29222782333909,
+      "bad": 0
+    }
+  ]
+}
