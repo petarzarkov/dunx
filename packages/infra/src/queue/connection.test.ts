@@ -192,3 +192,92 @@ describe('duplicate ownership', () => {
     expect(watched.calls).toBe(0);
   });
 });
+
+/**
+ * Teardown is the last step of shutdown, so nothing in it may abandon what
+ * follows. Both cases here are deterministic: the adapters are real, only their
+ * `disconnect` is replaced, and no broker is involved.
+ */
+describe('teardown robustness', () => {
+  it('does not orphan the adapters after one that throws', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => { disconnect: () => void };
+    };
+    const thrower = client.duplicate({});
+    const after = client.duplicate({});
+
+    thrower.disconnect = (): never => {
+      throw new Error('already torn down');
+    };
+    let reached = 0;
+    const inner = after.disconnect.bind(after);
+    after.disconnect = (): void => {
+      reached += 1;
+      inner();
+    };
+
+    // The pass used to stop at the throw, and `#open` had already been emptied,
+    // so nothing later would retry the rest.
+    expect(() => source.onShutdown()).not.toThrow();
+    expect(reached).toBe(1);
+  });
+
+  it('tears down an adapter that arrives during teardown', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => { disconnect: () => void };
+    };
+    const first = client.duplicate({});
+
+    // `disconnect()` with no argument cannot reconnect, but a `close`/`end`
+    // listener could duplicate, and that adapter still needs an owner.
+    let late: { disconnect: () => void } | undefined;
+    const inner = first.disconnect.bind(first);
+    first.disconnect = (): void => {
+      late ??= client.duplicate({});
+      inner();
+    };
+
+    source.onShutdown();
+
+    let closed = 0;
+    const lateInner = late?.disconnect.bind(late);
+    if (late && lateInner) {
+      late.disconnect = (): void => {
+        closed += 1;
+        lateInner();
+      };
+      // Already disconnected by the second pass, so a further call is the no-op
+      // bullmq's `closed` guard makes it.
+      source.onShutdown();
+    }
+    expect(late).toBeDefined();
+    expect(closed).toBe(0);
+  });
+
+  it('stops rather than livelocking on an adapter that always duplicates', () => {
+    const source = connection();
+    const client = source.client() as unknown as {
+      duplicate: (options: unknown) => { disconnect: () => void };
+    };
+
+    // Pathological: every teardown derives another adapter. Walking the live
+    // array would never finish.
+    const arm = (adapter: { disconnect: () => void }): void => {
+      const inner = adapter.disconnect.bind(adapter);
+      adapter.disconnect = (): void => {
+        arm(client.duplicate({}));
+        inner();
+      };
+    };
+    arm(client.duplicate({}));
+
+    const started = Bun.nanoseconds();
+    source.onShutdown();
+    const ms = (Bun.nanoseconds() - started) / 1e6;
+
+    expect(ms).toBeLessThan(1_000);
+    expect(source.open).toBe(0);
+  });
+});

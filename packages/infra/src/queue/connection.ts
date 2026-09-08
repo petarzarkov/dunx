@@ -40,6 +40,20 @@ const boundClientClass = (
 };
 
 /**
+ * How many drain passes `onShutdown` makes.
+ *
+ * `disconnect()` with no argument cannot itself hand back a duplicate: only
+ * `disconnect(true)` reaches `_scheduleReconnect`, and the no-argument branch
+ * closes the socket and emits `close` and `end`. A listener on those could still
+ * duplicate, so an adapter arriving mid-teardown is owned rather than dropped.
+ *
+ * The bound is what a plain loop over the live array did not have: an adapter
+ * that duplicated on every `disconnect()` would have been walked forever, and a
+ * livelocked shutdown is worse than a leaked socket.
+ */
+const TEARDOWN_PASSES = 4;
+
+/**
  * Where the ioredis boundary is drawn. bullmq takes either a connection
  * description it builds a client from, or a built client implementing
  * `IRedisClient`; dunx does the second over `Bun.RedisClient`, so every byte of
@@ -146,13 +160,46 @@ export class QueueConnection implements OnShutdown {
    * internal/notes/roadmap/queue-shutdown-sigterm.md.
    */
   onShutdown(): void {
-    // Drained first: `disconnect()` can schedule a reconnect, and a reconnect
-    // duplicates, so iterating the live array could append to what it is walking.
-    for (const adapter of this.#open.splice(0)) {
+    for (
+      let pass = 0;
+      pass < TEARDOWN_PASSES && this.#open.length > 0;
+      pass++
+    ) {
+      // Taken out before the pass walks them, so an adapter that arrives during
+      // it belongs to the next pass rather than to the array being iterated.
+      for (const adapter of this.#open.splice(0)) this.#tearDown(adapter);
+    }
+
+    if (this.#open.length > 0) {
+      this.#logger.warn(
+        `${this.#open.length} queue connection(s) were still being derived after ` +
+          `${TEARDOWN_PASSES} teardown passes, and are left to the runtime`,
+      );
+      this.#open.length = 0;
+    }
+  }
+
+  /**
+   * Both halves, in this order, and neither aborting the other.
+   *
+   * A throw used to end the whole pass: the adapters after it were neither
+   * disconnected nor closed, and having already been taken out of `#open` no
+   * later call would retry them, so their sockets leaked for the life of the
+   * process. An `error` on a listener-less emitter failing shutdown on its last
+   * step is the same shape, and is why `#handleErrors` exists.
+   */
+  #tearDown(adapter: IRedisClient): void {
+    try {
       adapter.disconnect();
+    } catch (error) {
+      this.#logger.warn('a queue connection failed to disconnect', error);
+    }
+    try {
       // `disconnect()` is raw-safe and closes nothing for a duplicate that never
       // connected, so this is the half that releases a socket either way.
       this.#socketOf(adapter)?.close();
+    } catch (error) {
+      this.#logger.warn('a queue socket failed to close', error);
     }
   }
 }
