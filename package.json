@@ -36,6 +36,7 @@
     "docs:build": "bun run --filter '@dunx/docs' build",
     "docs:dev": "bun run --filter '@dunx/docs' dev",
     "gen:cov": "bun ./scripts/coverage-report.ts",
+    "gen:mcp": "bun ./scripts/gen-mcp-corpus.ts",
     "gen:readme": "bun ./scripts/update-readme.ts",
     "gen:og": "bun run --filter '@dunx/docs' gen:og && bun run --filter '@dunx/example-full' gen:og",
     "sync:templates": "bun ./scripts/sync-templates.ts",

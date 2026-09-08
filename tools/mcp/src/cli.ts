@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { findRootModule } from '@dunx/core';
-import { serve } from './protocol.js';
+import { adoptionResources, adoptionTools } from './adopt.js';
+import { serve, type ToolDefinition } from './protocol.js';
 import { toolsFor } from './tools.js';
 
 /**
@@ -10,13 +11,19 @@ import { toolsFor } from './tools.js';
  * The entry exports its root module as `default` or `root`, the same convention
  * `bunx dunx-openapi` uses.
  *
+ * **The entry is optional.** Without one the server still starts, serving the
+ * tools that need no app: how to start, the written guide, and what
+ * `bunx @dunx/create-app` can generate. That is the state someone adopting dunx is
+ * in, and requiring a root module made the server unreachable exactly then.
+ *
  * **stdout is the protocol channel**, so nothing here prints to it: diagnostics go
  * to stderr, which is what an MCP client shows in its logs.
  */
-const usage = `Usage: bunx @dunx/mcp <entry> [--export=<name>]
+const usage = `Usage: bunx @dunx/mcp [entry] [--export=<name>]
 
-  <entry>          The file that declares your root module. A path, relative or
-                   absolute, or a package specifier.
+  [entry]          The file that declares your root module. A path, relative or
+                   absolute, or a package specifier. Omit it and the server serves
+                   only the tools that need no app.
   --export=<name>  Which export to use, when the entry declares several modules.
                    Otherwise the single @Module export is found on its own, and
                    \`default\` or \`root\` wins if present.
@@ -72,20 +79,25 @@ const load = async (path: string): Promise<Exported | undefined> => {
   }
 };
 
-export const main = async (argv: readonly string[]): Promise<number> => {
-  if (argv.includes('--help') || argv.includes('-h')) {
-    console.error(usage);
-    return 0;
-  }
-  if (argv.includes('--version')) {
-    console.error(await version());
-    return 0;
-  }
+/**
+ * The tools this invocation serves, or the exit code to fail with. Separated from
+ * {@link main} because everything after it blocks on stdin, so this is the half a
+ * test can call in process.
+ */
+export const assemble = async (
+  argv: readonly string[],
+): Promise<readonly ToolDefinition[] | number> => {
+  const adoption = adoptionTools();
 
   const entry = argv.find((arg) => !arg.startsWith('-'));
   if (entry === undefined) {
-    console.error(usage);
-    return 1;
+    console.error(
+      'No entry given, so this server answers about dunx itself: dunx_start, ' +
+        'dunx_guide, dunx_scaffold, and the guide as resources. Pass the file ' +
+        'that declares your root module, e.g. ./src/app.module.ts, to also read ' +
+        'your app.',
+    );
+    return adoption;
   }
 
   const path = locate(entry);
@@ -119,7 +131,21 @@ export const main = async (argv: readonly string[]): Promise<number> => {
     );
     return 1;
   }
-  const { root } = found;
+  return [...adoption, ...toolsFor(found.root)];
+};
+
+export const main = async (argv: readonly string[]): Promise<number> => {
+  if (argv.includes('--help') || argv.includes('-h')) {
+    console.error(usage);
+    return 0;
+  }
+  if (argv.includes('--version')) {
+    console.error(await version());
+    return 0;
+  }
+
+  const tools = await assemble(argv);
+  if (typeof tools === 'number') return tools;
 
   /**
    * `Bun.stdout.writer()` rather than `process.stdout.write`. It is a `FileSink`
@@ -137,8 +163,9 @@ export const main = async (argv: readonly string[]): Promise<number> => {
       void sink.write(line);
       await sink.flush();
     },
-    toolsFor(root),
+    tools,
     { name: '@dunx/mcp', version: await version() },
+    adoptionResources(),
   );
   return 0;
 };

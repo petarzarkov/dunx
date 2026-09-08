@@ -1,6 +1,25 @@
 export { handle, serve, PROTOCOL_VERSION, RpcError } from './protocol.js';
-export type { JsonRpcRequest, ToolDefinition } from './protocol.js';
+export type {
+  JsonRpcRequest,
+  ResourceDefinition,
+  ToolDefinition,
+} from './protocol.js';
 export { toolsFor } from './tools.js';
+// The half that needs no app: how to start, the written guide, and what
+// `bunx @dunx/create-app` can generate. The data is bundled at build time from
+// `docs/guide`, `examples/minimal` and `tools/create-app`, so a server of your own
+// can serve the same corpus without shipping a second copy of it.
+export { adoptionResources, adoptionTools } from './adopt.js';
+export { GUIDE, MINIMAL, SCAFFOLD } from './generated.js';
+export { Guide, GUIDE_SCHEME } from './guide.js';
+export type { GuideDoc, GuideEntry, GuideHit } from './guide.js';
+export { Scaffold } from './scaffold.js';
+export type {
+  ScaffoldFeature,
+  Starter,
+  StarterFile,
+  Step,
+} from './scaffold.js';
 // The readers behind the tools, re-exported so a server of your own can answer
 // the same questions without reimplementing the traversal. They live in the
 // packages that own the data they read: the container half in `@dunx/core`, the

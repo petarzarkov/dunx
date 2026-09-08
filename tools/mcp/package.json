@@ -1,7 +1,7 @@
 {
   "name": "@dunx/mcp",
   "version": "3.4.1",
-  "description": "A Model Context Protocol server for dunx apps - bunx @dunx/mcp ./src/app.module.ts",
+  "description": "A Model Context Protocol server for dunx - the written guide and scaffold catalogue with no app, your routes and providers with one",
   "keywords": [
     "agent",
     "bun",
@@ -46,7 +46,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun ../../scripts/build-package.ts",
+    "build": "bun ../../scripts/gen-mcp-corpus.ts && bun ../../scripts/build-package.ts",
     "test": "bun test --bail",
     "test:cov": "bun test --coverage",
     "typecheck": "tsc --noEmit"
