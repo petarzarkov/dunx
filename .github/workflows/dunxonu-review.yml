@@ -5,8 +5,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 # A push supersedes the review of the commit before it, so a rapid series of
-# pushes costs one review rather than one per push. Each review posts inline
-# comments and two overlapping runs would post two sets over the same lines.
+# pushes costs one review rather than one per push. The review lands in one
+# sticky comment, and two overlapping runs would race to rewrite it.
 concurrency:
   group: dunxonu-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -32,9 +32,14 @@ jobs:
       # No `bun install` here, and no `./.github/actions/setup`: a review reads
       # the diff rather than building, and the action prepends its own Bun to
       # PATH after ours anyway. CI runs the gates.
+      #
+      # Full history, not `fetch-depth: 1`. Three of the tools named below are
+      # `git log`, `git blame` and `git show`, and a single-commit checkout gives
+      # them nothing to read: the review reported reading `main...HEAD`, a range
+      # that does not exist locally at depth 1.
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - uses: anthropics/claude-code-action@v1
         env:
@@ -46,15 +51,33 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.DUNXONU_TOKEN }}
+          # One comment carrying the whole review, updated in place across pushes,
+          # rather than one inline comment per finding. `--comment` is what fanned
+          # them out: it posts each finding through the inline-comment tool, which
+          # put six separate top-level comments on #63 seconds apart. Dropping it
+          # leaves the review as a single report, and `track_progress` is the
+          # channel that report is posted through - without it the run is agent
+          # mode, which has no output channel to the PR at all and threw nine
+          # findings away on #64 while reporting success.
+          track_progress: true
+          use_sticky_comment: true
           # The built-in review, not code-review@claude-code-plugins. It needs
           # no marketplace clone, runs in the foreground under `-p`, and takes
           # an effort level: medium reports only what it is confident in, which
           # is the dial the plugin did not have. Raise it to high for broader
           # coverage and a longer run.
-          prompt: /code-review medium --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+          prompt: /code-review medium ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
           # --allowedTools REPLACES the skill's own allowed-tools rather than
-          # adding to it, so anything it reaches for has to be named. A review
-          # of a workflow diff was denied 18 calls and still reported no issues,
-          # so gh api is named here too.
+          # adding to it, so anything it reaches for has to be named. `Read`,
+          # `Grep` and `Glob` need no entry - they are permitted without one, and
+          # a run under this exact list was measured denying only `Bash`.
+          #
+          # The text commands are here because that measurement caught the review
+          # reaching for `cat -n`, `grep -nE` and `awk` on eight calls and being
+          # refused each time, which is what left it verifying findings by
+          # inference. `bun test` was refused too and is deliberately still
+          # absent: it executes the code under review, and this workflow carries
+          # an OAuth token. Add `Bash(bun test:*)` to trade that for a reviewer
+          # that can run the suite it is reasoning about.
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*)"
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
