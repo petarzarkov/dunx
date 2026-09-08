@@ -101,13 +101,15 @@ jobs:
           # an OAuth token. Add `Bash(bun test:*)` to trade that for a reviewer
           # that can run the suite it is reasoning about.
           #
-          # The model is asked for a verdict word, not for a shell call. Telling
-          # it to run `gh pr review` itself was measured twice and ignored both
-          # times: the slash command's own instructions say how to report, and an
-          # appended system prompt loses to them. It writes the review and the
-          # step below posts it, which is the half that has to be deterministic.
+          # The model is asked to change as little about its output as possible.
+          # Telling it to run `gh pr review` was measured twice and ignored both
+          # times, and telling it to write prose instead of its findings list is
+          # the same bet: the slash command's own instructions say how to report,
+          # and an appended system prompt loses to them. So it reports the way it
+          # reports, and `scripts/render-review.ts` formats and posts, which is
+          # the half that has to be deterministic.
           claude_args: |
-            --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else posts your final message verbatim as a pull request review. Write that message as GitHub-flavoured markdown prose that a person reads: a sentence on what you reviewed, then each finding as a bullet naming file:line and stating the defect. Never emit the findings as a JSON array or any other machine format, and open with no preamble naming the job, the run, the duration or yourself. End the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did."
+            --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else reads your final message and posts it as a pull request review, so open with no preamble naming the job, the run, the duration or yourself. Report your findings as the typed list you normally would. If you write prose instead, end the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did."
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
 
       # One review per run, which is one per push: the cadence CodeRabbit uses,
@@ -127,18 +129,8 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          jq -r 'if type == "array" then (map(select(.type == "result")) | last) else . end | .result // ""' \
-            "$EXECUTION_FILE" > review.md
-          # Approve only on the sentinel. A missing or malformed verdict posts a
-          # comment, so a model that forgets the line cannot approve by accident.
-          verdict=comment
-          if grep -qx 'VERDICT: APPROVE' review.md; then verdict=approve; fi
-          # `|| true` because grep exits 1 when it filters everything out, which is
-          # a review that was nothing but the sentinel. The guard below is what
-          # catches that, and it has to run after the strip rather than before it.
-          grep -vx 'VERDICT: \(APPROVE\|COMMENT\)' review.md > body.md || true
-          if [ ! -s body.md ]; then
-            echo "The reviewer produced no review. Not posting an empty one." >&2
-            exit 1
-          fi
+          # `scripts/render-review.ts` turns the run into the body and prints the
+          # verdict. It exits non-zero on an empty review rather than posting one.
+          # Bun is on PATH because the action put it there.
+          verdict="$(bun scripts/render-review.ts "$EXECUTION_FILE" body.md)"
           gh pr review "$PR" --repo "$REPO" "--$verdict" --body-file body.md
