@@ -109,6 +109,49 @@ describe('rendering a review', () => {
     expect(verdict).toBe('comment');
   });
 
+  /**
+   * `Array.prototype.every` is vacuously true on `[]`, so an illustrative empty
+   * fence inside a real write-up parsed as a clean review and approved a pull
+   * request the reviewer had just written findings for.
+   */
+  it('does not let a stray empty fence approve a flagged review', async () => {
+    const { verdict, body } = await render(
+      'Found a problem in foo.ts. An empty list looks like:\n\n' +
+        '```json\n[]\n```\n\nVERDICT: COMMENT\n',
+    );
+    expect(verdict).toBe('comment');
+    expect(body).toContain('Found a problem in foo.ts.');
+  });
+
+  it('approves an empty list that is the whole message, fenced or bare', async () => {
+    expect((await render('[]')).verdict).toBe('approve');
+    expect((await render('```json\n[]\n```')).verdict).toBe('approve');
+  });
+
+  /** The sentinel is the model's own words and outranks a parsed list. */
+  it('lets the sentinel overrule the list', async () => {
+    const { verdict } = await render(
+      `\`\`\`json\n${JSON.stringify([finding()])}\n\`\`\`\n\nVERDICT: APPROVE\n`,
+    );
+    expect(verdict).toBe('approve');
+  });
+
+  it('reports an unparseable execution file as no review', async () => {
+    const execution = join(dir, 'truncated.json');
+    await Bun.write(execution, '{"type":"res');
+    const proc = Bun.spawn(['bun', SCRIPT, execution, join(dir, 'never.md')], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const [stderr, code] = await Promise.all([
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(code).toBe(1);
+    expect(stderr).toContain('no review');
+    expect(stderr).not.toContain('SyntaxError');
+  });
+
   it('leaves a JSON array that is not findings alone', async () => {
     const { verdict, body } = await render('[1, 2, 3]');
     expect(verdict).toBe('comment');

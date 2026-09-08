@@ -23,9 +23,18 @@ interface Finding {
 
 const VERDICT = /^VERDICT: (APPROVE|COMMENT)$/m;
 
-/** The action writes either the result object or the whole event stream. */
+/**
+ * The action writes either the result object or the whole event stream. A file
+ * that is neither reads as no review, which the caller below reports as such: a
+ * run killed before it flushed used to fail here with a raw `SyntaxError` instead.
+ */
 const resultOf = (raw: string): string => {
-  const parsed: unknown = JSON.parse(raw);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return '';
+  }
   if (Array.isArray(parsed)) {
     const last = parsed.filter(
       (event): event is { type: string; result?: string } =>
@@ -44,11 +53,25 @@ const resultOf = (raw: string): string => {
  * `## Findings` heading between them. Reading only the first would have dropped a
  * finding, and reading only a whole-message fence would have dropped both.
  */
+const FENCE = /^```(?:json)?[ \t]*\n([\s\S]*?)\n```[ \t]*$/gm;
+
 const blocksIn = (text: string): readonly string[] => {
-  const fenced = [...text.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n\s*```/g)].map(
-    (match) => match[1] ?? '',
-  );
+  // Both fences anchored to a line, which is what markdown requires. Unanchored,
+  // the lazy body stopped at the first ``` that happened to follow a newline
+  // anywhere, including inside a block.
+  const fenced = [...text.matchAll(FENCE)].map((match) => match[1] ?? '');
   return fenced.length > 0 ? fenced : [text];
+};
+
+/**
+ * What the message says outside the list. A message that is nothing but a bare
+ * array carries no prose, which is not the same as the array itself being prose.
+ */
+const proseOutside = (text: string): string => {
+  const withoutFences = text.replace(FENCE, '').trim();
+  return withoutFences === text.trim() && parseFindings(text) !== undefined
+    ? ''
+    : withoutFences;
 };
 
 const parseFindings = (block: string): readonly Finding[] | undefined => {
@@ -114,19 +137,39 @@ if (executionFile === undefined || bodyOut === undefined) {
 
 const result = resultOf(await Bun.file(executionFile).text());
 const findings = findingsIn(result);
+const sentinel = VERDICT.exec(result)?.[1];
 
-let body: string;
-let verdict: string;
+/**
+ * An empty list means a clean review only when the message is nothing but that
+ * list. `Array.prototype.every` is vacuously true on `[]`, so an illustrative
+ * ```json []``` fence inside otherwise substantive prose parsed as a real empty
+ * findings list and approved a pull request the reviewer had written up.
+ */
+const clean =
+  findings !== undefined &&
+  findings.length === 0 &&
+  proseOutside(result) === '';
 
-if (findings === undefined) {
-  // Prose. The sentinel is the only signal available, and a missing one comments
-  // rather than approves, so a forgotten line cannot approve by accident.
-  verdict = VERDICT.exec(result)?.[1] === 'APPROVE' ? 'approve' : 'comment';
-  body = result.replace(VERDICT, '').trim();
-} else {
-  verdict = findings.length === 0 ? 'approve' : 'comment';
-  body = render(findings);
-}
+/**
+ * The sentinel outranks the list whenever it is present, for the same reason: the
+ * model saying COMMENT in words cannot be talked out of it by a stray fence. With
+ * no sentinel, only a genuinely clean review approves.
+ */
+const verdict =
+  sentinel === undefined
+    ? clean
+      ? 'approve'
+      : 'comment'
+    : sentinel === 'APPROVE'
+      ? 'approve'
+      : 'comment';
+
+const body =
+  findings !== undefined && findings.length > 0
+    ? render(findings)
+    : clean
+      ? render([])
+      : result.replace(VERDICT, '').trim();
 
 if (body === '') {
   console.error('The reviewer produced no review. Not posting an empty one.');

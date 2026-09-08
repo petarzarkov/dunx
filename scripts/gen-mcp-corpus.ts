@@ -36,8 +36,12 @@ const OUT = join(ROOT, 'tools/mcp/src/generated.ts');
 /**
  * A chapter link becomes its resource URI, so a client following one stays in the
  * corpus. Everything else is a repo path the consumer does not have, so it becomes
- * an absolute link. `../../` is replaced before `../`, or the second pattern eats
- * the first half of the first.
+ * an absolute link.
+ *
+ * The href is resolved against the chapter's directory and the decision is made on
+ * the resolved path. It used to be ordered regex replacement, `../../` before
+ * `../` so the second pattern did not eat the first half of the first, which was
+ * correct only while every chapter sat at exactly `docs/guide/*.md`.
  */
 const rewriteLinks = (markdown: string): string =>
   markdown.replace(/\]\((\.[^)\s]+)/g, (_match, href: string) => {
