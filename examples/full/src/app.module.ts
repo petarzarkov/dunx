@@ -103,7 +103,6 @@ const fileAndConsole = (
     LimitsModule,
     MaintenanceModule,
     AssetsModule,
-    LandingModule,
     UpstreamModule,
     GuardsModule,
     // After DatabaseModule, so better-auth reuses the connection it opened.
@@ -114,6 +113,11 @@ const fileAndConsole = (
     // After JobsModule and CacheModule, which bind what it reads and probes.
     OpsModule,
     StatsModule,
+    // Last: its panels read what every module above binds - `EventLoopLag` from
+    // StatsModule, `QueryMetrics` from DatabaseModule and `HttpService` from
+    // UpstreamModule - so it is built once they exist rather than pulling each
+    // of them forward.
+    LandingModule,
   ],
   providers: [Tour],
   // `OpenApiModule` wraps this module, so its factory resolves from here.

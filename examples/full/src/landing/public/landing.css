@@ -1,0 +1,283 @@
+:root {
+  color-scheme: dark light;
+  --bg: #0b0d10;
+  --panel: #14181d;
+  --line: #232a32;
+  --ink: #e6edf3;
+  --dim: #8b98a5;
+  --acc: #4cc38a;
+  --warn: #d29922;
+  --bad: #f85149;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f8fa;
+    --panel: #fff;
+    --line: #d8dee4;
+    --ink: #1f2328;
+    --dim: #59636e;
+    --acc: #1a7f37;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    15px/1.55 system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    sans-serif;
+}
+header {
+  border-bottom: 1px solid var(--line);
+  padding: 28px 20px 22px;
+}
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+h1 span {
+  color: var(--acc);
+}
+.sub {
+  color: var(--dim);
+  margin: 0;
+  max-width: 70ch;
+}
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.pill {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 4px 11px;
+  font: 12px/1.6 var(--mono);
+  color: var(--dim);
+}
+.pill b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.up {
+  color: var(--acc);
+}
+.down {
+  color: var(--bad);
+}
+.degraded {
+  color: var(--warn);
+}
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+nav a {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 8px 13px;
+  font-size: 14px;
+}
+nav a:hover {
+  border-color: var(--acc);
+}
+nav a small {
+  color: var(--dim);
+  display: block;
+  font: 11px/1.4 var(--mono);
+}
+main {
+  padding: 22px 20px 60px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  /* Without this every card in a row grows to the tallest one, and the panels
+     whose output appears only after a click sit under an empty half-screen. */
+  align-items: start;
+}
+section {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 0;
+}
+section h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+section p {
+  margin: 0 0 12px;
+  color: var(--dim);
+  font-size: 13px;
+}
+code {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--acc);
+}
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+button {
+  font:
+    500 13px system-ui,
+    sans-serif;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+input,
+select {
+  font: 13px var(--mono);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 9px;
+  min-width: 0;
+}
+pre {
+  margin: 12px 0 0;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 12px/1.5 var(--mono);
+  max-height: 190px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dim);
+}
+pre:empty {
+  display: none;
+}
+img.shot {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  image-rendering: pixelated;
+  background: var(--bg);
+}
+footer {
+  border-top: 1px solid var(--line);
+  padding: 18px 20px;
+  color: var(--dim);
+  font-size: 13px;
+}
+footer a {
+  color: var(--acc);
+}
+.s200 {
+  color: var(--acc);
+}
+.s429,
+.s400 {
+  color: var(--warn);
+}
+.s500 {
+  color: var(--bad);
+}
+
+/* The vitals panel: a number and its label, wrapping to as many columns as fit. */
+.vitals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+.vital {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+}
+.vital b {
+  display: block;
+  font: 600 17px/1.25 var(--mono);
+  color: var(--ink);
+  /* Tabular figures, so a counter ticking up does not shift the label under it. */
+  font-variant-numeric: tabular-nums;
+}
+.vital span {
+  font: 11px/1.5 var(--mono);
+  color: var(--dim);
+}
+/* Two panels are worth more than one column when there is room for it. */
+section.wide {
+  grid-column: 1 / -1;
+}
+table.routes {
+  width: 100%;
+  border-collapse: collapse;
+  font: 12px/1.6 var(--mono);
+}
+table.routes th {
+  text-align: left;
+  color: var(--dim);
+  font-weight: 500;
+  border-bottom: 1px solid var(--line);
+  padding: 4px 8px 4px 0;
+}
+table.routes td {
+  padding: 3px 8px 3px 0;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+table.routes td:first-child {
+  color: var(--ink);
+}
+pre.code {
+  color: var(--ink);
+  max-height: none;
+}
+/* The one line in a source excerpt worth pointing at. */
+pre.code .hl {
+  color: var(--acc);
+}
+.note {
+  margin: 10px 0 0;
+  color: var(--dim);
+  font-size: 12px;
+}
+.note b {
+  color: var(--ink);
+  font-weight: 600;
+}
