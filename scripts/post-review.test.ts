@@ -2,7 +2,9 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildReview,
   commentableLines,
+  COMPARE_FILE_CAP,
   type Commentable,
+  scopeFromCompare,
 } from './post-review.js';
 
 const finding = (over: Record<string, unknown> = {}) => ({
@@ -181,5 +183,110 @@ describe('reading the diff', () => {
     ]);
     expect([...(lines.get('a.ts') ?? [])]).toEqual([1, 60, 61]);
     expect(lines.has('binary.png')).toBe(false);
+  });
+});
+
+/*
+ * The reviewer runs against the full diff on every push and is not deterministic
+ * over it, so unchanged code gets a fresh chance to yield a finding on each run.
+ * Measured on #70: five rounds, 24 findings, never an approval, with round 3
+ * reporting two files `git log` shows were untouched since the first push.
+ *
+ * Scoping later reviews to what actually changed is what lets a pull request
+ * converge.
+ */
+describe('scoping a review to what changed since the last one', () => {
+  const both = diff({ 'a.ts': [10], 'b.ts': [3] });
+
+  it('reports everything when there is no previous review', () => {
+    const review = buildReview(
+      listed(finding(), finding({ file: 'b.ts', line: 3 })),
+      both,
+      null,
+    );
+    expect(review.comments).toHaveLength(2);
+    expect(review.event).toBe('COMMENT');
+  });
+
+  it('drops findings in files untouched since the last review', () => {
+    const review = buildReview(
+      listed(finding(), finding({ file: 'b.ts', line: 3 })),
+      both,
+      new Set(['b.ts']),
+    );
+    expect(review.comments).toHaveLength(1);
+    expect(review.comments[0]?.path).toBe('b.ts');
+  });
+
+  it('says how many it carried rather than hiding them', () => {
+    const review = buildReview(
+      listed(finding(), finding({ file: 'b.ts', line: 3 })),
+      both,
+      new Set(['b.ts']),
+    );
+    expect(review.body).toContain('1 further finding');
+    expect(review.body).toContain('untouched since the last review');
+  });
+
+  it('approves when everything left in scope is clean', () => {
+    // The convergence case: the author fixed what was raised and pushed. The
+    // only findings left are about code this push did not touch, so there is
+    // nothing new to say and the review should say so.
+    const review = buildReview(
+      listed(finding({ file: 'untouched.ts' })),
+      diff({ 'b.ts': [3] }),
+      new Set(['b.ts']),
+    );
+    expect(review.event).toBe('APPROVE');
+    expect(review.comments).toHaveLength(0);
+    expect(review.body).toContain('1 further finding');
+  });
+
+  it('still approves a genuinely clean review with nothing carried', () => {
+    const review = buildReview(
+      listed(),
+      diff({ 'b.ts': [3] }),
+      new Set(['b.ts']),
+    );
+    expect(review.event).toBe('APPROVE');
+    expect(review.body).toBe(
+      'Reviewed the diff and found nothing worth changing.',
+    );
+  });
+
+  it('keeps a finding with no file, which cannot be attributed to one', () => {
+    const review = buildReview(
+      listed(finding({ file: undefined, line: undefined })),
+      diff({ 'b.ts': [3] }),
+      new Set(['b.ts']),
+    );
+    expect(review.event).toBe('COMMENT');
+    expect(review.body).toContain('Actionable comment');
+  });
+});
+
+/*
+ * The compare endpoint caps its file list at 300 and does not page past it, so a
+ * bigger change comes back silently short. Narrowing the scope to a truncated
+ * list would suppress genuinely new findings and could then approve - the exact
+ * failure the scoping exists to prevent, which is why this widens instead.
+ */
+describe('scope from a compare result', () => {
+  it('scopes to the files it was given', () => {
+    expect(scopeFromCompare(['a.ts', 'b.ts'])).toEqual(
+      new Set(['a.ts', 'b.ts']),
+    );
+  });
+
+  it('scopes to nothing changed, which is still a scope', () => {
+    expect(scopeFromCompare([])).toEqual(new Set());
+  });
+
+  it('widens to the whole diff when the list may be truncated', () => {
+    const many = Array.from({ length: COMPARE_FILE_CAP }, (_, i) => `f${i}.ts`);
+    expect(scopeFromCompare(many)).toBeNull();
+    expect(
+      scopeFromCompare(many.slice(0, COMPARE_FILE_CAP - 1)),
+    ).not.toBeNull();
   });
 });

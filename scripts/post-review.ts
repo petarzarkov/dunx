@@ -32,6 +32,48 @@ export interface Review {
 /** Line numbers on the right-hand side of the diff, which are the commentable ones. */
 export type Commentable = ReadonlyMap<string, ReadonlySet<number>>;
 
+/**
+ * The files this review is allowed to report on, or `null` for all of them.
+ *
+ * `null` is the first review of a pull request, which sees the whole diff. Every
+ * review after it sees only the files touched since the previous one.
+ *
+ * **This is what lets a pull request converge.** The reviewer runs against the
+ * full diff on every push and is not deterministic over it, so unchanged code
+ * gets a fresh chance to yield a finding on each run. Measured on #70: round 3
+ * reported `rssMeanMiB` in `src/resources.ts` and a duplicated `Row` in
+ * `servers/drivers/pair.ts`, and `git log` shows neither file was touched between
+ * the first push and the commit that round reviewed. Both findings were equally
+ * true and equally reportable in round 1. Five rounds, 24 findings, and never an
+ * approval, because there was always something new to say about code nobody had
+ * changed.
+ *
+ * Findings outside the scope are counted in the body rather than dropped in
+ * silence: they were reportable earlier and are still true, and hiding them would
+ * be this script deciding what the author may see.
+ */
+export type Scope = ReadonlySet<string> | null;
+
+/**
+ * GitHub's compare endpoint returns at most this many files and does not page
+ * past them, so a longer list has been silently truncated.
+ */
+export const COMPARE_FILE_CAP = 300;
+
+/**
+ * The scope a compare result supports, or `null` when it cannot be trusted to be
+ * complete.
+ *
+ * Suppressing a finding because its file fell off the end of a truncated list is
+ * the exact failure this scoping exists to prevent: a genuinely new problem,
+ * filed under "not repeated here", on a review that could then approve.
+ *
+ * Being wrong about the cap is safe in the direction that matters - too low
+ * reviews more than it needs to, and only too high could suppress.
+ */
+export const scopeFromCompare = (touched: readonly string[]): Scope =>
+  touched.length >= COMPARE_FILE_CAP ? null : new Set(touched);
+
 const VERDICT = /^VERDICT: (APPROVE|COMMENT)$/gm;
 
 /**
@@ -125,8 +167,16 @@ const at = (finding: Finding): string =>
 export const buildReview = (
   result: string,
   commentable: Commentable,
+  scope: Scope = null,
 ): Review => {
-  const findings = findingsIn(result);
+  const all = findingsIn(result);
+  const findings =
+    all === undefined || scope === null
+      ? all
+      : all.filter(
+          (finding) => finding.file === undefined || scope.has(finding.file),
+        );
+  const carried = (all?.length ?? 0) - (findings?.length ?? 0);
   const sentinel = verdictIn(result);
   const clean =
     findings !== undefined &&
@@ -156,7 +206,10 @@ export const buildReview = (
   if (findings.length === 0) {
     return {
       event,
-      body: 'Reviewed the diff and found nothing worth changing.',
+      body:
+        carried === 0
+          ? 'Reviewed the diff and found nothing worth changing.'
+          : `Reviewed what changed since the last review and found nothing worth changing.\n\n${carriedNote(carried)}`,
       comments: [],
     };
   }
@@ -185,6 +238,8 @@ export const buildReview = (
 
   const plural = findings.length === 1 ? 'comment' : 'comments';
   const body = [`**Actionable ${plural} posted: ${comments.length}**`];
+
+  if (carried > 0) body.push('', carriedNote(carried));
 
   if (elsewhere.length > 0) {
     // Collapsed, so the conversation stays a summary rather than the review.
@@ -233,6 +288,16 @@ export const commentableLines = (
   return map;
 };
 
+/**
+ * Said plainly rather than hidden: these findings are real, they are just not
+ * about anything this push touched, so repeating them as new inline comments on
+ * every round is what turns a review into a treadmill.
+ */
+const carriedNote = (carried: number): string =>
+  `${carried} further finding${carried === 1 ? '' : 's'} ` +
+  `${carried === 1 ? 'is' : 'are'} in code untouched since the last review, ` +
+  'and so were reportable then. Not repeated here.';
+
 const gh = async (args: readonly string[]): Promise<string> => {
   const proc = Bun.spawn(['gh', ...args], { stdout: 'pipe', stderr: 'pipe' });
   const [out, err, code] = await Promise.all([
@@ -242,6 +307,61 @@ const gh = async (args: readonly string[]): Promise<string> => {
   ]);
   if (code !== 0) throw new Error(`gh ${args.join(' ')} failed: ${err.trim()}`);
   return out;
+};
+
+/**
+ * The commit this reviewer last posted a review against on this pull request, or
+ * `undefined` if this is the first.
+ *
+ * By the authenticated account rather than a hardcoded login: the workflow runs
+ * as whatever `DUNXONU_TOKEN` belongs to, and a review left by a human or by
+ * another bot must not narrow what this one looks at.
+ */
+const lastReviewedSha = async (
+  repo: string,
+  number: string,
+): Promise<string | undefined> => {
+  const me = (await gh(['api', 'user', '--jq', '.login'])).trim();
+  const reviews = JSON.parse(
+    await gh(['api', '--paginate', `repos/${repo}/pulls/${number}/reviews`]),
+  ) as { user?: { login?: string }; commit_id?: string }[];
+  return reviews.findLast((review) => review.user?.login === me)?.commit_id;
+};
+
+/**
+ * The files touched since this reviewer last looked, or `null` when it has not.
+ *
+ * Both failure modes here widen rather than narrow. A `compare` that throws -
+ * the old commit garbage-collected after a force-push, most likely - and a
+ * response at the file cap both fall back to the whole diff. Reviewing too much
+ * is the behaviour being fixed; reviewing nothing silently would be worse than
+ * the bug.
+ */
+const scopeSince = async (
+  repo: string,
+  number: string,
+  head: string,
+): Promise<Scope> => {
+  const since = await lastReviewedSha(repo, number);
+  if (since === undefined || since === head) return null;
+  try {
+    const compared = JSON.parse(
+      await gh(['api', `repos/${repo}/compare/${since}...${head}`]),
+    ) as { files?: { filename: string }[] };
+    const touched = compared.files?.map((file) => file.filename) ?? [];
+    const scope = scopeFromCompare(touched);
+    console.log(
+      scope === null
+        ? `Compare returned ${touched.length} files, at or past the ${COMPARE_FILE_CAP} the API caps at, so the list may be short. Reviewing the whole diff.`
+        : `Reviewing ${touched.length} file(s) changed since ${since.slice(0, 7)}.`,
+    );
+    return scope;
+  } catch (error) {
+    console.log(
+      `Could not compare ${since.slice(0, 7)}...${head.slice(0, 7)}, reviewing the whole diff: ${String(error)}`,
+    );
+    return null;
+  }
 };
 
 if (import.meta.main) {
@@ -284,7 +404,11 @@ if (import.meta.main) {
     await gh(['api', '--paginate', `repos/${repo}/pulls/${number}/files`]),
   ) as { filename: string; patch?: string }[];
 
-  const review = buildReview(result, commentableLines(files));
+  const review = buildReview(
+    result,
+    commentableLines(files),
+    await scopeSince(repo, number, head),
+  );
   if (review.body === '' && review.comments.length === 0) {
     console.error('The reviewer produced no review. Not posting an empty one.');
     process.exit(1);
