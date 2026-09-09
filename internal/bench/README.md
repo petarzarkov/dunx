@@ -343,11 +343,25 @@ These are choices that move the numbers. They are listed here rather than buried
 - **The Node subjects run on the current LTS, and the version is in every report.**
   Nothing pins it - the harness takes whatever `node` or `$BENCH_NODE` resolves -
   so it is a choice the person taking the run makes, and the wrong choice quietly
-  handicaps six of the twenty subjects. The first run of the `io` scenario was
-  taken on 20.20.2, which was out of maintenance; that understates Node against a
-  Bun measured on its current release, and the published numbers were retaken.
-  `machine.node` in the JSON and the header above every table is what makes this
-  checkable rather than a matter of trust.
+  handicaps six of the twenty subjects.
+
+  **It is worth more than anyone guessed.** The first run of the `io` scenario was
+  taken on 20.20.2, out of maintenance, against a Bun on its current release. Both
+  runs measured as a share of raw `Bun.serve`, so the machine cancels:
+
+  | Subject | plaintext | json | params | validate | io |
+  | ------- | --------: | ---: | -----: | -------: | -: |
+  | Express | 9.2 -> 20.5 | 9.2 -> 20.3 | 9.3 -> 19.9 | 10.2 -> 19.2 | 23.8 -> 39.5 |
+  | NestJS (Express) | 7.2 -> 14.6 | 7.0 -> 13.9 | 7.0 -> 13.6 | 8.2 -> 14.6 | 20.7 -> 35.8 |
+  | node:http (raw) | 31.4 -> 39.7 | 31.6 -> 37.7 | 32.9 -> 36.9 | 33.0 -> 35.6 | 50.3 -> 51.5 |
+  | Fastify | 28.5 -> 34.5 | 30.7 -> 34.0 | 30.4 -> 34.0 | 20.0 -> 25.1 | 49.2 -> 52.4 |
+  | Hono (Node) | 28.2 -> 30.6 | 26.0 -> 28.5 | 24.0 -> 26.6 | 22.6 -> 22.5 | 44.3 -> 46.5 |
+  | NestJS (Fastify) | 25.6 -> 27.6 | 26.0 -> 30.3 | 23.7 -> 26.6 | 17.2 -> 22.0 | 44.8 -> 47.4 |
+
+  Express and Nest-on-Express roughly **doubled**; 29 of 30 cells improved. An
+  out-of-date Node is not a small handicap on this suite, it is the largest single
+  one a run can carry, and `machine.node` in the JSON and in the header above every
+  table is what makes it checkable rather than a matter of trust.
 - **The two Redis clients are left at defaults that differ.** `Bun.RedisClient`
   batches a tick's commands into one write; `ioredis` does not, because
   `enableAutoPipelining` is `false` in 6.0.0. Neither is changed, for the reason
@@ -642,8 +656,8 @@ transcribed by hand.
 
 ```
 AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
-linux 7.0.0-31-generic x64 | bun 1.4.2 | node v20.20.2 | oha oha 1.15.0
-64 connections | 3s warmup | 5 x 5s measured | 2026-09-08
+linux 7.0.0-31-generic x64 | bun 1.4.2 | node v24.21.0 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 5s measured | 2026-09-09
 dunx-logging 3.5.1 | dunx-logging-arkv 3.5.1 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1 | gin v1.12.0 | axum 0.8.9 | spring 4.1.0 | aspnet-minimal net10.0 | aspnet-mvc net10.0 | django 6.1 | fastapi 0.141.1
 ```
 
@@ -653,126 +667,126 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
-| Bun.serve (raw) | 133,063 | 1,362 | 0.461 | 0.928 | 45.9 | 7.76 | 100.0% |
-| Elysia | 131,902 | 1,165 | 0.465 | 0.940 | 55.7 | 7.94 | 99.1% |
-| **@dunx/http** | **131,018** | 1,790 | 0.469 | 0.946 | 60.8 | 7.95 | **98.5%** |
-| Axum (Rust) | 124,804 | 1,217 | 0.503 | 0.589 | 5.0 | 7.99 | 93.8% |
-| Hono (Bun) | 120,661 | 2,147 | 0.505 | 1.014 | 53.5 | 8.67 | 90.7% |
-| ASP.NET Core minimal APIs | 110,657 | 1,296 | 0.562 | 0.772 | 102.4 | 11.40 | 83.2% |
-| ASP.NET Core MVC | 86,228 | 1,074 | 0.713 | 1.011 | 104.3 | 13.95 | 64.8% |
-| net/http (Go) | 76,290 | 848 | 0.837 | 1.834 | 18.0 | 13.12 | 57.3% |
-| @dunx/http (+ request logging) | 75,495 | 1,608 | 0.795 | 1.558 | 66.7 | 14.01 | 56.7% |
-| Gin (Go) | 75,236 | 719 | 0.844 | 1.946 | 22.8 | 13.28 | 56.5% |
-| @dunx/http (+ request logging, @arkv/logger) | 59,504 | 962 | 1.024 | 2.039 | 69.2 | 17.67 | 44.7% |
-| Spring Boot (JVM) | 47,991 | 824 | 1.290 | 1.599 | 650.0 | 30.90 | 36.1% |
-| node:http (raw) | 41,759 | 1,188 | 1.528 | 2.011 | 61.6 | 24.03 | 31.4% |
-| Fastify (Node) | 37,899 | 1,373 | 1.671 | 1.947 | 71.9 | 26.68 | 28.5% |
-| Hono (Node) | 37,549 | 809 | 1.660 | 2.057 | 75.2 | 26.72 | 28.2% |
-| NestJS (Fastify) | 34,014 | 744 | 1.831 | 2.336 | 91.7 | 29.56 | 25.6% |
-| Express (Node) | 12,289 | 227 | 4.885 | 7.052 | 126.5 | 96.88 | 9.2% |
-| NestJS (Express) | 9,542 | 42 | 6.272 | 8.988 | 159.4 | 123.25 | 7.2% |
-| FastAPI (Python) | 7,236 | 65 | 8.827 | 8.984 | 43.0 | 138.18 | 5.4% |
-| Django (Python) | 4,575 | 64 | 13.920 | 14.914 | 73.3 | 217.95 | 3.4% |
+| Bun.serve (raw) | 134,478 | 514 | 0.453 | 0.914 | 47.1 | 7.70 | 100.0% |
+| **@dunx/http** | **133,993** | 1,203 | 0.458 | 0.921 | 61.5 | 7.76 | **99.6%** |
+| Elysia | 133,151 | 1,698 | 0.459 | 0.930 | 54.8 | 7.88 | 99.0% |
+| Axum (Rust) | 126,969 | 1,202 | 0.499 | 0.553 | 4.8 | 7.89 | 94.4% |
+| Hono (Bun) | 123,815 | 2,455 | 0.495 | 0.999 | 52.5 | 8.44 | 92.1% |
+| ASP.NET Core minimal APIs | 110,649 | 2,356 | 0.558 | 0.803 | 98.8 | 11.32 | 82.3% |
+| ASP.NET Core MVC | 88,702 | 1,311 | 0.697 | 0.982 | 104.4 | 13.57 | 66.0% |
+| @dunx/http (+ request logging) | 80,618 | 594 | 0.761 | 1.507 | 69.6 | 13.19 | 59.9% |
+| Gin (Go) | 76,480 | 418 | 0.831 | 1.910 | 22.5 | 13.09 | 56.9% |
+| net/http (Go) | 74,976 | 423 | 0.851 | 1.867 | 17.9 | 13.36 | 55.8% |
+| @dunx/http (+ request logging, @arkv/logger) | 59,967 | 1,230 | 1.000 | 1.991 | 76.3 | 17.57 | 44.6% |
+| node:http (raw) | 53,325 | 814 | 1.162 | 2.295 | 86.1 | 18.81 | 39.7% |
+| Spring Boot (JVM) | 52,073 | 77 | 1.205 | 1.721 | 352.3 | 28.79 | 38.7% |
+| Fastify (Node) | 46,443 | 1,456 | 1.355 | 1.814 | 92.9 | 22.12 | 34.5% |
+| Hono (Node) | 41,201 | 1,251 | 1.538 | 1.943 | 89.4 | 24.55 | 30.6% |
+| NestJS (Fastify) | 37,178 | 1,864 | 1.623 | 2.173 | 109.4 | 27.85 | 27.6% |
+| Express (Node) | 27,561 | 768 | 2.275 | 2.735 | 92.7 | 36.77 | 20.5% |
+| NestJS (Express) | 19,640 | 256 | 3.145 | 3.573 | 109.6 | 51.99 | 14.6% |
+| FastAPI (Python) | 7,321 | 71 | 8.725 | 9.012 | 44.1 | 136.34 | 5.4% |
+| Django (Python) | 4,538 | 18 | 14.022 | 15.308 | 73.6 | 220.01 | 3.4% |
 
 **JSON** - `GET /json`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
-| Bun.serve (raw) | 129,216 | 1,455 | 0.476 | 0.959 | 46.6 | 8.00 | 100.0% |
-| **@dunx/http** | **125,170** | 766 | 0.491 | 0.987 | 59.7 | 8.30 | **96.9%** |
-| Elysia | 123,385 | 1,073 | 0.496 | 1.002 | 58.1 | 8.52 | 95.5% |
-| Axum (Rust) | 120,496 | 1,271 | 0.518 | 0.675 | 5.3 | 8.28 | 93.3% |
-| Hono (Bun) | 111,095 | 1,374 | 0.550 | 1.104 | 54.4 | 9.39 | 86.0% |
-| ASP.NET Core minimal APIs | 105,065 | 2,545 | 0.590 | 0.843 | 100.2 | 11.97 | 81.3% |
-| ASP.NET Core MVC | 83,115 | 1,025 | 0.751 | 1.014 | 106.7 | 14.36 | 64.3% |
-| @dunx/http (+ request logging) | 77,258 | 1,247 | 0.794 | 1.574 | 68.2 | 13.75 | 59.8% |
-| net/http (Go) | 74,366 | 287 | 0.857 | 1.899 | 17.5 | 13.44 | 57.6% |
-| Gin (Go) | 71,227 | 2,421 | 0.893 | 2.038 | 22.8 | 14.03 | 55.1% |
-| @dunx/http (+ request logging, @arkv/logger) | 57,101 | 1,757 | 1.066 | 2.126 | 74.1 | 18.80 | 44.2% |
-| Spring Boot (JVM) | 49,663 | 415 | 1.261 | 1.616 | 644.4 | 29.50 | 38.4% |
-| node:http (raw) | 40,819 | 1,685 | 1.505 | 1.929 | 62.0 | 24.68 | 31.6% |
-| Fastify (Node) | 39,606 | 1,278 | 1.587 | 1.944 | 71.7 | 25.33 | 30.7% |
-| NestJS (Fastify) | 33,654 | 483 | 1.865 | 2.241 | 90.1 | 29.93 | 26.0% |
-| Hono (Node) | 33,630 | 739 | 1.846 | 2.279 | 74.0 | 30.13 | 26.0% |
-| Express (Node) | 11,923 | 54 | 5.004 | 7.192 | 126.3 | 99.16 | 9.2% |
-| NestJS (Express) | 9,002 | 96 | 6.604 | 9.769 | 161.1 | 130.37 | 7.0% |
-| FastAPI (Python) | 7,240 | 87 | 8.820 | 9.029 | 44.0 | 138.40 | 5.6% |
-| Django (Python) | 4,375 | 52 | 14.505 | 15.911 | 72.7 | 228.32 | 3.4% |
+| Bun.serve (raw) | 129,641 | 1,354 | 0.470 | 0.944 | 46.3 | 7.96 | 100.0% |
+| Axum (Rust) | 126,805 | 644 | 0.500 | 0.574 | 4.8 | 7.89 | 97.8% |
+| **@dunx/http** | **123,999** | 1,618 | 0.493 | 0.990 | 60.3 | 8.33 | **95.6%** |
+| Elysia | 122,220 | 1,094 | 0.501 | 1.010 | 55.5 | 8.59 | 94.3% |
+| Hono (Bun) | 112,717 | 1,624 | 0.544 | 1.095 | 54.9 | 9.29 | 86.9% |
+| ASP.NET Core minimal APIs | 105,833 | 1,356 | 0.590 | 0.795 | 102.2 | 11.90 | 81.6% |
+| ASP.NET Core MVC | 84,393 | 1,744 | 0.734 | 1.016 | 106.7 | 14.14 | 65.1% |
+| @dunx/http (+ request logging) | 77,015 | 991 | 0.791 | 1.561 | 68.0 | 13.84 | 59.4% |
+| Gin (Go) | 74,874 | 866 | 0.850 | 1.955 | 22.4 | 13.37 | 57.8% |
+| net/http (Go) | 74,363 | 312 | 0.859 | 1.887 | 17.9 | 13.46 | 57.4% |
+| @dunx/http (+ request logging, @arkv/logger) | 58,051 | 828 | 1.046 | 2.082 | 70.3 | 18.33 | 44.8% |
+| Spring Boot (JVM) | 51,229 | 186 | 1.233 | 1.464 | 600.9 | 28.90 | 39.5% |
+| node:http (raw) | 48,882 | 1,811 | 1.285 | 2.502 | 86.2 | 20.53 | 37.7% |
+| Fastify (Node) | 44,040 | 1,505 | 1.392 | 1.843 | 92.1 | 23.37 | 34.0% |
+| NestJS (Fastify) | 39,254 | 1,152 | 1.577 | 2.458 | 109.7 | 26.32 | 30.3% |
+| Hono (Node) | 36,916 | 863 | 1.686 | 2.075 | 92.0 | 27.99 | 28.5% |
+| Express (Node) | 26,275 | 240 | 2.385 | 2.644 | 92.7 | 38.41 | 20.3% |
+| NestJS (Express) | 17,974 | 491 | 3.539 | 4.022 | 107.4 | 57.02 | 13.9% |
+| FastAPI (Python) | 7,258 | 22 | 8.802 | 9.061 | 44.0 | 137.71 | 5.6% |
+| Django (Python) | 4,425 | 45 | 14.389 | 16.098 | 73.9 | 225.74 | 3.4% |
 
 **Path parameter** - `GET /params/42`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
-| Bun.serve (raw) | 126,730 | 2,202 | 0.485 | 0.974 | 47.1 | 8.15 | 100.0% |
-| Elysia | 124,302 | 1,249 | 0.492 | 0.993 | 55.8 | 8.39 | 98.1% |
-| **@dunx/http** | **122,996** | 1,018 | 0.497 | 1.001 | 60.3 | 8.47 | **97.1%** |
-| Axum (Rust) | 119,359 | 941 | 0.529 | 0.605 | 5.2 | 8.37 | 94.2% |
-| Hono (Bun) | 107,011 | 1,768 | 0.571 | 1.144 | 54.9 | 9.77 | 84.4% |
-| ASP.NET Core minimal APIs | 105,345 | 2,931 | 0.595 | 0.824 | 100.5 | 11.79 | 83.1% |
-| @dunx/http (+ request logging) | 75,375 | 445 | 0.818 | 1.609 | 67.7 | 13.96 | 59.5% |
-| Gin (Go) | 73,796 | 2,341 | 0.862 | 1.979 | 22.9 | 13.57 | 58.2% |
-| net/http (Go) | 73,588 | 521 | 0.868 | 1.901 | 18.2 | 13.63 | 58.1% |
-| ASP.NET Core MVC | 70,881 | 1,834 | 0.877 | 1.188 | 106.0 | 16.41 | 55.9% |
-| @dunx/http (+ request logging, @arkv/logger) | 56,670 | 941 | 1.081 | 2.157 | 65.6 | 18.89 | 44.7% |
-| Spring Boot (JVM) | 44,719 | 1,374 | 1.406 | 1.782 | 618.5 | 32.67 | 35.3% |
-| node:http (raw) | 41,707 | 1,902 | 1.481 | 2.069 | 62.2 | 24.10 | 32.9% |
-| Fastify (Node) | 38,477 | 325 | 1.633 | 2.012 | 72.0 | 26.08 | 30.4% |
-| Hono (Node) | 30,387 | 1,155 | 2.066 | 2.402 | 74.6 | 33.08 | 24.0% |
-| NestJS (Fastify) | 30,054 | 654 | 2.056 | 2.638 | 92.2 | 33.65 | 23.7% |
-| Express (Node) | 11,738 | 108 | 5.094 | 7.440 | 128.2 | 100.98 | 9.3% |
-| NestJS (Express) | 8,905 | 66 | 6.691 | 10.080 | 159.6 | 132.73 | 7.0% |
-| FastAPI (Python) | 6,599 | 21 | 9.669 | 9.933 | 42.8 | 151.34 | 5.2% |
-| Django (Python) | 4,315 | 104 | 14.417 | 16.453 | 73.7 | 231.42 | 3.4% |
+| Bun.serve (raw) | 128,172 | 1,199 | 0.478 | 0.961 | 47.9 | 8.06 | 100.0% |
+| Elysia | 127,701 | 1,358 | 0.482 | 0.974 | 56.4 | 8.20 | 99.6% |
+| Axum (Rust) | 122,718 | 880 | 0.514 | 0.633 | 4.8 | 8.14 | 95.7% |
+| **@dunx/http** | **120,942** | 2,130 | 0.498 | 1.007 | 61.5 | 8.58 | **94.4%** |
+| Hono (Bun) | 108,669 | 1,434 | 0.564 | 1.133 | 54.1 | 9.66 | 84.8% |
+| ASP.NET Core minimal APIs | 105,077 | 2,309 | 0.596 | 0.819 | 99.9 | 11.83 | 82.0% |
+| @dunx/http (+ request logging) | 75,577 | 1,144 | 0.807 | 1.600 | 69.5 | 14.12 | 59.0% |
+| Gin (Go) | 74,708 | 415 | 0.850 | 1.969 | 22.5 | 13.40 | 58.3% |
+| net/http (Go) | 73,448 | 838 | 0.870 | 1.897 | 17.6 | 13.62 | 57.3% |
+| ASP.NET Core MVC | 68,123 | 1,740 | 0.903 | 1.240 | 105.9 | 17.24 | 53.1% |
+| @dunx/http (+ request logging, @arkv/logger) | 56,899 | 1,301 | 1.074 | 2.144 | 64.7 | 18.75 | 44.4% |
+| node:http (raw) | 47,348 | 1,560 | 1.355 | 2.476 | 86.0 | 21.24 | 36.9% |
+| Spring Boot (JVM) | 44,459 | 1,014 | 1.414 | 1.769 | 628.8 | 33.03 | 34.7% |
+| Fastify (Node) | 43,568 | 699 | 1.422 | 1.930 | 92.2 | 23.45 | 34.0% |
+| NestJS (Fastify) | 34,110 | 490 | 1.806 | 2.242 | 109.0 | 30.22 | 26.6% |
+| Hono (Node) | 34,043 | 1,096 | 1.809 | 2.324 | 93.9 | 30.34 | 26.6% |
+| Express (Node) | 25,443 | 422 | 2.456 | 2.927 | 91.2 | 39.95 | 19.9% |
+| NestJS (Express) | 17,446 | 446 | 3.637 | 4.086 | 108.3 | 57.98 | 13.6% |
+| FastAPI (Python) | 6,677 | 55 | 9.549 | 9.996 | 43.3 | 149.78 | 5.2% |
+| Django (Python) | 4,363 | 84 | 14.508 | 15.838 | 72.5 | 228.91 | 3.4% |
 
 **Body validation** - `POST /validate`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
-| Axum (Rust) | 90,419 | 188 | 0.705 | 0.750 | 5.4 | 11.05 | 102.4% |
-| Bun.serve (raw) | 88,302 | 2,419 | 0.694 | 1.380 | 50.8 | 11.73 | 100.0% |
-| **@dunx/http** | **84,264** | 803 | 0.728 | 1.459 | 61.0 | 12.41 | **95.4%** |
-| Elysia | 78,332 | 1,562 | 0.774 | 1.552 | 59.0 | 13.42 | 88.7% |
-| ASP.NET Core minimal APIs | 78,244 | 1,047 | 0.798 | 1.080 | 103.4 | 15.27 | 88.6% |
-| Hono (Bun) | 64,217 | 1,843 | 0.952 | 1.898 | 59.1 | 16.69 | 72.7% |
-| @dunx/http (+ request logging) | 57,116 | 368 | 1.083 | 1.778 | 68.3 | 18.47 | 64.7% |
-| ASP.NET Core MVC | 51,952 | 755 | 1.201 | 1.593 | 106.5 | 21.58 | 58.8% |
-| Gin (Go) | 50,216 | 235 | 1.275 | 2.844 | 22.9 | 19.94 | 56.9% |
-| net/http (Go) | 50,029 | 284 | 1.284 | 2.774 | 18.0 | 20.02 | 56.7% |
-| @dunx/http (+ request logging, @arkv/logger) | 42,452 | 1,354 | 1.435 | 2.813 | 70.8 | 24.53 | 48.1% |
-| Spring Boot (JVM) | 31,650 | 382 | 1.996 | 2.325 | 672.1 | 43.44 | 35.8% |
-| node:http (raw) | 29,166 | 396 | 2.161 | 4.221 | 63.0 | 34.53 | 33.0% |
-| Hono (Node) | 19,969 | 392 | 3.113 | 6.043 | 77.2 | 50.78 | 22.6% |
-| Fastify (Node) | 17,661 | 116 | 3.309 | 6.498 | 105.2 | 69.47 | 20.0% |
-| NestJS (Fastify) | 15,199 | 172 | 3.901 | 7.290 | 158.1 | 78.68 | 17.2% |
-| Express (Node) | 8,989 | 160 | 6.640 | 9.608 | 126.9 | 130.57 | 10.2% |
-| NestJS (Express) | 7,261 | 48 | 8.188 | 11.807 | 165.2 | 161.83 | 8.2% |
-| FastAPI (Python) | 4,404 | 9 | 14.472 | 14.960 | 44.3 | 226.86 | 5.0% |
-| Django (Python) | 4,178 | 45 | 15.180 | 17.192 | 73.1 | 238.62 | 4.7% |
+| Bun.serve (raw) | 90,015 | 892 | 0.687 | 1.369 | 51.0 | 11.53 | 100.0% |
+| Axum (Rust) | 84,320 | 3,397 | 0.758 | 0.812 | 5.5 | 11.86 | 93.7% |
+| **@dunx/http** | **82,903** | 1,551 | 0.727 | 1.460 | 68.2 | 12.58 | **92.1%** |
+| Elysia | 80,372 | 1,074 | 0.757 | 1.520 | 57.2 | 13.21 | 89.3% |
+| ASP.NET Core minimal APIs | 77,560 | 2,309 | 0.798 | 1.097 | 101.9 | 15.26 | 86.2% |
+| Hono (Bun) | 66,288 | 1,585 | 0.912 | 1.819 | 55.7 | 15.95 | 73.6% |
+| @dunx/http (+ request logging) | 57,602 | 889 | 1.060 | 1.979 | 73.0 | 18.49 | 64.0% |
+| ASP.NET Core MVC | 53,127 | 976 | 1.169 | 1.614 | 107.3 | 21.18 | 59.0% |
+| Gin (Go) | 50,459 | 70 | 1.269 | 2.826 | 22.5 | 19.88 | 56.1% |
+| net/http (Go) | 49,884 | 346 | 1.288 | 2.773 | 17.2 | 20.07 | 55.4% |
+| @dunx/http (+ request logging, @arkv/logger) | 43,607 | 1,287 | 1.390 | 2.718 | 71.0 | 24.52 | 48.4% |
+| Spring Boot (JVM) | 33,944 | 561 | 1.829 | 2.233 | 635.0 | 41.42 | 37.7% |
+| node:http (raw) | 32,013 | 1,364 | 1.888 | 3.734 | 90.4 | 31.84 | 35.6% |
+| Fastify (Node) | 22,584 | 403 | 2.620 | 9.675 | 258.6 | 52.47 | 25.1% |
+| Hono (Node) | 20,225 | 918 | 3.096 | 5.751 | 105.7 | 49.70 | 22.5% |
+| NestJS (Fastify) | 19,788 | 474 | 3.064 | 7.645 | 278.1 | 58.25 | 22.0% |
+| Express (Node) | 17,312 | 441 | 3.642 | 4.401 | 97.4 | 58.17 | 19.2% |
+| NestJS (Express) | 13,122 | 280 | 4.815 | 5.479 | 115.0 | 77.17 | 14.6% |
+| FastAPI (Python) | 4,403 | 23 | 14.502 | 14.887 | 44.2 | 227.13 | 4.9% |
+| Django (Python) | 4,199 | 61 | 15.132 | 16.780 | 73.8 | 237.85 | 4.7% |
 
 **Cache and database** - `GET /io`, one Redis `GET` then one Postgres `SELECT`
 
 | Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
 | ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
-| Axum (Rust) | 34,704 | 322 | 1.832 | 2.198 | 6.1 | 28.79 | 127.2% |
-| **@dunx/http** | **27,377** | 338 | 2.327 | 3.612 | 71.8 | 39.11 | **100.4%** |
-| Elysia | 27,367 | 459 | 2.333 | 3.641 | 68.5 | 39.29 | 100.3% |
-| Bun.serve (raw) | 27,281 | 181 | 2.336 | 3.592 | 62.7 | 39.18 | 100.0% |
-| Hono (Bun) | 26,248 | 407 | 2.423 | 3.831 | 64.1 | 40.83 | 96.2% |
-| @dunx/http (+ request logging) | 24,011 | 234 | 2.632 | 4.291 | 76.5 | 45.61 | 88.0% |
-| @dunx/http (+ request logging, @arkv/logger) | 22,689 | 247 | 2.785 | 4.511 | 84.4 | 48.58 | 83.2% |
-| ASP.NET Core minimal APIs | 21,229 | 254 | 2.984 | 3.928 | 120.1 | 69.46 | 77.8% |
-| Gin (Go) | 20,762 | 215 | 2.991 | 4.412 | 29.0 | 48.12 | 76.1% |
-| net/http (Go) | 20,656 | 204 | 3.007 | 4.349 | 21.8 | 48.37 | 75.7% |
-| ASP.NET Core MVC | 18,330 | 166 | 3.439 | 4.796 | 129.9 | 78.50 | 67.2% |
-| node:http (raw) | 13,715 | 323 | 4.463 | 6.185 | 93.1 | 73.84 | 50.3% |
-| Fastify (Node) | 13,414 | 347 | 4.635 | 6.324 | 98.7 | 76.55 | 49.2% |
-| NestJS (Fastify) | 12,234 | 264 | 5.124 | 7.185 | 108.5 | 83.11 | 44.8% |
-| Hono (Node) | 12,091 | 298 | 5.023 | 7.274 | 95.1 | 84.74 | 44.3% |
-| Express (Node) | 6,494 | 157 | 9.173 | 14.949 | 105.8 | 182.45 | 23.8% |
-| NestJS (Express) | 5,658 | 135 | 10.533 | 16.835 | 171.1 | 209.07 | 20.7% |
-| Spring Boot (JVM) | 4,899 | 44 | 13.013 | 14.341 | 404.5 | 111.49 | 18.0% |
-| FastAPI (Python) | 2,111 | 48 | 29.026 | 47.600 | 66.0 | 474.53 | 7.7% |
-| Django (Python) | 1,540 | 14 | 41.118 | 45.075 | 106.8 | 453.08 | - (1 bad) |
+| Axum (Rust) | 35,228 | 246 | 1.810 | 2.094 | 6.1 | 28.36 | 127.1% |
+| Elysia | 27,741 | 248 | 2.296 | 3.516 | 66.3 | 38.41 | 100.1% |
+| Bun.serve (raw) | 27,721 | 191 | 2.308 | 3.524 | 60.5 | 38.26 | 100.0% |
+| **@dunx/http** | **27,646** | 347 | 2.305 | 3.597 | 71.9 | 38.74 | **99.7%** |
+| Hono (Bun) | 26,494 | 518 | 2.406 | 3.782 | 64.1 | 40.69 | 95.6% |
+| @dunx/http (+ request logging) | 24,734 | 363 | 2.553 | 4.188 | 78.2 | 44.35 | 89.2% |
+| @dunx/http (+ request logging, @arkv/logger) | 22,517 | 111 | 2.838 | 4.494 | 80.6 | 47.83 | 81.2% |
+| ASP.NET Core minimal APIs | 21,355 | 261 | 2.963 | 3.940 | 122.7 | 68.45 | 77.0% |
+| Gin (Go) | 20,945 | 254 | 2.964 | 4.355 | 28.1 | 47.71 | 75.6% |
+| net/http (Go) | 20,764 | 239 | 2.995 | 4.318 | 23.1 | 48.12 | 74.9% |
+| ASP.NET Core MVC | 18,623 | 137 | 3.391 | 4.658 | 129.0 | 77.24 | 67.2% |
+| Fastify (Node) | 14,520 | 415 | 4.323 | 5.881 | 121.8 | 70.54 | 52.4% |
+| node:http (raw) | 14,267 | 612 | 4.317 | 6.040 | 113.2 | 72.12 | 51.5% |
+| NestJS (Fastify) | 13,140 | 383 | 4.736 | 6.671 | 158.3 | 77.79 | 47.4% |
+| Hono (Node) | 12,899 | 424 | 4.804 | 6.422 | 145.5 | 79.13 | 46.5% |
+| Express (Node) | 10,959 | 432 | 5.679 | 7.670 | 130.0 | 93.11 | 39.5% |
+| NestJS (Express) | 9,911 | 239 | 6.237 | 8.331 | 159.9 | 103.76 | 35.8% |
+| Spring Boot (JVM) | 4,944 | 44 | 12.898 | 14.341 | 367.8 | 109.19 | 17.8% |
+| FastAPI (Python) | 2,130 | 14 | 29.085 | 45.828 | 64.6 | 469.69 | 7.7% |
+| Django (Python) | 1,580 | 21 | 40.461 | 43.469 | 104.9 | 441.49 | 5.7% |
 
 Each subject uses its own ecosystem's clients, every pool pinned to 8 - the
 `SUBJECTS` block in `results/latest.json` names the pair behind each row. `spring`
@@ -784,51 +798,51 @@ runtime held still, see "Driver cost".
 
 | Subject | median ms | min ms | max ms |
 | ------- | --------: | -----: | -----: |
-| Axum (Rust) | 1.6 | 1.6 | 1.9 |
-| net/http (Go) | 4.1 | 3.8 | 5.1 |
-| Gin (Go) | 5.0 | 3.9 | 5.3 |
-| Bun.serve (raw) | 23.1 | 22.6 | 25.0 |
-| Hono (Bun) | 27.8 | 26.1 | 28.8 |
-| @dunx/http (+ request logging) | 46.5 | 43.5 | 48.9 |
-| **@dunx/http** | **47.1** | 45.7 | 48.9 |
-| Elysia | 52.6 | 50.6 | 53.3 |
-| @dunx/http (+ request logging, @arkv/logger) | 58.7 | 57.3 | 62.2 |
-| node:http (raw) | 77.9 | 72.7 | 80.6 |
-| Hono (Node) | 99.1 | 93.3 | 101.6 |
-| Express (Node) | 130.4 | 121.3 | 133.6 |
-| Django (Python) | 132.5 | 130.0 | 136.2 |
-| Fastify (Node) | 150.1 | 145.5 | 153.6 |
-| FastAPI (Python) | 246.0 | 243.1 | 249.8 |
-| NestJS (Express) | 284.5 | 274.4 | 292.9 |
-| ASP.NET Core minimal APIs | 292.8 | 286.7 | 307.8 |
-| NestJS (Fastify) | 298.6 | 291.9 | 304.3 |
-| ASP.NET Core MVC | 307.7 | 295.8 | 315.1 |
-| Spring Boot (JVM) | 1325.9 | 1301.7 | 1350.8 |
+| Axum (Rust) | 1.7 | 1.6 | 1.9 |
+| net/http (Go) | 4.0 | 3.8 | 4.3 |
+| Gin (Go) | 5.0 | 4.1 | 5.3 |
+| Bun.serve (raw) | 24.0 | 22.5 | 25.1 |
+| Hono (Bun) | 27.4 | 26.3 | 28.8 |
+| **@dunx/http** | **46.2** | 43.2 | 47.1 |
+| @dunx/http (+ request logging) | 46.6 | 44.6 | 48.1 |
+| Elysia | 51.9 | 49.0 | 57.0 |
+| @dunx/http (+ request logging, @arkv/logger) | 61.4 | 55.8 | 63.4 |
+| node:http (raw) | 80.7 | 76.3 | 83.3 |
+| Hono (Node) | 95.5 | 90.2 | 97.9 |
+| Express (Node) | 110.1 | 108.4 | 115.0 |
+| Django (Python) | 131.4 | 128.0 | 132.8 |
+| Fastify (Node) | 135.4 | 131.2 | 138.3 |
+| NestJS (Express) | 243.7 | 231.0 | 258.2 |
+| FastAPI (Python) | 244.0 | 239.9 | 245.6 |
+| NestJS (Fastify) | 251.8 | 246.1 | 261.4 |
+| ASP.NET Core MVC | 297.8 | 292.1 | 305.9 |
+| ASP.NET Core minimal APIs | 299.6 | 281.2 | 312.9 |
+| Spring Boot (JVM) | 1322.5 | 1274.7 | 1358.0 |
 
 **Resource footprint** - resident set of the whole process tree, read from `/proc`
 
 | Subject | boot MiB | peak MiB | processes |
 | ------- | -------: | -------: | --------: |
-| Axum (Rust) | 3.7 | 6.1 | 1 |
-| net/http (Go) | 13.0 | 21.8 | 1 |
-| Gin (Go) | 17.3 | 29.2 | 1 |
-| Bun.serve (raw) | 34.9 | 64.7 | 1 |
-| FastAPI (Python) | 43.0 | 66.0 | 1 |
-| Hono (Bun) | 36.6 | 66.4 | 1 |
-| Elysia | 47.2 | 69.4 | 1 |
-| **@dunx/http** | 51.1 | 73.0 | 1 |
-| @dunx/http (+ request logging) | 51.7 | 78.5 | 1 |
-| @dunx/http (+ request logging, @arkv/logger) | 54.2 | 85.7 | 1 |
-| node:http (raw) | 54.6 | 93.8 | 1 |
-| Hono (Node) | 60.3 | 95.6 | 1 |
-| Django (Python) | 73.1 | 107.6 | 2 |
-| ASP.NET Core minimal APIs | 76.5 | 120.6 | 1 |
-| ASP.NET Core MVC | 80.6 | 130.4 | 1 |
-| Fastify (Node) | 70.3 | 131.7 | 1 |
-| Express (Node) | 64.4 | 136.5 | 1 |
-| NestJS (Fastify) | 84.9 | 162.3 | 1 |
-| NestJS (Express) | 88.4 | 172.9 | 1 |
-| Spring Boot (JVM) | 250.7 | 672.1 | 1 |
+| Axum (Rust) | 3.5 | 6.1 | 1 |
+| net/http (Go) | 12.4 | 23.3 | 1 |
+| Gin (Go) | 17.5 | 28.4 | 1 |
+| Bun.serve (raw) | 34.6 | 62.8 | 1 |
+| FastAPI (Python) | 43.0 | 64.6 | 1 |
+| Hono (Bun) | 36.6 | 66.5 | 1 |
+| Elysia | 47.2 | 68.9 | 1 |
+| **@dunx/http** | 51.3 | 72.6 | 1 |
+| @dunx/http (+ request logging) | 52.1 | 79.2 | 1 |
+| @dunx/http (+ request logging, @arkv/logger) | 54.8 | 85.8 | 1 |
+| Django (Python) | 73.5 | 104.9 | 2 |
+| ASP.NET Core minimal APIs | 76.4 | 123.4 | 1 |
+| ASP.NET Core MVC | 80.6 | 129.8 | 1 |
+| node:http (raw) | 72.6 | 137.8 | 1 |
+| Express (Node) | 73.7 | 139.6 | 1 |
+| Hono (Node) | 77.2 | 148.4 | 1 |
+| NestJS (Express) | 99.0 | 181.6 | 1 |
+| Fastify (Node) | 79.1 | 269.1 | 1 |
+| NestJS (Fastify) | 99.3 | 278.4 | 1 |
+| Spring Boot (JVM) | 259.2 | 635.0 | 1 |
 
 ### What these say, including where dunx loses
 
@@ -836,11 +850,11 @@ runtime held still, see "Driver cost".
 
 | Scenario | Bun.serve | @dunx/http | dunx costs |
 | -------- | --------: | ---------: | ---------: |
-| `plaintext` | 133,063 | 131,018 | −1.5% |
-| `json` | 129,216 | 125,170 | −3.1% |
-| `params` | 126,730 | 122,996 | −2.9% |
-| `validate` | 88,302 | 84,264 | −4.6% |
-| `io` | 27,281 | 27,377 | +0.4% |
+| `plaintext` | 134,478 | 133,993 | −0.4% |
+| `json` | 129,641 | 123,999 | −4.4% |
+| `params` | 128,172 | 120,942 | −5.6% |
+| `validate` | 90,015 | 82,903 | −7.9% |
+| `io` | 27,721 | 27,646 | −0.3% |
 
 **A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
 *through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
@@ -866,28 +880,28 @@ Elysia on this scenario. What remains is dispatch, not validation.
 `oxc-parser` preload and eager DI resolution. It does beat Elysia, and every Node
 subject by a wide margin, but it is the number to watch if boot time matters.
 
-**Memory is the second one.** `@dunx/http` boots at 51.1 MiB against
-raw `Bun.serve`'s 34.9 MiB, for the container and the resolved
+**Memory is the second one.** `@dunx/http` boots at 51.3 MiB against
+raw `Bun.serve`'s 34.6 MiB, for the container and the resolved
 provider graph, and the gap holds under load. It is small next to the Node subjects
 and tiny next to `spring`, and it is still a cost the ceiling does not pay.
 
 **The framework tax disappears on `io`, and that is the most useful thing in this
-file.** dunx and raw `Bun.serve` land at 27,377 and 27,281 req/s,
+file.** dunx and raw `Bun.serve` land at 27,646 and 27,721 req/s,
 inside each other's spread, where on `plaintext` the same two are
-131,018 and
-133,063. One Redis
+133,993 and
+134,478. One Redis
 round trip and one Postgres query cost more than every framework difference above
 them put together. This file used to assert that under "What is not measured"; it is
 now measured, and it is the number to quote at anyone choosing a framework on a
 dispatch benchmark.
 
-**CPU per request tracks throughput on the first four scenarios and stops on the
-fifth.** On `plaintext` dunx spends 7.95 ms per thousand
-requests against the baseline's 7.76, which is the
-same gap the rate shows from the other side. On `io` both sit near
-39.18 while Axum spends 28.79 - the
-JavaScript subjects are burning CPU that Rust is not, on a workload where it buys
-neither of them any throughput because both are waiting on the same two sockets.
+**CPU per request is the rate read from the other side.** On `plaintext` dunx
+spends 7.76 ms per thousand requests against the
+baseline's 7.70, which is the same gap the
+throughput column shows. On `io` dunx and the baseline both sit near
+38.26 while Axum spends 28.36: the
+JavaScript subjects burn CPU that Rust does not, on a workload where it buys
+neither of them any throughput, because both are waiting on the same two sockets.
 
 ## How to read the results
 
@@ -941,17 +955,17 @@ same `Bun.serve`, the same SQL, the same pool of 8 and the same bytes on the wir
 
 ```
 AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
-linux 7.0.0-31-generic x64 | bun 1.4.2 | node v20.20.2 | oha oha 1.15.0
-64 connections | 3s warmup | 5 x 5s measured | 2026-09-08
+linux 7.0.0-31-generic x64 | bun 1.4.2 | node v24.21.0 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 5s measured | 2026-09-09
 ```
 
 | Cell | Runtime | Postgres | Redis | req/s | stddev | p50 ms | peak MiB | cpu ms/kreq | vs native |
 | ---- | ------- | -------- | ----- | ----: | -----: | -----: | -------: | ----------: | --------: |
-| `bun:native` | bun | Bun.SQL | Bun.RedisClient | 27,466 | 226 | 2.339 | 59.8 | 38.42 | +0.0% |
-| `bun:pg` | bun | pg | Bun.RedisClient | 23,899 | 407 | 2.620 | 78.6 | 44.99 | −13.0% |
-| `bun:ioredis` | bun | Bun.SQL | ioredis | 28,901 | 381 | 2.157 | 81.8 | 37.59 | +5.2% |
-| `bun:classic` | bun | pg | ioredis | 23,117 | 160 | 2.645 | 86.5 | 46.15 | −15.8% |
-| `node:classic` | node | pg | ioredis | 13,272 | 240 | 4.560 | 95.3 | 76.29 | −51.7% |
+| `bun:native` | bun | Bun.SQL | Bun.RedisClient | 27,822 | 469 | 2.291 | 60.1 | 38.28 | +0.0% |
+| `bun:pg` | bun | pg | Bun.RedisClient | 24,280 | 347 | 2.557 | 79.7 | 44.27 | −12.7% |
+| `bun:ioredis` | bun | Bun.SQL | ioredis | 29,210 | 560 | 2.135 | 83.1 | 37.44 | +5.0% |
+| `bun:classic` | bun | pg | ioredis | 22,700 | 946 | 2.734 | 85.0 | 47.16 | −18.4% |
+| `node:classic` | node | pg | ioredis | 15,338 | 341 | 4.110 | 198.5 | 65.65 | −44.9% |
 
 Reproduce with `bun run drivers`.
 
@@ -962,21 +976,24 @@ comparison.
 
 | Swap, same runtime and same server | with the other client native | with the other client classic |
 | ---------------------------------- | ---------------------------: | ----------------------------: |
-| `Bun.SQL` -> `pg` | −13.0% | −20.0% |
-| `Bun.RedisClient` -> `ioredis` | +5.2% | −3.3% |
+| `Bun.SQL` -> `pg` | −12.7% | −22.3% |
+| `Bun.RedisClient` -> `ioredis` | +5.0% | −6.5% |
 
 **The Postgres client is the term that resolves. The Redis client is not.** Swapping
 `Bun.SQL` for `pg` costs in both pairings, by far more than the run-to-run spread,
-which tops out here at 1.8%. Swapping `Bun.RedisClient` for
+which tops out here at 4.2%. Swapping `Bun.RedisClient` for
 `ioredis` comes out **positive against `Bun.SQL` and negative against `pg`**. A
 sign change is what an unresolvable difference looks like, so the statement this
 supports is that the two Redis clients are the same speed on this workload - not
-that either one wins.
+that either one wins. Both are at their defaults, and those defaults are not the
+same: `Bun.RedisClient` batches a tick's commands into one write and `ioredis`
+does not (`enableAutoPipelining` is `false` in 6.0.0). Tying anyway is the
+result; tuning one of them would have been a different measurement.
 
 **The runtime is a larger term than either client.** `pg` and `ioredis` on Bun
-against the same two on Node is −42.6%, where
+against the same two on Node is −32.4%, where
 swapping both clients on one runtime is
-−15.8%. Quote the first four rows for what the
+−18.4%. Quote the first four rows for what the
 native clients are worth; most of what a Bun service gains on this workload, it
 gains before it picks a client.
 
