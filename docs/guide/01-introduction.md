@@ -189,9 +189,14 @@ behaviour under sustained load, TLS, HTTP/2, websockets or streaming. Its only
 I/O is the `io` row's one Redis `GET` and one Postgres `SELECT`; no filesystem, no
 upstream HTTP, and nothing about a pool under contention.
 
-That one row is enough to place the rest. In an application that talks to
-Postgres, every difference in the table above is rounding error next to one query,
-which `io` shows rather than asserts: the framework is 0.3% of it.
+It does measure resident set and CPU per request, which this page does not
+reproduce. dunx boots at 51.3 MiB against raw `Bun.serve`'s 34.6, and peaks at
+71.9 against 60.5 while serving the `io` row.
+
+On that one row the framework is **0.3%** of the request. That is a result about
+this workload, not a law: a heavier query moves it further toward nothing, and an
+endpoint that touches no service at all is the `plaintext` row instead. It is
+enough to say the four rows above are the wrong thing to choose a framework on.
 
 ## When not to use dunx
 
