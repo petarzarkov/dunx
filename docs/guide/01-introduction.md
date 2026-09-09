@@ -118,19 +118,24 @@ first request that hits it. This costs boot time, measured below.
 `@dunx/http` sits on `Bun.serve`. The most useful number the benchmark harness
 produces is the gap between the two: that gap is dunx's own overhead.
 
-Run on an AMD Ryzen 9 5950X with 32 logical cores, Bun 1.4.0, oha 1.15.0, 64
-connections, 3 s warmup, 5 measured rounds of 5 s, dated 2026-08-22:
+Run on an AMD Ryzen 9 5950X with 32 logical cores, Bun 1.4.2, Node 24.21.0, oha
+1.15.0, 64 connections, 3 s warmup, 5 measured rounds of 5 s, dated 2026-09-09:
 
 | Scenario    | raw `Bun.serve` | `@dunx/http` | % of raw |          Elysia |
 | ----------- | --------------: | -----------: | -------: | --------------: |
-| `plaintext` |   131,805 req/s |      130,843 |    99.3% | 130,565 (99.1%) |
-| `json`      |   127,439 req/s |      123,022 |    96.5% | 121,831 (95.6%) |
-| `params`    |   122,963 req/s |      115,506 |    93.9% | 119,472 (97.2%) |
-| `validate`  |    85,605 req/s |       79,596 |    93.0% |  75,330 (88.0%) |
+| `plaintext` |   134,478 req/s |      133,993 |    99.6% | 133,151 (99.0%) |
+| `json`      |   129,641 req/s |      123,999 |    95.6% | 122,220 (94.3%) |
+| `params`    |   128,172 req/s |      120,942 |    94.4% | 127,701 (99.6%) |
+| `validate`  |    90,015 req/s |       82,903 |    92.1% |  80,372 (89.3%) |
+| `io`        |    27,721 req/s |       27,646 |    99.7% | 27,741 (100.1%) |
 
-**dunx costs 1% to 7%** against the API it dispatches through, and is level with
-Elysia. Read a ratio as plus or minus one point. Anything under three points is a
-tie: two full runs of the same code disagreed by a median of 0.6 points.
+**dunx costs under 1% to 8%** against the API it dispatches through, and is level
+with Elysia. Read a ratio as plus or minus one point. Anything under three points
+is a tie: two full runs of the same code disagreed by a median of 0.6 points.
+
+`io` is the one that leaves the process: a Redis `GET` and then a Postgres
+`SELECT`. The framework is 0.3% of it. Every difference above it is smaller than
+one query, which is the honest framing for the other four rows.
 
 A figure at or above 100% would be noise: dunx dispatches through `Bun.serve` and
 cannot serve a request faster than the API it calls.
@@ -139,17 +144,21 @@ Startup is the clearest loss, and it is a real one:
 
 | Subject          | cold start to first served request (median of 7) |
 | ---------------- | -----------------------------------------------: |
-| raw `Bun.serve`  |                                          19.4 ms |
-| **`@dunx/http`** |                                      **42.6 ms** |
-| Elysia           |                                          47.6 ms |
-| raw `node:http`  |                                          80.4 ms |
-| Express          |                                         126.5 ms |
-| Fastify          |                                         154.6 ms |
-| NestJS (Express) |                                         278.8 ms |
+| raw `Bun.serve`  |                                          24.0 ms |
+| **`@dunx/http`** |                                      **46.2 ms** |
+| Elysia           |                                          51.9 ms |
+| raw `node:http`  |                                          80.7 ms |
+| Express          |                                         110.1 ms |
+| Fastify          |                                         135.4 ms |
+| NestJS (Express) |                                         243.7 ms |
 
 Both Bun figures roughly halved on Bun 1.4, from 54.8 ms and 28.7 ms. The ratio has
 not changed since: dunx boots in about twice raw `Bun.serve`'s time, for the
 `oxc-parser` preload plus eager DI resolution and route discovery.
+
+Every figure here is **spawn to a request served**, not to `listen()` returning.
+The second milestone is roughly 20 ms earlier on both, so a number measured that
+way is not comparable with this table.
 
 That cost is paid once at boot, never per request. It is a real cost on a
 short-lived process.
