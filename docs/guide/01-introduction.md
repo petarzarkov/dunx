@@ -152,9 +152,10 @@ Startup is the clearest loss, and it is a real one:
 | Fastify          |                                         135.4 ms |
 | NestJS (Express) |                                         243.7 ms |
 
-Both Bun figures roughly halved on Bun 1.4, from 54.8 ms and 28.7 ms. The ratio has
-not changed since: dunx boots in about twice raw `Bun.serve`'s time, for the
-`oxc-parser` preload plus eager DI resolution and route discovery.
+dunx boots in **1.93x** raw `Bun.serve`'s time, for the `oxc-parser` preload plus
+eager DI resolution and route discovery. Read the ratio rather than the
+milliseconds: both absolute figures move with the Bun release, and have moved in
+both directions.
 
 Every figure here is **spawn to a request served**, not to `listen()` returning.
 The second milestone is roughly 20 ms earlier on both, so a number measured that
@@ -184,9 +185,13 @@ ajv, came in under the parse, so no throughput argument separates them. Pick on
 API, error quality and ecosystem.
 
 The harness does not measure absolute capacity, concurrency beyond one process,
-anything with I/O, memory, behaviour under sustained load, TLS, HTTP/2, websockets
-or streaming. In an application that talks to Postgres, every difference in the
-table above is rounding error next to one query.
+behaviour under sustained load, TLS, HTTP/2, websockets or streaming. Its only
+I/O is the `io` row's one Redis `GET` and one Postgres `SELECT`; no filesystem, no
+upstream HTTP, and nothing about a pool under contention.
+
+That one row is enough to place the rest. In an application that talks to
+Postgres, every difference in the table above is rounding error next to one query,
+which `io` shows rather than asserts: the framework is 0.3% of it.
 
 ## When not to use dunx
 
@@ -196,7 +201,7 @@ or class-based controllers, and that gap is the whole reason dunx exists. If you
 would not use the DI, you are paying its boot cost and its concepts for nothing.
 
 **Boot time is the number that matters.** A short-lived process, a serverless
-function billed per invocation, or a CLI will feel the ~43 ms. dunx is built for a
+function billed per invocation, or a CLI will feel the ~46 ms. dunx is built for a
 service that starts once and stays up. Note also that the startup numbers were
 taken on an idle 32-core desktop, which is not what a constrained serverless CPU
 looks like.

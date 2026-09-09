@@ -90,10 +90,9 @@ rather than stacking on it.
 
 **These stop when the process does, not when it has served something**, which is a
 different milestone from the one `docs/guide/01-introduction.md` publishes and
-about 20 ms earlier on both subjects. The two tables are not comparable and
-neither is wrong; this one exists to apportion the boot, and the guide's exists to
-state what a caller waits for. The apps here are also minimal, where the harness's
-carry zod.
+about 20 ms earlier on both subjects. Neither table is wrong: this one apportions
+the boot, and the guide's states what a caller waits for. The apps differ too -
+the rungs above are minimal, and the benchmark harness's subjects import zod.
 
 | Rung                        |   ms |  MiB | adds ms | adds MiB |
 | --------------------------- | ---: | ---: | ------: | -------: |
