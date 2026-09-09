@@ -127,6 +127,19 @@ jobs:
       # original defect this workflow had: it reported success while discarding
       # nine findings, and a review gate that can pass without reviewing is worse
       # than no gate.
+      #
+      # `post-review.ts` also decides *what* this review may report on, and that
+      # is the half that makes a pull request converge. The reviewer above always
+      # sees the whole diff - the slash command takes a pull request, not a range,
+      # and an appended instruction to narrow it would lose to the command's own,
+      # the way two other appended instructions already have. So the narrowing is
+      # done after the fact, deterministically: findings in files untouched since
+      # this account's previous review on the pull request are counted in the body
+      # instead of posted again.
+      #
+      # Without it the reviewer is re-rolled against unchanged code on every push.
+      # Measured on #70: five rounds, 24 findings, never an approval, and round 3
+      # reporting two files `git log` shows were untouched since the first push.
       - name: Submit the review
         env:
           GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
