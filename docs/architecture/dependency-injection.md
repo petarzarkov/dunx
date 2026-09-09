@@ -88,6 +88,12 @@ process adding one step to the one above it. The `oxc-parser` row is the
 exception: it is measured against bare `bun`, so it splits the preload below it
 rather than stacking on it.
 
+**These stop when the process does, not when it has served something**, which is a
+different milestone from the one `docs/guide/01-introduction.md` publishes and
+about 20 ms earlier on both subjects. Neither table is wrong: this one apportions
+the boot, and the guide's states what a caller waits for. The apps differ too -
+the rungs above are minimal, and the benchmark harness's subjects import zod.
+
 | Rung                        |   ms |  MiB | adds ms | adds MiB |
 | --------------------------- | ---: | ---: | ------: | -------: |
 | bare `bun`                  |  3.7 | 12.6 |         |          |
