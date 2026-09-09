@@ -36,6 +36,7 @@ import {
   StartupTable,
   ThroughputTable,
 } from '../components/BenchBars';
+import { invalidates } from '../../../bench/src/quality.js';
 import { bench, site } from '../data';
 import type { BenchModel } from '../../scripts/extract/model';
 
@@ -212,7 +213,13 @@ export const Benchmarks = (): React.JSX.Element => {
   }
 
   const model = bench;
-  const totalBad = model.results.reduce((sum, result) => sum + result.bad, 0);
+  // Judged as a rate per row, not as a total across the report: one non-2xx in
+  // 38,909 was turning the whole page red and reading as a broken run. The count
+  // is still in the JSON and in the row's own badge; this chip is about whether
+  // any row is unusable. `invalidates` in the harness owns the threshold.
+  const unusable = model.results.filter((result) =>
+    invalidates(result.bad, result.requests),
+  ).length;
 
   return (
     <Container size="lg" py="xl">
@@ -241,11 +248,11 @@ export const Benchmarks = (): React.JSX.Element => {
             <Badge
               variant="light"
               size="sm"
-              color={totalBad === 0 ? 'green' : 'red'}
+              color={unusable === 0 ? 'green' : 'red'}
             >
-              {totalBad === 0
-                ? 'zero errors, zero non-2xx'
-                : `${integer(totalBad)} bad responses`}
+              {unusable === 0
+                ? 'every row ranked'
+                : `${integer(unusable)} row(s) failed too often to rank`}
             </Badge>
           </Group>
         </Stack>

@@ -13,6 +13,7 @@
  * touches nothing else.
  */
 import { driversSection } from './drivers-tables.js';
+import { invalidates } from './quality.js';
 import { loggingSection } from './logging-tables.js';
 import { median, stddev } from './stats.js';
 import type { Report, ResourceUsage } from './types.js';
@@ -45,29 +46,34 @@ const cellsFor = (scenario: string) => {
   const baseline = rows.find((row) => row.subject === BASELINE);
   const base = baseline === undefined ? 0 : rpsOf(baseline);
 
-  return (
-    rows
-      .map((row) => {
-        const label =
-          report.subjects.find((subject) => subject.id === row.subject)
-            ?.label ?? row.subject;
-        const rps = rpsOf(row);
-        return {
-          id: row.subject,
-          label: row.subject === FOCUS ? `**${label}**` : label,
-          rps,
-          stddev: stddev(row.runs.map((run) => run.rps)),
-          p50: median(row.runs.map((run) => run.latencyP50Ms)),
-          p99: median(row.runs.map((run) => run.latencyP99Ms)),
-          pct: base === 0 ? 0 : (rps / base) * 100,
-          bad: row.runs.reduce((sum, run) => sum + run.non2xx + run.errors, 0),
-          cost: costFor(scenario, row.subject),
-        };
-      })
-      // A row whose requests failed sorts last and is never ranked: connection
-      // failures come back faster than responses do.
-      .sort((a, b) => Number(a.bad > 0) - Number(b.bad > 0) || b.rps - a.rps)
-  );
+  return rows
+    .map((row) => {
+      const label =
+        report.subjects.find((subject) => subject.id === row.subject)?.label ??
+        row.subject;
+      const rps = rpsOf(row);
+      const bad = row.runs.reduce(
+        (sum, run) => sum + run.non2xx + run.errors,
+        0,
+      );
+      const requests = row.runs.reduce((sum, run) => sum + run.requests, 0);
+      return {
+        id: row.subject,
+        label: row.subject === FOCUS ? `**${label}**` : label,
+        rps,
+        stddev: stddev(row.runs.map((run) => run.rps)),
+        p50: median(row.runs.map((run) => run.latencyP50Ms)),
+        p99: median(row.runs.map((run) => run.latencyP99Ms)),
+        pct: base === 0 ? 0 : (rps / base) * 100,
+        bad,
+        requests,
+        // A rate, not a count: one blip in 39,000 is a footnote, a quarter of
+        // the run failing is a row nobody can compare. See `src/quality.ts`.
+        unranked: invalidates(bad, requests),
+        cost: costFor(scenario, row.subject),
+      };
+    })
+    .sort((a, b) => Number(a.unranked) - Number(b.unranked) || b.rps - a.rps);
 };
 
 const throughputTable = (scenario: string): string => {
@@ -78,12 +84,11 @@ const throughputTable = (scenario: string): string => {
   const body = rows
     .map((row) => {
       const rps = row.id === FOCUS ? `**${int(row.rps)}**` : int(row.rps);
-      const pct =
-        row.bad > 0
-          ? `- (${int(row.bad)} bad)`
-          : row.id === FOCUS
-            ? `**${dec(row.pct, 1)}%**`
-            : `${dec(row.pct, 1)}%`;
+      const pct = row.unranked
+        ? `- (${int(row.bad)} bad)`
+        : row.id === FOCUS
+          ? `**${dec(row.pct, 1)}%**`
+          : `${dec(row.pct, 1)}%`;
       const rss =
         row.cost === undefined ? '-' : dec(row.cost.rssPeakMiB.median, 1);
       const cpu =

@@ -83,6 +83,7 @@ export const projectBench = (report: BenchReport): BenchModel => ({
       p50Ms: result.latencyP50Ms.median,
       p99Ms: result.latencyP99Ms.median,
       bad: result.totalErrors + result.totalNon2xx,
+      requests: result.runs.reduce((total, run) => total + run.requests, 0),
       peakMiB: usage?.rssPeakMiB.median ?? null,
       cpuMsPerKiloRequests: usage?.cpuMsPerKiloRequests.median ?? null,
     };

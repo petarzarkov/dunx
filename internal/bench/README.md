@@ -902,9 +902,16 @@ neither of them any throughput because both are waiting on the same two sockets.
   held constant. Compare that delta, not the absolute.
 - **Standard deviation** is across whole runs. If it is a large fraction of the
   median, the machine was busy and the run should be repeated.
-- **`bad`** counts non-2xx responses plus transport errors across all measured runs.
-  Anything other than 0 invalidates that row, and such a row is now sorted last and
-  shown with no ratio rather than being allowed to rank.
+- **`bad`** counts non-2xx responses plus transport errors across all measured runs,
+  and it is judged as a **rate**, not a count. Above one in a thousand the row is
+  sorted last and shown with no ratio; at or under it the row ranks normally and the
+  count is still printed. The count alone was the rule until it was enforced and
+  turned out to be wrong in both directions at once: two Node subjects that died
+  mid-run were recorded at 560,964 req/s of pure connection failures and sorted
+  above raw `Bun.serve`, while Django lost its ratio over **one** non-2xx in 38,909
+  - 0.0026% - which reads as a broken measurement rather than a measurement with a
+  blip in it. `src/quality.ts` owns the threshold, and the stdout table, the tables
+  below and the documentation site all read it from there.
 - **`cpu ms/kreq` before `peak MiB`.** CPU per request separates a subject that
   computes from one that waits; peak resident set is a footprint and moves with the
   runtime's allocator far more than with the framework. `cpu %` is not in the tables
@@ -1338,6 +1345,7 @@ internal/bench/
     io-fixture.ts     seeds Redis and Postgres, and checks the connection budget
     build.ts          Bun.build transpile of the Node subjects
     toolchains.ts     probe, compile and skip for the Go, Rust, JVM and .NET subjects
+    quality.ts        when a row's failure rate makes it unrankable
     scenarios.ts      the five workloads and their exact expected responses
     subjects.ts       the subject registry, including each one's handicaps
     loadgen/          oha adapter, Bun fetch driver, worker, histogram

@@ -1,3 +1,4 @@
+import { invalidates } from './quality.js';
 import { median } from './stats.js';
 import type { Report, ResourceUsage, ScenarioResult } from './types.js';
 
@@ -179,17 +180,22 @@ export const formatReport = (report: Report): string => {
   );
 
   for (const scenario of report.scenarios) {
-    // A row whose requests failed is sorted last and never ranked, however high
-    // its rate. Connection failures come back faster than responses do: two Node
-    // subjects that died mid-run were recorded at 560,964 req/s of pure errors
-    // and sorted to the top of this table above raw `Bun.serve`.
+    // A row that failed too often to compare is sorted last and never ranked.
+    // Connection failures come back faster than responses do: two Node subjects
+    // that died mid-run were recorded at 560,964 req/s of pure errors and sorted
+    // to the top of this table above raw `Bun.serve`. "Too often" is a rate, not
+    // a count - see `src/quality.ts`.
     const failed = (result: ScenarioResult): number =>
       result.totalErrors + result.totalNon2xx;
+    const requestsIn = (result: ScenarioResult): number =>
+      result.runs.reduce((total, run) => total + run.requests, 0);
+    const unranked = (result: ScenarioResult): boolean =>
+      invalidates(failed(result), requestsIn(result));
     const rows = report.results
       .filter((result) => result.scenario === scenario.id)
       .sort(
         (a, b) =>
-          Number(failed(a) > 0) - Number(failed(b) > 0) ||
+          Number(unranked(a)) - Number(unranked(b)) ||
           b.rps.median - a.rps.median,
       );
     if (rows.length === 0) continue;
@@ -198,7 +204,7 @@ export const formatReport = (report: Report): string => {
     // baseline row shows `-` for the same reason.
     const baselineRow = rows.find((row) => row.subject === BASELINE);
     const baseline =
-      baselineRow === undefined || failed(baselineRow) > 0
+      baselineRow === undefined || unranked(baselineRow)
         ? undefined
         : baselineRow.rps.median;
 
@@ -247,9 +253,7 @@ export const formatReport = (report: Report): string => {
             int(row.rps.stddev),
             row.latencyP50Ms.median.toFixed(3),
             row.latencyP99Ms.median.toFixed(3),
-            baseline === undefined ||
-            baseline === 0 ||
-            row.totalErrors + row.totalNon2xx > 0
+            baseline === undefined || baseline === 0 || unranked(row)
               ? '-'
               : `${((row.rps.median / baseline) * 100).toFixed(1)}%`,
             ...(measured

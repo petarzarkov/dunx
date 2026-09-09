@@ -252,8 +252,16 @@ export interface BenchResult {
   readonly rpsStddev: number;
   readonly p50Ms: number;
   readonly p99Ms: number;
-  /** Non-2xx responses plus transport errors. Anything but 0 invalidates the row. */
+  /**
+   * Non-2xx responses plus transport errors, across every measured run.
+   *
+   * Judged as a **rate** against `requests`, never as a count: one blip in
+   * 39,000 is a footnote and a quarter of the run failing is a row nobody can
+   * compare. `invalidates` in the harness's `src/quality.ts` owns the threshold.
+   */
   readonly bad: number;
+  /** Requests the load generator completed, the denominator for `bad`. */
+  readonly requests: number;
   /**
    * Highest resident set sampled during the measured window, for the subject's
    * whole process tree. `null` for a run taken where `/proc` does not answer,

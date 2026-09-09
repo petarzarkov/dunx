@@ -1,4 +1,5 @@
 import { Badge, Group, Table, Text } from '@mantine/core';
+import { formatBadRate } from '../../../bench/src/quality.js';
 import {
   decimal,
   FOCUS,
@@ -116,9 +117,20 @@ export const ThroughputTable = ({
               >
                 {row.label}
               </Text>
+              {/* Red only when the row is unrankable. A blip is still shown,
+                  in grey and as the rate it actually was, because hiding it
+                  outright would be the page deciding what the reader may see. */}
               {row.bad > 0 && (
-                <Badge color="red" size="xs" ml={6}>
-                  {row.bad} bad
+                <Badge
+                  color={row.unranked ? 'red' : 'gray'}
+                  variant={row.unranked ? 'filled' : 'light'}
+                  size="xs"
+                  ml={6}
+                  title={`${row.bad} of ${integer(row.requests)} requests`}
+                >
+                  {row.unranked
+                    ? `${integer(row.bad)} bad`
+                    : formatBadRate(row.bad, row.requests)}
                 </Badge>
               )}
             </Table.Td>

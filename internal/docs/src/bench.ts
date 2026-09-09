@@ -1,3 +1,4 @@
+import { invalidates } from '../../bench/src/quality.js';
 import type {
   BenchModel,
   BenchRuntime,
@@ -44,8 +45,15 @@ export interface ThroughputRow {
   readonly p99: number;
   /** Percentage of the raw `Bun.serve` baseline on this scenario. */
   readonly pctOfBaseline: number;
-  /** Non-2xx responses plus transport errors. Anything but 0 invalidates the row. */
+  /** Non-2xx responses plus transport errors, across every measured run. */
   readonly bad: number;
+  readonly requests: number;
+  /**
+   * True when the failures were too many for the row to be ranked. A rate, not
+   * a count - the harness's `src/quality.ts` owns the threshold, and both ends
+   * of this page have to agree with the README's tables about which rows count.
+   */
+  readonly unranked: boolean;
   /** Peak resident set of the whole process tree, MiB. `null` off Linux. */
   readonly peakMiB: number | null;
   /** CPU milliseconds per thousand requests. `null` off Linux. */
@@ -107,12 +115,14 @@ export const throughputRows = (
           p99: cell.p99Ms,
           pctOfBaseline: reference === 0 ? 0 : (cell.rps / reference) * 100,
           bad: cell.bad,
+          requests: cell.requests,
+          unranked: invalidates(cell.bad, cell.requests),
           peakMiB: cell.peakMiB,
           cpuMsPerKiloRequests: cell.cpuMsPerKiloRequests,
         },
       ];
     })
-    .sort((a, b) => b.rps - a.rps);
+    .sort((a, b) => Number(a.unranked) - Number(b.unranked) || b.rps - a.rps);
 };
 
 /**
