@@ -2,7 +2,9 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildReview,
   commentableLines,
+  COMPARE_FILE_CAP,
   type Commentable,
+  scopeFromCompare,
 } from './post-review.js';
 
 const finding = (over: Record<string, unknown> = {}) => ({
@@ -260,5 +262,31 @@ describe('scoping a review to what changed since the last one', () => {
     );
     expect(review.event).toBe('COMMENT');
     expect(review.body).toContain('Actionable comment');
+  });
+});
+
+/*
+ * The compare endpoint caps its file list at 300 and does not page past it, so a
+ * bigger change comes back silently short. Narrowing the scope to a truncated
+ * list would suppress genuinely new findings and could then approve - the exact
+ * failure the scoping exists to prevent, which is why this widens instead.
+ */
+describe('scope from a compare result', () => {
+  it('scopes to the files it was given', () => {
+    expect(scopeFromCompare(['a.ts', 'b.ts'])).toEqual(
+      new Set(['a.ts', 'b.ts']),
+    );
+  });
+
+  it('scopes to nothing changed, which is still a scope', () => {
+    expect(scopeFromCompare([])).toEqual(new Set());
+  });
+
+  it('widens to the whole diff when the list may be truncated', () => {
+    const many = Array.from({ length: COMPARE_FILE_CAP }, (_, i) => `f${i}.ts`);
+    expect(scopeFromCompare(many)).toBeNull();
+    expect(
+      scopeFromCompare(many.slice(0, COMPARE_FILE_CAP - 1)),
+    ).not.toBeNull();
   });
 });

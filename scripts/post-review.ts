@@ -54,6 +54,26 @@ export type Commentable = ReadonlyMap<string, ReadonlySet<number>>;
  */
 export type Scope = ReadonlySet<string> | null;
 
+/**
+ * GitHub's compare endpoint returns at most this many files and does not page
+ * past them, so a longer list has been silently truncated.
+ */
+export const COMPARE_FILE_CAP = 300;
+
+/**
+ * The scope a compare result supports, or `null` when it cannot be trusted to be
+ * complete.
+ *
+ * Suppressing a finding because its file fell off the end of a truncated list is
+ * the exact failure this scoping exists to prevent: a genuinely new problem,
+ * filed under "not repeated here", on a review that could then approve.
+ *
+ * Being wrong about the cap is safe in the direction that matters - too low
+ * reviews more than it needs to, and only too high could suppress.
+ */
+export const scopeFromCompare = (touched: readonly string[]): Scope =>
+  touched.length >= COMPARE_FILE_CAP ? null : new Set(touched);
+
 const VERDICT = /^VERDICT: (APPROVE|COMMENT)$/gm;
 
 /**
@@ -311,10 +331,11 @@ const lastReviewedSha = async (
 /**
  * The files touched since this reviewer last looked, or `null` when it has not.
  *
- * A `compare` that fails - the old commit garbage-collected after a force-push,
- * most likely - widens the scope back to everything rather than narrowing it to
- * nothing. Reviewing too much is the behaviour being fixed; reviewing nothing
- * silently would be worse than the bug.
+ * Both failure modes here widen rather than narrow. A `compare` that throws -
+ * the old commit garbage-collected after a force-push, most likely - and a
+ * response at the file cap both fall back to the whole diff. Reviewing too much
+ * is the behaviour being fixed; reviewing nothing silently would be worse than
+ * the bug.
  */
 const scopeSince = async (
   repo: string,
@@ -328,10 +349,13 @@ const scopeSince = async (
       await gh(['api', `repos/${repo}/compare/${since}...${head}`]),
     ) as { files?: { filename: string }[] };
     const touched = compared.files?.map((file) => file.filename) ?? [];
+    const scope = scopeFromCompare(touched);
     console.log(
-      `Reviewing ${touched.length} file(s) changed since ${since.slice(0, 7)}.`,
+      scope === null
+        ? `Compare returned ${touched.length} files, at or past the ${COMPARE_FILE_CAP} the API caps at, so the list may be short. Reviewing the whole diff.`
+        : `Reviewing ${touched.length} file(s) changed since ${since.slice(0, 7)}.`,
     );
-    return new Set(touched);
+    return scope;
   } catch (error) {
     console.log(
       `Could not compare ${since.slice(0, 7)}...${head.slice(0, 7)}, reviewing the whole diff: ${String(error)}`,
