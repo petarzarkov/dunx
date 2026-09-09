@@ -81,6 +81,34 @@ It would also cost `@dunx/core` its empty dependency list. The transform needs
 `oxc-parser`, a native binary. Every production deployment would then carry it,
 in order to run code that was already transformed at build time.
 
+### What the preload costs at boot
+
+Measured on Bun 1.4.2, a 5950X, median of 11 cold starts, each rung a whole
+process adding one step to the one above it:
+
+| Rung                        |   ms |  MiB | adds ms | adds MiB |
+| --------------------------- | ---: | ---: | ------: | -------: |
+| bare `bun`                  |  3.7 | 12.6 |         |          |
+| + `@dunx/transform` preload |  9.8 | 26.7 |    +6.1 |    +14.1 |
+| + `import '@dunx/core'`     | 11.4 | 27.4 |    +1.5 |     +0.7 |
+| + `import '@dunx/http'`     | 16.9 | 30.2 |    +5.5 |     +2.7 |
+| + `HttpFactory.create`      | 22.3 | 41.3 |    +5.4 |    +11.1 |
+| + `listen()`                | 24.8 | 43.2 |    +2.5 |     +1.9 |
+| raw `Bun.serve`, for scale  |  4.4 | 14.6 |         |          |
+
+**The preload is the largest single item in both columns** - 49% of the memory a
+dunx process holds over a raw `Bun.serve` one, and 30% of the time. It is paid
+before any application code runs: the 14.1 MiB is `oxc-parser` loading into a
+script with no classes in it at all.
+
+The container and the resolved provider graph are the other half, at 11.1 MiB and
+5.4 ms.
+
+`bun build --compile` already avoids the preload half - the records are written at
+build time and the binary needs no parser, which is what `examples/binary`
+demonstrates. So the 14.1 MiB is a cost of the `bun run` deployment shape rather
+than of the design, and anyone choosing between the two can now price it.
+
 So registration stays explicit, and the failure mode is closed off instead:
 
 ### The missing-transform guard
