@@ -230,6 +230,43 @@ export interface LoggingReport {
   readonly units: readonly LoggingUnit[];
 }
 
+/** One cell of the driver harness: a runtime, a Postgres client, a Redis client. */
+export interface DriverUnit {
+  readonly id: string;
+  readonly label: string;
+  readonly runtime: string;
+  readonly sql: string;
+  readonly redis: string;
+  readonly rps: Spread;
+  readonly latencyP50Ms: Spread;
+  readonly latencyP99Ms: Spread;
+  readonly rssPeakMiB: number;
+  readonly cpuMsPerKiloRequests: number;
+  readonly bad: number;
+}
+
+/**
+ * What `bun run drivers` writes. Rendered by `src/drivers-tables.ts`.
+ *
+ * Here rather than in `drivers.ts` for the reason `ValidationReport` and
+ * `LoggingReport` are here: the producer is an entrypoint with top-level effects,
+ * so its consumer cannot import from it and was keeping a hand-copied restatement
+ * of this shape that no compiler was checking against the original.
+ */
+export interface DriversReport {
+  readonly schemaVersion: 1;
+  readonly generatedAt: string;
+  readonly machine: MachineInfo;
+  readonly loadGenerator: { readonly id: string; readonly version: string };
+  readonly config: {
+    readonly connections: number;
+    readonly durationSeconds: number;
+    readonly warmupSeconds: number;
+    readonly runs: number;
+  };
+  readonly units: readonly DriverUnit[];
+}
+
 /**
  * One compiled-language toolchain, whether it was found, and what it cost to
  * build with. `buildSeconds` is here precisely so it is *not* in the startup

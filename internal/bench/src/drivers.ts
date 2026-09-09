@@ -39,7 +39,7 @@ import { resultsDir } from './paths.js';
 import { pairRounds } from './resources.js';
 import { median, spread } from './stats.js';
 import { bunCommand, startSubject } from './subject-process.js';
-import type { MachineInfo, Spread, Subject } from './types.js';
+import type { DriverUnit, DriversReport, Subject } from './types.js';
 
 const MIB = 1024 * 1024;
 const CONTRACT =
@@ -111,34 +111,6 @@ const subjectFor = (unit: Unit): Subject => ({
   io: `${unit.sql} + ${unit.redis}`,
   notes: [],
 });
-
-interface Result {
-  readonly id: string;
-  readonly label: string;
-  readonly runtime: string;
-  readonly sql: string;
-  readonly redis: string;
-  readonly rps: Spread;
-  readonly latencyP50Ms: Spread;
-  readonly latencyP99Ms: Spread;
-  readonly rssPeakMiB: number;
-  readonly cpuMsPerKiloRequests: number;
-  readonly bad: number;
-}
-
-interface Report {
-  readonly schemaVersion: 1;
-  readonly generatedAt: string;
-  readonly machine: MachineInfo;
-  readonly loadGenerator: { readonly id: string; readonly version: string };
-  readonly config: {
-    readonly connections: number;
-    readonly durationSeconds: number;
-    readonly warmupSeconds: number;
-    readonly runs: number;
-  };
-  readonly units: readonly Result[];
-}
 
 const usage = `bun run drivers [options]
 
@@ -261,7 +233,7 @@ const bring = async (unit: Unit): Promise<Live<Unit>> => {
  */
 const live = await driveUnits(runnable, bring, generator, config);
 
-const collect = (entry: Live<Unit>): Result => {
+const collect = (entry: Live<Unit>): DriverUnit => {
   // The same pairing `run.ts` uses, from `resources.ts`, rather than a second
   // copy that can drift from it.
   const paired = pairRounds(entry.usage, entry.samples);
@@ -308,7 +280,7 @@ for (const result of results) {
   );
 }
 
-const report: Report = {
+const report: DriversReport = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   machine,

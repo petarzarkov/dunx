@@ -220,6 +220,9 @@ export const Benchmarks = (): React.JSX.Element => {
   const unusable = model.results.filter((result) =>
     invalidates(result.bad, result.requests),
   ).length;
+  // Once, not once for the length check and again for the prop: it flatMaps and
+  // sorts the whole list, and the page re-renders on every route and theme change.
+  const footprint = footprintRows(model);
 
   return (
     <Container size="lg" py="xl">
@@ -296,7 +299,7 @@ export const Benchmarks = (): React.JSX.Element => {
           <StartupTable rows={startupRows(model)} />
         </Stack>
 
-        {footprintRows(model).length > 0 && (
+        {footprint.length > 0 && (
           <Stack gap="xs" id="footprint">
             <Title order={2} size="h3">
               Memory
@@ -311,7 +314,7 @@ export const Benchmarks = (): React.JSX.Element => {
               sample under it. Runs are seconds long, so neither says anything
               about heap growth at hour six.
             </Text>
-            <FootprintTable rows={footprintRows(model)} />
+            <FootprintTable rows={footprint} />
           </Stack>
         )}
 

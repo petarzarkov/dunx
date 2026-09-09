@@ -9,31 +9,19 @@
  * held still.
  */
 import { createServer } from 'node:http';
+import { answerIo } from '../io/respond.js';
 import { port } from '../shared.js';
 import { DriverPair } from './pair.js';
 
 const pair = await DriverPair.connect('pg', 'ioredis');
 
 const TEXT = { 'content-type': 'text/plain; charset=utf-8' };
-const JSON_TYPE = { 'content-type': 'application/json; charset=utf-8' };
 
 createServer((req, res) => {
   if (req.url === '/io') {
-    // The rejection is handled rather than left to Node's default, which exits
-    // the process. `servers/node-http.ts` carries the same branch and the same
-    // reason: a pool that cannot hand out a connection took a subject down
-    // mid-run once, and the harness recorded the connection failures as 560,964
-    // req/s. This file is the sibling that kept the bug.
-    void pair.read().then(
-      (payload) => {
-        res.writeHead(200, JSON_TYPE);
-        res.end(JSON.stringify(payload));
-      },
-      (error: unknown) => {
-        res.writeHead(500, JSON_TYPE);
-        res.end(JSON.stringify({ error: String(error) }));
-      },
-    );
+    // `answerIo`, not a bare `.then`: this file is where that shape was written
+    // the second time. See servers/io/respond.ts.
+    answerIo(res, () => pair.read());
     return;
   }
   res.writeHead(200, TEXT);

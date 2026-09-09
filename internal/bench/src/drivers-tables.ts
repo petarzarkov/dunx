@@ -3,41 +3,11 @@
  * Called by `src/readme-tables.ts`; returns `null` when no driver run has been
  * recorded, so a checkout without one still builds.
  */
+import { dec, int, signed as signedBy } from './format.js';
 import { resultsDir } from './paths.js';
-import type { MachineInfo, Spread } from './types.js';
+import type { DriversReport } from './types.js';
 
-interface Unit {
-  readonly id: string;
-  readonly label: string;
-  readonly runtime: string;
-  readonly sql: string;
-  readonly redis: string;
-  readonly rps: Spread;
-  readonly latencyP50Ms: Spread;
-  readonly latencyP99Ms: Spread;
-  readonly rssPeakMiB: number;
-  readonly cpuMsPerKiloRequests: number;
-  readonly bad: number;
-}
-
-interface DriversReport {
-  readonly generatedAt: string;
-  readonly machine: MachineInfo;
-  readonly loadGenerator: { readonly id: string; readonly version: string };
-  readonly config: {
-    readonly connections: number;
-    readonly durationSeconds: number;
-    readonly warmupSeconds: number;
-    readonly runs: number;
-  };
-  readonly units: readonly Unit[];
-}
-
-const int = (value: number): string =>
-  Math.round(value).toLocaleString('en-US');
-
-const signed = (value: number): string =>
-  `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(1)}%`;
+const signed = (value: number): string => signedBy(value, 1, '%');
 
 const table = (report: DriversReport): string => {
   const base = report.units.find((unit) => unit.id === 'bun:native');
@@ -49,8 +19,8 @@ const table = (report: DriversReport): string => {
     return (
       `| \`${unit.id}\` | ${unit.runtime} | ${unit.sql} | ${unit.redis} | ` +
       `${int(unit.rps.median)} | ${int(unit.rps.stddev)} | ` +
-      `${unit.latencyP50Ms.median.toFixed(3)} | ${unit.rssPeakMiB.toFixed(1)} | ` +
-      `${unit.cpuMsPerKiloRequests.toFixed(2)} | ${delta} |`
+      `${dec(unit.latencyP50Ms.median, 3)} | ${dec(unit.rssPeakMiB, 1)} | ` +
+      `${dec(unit.cpuMsPerKiloRequests, 2)} | ${delta} |`
     );
   });
   return [

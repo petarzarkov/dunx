@@ -4,6 +4,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { connectLazyIo, readLazyIo } from './io/lazy.js';
+import { answerIo } from './io/respond.js';
 import {
   echo,
   invalid,
@@ -65,20 +66,9 @@ createServer((req, res) => {
     return;
   }
   if (ioReady && url === '/io') {
-    // Caught, not left to the default unhandled-rejection handler, which exits
-    // the process. A pool that cannot hand out a connection then took this
-    // subject down mid-run and the harness recorded the connection failures as
-    // 560,964 req/s. Every other subject answers 5xx and stays up; so does this.
-    void readLazyIo().then(
-      (payload) => {
-        res.writeHead(200, JSON_TYPE);
-        res.end(JSON.stringify(payload));
-      },
-      (error: unknown) => {
-        res.writeHead(500, JSON_TYPE);
-        res.end(JSON.stringify({ error: String(error) }));
-      },
-    );
+    // `answerIo`, not a bare `.then`: see servers/io/respond.ts for the incident
+    // that shape caused, twice.
+    answerIo(res, readLazyIo);
     return;
   }
   res.writeHead(404, TEXT);
