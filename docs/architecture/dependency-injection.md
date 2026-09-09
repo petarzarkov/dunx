@@ -81,6 +81,47 @@ It would also cost `@dunx/core` its empty dependency list. The transform needs
 `oxc-parser`, a native binary. Every production deployment would then carry it,
 in order to run code that was already transformed at build time.
 
+### What the preload costs at boot
+
+Measured on Bun 1.4.2, a 5950X, median of 11 cold starts, each rung a whole
+process adding one step to the one above it. The `oxc-parser` row is the
+exception: it is measured against bare `bun`, so it splits the preload below it
+rather than stacking on it.
+
+| Rung                        |   ms |  MiB | adds ms | adds MiB |
+| --------------------------- | ---: | ---: | ------: | -------: |
+| bare `bun`                  |  3.7 | 12.6 |         |          |
+| `import 'oxc-parser'` alone |  8.9 | 24.7 |    +5.2 |    +12.1 |
+| + `@dunx/transform` preload |  9.8 | 26.7 |    +6.1 |    +14.1 |
+| + `import '@dunx/core'`     | 11.4 | 27.4 |    +1.5 |     +0.7 |
+| + `import '@dunx/http'`     | 16.9 | 30.2 |    +5.5 |     +2.7 |
+| + `HttpFactory.create`      | 22.3 | 41.3 |    +5.4 |    +11.1 |
+| + `listen()`                | 24.8 | 43.2 |    +2.5 |     +1.9 |
+| raw `Bun.serve`, for scale  |  4.4 | 14.6 |         |          |
+
+**The preload is the largest single item in memory**, at 49% of what a dunx
+process holds over a raw `Bun.serve` one, and it is paid before any application
+code runs: the rung above adds it to a script with no classes in it at all.
+`oxc-parser` on its own accounts for 12.1 of those 14.1 MiB, measured the same
+way; the rest is the plugin and its registration.
+
+**Time ranks differently, and the two should not be read as one number.** Of the
+21.1 ms over the baseline, the preload is 6.1, `import '@dunx/http'` is 5.5 and
+`HttpFactory.create` is 5.4. Those three are within a millisecond of each other,
+so anyone reducing boot latency has three targets rather than one, and the import
+is as large as the container.
+
+Memory is the lopsided one: 14.1 for the preload and 11.1 for the container and
+the resolved provider graph, against 2.7 for that same import.
+
+The preload half is already avoidable for a compiled deployment. `examples/binary`
+calls `Bun.build({ compile, plugins: [depsPlugin] })`, which applies the transform
+during the build and bakes the records into the binary, so the artifact carries no
+parser and needs no preload. That is the `Bun.build` API with `depsPlugin` rather
+than a plain `bun build --compile`, which would produce a binary with no records
+in it at all. So the 14.1 MiB is a cost of the `bun run` deployment shape rather
+than of the design, and the two can now be priced against each other.
+
 So registration stays explicit, and the failure mode is closed off instead:
 
 ### The missing-transform guard
