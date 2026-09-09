@@ -98,12 +98,31 @@ def validate(request):
     return JsonResponse({"name": name, "age": age}, json_dumps_params=COMPACT)
 
 
+# Imported and connected at module scope, before gunicorn loads the application,
+# so the connect is startup work rather than something the first request pays for.
+# `bench_io` imports no driver until a client is built, which is what keeps the
+# other four scenarios free of psycopg and redis.
+import bench_io  # noqa: E402
+
+_io_urls = bench_io.urls()
+_io = bench_io.SyncIo(*_io_urls) if _io_urls else None
+
+
+def io(_request):
+    return HttpResponse(
+        bench_io.encode(_io.read()), content_type="application/json"
+    )
+
+
 urlpatterns = [
     path("plaintext", plaintext),
     path("json", json_reply),
     path("params/<str:id>", params),
     path("validate", validate),
 ]
+
+if _io is not None:
+    urlpatterns.append(path("io", io))
 
 application = WSGIHandler()
 

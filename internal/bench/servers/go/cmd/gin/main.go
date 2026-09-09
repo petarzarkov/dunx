@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"runtime"
 
@@ -41,6 +42,16 @@ func main() {
 		}
 		c.JSON(http.StatusOK, shared.Echo{Name: person.Name, Age: person.Age})
 	})
+
+	io, err := shared.NewIo(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	if io != nil {
+		router.GET("/io", func(c *gin.Context) {
+			io.WriteTo(c.Writer, c.Request)
+		})
+	}
 
 	if err := router.Run(shared.Addr()); err != nil {
 		panic(err)

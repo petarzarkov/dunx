@@ -64,6 +64,16 @@ public class App {
     return new Echo(person.name(), person.age());
   }
 
+  /**
+   * Mapped whether or not the scenario is on, because Spring reads a controller's
+   * mappings off the class at startup. {@link Io#current} throws when the harness
+   * did not connect it, and only the io scenario requests this path.
+   */
+  @GetMapping("/io")
+  public Io.IoPayload io() throws Exception {
+    return Io.current();
+  }
+
   /** Never on the measured path; here so a rejected body answers the same bytes as every other subject. */
   @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
   @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -71,7 +81,10 @@ public class App {
     return new Invalid("Invalid body");
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
+    // Before Spring starts, so the connect is startup work rather than something
+    // the first request pays for.
+    Io.connect();
     SpringApplication.run(App.class, args);
   }
 }

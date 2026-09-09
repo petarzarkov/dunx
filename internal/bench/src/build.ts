@@ -40,6 +40,11 @@ export const buildNodeEntries = async (
     target: 'node',
     format: 'esm',
     packages: 'external',
+    // On, so a relative `await import()` stays one. `servers/io/node.ts` pulls in
+    // `pg` and `ioredis`, and with splitting off Bun inlines the dynamic import
+    // into the entry - which turns them into top-level requires that every
+    // scenario pays for in the startup column, not just the `io` one.
+    splitting: true,
     naming: '[name].mjs',
     minify: false,
     sourcemap: 'none',

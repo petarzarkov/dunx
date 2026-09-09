@@ -9,6 +9,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: null,
     validator: 'zod (hand-wired)',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'The ceiling. @dunx/http is a layer on top of this exact API, so the gap between them is dunx overhead and nothing else.',
       'Uses Bun.serve({ routes }) - the same native router @dunx/http dispatches through.',
@@ -22,6 +23,7 @@ export const subjects: readonly Subject[] = [
     preload: ['@dunx/transform/preload'],
     versionOf: '@dunx/http',
     validator: 'zod (Standard Schema)',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'Runs with the @dunx/transform preload and one constructor-injected service, which is how a real dunx app is written.',
       'DI resolution and route discovery happen at boot, so they show up in the startup number and not in the per-request number.',
@@ -35,6 +37,7 @@ export const subjects: readonly Subject[] = [
     preload: ['@dunx/transform/preload'],
     versionOf: '@dunx/http',
     validator: 'zod (Standard Schema)',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'The same app as `dunx` with `requestLogging` left at its default, so the cost of one structured entry per request is visible rather than folded into the framework number.',
       'No other subject logs anything, which is why this is a separate row and not the primary one.',
@@ -48,6 +51,7 @@ export const subjects: readonly Subject[] = [
     preload: ['@dunx/transform/preload'],
     versionOf: '@dunx/http',
     validator: 'zod (Standard Schema)',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       '`dunx-logging` with `LoggerModule.forRoot()` bound, which is what `packages/infra/README.md` recommends and therefore what most production apps run.',
       'It is here because the gap to `dunx-logging` was estimated twice and the estimates disagreed by 5.7x. Nothing that quotes a figure for this configuration should predate this row.',
@@ -61,6 +65,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'elysia',
     validator: 'zod (Standard Schema)',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'Bun-native. Given zod rather than its own TypeBox validator so the validate scenario stays comparable; TypeBox is compiled and would be faster.',
     ],
@@ -73,6 +78,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: '@nestjs/core',
     validator: 'zod (pipe)',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'dunx is deliberately Nest-shaped - modules, controllers, DI, guards - so this is the most direct answer to what that programming model costs.',
       'The default adapter, which is what most Nest apps ship. Compare against the `express` row to separate Nest from the server underneath it.',
@@ -87,6 +93,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: '@nestjs/core',
     validator: 'zod (pipe)',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'The same Nest application on the Fastify adapter, so the pair isolates the adapter from the framework the way hono-bun/hono-node isolates the runtime.',
     ],
@@ -99,6 +106,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'hono',
     validator: 'zod (@hono/zod-validator)',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'Hono on Bun.serve, so it shares the runtime with Bun.serve, dunx and Elysia.',
     ],
@@ -111,6 +119,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'hono',
     validator: 'zod (@hono/zod-validator)',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'The same Hono app on node:http via @hono/node-server. Included so one framework appears on both runtimes and the runtime term can be separated from the framework term.',
     ],
@@ -123,6 +132,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: null,
     validator: 'zod (hand-wired)',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'The Node ceiling: a bare requestListener with a hand-rolled switch, no framework. Routing is a startsWith chain, which is faster than any real router.',
     ],
@@ -135,6 +145,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'fastify',
     validator: 'zod (validatorCompiler)',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'Given zod through its validatorCompiler hook rather than its default ajv/JSON Schema path, so the validate scenario stays comparable. Ajv compiles to straight-line JS and is materially faster than zod - this understates Fastify on that one scenario.',
       'No response schema is set, so serialisation is JSON.stringify rather than fast-json-stringify, matching every other subject.',
@@ -148,6 +159,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'express',
     validator: 'zod (hand-wired)',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: ['Express 5 with express.json() for the validate scenario only.'],
   },
   {
@@ -158,6 +170,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: null,
     validator: 'go-playground/validator v10',
+    io: 'pgx v5 (pool 8) + go-redis v9 (pool 8)',
     notes: [
       'The Go ceiling, mirroring node:http and bun-serve for their runtimes: the standard library and nothing else.',
       'Routing is http.ServeMux with Go 1.22 method-and-wildcard patterns, so the router is native the same way Bun.serve({ routes }) is.',
@@ -173,6 +186,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'github.com/gin-gonic/gin',
     validator: 'gin binding (go-playground/validator v10)',
+    io: 'pgx v5 (pool 8) + go-redis v9 (pool 8)',
     notes: [
       "The Go framework Elysia's landing page compares itself against, which is why it is here.",
       'gin.New(), not gin.Default(): Default installs a per-request logger and a recovery middleware, and nothing else in this suite logs or recovers.',
@@ -188,6 +202,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'axum',
     validator: 'validator crate (derive)',
+    io: 'tokio-postgres via deadpool (pool 8) + redis-rs (multiplexed)',
     notes: [
       'Axum on tokio, hyper underneath, no tower layers.',
       'A single-threaded tokio runtime (flavor = "current_thread"), for the same reason Go is pinned to one core.',
@@ -203,12 +218,14 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'spring-boot-starter-parent',
     validator: 'jakarta.validation (Hibernate Validator)',
+    io: 'JDBC via HikariCP (pool 8) + Lettuce (multiplexed)',
     warmupFloorSeconds: 30,
     notes: [
       'Spring Boot on its default stack: Spring MVC over embedded Tomcat, Jackson, Hibernate Validator. No AOT, no CDS, no native image, no JVM flags.',
       'Warmed for 30 seconds rather than the 3 every other subject gets, because 3 does not warm a JIT and a cold JVM number would be as dishonest as a flattering one.',
       'Tomcat is pinned to one worker thread, for the same reason Go and tokio are pinned to one core.',
       'Packaged before the run. The startup column times `java -jar`, not `mvn package` - and unlike the compiled subjects that startup includes class loading and JIT-free first execution, which is a real cost and not an artefact.',
+      "**On the `io` scenario its one Tomcat thread means one request in flight**, because JDBC and Lettuce's synchronous commands block it for the whole round trip. Every async subject has eight queries in flight against the same pool size. `django` is the other blocking stack and the row to read this one against.",
     ],
   },
   {
@@ -219,6 +236,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'TargetFramework',
     validator: 'DataAnnotations (hand-wired)',
+    io: 'Npgsql (pool 8) + StackExchange.Redis (multiplexed)',
     warmupFloorSeconds: 30,
     env: { DOTNET_PROCESSOR_COUNT: '1' },
     notes: [
@@ -238,6 +256,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'TargetFramework',
     validator: 'DataAnnotations ([ApiController])',
+    io: 'Npgsql (pool 8) + StackExchange.Redis (multiplexed)',
     warmupFloorSeconds: 30,
     env: { DOTNET_PROCESSOR_COUNT: '1' },
     notes: [
@@ -257,12 +276,14 @@ export const subjects: readonly Subject[] = [
     versionOf: 'django',
     requires: 'django',
     validator: 'hand-written checks',
+    io: 'psycopg 3 (pool 8) + redis-py (pool 8)',
     notes: [
       'Django on gunicorn, one worker and one thread, for the same reason Go and tokio are pinned to one core. Not `runserver`, which reloads, threads and logs every request; and not `wsgiref.simple_server`, which serialises connections and measured 317 req/s at 64 of them.',
       'DEBUG off and MIDDLEWARE empty: the default stack adds sessions, auth, messages and CSRF, none of which the other subjects carry.',
       "Validation is hand-written rather than DRF. DRF is a separate framework and this row would then measure DRF; Django's own forms validate form-encoded input, not JSON.",
       '**Synchronous WSGI, and that is the honest caveat on this row.** Every other subject here speaks HTTP natively or through an event loop; a Django request handler blocks its worker for its whole duration. One gunicorn worker is the fair comparison against one core, and it is also not how anyone deploys Django - a real deployment runs several workers on several cores. Read this row as one worker against one worker, not as a capacity figure.',
       'Interpreted, so there is nothing to compile and no build time to report.',
+      '**On the `io` scenario its one gunicorn worker means one request in flight**, because psycopg and redis-py block it for the whole round trip. Every async subject has eight queries in flight against the same pool size. Read this row against `spring`, the other blocking stack, before reading it against anything else.',
     ],
   },
   {
@@ -274,6 +295,7 @@ export const subjects: readonly Subject[] = [
     versionOf: 'fastapi',
     requires: 'fastapi',
     validator: 'pydantic',
+    io: 'psycopg 3 async (pool 8) + redis-py asyncio (pool 8)',
     notes: [
       'FastAPI on uvicorn, one worker, async ASGI. The closest cross-language comparison in this suite to what `@dunx/http` is for: declarative validation from a schema, with the types carried through to the handler.',
       '**`validate` is the scenario to read this row on.** dunx validates with zod through Standard Schema, Elysia with TypeBox, this with pydantic - the same job, three ecosystems. The other three scenarios are dispatch and serialisation, where FastAPI is carrying an ASGI stack the Bun subjects do not have.',

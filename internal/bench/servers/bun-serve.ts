@@ -1,3 +1,5 @@
+import { connectBunIo, readBunIo } from './io/bun.js';
+import { ioEnabled } from './io/contract.js';
 import {
   echo,
   invalid,
@@ -6,6 +8,8 @@ import {
   PLAINTEXT,
   port,
 } from './shared.js';
+
+if (ioEnabled()) await connectBunIo();
 
 // Handlers, not Bun's static-`Response` route form. A static Response is served
 // from a precomputed buffer and would beat every framework here for reasons that
@@ -24,6 +28,12 @@ Bun.serve({
         if (!parsed.success) return Response.json(invalid, { status: 400 });
         return Response.json(echo(parsed.data));
       },
+    },
+    // Registered unconditionally: `Bun.serve`'s `routes` type rejects an optional
+    // key, and `readBunIo` throws when the harness did not enable the scenario -
+    // which nothing reaches, because only the `io` scenario requests this path.
+    '/io': {
+      GET: async (): Promise<Response> => Response.json(await readBunIo()),
     },
   },
 });

@@ -45,6 +45,7 @@ const subject = (mode: Mode): Subject => ({
   preload: ['@dunx/transform/preload'],
   versionOf: '@dunx/infra',
   validator: 'none',
+  io: 'none',
   notes: [],
 });
 
@@ -149,6 +150,7 @@ const bring = async (unit: Unit): Promise<Live<Unit>> => {
       server,
       request: { url, method: unit.scenario.method },
       samples: [],
+      usage: [],
     };
   } catch (error) {
     if (started) {

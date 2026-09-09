@@ -35,6 +35,7 @@ const subject: Subject = {
   preload: ['@dunx/transform/preload'],
   versionOf: '@dunx/http',
   validator: 'zod (Standard Schema)',
+  io: 'none',
   notes: [],
 };
 
@@ -256,6 +257,7 @@ const bring = async (unit: Unit, scenario: Scenario): Promise<Live<Unit>> => {
       contentType: scenario.contentType,
     },
     samples: [],
+    usage: [],
   };
 };
 

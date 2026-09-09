@@ -139,6 +139,18 @@ instead of rendering half a report. `results/latest.json` is the one file under
 `results/` that is _not_ gitignored, because CI builds the site from a clean
 checkout and an untracked report would deploy a page with no numbers on it.
 
+**Memory and CPU are joined onto each throughput row, not carried as a second
+list.** The harness writes `resources` per subject and scenario; `projectBench`
+folds `peakMiB` and `cpuMsPerKiloRequests` onto the matching `BenchResult` and
+reduces the rest to one `BenchFootprint` per subject, because `bootMiB` is the
+same reading repeated once per scenario. Both are `null` for a run taken where
+`/proc` does not answer, and the memory table is then not rendered at all.
+
+Throughput orders the table; `cpu ms/kreq` is what to read once it is ordered. It
+is milliseconds of CPU per thousand requests rather than a percentage because every
+subject in the suite is one thread under saturating load, so every percentage would
+sit near 100 and separate nothing.
+
 `@dunx/http` is marked in every table, and rows are ordered by the measured value
 alone - so it is marked where it comes third on cold start exactly as it is where
 it comes second on throughput. Colour encodes the **runtime**, not the ranking: a

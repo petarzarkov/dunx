@@ -11,6 +11,8 @@ import {
   type ArgumentMetadata,
   type PipeTransform,
 } from '@nestjs/common';
+import type { IoPayload } from '../io/contract.js';
+import { readLazyIo } from '../io/lazy.js';
 import {
   echo,
   jsonPayload,
@@ -73,6 +75,14 @@ export class BenchController {
   @UsePipes(new ZodValidationPipe())
   validate(@Body() body: Person): { name: string; age: number } {
     return echo(body);
+  }
+
+  // Declared rather than registered conditionally: Nest reads a controller's
+  // routes off the class at boot. `readLazyIo` throws unless the entrypoint
+  // connected, and only the `io` scenario requests this path.
+  @Get('/io')
+  io(): Promise<IoPayload> {
+    return readLazyIo();
   }
 }
 

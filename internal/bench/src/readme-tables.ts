@@ -12,29 +12,53 @@
  * It replaces everything between the `## Results` heading and the next `##`, and
  * touches nothing else.
  */
+import { driversSection } from './drivers-tables.js';
+import { foldFootprint } from './footprint.js';
+import { dec, int, signed } from './format.js';
+import { invalidates } from './quality.js';
 import { loggingSection } from './logging-tables.js';
 import { median, stddev } from './stats.js';
-import type { Report } from './types.js';
+import type { Report, ResourceUsage } from './types.js';
 import { validationSection } from './validation-tables.js';
 
 const BASELINE = 'bun-serve';
 const FOCUS = 'dunx';
-
-const int = (value: number): string =>
-  Math.round(value).toLocaleString('en-US');
-const dec = (value: number, places = 3): string => value.toFixed(places);
 
 const reportPath = new URL('../results/latest.json', import.meta.url).pathname;
 const readmePath = new URL('../README.md', import.meta.url).pathname;
 
 const report = (await Bun.file(reportPath).json()) as Report;
 
+const costFor = (
+  scenario: string,
+  subject: string,
+): ResourceUsage | undefined =>
+  report.resources.find(
+    (usage) => usage.scenario === scenario && usage.subject === subject,
+  );
+
 const cellsFor = (scenario: string) => {
   const rows = report.results.filter((row) => row.scenario === scenario);
   const rpsOf = (row: (typeof rows)[number]): number =>
     median(row.runs.map((run) => run.rps));
-  const baseline = rows.find((row) => row.subject === BASELINE);
-  const base = baseline === undefined ? 0 : rpsOf(baseline);
+  // A baseline that failed too often to rank is not a denominator either, the
+  // same rule `report.ts` applies: every healthy row would otherwise be a
+  // percentage of a failure rate.
+  const baselineRow = rows.find((row) => row.subject === BASELINE);
+  const totalOf = (
+    row: (typeof rows)[number],
+    key: 'bad' | 'requests',
+  ): number =>
+    row.runs.reduce(
+      (sum, run) =>
+        sum + (key === 'bad' ? run.non2xx + run.errors : run.requests),
+      0,
+    );
+  const base =
+    baselineRow === undefined ||
+    invalidates(totalOf(baselineRow, 'bad'), totalOf(baselineRow, 'requests'))
+      ? 0
+      : rpsOf(baselineRow);
 
   return rows
     .map((row) => {
@@ -42,6 +66,11 @@ const cellsFor = (scenario: string) => {
         report.subjects.find((subject) => subject.id === row.subject)?.label ??
         row.subject;
       const rps = rpsOf(row);
+      const bad = row.runs.reduce(
+        (sum, run) => sum + run.non2xx + run.errors,
+        0,
+      );
+      const requests = row.runs.reduce((sum, run) => sum + run.requests, 0);
       return {
         id: row.subject,
         label: row.subject === FOCUS ? `**${label}**` : label,
@@ -49,24 +78,64 @@ const cellsFor = (scenario: string) => {
         stddev: stddev(row.runs.map((run) => run.rps)),
         p50: median(row.runs.map((run) => run.latencyP50Ms)),
         p99: median(row.runs.map((run) => run.latencyP99Ms)),
-        pct: base === 0 ? 0 : (rps / base) * 100,
-        bad: row.runs.reduce((sum, run) => sum + run.non2xx + run.errors, 0),
+        pct: base === 0 ? null : (rps / base) * 100,
+        bad,
+        requests,
+        // A rate, not a count: one blip in 39,000 is a footnote, a quarter of
+        // the run failing is a row nobody can compare. See `src/quality.ts`.
+        unranked: invalidates(bad, requests),
+        cost: costFor(scenario, row.subject),
       };
     })
-    .sort((a, b) => b.rps - a.rps);
+    .sort((a, b) => Number(a.unranked) - Number(b.unranked) || b.rps - a.rps);
 };
 
 const throughputTable = (scenario: string): string => {
   const rows = cellsFor(scenario);
   const head =
-    '| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |\n' +
-    '| ------- | -------------: | -----: | -----: | -----: | -------------: |';
+    '| Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |\n' +
+    '| ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |';
   const body = rows
     .map((row) => {
       const rps = row.id === FOCUS ? `**${int(row.rps)}**` : int(row.rps);
       const pct =
-        row.id === FOCUS ? `**${dec(row.pct, 1)}%**` : `${dec(row.pct, 1)}%`;
-      return `| ${row.label} | ${rps} | ${int(row.stddev)} | ${dec(row.p50)} | ${dec(row.p99)} | ${pct} |`;
+        row.unranked || row.pct === null
+          ? `- (${int(row.bad)} bad)`
+          : row.id === FOCUS
+            ? `**${dec(row.pct, 1)}%**`
+            : `${dec(row.pct, 1)}%`;
+      const rss =
+        row.cost === undefined ? '-' : dec(row.cost.rssPeakMiB.median, 1);
+      const cpu =
+        row.cost === undefined || row.cost.cpuMsPerKiloRequests === null
+          ? '-'
+          : dec(row.cost.cpuMsPerKiloRequests.median, 2);
+      return `| ${row.label} | ${rps} | ${int(row.stddev)} | ${dec(row.p50)} | ${dec(row.p99)} | ${rss} | ${cpu} | ${pct} |`;
+    })
+    .join('\n');
+  return `${head}\n${body}`;
+};
+
+/**
+ * One row per subject, across every scenario. `boot MiB` is the only reading
+ * taken with nothing in flight, so it is the footprint; `peak MiB` is what it
+ * grew to under load.
+ */
+const footprintTable = (): string => {
+  const rows = foldFootprint(report.resources).map((row) => ({
+    ...row,
+    label:
+      report.subjects.find((one) => one.id === row.subject)?.label ??
+      row.subject,
+  }));
+
+  const head =
+    '| Subject | boot MiB | peak MiB | processes |\n' +
+    '| ------- | -------: | -------: | --------: |';
+  const body = rows
+    .map((row) => {
+      const label = row.subject === FOCUS ? `**${row.label}**` : row.label;
+      return `| ${label} | ${row.bootMiB === null ? '-' : dec(row.bootMiB, 1)} | ${dec(row.peakMiB, 1)} | ${row.processes} |`;
     })
     .join('\n');
   return `${head}\n${body}`;
@@ -108,15 +177,74 @@ const taxTable = (): string => {
       const rows = cellsFor(scenario.id);
       const base = rows.find((row) => row.id === BASELINE);
       const dunx = rows.find((row) => row.id === FOCUS);
+      // A tax computed from a row nobody can rank is not a tax. Omitted rather
+      // than printed, so the table never carries a figure the tables above it
+      // refuse to give a ratio for.
       if (base === undefined || dunx === undefined) return '';
+      if (base.unranked || dunx.unranked || base.rps === 0) return '';
       const delta = ((dunx.rps - base.rps) / base.rps) * 100;
-      const sign = delta >= 0 ? '+' : '−';
-      return `| \`${scenario.id}\` | ${int(base.rps)} | ${int(dunx.rps)} | ${sign}${dec(Math.abs(delta), 1)}% |`;
+      return `| \`${scenario.id}\` | ${int(base.rps)} | ${int(dunx.rps)} | ${signed(delta, 1, '%')} |`;
     })
     .filter((line) => line !== '')
     .join('\n');
   return `${head}\n${body}`;
 };
+
+/** A subject's boot resident set, median across the scenarios it was measured on. */
+const bootMiB = (subject: string): string => {
+  const readings = report.resources
+    .filter((usage) => usage.subject === subject)
+    .map((usage) => usage.rssBootMiB)
+    .filter((one): one is number => one !== null);
+  return readings.length === 0 ? '-' : dec(median(readings), 1);
+};
+
+const cpuPerK = (subject: string, scenario: string): string => {
+  const usage = report.resources.find(
+    (one) => one.subject === subject && one.scenario === scenario,
+  );
+  return usage === undefined || usage.cpuMsPerKiloRequests === null
+    ? '-'
+    : dec(usage.cpuMsPerKiloRequests.median, 2);
+};
+
+const ranIo = report.scenarios.some((scenario) => scenario.id === 'io');
+const ioSection = ranIo
+  ? `
+**Cache and database** - \`GET /io\`, one Redis \`GET\` then one Postgres \`SELECT\`
+
+${throughputTable('io')}
+
+Each subject uses its own ecosystem's clients, every pool pinned to 8 - the
+\`SUBJECTS\` block in \`results/latest.json\` names the pair behind each row. \`spring\`
+and \`django\` are blocking stacks and their one worker means one request in flight;
+see "Blocking subjects on the io scenario". For the client comparison with the
+runtime held still, see "Driver cost".
+`
+  : '';
+
+/** Only rendered when the io scenario ran; the numbers are the point of it. */
+const ioProse = `
+**The framework tax disappears on \`io\`, and that is the most useful thing in this
+file.** dunx and raw \`Bun.serve\` land at ${int(cellsFor('io').find((row) => row.id === FOCUS)?.rps ?? 0)} and ${int(cellsFor('io').find((row) => row.id === BASELINE)?.rps ?? 0)} req/s,
+inside each other's spread, where on \`plaintext\` the same two are
+${int(cellsFor('plaintext').find((row) => row.id === FOCUS)?.rps ?? 0)} and
+${int(cellsFor('plaintext').find((row) => row.id === BASELINE)?.rps ?? 0)}. One Redis
+round trip and one Postgres query cost more than every framework difference above
+them put together. This file used to assert that under "What is not measured"; it is
+now measured, and it is the number to quote at anyone choosing a framework on a
+dispatch benchmark.
+`;
+
+/**
+ * Both of these read `io` numbers, so both are rendered only when that scenario
+ * ran. Without the gate a machine with no Redis publishes committed prose about a
+ * scenario that never happened, with `-` where the figures should be.
+ */
+const cpuIoProse = ` On \`io\` dunx and the baseline both sit near
+${cpuPerK('bun-serve', 'io')} while Axum spends ${cpuPerK('axum', 'io')}: the
+JavaScript subjects burn CPU that Rust does not, on a workload where it buys
+neither of them any throughput, because both are waiting on the same two sockets.`;
 
 const { machine: m, config: c, loadGenerator: g } = report;
 const versions = report.subjects
@@ -153,10 +281,14 @@ ${throughputTable('params')}
 **Body validation** - \`POST /validate\`
 
 ${throughputTable('validate')}
-
+${ioSection}
 **Startup** - cold process to first served request, ${c.startupSamples} samples
 
 ${startupTable()}
+
+**Resource footprint** - resident set of the whole process tree, read from \`/proc\`
+
+${footprintTable()}
 
 ### What these say, including where dunx loses
 
@@ -187,6 +319,16 @@ Elysia on this scenario. What remains is dispatch, not validation.
 **Cold start is dunx's clearest loss**: roughly twice raw \`Bun.serve\`, from the
 \`oxc-parser\` preload and eager DI resolution. It does beat Elysia, and every Node
 subject by a wide margin, but it is the number to watch if boot time matters.
+
+**Memory is the second one.** \`@dunx/http\` boots at ${bootMiB('dunx')} MiB against
+raw \`Bun.serve\`'s ${bootMiB('bun-serve')} MiB, for the container and the resolved
+provider graph, and the gap holds under load. It is small next to the Node subjects
+and tiny next to \`spring\`, and it is still a cost the ceiling does not pay.
+${ranIo ? ioProse : ''}
+**CPU per request is the rate read from the other side.** On \`plaintext\` dunx
+spends ${cpuPerK('dunx', 'plaintext')} ms per thousand requests against the
+baseline's ${cpuPerK('bun-serve', 'plaintext')}, which is the same gap the
+throughput column shows.${ranIo ? cpuIoProse : ''}
 `;
 
 /** Replaces one `## ` section in place, leaving everything around it untouched. */
@@ -215,6 +357,14 @@ if (validation === null) {
 } else {
   readme = replaceSection(readme, '## Validation cost', validation);
   console.log('README validation section regenerated.');
+}
+
+const drivers = await driversSection();
+if (drivers === null) {
+  console.log('No results/drivers.json - driver section left as it is.');
+} else {
+  readme = replaceSection(readme, '## Driver cost', drivers);
+  console.log('README driver section regenerated.');
 }
 
 const logging = await loggingSection();

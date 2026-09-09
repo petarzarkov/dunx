@@ -11,24 +11,35 @@ to hide as the places it wins.
 
 ```bash
 bun run setup       # downloads oha into .bin/ (optional, but read "Load generator")
-bun run start       # full suite: 19 subjects x 4 scenarios, minus any whose toolchain is absent
+bun run smoke       # does every subject start and answer every scenario? no load, no timing
+bun run start       # full suite: 20 subjects x 5 scenarios, minus any whose toolchain is absent
+bun run drivers     # Bun.SQL/Bun.RedisClient against pg/ioredis - see "Driver cost"
 bun run validation  # the validation-cost harness - see "Validation cost"
 bun run db-modes    # @dunx/infra/db async vs synchronous SQLite, end to end
 bun run start --help
 ```
 
-Three harnesses, and they answer different questions. `start` compares frameworks
-with the validator held constant. `validation` does the opposite: one framework at a
-time, one step of work at a time, and every validator swapped through the same
-Standard Schema seam - which is how the `validate` scenario's cost gets split into
-parsing, the validator, and dunx. `db-modes` holds the framework, the SQL and the
-bytes on the wire constant, and varies only whether the handler awaits its way to
-the row. It writes `results/db-modes.json`, and what it found is recorded in
+**Run `bun run smoke` first.** It starts every subject once per scenario and checks
+the contract, with no load and no timing, so a subject that fails to build or
+answers the wrong bytes says so in a couple of minutes rather than forty. It found
+two real defects the day it was written: the .NET subjects refuse to start without
+`DOTNET_PROCESSOR_COUNT=1`, and two Node subjects took themselves down on an
+unhandled pool rejection.
+
+Four measuring harnesses, and they answer different questions. `start` compares
+frameworks with the validator held constant. `drivers` holds the framework, the
+runtime and the server constant and swaps only the database and cache client, which
+is the only way to separate "Bun's client is faster" from "Bun is faster".
+`validation` swaps every validator through the same Standard Schema seam - which is
+how the `validate` scenario's cost gets split into parsing, the validator, and dunx.
+`db-modes` holds the framework, the SQL and the bytes on the wire constant, and
+varies only whether the handler awaits its way to the row. It writes
+`results/db-modes.json`, and what it found is recorded in
 `docs/architecture/constraints.md` under "Synchronous SQLite mode".
 
 ## What is measured
 
-Four scenarios, each implemented the same way in every subject:
+Five scenarios, each implemented the same way in every subject:
 
 | Scenario    | Request              | Response                          | What it adds                  |
 | ----------- | -------------------- | --------------------------------- | ----------------------------- |
@@ -36,6 +47,20 @@ Four scenarios, each implemented the same way in every subject:
 | `json`      | `GET /json`          | `{"message":"Hello, World!"}`     | + JSON serialisation          |
 | `params`    | `GET /params/42`     | `{"id":"42"}`                     | + route matching with a param |
 | `validate`  | `POST /validate`     | `{"name":"Ada Lovelace","age":36}` | + body parse and validation  |
+| `io`        | `GET /io`            | `{"cached":"Hello, World!","id":1,...}` | + a Redis `GET` and a Postgres `SELECT` |
+
+The first four are CPU and dispatch. `io` is the one that leaves the process: one
+`GET bench:greeting` against Redis, then one
+`SELECT id, memo, amount FROM bench_ledger WHERE id = $1` against Postgres with the
+id **bound**, because a bound parameter is the prepare-and-bind path where clients
+differ. Sequential, not concurrent - a cache read that gates a database read is the
+shape the scenario is named for, and issuing both at once would measure the client's
+concurrency primitives instead.
+
+`io` needs Redis and Postgres. **It is opt-in on them answering**: the harness seeds
+the fixture before anything is measured and drops the scenario with a line saying so
+if either is absent, the same way a missing toolchain drops its subjects. See
+"Running the io scenario".
 
 Before any scenario is measured, the harness sends one request and asserts the
 subject returned **the same status, the same body bytes and the same media type**
@@ -43,17 +68,44 @@ as the contract in `src/scenarios.ts`. A subject that answers differently is doi
 different amount of work, and the run fails rather than producing a number nobody
 can compare. See `verifySubject` in `src/subject-process.ts`.
 
-Two things are reported per subject and scenario:
+Four things are reported per subject and scenario:
 
 - **Throughput** - requests per second, median of N runs, with the standard
   deviation across those runs.
 - **Latency** - p50 and p99, medians across runs, as the load generator measured
   them.
+- **Peak resident set** - the highest reading taken during the measured window, for
+  the subject's **whole process tree**. `gunicorn` is a master and a worker, and
+  charging Django only the master's 12 MiB would be wrong by the size of the thing
+  actually serving.
+- **CPU per request** - milliseconds of user plus system time per thousand requests.
 
-And one thing per subject:
+And two things per subject:
 
 - **Startup** - cold process spawn to first served request, median of N samples.
   Polled at 1 ms, so treat anything under about 5 ms as a tie.
+- **Boot footprint** - resident set the moment the subject answered its first
+  request, before any load. The only reading taken with nothing in flight.
+
+### Memory and CPU, and how to read them
+
+They come from `/proc/<pid>/stat` for every process in the tree, sampled at 20 Hz
+inside the measured window and nowhere else. There is no `Bun.*` API for another
+process's usage and no package involved: `pidusage` and friends shell out to `ps`
+per sample, and the kernel already publishes the two numbers. `src/resources.ts`.
+
+**`cpu ms/kreq` is the column to read, not `cpu %`.** Every subject here is one
+thread under saturating load, so every percentage sits near 100 and ranks nothing.
+CPU per request is what separates a subject that spends its time computing from one
+that spends it waiting - which is why the `io` scenario is where it earns its place
+and the `plaintext` scenario is where it is roughly the reciprocal of throughput.
+
+**Peak RSS is the peak of the samples.** A collection that happens between two reads
+is missed. 50 ms against a 5-second round is 100 readings, which finds a steady
+state and will under-report a spike.
+
+**Neither says anything about hour six.** Runs are seconds long, and nothing here is
+a statement about heap growth or a leak.
 
 ### Subjects
 
@@ -288,6 +340,64 @@ These are choices that move the numbers. They are listed here rather than buried
 - **Spring Boot runs with no JVM flags, no AOT, no CDS and no native image.** That
   understates what a tuned Spring deployment does, and it is what `spring init`
   produces.
+- **The Node subjects run on the current LTS, and the version is in every report.**
+  Nothing pins it - the harness takes whatever `node` or `$BENCH_NODE` resolves -
+  so it is a choice the person taking the run makes, and the wrong choice quietly
+  handicaps six of the twenty subjects.
+
+  **It is worth more than anyone guessed.** The first run of the `io` scenario was
+  taken on 20.20.2, out of maintenance, against a Bun on its current release. Both
+  runs measured as a share of raw `Bun.serve`, so the machine cancels:
+
+  | Subject | plaintext | json | params | validate | io |
+  | ------- | --------: | ---: | -----: | -------: | -: |
+  | Express | 9.2 -> 20.5 | 9.2 -> 20.3 | 9.3 -> 19.9 | 10.2 -> 19.2 | 23.8 -> 39.5 |
+  | NestJS (Express) | 7.2 -> 14.6 | 7.0 -> 13.9 | 7.0 -> 13.6 | 8.2 -> 14.6 | 20.7 -> 35.8 |
+  | node:http (raw) | 31.4 -> 39.7 | 31.6 -> 37.7 | 32.9 -> 36.9 | 33.0 -> 35.6 | 50.3 -> 51.5 |
+  | Fastify | 28.5 -> 34.5 | 30.7 -> 34.0 | 30.4 -> 34.0 | 20.0 -> 25.1 | 49.2 -> 52.4 |
+  | Hono (Node) | 28.2 -> 30.6 | 26.0 -> 28.5 | 24.0 -> 26.6 | 22.6 -> 22.5 | 44.3 -> 46.5 |
+  | NestJS (Fastify) | 25.6 -> 27.6 | 26.0 -> 30.3 | 23.7 -> 26.6 | 17.2 -> 22.0 | 44.8 -> 47.4 |
+
+  Express and Nest-on-Express roughly **doubled**; 29 of 30 cells improved. An
+  out-of-date Node is not a small handicap on this suite, it is the largest single
+  one a run can carry, and `machine.node` in the JSON and in the header above every
+  table is what makes it checkable rather than a matter of trust.
+- **The two Redis clients are left at defaults that differ.** `Bun.RedisClient`
+  batches a tick's commands into one write; `ioredis` does not, because
+  `enableAutoPipelining` is `false` in 6.0.0. Neither is changed, for the reason
+  `uvicorn[standard]` is not installed: defaults are what the comparison is of.
+  The subject registry records which is which, and "Driver cost" reads the pair.
+- **Every `io` pool is pinned to 8**, including the ones whose default is larger.
+  With 64 connections against one worker thread the pool is what sets how many
+  queries are in flight, so a subject on its own default would be measured on its
+  configuration. The clients that multiplex one connection instead of pooling -
+  `Bun.RedisClient`, `ioredis`, StackExchange.Redis, Lettuce, redis-rs - are
+  recorded as doing so, per subject, in `results/latest.json`.
+- **The `io` clients are not held constant across languages**, and cannot be, for
+  the same reason the validators are not. Each subject uses its ecosystem's choice:
+  `Bun.SQL`/`Bun.RedisClient`, `pg`/`ioredis`, pgx/go-redis, tokio-postgres/redis-rs,
+  HikariCP/Lettuce, Npgsql/StackExchange.Redis, psycopg/redis-py. Compare an `io` row
+  to its own `json` row before comparing it across languages, and read "Driver cost"
+  for the one comparison where the client is the only thing that changes.
+
+### Blocking subjects on the io scenario
+
+**`spring` and `django` are the two blocking stacks, and one worker thread means one
+request in flight for the whole round trip.** JDBC, Lettuce's synchronous commands,
+psycopg and redis-py all park the worker until the server answers. Every other
+subject is async and has eight queries in flight against the same pool.
+
+This is the thread pinning meaning something different on `io` than it does on the
+other four. On `plaintext` "one thread" is the same handicap for everybody, because
+everybody is computing. On `io` it caps a blocking stack's concurrency at one and an
+async stack's at its pool size, and the gap between those two numbers is in the
+result.
+
+It is left as it is rather than given the blocking subjects eight threads, because
+every table in this file rests on "every subject is one process on one thread" and
+forking that per scenario would need re-justifying all of them. So: read `spring`
+against `django`, and read either against its own `json` row. Do not read either as
+what a Spring or Django deployment does, which runs many workers.
 
 ## What is not measured
 
@@ -301,14 +411,52 @@ These are choices that move the numbers. They are listed here rather than buried
   all scale across cores in one process and the JavaScript runtimes do not, so a
   per-thread ranking flatters Bun by exactly the factor the reader is not being
   shown. See "Reading the Go, Rust and JVM rows fairly".
-- **Anything with I/O.** No database, no cache, no filesystem, no upstream calls. In
-  an application that talks to Postgres, all of these differences are rounding error
-  next to one query. That is the honest framing for every result below.
-- **Memory, and behaviour under sustained load.** Runs are seconds long. Nothing here
-  says anything about heap growth or a leak at hour six.
+- **Anything with I/O, on the first four scenarios.** No database, no cache, no
+  filesystem, no upstream calls. In an application that talks to Postgres, all of
+  those differences are rounding error next to one query. That used to be an
+  assertion in this paragraph and is now the `io` row, which measures it - see "The
+  framework tax disappears on `io`" under the results.
+- **The filesystem, and upstream HTTP.** `io` reaches Redis and Postgres and nothing
+  else.
+- **Behaviour under sustained load.** Runs are seconds long. Peak resident set is
+  reported per round; nothing here says anything about heap growth or a leak at hour
+  six.
 - **TLS, HTTP/2, HTTP/3, websockets, streaming, large bodies, file uploads.**
 - **Cold-start under a constrained CPU**, which is what actually matters on a
   serverless platform. The startup numbers here are from an idle 32-core desktop.
+
+## Running the io scenario
+
+Two services, and the harness seeds both before anything is measured. A subject
+must not seed its own fixture, or two subjects could be reading different rows.
+
+| Variable            | Default                                    |
+| ------------------- | ------------------------------------------ |
+| `$BENCH_REDIS_URL`  | `redis://127.0.0.1:6379`                   |
+| `$BENCH_PG_URL`     | `postgres://dunx:dunx@127.0.0.1:5432/dunx` |
+
+```bash
+docker run -d --name bench-valkey -p 6379:6379 valkey/valkey:8-alpine
+docker run -d --name bench-pg -p 5432:5432 \
+  -e POSTGRES_USER=dunx -e POSTGRES_PASSWORD=dunx -e POSTGRES_DB=dunx \
+  postgres:17-alpine -c max_connections=200
+```
+
+**`max_connections=200` is not decoration, and this is the scenario's hardest
+precondition.** Measured rounds are interleaved, so every subject is up and pooled
+at the same time: twenty subjects at a pool of 8 want 160 connections against
+Postgres' default of 100. What that produced was not an error, it was a table. Two
+Node subjects died of an unhandled pool rejection and were recorded at **560,964
+req/s of pure connection failures, sorted above raw `Bun.serve`**; four more served
+5xx for a fifth of their requests; every one of those rows had a number in it.
+
+Two things came out of that and both are in the code. The harness now reads
+`SHOW max_connections` before the run and drops the `io` scenario with the figure to
+set if the budget does not fit, and a row with any error or non-2xx is sorted last
+and shown with no ratio. `src/io-fixture.ts` and `src/report.ts`.
+
+The seed is 500 rows in `bench_ledger` and one Redis key, written with `Bun.SQL` and
+`Bun.RedisClient`, so the harness needs no driver of its own.
 
 ## Methodology
 
@@ -508,137 +656,193 @@ transcribed by hand.
 
 ```
 AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
-linux 7.0.0-31-generic x64 | bun 1.4.1 | node v20.20.2 | oha oha 1.15.0
-64 connections | 3s warmup | 5 x 5s measured | 2026-09-05
-dunx-logging 3.2.1 | dunx-logging-arkv 3.2.1 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1 | gin v1.12.0 | axum 0.8.9 | spring 4.1.0 | aspnet-minimal net10.0 | aspnet-mvc net10.0 | django 6.1 | fastapi 0.141.1
+linux 7.0.0-31-generic x64 | bun 1.4.2 | node v24.21.0 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 5s measured | 2026-09-09
+dunx-logging 3.5.1 | dunx-logging-arkv 3.5.1 | elysia 1.4.29 | nest-express 11.1.28 | nest-fastify 11.1.28 | hono-bun 4.12.33 | hono-node 4.12.33 | fastify 5.11.0 | express 5.2.1 | gin v1.12.0 | axum 0.8.9 | spring 4.1.0 | aspnet-minimal net10.0 | aspnet-mvc net10.0 | django 6.1 | fastapi 0.141.1
 ```
 
 Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 **Plain text** - `GET /plaintext`
 
-| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
-| ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Elysia | 136,766 | 2,388 | 0.444 | 0.900 | 100.2% |
-| Bun.serve (raw) | 136,500 | 1,788 | 0.446 | 0.897 | 100.0% |
-| **@dunx/http** | **134,864** | 933 | 0.450 | 0.909 | **98.8%** |
-| Hono (Bun) | 126,987 | 2,710 | 0.484 | 0.974 | 93.0% |
-| Axum (Rust) | 125,217 | 953 | 0.503 | 0.605 | 91.7% |
-| ASP.NET Core minimal APIs | 110,484 | 1,956 | 0.560 | 0.786 | 80.9% |
-| ASP.NET Core MVC | 90,251 | 268 | 0.689 | 0.961 | 66.1% |
-| @dunx/http (+ request logging) | 81,931 | 1,131 | 0.751 | 1.489 | 60.0% |
-| Gin (Go) | 75,374 | 970 | 0.845 | 1.903 | 55.2% |
-| net/http (Go) | 75,230 | 1,026 | 0.848 | 1.884 | 55.1% |
-| @dunx/http (+ request logging, @arkv/logger) | 60,054 | 588 | 1.015 | 2.028 | 44.0% |
-| Spring Boot (JVM) | 50,593 | 2,775 | 1.228 | 1.764 | 37.1% |
-| node:http (raw) | 44,428 | 1,161 | 1.397 | 1.991 | 32.5% |
-| Fastify (Node) | 40,143 | 922 | 1.562 | 1.856 | 29.4% |
-| Hono (Node) | 37,083 | 1,419 | 1.687 | 2.008 | 27.2% |
-| NestJS (Fastify) | 31,623 | 1,165 | 2.026 | 2.369 | 23.2% |
-| Express (Node) | 12,226 | 57 | 4.927 | 7.063 | 9.0% |
-| NestJS (Express) | 9,332 | 70 | 6.326 | 9.568 | 6.8% |
-| FastAPI (Python) | 7,260 | 13 | 8.781 | 9.004 | 5.3% |
-| Django (Python) | 4,545 | 34 | 13.937 | 14.801 | 3.3% |
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
+| Bun.serve (raw) | 134,478 | 514 | 0.453 | 0.914 | 47.1 | 7.70 | 100.0% |
+| **@dunx/http** | **133,993** | 1,203 | 0.458 | 0.921 | 61.5 | 7.76 | **99.6%** |
+| Elysia | 133,151 | 1,698 | 0.459 | 0.930 | 54.8 | 7.88 | 99.0% |
+| Axum (Rust) | 126,969 | 1,202 | 0.499 | 0.553 | 4.8 | 7.89 | 94.4% |
+| Hono (Bun) | 123,815 | 2,455 | 0.495 | 0.999 | 52.5 | 8.44 | 92.1% |
+| ASP.NET Core minimal APIs | 110,649 | 2,356 | 0.558 | 0.803 | 98.8 | 11.32 | 82.3% |
+| ASP.NET Core MVC | 88,702 | 1,311 | 0.697 | 0.982 | 104.4 | 13.57 | 66.0% |
+| @dunx/http (+ request logging) | 80,618 | 594 | 0.761 | 1.507 | 69.6 | 13.19 | 59.9% |
+| Gin (Go) | 76,480 | 418 | 0.831 | 1.910 | 22.5 | 13.09 | 56.9% |
+| net/http (Go) | 74,976 | 423 | 0.851 | 1.867 | 17.9 | 13.36 | 55.8% |
+| @dunx/http (+ request logging, @arkv/logger) | 59,967 | 1,230 | 1.000 | 1.991 | 76.3 | 17.57 | 44.6% |
+| node:http (raw) | 53,325 | 814 | 1.162 | 2.295 | 86.1 | 18.81 | 39.7% |
+| Spring Boot (JVM) | 52,073 | 77 | 1.205 | 1.721 | 352.3 | 28.79 | 38.7% |
+| Fastify (Node) | 46,443 | 1,456 | 1.355 | 1.814 | 92.9 | 22.12 | 34.5% |
+| Hono (Node) | 41,201 | 1,251 | 1.538 | 1.943 | 89.4 | 24.55 | 30.6% |
+| NestJS (Fastify) | 37,178 | 1,864 | 1.623 | 2.173 | 109.4 | 27.85 | 27.6% |
+| Express (Node) | 27,561 | 768 | 2.275 | 2.735 | 92.7 | 36.77 | 20.5% |
+| NestJS (Express) | 19,640 | 256 | 3.145 | 3.573 | 109.6 | 51.99 | 14.6% |
+| FastAPI (Python) | 7,321 | 71 | 8.725 | 9.012 | 44.1 | 136.34 | 5.4% |
+| Django (Python) | 4,538 | 18 | 14.022 | 15.308 | 73.6 | 220.01 | 3.4% |
 
 **JSON** - `GET /json`
 
-| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
-| ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 131,077 | 1,209 | 0.466 | 0.939 | 100.0% |
-| **@dunx/http** | **127,776** | 914 | 0.478 | 0.964 | **97.5%** |
-| Elysia | 123,937 | 3,173 | 0.487 | 0.986 | 94.6% |
-| Axum (Rust) | 121,724 | 1,564 | 0.515 | 0.629 | 92.9% |
-| Hono (Bun) | 111,301 | 1,349 | 0.545 | 1.099 | 84.9% |
-| ASP.NET Core minimal APIs | 103,899 | 1,467 | 0.596 | 0.845 | 79.3% |
-| ASP.NET Core MVC | 83,110 | 2,478 | 0.749 | 1.037 | 63.4% |
-| @dunx/http (+ request logging) | 78,439 | 5,121 | 0.785 | 1.549 | 59.8% |
-| net/http (Go) | 74,164 | 517 | 0.862 | 1.889 | 56.6% |
-| Gin (Go) | 72,991 | 1,272 | 0.873 | 1.972 | 55.7% |
-| @dunx/http (+ request logging, @arkv/logger) | 55,342 | 1,460 | 1.087 | 2.164 | 42.2% |
-| Spring Boot (JVM) | 52,795 | 1,601 | 1.193 | 1.464 | 40.3% |
-| Fastify (Node) | 39,291 | 628 | 1.563 | 2.018 | 30.0% |
-| node:http (raw) | 39,249 | 1,393 | 1.627 | 2.154 | 29.9% |
-| NestJS (Fastify) | 33,748 | 528 | 1.856 | 2.362 | 25.7% |
-| Hono (Node) | 33,010 | 1,076 | 1.945 | 2.265 | 25.2% |
-| Express (Node) | 11,880 | 140 | 5.039 | 7.237 | 9.1% |
-| NestJS (Express) | 9,098 | 111 | 6.570 | 9.317 | 6.9% |
-| FastAPI (Python) | 7,388 | 98 | 8.648 | 8.897 | 5.6% |
-| Django (Python) | 4,456 | 80 | 14.216 | 15.395 | 3.4% |
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
+| Bun.serve (raw) | 129,641 | 1,354 | 0.470 | 0.944 | 46.3 | 7.96 | 100.0% |
+| Axum (Rust) | 126,805 | 644 | 0.500 | 0.574 | 4.8 | 7.89 | 97.8% |
+| **@dunx/http** | **123,999** | 1,618 | 0.493 | 0.990 | 60.3 | 8.33 | **95.6%** |
+| Elysia | 122,220 | 1,094 | 0.501 | 1.010 | 55.5 | 8.59 | 94.3% |
+| Hono (Bun) | 112,717 | 1,624 | 0.544 | 1.095 | 54.9 | 9.29 | 86.9% |
+| ASP.NET Core minimal APIs | 105,833 | 1,356 | 0.590 | 0.795 | 102.2 | 11.90 | 81.6% |
+| ASP.NET Core MVC | 84,393 | 1,744 | 0.734 | 1.016 | 106.7 | 14.14 | 65.1% |
+| @dunx/http (+ request logging) | 77,015 | 991 | 0.791 | 1.561 | 68.0 | 13.84 | 59.4% |
+| Gin (Go) | 74,874 | 866 | 0.850 | 1.955 | 22.4 | 13.37 | 57.8% |
+| net/http (Go) | 74,363 | 312 | 0.859 | 1.887 | 17.9 | 13.46 | 57.4% |
+| @dunx/http (+ request logging, @arkv/logger) | 58,051 | 828 | 1.046 | 2.082 | 70.3 | 18.33 | 44.8% |
+| Spring Boot (JVM) | 51,229 | 186 | 1.233 | 1.464 | 600.9 | 28.90 | 39.5% |
+| node:http (raw) | 48,882 | 1,811 | 1.285 | 2.502 | 86.2 | 20.53 | 37.7% |
+| Fastify (Node) | 44,040 | 1,505 | 1.392 | 1.843 | 92.1 | 23.37 | 34.0% |
+| NestJS (Fastify) | 39,254 | 1,152 | 1.577 | 2.458 | 109.7 | 26.32 | 30.3% |
+| Hono (Node) | 36,916 | 863 | 1.686 | 2.075 | 92.0 | 27.99 | 28.5% |
+| Express (Node) | 26,275 | 240 | 2.385 | 2.644 | 92.7 | 38.41 | 20.3% |
+| NestJS (Express) | 17,974 | 491 | 3.539 | 4.022 | 107.4 | 57.02 | 13.9% |
+| FastAPI (Python) | 7,258 | 22 | 8.802 | 9.061 | 44.0 | 137.71 | 5.6% |
+| Django (Python) | 4,425 | 45 | 14.389 | 16.098 | 73.9 | 225.74 | 3.4% |
 
 **Path parameter** - `GET /params/42`
 
-| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
-| ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 130,479 | 1,407 | 0.471 | 0.947 | 100.0% |
-| Elysia | 127,885 | 1,803 | 0.476 | 0.964 | 98.0% |
-| **@dunx/http** | **126,206** | 1,294 | 0.486 | 0.976 | **96.7%** |
-| Axum (Rust) | 120,759 | 391 | 0.522 | 0.672 | 92.6% |
-| Hono (Bun) | 108,403 | 514 | 0.564 | 1.134 | 83.1% |
-| ASP.NET Core minimal APIs | 103,050 | 1,667 | 0.597 | 0.836 | 79.0% |
-| @dunx/http (+ request logging) | 75,566 | 2,235 | 0.810 | 1.585 | 57.9% |
-| Gin (Go) | 72,217 | 1,232 | 0.883 | 1.983 | 55.3% |
-| net/http (Go) | 71,903 | 2,836 | 0.887 | 1.938 | 55.1% |
-| ASP.NET Core MVC | 69,699 | 996 | 0.900 | 1.237 | 53.4% |
-| @dunx/http (+ request logging, @arkv/logger) | 55,751 | 685 | 1.082 | 2.153 | 42.7% |
-| Spring Boot (JVM) | 46,300 | 242 | 1.363 | 1.643 | 35.5% |
-| node:http (raw) | 38,733 | 1,597 | 1.619 | 1.892 | 29.7% |
-| Fastify (Node) | 38,248 | 1,379 | 1.623 | 2.121 | 29.3% |
-| Hono (Node) | 32,160 | 1,228 | 1.991 | 2.306 | 24.6% |
-| NestJS (Fastify) | 29,606 | 948 | 2.150 | 2.637 | 22.7% |
-| Express (Node) | 11,447 | 150 | 5.209 | 7.517 | 8.8% |
-| NestJS (Express) | 8,818 | 41 | 6.776 | 9.979 | 6.8% |
-| FastAPI (Python) | 6,727 | 40 | 9.487 | 9.766 | 5.2% |
-| Django (Python) | 4,415 | 30 | 14.399 | 14.906 | 3.4% |
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
+| Bun.serve (raw) | 128,172 | 1,199 | 0.478 | 0.961 | 47.9 | 8.06 | 100.0% |
+| Elysia | 127,701 | 1,358 | 0.482 | 0.974 | 56.4 | 8.20 | 99.6% |
+| Axum (Rust) | 122,718 | 880 | 0.514 | 0.633 | 4.8 | 8.14 | 95.7% |
+| **@dunx/http** | **120,942** | 2,130 | 0.498 | 1.007 | 61.5 | 8.58 | **94.4%** |
+| Hono (Bun) | 108,669 | 1,434 | 0.564 | 1.133 | 54.1 | 9.66 | 84.8% |
+| ASP.NET Core minimal APIs | 105,077 | 2,309 | 0.596 | 0.819 | 99.9 | 11.83 | 82.0% |
+| @dunx/http (+ request logging) | 75,577 | 1,144 | 0.807 | 1.600 | 69.5 | 14.12 | 59.0% |
+| Gin (Go) | 74,708 | 415 | 0.850 | 1.969 | 22.5 | 13.40 | 58.3% |
+| net/http (Go) | 73,448 | 838 | 0.870 | 1.897 | 17.6 | 13.62 | 57.3% |
+| ASP.NET Core MVC | 68,123 | 1,740 | 0.903 | 1.240 | 105.9 | 17.24 | 53.1% |
+| @dunx/http (+ request logging, @arkv/logger) | 56,899 | 1,301 | 1.074 | 2.144 | 64.7 | 18.75 | 44.4% |
+| node:http (raw) | 47,348 | 1,560 | 1.355 | 2.476 | 86.0 | 21.24 | 36.9% |
+| Spring Boot (JVM) | 44,459 | 1,014 | 1.414 | 1.769 | 628.8 | 33.03 | 34.7% |
+| Fastify (Node) | 43,568 | 699 | 1.422 | 1.930 | 92.2 | 23.45 | 34.0% |
+| NestJS (Fastify) | 34,110 | 490 | 1.806 | 2.242 | 109.0 | 30.22 | 26.6% |
+| Hono (Node) | 34,043 | 1,096 | 1.809 | 2.324 | 93.9 | 30.34 | 26.6% |
+| Express (Node) | 25,443 | 422 | 2.456 | 2.927 | 91.2 | 39.95 | 19.9% |
+| NestJS (Express) | 17,446 | 446 | 3.637 | 4.086 | 108.3 | 57.98 | 13.6% |
+| FastAPI (Python) | 6,677 | 55 | 9.549 | 9.996 | 43.3 | 149.78 | 5.2% |
+| Django (Python) | 4,363 | 84 | 14.508 | 15.838 | 72.5 | 228.91 | 3.4% |
 
 **Body validation** - `POST /validate`
 
-| Subject | req/s (median) | stddev | p50 ms | p99 ms | vs `bun-serve` |
-| ------- | -------------: | -----: | -----: | -----: | -------------: |
-| Bun.serve (raw) | 92,616 | 768 | 0.666 | 1.335 | 100.0% |
-| Axum (Rust) | 86,228 | 3,221 | 0.726 | 0.812 | 93.1% |
-| **@dunx/http** | **81,631** | 1,410 | 0.752 | 1.491 | **88.1%** |
-| ASP.NET Core minimal APIs | 80,863 | 2,158 | 0.775 | 1.046 | 87.3% |
-| Elysia | 78,649 | 2,342 | 0.763 | 1.536 | 84.9% |
-| Hono (Bun) | 60,513 | 2,310 | 1.007 | 1.954 | 65.3% |
-| @dunx/http (+ request logging) | 57,025 | 1,958 | 1.064 | 2.000 | 61.6% |
-| ASP.NET Core MVC | 53,116 | 724 | 1.178 | 1.585 | 57.4% |
-| net/http (Go) | 49,402 | 746 | 1.297 | 2.831 | 53.3% |
-| Gin (Go) | 48,539 | 438 | 1.323 | 2.918 | 52.4% |
-| @dunx/http (+ request logging, @arkv/logger) | 43,667 | 874 | 1.411 | 2.800 | 47.1% |
-| Spring Boot (JVM) | 33,566 | 567 | 1.852 | 2.386 | 36.2% |
-| node:http (raw) | 29,674 | 852 | 2.104 | 4.086 | 32.0% |
-| Hono (Node) | 20,237 | 469 | 3.069 | 6.025 | 21.9% |
-| Fastify (Node) | 17,743 | 117 | 3.283 | 6.484 | 19.2% |
-| NestJS (Fastify) | 14,953 | 186 | 3.917 | 7.214 | 16.1% |
-| Express (Node) | 8,977 | 89 | 6.670 | 9.709 | 9.7% |
-| NestJS (Express) | 7,266 | 43 | 8.171 | 11.696 | 7.8% |
-| FastAPI (Python) | 4,493 | 20 | 14.212 | 14.502 | 4.9% |
-| Django (Python) | 4,163 | 52 | 15.254 | 16.590 | 4.5% |
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
+| Bun.serve (raw) | 90,015 | 892 | 0.687 | 1.369 | 51.0 | 11.53 | 100.0% |
+| Axum (Rust) | 84,320 | 3,397 | 0.758 | 0.812 | 5.5 | 11.86 | 93.7% |
+| **@dunx/http** | **82,903** | 1,551 | 0.727 | 1.460 | 68.2 | 12.58 | **92.1%** |
+| Elysia | 80,372 | 1,074 | 0.757 | 1.520 | 57.2 | 13.21 | 89.3% |
+| ASP.NET Core minimal APIs | 77,560 | 2,309 | 0.798 | 1.097 | 101.9 | 15.26 | 86.2% |
+| Hono (Bun) | 66,288 | 1,585 | 0.912 | 1.819 | 55.7 | 15.95 | 73.6% |
+| @dunx/http (+ request logging) | 57,602 | 889 | 1.060 | 1.979 | 73.0 | 18.49 | 64.0% |
+| ASP.NET Core MVC | 53,127 | 976 | 1.169 | 1.614 | 107.3 | 21.18 | 59.0% |
+| Gin (Go) | 50,459 | 70 | 1.269 | 2.826 | 22.5 | 19.88 | 56.1% |
+| net/http (Go) | 49,884 | 346 | 1.288 | 2.773 | 17.2 | 20.07 | 55.4% |
+| @dunx/http (+ request logging, @arkv/logger) | 43,607 | 1,287 | 1.390 | 2.718 | 71.0 | 24.52 | 48.4% |
+| Spring Boot (JVM) | 33,944 | 561 | 1.829 | 2.233 | 635.0 | 41.42 | 37.7% |
+| node:http (raw) | 32,013 | 1,364 | 1.888 | 3.734 | 90.4 | 31.84 | 35.6% |
+| Fastify (Node) | 22,584 | 403 | 2.620 | 9.675 | 258.6 | 52.47 | 25.1% |
+| Hono (Node) | 20,225 | 918 | 3.096 | 5.751 | 105.7 | 49.70 | 22.5% |
+| NestJS (Fastify) | 19,788 | 474 | 3.064 | 7.645 | 278.1 | 58.25 | 22.0% |
+| Express (Node) | 17,312 | 441 | 3.642 | 4.401 | 97.4 | 58.17 | 19.2% |
+| NestJS (Express) | 13,122 | 280 | 4.815 | 5.479 | 115.0 | 77.17 | 14.6% |
+| FastAPI (Python) | 4,403 | 23 | 14.502 | 14.887 | 44.2 | 227.13 | 4.9% |
+| Django (Python) | 4,199 | 61 | 15.132 | 16.780 | 73.8 | 237.85 | 4.7% |
+
+**Cache and database** - `GET /io`, one Redis `GET` then one Postgres `SELECT`
+
+| Subject | req/s (median) | stddev | p50 ms | p99 ms | peak MiB | cpu ms/kreq | vs `bun-serve` |
+| ------- | -------------: | -----: | -----: | -----: | -------: | ----------: | -------------: |
+| Axum (Rust) | 35,228 | 246 | 1.810 | 2.094 | 6.1 | 28.36 | 127.1% |
+| Elysia | 27,741 | 248 | 2.296 | 3.516 | 66.3 | 38.41 | 100.1% |
+| Bun.serve (raw) | 27,721 | 191 | 2.308 | 3.524 | 60.5 | 38.26 | 100.0% |
+| **@dunx/http** | **27,646** | 347 | 2.305 | 3.597 | 71.9 | 38.74 | **99.7%** |
+| Hono (Bun) | 26,494 | 518 | 2.406 | 3.782 | 64.1 | 40.69 | 95.6% |
+| @dunx/http (+ request logging) | 24,734 | 363 | 2.553 | 4.188 | 78.2 | 44.35 | 89.2% |
+| @dunx/http (+ request logging, @arkv/logger) | 22,517 | 111 | 2.838 | 4.494 | 80.6 | 47.83 | 81.2% |
+| ASP.NET Core minimal APIs | 21,355 | 261 | 2.963 | 3.940 | 122.7 | 68.45 | 77.0% |
+| Gin (Go) | 20,945 | 254 | 2.964 | 4.355 | 28.1 | 47.71 | 75.6% |
+| net/http (Go) | 20,764 | 239 | 2.995 | 4.318 | 23.1 | 48.12 | 74.9% |
+| ASP.NET Core MVC | 18,623 | 137 | 3.391 | 4.658 | 129.0 | 77.24 | 67.2% |
+| Fastify (Node) | 14,520 | 415 | 4.323 | 5.881 | 121.8 | 70.54 | 52.4% |
+| node:http (raw) | 14,267 | 612 | 4.317 | 6.040 | 113.2 | 72.12 | 51.5% |
+| NestJS (Fastify) | 13,140 | 383 | 4.736 | 6.671 | 158.3 | 77.79 | 47.4% |
+| Hono (Node) | 12,899 | 424 | 4.804 | 6.422 | 145.5 | 79.13 | 46.5% |
+| Express (Node) | 10,959 | 432 | 5.679 | 7.670 | 130.0 | 93.11 | 39.5% |
+| NestJS (Express) | 9,911 | 239 | 6.237 | 8.331 | 159.9 | 103.76 | 35.8% |
+| Spring Boot (JVM) | 4,944 | 44 | 12.898 | 14.341 | 367.8 | 109.19 | 17.8% |
+| FastAPI (Python) | 2,130 | 14 | 29.085 | 45.828 | 64.6 | 469.69 | 7.7% |
+| Django (Python) | 1,580 | 21 | 40.461 | 43.469 | 104.9 | 441.49 | 5.7% |
+
+Each subject uses its own ecosystem's clients, every pool pinned to 8 - the
+`SUBJECTS` block in `results/latest.json` names the pair behind each row. `spring`
+and `django` are blocking stacks and their one worker means one request in flight;
+see "Blocking subjects on the io scenario". For the client comparison with the
+runtime held still, see "Driver cost".
 
 **Startup** - cold process to first served request, 7 samples
 
 | Subject | median ms | min ms | max ms |
 | ------- | --------: | -----: | -----: |
-| Axum (Rust) | 1.6 | 1.5 | 1.8 |
-| net/http (Go) | 4.1 | 3.8 | 4.4 |
-| Gin (Go) | 5.0 | 3.8 | 5.3 |
-| Bun.serve (raw) | 19.4 | 18.6 | 19.6 |
-| Hono (Bun) | 23.9 | 22.6 | 25.7 |
-| **@dunx/http** | **42.6** | 40.3 | 45.2 |
-| @dunx/http (+ request logging) | 42.8 | 40.2 | 44.6 |
-| Elysia | 47.6 | 45.7 | 48.2 |
-| @dunx/http (+ request logging, @arkv/logger) | 55.6 | 53.6 | 56.9 |
-| node:http (raw) | 80.4 | 69.4 | 83.6 |
-| Hono (Node) | 101.0 | 91.3 | 105.4 |
-| Express (Node) | 126.5 | 123.6 | 132.6 |
-| Django (Python) | 132.1 | 128.6 | 140.5 |
-| Fastify (Node) | 154.6 | 151.4 | 156.1 |
-| FastAPI (Python) | 245.5 | 241.9 | 247.5 |
-| NestJS (Express) | 278.8 | 273.5 | 284.8 |
-| ASP.NET Core minimal APIs | 280.6 | 274.6 | 291.0 |
-| NestJS (Fastify) | 293.6 | 287.5 | 300.4 |
-| ASP.NET Core MVC | 297.8 | 287.7 | 308.0 |
-| Spring Boot (JVM) | 1263.7 | 1241.4 | 1276.4 |
+| Axum (Rust) | 1.7 | 1.6 | 1.9 |
+| net/http (Go) | 4.0 | 3.8 | 4.3 |
+| Gin (Go) | 5.0 | 4.1 | 5.3 |
+| Bun.serve (raw) | 24.0 | 22.5 | 25.1 |
+| Hono (Bun) | 27.4 | 26.3 | 28.8 |
+| **@dunx/http** | **46.2** | 43.2 | 47.1 |
+| @dunx/http (+ request logging) | 46.6 | 44.6 | 48.1 |
+| Elysia | 51.9 | 49.0 | 57.0 |
+| @dunx/http (+ request logging, @arkv/logger) | 61.4 | 55.8 | 63.4 |
+| node:http (raw) | 80.7 | 76.3 | 83.3 |
+| Hono (Node) | 95.5 | 90.2 | 97.9 |
+| Express (Node) | 110.1 | 108.4 | 115.0 |
+| Django (Python) | 131.4 | 128.0 | 132.8 |
+| Fastify (Node) | 135.4 | 131.2 | 138.3 |
+| NestJS (Express) | 243.7 | 231.0 | 258.2 |
+| FastAPI (Python) | 244.0 | 239.9 | 245.6 |
+| NestJS (Fastify) | 251.8 | 246.1 | 261.4 |
+| ASP.NET Core MVC | 297.8 | 292.1 | 305.9 |
+| ASP.NET Core minimal APIs | 299.6 | 281.2 | 312.9 |
+| Spring Boot (JVM) | 1322.5 | 1274.7 | 1358.0 |
+
+**Resource footprint** - resident set of the whole process tree, read from `/proc`
+
+| Subject | boot MiB | peak MiB | processes |
+| ------- | -------: | -------: | --------: |
+| Axum (Rust) | 3.5 | 6.1 | 1 |
+| net/http (Go) | 12.4 | 23.3 | 1 |
+| Gin (Go) | 17.5 | 28.4 | 1 |
+| Bun.serve (raw) | 34.6 | 62.8 | 1 |
+| FastAPI (Python) | 43.0 | 64.6 | 1 |
+| Hono (Bun) | 36.6 | 66.5 | 1 |
+| Elysia | 47.2 | 68.9 | 1 |
+| **@dunx/http** | 51.3 | 72.6 | 1 |
+| @dunx/http (+ request logging) | 52.1 | 79.2 | 1 |
+| @dunx/http (+ request logging, @arkv/logger) | 54.8 | 85.8 | 1 |
+| Django (Python) | 73.5 | 104.9 | 2 |
+| ASP.NET Core minimal APIs | 76.4 | 123.4 | 1 |
+| ASP.NET Core MVC | 80.6 | 129.8 | 1 |
+| node:http (raw) | 72.6 | 137.8 | 1 |
+| Express (Node) | 73.7 | 139.6 | 1 |
+| Hono (Node) | 77.2 | 148.4 | 1 |
+| NestJS (Express) | 99.0 | 181.6 | 1 |
+| Fastify (Node) | 79.1 | 269.1 | 1 |
+| NestJS (Fastify) | 99.3 | 278.4 | 1 |
+| Spring Boot (JVM) | 259.2 | 635.0 | 1 |
 
 ### What these say, including where dunx loses
 
@@ -646,10 +850,11 @@ Reproduce with `bun run start`; the full JSON lands in `results/latest.json`.
 
 | Scenario | Bun.serve | @dunx/http | dunx costs |
 | -------- | --------: | ---------: | ---------: |
-| `plaintext` | 136,500 | 134,864 | −1.2% |
-| `json` | 131,077 | 127,776 | −2.5% |
-| `params` | 130,479 | 126,206 | −3.3% |
-| `validate` | 92,616 | 81,631 | −11.9% |
+| `plaintext` | 134,478 | 133,993 | −0.4% |
+| `json` | 129,641 | 123,999 | −4.4% |
+| `params` | 128,172 | 120,942 | −5.6% |
+| `validate` | 90,015 | 82,903 | −7.9% |
+| `io` | 27,721 | 27,646 | −0.3% |
 
 **A figure at or above 100% is noise, not a win.** `@dunx/http` dispatches
 *through* `Bun.serve`; it cannot serve a request faster than the API it calls. When
@@ -675,6 +880,29 @@ Elysia on this scenario. What remains is dispatch, not validation.
 `oxc-parser` preload and eager DI resolution. It does beat Elysia, and every Node
 subject by a wide margin, but it is the number to watch if boot time matters.
 
+**Memory is the second one.** `@dunx/http` boots at 51.3 MiB against
+raw `Bun.serve`'s 34.6 MiB, for the container and the resolved
+provider graph, and the gap holds under load. It is small next to the Node subjects
+and tiny next to `spring`, and it is still a cost the ceiling does not pay.
+
+**The framework tax disappears on `io`, and that is the most useful thing in this
+file.** dunx and raw `Bun.serve` land at 27,646 and 27,721 req/s,
+inside each other's spread, where on `plaintext` the same two are
+133,993 and
+134,478. One Redis
+round trip and one Postgres query cost more than every framework difference above
+them put together. This file used to assert that under "What is not measured"; it is
+now measured, and it is the number to quote at anyone choosing a framework on a
+dispatch benchmark.
+
+**CPU per request is the rate read from the other side.** On `plaintext` dunx
+spends 7.76 ms per thousand requests against the
+baseline's 7.70, which is the same gap the
+throughput column shows. On `io` dunx and the baseline both sit near
+38.26 while Axum spends 28.36: the
+JavaScript subjects burn CPU that Rust does not, on a workload where it buys
+neither of them any throughput, because both are waiting on the same two sockets.
+
 ## How to read the results
 
 - **`vs bun-serve`** is the column that matters for dunx. It is the fraction of raw
@@ -688,8 +916,23 @@ subject by a wide margin, but it is the number to watch if boot time matters.
   held constant. Compare that delta, not the absolute.
 - **Standard deviation** is across whole runs. If it is a large fraction of the
   median, the machine was busy and the run should be repeated.
-- **`bad`** counts non-2xx responses plus transport errors across all measured runs.
-  Anything other than 0 invalidates that row.
+- **`bad`** counts non-2xx responses plus transport errors across all measured runs,
+  and it is judged as a **rate**, not a count. Above one in a thousand the row is
+  sorted last and shown with no ratio; at or under it the row ranks normally and the
+  count is still printed. The count alone was the rule until it was enforced and
+  turned out to be wrong in both directions at once: two Node subjects that died
+  mid-run were recorded at 560,964 req/s of pure connection failures and sorted
+  above raw `Bun.serve`, while Django lost its ratio over **one** non-2xx in 38,909
+  - 0.0026% - which reads as a broken measurement rather than a measurement with a
+  blip in it. `src/quality.ts` owns the threshold, and the stdout table, the tables
+  below and the documentation site all read it from there.
+- **`cpu ms/kreq` before `peak MiB`.** CPU per request separates a subject that
+  computes from one that waits; peak resident set is a footprint and moves with the
+  runtime's allocator far more than with the framework. `cpu %` is not in the tables
+  because every subject saturates one thread and every figure would read near 100.
+- **On `io`, compare each row to its own `json` row first.** The clients differ per
+  language and the two blocking subjects are capped at one request in flight. For
+  the client comparison with everything else held still, read "Driver cost".
 - **Differences under about 3 points are noise on this setup, and that was measured
   rather than assumed.** Two full runs on the same idle machine, same code, moved
   `@dunx/http`'s `vs bun-serve` figure by up to **3.2 points** (`params` 96.2% ->
@@ -698,6 +941,61 @@ subject by a wide margin, but it is the number to watch if boot time matters.
   nothing, and do not quote an absolute as capacity. Nothing external was competing -
   `oha` and the subject were the only things on the CPU - so this is the machine's own
   frequency behaviour, not contention.
+
+## Driver cost
+
+What Bun's own database and cache clients are worth against the two a Node service
+reaches for. Generated from `results/drivers.json` by `bun src/readme-tables.ts`.
+
+The `io` scenario in the main table cannot answer this. Its Bun subjects run
+`Bun.SQL` and `Bun.RedisClient` and its Node subjects run `pg` and `ioredis`, so
+every gap there is a driver difference **and** a runtime difference. So this harness
+runs `pg` and `ioredis` **on Bun**, next to the native pair on the same runtime, the
+same `Bun.serve`, the same SQL, the same pool of 8 and the same bytes on the wire.
+
+```
+AMD Ryzen 9 5950X 16-Core Processor, 32 logical cores, 62.7 GiB RAM
+linux 7.0.0-31-generic x64 | bun 1.4.2 | node v24.21.0 | oha oha 1.15.0
+64 connections | 3s warmup | 5 x 5s measured | 2026-09-09
+```
+
+| Cell | Runtime | Postgres | Redis | req/s | stddev | p50 ms | peak MiB | cpu ms/kreq | vs native |
+| ---- | ------- | -------- | ----- | ----: | -----: | -----: | -------: | ----------: | --------: |
+| `bun:native` | bun | Bun.SQL | Bun.RedisClient | 27,822 | 469 | 2.291 | 60.1 | 38.28 | +0.0% |
+| `bun:pg` | bun | pg | Bun.RedisClient | 24,280 | 347 | 2.557 | 79.7 | 44.27 | −12.7% |
+| `bun:ioredis` | bun | Bun.SQL | ioredis | 29,210 | 560 | 2.135 | 83.1 | 37.44 | +5.0% |
+| `bun:classic` | bun | pg | ioredis | 22,700 | 946 | 2.734 | 85.0 | 47.16 | −18.4% |
+| `node:classic` | node | pg | ioredis | 15,338 | 341 | 4.110 | 198.5 | 65.65 | −44.9% |
+
+Reproduce with `bun run drivers`.
+
+**Read the first four rows and then the fifth, separately.** The first four differ
+only in the client, so their differences are the client. `node:classic` changes the
+runtime and the server as well, and is the reference point rather than a term in the
+comparison.
+
+| Swap, same runtime and same server | with the other client native | with the other client classic |
+| ---------------------------------- | ---------------------------: | ----------------------------: |
+| `Bun.SQL` -> `pg` | −12.7% | −22.3% |
+| `Bun.RedisClient` -> `ioredis` | +5.0% | −6.5% |
+
+**The Postgres client is the term that resolves. The Redis client is not.** Swapping
+`Bun.SQL` for `pg` costs in both pairings, by far more than the run-to-run spread,
+which tops out here at 4.2%. Swapping `Bun.RedisClient` for
+`ioredis` comes out **positive against `Bun.SQL` and negative against `pg`**. A
+sign change is what an unresolvable difference looks like, so the statement this
+supports is that the two Redis clients are the same speed on this workload - not
+that either one wins. Both are at their defaults, and those defaults are not the
+same: `Bun.RedisClient` batches a tick's commands into one write and `ioredis`
+does not (`enableAutoPipelining` is `false` in 6.0.0). Tying anyway is the
+result; tuning one of them would have been a different measurement.
+
+**The runtime is a larger term than either client.** `pg` and `ioredis` on Bun
+against the same two on Node is −32.4%, where
+swapping both clients on one runtime is
+−18.4%. Quote the first four rows for what the
+native clients are worth; most of what a Bun service gains on this workload, it
+gains before it picks a client.
 
 ## Validation cost
 
@@ -924,6 +1222,9 @@ rest of the README.
 `src/logging-tables.ts` for the "Request logging cost" section. Its shape is
 `LoggingReport` in `src/types.ts`.
 
+`results/drivers.json` is the fourth, written by `bun run drivers` and read by
+`src/drivers-tables.ts` for the "Driver cost" section.
+
 **A subject's stdout goes to `/dev/null`** (`StdoutSink` in
 `src/subject-process.ts`). It used to be a pipe nobody read, which meant a subject
 that logged parked on a full 64 KiB pipe - worth 2.68 µs/request, and a property of
@@ -960,8 +1261,9 @@ as an explicit row so the difference stays visible.
   }],
   "subjects": [{
     "id": "string", "label": "string",
-    "runtime": "bun" | "node" | "go" | "rust" | "jvm",
+    "runtime": "bun" | "node" | "go" | "rust" | "jvm" | "dotnet" | "python",
     "version": "string", "validator": "string",
+    "io": "string",                   // the Postgres and Redis clients behind its io row
     "notes": ["string"],              // the handicaps above, per subject
     "entry": "string", "preload": ["string"], "versionOf": "string | null",
     "warmupFloorSeconds": 0           // optional; only `spring` sets it
@@ -985,14 +1287,25 @@ as an explicit row so the difference stays visible.
     "latencyP99Ms": { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
     "totalErrors": 0, "totalNon2xx": 0
   }],
+  "resources": [{                     // empty off Linux, where /proc does not answer
+    "subject": "string",              // Subject.id
+    "scenario": "string",             // Scenario.id
+    "rssBootMiB": 0.0,                // after the first request, before any load
+    "rssPeakMiB":  { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
+    "rssMeanMiB":  { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
+    "cpuPercent":  { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
+    "cpuMsPerKiloRequests": { "median": 0.0, "min": 0.0, "max": 0.0, "stddev": 0.0 },
+    "processes": 0                    // largest tree seen; gunicorn is 2
+  }],
   "startup": [{
     "subject": "string", "samplesMs": [0.0], "medianMs": 0.0
   }]
 }
 ```
 
-`results` is a flat list; join on `subject` and `scenario`. A `(subject, scenario)`
-pair missing from it was not run.
+`results` and `resources` are flat lists; join both on `subject` and `scenario`. A
+`(subject, scenario)` pair missing from `results` was not run; one missing from
+`resources` was run on a machine with no `/proc`.
 
 ## Layout
 
@@ -1000,6 +1313,15 @@ pair missing from it was not run.
 internal/bench/
   servers/            one file per subject, each readable end to end
     shared.ts         the payloads and the one zod schema every subject validates with
+    io/               the io scenario's clients, one module per ecosystem
+      contract.ts     the key, the SQL, the pool size and the payload shape
+      bun.ts          Bun.SQL and Bun.RedisClient, for the Bun subjects
+      node.ts         pg and ioredis, for the Node subjects
+      lazy.ts         the await import() that keeps those two out of the other scenarios
+    drivers/          the driver harness: one client pair per cell
+      pair.ts         the four clients, chosen by environment
+      bun.ts          Bun.serve, for the four Bun cells
+      node.ts         node:http, for the reference cell
     validation/       the validation harness's two subjects
       raw.ts          raw Bun.serve, one route per step of the decomposition
       dunx.ts         the dunx app, declared and hand-written variants
@@ -1007,33 +1329,46 @@ internal/bench/
     logging/          the request-logging harness's one subject
       dunx.ts         the app, with the middleware truncated at $LOGGING_VARIANT
       variants.ts     the step list and the three stand-in Logger bindings
+    python/           one file per Python subject
+      app.py          Django on gunicorn
+      fastapi_app.py  FastAPI on uvicorn
+      bench_io.py     psycopg and redis-py, sync for Django and async for FastAPI
     go/               one Go module, one command per subject
-      shared/         the payloads and the one validator both Go subjects use
+      shared/         the payloads, the validator, and the io clients (pgx, go-redis)
       cmd/nethttp/    net/http and http.ServeMux, the Go floor
       cmd/gin/        Gin
     rust/             one Cargo package, one [[bin]] per subject
       src/axum.rs     Axum on tokio, single-threaded
+      src/io.rs       tokio-postgres behind deadpool, redis-rs multiplexed
     java/             one Maven project
       src/main/java/bench/App.java   Spring Boot, MVC over Tomcat
+      src/main/java/bench/Io.java    HikariCP and Lettuce, both blocking
     dotnet/           one solution-less directory, one project per subject
       Directory.Build.props          the target framework and where builds land
-      shared/         the payloads, the validator and the thread pinning
+      shared/         the payloads, the validator, the thread pinning, Npgsql + StackExchange.Redis
       aspnet-minimal/ minimal APIs on Kestrel, the .NET floor
       aspnet-mvc/     the same server with MVC on top
   src/
     index.ts          entrypoint for the framework suite
+    smoke.ts          does every subject start and answer? no load, no timing
+    drivers.ts        entrypoint for the driver harness
     validation.ts     entrypoint for the validation harness
     logging.ts        entrypoint for the request-logging harness
     cli.ts            flags
     run.ts            orchestration: startup, warmup, measured runs
+    driver.ts         the round-robin loop the four side harnesses share
     subject-process.ts  spawn, readiness, contract verification, stop
+    resources.ts      resident set and CPU for a process tree, out of /proc
+    io-fixture.ts     seeds Redis and Postgres, and checks the connection budget
     build.ts          Bun.build transpile of the Node subjects
     toolchains.ts     probe, compile and skip for the Go, Rust, JVM and .NET subjects
-    scenarios.ts      the four workloads and their exact expected responses
+    quality.ts        when a row's failure rate makes it unrankable
+    scenarios.ts      the five workloads and their exact expected responses
     subjects.ts       the subject registry, including each one's handicaps
     loadgen/          oha adapter, Bun fetch driver, worker, histogram
     report.ts         the stdout table
     readme-tables.ts  regenerates every generated README section
+    drivers-tables.ts     the "Driver cost" section
     validation-tables.ts  the "Validation cost" section
     logging-tables.ts     the "Request logging cost" section
     machine.ts        CPU/RAM/OS/runtime/package versions
@@ -1043,11 +1378,19 @@ internal/bench/
 ## Adding a subject
 
 1. Write `servers/<name>.ts`. It must read `PORT` from the environment and answer all
-   four scenarios with byte-identical responses. Copy `servers/hono.ts`.
-2. Add an entry to `src/subjects.ts`, including a `validator` string and a `notes`
-   array naming anything that flatters or handicaps it.
-3. `bun run start --subjects <name>`. The contract check will tell you what does
-   not match.
+   five scenarios with byte-identical responses. Copy `servers/hono.ts`.
+2. Add an entry to `src/subjects.ts`, including a `validator` string, an `io` string
+   naming the two clients it answers `/io` with, and a `notes` array naming anything
+   that flatters or handicaps it.
+3. `bun run smoke --subjects <name>`. The contract check will tell you what does not
+   match, without waiting for a measured run.
+
+**The `/io` route connects only when `$BENCH_IO_PG_URL` and `$BENCH_IO_REDIS_URL`
+are both set**, which the harness passes for that scenario and no other. A subject
+spawns fresh per scenario, so the other four must open no socket and pay no client
+module load - the Node subjects reach `pg` and `ioredis` through an `await import()`
+in `servers/io/lazy.ts` for exactly that reason, and `src/build.ts` transpiles them
+with `splitting` on so the dynamic import stays one.
 
 Node subjects need nothing extra - `src/build.ts` finds them by `runtime: 'node'`.
 
@@ -1078,13 +1421,21 @@ none of them.
 | Need                     | For                      | Found via                        |
 | ------------------------ | ------------------------ | -------------------------------- |
 | **Bun**                  | the harness, Bun subjects | required                        |
-| Node                     | the four Node subjects   | `PATH`, or `$BENCH_NODE`         |
+| Node, current LTS        | the six Node subjects    | `PATH`, or `$BENCH_NODE`         |
 | Go 1.22+                 | `nethttp`, `gin`         | `PATH`, or `$BENCH_GO`           |
 | Rust / Cargo             | `axum`                   | `PATH`, or `$BENCH_CARGO`        |
 | JDK 21+ **and** Maven    | `spring`                 | `PATH`, or `$BENCH_JAVA` and `$BENCH_MVN` |
 | .NET SDK 10+             | `aspnet-minimal`, `aspnet-mvc` | `PATH`, or `$BENCH_DOTNET`  |
 | Python 3.10+, Django, gunicorn | `django`           | `PATH`, or `$BENCH_PYTHON`       |
 | Python 3.10+, FastAPI, uvicorn | `fastapi`          | `PATH`, or `$BENCH_PYTHON`       |
+| Redis **and** Postgres   | the `io` scenario, `bun run drivers` | `$BENCH_REDIS_URL`, `$BENCH_PG_URL` |
+
+The `io` scenario also needs a client library per language, and unlike the rows
+above those are declared rather than probed: `pg` and `ioredis` in this workspace's
+`package.json`, pgx and go-redis in `servers/go/go.mod`, tokio-postgres and redis-rs
+in `Cargo.toml`, HikariCP, the Postgres JDBC driver and Lettuce in `pom.xml`, Npgsql
+and StackExchange.Redis in `shared/Shared.csproj`, and psycopg plus redis-py for
+Python. A toolchain that resolves builds them; nothing extra is opt-in.
 
 Each package has to be **importable**, not merely on disk: the probe runs
 `import <name>` and skips that subject with a clear line if it fails, rather than
@@ -1098,7 +1449,8 @@ server - gunicorn for Django, uvicorn for FastAPI - so the shortest route is pip
 with `--target`:
 
 ```bash
-python3 -m pip install --target pylib django gunicorn 'fastapi[standard]' uvicorn
+python3 -m pip install --target pylib django gunicorn 'fastapi[standard]' uvicorn \
+  redis 'psycopg[binary,pool]'
 BENCH_PYTHONPATH=$PWD/pylib bun run start --subjects django,fastapi
 ```
 

@@ -252,8 +252,42 @@ export interface BenchResult {
   readonly rpsStddev: number;
   readonly p50Ms: number;
   readonly p99Ms: number;
-  /** Non-2xx responses plus transport errors. Anything but 0 invalidates the row. */
+  /**
+   * Non-2xx responses plus transport errors, across every measured run.
+   *
+   * Judged as a **rate** against `requests`, never as a count: one blip in
+   * 39,000 is a footnote and a quarter of the run failing is a row nobody can
+   * compare. `invalidates` in the harness's `src/quality.ts` owns the threshold.
+   */
   readonly bad: number;
+  /** Requests the load generator completed, the denominator for `bad`. */
+  readonly requests: number;
+  /**
+   * Highest resident set sampled during the measured window, for the subject's
+   * whole process tree. `null` for a run taken where `/proc` does not answer,
+   * which is every platform that is not Linux.
+   */
+  readonly peakMiB: number | null;
+  /**
+   * CPU milliseconds per thousand requests, user plus system.
+   *
+   * This rather than a percentage: every subject in the suite is one thread under
+   * saturating load, so every percentage sits near 100 and ranks nothing.
+   */
+  readonly cpuMsPerKiloRequests: number | null;
+}
+
+/**
+ * One row per subject, across every scenario. Separate from `BenchResult`
+ * because it is not per scenario: `bootMiB` is read once per process, before any
+ * load, and is the figure to quote as a footprint.
+ */
+export interface BenchFootprint {
+  readonly subject: string;
+  readonly bootMiB: number;
+  readonly peakMiB: number;
+  /** Processes in the tree. `gunicorn` is a master and a worker, so Django is 2. */
+  readonly processes: number;
 }
 
 export interface BenchStartup {
@@ -272,6 +306,8 @@ export interface BenchModel {
   readonly subjects: readonly BenchSubject[];
   readonly scenarios: readonly BenchScenario[];
   readonly results: readonly BenchResult[];
+  /** Empty for a run taken off Linux, and the page then omits the table. */
+  readonly footprint: readonly BenchFootprint[];
   readonly startup: readonly BenchStartup[];
 }
 

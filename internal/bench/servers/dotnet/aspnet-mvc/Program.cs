@@ -7,6 +7,10 @@
 using Bench;
 using Microsoft.AspNetCore.Mvc;
 
+// Connected before the pinning, and blocking rather than awaiting, both for the
+// reasons spelled out on the aspnet-minimal row.
+var io = Io.ConnectAsync().GetAwaiter().GetResult();
+
 // One thread, because every other subject in this suite is single-threaded. See
 // the README, "Threads".
 Shared.PinToOneThread();
@@ -17,6 +21,9 @@ builder.WebHost.UseUrls(Shared.Url());
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
 builder.Services.AddSingleton<Greeter>();
+// A singleton the controller takes by constructor, the way Greeter is. Present
+// whether or not the scenario is on, so the controller resolves either way.
+builder.Services.AddSingleton(io);
 builder.Services
     .AddControllers()
     // Never on the measured path; here so a rejected body answers the same bytes
@@ -42,7 +49,7 @@ public sealed class Greeter
 }
 
 [ApiController]
-public sealed class BenchController(Greeter greeter) : ControllerBase
+public sealed class BenchController(Greeter greeter, Io io) : ControllerBase
 {
     // An MVC action returning a bare string answers text/plain already; Content
     // states the media type, charset included, so the response header matches the
@@ -61,4 +68,10 @@ public sealed class BenchController(Greeter greeter) : ControllerBase
     // not the handler.
     [HttpPost("/validate")]
     public Echo Validate([FromBody] Person person) => new(person.Name, person.Age);
+
+    // An action rather than a conditional mapping: MVC reads a controller's
+    // routes off the class at startup. Only the io scenario requests this path,
+    // and only that scenario connects the client.
+    [HttpGet("/io")]
+    public Task<IoPayload> Io() => io.ReadAsync();
 }

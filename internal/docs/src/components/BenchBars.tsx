@@ -1,7 +1,9 @@
 import { Badge, Group, Table, Text } from '@mantine/core';
+import { formatBadRate } from '../../../bench/src/quality.js';
 import {
   decimal,
   FOCUS,
+  type FootprintRow,
   integer,
   type StartupRow,
   type ThroughputRow,
@@ -77,7 +79,7 @@ export const ThroughputTable = ({
 }: {
   rows: readonly ThroughputRow[];
 }): React.JSX.Element => (
-  <Table.ScrollContainer minWidth={760}>
+  <Table.ScrollContainer minWidth={960}>
     <Table verticalSpacing="xs" fz="sm" highlightOnHover>
       <Table.Thead>
         <Table.Tr>
@@ -95,6 +97,12 @@ export const ThroughputTable = ({
           <Table.Th ta="right" w={80}>
             p99 ms
           </Table.Th>
+          <Table.Th ta="right" w={90}>
+            peak MiB
+          </Table.Th>
+          <Table.Th ta="right" w={110}>
+            cpu ms/kreq
+          </Table.Th>
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
@@ -109,9 +117,20 @@ export const ThroughputTable = ({
               >
                 {row.label}
               </Text>
+              {/* Red only when the row is unrankable. A blip is still shown,
+                  in grey and as the rate it actually was, because hiding it
+                  outright would be the page deciding what the reader may see. */}
               {row.bad > 0 && (
-                <Badge color="red" size="xs" ml={6}>
-                  {row.bad} bad
+                <Badge
+                  color={row.unranked ? 'red' : 'gray'}
+                  variant={row.unranked ? 'filled' : 'light'}
+                  size="xs"
+                  ml={6}
+                  title={`${row.bad} of ${integer(row.requests)} requests`}
+                >
+                  {row.unranked
+                    ? `${integer(row.bad)} bad`
+                    : formatBadRate(row.bad, row.requests)}
                 </Badge>
               )}
             </Table.Td>
@@ -131,6 +150,14 @@ export const ThroughputTable = ({
             </Table.Td>
             <Table.Td ta="right">{decimal(row.p50, 3)}</Table.Td>
             <Table.Td ta="right">{decimal(row.p99, 3)}</Table.Td>
+            <Table.Td ta="right" c="dimmed">
+              {row.peakMiB === null ? '-' : decimal(row.peakMiB, 1)}
+            </Table.Td>
+            <Table.Td ta="right">
+              {row.cpuMsPerKiloRequests === null
+                ? '-'
+                : decimal(row.cpuMsPerKiloRequests, 2)}
+            </Table.Td>
           </Table.Tr>
         ))}
       </Table.Tbody>
@@ -195,6 +222,76 @@ export const StartupTable = ({
                 {decimal(row.maxMs, 1)}
               </Table.Td>
               <Table.Td ta="right">{decimal(row.ratioToBaseline, 2)}x</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
+  );
+};
+
+/**
+ * Resident set per subject, ordered smallest first.
+ *
+ * `boot` is the only reading taken with nothing in flight, so it is the number to
+ * quote as a footprint; `peak` is what the process grew to under load. The bar is
+ * scaled to `peak`, because that is the figure someone sizing a container reads.
+ */
+export const FootprintTable = ({
+  rows,
+}: {
+  rows: readonly FootprintRow[];
+}): React.JSX.Element => {
+  const largest = rows.reduce((max, row) => Math.max(max, row.peakMiB), 0);
+
+  return (
+    <Table.ScrollContainer minWidth={700}>
+      <Table verticalSpacing="xs" fz="sm" highlightOnHover>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th w={170}>Subject</Table.Th>
+            <Table.Th>Peak resident set - smaller is better</Table.Th>
+            <Table.Th ta="right" w={100}>
+              boot MiB
+            </Table.Th>
+            <Table.Th ta="right" w={100}>
+              peak MiB
+            </Table.Th>
+            <Table.Th ta="right" w={100}>
+              processes
+            </Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {rows.map((row) => (
+            <Table.Tr key={row.id} className={rowClass(row.id)}>
+              <Table.Td>
+                <Text
+                  size="sm"
+                  ff="monospace"
+                  fw={row.id === FOCUS ? 700 : 400}
+                  component="span"
+                >
+                  {row.label}
+                </Text>
+              </Table.Td>
+              <Table.Td>
+                <Bar
+                  fraction={largest === 0 ? 0 : (row.peakMiB / largest) * 100}
+                  runtime={row.runtime}
+                />
+              </Table.Td>
+              <Table.Td ta="right" c="dimmed">
+                {decimal(row.bootMiB, 1)}
+              </Table.Td>
+              <Table.Td ta="right" fw={row.id === FOCUS ? 700 : 400}>
+                {decimal(row.peakMiB, 1)}
+              </Table.Td>
+              {/* A forking subject is the exception worth seeing: `gunicorn` is a
+                  master and a worker, and both are charged to Django. */}
+              <Table.Td ta="right" c={row.processes > 1 ? 'orange' : 'dimmed'}>
+                {integer(row.processes)}
+              </Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>

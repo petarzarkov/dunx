@@ -1,9 +1,18 @@
 import { root } from './paths.js';
+import { readTree } from './resources.js';
 import type { Scenario, Subject } from './types.js';
 
 export interface SubjectProcess {
   readonly baseUrl: string;
   readonly startupMs: number;
+  /** The subject's own pid, which `ResourceSampler` walks the tree from. */
+  readonly pid: number;
+  /**
+   * Resident set of the whole tree the moment the subject answered its first
+   * request, before any load. The idle footprint, and the only reading taken
+   * where nothing is in flight. `null` where `/proc` is absent.
+   */
+  readonly rssBootBytes: number | null;
   readonly stop: () => Promise<void>;
 }
 
@@ -80,6 +89,13 @@ export const bunCommand = (
  */
 export type StdoutSink = 'null' | 'blocked';
 
+/**
+ * `subject.env` is merged in here rather than at the call site, because a caller
+ * that forgets it gets a subject measuring something else. Measured: the .NET
+ * subjects throw out of `Shared.PinToOneThread` without `DOTNET_PROCESSOR_COUNT`,
+ * and the smoke harness dropped the argument and read the result as two broken
+ * servers. `extraEnv` wins, so a harness varying one variable still can.
+ */
 export const startSubject = async (
   subject: Subject,
   exec: readonly string[],
@@ -94,6 +110,7 @@ export const startSubject = async (
     cwd: root,
     env: {
       ...process.env,
+      ...subject.env,
       ...extraEnv,
       PORT: String(port),
       NODE_ENV: 'production',
@@ -141,7 +158,13 @@ export const startSubject = async (
       const response = await fetch(`${baseUrl}/plaintext`);
       await response.text();
       if (response.ok) {
-        return { baseUrl, startupMs: performance.now() - startedAt, stop };
+        return {
+          baseUrl,
+          startupMs: performance.now() - startedAt,
+          pid: proc.pid,
+          rssBootBytes: readTree(proc.pid)?.rssBytes ?? null,
+          stop,
+        };
       }
     } catch {
       // Connection refused while the process is still booting.

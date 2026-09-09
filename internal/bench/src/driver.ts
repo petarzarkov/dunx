@@ -1,3 +1,4 @@
+import { ResourceSampler, type ResourceSample } from './resources.js';
 import type { SubjectProcess } from './subject-process.js';
 import type { LoadGenerator, LoadRequest, LoadSample } from './types.js';
 
@@ -15,6 +16,12 @@ export interface Live<U> {
   readonly server: SubjectProcess;
   readonly request: LoadRequest;
   readonly samples: LoadSample[];
+  /**
+   * Resident set and CPU for the round at the same index in `samples`, or `null`
+   * where `/proc` did not answer. Filled by `driveUnits`, so a harness that only
+   * reports throughput can ignore it.
+   */
+  readonly usage: (ResourceSample | null)[];
 }
 
 /** The subset of `BenchConfig` a side harness reads. */
@@ -65,7 +72,16 @@ export const driveUnits = async <U extends { readonly id: string }>(
     for (let round = 0; round < config.runs; round += 1) {
       note(`round ${round + 1} of ${config.runs}`);
       for (const entry of live) {
-        entry.samples.push(await generator.run(entry.request, options));
+        // Around this one unit's own window, so a reading never spans another
+        // unit's turn. `db-modes` runs several units against one process, and
+        // charging a unit for the round-robin's other visits would be wrong.
+        const sampler = new ResourceSampler(entry.server.pid);
+        sampler.start();
+        try {
+          entry.samples.push(await generator.run(entry.request, options));
+        } finally {
+          entry.usage.push(sampler.stop());
+        }
       }
     }
   } finally {

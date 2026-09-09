@@ -6,6 +6,8 @@
 //! single-threaded JavaScript one is not a framework comparison. See the README,
 //! "Threads".
 
+mod io;
+
 use axum::extract::rejection::JsonRejection;
 use axum::extract::Path;
 use axum::http::StatusCode;
@@ -91,11 +93,19 @@ async fn validate(body: Result<Json<Person>, JsonRejection>) -> Response {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/plaintext", get(plaintext))
         .route("/json", get(json))
         .route("/params/{id}", get(params))
         .route("/validate", post(validate));
+
+    if let Some(client) = io::Io::connect().await {
+        app = app.merge(
+            Router::new()
+                .route("/io", get(io::handler))
+                .with_state(client),
+        );
+    }
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "0".to_owned());
     // `axum::serve` leaves Nagle on, and Go's net/http and Bun's uSockets both

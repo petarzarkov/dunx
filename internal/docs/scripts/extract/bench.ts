@@ -1,14 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { foldFootprint } from '../../../bench/src/footprint.js';
 import {
   BENCH_SCHEMA_VERSION,
   type BenchModel,
   type BenchReport,
 } from './model';
 
-/**
- * Narrows the harness's report to the fields the site renders. See the
- * `BenchModel` doc comment for why.
- */
 export const projectBench = (report: BenchReport): BenchModel => ({
   schemaVersion: report.schemaVersion,
   generatedAt: report.generatedAt,
@@ -30,15 +27,29 @@ export const projectBench = (report: BenchReport): BenchModel => ({
     method: scenario.method,
     path: scenario.path,
   })),
-  results: report.results.map((result) => ({
-    subject: result.subject,
-    scenario: result.scenario,
-    rps: result.rps.median,
-    rpsStddev: result.rps.stddev,
-    p50Ms: result.latencyP50Ms.median,
-    p99Ms: result.latencyP99Ms.median,
-    bad: result.totalErrors + result.totalNon2xx,
-  })),
+  results: report.results.map((result) => {
+    const usage = report.resources.find(
+      (one) =>
+        one.subject === result.subject && one.scenario === result.scenario,
+    );
+    return {
+      subject: result.subject,
+      scenario: result.scenario,
+      rps: result.rps.median,
+      rpsStddev: result.rps.stddev,
+      p50Ms: result.latencyP50Ms.median,
+      p99Ms: result.latencyP99Ms.median,
+      bad: result.totalErrors + result.totalNon2xx,
+      requests: result.runs.reduce((total, run) => total + run.requests, 0),
+      peakMiB: usage?.rssPeakMiB.median ?? null,
+      cpuMsPerKiloRequests: usage?.cpuMsPerKiloRequests?.median ?? null,
+    };
+  }),
+  // The harness's own fold, shared with its stdout table and its README tables,
+  // so the three cannot disagree about a subject with no boot reading.
+  footprint: foldFootprint(report.resources).flatMap((row) =>
+    row.bootMiB === null ? [] : [{ ...row, bootMiB: row.bootMiB }],
+  ),
   startup: report.startup.map((entry) => ({
     subject: entry.subject,
     medianMs: entry.medianMs,

@@ -24,6 +24,7 @@ import {
   scoreboard,
   startupHeadline,
   startupRows,
+  footprintRows,
   throughputRows,
   type Verdict,
 } from '../bench';
@@ -31,9 +32,11 @@ import { StartupChart, ThroughputChart } from '../components/BenchChart';
 import { Stat } from '../components/Stat';
 import {
   RuntimeLegend,
+  FootprintTable,
   StartupTable,
   ThroughputTable,
 } from '../components/BenchBars';
+import { invalidates } from '../../../bench/src/quality.js';
 import { bench, site } from '../data';
 import type { BenchModel } from '../../scripts/extract/model';
 
@@ -159,9 +162,10 @@ const Method = (): React.JSX.Element => (
         dispatches through that API and cannot outrun it.
       </List.Item>
       <List.Item>
-        <b>No database, cache or upstream call is involved</b>, and every
-        subject validates with zod. In an application that talks to Postgres,
-        every difference here is rounding error next to one query.
+        <b>Only the cache-and-database scenario leaves the process.</b> The
+        other four are dispatch, serialisation and validation, all with zod, and
+        their differences are rounding error next to one query - which is what
+        the <code>io</code> row measures rather than asserts.
       </List.Item>
     </List>
     <Text size="sm" mt="sm">
@@ -209,7 +213,16 @@ export const Benchmarks = (): React.JSX.Element => {
   }
 
   const model = bench;
-  const totalBad = model.results.reduce((sum, result) => sum + result.bad, 0);
+  // Judged as a rate per row, not as a total across the report: one non-2xx in
+  // 38,909 was turning the whole page red and reading as a broken run. The count
+  // is still in the JSON and in the row's own badge; this chip is about whether
+  // any row is unusable. `invalidates` in the harness owns the threshold.
+  const unusable = model.results.filter((result) =>
+    invalidates(result.bad, result.requests),
+  ).length;
+  // Once, not once for the length check and again for the prop: it flatMaps and
+  // sorts the whole list, and the page re-renders on every route and theme change.
+  const footprint = footprintRows(model);
 
   return (
     <Container size="lg" py="xl">
@@ -238,11 +251,11 @@ export const Benchmarks = (): React.JSX.Element => {
             <Badge
               variant="light"
               size="sm"
-              color={totalBad === 0 ? 'green' : 'red'}
+              color={unusable === 0 ? 'green' : 'red'}
             >
-              {totalBad === 0
-                ? 'zero errors, zero non-2xx'
-                : `${integer(totalBad)} bad responses`}
+              {unusable === 0
+                ? 'every row ranked'
+                : `${integer(unusable)} row(s) failed too often to rank`}
             </Badge>
           </Group>
         </Stack>
@@ -285,6 +298,25 @@ export const Benchmarks = (): React.JSX.Element => {
           <StartupChart rows={startupRows(model)} />
           <StartupTable rows={startupRows(model)} />
         </Stack>
+
+        {footprint.length > 0 && (
+          <Stack gap="xs" id="footprint">
+            <Title order={2} size="h3">
+              Memory
+            </Title>
+            <Text size="sm" c="dimmed" maw="74ch">
+              Resident set of the whole process tree, read from{' '}
+              <Text span ff="monospace">
+                /proc
+              </Text>{' '}
+              at 20 Hz inside each measured window. Boot is taken after the
+              first served request and before any load; peak is the highest
+              sample under it. Runs are seconds long, so neither says anything
+              about heap growth at hour six.
+            </Text>
+            <FootprintTable rows={footprint} />
+          </Stack>
+        )}
 
         <Stack gap="xs">
           <Title order={2} size="h3">

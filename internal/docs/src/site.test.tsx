@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mount } from './harness';
 import {
+  footprintRows,
   integer,
   NOISE_PCT,
   scenarioHeadlines,
@@ -220,6 +221,57 @@ describe('the benchmark model', () => {
     expect(text).toContain(integer(dunx.rps));
     expect(text).toContain(bench.machine.cpuModel);
     expect(text).toContain('How to read this');
+  });
+
+  /*
+   * The resource columns are the reason the harness samples `/proc` at all, and
+   * they reach the page through two narrowings - `projectBench` and
+   * `throughputRows` - either of which can drop a field without a type error,
+   * because both ends of the join are optional.
+   */
+  test.if(bench !== null)('carries memory and CPU through to the page', () => {
+    if (!bench) return;
+    // A run taken off Linux has no `/proc` and therefore no resource rows. That
+    // is a valid model, not a broken one, so the assertions branch on it rather
+    // than requiring whoever regenerates `bench.json` to be on Linux.
+    const measured = bench.footprint.length > 0;
+
+    for (const scenario of bench.scenarios) {
+      for (const row of throughputRows(bench, scenario.id)) {
+        if (measured) {
+          expect(row.peakMiB).toBeGreaterThan(0);
+          expect(row.cpuMsPerKiloRequests).toBeGreaterThan(0);
+        } else {
+          expect(row.peakMiB).toBeNull();
+          expect(row.cpuMsPerKiloRequests).toBeNull();
+        }
+      }
+    }
+
+    const footprint = footprintRows(bench);
+    if (measured) {
+      expect(footprint).toHaveLength(bench.subjects.length);
+      // Smallest first, which is the ordering the column is read for.
+      for (let i = 1; i < footprint.length; i += 1) {
+        expect(footprint[i - 1]?.peakMiB).toBeLessThanOrEqual(
+          footprint[i]?.peakMiB ?? 0,
+        );
+      }
+      // A process never shrinks below what it booted at.
+      for (const row of footprint) {
+        expect(row.peakMiB).toBeGreaterThanOrEqual(row.bootMiB);
+        expect(row.processes).toBeGreaterThanOrEqual(1);
+      }
+    } else {
+      expect(footprint).toHaveLength(0);
+    }
+
+    mount('/benchmarks');
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('cpu ms/kreq');
+    expect(text).toContain('peak MiB');
+    // The memory table is rendered only when there is something to put in it.
+    expect(text.includes('boot MiB')).toBe(measured);
   });
 
   test.if(bench !== null)('summarises on the landing page', () => {

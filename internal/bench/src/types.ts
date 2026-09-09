@@ -36,6 +36,13 @@ export interface Subject {
   readonly preload: readonly string[];
   readonly versionOf: string | null;
   readonly validator: string;
+  /**
+   * The Redis and Postgres clients this subject answers the `io` scenario with,
+   * and how each one is pooled. Held here for the reason `validator` is: the
+   * clients cannot be the same across seven languages, so the report says which
+   * one produced each row instead of implying they match.
+   */
+  readonly io: string;
   readonly notes: readonly string[];
   /**
    * The importable package this subject needs, for a `python` subject only. Two
@@ -110,6 +117,33 @@ export interface ScenarioResult {
   readonly latencyP99Ms: Spread;
   readonly totalErrors: number;
   readonly totalNon2xx: number;
+}
+
+/**
+ * What one subject cost on one scenario, alongside the rate it achieved.
+ *
+ * `cpuMsPerKiloRequests` is the column to read. Every subject here is one thread
+ * under saturating load, so `cpuPercent` is near 100 for all of them and ranks
+ * nothing; CPU per request is what separates a subject that spends its time
+ * computing from one that spends it waiting.
+ */
+export interface ResourceUsage {
+  readonly subject: string;
+  readonly scenario: string;
+  /** Resident set right after the first request, before any load. */
+  readonly rssBootMiB: number | null;
+  readonly rssPeakMiB: Spread;
+  readonly cpuPercent: Spread;
+  /**
+   * `null` when the subject completed no requests at all in any measured round,
+   * which is what a process that died mid-run looks like: `oha` counts only
+   * status-bearing responses, so its `requests` is zero and CPU per request is
+   * undefined rather than free. Printing `0.00` there read as the cheapest row
+   * in the table.
+   */
+  readonly cpuMsPerKiloRequests: Spread | null;
+  /** Processes in the tree, so `gunicorn`'s master plus worker is visible. */
+  readonly processes: number;
 }
 
 export interface StartupResult {
@@ -196,6 +230,43 @@ export interface LoggingReport {
   readonly units: readonly LoggingUnit[];
 }
 
+/** One cell of the driver harness: a runtime, a Postgres client, a Redis client. */
+export interface DriverUnit {
+  readonly id: string;
+  readonly label: string;
+  readonly runtime: string;
+  readonly sql: string;
+  readonly redis: string;
+  readonly rps: Spread;
+  readonly latencyP50Ms: Spread;
+  readonly latencyP99Ms: Spread;
+  readonly rssPeakMiB: number;
+  readonly cpuMsPerKiloRequests: number;
+  readonly bad: number;
+}
+
+/**
+ * What `bun run drivers` writes. Rendered by `src/drivers-tables.ts`.
+ *
+ * Here rather than in `drivers.ts` for the reason `ValidationReport` and
+ * `LoggingReport` are here: the producer is an entrypoint with top-level effects,
+ * so its consumer cannot import from it and was keeping a hand-copied restatement
+ * of this shape that no compiler was checking against the original.
+ */
+export interface DriversReport {
+  readonly schemaVersion: 1;
+  readonly generatedAt: string;
+  readonly machine: MachineInfo;
+  readonly loadGenerator: { readonly id: string; readonly version: string };
+  readonly config: {
+    readonly connections: number;
+    readonly durationSeconds: number;
+    readonly warmupSeconds: number;
+    readonly runs: number;
+  };
+  readonly units: readonly DriverUnit[];
+}
+
 /**
  * One compiled-language toolchain, whether it was found, and what it cost to
  * build with. `buildSeconds` is here precisely so it is *not* in the startup
@@ -226,5 +297,10 @@ export interface Report {
   readonly subjects: readonly SubjectInfo[];
   readonly scenarios: readonly Scenario[];
   readonly results: readonly ScenarioResult[];
+  /**
+   * Empty where `/proc` did not answer, which is every platform that is not
+   * Linux. The tables then omit the columns rather than printing zeroes.
+   */
+  readonly resources: readonly ResourceUsage[];
   readonly startup: readonly StartupResult[];
 }

@@ -1,4 +1,7 @@
-import type { Report } from './types.js';
+import { foldFootprint } from './footprint.js';
+import { dec, int } from './format.js';
+import { invalidates } from './quality.js';
+import type { Report, ScenarioResult } from './types.js';
 
 const BASELINE = 'bun-serve';
 
@@ -35,8 +38,44 @@ const render = (
   ].join('\n');
 };
 
-const int = (value: number): string =>
-  Math.round(value).toLocaleString('en-US');
+/**
+ * One row per subject, across every scenario it was measured on. The fold is
+ * `src/footprint.ts`, shared with the README tables and the documentation site,
+ * because three copies of it had already begun to disagree.
+ *
+ * `boot MiB` is the only reading taken with nothing in flight, so it is the one
+ * to quote as a footprint; `peak MiB` is what it grew to under load. `procs`
+ * makes a forking subject visible - `gunicorn` is a master and a worker, and both
+ * are charged to Django.
+ */
+const formatFootprint = (
+  report: Report,
+  labels: ReadonlyMap<string, string>,
+): string => {
+  const rows = foldFootprint(report.resources);
+
+  return [
+    '\nRESOURCE FOOTPRINT - resident set of the whole process tree, from /proc',
+    '  boot is measured after the first served request and before any load; peak is the highest sample under it',
+    render(
+      [
+        { header: 'subject', align: 'left' },
+        { header: 'boot MiB', align: 'right' },
+        { header: 'peak MiB', align: 'right' },
+        { header: 'procs', align: 'right' },
+      ],
+      rows.map((row) => [
+        labels.get(row.subject) ?? row.subject,
+        row.bootMiB === null ? '-' : dec(row.bootMiB, 1),
+        dec(row.peakMiB, 1),
+        String(row.processes),
+      ]),
+    )
+      .split('\n')
+      .map((row) => `  ${row}`)
+      .join('\n'),
+  ].join('\n');
+};
 
 export const formatReport = (report: Report): string => {
   const labels = new Map(
@@ -94,6 +133,7 @@ export const formatReport = (report: Report): string => {
     );
   }
 
+  const ranIo = report.scenarios.some((scenario) => scenario.id === 'io');
   out.push('\nSUBJECTS');
   out.push(
     render(
@@ -102,12 +142,14 @@ export const formatReport = (report: Report): string => {
         { header: 'runtime', align: 'left' },
         { header: 'version', align: 'left' },
         { header: 'validator', align: 'left' },
+        ...(ranIo ? ([{ header: 'io clients', align: 'left' }] as const) : []),
       ],
       report.subjects.map((subject) => [
         subject.label,
         subject.runtime,
         subject.version,
         subject.validator,
+        ...(ranIo ? [subject.io] : []),
       ]),
     )
       .split('\n')
@@ -116,16 +158,54 @@ export const formatReport = (report: Report): string => {
   );
 
   for (const scenario of report.scenarios) {
+    // A row that failed too often to compare is sorted last and never ranked.
+    // Connection failures come back faster than responses do: two Node subjects
+    // that died mid-run were recorded at 560,964 req/s of pure errors and sorted
+    // to the top of this table above raw `Bun.serve`. "Too often" is a rate, not
+    // a count - see `src/quality.ts`.
+    const failed = (result: ScenarioResult): number =>
+      result.totalErrors + result.totalNon2xx;
+    const requestsIn = (result: ScenarioResult): number =>
+      result.runs.reduce((total, run) => total + run.requests, 0);
+    const unranked = (result: ScenarioResult): boolean =>
+      invalidates(failed(result), requestsIn(result));
     const rows = report.results
       .filter((result) => result.scenario === scenario.id)
-      .sort((a, b) => b.rps.median - a.rps.median);
+      .sort(
+        (a, b) =>
+          Number(unranked(a)) - Number(unranked(b)) ||
+          b.rps.median - a.rps.median,
+      );
     if (rows.length === 0) continue;
-    const baseline = rows.find((row) => row.subject === BASELINE)?.rps.median;
+    // A baseline that itself answered errors is not a denominator: every healthy
+    // row would then be reported as a percentage of a failure rate, while the
+    // baseline row shows `-` for the same reason.
+    const baselineRow = rows.find((row) => row.subject === BASELINE);
+    const baseline =
+      baselineRow === undefined || unranked(baselineRow)
+        ? undefined
+        : baselineRow.rps.median;
 
     out.push(
       `\n${scenario.title.toUpperCase()} - ${scenario.method} ${scenario.path}`,
     );
     out.push(`  ${scenario.description}`);
+    const broken = rows.filter(unranked);
+    if (broken.length > 0) {
+      out.push(
+        `  ${broken.length} subject(s) answered errors or non-2xx and are listed last with no ratio: ` +
+          broken
+            .map((row) => labels.get(row.subject) ?? row.subject)
+            .join(', '),
+      );
+    }
+    const costs = new Map(
+      report.resources
+        .filter((usage) => usage.scenario === scenario.id)
+        .map((usage) => [usage.subject, usage]),
+    );
+    const measured = costs.size > 0;
+
     out.push(
       render(
         [
@@ -135,24 +215,45 @@ export const formatReport = (report: Report): string => {
           { header: 'p50 ms', align: 'right' },
           { header: 'p99 ms', align: 'right' },
           { header: `vs ${BASELINE}`, align: 'right' },
+          ...(measured
+            ? ([
+                { header: 'rss MiB', align: 'right' },
+                { header: 'cpu ms/kreq', align: 'right' },
+              ] as const)
+            : []),
           { header: 'bad', align: 'right' },
         ],
-        rows.map((row) => [
-          labels.get(row.subject) ?? row.subject,
-          int(row.rps.median),
-          int(row.rps.stddev),
-          row.latencyP50Ms.median.toFixed(3),
-          row.latencyP99Ms.median.toFixed(3),
-          baseline === undefined || baseline === 0
-            ? '-'
-            : `${((row.rps.median / baseline) * 100).toFixed(1)}%`,
-          String(row.totalErrors + row.totalNon2xx),
-        ]),
+        rows.map((row) => {
+          const cost = costs.get(row.subject);
+          return [
+            labels.get(row.subject) ?? row.subject,
+            int(row.rps.median),
+            int(row.rps.stddev),
+            row.latencyP50Ms.median.toFixed(3),
+            row.latencyP99Ms.median.toFixed(3),
+            baseline === undefined || baseline === 0 || unranked(row)
+              ? '-'
+              : `${((row.rps.median / baseline) * 100).toFixed(1)}%`,
+            ...(measured
+              ? [
+                  cost === undefined ? '-' : dec(cost.rssPeakMiB.median, 1),
+                  cost === undefined || cost.cpuMsPerKiloRequests === null
+                    ? '-'
+                    : dec(cost.cpuMsPerKiloRequests.median, 2),
+                ]
+              : []),
+            String(row.totalErrors + row.totalNon2xx),
+          ];
+        }),
       )
         .split('\n')
         .map((row) => `  ${row}`)
         .join('\n'),
     );
+  }
+
+  if (report.resources.length > 0) {
+    out.push(formatFootprint(report, labels));
   }
 
   if (report.startup.length > 0) {

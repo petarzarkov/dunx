@@ -18,16 +18,35 @@ whose bytes differ, which is what keeps the comparison a comparison.
 """
 
 import os
+from contextlib import asynccontextmanager
 
+import bench_io
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 
 PLAINTEXT = "Hello, World!"
 
+# Built here rather than further down because an async pool needs a running event
+# loop to open, and the lifespan hook that gives it one has to be passed to
+# `FastAPI(...)`. `bench_io` imports no driver until a client is built, so the
+# other four scenarios load neither psycopg nor redis.
+_io_urls = bench_io.urls()
+_io = bench_io.AsyncIo(*_io_urls) if _io_urls else None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if _io is not None:
+        await _io.open()
+    yield
+
+
 # `docs_url`/`redoc_url`/`openapi_url` off: they mount three extra routes, and a
 # router with routes nothing calls is not what the other subjects carry.
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(
+    docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
+)
 
 
 class Person(BaseModel):
@@ -78,6 +97,13 @@ async def validate(request: Request) -> JSONResponse:
         return JSONResponse({"error": "Invalid body"}, status_code=400)
 
     return JSONResponse(Echo(name=person.name, age=person.age).model_dump())
+
+
+if _io is not None:
+
+    @app.get("/io")
+    async def io() -> JSONResponse:
+        return JSONResponse(await _io.read())
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
+import { connectLazyIo, readLazyIo } from './io/lazy.js';
+import { answerIo } from './io/respond.js';
 import {
   echo,
   invalid,
@@ -11,6 +13,8 @@ import {
   PLAINTEXT,
   port,
 } from './shared.js';
+
+const ioReady = await connectLazyIo();
 
 const TEXT = { 'content-type': 'text/plain; charset=utf-8' };
 const JSON_TYPE = { 'content-type': 'application/json; charset=utf-8' };
@@ -59,6 +63,12 @@ createServer((req, res) => {
   }
   if (url === '/validate' && req.method === 'POST') {
     void validate(req, res);
+    return;
+  }
+  if (ioReady && url === '/io') {
+    // `answerIo`, not a bare `.then`: see servers/io/respond.ts for the incident
+    // that shape caused, twice.
+    answerIo(res, readLazyIo);
     return;
   }
   res.writeHead(404, TEXT);
