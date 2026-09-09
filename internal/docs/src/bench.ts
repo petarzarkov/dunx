@@ -46,6 +46,19 @@ export interface ThroughputRow {
   readonly pctOfBaseline: number;
   /** Non-2xx responses plus transport errors. Anything but 0 invalidates the row. */
   readonly bad: number;
+  /** Peak resident set of the whole process tree, MiB. `null` off Linux. */
+  readonly peakMiB: number | null;
+  /** CPU milliseconds per thousand requests. `null` off Linux. */
+  readonly cpuMsPerKiloRequests: number | null;
+}
+
+export interface FootprintRow {
+  readonly id: string;
+  readonly label: string;
+  readonly runtime: BenchRuntime;
+  readonly bootMiB: number;
+  readonly peakMiB: number;
+  readonly processes: number;
 }
 
 export interface StartupRow {
@@ -94,10 +107,36 @@ export const throughputRows = (
           p99: cell.p99Ms,
           pctOfBaseline: reference === 0 ? 0 : (cell.rps / reference) * 100,
           bad: cell.bad,
+          peakMiB: cell.peakMiB,
+          cpuMsPerKiloRequests: cell.cpuMsPerKiloRequests,
         },
       ];
     })
     .sort((a, b) => b.rps - a.rps);
+};
+
+/**
+ * Ordered by peak resident set, smallest first, which is the ordering the column
+ * is read for. Empty for a run taken off Linux, and the page omits the table.
+ */
+export const footprintRows = (model: BenchModel): FootprintRow[] => {
+  const subjects = subjectsById(model);
+  return model.footprint
+    .flatMap((entry) => {
+      const subject = subjects.get(entry.subject);
+      if (!subject) return [];
+      return [
+        {
+          id: subject.id,
+          label: subject.label,
+          runtime: subject.runtime,
+          bootMiB: entry.bootMiB,
+          peakMiB: entry.peakMiB,
+          processes: entry.processes,
+        },
+      ];
+    })
+    .sort((a, b) => a.peakMiB - b.peakMiB);
 };
 
 export const startupRows = (model: BenchModel): StartupRow[] => {

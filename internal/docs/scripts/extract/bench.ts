@@ -1,9 +1,45 @@
 import { existsSync, readFileSync } from 'node:fs';
 import {
   BENCH_SCHEMA_VERSION,
+  type BenchFootprint,
   type BenchModel,
   type BenchReport,
 } from './model';
+
+/**
+ * One row per subject out of the harness's per-scenario resource rows.
+ *
+ * `bootMiB` is a median rather than a sum: it is the same measurement taken once
+ * per scenario, of a process doing nothing, so the scenarios are repeats of one
+ * reading. `peakMiB` is the highest anything reached under any load, which is the
+ * figure a reader sizing a container wants.
+ */
+const foldFootprint = (report: BenchReport): BenchFootprint[] => {
+  const bySubject = new Map<string, typeof report.resources>();
+  for (const usage of report.resources) {
+    bySubject.set(usage.subject, [
+      ...(bySubject.get(usage.subject) ?? []),
+      usage,
+    ]);
+  }
+
+  return [...bySubject].flatMap(([subject, list]) => {
+    const boots = list
+      .map((one) => one.rssBootMiB)
+      .filter((one): one is number => one !== null)
+      .sort((a, b) => a - b);
+    const boot = boots[boots.length >> 1];
+    if (boot === undefined) return [];
+    return [
+      {
+        subject,
+        bootMiB: boot,
+        peakMiB: Math.max(...list.map((one) => one.rssPeakMiB.max)),
+        processes: Math.max(...list.map((one) => one.processes)),
+      },
+    ];
+  });
+};
 
 /**
  * Narrows the harness's report to the fields the site renders. See the
@@ -30,15 +66,24 @@ export const projectBench = (report: BenchReport): BenchModel => ({
     method: scenario.method,
     path: scenario.path,
   })),
-  results: report.results.map((result) => ({
-    subject: result.subject,
-    scenario: result.scenario,
-    rps: result.rps.median,
-    rpsStddev: result.rps.stddev,
-    p50Ms: result.latencyP50Ms.median,
-    p99Ms: result.latencyP99Ms.median,
-    bad: result.totalErrors + result.totalNon2xx,
-  })),
+  results: report.results.map((result) => {
+    const usage = report.resources.find(
+      (one) =>
+        one.subject === result.subject && one.scenario === result.scenario,
+    );
+    return {
+      subject: result.subject,
+      scenario: result.scenario,
+      rps: result.rps.median,
+      rpsStddev: result.rps.stddev,
+      p50Ms: result.latencyP50Ms.median,
+      p99Ms: result.latencyP99Ms.median,
+      bad: result.totalErrors + result.totalNon2xx,
+      peakMiB: usage?.rssPeakMiB.median ?? null,
+      cpuMsPerKiloRequests: usage?.cpuMsPerKiloRequests.median ?? null,
+    };
+  }),
+  footprint: foldFootprint(report),
   startup: report.startup.map((entry) => ({
     subject: entry.subject,
     medianMs: entry.medianMs,

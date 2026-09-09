@@ -24,6 +24,7 @@ import {
   scoreboard,
   startupHeadline,
   startupRows,
+  footprintRows,
   throughputRows,
   type Verdict,
 } from '../bench';
@@ -31,6 +32,7 @@ import { StartupChart, ThroughputChart } from '../components/BenchChart';
 import { Stat } from '../components/Stat';
 import {
   RuntimeLegend,
+  FootprintTable,
   StartupTable,
   ThroughputTable,
 } from '../components/BenchBars';
@@ -285,6 +287,25 @@ export const Benchmarks = (): React.JSX.Element => {
           <StartupChart rows={startupRows(model)} />
           <StartupTable rows={startupRows(model)} />
         </Stack>
+
+        {footprintRows(model).length > 0 && (
+          <Stack gap="xs" id="footprint">
+            <Title order={2} size="h3">
+              Memory
+            </Title>
+            <Text size="sm" c="dimmed" maw="74ch">
+              Resident set of the whole process tree, read from{' '}
+              <Text span ff="monospace">
+                /proc
+              </Text>{' '}
+              at 20 Hz inside each measured window. Boot is taken after the
+              first served request and before any load; peak is the highest
+              sample under it. Runs are seconds long, so neither says anything
+              about heap growth at hour six.
+            </Text>
+            <FootprintTable rows={footprintRows(model)} />
+          </Stack>
+        )}
 
         <Stack gap="xs">
           <Title order={2} size="h3">
