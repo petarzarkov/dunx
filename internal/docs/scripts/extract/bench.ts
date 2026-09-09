@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { median } from '../../../bench/src/stats.js';
 import {
   BENCH_SCHEMA_VERSION,
   type BenchFootprint,
@@ -13,6 +14,11 @@ import {
  * per scenario, of a process doing nothing, so the scenarios are repeats of one
  * reading. `peakMiB` is the highest anything reached under any load, which is the
  * figure a reader sizing a container wants.
+ *
+ * The median comes from the harness, which `model.ts` already reaches into for
+ * every type in this file. A local one written as `sorted[length >> 1]` takes the
+ * upper of the two middle readings on an even sample count, which is not a median
+ * and skews the published figure high every time the scenario count is even.
  */
 const foldFootprint = (report: BenchReport): BenchFootprint[] => {
   const bySubject = new Map<string, typeof report.resources>();
@@ -26,14 +32,12 @@ const foldFootprint = (report: BenchReport): BenchFootprint[] => {
   return [...bySubject].flatMap(([subject, list]) => {
     const boots = list
       .map((one) => one.rssBootMiB)
-      .filter((one): one is number => one !== null)
-      .sort((a, b) => a - b);
-    const boot = boots[boots.length >> 1];
-    if (boot === undefined) return [];
+      .filter((one): one is number => one !== null);
+    if (boots.length === 0) return [];
     return [
       {
         subject,
-        bootMiB: boot,
+        bootMiB: median(boots),
         peakMiB: Math.max(...list.map((one) => one.rssPeakMiB.max)),
         processes: Math.max(...list.map((one) => one.processes)),
       },

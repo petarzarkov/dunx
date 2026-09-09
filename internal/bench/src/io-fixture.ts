@@ -11,12 +11,22 @@
  * missing toolchain drops its subjects.
  */
 import { RedisClient, SQL } from 'bun';
-import { IO_POOL_SIZE } from '../servers/io/contract.js';
+import {
+  IO_POOL_SIZE,
+  IO_REDIS_KEY,
+  IO_TABLE,
+} from '../servers/io/contract.js';
 import type { Scenario } from './types.js';
 
-export const IO_REDIS_KEY = 'bench:greeting';
+/**
+ * The key and the table come from `servers/io/contract.ts`, which twenty subjects
+ * read them from. Declaring a second copy here is the drift that matters most: a
+ * seeder writing to one key while every subject reads another does not fail, it
+ * reports `cached: "missing"` on every request and calls it a measurement.
+ */
+export { IO_REDIS_KEY, IO_TABLE };
+
 export const IO_GREETING = 'Hello, World!';
-export const IO_TABLE = 'bench_ledger';
 export const IO_ROWS = 500;
 
 const DEFAULT_PG = 'postgres://dunx:dunx@127.0.0.1:5432/dunx';
@@ -148,7 +158,7 @@ export const ioEnvFor = (
     ? { BENCH_IO_PG_URL: services.pgUrl, BENCH_IO_REDIS_URL: services.redisUrl }
     : {};
 
-/** `pgUrl` with any password stripped, so a report or a log never carries one. */
+/** Either URL with any password stripped, so a log never carries one. */
 const redacted = (url: string): string => url.replace(/\/\/[^@/]*@/, '//');
 
 export interface IoPlan {
@@ -175,7 +185,7 @@ export const planIo = async (
     return {
       scenarios,
       services,
-      note: `io fixture seeded: ${services.redisUrl} and ${redacted(services.pgUrl)}`,
+      note: `io fixture seeded: ${redacted(services.redisUrl)} and ${redacted(services.pgUrl)}`,
     };
   }
   return {

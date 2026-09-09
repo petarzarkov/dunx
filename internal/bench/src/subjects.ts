@@ -9,7 +9,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: null,
     validator: 'zod (hand-wired)',
-    io: 'Bun.SQL (pool 8) + Bun.RedisClient',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'The ceiling. @dunx/http is a layer on top of this exact API, so the gap between them is dunx overhead and nothing else.',
       'Uses Bun.serve({ routes }) - the same native router @dunx/http dispatches through.',
@@ -23,7 +23,7 @@ export const subjects: readonly Subject[] = [
     preload: ['@dunx/transform/preload'],
     versionOf: '@dunx/http',
     validator: 'zod (Standard Schema)',
-    io: 'Bun.SQL (pool 8) + Bun.RedisClient',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'Runs with the @dunx/transform preload and one constructor-injected service, which is how a real dunx app is written.',
       'DI resolution and route discovery happen at boot, so they show up in the startup number and not in the per-request number.',
@@ -37,7 +37,7 @@ export const subjects: readonly Subject[] = [
     preload: ['@dunx/transform/preload'],
     versionOf: '@dunx/http',
     validator: 'zod (Standard Schema)',
-    io: 'Bun.SQL (pool 8) + Bun.RedisClient',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'The same app as `dunx` with `requestLogging` left at its default, so the cost of one structured entry per request is visible rather than folded into the framework number.',
       'No other subject logs anything, which is why this is a separate row and not the primary one.',
@@ -51,7 +51,7 @@ export const subjects: readonly Subject[] = [
     preload: ['@dunx/transform/preload'],
     versionOf: '@dunx/http',
     validator: 'zod (Standard Schema)',
-    io: 'Bun.SQL (pool 8) + Bun.RedisClient',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       '`dunx-logging` with `LoggerModule.forRoot()` bound, which is what `packages/infra/README.md` recommends and therefore what most production apps run.',
       'It is here because the gap to `dunx-logging` was estimated twice and the estimates disagreed by 5.7x. Nothing that quotes a figure for this configuration should predate this row.',
@@ -65,7 +65,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'elysia',
     validator: 'zod (Standard Schema)',
-    io: 'Bun.SQL (pool 8) + Bun.RedisClient',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'Bun-native. Given zod rather than its own TypeBox validator so the validate scenario stays comparable; TypeBox is compiled and would be faster.',
     ],
@@ -78,7 +78,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: '@nestjs/core',
     validator: 'zod (pipe)',
-    io: 'pg (pool 8) + ioredis',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'dunx is deliberately Nest-shaped - modules, controllers, DI, guards - so this is the most direct answer to what that programming model costs.',
       'The default adapter, which is what most Nest apps ship. Compare against the `express` row to separate Nest from the server underneath it.',
@@ -93,7 +93,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: '@nestjs/core',
     validator: 'zod (pipe)',
-    io: 'pg (pool 8) + ioredis',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'The same Nest application on the Fastify adapter, so the pair isolates the adapter from the framework the way hono-bun/hono-node isolates the runtime.',
     ],
@@ -106,7 +106,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'hono',
     validator: 'zod (@hono/zod-validator)',
-    io: 'Bun.SQL (pool 8) + Bun.RedisClient',
+    io: 'Bun.SQL (pool 8) + Bun.RedisClient (1 conn, auto-pipelined)',
     notes: [
       'Hono on Bun.serve, so it shares the runtime with Bun.serve, dunx and Elysia.',
     ],
@@ -119,7 +119,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'hono',
     validator: 'zod (@hono/zod-validator)',
-    io: 'pg (pool 8) + ioredis',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'The same Hono app on node:http via @hono/node-server. Included so one framework appears on both runtimes and the runtime term can be separated from the framework term.',
     ],
@@ -132,7 +132,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: null,
     validator: 'zod (hand-wired)',
-    io: 'pg (pool 8) + ioredis',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'The Node ceiling: a bare requestListener with a hand-rolled switch, no framework. Routing is a startsWith chain, which is faster than any real router.',
     ],
@@ -145,7 +145,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'fastify',
     validator: 'zod (validatorCompiler)',
-    io: 'pg (pool 8) + ioredis',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: [
       'Given zod through its validatorCompiler hook rather than its default ajv/JSON Schema path, so the validate scenario stays comparable. Ajv compiles to straight-line JS and is materially faster than zod - this understates Fastify on that one scenario.',
       'No response schema is set, so serialisation is JSON.stringify rather than fast-json-stringify, matching every other subject.',
@@ -159,7 +159,7 @@ export const subjects: readonly Subject[] = [
     preload: [],
     versionOf: 'express',
     validator: 'zod (hand-wired)',
-    io: 'pg (pool 8) + ioredis',
+    io: 'pg (pool 8) + ioredis (1 conn, no auto-pipelining)',
     notes: ['Express 5 with express.json() for the validate scenario only.'],
   },
   {

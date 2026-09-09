@@ -161,9 +161,10 @@ const Method = (): React.JSX.Element => (
         dispatches through that API and cannot outrun it.
       </List.Item>
       <List.Item>
-        <b>No database, cache or upstream call is involved</b>, and every
-        subject validates with zod. In an application that talks to Postgres,
-        every difference here is rounding error next to one query.
+        <b>Only the cache-and-database scenario leaves the process.</b> The
+        other four are dispatch, serialisation and validation, all with zod, and
+        their differences are rounding error next to one query - which is what
+        the <code>io</code> row measures rather than asserts.
       </List.Item>
     </List>
     <Text size="sm" mt="sm">

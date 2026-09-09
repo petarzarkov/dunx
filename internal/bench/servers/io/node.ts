@@ -5,8 +5,11 @@
  * `servers/io/bun.ts` and `src/drivers.ts`.
  *
  * `pg` is given the same pool size as every other subject. `ioredis` opens one
- * connection and pipelines on it, which is what `Bun.RedisClient`,
- * `StackExchange.Redis` and Lettuce all do too.
+ * connection, as `Bun.RedisClient`, `StackExchange.Redis`, Lettuce and redis-rs
+ * all do - but **it does not batch**: `enableAutoPipelining` defaults to `false`
+ * in ioredis 6.0.0, where `Bun.RedisClient` pipelines a tick's commands into one
+ * write. Both are left at their defaults, the way every other subject here is,
+ * and the asymmetry is recorded in the subject registry rather than tuned away.
  */
 import { Redis } from 'ioredis';
 import { Pool } from 'pg';

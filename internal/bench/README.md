@@ -340,6 +340,19 @@ These are choices that move the numbers. They are listed here rather than buried
 - **Spring Boot runs with no JVM flags, no AOT, no CDS and no native image.** That
   understates what a tuned Spring deployment does, and it is what `spring init`
   produces.
+- **The Node subjects run on the current LTS, and the version is in every report.**
+  Nothing pins it - the harness takes whatever `node` or `$BENCH_NODE` resolves -
+  so it is a choice the person taking the run makes, and the wrong choice quietly
+  handicaps six of the twenty subjects. The first run of the `io` scenario was
+  taken on 20.20.2, which was out of maintenance; that understates Node against a
+  Bun measured on its current release, and the published numbers were retaken.
+  `machine.node` in the JSON and the header above every table is what makes this
+  checkable rather than a matter of trust.
+- **The two Redis clients are left at defaults that differ.** `Bun.RedisClient`
+  batches a tick's commands into one write; `ioredis` does not, because
+  `enableAutoPipelining` is `false` in 6.0.0. Neither is changed, for the reason
+  `uvicorn[standard]` is not installed: defaults are what the comparison is of.
+  The subject registry records which is which, and "Driver cost" reads the pair.
 - **Every `io` pool is pinned to 8**, including the ones whose default is larger.
   With 64 connections against one worker thread the pool is what sets how many
   queries are in flight, so a subject on its own default would be measured on its
@@ -1383,7 +1396,7 @@ none of them.
 | Need                     | For                      | Found via                        |
 | ------------------------ | ------------------------ | -------------------------------- |
 | **Bun**                  | the harness, Bun subjects | required                        |
-| Node                     | the four Node subjects   | `PATH`, or `$BENCH_NODE`         |
+| Node, current LTS        | the six Node subjects    | `PATH`, or `$BENCH_NODE`         |
 | Go 1.22+                 | `nethttp`, `gin`         | `PATH`, or `$BENCH_GO`           |
 | Rust / Cargo             | `axum`                   | `PATH`, or `$BENCH_CARGO`        |
 | JDK 21+ **and** Maven    | `spring`                 | `PATH`, or `$BENCH_JAVA` and `$BENCH_MVN` |

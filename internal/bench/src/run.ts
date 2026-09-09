@@ -395,7 +395,10 @@ export const runSuite = async (
       profile,
     );
 
-  const plan = await planIo(chosenScenarios, chosenSubjects.length);
+  // `runnable`, not `chosenSubjects`: a subject whose toolchain is missing opens
+  // no pool, and counting it would refuse the scenario over connections nobody
+  // was going to ask for.
+  const plan = await planIo(chosenScenarios, runnable.length);
   if (plan.note !== null) note(plan.note);
   const scenarios = plan.scenarios;
 

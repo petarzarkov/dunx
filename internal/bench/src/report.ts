@@ -193,7 +193,14 @@ export const formatReport = (report: Report): string => {
           b.rps.median - a.rps.median,
       );
     if (rows.length === 0) continue;
-    const baseline = rows.find((row) => row.subject === BASELINE)?.rps.median;
+    // A baseline that itself answered errors is not a denominator: every healthy
+    // row would then be reported as a percentage of a failure rate, while the
+    // baseline row shows `-` for the same reason.
+    const baselineRow = rows.find((row) => row.subject === BASELINE);
+    const baseline =
+      baselineRow === undefined || failed(baselineRow) > 0
+        ? undefined
+        : baselineRow.rps.median;
 
     out.push(
       `\n${scenario.title.toUpperCase()} - ${scenario.method} ${scenario.path}`,

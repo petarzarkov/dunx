@@ -133,7 +133,10 @@ which tops out here at ${worstSpread(report)}. Swapping \`Bun.RedisClient\` for
 \`ioredis\` comes out **positive against \`Bun.SQL\` and negative against \`pg\`**. A
 sign change is what an unresolvable difference looks like, so the statement this
 supports is that the two Redis clients are the same speed on this workload - not
-that either one wins.
+that either one wins. Both are at their defaults, and those defaults are not the
+same: \`Bun.RedisClient\` batches a tick's commands into one write and \`ioredis\`
+does not (\`enableAutoPipelining\` is \`false\` in 6.0.0). Tying anyway is the
+result; tuning one of them would have been a different measurement.
 
 **The runtime is a larger term than either client.** \`pg\` and \`ioredis\` on Bun
 against the same two on Node is ${gap(report, 'bun:classic', 'node:classic')}, where

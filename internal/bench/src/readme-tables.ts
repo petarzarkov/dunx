@@ -226,6 +226,16 @@ now measured, and it is the number to quote at anyone choosing a framework on a
 dispatch benchmark.
 `;
 
+/**
+ * Both of these read `io` numbers, so both are rendered only when that scenario
+ * ran. Without the gate a machine with no Redis publishes committed prose about a
+ * scenario that never happened, with `-` where the figures should be.
+ */
+const cpuIoProse = ` On \`io\` dunx and the baseline both sit near
+${cpuPerK('bun-serve', 'io')} while Axum spends ${cpuPerK('axum', 'io')}: the
+JavaScript subjects burn CPU that Rust does not, on a workload where it buys
+neither of them any throughput, because both are waiting on the same two sockets.`;
+
 const { machine: m, config: c, loadGenerator: g } = report;
 const versions = report.subjects
   .filter((subject) => subject.version !== 'n/a' && subject.id !== FOCUS)
@@ -305,13 +315,10 @@ raw \`Bun.serve\`'s ${bootMiB('bun-serve')} MiB, for the container and the resol
 provider graph, and the gap holds under load. It is small next to the Node subjects
 and tiny next to \`spring\`, and it is still a cost the ceiling does not pay.
 ${ranIo ? ioProse : ''}
-**CPU per request tracks throughput on the first four scenarios and stops on the
-fifth.** On \`plaintext\` dunx spends ${cpuPerK('dunx', 'plaintext')} ms per thousand
-requests against the baseline's ${cpuPerK('bun-serve', 'plaintext')}, which is the
-same gap the rate shows from the other side. On \`io\` both sit near
-${cpuPerK('bun-serve', 'io')} while Axum spends ${cpuPerK('axum', 'io')} - the
-JavaScript subjects are burning CPU that Rust is not, on a workload where it buys
-neither of them any throughput because both are waiting on the same two sockets.
+**CPU per request is the rate read from the other side.** On \`plaintext\` dunx
+spends ${cpuPerK('dunx', 'plaintext')} ms per thousand requests against the
+baseline's ${cpuPerK('bun-serve', 'plaintext')}, which is the same gap the
+throughput column shows.${ranIo ? cpuIoProse : ''}
 `;
 
 /** Replaces one `## ` section in place, leaving everything around it untouched. */

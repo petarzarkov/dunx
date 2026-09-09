@@ -19,10 +19,21 @@ const JSON_TYPE = { 'content-type': 'application/json; charset=utf-8' };
 
 createServer((req, res) => {
   if (req.url === '/io') {
-    void pair.read().then((payload) => {
-      res.writeHead(200, JSON_TYPE);
-      res.end(JSON.stringify(payload));
-    });
+    // The rejection is handled rather than left to Node's default, which exits
+    // the process. `servers/node-http.ts` carries the same branch and the same
+    // reason: a pool that cannot hand out a connection took a subject down
+    // mid-run once, and the harness recorded the connection failures as 560,964
+    // req/s. This file is the sibling that kept the bug.
+    void pair.read().then(
+      (payload) => {
+        res.writeHead(200, JSON_TYPE);
+        res.end(JSON.stringify(payload));
+      },
+      (error: unknown) => {
+        res.writeHead(500, JSON_TYPE);
+        res.end(JSON.stringify({ error: String(error) }));
+      },
+    );
     return;
   }
   res.writeHead(200, TEXT);

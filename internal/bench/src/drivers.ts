@@ -179,15 +179,6 @@ const config = {
 };
 
 const services = ioServices();
-const probe = await probeIo(services, units.length);
-if (!probe.ok) {
-  note(
-    `This harness is only about database and cache clients, so it cannot skip ` +
-      `them the way the main suite skips the io scenario.\n${probe.reason}\n` +
-      'Set BENCH_REDIS_URL and BENCH_PG_URL, or start the services.',
-  );
-  process.exit(1);
-}
 
 const nodeBinary = process.env['BENCH_NODE'] ?? 'node';
 const machine = await readMachine(nodeBinary);
@@ -205,9 +196,26 @@ if (machine.node === 'not found' || nodeEntry === undefined) {
   );
 }
 
-const runnable = units.filter(
-  (unit) => unit.runtime === 'bun' || nodeEntry !== undefined,
-);
+// `machine.node` as well as the entry: `buildNodeEntries` is `Bun.build` and
+// transpiles whether or not a Node binary exists, so the entry alone is not
+// evidence that anything can run it. Without this the cell is brought up with a
+// missing binary, `startSubject` throws, and `driveUnits` aborts the whole
+// harness instead of returning the four Bun rows. `run.ts` has the same check.
+const nodeUsable = machine.node !== 'not found' && nodeEntry !== undefined;
+const runnable = units.filter((unit) => unit.runtime === 'bun' || nodeUsable);
+
+// After `runnable`, not before: the connection budget has to be sized on the
+// cells that will actually open a pool, or a machine with no Node is refused
+// over connections nobody was going to ask for.
+const probe = await probeIo(services, runnable.length);
+if (!probe.ok) {
+  note(
+    `This harness is only about database and cache clients, so it cannot skip ` +
+      `them the way the main suite skips the io scenario.\n${probe.reason}\n` +
+      'Set BENCH_REDIS_URL and BENCH_PG_URL, or start the services.',
+  );
+  process.exit(1);
+}
 
 const generator = await selectGenerator(
   (values.loadgen ?? 'auto') as LoadGeneratorChoice,

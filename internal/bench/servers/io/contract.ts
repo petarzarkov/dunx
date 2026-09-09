@@ -20,10 +20,10 @@
  * instead are recorded as doing so in the subject's `io` field.
  */
 export const IO_REDIS_KEY = 'bench:greeting';
+export const IO_TABLE = 'bench_ledger';
 export const IO_ROW_ID = 1;
 export const IO_POOL_SIZE = 8;
-export const IO_SELECT =
-  'SELECT id, memo, amount FROM bench_ledger WHERE id = $1';
+export const IO_SELECT = `SELECT id, memo, amount FROM ${IO_TABLE} WHERE id = $1`;
 
 export interface IoPayload {
   readonly cached: string;

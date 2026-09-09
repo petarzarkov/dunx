@@ -53,16 +53,44 @@ public sealed class Io
         var builder = new NpgsqlDataSourceBuilder(ToNpgsql(pgUrl));
         var source = builder.Build();
 
-        var redisHost = new Uri(redisUrl);
-        var options = ConfigurationOptions.Parse($"{redisHost.Host}:{redisHost.Port}");
-        options.AbortOnConnectFail = true;
-        var multiplexer = await ConnectionMultiplexer.ConnectAsync(options);
+        var multiplexer = await ConnectionMultiplexer.ConnectAsync(ToRedisOptions(redisUrl));
 
         var io = new Io(source, multiplexer.GetDatabase());
         // One round trip here, so the connect lands in the startup number where
         // every other subject's also is.
         await io.ReadAsync();
         return io;
+    }
+
+    /// <summary>
+    /// StackExchange.Redis does not accept a `redis://` URL - it has its own
+    /// comma-separated format - and every subject in the suite is handed the same
+    /// URL, so it is taken apart here.
+    ///
+    /// The port and the credentials are both handled for the reason the Postgres
+    /// branch below handles them: a `Uri` with no port reports `-1`, which would
+    /// reach `Parse` as `host:-1`, and dropping `UserInfo` would fail against any
+    /// Redis that asks for a password. The default URL has neither, which is
+    /// exactly why this would have gone unnoticed.
+    /// </summary>
+    private static ConfigurationOptions ToRedisOptions(string url)
+    {
+        var parsed = new Uri(url);
+        var options = ConfigurationOptions.Parse(
+            $"{parsed.Host}:{(parsed.Port == -1 ? 6379 : parsed.Port)}");
+        options.AbortOnConnectFail = true;
+
+        var credentials = parsed.UserInfo.Split(':', 2);
+        if (credentials.Length > 0 && credentials[0].Length > 0)
+        {
+            options.User = Uri.UnescapeDataString(credentials[0]);
+        }
+        if (credentials.Length > 1)
+        {
+            options.Password = Uri.UnescapeDataString(credentials[1]);
+        }
+
+        return options;
     }
 
     /// <summary>
