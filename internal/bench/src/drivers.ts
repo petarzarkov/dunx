@@ -36,10 +36,10 @@ import { ioServices, probeIo } from './io-fixture.js';
 import { selectGenerator, type LoadGeneratorChoice } from './loadgen/index.js';
 import { readMachine } from './machine.js';
 import { resultsDir } from './paths.js';
-import type { ResourceSample } from './resources.js';
+import { pairRounds } from './resources.js';
 import { median, spread } from './stats.js';
 import { bunCommand, startSubject } from './subject-process.js';
-import type { LoadSample, MachineInfo, Spread, Subject } from './types.js';
+import type { MachineInfo, Spread, Subject } from './types.js';
 
 const MIB = 1024 * 1024;
 const CONTRACT =
@@ -262,12 +262,9 @@ const bring = async (unit: Unit): Promise<Live<Unit>> => {
 const live = await driveUnits(runnable, bring, generator, config);
 
 const collect = (entry: Live<Unit>): Result => {
-  const paired = entry.usage
-    .map((sample, index) => ({ sample, load: entry.samples[index] }))
-    .filter(
-      (one): one is { sample: ResourceSample; load: LoadSample } =>
-        one.sample !== null && one.load !== undefined,
-    );
+  // The same pairing `run.ts` uses, from `resources.ts`, rather than a second
+  // copy that can drift from it.
+  const paired = pairRounds(entry.usage, entry.samples);
   return {
     id: entry.unit.id,
     label: entry.unit.label,

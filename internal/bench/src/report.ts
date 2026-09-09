@@ -1,6 +1,7 @@
+import { foldFootprint } from './footprint.js';
+import { dec, int } from './format.js';
 import { invalidates } from './quality.js';
-import { median } from './stats.js';
-import type { Report, ResourceUsage, ScenarioResult } from './types.js';
+import type { Report, ScenarioResult } from './types.js';
 
 const BASELINE = 'bun-serve';
 
@@ -37,11 +38,10 @@ const render = (
   ].join('\n');
 };
 
-const int = (value: number): string =>
-  Math.round(value).toLocaleString('en-US');
-
 /**
- * One row per subject, across every scenario it was measured on.
+ * One row per subject, across every scenario it was measured on. The fold is
+ * `src/footprint.ts`, shared with the README tables and the documentation site,
+ * because three copies of it had already begun to disagree.
  *
  * `boot MiB` is the only reading taken with nothing in flight, so it is the one
  * to quote as a footprint; `peak MiB` is what it grew to under load. `procs`
@@ -52,27 +52,7 @@ const formatFootprint = (
   report: Report,
   labels: ReadonlyMap<string, string>,
 ): string => {
-  const bySubject = new Map<string, ResourceUsage[]>();
-  for (const usage of report.resources) {
-    bySubject.set(usage.subject, [
-      ...(bySubject.get(usage.subject) ?? []),
-      usage,
-    ]);
-  }
-
-  const rows = [...bySubject]
-    .map(([subject, list]) => ({
-      subject,
-      bootMiB: median(
-        list
-          .map((one) => one.rssBootMiB)
-          .filter((one): one is number => one !== null),
-      ),
-      peakMiB: Math.max(...list.map((one) => one.rssPeakMiB.max)),
-      cpuPercent: median(list.map((one) => one.cpuPercent.median)),
-      processes: Math.max(...list.map((one) => one.processes)),
-    }))
-    .sort((a, b) => a.peakMiB - b.peakMiB);
+  const rows = foldFootprint(report.resources);
 
   return [
     '\nRESOURCE FOOTPRINT - resident set of the whole process tree, from /proc',
@@ -82,14 +62,12 @@ const formatFootprint = (
         { header: 'subject', align: 'left' },
         { header: 'boot MiB', align: 'right' },
         { header: 'peak MiB', align: 'right' },
-        { header: 'cpu %', align: 'right' },
         { header: 'procs', align: 'right' },
       ],
       rows.map((row) => [
         labels.get(row.subject) ?? row.subject,
-        row.bootMiB === 0 ? '-' : row.bootMiB.toFixed(1),
-        row.peakMiB.toFixed(1),
-        row.cpuPercent.toFixed(0),
+        row.bootMiB === null ? '-' : dec(row.bootMiB, 1),
+        dec(row.peakMiB, 1),
         String(row.processes),
       ]),
     )
@@ -212,7 +190,7 @@ export const formatReport = (report: Report): string => {
       `\n${scenario.title.toUpperCase()} - ${scenario.method} ${scenario.path}`,
     );
     out.push(`  ${scenario.description}`);
-    const broken = rows.filter((row) => failed(row) > 0);
+    const broken = rows.filter(unranked);
     if (broken.length > 0) {
       out.push(
         `  ${broken.length} subject(s) answered errors or non-2xx and are listed last with no ratio: ` +
@@ -258,10 +236,10 @@ export const formatReport = (report: Report): string => {
               : `${((row.rps.median / baseline) * 100).toFixed(1)}%`,
             ...(measured
               ? [
-                  cost === undefined ? '-' : cost.rssPeakMiB.median.toFixed(1),
-                  cost === undefined
+                  cost === undefined ? '-' : dec(cost.rssPeakMiB.median, 1),
+                  cost === undefined || cost.cpuMsPerKiloRequests === null
                     ? '-'
-                    : cost.cpuMsPerKiloRequests.median.toFixed(2),
+                    : dec(cost.cpuMsPerKiloRequests.median, 2),
                 ]
               : []),
             String(row.totalErrors + row.totalNon2xx),

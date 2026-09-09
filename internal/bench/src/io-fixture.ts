@@ -56,12 +56,19 @@ export const seedIo = async (services: IoServices): Promise<void> => {
       amount integer NOT NULL
     )`);
     await sql.unsafe(`TRUNCATE ${IO_TABLE}`);
-    for (let index = 1; index <= IO_ROWS; index += 1) {
-      await sql.unsafe(
-        `INSERT INTO ${IO_TABLE} (id, memo, amount) VALUES ($1, $2, $3)`,
-        [index, `row ${index}`, index * 100],
-      );
-    }
+    // One statement, not 500. Every `bun run start` and `bun run smoke` that
+    // includes the io scenario seeds this, and a round trip per row was seconds
+    // of every invocation for nothing.
+    const values: unknown[] = [];
+    const tuples = Array.from({ length: IO_ROWS }, (_, offset) => {
+      const id = offset + 1;
+      values.push(id, `row ${id}`, id * 100);
+      return `($${offset * 3 + 1}, $${offset * 3 + 2}, $${offset * 3 + 3})`;
+    });
+    await sql.unsafe(
+      `INSERT INTO ${IO_TABLE} (id, memo, amount) VALUES ${tuples.join(', ')}`,
+      values,
+    );
     await sql.unsafe(`ANALYZE ${IO_TABLE}`);
   } finally {
     await sql.close();

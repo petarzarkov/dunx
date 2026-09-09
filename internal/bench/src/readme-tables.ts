@@ -13,6 +13,8 @@
  * touches nothing else.
  */
 import { driversSection } from './drivers-tables.js';
+import { foldFootprint } from './footprint.js';
+import { dec, int, signed } from './format.js';
 import { invalidates } from './quality.js';
 import { loggingSection } from './logging-tables.js';
 import { median, stddev } from './stats.js';
@@ -21,10 +23,6 @@ import { validationSection } from './validation-tables.js';
 
 const BASELINE = 'bun-serve';
 const FOCUS = 'dunx';
-
-const int = (value: number): string =>
-  Math.round(value).toLocaleString('en-US');
-const dec = (value: number, places = 3): string => value.toFixed(places);
 
 const reportPath = new URL('../results/latest.json', import.meta.url).pathname;
 const readmePath = new URL('../README.md', import.meta.url).pathname;
@@ -43,8 +41,24 @@ const cellsFor = (scenario: string) => {
   const rows = report.results.filter((row) => row.scenario === scenario);
   const rpsOf = (row: (typeof rows)[number]): number =>
     median(row.runs.map((run) => run.rps));
-  const baseline = rows.find((row) => row.subject === BASELINE);
-  const base = baseline === undefined ? 0 : rpsOf(baseline);
+  // A baseline that failed too often to rank is not a denominator either, the
+  // same rule `report.ts` applies: every healthy row would otherwise be a
+  // percentage of a failure rate.
+  const baselineRow = rows.find((row) => row.subject === BASELINE);
+  const totalOf = (
+    row: (typeof rows)[number],
+    key: 'bad' | 'requests',
+  ): number =>
+    row.runs.reduce(
+      (sum, run) =>
+        sum + (key === 'bad' ? run.non2xx + run.errors : run.requests),
+      0,
+    );
+  const base =
+    baselineRow === undefined ||
+    invalidates(totalOf(baselineRow, 'bad'), totalOf(baselineRow, 'requests'))
+      ? 0
+      : rpsOf(baselineRow);
 
   return rows
     .map((row) => {
@@ -64,7 +78,7 @@ const cellsFor = (scenario: string) => {
         stddev: stddev(row.runs.map((run) => run.rps)),
         p50: median(row.runs.map((run) => run.latencyP50Ms)),
         p99: median(row.runs.map((run) => run.latencyP99Ms)),
-        pct: base === 0 ? 0 : (rps / base) * 100,
+        pct: base === 0 ? null : (rps / base) * 100,
         bad,
         requests,
         // A rate, not a count: one blip in 39,000 is a footnote, a quarter of
@@ -84,15 +98,16 @@ const throughputTable = (scenario: string): string => {
   const body = rows
     .map((row) => {
       const rps = row.id === FOCUS ? `**${int(row.rps)}**` : int(row.rps);
-      const pct = row.unranked
-        ? `- (${int(row.bad)} bad)`
-        : row.id === FOCUS
-          ? `**${dec(row.pct, 1)}%**`
-          : `${dec(row.pct, 1)}%`;
+      const pct =
+        row.unranked || row.pct === null
+          ? `- (${int(row.bad)} bad)`
+          : row.id === FOCUS
+            ? `**${dec(row.pct, 1)}%**`
+            : `${dec(row.pct, 1)}%`;
       const rss =
         row.cost === undefined ? '-' : dec(row.cost.rssPeakMiB.median, 1);
       const cpu =
-        row.cost === undefined
+        row.cost === undefined || row.cost.cpuMsPerKiloRequests === null
           ? '-'
           : dec(row.cost.cpuMsPerKiloRequests.median, 2);
       return `| ${row.label} | ${rps} | ${int(row.stddev)} | ${dec(row.p50)} | ${dec(row.p99)} | ${rss} | ${cpu} | ${pct} |`;
@@ -107,35 +122,20 @@ const throughputTable = (scenario: string): string => {
  * grew to under load.
  */
 const footprintTable = (): string => {
-  const bySubject = new Map<string, ResourceUsage[]>();
-  for (const usage of report.resources) {
-    bySubject.set(usage.subject, [
-      ...(bySubject.get(usage.subject) ?? []),
-      usage,
-    ]);
-  }
-  const rows = [...bySubject]
-    .map(([subject, list]) => ({
-      id: subject,
-      label:
-        report.subjects.find((one) => one.id === subject)?.label ?? subject,
-      boot: median(
-        list
-          .map((one) => one.rssBootMiB)
-          .filter((one): one is number => one !== null),
-      ),
-      peak: Math.max(...list.map((one) => one.rssPeakMiB.max)),
-      processes: Math.max(...list.map((one) => one.processes)),
-    }))
-    .sort((a, b) => a.peak - b.peak);
+  const rows = foldFootprint(report.resources).map((row) => ({
+    ...row,
+    label:
+      report.subjects.find((one) => one.id === row.subject)?.label ??
+      row.subject,
+  }));
 
   const head =
     '| Subject | boot MiB | peak MiB | processes |\n' +
     '| ------- | -------: | -------: | --------: |';
   const body = rows
     .map((row) => {
-      const label = row.id === FOCUS ? `**${row.label}**` : row.label;
-      return `| ${label} | ${row.boot === 0 ? '-' : dec(row.boot, 1)} | ${dec(row.peak, 1)} | ${row.processes} |`;
+      const label = row.subject === FOCUS ? `**${row.label}**` : row.label;
+      return `| ${label} | ${row.bootMiB === null ? '-' : dec(row.bootMiB, 1)} | ${dec(row.peakMiB, 1)} | ${row.processes} |`;
     })
     .join('\n');
   return `${head}\n${body}`;
@@ -177,10 +177,13 @@ const taxTable = (): string => {
       const rows = cellsFor(scenario.id);
       const base = rows.find((row) => row.id === BASELINE);
       const dunx = rows.find((row) => row.id === FOCUS);
+      // A tax computed from a row nobody can rank is not a tax. Omitted rather
+      // than printed, so the table never carries a figure the tables above it
+      // refuse to give a ratio for.
       if (base === undefined || dunx === undefined) return '';
+      if (base.unranked || dunx.unranked || base.rps === 0) return '';
       const delta = ((dunx.rps - base.rps) / base.rps) * 100;
-      const sign = delta >= 0 ? '+' : '−';
-      return `| \`${scenario.id}\` | ${int(base.rps)} | ${int(dunx.rps)} | ${sign}${dec(Math.abs(delta), 1)}% |`;
+      return `| \`${scenario.id}\` | ${int(base.rps)} | ${int(dunx.rps)} | ${signed(delta, 1, '%')} |`;
     })
     .filter((line) => line !== '')
     .join('\n');
@@ -200,7 +203,9 @@ const cpuPerK = (subject: string, scenario: string): string => {
   const usage = report.resources.find(
     (one) => one.subject === subject && one.scenario === scenario,
   );
-  return usage === undefined ? '-' : dec(usage.cpuMsPerKiloRequests.median, 2);
+  return usage === undefined || usage.cpuMsPerKiloRequests === null
+    ? '-'
+    : dec(usage.cpuMsPerKiloRequests.median, 2);
 };
 
 const ranIo = report.scenarios.some((scenario) => scenario.id === 'io');

@@ -1,54 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { median } from '../../../bench/src/stats.js';
+import { foldFootprint } from '../../../bench/src/footprint.js';
 import {
   BENCH_SCHEMA_VERSION,
-  type BenchFootprint,
   type BenchModel,
   type BenchReport,
 } from './model';
 
-/**
- * One row per subject out of the harness's per-scenario resource rows.
- *
- * `bootMiB` is a median rather than a sum: it is the same measurement taken once
- * per scenario, of a process doing nothing, so the scenarios are repeats of one
- * reading. `peakMiB` is the highest anything reached under any load, which is the
- * figure a reader sizing a container wants.
- *
- * The median comes from the harness, which `model.ts` already reaches into for
- * every type in this file. A local one written as `sorted[length >> 1]` takes the
- * upper of the two middle readings on an even sample count, which is not a median
- * and skews the published figure high every time the scenario count is even.
- */
-const foldFootprint = (report: BenchReport): BenchFootprint[] => {
-  const bySubject = new Map<string, typeof report.resources>();
-  for (const usage of report.resources) {
-    bySubject.set(usage.subject, [
-      ...(bySubject.get(usage.subject) ?? []),
-      usage,
-    ]);
-  }
-
-  return [...bySubject].flatMap(([subject, list]) => {
-    const boots = list
-      .map((one) => one.rssBootMiB)
-      .filter((one): one is number => one !== null);
-    if (boots.length === 0) return [];
-    return [
-      {
-        subject,
-        bootMiB: median(boots),
-        peakMiB: Math.max(...list.map((one) => one.rssPeakMiB.max)),
-        processes: Math.max(...list.map((one) => one.processes)),
-      },
-    ];
-  });
-};
-
-/**
- * Narrows the harness's report to the fields the site renders. See the
- * `BenchModel` doc comment for why.
- */
 export const projectBench = (report: BenchReport): BenchModel => ({
   schemaVersion: report.schemaVersion,
   generatedAt: report.generatedAt,
@@ -85,10 +42,14 @@ export const projectBench = (report: BenchReport): BenchModel => ({
       bad: result.totalErrors + result.totalNon2xx,
       requests: result.runs.reduce((total, run) => total + run.requests, 0),
       peakMiB: usage?.rssPeakMiB.median ?? null,
-      cpuMsPerKiloRequests: usage?.cpuMsPerKiloRequests.median ?? null,
+      cpuMsPerKiloRequests: usage?.cpuMsPerKiloRequests?.median ?? null,
     };
   }),
-  footprint: foldFootprint(report),
+  // The harness's own fold, shared with its stdout table and its README tables,
+  // so the three cannot disagree about a subject with no boot reading.
+  footprint: foldFootprint(report.resources).flatMap((row) =>
+    row.bootMiB === null ? [] : [{ ...row, bootMiB: row.bootMiB }],
+  ),
   startup: report.startup.map((entry) => ({
     subject: entry.subject,
     medianMs: entry.medianMs,

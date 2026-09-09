@@ -2,7 +2,11 @@ import { buildNodeEntries } from './build.js';
 import { ioEnvFor, planIo } from './io-fixture.js';
 import { repoRoot, root } from './paths.js';
 import { describeSubjects, readMachine } from './machine.js';
-import { ResourceSampler, type ResourceSample } from './resources.js';
+import {
+  pairRounds,
+  ResourceSampler,
+  type ResourceSample,
+} from './resources.js';
 import { spread } from './stats.js';
 import {
   bunCommand,
@@ -82,28 +86,26 @@ const summariseResources = (
   usage: readonly (ResourceSample | null)[],
   rssBootBytes: number | null,
 ): ResourceUsage | null => {
-  const paired = usage
-    .map((sample, index) => ({ sample, load: runs[index] }))
-    .filter(
-      (entry): entry is { sample: ResourceSample; load: LoadSample } =>
-        entry.sample !== null && entry.load !== undefined,
-    );
+  const paired = pairRounds(usage, runs);
   if (paired.length === 0) return null;
+
+  const perRequest = paired
+    .filter((one) => one.load.requests > 0)
+    .map((one) => (one.sample.cpuMs / one.load.requests) * 1000);
 
   return {
     subject: subject.id,
     scenario: scenario.id,
     rssBootMiB: rssBootBytes === null ? null : rssBootBytes / MIB,
     rssPeakMiB: spread(paired.map((one) => one.sample.rssPeakBytes / MIB)),
-    rssMeanMiB: spread(paired.map((one) => one.sample.rssMeanBytes / MIB)),
     cpuPercent: spread(
       paired.map((one) => (one.sample.cpuMs / one.sample.elapsedMs) * 100),
     ),
-    cpuMsPerKiloRequests: spread(
-      paired
-        .filter((one) => one.load.requests > 0)
-        .map((one) => (one.sample.cpuMs / one.load.requests) * 1000),
-    ),
+    // `null`, not zero, when nothing was served. `oha` counts only
+    // status-bearing responses, so a subject that died mid-run reports
+    // `requests: 0` and `spread([])` would have printed 0.00 ms/kreq - the
+    // cheapest row in the table, for a process that answered nothing.
+    cpuMsPerKiloRequests: perRequest.length === 0 ? null : spread(perRequest),
     processes: Math.max(...paired.map((one) => one.sample.processes)),
   };
 };
@@ -435,18 +437,18 @@ export const runSuite = async (
     );
     results.push(...measured.results);
     resources.push(...measured.resources);
+    // A map, not a scan per row, the way `report.ts` does the identical join.
+    const costs = new Map(measured.resources.map((one) => [one.subject, one]));
     for (const result of measured.results) {
       const subject = runnable.find((one) => one.id === result.subject);
-      const cost = measured.resources.find(
-        (one) => one.subject === result.subject,
-      );
+      const cost = costs.get(result.subject);
       note(
         `  ${(subject?.label ?? result.subject).padEnd(30)} ${Math.round(result.rps.median).toLocaleString('en-US').padStart(10)} req/s` +
           `  p99 ${result.latencyP99Ms.median.toFixed(3)} ms` +
           (cost === undefined
             ? ''
             : `  rss ${cost.rssPeakMiB.median.toFixed(0).padStart(4)} MiB` +
-              `  cpu ${cost.cpuMsPerKiloRequests.median.toFixed(2)} ms/kreq`) +
+              `  cpu ${cost.cpuMsPerKiloRequests === null ? '-' : `${cost.cpuMsPerKiloRequests.median.toFixed(2)} ms/kreq`}`) +
           (result.totalErrors + result.totalNon2xx > 0
             ? `  errors ${result.totalErrors} non-2xx ${result.totalNon2xx}`
             : ''),

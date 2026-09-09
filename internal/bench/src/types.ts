@@ -133,9 +133,15 @@ export interface ResourceUsage {
   /** Resident set right after the first request, before any load. */
   readonly rssBootMiB: number | null;
   readonly rssPeakMiB: Spread;
-  readonly rssMeanMiB: Spread;
   readonly cpuPercent: Spread;
-  readonly cpuMsPerKiloRequests: Spread;
+  /**
+   * `null` when the subject completed no requests at all in any measured round,
+   * which is what a process that died mid-run looks like: `oha` counts only
+   * status-bearing responses, so its `requests` is zero and CPU per request is
+   * undefined rather than free. Printing `0.00` there read as the cheapest row
+   * in the table.
+   */
+  readonly cpuMsPerKiloRequests: Spread | null;
   /** Processes in the tree, so `gunicorn`'s master plus worker is visible. */
   readonly processes: number;
 }

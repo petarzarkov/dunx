@@ -28,7 +28,9 @@
  *   exactly what makes it worth reporting for the ones that are not.
  * - **RSS is sampled, so the peak is the peak of the samples.** A garbage collector
  *   that runs between two reads is missed. 50 ms against a 5-second round is 100
- *   samples, which finds a steady state and will under-report a spike.
+ *   samples, which finds a steady state and will under-report a spike. Only the
+ *   peak is kept: a mean was carried end to end for a while and no table, chart
+ *   or report ever read it.
  */
 import { readFileSync } from 'node:fs';
 
@@ -109,7 +111,6 @@ export const procIsReadable = (): boolean => readTree(process.pid) !== null;
 /** What one measured window cost. `null` where `/proc` did not answer. */
 export interface ResourceSample {
   readonly rssPeakBytes: number;
-  readonly rssMeanBytes: number;
   /** CPU consumed by the whole tree during the window, user plus system. */
   readonly cpuMs: number;
   readonly elapsedMs: number;
@@ -119,6 +120,30 @@ export interface ResourceSample {
 }
 
 const SAMPLE_INTERVAL_MS = 50;
+
+/**
+ * A round's resource reading beside the load sample it belongs to, paired by
+ * index and never by a median of the other rounds. A round the sampler could not
+ * read is dropped from both sides rather than paired with the wrong one.
+ *
+ * Shared because `run.ts` and `drivers.ts` both do this over the same shape, and
+ * a correctness fix to the pairing had to land in one of them and not the other.
+ */
+export interface PairedRound<L> {
+  readonly sample: ResourceSample;
+  readonly load: L;
+}
+
+export const pairRounds = <L>(
+  usage: readonly (ResourceSample | null)[],
+  load: readonly L[],
+): PairedRound<L>[] =>
+  usage
+    .map((sample, index) => ({ sample, load: load[index] }))
+    .filter(
+      (one): one is PairedRound<L> =>
+        one.sample !== null && one.load !== undefined,
+    );
 
 /**
  * Samples one subject's tree for as long as a measured run lasts.
@@ -133,7 +158,6 @@ export class ResourceSampler {
   private opening: Snapshot | null = null;
   private latest: Snapshot | null = null;
   private peakBytes = 0;
-  private totalBytes = 0;
   private readings = 0;
   private processes = 0;
 
@@ -143,7 +167,6 @@ export class ResourceSampler {
     this.opening = readTree(this.pid);
     this.latest = this.opening;
     this.peakBytes = this.opening?.rssBytes ?? 0;
-    this.totalBytes = 0;
     this.readings = 0;
     this.processes = this.opening?.processes ?? 0;
     this.startedAt = performance.now();
@@ -155,7 +178,6 @@ export class ResourceSampler {
     if (reading === null) return;
     this.latest = reading;
     this.peakBytes = Math.max(this.peakBytes, reading.rssBytes);
-    this.totalBytes += reading.rssBytes;
     this.readings += 1;
     this.processes = Math.max(this.processes, reading.processes);
   }
@@ -170,7 +192,6 @@ export class ResourceSampler {
     }
     return {
       rssPeakBytes: this.peakBytes,
-      rssMeanBytes: this.totalBytes / this.readings,
       // Clamped: a child that exits mid-window takes its ticks out of the tree,
       // which would otherwise read as negative CPU.
       cpuMs: Math.max(0, this.latest.cpuMs - this.opening.cpuMs),

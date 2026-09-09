@@ -76,8 +76,15 @@ public sealed class Io
     private static ConfigurationOptions ToRedisOptions(string url)
     {
         var parsed = new Uri(url);
-        var options = ConfigurationOptions.Parse(
-            $"{parsed.Host}:{(parsed.Port == -1 ? 6379 : parsed.Port)}");
+        // `rediss://` is TLS, and dropping the scheme would have connected in
+        // cleartext to a server that asked for it - silently, because the
+        // handshake is the client's to demand. StackExchange.Redis defaults the
+        // port by the same flag: 6379 plain, 6380 over TLS.
+        var ssl = string.Equals(parsed.Scheme, "rediss", StringComparison.OrdinalIgnoreCase);
+        var port = parsed.Port == -1 ? (ssl ? 6380 : 6379) : parsed.Port;
+
+        var options = ConfigurationOptions.Parse($"{parsed.Host}:{port}");
+        options.Ssl = ssl;
         options.AbortOnConnectFail = true;
 
         var credentials = parsed.UserInfo.Split(':', 2);
