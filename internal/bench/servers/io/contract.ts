@@ -25,6 +25,17 @@ export const IO_ROW_ID = 1;
 export const IO_POOL_SIZE = 8;
 export const IO_SELECT = `SELECT id, memo, amount FROM ${IO_TABLE} WHERE id = $1`;
 
+/**
+ * The row `IO_SELECT` returns. Declared beside the query that produces it, and
+ * beside the payload it becomes, rather than three times in the three modules
+ * that read it.
+ */
+export interface IoRow {
+  id: number;
+  memo: string;
+  amount: number;
+}
+
 export interface IoPayload {
   readonly cached: string;
   readonly id: number;
@@ -48,7 +59,7 @@ export const redisUrl = (): string => process.env['BENCH_IO_REDIS_URL'] ?? '';
 /** Identical bytes from every subject, so the comparison is like for like. */
 export const ioPayload = (
   cached: string | null,
-  row: { id: number; memo: string; amount: number } | undefined,
+  row: IoRow | undefined,
 ): IoPayload => ({
   cached: cached ?? 'missing',
   id: row?.id ?? 0,

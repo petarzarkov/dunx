@@ -18,6 +18,7 @@ import {
   IO_REDIS_KEY,
   IO_ROW_ID,
   IO_SELECT,
+  type IoRow,
   ioPayload,
   type IoPayload,
   pgUrl,
@@ -27,12 +28,6 @@ import {
 // Loaded through `servers/io/lazy.ts`, never imported at a server's top level:
 // `pg` and `ioredis` are real module loads, and a static import would put them in
 // every scenario's startup number rather than only the `io` one.
-
-interface Row {
-  id: number;
-  memo: string;
-  amount: number;
-}
 
 export class NodeIo {
   private readonly pool = new Pool({
@@ -44,7 +39,7 @@ export class NodeIo {
 
   async read(): Promise<IoPayload> {
     const cached = await this.redis.get(IO_REDIS_KEY);
-    const result = await this.pool.query<Row>(IO_SELECT, [IO_ROW_ID]);
+    const result = await this.pool.query<IoRow>(IO_SELECT, [IO_ROW_ID]);
     return ioPayload(cached, result.rows[0]);
   }
 

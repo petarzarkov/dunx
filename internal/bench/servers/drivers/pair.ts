@@ -8,12 +8,19 @@
  *
  * Every client is loaded with `await import()`. A cell running `Bun.SQL` must not
  * pay for `pg` being on disk, and the Node build has no `Bun` to import at all.
+ *
+ * **`BunIo` and `NodeIo` are not reused here, and cannot be.** Each of those fixes
+ * a *pair* - Bun's two clients, or Node's two - and the whole point of this file
+ * is the two cells that cross them. What is shared is what can be: the key, the
+ * SQL, the pool size, `IoRow` and `ioPayload`, all from `servers/io/contract.ts`,
+ * so the query and the bytes cannot drift between this harness and the scenario.
  */
 import {
   IO_POOL_SIZE,
   IO_REDIS_KEY,
   IO_ROW_ID,
   IO_SELECT,
+  type IoRow,
   ioPayload,
   type IoPayload,
   pgUrl,
@@ -23,14 +30,8 @@ import {
 export type SqlKind = 'bun' | 'pg';
 export type RedisKind = 'bun' | 'ioredis';
 
-interface Row {
-  id: number;
-  memo: string;
-  amount: number;
-}
-
 type ReadCache = () => Promise<string | null>;
-type ReadRow = () => Promise<Row | undefined>;
+type ReadRow = () => Promise<IoRow | undefined>;
 
 const bunRedis = async (): Promise<ReadCache> => {
   const { RedisClient } = await import('bun');
@@ -47,13 +48,13 @@ const ioredis = async (): Promise<ReadCache> => {
 const bunSql = async (): Promise<ReadRow> => {
   const { SQL } = await import('bun');
   const sql = new SQL({ url: pgUrl(), max: IO_POOL_SIZE });
-  return async () => ((await sql.unsafe(IO_SELECT, [IO_ROW_ID])) as Row[])[0];
+  return async () => ((await sql.unsafe(IO_SELECT, [IO_ROW_ID])) as IoRow[])[0];
 };
 
 const pg = async (): Promise<ReadRow> => {
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: pgUrl(), max: IO_POOL_SIZE });
-  return async () => (await pool.query<Row>(IO_SELECT, [IO_ROW_ID])).rows[0];
+  return async () => (await pool.query<IoRow>(IO_SELECT, [IO_ROW_ID])).rows[0];
 };
 
 export class DriverPair {

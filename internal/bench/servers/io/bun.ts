@@ -13,17 +13,12 @@ import {
   IO_REDIS_KEY,
   IO_ROW_ID,
   IO_SELECT,
+  type IoRow,
   ioPayload,
   type IoPayload,
   pgUrl,
   redisUrl,
 } from './contract.js';
-
-interface Row {
-  id: number;
-  memo: string;
-  amount: number;
-}
 
 export class BunIo {
   private readonly sql = new SQL({ url: pgUrl(), max: IO_POOL_SIZE });
@@ -31,7 +26,7 @@ export class BunIo {
 
   async read(): Promise<IoPayload> {
     const cached = await this.redis.get(IO_REDIS_KEY);
-    const rows = (await this.sql.unsafe(IO_SELECT, [IO_ROW_ID])) as Row[];
+    const rows = (await this.sql.unsafe(IO_SELECT, [IO_ROW_ID])) as IoRow[];
     return ioPayload(cached, rows[0]);
   }
 
