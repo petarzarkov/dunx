@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { ConfigModule } from '@dunx/core';
 import { ThrottleGuard } from '@dunx/http';
 import { createTestServer, type TestServer } from '@dunx/testing';
-import { AppConfigService, validate } from './config.js';
+import { configModule } from './config.js';
 import { LimitsModule } from './throttle/throttle.module.js';
 
 /**
@@ -44,13 +43,9 @@ const hammer = async (
 beforeAll(async () => {
   server = await createTestServer({
     modules: [
-      ConfigModule.forRoot({
-        validate,
-        as: AppConfigService,
-        source: {
-          THROTTLE_LIMIT: String(LIMIT),
-          THROTTLE_WINDOW_SECONDS: '60',
-        },
+      configModule({
+        THROTTLE_LIMIT: String(LIMIT),
+        THROTTLE_WINDOW_SECONDS: '60',
       }),
       LimitsModule,
     ],
