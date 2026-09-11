@@ -20,6 +20,9 @@ import {
  * flip that panel to "gave up on 503" for every visitor. */
 export const FLAKY_FAILURES = 2;
 
+/** How long `/slow` takes, over every budget aimed at it. */
+export const SLOW_ROUTE_MS = 300;
+
 @Controller('upstream')
 @SkipThrottle()
 export class FlakyController {
@@ -59,10 +62,9 @@ export class FlakyController {
     return { recovered: true, after: seen };
   }
 
-  /** Slower than any budget the demo gives it, so the timeout is not a race. */
   @Get('/slow')
   async slow(): Promise<{ done: true }> {
-    await Bun.sleep(300);
+    await Bun.sleep(SLOW_ROUTE_MS);
     return { done: true };
   }
 

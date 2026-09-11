@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { isJsonBody, isPlainObject, safeStringify } from './json.js';
+import { ResilienceOptions, ResiliencePolicy } from '@dunx/core';
+import { isJsonBody, isPlainObject, readBody, safeStringify } from './json.js';
 import {
-  backoffDelay,
-  executeWithRetry,
+  HttpRetryClassifier,
   isRetryableStatus,
   retryAfterMs,
+  type HttpRetryOptions,
 } from './retry.js';
 import { FetchError, FetchTransportError } from './errors.js';
 
@@ -65,28 +66,29 @@ describe('isJsonBody', () => {
   });
 });
 
-describe('backoffDelay', () => {
-  it('grows exponentially and stays under the ceiling', () => {
-    const flat = { jitterMs: 0, maxMs: 30_000 };
-    expect(backoffDelay(0, { baseMs: 100, ...flat })).toBe(100);
-    expect(backoffDelay(1, { baseMs: 100, ...flat })).toBe(200);
-    expect(backoffDelay(4, { baseMs: 100, ...flat })).toBe(1600);
-    expect(backoffDelay(30, { baseMs: 100, ...flat })).toBe(30_000);
+describe('readBody', () => {
+  it('parses JSON, falls back to text, and answers nothing for empty', async () => {
+    expect(await readBody(Response.json({ a: 1 }))).toEqual({ a: 1 });
+    expect(await readBody(new Response('plain'))).toBe('plain');
+    expect(await readBody(new Response(''))).toBeUndefined();
   });
 
   /**
-   * The jitter is what decorrelates a fleet of clients retrying together, so it has
-   * to actually vary - and it comes from `crypto.getRandomValues`, not `Math.random`.
+   * A read that dies mid-body used to be reported as an empty body, so a 2xx
+   * whose stream broke reached the caller as a success with no data and a retry
+   * policy saw nothing to retry.
    */
-  it('adds a bounded, varying jitter', () => {
-    const seen = new Set<number>();
-    for (let i = 0; i < 40; i += 1) {
-      const delay = backoffDelay(0, { baseMs: 100, jitterMs: 1000 });
-      expect(delay).toBeGreaterThanOrEqual(100);
-      expect(delay).toBeLessThan(1100);
-      seen.add(delay);
-    }
-    expect(seen.size).toBeGreaterThan(30);
+  it('rejects when the body cannot be read', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"partial":'));
+        controller.error(new Error('connection reset'));
+      },
+    });
+
+    await expect(readBody(new Response(body))).rejects.toThrow(
+      'connection reset',
+    );
   });
 });
 
@@ -136,7 +138,11 @@ describe('isRetryableStatus', () => {
   });
 });
 
-describe('executeWithRetry', () => {
+/**
+ * The classifier through the policy that uses it, which is how `HttpService`
+ * composes them: core owns the loop and the backoff, this package owns the verdict.
+ */
+describe('HttpRetryClassifier', () => {
   const fetchError = (
     status: number,
     headers: Record<string, string> = {},
@@ -147,9 +153,20 @@ describe('executeWithRetry', () => {
       headers: new Headers(headers),
     });
 
+  const run = <T>(
+    op: () => T | Promise<T>,
+    retry: HttpRetryOptions = {},
+  ): Promise<T> =>
+    new ResiliencePolicy(
+      new ResilienceOptions({
+        retry,
+        classifier: new HttpRetryClassifier(retry),
+      }),
+    ).run(async () => op());
+
   it('returns the first success without retrying', async () => {
     let calls = 0;
-    const result = await executeWithRetry(() => {
+    const result = await run(() => {
       calls += 1;
       return 'ok';
     });
@@ -164,7 +181,7 @@ describe('executeWithRetry', () => {
       throw fetchError(500);
     };
     await expect(
-      executeWithRetry(failing, {
+      run(failing, {
         maxRetries: 2,
         retryDelayMs: 1,
         backoff: { jitterMs: 0 },
@@ -176,7 +193,7 @@ describe('executeWithRetry', () => {
 
   it('does not retry a status the policy rejects', async () => {
     let calls = 0;
-    await executeWithRetry(
+    await run(
       () => {
         calls += 1;
         throw fetchError(400);
@@ -186,10 +203,27 @@ describe('executeWithRetry', () => {
     expect(calls).toBe(1);
   });
 
+  it('takes a shouldRetryOnStatus that widens the default', async () => {
+    let calls = 0;
+    await run(
+      () => {
+        calls += 1;
+        throw fetchError(404);
+      },
+      {
+        maxRetries: 1,
+        retryDelayMs: 1,
+        backoff: { jitterMs: 0 },
+        shouldRetryOnStatus: (status) => status === 404,
+      },
+    ).catch(() => undefined);
+    expect(calls).toBe(2);
+  });
+
   /** An abort means the call's budget is spent; retrying spends it again. */
   it('never retries an abort', async () => {
     let calls = 0;
-    await executeWithRetry(
+    await run(
       () => {
         calls += 1;
         throw new FetchTransportError(
@@ -204,7 +238,7 @@ describe('executeWithRetry', () => {
 
   it('retries a transport failure that was not an abort', async () => {
     let calls = 0;
-    await executeWithRetry(
+    await run(
       () => {
         calls += 1;
         throw new FetchTransportError(
@@ -217,10 +251,23 @@ describe('executeWithRetry', () => {
     expect(calls).toBe(3);
   });
 
+  /** Anything that is not a fetch failure carries no verdict, so it is retried. */
+  it('retries an error that is neither', async () => {
+    let calls = 0;
+    await run(
+      () => {
+        calls += 1;
+        throw new Error('json parse');
+      },
+      { maxRetries: 1, retryDelayMs: 1, backoff: { jitterMs: 0 } },
+    ).catch(() => undefined);
+    expect(calls).toBe(2);
+  });
+
   it('waits the Retry-After rather than the computed backoff', async () => {
     const started = Date.now();
     let calls = 0;
-    await executeWithRetry(
+    await run(
       () => {
         calls += 1;
         if (calls === 1) throw fetchError(429, { 'retry-after': '0' });
@@ -234,7 +281,7 @@ describe('executeWithRetry', () => {
 
   it('caps a Retry-After at the backoff ceiling', async () => {
     const started = Date.now();
-    await executeWithRetry(
+    await run(
       () => {
         throw fetchError(429, { 'retry-after': '3600' });
       },
@@ -246,7 +293,7 @@ describe('executeWithRetry', () => {
 
   it('can be told to ignore Retry-After', async () => {
     const waited: number[] = [];
-    await executeWithRetry(
+    await run(
       () => {
         throw fetchError(429, { 'retry-after': '3600' });
       },

@@ -1,4 +1,9 @@
-import { Logger, RequestContext } from '@dunx/core';
+import {
+  Logger,
+  RequestContext,
+  ResilienceOptions,
+  ResiliencePolicy,
+} from '@dunx/core';
 import {
   TRACEPARENT_HEADER,
   TRACESTATE_HEADER,
@@ -7,9 +12,10 @@ import {
 import { UrlHelper, type ParamsType } from '@arkv/shared';
 import type { HttpMethod } from '../route/marker.js';
 import { FetchError, FetchTransportError } from './errors.js';
-import { isJsonBody, safeStringify } from './json.js';
+import { isJsonBody, readBody, safeStringify } from './json.js';
+import { ConnectDeadline, sseData } from './sse.js';
 import { HttpClientOptions } from './options.js';
-import { executeWithRetry, type RetryOptions } from './retry.js';
+import { HttpRetryClassifier, type HttpRetryOptions } from './retry.js';
 
 /** The client speaks two more verbs than a route can declare. */
 export type RequestMethod = HttpMethod | 'HEAD' | 'OPTIONS';
@@ -55,7 +61,7 @@ export interface RequestConfig<TRequest = unknown, TResponse = unknown> {
   readonly headerFactory?: HeaderFactory;
   /** Merged into the async context for this call, so its logs carry it. */
   readonly flow?: string;
-  readonly retry?: RetryOptions<TResponse>;
+  readonly retry?: HttpRetryOptions<TResponse>;
   /** Cancels the call. Combined with the timeout, whichever fires first. */
   readonly signal?: AbortSignal;
 }
@@ -66,17 +72,17 @@ type BaseOptions<TRequest, TResponse> = Omit<
 >;
 
 /**
- * What `send` reads. Narrower than `RequestConfig` on purpose: `RetryOptions<T>` is
- * invariant in `T` - its `onSuccess` takes a `T` and its callbacks return one - so a
- * `RequestConfig<_, TResponse>` is not assignable to a `RequestConfig<_, unknown>`.
+ * What `send` reads. Narrower than `RequestConfig` on purpose: `HttpRetryOptions<T>`
+ * is invariant in `T` - its `onSuccess` takes a `T` and its callbacks return one - so
+ * a `RequestConfig<_, TResponse>` is not assignable to a `RequestConfig<_, unknown>`.
  * `send` never touches `retry`, so leaving it out is both true and assignable.
+ * `ResiliencePolicy` owns the budget and the caller's signal, and hands `send` the
+ * combined one per attempt.
  */
 interface SendConfig {
   readonly method: RequestMethod;
   readonly headers?: Readonly<Record<string, string>>;
-  readonly timeoutMs?: number;
   readonly headerFactory?: HeaderFactory;
-  readonly signal?: AbortSignal;
 }
 
 /**
@@ -124,16 +130,18 @@ export class HttpService extends UrlHelper {
      */
     const replayable = !(config.payload instanceof ReadableStream);
 
-    const attempt = async (): Promise<TResponse> => {
+    const attempt = async (signal: AbortSignal): Promise<TResponse> => {
       attempts += 1;
-      const response = await this.send(config, url, body, serialised);
+      const response = await this.send(config, url, body, serialised, signal);
       status = response.status;
 
       if (!response.ok) {
         throw new FetchError(
           response.status,
           response.statusText,
-          await readBody(response),
+          // The status is the signal here, so an unreadable body is dropped
+          // rather than replacing a 4xx or 5xx with a read error.
+          await readBody(response).catch(() => undefined),
           {
             method: config.method,
             url: url.href,
@@ -146,6 +154,11 @@ export class HttpService extends UrlHelper {
     };
 
     const describe = (): string => `${config.method} ${url.href}`;
+    const policy = this.policyFor(config, {
+      ...this.options.retry,
+      ...config.retry,
+      ...(replayable ? {} : { maxRetries: 0 }),
+    } as HttpRetryOptions);
 
     try {
       const result = await this.requestContext.runWithContext(
@@ -153,12 +166,7 @@ export class HttpService extends UrlHelper {
           ...(config.flow === undefined ? {} : { flow: config.flow }),
           event: config.path ?? url.pathname,
         },
-        () =>
-          executeWithRetry(attempt, {
-            ...this.options.retry,
-            ...config.retry,
-            ...(replayable ? {} : { maxRetries: 0 }),
-          } as RetryOptions<TResponse>),
+        () => policy.run(attempt),
       );
 
       this.logger.debug(`${describe()} succeeded`, {
@@ -262,45 +270,46 @@ export class HttpService extends UrlHelper {
     const startedAt = Date.now();
     const { body, serialised } = this.bodyFor(config.payload);
 
-    const response = await this.send(
-      { ...config, method },
-      url,
-      body,
-      serialised,
-      'text/event-stream',
+    // No timeout on the policy: its `AbortSignal.timeout` reaches `fetch` and
+    // keeps aborting once headers arrive. See `ConnectDeadline`.
+    const deadline = new ConnectDeadline(
+      config.timeoutMs ?? this.options.timeoutMs,
+      url.href,
     );
+
+    let response: Response;
+    try {
+      const policy = this.policyFor(
+        { ...config, timeoutMs: 0 },
+        {
+          maxRetries: 0,
+        },
+      );
+      response = await policy.run((signal) =>
+        this.send(
+          { ...config, method },
+          url,
+          body,
+          serialised,
+          AbortSignal.any([signal, deadline.signal]),
+          'text/event-stream',
+        ),
+      );
+    } finally {
+      deadline.clear();
+    }
 
     if (!response.ok || response.body === null) {
       throw new FetchError(
         response.status,
         response.statusText,
-        await readBody(response),
+        await readBody(response).catch(() => undefined),
         { method, url: url.href, headers: response.headers },
       );
     }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
-
     try {
-      // Async iteration, not `getReader()`: it acquires the reader and releases it
-      // on completion, on `break`, and on the `return` below when `[DONE]` arrives -
-      // which is the case the manual form needed `releaseLock()` in a `finally` for.
-      for await (const chunk of response.body) {
-        buffer += decoder.decode(chunk, { stream: true });
-
-        let newline = buffer.indexOf('\n');
-        while (newline !== -1) {
-          const line = buffer.slice(0, newline).trim();
-          buffer = buffer.slice(newline + 1);
-          newline = buffer.indexOf('\n');
-
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (data === '[DONE]') return;
-          yield data;
-        }
-      }
+      yield* sseData(response.body);
     } finally {
       this.logger.debug(`SSE ${method} ${url.href} closed`, {
         elapsedMs: Date.now() - startedAt,
@@ -360,6 +369,25 @@ export class HttpService extends UrlHelper {
     });
   }
 
+  /**
+   * One policy per call, because the budget and the caller's signal are. Core owns
+   * the timeout, the loop and the backoff; `HttpRetryClassifier` is the only part
+   * of it that knows what a status is.
+   */
+  private policyFor(
+    config: { readonly timeoutMs?: number; readonly signal?: AbortSignal },
+    retry: HttpRetryOptions,
+  ): ResiliencePolicy {
+    return new ResiliencePolicy(
+      new ResilienceOptions({
+        timeoutMs: config.timeoutMs ?? this.options.timeoutMs,
+        ...(config.signal === undefined ? {} : { signal: config.signal }),
+        retry,
+        classifier: new HttpRetryClassifier(retry),
+      }),
+    );
+  }
+
   /** `serialised` is what a `headerFactory` signs, and is `''` for no body. */
   private bodyFor(payload: unknown): {
     body: FetchBody | undefined;
@@ -383,6 +411,7 @@ export class HttpService extends UrlHelper {
     url: URL,
     body: FetchBody | undefined,
     serialised: string,
+    signal: AbortSignal,
     accept = 'application/json',
   ): Promise<Response> {
     // A trace is only in the store when the inbound side adopted one, so with
@@ -423,25 +452,12 @@ export class HttpService extends UrlHelper {
       ...config.headers,
     };
 
-    /**
-     * `AbortSignal.timeout` plus `AbortSignal.any`, rather than an
-     * `AbortController` with a `setTimeout` and a `clearTimeout` in a `finally`.
-     * Both are Web standards Bun implements, the timer is the runtime's to cancel,
-     * and combining the caller's signal with the budget is one call instead of a
-     * second listener that has to be removed.
-     */
-    const timeoutMs = config.timeoutMs ?? this.options.timeoutMs;
-    const signals = [
-      ...(timeoutMs > 0 ? [AbortSignal.timeout(timeoutMs)] : []),
-      ...(config.signal === undefined ? [] : [config.signal]),
-    ];
-
     try {
       return await fetch(url.href, {
         method: config.method,
         headers,
         ...(body === undefined ? {} : { body }),
-        ...(signals.length === 0 ? {} : { signal: AbortSignal.any(signals) }),
+        signal,
         ...this.options.fetchOptions,
       });
     } catch (error) {
@@ -461,17 +477,6 @@ export class HttpService extends UrlHelper {
 
 const urlOf = (url?: string | URL): { url?: string | URL } =>
   url === undefined ? {} : { url };
-
-/** JSON when the upstream said so or the body parses; text otherwise; undefined for empty. */
-const readBody = async (response: Response): Promise<unknown> => {
-  const text = await response.text().catch(() => '');
-  if (text === '') return undefined;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
-};
 
 const describeError = (error: unknown): Record<string, unknown> => {
   if (error instanceof FetchError) {

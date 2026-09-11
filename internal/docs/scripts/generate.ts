@@ -154,7 +154,14 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
   ],
   [
     'Going live',
-    ['deployment', 'health-checks', 'agent-tooling', 'metrics', 'upgrading'],
+    [
+      'deployment',
+      'health-checks',
+      'agent-tooling',
+      'metrics',
+      'upgrading',
+      'resilience',
+    ],
   ],
 ];
 

@@ -465,6 +465,21 @@ it('retries an outbound 503, and does not retry a 404 or an abort', () => {
   );
 });
 
+it('runs the same upstream through a ResiliencePolicy, with a fallback', () => {
+  // Core owns the loop, `HttpRetryClassifier` owns the verdict on a status.
+  expect(tour.text).toContain(
+    'ResiliencePolicy retried the 503s itself -> recovered after 3',
+  );
+  // A 404 is not retried, so the attempts are spent and the fallback answers.
+  expect(tour.text).toContain('ResiliencePolicy on a 404 -> cached=true');
+  // The client is given no budget for this one, so the abort can only come from
+  // the signal `run` handed the attempt. A callback that dropped it would answer
+  // `done` 300 ms later, and the demo raises rather than logging this line.
+  expect(tour.text).toContain(
+    'ResiliencePolicy timeoutMs against a 300 ms route -> cached=true',
+  );
+});
+
 it('arms three schedules and triggers two off their cadence', () => {
   expect(tour.text).toContain('once     maintenance.warm at 0');
   expect(tour.text).toContain('interval maintenance.sweep at 600000');

@@ -1,9 +1,17 @@
-import { Module } from '@dunx/core';
-import { HttpModule as HttpClientModule, HttpService } from '@dunx/http/client';
+import { Module, ResilienceModule } from '@dunx/core';
+import {
+  HttpModule as HttpClientModule,
+  HttpRetryClassifier,
+  HttpService,
+} from '@dunx/http/client';
 import { AppConfigService } from '../config.js';
 import { FlakyController } from './flaky.controller.js';
 import { HealthClient } from './health.client.js';
 import { UpstreamDemo } from './upstream.demo.js';
+import { UpstreamPolicy } from './upstream.policy.js';
+
+/** `UpstreamPolicy`'s per-attempt budget, under `/upstream/slow`'s 300 ms. */
+const POLICY_TIMEOUT_MS = 150;
 
 /**
  * The outbound half of `@dunx/http`, from the `./client` subpath, aliased because
@@ -55,12 +63,38 @@ import { UpstreamDemo } from './upstream.demo.js';
       },
       HealthClient,
     ),
+    /**
+     * Retry, backoff and jitter around any operation rather than one request.
+     * `@dunx/core` owns the loop; `HttpRetryClassifier` is what teaches it that a
+     * 404 is an answer and a 503 is not, and `fallback` is what it answers with
+     * once the attempts are spent. Its budget is under the client's, so a call
+     * that outlives it is cancelled through the signal `run` hands each attempt.
+     */
+    ResilienceModule.forRootAsync(
+      {
+        useFactory: (config: AppConfigService) => ({
+          timeoutMs: Math.min(
+            POLICY_TIMEOUT_MS,
+            config.get('upstream').timeoutMs,
+          ),
+          retry: {
+            maxRetries: 2,
+            retryDelayMs: 20,
+            backoff: { jitterMs: 10, maxMs: 200 },
+          },
+          classifier: new HttpRetryClassifier(),
+          fallback: () => ({ cached: true }),
+        }),
+        inject: [AppConfigService] as const,
+      },
+      UpstreamPolicy,
+    ),
   ],
   controllers: [FlakyController],
   providers: [UpstreamDemo],
   /** `HttpService` is the default client `HttpClientModule.forRootAsync` bound
    * above. Exported so `LandingModule` can show the retry policy working; without
    * it the token stays inside this scope and the panel is a boot error. */
-  exports: [UpstreamDemo, HealthClient, HttpService],
+  exports: [UpstreamDemo, HealthClient, HttpService, UpstreamPolicy],
 })
 export class UpstreamModule {}
