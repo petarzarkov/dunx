@@ -94,6 +94,17 @@ describe('ConfigFiles', () => {
     expect(await load(empty, comments, real)).toEqual({ a: 1 });
   });
 
+  it('skips an empty file in every format, not just yaml', async () => {
+    // Only YAML answered `null` for this on its own: `Bun.TOML.parse('')` gives
+    // `{}` and `JSON.parse('')` throws, so an empty `.json` used to fail boot.
+    const json = await write('empty.json', '');
+    const toml = await write('empty.toml', '  \n ');
+    const blank = await write('blank.yaml', '   ');
+    const real = await write('real2.yml', 'a: 1\n');
+
+    expect(await load(json, toml, blank, real)).toEqual({ a: 1 });
+  });
+
   it('rejects a file whose top level is not an object', async () => {
     const list = await write('list.yml', '- a\n- b\n');
     const scalar = await write('scalar.yml', '42\n');

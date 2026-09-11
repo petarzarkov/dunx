@@ -75,6 +75,10 @@ export class ConfigFiles {
       // parse", which named the file twice and contradicted itself.
       const parse = parserFor(path);
       const text = await file.text();
+      // Empty means the same as absent, and only YAML agreed on its own:
+      // `Bun.TOML.parse('')` answers `{}` but `JSON.parse('')` throws, so an
+      // empty `.json` failed boot where an empty `.yml` was skipped.
+      if (text.trim() === '') continue;
       let parsed: unknown;
       try {
         parsed = parse(text);
