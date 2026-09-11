@@ -319,4 +319,4 @@ Override a field with a field and a getter with a getter - TypeScript rejects th
 other pairing (`TS2611`, `TS2610`). To derive a field from config, declare
 `override trustProxy: boolean` and assign it in the constructor.
 
-See [Upgrading](./23-upgrading.md) for what each imperative call maps to.
+See [Upgrading](./24-upgrading.md) for what each imperative call maps to.

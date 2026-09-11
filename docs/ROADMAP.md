@@ -296,7 +296,7 @@ Feedback goes in as a new file rather than into conversation.
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | Filed as bullmq#4656 and open there. Nothing left here but the re-measure.       |
 | [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined. |
-| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Fan-out shipped in 3.1.2. Queue and cache both held, the queue on a Bun gap.     |
+| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Fan-out shipped in 3.1.2, the cache as `@dunx/infra/cache`. The queue is held.   |
 
 Delivered and moved out of this folder rather than left here marked done:
 
@@ -308,7 +308,7 @@ Delivered and moved out of this folder rather than left here marked done:
   provider. `HttpOptionsProvider` and the argument-wins ordering are in
   [architecture/http.md](./architecture/http.md); the named-instance subclasses,
   the config schema and the document contributors are in
-  [Upgrading](./guide/23-upgrading.md). Three items were withdrawn rather than
+  [Upgrading](./guide/24-upgrading.md). Three items were withdrawn rather than
   built: the imperative `app.*` methods stay
   ([architecture/http.md](./architecture/http.md)), a decorated module that also
   configures itself keeps its override
@@ -353,7 +353,7 @@ deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, an
 `OpenApiModule.forRootAsync` closed the half of the options-before-container problem
 that `OpenApiModule` owned, and `HttpOptionsProvider` closed the other:
 a subclass resolved from the container, so the template no longer validates its
-config twice. See [Upgrading](./guide/23-upgrading.md) for what each imperative
+config twice. See [Upgrading](./guide/24-upgrading.md) for what each imperative
 call maps to, and
 [architecture/http.md](./architecture/http.md) for why the argument still wins.
 

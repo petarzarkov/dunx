@@ -278,7 +278,8 @@ export const FEATURES: readonly Feature[] = [
   {
     name: 'cache',
     source: 'cache',
-    summary: 'Bun.RedisClient behind a session store, degrading when absent.',
+    summary:
+      'Bun.RedisClient behind a session store, and a two-tier Cache in front of it.',
     requires: [],
     module: { klass: 'CacheModule', from: './cache/cache.module.js' },
     dependencies: ['@dunx/infra', 'zod'],

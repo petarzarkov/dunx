@@ -145,6 +145,7 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
       'configuration',
       'logging',
       'database',
+      'caching',
       'queues',
       'scheduling',
       'authentication',

@@ -8,16 +8,16 @@ and what was measured rather than assumed.
 Everything below was probed on Bun 1.4.0 (rev `34cbb9a40`) against Postgres 17. The
 measurements live in the architecture docs; this file holds the decision.
 
-Fan-out shipped in 3.1.2. Delete this file once the queue and cache verdicts are
-taken.
+Fan-out shipped in 3.1.2, the cache as `@dunx/infra/cache`. Delete this file once
+the queue verdict is taken.
 
 ## The three layers do not have the same answer
 
-| Layer               | Stands on                               | Verdict                                |
-| ------------------- | --------------------------------------- | -------------------------------------- |
-| Fan-out (Cable)     | `Bun.SQL` `LISTEN`/`NOTIFY`, no library | **shipped as `PostgresRelay`, 3.1.2**  |
-| Queue (Solid Queue) | pg-boss over a `Bun.SQL` adapter        | works, with a shim that is a liability |
-| Cache (Solid Cache) | nothing that clears Rule 1              | no contract exists to extend           |
+| Layer               | Stands on                                   | Verdict                                |
+| ------------------- | ------------------------------------------- | -------------------------------------- |
+| Fan-out (Cable)     | `Bun.SQL` `LISTEN`/`NOTIFY`, no library     | **shipped as `PostgresRelay`, 3.1.2**  |
+| Queue (Solid Queue) | pg-boss over a `Bun.SQL` adapter            | works, with a shim that is a liability |
+| Cache (Solid Cache) | a `CacheStore` in the `ThrottleStore` shape | **shipped as `@dunx/infra/cache`**     |
 
 ## Fan-out: shipped in 3.1.2
 
@@ -61,7 +61,50 @@ The second cost does not expire: pg-boss has its own job model, and
 `JobPublisher.for()` hands back bullmq's `Queue`. A pg-boss backend is a second
 surface, not a driver behind the existing one.
 
-## Cache: the one with nothing to lean on
+## Cache: shipped as a subpath, without the SQL store
+
+**The gate cleared on a user, not on symmetry.** Issue #78 is from an outside
+author asking for local and remote caching. That is what the hold below was
+waiting for, and what ROADMAP's "a new package needs a user first" asks. It is a
+subpath rather than a package, following the brokers note: `@dunx/infra/cache`
+adds no dependency in any position, and an eleventh published workspace for ~250
+LOC is the `@dunx/queue-dashboard` mistake.
+
+What shipped, and what was cut:
+
+- **No plugin surface.** The issue asks for "customizable extensions for L1 and
+  L2". One abstract `CacheStore` with three implementations answers it: an app
+  binds its own subclass through `store`. A registry of named adapters is easy to
+  add later and impossible to remove.
+- **No SQL store.** The sketch below is not wanted. `MemoryCacheStore` and
+  `RedisCacheStore` cover both halves of the request, and a Postgres tier would be
+  slower than the Redis one it would sit beside.
+- **No cross-process L1 invalidation.** `TieredCacheStore.del` clears this node's
+  L1 and the shared L2; every other node serves its own L1 copy until
+  `promoteTtl` expires. Pub/sub is the fix and is deferred: a subscribing
+  `Bun.RedisClient` holds the event loop open after `close()`, so every app with a
+  cache would stop exiting. Tracked with the other loop-hold findings in
+  `docs/ROADMAP.md`.
+- **No `@Cacheable` decorator.** Not blocked by `inject()` - the mechanism exists,
+  and `@dunx/infra/schedule`'s marker plus core's `marked()` is the shipped
+  example. Three things make it a later decision: the boot scan reaches only
+  `providers` and controllers, so a marked class outside the graph is a silent
+  no-op rather than an error; `schedule` _binds_ a method where caching has to
+  _replace_ it; and turning arguments into a key is the real policy surface, which
+  a decorator would have to answer for every consumer at once.
+- **Single flight is in `wrap`.** One `Map<string, Promise<V>>` and a `finally`
+  delete. The delete has to be in `finally` or a rejected load is handed to every
+  later caller for the life of the process. Dedupe is per process: N replicas on a
+  cold key still run N loads.
+
+`ThrottleStore` was **not** reused and the sweep was **not** moved.
+`ThrottleStore` is a counter with no value channel and no recency; the only literal
+overlap is `MemoryThrottleStore.#sweep`, six lines that walk the whole Map and
+`clear()` at the cap, measured at a 59.9 ms stall and already flagged for
+replacement. There is also no home for a shared contract: `@dunx/infra` must not
+depend on `@dunx/http`, so the only common owner is zero-dependency `@dunx/core`.
+
+## The audit this replaced
 
 dunx has no cache contract at all. Nothing in `packages/*` declares one, so this is
 not a second backend for an existing abstraction, it is a new abstraction.

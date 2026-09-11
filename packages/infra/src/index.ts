@@ -9,6 +9,19 @@
  * The subpaths are the better import: they evaluate only what that area needs.
  */
 export {
+  Cache,
+  CacheModule,
+  CacheOptions,
+  type CacheOptionsInit,
+  type CacheRedis,
+  CacheStore,
+  type MemoryCacheInit,
+  MemoryCacheStore,
+  RedisCacheStore,
+  type TieredCacheInit,
+  TieredCacheStore,
+} from './cache/index.js';
+export {
   defaultRedisUrl,
   isConnectionError,
   type ConnectionTarget,

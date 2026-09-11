@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import * as cache from './cache/index.js';
 import * as db from './db/index.js';
 import * as files from './files/index.js';
 import * as images from './images/index.js';
@@ -8,7 +9,7 @@ import * as queue from './queue/index.js';
 import * as redis from './redis/index.js';
 import * as schedule from './schedule/index.js';
 
-const included = { files, images, logger, redis, schedule };
+const included = { cache, files, images, logger, redis, schedule };
 
 /**
  * The root barrel used to be a partial re-export of five of the six areas as well

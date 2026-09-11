@@ -1,6 +1,7 @@
 import { Logger } from '@dunx/core';
 import type { HttpApp } from '@dunx/http';
 import { AuthDemo } from '../auth/auth.demo.js';
+import { CatalogDemo } from '../cache/catalog.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
 import { PostgresRelayDemo } from '../chat/postgres-relay.demo.js';
@@ -36,6 +37,7 @@ export class Tour {
     private readonly uploads: Uploads,
     private readonly thumbnails: Thumbnails,
     private readonly sessions: Sessions,
+    private readonly catalog: CatalogDemo,
     private readonly users: UsersDemo,
     private readonly http: HttpDemo,
     private readonly compression: CompressionDemo,
@@ -72,6 +74,9 @@ export class Tour {
 
     this.group('@dunx/infra/redis - Bun.RedisClient');
     await this.sessions.demonstrate();
+
+    this.group('@dunx/infra/cache - wrap, single flight, and two tiers');
+    await this.catalog.demonstrate(url);
 
     this.group('@dunx/http - zod schemas on the users routes');
     await this.users.demonstrate(url);
