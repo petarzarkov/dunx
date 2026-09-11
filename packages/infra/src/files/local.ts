@@ -112,8 +112,8 @@ export class LocalStorage extends Storage {
     const limit = options?.limit ?? Infinity;
     const base = prefix === '' ? '' : `${toPosix(prefix).replace(/\/+$/, '')}/`;
     // Checked like the prefix above it, or the glob walks out of the root the
-    // prefix was just held inside. S3 needs no equivalent: there the glob only
-    // filters keys the bucket already returned.
+    // prefix was just held inside (docs/bun-apis.md). S3 needs no equivalent:
+    // there the glob only filters keys the bucket already returned.
     const glob = new Bun.Glob(assertGlobWithin(cwd, options?.glob ?? '**/*'));
 
     let yielded = 0;

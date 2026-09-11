@@ -308,9 +308,8 @@ describe('LocalStorage', () => {
     });
 
     // The prefix was checked and the glob beside it was not, so `prefix: '../..'`
-    // threw while `glob: '/etc/*'` listed the host. Measured on Bun 1.4.2:
-    // `scan` walks a `..` segment and ignores `cwd` entirely for an absolute
-    // pattern.
+    // threw while `glob: '/etc/*'` listed the host. What `scan` does with each
+    // of these is in docs/bun-apis.md.
     it('rejects a glob that escapes, not just a prefix', async () => {
       const patterns = [
         '../*',
@@ -328,10 +327,10 @@ describe('LocalStorage', () => {
     });
 
     it('contains what a brace pattern expands to as well', async () => {
-      // Bun 1.4.2 matches nothing for a brace group holding a `..` branch rather
-      // than expanding it into a traversal, and `list` checks the paths a scan
-      // produced - so either way this is a refusal or an empty listing, never a
-      // key from outside the root.
+      // A brace group holding a `..` branch matches nothing on Bun 1.4.2 rather
+      // than expanding into a traversal (docs/bun-apis.md), and `list` checks
+      // the paths a scan produced - so either way this is an empty listing or a
+      // refusal, never a key from outside the root.
       expect(
         await collect(storage.list({ glob: '{reports,../..}/*' })),
       ).toEqual([]);
