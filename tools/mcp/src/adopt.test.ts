@@ -394,7 +394,7 @@ describe('the tools that need no app', () => {
     const numbered = (await call('dunx_guide', { topic: '22' }))['chapter'] as {
       slug: string;
     };
-    expect(numbered.slug).toBe('22-metrics');
+    expect(numbered.slug).toBe('22-agent-tooling');
 
     // A partial number is not, and the answer names them rather than picking one.
     const ambiguous = await call('dunx_guide', { topic: '2' });

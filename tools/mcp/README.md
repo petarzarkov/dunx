@@ -30,7 +30,7 @@ exported only by name is found on its own. `default` and `root` win if present, 
 
 ## The tools
 
-The [Agent tooling guide](../../docs/guide/21-agent-tooling.md) is canonical.
+The [Agent tooling guide](../../docs/guide/22-agent-tooling.md) is canonical.
 
 Three answer with no app, and are served whether or not an entry was given:
 

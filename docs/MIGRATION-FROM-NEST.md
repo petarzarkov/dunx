@@ -209,10 +209,10 @@ TC39 standard decorators have no parameter position.
 | `@nestjs/websockets` + socket.io       | [gateways on `Bun.serve`](./guide/09-websockets.md)                                                   | done         |
 | `@nestjs/serve-static`                 | `StaticFiles` in `@dunx/http`                                                                         | done         |
 | `@bull-board/*`                        | bull-board mounted by `@dunx/dashboard`                                                               | done         |
-| `@nestjs/cache-manager`                | `RedisConnection.set` with a TTL; no store or `@Cacheable`                                            | partial      |
+| `@nestjs/cache-manager`                | [`@dunx/infra/cache`](./guide/19-caching.md); no `@Cacheable`                                         | partial      |
 | `@nestjs/schedule` (`@Cron`)           | [`@dunx/infra/schedule`](./guide/16-scheduling.md)                                                    | done         |
 | `@nestjs/throttler`                    | `ThrottleModule`, `ThrottleGuard`, `@Throttle`, `@SkipThrottle`, `RedisThrottleStore` in `@dunx/http` | done         |
-| `@nestjs/terminus`                     | [`HealthModule` in `@dunx/http`](./guide/20-health-checks.md)                                         | done         |
+| `@nestjs/terminus`                     | [`HealthModule` in `@dunx/http`](./guide/21-health-checks.md)                                         | done         |
 | `@nestjs/platform-express` (`app.use`) | -                                                                                                     | out of scope |
 
 ## The reference application
