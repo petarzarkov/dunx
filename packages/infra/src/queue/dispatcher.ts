@@ -1,7 +1,33 @@
+import type { App, InjectionToken, ResolvedModule } from '@dunx/core';
 import type { Job } from 'bullmq';
 import { describeJob, type DiscoveredJob } from './discover.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { JobOutcome, QueueMetrics } from './metrics.js';
+
+/**
+ * Whether the graph binds this token, asked of the graph rather than by resolving
+ * it. An unbound class self-binds into whichever scope asks first, so `app.get`
+ * answers yes to everything.
+ */
+export const declares = (
+  modules: readonly ResolvedModule[],
+  token: InjectionToken<unknown>,
+): boolean =>
+  modules.some((module) =>
+    (module.options.providers ?? []).some(
+      (entry) => typeof entry !== 'function' && entry.token === token,
+    ),
+  );
+
+/**
+ * The `QueueMetrics` the graph bound, or `undefined` when `metrics` was off. Off,
+ * the dispatcher takes none at all, so a handler pays for no clock.
+ */
+export const metricsIn = (
+  modules: readonly ResolvedModule[],
+  app: App,
+): QueueMetrics | undefined =>
+  declares(modules, QueueMetrics) ? app.get(QueueMetrics) : undefined;
 
 const outcomeOf = (error: unknown): JobOutcome =>
   error instanceof QueueError && error.code === QueueErrorCode.TIMED_OUT

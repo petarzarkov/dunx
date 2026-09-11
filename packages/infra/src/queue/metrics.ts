@@ -63,15 +63,15 @@ const EMPTY: HistogramSnapshot = Object.freeze({ count: 0 });
  * How the queue is behaving, by queue and job name.
  *
  * Two seams, both in the container that bound this: `JobPublisher.publish` for the
- * enqueue, and the `JobDispatcher` a `consume: true` container builds for the
- * handler. A histogram is allocated per side on first use, so a web process that
- * only publishes holds no handler histograms.
+ * enqueue, and the `JobDispatcher` that container builds to consume, whether from
+ * `consume: true` or from `WorkerFactory`. A histogram is allocated per side on
+ * first use, so a web process that only publishes holds no handler histograms.
  *
  * **A forked handler is invisible here, and that covers most of them.** `isolation`
  * defaults to `'process'`, so a queue carrying a `@JobHandler({ background: true })`
- * runs in a child that boots its own container and its own `QueueMetrics`. So does
- * a dedicated worker process built by `WorkerFactory`. What this reports is the
- * publish side plus whatever handlers ran in this process.
+ * runs in a child that boots a container this one cannot see. So does a dedicated
+ * worker process, which keeps its own. What this reports is the publish side plus
+ * whatever handlers ran in this process.
  *
  * A job name comes from the caller, so series are capped: {@link CappedSeries}.
  *

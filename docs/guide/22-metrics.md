@@ -227,13 +227,16 @@ The publish side is always this container's. The handler side is only this
 container's when the handler ran here.
 
 `isolation` defaults to `'process'`, so a queue carrying a
-`@JobHandler({ background: true })` runs in a forked child that boots its own
-container, with its own `QueueMetrics`. A dedicated worker process built by
-`WorkerFactory` is a separate container too. In a web process publishing to such a
-queue, `handled` stays 0 while `published` climbs, as in the payload above.
+`@JobHandler({ background: true })` runs in a forked child that boots a container
+this one cannot see, and whose durations reach nothing here. A dedicated worker
+process built by `WorkerFactory` is a separate container too. In a web process
+publishing to such a queue, `handled` stays 0 while `published` climbs, as in the
+payload above.
 
-A handler with no `background` flag, in a container given `consume: true`, runs in
-that process and does land in its `handlerDuration`.
+A handler with no `background` flag lands in the `handlerDuration` of whichever
+container consumed it: the one given `consume: true`, the one
+`WorkerFactory.attach()` was handed, or the worker process `WorkerFactory.create`
+booted, each reading its own `QueueMetrics`.
 
 ### Series are capped at 128, so a payload holds at most 129
 
