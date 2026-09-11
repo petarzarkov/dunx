@@ -336,6 +336,29 @@ describe('LocalStorage', () => {
       ).toEqual([]);
     });
 
+    it('contains a backslash-escaped parent segment too', async () => {
+      // `\.\.` is not a parent segment to `hasParentSegment`, which splits on
+      // the backslash, and on Bun 1.4.2 it is not one to `Bun.Glob` either - a
+      // backslash there matches a literal backslash rather than escaping the
+      // dot (docs/bun-apis.md). The gate carries it anyway, so the day that
+      // changes the per-entry check is already running.
+      for (const glob of ['\\.\\./*', '\\.\\./secret/*', '.\\./*']) {
+        expect(await collect(storage.list({ glob }))).toEqual([]);
+      }
+    });
+
+    it('cannot reach a parent segment with wildcards alone', async () => {
+      // What the per-entry check is gated on: `*` and `?` match one entry name
+      // and never a separator, so a pattern carrying no alternation construct
+      // cannot leave `cwd` and is not charged for the check.
+      // Each of these passes the pattern check, so the scan really runs.
+      for (const glob of ['*/*', '**/*', '?./*', '..?/*']) {
+        const keys = await collect(storage.list({ glob }));
+
+        expect(keys.every((key) => !key.startsWith('..'))).toBe(true);
+      }
+    });
+
     it('lists a key whose colon only looks drive-qualified', async () => {
       // `resolve` settles this rather than a second regex: on POSIX the key is
       // an ordinary filename, on Windows it is drive-relative and resolves out.
