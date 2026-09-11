@@ -307,6 +307,34 @@ describe('LocalStorage', () => {
       }
     });
 
+    // The prefix was checked and the glob beside it was not, so `prefix: '../..'`
+    // threw while `glob: '/etc/*'` listed the host. Measured on Bun 1.4.2:
+    // `scan` walks a `..` segment and ignores `cwd` entirely for an absolute
+    // pattern.
+    it('rejects a glob that escapes, not just a prefix', async () => {
+      const patterns = [
+        '../*',
+        '../../**/*',
+        'reports/../../*',
+        '/etc/*',
+        '..\\*',
+      ];
+
+      for (const glob of patterns) {
+        expect(await rejection(collect(storage.list({ glob })))).toBeInstanceOf(
+          PathTraversalError,
+        );
+      }
+    });
+
+    it('still lists a glob that merely mentions dots', async () => {
+      await storage.write('a..b/c.txt', 'fine');
+
+      expect(await collect(storage.list({ glob: 'a..b/*' }))).toEqual([
+        'a..b/c.txt',
+      ]);
+    });
+
     it('names the key and the root it refused to leave', async () => {
       const error = await rejection(storage.read('../../etc/passwd'));
 

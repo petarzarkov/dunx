@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import type { BunFile } from 'bun';
 import { FileNotFoundError, UnsupportedOperationError } from './errors.js';
 import {
+  assertGlobWithin,
   guardMissing,
   isMissing,
   resolveDirWithin,
@@ -110,7 +111,10 @@ export class LocalStorage extends Storage {
     const cwd = resolveDirWithin(this.#root, prefix);
     const limit = options?.limit ?? Infinity;
     const base = prefix === '' ? '' : `${toPosix(prefix).replace(/\/+$/, '')}/`;
-    const glob = new Bun.Glob(options?.glob ?? '**/*');
+    // Checked like the prefix above it, or the glob walks out of the root the
+    // prefix was just held inside. S3 needs no equivalent: there the glob only
+    // filters keys the bucket already returned.
+    const glob = new Bun.Glob(assertGlobWithin(options?.glob ?? '**/*'));
 
     let yielded = 0;
     try {

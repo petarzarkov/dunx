@@ -13,7 +13,7 @@ import { z } from 'zod';
 /**
  * The key is a query parameter because keys contain slashes: `reports/q1.csv` is
  * one key, not two segments. `Storage` itself rejects traversal - try
- * `?key=../../etc/passwd`.
+ * `?key=../../etc/passwd`, or `?glob=/etc/*` on the listing.
  */
 const FileKey = z.object({ key: z.string().min(1).max(200) }).meta({
   id: 'FileKey',
@@ -26,8 +26,8 @@ const WriteFile = z
 
 const listFiles = {
   query: z.object({
-    prefix: z.string().default(''),
-    glob: z.string().default('**/*'),
+    prefix: z.string().max(200).default(''),
+    glob: z.string().max(200).default('**/*'),
   }),
 } as const;
 const objectKey = { query: FileKey } as const;
@@ -45,11 +45,16 @@ export class FilesController {
     keys: readonly string[];
   }> {
     const keys: string[] = [];
-    for await (const entry of this.storage.list({
-      prefix: query.prefix,
-      glob: query.glob,
-    })) {
-      keys.push(entry.key);
+    try {
+      for await (const entry of this.storage.list({
+        prefix: query.prefix,
+        glob: query.glob,
+      })) {
+        keys.push(entry.key);
+      }
+    } catch (error) {
+      if (!(error instanceof PathTraversalError)) throw error;
+      throw new HttpError(HttpStatusCode.BAD_REQUEST, error.message);
     }
     // The contract cannot promise a root, so narrowing reaches it.
     const root =

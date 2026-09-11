@@ -45,6 +45,19 @@ export const resolveDirWithin = (root: string, prefix: string): string =>
   checkWithin(root, prefix, true);
 
 /**
+ * A `list` pattern, checked before `Bun.Glob` is constructed from it. `scan`
+ * walks a `..` segment and ignores `cwd` outright for an absolute pattern, so a
+ * checked `prefix` buys nothing while the glob beside it can name the whole
+ * filesystem. Segments, not a substring: an inner `a..b` still lists.
+ */
+export const assertGlobWithin = (glob: string): string => {
+  if (hasParentSegment(glob) || /^([/\\]|[A-Za-z]:)/.test(glob)) {
+    throw new PathTraversalError(glob);
+  }
+  return glob;
+};
+
+/**
  * An object key with leading slashes and duplicate separators removed. `..` is
  * rejected outright rather than collapsed: an S3 key is opaque, so a caller who
  * wrote `..` meant a path, and under a configured prefix that would escape it.
