@@ -807,10 +807,26 @@ root, medians of seven runs:
 | the check alone, 5,000 calls | 1.8 ms |
 
 So it runs only for a pattern that can expand into a segment the pattern check
-did not see: one carrying `{`, `[` or `(`. A wildcard matches a single entry
-name and never a separator, so `*`, `**` and `?` cannot spell a parent segment
-on their own, and extglob is covered because `@(`, `+(`, `?(` and `!(` all carry
-a paren. `**/*` therefore pays nothing and `{a,../b}/*` pays for every entry.
+did not see: one carrying `{`, `[`, `(` or a backslash. A wildcard matches a
+single entry name and never a separator, so `*`, `**` and `?` cannot spell a
+parent segment on their own, and extglob is covered because `@(`, `+(`, `?(` and
+`!(` all carry a paren. `**/*` therefore pays nothing and `{a,../b}/*` pays for
+every entry.
+
+**A backslash is not an escape**, which is why it is on that list rather than
+handled by the pattern check. On 1.4.2 it matches a literal backslash in a name:
+
+```
+ok/*          -> ["ok/a.txt"]      \o\k/*        -> nothing
+dot.dir/*     -> ["dot.dir/f.txt"] dot\.dir/*    -> nothing
+\.\./secret/* -> nothing           ..            -> nothing
+```
+
+So `\.\./secret/*` looks for a directory named `\.\.` and finds none. The day
+Bun aligns with the engines that do treat `\.` as an escaped dot, that pattern
+becomes `../secret/*` while `hasParentSegment` still sees `['', '.', '.']`,
+because it splits on the backslash. Gating on the character costs a real pattern
+nothing and does not wait for that.
 
 ### `Bun.S3Client` - the undocumented surface
 

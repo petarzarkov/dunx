@@ -118,8 +118,10 @@ export class LocalStorage extends Storage {
     const glob = new Bun.Glob(pattern);
     // A wildcard matches one entry name and cannot introduce a separator, so
     // after that check only an alternation construct can still spell a parent
-    // segment. Those pay for a per-entry check and `**/*` does not.
-    const expands = /[{[(]/.test(pattern);
+    // segment. Those pay for a per-entry check and `**/*` does not. A backslash
+    // is in the list because it is not an escape on Bun 1.4.2 and the day it
+    // becomes one, `\.\.` is a parent segment the pattern check cannot see.
+    const expands = /[{[(\\]/.test(pattern);
 
     let yielded = 0;
     try {
