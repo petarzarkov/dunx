@@ -1,6 +1,8 @@
+export { ConfigFiles, type ConfigValues } from './files.js';
 export {
   ConfigInput,
   ConfigModule,
+  type ConfigFilesOption,
   type ConfigModuleOptions,
 } from './module.js';
 export { ConfigError, ConfigService, type ConfigSource } from './service.js';

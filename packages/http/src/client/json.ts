@@ -18,24 +18,11 @@ export const safeStringify = (value: unknown): string => {
   });
 };
 
-/**
- * A plain object: `{}`, `Object.create(null)`, or a JSON-parsed value. Anything
- * with its own prototype - `Date`, `Map`, `Error`, a class instance - is not one.
- *
- * The prototype check rather than the reference's `typeof === 'object' && !Array
- * && !(instanceof Error)`, which answered `true` for a `Date` and for every class
- * instance, so "is this a plain object" did not mean what it said. Body routing
- * does not use this - see {@link isJsonBody} - so tightening it changes no
- * behaviour beyond making the predicate honest.
- */
-export const isPlainObject = (
-  value: unknown,
-): value is Record<string, unknown> => {
-  if (typeof value !== 'object' || value === null) return false;
-  const proto = Object.getPrototypeOf(value) as object | null;
-  return proto === Object.prototype || proto === null;
-};
-
+// Declared by `@dunx/core`, which needs the same predicate to merge config
+// files: `Bun.TOML.parse` returns `Temporal` values that the loose check
+// mistakes for mergeable objects. Re-exported so this module's consumers and
+// its tests keep their import path.
+export { isPlainObject } from '@dunx/core';
 /**
  * Whether a payload should be JSON-encoded, or handed to `fetch` as-is.
  *

@@ -1,0 +1,14 @@
+# A list and a nested group: the two shapes a flat environment variable handles
+# badly. `ConfigModule.forRoot({ files })` reads this, and an environment
+# variable of the same name still overrides a key here.
+#
+# `application-${NODE_ENV}.yml` is layered on top of this when it exists, and
+# skipped when it does not, so a per-environment overlay costs no branch.
+#
+# Secrets do not belong here. They stay in the environment, where `.env` and the
+# deployment already put them.
+
+seed:
+  users:
+    - ada
+    - grace

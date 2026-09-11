@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { ConfigModule } from '@dunx/core';
 import { DashboardMiddleware } from '@dunx/dashboard';
 import type { HttpApp } from '@dunx/http';
 import {
@@ -8,7 +7,7 @@ import {
   type TestClient,
   type TestServer,
 } from '@dunx/testing';
-import { AppConfigService, validate } from './config.js';
+import { configModule } from './config.js';
 import { OpsModule } from './dashboard/dashboard.module.js';
 import { createApp } from './main.js';
 
@@ -147,14 +146,7 @@ it('answers 404 for a JSON endpoint it does not have', async () => {
  */
 const guarded = async (): Promise<TestServer> =>
   createTestServer({
-    modules: [
-      ConfigModule.forRoot({
-        validate,
-        as: AppConfigService,
-        source: { DASHBOARD_TOKEN: TOKEN },
-      }),
-      OpsModule,
-    ],
+    modules: [configModule({ DASHBOARD_TOKEN: TOKEN }), OpsModule],
     prefix: 'api',
     middleware: [DashboardMiddleware],
   });

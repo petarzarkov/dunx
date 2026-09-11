@@ -1,7 +1,7 @@
 import { JobProcessor } from '@dunx/infra/queue';
-import { ConfigModule, Module } from '@dunx/core';
+import { Module } from '@dunx/core';
 import { LoggerModule } from '@dunx/infra/logger';
-import { AppConfigService, validate } from '../config.js';
+import { AppConfigService, configModule } from '../config.js';
 import { JobsModule } from './jobs.module.js';
 
 /**
@@ -12,7 +12,7 @@ import { JobsModule } from './jobs.module.js';
  */
 @Module({
   imports: [
-    ConfigModule.forRoot({ validate, as: AppConfigService }),
+    configModule(),
     LoggerModule.forRootAsync({
       useFactory: (config: AppConfigService) => ({
         // Named, so a line from a child is attributable on sight.
