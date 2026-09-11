@@ -114,7 +114,7 @@ export class LocalStorage extends Storage {
     // Checked like the prefix above it, or the glob walks out of the root the
     // prefix was just held inside. S3 needs no equivalent: there the glob only
     // filters keys the bucket already returned.
-    const glob = new Bun.Glob(assertGlobWithin(options?.glob ?? '**/*'));
+    const glob = new Bun.Glob(assertGlobWithin(cwd, options?.glob ?? '**/*'));
 
     let yielded = 0;
     try {
@@ -124,9 +124,14 @@ export class LocalStorage extends Storage {
         dot: true,
         onlyFiles: true,
       })) {
+        const key = `${base}${toPosix(relative)}`;
+        // The pattern was checked, and so is every path it produced - so
+        // containment holds however `Bun.Glob` expands a brace or a bracket,
+        // rather than because a measurement said today's expansion is contained.
+        resolveWithin(this.#root, key);
         if (yielded >= limit) return;
         yielded += 1;
-        yield { key: `${base}${toPosix(relative)}` };
+        yield { key };
       }
     } catch (error) {
       // An absent directory lists as empty, matching what S3 does for a prefix

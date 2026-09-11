@@ -327,6 +327,26 @@ describe('LocalStorage', () => {
       }
     });
 
+    it('contains what a brace pattern expands to as well', async () => {
+      // Bun 1.4.2 matches nothing for a brace group holding a `..` branch rather
+      // than expanding it into a traversal, and `list` checks the paths a scan
+      // produced - so either way this is a refusal or an empty listing, never a
+      // key from outside the root.
+      expect(
+        await collect(storage.list({ glob: '{reports,../..}/*' })),
+      ).toEqual([]);
+    });
+
+    it('lists a key whose colon only looks drive-qualified', async () => {
+      // `resolve` settles this rather than a second regex: on POSIX the key is
+      // an ordinary filename, on Windows it is drive-relative and resolves out.
+      await storage.write('c:notes.txt', 'fine');
+
+      expect(await collect(storage.list({ glob: 'c:*' }))).toEqual([
+        'c:notes.txt',
+      ]);
+    });
+
     it('still lists a glob that merely mentions dots', async () => {
       await storage.write('a..b/c.txt', 'fine');
 

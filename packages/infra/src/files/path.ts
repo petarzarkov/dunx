@@ -48,12 +48,16 @@ export const resolveDirWithin = (root: string, prefix: string): string =>
  * A `list` pattern, checked before `Bun.Glob` is constructed from it. `scan`
  * walks a `..` segment and ignores `cwd` outright for an absolute pattern, so a
  * checked `prefix` buys nothing while the glob beside it can name the whole
- * filesystem. Segments, not a substring: an inner `a..b` still lists.
+ * filesystem.
+ *
+ * The same `checkWithin` every key goes through, so there is one definition of
+ * "outside the root" rather than a second one that drifts. A wildcard is an
+ * ordinary path character to `resolve`, and the root itself is the pattern's
+ * own directory. What this cannot see is how `Bun.Glob` expands a brace or a
+ * bracket, so `LocalStorage.list` checks the paths it produced as well.
  */
-export const assertGlobWithin = (glob: string): string => {
-  if (hasParentSegment(glob) || /^([/\\]|[A-Za-z]:)/.test(glob)) {
-    throw new PathTraversalError(glob);
-  }
+export const assertGlobWithin = (root: string, glob: string): string => {
+  checkWithin(root, glob, true);
   return glob;
 };
 
