@@ -290,3 +290,89 @@ describe('the fallback', () => {
     ).rejects.toThrow(AppError);
   });
 });
+
+describe('what the retry loop does not catch', () => {
+  /**
+   * The one that would have cost money: a throwing success hook was caught by
+   * the attempt's own `catch`, classified as a failed attempt, and the operation
+   * ran again. Measured at four calls for an operation that succeeded every
+   * time, which for a charge is four charges.
+   */
+  it('does not re-run a succeeding operation when onSuccess throws', async () => {
+    let calls = 0;
+    const subject = policy({
+      classifier: new TransientRetryClassifier(),
+      retry: {
+        maxRetries: 3,
+        retryDelayMs: 1,
+        onSuccess: () => {
+          throw new AppError('hook');
+        },
+      },
+    });
+
+    await expect(
+      subject.run(async () => {
+        calls += 1;
+        return 'ok';
+      }),
+    ).rejects.toThrow('hook');
+    expect(calls).toBe(1);
+  });
+
+  /** `onAttempt` runs before the operation, so a fallback here answers for nothing. */
+  it('does not answer with the fallback when onAttempt throws', async () => {
+    let calls = 0;
+    const subject = policy({
+      classifier: new TransientRetryClassifier(),
+      fallback: () => 'FALLBACK',
+      retry: {
+        maxRetries: 0,
+        onAttempt: () => {
+          throw new AppError('before the call');
+        },
+      },
+    });
+
+    await expect(
+      subject.run(async () => {
+        calls += 1;
+        return 'real';
+      }),
+    ).rejects.toThrow('before the call');
+    expect(calls).toBe(0);
+  });
+
+  it('does not answer with the fallback when the classifier throws', async () => {
+    class Broken extends RetryClassifier {
+      classify(): RetryVerdict {
+        throw new AppError('classifier');
+      }
+    }
+    const subject = policy({
+      classifier: new Broken(),
+      fallback: () => 'FALLBACK',
+      retry: { maxRetries: 1, retryDelayMs: 1 },
+    });
+
+    await expect(
+      subject.run(async () => {
+        throw new AppError('upstream');
+      }),
+    ).rejects.toThrow('classifier');
+  });
+
+  it('still answers with the fallback when the operation itself fails', async () => {
+    const subject = policy({
+      classifier: new TransientRetryClassifier(),
+      fallback: () => 'FALLBACK',
+      retry: { maxRetries: 0 },
+    });
+
+    const attempt = async (): Promise<string> => {
+      throw new AppError('upstream');
+    };
+
+    expect(await subject.run(attempt)).toBe('FALLBACK');
+  });
+});

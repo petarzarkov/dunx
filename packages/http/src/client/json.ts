@@ -48,9 +48,18 @@ export const isJsonBody = (payload: unknown): boolean => {
   );
 };
 
-/** JSON when the upstream said so or the body parses; text otherwise; undefined for empty. */
+/**
+ * JSON when the upstream said so or the body parses; text otherwise; undefined
+ * for empty.
+ *
+ * **A failed read rejects.** It used to be caught and reported as an empty body,
+ * so a 2xx whose body died mid-stream reached the caller as a success with no
+ * data, and a retry policy saw nothing to retry. A caller that wants the old
+ * behaviour asks for it: the two error paths in `HttpService` do, because there
+ * the status is the signal and an unreadable body should not replace it.
+ */
 export const readBody = async (response: Response): Promise<unknown> => {
-  const text = await response.text().catch(() => '');
+  const text = await response.text();
   if (text === '') return undefined;
   try {
     return JSON.parse(text) as unknown;

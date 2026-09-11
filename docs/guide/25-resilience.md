@@ -33,10 +33,17 @@ export class Checkout {
   constructor(private readonly policy: ResiliencePolicy) {}
 
   charge(order: Order): Promise<Receipt> {
+    // `order.id` as the idempotency key: see the warning below.
     return this.policy.run((signal) => this.gateway.charge(order, signal));
   }
 }
 ```
+
+**Retry only what is safe to run twice.** A transport failure can arrive after
+the upstream already did the work, and a retry then does it again. For a charge
+that is a second charge. Send an idempotency key the upstream honours, or narrow
+the classifier so only a failure that cannot have landed is retried: a connect
+error or a 503 with no body, rather than every timeout.
 
 `maxRetries` counts retries after the first attempt, so `3` is up to four calls.
 `timeoutMs` is per attempt and `0` leaves each one unbounded. The signal is

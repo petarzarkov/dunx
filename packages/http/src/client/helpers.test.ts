@@ -72,6 +72,24 @@ describe('readBody', () => {
     expect(await readBody(new Response('plain'))).toBe('plain');
     expect(await readBody(new Response(''))).toBeUndefined();
   });
+
+  /**
+   * A read that dies mid-body used to be reported as an empty body, so a 2xx
+   * whose stream broke reached the caller as a success with no data and a retry
+   * policy saw nothing to retry.
+   */
+  it('rejects when the body cannot be read', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"partial":'));
+        controller.error(new Error('connection reset'));
+      },
+    });
+
+    await expect(readBody(new Response(body))).rejects.toThrow(
+      'connection reset',
+    );
+  });
 });
 
 describe('retryAfterMs', () => {

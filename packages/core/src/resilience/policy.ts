@@ -28,17 +28,21 @@ export class ResiliencePolicy {
    * timer is the runtime's to cancel.
    */
   async run<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    try {
-      return await this.#attempts(op);
-    } catch (error) {
-      const { fallback } = this.options;
-      if (fallback === undefined) throw error;
-      // A policy is shared across operations of different result types, so its
-      // fallback cannot be typed per call.
-      return (await fallback(error)) as T;
-    }
+    return this.#attempts(op);
   }
 
+  /**
+   * **Only `op`'s own rejection is caught.** The `try` holds the call and nothing
+   * else, so a throw from `onAttempt`, `onSuccess`, `onError`, the classifier or
+   * the sleep propagates as itself.
+   *
+   * Both halves of that were wrong and both were reachable. `onSuccess` used to
+   * sit inside the `try`, so a throwing success hook was classified as a failed
+   * attempt and **ran `op` again**: measured at four calls for one succeeding
+   * operation, which for a charge is four charges. And `fallback` used to wrap
+   * this whole method, so a throw from `onAttempt` returned the fallback value
+   * for an operation that had never run.
+   */
   async #attempts<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const {
       maxRetries = 3,
@@ -46,24 +50,32 @@ export class ResiliencePolicy {
       onError,
       onSuccess,
     } = this.options.retry;
+    const { fallback } = this.options;
 
     // No terminating condition: every path out is a return or a throw, so a
     // counted loop would end on a line no test can reach.
     for (let attempt = 0; ; attempt += 1) {
       onAttempt?.(attempt + 1, attempt > 0);
+      let result: T;
       try {
-        const result = await op(this.#signal());
-        onSuccess?.(result, attempt + 1);
-        return result;
+        result = await op(this.#signal());
       } catch (error) {
         const verdict = this.#decide(error, attempt);
         const willRetry = verdict.retry && attempt < maxRetries;
         onError?.(error, attempt + 1, willRetry);
-        if (!willRetry) throw error;
-        // `Bun.sleep` rather than a `setTimeout` promise: it is the runtime's own
-        // timer and needs no wrapper.
-        await Bun.sleep(verdict.delayMs);
+        if (willRetry) {
+          // `Bun.sleep` rather than a `setTimeout` promise: it is the runtime's
+          // own timer and needs no wrapper.
+          await Bun.sleep(verdict.delayMs);
+          continue;
+        }
+        if (fallback === undefined) throw error;
+        // A policy is shared across operations of different result types, so its
+        // fallback cannot be typed per call.
+        return (await fallback(error)) as T;
       }
+      onSuccess?.(result, attempt + 1);
+      return result;
     }
   }
 

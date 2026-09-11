@@ -13,6 +13,7 @@ import { UrlHelper, type ParamsType } from '@arkv/shared';
 import type { HttpMethod } from '../route/marker.js';
 import { FetchError, FetchTransportError } from './errors.js';
 import { isJsonBody, readBody, safeStringify } from './json.js';
+import { ConnectDeadline, sseData } from './sse.js';
 import { HttpClientOptions } from './options.js';
 import { HttpRetryClassifier, type HttpRetryOptions } from './retry.js';
 
@@ -138,7 +139,9 @@ export class HttpService extends UrlHelper {
         throw new FetchError(
           response.status,
           response.statusText,
-          await readBody(response),
+          // The status is the signal here, so an unreadable body is dropped
+          // rather than replacing a 4xx or 5xx with a read error.
+          await readBody(response).catch(() => undefined),
           {
             method: config.method,
             url: url.href,
@@ -267,49 +270,46 @@ export class HttpService extends UrlHelper {
     const startedAt = Date.now();
     const { body, serialised } = this.bodyFor(config.payload);
 
-    const response = await this.policyFor(config, { maxRetries: 0 }).run(
-      (signal) =>
+    // No timeout on the policy: its `AbortSignal.timeout` reaches `fetch` and
+    // keeps aborting once headers arrive. See `ConnectDeadline`.
+    const deadline = new ConnectDeadline(
+      config.timeoutMs ?? this.options.timeoutMs,
+      url.href,
+    );
+
+    let response: Response;
+    try {
+      const policy = this.policyFor(
+        { ...config, timeoutMs: 0 },
+        {
+          maxRetries: 0,
+        },
+      );
+      response = await policy.run((signal) =>
         this.send(
           { ...config, method },
           url,
           body,
           serialised,
-          signal,
+          AbortSignal.any([signal, deadline.signal]),
           'text/event-stream',
         ),
-    );
+      );
+    } finally {
+      deadline.clear();
+    }
 
     if (!response.ok || response.body === null) {
       throw new FetchError(
         response.status,
         response.statusText,
-        await readBody(response),
+        await readBody(response).catch(() => undefined),
         { method, url: url.href, headers: response.headers },
       );
     }
 
-    const decoder = new TextDecoder();
-    let buffer = '';
-
     try {
-      // Async iteration, not `getReader()`: it acquires the reader and releases it
-      // on completion, on `break`, and on the `return` below when `[DONE]` arrives -
-      // which is the case the manual form needed `releaseLock()` in a `finally` for.
-      for await (const chunk of response.body) {
-        buffer += decoder.decode(chunk, { stream: true });
-
-        let newline = buffer.indexOf('\n');
-        while (newline !== -1) {
-          const line = buffer.slice(0, newline).trim();
-          buffer = buffer.slice(newline + 1);
-          newline = buffer.indexOf('\n');
-
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (data === '[DONE]') return;
-          yield data;
-        }
-      }
+      yield* sseData(response.body);
     } finally {
       this.logger.debug(`SSE ${method} ${url.href} closed`, {
         elapsedMs: Date.now() - startedAt,
