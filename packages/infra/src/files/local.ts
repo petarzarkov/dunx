@@ -114,7 +114,12 @@ export class LocalStorage extends Storage {
     // Checked like the prefix above it, or the glob walks out of the root the
     // prefix was just held inside (docs/bun-apis.md). S3 needs no equivalent:
     // there the glob only filters keys the bucket already returned.
-    const glob = new Bun.Glob(assertGlobWithin(cwd, options?.glob ?? '**/*'));
+    const pattern = assertGlobWithin(cwd, options?.glob ?? '**/*');
+    const glob = new Bun.Glob(pattern);
+    // A wildcard matches one entry name and cannot introduce a separator, so
+    // after that check only an alternation construct can still spell a parent
+    // segment. Those pay for a per-entry check and `**/*` does not.
+    const expands = /[{[(]/.test(pattern);
 
     let yielded = 0;
     try {
@@ -125,10 +130,10 @@ export class LocalStorage extends Storage {
         onlyFiles: true,
       })) {
         const key = `${base}${toPosix(relative)}`;
-        // The pattern was checked, and so is every path it produced - so
-        // containment holds however `Bun.Glob` expands a brace or a bracket,
-        // rather than because a measurement said today's expansion is contained.
-        resolveWithin(this.#root, key);
+        // The same check every other method makes, so containment holds however
+        // `Bun.Glob` expands one of those constructs rather than because a
+        // measurement said today's expansion is contained.
+        if (expands) resolveWithin(this.#root, key);
         if (yielded >= limit) return;
         yielded += 1;
         yield { key };

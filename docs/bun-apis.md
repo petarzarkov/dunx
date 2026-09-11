@@ -797,6 +797,21 @@ key goes through and checks each path the scan produced. The second check is
 what keeps containment off the last four rows of that table: they are today's
 expansion, not a promise.
 
+That second check is charged per entry, and it is not free. 5,000 files under one
+root, medians of seven runs:
+
+| Listing                      | Median |
+| ---------------------------- | ------ |
+| `**/*`, every entry checked  | 7.0 ms |
+| `**/*`, no entry checked     | 3.7 ms |
+| the check alone, 5,000 calls | 1.8 ms |
+
+So it runs only for a pattern that can expand into a segment the pattern check
+did not see: one carrying `{`, `[` or `(`. A wildcard matches a single entry
+name and never a separator, so `*`, `**` and `?` cannot spell a parent segment
+on their own, and extglob is covered because `@(`, `+(`, `?(` and `!(` all carry
+a paren. `**/*` therefore pays nothing and `{a,../b}/*` pays for every entry.
+
 ### `Bun.S3Client` - the undocumented surface
 
 `prototype`: `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`,
