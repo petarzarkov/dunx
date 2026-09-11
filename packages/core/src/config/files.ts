@@ -5,15 +5,33 @@ import { ConfigError } from './service.js';
 /** A source whose values are already typed, as a parsed file's are. */
 export type ConfigValues = Record<string, unknown>;
 
+/**
+ * Every `__proto__` the parser produced, gone, before anything merges or is
+ * handed out.
+ *
+ * A parser makes it an **own** property, so it survives until something assigns
+ * it onward: `out.__proto__ = value` and `Object.assign({}, element)` both reach
+ * the inherited setter and repoint the target rather than adding a key, and then
+ * `config.get('isAdmin')` answers whatever the file said. Done here rather than
+ * in {@link merge} because an array is replaced whole and never merged, so a
+ * guard there would miss `hosts: [{ __proto__: ... }]`.
+ */
+const sanitize = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(sanitize);
+  if (!isPlainObject(value)) return value;
+
+  const out: ConfigValues = {};
+  for (const [key, inner] of Object.entries(value)) {
+    if (key === '__proto__') continue;
+    out[key] = sanitize(inner);
+  }
+  return out;
+};
+
 /** Later wins, per key: two objects merge, anything else replaces. */
 const merge = (base: ConfigValues, overlay: ConfigValues): ConfigValues => {
   const out: ConfigValues = { ...base };
   for (const [key, value] of Object.entries(overlay)) {
-    // `out.__proto__ = value` reaches the inherited setter and repoints the
-    // object instead of adding a key, so `__proto__: { isAdmin: true }` in a
-    // file would have `config.get('isAdmin')` answer true. Dropped at every
-    // depth, because a config key by that name can never be read back anyway.
-    if (key === '__proto__') continue;
     const existing = out[key];
     out[key] =
       isPlainObject(existing) && isPlainObject(value)
@@ -102,7 +120,7 @@ export class ConfigFiles {
         );
       }
 
-      values = merge(values, parsed);
+      values = merge(values, sanitize(parsed) as ConfigValues);
     }
 
     return values;

@@ -163,6 +163,33 @@ describe('ConfigFiles', () => {
     expect(Object.getPrototypeOf(db)).toBe(Object.prototype);
   });
 
+  it('drops a `__proto__` inside an array element', async () => {
+    // An array is replaced whole rather than merged, so a guard inside the
+    // merge missed this: the element kept an own `__proto__`, and any later
+    // `Object.assign({}, element)` repointed the copy's prototype.
+    const evil = await write(
+      'proto-array.yml',
+      'hosts:\n  - __proto__:\n      isAdmin: true\n    name: a\n',
+    );
+
+    const hosts = (await load(evil))['hosts'] as Record<string, unknown>[];
+    const element = hosts[0] as Record<string, unknown>;
+
+    expect(element['name']).toBe('a');
+    expect(Object.prototype.hasOwnProperty.call(element, '__proto__')).toBe(
+      false,
+    );
+    const copy = Object.assign({}, element);
+    expect(copy['isAdmin']).toBeUndefined();
+    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype);
+  });
+
+  it('skips a directory the way it skips a missing file', async () => {
+    // `Bun.file(dir).exists()` answers false for a directory on 1.4.2, so this
+    // never reaches `text()`, which would throw outside the parse wrapper.
+    expect(await load('.')).toEqual({});
+  });
+
   it('defaults its cwd to the process working directory', async () => {
     // Nothing by this name exists at the repo root, so an absent file is the
     // observable half: it resolves and skips rather than throwing.
