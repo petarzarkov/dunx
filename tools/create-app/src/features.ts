@@ -381,14 +381,15 @@ export const FEATURES: readonly Feature[] = [
   {
     name: 'stats',
     source: 'stats',
-    summary:
-      'Per-route request timings and per-operation query timings, as JSON.',
-    // `QueryMetrics` comes from `DbModule`, so the database has to be there for
-    // the query half to exist at all.
-    requires: ['database'],
+    summary: 'Request, query, Redis command and queue timings, as JSON.',
+    // Each metrics class is bound by the module that owns the thing it measures:
+    // `QueryMetrics` by `DbModule`, `RedisMetrics` by `RedisModule`, `QueueMetrics`
+    // by `QueueModule`. Only `RequestMetrics` is global.
+    requires: ['database', 'cache', 'jobs'],
     module: { klass: 'StatsModule', from: './stats/stats.module.js' },
     dependencies: [],
     config: [],
+    service: 'Redis or Valkey',
   },
   {
     name: 'client',

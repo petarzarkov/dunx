@@ -8,6 +8,7 @@ import {
 import {
   defaultRedisUrl,
   RedisConnection,
+  RedisMetrics,
   RedisModule,
 } from '@dunx/infra/redis';
 import { AppConfigService } from '../config.js';
@@ -27,27 +28,32 @@ const sessionsUrl = (url: string | undefined): string => {
 
 /**
  * Hoisted rather than written inline, because the cache layer below names this
- * same object in its own `imports`. A dynamic module is its own scope keyed on the
- * reference, so calling `forRootAsync` twice would open two connections.
+ * same object in its own `imports`. A dynamic module is its own scope keyed on
+ * the reference, so calling `forRootAsync` twice would open two connections.
+ *
+ * No url, so Bun resolves $VALKEY_URL, $REDIS_URL, then localhost, lazily.
+ * `maxRetries: 0` because on Bun 1.3.14 a failed connect with retries keeps a
+ * timer alive past `close()`.
  */
-// No url, so Bun resolves $VALKEY_URL, $REDIS_URL, then localhost.
-// Connections are lazy, so an unavailable cache cannot stop boot.
-//
-// `maxRetries: 0` because on Bun 1.3.14 a client that failed to connect with
-// `maxRetries > 0` keeps a retry timer alive after `close()` and never exits.
-const appRedis = RedisModule.forRootAsync({
-  useFactory: (config: AppConfigService) => {
-    // `exactOptionalPropertyTypes` will not let `string | undefined` reach
-    // a `url?: string`, even where `undefined` is ruled out.
-    const { url } = config.get('redis');
-    return {
-      ...(url === undefined ? {} : { url }),
-      connectionTimeout: 500,
-      maxRetries: 0,
-    };
+const appRedis = RedisModule.forRootAsync(
+  {
+    useFactory: (config: AppConfigService) => {
+      // `exactOptionalPropertyTypes` will not let `string | undefined` reach
+      // a `url?: string`, even where `undefined` is ruled out.
+      const { url } = config.get('redis');
+      return {
+        ...(url === undefined ? {} : { url }),
+        connectionTimeout: 500,
+        maxRetries: 0,
+      };
+    },
+    inject: [AppConfigService] as const,
   },
-  inject: [AppConfigService] as const,
-});
+  // No subclass: the default connection. Settings come last, as on `DbModule`.
+  undefined,
+  // Times every command, readable as `RedisMetrics`. Off by default.
+  { metrics: true },
+);
 
 @Module({
   imports: [
@@ -103,6 +109,12 @@ const appRedis = RedisModule.forRootAsync({
   controllers: [CacheController, CatalogController],
   providers: [Sessions, Catalog, CatalogDemo],
   // Re-exported so the chat gateway fans out through the same connection.
-  exports: [RedisConnection, SessionsRedis, Sessions, CatalogDemo],
+  exports: [
+    RedisConnection,
+    RedisMetrics,
+    SessionsRedis,
+    Sessions,
+    CatalogDemo,
+  ],
 })
 export class CacheModule {}

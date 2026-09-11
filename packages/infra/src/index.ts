@@ -22,6 +22,7 @@ export {
   TieredCacheStore,
 } from './cache/index.js';
 export {
+  type CommandStats,
   defaultRedisUrl,
   isConnectionError,
   type ConnectionTarget,
@@ -35,10 +36,14 @@ export {
   RedisError,
   RedisErrorCode,
   type RedisKey,
+  RedisMetrics,
+  redisMetrics,
   RedisModule,
+  type RedisModuleSettings,
   RedisOptions,
   type RedisOptionsInit,
   type RedisProtocol,
+  type RedisStatsReport,
   type RedisValue,
   type ScanOptions,
   type ScanResult,

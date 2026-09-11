@@ -68,19 +68,23 @@ to record.
 
 It is an abstract class where dunx owns the contract (`Storage`, `DbConnection`,
 `ImagesOptions`) and the library's own class where it does not
-(`BunSQLiteDatabase`, `ContextStore`). The two `token()` exports,
-`redisConnection(name)` and `LoggerSettings`, name things no class can.
+(`BunSQLiteDatabase`, `ContextStore`). The three `token()` exports,
+`redisConnection(name)`, `redisMetrics(name)` and `LoggerSettings`, name things no
+class can.
 
 **If an area is in the root barrel at all, all of it is.** `/db` and `/queue` are
 the two the barrel does not re-export: each reaches an optional peer through a
 static import, so exporting them would make `drizzle-orm` and `ioredis` hard
 requirements of `import '@dunx/infra'`. Reach them at their subpaths.
 
-**Query timing is off unless asked for.** `DbModule.forRoot(options, { metrics:
-true })` binds a `QueryMetrics` and wraps the driver dunx constructs. Drizzle's
-`logger` option cannot supply a duration: `logQuery` fires before the statement
-runs and has no completion callback. See
-[Metrics](../../docs/guide/23-metrics.md).
+**Timing is off unless asked for.** `{ metrics: true }` is the last argument to
+`DbModule`, `RedisModule` and `QueueModule`, binding a `QueryMetrics`,
+`RedisMetrics` or `QueueMetrics`.
+
+`/db` wraps the driver dunx constructs, since drizzle's `logger` option cannot
+supply a duration. `/redis` times the one seam every command goes through.
+`/queue` times `publish()` plus the handlers this container ran, which excludes a
+forked `background` one. See [Metrics](../../docs/guide/23-metrics.md).
 
 ## Verified against
 

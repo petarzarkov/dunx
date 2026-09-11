@@ -11,6 +11,7 @@ import {
 } from '@dunx/core';
 import { QueueConnection } from './connection.js';
 import { JobEvents } from './events.js';
+import { QueueMetrics } from './metrics.js';
 import { QueueOptions, type QueueOptionsInit } from './options.js';
 import { JobPublisher } from './publisher.js';
 import { QueueRunner } from './runner.js';
@@ -30,6 +31,24 @@ import { QueueRunner } from './runner.js';
  */
 const surface = [QueueOptions, QueueConnection, JobPublisher, JobEvents];
 
+export interface QueueModuleSettings {
+  /**
+   * Count and time enqueues and handlers, readable through {@link QueueMetrics}.
+   * Off by default.
+   *
+   * A handler reaches it only where the dispatcher is built by this container -
+   * `consume: true` in this process. `isolation` defaults to `'process'`, so a
+   * `@JobHandler({ background: true })` runs in a forked child with a container of
+   * its own, and so does a `WorkerFactory` worker process. The publish side is
+   * always this container's.
+   */
+  readonly metrics?: boolean;
+}
+
+/** The surface plus `QueueMetrics`, which is bound only when it is asked for. */
+const exportsFor = (metrics: QueueMetrics | undefined) =>
+  metrics === undefined ? surface : [...surface, QueueMetrics];
+
 /**
  * Always bound, and idle unless `consume` is set - checked in `onInit`, since
  * `forRootAsync` builds its options from a factory and the flag is not knowable
@@ -38,7 +57,7 @@ const surface = [QueueOptions, QueueConnection, JobPublisher, JobEvents];
  * `QueueConnection` is injected though the runner never touches it: that is what
  * orders the runner after it in construction and before it in teardown.
  */
-const runner = (): Registration =>
+const runner = (metrics: QueueMetrics | undefined): Registration =>
   provide(QueueRunner, {
     useFactory: (
       ref: AppRef,
@@ -46,7 +65,7 @@ const runner = (): Registration =>
       options: QueueOptions,
       logger: Logger,
       _connection: QueueConnection,
-    ) => new QueueRunner(ref, root, options, logger),
+    ) => new QueueRunner(ref, root, options, logger, metrics),
     inject: [
       AppRef,
       ROOT_MODULE,
@@ -56,7 +75,12 @@ const runner = (): Registration =>
     ] as const,
   });
 
-const bindings: readonly Registration[] = [
+const bindings = (
+  metrics: QueueMetrics | undefined,
+): readonly Registration[] => [
+  ...(metrics === undefined
+    ? []
+    : [provide(QueueMetrics, { useValue: metrics })]),
   provide(QueueConnection, {
     useFactory: (options: QueueOptions, logger: Logger) =>
       new QueueConnection(options, logger),
@@ -67,7 +91,7 @@ const bindings: readonly Registration[] = [
       connection: QueueConnection,
       options: QueueOptions,
       logger: Logger,
-    ) => new JobPublisher(connection, options, logger),
+    ) => new JobPublisher(connection, options, logger, metrics),
     inject: [QueueConnection, QueueOptions, Logger] as const,
   }),
   // After the connection, so reverse-order teardown closes the event streams
@@ -91,14 +115,18 @@ const bindings: readonly Registration[] = [
  * alone opens no worker and consumes nothing.
  */
 export class QueueModule {
-  static forRoot(init: QueueOptionsInit = {}): DynamicModule {
+  static forRoot(
+    init: QueueOptionsInit = {},
+    settings: QueueModuleSettings = {},
+  ): DynamicModule {
+    const metrics = settings.metrics === true ? new QueueMetrics() : undefined;
     return {
       module: QueueModule,
-      exports: surface,
+      exports: exportsFor(metrics),
       providers: [
         provide(QueueOptions, { useValue: new QueueOptions(init) }),
-        ...bindings,
-        runner(),
+        ...bindings(metrics),
+        runner(metrics),
       ],
     };
   }
@@ -115,32 +143,36 @@ export class QueueModule {
    */
   static forRootAsync(
     load: () => QueueOptionsInit | Promise<QueueOptionsInit>,
+    settings?: QueueModuleSettings,
   ): DynamicModule;
   static forRootAsync<const D extends Deps>(
     config: AsyncModuleConfig<QueueOptionsInit, D>,
+    settings?: QueueModuleSettings,
   ): DynamicModule;
   static forRootAsync(
     source:
       | (() => QueueOptionsInit | Promise<QueueOptionsInit>)
       | AsyncModuleConfig<QueueOptionsInit, Deps>,
+    settings: QueueModuleSettings = {},
   ): DynamicModule {
     const load = typeof source === 'function' ? source : source.useFactory;
     const inject = typeof source === 'function' ? [] : (source.inject ?? []);
+    const metrics = settings.metrics === true ? new QueueMetrics() : undefined;
 
     return {
       module: QueueModule,
       ...(typeof source === 'function' || source.imports === undefined
         ? {}
         : { imports: source.imports }),
-      exports: surface,
+      exports: exportsFor(metrics),
       providers: [
         provide(QueueOptions, {
           useFactory: async (...deps: readonly unknown[]) =>
             new QueueOptions(await load(...deps)),
           inject,
         }),
-        ...bindings,
-        runner(),
+        ...bindings(metrics),
+        runner(metrics),
       ],
     };
   }

@@ -1,6 +1,8 @@
 import { EventLoopLag, Logger } from '@dunx/core';
 import { RequestMetrics } from '@dunx/http';
 import { QueryMetrics } from '@dunx/infra/db';
+import { QueueMetrics } from '@dunx/infra/queue';
+import { RedisMetrics } from '@dunx/infra/redis';
 
 /** Read out of the same container, from work the tour already did. */
 export class StatsDemo {
@@ -8,6 +10,8 @@ export class StatsDemo {
     private readonly logger: Logger,
     private readonly requests: RequestMetrics,
     private readonly queries: QueryMetrics,
+    private readonly commands: RedisMetrics,
+    private readonly jobs: QueueMetrics,
     private readonly lag: EventLoopLag,
   ) {}
 
@@ -59,6 +63,37 @@ export class StatsDemo {
           `${operation.errors} failed, p99 ${ms(operation.duration.p99)}`,
       );
     }
+
+    const redis = this.commands.snapshot();
+    this.logger.info(
+      `${redis.total} redis commands across ${redis.commands.length} verbs, ` +
+        `${redis.errors} failed - timed at the one seam every command goes through`,
+    );
+    const busiest = [...redis.commands]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+    for (const command of busiest) {
+      this.logger.info(
+        `${command.command}: ${command.count} calls, ` +
+          `p99 ${ms(command.duration.p99)} - the key is never kept`,
+      );
+    }
+
+    const queue = this.jobs.snapshot();
+    this.logger.info(
+      `${queue.published} jobs published, ${queue.handled} handled in this process`,
+    );
+    for (const entry of queue.jobs) {
+      this.logger.info(
+        `${entry.queue}/${entry.name}: published ${entry.published} ` +
+          `(p99 ${ms(entry.publishDuration.p99)}), handled ${entry.handled} ` +
+          `(p99 ${ms(entry.handlerDuration.p99)})`,
+      );
+    }
+    this.logger.info(
+      'a background handler runs in a forked child with its own container, so ' +
+        'its duration is 0 here and the publish beside it is not',
+    );
 
     const loop = this.lag.snapshot();
     this.logger.info(

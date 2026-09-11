@@ -5,6 +5,8 @@ import type { Job } from 'bullmq';
 import { Thumbnails } from '../pictures/thumbnails.service.js';
 
 export const THUMBNAIL_QUEUE = 'thumbnails';
+// Its own queue: a queue is sandboxed when any handler on it is `background`.
+export const AUDIT_QUEUE = 'thumbnail-audit';
 
 export interface RenderRequest {
   readonly width: number;
@@ -57,5 +59,15 @@ export class ThumbnailJobs {
     );
 
     return result;
+  }
+
+  // No `background`, so this runs in the container that consumes the queue - here
+  // the web process, which is what makes its duration visible to `QueueMetrics`.
+  @JobHandler({ queue: AUDIT_QUEUE, name: 'record' })
+  record(job: Job<RenderResult>): string {
+    this.logger.info(
+      `audited ${job.data.width}x${job.data.height} in this process`,
+    );
+    return `${job.data.bytes}`;
   }
 }
