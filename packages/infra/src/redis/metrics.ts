@@ -1,4 +1,5 @@
 import { Durations, type HistogramSnapshot } from '@dunx/core';
+import { CappedSeries } from '../series.js';
 
 export interface CommandStats {
   /** The verb, uppercased: `GET`, `HSET`, `SUBSCRIBE`. */
@@ -18,12 +19,14 @@ export interface RedisStatsReport {
 }
 
 interface Series {
+  readonly command: string;
   count: number;
   errors: number;
   readonly duration: Durations;
 }
 
-const series = (): Series => ({
+const series = (command: string): Series => ({
+  command,
   count: 0,
   errors: 0,
   duration: new Durations(),
@@ -41,24 +44,20 @@ const series = (): Series => ({
  * statement shape for the slowest query; the Redis analogue would be the key, and a
  * key is caller data with no `redact()` that could be written for it.
  *
- * Series are bounded by Redis's own command vocabulary rather than by traffic:
- * `send()` uppercases whatever verb it is given, and a verb derived from data is
- * not a command the server would answer.
+ * **The verb is caller data too.** `send()` uppercases whatever string it is given
+ * and a rejected command is recorded against its verb, so the series are capped:
+ * see {@link CappedSeries} for the ceiling.
  *
  * Bound only when `metrics: true`.
  */
 export class RedisMetrics {
-  readonly #series = new Map<string, Series>();
+  readonly #series = new CappedSeries(series);
   #total = 0;
   #errors = 0;
   #since = new Date();
 
   observe(command: string, durationNs: number, failed = false): void {
-    let stats = this.#series.get(command);
-    if (stats === undefined) {
-      stats = series();
-      this.#series.set(command, stats);
-    }
+    const stats = this.#series.for(command);
     this.#total += 1;
     stats.count += 1;
     if (failed) {
@@ -70,9 +69,9 @@ export class RedisMetrics {
 
   snapshot(): RedisStatsReport {
     const commands: CommandStats[] = [];
-    for (const [command, stats] of this.#series) {
+    for (const stats of this.#series.values()) {
       commands.push({
-        command,
+        command: stats.command,
         count: stats.count,
         errors: stats.errors,
         duration: stats.duration.snapshot(),

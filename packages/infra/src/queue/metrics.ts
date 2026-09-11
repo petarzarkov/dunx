@@ -1,4 +1,5 @@
 import { Durations, type HistogramSnapshot } from '@dunx/core';
+import { CappedSeries } from '../series.js';
 
 export const JobOutcome = Object.freeze({
   COMPLETED: 'completed',
@@ -31,21 +32,6 @@ export interface QueueStatsReport {
   readonly handled: number;
   readonly since: string;
 }
-
-/**
- * Distinct (queue, name) pairs past which everything else collapses into one
- * series. A job name is whatever `publish()` was given, so a name built from data
- * would otherwise hold a histogram per value for the life of the process.
- */
-const MAX_SERIES = 128;
-const OVERFLOW = '(other)';
-
-/**
- * Length-prefixed, so no queue name holding the separator can forge another
- * pair's key. Never parsed back: `Series` carries both halves.
- */
-const keyOf = (queue: string, name: string): string =>
-  `${queue.length}:${queue}:${name}`;
 
 interface Series {
   readonly queue: string;
@@ -87,10 +73,12 @@ const EMPTY: HistogramSnapshot = Object.freeze({ count: 0 });
  * a dedicated worker process built by `WorkerFactory`. What this reports is the
  * publish side plus whatever handlers ran in this process.
  *
+ * A job name comes from the caller, so series are capped: {@link CappedSeries}.
+ *
  * Bound only when `metrics: true`.
  */
 export class QueueMetrics {
-  readonly #series = new Map<string, Series>();
+  readonly #series = new CappedSeries(series);
   #published = 0;
   #handled = 0;
   #since = new Date();
@@ -101,7 +89,7 @@ export class QueueMetrics {
     durationNs: number,
     failed = false,
   ): void {
-    const stats = this.#seriesFor(queue, name);
+    const stats = this.#series.for(queue, name);
     this.#published += 1;
     stats.published += 1;
     if (failed) stats.publishErrors += 1;
@@ -114,7 +102,7 @@ export class QueueMetrics {
     durationNs: number,
     outcome: JobOutcome,
   ): void {
-    const stats = this.#seriesFor(queue, name);
+    const stats = this.#series.for(queue, name);
     this.#handled += 1;
     stats.handled += 1;
     if (outcome === JobOutcome.FAILED) stats.failed += 1;
@@ -150,22 +138,5 @@ export class QueueMetrics {
     this.#published = 0;
     this.#handled = 0;
     this.#since = new Date();
-  }
-
-  #seriesFor(queue: string, name: string): Series {
-    const key = keyOf(queue, name);
-    const existing = this.#series.get(key);
-    if (existing) return existing;
-    if (this.#series.size < MAX_SERIES) {
-      const created = series(queue, name);
-      this.#series.set(key, created);
-      return created;
-    }
-    const overflowKey = keyOf(OVERFLOW, OVERFLOW);
-    const overflow = this.#series.get(overflowKey);
-    if (overflow) return overflow;
-    const created = series(OVERFLOW, OVERFLOW);
-    this.#series.set(overflowKey, created);
-    return created;
   }
 }

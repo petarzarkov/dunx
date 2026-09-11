@@ -68,6 +68,37 @@ describe('RedisMetrics', () => {
     expect(report.commands[0]?.duration.count).toBe(2);
   });
 
+  it('collapses everything past the cap into one series', () => {
+    const metrics = new RedisMetrics();
+    // `send()` uppercases whatever string it is given and the error path records
+    // it, so a verb built from data is one series per value without the cap.
+    for (let at = 0; at < 200; at += 1) {
+      metrics.observe(`VERB-${at}`, 1_000, true);
+    }
+
+    const report = metrics.snapshot();
+    // 128 named series plus the one everything else lands in.
+    expect(report.commands).toHaveLength(129);
+    expect(report.total).toBe(200);
+    expect(report.errors).toBe(200);
+    const overflow = report.commands.find((one) => one.command === '(other)');
+    expect(overflow?.count).toBe(72);
+    expect(overflow?.errors).toBe(72);
+    expect(overflow?.duration.count).toBe(72);
+  });
+
+  it('keeps counting a verb it already has a series for', () => {
+    const metrics = new RedisMetrics();
+    for (let at = 0; at < 200; at += 1) metrics.observe(`VERB-${at}`, 1_000);
+    metrics.observe('VERB-0', 5_000);
+
+    const report = metrics.snapshot();
+    const first = report.commands.find((one) => one.command === 'VERB-0');
+    expect(first?.count).toBe(2);
+    expect(first?.duration.max).toBe(5_000);
+    expect(report.commands).toHaveLength(129);
+  });
+
   it('carries no key anywhere in the payload', () => {
     const metrics = new RedisMetrics();
     metrics.observe('GET', 1_000);
@@ -111,6 +142,22 @@ describe('the command seam', () => {
     await redis.onShutdown();
 
     expect(metrics.snapshot().commands[0]?.command).toBe('CLIENT');
+  });
+
+  it('caps what a caller-supplied verb can grow to', async () => {
+    const metrics = new RedisMetrics();
+    const redis = new Redis(offline, metrics);
+
+    // A verb the server would never answer is still recorded, because the seam
+    // records the rejection too.
+    for (let at = 0; at < 200; at += 1) {
+      await expect(redis.send(`verb-${at}`)).rejects.toThrow();
+    }
+    await redis.onShutdown();
+
+    const report = metrics.snapshot();
+    expect(report.total).toBe(200);
+    expect(report.commands).toHaveLength(129);
   });
 
   it('records nothing when no metrics were bound', async () => {

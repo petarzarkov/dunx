@@ -159,8 +159,10 @@ Every method on the connection and every `send()` passes through one seam inside
 rejected, including the ones Bun throws synchronously for subscriber-mode and
 argument errors; they stay in `count` as well.
 
-The series count is bounded by Redis's own command vocabulary. `send('client',
-['id'])` records `CLIENT`.
+`send('client', ['id'])` records `CLIENT`. That verb is whatever string the caller
+passed, and a command the server rejects is recorded against its verb like any
+other, so the series are capped the same way the queue's are: 128 verbs, then one
+`(other)` series, 129 in the payload.
 
 ### The key is never kept
 
@@ -233,11 +235,12 @@ queue, `handled` stays 0 while `published` climbs, as in the payload above.
 A handler with no `background` flag, in a container given `consume: true`, runs in
 that process and does land in its `handlerDuration`.
 
-### Series are capped at 128
+### Series are capped at 128, so a payload holds at most 129
 
 `publish(queue, name, data)` takes the name from the caller, so a name built from
 data would hold two histograms per value for the life of the process. Past 128
-distinct pairs everything else lands in one `(other)/(other)` series.
+distinct pairs everything else lands in one `(other)/(other)` series, which takes
+a slot of its own: `jobs` is 129 entries long once the collapse has happened.
 
 Only `publish()` is counted. `queue(name)` hands back bullmq's own `Queue`, and
 `add`, `addBulk` and `upsertJobScheduler` on it go round the seam.

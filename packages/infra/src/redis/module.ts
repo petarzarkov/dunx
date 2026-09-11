@@ -61,7 +61,7 @@ export interface RedisModuleSettings {
   /**
    * Count and time every command, readable through {@link RedisMetrics}. Off by
    * default: on, each command pays two `Bun.nanoseconds()` reads and a histogram
-   * record, and holds one histogram per verb seen.
+   * record, and holds one histogram per verb seen, up to the cap.
    */
   readonly metrics?: boolean;
 }
