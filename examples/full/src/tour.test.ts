@@ -343,6 +343,39 @@ it('times queries at the driver, since drizzle cannot time one', () => {
   expect(tour.text).toMatch(/select: \d+ calls, \d+ failed, p99 [\d.]+ms/);
 });
 
+it('times every redis command at the one seam, and keeps no key', () => {
+  expect(tour.text).toMatch(
+    /\d+ redis commands across \d+ verbs, \d+ failed - timed at the one seam/,
+  );
+  // The verb is the whole key: `QueryMetrics` keeps a redacted statement for its
+  // slowest, and the Redis analogue would be a key nothing can redact.
+  expect(tour.text).toMatch(
+    /[A-Z]+: \d+ calls, p99 .+ - the key is never kept/,
+  );
+});
+
+it('reports the publish side, and only handlers this process ran', () => {
+  expect(tour.text).toMatch(/\d+ jobs published, \d+ handled in this process/);
+
+  // The forked handler is the scope limit, stated by the numbers: its enqueue is
+  // this container's and its duration belongs to the child that ran it.
+  expect(tour.text).toMatch(
+    /thumbnails\/render: published \d+ \(p99 [^)]+\), handled 0/,
+  );
+  expect(tour.text).toContain(
+    'a background handler runs in a forked child with its own container',
+  );
+
+  const handled = tour.messages.some((line) =>
+    line.includes('audited 96x72 in this process'),
+  );
+  if (handled) {
+    expect(tour.text).toMatch(
+      /thumbnail-audit\/record: published \d+ \(p99 [^)]+\), handled 1 \(p99 [\d.]+ms\)/,
+    );
+  }
+});
+
 it('samples event-loop lag from boot rather than from the first read', () => {
   // `EventLoopLag` is a provider, so `onInit` enabled it before any of this ran.
   expect(tour.text).toMatch(
@@ -618,5 +651,9 @@ it('narrates the queue, which spans two processes', () => {
     expect(tour.text).toContain(
       'completed in a process this one never started',
     );
+    // The other half of the pair: a handler with no `background`, which runs
+    // wherever the queue is consumed - here, in this container.
+    expect(tour.text).toContain('audited 96x72 in this process');
+    expect(tour.text).toContain('ran in this process, so its handler duration');
   }
 });

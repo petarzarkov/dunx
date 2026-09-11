@@ -2,6 +2,7 @@ import { Module } from '@dunx/core';
 import {
   defaultRedisUrl,
   RedisConnection,
+  RedisMetrics,
   RedisModule,
 } from '@dunx/infra/redis';
 import { AppConfigService } from '../config.js';
@@ -23,19 +24,25 @@ const sessionsUrl = (url: string | undefined): string => {
     //
     // `maxRetries: 0` because on Bun 1.3.14 a client that failed to connect with
     // `maxRetries > 0` keeps a retry timer alive after `close()` and never exits.
-    RedisModule.forRootAsync({
-      useFactory: (config: AppConfigService) => {
-        // `exactOptionalPropertyTypes` will not let `string | undefined` reach
-        // a `url?: string`, even where `undefined` is ruled out.
-        const { url } = config.get('redis');
-        return {
-          ...(url === undefined ? {} : { url }),
-          connectionTimeout: 500,
-          maxRetries: 0,
-        };
+    RedisModule.forRootAsync(
+      {
+        useFactory: (config: AppConfigService) => {
+          // `exactOptionalPropertyTypes` will not let `string | undefined` reach
+          // a `url?: string`, even where `undefined` is ruled out.
+          const { url } = config.get('redis');
+          return {
+            ...(url === undefined ? {} : { url }),
+            connectionTimeout: 500,
+            maxRetries: 0,
+          };
+        },
+        inject: [AppConfigService] as const,
       },
-      inject: [AppConfigService] as const,
-    }),
+      // No subclass: the default connection. Settings come last, as on `DbModule`.
+      undefined,
+      // Times every command, readable as `RedisMetrics`. Off by default.
+      { metrics: true },
+    ),
     /**
      * A subclass rather than a name, so `SessionsRedis` is an ordinary
      * constructor parameter, and it does not claim `RedisConnection`. Database 1:
@@ -57,6 +64,6 @@ const sessionsUrl = (url: string | undefined): string => {
   controllers: [CacheController],
   providers: [Sessions],
   // Re-exported so the chat gateway fans out through the same connection.
-  exports: [RedisConnection, SessionsRedis, Sessions],
+  exports: [RedisConnection, RedisMetrics, SessionsRedis, Sessions],
 })
 export class CacheModule {}

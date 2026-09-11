@@ -18,7 +18,13 @@ export { QueueError, QueueErrorCode } from './errors.js';
 // dunx's, the waiting is bullmq's.
 export { JobEvents } from './events.js';
 export { type JobMeta } from './marker.js';
-export { QueueModule } from './module.js';
+export {
+  JobOutcome,
+  QueueMetrics,
+  type JobStats,
+  type QueueStatsReport,
+} from './metrics.js';
+export { QueueModule, type QueueModuleSettings } from './module.js';
 export {
   QueueOptions,
   type QueueOptionsInit,

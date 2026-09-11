@@ -19,9 +19,16 @@ export {
   RedisErrorCode,
 } from './errors.js';
 export {
+  RedisMetrics,
+  type CommandStats,
+  type RedisStatsReport,
+} from './metrics.js';
+export {
   RedisModule,
   redisConnection,
+  redisMetrics,
   type ConnectionTarget,
+  type RedisModuleSettings,
 } from './module.js';
 export {
   defaultRedisUrl,

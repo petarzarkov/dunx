@@ -1,12 +1,13 @@
 # Metrics
 
-Counts and timings for requests and database queries, as JSON. There is no
-Prometheus endpoint and no metrics dependency. dunx supplies the numbers Bun can
-measure; exposition belongs to whatever already scrapes your service.
+Counts and timings for requests, database queries, Redis commands and queue jobs,
+as JSON. There is no Prometheus endpoint and no metrics dependency. dunx supplies
+the numbers Bun can measure; exposition belongs to whatever already scrapes your
+service.
 
 ## Turning it on
 
-Two flags, independent of each other:
+Four flags, independent of each other:
 
 ```ts
 const app = await HttpFactory.create(AppModule, { metrics: true });
@@ -14,10 +15,15 @@ const app = await HttpFactory.create(AppModule, { metrics: true });
 
 ```ts
 DbModule.forRoot(new SqliteOptions({ schema, filename }), { metrics: true });
+RedisModule.forRoot({ url }, undefined, { metrics: true });
+QueueModule.forRoot({ url }, { metrics: true });
 ```
 
-Both default to `false`. With `metrics: false` no driver is wrapped and no
+All four default to `false`. With `metrics: false` no driver is wrapped and no
 histogram is allocated.
+
+The settings object is always the last parameter, which on `RedisModule` puts it
+after the optional connection subclass. `forRootAsync` takes it in the same slot.
 
 ## Reading requests
 
@@ -127,6 +133,114 @@ endpoint, so anything retained is readable by whoever can reach that page.
 drizzle parameterises, so a query it built carries no values anyway. The redaction
 is for the `sql` template escape hatch and hand-written statements. Redaction runs
 before truncation, so a long literal cannot survive by being cut off mid-string.
+
+## Reading Redis commands
+
+`RedisMetrics` is exported by `RedisModule` when `metrics: true`:
+
+```json
+{
+  "commands": [
+    {
+      "command": "GET",
+      "count": 8412,
+      "errors": 3,
+      "duration": { "count": 8412, "min": 41000, "p99": 980000 }
+    }
+  ],
+  "total": 12904,
+  "errors": 3,
+  "since": "2026-09-02T09:14:22.881Z"
+}
+```
+
+Every method on the connection and every `send()` passes through one seam inside
+`Redis`, so one series per verb covers all of them. `errors` counts commands that
+rejected, including the ones Bun throws synchronously for subscriber-mode and
+argument errors; they stay in `count` as well.
+
+The series count is bounded by Redis's own command vocabulary. `send('client',
+['id'])` records `CLIENT`.
+
+### The key is never kept
+
+There is no `slowest` field. `QueryMetrics` keeps a redacted statement shape for
+its slowest query; the same field here would hold a Redis key, which is
+application data with no redaction that would make it safe to serve.
+
+### A named connection binds a token
+
+The default connection binds the class:
+
+```ts
+constructor(private readonly stats: RedisMetrics) {}
+```
+
+A connection registered with a name or a subclass gets its own instance under
+`redisMetrics(label)`, where the label is the name or the subclass name. Two
+registrations both binding `RedisMetrics` would leave the importer resolving one
+of them.
+
+```ts
+RedisModule.forRootAsync(config, SessionsRedis, { metrics: true });
+
+class Ops {
+  readonly sessions = inject(redisMetrics('SessionsRedis'));
+}
+```
+
+## Reading the queue
+
+`QueueMetrics` is exported by `QueueModule` when `metrics: true`, keyed by queue
+and job name:
+
+```json
+{
+  "jobs": [
+    {
+      "queue": "thumbnails",
+      "name": "render",
+      "published": 1204,
+      "publishErrors": 0,
+      "publishDuration": { "count": 1204, "p99": 3200000 },
+      "handled": 0,
+      "failed": 0,
+      "timedOut": 0,
+      "handlerDuration": { "count": 0 }
+    }
+  ],
+  "published": 1204,
+  "handled": 0,
+  "since": "2026-09-02T09:14:22.881Z"
+}
+```
+
+`failed` and `timedOut` are disjoint: a handler rejected by `jobTimeoutMs` counts
+only in `timedOut`. A job name no handler claims is not recorded at all, since no
+handler ran.
+
+### What a forked handler does to these numbers
+
+The publish side is always this container's. The handler side is only this
+container's when the handler ran here.
+
+`isolation` defaults to `'process'`, so a queue carrying a
+`@JobHandler({ background: true })` runs in a forked child that boots its own
+container, with its own `QueueMetrics`. A dedicated worker process built by
+`WorkerFactory` is a separate container too. In a web process publishing to such a
+queue, `handled` stays 0 while `published` climbs, as in the payload above.
+
+A handler with no `background` flag, in a container given `consume: true`, runs in
+that process and does land in its `handlerDuration`.
+
+### Series are capped at 128
+
+`publish(queue, name, data)` takes the name from the caller, so a name built from
+data would hold two histograms per value for the life of the process. Past 128
+distinct pairs everything else lands in one `(other)/(other)` series.
+
+Only `publish()` is counted. `queue(name)` hands back bullmq's own `Queue`, and
+`add`, `addBulk` and `upsertJobScheduler` on it go round the seam.
 
 ## On the dashboard
 
@@ -248,6 +362,6 @@ is `["mark", "measure", "resource"]` under Bun, and a `gc` observer never fires.
 
 ## Resetting
 
-`reset()` on either class drops every series and moves `since` forward. Nothing
-calls it for you. A cumulative histogram is what `rate()` in a scraper wants, and
+`reset()` on any of the four classes drops every series and moves `since` forward.
+Nothing calls it for you. A cumulative histogram is what `rate()` in a scraper wants, and
 resetting on scrape would break the consumer most likely to be reading.

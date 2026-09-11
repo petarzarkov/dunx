@@ -132,8 +132,10 @@ export class Tour {
     this.group('@dunx/dashboard - one page over the running process');
     await this.dashboard.demonstrate(url);
 
-    // Last, so it counts every request and query the sections above made.
-    this.group('@dunx/http + @dunx/infra/db - request and query stats');
+    // Last, so it counts every request, query, command and job above.
+    this.group(
+      '@dunx/http + @dunx/infra - request, query, command and job stats',
+    );
     this.stats.demonstrate();
   }
 
