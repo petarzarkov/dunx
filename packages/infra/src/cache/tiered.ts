@@ -1,3 +1,4 @@
+import { AppError } from '@dunx/core';
 import { CacheStore } from './store.js';
 
 export interface TieredCacheInit {
@@ -30,7 +31,17 @@ export class TieredCacheStore extends CacheStore {
     init: TieredCacheInit = {},
   ) {
     super();
-    this.#promoteTtl = Math.max(1, init.promoteTtl ?? 30_000);
+    const promoteTtl = init.promoteTtl ?? 30_000;
+    // `Math.max(1, NaN)` is `NaN`, which reaches L1 as `expiresAt: NaN`. Nothing
+    // compares greater than that, so the promoted entry never expires and keeps
+    // answering after the L2 one is gone.
+    if (!Number.isFinite(promoteTtl) || promoteTtl <= 0) {
+      throw new AppError(
+        'Cache promoteTtl must be a positive number of milliseconds, got ' +
+          `${String(promoteTtl)}.`,
+      );
+    }
+    this.#promoteTtl = promoteTtl;
   }
 
   async get<V = unknown>(key: string): Promise<V | undefined> {

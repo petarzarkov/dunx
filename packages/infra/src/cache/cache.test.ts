@@ -114,6 +114,41 @@ describe('Cache', () => {
     expect(settled.map((one) => one.status)).toEqual(['rejected', 'rejected']);
   });
 
+  it('does not let a load started before a del undo it', async () => {
+    const cache = cacheWith();
+    const loading = cache.wrap('k', async () => {
+      await Bun.sleep(30);
+      return 'loaded';
+    });
+
+    await Bun.sleep(5);
+    await cache.del('k');
+    expect(await loading).toBe('loaded');
+
+    expect(await cache.get('k')).toBeUndefined();
+  });
+
+  it('does not let a load started before a set overwrite it', async () => {
+    const cache = cacheWith();
+    const loading = cache.wrap('k', async () => {
+      await Bun.sleep(30);
+      return 'stale';
+    });
+
+    await Bun.sleep(5);
+    await cache.set('k', 'fresh');
+    expect(await loading).toBe('stale');
+
+    expect(await cache.get<string>('k')).toBe('fresh');
+  });
+
+  it('stores again once the superseded load has finished', async () => {
+    const cache = cacheWith();
+    await cache.del('k');
+    expect(await cache.wrap('k', () => 'after')).toBe('after');
+    expect(await cache.get<string>('k')).toBe('after');
+  });
+
   it('does not store an undefined load', async () => {
     const cache = cacheWith();
     let loads = 0;

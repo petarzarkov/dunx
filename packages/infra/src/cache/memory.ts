@@ -1,3 +1,4 @@
+import { AppError } from '@dunx/core';
 import { CacheStore } from './store.js';
 
 interface Entry {
@@ -29,7 +30,15 @@ export class MemoryCacheStore extends CacheStore {
 
   constructor(init: MemoryCacheInit = {}) {
     super();
-    this.#max = Math.max(1, init.max ?? 10_000);
+    const max = init.max ?? 10_000;
+    // `Math.max(1, NaN)` is `NaN`, and `size > NaN` is never true, so a
+    // non-finite bound silently turns eviction off and the Map grows forever.
+    if (!Number.isFinite(max)) {
+      throw new AppError(
+        `Cache max must be a finite number of entries, got ${String(max)}.`,
+      );
+    }
+    this.#max = Math.max(1, max);
   }
 
   /** Live and expired entries alike, until one is touched. */

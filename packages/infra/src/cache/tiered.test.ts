@@ -1,3 +1,4 @@
+import { AppError } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
 import { FakeRedis } from './fake-redis.fixture.js';
 import { MemoryCacheStore } from './memory.js';
@@ -37,14 +38,22 @@ describe('TieredCacheStore', () => {
   });
 
   it('caps the L1 lifetime at promoteTtl', async () => {
-    const { redis, store } = tiers(50);
+    const { l1, redis, store } = tiers(50);
     await store.set('k', 1, 5_000);
     expect(redis.writes[0]?.px).toBe(5_000);
 
     await Bun.sleep(80);
     // Gone from L1, still in L2, so the read promotes it back.
+    expect(await l1.get('k')).toBeUndefined();
     expect(await store.get<number>('k')).toBe(1);
   });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -1])(
+    'rejects a promoteTtl of %p rather than promoting forever',
+    (promoteTtl) => {
+      expect(() => tiers(promoteTtl)).toThrow(AppError);
+    },
+  );
 
   it('answers from L1 without reaching L2', async () => {
     const { l1, redis, store } = tiers();

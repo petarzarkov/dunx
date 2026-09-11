@@ -45,6 +45,9 @@ next `wrap` runs it again.
 Concurrent `wrap` calls for one key run `load()` once. The second caller receives
 the first one's promise, and a rejection is not cached: the next call loads again.
 
+A `set` or `del` for the same key while `load()` is running wins. `wrap` hands the
+loaded value to its caller and does not store it, so a `del` stays a `del`.
+
 Dedupe is per process. Ten replicas handling a cold key run ten loads.
 
 ## The three stores

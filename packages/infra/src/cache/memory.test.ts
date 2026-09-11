@@ -1,3 +1,4 @@
+import { AppError } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
 import { MemoryCacheStore } from './memory.js';
 
@@ -58,6 +59,13 @@ describe('MemoryCacheStore', () => {
     await store.set('a', 1, 1_000);
     expect(await store.get<number>('a')).toBe(1);
   });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects a max of %p rather than evicting nothing',
+    (max) => {
+      expect(() => new MemoryCacheStore({ max })).toThrow(AppError);
+    },
+  );
 
   it('stores a value by reference', async () => {
     const store = new MemoryCacheStore();
