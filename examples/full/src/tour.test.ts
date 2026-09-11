@@ -268,6 +268,18 @@ it('reaches redis, or says it is skipping it', () => {
   expect(tour.text).toMatch(/(PING \S+ -> PONG|skipping redis at \S+)/);
 });
 
+it('serves a cached read and dedupes the concurrent ones', () => {
+  expect(tour.text).toMatch(
+    /store -> (L1 memory in front of L2 redis|L1 memory only, redis unreachable at boot), default ttl 30000ms/,
+  );
+  expect(tour.text).toContain(
+    '10 concurrent reads of an uncached key -> 1 load (single flight, per process)',
+  );
+  expect(tour.text).toMatch(
+    /DELETE -> \{"evicted":true\}, the next read loads again/,
+  );
+});
+
 it('exits 0 with no redis at all', async () => {
   const run = await runTour({ REDIS_URL: 'redis://127.0.0.1:1' });
 

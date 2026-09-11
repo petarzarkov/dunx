@@ -154,7 +154,7 @@ export interface HttpOptions extends AppOptions {
    * and never both. The pair without a `gatewayPort` is a boot error.
    *
    * `0` takes any free port and is the one value that does not warn when no
-   * gateway is declared. See docs/guide/19-deployment.md.
+   * gateway is declared. See docs/guide/20-deployment.md.
    */
   readonly gatewayPort?: number;
 }

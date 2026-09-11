@@ -318,6 +318,35 @@ it('answers the cache routes, degrading to 503 rather than failing', async () =>
   expect((await json('cache/suite', { method: 'DELETE' })).status).toBe(200);
 });
 
+it('serves a cached read, one load per key in flight', async () => {
+  const loads = async (): Promise<number> =>
+    (await json<{ loads: number }>('catalog')).body.loads;
+
+  const before = await loads();
+  const first = await json<{ symbol: string; price: number }>('catalog/acme');
+  expect(first.status).toBe(200);
+  expect(first.body.symbol).toBe('acme');
+
+  // A hit: the loader does not run a second time.
+  const second = await json<{ loadedAt: number }>('catalog/acme');
+  expect(second.body.loadedAt).toBe(
+    (first.body as unknown as { loadedAt: number }).loadedAt,
+  );
+  expect(await loads()).toBe(before + 1);
+
+  // Ten at once on a cold key share a single load.
+  const at = await loads();
+  await Promise.all(Array.from({ length: 10 }, () => json('catalog/zeta')));
+  expect(await loads()).toBe(at + 1);
+
+  const evicted = await json<{ evicted: boolean }>('catalog/acme', {
+    method: 'DELETE',
+  });
+  expect(evicted.body.evicted).toBe(true);
+  await json('catalog/acme');
+  expect(await loads()).toBe(at + 2);
+});
+
 it('guards only the reports controller', async () => {
   // @UseGuards(AuthGuard) is on ReportsController, so everything else is open.
   expect((await json('users')).status).toBe(200);
