@@ -45,6 +45,23 @@ export const resolveDirWithin = (root: string, prefix: string): string =>
   checkWithin(root, prefix, true);
 
 /**
+ * A `list` pattern, checked before `Bun.Glob` is constructed from it. `scan`
+ * walks a `..` segment and ignores `cwd` outright for an absolute pattern, so a
+ * checked `prefix` buys nothing while the glob beside it can name the whole
+ * filesystem.
+ *
+ * The same `checkWithin` every key goes through, so there is one definition of
+ * "outside the root" rather than a second one that drifts. A wildcard is an
+ * ordinary path character to `resolve`, and the root itself is the pattern's
+ * own directory. What this cannot see is how `Bun.Glob` expands a brace or a
+ * bracket, so `LocalStorage.list` checks the paths it produced as well.
+ */
+export const assertGlobWithin = (root: string, glob: string): string => {
+  checkWithin(root, glob, true);
+  return glob;
+};
+
+/**
  * An object key with leading slashes and duplicate separators removed. `..` is
  * rejected outright rather than collapsed: an S3 key is opaque, so a caller who
  * wrote `..` meant a path, and under a configured prefix that would escape it.

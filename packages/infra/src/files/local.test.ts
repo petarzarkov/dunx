@@ -307,6 +307,53 @@ describe('LocalStorage', () => {
       }
     });
 
+    // The prefix was checked and the glob beside it was not, so `prefix: '../..'`
+    // threw while `glob: '/etc/*'` listed the host. What `scan` does with each
+    // of these is in docs/bun-apis.md.
+    it('rejects a glob that escapes, not just a prefix', async () => {
+      const patterns = [
+        '../*',
+        '../../**/*',
+        'reports/../../*',
+        '/etc/*',
+        '..\\*',
+      ];
+
+      for (const glob of patterns) {
+        expect(await rejection(collect(storage.list({ glob })))).toBeInstanceOf(
+          PathTraversalError,
+        );
+      }
+    });
+
+    it('contains what a brace pattern expands to as well', async () => {
+      // A brace group holding a `..` branch matches nothing on Bun 1.4.2 rather
+      // than expanding into a traversal (docs/bun-apis.md), and `list` checks
+      // the paths a scan produced - so either way this is an empty listing or a
+      // refusal, never a key from outside the root.
+      expect(
+        await collect(storage.list({ glob: '{reports,../..}/*' })),
+      ).toEqual([]);
+    });
+
+    it('lists a key whose colon only looks drive-qualified', async () => {
+      // `resolve` settles this rather than a second regex: on POSIX the key is
+      // an ordinary filename, on Windows it is drive-relative and resolves out.
+      await storage.write('c:notes.txt', 'fine');
+
+      expect(await collect(storage.list({ glob: 'c:*' }))).toEqual([
+        'c:notes.txt',
+      ]);
+    });
+
+    it('still lists a glob that merely mentions dots', async () => {
+      await storage.write('a..b/c.txt', 'fine');
+
+      expect(await collect(storage.list({ glob: 'a..b/*' }))).toEqual([
+        'a..b/c.txt',
+      ]);
+    });
+
     it('names the key and the root it refused to leave', async () => {
       const error = await rejection(storage.read('../../etc/passwd'));
 

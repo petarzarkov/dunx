@@ -764,6 +764,39 @@ locally, `NetworkSink` for S3), preceded by an empty `Bun.write` to create paren
 and truncate. On 1.4.1 the local half is `Bun.write(path, stream)`; the S3 half is
 still a `NetworkSink`, because `S3Client`'s write takes no `ReadableStream`.
 
+### `Bun.Glob.scan` - `cwd` is where a pattern starts, not a boundary
+
+`scan({ cwd })` resolves the pattern against `cwd` and follows it wherever it
+leads. An absolute pattern ignores `cwd` entirely. Measured on 1.4.2 rev
+`744846f84`, one run, against a root holding `ok/a.txt` and `sub/s.txt` with a
+`secret/creds.env` beside it:
+
+| Pattern              | Yields                                           |
+| -------------------- | ------------------------------------------------ |
+| `**/*`               | `sub/s.txt`, `ok/a.txt`                          |
+| `../secret/*`        | `../secret/creds.env`                            |
+| `sub/../../secret/*` | `sub/../../secret/creds.env`                     |
+| `/etc/hostn*`        | `/etc/hostname`                                  |
+| `{ok,../secret}/*`   | nothing, and that includes the `ok/a.txt` branch |
+| `{.,..}/secret/*`    | nothing                                          |
+| `[.][.]/secret/*`    | nothing                                          |
+| `..?/secret/*`       | nothing                                          |
+
+A `..` segment and a leading `/` escape. The forms that spell a parent segment
+without writing one as a segment do not, and a brace group holding a `..` branch
+matches nothing at all rather than expanding to the branch that would have
+resolved. `dot: true` and `onlyFiles: true` change none of it.
+
+An escape stays visible in the result: a relative match keeps its `../` prefix
+and an absolute pattern yields absolute paths, so nothing is normalised away
+before the caller sees it.
+
+`LocalStorage.list` takes its `glob` from a caller, which in an app is usually a
+query parameter, so it checks the pattern through the same `checkWithin` every
+key goes through and checks each path the scan produced. The second check is
+what keeps containment off the last four rows of that table: they are today's
+expansion, not a promise.
+
 ### `Bun.S3Client` - the undocumented surface
 
 `prototype`: `delete`, `exists`, `file`, `list`, `presign`, `size`, `stat`,

@@ -185,6 +185,18 @@ it('refuses to walk out of the storage root', async () => {
   expect(status).toBe(400);
 });
 
+it('refuses a listing glob that walks out too, not just a key', async () => {
+  // The prefix was checked and the glob beside it was not, so `?glob=/etc/*`
+  // listed the host filesystem through a route that refuses `?key=../..`.
+  for (const glob of ['/etc/*', '../../**/*']) {
+    const { status } = await json<ErrorBody>(
+      `files?glob=${encodeURIComponent(glob)}`,
+    );
+
+    expect(status).toBe(400);
+  }
+});
+
 it('answers 404 for a storage key that was never written', async () => {
   const { status } = await json<ErrorBody>(
     'files/object?key=never-written.txt',

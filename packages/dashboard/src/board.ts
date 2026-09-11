@@ -30,7 +30,10 @@ interface BullBoardModules {
     serverAdapter: unknown;
     options?: { uiConfig: BoardUiConfig };
   }) => unknown;
-  readonly BullMQAdapter: new (queue: unknown) => QueueAdapter;
+  readonly BullMQAdapter: new (
+    queue: unknown,
+    options?: { readOnlyMode: boolean },
+  ) => QueueAdapter;
   readonly BunAdapter: new () => {
     setBasePath(path: string): unknown;
     setQueues(queues: unknown): unknown;
@@ -131,7 +134,6 @@ export const boardNames = (
  * setting only one leaves the page half-branded.
  */
 interface BoardUiConfig {
-  readonly readOnlyMode: boolean;
   readonly boardTitle: string;
   /** The mark **in the board's own header**, beside the title. */
   readonly boardLogo: { path: string; width?: number; height?: number };
@@ -145,7 +147,6 @@ const uiConfigFor = (
   options: DashboardOptions,
   favicon: string,
 ): BoardUiConfig => ({
-  readOnlyMode: !options.commands,
   boardTitle: `${options.title} queues`,
   // Both, not just the tab: `boardLogo` is the mark in bull-board's own header,
   // which is what actually makes the page look like part of this app rather than
@@ -187,12 +188,17 @@ export const buildBoard = async (
   serverAdapter.setBasePath(basePath);
 
   createBullBoard({
-    queues: names.map((name) => new BullMQAdapter(source.queue(name))),
+    // `commands: false` maps onto bull-board's own `readOnlyMode` rather than dunx
+    // refusing the POSTs itself, and that switch is **per adapter**: `BaseAdapter`
+    // reads it in its constructor and `queueProvider` answers 405 from it. As a
+    // `uiConfig` key it set a field nothing reads and every mutation stayed open.
+    queues: names.map(
+      (name) =>
+        new BullMQAdapter(source.queue(name), {
+          readOnlyMode: !options.commands,
+        }),
+    ),
     serverAdapter,
-    // `commands: false` maps straight onto bull-board's own `readOnlyMode` rather
-    // than dunx refusing the POSTs itself. Enforcing it here would be a second
-    // implementation of a switch the library already has, and one that disagreed
-    // the moment bull-board grew an operation dunx had not heard of.
     options: { uiConfig: uiConfigFor(options, favicon) },
   });
 
