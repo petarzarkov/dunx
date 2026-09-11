@@ -1,11 +1,12 @@
 import type { DynamicModule } from '../di/module.js';
 import { provide } from '../di/provider.js';
 import { token } from '../di/token.js';
+import { ConfigFiles, type ConfigValues } from './files.js';
 import { issuePath, type StandardSchemaV1 } from './schema.js';
 import { ConfigError, ConfigService, type ConfigSource } from './service.js';
 
 /** The raw source `validate` was handed, bound so a factory can read it. */
-export const ConfigInput = token<ConfigSource>('ConfigInput');
+export const ConfigInput = token<ConfigValues>('ConfigInput');
 
 interface ConfigModuleBase<T extends object> {
   /**
@@ -15,6 +16,16 @@ interface ConfigModuleBase<T extends object> {
    * Pass a plain object in a test rather than mutating the process environment.
    */
   readonly source?: ConfigSource;
+  /**
+   * Configuration files, read in order and deep-merged under the environment.
+   * `.yml`, `.yaml`, `.toml` and `.json`; a missing one is skipped. See
+   * {@link ConfigFiles}.
+   *
+   * **The environment still wins, by exact key name.** There is no convention
+   * mapping `DATABASE__POOLSIZE` onto `database.poolSize`; override a nested key
+   * in `validate`.
+   */
+  readonly files?: readonly string[];
   /**
    * Bind under a subclass as well, so the type argument survives into places
    * that name the token rather than annotate a parameter:
@@ -38,7 +49,10 @@ interface ConfigModuleBase<T extends object> {
  * How the raw source becomes typed configuration: a function, or a schema.
  * Exactly one, because two would leave it unclear which ran.
  */
-export type ConfigModuleOptions<T extends object> = ConfigModuleBase<T> &
+export type ConfigModuleOptions<
+  T extends object,
+  S extends object = ConfigSource,
+> = ConfigModuleBase<T> &
   (
     | {
         /**
@@ -48,8 +62,12 @@ export type ConfigModuleOptions<T extends object> = ConfigModuleBase<T> &
          *
          * A hand-written function costs no dependency and works identically to
          * a schema.
+         *
+         * The parameter is `ConfigSource` (`Bun.env`'s flat string map) unless
+         * it is annotated otherwise. With `files`, annotate it `ConfigValues`:
+         * a parsed file's port is already a number.
          */
-        readonly validate: (env: ConfigSource) => T | Promise<T>;
+        readonly validate: (env: S) => T | Promise<T>;
         readonly schema?: undefined;
       }
     | {
@@ -75,13 +93,18 @@ export type ConfigModuleOptions<T extends object> = ConfigModuleBase<T> &
  * One validation function out of either spelling, so the rest of the module has
  * a single path.
  */
-const validatorFor = <T extends object>(
-  options: ConfigModuleOptions<T>,
-): ((env: ConfigSource) => T | Promise<T>) => {
-  if (options.validate !== undefined) return options.validate;
+const validatorFor = <T extends object, S extends object>(
+  options: ConfigModuleOptions<T, S>,
+): ((env: ConfigValues) => T | Promise<T>) => {
+  // The one cast in this module. `S` exists so the caller's `validate` sees the
+  // source shape it declared; what is bound is always a `ConfigValues`, and the
+  // two are the same object.
+  if (options.validate !== undefined) {
+    return options.validate as (env: ConfigValues) => T | Promise<T>;
+  }
 
   const { schema } = options;
-  return async (env: ConfigSource): Promise<T> => {
+  return async (env: ConfigValues): Promise<T> => {
     const result = await schema['~standard'].validate(env);
     if (result.issues === undefined) return result.value;
 
@@ -111,11 +134,13 @@ export class ConfigModule {
    * There is no `forRootAsync`: eager resolution settles an async `validate` before
    * any constructor runs.
    */
-  static forRoot<T extends object>(
-    options: ConfigModuleOptions<T>,
+  static forRoot<T extends object, S extends object = ConfigSource>(
+    options: ConfigModuleOptions<T, S>,
   ): DynamicModule {
     const Target = options.as ?? ConfigService;
     const validate = validatorFor(options);
+    const environment = options.source ?? Bun.env;
+    const { files } = options;
     return {
       module: ConfigModule,
       global: true,
@@ -124,9 +149,19 @@ export class ConfigModule {
           ? [ConfigService]
           : [ConfigService, options.as],
       providers: [
-        provide(ConfigInput, { useValue: options.source ?? Bun.env }),
+        files === undefined
+          ? provide(ConfigInput, { useValue: environment })
+          : provide(ConfigInput, {
+              // The environment goes on top, so a variable overrides a file key
+              // of the same name. Eager resolution settles this before any
+              // constructor runs, the same way an async `validate` is settled.
+              useFactory: async (): Promise<ConfigValues> => ({
+                ...(await new ConfigFiles(files).load()),
+                ...environment,
+              }),
+            }),
         provide(Target, {
-          useFactory: async (env: ConfigSource) =>
+          useFactory: async (env: ConfigValues) =>
             new Target(await validate(env)),
           inject: [ConfigInput] as const,
         }),

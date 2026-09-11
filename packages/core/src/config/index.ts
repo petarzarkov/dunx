@@ -1,3 +1,4 @@
+export { ConfigFiles, type ConfigValues } from './files.js';
 export {
   ConfigInput,
   ConfigModule,

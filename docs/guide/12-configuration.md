@@ -45,8 +45,61 @@ Whatever it throws is what boot fails with, so throw something whose message say
 which keys are wrong. `schema` is the same step handed to a Standard Schema
 instead, and its issues become a `ConfigError` naming each path.
 
-That is the whole contract. There is no `envFilePath`, no `load: [...]`, no
+That is the whole contract, plus `files`. There is no `envFilePath` and no
 `expandVariables`.
+
+## Configuration files
+
+`files` reads YAML, TOML and JSON and merges them under the environment:
+
+```ts
+ConfigModule.forRoot({
+  files: ['application.yml', `application-${Bun.env.NODE_ENV}.yml`],
+  schema: configSchema,
+  as: AppConfigService,
+});
+```
+
+`.yml` and `.yaml` go through `Bun.YAML`, `.toml` through `Bun.TOML`, `.json`
+through `JSON.parse`. All three are native, so this costs no dependency.
+
+Files are read in the order given and deep-merged, so an overlay overrides only
+the keys it names. **A file that does not exist is skipped**, which is what lets
+one list cover every environment. A file whose top level is not an object fails
+boot naming the file, and so does one that does not parse.
+
+The shape a file is good at is the one a flat variable is bad at:
+
+```yaml
+seed:
+  users:
+    - ada
+    - grace
+```
+
+`ConfigService.get` reads that back with a dotted path: `config.get('seed.users')`.
+
+### The environment still wins
+
+`Bun.env` is spread over the merged files, so a variable overrides a file key of
+the same name. That match is by exact name. There is no convention mapping
+`DATABASE__POOLSIZE` onto `database.poolSize`, because that needs a separator, a
+case rule and a coercion rule, which is the schema DSL this module does not have.
+
+Override a nested key in `validate`, where it stays visible:
+
+```ts
+validate: (src) => schema.parse({
+  ...src,
+  database: { ...src.database, url: Bun.env.DATABASE_URL ?? src.database.url },
+}),
+```
+
+Structure belongs in the file, secrets and per-deploy values in the environment.
+
+`validate` receives `ConfigValues` rather than `ConfigSource` once files are in
+play: a parsed `port: 3000` is already a number, where `Bun.env` only ever holds
+strings.
 
 A schema DSL can only express what its author anticipated; a function expresses
 everything. Grouping flat variables into nested objects, deriving one value from

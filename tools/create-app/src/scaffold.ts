@@ -5,15 +5,8 @@ import { Glob } from 'bun';
 import { agentFiles } from './agents.js';
 import { resolveFeatures, type Feature } from './features.js';
 import { buildScript } from './build-template.js';
-import {
-  appModule,
-  config,
-  configGroupsFor,
-  envExample,
-  main,
-  manifest,
-  readme,
-} from './generate.js';
+import { config, configGroupsFor } from './generate-config.js';
+import { appModule, envExample, main, manifest, readme } from './generate.js';
 
 /** The templates that ship with the package, as `templates/<name>/`. */
 export const TEMPLATES = Object.freeze(['minimal'] as const);
