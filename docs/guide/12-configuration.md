@@ -31,14 +31,19 @@ its path, rather than whatever shape the library throws.
 `ConfigModule.forRoot` takes one required option, in either spelling:
 
 ```ts
-type ConfigModuleOptions<T extends object> = {
+type ConfigModuleOptions<T extends object, S extends object = ConfigSource> = {
   source?: ConfigSource;
   as?: new (values: T) => ConfigService<T>;
 } & (
-  | { validate: (env: ConfigSource) => T | Promise<T>; schema?: undefined }
+  | { validate: (env: S) => T | Promise<T>; schema?: undefined }
   | { schema: StandardSchemaV1<unknown, T>; validate?: undefined }
 );
 ```
+
+`forRoot` has two signatures, and `files` picks between them: without it `S` is
+`ConfigSource`, the flat string map `Bun.env` is; with it `S` is `ConfigValues`,
+where a parsed `port: 3000` is already a number. Annotating `ConfigValues` in an
+app that passes no files is a compile error rather than a run of empty reads.
 
 `validate` receives the raw key/value pairs and returns the shaped, typed object.
 Whatever it throws is what boot fails with, so throw something whose message says

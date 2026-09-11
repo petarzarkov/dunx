@@ -17,16 +17,6 @@ interface ConfigModuleBase<T extends object> {
    */
   readonly source?: ConfigSource;
   /**
-   * Configuration files, read in order and deep-merged under the environment.
-   * `.yml`, `.yaml`, `.toml` and `.json`; a missing one is skipped. See
-   * {@link ConfigFiles}.
-   *
-   * **The environment still wins, by exact key name.** There is no convention
-   * mapping `DATABASE__POOLSIZE` onto `database.poolSize`; override a nested key
-   * in `validate`.
-   */
-  readonly files?: readonly string[];
-  /**
    * Bind under a subclass as well, so the type argument survives into places
    * that name the token rather than annotate a parameter:
    *
@@ -89,12 +79,33 @@ export type ConfigModuleOptions<
       }
   );
 
+/** The `files` half, which is what decides the source shape. */
+export interface ConfigFilesOption {
+  /**
+   * Configuration files, read in order and deep-merged under the environment.
+   * `.yml`, `.yaml`, `.toml` and `.json`; a missing one is skipped. See
+   * {@link ConfigFiles}.
+   *
+   * **The environment still wins, by exact key name.** There is no convention
+   * mapping `DATABASE__POOLSIZE` onto `database.poolSize`; override a nested key
+   * in `validate`.
+   */
+  readonly files: readonly string[];
+}
+
+/**
+ * Either source shape, for the places that do not care which one a caller chose.
+ */
+type AnyConfigModuleOptions<T extends object> =
+  | ConfigModuleOptions<T, ConfigSource>
+  | ConfigModuleOptions<T, ConfigValues>;
+
 /**
  * One validation function out of either spelling, so the rest of the module has
  * a single path.
  */
-const validatorFor = <T extends object, S extends object>(
-  options: ConfigModuleOptions<T, S>,
+const validatorFor = <T extends object>(
+  options: AnyConfigModuleOptions<T>,
 ): ((env: ConfigValues) => T | Promise<T>) => {
   // The one cast in this module. `S` exists so the caller's `validate` sees the
   // source shape it declared; what is bound is always a `ConfigValues`, and the
@@ -134,8 +145,25 @@ export class ConfigModule {
    * There is no `forRootAsync`: eager resolution settles an async `validate` before
    * any constructor runs.
    */
-  static forRoot<T extends object, S extends object = ConfigSource>(
-    options: ConfigModuleOptions<T, S>,
+  static forRoot<T extends object>(
+    options: ConfigModuleOptions<T, ConfigSource> & {
+      readonly files?: undefined;
+    },
+  ): DynamicModule;
+  /**
+   * With `files`, the source is the merged parsed values rather than `Bun.env`'s
+   * flat strings, so `validate` takes a {@link ConfigValues}. Declared as a
+   * second signature rather than one generic: annotating `ConfigValues` in an
+   * app that passes no files would otherwise typecheck and then read `undefined`
+   * out of every nested path at runtime.
+   */
+  static forRoot<T extends object>(
+    options: ConfigModuleOptions<T, ConfigValues> & ConfigFilesOption,
+  ): DynamicModule;
+  static forRoot<T extends object>(
+    options:
+      | (ConfigModuleOptions<T, ConfigSource> & { readonly files?: undefined })
+      | (ConfigModuleOptions<T, ConfigValues> & ConfigFilesOption),
   ): DynamicModule {
     const Target = options.as ?? ConfigService;
     const validate = validatorFor(options);
@@ -155,9 +183,19 @@ export class ConfigModule {
               // The environment goes on top, so a variable overrides a file key
               // of the same name. Eager resolution settles this before any
               // constructor runs, the same way an async `validate` is settled.
+              //
+              // `undefined` entries are dropped first: `ConfigSource` allows
+              // them, and spreading `{ PORT: undefined }` would delete the
+              // file's value rather than leaving it as the fallback. An unset
+              // variable is absent from `Bun.env` entirely, so this is what a
+              // hand-written `source` has to mean too.
               useFactory: async (): Promise<ConfigValues> => ({
                 ...(await new ConfigFiles(files).load()),
-                ...environment,
+                ...Object.fromEntries(
+                  Object.entries(environment).filter(
+                    ([, value]) => value !== undefined,
+                  ),
+                ),
               }),
             }),
         provide(Target, {

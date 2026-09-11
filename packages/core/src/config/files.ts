@@ -11,6 +11,11 @@ const isPlainObject = (value: unknown): value is ConfigValues =>
 const merge = (base: ConfigValues, overlay: ConfigValues): ConfigValues => {
   const out: ConfigValues = { ...base };
   for (const [key, value] of Object.entries(overlay)) {
+    // `out.__proto__ = value` reaches the inherited setter and repoints the
+    // object instead of adding a key, so `__proto__: { isAdmin: true }` in a
+    // file would have `config.get('isAdmin')` answer true. Dropped at every
+    // depth, because a config key by that name can never be read back anyway.
+    if (key === '__proto__') continue;
     const existing = out[key];
     out[key] =
       isPlainObject(existing) && isPlainObject(value)
@@ -21,13 +26,13 @@ const merge = (base: ConfigValues, overlay: ConfigValues): ConfigValues => {
 };
 
 /** `Bun.YAML` and `Bun.TOML` are native, so no format here costs a dependency. */
-const parse = (path: string, text: string): unknown => {
+const parserFor = (path: string): ((text: string) => unknown) => {
   const lower = path.toLowerCase();
   if (lower.endsWith('.yml') || lower.endsWith('.yaml')) {
-    return Bun.YAML.parse(text);
+    return (text) => Bun.YAML.parse(text);
   }
-  if (lower.endsWith('.toml')) return Bun.TOML.parse(text);
-  if (lower.endsWith('.json')) return JSON.parse(text) as unknown;
+  if (lower.endsWith('.toml')) return (text) => Bun.TOML.parse(text);
+  if (lower.endsWith('.json')) return (text) => JSON.parse(text) as unknown;
 
   throw new ConfigError(
     `Config file "${path}" has no parser. Use .yml, .yaml, .toml or .json.`,
@@ -68,14 +73,19 @@ export class ConfigFiles {
       const file = Bun.file(absolute);
       if (!(await file.exists())) continue;
 
+      // Resolved before the try, so "no parser" is not rewrapped as "did not
+      // parse", which named the file twice and contradicted itself.
+      const parse = parserFor(path);
       const text = await file.text();
       let parsed: unknown;
       try {
-        parsed = parse(path, text);
+        parsed = parse(text);
       } catch (cause) {
         // The parser names the line but not the file: it was handed a string.
         throw new ConfigError(
-          `Config file "${path}" did not parse: ${(cause as Error).message}`,
+          `Config file "${path}" did not parse: ${
+            cause instanceof Error ? cause.message : String(cause)
+          }`,
         );
       }
 

@@ -100,12 +100,42 @@ describe('ConfigFiles', () => {
     await expect(load(bad)).rejects.toThrow(/"bad\.toml" did not parse/);
   });
 
-  it('rejects an extension it has no parser for', async () => {
+  it('rejects an extension it has no parser for, once', async () => {
     const ini = await write('conf.ini', 'a=1\n');
 
     await expect(load(ini)).rejects.toThrow(
       /no parser.*\.yml, \.yaml, \.toml/s,
     );
+    // The parser is chosen before the read is attempted, so this is not also
+    // wrapped as "did not parse", which named the file twice and contradicted
+    // itself.
+    await expect(load(ini)).rejects.not.toThrow(/did not parse/);
+  });
+
+  it('drops a `__proto__` key instead of repointing the prototype', async () => {
+    const evil = await write(
+      'proto.yml',
+      '__proto__:\n  isAdmin: true\nport: 3000\n',
+    );
+
+    const values = await load(evil);
+
+    expect(values['port']).toBe(3000);
+    expect(values['isAdmin']).toBeUndefined();
+    expect(Object.getPrototypeOf(values)).toBe(Object.prototype);
+  });
+
+  it('drops a nested `__proto__` key too', async () => {
+    const evil = await write(
+      'proto-nested.yml',
+      'db:\n  __proto__:\n    isAdmin: true\n  host: local\n',
+    );
+
+    const db = (await load(evil))['db'] as Record<string, unknown>;
+
+    expect(db['host']).toBe('local');
+    expect(db['isAdmin']).toBeUndefined();
+    expect(Object.getPrototypeOf(db)).toBe(Object.prototype);
   });
 
   it('defaults its cwd to the process working directory', async () => {
@@ -175,6 +205,31 @@ describe('ConfigModule with files', () => {
     // leaves everything it does not name alone.
     expect(config.get('PORT')).toBe('8080');
     expect(config.get('kept')).toBe('yes');
+    await app.shutdown();
+  });
+
+  it('treats an undefined environment entry as unset, not as an override', async () => {
+    const file = await write('fallback.yml', 'PORT: 3000\n');
+    interface Ported {
+      readonly PORT: unknown;
+    }
+
+    @Module({
+      imports: [
+        ConfigModule.forRoot({
+          files: [join(dir, file)],
+          // `ConfigSource` permits an enumerable undefined. Spreading it would
+          // delete the file's value rather than leaving it as the fallback.
+          source: { PORT: undefined },
+          validate: (src: ConfigValues) => src as unknown as Ported,
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+
+    expect(app.get(ConfigService<Ported>).get('PORT')).toBe(3000);
     await app.shutdown();
   });
 
