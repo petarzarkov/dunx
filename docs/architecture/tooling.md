@@ -277,8 +277,11 @@ decision rather than a footnote to it. Two things follow, and both are in the co
 - **It is not inlined.** 1.7 MiB in every page response would resend it on every
   load. The two files are served as routes with `cache-control: immutable` and the
   installed version in the query, so a browser fetches them once.
-- **It is an optional peer, resolved on the first request for the page.** An app
-  serving only `/openapi.json` neither installs nor loads it.
+- **It is a dependency, resolved on the first request for the page.** An app
+  serving only `/openapi.json` installs the 12 MB and never looks it up:
+  `SwaggerAssets.resolve()` runs when a page is first built, not at boot, so a
+  broken install surfaces as that route failing instead of as everyone's boot
+  error. CLAUDE.md carries the carve-out for why it is a dependency and not a peer.
 
 Two measurements from the explorer era still shape things as they are:
 **per-component Mantine CSS** beat the `styles.css` barrel 381 KiB to 517 KiB, and
