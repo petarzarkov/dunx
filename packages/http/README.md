@@ -67,6 +67,7 @@ The guide is canonical for every row; this table is the index.
 | Metrics                 | Per-route counts and timings, off by default                | [Metrics](../../docs/guide/22-metrics.md)                         |
 | Health and draining     | `/health/live`, `/health/ready`, readiness during a rollout | [Health checks](../../docs/guide/20-health-checks.md)             |
 | Throttling              | `@Throttle`, `@SkipThrottle`, memory and Redis counters     | [Middleware and guards](../../docs/guide/08-middleware-and-guards.md) |
+| Outbound resilience     | `HttpRetryClassifier`: which statuses retry, and `Retry-After` | [Resilience](../../docs/guide/25-resilience.md)                |
 | Static files            | `Bun.file` behind a mount, with a cache policy              | [Deployment](../../docs/guide/19-deployment.md)                   |
 | Compression             | zstd and gzip on Bun's own compressors                      | [Deployment](../../docs/guide/19-deployment.md)                   |
 

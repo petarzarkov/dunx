@@ -1,4 +1,4 @@
-import type { RetryOptions } from './retry.js';
+import type { HttpRetryOptions } from './retry.js';
 
 /**
  * Named `HttpClientOptions`, not `HttpOptions`: the server half already exports
@@ -16,7 +16,7 @@ export interface HttpClientOptionsInit {
   readonly timeoutMs?: number;
   /** Sent on every request, under anything a call sets itself. */
   readonly headers?: Readonly<Record<string, string>>;
-  readonly retry?: RetryOptions<unknown>;
+  readonly retry?: HttpRetryOptions;
   /**
    * Forward W3C Trace Context upstream as `traceparent`, so the callee's spans
    * join this request's trace and one trace spans both services.
@@ -73,7 +73,7 @@ export class HttpClientOptions {
   readonly baseUrl: string | undefined;
   readonly timeoutMs: number;
   readonly headers: Readonly<Record<string, string>>;
-  readonly retry: RetryOptions<unknown>;
+  readonly retry: HttpRetryOptions;
   readonly propagateTrace: boolean;
   readonly name: string | undefined;
   readonly fetchOptions: Readonly<Record<string, unknown>>;

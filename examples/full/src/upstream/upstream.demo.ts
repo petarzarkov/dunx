@@ -5,6 +5,7 @@ import {
   HttpService,
 } from '@dunx/http/client';
 import { HealthClient } from './health.client.js';
+import { UpstreamPolicy } from './upstream.policy.js';
 
 /**
  * Calling out over `fetch`. Three things a bare `fetch` does not do: retry a 503
@@ -19,6 +20,7 @@ export class UpstreamDemo {
     // a subclass buys: `inject(httpClient('health'))` in a field is the only way
     // to reach one bound to a `Token`.
     private readonly health: HealthClient,
+    private readonly policy: UpstreamPolicy,
   ) {}
 
   async demonstrate(url: string): Promise<void> {
@@ -80,5 +82,34 @@ export class UpstreamDemo {
           '(an abort is never retried)',
       );
     }
+
+    await this.demonstratePolicy(url);
+  }
+
+  /** `ResiliencePolicy` around the same upstream: the retry loop is core's, and
+   * the verdict on a status is `HttpRetryClassifier`'s. */
+  private async demonstratePolicy(url: string): Promise<void> {
+    const key = `policy-${Date.now()}`;
+    const recovered = await this.policy.run(() =>
+      this.http.get<{ after: number }>(
+        new URL(`api/upstream/flaky?key=${key}`, url),
+        { retry: { maxRetries: 0 } },
+      ),
+    );
+    this.logger.info(
+      `ResiliencePolicy retried the 503s itself -> recovered after ` +
+        `${recovered.after}`,
+    );
+
+    const answered = await this.policy.run(() =>
+      this.http.get<{ cached?: boolean }>(
+        new URL('api/upstream/missing', url),
+        { retry: { maxRetries: 0 } },
+      ),
+    );
+    this.logger.info(
+      `ResiliencePolicy on a 404 -> cached=${answered.cached} ` +
+        '(the classifier refuses to retry it, so the fallback answers)',
+    );
   }
 }

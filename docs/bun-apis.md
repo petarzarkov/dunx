@@ -147,6 +147,7 @@ here; everything else in this file still reproduces.
 | `server.upgrade()` after an `await`, on an HTTP/1.0 request      | **new, and 1.4.0-only** - leaked the socket, so the process never exited     |
 | `Bun.file(path).writer()` does not truncate or create parents    | reproduces                                                                   |
 | A `?raw` import resolves as JSON inside a `--parallel` worker    | reproduces                                                                   |
+| The transpiler cache serves a stale `?raw` module over 50 KB     | reproduces                                                                   |
 | Subscriber mode leaks past `close()` without `unsubscribe()`     | reproduces                                                                   |
 | A failed `subscribe()` leaks past `close()`                      | reproduces                                                                   |
 | `fetch` with `protocol: 'http2'` throws against a cleartext peer | reproduces, and `Bun.serve({ http2: true })` does not change it              |
@@ -1417,6 +1418,15 @@ passing and 7 failing**.
 
 It fails loudly, so opting in per workspace is safe. `internal/docs` is the one
 exclusion, in the `docs` phase of `scripts/ci.ts`.
+
+**The runtime transpiler cache serves a stale `?raw` module.** That import is 69 KB
+of text, over the 50 KB the cache starts at, so `bun run generate` followed by
+`bun test src` in the same checkout reads the **previous** model: 26 guides from
+`data.ts` and 27 from the same specifier imported directly in the test file, in one
+process. `links.test.tsx` then reports a link to the new page as pointing at nothing.
+`BUN_RUNTIME_TRANSPILER_CACHE_PATH=0` disables the cache and both read 27. CI is a
+fresh runner, so it sees this only if a job regenerates the model after its first
+read.
 
 **`--coverage --parallel` reported low, and a different figure each run.** The same
 sweep sequentially was 87.80% lines / 93.92% functions on every run. With

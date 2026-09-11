@@ -177,6 +177,8 @@ const CLIENT = [
   'HttpClientOptions',
   'HttpClientOptionsInit',
   'HttpModule',
+  'HttpRetryClassifier',
+  'HttpRetryOptions',
   'HttpService',
   'RequestConfig',
   'RequestMethod',

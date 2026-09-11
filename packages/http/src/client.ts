@@ -10,7 +10,14 @@ export {
   HttpClientOptions,
   type HttpClientOptionsInit,
 } from './client/options.js';
-export type { BackoffOptions, RetryOptions } from './client/retry.js';
+/**
+ * Retry, backoff and jitter are `@dunx/core`'s, re-exported so an import of this
+ * subpath still names them. What stays here is the HTTP half of the decision:
+ * `HttpRetryClassifier` reads a status and a `Retry-After`, which is the seam that
+ * keeps both out of core.
+ */
+export type { BackoffOptions, RetryOptions } from '@dunx/core';
+export { HttpRetryClassifier, type HttpRetryOptions } from './client/retry.js';
 export { httpClient, HttpModule, type ClientTarget } from './client/module.js';
 export {
   HttpService,

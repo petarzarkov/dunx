@@ -60,3 +60,14 @@ export const isJsonBody = (payload: unknown): boolean => {
     ArrayBuffer.isView(payload)
   );
 };
+
+/** JSON when the upstream said so or the body parses; text otherwise; undefined for empty. */
+export const readBody = async (response: Response): Promise<unknown> => {
+  const text = await response.text().catch(() => '');
+  if (text === '') return undefined;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+};
