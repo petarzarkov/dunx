@@ -12,7 +12,7 @@ import {
 } from '@dunx/core';
 import { Worker, type Job } from 'bullmq';
 import { QueueConnection } from './connection.js';
-import { JobDispatcher } from './dispatcher.js';
+import { declares, JobDispatcher, metricsIn } from './dispatcher.js';
 import { describeJob, selectJobs, type DiscoveredJob } from './discover.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueOptions } from './options.js';
@@ -385,18 +385,12 @@ class WorkerApplication extends ShutdownAware implements WorkerApp {
 }
 
 /**
- * Read off the module graph rather than by resolving the token: `QueueOptions`
- * has an optional constructor argument, so an unbound container would self-bind
- * it and hand back defaults. A worker silently pointed at `localhost` is worse
- * than one that will not boot.
+ * `QueueOptions` has an optional constructor argument, so an unbound container
+ * would self-bind it and hand back defaults. A worker silently pointed at
+ * `localhost` is worse than one that will not boot.
  */
 const assertQueueModule = (modules: readonly ResolvedModule[]): void => {
-  const bound = modules.some((module) =>
-    (module.options.providers ?? []).some(
-      (entry) => typeof entry !== 'function' && entry.token === QueueOptions,
-    ),
-  );
-  if (bound) return;
+  if (declares(modules, QueueOptions)) return;
 
   throw new QueueError(
     QueueErrorCode.INVALID_STATE,
@@ -436,7 +430,11 @@ export class WorkerFactory {
       throw error;
     }
 
-    const dispatcher = new JobDispatcher(jobs, queueOptions.jobTimeoutMs);
+    const dispatcher = new JobDispatcher(
+      jobs,
+      queueOptions.jobTimeoutMs,
+      metricsIn(modules, app),
+    );
     const consumer = new QueueConsumer(
       app,
       dispatcher,
@@ -473,6 +471,7 @@ export class WorkerFactory {
     const dispatcher = new JobDispatcher(
       jobs,
       app.get(QueueOptions).jobTimeoutMs,
+      metricsIn(modules, app),
     );
     return new QueueConsumer(app, dispatcher, jobs, dispatcher.queues);
   }

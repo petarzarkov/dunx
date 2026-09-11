@@ -10,6 +10,7 @@ import {
   type SetOptions,
 } from './connection.js';
 import { toRedisError } from './errors.js';
+import { RedisMetrics } from './metrics.js';
 import { RedisOptions } from './options.js';
 
 const toKeyLike = (value: RedisValue): RedisKey =>
@@ -47,6 +48,7 @@ const scanArgs = (options: ScanOptions | undefined): (string | number)[] => {
 export class Redis extends RedisConnection implements OnInit, OnShutdown {
   readonly #client: Bun.RedisClient;
   readonly #options: RedisOptions;
+  readonly #metrics: RedisMetrics | undefined;
   /**
    * A `Bun.RedisClient` in subscriber mode rejects every data command, so
    * subscriptions get their own socket. Opened on first `subscribe()` and never
@@ -55,9 +57,10 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
   #subscriber: Bun.RedisClient | undefined;
   readonly #listeners = new Map<string, Set<MessageListener>>();
 
-  constructor(options: RedisOptions) {
+  constructor(options: RedisOptions, metrics?: RedisMetrics) {
     super();
     this.#options = options;
+    this.#metrics = metrics;
     this.#client = new Bun.RedisClient(options.url, options.toClientOptions());
   }
 
@@ -105,11 +108,21 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
    * Every command goes through here. The call is inside the `try` rather than just
    * the await, because Bun throws synchronously for state errors (subscriber mode)
    * and argument errors - an `async` wrapper turns both into one rejection shape.
+   *
+   * It is also the one timing seam: `RedisMetrics` sees every method on this class
+   * and every `send()`, failures included. With no metrics bound, optional chaining
+   * short-circuits before the arguments are evaluated, so neither `Bun.nanoseconds()`
+   * call runs.
    */
   async #run<T>(command: string, call: () => Promise<T>): Promise<T> {
+    const metrics = this.#metrics;
+    const started = metrics === undefined ? 0 : Bun.nanoseconds();
     try {
-      return await call();
+      const value = await call();
+      metrics?.observe(command, Bun.nanoseconds() - started);
+      return value;
     } catch (cause) {
+      metrics?.observe(command, Bun.nanoseconds() - started, true);
       throw toRedisError(command, cause);
     }
   }

@@ -1,6 +1,38 @@
+import type { App, InjectionToken, ResolvedModule } from '@dunx/core';
 import type { Job } from 'bullmq';
 import { describeJob, type DiscoveredJob } from './discover.js';
 import { QueueError, QueueErrorCode } from './errors.js';
+import { JobOutcome, QueueMetrics } from './metrics.js';
+
+/**
+ * Whether the graph binds this token, asked of the graph rather than by resolving
+ * it. An unbound class self-binds into whichever scope asks first, so `app.get`
+ * answers yes to everything.
+ */
+export const declares = (
+  modules: readonly ResolvedModule[],
+  token: InjectionToken<unknown>,
+): boolean =>
+  modules.some((module) =>
+    (module.options.providers ?? []).some(
+      (entry) => typeof entry !== 'function' && entry.token === token,
+    ),
+  );
+
+/**
+ * The `QueueMetrics` the graph bound, or `undefined` when `metrics` was off. Off,
+ * the dispatcher takes none at all, so a handler pays for no clock.
+ */
+export const metricsIn = (
+  modules: readonly ResolvedModule[],
+  app: App,
+): QueueMetrics | undefined =>
+  declares(modules, QueueMetrics) ? app.get(QueueMetrics) : undefined;
+
+const outcomeOf = (error: unknown): JobOutcome =>
+  error instanceof QueueError && error.code === QueueErrorCode.TIMED_OUT
+    ? JobOutcome.TIMED_OUT
+    : JobOutcome.FAILED;
 
 /**
  * Routes an arriving `Job` to the handler discovery found for it.
@@ -12,9 +44,15 @@ import { QueueError, QueueErrorCode } from './errors.js';
 export class JobDispatcher {
   readonly #byQueue = new Map<string, Map<string, DiscoveredJob>>();
   readonly #timeoutMs: number | undefined;
+  readonly #metrics: QueueMetrics | undefined;
 
-  constructor(jobs: readonly DiscoveredJob[], timeoutMs?: number) {
+  constructor(
+    jobs: readonly DiscoveredJob[],
+    timeoutMs?: number,
+    metrics?: QueueMetrics,
+  ) {
     this.#timeoutMs = timeoutMs;
+    this.#metrics = metrics;
     for (const job of jobs) {
       let queue = this.#byQueue.get(job.queue);
       if (!queue) {
@@ -39,7 +77,8 @@ export class JobDispatcher {
    *
    * An unclaimed job name throws rather than being acknowledged: bullmq then
    * retries it under the job's own `attempts`, which is the right outcome when the
-   * cause is a worker deployed before the handler that serves it.
+   * cause is a worker deployed before the handler that serves it. It is not timed
+   * either: no handler ran, so there is nothing whose duration it would be.
    */
   async dispatch(job: Job): Promise<unknown> {
     const found = this.#byQueue.get(job.queueName)?.get(job.name);
@@ -52,8 +91,40 @@ export class JobDispatcher {
       );
     }
 
+    const metrics = this.#metrics;
+    if (metrics === undefined) return this.#invoke(job, found);
+    return this.#observed(job, found, metrics);
+  }
+
+  #invoke(job: Job, found: DiscoveredJob): unknown {
     if (this.#timeoutMs === undefined) return found.handler(job);
     return this.#withTimeout(job, found, this.#timeoutMs);
+  }
+
+  async #observed(
+    job: Job,
+    found: DiscoveredJob,
+    metrics: QueueMetrics,
+  ): Promise<unknown> {
+    const started = Bun.nanoseconds();
+    try {
+      const value = await this.#invoke(job, found);
+      metrics.observeHandled(
+        job.queueName,
+        job.name,
+        Bun.nanoseconds() - started,
+        JobOutcome.COMPLETED,
+      );
+      return value;
+    } catch (error) {
+      metrics.observeHandled(
+        job.queueName,
+        job.name,
+        Bun.nanoseconds() - started,
+        outcomeOf(error),
+      );
+      throw error;
+    }
   }
 
   async #withTimeout(

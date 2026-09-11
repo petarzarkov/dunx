@@ -1,5 +1,5 @@
 import { Module } from '@dunx/core';
-import { JobPublisher, QueueModule } from '@dunx/infra/queue';
+import { JobPublisher, QueueMetrics, QueueModule } from '@dunx/infra/queue';
 import { AppConfigService } from '../config.js';
 import { PicturesModule } from '../pictures/pictures.module.js';
 import { JobsController } from './jobs.controller.js';
@@ -13,31 +13,36 @@ import { ThumbnailJobs } from './thumbnail.jobs.js';
  */
 @Module({
   imports: [
-    QueueModule.forRootAsync({
-      useFactory: (config: AppConfigService) => {
-        const { url } = config.get('redis');
-        return {
-          ...(url === undefined ? {} : { url }),
-          prefix: 'dunx-full',
-          // The container starts the workers at onInit and stops them before
-          // the database they use, so `main.ts` says nothing about queues.
-          //
-          // `true`, not `'if-any'`: this module declares handlers, and `true`
-          // refuses to boot if that ever stops being so. `'if-any'` is for a
-          // migration where the wiring lands before the first @JobHandler.
-          consume: true,
-          // Where bullmq forks for a `background` handler. Absolute: the child
-          // resolves it, not this module.
-          processor: new URL('./jobs.processor.ts', import.meta.url).pathname,
-        };
+    QueueModule.forRootAsync(
+      {
+        useFactory: (config: AppConfigService) => {
+          const { url } = config.get('redis');
+          return {
+            ...(url === undefined ? {} : { url }),
+            prefix: 'dunx-full',
+            // The container starts the workers at onInit and stops them before
+            // the database they use, so `main.ts` says nothing about queues.
+            //
+            // `true`, not `'if-any'`: this module declares handlers, and `true`
+            // refuses to boot if that ever stops being so. `'if-any'` is for a
+            // migration where the wiring lands before the first @JobHandler.
+            consume: true,
+            // Where bullmq forks for a `background` handler. Absolute: the child
+            // resolves it, not this module.
+            processor: new URL('./jobs.processor.ts', import.meta.url).pathname,
+          };
+        },
+        inject: [AppConfigService] as const,
       },
-      inject: [AppConfigService] as const,
-    }),
+      // Enqueues, plus the handlers this container runs: the forked thumbnail one
+      // reports into the child's own `QueueMetrics`, the audit one into this.
+      { metrics: true },
+    ),
     PicturesModule,
   ],
   controllers: [JobsController],
   providers: [ThumbnailJobs, JobsDemo],
   // Re-exported so a feature that enqueues does not import @dunx/infra/queue.
-  exports: [JobPublisher, ThumbnailJobs, JobsDemo],
+  exports: [JobPublisher, QueueMetrics, ThumbnailJobs, JobsDemo],
 })
 export class JobsModule {}

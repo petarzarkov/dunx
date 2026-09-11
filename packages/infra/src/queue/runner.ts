@@ -10,6 +10,7 @@ import {
 } from '@dunx/core';
 import { JobDispatcher } from './dispatcher.js';
 import { selectJobs, type DiscoveredJob } from './discover.js';
+import { QueueMetrics } from './metrics.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueOptions } from './options.js';
 import { QueueConsumer } from './worker.js';
@@ -30,6 +31,7 @@ export class QueueRunner implements OnInit, OnShutdown {
   readonly #root: ModuleRef;
   readonly #options: QueueOptions;
   readonly #logger: Logger;
+  readonly #metrics: QueueMetrics | undefined;
   #consumer: QueueConsumer | undefined;
 
   constructor(
@@ -37,11 +39,13 @@ export class QueueRunner implements OnInit, OnShutdown {
     root: ModuleRef,
     options: QueueOptions,
     logger: Logger,
+    metrics?: QueueMetrics,
   ) {
     this.#ref = ref;
     this.#root = root;
     this.#options = options;
     this.#logger = logger;
+    this.#metrics = metrics;
   }
 
   /** The consumer, once started. Absent until `onInit` has run. */
@@ -74,7 +78,11 @@ export class QueueRunner implements OnInit, OnShutdown {
     const modules = collectModules(this.#root);
     const jobs = this.#select(modules, (token) => app.get(token));
     if (jobs === undefined) return;
-    const dispatcher = new JobDispatcher(jobs, this.#options.jobTimeoutMs);
+    const dispatcher = new JobDispatcher(
+      jobs,
+      this.#options.jobTimeoutMs,
+      this.#metrics,
+    );
 
     this.#consumer = new QueueConsumer(
       app,

@@ -2,7 +2,11 @@ import { Logger } from '@dunx/core';
 import { EncodableFormat } from '@dunx/infra/images';
 import { JobEvents, JobPublisher } from '@dunx/infra/queue';
 import { isConnectionError } from '@dunx/infra/redis';
-import { THUMBNAIL_QUEUE, type RenderResult } from './thumbnail.jobs.js';
+import {
+  AUDIT_QUEUE,
+  THUMBNAIL_QUEUE,
+  type RenderResult,
+} from './thumbnail.jobs.js';
 
 /** How long to wait for a forked worker to answer before giving up on it. */
 const SETTLE_MS = 8_000;
@@ -56,6 +60,14 @@ export class JobsDemo {
     this.logger.info(
       `job ${id} completed in a process this one never started: ` +
         `${result.width}x${result.height}, ${result.bytes} bytes`,
+    );
+
+    // Foreground, so this handler runs here: the stats section reads both.
+    const audit = await this.publisher.publish(AUDIT_QUEUE, 'record', result);
+    await audit.waitUntilFinished(this.events.events(AUDIT_QUEUE), SETTLE_MS);
+    this.logger.info(
+      `audit ${audit.id ?? '(unassigned)'} ran in this process, so its handler ` +
+        'duration is one this container can report',
     );
   }
 }
