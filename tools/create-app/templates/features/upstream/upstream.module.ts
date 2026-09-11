@@ -10,6 +10,9 @@ import { HealthClient } from './health.client.js';
 import { UpstreamDemo } from './upstream.demo.js';
 import { UpstreamPolicy } from './upstream.policy.js';
 
+/** `UpstreamPolicy`'s per-attempt budget, under `/upstream/slow`'s 300 ms. */
+const POLICY_TIMEOUT_MS = 150;
+
 /**
  * The outbound half of `@dunx/http`, from the `./client` subpath, aliased because
  * this app has an `HttpModule` of its own. No `baseUrl`: this app calls itself,
@@ -61,15 +64,19 @@ import { UpstreamPolicy } from './upstream.policy.js';
       HealthClient,
     ),
     /**
-     * The same timeout, retry, backoff and jitter as above, around any operation
-     * rather than one request. `@dunx/core` owns the loop; `HttpRetryClassifier`
-     * is what teaches it that a 404 is an answer and a 503 is not, and `fallback`
-     * is what it answers with once the attempts are spent.
+     * Retry, backoff and jitter around any operation rather than one request.
+     * `@dunx/core` owns the loop; `HttpRetryClassifier` is what teaches it that a
+     * 404 is an answer and a 503 is not, and `fallback` is what it answers with
+     * once the attempts are spent. Its budget is under the client's, so a call
+     * that outlives it is cancelled through the signal `run` hands each attempt.
      */
     ResilienceModule.forRootAsync(
       {
         useFactory: (config: AppConfigService) => ({
-          timeoutMs: config.get('upstream').timeoutMs,
+          timeoutMs: Math.min(
+            POLICY_TIMEOUT_MS,
+            config.get('upstream').timeoutMs,
+          ),
           retry: {
             maxRetries: 2,
             retryDelayMs: 20,

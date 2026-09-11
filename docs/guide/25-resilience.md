@@ -187,4 +187,10 @@ HttpModule.forRoot({
 });
 ```
 
-Bind `ResilienceModule` when the work is not a request that client makes.
+Bind `ResilienceModule` when the work is not a request that client makes. A
+policy wrapped around `HttpService` has to hand the attempt's signal to the
+request, or the policy's `timeoutMs` never reaches `fetch`:
+
+```ts
+policy.run((signal) => this.http.get(url, { signal }));
+```

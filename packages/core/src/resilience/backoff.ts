@@ -11,6 +11,13 @@ const uniform = (): number => {
   return (buffer[0] ?? 0) / 2 ** 32;
 };
 
+/**
+ * The ceiling both delays share: the computed backoff below, and a wait a failure
+ * asked for through `RetryVerdict.delayMs`, which `ResiliencePolicy` caps with
+ * this same number.
+ */
+export const DEFAULT_MAX_DELAY_MS = 30_000;
+
 export interface BackoffOptions {
   /** Base delay, doubled each attempt. */
   readonly baseMs: number;
@@ -25,5 +32,10 @@ export interface BackoffOptions {
 /** `base * power^attempt + jitter`, capped. `attempt` is 0 for the first retry. */
 export const backoffDelay = (
   attempt: number,
-  { baseMs, power = 2, jitterMs = 1000, maxMs = 30_000 }: BackoffOptions,
+  {
+    baseMs,
+    power = 2,
+    jitterMs = 1000,
+    maxMs = DEFAULT_MAX_DELAY_MS,
+  }: BackoffOptions,
 ): number => Math.min(baseMs * power ** attempt + uniform() * jitterMs, maxMs);

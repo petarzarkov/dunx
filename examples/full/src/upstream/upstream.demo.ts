@@ -86,14 +86,15 @@ export class UpstreamDemo {
     await this.demonstratePolicy(url);
   }
 
-  /** `ResiliencePolicy` around the same upstream: the retry loop is core's, and
-   * the verdict on a status is `HttpRetryClassifier`'s. */
+  /** `ResiliencePolicy` around the same upstream: the retry loop is core's, the
+   * verdict on a status is `HttpRetryClassifier`'s, and every `run` passes the
+   * attempt's `signal` on, which is the only thing the budget travels through. */
   private async demonstratePolicy(url: string): Promise<void> {
     const key = `policy-${Date.now()}`;
-    const recovered = await this.policy.run(() =>
+    const recovered = await this.policy.run((signal) =>
       this.http.get<{ after: number }>(
         new URL(`api/upstream/flaky?key=${key}`, url),
-        { retry: { maxRetries: 0 } },
+        { retry: { maxRetries: 0 }, signal },
       ),
     );
     this.logger.info(
@@ -101,15 +102,30 @@ export class UpstreamDemo {
         `${recovered.after}`,
     );
 
-    const answered = await this.policy.run(() =>
+    const answered = await this.policy.run((signal) =>
       this.http.get<{ cached?: boolean }>(
         new URL('api/upstream/missing', url),
-        { retry: { maxRetries: 0 } },
+        { retry: { maxRetries: 0 }, signal },
       ),
     );
     this.logger.info(
       `ResiliencePolicy on a 404 -> cached=${answered.cached} ` +
         '(the classifier refuses to retry it, so the fallback answers)',
+    );
+
+    const bounded = await this.policy.run((signal) =>
+      this.http.get<{ done?: true; cached?: boolean }>(
+        new URL('api/upstream/slow', url),
+        // `timeoutMs: 0`, so the only budget left is the policy's own.
+        { retry: { maxRetries: 0 }, timeoutMs: 0, signal },
+      ),
+    );
+    if (bounded.done === true) {
+      throw new Error('the policy budget should have cancelled a 300 ms route');
+    }
+    this.logger.info(
+      `ResiliencePolicy timeoutMs against a 300 ms route -> ` +
+        `cached=${bounded.cached} (the attempt signal reached fetch)`,
     );
   }
 }

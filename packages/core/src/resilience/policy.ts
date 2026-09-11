@@ -1,5 +1,12 @@
-import { backoffDelay } from './backoff.js';
+import { backoffDelay, DEFAULT_MAX_DELAY_MS } from './backoff.js';
 import type { ResilienceOptions } from './options.js';
+
+/**
+ * Handed to an attempt that has neither a budget nor a caller's signal. One for
+ * the process: nothing holds the controller, so it can never abort and there is
+ * nothing to observe per attempt.
+ */
+const unbounded = new AbortController().signal;
 
 /**
  * Timeout, retry, backoff, jitter and fallback around one operation.
@@ -74,7 +81,7 @@ export class ResiliencePolicy {
     });
     // An upstream asking for an hour should not park a request handler for an
     // hour, so what the failure asked for is still capped by the ceiling.
-    const maxMs = backoff?.maxMs ?? 30_000;
+    const maxMs = backoff?.maxMs ?? DEFAULT_MAX_DELAY_MS;
     const asked = verdict.delayMs;
     return {
       retry: true,
@@ -82,11 +89,12 @@ export class ResiliencePolicy {
     };
   }
 
+  // `AbortSignal.any` only where there are two signals to combine: an attempt with
+  // one of them, or neither, gets that one or the process-wide `unbounded`.
   #signal(): AbortSignal {
     const { timeoutMs, signal } = this.options;
-    return AbortSignal.any([
-      ...(timeoutMs > 0 ? [AbortSignal.timeout(timeoutMs)] : []),
-      ...(signal === undefined ? [] : [signal]),
-    ]);
+    if (timeoutMs <= 0) return signal ?? unbounded;
+    const timeout = AbortSignal.timeout(timeoutMs);
+    return signal === undefined ? timeout : AbortSignal.any([timeout, signal]);
   }
 }

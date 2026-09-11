@@ -10,7 +10,6 @@ import {
 } from '@dunx/testing';
 import { SelfOrigin } from './landing/self-origin.js';
 import { FLAKY_FAILURES } from './upstream/flaky.controller.js';
-import { UpstreamPolicy } from './upstream/upstream.policy.js';
 import { createApp } from './main.js';
 import { Maintenance } from './schedule/maintenance.service.js';
 
@@ -432,32 +431,6 @@ it('retries an outbound 503 and raises a 404 as a FetchError', async () => {
   expect(failure).toBeInstanceOf(FetchError);
   expect((failure as FetchError).status).toBe(404);
   expect(failure).not.toBeInstanceOf(HttpError);
-});
-
-it('retries through a ResiliencePolicy and falls back on a 404', async () => {
-  const policy = app.get(UpstreamPolicy);
-  const url = client.url;
-  const key = `policy-suite-${Date.now()}`;
-
-  // The client is told not to retry, so the recovery is the policy's own loop.
-  const recovered = await policy.run(() =>
-    app
-      .get(HttpService)
-      .get<{ after: number }>(new URL(`api/upstream/flaky?key=${key}`, url), {
-        retry: { maxRetries: 0 },
-      }),
-  );
-  expect(recovered.after).toBe(FLAKY_FAILURES + 1);
-
-  // `HttpRetryClassifier` refuses a 404, so the fallback is what answers.
-  const answered = await policy.run(() =>
-    app
-      .get(HttpService)
-      .get<{ cached?: boolean }>(new URL('api/upstream/missing', url), {
-        retry: { maxRetries: 0 },
-      }),
-  );
-  expect(answered.cached).toBe(true);
 });
 
 it('documents every route it serves, with nothing unresolved', async () => {

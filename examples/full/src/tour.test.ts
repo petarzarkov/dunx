@@ -427,6 +427,12 @@ it('runs the same upstream through a ResiliencePolicy, with a fallback', () => {
   );
   // A 404 is not retried, so the attempts are spent and the fallback answers.
   expect(tour.text).toContain('ResiliencePolicy on a 404 -> cached=true');
+  // The client is given no budget for this one, so the abort can only come from
+  // the signal `run` handed the attempt. A callback that dropped it would answer
+  // `done` 300 ms later, and the demo raises rather than logging this line.
+  expect(tour.text).toContain(
+    'ResiliencePolicy timeoutMs against a 300 ms route -> cached=true',
+  );
 });
 
 it('arms three schedules and triggers two off their cadence', () => {

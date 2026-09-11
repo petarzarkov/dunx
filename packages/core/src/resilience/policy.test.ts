@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import { AppError } from '../di/errors.js';
 import { backoffDelay } from './backoff.js';
 import {
@@ -159,6 +159,14 @@ describe('the timeout', () => {
     expect(aborted).toBe(false);
   });
 
+  it('hands the caller`s own signal straight through when there is no budget', async () => {
+    const controller = new AbortController();
+    const seen = await policy({ signal: controller.signal }).run((signal) =>
+      Promise.resolve(signal),
+    );
+    expect(seen).toBe(controller.signal);
+  });
+
   it('combines the caller`s own signal with it', async () => {
     const controller = new AbortController();
     let calls = 0;
@@ -202,6 +210,29 @@ describe('a classifier that asks for a wait', () => {
       return Promise.resolve('ok');
     });
     expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  /**
+   * The ceiling for a wait a failure asked for and the ceiling for a computed
+   * backoff are one number, so they cannot drift apart. Asserted against
+   * `backoffDelay`'s own default rather than a literal, which is what makes the
+   * two paths one fact instead of two copies of it.
+   */
+  it('caps it at the same default ceiling the computed backoff uses', async () => {
+    const sleep = spyOn(Bun, 'sleep').mockResolvedValue(undefined);
+    try {
+      await policy({
+        classifier: new AskingClassifier(3_600_000),
+        retry: { maxRetries: 1, retryDelayMs: 1 },
+      })
+        .run(() => Promise.reject(new Error('always')))
+        .catch(() => undefined);
+      expect(sleep.mock.calls[0]?.[0]).toBe(
+        backoffDelay(50, { baseMs: 1, jitterMs: 0 }),
+      );
+    } finally {
+      sleep.mockRestore();
+    }
   });
 
   it('is still capped by the backoff ceiling', async () => {
