@@ -14,7 +14,8 @@ import { defaultRedisUrl } from '../redis/options.js';
 import { QueueConnection } from './connection.js';
 import { JobHandler } from './decorators.js';
 import { QueueError, QueueErrorCode } from './errors.js';
-import { QueueModule } from './module.js';
+import { QueueMetrics } from './metrics.js';
+import { QueueModule, type QueueModuleSettings } from './module.js';
 import { JobPublisher } from './publisher.js';
 import {
   closeWithin,
@@ -124,14 +125,18 @@ class Root {}
 const moduleWith = (
   providers: readonly Ctor<unknown>[],
   timeoutMs?: number,
+  settings?: QueueModuleSettings,
 ): ModuleRef => ({
   module: Root,
   imports: [
-    QueueModule.forRoot({
-      url,
-      prefix: ns,
-      ...(timeoutMs !== undefined && { jobTimeoutMs: timeoutMs }),
-    }),
+    QueueModule.forRoot(
+      {
+        url,
+        prefix: ns,
+        ...(timeoutMs !== undefined && { jobTimeoutMs: timeoutMs }),
+      },
+      settings,
+    ),
   ],
   providers,
 });
@@ -463,6 +468,52 @@ describe('WorkerFactory.attach', () => {
 
       await app.shutdown();
       expect(recorder.events).toContain('container:shutdown');
+    },
+  );
+
+  it.if(live)(
+    'a worker process records into its own QueueMetrics',
+    async () => {
+      const worker = await WorkerFactory.create(
+        moduleWith([Emails], undefined, { metrics: true }),
+      );
+      await worker.start();
+      const metrics = worker.get(QueueMetrics);
+
+      await worker.get(JobPublisher).publish(EMAILS, 'welcome', { to: 'alan' });
+      await until(
+        () => metrics.snapshot().handled === 1,
+        'the handler to be counted',
+      );
+
+      await worker.get(JobPublisher).queue(EMAILS).obliterate({ force: true });
+      await worker.shutdown();
+    },
+  );
+
+  it.if(live)(
+    'records into the QueueMetrics that container bound',
+    async () => {
+      const root = moduleWith([Emails], undefined, { metrics: true });
+      const app = await AppFactory.create(root);
+      const metrics = app.get(QueueMetrics);
+
+      const consumer = await WorkerFactory.attach(app, root);
+      await consumer.start();
+      await app.get(JobPublisher).publish(EMAILS, 'welcome', { to: 'grace' });
+      await until(
+        () => metrics.snapshot().handled === 1,
+        'the handler to be counted',
+      );
+
+      const stats = metrics
+        .snapshot()
+        .jobs.find((one) => one.queue === EMAILS && one.name === 'welcome');
+      expect(stats?.published).toBe(1);
+      expect(stats?.handlerDuration.count).toBe(1);
+
+      await consumer.stop();
+      await app.shutdown();
     },
   );
 

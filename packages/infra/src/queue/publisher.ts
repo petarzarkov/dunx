@@ -2,6 +2,7 @@ import { Logger, type OnShutdown } from '@dunx/core';
 import { Queue, type Job, type JobsOptions } from 'bullmq';
 import { QueueConnection } from './connection.js';
 import { describeJob } from './discover.js';
+import { QueueMetrics } from './metrics.js';
 import { QueueOptions } from './options.js';
 
 /**
@@ -24,16 +25,19 @@ export class JobPublisher implements OnShutdown {
   readonly #connection: QueueConnection;
   readonly #options: QueueOptions;
   readonly #logger: Logger;
+  readonly #metrics: QueueMetrics | undefined;
   readonly #queues = new Map<string, Queue>();
 
   constructor(
     connection: QueueConnection,
     options: QueueOptions,
     logger: Logger,
+    metrics?: QueueMetrics,
   ) {
     this.#connection = connection;
     this.#options = options;
     this.#logger = logger;
+    this.#metrics = metrics;
   }
 
   /** The names this publisher has opened a queue for so far. */
@@ -87,14 +91,28 @@ export class JobPublisher implements OnShutdown {
     return created;
   }
 
-  /** `queue(...).add(...)`, with the enqueue recorded on the logger. */
+  /**
+   * `queue(...).add(...)`, with the enqueue recorded on the logger and, when
+   * `metrics: true`, timed on `QueueMetrics`. A caller reaching for `queue(name)`
+   * and calling `add`, `addBulk` or `upsertJobScheduler` on it goes round this and
+   * is counted nowhere.
+   */
   async publish<T>(
     queue: string,
     name: string,
     data: T,
     options?: JobsOptions,
   ): Promise<Job<T>> {
-    const job = await this.queue(queue).add(name, data, options);
+    const metrics = this.#metrics;
+    const started = metrics === undefined ? 0 : Bun.nanoseconds();
+    let job: Job;
+    try {
+      job = await this.queue(queue).add(name, data, options);
+    } catch (error) {
+      metrics?.observePublish(queue, name, Bun.nanoseconds() - started, true);
+      throw error;
+    }
+    metrics?.observePublish(queue, name, Bun.nanoseconds() - started);
     this.#logger.debug(`Published job ${describeJob(job)}`);
     return job as Job<T>;
   }
