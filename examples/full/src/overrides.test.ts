@@ -1,11 +1,11 @@
 import { expect, it } from 'bun:test';
-import { ConfigModule, Logger, provide, token } from '@dunx/core';
+import { Logger, provide, token } from '@dunx/core';
 import {
   createTestApp,
   createTestServer,
   RecordingLogger,
 } from '@dunx/testing';
-import { AppConfigService, validate } from './config.js';
+import { configModule } from './config.js';
 import { DatabaseModule } from './database/database.module.js';
 import { UsersModule } from './users/users.module.js';
 import { UsersService } from './users/users.service.js';
@@ -25,11 +25,7 @@ it('boots the users slice with the logger replaced', async () => {
   const logger = new RecordingLogger();
 
   const app = await createTestApp({
-    modules: [
-      ConfigModule.forRoot({ validate, as: AppConfigService }),
-      DatabaseModule,
-      UsersModule,
-    ],
+    modules: [configModule(), DatabaseModule, UsersModule],
     overrides: [provide(Logger, { useValue: logger })],
   });
 
@@ -79,11 +75,7 @@ it('refuses an override for a token the slice does not bind', async () => {
  */
 it('serves a slice through a real Bun.serve on port 0', async () => {
   const server = await createTestServer({
-    modules: [
-      ConfigModule.forRoot({ validate, as: AppConfigService }),
-      DatabaseModule,
-      UsersModule,
-    ],
+    modules: [configModule(), DatabaseModule, UsersModule],
     prefix: 'api',
   });
 

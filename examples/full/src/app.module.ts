@@ -1,5 +1,5 @@
 import { Auth } from '@dunx/auth';
-import { ConfigModule, Module } from '@dunx/core';
+import { Module } from '@dunx/core';
 import {
   ConsoleTransport,
   FileTransport,
@@ -14,7 +14,7 @@ import { AccountsModule } from './auth/auth.module.js';
 import { CacheModule } from './cache/cache.module.js';
 import { ChatModule } from './chat/chat.module.js';
 import { ProtocolsModule } from './protocols/protocols.module.js';
-import { AppConfigService, validate } from './config.js';
+import { AppConfigService, configModule } from './config.js';
 import { OpsModule } from './dashboard/dashboard.module.js';
 import { StatsModule } from './stats/stats.module.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -67,7 +67,7 @@ const fileAndConsole = (
  * and the logger are built first and torn down last. */
 @Module({
   imports: [
-    ConfigModule.forRoot({ validate, as: AppConfigService }),
+    configModule(),
     // `captureGlobalErrors` turns an uncaught exception into a fatal entry
     // flushed before exit.
     LoggerModule.forRootAsync(

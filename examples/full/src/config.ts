@@ -1,10 +1,28 @@
-import { ConfigService, type ConfigSource, LogLevel } from '@dunx/core';
+import {
+  ConfigModule,
+  ConfigService,
+  type ConfigSource,
+  type ConfigValues,
+  type DynamicModule,
+  LogLevel,
+} from '@dunx/core';
+import { join } from 'node:path';
 import { z } from 'zod';
+
+/** Merged in order before validating. The overlay is absent, so it is skipped. */
+export const configFiles = [
+  join(import.meta.dir, '..', 'application.yml'),
+  join(
+    import.meta.dir,
+    '..',
+    `application-${Bun.env.NODE_ENV ?? 'development'}.yml`,
+  ),
+];
 
 /**
  * One validation function is the whole `ConfigModule` contract. zod here because
  * the routes already use it; a hand-written function would work identically.
- * Bun loads `.env` itself, so nothing here reads a file.
+ * Bun loads `.env` itself, and `files` supplies what a flat variable cannot.
  */
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(0).max(65535).default(3000),
@@ -60,6 +78,8 @@ const envSchema = z.object({
   /** No sign-up; a guest account per visitor instead. The public demo's shape. */
   AUTH_GUEST_ONLY: z.stringbool().default(false),
   AUTH_SESSION_DAYS: z.coerce.number().int().min(1).default(7),
+  /** From `application.yml`. No default, so a missing file fails boot here. */
+  seed: z.object({ users: z.array(z.string()).min(1) }),
 });
 
 /** The broker channel the websocket relay carries every topic on. */
@@ -102,8 +122,20 @@ export interface AppConfig {
  */
 export class AppConfigService extends ConfigService<AppConfig> {}
 
+/**
+ * One place: the forked queue processor and every test slice need the same
+ * `files`. `source` is all a caller varies, standing in for the environment.
+ */
+export const configModule = (source?: ConfigSource): DynamicModule =>
+  ConfigModule.forRoot({
+    files: configFiles,
+    validate,
+    as: AppConfigService,
+    ...(source === undefined ? {} : { source }),
+  });
+
 /** Flat variables in, a shaped object out. Nothing downstream reads the env. */
-export const validate = (env: ConfigSource): AppConfig => {
+export const validate = (env: ConfigValues): AppConfig => {
   const parsed = envSchema.safeParse(env);
   if (!parsed.success) {
     const issues = parsed.error.issues
@@ -118,7 +150,7 @@ export const validate = (env: ConfigSource): AppConfig => {
     port: value.PORT,
     corsOrigin: value.CORS_ORIGIN,
     trustProxy: value.TRUST_PROXY,
-    seedUsers: ['ada', 'grace'],
+    seedUsers: value.seed.users,
     log: {
       level: value.LOG_LEVEL,
       file: value.LOG_FILE,
