@@ -316,7 +316,10 @@ describe('the queues handoff', () => {
 });
 
 describe('a read-only mount', () => {
-  it('hands bull-board its own readOnlyMode rather than refusing posts', async () => {
+  let readOnly: Awaited<ReturnType<typeof HttpFactory.create>>;
+  let url = '';
+
+  beforeAll(async () => {
     // dunx does not police bull-board's operations - it has the switch, and a
     // second implementation would disagree the moment it grew an operation.
     @Module({
@@ -327,20 +330,51 @@ describe('a read-only mount', () => {
     })
     class ReadOnly {}
 
-    const readOnly = await HttpFactory.create(ReadOnly, {
+    readOnly = await HttpFactory.create(ReadOnly, {
       requestLogging: false,
       bootLogging: false,
     });
     readOnly.use(DashboardMiddleware);
-    const url = (await readOnly.listen(0)).replace(/\/$/, '');
+    url = (await readOnly.listen(0)).replace(/\/$/, '');
+  });
 
-    const page = await fetch(`${url}/_dunx/queues`);
-    expect(page.status).toBe(200);
-    // bull-board's own UI config, which is where the switch actually lives.
-    expect(await page.text()).toContain('"readOnlyMode":true');
-
+  afterAll(async () => {
     await readOnly.shutdown();
   });
+
+  it('serves the board', async () => {
+    const page = await fetch(`${url}/_dunx/queues`);
+
+    expect(page.status).toBe(200);
+    // bull-board's own shell, so read-only is a refusal of the writes rather
+    // than of the page.
+    expect(await page.text()).toContain('__UI_CONFIG__');
+  });
+
+  // The switch is per **adapter**: `BaseAdapter` reads `readOnlyMode` in its
+  // constructor and `queueProvider` answers 405 from it. Passing it to `uiConfig`
+  // instead set a key bull-board does not have, so every mutation was allowed and
+  // the UI rendered the buttons - asserting the string appeared in the page is
+  // what let that pass. This asserts the refusal instead.
+  const mutations = [
+    ['PUT', 'emails/pause'],
+    ['PUT', 'emails/obliterate'],
+    ['PUT', 'emails/clean/completed'],
+    ['POST', 'emails/add'],
+  ] as const;
+
+  for (const [method, path] of mutations) {
+    it(`refuses ${method} ${path} with 405`, async () => {
+      const response = await fetch(`${url}/_dunx/queues/api/queues/${path}`, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'x', data: {}, options: {} }),
+      });
+
+      expect(response.status).toBe(405);
+      expect(await response.text()).toContain('QUEUE_READ_ONLY');
+    });
+  }
 });
 
 describe('without a config handle', () => {
