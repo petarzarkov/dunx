@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { ConfigModule } from '@dunx/core';
 import { HttpService } from '@dunx/http/client';
 import { createTestServer, type TestServer } from '@dunx/testing';
-import { AppConfigService, validate } from './config.js';
+import { configModule } from './config.js';
 import { FLAKY_FAILURES, SLOW_ROUTE_MS } from './upstream/flaky.controller.js';
 import { UpstreamModule } from './upstream/upstream.module.js';
 import { UpstreamPolicy } from './upstream/upstream.policy.js';
@@ -23,14 +22,7 @@ const http = (): HttpService => server.app.get(HttpService);
 
 beforeAll(async () => {
   server = await createTestServer({
-    modules: [
-      ConfigModule.forRoot({
-        validate,
-        as: AppConfigService,
-        source: { UPSTREAM_TIMEOUT_MS: '5000' },
-      }),
-      UpstreamModule,
-    ],
+    modules: [configModule({ UPSTREAM_TIMEOUT_MS: '5000' }), UpstreamModule],
   });
 });
 

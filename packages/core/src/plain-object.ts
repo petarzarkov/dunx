@@ -1,13 +1,8 @@
 /**
- * A plain object: `{}`, `Object.create(null)`, or a parsed value. Anything with
- * its own prototype - a `Date`, a `Temporal.PlainDate`, a `Map`, a class
- * instance - is not one.
- *
- * The prototype check rather than `typeof === 'object' && !Array.isArray`, which
- * answers `true` for every class instance. `Bun.TOML.parse` is why this lives in
- * core: TOML has a first-class date type and Bun returns `Temporal.Instant` and
- * `Temporal.PlainDate` for it, both of which have zero own enumerable keys, so a
- * recursive merge that trusted the loose check replaced a date with `{}`.
+ * A plain object: `{}` or `Object.create(null)`. A `Date`, a `Temporal.PlainDate`,
+ * a `Map` or a class instance is not one, which `typeof === 'object'` gets wrong:
+ * `Bun.TOML.parse` returns `Temporal` values with zero own keys, and a merge that
+ * trusted the loose check wrote `{}` over a date.
  */
 export const isPlainObject = (
   value: unknown,

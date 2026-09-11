@@ -12,22 +12,12 @@ import { ResiliencePolicy } from './policy.js';
 const tokens = new Map<string, Token<ResiliencePolicy>>();
 
 /**
- * The token a named policy is bound to.
+ * The token a named policy is bound to. Memoised, so the module and a consumer
+ * hold the same token for `'payment'`: `token()` returns a fresh object per call.
  *
- * Memoised, because `token()` returns a fresh object every call: without this the
- * module and the consumer would hold different tokens for `'payment'` and the
- * lookup would miss. Same name in, same token out.
- *
- * A `Token` is not a constructor type, so a policy registered under one cannot be
- * a constructor parameter. Reach it with `inject()` in a field initialiser:
- *
- * ```ts
- * class Payments {
- *   readonly policy = inject(resiliencePolicy('payment'));
- * }
- * ```
- *
- * Passing `as` a subclass instead gives an ordinary constructor parameter.
+ * A `Token` is not a constructor type, so reach one with `inject()` in a field
+ * initialiser, or pass `as` a subclass for an ordinary constructor parameter.
+ * The same shape as `httpClient(name)`, which documents it at length.
  */
 export const resiliencePolicy = (name: string): Token<ResiliencePolicy> => {
   const existing = tokens.get(name);
