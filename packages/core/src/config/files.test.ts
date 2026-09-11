@@ -63,6 +63,20 @@ describe('ConfigFiles', () => {
     expect(await load(base, overlay)).toEqual({ hosts: ['c'] });
   });
 
+  it('overlays a toml date instead of merging it into an empty object', async () => {
+    // `Bun.TOML.parse` returns `Temporal.PlainDate` and `Temporal.Instant` for
+    // TOML's first-class date types. Both are objects with zero own enumerable
+    // keys, so a merge that asked `typeof === 'object' && !Array.isArray`
+    // recursed into them and wrote `{}` over the date.
+    const base = await write('dated.toml', 'released = 2024-01-01\n');
+    const overlay = await write('dated-over.toml', 'released = 2024-06-01\n');
+
+    const merged = await load(base, overlay);
+
+    expect(String(merged['released'])).toBe('2024-06-01');
+    expect(merged['released']).not.toEqual({});
+  });
+
   it('skips a file that does not exist', async () => {
     const present = await write('present.yml', 'a: 1\n');
 

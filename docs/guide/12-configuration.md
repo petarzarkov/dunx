@@ -68,6 +68,21 @@ ConfigModule.forRoot({
 `.yml` and `.yaml` go through `Bun.YAML`, `.toml` through `Bun.TOML`, `.json`
 through `JSON.parse`. All three are native, so this costs no dependency.
 
+**A relative path resolves against `process.cwd()`, and a missing file is
+skipped.** Those two together mean an app started from another directory boots
+on defaults rather than failing, so prefer a path anchored to the module:
+
+```ts
+import { join } from 'node:path';
+
+const files = [
+  join(import.meta.dir, '..', 'application.yml'),
+  join(import.meta.dir, '..', `application-${Bun.env.NODE_ENV}.yml`),
+];
+```
+
+`examples/full` uses that form.
+
 Files are read in the order given and deep-merged, so an overlay overrides only
 the keys it names. **A file that does not exist is skipped**, which is what lets
 one list cover every environment. A file whose top level is not an object fails

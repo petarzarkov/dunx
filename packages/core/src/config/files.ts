@@ -1,11 +1,9 @@
 import { resolve } from 'node:path';
+import { isPlainObject } from '../plain-object.js';
 import { ConfigError } from './service.js';
 
 /** A source whose values are already typed, as a parsed file's are. */
 export type ConfigValues = Record<string, unknown>;
-
-const isPlainObject = (value: unknown): value is ConfigValues =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** Later wins, per key: two objects merge, anything else replaces. */
 const merge = (base: ConfigValues, overlay: ConfigValues): ConfigValues => {
