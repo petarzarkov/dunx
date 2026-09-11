@@ -409,12 +409,49 @@ an upload buffer with `await new Bun.Image(buffer).metadata()`, which replaces a
 `Bun.zstdCompressSync`, `Bun.CookieMap`, `Bun.udpSocket`, `Bun.listen`,
 `Bun.connect`, `Bun.FileSystemRouter`, `Bun.ArrayBufferSink`, `Bun.randomUUIDv7`,
 `Bun.inflateSync`, `Bun.Transpiler`, `Bun.color`, `Bun.semver`, `Bun.markdown`,
-`Bun.TOML`, `Bun.which`, `Bun.hash`, `Bun.CSRF`, `Bun.dns`, `Bun.stringWidth`,
+`Bun.TOML`, `Bun.YAML`, `Bun.which`, `Bun.hash`, `Bun.CSRF`, `Bun.dns`,
+`Bun.stringWidth`,
 `Bun.escapeHTML`, `Bun.deepEquals`, `Bun.peek`, `Bun.readableStreamToBytes`,
 `Bun.build`.
 
 Modules: `bun:sqlite` (exports `Database`, `Statement`, `SQLiteError`, `constants`),
-`bun:ffi`, `bun:jsc`, `bun:test`.
+`bun:yaml`, `bun:ffi`, `bun:jsc`, `bun:test`.
+
+### `Bun.YAML` parses config, and a duplicate key takes the last silently
+
+`Bun.YAML` is absent from the API table above and from Bun's docs. On 1.4.2 it is
+`{ parse, stringify }`, and `bun:yaml` resolves as a builtin carrying the `yaml`
+package's surface: `Document`, `Composer`, `parseDocument`, `parseAllDocuments`,
+`visit`. `Bun.TOML` is the same pair, and its `stringify` is undocumented too.
+
+Scalars come back typed, so a config file needs no coercion pass:
+
+```
+server:   { port: 3000, host: "0.0.0.0" }   port     -> number
+database: { poolSize: 10, ssl: false }      ssl      -> boolean
+empty:                                       empty   -> null
+```
+
+Three behaviours to know before pointing it at a config file:
+
+- **A duplicate key does not throw.** `a: 1\na: 2` parses to `{"a": 2}`. The `yaml`
+  package rejects that under its default schema; `Bun.YAML` keeps the last one.
+- **A multi-document stream returns an array.** `a: 1\n---\nb: 2` parses to
+  `[{"a":1},{"b":2}]`, so a stray `---` turns an object into a list and parses
+  clean.
+- **A parse error is a `SyntaxError`** reading `YAML Parse error: Unexpected token`.
+
+The loading half decides the shape of anything file-backed:
+
+| Reading `application.yml`                        | Result                                                                                                   |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `await import('./application.yml')` in a package | resolves against **that module**, so a published `dist/` looks beside itself instead of in the app's cwd |
+| `await import(absolutePath)`                     | works, and parses                                                                                        |
+| `await import(missingPath)`                      | throws `ResolveMessage`                                                                                  |
+| `Bun.file(missingPath).exists()`                 | `false`                                                                                                  |
+
+An optional per-environment overlay needs the last row, so `Bun.file(abs).text()`
+plus `Bun.YAML.parse` is the pairing for a config loader, not a dynamic import.
 
 ### Note on `Bun.SQL` and `Bun.RedisClient`
 
