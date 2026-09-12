@@ -53,6 +53,11 @@ export class ConnectMiddleware implements Middleware, ClaimsPaths {
     return this.#registry.paths;
   }
 
+  /** Connect and gRPC-Web both POST. Connect's GET form is not served here. */
+  claimedMethods(): readonly string[] {
+    return ['POST'];
+  }
+
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
     if (ctx.get(UNMATCHED) !== true) return next();
 

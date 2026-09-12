@@ -23,6 +23,19 @@ const page = (ui?: SwaggerUiOptions): string =>
   );
 
 describe('renderUiOptions', () => {
+  it('escapes a value that would close the inline script block', () => {
+    const rendered = renderUiOptions(
+      { configUrl: '</script><script>alert(1)</script>' },
+      'swagger-ui',
+    );
+
+    // This lands inside an inline `<script>`, so a raw `</script>` in a value
+    // ends the block and everything after it is markup. The Scalar renderer
+    // embeds its options through the same escape.
+    expect(rendered).not.toContain('</script>');
+    expect(rendered).toContain('\\u003c/script');
+  });
+
   it('always names the mount point, and never from the caller', () => {
     expect(renderUiOptions({}, 'swagger-ui')).toContain('dom_id:"#swagger-ui"');
   });

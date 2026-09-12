@@ -44,6 +44,11 @@ export const compose = (
  */
 export interface ClaimsPaths {
   claimedPaths(): readonly string[];
+  /**
+   * The methods those paths answer. `preflight` is mounted over the route table,
+   * which a claimed path is not in, so an `OPTIONS` would reach the 404.
+   */
+  claimedMethods(): readonly string[];
 }
 
 export const hasClaimedPaths = (value: object): value is ClaimsPaths =>

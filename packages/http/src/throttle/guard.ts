@@ -86,6 +86,9 @@ export class ThrottleGuard implements Middleware {
   /**
    * Per **handler**, not per path: two verbs on one path get their own budgets,
    * and a parameterised path does not fragment into a key per id.
+   *
+   * A claimed path reports `(unmatched)`/`(none)` for every one of them, so it
+   * keys on the path: otherwise every RPC on a mount shares one budget.
    */
   #key(req: BunRequest, ctx: RouteContext): string {
     const subject =
@@ -93,7 +96,11 @@ export class ThrottleGuard implements Middleware {
         req,
         ctx,
       ) ?? 'anonymous';
-    return `${this.options.prefix}:throttle:${ctx.controller}:${ctx.handler}:${subject}`;
+    const scope =
+      ctx.get(UNMATCHED) === true
+        ? ctx.path
+        : `${ctx.controller}:${ctx.handler}`;
+    return `${this.options.prefix}:throttle:${scope}:${subject}`;
   }
 
   async #hit(key: string, windowSeconds: number): Promise<number | undefined> {

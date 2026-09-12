@@ -368,6 +368,41 @@ describe('ConnectModule', () => {
     return app.listen(0);
   };
 
+  it('answers a CORS preflight on an RPC path', async () => {
+    @Module({
+      imports: [
+        ConnectModule.forRoot({
+          services: [connectService(GreetService, GreetRpc)],
+        }),
+      ],
+    })
+    class CorsModule {}
+
+    app = await HttpFactory.create(CorsModule as never, {
+      bootLogging: false,
+      requestLogging: false,
+    });
+    app.use(ConnectMiddleware);
+    app.enableCors({ origin: 'https://app.example' });
+    const url = await app.listen(0);
+
+    const res = await fetch(`${url}${SAY}`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://app.example',
+        'access-control-request-method': 'POST',
+      },
+    });
+
+    // `preflight` is mounted over the route table, which an RPC path is not in,
+    // so without one built here a browser gRPC-Web call never gets past this.
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(res.headers.get('access-control-allow-origin')).toBe(
+      'https://app.example',
+    );
+  });
+
   it('refuses a controller route that would shadow an RPC path', async () => {
     @Controller('/')
     class Shadow {
