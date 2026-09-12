@@ -25,7 +25,7 @@ export class ReferenceMiddleware implements Middleware {
     theme: 'purple',
     title: 'dunx full example - Scalar',
   });
-  #page: string | undefined;
+  #page: Promise<string> | undefined;
 
   constructor(private readonly explorer: OpenApiExplorer) {}
 
@@ -48,7 +48,7 @@ export class ReferenceMiddleware implements Middleware {
   }
 
   async #html(): Promise<string> {
-    this.#page ??= await this.#renderer.page(this.explorer.document('/api'), {
+    this.#page ??= this.#renderer.page(this.explorer.document('/api'), {
       jsonHref: '/api/openapi.json',
       warnings: this.explorer.warnings,
       mountedAt: REFERENCE_PATH,

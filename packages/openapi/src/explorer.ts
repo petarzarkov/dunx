@@ -19,7 +19,7 @@ export class OpenApiExplorer {
   readonly #renderer: DocsRenderer | undefined;
   readonly #documents = new Map<string, OpenApiDocument>();
   readonly #json = new Map<string, string>();
-  readonly #pages = new Map<string, string>();
+  readonly #pages = new Map<string, Promise<string>>();
 
   constructor(
     generated: GeneratedDocument,
@@ -58,17 +58,34 @@ export class OpenApiExplorer {
    * serving only `/openapi.json` never looks them up and a missing optional peer
    * surfaces as this route failing rather than as everyone's boot error.
    */
-  async page(prefix = ''): Promise<string> {
+  page(prefix = ''): Promise<string> {
     const cached = this.#pages.get(prefix);
     if (cached !== undefined) return cached;
 
-    const html = await this.#ui().page(this.document(prefix), {
-      jsonHref: joinPath(prefix, this.#jsonPath),
-      warnings: this.warnings,
-      mountedAt: joinPath(prefix, this.#uiPath),
-    });
-    this.#pages.set(prefix, html);
-    return html;
+    // The promise, not its value, for the reason `PackageAssets.resolve` caches
+    // one: a cold page load asks for the page and its assets at once, and a
+    // value written after the await lets every one of them render it again.
+    const rendering = this.#render(prefix);
+    this.#pages.set(prefix, rendering);
+    return rendering;
+  }
+
+  /**
+   * Async so that `#ui()` refusing a missing renderer rejects rather than
+   * throwing synchronously out of `page()`, and so a failure evicts itself - a
+   * cached rejection would leave the route broken for the process's life.
+   */
+  async #render(prefix: string): Promise<string> {
+    try {
+      return await this.#ui().page(this.document(prefix), {
+        jsonHref: joinPath(prefix, this.#jsonPath),
+        warnings: this.warnings,
+        mountedAt: joinPath(prefix, this.#uiPath),
+      });
+    } catch (error) {
+      this.#pages.delete(prefix);
+      throw error;
+    }
   }
 
   /** One file the page linked, straight off disk. Any other name is a 404. */
