@@ -24,6 +24,13 @@ export interface ConnectMethodInfo {
   readonly protocols: readonly string[];
 }
 
+/** What the middleware needs per path, in one lookup. */
+export interface ConnectRoute {
+  readonly handle: ConnectHandler;
+  /** Anything but `unary`, so the gap between messages is the protocol. */
+  readonly streaming: boolean;
+}
+
 /**
  * One fetch handler per RPC, built at boot into a path map, so a request costs a
  * `Map.get`. Connect's own router picks the protocol off the content type.
@@ -33,7 +40,7 @@ export interface ConnectMethodInfo {
  * status no client reads. Probed on Bun 1.4.2.
  */
 export class ConnectRegistry {
-  readonly #routes = new Map<string, ConnectHandler>();
+  readonly #routes = new Map<string, ConnectRoute>();
   readonly #methods: ConnectMethodInfo[] = [];
   readonly #stopping = new AbortController();
 
@@ -63,7 +70,21 @@ export class ConnectRegistry {
 
     for (const handler of router.handlers) {
       const path = `${options.prefix}${handler.requestPath}`;
-      this.#routes.set(path, createFetchHandler(handler));
+      const rpc = `${handler.service.typeName}.${handler.method.name}`;
+      // The same contract as `assertNoCollisions` for routes: two services
+      // reaching one path is a boot error naming both, never a silent overwrite
+      // that serves whichever registered last.
+      const taken = this.#methods.find((method) => method.path === path);
+      if (taken !== undefined) {
+        throw new Error(
+          `Two RPCs are mounted at ${path}: ${taken.service}.${taken.method} ` +
+            `and ${rpc}. Register each service once, or give one its own prefix.`,
+        );
+      }
+      this.#routes.set(path, {
+        handle: createFetchHandler(handler),
+        streaming: handler.method.methodKind !== 'unary',
+      });
       this.#methods.push({
         path,
         service: handler.service.typeName,
@@ -79,7 +100,7 @@ export class ConnectRegistry {
     return this.#methods;
   }
 
-  handlerFor(path: string): ConnectHandler | undefined {
+  routeFor(path: string): ConnectRoute | undefined {
     return this.#routes.get(path);
   }
 

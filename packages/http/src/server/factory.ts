@@ -12,6 +12,7 @@ import {
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
 import { ClientAddress } from './client-address.js';
+import { ServerRef } from './server-ref.js';
 import { RoutePrefix } from '../route/prefix.js';
 import { MetricsMiddleware, RequestMetrics } from './metrics.js';
 import { buildWebSocket } from '../ws/adapter.js';
@@ -135,7 +136,15 @@ export class HttpFactory {
     // `RoutePrefix` is here for that reason too, and it is the one a second
     // instance fails quietly rather than loudly: an unattached one reads as "no
     // prefix", which is a plausible answer and a wrong one.
-    const services = [PubSub, ClientAddress, RequestMetrics, RoutePrefix];
+    // `ServerRef` joins them for the same reason: `listen()` hands one instance
+    // the live server, and a second would answer every call on no server at all.
+    const services = [
+      PubSub,
+      ClientAddress,
+      RequestMetrics,
+      RoutePrefix,
+      ServerRef,
+    ];
     /**
      * Every middleware is bound unconditionally, which is what unties the
      * ordering knot the options provider was blocked on: `requestLogging: false`

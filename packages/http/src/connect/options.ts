@@ -1,6 +1,7 @@
 import type { DescService } from '@bufbuild/protobuf';
 import type { ConnectRouterOptions, ServiceImpl } from '@connectrpc/connect';
 import type { Ctor, ModuleRef } from '@dunx/core';
+import { normalizePrefix } from '../route/prefix.js';
 
 /**
  * Everything `createConnectRouter` takes except the protocol switches and
@@ -70,7 +71,10 @@ export class ConnectOptions {
       ...router
     } = init;
     this.services = services;
-    this.prefix = normalizeConnectPrefix(prefix ?? '');
+    // `normalizePrefix` answers '/' for an empty prefix; an RPC mount wants
+    // '' there, which leaves every path where a stock client looks.
+    const mounted = normalizePrefix(prefix ?? '');
+    this.prefix = mounted === '/' ? '' : mounted;
     this.connect = connect ?? true;
     this.grpcWeb = grpcWeb ?? true;
     this.router = router;
@@ -90,10 +94,3 @@ export class ConnectOptions {
     }
   }
 }
-
-/** A leading slash and no trailing one. An empty prefix stays empty, which is
- * where a stock Connect client looks. */
-export const normalizeConnectPrefix = (prefix: string): string => {
-  const parts = prefix.split('/').filter(Boolean);
-  return parts.length === 0 ? '' : `/${parts.join('/')}`;
-};

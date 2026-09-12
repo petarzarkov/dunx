@@ -11,7 +11,6 @@ export { ConnectModule, type ConnectSettings } from './connect/module.js';
 export {
   connectService,
   ConnectOptions,
-  normalizeConnectPrefix,
   type ConnectOptionsInit,
   type ConnectRouterSettings,
   type ConnectServiceRegistration,
@@ -20,4 +19,5 @@ export {
   ConnectRegistry,
   type ConnectHandler,
   type ConnectMethodInfo,
+  type ConnectRoute,
 } from './connect/registry.js';

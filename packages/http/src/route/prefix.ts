@@ -1,6 +1,16 @@
 import { joinPath } from './discover.js';
 
 /**
+ * A leading slash and no trailing one, so `${path}/x` is never `//x`. `/` is
+ * what an empty prefix normalises to; a caller that wants `''` there maps it
+ * itself, which is the only difference between the two users.
+ */
+export const normalizePrefix = (path: string): string => {
+  const trimmed = path.split('/').filter(Boolean).join('/');
+  return trimmed === '' ? '/' : `/${trimmed}`;
+};
+
+/**
  * The global prefix, as `listen()` resolved it.
  *
  * Bound by `HttpFactory`'s global wrapper next to `ClientAddress`, and attached

@@ -101,3 +101,21 @@ export class CapturingRpc {
     });
   }
 }
+
+/** Pauses longer than `Bun.serve`'s default 10s idle timeout between two
+ * messages, which is what the keep-alive has to survive. */
+export class SlowRpc {
+  // Defaulted, so `ctor.length` is 0 and the container builds it without the
+  // transform preload, like every other fixture here.
+  constructor(private readonly gapMs = 12_500) {}
+
+  say(request: SayRequest): Said {
+    return { text: request.name };
+  }
+
+  async *countdown(request: SayRequest): AsyncGenerator<Said> {
+    yield { text: `${request.name} first` };
+    await Bun.sleep(this.gapMs);
+    yield { text: `${request.name} second` };
+  }
+}

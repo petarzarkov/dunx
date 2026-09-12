@@ -14,6 +14,7 @@ import {
   type ConnectServiceRegistration,
 } from './options.js';
 import { ConnectRegistry } from './registry.js';
+import { ServerRef } from '../server/server-ref.js';
 
 /** Everything `forRoot` takes except the services, which `forRootAsync` needs
  * synchronously, and `imports`, which `AsyncModuleConfig` already carries. */
@@ -47,9 +48,9 @@ const build = (
         inject: [ConnectOptions, ...implementations],
       }),
       provide(ConnectMiddleware, {
-        useFactory: (registry: ConnectRegistry) =>
-          new ConnectMiddleware(registry),
-        inject: [ConnectRegistry] as const,
+        useFactory: (registry: ConnectRegistry, server: ServerRef) =>
+          new ConnectMiddleware(registry, server),
+        inject: [ConnectRegistry, ServerRef] as const,
       }),
     ],
   };

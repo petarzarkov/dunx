@@ -7,10 +7,15 @@ Two verdicts. The word RPC is the only thing they share.
 gRPC is **not** blocked by Bun. Bun 1.3.14 hosts a working gRPC server today:
 `@grpc/grpc-js` 1.14.4 passed unary, server-streaming, client-streaming, bidirectional
 streaming, metadata, deadlines and TLS, and emitted correct HTTP/2 trailers with zero
-empty DATA frames. The one missing capability is narrower: **`Bun.serve` speaks no
-HTTP/2 and can send no trailers**, so a gRPC server on Bun runs on `node:http2`, on its
-own port, outside `Bun.serve({ routes })` and therefore outside every middleware, guard,
-input reader and request log dunx has.
+empty DATA frames.
+
+**Half of the gap below has since closed.** Everything in this file about HTTP/2 was
+measured on **Bun 1.3.14, where `Bun.serve` spoke none**. It does now:
+`HttpOptions.http2` serves h2c on the same port as HTTP/1.1. What remains is the
+trailer half, re-probed on **1.4.2**: `Response` has no trailer channel, so a
+`Bun.serve` handler cannot send `grpc-status` after the body. A native gRPC server on
+Bun still runs on `node:http2`, on its own port, outside every middleware, guard, input
+reader and request log dunx has.
 
 ### Connect and gRPC-Web: built, behind `@dunx/http/connect`
 
@@ -109,11 +114,15 @@ h2c against Bun.serve -> session error: ERR_HTTP2_SESSION_ERROR NGHTTP2_PROTOCOL
 fetch to h2-only server threw: Malformed_HTTP_Response
 ```
 
-Three separate gaps: `Bun.serve` answers an HTTP/2 preface with a protocol error;
-`Response` has no trailer channel, so a `Bun.serve` handler cannot send `grpc-status`
-after the body; and `fetch` cannot read trailers or even talk to an h2-only origin.
-`Bun.serve` accepts `http2`, `alpn`, `allowH2` and `protocol` keys without throwing, and
-none of them do anything. https://github.com/oven-sh/bun/issues/14672, open.
+Three separate gaps **on 1.3.14**: `Bun.serve` answered an HTTP/2 preface with a
+protocol error; `Response` has no trailer channel, so a `Bun.serve` handler cannot send
+`grpc-status` after the body; and `fetch` cannot read trailers or even talk to an
+h2-only origin. `Bun.serve` accepted `http2`, `alpn`, `allowH2` and `protocol` keys
+without throwing, and none of them did anything.
+
+**The first gap is closed.** oven-sh/bun#14672 shipped, `Bun.serve` serves h2c, and
+`HttpOptions.http2` is how dunx turns it on. The trailer gap is unchanged on 1.4.2 and
+is what still rules out native gRPC.
 
 ### grpc-js works, all four call types
 
@@ -443,7 +452,7 @@ The dunx side is the small half. What a consumer adopts is the cost.
 | Consumer: codegen            | `buf generate` ran in **0.475 s** and emitted **71 lines** for a two-method service. It must run in CI, and the output is either committed or built. Plus `buf.yaml`, `buf.gen.yaml`, and a `proto/` tree in the `package foo.v1` layout buf lint expects |
 | Consumer: schema duplication | messages live in `.proto`, so every request type exists twice if the app also has zod DTOs. dunx has no answer to this and would not gain one                                                                                                             |
 | Consumer: runtime peers      | `@connectrpc/connect` plus `@bufbuild/protobuf`, 2.78 MB unpacked, 0 transitive. Or `@grpc/grpc-js`, 2.51 MB and 33 installed packages                                                                                                                    |
-| Consumer: deployment         | until oven-sh/bun#14672 ships, either a second port or a proxy translating gRPC to Connect                                                                                                                                                                |
+| Consumer: deployment         | Connect and gRPC-Web are served in-process; reaching an existing native gRPC fleet still needs a proxy that translates, or a second port                                                                                                                  |
 | dunx: mount code             | ~80 LOC for Connect on `Bun.serve`, or ~250 LOC for a grpc-js adapter with DI, lifecycle and a second bound port                                                                                                                                          |
 | dunx: tests                  | ~300 LOC, needing generated fixtures committed under a `templates`-style exclusion so the root coverage run does not compile them                                                                                                                         |
 | dunx: docs and CI            | one guide page, one architecture page, and a codegen step or committed fixtures. `internal/bench` would want a subject, a third server process in the harness                                                                                             |
@@ -454,12 +463,12 @@ gRPC recipe in the docs serves the same reader for none of the maintenance.
 
 ## Risks and open spikes
 
-- **`Bun.serve` HTTP/2 is the single blocking item**, oven-sh/bun#14672, open since
-  October 2024 with no maintainer commitment. The whole gRPC verdict is downstream of it.
-  Re-probe on each Bun minor with `probes/04-bunserve-h2-trailers.ts`; the verdict flips
-  when the h2c line stops returning `NGHTTP2_PROTOCOL_ERROR`. **`Response` trailers are a
-  second, separate gap**: h2 on `Bun.serve` without a trailer API on `Response` still
-  hosts no native gRPC. Both are needed.
+- **`Response` trailers are now the single blocking item.** Both halves were needed and
+  one arrived: oven-sh/bun#14672 shipped, so `Bun.serve` serves h2c, and that is what
+  let Connect and gRPC-Web land in `@dunx/http/connect`. h2 without a trailer API on
+  `Response` still hosts no native gRPC, and 1.4.2 has no trailer API. Re-probe on each
+  Bun minor with `probes/04-bunserve-h2-trailers.ts`; the native-gRPC verdict flips when
+  `'trailers' in Response.prototype` stops returning `false`.
 - **oven-sh/bun#21759 is closed with no fix version.** Verified fixed on 1.3.14 by reading
   the wire, not by trusting grpc-js. A regression is silent to a loopback test and fatal
   behind Envoy, so `probes/grpc-sandbox/probe-frames.ts` asserts `empty=0` rather than

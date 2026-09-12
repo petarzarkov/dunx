@@ -2,8 +2,9 @@
 
 `@dunx/http/connect` serves protobuf services over the **Connect** and
 **gRPC-Web** protocols, on the port `Bun.serve` already has and through the
-middleware chain the app already has. An RPC is rate limited, request logged,
-CORS-handled and guarded the same way a route is.
+middleware chain the app already has. An RPC is request logged, CORS-handled and
+guarded the same way a route is. `ThrottleGuard` is the exception: see
+[What is served](#what-is-served).
 
 Native gRPC is not served. It carries `grpc-status` in an HTTP trailer, and
 `Bun.serve` sends no trailers, so a gRPC client would read every call as a
@@ -17,6 +18,12 @@ The Connect packages are optional peers, and the protobuf toolchain is yours:
 
 ```bash
 bun add @connectrpc/connect @bufbuild/protobuf
+```
+
+A client needs a transport as well, which is its own package:
+
+```bash
+bun add @connectrpc/connect-web
 ```
 
 Generate the service descriptor with `buf` as you would for any Connect server.
@@ -123,6 +130,11 @@ app.use(ConnectMiddleware);
 
 A guard registered before it covers every RPC. One registered after it does not.
 
+`ThrottleGuard` is the one that covers an RPC nowhere in the chain. It returns
+early on every unmatched path so a burst of 404s cannot spend a caller's budget,
+and an RPC path is in no route table. Rate limiting RPC traffic means a
+middleware of your own registered ahead of `ConnectMiddleware`, or a proxy.
+
 RPC paths are in no route table, so they reach the unmatched-path fallback, where
 the middleware claims the ones it serves and lets everything else through to the
 usual 404.
@@ -160,6 +172,9 @@ curl -X POST -H 'content-type: application/json' \
 | Client and bidi streaming            | Connect's, over HTTP/2 (`http2: true`)    |
 | Native gRPC                          | Not served: `Bun.serve` sends no trailers |
 | `.proto` loading and codegen         | Yours, through `buf`                      |
+| Request logging, CORS, guards        | Apply, as they do to a route              |
+| `ThrottleGuard`                      | Does not apply: it skips unmatched paths  |
+| Per-route metrics                    | Bucketed as `(unmatched)`, not per RPC    |
 
 `ConnectRegistry` lists what is mounted, which is what a health page or a test
 reads:
@@ -172,6 +187,10 @@ app.get(ConnectRegistry).methods;
 
 On shutdown the registry aborts the signal every running handler holds, so a
 long-running implementation gets its cue to wrap up.
+
+A streaming RPC clears its own idle deadline, so a pause between messages longer
+than `Bun.serve`'s 10 second `idleTimeout` does not sever the connection. The
+app-wide setting is untouched.
 
 Every other `createConnectRouter` option passes through: `interceptors`,
 `contextValues`, `requestGate`, `readMaxBytes`, `jsonOptions` and the rest.

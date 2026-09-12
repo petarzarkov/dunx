@@ -12,13 +12,15 @@ import type { RouteContext } from '../server/context.js';
 import { HttpFactory, type HttpApp } from '../server/factory.js';
 import { ConnectMiddleware } from './middleware.js';
 import { ConnectModule } from './module.js';
-import {
-  connectService,
-  ConnectOptions,
-  normalizeConnectPrefix,
-} from './options.js';
+import { connectService, ConnectOptions } from './options.js';
+import { ServerRef } from '../server/server-ref.js';
 import { ConnectRegistry } from './registry.js';
-import { CapturingRpc, GreetRpc, GreetService } from './greet.fixture.js';
+import {
+  CapturingRpc,
+  GreetRpc,
+  GreetService,
+  SlowRpc,
+} from './greet.fixture.js';
 
 const SAY = '/greet.v1.GreetService/Say';
 const COUNTDOWN = '/greet.v1.GreetService/Countdown';
@@ -68,16 +70,22 @@ const registryFor = (
     [impl],
   );
 
-describe('normalizeConnectPrefix', () => {
+describe('the mount prefix', () => {
+  const at = (prefix: string): string =>
+    new ConnectOptions({
+      services: [connectService(GreetService, GreetRpc)],
+      prefix,
+    }).prefix;
+
   it('leaves an empty prefix empty, which is where clients look', () => {
-    expect(normalizeConnectPrefix('')).toBe('');
-    expect(normalizeConnectPrefix('/')).toBe('');
+    expect(at('')).toBe('');
+    expect(at('/')).toBe('');
   });
 
   it('adds the leading slash and drops the trailing one', () => {
-    expect(normalizeConnectPrefix('api')).toBe('/api');
-    expect(normalizeConnectPrefix('/api/')).toBe('/api');
-    expect(normalizeConnectPrefix('//api//v1//')).toBe('/api/v1');
+    expect(at('api')).toBe('/api');
+    expect(at('/api/')).toBe('/api');
+    expect(at('//api//v1//')).toBe('/api/v1');
   });
 });
 
@@ -158,14 +166,14 @@ describe('ConnectRegistry', () => {
       `/rpc${SAY}`,
       `/rpc${COUNTDOWN}`,
     ]);
-    expect(registry.handlerFor(`/rpc${SAY}`)).toBeDefined();
-    expect(registry.handlerFor(SAY)).toBeUndefined();
+    expect(registry.routeFor(`/rpc${SAY}`)).toBeDefined();
+    expect(registry.routeFor(SAY)).toBeUndefined();
   });
 
   it('serves a call through the injected instance, with `this` intact', async () => {
     const registry = registryFor('', new GreetRpc('Howdy'));
-    const handler = registry.handlerFor(SAY);
-    const response = await handler!(
+    const route = registry.routeFor(SAY);
+    const response = await route!.handle(
       post(SAY, 'application/json', JSON.stringify({ name: 'world' })),
     );
     expect(response.status).toBe(200);
@@ -193,18 +201,35 @@ describe('ConnectRegistry', () => {
       [new GreetRpc()],
     );
     expect(registry.methods[0]?.protocols).toEqual(['grpc-web']);
-    const refused = await registry.handlerFor(SAY)!(
-      post(SAY, 'application/json'),
-    );
+    const refused = await registry
+      .routeFor(SAY)!
+      .handle(post(SAY, 'application/json'));
     expect(refused.status).toBe(415);
+  });
+
+  it('refuses two RPCs mounted at one path, naming both', () => {
+    const registration = connectService(GreetService, GreetRpc);
+    expect(
+      () =>
+        new ConnectRegistry(
+          new ConnectOptions({ services: [registration, registration] }),
+          [new GreetRpc(), new GreetRpc()],
+        ),
+    ).toThrow(/Two RPCs are mounted at \/greet\.v1\.GreetService\/Say/);
+  });
+
+  it('marks a streaming RPC, which is what clears the idle timeout', () => {
+    const registry = registryFor();
+    expect(registry.routeFor(SAY)?.streaming).toBe(false);
+    expect(registry.routeFor(COUNTDOWN)?.streaming).toBe(true);
   });
 
   it('aborts the signal a running handler holds when the app shuts down', async () => {
     const implementation = new CapturingRpc();
     const registry = registryFor('', implementation);
-    const response = await registry.handlerFor(COUNTDOWN)!(
-      stream(COUNTDOWN, '{}'),
-    );
+    const response = await registry
+      .routeFor(COUNTDOWN)!
+      .handle(stream(COUNTDOWN, '{}'));
     const reader = response.body!.getReader();
     // The first message, so the generator is suspended mid-call rather than
     // finished - connect aborts the per-call controller when a call completes.
@@ -219,7 +244,7 @@ describe('ConnectRegistry', () => {
 
 describe('ConnectMiddleware', () => {
   const middleware = (registry = registryFor()): ConnectMiddleware =>
-    new ConnectMiddleware(registry);
+    new ConnectMiddleware(registry, new ServerRef());
 
   const passthrough = async (): Promise<Response> =>
     new Response('next', { status: 418 });
@@ -393,6 +418,38 @@ describe('ConnectModule', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ text: 'Hello curl' });
   });
+
+  /**
+   * `Bun.serve` cuts a connection idle for `idleTimeout`, 10 seconds by default,
+   * and a paused response stream counts as idle once the request body has been
+   * read. Without `ServerRef.keepAlive` this call loses its second message and
+   * the client sees `ECONNRESET`.
+   *
+   * The gap is 12.5s because the cut is not sharp at 10: measured on Bun 1.4.2,
+   * an 11s pause survived and 12.5s did not. So the test costs those seconds.
+   */
+  it('keeps a stream alive across a pause longer than the idle timeout', async () => {
+    @Module({
+      imports: [
+        ConnectModule.forRoot({
+          services: [connectService(GreetService, SlowRpc)],
+        }),
+      ],
+    })
+    class AppModule {}
+
+    const baseUrl = await boot(AppModule);
+    const client = createClient(
+      GreetService,
+      createConnectTransport({ baseUrl }),
+    );
+
+    const texts: string[] = [];
+    for await (const message of client.countdown({ name: 'slow' })) {
+      texts.push(message.text);
+    }
+    expect(texts).toEqual(['slow first', 'slow second']);
+  }, 30_000);
 
   it('still answers 404 for a path no RPC and no route claims', async () => {
     @Module({
