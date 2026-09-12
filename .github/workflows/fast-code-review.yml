@@ -6,20 +6,35 @@ name: fast code review
 # no longer needs an OAuth token, a checkout, or a script to parse an execution
 # file.
 #
+# All four of the old triggers are here, so nothing is dropped: pushes get a
+# review, replies in dunxonu's own threads get an answer, and `@dunxonu` in a
+# comment, an issue or a submitted review gets an answer too.
+#
+# The one capability that does not carry over is dunxonu writing code. The old
+# mention path ran with `contents: write` and could push a fix; this action has
+# no checkout and no file access, so it answers with a diff to apply instead.
+# `git log --author=dunxonu` is empty, so that path was never used.
+#
 # What it buys: the review runs on free tiers and deranks through every key of
 # every provider before it gives up, rather than depending on one subscription.
 # The anchoring, the approve/comment decision, the scope narrowing and the
 # carried-findings note moved into the action, where they are tested.
 #
-# One job handles both triggers. Which flow runs is decided by the webhook
-# payload: a `pull_request` event reviews the diff, a review comment gets a
-# reply in its thread.
+# One job handles all four triggers. Which flow runs is decided by the webhook
+# payload: a `pull_request` event reviews the diff, a reply in one of dunxonu's
+# own threads gets an answer there, and anything naming `@dunxonu` gets an
+# answer where it was said. A comment that names nobody returns before any API
+# call, so ordinary conversation costs nothing.
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review_comment:
     types: [created]
+  issue_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
 
 # Keyed by event as well as by pull request, because the two flows must not
 # cancel each other. Sharing one group meant a comment arriving mid-review
@@ -31,7 +46,7 @@ on:
 # anything: two people commenting is two questions, and cancelling the first
 # would drop an answer.
 concurrency:
-  group: fast-code-review-${{ github.event.pull_request.number }}-${{ github.event_name }}
+  group: fast-code-review-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Nothing at the workflow level, so a job that forgets its own block gets none
@@ -40,7 +55,7 @@ permissions: {}
 
 jobs:
   review:
-    name: Review the diff
+    name: Review, reply, or answer
     runs-on: ubuntu-latest
     # The loop guard, and it is load bearing: dunxonu posts with a real user's
     # token, so its own reviews and replies raise these same events. A comment
@@ -52,6 +67,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      # For answering a mention on an issue, which is not a pull request.
+      issues: write
     steps:
       # No actions/checkout. The action reads the diff through the API and never
       # touches the working tree, so there is no workflow token left behind in
@@ -62,7 +79,7 @@ jobs:
       # Pinned to the tag's commit rather than to `v1`, which is a moving tag:
       # this job hands the action four secrets, and retargeting `v1` would run
       # unreviewed code with them.
-      - uses: petarzarkov/fast-code-review@52aeedae7e97154c785005c93b7a172fad1f0c68 # v1.0.0
+      - uses: petarzarkov/fast-code-review@87d97ee84a8afcddee3454ab60f2343be99cabae # v1.1.0
         with:
           github_token: ${{ secrets.DUNXONU_TOKEN }}
 
