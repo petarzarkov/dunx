@@ -358,6 +358,12 @@ it('keeps one series per route pattern, and one for every miss', () => {
   );
 });
 
+it('gives each rpc a series of its own, not the miss bucket', () => {
+  const seen = /(\d+) rpc series over (\d+) mounted methods/.exec(tour.text);
+  expect(Number(seen?.[1])).toBeGreaterThan(0);
+  expect(seen?.[1]).toBe(seen?.[2]);
+});
+
 it('times queries at the driver, since drizzle cannot time one', () => {
   expect(tour.text).toMatch(
     /\d+ queries, timed at the bun:sqlite handle dunx constructs/,

@@ -4,6 +4,8 @@ import {
   createGrpcWebTransport,
 } from '@connectrpc/connect-web';
 import { Logger } from '@dunx/core';
+import { RequestMetrics } from '@dunx/http';
+import { ConnectRegistry } from '@dunx/http/connect';
 import { GreetService } from './greet_pb.js';
 
 type GreetClient = Client<typeof GreetService>;
@@ -16,7 +18,11 @@ type GreetClient = Client<typeof GreetService>;
  * of them: the outbound half of Connect is the library's own one-liner.
  */
 export class RpcDemo {
-  constructor(private readonly logger: Logger) {}
+  constructor(
+    private readonly logger: Logger,
+    private readonly registry: ConnectRegistry,
+    private readonly metrics: RequestMetrics,
+  ) {}
 
   async demonstrate(url: string): Promise<void> {
     const connect: GreetClient = createClient(
@@ -52,6 +58,7 @@ export class RpcDemo {
     this.logger.info(`plain JSON POST -> ${curl.status} ${await curl.text()}`);
 
     await this.refusals(url, connect);
+    this.counted();
   }
 
   /** The two answers that are not a successful call. */
@@ -75,6 +82,18 @@ export class RpcDemo {
     this.logger.info(
       `native gRPC content-type -> ${grpc.status} ${body.code} ` +
         '(Connect and gRPC-Web only)',
+    );
+  }
+
+  /** An rpc matches no route, so it answers off the same fallback a 404 does. */
+  private counted(): void {
+    const mounted = new Set(this.registry.paths);
+    const series = this.metrics
+      .snapshot()
+      .routes.filter((route) => mounted.has(route.route));
+    this.logger.info(
+      `${series.length} rpc series over ${mounted.size} mounted methods - ` +
+        'each is counted under its own path, not in the (unmatched) one',
     );
   }
 }
