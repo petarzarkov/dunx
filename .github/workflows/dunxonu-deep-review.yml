@@ -54,12 +54,15 @@ jobs:
       github.event.sender.login != 'dunxonu' &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     timeout-minutes: 30
+    # Read only. `permissions:` governs the automatic GITHUB_TOKEN, which is what
+    # the agent below is handed; DUNXONU_TOKEN is a personal access token with
+    # its own scopes, so the submit step can still post while the agent cannot.
     permissions:
       contents: read
-      pull-requests: write
-      issues: write
-      id-token: write
+      pull-requests: read
+      # The action reads its own run to produce `execution_file`.
       actions: read
+      id-token: write
     steps:
       # Resolved before the checkout, not after it.
       #
@@ -131,7 +134,12 @@ jobs:
       # injection that got the agent to print that file would disclose a token
       # holding `pull-requests: write`. Nothing here needs credentials after the
       # fetch.
-      - uses: actions/checkout@v4
+      # Pinned to a commit: `v4` is mutable, and a retargeted tag would run
+      # unreviewed code in a job that goes on to touch a token.
+      #
+      # Everything this brings into the workspace is attacker-controlled. It is
+      # here for the agent to read and for nothing else to execute.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         if: steps.gate.outputs.ok == 'true'
         with:
           fetch-depth: 0
@@ -150,7 +158,16 @@ jobs:
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.DUNXONU_TOKEN }}
+          # The workflow's own token, which this job has granted read only,
+          # rather than DUNXONU_TOKEN.
+          #
+          # The agent is allowed `Bash(gh api:*)`, which is any method against
+          # any endpoint, and it reads a pull request whose text anybody can
+          # write. An appended instruction saying "do not post anything" is a
+          # request, not an authorization boundary, so the boundary is the token:
+          # with this one it can read the things it needs and write nothing at
+          # all. Posting happens in the trusted step at the bottom.
+          github_token: ${{ github.token }}
           # `high` rather than `medium`. Somebody asked for this one by name, and
           # broader coverage at the cost of a longer run is the whole reason to
           # ask. `medium` is what the automatic reviewer already approximates.
@@ -182,11 +199,27 @@ jobs:
       # a count, because the whole review in the body put a screen of prose in
       # the conversation.
       #
-      # Always the whole diff. post-review.ts used to narrow to what changed
-      # since this account's last review, which is now meaningless: dunxonu
-      # reviews every push automatically, so a requested deep review would have
-      # scoped itself to nothing. That narrowing is gone rather than flagged
-      # off, since nothing could reach it.
+      # The script is taken from the default branch, not from the pull request,
+      # and only now that the agent has stopped.
+      #
+      # Both halves matter. The workspace holds pull request content, so a
+      # contributor could simply edit `scripts/post-review.ts` and have it run
+      # with DUNXONU_TOKEN in `GH_TOKEN`: no prompt injection required, just a
+      # commit. And fetching the trusted copy earlier would not help, because
+      # the agent's tool list includes `sed` and `awk`, either of which writes a
+      # file in place. So the trusted copy does not exist while the agent runs.
+      - name: Fetch the submission script from the default branch
+        if: steps.gate.outputs.ok == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .trusted
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      # One review per request, findings on the lines they are about and the
+      # body a count, because the whole review in the body put a screen of prose
+      # in the conversation.
       #
       # An empty review is a hard failure rather than a green check. A review
       # gate that can pass without reviewing is worse than no gate, and this one
@@ -199,7 +232,7 @@ jobs:
         run: |
           set -euo pipefail
           # Bun is on PATH because the action put it there.
-          bun scripts/post-review.ts \
+          bun .trusted/scripts/post-review.ts \
             "$EXECUTION_FILE" \
             "${{ github.repository }}" \
             "${{ steps.head.outputs.number }}" \
