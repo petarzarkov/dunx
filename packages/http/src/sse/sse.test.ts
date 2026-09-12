@@ -14,6 +14,19 @@ const events = async function* (
   for (let i = 0; i < count; i += 1) yield { data: `event-${i}` };
 };
 
+describe('a frame with no data', () => {
+  it('carries an empty data line so a named event dispatches', () => {
+    // Without it the spec leaves the data buffer empty and returns, so an
+    // `event`-only frame is silence on the wire.
+    expect(frameEvent({ event: 'ready' })).toBe('event: ready\ndata: \n\n');
+    expect(frameEvent({ id: '7' })).toBe('id: 7\ndata: \n\n');
+  });
+
+  it('leaves a retry-only frame undispatched, which is what retry is', () => {
+    expect(frameEvent({ retry: 5000 })).toBe('retry: 5000\n\n');
+  });
+});
+
 describe('frameEvent', () => {
   it('frames a string payload and terminates it with a blank line', () => {
     expect(frameEvent({ data: 'hello' })).toBe('data: hello\n\n');

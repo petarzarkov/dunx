@@ -50,6 +50,28 @@ const messages = async (
 };
 
 describe('sseMessages', () => {
+  it('joins a CRLF split across two chunks into one event', async () => {
+    const messages = [];
+    for await (const m of sseMessages(
+      streamOf('data: a\r', '\ndata: b\r\n\r\n'),
+    )) {
+      messages.push(m);
+    }
+
+    // A trailing `\r` is half of a `\r\n` until the next byte says otherwise;
+    // taking it as a line ending split this into two events.
+    expect(messages).toEqual([{ data: 'a\nb' }]);
+  });
+
+  it('dispatches a data field carrying an empty value', async () => {
+    const messages = [];
+    for await (const m of sseMessages(streamOf('data:\n\n'))) messages.push(m);
+
+    // Only a frame with no `data:` field at all is skipped, which is what a
+    // comment heartbeat relies on.
+    expect(messages).toEqual([{ data: '' }]);
+  });
+
   it('carries the envelope, not just the payload', async () => {
     expect(
       await messages(

@@ -25,9 +25,10 @@ const split = (line: string): readonly [string, string] => {
  * Every event of a server-sent-events body, in order, ending with the stream or
  * with `[DONE]`. One still being read when the body ends is dropped, per spec.
  *
- * Async iteration rather than `getReader()`, which releases the reader on
- * completion, on a consumer `break` and on the `[DONE]` return. Hand-rolled:
- * Bun exposes no `EventSource` global and no SSE parser, measured not assumed.
+ * `getReader()` rather than async iteration, so the last read is told apart from
+ * a chunk boundary: a trailing `\r` is half a `\r\n` in one and a line ending in
+ * the other. `releaseLock` in a `finally` covers a `break` and `[DONE]`.
+ * Hand-rolled: Bun exposes no `EventSource` and no SSE parser, measured.
  */
 export async function* sseMessages(
   body: ReadableStream<Uint8Array>,
@@ -39,45 +40,66 @@ export async function* sseMessages(
   let id: string | undefined;
   let retry: number | undefined;
 
-  for await (const chunk of body) {
-    buffer += decoder.decode(chunk, { stream: true });
+  const reader = body.getReader();
+  let done = false;
 
-    let end = LINE.exec(buffer);
-    while (end !== null) {
-      const line = buffer.slice(0, end.index);
-      buffer = buffer.slice(end.index + end[0].length);
-      end = LINE.exec(buffer);
+  try {
+    for (;;) {
+      let end = LINE.exec(buffer);
+      while (end !== null) {
+        // A trailing `\r` may be half of a `\r\n` in the next chunk, and taking
+        // it as a line ending splits one event in two. Once the body has ended
+        // nothing more is coming, so it is one.
+        if (!done && end[0] === '\r' && end.index + 1 === buffer.length) break;
+        const line = buffer.slice(0, end.index);
+        buffer = buffer.slice(end.index + end[0].length);
+        end = LINE.exec(buffer);
 
-      // The blank line dispatches. An event with no data is not one: the spec
-      // resets the buffers and moves on, which is what a heartbeat relies on.
-      if (line === '') {
-        const payload = data.join('\n');
-        data = [];
-        if (payload === '') {
+        // The blank line dispatches.
+        if (line === '') {
+          const seen = data.length > 0;
+          const payload = data.join('\n');
+          data = [];
+          // No `data:` field at all does not dispatch, which a heartbeat relies
+          // on. One carrying an empty value does.
+          if (!seen) {
+            event = undefined;
+            continue;
+          }
+          if (payload === '[DONE]') return;
+          yield {
+            data: payload,
+            ...(event === undefined ? {} : { event }),
+            ...(id === undefined ? {} : { id }),
+            ...(retry === undefined ? {} : { retry }),
+          };
           event = undefined;
           continue;
         }
-        if (payload === '[DONE]') return;
-        yield {
-          data: payload,
-          ...(event === undefined ? {} : { event }),
-          ...(id === undefined ? {} : { id }),
-          ...(retry === undefined ? {} : { retry }),
-        };
-        event = undefined;
-        continue;
+
+        // A comment, which is what a heartbeat is.
+        if (line.startsWith(':')) continue;
+
+        const [field, value] = split(line);
+        if (field === 'data') data.push(value);
+        else if (field === 'event') event = value;
+        // The spec ignores an id containing NUL, and a non-integer retry.
+        else if (field === 'id' && !value.includes('\0')) id = value;
+        else if (field === 'retry' && /^\d+$/.test(value))
+          retry = Number(value);
       }
 
-      // A comment, which is what a heartbeat is.
-      if (line.startsWith(':')) continue;
-
-      const [field, value] = split(line);
-      if (field === 'data') data.push(value);
-      else if (field === 'event') event = value;
-      // The spec ignores an id containing NUL, and a non-integer retry.
-      else if (field === 'id' && !value.includes('\0')) id = value;
-      else if (field === 'retry' && /^\d+$/.test(value)) retry = Number(value);
+      if (done) return;
+      const next = await reader.read();
+      if (next.done) {
+        buffer += decoder.decode();
+        done = true;
+        continue;
+      }
+      buffer += decoder.decode(next.value, { stream: true });
     }
+  } finally {
+    reader.releaseLock();
   }
 }
 
