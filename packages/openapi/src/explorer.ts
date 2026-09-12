@@ -62,18 +62,16 @@ export class OpenApiExplorer {
     const cached = this.#pages.get(prefix);
     if (cached !== undefined) return cached;
 
-    // The promise, not its value, for the reason `PackageAssets.resolve` caches
-    // one: a cold page load asks for the page and its assets at once, and a
-    // value written after the await lets every one of them render it again.
+    // The promise, not its value: a cold page load asks for the page and its
+    // assets at once, and a value written after the await renders them all.
     const rendering = this.#render(prefix);
     this.#pages.set(prefix, rendering);
     return rendering;
   }
 
   /**
-   * Async so that `#ui()` refusing a missing renderer rejects rather than
-   * throwing synchronously out of `page()`, and so a failure evicts itself - a
-   * cached rejection would leave the route broken for the process's life.
+   * Async so a missing renderer rejects rather than throwing out of `page()`,
+   * and so a failure evicts itself rather than breaking the route for good.
    */
   async #render(prefix: string): Promise<string> {
     try {
