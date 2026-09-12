@@ -64,6 +64,51 @@ both behaviours are in [bun-apis.md](../bun-apis.md).
 per query, so instrumenting after `open()` works. That keeps this out of both
 connection constructors and both option classes.
 
+## Re-measured: the cost case against OpenTelemetry has collapsed, and the answer held anyway
+
+The note rejected `@opentelemetry/api` partly on cost, at noop 14.4-18.0 ns and
+904-932 ns with an SDK registered. Those are Bun 1.3.14 figures and they are
+stale. Re-measured on 1.4.0, 200k iterations warmed, against the attributes dunx
+would actually pass:
+
+| Call                                       |    ns |
+| ------------------------------------------ | ----: |
+| `perf_hooks` `record()`, what dunx uses    |  10.1 |
+| OTel noop `histogram.record`               |   3.8 |
+| OTel noop, with a route attributes object  |   5.9 |
+| OTel + SDK `histogram.record`              |  78.3 |
+| OTel + SDK, with a route attributes object | 359.0 |
+| `prom-client` `observe` with labels        | 430.8 |
+
+So an app registering no SDK would pay **less** than the native histogram, and one
+registering an SDK pays 359 ns, which is 6.6% of the 5.4 us request logging
+already spends. Cost is no longer an argument in either direction.
+
+**The answer is still no dependency**, on three reasons that never were about
+speed:
+
+- **OTel's metrics API is write-only.** A `Histogram` cannot be asked for its
+  p99. The dashboard's Stats panel reads `snapshot()`, so recording into OTel
+  instead of aggregating here would mean attaching a `MetricReader` and reading
+  the collected batch back - more machinery than `Durations` is.
+- **The instrumentation is dunx's either way.** No SDK sees `Bun.serve`,
+  `Bun.SQL`, `Bun.RedisClient` or `fetch` (measured, in bun-apis.md), and the
+  route _pattern_ comes from dunx's own `RouteContext`. Only the aggregation was
+  ever in question.
+- **`RuntimeStats` and `EventLoopLag` have no working equivalent.**
+  `prom-client`'s `collectDefaultMetrics` is partly dead on Bun: event-loop lag
+  always 0, no active-resource counts, zero GC samples.
+
+Plus `@dunx/core` has zero dependencies, and the guide's `prom-client` recipe is
+about fifteen lines.
+
+**What would change it:** an adopter wanting OTLP export without writing that
+pump. The shape is settled if it ever comes - `@opentelemetry/api` as an optional
+peer, `RequestMetrics` and `QueryMetrics` recording into instruments named by the
+semantic conventions they already follow, alongside the native aggregation rather
+than instead of it. Do not reopen this on the cost figures alone; the numbers
+above are the current ones and they did not decide it.
+
 ## What is still not built
 
 The ambient `stats.time('db.query')` handle, which the note gates on nothing now
