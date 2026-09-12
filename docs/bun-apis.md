@@ -167,6 +167,13 @@ a pile writes none with it set. `BUN_RUNTIME_TRANSPILER_CACHE_DIR` is not a
 variable Bun reads, which is why setting it looked like the cache ignoring the
 override.
 
+That override is also the workaround: a fourth worktree hit the same failure and
+`BUN_RUNTIME_TRANSPILER_CACHE_PATH=0` cleared it, 28/28. So the cache is
+implicated even though the shape above does not reproduce it. Which module is
+being served stale is still unidentified: the threshold sits somewhere between
+74 bytes and 101,889, and neither a small importer nor a 70 KB `?raw` target
+writes a pile at all, so it is not `data.ts` and not the JSON.
+
 ## Re-probed on Bun 1.4.1 (rev 4661e494f)
 
 Run against 1.4.0 rev `34cbb9a40` side by side, on the same machine, rather than
