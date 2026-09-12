@@ -92,3 +92,46 @@ describe('TieredCacheStore', () => {
     expect(await store.del('k')).toBe(true);
   });
 });
+
+/** An L2 whose read is slow enough for a write to land while it is in flight. */
+class SlowL2 extends MemoryCacheStore {
+  override async get<V>(key: string): Promise<V | undefined> {
+    const value = await super.get<V>(key);
+    await Bun.sleep(20);
+    return value;
+  }
+}
+
+describe('a write landing during a promote', () => {
+  const racing = async (
+    invalidate: (t: TieredCacheStore) => Promise<unknown>,
+  ) => {
+    const l1 = new MemoryCacheStore();
+    const tiered = new TieredCacheStore(l1, new SlowL2(), {
+      promoteTtl: 60_000,
+    });
+    await tiered.set('k', 'old', 60_000);
+    await l1.del('k'); // the next read has to go to L2
+
+    const reading = tiered.get('k');
+    await Bun.sleep(5);
+    await invalidate(tiered);
+    await reading;
+    return { l1, tiered };
+  };
+
+  it('does not put a deleted value back into L1', async () => {
+    const { l1, tiered } = await racing((t) => t.del('k'));
+
+    // The promote wrote `old` back for the whole promoteTtl, so a delete was
+    // undone for thirty seconds by default.
+    expect(await tiered.get('k')).toBeUndefined();
+    expect(await l1.get('k')).toBeUndefined();
+  });
+
+  it('does not overwrite a value written while it was reading', async () => {
+    const { tiered } = await racing((t) => t.set('k', 'new', 60_000));
+
+    expect(await tiered.get<string>('k')).toBe('new');
+  });
+});

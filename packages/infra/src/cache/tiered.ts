@@ -24,6 +24,9 @@ export interface TieredCacheInit {
  */
 export class TieredCacheStore extends CacheStore {
   readonly #promoteTtl: number;
+  /** Keys with an L2 read in flight, and those invalidated while one was. */
+  readonly #promoting = new Set<string>();
+  readonly #superseded = new Set<string>();
 
   constructor(
     private readonly l1: CacheStore,
@@ -47,18 +50,36 @@ export class TieredCacheStore extends CacheStore {
   async get<V = unknown>(key: string): Promise<V | undefined> {
     const near = await this.l1.get<V>(key);
     if (near !== undefined) return near;
-    const far = await this.l2.get<V>(key);
-    if (far === undefined) return undefined;
-    await this.l1.set(key, far, this.#promoteTtl);
-    return far;
+
+    this.#promoting.add(key);
+    try {
+      const far = await this.l2.get<V>(key);
+      if (far === undefined) return undefined;
+      // A `del` or `set` landing while the L2 read was in flight has already
+      // run. Promoting now would put the old value back into L1 and answer
+      // from it until `promoteTtl` expired, so the write is dropped instead.
+      if (this.#superseded.has(key)) return undefined;
+      await this.l1.set(key, far, this.#promoteTtl);
+      return far;
+    } finally {
+      this.#promoting.delete(key);
+      this.#superseded.delete(key);
+    }
+  }
+
+  /** Bounded by the reads in flight, so it holds nothing between `get` calls. */
+  #supersede(key: string): void {
+    if (this.#promoting.has(key)) this.#superseded.add(key);
   }
 
   async set<V>(key: string, value: V, ttl: number): Promise<void> {
+    this.#supersede(key);
     await this.l2.set(key, value, ttl);
     await this.l1.set(key, value, Math.min(ttl, this.#promoteTtl));
   }
 
   async del(key: string): Promise<boolean> {
+    this.#supersede(key);
     const [near, far] = await Promise.all([this.l1.del(key), this.l2.del(key)]);
     return near || far;
   }

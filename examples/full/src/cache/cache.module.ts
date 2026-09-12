@@ -86,7 +86,11 @@ const appRedis = RedisModule.forRootAsync(
         const l1 = new MemoryCacheStore({ max: 500 });
         const shared = {
           ttl: 30_000,
-          prefix: `dunx-full:${process.pid}:cache`,
+          // One prefix per deployment, not per process: a shared L2 that no
+          // replica or restart can read is not shared. The example's own suites
+          // set DUNX_CACHE_PREFIX so concurrent runs do not collide on one
+          // valkey; an app that sets nothing gets a stable prefix.
+          prefix: `${process.env['DUNX_CACHE_PREFIX'] ?? 'app'}:cache`,
         };
         try {
           await redis.ping();
