@@ -1,9 +1,11 @@
 {
   "name": "@dunx/infra",
   "version": "3.7.0",
-  "description": "Database, Redis, queue, schedule, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, bullmq over Bun.RedisClient, plus Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger",
+  "description": "Database, Redis, queue, AMQP, schedule, storage, image and logging infrastructure for dunx. drizzle over bun:sqlite and Bun.SQL, bullmq over Bun.RedisClient, rabbitmq-client for RabbitMQ, plus Bun.file, Bun.Glob, Bun.S3Client, Bun.Image and @arkv/logger",
   "keywords": [
+    "amqp",
     "avif",
+    "broker",
     "bullmq",
     "bun",
     "cache",
@@ -17,9 +19,11 @@
     "image",
     "jobs",
     "logger",
+    "messaging",
     "postgres",
     "pubsub",
     "queue",
+    "rabbitmq",
     "redis",
     "resize",
     "s3",
@@ -96,6 +100,10 @@
     "./pagination/cursor": {
       "types": "./dist/pagination/cursor-only.d.ts",
       "import": "./dist/pagination/cursor-only.js"
+    },
+    "./amqp": {
+      "types": "./dist/amqp/index.d.ts",
+      "import": "./dist/amqp/index.js"
     }
   },
   "publishConfig": {
@@ -115,14 +123,16 @@
     "@dunx/core": "workspace:*",
     "bullmq": "6.3.4",
     "drizzle-orm": "0.45.2",
-    "ioredis": "6.0.0"
+    "ioredis": "6.0.0",
+    "rabbitmq-client": "5.0.8"
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",
     "@types/bun": ">=1.4.1",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",
-    "ioredis": ">=5.0.0"
+    "ioredis": ">=5.0.0",
+    "rabbitmq-client": "^5.0.8"
   },
   "peerDependenciesMeta": {
     "@types/bun": {
@@ -135,6 +145,9 @@
       "optional": true
     },
     "ioredis": {
+      "optional": true
+    },
+    "rabbitmq-client": {
       "optional": true
     }
   },

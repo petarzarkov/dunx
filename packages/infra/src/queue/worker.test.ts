@@ -19,11 +19,11 @@ import { QueueModule, type QueueModuleSettings } from './module.js';
 import { JobPublisher } from './publisher.js';
 import {
   closeWithin,
-  errorThrottle,
   QueueConsumer,
   WorkerFactory,
   type WorkerApp,
 } from './worker.js';
+import { ErrorThrottle } from '../error-throttle.js';
 
 const url = defaultRedisUrl();
 
@@ -581,23 +581,23 @@ describe('closeWithin', () => {
  * Throttled rather than gated on recovery: bullmq emits `Worker`'s `ready` once,
  * so a flag cleared on that event would silence every outage after the first.
  */
-describe('errorThrottle', () => {
+describe('ErrorThrottle', () => {
   it('reports one of a flood', () => {
-    const report = errorThrottle(30_000, () => 0);
-    const reported = Array.from({ length: 10_000 }, () => report()).filter(
-      Boolean,
-    );
+    const report = new ErrorThrottle(30_000, () => 0);
+    const reported = Array.from({ length: 10_000 }, () =>
+      report.allows(),
+    ).filter(Boolean);
     expect(reported).toHaveLength(1);
   });
 
   it('reports a second outage once the interval has passed', () => {
     let at = 0;
-    const report = errorThrottle(30_000, () => at);
-    expect(report()).toBe(true);
-    expect(report()).toBe(false);
+    const report = new ErrorThrottle(30_000, () => at);
+    expect(report.allows()).toBe(true);
+    expect(report.allows()).toBe(false);
     // Recovered, ran for a while, then failed again.
     at = 30_000;
-    expect(report()).toBe(true);
-    expect(report()).toBe(false);
+    expect(report.allows()).toBe(true);
+    expect(report.allows()).toBe(false);
   });
 });

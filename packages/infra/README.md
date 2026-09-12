@@ -1,25 +1,28 @@
 # @dunx/infra
 
 Infrastructure for [dunx](https://github.com/petarzarkov/dunx): databases,
-Redis/Valkey, caching, queues, file storage, images, scheduling, pagination and
-logging. Nine areas, one package.
+Redis/Valkey, caching, queues, message brokers, file storage, images, scheduling,
+pagination and logging. Ten areas, one package.
 
 Where Bun ships the primitive, the primitive is what runs: `Bun.SQL`,
 `bun:sqlite`, `Bun.RedisClient`, `Bun.file`, `Bun.Glob`, `Bun.S3Client`,
 `Bun.Image`, `Bun.cron`. No `pg`, no `better-sqlite3`, no `ioredis`, no
 `@aws-sdk`, no `glob`, no `sharp`.
 
-Three areas integrate a mature library rather than hand-rolling one. Each of
-those drives a Bun API underneath. `drizzle-orm` and `bullmq` are **optional peer
-dependencies**, so an app using only `/files` installs neither.
+Four areas integrate a mature library rather than hand-rolling one. `drizzle-orm`,
+`bullmq` and `rabbitmq-client` are **optional peer dependencies**, so an app using
+only `/files` installs none of them. The first two drive a Bun API underneath;
+`rabbitmq-client` speaks a wire protocol Bun ships no client for, over `node:net`,
+which Bun implements natively.
 
 ## Install
 
 ```bash
 bun add @dunx/infra @dunx/core
 # plus what the areas you use need
-bun add drizzle-orm   # /db
-bun add bullmq        # /queue
+bun add drizzle-orm     # /db
+bun add bullmq          # /queue
+bun add rabbitmq-client # /amqp
 ```
 
 ## The subpaths
@@ -32,6 +35,7 @@ The guide is canonical for every row; this table is the index.
 | `@dunx/infra/redis`      | `Bun.RedisClient`, named connections, pub/sub                     | [Database](../../docs/guide/14-database.md)                 |
 | `@dunx/infra/cache`      | `Cache` over a memory, Redis or two-tier `CacheStore`, `CacheMetrics` | [Caching](../../docs/guide/19-caching.md)                   |
 | `@dunx/infra/queue`      | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker    | [Queues](../../docs/guide/15-queues.md)                     |
+| `@dunx/infra/amqp`       | **rabbitmq-client**: `@AmqpHandler`, publisher, drained consumers | [Message brokers](../../docs/guide/28-message-brokers.md)   |
 | `@dunx/infra/schedule`   | `Bun.cron` and timers: `@Cron`, `@Interval`, `@OnceOnBoot`        | [Scheduling](../../docs/guide/16-scheduling.md)             |
 | `@dunx/infra/files`      | One `Storage` contract over `Bun.file` and `Bun.S3Client`         | [Files and images](../../docs/guide/18-files-and-images.md) |
 | `@dunx/infra/images`     | An immutable pipeline over `Bun.Image`                            | [Files and images](../../docs/guide/18-files-and-images.md) |
@@ -73,10 +77,11 @@ It is an abstract class where dunx owns the contract (`Storage`, `DbConnection`,
 `redisConnection(name)`, `redisMetrics(name)` and `LoggerSettings`, name things no
 class can.
 
-**If an area is in the root barrel at all, all of it is.** `/db` and `/queue` are
-the two the barrel does not re-export: each reaches an optional peer through a
-static import, so exporting them would make `drizzle-orm` and `ioredis` hard
-requirements of `import '@dunx/infra'`. Reach them at their subpaths.
+**If an area is in the root barrel at all, all of it is.** `/db`, `/queue` and
+`/amqp` are the three the barrel does not re-export: each reaches an optional peer
+through a static import, so exporting them would make `drizzle-orm`, `ioredis` and
+`rabbitmq-client` hard requirements of `import '@dunx/infra'`. Reach them at their
+subpaths.
 
 **Timing is off unless asked for.** `{ metrics: true }` is the last argument to
 `DbModule`, `CacheModule`, `RedisModule` and `QueueModule`, binding a
@@ -92,7 +97,8 @@ See [Metrics](../../docs/guide/23-metrics.md).
 
 ## Verified against
 
-Bun 1.4.0, drizzle-orm 0.45.2 and bullmq 6.0.5. Bun's documentation is incomplete
+Bun 1.4.2, drizzle-orm 0.45.2, bullmq 6.0.5 and rabbitmq-client 5.0.8. Bun's
+documentation is incomplete
 across every area here, so the behaviour was measured rather than read. The
 evidence is in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) and
 [docs/bun-apis.md](../../docs/bun-apis.md).
