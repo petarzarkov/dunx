@@ -72,8 +72,14 @@ export const isSampled = (trace: Pick<TraceIds, 'flags'>): boolean =>
  * `n` random bytes as hex. `Uint8Array.prototype.toHex` is 49.2 ns for a trace id
  * and a span id together, against 260.5 ns for a `crypto.randomUUID()` pair.
  */
-export const mintTraceId = (bytes: number): string =>
+const randomHex = (bytes: number): string =>
   crypto.getRandomValues(new Uint8Array(bytes)).toHex();
+
+/** A fresh trace id: 32 hex digits. */
+export const mintTraceId = (): string => randomHex(16);
+
+/** A fresh span id: 16 hex digits. */
+export const mintSpanId = (): string => randomHex(8);
 
 /**
  * The `traceparent` for the scope a `RequestContext` currently holds, or nothing

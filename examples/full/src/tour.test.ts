@@ -1,36 +1,14 @@
 import { existsSync } from 'node:fs';
 import { beforeAll, expect, it } from 'bun:test';
+import { runTour } from './tour/run-tour.js';
 
 const APP_DIR = new URL('..', import.meta.url).pathname;
 
 /**
  * The tour is the end-to-end check: it boots the same app `bun start` serves,
- * narrates every package and exits 0. Assertions read the structured entries,
- * `NODE_ENV=production` selecting the plain JSON formatter so there is no ANSI
- * to strip. Both streams are collected: `ConsoleTransport` sends warn and above
- * to stderr, and the degraded-cache line is a warning.
+ * narrates every package and exits 0. Assertions read the structured entries the
+ * `runTour` harness parses rather than raw stdout.
  */
-const runTour = async (env: Record<string, string> = {}) => {
-  const proc = Bun.spawn(['bun', 'src/tour.ts'], {
-    cwd: APP_DIR,
-    env: { ...process.env, NODE_ENV: 'production', ...env },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-
-  const [out, err] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  const code = await proc.exited;
-  const messages = `${out}\n${err}`
-    .split('\n')
-    .filter((line) => line.startsWith('{'))
-    .map((line) => String((JSON.parse(line) as { message: unknown }).message));
-
-  return { code, messages, text: messages.join('\n') };
-};
-
 const tour = { text: '', messages: [] as string[], code: -1 };
 
 /**
@@ -379,6 +357,17 @@ it('times every redis command at the one seam, and keeps no key', () => {
   // slowest, and the Redis analogue would be a key nothing can redact.
   expect(tour.text).toMatch(
     /[A-Z]+: \d+ calls, p99 .+ - the key is never kept/,
+  );
+});
+
+// The trace half is the reason `AmqpPublisher.publish` exists rather than
+// `publisher().send()`: a flow that crossed the broker joins in one log query.
+it('routes through a topic exchange carrying its trace, or skips', () => {
+  expect(tour.text).toMatch(
+    /(2 of 2 delivered to dunx-full\.orders\.placed, dunx-full\.orders\.shipped|skipping the message broker section)/,
+  );
+  expect(tour.text).toMatch(
+    /(the handlers ran under traceId [0-9a-f]{32}|skipping the message broker section)/,
   );
 });
 

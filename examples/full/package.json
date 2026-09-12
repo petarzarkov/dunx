@@ -2,7 +2,7 @@
   "name": "@dunx/example-full",
   "version": "0.0.0",
   "private": true,
-  "description": "The dunx example app - one long-running service exercising DI, config, logging, HTTP routes, websocket gateways, guards, db, redis, files, images and OpenAPI",
+  "description": "The dunx example app - one long-running service exercising DI, config, logging, HTTP routes, websocket gateways, guards, db, redis, files, images, message brokers and OpenAPI",
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/main.ts",
@@ -35,6 +35,7 @@
     "bullmq": "6.3.4",
     "drizzle-orm": "0.45.2",
     "ioredis": "6.0.0",
+    "rabbitmq-client": "5.0.8",
     "swagger-ui-dist": "5.32.14",
     "zod": "4.5.4"
   },

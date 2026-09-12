@@ -2,6 +2,7 @@ import {
   DEFAULT_TRACE_FLAGS,
   formatTraceparent,
   isSampled,
+  mintSpanId,
   mintTraceId,
   parseTraceparent,
   TRACEPARENT_HEADER,
@@ -95,13 +96,13 @@ export class TraceContext {
     const trace: Trace =
       inbound === undefined
         ? {
-            traceId: mintTraceId(16),
-            spanId: mintTraceId(8),
+            traceId: mintTraceId(),
+            spanId: mintSpanId(),
             flags: DEFAULT_TRACE_FLAGS,
           }
         : {
             traceId: inbound.traceId,
-            spanId: mintTraceId(8),
+            spanId: mintSpanId(),
             parentSpanId: inbound.spanId,
             flags: inbound.flags,
             ...(state === null ? {} : { state }),

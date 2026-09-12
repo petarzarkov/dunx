@@ -21,6 +21,7 @@ export {
   DEFAULT_TRACE_FLAGS,
   formatTraceparent,
   isSampled,
+  mintSpanId,
   mintTraceId,
   parseTraceparent,
   TRACEPARENT_HEADER,

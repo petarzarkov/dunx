@@ -55,6 +55,8 @@ const envSchema = z.object({
   PUBLIC_URL: z.url().optional(),
   /** Absent is fine: the cache routes report themselves degraded instead of failing. */
   REDIS_URL: z.string().optional(),
+  /** Absent is fine: the messaging routes answer 503 and the tour skips. */
+  RABBITMQ_URL: z.string().optional(),
   IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),
   /** Generous, so per-route `@Throttle` is the interesting half. */
   THROTTLE_LIMIT: z.coerce.number().int().min(1).default(1000),
@@ -100,6 +102,7 @@ export interface AppConfig {
   };
   readonly database: { readonly file: string };
   readonly redis: { readonly url: string | undefined };
+  readonly amqp: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
   readonly auth: {
     readonly secret: string;
@@ -160,6 +163,7 @@ export const validate = (env: ConfigValues): AppConfig => {
     },
     database: { file: value.DATABASE_FILE },
     redis: { url: value.REDIS_URL },
+    amqp: { url: value.RABBITMQ_URL },
     images: { quality: value.IMAGE_QUALITY },
     auth: {
       secret: value.AUTH_SECRET,

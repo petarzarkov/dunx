@@ -1,6 +1,6 @@
-# The services `examples/full` degrades without: a broker for the cache, the queue,
-# the rate limiter's shared store and the websocket relay, and Postgres for the
-# relay's LISTEN/NOTIFY backend.
+# The services `examples/full` degrades without: Valkey for the cache, the queue,
+# the rate limiter's shared store and the websocket relay, Postgres for the
+# relay's LISTEN/NOTIFY backend, and RabbitMQ for the message broker routes.
 #
 # Images come from **public.ecr.aws** rather than Docker Hub, which rate limits
 # anonymous pulls by IP. A CI runner shares its IP with every other runner on the
@@ -13,7 +13,7 @@
 # example's storage is `LocalStorageOptions` on a temp dir, and the one suite that
 # needs a bucket runs in the coverage job against MinIO from Hub.
 #
-#   bun run services:up      start and wait for both to answer
+#   bun run services:up      start and wait for all three to answer
 #   bun run services:down    stop and remove them, volumes included
 #
 # The same file is what CI's examples job brings up, so there is one description
@@ -46,3 +46,14 @@ services:
       timeout: 3s
       retries: 10
       start_period: 2s
+
+  rabbitmq:
+    image: public.ecr.aws/docker/library/rabbitmq:4-alpine
+    ports:
+      - '5672:5672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s

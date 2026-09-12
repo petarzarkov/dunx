@@ -3,6 +3,7 @@ import {
   DEFAULT_TRACE_FLAGS,
   formatTraceparent,
   isSampled,
+  mintSpanId,
   mintTraceId,
   parseTraceparent,
   traceparentOf,
@@ -68,11 +69,11 @@ describe('isSampled', () => {
   });
 });
 
-describe('mintTraceId', () => {
-  it('returns hex of the width asked for, and a different one each call', () => {
-    expect(mintTraceId(16)).toMatch(/^[0-9a-f]{32}$/);
-    expect(mintTraceId(8)).toMatch(/^[0-9a-f]{16}$/);
-    expect(mintTraceId(8)).not.toBe(mintTraceId(8));
+describe('minting ids', () => {
+  it('returns the width the standard states, and a different one each call', () => {
+    expect(mintTraceId()).toMatch(/^[0-9a-f]{32}$/);
+    expect(mintSpanId()).toMatch(/^[0-9a-f]{16}$/);
+    expect(mintSpanId()).not.toBe(mintSpanId());
   });
 });
 
