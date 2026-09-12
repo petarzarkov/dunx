@@ -1,4 +1,20 @@
-# dunxonu reviews every pull request through .github/workflows/dunxonu-review.yml.
-# Listing it here only auto-requests its review in the Reviewers box: it never
-# submits an approval, so require_code_owner_review must stay false.
-*  @dunxonu
+# Deliberately empty of owners. Please read before adding one.
+#
+# dunxonu was listed here as `*  @dunxonu`, to auto-request its review in the
+# Reviewers box, on the stated grounds that it "never submits an approval, so
+# require_code_owner_review must stay false".
+#
+# That is no longer true. dunxonu reviews every push through
+# .github/workflows/fast-code-review.yml, and that action submits a real
+# APPROVE when it finds nothing. So a bot approval now counts as a code owner
+# approval, and enabling require_code_owner_reviews would let a pull request
+# satisfy its review requirement without a person reading it.
+#
+# The exposure is not hypothetical. The deep reviewer holds a token with
+# pull-requests: write and reads attacker-controlled pull request text, so the
+# gap between "a bot can approve" and "a bot can approve on request from
+# somebody outside the project" is thinner than it looks.
+#
+# If you want a code owner here, make it a person or a team. If you want
+# dunxonu's review auto-requested again, set `approve: false` on the action
+# first so it can only ever comment.
