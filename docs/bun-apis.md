@@ -643,6 +643,13 @@ not go through it, so a preloaded SDK patches nothing unless the file that impor
 `node:http` is CJS. The same process instruments a CJS `require` and misses the ESM
 import beside it.
 
+Re-probed on **1.4.2**, and with `getNodeAutoInstrumentations()` in place of the
+single http instrumentation. Nothing moved: a CJS `require('node:http')` still
+records **2** spans with `http.get.__wrapped` true, an ESM `import` still records
+**0**, and `Bun.serve`, `fetch` and `bun:sqlite` in one process still record **0**
+between them. The CJS row is the one that gets misread as having broken since;
+it has not.
+
 The API half works. `startActiveSpan` holds context across an `await`, and a child
 started after it carries the parent's trace id and span id -
 `@opentelemetry/context-async-hooks` over `AsyncLocalStorage`.
