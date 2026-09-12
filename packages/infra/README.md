@@ -37,6 +37,7 @@ The guide is canonical for every row; this table is the index.
 | `@dunx/infra/images`     | An immutable pipeline over `Bun.Image`                            | [Files and images](../../docs/guide/18-files-and-images.md) |
 | `@dunx/infra/logger`     | **`@arkv/logger`** bound to core's `Logger` contract              | [Logging](../../docs/guide/13-logging.md)                   |
 | `@dunx/infra/pagination` | Keyset pagination: cursor codec, options parser, drizzle query    | [Database](../../docs/guide/14-database.md)                 |
+| `@dunx/infra/pagination/cursor` | The same codec and parser without the drizzle query, so it resolves with no drizzle installed | [Database](../../docs/guide/14-database.md) |
 
 ## Usage
 

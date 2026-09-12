@@ -92,6 +92,10 @@
     "./pagination": {
       "types": "./dist/pagination/index.d.ts",
       "import": "./dist/pagination/index.js"
+    },
+    "./pagination/cursor": {
+      "types": "./dist/pagination/cursor-only.d.ts",
+      "import": "./dist/pagination/cursor-only.js"
     }
   },
   "publishConfig": {

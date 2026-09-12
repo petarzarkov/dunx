@@ -463,3 +463,28 @@ describe('paginate, on a synchronous driver', () => {
     expect((await pending).data.map((row) => row.id)).toEqual(['e', 'd']);
   });
 });
+
+describe('the cursor subpath', () => {
+  it('carries the database-free half and nothing that needs drizzle', async () => {
+    const built = `${import.meta.dir}/../../dist/pagination/cursor-only.js`;
+    const source = await Bun.file(built).text();
+
+    // The point of the subpath: an app paginating something that is not a
+    // drizzle table wants the same cursor and none of the query builder, and
+    // drizzle is an optional peer it may not have installed.
+    expect(source).not.toContain('drizzle');
+
+    const codec = (await import(built)) as Record<string, unknown>;
+    expect(Object.keys(codec).sort()).toEqual([
+      'CursorError',
+      'PAGINATION',
+      'PageOptionsError',
+      'PaginationDirection',
+      'PaginationOrder',
+      'decodeCursor',
+      'encodeCursor',
+      'pageOf',
+      'parsePageOptions',
+    ]);
+  });
+});
