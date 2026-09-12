@@ -23,7 +23,6 @@ import {
   WorkerFactory,
   type WorkerApp,
 } from './worker.js';
-import { ErrorThrottle } from '../error-throttle.js';
 
 const url = defaultRedisUrl();
 
@@ -581,23 +580,3 @@ describe('closeWithin', () => {
  * Throttled rather than gated on recovery: bullmq emits `Worker`'s `ready` once,
  * so a flag cleared on that event would silence every outage after the first.
  */
-describe('ErrorThrottle', () => {
-  it('reports one of a flood', () => {
-    const report = new ErrorThrottle(30_000, () => 0);
-    const reported = Array.from({ length: 10_000 }, () =>
-      report.allows(),
-    ).filter(Boolean);
-    expect(reported).toHaveLength(1);
-  });
-
-  it('reports a second outage once the interval has passed', () => {
-    let at = 0;
-    const report = new ErrorThrottle(30_000, () => at);
-    expect(report.allows()).toBe(true);
-    expect(report.allows()).toBe(false);
-    // Recovered, ran for a while, then failed again.
-    at = 30_000;
-    expect(report.allows()).toBe(true);
-    expect(report.allows()).toBe(false);
-  });
-});

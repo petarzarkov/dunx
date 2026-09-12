@@ -1,8 +1,6 @@
 import {
   discoverMarked,
-  markedMethods,
   markedMethodsOn,
-  type Ctor,
   type DiscoveredMethod,
   type ResolvedModule,
   type ScopedResolver,
@@ -38,10 +36,6 @@ export const discoverSubscriptionsOn = (
   markedMethodsOn<AmqpMeta, AmqpHandlerFn>(instance, amqpMetaOf).map(
     asSubscription,
   );
-
-/** Whether a class declares a handler, without constructing it. */
-export const declaresAmqpHandler = (ctor: Ctor<unknown>): boolean =>
-  markedMethods(ctor.prototype as object | null, amqpMetaOf).length > 0;
 
 /**
  * **One queue, one handler.** A second consumer on a queue is how AMQP spreads

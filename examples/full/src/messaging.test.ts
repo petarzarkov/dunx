@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import type { HttpApp } from '@dunx/http';
 import { createApp } from './main.js';
+import { runTour } from './tour/run-tour.js';
 import type { Handled } from './messaging/orders.messages.js';
 
 /**
@@ -136,3 +137,22 @@ it('answers 503 with no broker rather than hanging', async () => {
   expect(status).toBe(503);
   expect((await inbox()).connected).toBe(false);
 });
+
+/**
+ * Here rather than beside the other tour assertions because `tour.test.ts` is at
+ * the 800-line cap, and this one spawns a tour of its own rather than reading the
+ * shared run.
+ *
+ * Both variables, because `defaultAmqpUrl` falls back to `$AMQP_URL`: setting one
+ * would leave the other pointing at a reachable broker.
+ */
+it('tours and exits 0 with no broker at all', async () => {
+  const unreachable = 'amqp://127.0.0.1:1';
+  const run = await runTour({
+    RABBITMQ_URL: unreachable,
+    AMQP_URL: unreachable,
+  });
+
+  expect(run.code).toBe(0);
+  expect(run.text).toContain('skipping the message broker section');
+}, 30_000);

@@ -25,6 +25,11 @@ const nested = <T extends object>(
     ? undefined
     : { value: { ...base, ...over } as T };
 
+/** The key a handler's queue is bound with, which the binding and the boot log
+ * both report and which must not be derived twice. */
+export const bindingKey = (found: DiscoveredSubscription): string =>
+  found.routingKey ?? found.queue;
+
 export const consumerProps = (
   defaults: Omit<ConsumerProps, 'queue'>,
   found: DiscoveredSubscription,
@@ -60,7 +65,7 @@ export const consumerProps = (
       {
         exchange: found.exchange,
         queue: found.queue,
-        routingKey: found.routingKey ?? found.queue,
+        routingKey: bindingKey(found),
       },
     ],
   };
@@ -134,7 +139,7 @@ export class AmqpSubscriber {
                 ? {}
                 : {
                     exchange: found.exchange,
-                    routingKey: found.routingKey ?? found.queue,
+                    routingKey: bindingKey(found),
                   }),
             },
           );

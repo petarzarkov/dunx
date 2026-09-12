@@ -1,9 +1,9 @@
 export { AmqpConnection } from './connection.js';
 export { AmqpHandler } from './decorators.js';
 export { AmqpDispatcher, type DispatchSettings } from './dispatcher.js';
-// `declaresAmqpHandler`, `assertNoDuplicateQueues` and `consumerProps` are
-// deliberately not here, matching `/queue`: nothing outside this subpath calls
-// them, and exporting one would freeze it as semver surface.
+// `assertNoDuplicateQueues` and `consumerProps` are deliberately not here,
+// matching `/queue`: nothing outside this subpath calls them, and exporting one
+// would freeze it as semver surface.
 export {
   discoverSubscriptions,
   discoverSubscriptionsOn,

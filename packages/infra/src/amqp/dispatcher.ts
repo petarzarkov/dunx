@@ -1,5 +1,6 @@
 import {
   Logger,
+  DEFAULT_TRACE_FLAGS,
   mintSpanId,
   mintTraceId,
   parseTraceparent,
@@ -9,6 +10,7 @@ import {
   type RequestFields,
 } from '@dunx/core';
 import { ConsumerStatus, type AsyncMessage } from 'rabbitmq-client';
+import { withTimeout } from '../with-timeout.js';
 import type { DiscoveredSubscription } from './discover.js';
 import { AmqpError, AmqpErrorCode } from './errors.js';
 import { describeMessage } from './message.js';
@@ -96,7 +98,7 @@ export class AmqpDispatcher {
       context: `${found.provider}.${found.method}`,
       spanId: mintSpanId(),
       ...(inbound === undefined
-        ? { traceId: mintTraceId(), traceFlags: '01' }
+        ? { traceId: mintTraceId(), traceFlags: DEFAULT_TRACE_FLAGS }
         : {
             traceId: inbound.traceId,
             parentSpanId: inbound.spanId,
@@ -112,34 +114,17 @@ export class AmqpDispatcher {
     message: AsyncMessage,
   ): unknown {
     const delivery = message as AmqpMessage;
-    if (settings.timeoutMs === undefined) return found.handler(delivery);
-    return this.#withTimeout(found, settings.timeoutMs, delivery);
-  }
-
-  async #withTimeout(
-    found: DiscoveredSubscription,
-    timeoutMs: number,
-    message: AmqpMessage,
-  ): Promise<unknown> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const expiry = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        reject(
-          new AmqpError(
-            AmqpErrorCode.TIMED_OUT,
-            `${found.provider}.${found.method}() exceeded handlerTimeoutMs ` +
-              `(${timeoutMs}ms) handling ${describeMessage(found.queue, message)}.`,
-          ),
-        );
-      }, timeoutMs);
-    });
-
-    try {
-      return await Promise.race([found.handler(message), expiry]);
-    } finally {
-      // Otherwise a handler that finished in time leaves a pending timer, and the
-      // process cannot exit until the longest one fires.
-      clearTimeout(timer);
-    }
+    const { timeoutMs } = settings;
+    if (timeoutMs === undefined) return found.handler(delivery);
+    return withTimeout(
+      () => found.handler(delivery),
+      timeoutMs,
+      () =>
+        new AmqpError(
+          AmqpErrorCode.TIMED_OUT,
+          `${found.provider}.${found.method}() exceeded handlerTimeoutMs ` +
+            `(${timeoutMs}ms) handling ${describeMessage(found.queue, delivery)}.`,
+        ),
+    );
   }
 }

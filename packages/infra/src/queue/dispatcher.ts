@@ -3,6 +3,7 @@ import type { Job } from 'bullmq';
 import { describeJob, type DiscoveredJob } from './discover.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { JobOutcome, QueueMetrics } from './metrics.js';
+import { withTimeout } from '../with-timeout.js';
 
 /**
  * Whether the graph binds this token, asked of the graph rather than by resolving
@@ -98,7 +99,17 @@ export class JobDispatcher {
 
   #invoke(job: Job, found: DiscoveredJob): unknown {
     if (this.#timeoutMs === undefined) return found.handler(job);
-    return this.#withTimeout(job, found, this.#timeoutMs);
+    const timeoutMs = this.#timeoutMs;
+    return withTimeout(
+      () => found.handler(job),
+      timeoutMs,
+      () =>
+        new QueueError(
+          QueueErrorCode.TIMED_OUT,
+          `${found.provider}.${found.method}() exceeded jobTimeoutMs ` +
+            `(${timeoutMs}ms) handling ${describeJob(job)}.`,
+        ),
+    );
   }
 
   async #observed(
@@ -124,33 +135,6 @@ export class JobDispatcher {
         outcomeOf(error),
       );
       throw error;
-    }
-  }
-
-  async #withTimeout(
-    job: Job,
-    found: DiscoveredJob,
-    timeoutMs: number,
-  ): Promise<unknown> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const expiry = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        reject(
-          new QueueError(
-            QueueErrorCode.TIMED_OUT,
-            `${found.provider}.${found.method}() exceeded jobTimeoutMs ` +
-              `(${timeoutMs}ms) handling ${describeJob(job)}.`,
-          ),
-        );
-      }, timeoutMs);
-    });
-
-    try {
-      return await Promise.race([found.handler(job), expiry]);
-    } finally {
-      // Otherwise a handler that finished in time leaves a pending timer, and the
-      // process cannot exit until the longest one fires.
-      clearTimeout(timer);
     }
   }
 }

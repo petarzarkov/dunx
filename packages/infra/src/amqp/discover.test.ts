@@ -2,7 +2,6 @@ import { AppFactory, collectModules, Module, provide, token } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
 import { AmqpHandler } from './decorators.js';
 import {
-  declaresAmqpHandler,
   discoverSubscriptions,
   discoverSubscriptionsOn,
   selectSubscriptions,
@@ -56,11 +55,6 @@ describe('the marker', () => {
     expect(amqpMetaOf(method('onOrder'))?.queue).toBe('orders');
     expect(amqpMetaOf(method('notAHandler'))).toBeUndefined();
     expect(amqpMetaOf('not a function')).toBeUndefined();
-  });
-
-  it('answers whether a class declares one without constructing it', () => {
-    expect(declaresAmqpHandler(Orders)).toBe(true);
-    expect(declaresAmqpHandler(class Plain {})).toBe(false);
   });
 });
 

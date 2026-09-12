@@ -42,9 +42,10 @@ export class MessagingDemo {
     );
 
     const mine = await this.settle(id);
-    this.logger.info(
-      `${mine.length} of 2 delivered to ${mine.map((entry) => entry.queue).join(', ')}`,
-    );
+    // Sorted, so the line is the same on every run: the two queues have a
+    // consumer each on its own channel, and either can finish first.
+    const queues = mine.map((entry) => entry.queue).sort();
+    this.logger.info(`${mine.length} of 2 delivered to ${queues.join(', ')}`);
     // The whole reason `publish` exists rather than `publisher().send()`: the
     // handler ran inside the trace the publishing request was in.
     this.logger.info(

@@ -22,6 +22,7 @@ class FakePublisher {
   readonly listeners = new Map<string, (value: never) => void>();
   closed = 0;
   failClose = false;
+  neverCloses = false;
 
   send(envelope: Envelope, body: MessageBody): Promise<void> {
     this.sent.push({ envelope, body });
@@ -35,6 +36,7 @@ class FakePublisher {
 
   close(): Promise<void> {
     this.closed++;
+    if (this.neverCloses) return new Promise<void>(() => undefined);
     return this.failClose
       ? Promise.reject(new Error('channel gone'))
       : Promise.resolve();
@@ -67,7 +69,7 @@ const build = (init: { context?: AsyncRequestContext } = {}) => {
     lines,
     publisher: new AmqpPublisher(
       connection,
-      new AmqpOptions({ url: 'amqp://127.0.0.1:1' }),
+      new AmqpOptions({ url: 'amqp://127.0.0.1:1', closeTimeoutMs: 50 }),
       logger,
       init.context,
     ),
@@ -236,6 +238,28 @@ describe('shutting down', () => {
     const { publisher, fake } = build();
     await publisher.onShutdown();
     expect(fake.closed).toBe(0);
+  });
+
+  /**
+   * Teardown runs one hook at a time, so an unbounded wait here ran before
+   * `AmqpConnection`'s own bound and its `unsafeDestroy()`. Closing a channel
+   * needs the connection, and `Publisher.close()` against a broker that has gone
+   * away waits `acquireTimeout`: 20 s measured on rabbitmq-client 5.0.8, which
+   * hung `SIGTERM` past both documented bounds.
+   */
+  it('gives up on a channel that will not close, and says so', async () => {
+    const { publisher, fake, lines } = build();
+    await publisher.publish('orders', {});
+    fake.neverCloses = true;
+
+    const started = Bun.nanoseconds();
+    await publisher.onShutdown();
+
+    expect((Bun.nanoseconds() - started) / 1e6).toBeLessThan(2_000);
+    expect(lines.find((line) => line.level === 'warn')?.message).toContain(
+      'did not close within 50 ms',
+    );
+    expect(publisher.opened).toBe(false);
   });
 
   /** A channel that will not close must not stop the rest of teardown, which is

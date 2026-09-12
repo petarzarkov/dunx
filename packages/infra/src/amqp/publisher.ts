@@ -116,15 +116,44 @@ export class AmqpPublisher implements OnShutdown {
     };
   }
 
-  /** Closes the channel, before the socket it borrowed closes under it. */
+  /**
+   * Closes the channel, before the socket it borrowed closes under it.
+   *
+   * Bounded by `closeTimeoutMs`, for the reason the consumer drain is: closing a
+   * channel needs the connection, so against a broker that has gone away this
+   * waits `acquireTimeout`, measured at 20 s on rabbitmq-client 5.0.8. Teardown
+   * is sequential, so an unbounded wait here ran before `AmqpConnection`'s own
+   * bound and its `unsafeDestroy()`, and `SIGTERM` hung past both.
+   */
   async onShutdown(): Promise<void> {
     const publisher = this.#publisher;
     if (publisher === undefined) return;
     this.#publisher = undefined;
+
+    const timedOut = Symbol('timed out');
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await publisher.close();
+      const outcome = await Promise.race([
+        publisher.close(),
+        new Promise<symbol>((resolve) => {
+          timer = setTimeout(
+            () => resolve(timedOut),
+            this.#options.closeTimeoutMs,
+          );
+        }),
+      ]);
+      if (outcome === timedOut) {
+        this.#logger.warn(
+          'the AMQP publisher did not close within ' +
+            `${this.#options.closeTimeoutMs} ms`,
+        );
+      }
     } catch (error) {
       this.#logger.warn('the AMQP publisher failed to close', error);
+    } finally {
+      // The loser of the race stays pending; without this a channel that closed
+      // at once would hold the loop open for the rest of the window.
+      clearTimeout(timer);
     }
   }
 }
