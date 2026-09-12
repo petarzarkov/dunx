@@ -1,5 +1,6 @@
 import type { BunRequest } from 'bun';
 import type {
+  CacheStatsSource,
   ConfigValues,
   DashboardProbe,
   DbStatsSource,
@@ -60,6 +61,9 @@ export interface DashboardOptionsInit {
   /** `QueryMetrics` from `@dunx/infra/db` goes here, and needs
    * `DbModule.forRoot(options, { metrics: true })`. */
   readonly dbStats?: DbStatsSource;
+  /** `CacheMetrics` from `@dunx/infra/cache` goes here, and needs
+   * `CacheModule.forRoot(init, { metrics: true })`. */
+  readonly cacheStats?: CacheStatsSource;
   /** `ConfigService` goes here; the panel is absent without it. */
   readonly config?: ConfigValues;
   /** See {@link Reveal}. The default reveals nothing, even with `config` set. */
@@ -112,6 +116,7 @@ export class DashboardOptions {
   readonly probes: readonly DashboardProbe[];
   readonly stats: StatsSource | undefined;
   readonly dbStats: DbStatsSource | undefined;
+  readonly cacheStats: CacheStatsSource | undefined;
   readonly config: ConfigValues | undefined;
   readonly reveal: Reveal;
   readonly openApiPath: string | undefined;
@@ -130,6 +135,7 @@ export class DashboardOptions {
     this.probes = init.probes ?? [];
     this.stats = init.stats;
     this.dbStats = init.dbStats;
+    this.cacheStats = init.cacheStats;
     this.config = init.config;
     this.reveal = init.reveal ?? (() => false);
     this.openApiPath = init.openApiPath;

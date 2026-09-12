@@ -58,7 +58,7 @@ way to read this on a box with no browser. The queues page is bull-board's.
 | Redis     | Connection state and `INFO`                                 |
 | Config    | Keys always, values only where `reveal` says so             |
 | Runtime   | The process, its memory and its probes                      |
-| Stats     | Per-route request timings and per-operation query timings   |
+| Stats     | Request, query and cache timings, each half independent      |
 
 ## Three things that are decisions
 

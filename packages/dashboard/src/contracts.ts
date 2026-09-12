@@ -13,6 +13,7 @@ import type { HttpStatsReport, ProbeResult } from '@dunx/http';
  * | `ConfigValues` | `ConfigService` from `@dunx/core`          |
  * | `StatsSource`  | `RequestMetrics` from `@dunx/http`         |
  * | `DbStatsSource`| `QueryMetrics` from `@dunx/infra/db`       |
+ * | `CacheStatsSource` | `CacheMetrics` from `@dunx/infra/cache` |
  */
 
 /**
@@ -73,6 +74,35 @@ export interface DbQueryStats {
 export interface DbStatsReport {
   readonly operations: readonly DbQueryStats[];
   readonly total: number;
+  readonly since: string;
+}
+
+/**
+ * Cache hit rate and timings. `CacheMetrics` from `@dunx/infra/cache` satisfies
+ * it structurally, and `CacheStatsReport` is restated for the reason
+ * `DbStatsReport` is. Narrowing a field silently un-satisfies `CacheMetrics`.
+ */
+export interface CacheStatsSource {
+  snapshot(): CacheStatsReport;
+}
+
+/** `operation` is a plain `string`: `CacheOperation` in `@dunx/infra/cache` is
+ * the canonical list, and a second one here would exist only to convert. */
+export interface CacheOperationStats {
+  readonly operation: string;
+  readonly count: number;
+  readonly errors: number;
+  readonly duration: HistogramSnapshot;
+}
+
+export interface CacheStatsReport {
+  readonly operations: readonly CacheOperationStats[];
+  readonly hits: number;
+  readonly misses: number;
+  /** `hits / (hits + misses)`, `0` before the first read. */
+  readonly hitRate: number;
+  readonly total: number;
+  readonly errors: number;
   readonly since: string;
 }
 

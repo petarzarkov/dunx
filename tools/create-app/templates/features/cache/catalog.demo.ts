@@ -1,5 +1,9 @@
 import { Logger } from '@dunx/core';
-import { CacheOptions, TieredCacheStore } from '@dunx/infra/cache';
+import {
+  CacheOptions,
+  MeteredCacheStore,
+  TieredCacheStore,
+} from '@dunx/infra/cache';
 
 /**
  * One read, a second that never reaches the loader, ten at once that share a
@@ -12,11 +16,20 @@ export class CatalogDemo {
   ) {}
 
   async demonstrate(url: string): Promise<void> {
+    // `metrics: true` puts a MeteredCacheStore in front of what was configured,
+    // so the tier check reads through it. An `instanceof` straight at
+    // `options.store` answers no here and narrates the wrong store.
+    const { store } = this.options;
+    const metered = store instanceof MeteredCacheStore;
+    const configured = metered ? store.inner : store;
     const tiers =
-      this.options.store instanceof TieredCacheStore
+      configured instanceof TieredCacheStore
         ? 'L1 memory in front of L2 redis'
         : 'L1 memory only, redis unreachable at boot';
-    this.logger.info(`store -> ${tiers}, default ttl ${this.options.ttl}ms`);
+    this.logger.info(
+      `store -> ${tiers}${metered ? ', metered' : ''}, ` +
+        `default ttl ${this.options.ttl}ms`,
+    );
 
     const before = await this.loads(url);
     const first = await this.quote(url, 'dunx');

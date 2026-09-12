@@ -56,6 +56,12 @@ export class ResiliencePolicy {
     // counted loop would end on a line no test can reach.
     for (let attempt = 0; ; attempt += 1) {
       onAttempt?.(attempt + 1, attempt > 0);
+      // The binding is outer, and `onSuccess` and the return sit **after** the
+      // try, so a throwing success hook is not caught by the attempt's own
+      // `catch`. Moving either inside classifies the hook's error as a failed
+      // attempt and runs the operation again: four calls for an operation that
+      // succeeded every time, which for a charge is four charges. Tried, and
+      // reverted by the test that names it.
       let result: T;
       try {
         result = await op(this.#signal());

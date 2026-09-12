@@ -64,6 +64,44 @@ both behaviours are in [bun-apis.md](../bun-apis.md).
 per query, so instrumenting after `open()` works. That keeps this out of both
 connection constructors and both option classes.
 
+## The cache seam, asked for in #106
+
+The issue asked for hits, misses, a rate, per-operation counts and a latency
+histogram, plus a Stats panel beside HTTP and Database. All of it is the existing
+primitives; the only open question was where to record.
+
+`Cache` was the obvious seam and is the wrong one. Three things it gets wrong that
+`CacheStore` does not:
+
+- `Cache.wrap` coalesces concurrent callers into one `load()`. Counting there
+  reports five reads where one reached the store, so the hit rate answers a
+  question nobody asked.
+- `CacheModule` binds `CacheStore` as well, and an app injecting it directly would
+  be invisible.
+- `wrap`'s own read and its write-back are internal to `Cache`, so they would need
+  recording by hand at three call sites instead of falling out of the wrap.
+
+So `MeteredCacheStore` wraps the configured store and `CacheOptions` holds the
+wrapped one, which is what puts every reader behind it with no change to `Cache`.
+It is the `QueryMetrics.instrument(client)` shape: wrap the thing that does the
+I/O, not the thing that calls it.
+
+**A tier below the wrap is invisible, and that is the trade.** Wrapping a
+`TieredCacheStore` counts an L2 hit promoted into L1 as one `get` and one hit, and
+the L1 write behind it as nothing. The alternative was an L1/L2 discriminant on
+every series, which is a second label on a metric whose whole value is one number
+a reader compares against yesterday's. A consumer wanting the split wraps a tier
+with a second `CacheMetrics`, which costs a line.
+
+`hitRate` excludes errors from both terms. A `get` that threw is not a miss: a
+broker that is down would otherwise read as a cache that is cold, and those two
+send someone to different places.
+
+There is no `slowest`, for the reason `RedisMetrics` has none - the analogue is a
+cache key, which is caller data with no redaction that would make it safe to serve
+over the stats endpoint. Nothing is keyed on caller data either, so unlike the
+queue and Redis series there is nothing to cap: three operations, three series.
+
 ## Re-measured: the cost case against OpenTelemetry has collapsed, and the answer held anyway
 
 The note rejected `@opentelemetry/api` partly on cost, at noop 14.4-18.0 ns and
@@ -112,8 +150,9 @@ above are the current ones and they did not decide it.
 ## What is still not built
 
 The ambient `stats.time('db.query')` handle, which the note gates on nothing now
-that the drizzle seam covers queries. No adopter has asked for one for cache or
-upstream calls, and `HttpService` already logs a line per outbound call.
+that the drizzle seam covers queries. The cache asked for a class of its own
+rather than that handle, and `HttpService` already logs a line per outbound call,
+so upstream is the only side with nothing.
 
 Nothing resets on scrape, for the reason the note gives: `rate()` over a cumulative
 histogram is what a scraper wants. `reset()` is public and the guide says who may

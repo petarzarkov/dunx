@@ -2,6 +2,7 @@ import { Alert, Badge, Group, SimpleGrid, Table, Text } from '@mantine/core';
 import { EmptyState, Panel, StatCard } from '@dunx/ui';
 import type { JSX } from 'react';
 import type {
+  CacheStatsReport,
   DbStatsReport,
   HistogramSnapshot,
   HttpStatsReport,
@@ -26,6 +27,16 @@ const percentiles = (histogram: HistogramSnapshot): string =>
   histogram.count === 0
     ? '-'
     : `${ms(histogram.p50)} / ${ms(histogram.p95)} / ${ms(histogram.p99)}`;
+
+/** Red only when there are any. A red zero reads as a problem there is not. */
+const errorCell = (value: number): JSX.Element =>
+  value > 0 ? (
+    <Text size="sm" c="red">
+      {count(value)}
+    </Text>
+  ) : (
+    <Text size="sm">{count(value)}</Text>
+  );
 
 const statusBadges = (
   byStatus: Readonly<Record<string, number>>,
@@ -191,13 +202,7 @@ const Queries = ({ db }: { db: StatsHalf<DbStatsReport> }): JSX.Element => {
                     {count(row.count)}
                   </Table.Td>
                   <Table.Td className="dunx-hide-below-md">
-                    {row.errors > 0 ? (
-                      <Text size="sm" c="red">
-                        {count(row.errors)}
-                      </Text>
-                    ) : (
-                      <Text size="sm">{count(row.errors)}</Text>
-                    )}
+                    {errorCell(row.errors)}
                   </Table.Td>
                   <Table.Td>{percentiles(row.duration)}</Table.Td>
                   <Table.Td className="dunx-hide-below-md">
@@ -207,6 +212,87 @@ const Queries = ({ db }: { db: StatsHalf<DbStatsReport> }): JSX.Element => {
                     <Text size="xs" ff="monospace" c="dimmed" lineClamp={1}>
                       {row.slowest ?? '-'}
                     </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      )}
+    </Panel>
+  );
+};
+
+/** One decimal: a hit rate a reader compares against yesterday's, not a ratio. */
+const rate = (value: number): string => `${(value * 100).toFixed(1)}%`;
+
+const Cached = ({
+  cache,
+}: {
+  cache: StatsHalf<CacheStatsReport>;
+}): JSX.Element => {
+  if (cache.configured === false) {
+    return (
+      <Panel title="Cache">
+        <EmptyState
+          title="No cache metrics"
+          reason="Pass `cacheStats` to DashboardModule and open the cache with CacheModule.forRoot(init, { metrics: true })."
+        />
+      </Panel>
+    );
+  }
+
+  const reads = cache.hits + cache.misses;
+
+  return (
+    <Panel
+      title="Cache"
+      description={`${count(cache.total)} operations since ${new Date(cache.since).toLocaleTimeString()}`}
+      actions={
+        <Group gap="xs">
+          <StatCard
+            label="hit rate"
+            value={reads === 0 ? '-' : rate(cache.hitRate)}
+          />
+          <StatCard label="hits" value={count(cache.hits)} />
+          <StatCard label="misses" value={count(cache.misses)} />
+        </Group>
+      }
+    >
+      {cache.operations.length === 0 ? (
+        <EmptyState
+          title="Nothing read or written yet"
+          reason="No cache operation has run since the counters were last reset."
+        />
+      ) : (
+        <Table.ScrollContainer minWidth={320}>
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Operation</Table.Th>
+                <Table.Th className="dunx-hide-below-sm">Count</Table.Th>
+                <Table.Th className="dunx-hide-below-md">Errors</Table.Th>
+                <Table.Th>p50 / p95 / p99</Table.Th>
+                <Table.Th className="dunx-hide-below-md">Max</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {cache.operations.map((row) => (
+                <Table.Tr key={row.operation}>
+                  <Table.Td>
+                    <Badge size="sm" variant="light">
+                      {row.operation}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td className="dunx-hide-below-sm">
+                    {count(row.count)}
+                  </Table.Td>
+                  <Table.Td className="dunx-hide-below-md">
+                    {errorCell(row.errors)}
+                  </Table.Td>
+                  <Table.Td>{percentiles(row.duration)}</Table.Td>
+                  <Table.Td className="dunx-hide-below-md">
+                    {ms(row.duration.max)}
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -245,6 +331,7 @@ export const Stats = ({
     <SimpleGrid cols={1} spacing="lg">
       <Requests http={report.http} />
       <Queries db={report.db} />
+      <Cached cache={report.cache} />
     </SimpleGrid>
   );
 };

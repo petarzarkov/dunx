@@ -1,6 +1,7 @@
 import { Module } from '@dunx/core';
 import { DashboardModule } from '@dunx/dashboard';
 import { RequestMetrics } from '@dunx/http';
+import { CacheMetrics } from '@dunx/infra/cache';
 import { QueryMetrics } from '@dunx/infra/db';
 import { JobPublisher } from '@dunx/infra/queue';
 import { RedisConnection } from '@dunx/infra/redis';
@@ -36,6 +37,7 @@ import { DashboardDemo } from './dashboard.demo.js';
         indicators: AppIndicators,
         stats: RequestMetrics,
         dbStats: QueryMetrics,
+        cacheStats: CacheMetrics,
       ) => ({
         // Spelled out: the global prefix covers discovered routes, and this is
         // a middleware.
@@ -52,6 +54,8 @@ import { DashboardDemo } from './dashboard.demo.js';
         // anything in these; without it the panel says so rather than lying.
         stats,
         dbStats,
+        // The cache half, filled by `{ metrics: true }` on the cache layer.
+        cacheStats,
         config,
         // Keys only, except two that are safe to read. Everything else stays
         // redacted, including the database url and every secret.
@@ -78,6 +82,7 @@ import { DashboardDemo } from './dashboard.demo.js';
         AppIndicators,
         RequestMetrics,
         QueryMetrics,
+        CacheMetrics,
       ] as const,
     }),
   ],

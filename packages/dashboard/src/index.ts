@@ -11,6 +11,7 @@ export {
 // may want to name the shape it is satisfying, and because anything else that can
 // satisfy one - a fake in a test, a second queue library - needs the contract.
 export type {
+  CacheStatsSource,
   ConfigValues,
   DashboardProbe,
   DbStatsSource,
@@ -24,6 +25,8 @@ export type {
 // are a supported way to read the dashboard, not an implementation detail of the
 // page. `internal/dashboard-ui` imports them from the source for the same reason.
 export type {
+  CacheOperationStats,
+  CacheStatsReport,
   ConfigEntry,
   GatewayNode,
   DbQueryStats,

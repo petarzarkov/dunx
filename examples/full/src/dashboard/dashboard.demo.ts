@@ -69,7 +69,8 @@ export class DashboardDemo {
     const stats = await read<StatsReport>('/api/stats');
     this.logger.info(
       `stats -> http ${stats.http.configured ? 'configured' : 'absent'}, ` +
-        `db ${stats.db.configured ? 'configured' : 'absent'}`,
+        `db ${stats.db.configured ? 'configured' : 'absent'}, ` +
+        `cache ${stats.cache.configured ? 'configured' : 'absent'}`,
     );
 
     const page = await fetch(base);

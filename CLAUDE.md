@@ -599,6 +599,22 @@ then not cover it.
 --parallel` reported low and differently every run on 1.4.0 and agrees with
   sequential on 1.4.1, so the `coverage` phase runs `--parallel` too; the
   measurement is in that file.
+- **A second checkout of this repo poisons `internal/docs`'s suite, and the error
+  names a directory that no longer exists.** Bun's runtime transpiler cache is
+  `~/.bun/install/cache/@t@/*.pile`, and it is keyed on file **content, not path**:
+  measured on 1.4.2, a 620 KB module wrote one pile from one directory and a
+  byte-identical copy in a second directory wrote none. So two checkouts sharing an
+  `internal/docs/src/data.ts` share its cached module, and the `?raw` path
+  `happydom.ts` resolved on the first run is what the second run replays. The suite
+  dies on `ENOENT ... /internal/docs/src/generated/bench.json` naming a worktree
+  that has since been deleted. Nothing in the tree holds that path, so grepping for
+  it finds nothing.
+
+  `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0` confirms it, `rm -rf ~/.bun/install/cache/@t@`
+  clears it. CI never hits it: a runner has one checkout and a cold cache. Do not
+  go looking for it in the repo - a missing `src/generated/` is a different failure
+  and `bun run --filter '@dunx/docs' generate` is what fixes that one.
+
 - `bun run test:cov` - one root run over `./packages ./tools ./scripts` (excluding
   `**/templates/**`, which holds a working app whose test cannot resolve from there)
   so everything lands in

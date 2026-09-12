@@ -6,6 +6,8 @@ import type {
 } from '@dunx/core';
 import type { GatewayNode, RouteNode } from '@dunx/http/internal';
 import type {
+  CacheOperationStats,
+  CacheStatsReport,
   DbQueryStats,
   DbStatsReport,
   HistogramSnapshot,
@@ -145,15 +147,18 @@ export interface StatsAbsent {
 export type StatsHalf<T> = (T & { readonly configured: true }) | StatsAbsent;
 
 /**
- * Both halves of `{path}/api/stats`. Independent: an app may time requests and
- * not queries, or the other way round.
+ * The three halves of `{path}/api/stats`. Independent: an app may time requests
+ * and not queries, or the cache and neither.
  */
 export interface StatsReport {
   readonly http: StatsHalf<HttpStatsReport>;
   readonly db: StatsHalf<DbStatsReport>;
+  readonly cache: StatsHalf<CacheStatsReport>;
 }
 
 export type {
+  CacheOperationStats,
+  CacheStatsReport,
   DbQueryStats,
   DbStatsReport,
   HistogramSnapshot,
