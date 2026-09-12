@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package greet.v1;
+
+message SayRequest {
+  string name = 1;
+}
+
+message SayResponse {
+  string text = 1;
+  // How many greetings the injected Greetings service has counted.
+  int32 greeted = 2;
+}
+
+message CountdownRequest {
+  string name = 1;
+  int32 from = 2;
+}
+
+service GreetService {
+  rpc Say(SayRequest) returns (SayResponse) {}
+  rpc Countdown(CountdownRequest) returns (stream SayResponse) {}
+}

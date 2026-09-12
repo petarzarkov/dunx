@@ -4,8 +4,10 @@
   "description": "Bun.serve adapter for the dunx framework: controllers, middleware and WebSocket gateways",
   "keywords": [
     "bun",
+    "connect-rpc",
     "controller",
     "dunx",
+    "grpc-web",
     "http",
     "pubsub",
     "realtime",
@@ -41,6 +43,10 @@
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js"
     },
+    "./connect": {
+      "types": "./dist/connect.d.ts",
+      "import": "./dist/connect.js"
+    },
     "./internal": {
       "types": "./dist/internal.d.ts",
       "import": "./dist/internal.js"
@@ -59,16 +65,27 @@
     "@arkv/shared": "0.8.0"
   },
   "devDependencies": {
+    "@bufbuild/protobuf": "2.15.0",
+    "@connectrpc/connect": "2.2.0",
+    "@connectrpc/connect-web": "2.2.0",
     "@dunx/core": "workspace:*",
     "@opentelemetry/api": "1.9.1",
     "@opentelemetry/core": "2.11.0",
     "@opentelemetry/sdk-trace-node": "2.11.0"
   },
   "peerDependencies": {
+    "@bufbuild/protobuf": "^2.15.0",
+    "@connectrpc/connect": "^2.2.0",
     "@dunx/core": "workspace:*",
     "@types/bun": ">=1.4.1"
   },
   "peerDependenciesMeta": {
+    "@bufbuild/protobuf": {
+      "optional": true
+    },
+    "@connectrpc/connect": {
+      "optional": true
+    },
     "@types/bun": {
       "optional": true
     }

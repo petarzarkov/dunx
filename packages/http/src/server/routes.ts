@@ -1,8 +1,15 @@
 import { AppError, type Ctor, type ModuleRef } from '@dunx/core';
-import type { BunRequest } from 'bun';
+import type { BunRequest, Server } from 'bun';
+import { PathClaims } from '../route/claims.js';
 import type { DiscoveredRoute } from '../route/discover.js';
 import { defaultStatusFor, type HttpMethod } from '../route/marker.js';
-import { PUBLIC, STREAMS, UNMATCHED, type MetaKey } from '../route/metadata.js';
+import {
+  PUBLIC,
+  REQUEST_SERVER,
+  STREAMS,
+  UNMATCHED,
+  type MetaKey,
+} from '../route/metadata.js';
 import type { RouteInput } from '../route/schema.js';
 import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
@@ -12,6 +19,7 @@ import { buildInputReader, type InputReader } from './input.js';
 import { TraceContext } from './trace-context.js';
 import {
   compose,
+  hasClaimedPaths,
   type Middleware,
   type RouteHandler,
   type ServedHandler,
@@ -75,20 +83,13 @@ const statusFor = (route: DiscoveredRoute): number =>
 export const assertNoCollisions = (
   discovered: readonly DiscoveredRoute[],
 ): void => {
-  const owners = new Map<string, string>();
+  const claims = new PathClaims('Route', 'Bun would keep only one of them.');
 
   for (const route of discovered) {
-    const key = `${route.method} ${route.path}`;
-    const owner = `${route.controller}.${route.handlerName}`;
-    const existing = owners.get(key);
-
-    if (existing !== undefined) {
-      throw new AppError(
-        `Route collision: ${key} is declared by ${existing} and by ${owner}. ` +
-          'Bun would keep only one of them.',
-      );
-    }
-    owners.set(key, owner);
+    claims.claim(
+      `${route.method} ${route.path}`,
+      `${route.controller}.${route.handlerName}`,
+    );
   }
 };
 
@@ -136,7 +137,11 @@ export const withUpgradeRoutes = (
  * `'guarded'`. Either way `UNMATCHED` is
  * set and no real route sets it, so a guard can tell the two apart.
  */
-const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
+const unmatchedContext = (
+  req: Request,
+  isPublic: boolean,
+  server: Server<unknown> | undefined,
+): RouteContext =>
   Object.freeze({
     controller: '(unmatched)',
     handler: '(none)',
@@ -147,6 +152,7 @@ const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
     get: <T>(key: MetaKey<T>): T | undefined => {
       if (key.id === UNMATCHED.id) return true as T;
       if (key.id === PUBLIC.id && isPublic) return true as T;
+      if (key.id === REQUEST_SERVER.id) return server as T | undefined;
       return undefined;
     },
   });
@@ -171,12 +177,44 @@ const unmatchedContext = (req: Request, isPublic: boolean): RouteContext =>
  * `ctx.get(UNMATCHED)` is the cheaper half: set here and by no real route, so a
  * middleware can tell a miss from a handler's own 404 before calling `next()`.
  */
+/**
+ * A route and a path-claiming middleware cannot share a path: Bun matches the
+ * route, the fallback never runs, and the claim is silently dead.
+ */
+export const assertNoShadowedClaims = (
+  discovered: readonly DiscoveredRoute[],
+  middleware: readonly Middleware[],
+): void => {
+  // Routes share a path across methods, so they are the set to check against
+  // rather than claims in their own right - `assertNoCollisions` owns that.
+  const routed = new Map<string, string>();
+  for (const route of discovered) {
+    if (!routed.has(route.path)) {
+      routed.set(route.path, `${route.controller}.${route.handlerName}`);
+    }
+  }
+
+  for (const entry of middleware) {
+    if (!hasClaimedPaths(entry)) continue;
+    const owner = entry.constructor.name;
+    for (const path of entry.claimedPaths()) {
+      const taken = routed.get(path);
+      if (taken !== undefined) {
+        throw new AppError(
+          `Path collision: ${path} is declared by ${taken} and claimed by ` +
+            `${owner}. A route wins, so the middleware would never see it.`,
+        );
+      }
+    }
+  }
+};
+
 export const buildFallback = (
   middleware: readonly Middleware[] = [],
   onError: ErrorMapper = defaultErrorMapper,
   cors?: CorsOptions,
   notFound: 'guarded' | 'public' = 'guarded',
-): RouteHandler => {
+): ServedHandler => {
   // The canonical status name, not a sentence naming the path back at the
   // caller: an unmatched path is the one place where echoing the request would
   // tell a prober something about the surface it just failed to find.
@@ -184,11 +222,13 @@ export const buildFallback = (
     throw new HttpError(HttpStatusCode.NOT_FOUND, 'NOT_FOUND');
   };
 
-  const run: RouteHandler = async (req) => {
+  const run: ServedHandler = async (req, server) => {
     try {
       return await compose(
         middleware,
-        unmatchedContext(req, notFound === 'public'),
+        // Built per request, unlike a route's, so it can carry the server Bun
+        // handed this call: the unmatched path has no route to declare STREAMS.
+        unmatchedContext(req, notFound === 'public', server),
         miss,
       )(req);
     } catch (error) {

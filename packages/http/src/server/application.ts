@@ -12,6 +12,7 @@ import {
   type ModuleRef,
 } from '@dunx/core';
 import type { DiscoveredRoute } from '../route/discover.js';
+import { ClaimedRoutes } from './claimed-routes.js';
 import { RoutePrefix } from '../route/prefix.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import { PubSub } from '../ws/pubsub.js';
@@ -24,11 +25,12 @@ import {
 } from './metrics.js';
 import type { CorsOptions } from './cors.js';
 import { errorMapper, toErrorMapper, type ErrorMapper } from './errors.js';
-import type { Middleware } from './middleware.js';
+import { hasClaimedPaths, type Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
 import {
   assertNoGatewayCollisions,
   buildFallback,
+  assertNoShadowedClaims,
   buildRoutes,
   withTrailingSlashAliases,
 } from './routes.js';
@@ -231,6 +233,18 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     // Only when the upgrades share the routes table. Under `gatewayPort` a
     // route and a gateway on one path sit on different ports and nothing drops.
     if (ws && !this.#split) assertNoGatewayCollisions(prefixed, ws.paths);
+
+    // A middleware serving fixed paths off the fallback cannot share one with a
+    // route, which Bun matches first.
+    assertNoShadowedClaims(prefixed, middleware);
+    // So `ThrottleGuard` can tell a claimed path from a real 404.
+    this.#app
+      .get(ClaimedRoutes)
+      .attach(
+        middleware.flatMap((entry) =>
+          hasClaimedPaths(entry) ? [...entry.claimedPaths()] : [],
+        ),
+      );
 
     // Bun's own 404 never reaches the middleware chain. This runs only after Bun
     // has matched nothing, so Bun is still the router.

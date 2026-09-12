@@ -403,6 +403,11 @@ describe('source comments', () => {
         // A template is a working app vendored into the scaffolder, measured where
         // it lives in `examples/full`.
         .filter((f) => !f.includes('/templates/'))
+        // `protoc-gen-es` output. Nobody wrote its comments: they are copied out
+        // of the `.proto` and repeated per message, field and RPC, which is 53%
+        // of `examples/full/src/rpc/greet_pb.ts`. Measuring it would charge the
+        // example for a generator's voice.
+        .filter((f) => !f.endsWith('_pb.ts'))
         // A dot-prefixed name is a tool's scratch file, never shipped source.
         // `--others` lists them, and `packages/infra/src/queue/sandbox.test.ts`
         // writes a `.sandbox-child-<uuid>.ts` beside itself and deletes it - so

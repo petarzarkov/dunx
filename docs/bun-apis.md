@@ -158,13 +158,37 @@ were probed before anything was built on them:
 
 The second answer is the one that decided the design. A registry of bound
 servers was written first, on the third and fourth rows, and thrown away: Bun
-hands the owning server to the route table entry, so a route that declares it
-idles clears its own deadline with the right server and no registry. The third
-row still matters, because it rules out reading the server back off a request.
+hands the owning server to the route table entry and to the `fetch` fallback, so
+a route that declares it idles, and an RPC on the unmatched path, each clear their
+own deadline on the right server with no registry. The third row still matters,
+because it rules out reading the server back off a request.
 
-Reaping runs on Bun's own sweep rather than a per-request timer: with
-`idleTimeout: 1` the socket closed **4.0 s** after the last byte, which is what the
-regression test's window is set against.
+**The sever does not land at `idleTimeout`.** Reaping runs on Bun's own sweep, a
+4 second timer, so it lands at the next 4 second boundary at or after it. One
+chunk at T+0 then a 60s sleep, measuring when the client errors:
+
+| `idleTimeout` | Severed at | `ceil(t / 4) * 4` |
+| ------------- | ---------- | ----------------- |
+| 5             | 8.0s       | 8                 |
+| 7             | 8.0s       | 8                 |
+| 8             | 8.0s       | 8                 |
+| 10 (default)  | 12.0s      | 12                |
+| 11            | 12.0s      | 12                |
+| 12            | 12.0s      | 12                |
+| 15            | 16.0s      | 16                |
+| 30            | 32.0s      | 32                |
+| 0             | never      | -                 |
+
+Nine points, all fitting `ceil(idleTimeout / 4) * 4`, and `0` disables it. That is
+why `idleTimeout: 1` closes the socket **4.0 s** after the last byte, and what a
+regression test's window has to be set against: a gap past the **boundary**, not
+past `idleTimeout`. An 11s gap on the default passes with the fix removed.
+
+**Reading the request body makes no difference.** Holding the gap at 13s and
+varying only the read, a `GET` with no read, a `GET` with `arrayBuffer()` and a
+`POST` with `arrayBuffer()` all severed at 12.0s. An earlier reading recorded the
+body read as the trigger; it was two probes that differed in gap, both near the
+12.0s boundary.
 
 ### The transpiler cache is content-keyed across paths, and a docs failure it did not cause
 

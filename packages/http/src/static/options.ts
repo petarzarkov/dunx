@@ -1,3 +1,5 @@
+import { normalizePrefix } from '../route/prefix.js';
+
 export interface StaticOptionsInit {
   /**
    * The directory served. Resolved once, at construction, and every request is
@@ -50,8 +52,4 @@ export class StaticOptions {
   }
 }
 
-/** A leading slash and no trailing one, so `${path}/x` is never `//x`. */
-export const normalizePrefix = (path: string): string => {
-  const trimmed = path.split('/').filter(Boolean).join('/');
-  return trimmed === '' ? '/' : `/${trimmed}`;
-};
+export { normalizePrefix };

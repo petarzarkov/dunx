@@ -1,0 +1,11 @@
+# Regenerate `src/rpc/greet_pb.ts` from `src/rpc/greet.proto`: `bun run gen:proto`.
+# The generated file is committed, so nothing in CI needs the buf toolchain.
+version: v2
+inputs:
+  - directory: src/rpc
+plugins:
+  - local: protoc-gen-es
+    out: src/rpc
+    opt:
+      - target=ts
+      - import_extension=js

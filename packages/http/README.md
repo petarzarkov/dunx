@@ -71,6 +71,7 @@ The guide is canonical for every row; this table is the index.
 | Outbound resilience     | `HttpRetryClassifier`: which statuses retry, and `Retry-After` | [Resilience](../../docs/guide/25-resilience.md)                |
 | Static files            | `Bun.file` behind a mount, with a cache policy              | [Deployment](../../docs/guide/20-deployment.md)                   |
 | Compression             | zstd and gzip on Bun's own compressors                      | [Deployment](../../docs/guide/20-deployment.md)                   |
+| RPC                     | protobuf over Connect and gRPC-Web, as middleware           | [RPC](../../docs/guide/27-rpc.md)                                 |
 
 ## Subpaths
 
@@ -78,6 +79,7 @@ The guide is canonical for every row; this table is the index.
 | ---------------------- | ----------------------------------------------------------------- |
 | `@dunx/http`           | Everything above                                                  |
 | `@dunx/http/client`    | The outbound half: `HttpService`, retry with backoff, `HttpModule` |
+| `@dunx/http/connect`   | protobuf services over Connect and gRPC-Web, mounted as middleware |
 | `@dunx/http/internal`  | The framework's own plumbing. No stability promise                |
 
 `@dunx/http/internal` holds route-table construction, the middleware fold, the
@@ -102,6 +104,12 @@ from, and it may change in any release.
   ns. W3C Trace Context is the only correlation id; there is no second one.
 - `metrics: true` adds per-route counts and a nanosecond histogram at +35.2 ns a
   request, folded into the `.then` request logging already allocates.
+- `@dunx/http/connect` serves Connect and gRPC-Web, not native gRPC. gRPC carries
+  `grpc-status` in an HTTP trailer and `Bun.serve` sends no trailers, so a request
+  with `content-type: application/grpc` gets a 415 that says so.
+  `@connectrpc/connect` and `@bufbuild/protobuf` are optional peers, and the
+  `.proto` toolchain stays yours. `ThrottleGuard` does not cover an RPC: it skips
+  every unmatched path, and an RPC path is in no route table.
 
 ## License
 

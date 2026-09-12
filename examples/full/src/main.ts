@@ -8,6 +8,7 @@ import {
   ThrottleGuard,
   type HttpApp,
 } from '@dunx/http';
+import { ConnectMiddleware } from '@dunx/http/connect';
 import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
 import { AuthDocs, AuthDocsModule } from './auth-docs.js';
@@ -115,6 +116,11 @@ export const createApp = async (): Promise<HttpApp> => {
   app.use(RequestTrailMiddleware);
   // After anything that establishes the caller, since that decides the subject.
   app.use(ThrottleGuard);
+  // Last. An RPC is logged by the request logger outermost and gets the app's
+  // CORS, which is the point of serving Connect as middleware rather than on a
+  // second port. `ThrottleGuard` above reaches it too: an RPC path is claimed,
+  // so it is not the 404 the guard's early return exists for.
+  app.use(ConnectMiddleware);
   return app;
 };
 

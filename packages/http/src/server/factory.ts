@@ -11,6 +11,7 @@ import {
   type ModuleRef,
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
+import { ClaimedRoutes } from './claimed-routes.js';
 import { ClientAddress } from './client-address.js';
 import { RoutePrefix } from '../route/prefix.js';
 import { MetricsMiddleware, RequestMetrics } from './metrics.js';
@@ -135,7 +136,13 @@ export class HttpFactory {
     // `RoutePrefix` is here for that reason too, and it is the one a second
     // instance fails quietly rather than loudly: an unattached one reads as "no
     // prefix", which is a plausible answer and a wrong one.
-    const services = [PubSub, ClientAddress, RequestMetrics, RoutePrefix];
+    const services = [
+      PubSub,
+      ClientAddress,
+      RequestMetrics,
+      RoutePrefix,
+      ClaimedRoutes,
+    ];
     /**
      * Every middleware is bound unconditionally, which is what unties the
      * ordering knot the options provider was blocked on: `requestLogging: false`

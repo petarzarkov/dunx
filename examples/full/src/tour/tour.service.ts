@@ -6,6 +6,7 @@ import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
 import { PostgresRelayDemo } from '../chat/postgres-relay.demo.js';
 import { ProtocolsDemo } from '../protocols/protocols.demo.js';
+import { RpcDemo } from '../rpc/rpc.demo.js';
 import { CompressionDemo } from '../http/compression.demo.js';
 import { TraceDemo } from '../http/trace.demo.js';
 import { DashboardDemo } from '../dashboard/dashboard.demo.js';
@@ -47,6 +48,7 @@ export class Tour {
     private readonly chat: ChatDemo,
     private readonly postgresRelay: PostgresRelayDemo,
     private readonly protocols: ProtocolsDemo,
+    private readonly rpc: RpcDemo,
     private readonly guards: GuardsDemo,
     private readonly health: HealthDemo,
     private readonly sse: SseDemo,
@@ -99,6 +101,11 @@ export class Tour {
 
     this.group('@dunx/http - HTTP/2 on the same port, and a binary frame');
     await this.protocols.demonstrate(url);
+
+    this.group(
+      '@dunx/http/connect - protobuf over Connect and gRPC-Web, same port',
+    );
+    await this.rpc.demonstrate(url);
 
     this.group('@dunx/http - the websocket relay, two nodes, one topic');
     await this.chat.relayed(url);
