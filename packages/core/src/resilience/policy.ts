@@ -87,7 +87,7 @@ export class ResiliencePolicy {
     const verdict = this.options.classifier.classify(error);
     if (!verdict.retry) return { retry: false, delayMs: 0 };
 
-    const computed = backoffDelay(attempt, {
+    const computed = backoffDelay(attempt + 1, {
       baseMs: retryDelayMs,
       ...backoff,
     });
