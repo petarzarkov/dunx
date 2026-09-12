@@ -83,56 +83,51 @@ jobs:
         with:
           github_token: ${{ secrets.DUNXONU_TOKEN }}
 
-          # Ordered by how long a review takes, not by model size. Every key
-          # of a route is spent before the next route is reached, so whatever
-          # is at the top is what reviews most pull requests.
+          # Every id below came from each provider's own /models endpoint,
+          # asked with these keys. Three rounds of guessing produced three
+          # rounds of 404s - the whole first list, then `gemini-2.5-pro`, then
+          # `moonshotai/kimi-k2-instruct` and `cerebras/llama-3.3-70b` - and
+          # each one only deranked rather than failing, which is the list doing
+          # its job and still not a reason to keep writing them from memory.
           #
-          # Gemini Flash is first because it answered in about 25 seconds every
-          # time it was measured, where Nemotron Ultra took between 30 seconds
-          # and four and a half minutes for the same diff. A reviewer that lands
-          # before the author has switched tabs is worth more here than a larger
-          # model: both found the same two real bugs on this pull request.
-          # Gemini's free tier is also the smallest, so it is the one most
-          # likely to run out - which is what the rest of the list is for.
+          # Ordered by how long a review takes, not by model size. Every key of
+          # a route is spent before the next is reached, so whatever sits at the
+          # top reviews most pull requests, and a review that lands before the
+          # author has switched tabs is worth more here than a larger model.
+          # Gemini's free tier is also the smallest, which is what the ten
+          # routes behind it are for.
           #
-          # The OpenRouter entries are the `:free` ids its /models endpoint
-          # actually served on the day this was written, not the ones a model
-          # will guess: every id in the first version of this file returned 404,
-          # and the review only landed because the list was long enough to fall
-          # through. Free tiers are renamed and retired often, so a 404 here is
-          # expected eventually, costs about a tenth of a second, and the run
-          # log names each one. The Groq ids have not been reached yet, so they
-          # are still unverified.
+          # `gemini-flash-latest` is a moving alias and sits second on purpose:
+          # when the pinned newest flash is retired, the alias catches it
+          # without anyone editing this file.
           routes: |
+            google/gemini-3.8-flash
+            google/gemini-flash-latest
+            google/gemini-3.5-flash
             google/gemini-2.5-flash
-            google/gemini-2.5-flash-lite
-            openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
-            openrouter/nvidia/nemotron-3-super-120b-a12b:free
-            openrouter/cohere/north-mini-code:free
-            openrouter/poolside/laguna-s-2.1:free
-            openrouter/google/gemma-4-31b-it:free
             groq/openai/gpt-oss-120b
+            groq/qwen/qwen3.8-27b
             groq/openai/gpt-oss-20b
-            groq/moonshotai/kimi-k2-instruct
-            cerebras/llama-3.3-70b
-
-          # Answering a person is not reviewing a diff, and the cheap model is
-          # only reliable at the second one. Asked an open question on #103 it
-          # reached the right answer through an argument it had invented, and
-          # nothing in the reply marked which half it had read. A review has the
-          # diff in front of it and a schema to fill in; an answer has neither,
-          # so it gets the slower list.
-          #
-          # Ends at Flash on purpose: the fallback for a careful answer is a
-          # quick answer, not no answer.
-          #
-          # No `google/gemini-2.5-pro`: it returned 404 on this key, so the
-          # free tier does not serve it under that name. The route cost a
-          # tenth of a second and deranked, which is the list working, but a
-          # dead entry at the top is not worth keeping.
-          answer_routes: |
-            openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+            cerebras/gpt-oss-120b
+            cerebras/qwen-3.8-27b
             openrouter/nvidia/nemotron-3-super-120b-a12b:free
+            openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+
+          # Answering a person is not reviewing a diff, so it gets the
+          # slower, more capable list. A review has the diff in front of it and
+          # a schema to fill in; an answer has neither.
+          #
+          # Pro first, though `gemini-2.5-pro` returned 404 on this key while
+          # appearing in the model list, which is what a tier you are not
+          # entitled to looks like from outside. If the 3.1 preview does the
+          # same it costs a tenth of a second and moves on, and the list ends
+          # at Flash on purpose: the fallback for a careful answer is a quick
+          # answer, not no answer.
+          answer_routes: |
+            google/gemini-3.1-pro-preview
+            google/gemini-pro-latest
+            openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+            google/gemini-3.8-flash
             groq/openai/gpt-oss-120b
             google/gemini-2.5-flash
 
