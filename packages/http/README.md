@@ -62,6 +62,7 @@ The guide is canonical for every row; this table is the index.
 | Typed input             | `body`, `query`, `params` over Standard Schema              | [Validation](../../docs/guide/06-validation.md)                   |
 | Middleware and guards   | One extension point, `@UseGuards`, `@Roles`, `@Public`      | [Middleware and guards](../../docs/guide/08-middleware-and-guards.md) |
 | WebSocket gateways      | `@Gateway`, handlers, `PubSub`, multi-node relay            | [WebSockets](../../docs/guide/09-websockets.md)                   |
+| Server-sent events      | `@Sse`, `SseStream`, framing, heartbeats, `Last-Event-ID`   | [Controllers](../../docs/guide/05-controllers.md)                 |
 | Request logging         | One structured entry per request, on by default             | [Logging](../../docs/guide/13-logging.md)                         |
 | Trace context           | W3C `traceparent` adopted and propagated, on by default     | [Logging](../../docs/guide/13-logging.md)                         |
 | Metrics                 | Per-route counts and timings, off by default                | [Metrics](../../docs/guide/23-metrics.md)                         |

@@ -36,9 +36,16 @@ const runTour = async (env: Record<string, string> = {}) => {
 
 const tour = { text: '', messages: [] as string[], code: -1 };
 
+/**
+ * 20 s rather than the 5 s default. This hook boots the whole app in a process of
+ * its own, narrates every package and waits for it to exit: 4.4 s on a laptop with
+ * every service reachable, and a GitHub runner is 2 to 3 times slower. It failed
+ * twice on the default while the rest of `bun run ci` ran beside it. A real hang
+ * still fails, just later.
+ */
 beforeAll(async () => {
   Object.assign(tour, await runTour());
-});
+}, 20_000);
 
 it('boots the whole graph and exits 0', () => {
   expect(tour.code).toBe(0);
@@ -715,4 +722,38 @@ it('narrates the queue, which spans two processes', () => {
     expect(tour.text).toContain('audited 96x72 in this process');
     expect(tour.text).toContain('ran in this process, so its handler duration');
   }
+});
+
+/**
+ * Both halves of an event stream in one step: `@Sse` writes one,
+ * `HttpService.streamSse` reads it back, and `app.use(Compression)` sits in front
+ * of both.
+ */
+it('serves an event stream and reads its own back', () => {
+  expect(tour.text).toContain(
+    '@Sse -> streamSseEvents read 3 events: ticks 1, 2, 3',
+  );
+  // The envelope, not just the payload: `streamSse` yields the data alone.
+  expect(tour.text).toContain(
+    'the last one arrived whole: event=tick id=3 data={"tick":3}',
+  );
+  // The id of the last event seen, sent back the way an EventSource does.
+  expect(tour.text).toContain('Last-Event-ID: 3 -> resumed at tick 4');
+});
+
+it('leaves the event stream unencoded, and frames it per event', () => {
+  expect(tour.text).toContain(
+    'content-type: text/event-stream, content-encoding: identity',
+  );
+  // The comment Bun wants before it will flush the headers.
+  expect(tour.text).toContain('opens with ":", a comment line');
+  expect(tour.text).toContain('event: tick / id: 1 / data: {"tick":1}');
+});
+
+it('pushes into a stream the handler kept, and drops it on disconnect', () => {
+  expect(tour.text).toContain(
+    'SseStream, 1 subscriber, pushed: event: notice / data: ' +
+      '{"message":"deploy finished"}',
+  );
+  expect(tour.text).toContain('the client left -> 0 subscribers');
 });

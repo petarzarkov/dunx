@@ -29,6 +29,7 @@ import { JobsModule } from './jobs/jobs.module.js';
 import { NotesModule } from './notes/notes.module.js';
 import { MaintenanceModule } from './schedule/schedule.module.js';
 import { LimitsModule } from './throttle/throttle.module.js';
+import { SseModule } from './sse/sse.module.js';
 import { UpstreamModule } from './upstream/upstream.module.js';
 import { PicturesModule } from './pictures/pictures.module.js';
 import { StorageModule } from './storage/storage.module.js';
@@ -105,6 +106,8 @@ const fileAndConsole = (
     MaintenanceModule,
     AssetsModule,
     UpstreamModule,
+    // After UpstreamModule, whose HttpService its demo reads its own stream with.
+    SseModule,
     GuardsModule,
     // After DatabaseModule, so better-auth reuses the connection it opened.
     AccountsModule,

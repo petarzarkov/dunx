@@ -157,4 +157,12 @@ export interface HttpOptions extends AppOptions {
    * gateway is declared. See docs/guide/20-deployment.md.
    */
   readonly gatewayPort?: number;
+  /**
+   * Seconds a request may go without traffic before `Bun.serve` severs it. `0`
+   * removes the limit for every request, which is what a slowloris counts on;
+   * a route that idles declares `meta(STREAMS, true)` instead, as `@Sse` does.
+   *
+   * @default 10, which is Bun's
+   */
+  readonly idleTimeout?: number;
 }

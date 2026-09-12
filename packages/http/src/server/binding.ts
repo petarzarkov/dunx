@@ -22,6 +22,8 @@ export interface BindingProtocols {
    * merged into the main table and a second `Bun.serve` takes them.
    */
   readonly gatewayPort?: number | undefined;
+  /** Seconds a request may idle before Bun severs it. `undefined` leaves Bun's 10. */
+  readonly idleTimeout?: number | undefined;
 }
 
 /**
@@ -68,7 +70,7 @@ export class ServerBinding {
 
   bind(plan: BindingPlan): Bound {
     const { websocket: ws } = plan;
-    const { http2, http1, gatewayPort } = this.#protocols;
+    const { http2, http1, gatewayPort, idleTimeout } = this.#protocols;
     const split = ws !== undefined && gatewayPort !== undefined;
 
     // One call: a route that may answer `undefined` because it upgraded is only
@@ -85,6 +87,7 @@ export class ServerBinding {
       fetch: plan.fetch,
       ...(http2 !== undefined && { http2 }),
       ...(http1 !== undefined && { http1 }),
+      ...(idleTimeout !== undefined && { idleTimeout }),
       ...table,
     });
 
@@ -96,6 +99,7 @@ export class ServerBinding {
           // gets its CORS headers and honours `notFound` the same way. The only
           // difference between the two servers is what is in the table.
           fetch: plan.fetch,
+          ...(idleTimeout !== undefined && { idleTimeout }),
           routes: withUpgradeRoutes({}, ws.routes),
           websocket: ws.websocket,
         });

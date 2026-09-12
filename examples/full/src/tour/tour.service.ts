@@ -20,6 +20,7 @@ import { JobsDemo } from '../jobs/jobs.demo.js';
 import { HttpDemo } from '../http/http.demo.js';
 import { Thumbnails } from '../pictures/thumbnails.service.js';
 import { ScheduleDemo } from '../schedule/schedule.demo.js';
+import { SseDemo } from '../sse/sse.demo.js';
 import { ThrottleDemo } from '../throttle/throttle.demo.js';
 import { UpstreamDemo } from '../upstream/upstream.demo.js';
 import { Uploads } from '../storage/uploads.service.js';
@@ -48,6 +49,7 @@ export class Tour {
     private readonly protocols: ProtocolsDemo,
     private readonly guards: GuardsDemo,
     private readonly health: HealthDemo,
+    private readonly sse: SseDemo,
     private readonly throttle: ThrottleDemo,
     private readonly jobs: JobsDemo,
     private readonly schedule: ScheduleDemo,
@@ -103,6 +105,9 @@ export class Tour {
     // The same fan-out on the other backend, so both are proven rather than one
     // being proven and the other named in a comment.
     await this.postgresRelay.demonstrate();
+
+    this.group('@dunx/http - @Sse, and the client reading its own stream');
+    await this.sse.demonstrate(url);
 
     this.group('@dunx/http - @Public, @Roles and @UseGuards');
     await this.guards.demonstrate(url);

@@ -21,6 +21,7 @@ export {
   PUBLIC,
   Roles,
   ROLES,
+  STREAMS,
   UNMATCHED,
   UseGuards,
   type MetaKey,
@@ -118,6 +119,21 @@ export {
   CompressionOptions,
   type CompressionOptionsInit,
 } from './compression/options.js';
+// Server-sent events: `@Sse` alongside `@Get`, over a `ReadableStream` in a
+// `Response` - so the dispatcher's existing `Response` passthrough is the whole
+// integration and Bun does the streaming. `@dunx/http/client` already reads an
+// event stream (`HttpService.sse`); this is the half that writes one.
+export {
+  Sse,
+  type SseInput,
+  type SseResult,
+  type SseSchemas,
+} from './sse/decorators.js';
+// `Bun.serve` severs a request idle for 10 seconds, a response already streaming
+// included, so anything long-lived has to say so. `@Sse` calls this for every
+// stream it answers with; `idleTimeout` moves the limit for the whole server.
+export type { SseEvent } from './sse/event.js';
+export { SseStream, type SseStreamOptions } from './sse/stream.js';
 // A fixed-window rate limit. Here rather than in `@dunx/infra` because it is a
 // `Middleware` reading a `MetaKey` off a `RouteContext`, and `@dunx/infra` must not
 // depend on the web layer - the same boundary that made `@dunx/auth` its own

@@ -133,6 +133,39 @@ A 64x48 CMYK JPEG through `resize(32, 24).webp()`:
 `metadata()` reported `64x48 jpeg` on both, which is the header-only read recorded
 below rather than a decode.
 
+### `idleTimeout` severs a streaming response, and `server.timeout()` exempts one
+
+`Bun.serve` closes a connection that goes `idleTimeout` seconds without traffic,
+10 by default, and a response already streaming is not exempt. A body with 13
+seconds between chunks:
+
+```
+[client] T+0.0s   chunk ": open\n\n"
+[client] T+12.0s  ERROR The socket connection was closed unexpectedly
+[server] enqueue  Invalid state: Controller is already closed
+warn: Bun.serve() timed out a request after 10 seconds. Pass `idleTimeout` to configure.
+```
+
+An event stream is the case that breaks on: idling is what it is for. Four things
+were probed before anything was built on them:
+
+| Question                                                    | Answer on 1.4.2                                        |
+| ----------------------------------------------------------- | ------------------------------------------------------ |
+| Does `server.timeout(req, 0)` exist and hold a stream open? | yes - the same body delivered its chunk at T+13.0s     |
+| Does a route handler receive the server?                    | yes, as the second argument, `timeout` included        |
+| Does a `BunRequest` carry a handle to its server?           | no - no own or prototype property names one            |
+| `server.timeout(req, n)` for a foreign request              | silent no-op, and the owning server's call still takes |
+
+The second answer is the one that decided the design. A registry of bound
+servers was written first, on the third and fourth rows, and thrown away: Bun
+hands the owning server to the route table entry, so a route that declares it
+idles clears its own deadline with the right server and no registry. The third
+row still matters, because it rules out reading the server back off a request.
+
+Reaping runs on Bun's own sweep rather than a per-request timer: with
+`idleTimeout: 1` the socket closed **4.0 s** after the last byte, which is what the
+regression test's window is set against.
+
 ### The transpiler cache is content-keyed across paths, and a docs failure it did not cause
 
 Three concurrent worktrees under `.claude/worktrees/` each had `internal/docs`

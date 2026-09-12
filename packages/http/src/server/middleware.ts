@@ -1,4 +1,4 @@
-import type { BunRequest } from 'bun';
+import type { BunRequest, Server } from 'bun';
 import type { RouteContext } from './context.js';
 
 export type Next = () => Promise<Response>;
@@ -19,7 +19,12 @@ export type RouteHandler = (req: BunRequest) => Promise<Response>;
  * Bun accepts a plain `Response`, which is what lets a route with nothing to
  * await skip promises altogether - see `buildRoutes`.
  */
-export type ServedHandler = (req: BunRequest) => Response | Promise<Response>;
+export type ServedHandler = (
+  req: BunRequest,
+  /** The server that received the request. Bun always passes it; optional so a
+   * test can call a handler with the request alone. See `STREAMS`. */
+  server?: Server<unknown>,
+) => Response | Promise<Response>;
 
 /** Folded into one closure per route at boot - no per-request array iteration. */
 export const compose = (

@@ -118,6 +118,12 @@ describe('isCompressibleType', () => {
     expect(isCompressibleType('application/zip')).toBe(false);
     expect(isCompressibleType(null)).toBe(false);
   });
+
+  it('refuses text/event-stream, which the text/ prefix would have taken', () => {
+    expect(isCompressibleType('text/event-stream')).toBe(false);
+    expect(isCompressibleType('text/event-stream; charset=utf-8')).toBe(false);
+    expect(isCompressibleType('TEXT/Event-Stream')).toBe(false);
+  });
 });
 
 describe('Compression', () => {
@@ -262,9 +268,39 @@ describe('Compression', () => {
   });
 
   /**
+   * An event stream reaches neither `done` nor the buffer limit, so reading it to
+   * learn its size returns when the client gives up. Measured before the filter
+   * excluded it: zero bytes for five seconds, then the whole stream at once.
+   */
+  it('hands a text/event-stream through instead of buffering it', async () => {
+    const held = Symbol('held');
+    const stream = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: one\n\n'));
+        },
+      }),
+      { headers: { 'content-type': 'text/event-stream' } },
+    );
+
+    const settled = await Promise.race([
+      run(request('gzip, zstd'), stream),
+      // Long enough that the buffered path cannot win the race by accident.
+      Bun.sleep(250).then(() => held),
+    ]);
+    expect(settled).not.toBe(held);
+
+    const res = settled as Response;
+    expect(res.headers.get('content-encoding')).toBeNull();
+    const reader = res.body!.getReader();
+    expect(text((await reader.read()).value!)).toBe('data: one\n\n');
+    await reader.cancel();
+  });
+
+  /**
    * Past the buffer limit the body keeps streaming rather than being held whole,
-   * which is what lets an SSE feed or a large download survive this middleware.
-   * The encoded length is unknowable then, so the header goes.
+   * which is what lets a large download survive this middleware. The encoded
+   * length is unknowable then, so the header goes.
    */
   it('streams a body past the buffer limit instead of holding it', async () => {
     const chunk = new TextEncoder().encode('x'.repeat(64 * 1024));
