@@ -76,9 +76,10 @@ export const UNMATCHED: MetaKey<boolean> = metaKey('unmatched');
  * it with the server it is handed. `@Sse` sets it; a raw stream can too. */
 export const STREAMS: MetaKey<boolean> = metaKey('streams');
 /**
- * The server that received the request, on the unmatched path only. A matched
- * route's context is built once at boot and shared, so it carries none; those
- * clear their deadline through {@link STREAMS} instead.
+ * The server that received the request, on the unmatched path only, where the
+ * context is built per request. A matched route's is built once at boot and
+ * carries none: those clear their deadline through {@link STREAMS}. Not exported
+ * from the barrel - `ConnectMiddleware` is the only reader.
  */
 export const REQUEST_SERVER: MetaKey<Server<unknown>> =
   metaKey('request-server');

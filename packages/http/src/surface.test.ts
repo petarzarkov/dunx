@@ -162,7 +162,6 @@ const BARREL = [
   'ThrottleStore',
   'Trace',
   'TraceContext',
-  'REQUEST_SERVER',
   'STREAMS',
   'UNMATCHED',
   'UseGuards',

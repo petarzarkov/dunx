@@ -6,6 +6,7 @@ import { ClientAddress } from '../server/client-address.js';
 import type { RouteContext } from '../server/context.js';
 import { HttpFactory } from '../server/factory.js';
 import { SkipThrottle, Throttle } from './decorators.js';
+import { ClaimedRoutes } from '../server/claimed-routes.js';
 import { ThrottleGuard } from './guard.js';
 import { ThrottleModule } from './module.js';
 import { ThrottleOptions, type ThrottleOptionsInit } from './options.js';
@@ -333,6 +334,7 @@ describe('ThrottleGuard, against a counter that is down', () => {
       new RedisThrottleStore(new BrokenRedis()),
       new ClientAddress(),
       logger,
+      new ClaimedRoutes(),
     );
     const req = new Request('http://x/things') as never;
     const ok = () => Promise.resolve(new Response('ok'));
@@ -341,6 +343,33 @@ describe('ThrottleGuard, against a counter that is down', () => {
       expect((await guard.handle(req, contextOf(), ok)).status).toBe(200);
     }
     expect(logger.warnings).toBe(1);
+  });
+
+  it('limits an unmatched path that a middleware claims', async () => {
+    const claimed = new ClaimedRoutes();
+    claimed.attach(['/things']);
+    const guard = new ThrottleGuard(
+      new ThrottleOptions({
+        limit: 1,
+        windowSeconds: 60,
+        prefix: 'app',
+        subject: () => 'unit',
+      }),
+      new MemoryThrottleStore(),
+      new ClientAddress(),
+      new Counting(),
+      claimed,
+    );
+    const call = () =>
+      guard.handle(
+        new Request('http://x/things') as never,
+        contextOf({ unmatched: true }),
+        () => Promise.resolve(new Response('rpc')),
+      );
+
+    expect((await call()).status).toBe(200);
+    // An RPC path is served, so it spends a budget where a real 404 would not.
+    await expect(call()).rejects.toThrow(/Rate limit exceeded/);
   });
 
   it('skips an unmatched path before it ever reaches the store', async () => {
@@ -355,6 +384,7 @@ describe('ThrottleGuard, against a counter that is down', () => {
       new RedisThrottleStore(new BrokenRedis()),
       new ClientAddress(),
       logger,
+      new ClaimedRoutes(),
     );
     const response = await guard.handle(
       new Request('http://x/nope') as never,

@@ -42,6 +42,11 @@ export interface ConnectRoute {
  */
 export class ConnectRegistry {
   readonly #routes = new Map<string, ConnectRoute>();
+  /** Every mounted path, in registration order. */
+  get paths(): readonly string[] {
+    return [...this.#routes.keys()];
+  }
+
   /** Seconds a streaming call may idle; `0` lifts the deadline. */
   readonly streamTimeout: number;
   readonly #methods: ConnectMethodInfo[] = [];

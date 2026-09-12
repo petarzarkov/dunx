@@ -7,6 +7,7 @@ import {
   type AsyncModuleConfig,
   type Registration,
 } from '@dunx/core';
+import { ClaimedRoutes } from '../server/claimed-routes.js';
 import { ClientAddress } from '../server/client-address.js';
 import { ThrottleGuard } from './guard.js';
 import { ThrottleOptions, type ThrottleOptionsInit } from './options.js';
@@ -27,8 +28,15 @@ const guard = (): Registration =>
       store: ThrottleStore,
       address: ClientAddress,
       logger: Logger,
-    ) => new ThrottleGuard(options, store, address, logger),
-    inject: [ThrottleOptions, ThrottleStore, ClientAddress, Logger] as const,
+      claimed: ClaimedRoutes,
+    ) => new ThrottleGuard(options, store, address, logger, claimed),
+    inject: [
+      ThrottleOptions,
+      ThrottleStore,
+      ClientAddress,
+      Logger,
+      ClaimedRoutes,
+    ] as const,
   });
 
 /**

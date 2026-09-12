@@ -19,6 +19,7 @@ import { buildInputReader, type InputReader } from './input.js';
 import { TraceContext } from './trace-context.js';
 import {
   compose,
+  hasClaimedPaths,
   type Middleware,
   type RouteHandler,
   type ServedHandler,
@@ -176,6 +177,38 @@ const unmatchedContext = (
  * `ctx.get(UNMATCHED)` is the cheaper half: set here and by no real route, so a
  * middleware can tell a miss from a handler's own 404 before calling `next()`.
  */
+/**
+ * A route and a path-claiming middleware cannot share a path: Bun matches the
+ * route, the fallback never runs, and the claim is silently dead.
+ */
+export const assertNoShadowedClaims = (
+  discovered: readonly DiscoveredRoute[],
+  middleware: readonly Middleware[],
+): void => {
+  // Routes share a path across methods, so they are the set to check against
+  // rather than claims in their own right - `assertNoCollisions` owns that.
+  const routed = new Map<string, string>();
+  for (const route of discovered) {
+    if (!routed.has(route.path)) {
+      routed.set(route.path, `${route.controller}.${route.handlerName}`);
+    }
+  }
+
+  for (const entry of middleware) {
+    if (!hasClaimedPaths(entry)) continue;
+    const owner = entry.constructor.name;
+    for (const path of entry.claimedPaths()) {
+      const taken = routed.get(path);
+      if (taken !== undefined) {
+        throw new AppError(
+          `Path collision: ${path} is declared by ${taken} and claimed by ` +
+            `${owner}. A route wins, so the middleware would never see it.`,
+        );
+      }
+    }
+  }
+};
+
 export const buildFallback = (
   middleware: readonly Middleware[] = [],
   onError: ErrorMapper = defaultErrorMapper,

@@ -1,7 +1,7 @@
 import type { BunRequest } from 'bun';
 import { REQUEST_SERVER, UNMATCHED } from '../route/metadata.js';
 import type { RouteContext } from '../server/context.js';
-import type { Middleware, Next } from '../server/middleware.js';
+import type { ClaimsPaths, Middleware, Next } from '../server/middleware.js';
 import { HttpStatusCode } from '../server/status.js';
 import { ConnectRegistry } from './registry.js';
 
@@ -41,11 +41,16 @@ const grpcUnsupported = (): Response =>
  * every unmatched path so a burst of 404s cannot spend a caller's budget, and an
  * RPC is unmatched. See docs/guide/27-rpc.md.
  */
-export class ConnectMiddleware implements Middleware {
+export class ConnectMiddleware implements Middleware, ClaimsPaths {
   readonly #registry: ConnectRegistry;
 
   constructor(registry: ConnectRegistry) {
     this.#registry = registry;
+  }
+
+  /** Every mounted RPC path, so a controller cannot shadow one unnoticed. */
+  claimedPaths(): readonly string[] {
+    return this.#registry.paths;
   }
 
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {

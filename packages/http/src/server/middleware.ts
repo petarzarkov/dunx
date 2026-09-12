@@ -36,3 +36,15 @@ export const compose = (
     (next, current) => (req) => current.handle(req, ctx, () => next(req)),
     handler,
   );
+
+/**
+ * Middleware that answers a fixed set of paths itself, on the unmatched path.
+ * `buildRoutes` cross-checks them against the route table: Bun matches a route
+ * first, so a controller on one of these would shadow it with nothing said.
+ */
+export interface ClaimsPaths {
+  claimedPaths(): readonly string[];
+}
+
+export const hasClaimedPaths = (value: object): value is ClaimsPaths =>
+  typeof (value as Partial<ClaimsPaths>).claimedPaths === 'function';

@@ -21,7 +21,6 @@ export {
   PUBLIC,
   Roles,
   ROLES,
-  REQUEST_SERVER,
   STREAMS,
   UNMATCHED,
   UseGuards,

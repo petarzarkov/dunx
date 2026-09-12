@@ -118,8 +118,8 @@ export const createApp = async (): Promise<HttpApp> => {
   app.use(ThrottleGuard);
   // Last. An RPC is logged by the request logger outermost and gets the app's
   // CORS, which is the point of serving Connect as middleware rather than on a
-  // second port. `ThrottleGuard` above does not reach it: it returns early on
-  // every unmatched path, and an RPC path is in no route table.
+  // second port. `ThrottleGuard` above reaches it too: an RPC path is claimed,
+  // so it is not the 404 the guard's early return exists for.
   app.use(ConnectMiddleware);
   return app;
 };

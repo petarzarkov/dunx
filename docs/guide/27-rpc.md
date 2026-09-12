@@ -3,8 +3,7 @@
 `@dunx/http/connect` serves protobuf services over the **Connect** and
 **gRPC-Web** protocols, on the port `Bun.serve` already has and through the
 middleware chain the app already has. An RPC is request logged, CORS-handled and
-guarded the same way a route is. `ThrottleGuard` is the exception: see
-[What is served](#what-is-served).
+guarded and rate limited the same way a route is.
 
 Native gRPC is not served. It carries `grpc-status` in an HTTP trailer, and
 `Bun.serve` sends no trailers, so a gRPC client would read every call as a
@@ -130,15 +129,12 @@ app.use(ConnectMiddleware);
 
 A guard registered before it covers every RPC. One registered after it does not.
 
-`ThrottleGuard` is the one that covers an RPC nowhere in the chain. It returns
-early on every unmatched path so a burst of 404s cannot spend a caller's budget,
-and an RPC path is in no route table. Rate limiting RPC traffic means a
-middleware of your own registered ahead of `ConnectMiddleware`, or a proxy.
+`ThrottleGuard` covers an RPC. It returns early on an unmatched path so a burst
+of 404s cannot spend a caller's budget, but an RPC path is **claimed**: something
+serves it, so it is limited like any route.
 
-That matters most for a **streaming** RPC, which also has Bun's idle deadline
-lifted so a gap between messages does not sever it. Nothing in dunx then bounds
-how long, or how many, streams one caller holds open. `streamTimeout` seconds
-puts the deadline back for streaming calls:
+A **streaming** RPC has Bun's idle deadline lifted, so a gap between messages does
+not sever it. `streamTimeout` seconds puts a bound back on how long one may idle:
 
 ```ts
 ConnectModule.forRoot({ services: [...], streamTimeout: 300 });
@@ -182,7 +178,7 @@ curl -X POST -H 'content-type: application/json' \
 | Native gRPC                          | Not served: `Bun.serve` sends no trailers |
 | `.proto` loading and codegen         | Yours, through `buf`                      |
 | Request logging, CORS, guards        | Apply, as they do to a route              |
-| `ThrottleGuard`                      | Does not apply: it skips unmatched paths  |
+| `ThrottleGuard`                      | Applies: an RPC path is a claimed path    |
 | Per-route metrics                    | Bucketed as `(unmatched)`, not per RPC    |
 
 `ConnectRegistry` lists what is mounted, which is what a health page or a test

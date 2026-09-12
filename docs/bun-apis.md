@@ -133,16 +133,39 @@ A 64x48 CMYK JPEG through `resize(32, 24).webp()`:
 `metadata()` reported `64x48 jpeg` on both, which is the header-only read recorded
 below rather than a decode.
 
-### `idleTimeout` severs a streaming response, on a 4 second timer
+### `idleTimeout` severs a streaming response, and `server.timeout()` exempts one
 
-`Bun.serve({ idleTimeout })` is in seconds and defaults to 10. A response already
-in flight is not exempt: the stream is severed, `controller.enqueue` throws
-`Invalid state: Controller is already closed`, the client reads `ECONNRESET`, and
-Bun prints `warn: Bun.serve() timed out a request after 10 seconds`.
+`Bun.serve` closes a connection that goes `idleTimeout` seconds without traffic,
+10 by default, and a response already streaming is not exempt. A body with 13
+seconds between chunks:
 
-**The sever does not land at `idleTimeout`.** The check runs on a 4 second timer,
-so it lands at the next 4 second boundary at or after it. One chunk at T+0, then
-a 60s sleep, measuring when the client errors:
+```
+[client] T+0.0s   chunk ": open\n\n"
+[client] T+12.0s  ERROR The socket connection was closed unexpectedly
+[server] enqueue  Invalid state: Controller is already closed
+warn: Bun.serve() timed out a request after 10 seconds. Pass `idleTimeout` to configure.
+```
+
+An event stream is the case that breaks on: idling is what it is for. Four things
+were probed before anything was built on them:
+
+| Question                                                    | Answer on 1.4.2                                        |
+| ----------------------------------------------------------- | ------------------------------------------------------ |
+| Does `server.timeout(req, 0)` exist and hold a stream open? | yes - the same body delivered its chunk at T+13.0s     |
+| Does a route handler receive the server?                    | yes, as the second argument, `timeout` included        |
+| Does a `BunRequest` carry a handle to its server?           | no - no own or prototype property names one            |
+| `server.timeout(req, n)` for a foreign request              | silent no-op, and the owning server's call still takes |
+
+The second answer is the one that decided the design. A registry of bound
+servers was written first, on the third and fourth rows, and thrown away: Bun
+hands the owning server to the route table entry and to the `fetch` fallback, so
+a route that declares it idles, and an RPC on the unmatched path, each clear their
+own deadline on the right server with no registry. The third row still matters,
+because it rules out reading the server back off a request.
+
+**The sever does not land at `idleTimeout`.** Reaping runs on Bun's own sweep, a
+4 second timer, so it lands at the next 4 second boundary at or after it. One
+chunk at T+0 then a 60s sleep, measuring when the client errors:
 
 | `idleTimeout` | Severed at | `ceil(t / 4) * 4` |
 | ------------- | ---------- | ----------------- |
@@ -156,33 +179,16 @@ a 60s sleep, measuring when the client errors:
 | 30            | 32.0s      | 32                |
 | 0             | never      | -                 |
 
-Nine points, all fitting `ceil(idleTimeout / 4) * 4`, and `0` disables it.
+Nine points, all fitting `ceil(idleTimeout / 4) * 4`, and `0` disables it. That is
+why `idleTimeout: 1` closes the socket **4.0 s** after the last byte, and what a
+regression test's window has to be set against: a gap past the **boundary**, not
+past `idleTimeout`. An 11s gap on the default passes with the fix removed.
 
 **Reading the request body makes no difference.** Holding the gap at 13s and
 varying only the read, a `GET` with no read, a `GET` with `arrayBuffer()` and a
 `POST` with `arrayBuffer()` all severed at 12.0s. An earlier reading recorded the
-body read as the trigger; it was two probes that differed in gap, 12s against
-12s, straddling the boundary. The variable is the gap.
-
-An event stream is the case this breaks, idling being what it is for. Four things
-were probed before anything was built on them:
-
-| Question                                                    | Answer on 1.4.2                                        |
-| ----------------------------------------------------------- | ------------------------------------------------------ |
-| Does `server.timeout(req, 0)` exist and hold a stream open? | yes - the same body delivered its chunk at T+13.0s     |
-| Does a route handler receive the server?                    | yes, as the second argument, `timeout` included        |
-| Does a `BunRequest` carry a handle to its server?           | no - no own or prototype property names one            |
-| `server.timeout(req, n)` for a foreign request              | silent no-op, and the owning server's call still takes |
-
-The second answer decided the design. A registry of bound servers was written
-first, on the third and fourth rows, and thrown away: Bun hands the owning server
-to the route table entry and to the `fetch` fallback, so a route that declares it
-idles, and an RPC on the unmatched path, each clear their own deadline on the
-right server with no registry. The third row rules out reading it off a request.
-
-A regression test for this needs a gap past the **boundary**, not past
-`idleTimeout`: an 11s gap against the default passes with the fix removed, which
-is a test that proves nothing.
+body read as the trigger; it was two probes that differed in gap, both near the
+12.0s boundary.
 
 ### The transpiler cache is content-keyed across paths, and a docs failure it did not cause
 
@@ -224,6 +230,30 @@ implicated even though the shape above does not reproduce it. Which module is
 being served stale is still unidentified: the threshold sits somewhere between
 74 bytes and 101,889, and neither a small importer nor a 70 KB `?raw` target
 writes a pile at all, so it is not `data.ts` and not the JSON.
+
+## Re-probed on Bun 1.4.1 (rev 4661e494f)
+
+Run against 1.4.0 rev `34cbb9a40` side by side, on the same machine, rather than
+compared with the numbers below. Three findings moved and one new one is recorded
+here; everything else in this file still reproduces.
+
+| Finding                                                          | On 1.4.1                                                                     |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `Bun.write(path, stream)` writes `[object ReadableStream]`       | **fixed** - streams, truncates, honours `createPath`, returns the byte count |
+| `Bun.write(path, new Response(stream))` never settles            | **fixed** - and `Request` works too                                          |
+| `--coverage --parallel` reports low, and differently each run    | **fixed** - agrees with sequential to the digit, per package and in total    |
+| `server.upgrade()` after an `await`, on an HTTP/1.0 request      | **new, and 1.4.0-only** - leaked the socket, so the process never exited     |
+| `Bun.file(path).writer()` does not truncate or create parents    | reproduces                                                                   |
+| A `?raw` import resolves as JSON inside a `--parallel` worker    | reproduces                                                                   |
+| The transpiler cache serves a stale `?raw` module over 50 KB     | reproduces                                                                   |
+| Subscriber mode leaks past `close()` without `unsubscribe()`     | reproduces                                                                   |
+| A failed `subscribe()` leaks past `close()`                      | reproduces                                                                   |
+| `fetch` with `protocol: 'http2'` throws against a cleartext peer | reproduces, and `Bun.serve({ http2: true })` does not change it              |
+
+New in 1.4.1 and reachable: `Bun.serve({ http2, http1 })`, `binaryType: 'blob'` on a
+`ServerWebSocket`, `WebSocket.prototype.pause`/`resume`/`isPaused`, and
+`crypto.argon2`/`argon2Sync` in `node:crypto`. `http2` and `http1` are marked
+`@experimental` in `bun-types`; `http3` is declared alongside them and was not probed.
 
 ### `Bun.write` takes a stream, and it is the whole local write path
 

@@ -1,6 +1,7 @@
 import { Logger } from '@dunx/core';
 import type { BunRequest } from 'bun';
 import { UNMATCHED } from '../route/metadata.js';
+import { ClaimedRoutes } from '../server/claimed-routes.js';
 import { ClientAddress } from '../server/client-address.js';
 import type { RouteContext } from '../server/context.js';
 import { HttpError } from '../server/errors.js';
@@ -30,6 +31,7 @@ export class ThrottleGuard implements Middleware {
     private readonly store: ThrottleStore,
     private readonly address: ClientAddress,
     private readonly logger: Logger,
+    private readonly claimed: ClaimedRoutes,
   ) {}
 
   async handle(
@@ -39,8 +41,11 @@ export class ThrottleGuard implements Middleware {
   ): Promise<Response> {
     // A path that matched nothing has no handler to limit, and counting it would
     // let a burst of 404s spend a real caller's budget - one Redis round trip per
-    // miss, on the cheapest request to generate.
-    if (ctx.get(UNMATCHED) === true) return next();
+    // miss, on the cheapest request to generate. A path a middleware claims is
+    // not that: something serves it, so it is limited like any route.
+    if (ctx.get(UNMATCHED) === true && !this.claimed.has(ctx.path)) {
+      return next();
+    }
     if (ctx.get(SKIP_THROTTLE) === true) return next();
 
     const limit: ThrottleLimit = ctx.get(THROTTLE) ?? this.options;

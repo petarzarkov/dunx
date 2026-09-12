@@ -9,6 +9,7 @@ import type { BunRequest } from 'bun';
 import type { HttpMethod } from '../route/marker.js';
 import { UNMATCHED, type MetaKey } from '../route/metadata.js';
 import type { RouteContext } from '../server/context.js';
+import { Controller, Get } from '../route/decorators.js';
 import { HttpFactory, type HttpApp } from '../server/factory.js';
 import { ConnectMiddleware } from './middleware.js';
 import { ConnectModule } from './module.js';
@@ -129,6 +130,27 @@ describe('connectService', () => {
     const registration = connectService(GreetService, GreetRpc);
     expect(registration.service).toBe(GreetService);
     expect(registration.useClass).toBe(GreetRpc);
+  });
+
+  it('rejects a class that does not serve the descriptor', () => {
+    class NotGreet {
+      hello(): string {
+        return 'no';
+      }
+    }
+    // The pairing is what makes the cast in `registry.ts` sound, so the check
+    // has to be a compile error rather than a boot one. `tsc --noEmit` fails
+    // this file if the line below ever starts type-checking.
+    // @ts-expect-error NotGreet implements none of GreetService's methods
+    connectService(GreetService, NotGreet);
+
+    class WrongReturn {
+      say(): number {
+        return 1;
+      }
+    }
+    // @ts-expect-error say must answer the descriptor's response, not a number
+    connectService(GreetService, WrongReturn);
   });
 });
 
@@ -345,6 +367,31 @@ describe('ConnectModule', () => {
     app.use(ConnectMiddleware);
     return app.listen(0);
   };
+
+  it('refuses a controller route that would shadow an RPC path', async () => {
+    @Controller('/')
+    class Shadow {
+      @Get(SAY as never)
+      say(): string {
+        return 'shadowed';
+      }
+    }
+
+    @Module({
+      controllers: [Shadow],
+      imports: [
+        ConnectModule.forRoot({
+          services: [connectService(GreetService, GreetRpc)],
+        }),
+      ],
+    })
+    class ShadowModule {}
+
+    // Bun matches the route, so the middleware would never see the call.
+    await expect(boot(ShadowModule)).rejects.toThrow(
+      /Path collision: .*GreetService\/Say is declared by Shadow\.say/,
+    );
+  });
 
   it('binds the registry, the options and the middleware', async () => {
     @Module({
