@@ -1,10 +1,10 @@
 name: fast code review
 
 # Replaces `dunxonu review` and `dunxonu`, which were two workflows around
-# anthropics/claude-code-action plus `scripts/post-review.ts` to format what it
-# produced. The action below does the reviewing and the posting, so the review
-# no longer needs an OAuth token, a checkout, or a script to parse an execution
-# file.
+# anthropics/claude-code-action plus a `scripts/post-review.ts` that formatted
+# what it produced. The action below does the reviewing and the posting, so the
+# review no longer needs an OAuth token, a checkout, or a script to parse an
+# execution file, and that script is deleted with this change.
 #
 # All four of the old triggers are here, so nothing is dropped: pushes get a
 # review, replies in dunxonu's own threads get an answer, and `@dunxonu` in a
@@ -83,17 +83,29 @@ jobs:
         with:
           github_token: ${{ secrets.DUNXONU_TOKEN }}
 
-          # Best first. Every key of a route is spent before the next route is
-          # reached, so the free tiers are exhausted at the top of the list
-          # rather than spread thinly across all of it.
+          # Ordered by how long a review takes, not by model size. Every key
+          # of a route is spent before the next route is reached, so whatever
+          # is at the top is what reviews most pull requests.
+          #
+          # Gemini Flash is first because it answered in about 25 seconds every
+          # time it was measured, where Nemotron Ultra took between 30 seconds
+          # and four and a half minutes for the same diff. A reviewer that lands
+          # before the author has switched tabs is worth more here than a larger
+          # model: both found the same two real bugs on this pull request.
+          # Gemini's free tier is also the smallest, so it is the one most
+          # likely to run out - which is what the rest of the list is for.
           #
           # The OpenRouter entries are the `:free` ids its /models endpoint
           # actually served on the day this was written, not the ones a model
           # will guess: every id in the first version of this file returned 404,
-          # and the review only landed because the list was long enough to reach
-          # Gemini. Free tiers are renamed and retired often, so a 404 here is
-          # expected eventually and the run log names each one.
+          # and the review only landed because the list was long enough to fall
+          # through. Free tiers are renamed and retired often, so a 404 here is
+          # expected eventually, costs about a tenth of a second, and the run
+          # log names each one. The Groq ids have not been reached yet, so they
+          # are still unverified.
           routes: |
+            google/gemini-2.5-flash
+            google/gemini-2.5-flash-lite
             openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
             openrouter/nvidia/nemotron-3-super-120b-a12b:free
             openrouter/cohere/north-mini-code:free
@@ -102,8 +114,6 @@ jobs:
             groq/openai/gpt-oss-120b
             groq/openai/gpt-oss-20b
             groq/moonshotai/kimi-k2-instruct
-            google/gemini-2.5-flash
-            google/gemini-2.5-flash-lite
             cerebras/llama-3.3-70b
 
           exclude: '*.md,*.lock,bun.lock,coverage/**,dist/**,docs/**,**/templates/**,**/__snapshots__/**,*.snap,*.svg,*.png,*.ico'
