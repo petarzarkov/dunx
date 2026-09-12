@@ -83,6 +83,9 @@ export class RequestMetrics {
    * The method set is bounded, so this is.
    */
   readonly #unmatched = new Map<string, Series>();
+  /** Unmatched but not a miss. Fixed at boot, so path keys stay bounded. */
+  readonly #claimed = new Map<string, Series>();
+  #claimedPaths: ReadonlySet<string> = new Set();
   #since = new Date();
   #server: ServerGauges | undefined;
 
@@ -97,10 +100,13 @@ export class RequestMetrics {
     let series = this.#series.get(ctx);
     if (series === undefined) {
       if (ctx.get(UNMATCHED) === true) {
-        series = this.#unmatched.get(ctx.method);
+        const claimed = this.#claimedPaths.has(ctx.path);
+        const key = claimed ? `${ctx.method} ${ctx.path}` : ctx.method;
+        const bucket = claimed ? this.#claimed : this.#unmatched;
+        series = bucket.get(key);
         if (series === undefined) {
-          series = seriesFor(UNMATCHED_ROUTE, ctx.method);
-          this.#unmatched.set(ctx.method, series);
+          series = seriesFor(claimed ? ctx.path : UNMATCHED_ROUTE, ctx.method);
+          bucket.set(key, series);
         }
       } else {
         series = seriesFor(ctx.path, ctx.method);
@@ -121,6 +127,7 @@ export class RequestMetrics {
     const routes: RouteStats[] = [];
     for (const series of [
       ...this.#series.values(),
+      ...this.#claimed.values(),
       ...this.#unmatched.values(),
     ]) {
       routes.push({
@@ -149,8 +156,14 @@ export class RequestMetrics {
    */
   reset(): void {
     this.#series.clear();
+    this.#claimed.clear();
     this.#unmatched.clear();
     this.#since = new Date();
+  }
+
+  /** Internal: the paths a middleware answers off the fallback. */
+  claim(paths: Iterable<string>): void {
+    this.#claimedPaths = new Set(paths);
   }
 
   /**
