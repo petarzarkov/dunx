@@ -360,16 +360,32 @@ it('times every redis command at the one seam, and keeps no key', () => {
   );
 });
 
-// The trace half is the reason `AmqpPublisher.publish` exists rather than
-// `publisher().send()`: a flow that crossed the broker joins in one log query.
-it('routes through a topic exchange carrying its trace, or skips', () => {
-  expect(tour.text).toMatch(
-    /(2 of 2 delivered to dunx-full\.orders\.placed, dunx-full\.orders\.shipped|skipping the message broker section)/,
+/**
+ * The alternation the other degradable steps use would let a broker regression
+ * pass here: `ci examples` sets `RABBITMQ_URL`, so the skip branch means
+ * something broke. Delivery is required when one is configured, and the
+ * no-broker path has a test of its own below.
+ *
+ * The trace half is the reason `AmqpPublisher.publish` exists rather than
+ * `publisher().send()`: a flow that crossed the broker joins in one log query.
+ */
+it('routes through a topic exchange carrying its trace', () => {
+  if (process.env['RABBITMQ_URL'] === undefined) {
+    expect(tour.text).toContain('skipping the message broker section');
+    return;
+  }
+  expect(tour.text).toContain(
+    '2 of 2 delivered to dunx-full.orders.placed, dunx-full.orders.shipped',
   );
-  expect(tour.text).toMatch(
-    /(the handlers ran under traceId [0-9a-f]{32}|skipping the message broker section)/,
-  );
+  expect(tour.text).toMatch(/the handlers ran under traceId [0-9a-f]{32}/);
 });
+
+it('exits 0 with no broker at all', async () => {
+  const run = await runTour({ RABBITMQ_URL: 'amqp://127.0.0.1:1' });
+
+  expect(run.code).toBe(0);
+  expect(run.text).toContain('skipping the message broker section');
+}, 30_000);
 
 it('reports the publish side, and only handlers this process ran', () => {
   expect(tour.text).toMatch(/\d+ jobs published, \d+ handled in this process/);

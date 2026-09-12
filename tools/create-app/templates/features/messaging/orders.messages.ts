@@ -27,8 +27,15 @@ export interface Handled {
  * Discovery walks the prototypes of the classes already in `providers`, the same
  * marker-plus-scan `@JobHandler` and the routes use.
  */
+/**
+ * How many deliveries `handled` keeps. `consume: true` means this runs for the
+ * life of the process, so an unbounded array is a slow leak rather than a record.
+ */
+const KEEP = 100;
+
 export class OrdersMessages {
-  /** What arrived, so an HTTP route can show the consuming side worked. */
+  /** The most recent deliveries, so an HTTP route can show the consuming side
+   * worked. Oldest first, capped at {@link KEEP}. */
   readonly handled: Handled[] = [];
 
   constructor(
@@ -65,6 +72,7 @@ export class OrdersMessages {
   }
 
   private record(queue: string, id: string): void {
+    if (this.handled.length >= KEEP) this.handled.shift();
     this.handled.push({
       id,
       queue,

@@ -5,6 +5,7 @@ import {
   OrdersMessages,
   PLACED_KEY,
   SHIPPED_KEY,
+  type Handled,
 } from './orders.messages.js';
 
 /** How long to give the broker to deliver before reporting what arrived. */
@@ -40,8 +41,7 @@ export class MessagingDemo {
         'key to its own queue, and this container consumes both',
     );
 
-    await this.settle();
-    const mine = this.messages.handled.filter((entry) => entry.id === id);
+    const mine = await this.settle(id);
     this.logger.info(
       `${mine.length} of 2 delivered to ${mine.map((entry) => entry.queue).join(', ')}`,
     );
@@ -53,10 +53,15 @@ export class MessagingDemo {
     );
   }
 
-  private async settle(): Promise<void> {
+  /** Waits for **this** publish, not for a total: `handled` keeps every delivery
+   * the process has seen, so a count crosses two the moment anything else runs. */
+  private async settle(id: string): Promise<readonly Handled[]> {
     const deadline = Date.now() + SETTLE_MS;
-    while (Date.now() < deadline && this.messages.handled.length < 2) {
+    let mine = this.messages.handled.filter((entry) => entry.id === id);
+    while (Date.now() < deadline && mine.length < 2) {
       await Bun.sleep(50);
+      mine = this.messages.handled.filter((entry) => entry.id === id);
     }
+    return mine;
   }
 }

@@ -36,13 +36,13 @@ describe('the broker url', () => {
    * failed connection forever, so a typo would otherwise surface as a publish
    * that never settles.
    */
-  it('rejects an unparseable url with the code and the value', () => {
+  it('rejects an unparseable url, naming where to look rather than the value', () => {
     expect(() => assertAmqpUrl('not a url')).toThrow(AmqpError);
     try {
       assertAmqpUrl('not a url');
     } catch (error) {
       expect((error as AmqpError).code).toBe(AmqpErrorCode.INVALID_URL);
-      expect((error as AmqpError).message).toContain('"not a url"');
+      expect((error as AmqpError).message).toContain('$RABBITMQ_URL');
     }
   });
 
@@ -50,6 +50,25 @@ describe('the broker url', () => {
     expect(() => assertAmqpUrl('redis://localhost:6379')).toThrow(
       /Unsupported protocol "redis:"/,
     );
+  });
+
+  /**
+   * An AMQP url almost always holds credentials and a boot error is written by
+   * whatever logger is bound, so neither message carries the url as given.
+   */
+  it('keeps the password out of both failures', () => {
+    const secret = 'hunter2';
+    expect(() => assertAmqpUrl(`redis://app:${secret}@broker:5672`)).toThrow(
+      AmqpError,
+    );
+    for (const url of [`redis://app:${secret}@broker:5672`, `::${secret}::`]) {
+      try {
+        assertAmqpUrl(url);
+        expect.unreachable();
+      } catch (error) {
+        expect((error as AmqpError).message).not.toContain(secret);
+      }
+    }
   });
 });
 
@@ -73,6 +92,34 @@ describe('AmqpOptions', () => {
     expect(
       new AmqpOptions({ publisher: { confirm: false } }).publisher.confirm,
     ).toBe(false);
+  });
+
+  /**
+   * A single spread replaced these wholesale, so `queueOptions: { arguments }`
+   * dropped `durable: true` and RabbitMQ 4 refuses the declare with
+   * `INTERNAL_ERROR`, and `qos: { global: true }` reset the prefetch to 0.
+   */
+  it('merges qos and queueOptions key by key', () => {
+    const options = new AmqpOptions({
+      consumer: {
+        qos: { global: true },
+        queueOptions: { arguments: { 'x-dead-letter-exchange': 'dlx' } },
+      },
+    });
+
+    expect(options.consumer.qos).toEqual({ prefetchCount: 16, global: true });
+    expect(options.consumer.queueOptions).toEqual({
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': 'dlx' },
+    });
+  });
+
+  it('keeps the defaults under an empty nested override', () => {
+    const options = new AmqpOptions({
+      consumer: { qos: {}, queueOptions: {} },
+    });
+    expect(options.consumer.qos?.prefetchCount).toBe(16);
+    expect(options.consumer.queueOptions?.durable).toBe(true);
   });
 
   it('overrides a consumer default per key rather than wholesale', () => {

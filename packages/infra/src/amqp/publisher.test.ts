@@ -176,6 +176,39 @@ describe('the trace it stamps', () => {
     expect(fake.sent[0]?.envelope.headers?.['traceparent']).toBe('upstream');
   });
 
+  /**
+   * The two are one context. Adding this scope's `tracestate` to a caller's
+   * `traceparent` would join the vendor state of one trace to the ids of another.
+   */
+  it('adds no tracestate beside a traceparent the caller set', async () => {
+    const context = new AsyncRequestContext();
+    const { publisher, fake } = build({ context });
+
+    await context.runWithContext(
+      { traceId, spanId, traceState: 'mine=1' },
+      () =>
+        publisher.publish(
+          { routingKey: 'orders', headers: { traceparent: 'upstream' } },
+          {},
+        ),
+    );
+    expect(fake.sent[0]?.envelope.headers?.['tracestate']).toBeUndefined();
+  });
+
+  it('stamps neither when the caller set tracestate alone', async () => {
+    const context = new AsyncRequestContext();
+    const { publisher, fake } = build({ context });
+
+    await context.runWithContext({ traceId, spanId }, () =>
+      publisher.publish(
+        { routingKey: 'orders', headers: { tracestate: 'upstream=1' } },
+        {},
+      ),
+    );
+    expect(fake.sent[0]?.envelope.headers?.['traceparent']).toBeUndefined();
+    expect(fake.sent[0]?.envelope.headers?.['tracestate']).toBe('upstream=1');
+  });
+
   it('stamps nothing when the scope holds no trace', async () => {
     const context = new AsyncRequestContext();
     const { publisher, fake } = build({ context });

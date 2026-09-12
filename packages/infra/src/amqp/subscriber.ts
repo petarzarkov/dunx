@@ -15,14 +15,33 @@ const ERROR_LOG_INTERVAL_MS = 30_000;
  * handler's own `consumer` over them, and the convenience `exchange` pair
  * appended to whatever bindings either declared rather than replacing them.
  */
+/** One nested option object over another, or nothing where neither side has one:
+ * `qos: {}` is not the same as no `qos`, which skips `basicQos` entirely. */
+const nested = <T extends object>(
+  base: T | undefined,
+  over: T | undefined,
+): { value: T } | undefined =>
+  base === undefined && over === undefined
+    ? undefined
+    : { value: { ...base, ...over } as T };
+
 export const consumerProps = (
   defaults: Omit<ConsumerProps, 'queue'>,
   found: DiscoveredSubscription,
 ): ConsumerProps => {
+  const qos = nested(defaults.qos, found.consumer?.qos);
+  const queueOptions = nested(
+    defaults.queueOptions,
+    found.consumer?.queueOptions,
+  );
   const merged: ConsumerProps = {
     ...defaults,
     ...found.consumer,
     queue: found.queue,
+    // Key by key, for the reason `AmqpOptions` does it: a handler overriding one
+    // field of either would otherwise drop the module-wide rest.
+    ...(qos === undefined ? {} : { qos: qos.value }),
+    ...(queueOptions === undefined ? {} : { queueOptions: queueOptions.value }),
   };
   if (found.exchange === undefined) return merged;
 

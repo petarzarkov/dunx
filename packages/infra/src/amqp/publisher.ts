@@ -85,24 +85,31 @@ export class AmqpPublisher implements OnShutdown {
     );
   }
 
-  /** The envelope with `traceparent` and `tracestate` added. Neither overwrites
-   * one the caller set, so forwarding passes the upstream trace on. */
+  /**
+   * The envelope with `traceparent` and `tracestate` added.
+   *
+   * **The two are one context, so they are stamped together or not at all.** A
+   * caller that set `traceparent` alone is forwarding an upstream trace, and
+   * adding this scope's `tracestate` to it would join the vendor state of one
+   * trace to the ids of another.
+   */
   #traced(envelope: Envelope): Envelope {
-    const fields = this.#context?.getContext();
-    if (fields === undefined) return envelope;
-
-    const traceparent = traceparentOf(fields);
-    if (traceparent === undefined) return envelope;
-
     const headers = envelope.headers ?? {};
+    if (TRACEPARENT_HEADER in headers || TRACESTATE_HEADER in headers) {
+      return envelope;
+    }
+
+    const fields = this.#context?.getContext();
+    const traceparent =
+      fields === undefined ? undefined : traceparentOf(fields);
+    if (traceparent === undefined || fields === undefined) return envelope;
+
     return {
       ...envelope,
       headers: {
         ...headers,
-        ...(TRACEPARENT_HEADER in headers
-          ? {}
-          : { [TRACEPARENT_HEADER]: traceparent }),
-        ...(fields.traceState === undefined || TRACESTATE_HEADER in headers
+        [TRACEPARENT_HEADER]: traceparent,
+        ...(fields.traceState === undefined
           ? {}
           : { [TRACESTATE_HEADER]: fields.traceState }),
       },

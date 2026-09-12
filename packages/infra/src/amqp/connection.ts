@@ -11,13 +11,6 @@ import {
 import { AmqpOptions } from './options.js';
 
 /**
- * How long `Connection.close()` gets before shutdown stops waiting. It waits for
- * every open channel, and one whose broker has gone away takes `acquireTimeout`,
- * 20 s by default. `unsafeDestroy()` follows regardless.
- */
-const CLOSE_TIMEOUT_MS = 5_000;
-
-/**
  * The one connection this app holds, and the only place `rabbitmq-client` is
  * constructed. One TCP connection carries a channel per consumer and one for the
  * publisher; channels are multiplexed, so a connection each would cost a socket
@@ -123,12 +116,16 @@ export class AmqpConnection implements OnShutdown {
       const outcome = await Promise.race([
         connection.close(),
         new Promise<symbol>((resolve) => {
-          timer = setTimeout(() => resolve(timedOut), CLOSE_TIMEOUT_MS);
+          timer = setTimeout(
+            () => resolve(timedOut),
+            this.#options.closeTimeoutMs,
+          );
         }),
       ]);
       if (outcome === timedOut) {
         this.#logger.warn(
-          `the AMQP connection did not close within ${CLOSE_TIMEOUT_MS} ms`,
+          'the AMQP connection did not close within ' +
+            `${this.#options.closeTimeoutMs} ms`,
         );
       }
     } catch (error) {

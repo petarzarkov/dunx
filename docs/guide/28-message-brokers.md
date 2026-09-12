@@ -101,6 +101,11 @@ across processes, so two in one process makes the broker round-robin between the
 and each sees roughly half the deliveries. Two handlers on one queue is a boot
 error naming both; `consumer.concurrency` is the knob for throughput.
 
+**`requeue` defaults to true, which loops on a message that can never succeed.** A
+body the handler cannot parse throws on every redelivery. Validate the body and
+return `ConsumerStatus.DROP` for one that is malformed, or set `requeue: false`
+with an `x-dead-letter-exchange` on the queue so the broker parks it.
+
 ## Setup
 
 ```ts
@@ -231,6 +236,12 @@ Rejects a handler that runs longer than this, so a delivery hung on an external
 call is nacked and redelivered instead of holding a prefetch slot until the
 connection drops. AMQP has no handler timeout of its own: an acknowledgement
 either arrives or does not.
+
+**The handler is not cancelled, only stopped being waited for.** A timed-out call
+carries on in the background while the delivery is redelivered, so a handler with
+side effects can run twice over one message. `@dunx/infra/queue`'s `jobTimeoutMs`
+behaves the same way. Make the handler idempotent, or give it a deadline of its
+own that it can act on.
 
 ## Shutdown
 

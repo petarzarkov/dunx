@@ -30,6 +30,7 @@ const connection = (
       new AmqpOptions({
         url: unreachable,
         connection: { retryLow: 50 },
+        closeTimeoutMs: 50,
         ...init,
       }),
       logger,
@@ -112,22 +113,50 @@ describe('shutting down', () => {
     expect(amqp.opened).toBe(false);
   });
 
+  it('closes the live connection and forgets it', async () => {
+    const { connection: amqp } = connection();
+    amqp.connection();
+
+    await amqp.onShutdown();
+    expect(amqp.opened).toBe(false);
+    expect(amqp.ready).toBe(false);
+  });
+
   /**
    * `close()` against a broker that has gone away waits `acquireTimeout` per
    * channel - measured at 19.7 s on rabbitmq-client 5.0.8 - and a socket still
    * open is what keeps the process from exiting.
+   *
+   * A `close()` that never settles rather than a real unreachable connection: one
+   * that is still connecting resolves `close()` at once, so the elapsed time
+   * proved nothing about which side of the race won.
    */
-  it('destroys the socket when close outruns its window', async () => {
+  it('warns and destroys the socket when close outruns its window', async () => {
     const { connection: amqp, lines } = connection();
-    amqp.connection();
+    let destroyed = 0;
+    const live = amqp.connection() as unknown as {
+      close: () => Promise<void>;
+      unsafeDestroy: () => void;
+    };
+    const realDestroy = live.unsafeDestroy.bind(live);
+    live.close = () => new Promise<void>(() => undefined);
+    live.unsafeDestroy = (): void => {
+      destroyed += 1;
+      realDestroy();
+    };
 
-    const started = Bun.nanoseconds();
     await amqp.onShutdown();
 
-    expect((Bun.nanoseconds() - started) / 1e6).toBeLessThan(6_000);
+    // By content: the retrying connection also warns about the refused socket.
+    expect(
+      lines.some(
+        (line) =>
+          line.level === 'warn' &&
+          String(line.message).includes('did not close within 50 ms'),
+      ),
+    ).toBe(true);
+    expect(destroyed).toBe(1);
     expect(amqp.opened).toBe(false);
-    expect(amqp.ready).toBe(false);
-    expect(lines.length).toBeGreaterThanOrEqual(0);
   });
 
   /** Reopening after teardown would put back a socket nothing will close, and

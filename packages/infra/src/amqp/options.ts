@@ -21,6 +21,10 @@ export const defaultAmqpUrl = (): string =>
  * Checked here rather than at connect time: `rabbitmq-client` retries a failed
  * connection forever, so a typo in the scheme would surface as a publish that
  * never settles.
+ *
+ * **Neither message carries the url as given.** An AMQP url almost always holds
+ * credentials, a boot error is written by whatever logger is bound, and an
+ * unparseable one cannot be redacted at all, since `redactUrl` parses it too.
  */
 export const assertAmqpUrl = (url: string): string => {
   let parsed: URL;
@@ -29,8 +33,9 @@ export const assertAmqpUrl = (url: string): string => {
   } catch {
     throw new AmqpError(
       AmqpErrorCode.INVALID_URL,
-      `${JSON.stringify(url)} is not a valid URL. Expected something like ` +
-        'amqp://guest:guest@localhost:5672.',
+      'The AMQP url is not a valid URL. Expected something like ' +
+        'amqp://guest:guest@localhost:5672. Check $RABBITMQ_URL, $AMQP_URL, or ' +
+        'the `url` passed to AmqpModule.',
     );
   }
 
@@ -38,7 +43,7 @@ export const assertAmqpUrl = (url: string): string => {
     throw new AmqpError(
       AmqpErrorCode.INVALID_URL,
       `Unsupported protocol ${JSON.stringify(parsed.protocol)} in ` +
-        `${JSON.stringify(url)}. Expected one of ${AMQP_PROTOCOLS.join(', ')}.`,
+        `${redactUrl(url)}. Expected one of ${AMQP_PROTOCOLS.join(', ')}.`,
     );
   }
 
@@ -95,6 +100,15 @@ export interface AmqpOptionsInit {
    */
   readonly drainTimeoutMs?: number;
   /**
+   * How long `AmqpConnection.onShutdown` waits for the connection to close before
+   * destroying the socket. `close()` waits for every open channel, and one whose
+   * broker has gone away takes `acquireTimeout`. The socket is destroyed after
+   * this either way.
+   *
+   * @default 5000
+   */
+  readonly closeTimeoutMs?: number;
+  /**
    * Reject a handler that runs longer than this, so a message hung on an external
    * call is nacked instead of holding a prefetch slot forever. AMQP has no
    * handler timeout of its own. Off by default.
@@ -124,6 +138,7 @@ export class AmqpOptions {
   readonly publisher: PublisherProps;
   readonly readyTimeoutMs: number;
   readonly drainTimeoutMs: number;
+  readonly closeTimeoutMs: number;
   readonly handlerTimeoutMs: number | undefined;
   readonly consume: boolean | 'if-any';
 
@@ -131,17 +146,22 @@ export class AmqpOptions {
     this.url = assertAmqpUrl(init.url ?? defaultAmqpUrl());
     this.connectionName = init.connectionName ?? 'dunx';
     this.connection = init.connection ?? {};
+    const given = init.consumer ?? {};
+    // `qos` and `queueOptions` merge key by key. A single spread replaced them
+    // wholesale, so `queueOptions: { arguments: ... }` dropped `durable: true`
+    // and RabbitMQ 4 refuses the declare, and a partial `qos` reset the prefetch.
     this.consumer = {
       concurrency: 8,
-      qos: { prefetchCount: 16 },
-      queueOptions: { durable: true },
-      ...init.consumer,
+      ...given,
+      qos: { prefetchCount: 16, ...given.qos },
+      queueOptions: { durable: true, ...given.queueOptions },
     };
     // Without confirms `send()` resolves once the frame is written, so a broker
     // that rejected the message reports nothing.
     this.publisher = { confirm: true, ...init.publisher };
     this.readyTimeoutMs = init.readyTimeoutMs ?? 5_000;
     this.drainTimeoutMs = init.drainTimeoutMs ?? 10_000;
+    this.closeTimeoutMs = init.closeTimeoutMs ?? 5_000;
     this.handlerTimeoutMs = init.handlerTimeoutMs;
     this.consume = init.consume ?? false;
   }

@@ -82,6 +82,29 @@ describe('consumerProps', () => {
     expect(props.queueBindings).toHaveLength(2);
   });
 
+  /** The same key-by-key merge `AmqpOptions` does, for the same reason: a handler
+   * overriding one field would otherwise drop the module-wide rest. */
+  it('merges qos and queueOptions key by key', () => {
+    const props = consumerProps(
+      {
+        qos: { prefetchCount: 16 },
+        queueOptions: { durable: true, exclusive: false },
+      },
+      subscription({ consumer: { qos: { global: true }, queueOptions: {} } }),
+    );
+
+    expect(props.qos).toEqual({ prefetchCount: 16, global: true });
+    expect(props.queueOptions).toEqual({ durable: true, exclusive: false });
+  });
+
+  /** `qos: {}` is not the same as no `qos`: the library skips `basicQos`
+   * entirely for the second, and sends an unlimited prefetch for the first. */
+  it('leaves qos absent when neither side declares one', () => {
+    const props = consumerProps({}, subscription());
+    expect(props.qos).toBeUndefined();
+    expect(props.queueOptions).toBeUndefined();
+  });
+
   it('declares nothing when the handler names no exchange', () => {
     const props = consumerProps({}, subscription());
     expect(props.exchanges).toBeUndefined();
