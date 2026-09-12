@@ -36,9 +36,16 @@ const runTour = async (env: Record<string, string> = {}) => {
 
 const tour = { text: '', messages: [] as string[], code: -1 };
 
+/**
+ * 20 s rather than the 5 s default. This hook boots the whole app in a process of
+ * its own, narrates every package and waits for it to exit: 4.4 s on a laptop with
+ * every service reachable, and a GitHub runner is 2 to 3 times slower. It failed
+ * twice on the default while the rest of `bun run ci` ran beside it. A real hang
+ * still fails, just later.
+ */
 beforeAll(async () => {
   Object.assign(tour, await runTour());
-});
+}, 20_000);
 
 it('boots the whole graph and exits 0', () => {
   expect(tour.code).toBe(0);
