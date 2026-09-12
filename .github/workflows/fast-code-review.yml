@@ -79,7 +79,7 @@ jobs:
       # Pinned to the tag's commit rather than to `v1`, which is a moving tag:
       # this job hands the action four secrets, and retargeting `v1` would run
       # unreviewed code with them.
-      - uses: petarzarkov/fast-code-review@b281611488521829eef7d7765ca34bac8afd723b # v1.2.0
+      - uses: petarzarkov/fast-code-review@de86a3567965dd9771db479a9f2d4d4c02b2442c # v1.2.1
         with:
           github_token: ${{ secrets.DUNXONU_TOKEN }}
 
@@ -125,8 +125,12 @@ jobs:
           #
           # Ends at Flash on purpose: the fallback for a careful answer is a
           # quick answer, not no answer.
+          #
+          # No `google/gemini-2.5-pro`: it returned 404 on this key, so the
+          # free tier does not serve it under that name. The route cost a
+          # tenth of a second and deranked, which is the list working, but a
+          # dead entry at the top is not worth keeping.
           answer_routes: |
-            google/gemini-2.5-pro
             openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
             openrouter/nvidia/nemotron-3-super-120b-a12b:free
             groq/openai/gpt-oss-120b
