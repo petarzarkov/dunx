@@ -79,7 +79,7 @@ jobs:
       # Pinned to the tag's commit rather than to `v1`, which is a moving tag:
       # this job hands the action four secrets, and retargeting `v1` would run
       # unreviewed code with them.
-      - uses: petarzarkov/fast-code-review@87d97ee84a8afcddee3454ab60f2343be99cabae # v1.1.0
+      - uses: petarzarkov/fast-code-review@b281611488521829eef7d7765ca34bac8afd723b # v1.2.0
         with:
           github_token: ${{ secrets.DUNXONU_TOKEN }}
 
@@ -115,6 +115,22 @@ jobs:
             groq/openai/gpt-oss-20b
             groq/moonshotai/kimi-k2-instruct
             cerebras/llama-3.3-70b
+
+          # Answering a person is not reviewing a diff, and the cheap model is
+          # only reliable at the second one. Asked an open question on #103 it
+          # reached the right answer through an argument it had invented, and
+          # nothing in the reply marked which half it had read. A review has the
+          # diff in front of it and a schema to fill in; an answer has neither,
+          # so it gets the slower list.
+          #
+          # Ends at Flash on purpose: the fallback for a careful answer is a
+          # quick answer, not no answer.
+          answer_routes: |
+            google/gemini-2.5-pro
+            openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+            openrouter/nvidia/nemotron-3-super-120b-a12b:free
+            groq/openai/gpt-oss-120b
+            google/gemini-2.5-flash
 
           exclude: '*.md,*.lock,bun.lock,coverage/**,dist/**,docs/**,**/templates/**,**/__snapshots__/**,*.snap,*.svg,*.png,*.ico'
 
