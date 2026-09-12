@@ -64,7 +64,17 @@ export class JobsDemo {
 
     // Foreground, so this handler runs here: the stats section reads both.
     const audit = await this.publisher.publish(AUDIT_QUEUE, 'record', result);
-    await audit.waitUntilFinished(this.events.events(AUDIT_QUEUE), SETTLE_MS);
+    // Wrapped for the reason the render above is: the ttl rejects, and a slow
+    // audit took the whole tour down rather than narrating that it was slow.
+    try {
+      await audit.waitUntilFinished(this.events.events(AUDIT_QUEUE), SETTLE_MS);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.info(
+        `audit ${audit.id ?? '(unassigned)'} did not finish: ${reason}`,
+      );
+      return;
+    }
     this.logger.info(
       `audit ${audit.id ?? '(unassigned)'} ran in this process, so its handler ` +
         'duration is one this container can report',

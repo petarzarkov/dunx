@@ -434,6 +434,9 @@ $('explorers-go').addEventListener('click', async (event) => {
       `both render ${Object.keys(spec.paths).length} paths from one document`,
     );
     out.textContent = lines.join('\n');
+  } catch (error) {
+    // Without this the pane reads "fetching..." for as long as the tab is open.
+    out.textContent = `could not read the explorers: ${String(error)}`;
   } finally {
     button.disabled = false;
   }

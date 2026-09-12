@@ -1,3 +1,4 @@
+import { AppError } from '@dunx/core';
 import {
   createConnectRouter,
   type ConnectRouter,
@@ -65,7 +66,7 @@ export class ConnectRegistry {
     options.services.forEach((registration, index) => {
       const implementation = implementations[index];
       if (implementation === undefined) {
-        throw new Error(
+        throw new AppError(
           `No instance was resolved for ${registration.useClass.name}, which ` +
             `serves ${registration.service.typeName}.`,
         );

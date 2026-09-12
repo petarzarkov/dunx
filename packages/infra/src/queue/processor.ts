@@ -116,6 +116,7 @@ export class JobProcessor {
       app,
       this.#options.queues,
     );
+    // No metrics: a counter this forked child keeps, nothing reads.
     const dispatcher = new JobDispatcher(
       jobs,
       app.get(QueueOptions).jobTimeoutMs,
