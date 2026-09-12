@@ -101,14 +101,13 @@ const entryFor = (
 };
 
 /**
- * Records each class's constructor dependencies, and each decorated field's
- * declared type, as thunks on the class itself.
+ * Records each class's constructor dependencies as a thunk on the class itself.
  *
  * A thunk, not a literal: the body is evaluated when the record is read rather
  * than when the module is defined, so a dependency declared later in the file -
  * or in a circular import - is not a temporal-dead-zone crash. That is what
  * removes the need for a `forwardRef` escape hatch, and it is also why a class decorator
- * cannot read the field record while it runs: the statement is appended after the
+ * cannot read the record while it runs: the statement is appended after the
  * class, which is after decoration.
  */
 export const transform = (
