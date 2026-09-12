@@ -1,0 +1,158 @@
+name: fast code review
+
+# Replaces `dunxonu review` and `dunxonu`, which were two workflows around
+# anthropics/claude-code-action plus a `scripts/post-review.ts` that formatted
+# what it produced. The action below does the reviewing and the posting, so the
+# review no longer needs an OAuth token, a checkout, or a script to parse an
+# execution file, and that script is deleted with this change.
+#
+# All four of the old triggers are here, so nothing is dropped: pushes get a
+# review, replies in dunxonu's own threads get an answer, and `@dunxonu` in a
+# comment, an issue or a submitted review gets an answer too.
+#
+# The one capability that does not carry over is dunxonu writing code. The old
+# mention path ran with `contents: write` and could push a fix; this action has
+# no checkout and no file access, so it answers with a diff to apply instead.
+# `git log --author=dunxonu` is empty, so that path was never used.
+#
+# What it buys: the review runs on free tiers and deranks through every key of
+# every provider before it gives up, rather than depending on one subscription.
+# The anchoring, the approve/comment decision, the scope narrowing and the
+# carried-findings note moved into the action, where they are tested.
+#
+# One job handles all four triggers. Which flow runs is decided by the webhook
+# payload: a `pull_request` event reviews the diff, a reply in one of dunxonu's
+# own threads gets an answer there, and anything naming `@dunxonu` gets an
+# answer where it was said. A comment that names nobody returns before any API
+# call, so ordinary conversation costs nothing.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+# Keyed by event as well as by pull request, because the two flows must not
+# cancel each other. Sharing one group meant a comment arriving mid-review
+# cancelled the review, which is the pair of workflows this replaces having had
+# two groups for a reason.
+#
+# A push supersedes the review of the commit before it, so a rapid series of
+# pushes costs one review rather than one per push. A reply does not supersede
+# anything: two people commenting is two questions, and cancelling the first
+# would drop an answer.
+concurrency:
+  group: fast-code-review-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Nothing at the workflow level, so a job that forgets its own block gets none
+# rather than the repository default.
+permissions: {}
+
+jobs:
+  review:
+    name: Review, reply, or answer
+    runs-on: ubuntu-latest
+    # The loop guard, and it is load bearing: dunxonu posts with a real user's
+    # token, so its own reviews and replies raise these same events. A comment
+    # posted with GITHUB_TOKEN would not.
+    if: >-
+      github.event.sender.login != 'dunxonu' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      # For answering a mention on an issue, which is not a pull request.
+      issues: write
+    steps:
+      # No actions/checkout. The action reads the diff through the API and never
+      # touches the working tree, so there is no workflow token left behind in
+      # .git/config for a prompt injection in an attacker-controlled pull
+      # request to read out. That exposure is why the old review workflow had to
+      # pass `persist-credentials: false`.
+      #
+      # Pinned to the tag's commit rather than to `v1`, which is a moving tag:
+      # this job hands the action four secrets, and retargeting `v1` would run
+      # unreviewed code with them.
+      - uses: petarzarkov/fast-code-review@87d97ee84a8afcddee3454ab60f2343be99cabae # v1.1.0
+        with:
+          github_token: ${{ secrets.DUNXONU_TOKEN }}
+
+          # Ordered by how long a review takes, not by model size. Every key
+          # of a route is spent before the next route is reached, so whatever
+          # is at the top is what reviews most pull requests.
+          #
+          # Gemini Flash is first because it answered in about 25 seconds every
+          # time it was measured, where Nemotron Ultra took between 30 seconds
+          # and four and a half minutes for the same diff. A reviewer that lands
+          # before the author has switched tabs is worth more here than a larger
+          # model: both found the same two real bugs on this pull request.
+          # Gemini's free tier is also the smallest, so it is the one most
+          # likely to run out - which is what the rest of the list is for.
+          #
+          # The OpenRouter entries are the `:free` ids its /models endpoint
+          # actually served on the day this was written, not the ones a model
+          # will guess: every id in the first version of this file returned 404,
+          # and the review only landed because the list was long enough to fall
+          # through. Free tiers are renamed and retired often, so a 404 here is
+          # expected eventually, costs about a tenth of a second, and the run
+          # log names each one. The Groq ids have not been reached yet, so they
+          # are still unverified.
+          routes: |
+            google/gemini-2.5-flash
+            google/gemini-2.5-flash-lite
+            openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+            openrouter/nvidia/nemotron-3-super-120b-a12b:free
+            openrouter/cohere/north-mini-code:free
+            openrouter/poolside/laguna-s-2.1:free
+            openrouter/google/gemma-4-31b-it:free
+            groq/openai/gpt-oss-120b
+            groq/openai/gpt-oss-20b
+            groq/moonshotai/kimi-k2-instruct
+            cerebras/llama-3.3-70b
+
+          exclude: '*.md,*.lock,bun.lock,coverage/**,dist/**,docs/**,**/templates/**,**/__snapshots__/**,*.snap,*.svg,*.png,*.ico'
+
+          # CLAUDE.md is 61k and cannot go in a prompt. This is the part of it a
+          # reviewer working from a diff cannot infer but can still check.
+          instructions: |
+            This repository has hard rules that a linter or a test enforces. Flag
+            a diff that breaks one, and cite the rule:
+
+            - No `enum` or `const enum`. An enum is the one TypeScript construct
+              that cannot be erased. The replacement is a frozen object plus an
+              indexed-access union.
+            - No identifier prefixed with `Dunx`. The brand belongs in the
+              package name. Use `App`: AppFactory, AppError, AppModule.
+            - No `any`.
+            - No source file over 500 lines, tests included.
+            - No em dash or en dash anywhere, including comments and prose. A
+              spaced hyphen, a comma or a colon replaces one.
+            - No `npx`, `npm`, `yarn` or `pnpm`. Use `bun` or `bunx`.
+            - No section-divider comments. A file that needs sections should be
+              split into separate files.
+            - Dependency versions are exact, never ranged.
+
+            `packages/*/src/index.ts` is the published API surface. Flag a
+            breaking change to an export there.
+
+            Do not flag missing tests in `examples/` or `internal/`.
+            Do not flag comment wording, prose style, or documentation voice.
+
+            The em dash rule binds your own writing too, not just the diff you
+            are reading. Never put an em dash or an en dash in a review comment
+            or a reply: use a spaced hyphen, a comma, or a colon.
+        env:
+          # One secret per provider holding a comma-separated list, so adding a
+          # key later is editing one secret rather than touching this file.
+          # A provider with no secret set is skipped with a warning, not an
+          # error, so the list above can name more than is configured.
+          OPENROUTER_API_KEYS: ${{ secrets.OPENROUTER_API_KEYS }}
+          GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
+          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
