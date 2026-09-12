@@ -152,6 +152,27 @@ describe('MeteredCacheStore', () => {
     expect(report.hitRate).toBe(0);
   });
 
+  /**
+   * The wrapper is what `CacheStore` resolves to once metrics are on, so an
+   * `instanceof` against the configured store stops matching. `inner` is the way
+   * back, and `examples/full` narrated the wrong store before it was public.
+   */
+  it('hands back the store it wraps, for an instanceof that would stop matching', async () => {
+    const configured = new TieredCacheStore(
+      new MemoryCacheStore(),
+      new MemoryCacheStore(),
+    );
+    const app = await AppFactory.create(
+      CacheModule.forRoot({ store: configured }, { metrics: true }),
+    );
+    const resolved = app.get(CacheStore);
+
+    expect(resolved).not.toBe(configured);
+    expect(resolved).toBeInstanceOf(MeteredCacheStore);
+    expect((resolved as MeteredCacheStore).inner).toBe(configured);
+    await app.shutdown();
+  });
+
   it('times every operation it records', async () => {
     const metrics = new CacheMetrics();
     const store = new MeteredCacheStore(new MemoryCacheStore(), metrics);

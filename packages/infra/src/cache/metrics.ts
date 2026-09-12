@@ -159,10 +159,17 @@ export class CacheMetrics {
  * Wrapping a `TieredCacheStore` counts the logical operation: an L2 hit promoted
  * into L1 is one `get` and one hit, and the L1 write behind it is not a `set`.
  * Wrap a tier to see that split, with a `CacheMetrics` of its own.
+ *
+ * **`metrics: true` changes what `CacheStore` resolves to**, since this is what
+ * sits in front of the configured store. An `instanceof TieredCacheStore` on
+ * `CacheOptions.store` stops matching the moment metrics go on, which is why
+ * {@link MeteredCacheStore.inner} is public: reach through it for an identity or
+ * an `instanceof` check.
  */
 export class MeteredCacheStore extends CacheStore {
   constructor(
-    private readonly inner: CacheStore,
+    /** The store being timed, so a caller can reach what it configured. */
+    readonly inner: CacheStore,
     private readonly metrics: CacheMetrics,
   ) {
     super();

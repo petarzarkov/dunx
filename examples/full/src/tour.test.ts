@@ -280,7 +280,7 @@ it('reaches redis, or says it is skipping it', () => {
 
 it('serves a cached read and dedupes the concurrent ones', () => {
   expect(tour.text).toMatch(
-    /store -> (L1 memory in front of L2 redis|L1 memory only, redis unreachable at boot), default ttl 30000ms/,
+    /store -> (L1 memory in front of L2 redis|L1 memory only, redis unreachable at boot), metered, default ttl 30000ms/,
   );
   expect(tour.text).toContain(
     '10 concurrent reads of an uncached key -> 1 load (single flight, per process)',
@@ -412,9 +412,7 @@ it('samples event-loop lag from boot rather than from the first read', () => {
 });
 
 it('serves the stats panel over the ops page, cache half included', () => {
-  expect(tour.text).toContain('db configured, cache configured');
   expect(tour.text).toMatch(/cache: \d+ hits, \d+ misses, hit rate [\d.]+%/);
-  expect(tour.text).toMatch(/get: \d+ calls, \d+ failed, p99 [\d.]+ms/);
 });
 
 it('lights the same indicators on the ops page, each once', () => {

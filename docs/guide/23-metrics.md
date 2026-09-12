@@ -204,6 +204,19 @@ const store = new TieredCacheStore(
 
 An expired entry is a miss: it is what the read answered.
 
+Turning metrics on **changes what `CacheStore` resolves to**: it is the
+`MeteredCacheStore`, not the store that was configured. Code that tests the
+configured store reads through `inner`, or stops matching the day the flag goes
+on.
+
+```ts
+const { store } = options;
+const configured = store instanceof MeteredCacheStore ? store.inner : store;
+if (configured instanceof TieredCacheStore) {
+  // ...
+}
+```
+
 ### The key is never kept
 
 There is no `slowest` field, for the reason `RedisMetrics` has none. A cache key
