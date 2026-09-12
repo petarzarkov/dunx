@@ -24,8 +24,8 @@ export interface TieredCacheInit {
  */
 export class TieredCacheStore extends CacheStore {
   readonly #promoteTtl: number;
-  /** Keys with an L2 read in flight, and those invalidated while one was. */
-  readonly #promoting = new Set<string>();
+  /** How many L2 reads are in flight per key, and which were invalidated. */
+  readonly #promoting = new Map<string, number>();
   readonly #superseded = new Set<string>();
 
   constructor(
@@ -51,7 +51,7 @@ export class TieredCacheStore extends CacheStore {
     const near = await this.l1.get<V>(key);
     if (near !== undefined) return near;
 
-    this.#promoting.add(key);
+    this.#promoting.set(key, (this.#promoting.get(key) ?? 0) + 1);
     try {
       const far = await this.l2.get<V>(key);
       if (far === undefined) return undefined;
@@ -62,8 +62,15 @@ export class TieredCacheStore extends CacheStore {
       await this.l1.set(key, far, this.#promoteTtl);
       return far;
     } finally {
-      this.#promoting.delete(key);
-      this.#superseded.delete(key);
+      // Counted, not a flag: the first of several concurrent reads to finish
+      // would otherwise clear the mark and let the ones behind it write the
+      // value a `del` had already removed.
+      const left = (this.#promoting.get(key) ?? 1) - 1;
+      if (left > 0) this.#promoting.set(key, left);
+      else {
+        this.#promoting.delete(key);
+        this.#superseded.delete(key);
+      }
     }
   }
 

@@ -129,6 +129,33 @@ describe('a write landing during a promote', () => {
     expect(await l1.get('k')).toBeUndefined();
   });
 
+  it('protects every concurrent read, not just the first to finish', async () => {
+    let nth = 0;
+    class Staggered extends MemoryCacheStore {
+      override async get<V>(key: string): Promise<V | undefined> {
+        const value = await super.get<V>(key);
+        await Bun.sleep(++nth === 1 ? 10 : 40);
+        return value;
+      }
+    }
+    const l1 = new MemoryCacheStore();
+    const tiered = new TieredCacheStore(l1, new Staggered(), {
+      promoteTtl: 60_000,
+    });
+    await tiered.set('k', 'old', 60_000);
+    await l1.del('k');
+
+    const first = tiered.get('k');
+    const second = tiered.get('k');
+    await Bun.sleep(2);
+    await tiered.del('k');
+    await Promise.all([first, second]);
+
+    // Marking the key rather than counting the readers let whichever finished
+    // first clear it, and the one behind wrote the deleted value back.
+    expect(await l1.get('k')).toBeUndefined();
+  });
+
   it('does not overwrite a value written while it was reading', async () => {
     const { tiered } = await racing((t) => t.set('k', 'new', 60_000));
 
