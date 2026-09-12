@@ -62,8 +62,8 @@ export class ConnectMiddleware implements Middleware {
       return Promise.resolve(grpcUnsupported());
     }
 
-    // A streaming RPC may legitimately pause longer than `idleTimeout` between
-    // messages, and Bun would cut the socket mid-stream. See ServerRef.keepAlive.
+    // A streaming RPC may pause between messages longer than `idleTimeout`
+    // allows, and Bun would sever it mid-stream. See ServerRef.keepAlive.
     if (route.streaming) this.#server.keepAlive(req);
     return route.handle(req);
   }

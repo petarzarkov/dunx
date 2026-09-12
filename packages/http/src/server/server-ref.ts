@@ -24,16 +24,17 @@ export class ServerRef {
   /**
    * Takes one in-flight request out of the idle timeout.
    *
-   * `Bun.serve` closes a connection idle for `idleTimeout`, 10 seconds by
-   * default, and a paused response stream counts as idle once the request body
-   * has been read. Measured on Bun 1.4.2: a handler that reads the body and then
-   * waits 12.5 seconds before its second chunk has the socket cut and the
-   * enqueue throws `Controller is already closed`; the same handler on a GET with
-   * no body survives, and an 11 second pause survives either way.
+   * `Bun.serve` severs a response that has been idle past `idleTimeout`: the
+   * enqueue throws `Controller is already closed` and the client reads
+   * `ECONNRESET`. The check runs on a 4 second timer, so the sever lands at
+   * `ceil(idleTimeout / 4) * 4` seconds - 12.0s on the default 10, and 8.0s for
+   * any setting from 5 to 8. Reading the request body makes no difference, and
+   * `idleTimeout: 0` disables it. Measured on Bun 1.4.2, table in
+   * docs/bun-apis.md.
    *
-   * So a streaming RPC, where the gap between messages is the protocol rather
-   * than a stall, clears its own deadline. The app-wide `idleTimeout` is left
-   * alone, since it is protecting every other route.
+   * A streaming RPC clears its own deadline because a gap between messages is
+   * the protocol rather than a stall. Everything else, a slow unary handler
+   * included, stays under the app-wide `idleTimeout` that protects every route.
    */
   keepAlive(req: Request): void {
     this.#server?.timeout(req, 0);

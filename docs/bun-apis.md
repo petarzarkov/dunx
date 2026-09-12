@@ -207,6 +207,45 @@ being served stale is still unidentified: the threshold sits somewhere between
 74 bytes and 101,889, and neither a small importer nor a 70 KB `?raw` target
 writes a pile at all, so it is not `data.ts` and not the JSON.
 
+### `idleTimeout` severs a streaming response on a 4 second timer
+
+`Bun.serve({ idleTimeout })` is documented in seconds and defaults to 10. What it
+does to a response already in flight: the stream is severed, `controller.enqueue`
+throws `Invalid state: Controller is already closed`, and the client reads
+`ECONNRESET`. `Bun.serve()` also prints
+`warn: Bun.serve() timed out a request after 10 seconds`.
+
+**The sever does not land at `idleTimeout`.** The check runs on a 4 second timer,
+so it lands at the next 4 second boundary at or after it. One chunk written at
+T+0, then a 60s sleep, measuring when the client errors:
+
+| `idleTimeout` | Severed at | `ceil(t / 4) * 4` |
+| ------------- | ---------- | ----------------- |
+| 5             | 8.0s       | 8                 |
+| 7             | 8.0s       | 8                 |
+| 8             | 8.0s       | 8                 |
+| 10 (default)  | 12.0s      | 12                |
+| 11            | 12.0s      | 12                |
+| 12            | 12.0s      | 12                |
+| 15            | 16.0s      | 16                |
+| 30            | 32.0s      | 32                |
+| 0             | never      | -                 |
+
+Nine points, all fitting `ceil(idleTimeout / 4) * 4`, and `0` disables it.
+
+**Reading the request body makes no difference.** Holding the gap at 13s and
+varying only the read, a `GET` with no read, a `GET` with `arrayBuffer()` and a
+`POST` with `arrayBuffer()` all severed at 12.0s. An earlier reading of this
+recorded the body read as the trigger; it was two probes that differed in gap
+length, 12s against 12s, straddling the 12.0s boundary. The variable is the gap.
+
+Two things follow for a test. A regression test for this needs a gap past the
+**boundary**, not past `idleTimeout`: an 11s gap against the default passes with
+the fix removed, which is a test that proves nothing. And `server.timeout(req, 0)`
+takes one in-flight request out of it, which is what `ServerRef.keepAlive` in
+`@dunx/http` does for a streaming RPC. It does not throw on a request the server
+is not serving.
+
 ## Re-probed on Bun 1.4.1 (rev 4661e494f)
 
 Run against 1.4.0 rev `34cbb9a40` side by side, on the same machine, rather than

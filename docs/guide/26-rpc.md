@@ -188,9 +188,10 @@ app.get(ConnectRegistry).methods;
 On shutdown the registry aborts the signal every running handler holds, so a
 long-running implementation gets its cue to wrap up.
 
-A streaming RPC clears its own idle deadline, so a pause between messages longer
-than `Bun.serve`'s 10 second `idleTimeout` does not sever the connection. The
-app-wide setting is untouched.
+A streaming RPC clears its own idle deadline, so a pause between messages does
+not sever the connection. `Bun.serve` otherwise severs an idle response at
+`ceil(idleTimeout / 4) * 4` seconds, which is 12.0s on the default. The app-wide
+`idleTimeout` is untouched and still covers every route and every unary call.
 
 Every other `createConnectRouter` option passes through: `interceptors`,
 `contextValues`, `requestGate`, `readMaxBytes`, `jsonOptions` and the rest.

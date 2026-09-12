@@ -102,12 +102,12 @@ export class CapturingRpc {
   }
 }
 
-/** Pauses longer than `Bun.serve`'s default 10s idle timeout between two
- * messages, which is what the keep-alive has to survive. */
+/** Pauses past the point `Bun.serve` severs an idle response, which on the
+ * default `idleTimeout` is 12.0s. The keep-alive has to survive it. */
 export class SlowRpc {
   // Defaulted, so `ctor.length` is 0 and the container builds it without the
   // transform preload, like every other fixture here.
-  constructor(private readonly gapMs = 12_500) {}
+  constructor(private readonly gapMs = 16_000) {}
 
   say(request: SayRequest): Said {
     return { text: request.name };

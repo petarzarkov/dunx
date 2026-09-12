@@ -420,13 +420,15 @@ describe('ConnectModule', () => {
   });
 
   /**
-   * `Bun.serve` cuts a connection idle for `idleTimeout`, 10 seconds by default,
-   * and a paused response stream counts as idle once the request body has been
-   * read. Without `ServerRef.keepAlive` this call loses its second message and
-   * the client sees `ECONNRESET`.
+   * Without `ServerRef.keepAlive` this call loses its second message and the
+   * client reads `ECONNRESET`.
    *
-   * The gap is 12.5s because the cut is not sharp at 10: measured on Bun 1.4.2,
-   * an 11s pause survived and 12.5s did not. So the test costs those seconds.
+   * The gap is 16s, and the number matters. `Bun.serve` severs an idle response
+   * on a 4 second timer, so the default `idleTimeout: 10` cuts at 12.0s, not at
+   * 10 - an earlier 11s version of this test passed with the fix removed. 16s
+   * leaves a full timer tick of margin below, and nothing above: `keepAlive`
+   * clears the deadline outright, so a loaded machine stretching the sleep only
+   * makes the unfixed case fail harder. Those 16 seconds are what it costs.
    */
   it('keeps a stream alive across a pause longer than the idle timeout', async () => {
     @Module({
@@ -449,7 +451,7 @@ describe('ConnectModule', () => {
       texts.push(message.text);
     }
     expect(texts).toEqual(['slow first', 'slow second']);
-  }, 30_000);
+  }, 40_000);
 
   it('still answers 404 for a path no RPC and no route claims', async () => {
     @Module({
