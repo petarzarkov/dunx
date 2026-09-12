@@ -144,7 +144,18 @@ describe('Cache', () => {
 
   it('stores again once the superseded load has finished', async () => {
     const cache = cacheWith();
+    // The mark has to be set for this to test anything: a `del` with nothing in
+    // flight records none, and the old version passed without the cleanup.
+    const loading = cache.wrap('k', async () => {
+      await Bun.sleep(30);
+      return 'stale';
+    });
+    await Bun.sleep(5);
     await cache.del('k');
+    await loading;
+    expect(await cache.get('k')).toBeUndefined();
+
+    // The next load is not superseded, so it stores.
     expect(await cache.wrap('k', () => 'after')).toBe('after');
     expect(await cache.get<string>('k')).toBe('after');
   });

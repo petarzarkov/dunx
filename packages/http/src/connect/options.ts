@@ -1,6 +1,6 @@
 import type { DescService } from '@bufbuild/protobuf';
 import type { ConnectRouterOptions, ServiceImpl } from '@connectrpc/connect';
-import type { Ctor, ModuleRef } from '@dunx/core';
+import { AppError, type Ctor, type ModuleRef } from '@dunx/core';
 import { normalizePrefix } from '../route/prefix.js';
 
 /**
@@ -92,21 +92,21 @@ export class ConnectOptions {
     this.grpcWeb = grpcWeb ?? true;
     this.streamTimeout = streamTimeout ?? 0;
     if (!Number.isFinite(this.streamTimeout) || this.streamTimeout < 0) {
-      throw new Error(
+      throw new AppError(
         `ConnectModule streamTimeout must be a non-negative number of seconds, got ${String(streamTimeout)}.`,
       );
     }
     this.router = router;
 
     if (!this.connect && !this.grpcWeb) {
-      throw new Error(
+      throw new AppError(
         'ConnectModule needs at least one protocol, and both connect and ' +
           'grpcWeb are false. Native gRPC is not a third option here: it ' +
           'carries grpc-status in an HTTP trailer and Bun.serve sends none.',
       );
     }
     if (services.length === 0) {
-      throw new Error(
+      throw new AppError(
         'ConnectModule.forRoot was given no services. Pass at least one ' +
           'connectService(Desc, Impl), or drop the module.',
       );

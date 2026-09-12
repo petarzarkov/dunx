@@ -29,7 +29,10 @@ export class EventsController {
    */
   @Sse('/ticks', ticks)
   async *ticks(input: SseInput<typeof ticks>): AsyncGenerator<SseEvent> {
-    const from = Number(input.lastEventId ?? '0');
+    // Nothing guarantees the id a client sends back is one of ours, and
+    // `Number('abc')` is NaN, which answers a reconnect with no events.
+    const seen = Number(input.lastEventId ?? '0');
+    const from = Number.isFinite(seen) && seen >= 0 ? seen : 0;
     for (let tick = from + 1; tick <= from + input.query.count; tick += 1) {
       yield { data: { tick }, event: 'tick', id: String(tick) };
       await Bun.sleep(5);

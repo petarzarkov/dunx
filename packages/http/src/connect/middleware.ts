@@ -37,9 +37,8 @@ const grpcUnsupported = (): Response =>
  * first is what leaves a matched route paying nothing. Anything outside the
  * registered paths falls through untouched.
  *
- * `ThrottleGuard` covers an RPC. Its early return is for an unmatched path
- * nobody claims, so a burst of 404s cannot spend a caller's budget; a claimed
- * path is served and is limited like a route. See docs/guide/27-rpc.md.
+ * `ThrottleGuard` covers an RPC: its early return is for an unmatched path
+ * nobody claims, and a claimed path is served. See docs/guide/27-rpc.md.
  */
 export class ConnectMiddleware implements Middleware, ClaimsPaths {
   readonly #registry: ConnectRegistry;
