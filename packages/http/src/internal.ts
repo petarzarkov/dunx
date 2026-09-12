@@ -1,15 +1,12 @@
 /**
- * What the framework calls on itself, and the only place it is exported from.
+ * What the framework calls on itself, and the only place it is exported from: the
+ * discovery readers and route metadata `@dunx/dashboard`, `@dunx/mcp`,
+ * `@dunx/openapi` and `@dunx/testing` import. The barrel stays the surface an app
+ * writes against.
  *
- * The barrel was a semver promise 173 symbols wide, which is more than this
- * package meant to make. What stays public there is the surface an app writes
- * against. What is here is the discovery readers and route metadata that
- * `@dunx/dashboard`, `@dunx/mcp`, `@dunx/openapi` and `@dunx/testing` import.
- *
- * It held 62 symbols and 50 had no importer, all of them reachable from inside
- * this package by relative import. Add one back when a sibling needs it.
- *
- * No stability promise attaches to this subpath.
+ * It held 62 symbols and 50 had no importer, all reachable from inside this
+ * package by relative import. Add one back when a sibling needs it. No stability
+ * promise attaches here.
  */
 export {
   discoverRoutes,
@@ -27,5 +24,6 @@ export {
   type RouteNode,
 } from './inspect.js';
 export { buildContext } from './server/context.js';
+export { IMMUTABLE_CACHE_CONTROL } from './static/files.js';
 export { embedJson } from './server/html.js';
 export { isGateway } from './ws/marker.js';

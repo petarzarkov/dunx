@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { renderShell } from './html.js';
-import { SwaggerAssets } from './swagger.js';
-import { renderUiOptions, type SwaggerUiOptions } from './ui-options.js';
-import type { OpenApiDocument } from './types.js';
+import { PackageAssets } from '../assets.js';
+import type { OpenApiDocument } from '../types.js';
+import { renderSwaggerPage } from './html.js';
+import { renderUiOptions, type SwaggerUiOptions } from './options.js';
+import { SWAGGER_ASSETS } from './renderer.js';
 
 const doc: OpenApiDocument = {
   openapi: '3.1.0',
@@ -12,17 +13,13 @@ const doc: OpenApiDocument = {
   components: { schemas: {}, securitySchemes: {} },
 };
 
-const assets = await SwaggerAssets.resolve();
+const assets = await PackageAssets.resolve(SWAGGER_ASSETS);
 const page = (ui?: SwaggerUiOptions): string =>
-  renderShell(
+  renderSwaggerPage(
     doc,
-    {
-      jsonHref: '/openapi.json',
-      warnings: [],
-      mountedAt: '/docs',
-      ...(ui ? { ui } : {}),
-    },
+    { jsonHref: '/openapi.json', warnings: [], mountedAt: '/docs' },
     assets,
+    ui,
   );
 
 describe('renderUiOptions', () => {

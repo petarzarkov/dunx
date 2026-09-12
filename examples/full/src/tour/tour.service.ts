@@ -14,6 +14,7 @@ import { StatsDemo } from '../stats/stats.demo.js';
 import { Ledger } from '../database/ledger.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
 import { EventsDemo } from '../events/events.demo.js';
+import { ReferenceDemo } from '../reference/reference.demo.js';
 import { AssetsDemo } from '../assets/assets.demo.js';
 import { GuardsDemo } from '../guards/guards.demo.js';
 import { HealthDemo } from '../health/health.demo.js';
@@ -59,6 +60,7 @@ export class Tour {
     private readonly upstream: UpstreamDemo,
     private readonly auth: AuthDemo,
     private readonly docs: DocsDemo,
+    private readonly reference: ReferenceDemo,
     private readonly wiring: WiringDemo,
     private readonly events: EventsDemo,
     private readonly dashboard: DashboardDemo,
@@ -150,6 +152,9 @@ export class Tour {
 
     this.group('@dunx/openapi - security, from the guards own metadata');
     await this.docs.guarded(url);
+
+    this.group('@dunx/openapi/scalar - the other renderer, same document');
+    await this.reference.demonstrate(url);
 
     this.group('@dunx/dashboard - one page over the running process');
     await this.dashboard.demonstrate(url);

@@ -1,3 +1,5 @@
+import { SHELL_KEYS } from '../shell.js';
+
 /**
  * Every Swagger UI configuration parameter, as a typed object - the full set from
  * its own reference, minus the four dunx owns: `dom_id`, `domNode`, `spec` and
@@ -147,9 +149,6 @@ const RAW_KEYS = Object.freeze([
 
 const SORTER_SHORTHANDS = Object.freeze(['alpha', 'method'] as const);
 
-/** Keys dunx consumes itself rather than forwarding to Swagger UI. */
-const DUNX_KEYS = Object.freeze(['favicon', 'title'] as const);
-
 const isRawKey = (key: string): boolean =>
   (RAW_KEYS as readonly string[]).includes(key);
 
@@ -186,7 +185,7 @@ export const renderUiOptions = (
 
   for (const [key, value] of Object.entries(merged)) {
     if (value === undefined) continue;
-    if ((DUNX_KEYS as readonly string[]).includes(key)) continue;
+    if ((SHELL_KEYS as readonly string[]).includes(key)) continue;
 
     if (
       typeof value === 'string' &&

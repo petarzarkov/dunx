@@ -277,11 +277,11 @@ decision rather than a footnote to it. Two things follow, and both are in the co
 - **It is not inlined.** 1.7 MiB in every page response would resend it on every
   load. The two files are served as routes with `cache-control: immutable` and the
   installed version in the query, so a browser fetches them once.
-- **It is a dependency, resolved on the first request for the page.** An app
-  serving only `/openapi.json` installs the 12 MB and never looks it up:
-  `SwaggerAssets.resolve()` runs when a page is first built, not at boot, so a
-  broken install surfaces as that route failing instead of as everyone's boot
-  error. CLAUDE.md carries the carve-out for why it is a dependency and not a peer.
+- **It is resolved on the first request for the page**, not at boot, so an app
+  serving only `/openapi.json` never looks it up and a missing package surfaces as
+  that route failing instead of as everyone's boot error. It was a `dependency`
+  when this was written and is now an optional peer - see "The renderer moved
+  behind a subpath" below.
 
 Two measurements from the explorer era still shape things as they are:
 **per-component Mantine CSS** beat the `styles.css` barrel 381 KiB to 517 KiB, and
@@ -336,11 +336,53 @@ The old page fetched nothing at all, and the assertion had already had to move o
   literal string `"<script>"` in its own code, so it moved to the **tags**.
 
 It has now narrowed for real, and that is a genuine loss rather than a rephrasing:
-the page does fetch two assets. What `html.test.ts` pins is that both are
-**same-origin relative URLs** and that nothing reaches a CDN, `unpkg`, `jsdelivr` or
-Google Fonts. `examples/full` proves the other half over a real server with a global
-prefix, which a unit test cannot: both assets answer 200 under `/api/docs/`, with
-the immutable header, and the page requests nothing off-origin.
+the page does fetch its renderer's assets. What each renderer's suite pins is that
+every one is a **same-origin relative URL** and that nothing reaches a CDN,
+`unpkg`, `jsdelivr` or Google Fonts.
+
+`examples/full` proves the other half over a real server with a global prefix,
+which a unit test cannot: every asset answers 200 under the mount, with the
+immutable header, and the page requests nothing off-origin.
+
+Scalar adds one term, since its fonts are a config flag rather than a tag in the
+shell. `withDefaultFonts` defaults to `false`.
+
+### The renderer moved behind a subpath, and the carve-out went with it
+
+`swagger-ui-dist` was a `dependency` of `@dunx/openapi` on one argument: nobody
+imports it or types against it, so nobody holds a version opinion about it. Issue
+#85 asked for Scalar, and that argument does not survive a second renderer.
+Choosing one is now a line the consumer writes, which is a version opinion.
+
+Measured on Bun 1.4.2, installed clean:
+
+| Package                 | Disk   | Packages | Bundle, gzipped |
+| ----------------------- | ------ | -------- | --------------- |
+| `swagger-ui-dist`       | 12 MB  | 2        | 447 KiB         |
+| `@scalar/api-reference` | 276 MB | 279      | 1.05 MiB        |
+
+Scalar's tree carries Vue 3, `@phosphor-icons` at 38 MB, highlight.js, zod, the
+`ai` SDK and `@opentelemetry`. That is larger than `swagger-ui` (the non-`dist`
+package) at 177 MB, which was already turned down above for dragging React in.
+
+So both are **optional peers**, one per subpath: `@dunx/openapi/swagger` and
+`@dunx/openapi/scalar`. The default install of `@dunx/openapi` got 12 MB smaller
+rather than 276 MB larger, and `OpenApiModule` with no `renderer` serves
+`openapi.json` and routes no page.
+
+Three things this is not:
+
+- **Not a byte split** like `@dunx/dashboard`'s `./ui`. Both renderers are a few
+  KB of shell; the subpath decides which peer the consumer installs.
+- **Not the CDN adapter every other framework ships.** Scalar's own hono, nestjs
+  and express integrations are thin because they emit
+  `<script src="https://cdn.jsdelivr.net/...">`. The no-CDN test closes that path,
+  so `ScalarRenderer` serves `standalone.js` out of the install. The ESM build is
+  730 KB against 3.7 MB but lazy-loads 180 chunks, which one asset route cannot
+  serve.
+- **Not two implementations of a page.** `renderShell` in the root is the markup
+  both produce, and `PackageAssets` is the resolver both use. A third renderer is
+  those two plus `DocsRenderer`, which is what makes blessing neither possible.
 
 ### Vite in `internal/dashboard-ui`, `bun build` in `internal/docs`
 

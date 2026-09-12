@@ -1,7 +1,7 @@
 # @dunx/openapi
 
 An OpenAPI 3.1 document generated from the routes an app already has, with
-**Swagger UI** served from the same `Bun.serve` as everything else.
+**Swagger UI** or **Scalar** served from the same `Bun.serve` as everything else.
 
 The difference from a reflection-based generator is what it reads. A route's
 schemas are the objects the request path validates against. Its security
@@ -20,20 +20,28 @@ and ArkType work for validation too, but the OpenAPI document needs JSON Schema,
 and only zod has `z.toJSONSchema`. A non-zod schema validates at runtime and
 appears as a permissive entry in the document, with a warning at generation time.
 
-`swagger-ui-dist` is a regular dependency - nobody writes code against it, so
-nobody has a version opinion about it.
+The documentation UI is opt-in, one optional peer per subpath. Install the one you
+mount, or neither:
+
+| Import                  | Renderer          | Peer to install         |
+| ----------------------- | ----------------- | ----------------------- |
+| `@dunx/openapi/swagger` | `SwaggerRenderer` | `swagger-ui-dist`       |
+| `@dunx/openapi/scalar`  | `ScalarRenderer`  | `@scalar/api-reference` |
 
 ## Usage
 
 ```ts
 import { HttpFactory } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
+import { SwaggerRenderer } from '@dunx/openapi/swagger';
 
 const app = await HttpFactory.create(
   OpenApiModule.forRoot({
     title: 'Payments',
     version: '1.4.0',
     root: AppModule, // the graph to document, and the graph that gets imported
+    // Omit for the document alone: no `renderer`, no page route.
+    renderer: new SwaggerRenderer({ docExpansion: 'list' }),
   }),
 );
 app.setGlobalPrefix('api');
@@ -51,7 +59,8 @@ The [OpenAPI guide](../../docs/guide/10-openapi.md) is canonical.
 
 | Piece                | What it does                                                        |
 | -------------------- | -------------------------------------------------------------------- |
-| `OpenApiModule`      | Wraps the root it documents, mounts the page and the JSON            |
+| `OpenApiModule`      | Wraps the root it documents, mounts the JSON and a `renderer`'s page |
+| `DocsRenderer`       | The page contract. `PackageAssets` serves a renderer's files         |
 | `@ApiDoc`            | Summary, description, tags and deprecation on a route or a class     |
 | `@ApiHidden`         | A real route kept out of the document. Lives in `@dunx/http`         |
 | `describeRoutes`     | The routes as data, constructing nothing                             |
@@ -69,10 +78,12 @@ return type to it at compile time instead of validating every response.
 - `.meta({ id })` on a zod schema is what hoists it into `components/schemas`.
   Without an id it is inlined at every use site. `.strict()` after `.meta()`
   discards the metadata, so put `.meta()` last.
-- Prose belongs in `description`. Swagger UI labels a schema by `title`, which
+- Prose belongs in `description`. An explorer labels a schema by `title`, which
   `@dunx/openapi` fills with the component name.
-- The page embeds the document rather than fetching it, and loads its two assets
-  same-origin. Nothing reaches a CDN.
+- The page embeds the document rather than fetching it, and loads the renderer's
+  files same-origin from your own install. Nothing reaches a CDN.
+- `renderer` sits beside `root` rather than in `forRootAsync`'s factory: the
+  controller declares its routes before there is a container to run one.
 
 ## License
 

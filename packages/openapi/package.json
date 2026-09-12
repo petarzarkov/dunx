@@ -1,11 +1,12 @@
 {
   "name": "@dunx/openapi",
   "version": "3.6.0",
-  "description": "OpenAPI 3.1 documents for dunx controllers, generated from the schemas the routes already validate, with Swagger UI mounted over them",
+  "description": "OpenAPI 3.1 documents for dunx controllers, generated from the schemas the routes already validate, with Swagger UI or Scalar mounted over them",
   "keywords": [
     "bun",
     "dunx",
     "openapi",
+    "scalar",
     "swagger",
     "zod"
   ],
@@ -36,6 +37,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./swagger": {
+      "types": "./dist/swagger/index.d.ts",
+      "import": "./dist/swagger/index.js"
+    },
+    "./scalar": {
+      "types": "./dist/scalar/index.d.ts",
+      "import": "./dist/scalar/index.js"
     }
   },
   "publishConfig": {
@@ -47,23 +56,30 @@
     "test:cov": "bun test --coverage",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "swagger-ui-dist": "5.32.14"
-  },
   "devDependencies": {
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
     "@dunx/testing": "workspace:*",
+    "@scalar/api-reference": "1.68.0",
+    "swagger-ui-dist": "5.32.14",
     "zod": "4.5.4"
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",
     "@dunx/http": "workspace:*",
+    "@scalar/api-reference": "^1.68.0",
     "@types/bun": ">=1.4.1",
+    "swagger-ui-dist": "^5.32.14",
     "zod": "^4"
   },
   "peerDependenciesMeta": {
+    "@scalar/api-reference": {
+      "optional": true
+    },
     "@types/bun": {
+      "optional": true
+    },
+    "swagger-ui-dist": {
       "optional": true
     },
     "zod": {

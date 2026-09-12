@@ -24,6 +24,7 @@ import { GuardsModule } from './guards/guards.module.js';
 import { AssetsModule } from './assets/assets.module.js';
 import { LandingModule } from './landing/landing.module.js';
 import { ProbesModule } from './health/health.module.js';
+import { ReferenceModule } from './reference/reference.module.js';
 import { HttpModule } from './http/http.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { NotesModule } from './notes/notes.module.js';
@@ -117,6 +118,7 @@ const fileAndConsole = (
     WiringModule,
     EventsModule,
     DocsModule,
+    ReferenceModule,
     // After JobsModule and CacheModule, which bind what it reads and probes.
     OpsModule,
     StatsModule,

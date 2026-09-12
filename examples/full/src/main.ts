@@ -10,10 +10,12 @@ import {
 } from '@dunx/http';
 import { ConnectMiddleware } from '@dunx/http/connect';
 import { OpenApiModule } from '@dunx/openapi';
+import { SwaggerRenderer } from '@dunx/openapi/swagger';
 import { AppModule } from './app.module.js';
 import { AuthDocs, AuthDocsModule } from './auth-docs.js';
 import { AppConfigService } from './config.js';
 import { LandingMiddleware } from './landing/landing.middleware.js';
+import { ReferenceMiddleware } from './reference/reference.middleware.js';
 import { SelfOrigin } from './landing/self-origin.js';
 import { RequestTrailMiddleware } from './http/request-trail.js';
 
@@ -35,6 +37,43 @@ export const createApp = async (): Promise<HttpApp> => {
       // imports; importing it into the root does not reach the factory.
       imports: [AuthDocsModule],
       inject: [AuthDocs] as const,
+      /**
+       * Which documentation UI, and its configuration. Beside `root` rather
+       * than in the factory: the controller declares its routes before a
+       * container exists. `/api/reference` serves the other one dunx ships.
+       */
+      renderer: new SwaggerRenderer({
+        title: 'dunx full example - API',
+        docExpansion: 'list',
+        filter: true,
+        tryItOutEnabled: true,
+        persistAuthorization: true,
+        displayRequestDuration: true,
+        operationsSorter: 'alpha',
+        tagsSorter: 'alpha',
+        syntaxHighlight: { theme: 'nord' },
+        // The source of an expression, not a function: the page renders server
+        // side, so a closure cannot travel. Async because swagger-ui awaits it;
+        // without it `/api/docs` ran no sign-in and every route answered 401.
+        requestInterceptor: `(() => {
+          let ready;
+          const ensure = () => (ready ??= (async () => {
+            const me = await fetch('/api/profile', {
+              headers: { accept: 'application/json' },
+            });
+            if (me.status !== 401) return;
+            await fetch('/api/auth/sign-in/anonymous', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+            });
+          })());
+          return async (req) => {
+            await ensure();
+            req.headers['x-dunx-example'] = '1';
+            return req;
+          };
+        })()`,
+      }),
       useFactory: (authDocs: AuthDocs) => ({
         title: 'dunx full example',
         version: '0.1.0',
@@ -43,42 +82,6 @@ export const createApp = async (): Promise<HttpApp> => {
           'the routes validate against.\n\n[Back to the demo](/)',
         // A provider, asked for its fragment when the document is generated.
         contribute: [authDocs],
-        /**
-         * Every Swagger UI parameter is available; these are a sample.
-         * `requestInterceptor` takes the source of an expression, not a
-         * function - the page is rendered server-side, so a closure cannot travel.
-         */
-        ui: {
-          title: 'dunx full example - API',
-          docExpansion: 'list',
-          filter: true,
-          tryItOutEnabled: true,
-          persistAuthorization: true,
-          displayRequestDuration: true,
-          operationsSorter: 'alpha',
-          tagsSorter: 'alpha',
-          syntaxHighlight: { theme: 'nord' },
-          // Async because swagger-ui awaits it: opening `/api/docs` directly
-          // ran no sign-in, so every guarded route answered 401.
-          requestInterceptor: `(() => {
-            let ready;
-            const ensure = () => (ready ??= (async () => {
-              const me = await fetch('/api/profile', {
-                headers: { accept: 'application/json' },
-              });
-              if (me.status !== 401) return;
-              await fetch('/api/auth/sign-in/anonymous', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-              });
-            })());
-            return async (req) => {
-              await ensure();
-              req.headers['x-dunx-example'] = '1';
-              return req;
-            };
-          })()`,
-        },
       }),
     }),
     {
@@ -113,6 +116,8 @@ export const createApp = async (): Promise<HttpApp> => {
   // Before the rate limit: twenty hashed bundles must not spend a request budget.
   app.use(StaticFiles);
   app.use(LandingMiddleware);
+  // The second renderer, over the same document. `OpenApiModule` mounts one.
+  app.use(ReferenceMiddleware);
   app.use(RequestTrailMiddleware);
   // After anything that establishes the caller, since that decides the subject.
   app.use(ThrottleGuard);
@@ -151,7 +156,8 @@ const start = async (): Promise<void> => {
   }
 
   logger.info(`listening on ${url}`);
-  logger.info(`docs      ${new URL('api/docs', url).href}`);
+  logger.info(`docs      ${new URL('api/docs', url).href} (swagger-ui)`);
+  logger.info(`reference ${new URL('api/reference', url).href} (scalar)`);
   logger.info(`openapi   ${new URL('api/openapi.json', url).href}`);
   logger.info(`live      ${new URL('api/health/live', url).href}`);
   logger.info(`ready     ${new URL('api/health/ready', url).href}`);

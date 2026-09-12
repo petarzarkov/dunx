@@ -87,6 +87,7 @@ export const manifest = (
  */
 export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
   zod: '4.5.4',
+  'swagger-ui-dist': '5.32.14',
   'drizzle-orm': '0.45.2',
   'better-auth': '1.6.25',
   bullmq: '6.3.4',
@@ -182,7 +183,12 @@ export const main = (name: string, features: readonly Feature[]): string => {
       ...(throttle ? ['ThrottleGuard'] : []),
       'type HttpApp',
     ].join(', ')} } from '@dunx/http';`,
-    ...(openapi ? ["import { OpenApiModule } from '@dunx/openapi';"] : []),
+    ...(openapi
+      ? [
+          "import { OpenApiModule } from '@dunx/openapi';",
+          "import { SwaggerRenderer } from '@dunx/openapi/swagger';",
+        ]
+      : []),
     "import { AppModule } from './app.module.js';",
     `import { ${['AppConfigService', ...(websockets ? ['RELAY_CHANNEL'] : [])].join(', ')} } from './config.js';`,
     ...(http
@@ -199,6 +205,9 @@ export const main = (name: string, features: readonly Feature[]): string => {
   const root = documentsAuth
     ? `OpenApiModule.forRootAsync({
       root: AppModule,
+      // Which documentation UI. \`ScalarRenderer\` from '@dunx/openapi/scalar'
+      // is the other one, and takes \`@scalar/api-reference\` instead.
+      renderer: new SwaggerRenderer(),
       inject: [Auth] as const,
       useFactory: (auth: Auth) => ({
         title: '__DUNX_APP_NAME__',
@@ -213,6 +222,9 @@ export const main = (name: string, features: readonly Feature[]): string => {
       title: '__DUNX_APP_NAME__',
       version: '0.1.0',
       root: AppModule,
+      // Which documentation UI. \`ScalarRenderer\` from '@dunx/openapi/scalar'
+      // is the other one, and takes \`@scalar/api-reference\` instead.
+      renderer: new SwaggerRenderer(),
     })`
       : 'AppModule';
 

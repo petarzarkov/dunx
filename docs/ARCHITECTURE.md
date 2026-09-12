@@ -37,16 +37,17 @@ mature library already solves.** None of them restates the library's own surface
 | [Queues](./architecture/queues.md)                 | bullmq, over `Bun.RedisClient`                 |
 | [Logging](./architecture/logging.md)               | `@arkv/logger`, and where a fix belongs        |
 
-The fifth is **swagger-ui-dist**, which `@dunx/openapi` mounts for its `/docs` page.
-It is written up with the tooling rather than here: what it replaced was a frontend
-of dunx's own. See [The tools](./architecture/tooling.md), "The API explorer".
+The fifth and sixth are **swagger-ui-dist** and **@scalar/api-reference**, one per
+`@dunx/openapi` renderer subpath. They are written up with the tooling rather than
+here: what they replaced was a frontend of dunx's own. See
+[The tools](./architecture/tooling.md), "The API explorer".
 
 ## Shipping it
 
 | Page                                                  | What it settles                                                                     |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | [Building and releasing](./architecture/packaging.md) | The topological build, why versioning is lockstep, and what the scaffolder resolves |
-| [The tools](./architecture/tooling.md)                | The documentation site, and why the API explorer became swagger-ui-dist             |
+| [The tools](./architecture/tooling.md)                | The documentation site, and why the API explorer became a mounted library           |
 | [The MCP server](./architecture/mcp.md)               | What an agent may read out of an app, and why it never boots one                    |
 
 ## What was measured
