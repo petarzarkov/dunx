@@ -4,21 +4,15 @@ import type { Input, RouteInput, RouteSchemas } from '../route/schema.js';
 import type { SseEvent } from './event.js';
 import { SseStream } from './stream.js';
 
-/**
- * The request half of {@link RouteSchemas}. An event stream has no request body,
- * and its status is always 200.
- */
+/** The request half of {@link RouteSchemas}: no body, and always 200. */
 export type SseSchemas = Pick<RouteSchemas, 'params' | 'query'>;
 
 /** What a `@Sse` handler may answer with. */
 export type SseResult = SseStream | AsyncIterable<SseEvent>;
 
-/** {@link Input} plus the one header an event stream is resumed with. */
+/** {@link Input} plus the resume header. */
 export type SseInput<O extends SseSchemas> = Input<O> & {
-  /**
-   * The `id` of the last event this client saw, sent back as `Last-Event-ID` when
-   * it reconnects. Absent on a first connection.
-   */
+  /** The `id` this client last saw, from `Last-Event-ID`. Absent on a first connection. */
   readonly lastEventId: string | undefined;
 };
 
@@ -30,30 +24,26 @@ type SseHandler = (
 const LAST_EVENT_ID = 'last-event-id';
 
 /**
- * No teardown beyond the stream's own: a client that goes away cancels the
- * response body, which is what the stream clears its heartbeat from - measured on
- * Bun 1.4.2, the request aborted before a slow handler returned its `Response`
- * included. The idle deadline is cleared by `buildRoutes`, which has the server.
+ * No teardown beyond the stream's own: a departing client cancels the response
+ * body, which is what clears the heartbeat. `buildRoutes` clears the idle
+ * deadline, having the server.
  */
 const respond = (result: SseResult): Response =>
   (result instanceof SseStream ? result : SseStream.from(result)).toResponse();
 
 /**
- * A `GET` route answering `text/event-stream`, from a handler that returns an
+ * A `GET` route answering `text/event-stream`, from a handler returning an
  * `AsyncIterable<SseEvent>` or an {@link SseStream}.
  *
  * ```ts
  * @Sse('/progress')
  * async *progress(input: SseInput<RouteSchemas>): AsyncGenerator<SseEvent> {
- *   for (let step = 0; step <= 100; step += 10) {
- *     yield { data: { step }, id: String(step) };
- *     await Bun.sleep(100);
- *   }
+ *   yield { data: { step: 10 }, id: '10' };
  * }
  * ```
  *
- * The parameter has to be annotated, for the reason `@Get`'s does: a standard
- * decorator can check a parameter's type but not supply one.
+ * The parameter is annotated for the reason `@Get`'s is: a standard decorator
+ * can check a parameter's type but not supply one.
  */
 export const Sse =
   <const O extends SseSchemas>(path: RoutePath = '/', options?: O) =>
@@ -80,8 +70,7 @@ export const Sse =
     // Idling is what an event stream is for, so the route declares it and
     // `buildRoutes` clears Bun's deadline using the server it is handed.
     meta(STREAMS, true)(served);
-    // The class gets this wrapper, which answers a `Response` where the handler
-    // answered a stream. A method decorator's return type has to be assignable to
-    // the method it replaces, so the cast is the only way to say so.
+    // The wrapper answers a `Response` where the handler answered a stream, and
+    // a method decorator's return has to be assignable to what it replaces.
     return served as unknown as H;
   };

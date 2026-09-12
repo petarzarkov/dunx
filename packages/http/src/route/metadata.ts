@@ -71,11 +71,8 @@ export const HIDDEN: MetaKey<boolean> = metaKey('hidden');
  * genuinely public route from one that matched nothing.
  */
 export const UNMATCHED: MetaKey<boolean> = metaKey('unmatched');
-/**
- * This route answers a response that idles by design, so `buildRoutes` clears
- * Bun's idle deadline for it with the server Bun hands the route table entry.
- * Set by `@Sse`; a hand-rolled stream sets it with `meta(STREAMS, true)`.
- */
+/** This route idles by design, so `buildRoutes` clears Bun's idle deadline for
+ * it with the server it is handed. `@Sse` sets it; a raw stream can too. */
 export const STREAMS: MetaKey<boolean> = metaKey('streams');
 
 export const Roles = (...roles: readonly string[]) => meta(ROLES, roles);

@@ -1,7 +1,5 @@
-/**
- * One dispatched server-sent event, as it arrived. Not `SseEvent`, which is the
- * write side: there `data` is any value, here it is the text off the wire.
- */
+/** One dispatched event as it arrived. Not `SseEvent`, the write side, where
+ * `data` is any value rather than the text off the wire. */
 export interface SseMessage {
   /** The `data:` lines of one event, joined with `\n` as the spec requires. */
   readonly data: string;
@@ -24,14 +22,12 @@ const split = (line: string): readonly [string, string] => {
 };
 
 /**
- * Every event of a server-sent-events body, in order, ending when the stream does
- * or when one reads `[DONE]`. An event still being read when the body ends is
- * dropped, which is what the spec says to do with an incomplete one.
+ * Every event of a server-sent-events body, in order, ending with the stream or
+ * with `[DONE]`. One still being read when the body ends is dropped, per spec.
  *
- * Async iteration rather than `getReader()`: it releases the reader on completion,
- * on a `break` in the consumer, and on the `[DONE]` return, which the manual form
- * needed a `releaseLock()` in a `finally` for. Hand-rolled because Bun exposes no
- * `EventSource` global and no SSE parser, which was measured rather than assumed.
+ * Async iteration rather than `getReader()`, which releases the reader on
+ * completion, on a consumer `break` and on the `[DONE]` return. Hand-rolled:
+ * Bun exposes no `EventSource` global and no SSE parser, measured not assumed.
  */
 export async function* sseMessages(
   body: ReadableStream<Uint8Array>,
@@ -86,9 +82,8 @@ export async function* sseMessages(
 }
 
 /**
- * The `data:` payloads alone, for a caller that wants the text and not the
- * envelope. One string per event rather than per line, so a multi-line payload
- * arrives as it was sent.
+ * The `data:` payloads alone, one string per event rather than per line, so a
+ * multi-line payload arrives as it was sent.
  */
 export async function* sseData(
   body: ReadableStream<Uint8Array>,

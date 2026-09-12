@@ -319,9 +319,8 @@ export const buildRoutes = (
       }
     };
 
-    // Bun hands the route table entry the server that received the request, so a
-    // route that idles by design clears its own deadline with the right one. No
-    // registry, and nothing is paid by a route that does not declare it.
+    // Bun hands the table entry its own server, so an idling route clears its
+    // own deadline: no registry, and no cost to any other route.
     const served = cors
       ? withCors(cors, guarded)
       : directOr(guarded, route, read, status, onError, chain.length === 0);

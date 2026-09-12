@@ -15,4 +15,4 @@ import { SseDemo } from './sse.demo.js';
   providers: [NotificationFeed, SseDemo],
   exports: [NotificationFeed, SseDemo],
 })
-export class EventsModule {}
+export class SseModule {}

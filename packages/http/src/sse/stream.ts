@@ -2,10 +2,8 @@ import { frameComment, frameEvent, type SseEvent } from './event.js';
 
 export interface SseStreamOptions {
   /**
-   * Milliseconds between the comment lines that keep an idle connection from
-   * being reaped by a proxy that sees no bytes. `0` sends none.
-   *
-   * @default 15000
+   * Milliseconds between the comment lines that stop a proxy seeing no bytes
+   * from reaping the connection. `0` sends none. @default 15000
    */
   readonly heartbeatMs?: number;
 }
@@ -15,10 +13,7 @@ const DEFAULT_HEARTBEAT_MS = 15_000;
 /** Stateless, so one serves every connection rather than one per open stream. */
 const encoder = new TextEncoder();
 
-/**
- * `no-transform` is what tells `Compression`, and any proxy in front, to leave the
- * bytes alone: gzip emits its header and then nothing until the stream ends.
- */
+/** Tells `Compression` and any proxy to leave the bytes alone. */
 const SSE_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   'content-type': 'text/event-stream',
   'cache-control': 'no-cache, no-transform',
@@ -26,13 +21,9 @@ const SSE_HEADERS: Readonly<Record<string, string>> = Object.freeze({
 });
 
 /**
- * A server-sent-events response, held open. `ReadableStream` in a `Response` is
- * what Bun serves it with: headers flush on return and each chunk reaches the
- * client as it is enqueued, and every stream opens with one comment line so those
- * headers go out before the first event does.
- *
- * `@Sse` builds one for a handler that returns an `AsyncIterable` and takes one a
- * handler builds itself. Outside a route it is a `Response` a `@Get` can return.
+ * A server-sent-events response, held open by a `ReadableStream` in a `Response`.
+ * `@Sse` builds one for a handler returning an `AsyncIterable` and takes one a
+ * handler built itself; outside a route it is a `Response` a `@Get` can return.
  */
 export class SseStream {
   readonly #body: ReadableStream<Uint8Array>;
@@ -46,17 +37,14 @@ export class SseStream {
       start: (controller) => {
         this.#controller = controller;
       },
-      // What a client disconnect reaches the server as. The heartbeat is a timer
-      // per connection, so a stream not torn down here is a leak that scales with
-      // the clients that went away.
+      // A disconnect: not tearing down leaks a heartbeat timer per lost client.
       cancel: () => {
         this.#stop();
       },
     });
 
-    // Bun holds the response headers until the body's first chunk - measured on
-    // 1.4.2, a stream with nothing enqueued left `fetch` pending indefinitely. One
-    // comment line opens the connection, and every client ignores it.
+    // Bun holds the headers until the body's first chunk, so one comment line
+    // opens the connection. Clients ignore it. Measured on 1.4.2.
     this.comment();
 
     const heartbeatMs = options.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
@@ -70,10 +58,9 @@ export class SseStream {
   }
 
   /**
-   * Pumps `events` into a new stream, closing it when the iterable ends.
-   *
-   * A throw once the headers are out cannot become a status code, so the body is
-   * ended without its terminal chunk and an `EventSource` reconnects.
+   * Pumps `events` into a new stream, closing it when the iterable ends. A throw
+   * once the headers are out cannot become a status, so the body ends without its
+   * terminal chunk and an `EventSource` reconnects.
    */
   static from(
     events: AsyncIterable<SseEvent>,
@@ -83,8 +70,8 @@ export class SseStream {
     void (async () => {
       try {
         for await (const event of events) {
-          // Closed by a disconnect. `break` runs the generator's own `return`, so
-          // a `finally` in the handler releases what it holds.
+          // Disconnected. `break` runs the generator's `return`, so a handler's
+          // `finally` releases what it holds.
           if (stream.#closed) break;
           stream.send(event);
         }
@@ -123,9 +110,8 @@ export class SseStream {
   }
 
   /**
-   * `headers` are merged under the three this sets. There is no status: an event
-   * stream is a 200 or it is not one.
-   */
+   * `headers` merge under the three this sets. No status: an event stream is a
+   * 200 or it is not one. */
   toResponse(headers: Readonly<Record<string, string>> = {}): Response {
     return new Response(this.#body, {
       headers: { ...headers, ...SSE_HEADERS },

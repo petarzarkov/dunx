@@ -36,18 +36,14 @@ const COMPRESSIBLE: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Types that carry a stream with no end, which no encoder here can take.
+ * Types carrying a stream with no end, which no encoder here can take. The
+ * buffered path reads to `done` to size the body, which an event stream only
+ * reaches on disconnect, and streaming through `CompressionStream` is no
+ * alternative: gzip emits its header and nothing more until the writable closes
+ * (Bun 1.4.2, 20 events over 200 ms reached the reader as 0 payload bytes).
  *
- * The buffered path reads to `done` to learn the size, and an event stream reaches
- * it when the client disconnects. Streaming it through `CompressionStream` is not
- * the alternative: measured on Bun 1.4.2, gzip emits its 10-byte header and then
- * nothing until the writable side closes, so 20 events over 200 ms reached the
- * reader as 0 payload bytes.
- *
- * The content type is the only signal available before the body is read. A handler
- * streaming any other type - a tailed `text/plain` log, an open `x-ndjson` feed -
- * opts out with `cache-control: no-transform`, which `Compression` checks before
- * this filter.
+ * The content type is the only signal before the body is read; any other
+ * streaming type opts out with `cache-control: no-transform`, checked first.
  */
 const ENDLESS: ReadonlySet<string> = new Set(['text/event-stream']);
 

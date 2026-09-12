@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { configModule } from './config.js';
 import { NotificationFeed } from './sse/notification.feed.js';
-import { EventsModule } from './sse/sse.module.js';
+import { SseModule } from './sse/sse.module.js';
 
 /**
  * The event-stream routes over a real server. The tour narrates the same routes
@@ -16,7 +16,7 @@ const OPEN = ':\n\n';
 
 beforeAll(async () => {
   server = await createTestServer({
-    modules: [configModule(), EventsModule],
+    modules: [configModule(), SseModule],
   });
 });
 

@@ -1,13 +1,10 @@
 /**
- * One server-sent event. Every field is optional: a frame carrying only `retry`
- * changes the client's reconnection delay, and one carrying only `event` fires a
- * named event with no payload.
+ * One server-sent event. Every field is optional: `retry` alone changes the
+ * reconnection delay, `event` alone fires a named event with no payload.
  */
 export interface SseEvent {
-  /**
-   * Sent as it is when it is a string, and through `JSON.stringify` otherwise. A
-   * value spanning several lines becomes one `data:` line each.
-   */
+  /** A string as it is, anything else through `JSON.stringify`. Each line of it
+   * becomes its own `data:` line. */
   readonly data?: unknown;
   /** The `event:` name the client listens for. Absent dispatches `message`. */
   readonly event?: string;
@@ -17,12 +14,10 @@ export interface SseEvent {
   readonly retry?: number;
 }
 
-// `\r\n` and a bare `\r` end a line for an SSE parser as much as `\n` does, so
-// splitting on `\n` alone leaves a `\r` inside the value.
+// `\r\n` and a bare `\r` end an SSE line too; splitting on `\n` leaves the `\r` in.
 const lines = (value: string): readonly string[] => value.split(/\r\n|\r|\n/);
 
-// A line break in an `event` name or an `id` would end the field and let the rest
-// be read as another one, so a field that cannot repeat keeps its first line.
+// A break in `event` or `id` would end the field, so each keeps its first line.
 const oneLine = (value: string): string => lines(value)[0] ?? '';
 
 /** `event`, framed, ending with the blank line that dispatches it. */

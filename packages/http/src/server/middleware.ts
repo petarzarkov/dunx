@@ -21,11 +21,8 @@ export type RouteHandler = (req: BunRequest) => Promise<Response>;
  */
 export type ServedHandler = (
   req: BunRequest,
-  /**
-   * The server that received the request. Bun always passes it; optional so a
-   * test can still call a handler with the request alone. A route that idles by
-   * design uses it to clear Bun's idle deadline - see `STREAMS` in `buildRoutes`.
-   */
+  /** The server that received the request. Bun always passes it; optional so a
+   * test can call a handler with the request alone. See `STREAMS`. */
   server?: Server<unknown>,
 ) => Response | Promise<Response>;
 
