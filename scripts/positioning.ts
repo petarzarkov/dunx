@@ -65,12 +65,21 @@ export const CAPABILITIES: readonly Capability[] = [
   {
     need: 'API documentation',
     gives:
-      'OpenAPI 3.1 from the schemas the routes already validate, Swagger UI',
+      "OpenAPI 3.1 from the routes' own schemas, behind Swagger UI or Scalar",
   },
   {
     need: 'Realtime',
     gives:
-      'WebSocket gateways on the same port, with a Redis relay for many nodes',
+      'WebSocket gateways and server-sent events, with a Redis relay for many nodes',
+  },
+  {
+    need: 'Service to service',
+    gives: 'Connect and gRPC-Web, through the middleware chain the app has',
+  },
+  {
+    need: 'Decoupling',
+    gives:
+      'An in-process event bus: publish a class, subscribe with `@OnEvent`',
   },
   {
     need: 'Data',

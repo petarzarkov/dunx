@@ -335,9 +335,9 @@ export class AppFactory {
  * a token it cannot name at build time: `@dunx/infra/queue`'s runner finds
  * `@JobHandler` methods anywhere in the graph and resolves each declaring class.
  *
- * Only usable from `onInit` onwards - the container is still resolving while
- * constructors run, so `current` throws there rather than hand back a half-built
- * graph. That is why this is a holder rather than the `App`.
+ * Only usable from `onBeforeInit` onwards - the container is still resolving
+ * while constructors run, so `current` throws there rather than hand back a
+ * half-built graph. That is why this is a holder rather than the `App`.
  */
 export class AppRef {
   #app: App | undefined;
@@ -346,8 +346,8 @@ export class AppRef {
     if (this.#app === undefined) {
       throw new AppError(
         'AppRef was read during construction. The container is still resolving ' +
-          'at that point, so there is nothing to hand back. Read it in onInit(), ' +
-          'which runs once every provider exists.',
+          'at that point, so there is nothing to hand back. Read it in ' +
+          'onBeforeInit() or onInit(), which run once every provider exists.',
       );
     }
     return this.#app;

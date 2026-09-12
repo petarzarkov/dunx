@@ -108,8 +108,8 @@ from, and it may change in any release.
   `grpc-status` in an HTTP trailer and `Bun.serve` sends no trailers, so a request
   with `content-type: application/grpc` gets a 415 that says so.
   `@connectrpc/connect` and `@bufbuild/protobuf` are optional peers, and the
-  `.proto` toolchain stays yours. `ThrottleGuard` does not cover an RPC: it skips
-  every unmatched path, and an RPC path is in no route table.
+  `.proto` toolchain stays yours. `ThrottleGuard` covers an RPC: it skips an
+  unmatched path nobody claims, and an RPC path is claimed.
 
 ## License
 

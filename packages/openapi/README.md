@@ -81,7 +81,8 @@ return type to it at compile time instead of validating every response.
 - Prose belongs in `description`. An explorer labels a schema by `title`, which
   `@dunx/openapi` fills with the component name.
 - The page embeds the document rather than fetching it, and loads the renderer's
-  files same-origin from your own install. Nothing reaches a CDN.
+  files same-origin from your own install. Nothing reaches a CDN, unless you turn
+  Scalar's `withDefaultFonts` back on.
 - `renderer` sits beside `root` rather than in `forRootAsync`'s factory: the
   controller declares its routes before there is a container to run one.
 

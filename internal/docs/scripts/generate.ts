@@ -165,7 +165,7 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
   ],
   // A section is a contiguous run of the numeric prefixes, so a page joins the
   // section its neighbours are in or starts one of its own.
-  ['Events', ['events']],
+  ['Messaging', ['events', 'rpc']],
 ];
 
 const sectionOf = (slug: string): string => {

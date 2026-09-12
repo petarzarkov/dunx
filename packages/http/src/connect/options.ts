@@ -54,9 +54,8 @@ export interface ConnectOptionsInit extends ConnectRouterSettings {
    * the deadline for the whole call, which is the default because a gap between
    * messages is the protocol rather than a symptom.
    *
-   * Worth setting on a public mount: `ThrottleGuard` returns early on every
-   * unmatched path and an RPC is unmatched, so nothing else here bounds how long
-   * or how many streams one caller holds open.
+   * Worth setting on a public mount: `ThrottleGuard` limits the calls, and this
+   * limits how long one that is already streaming may idle.
    *
    * @default 0
    */

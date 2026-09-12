@@ -33,9 +33,8 @@ One detail differs from the sentence above: it mounts as **middleware**, not int
 table. RPC paths are in no route table, so they reach the `fetch` fallback, where
 `ctx.get(UNMATCHED)` is true and `ctx.path` is already parsed. Middleware, request logging,
 CORS and the dashboard apply either way, and the fallback needs no new extension
-point. `ThrottleGuard` is the exception: it returns early on every unmatched path,
-so rate limiting an RPC means a middleware registered ahead of `ConnectMiddleware`,
-or `streamTimeout` for the streaming half.
+point. `ThrottleGuard` reaches an RPC too, since a claimed path is not the 404 its early
+return exists for, and `streamTimeout` bounds the streaming half.
 
 ### Native gRPC: still do not build
 

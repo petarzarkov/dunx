@@ -16,8 +16,8 @@ export class GreetingsModule {}
 /**
  * Protobuf services over Connect and gRPC-Web, on the port this app already
  * serves. `main.ts` registers `ConnectMiddleware` last, so an RPC is request
- * logged and CORS-handled like every route. `ThrottleGuard` does not reach it:
- * it skips every unmatched path, and an RPC path is in no route table.
+ * logged and CORS-handled like every route. `ThrottleGuard` reaches it too:
+ * it skips only an unmatched path nobody claims, and an RPC path is claimed.
  *
  * `greet_pb.ts` is `buf generate` output, committed. Regenerate it from
  * `greet.proto` with `bun run gen:proto`; dunx loads no `.proto` and ships no

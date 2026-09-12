@@ -26,7 +26,7 @@ contradicts it is a decision made without measuring.
 
 ## The integrations
 
-Five areas are a mature library wired in rather than dunx code. This is the second
+Seven areas are a mature library wired in rather than dunx code. This is the second
 half of the principle above: **never reimplement what Bun does, never invent what a
 mature library already solves.** None of them restates the library's own surface.
 
@@ -38,7 +38,8 @@ mature library already solves.** None of them restates the library's own surface
 | [Logging](./architecture/logging.md)               | `@arkv/logger`, and where a fix belongs        |
 
 The fifth and sixth are **swagger-ui-dist** and **@scalar/api-reference**, one per
-`@dunx/openapi` renderer subpath. They are written up with the tooling rather than
+`@dunx/openapi` renderer subpath, and the seventh is **@connectrpc/connect** behind
+`@dunx/http/connect`. They are written up with the tooling rather than
 here: what they replaced was a frontend of dunx's own. See
 [The tools](./architecture/tooling.md), "The API explorer".
 
