@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from 'bun:test';
-import { frameComment, frameEvent } from './event.js';
+import { frameComment, frameEvent, type SseEvent } from './event.js';
 import { SseStream } from './stream.js';
 
 /** The comment every stream opens with, so Bun flushes the headers. */
@@ -232,5 +232,40 @@ describe('SseStream.from', () => {
     await Bun.sleep(40);
     // The loop breaks on the next yield, so one more may be produced and dropped.
     expect(produced).toBeLessThanOrEqual(seen + 1);
+  });
+});
+
+describe('a producer faster than its client', () => {
+  it('stops at the queue rather than buffering without bound', async () => {
+    let produced = 0;
+    // Bounded, so that without the gate this test fails on the count rather
+    // than running until something runs out of memory.
+    async function* many(): AsyncGenerator<SseEvent> {
+      for (let i = 0; i < 10_000; i += 1) {
+        produced += 1;
+        yield { data: 'x'.repeat(64) };
+      }
+    }
+
+    const stream = SseStream.from(many(), { heartbeatMs: 0 });
+    stream.toResponse();
+    await Bun.sleep(50);
+
+    // Nothing is reading, so `desiredSize` never recovers. Enqueuing regardless
+    // is a queue that grows for as long as the handler runs.
+    expect(produced).toBeLessThan(5);
+    stream.close();
+  });
+
+  it('aborts its signal when the client goes away', async () => {
+    const stream = new SseStream({ heartbeatMs: 0 });
+    const response = stream.toResponse();
+
+    expect(stream.signal.aborted).toBe(false);
+    await response.body?.cancel();
+
+    // `for await` only sees a disconnect between yields, so a handler waiting
+    // inside `next()` needs something to race.
+    expect(stream.signal.aborted).toBe(true);
   });
 });
