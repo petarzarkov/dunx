@@ -71,7 +71,7 @@ The guide is canonical for every row; this table is the index.
 | Outbound resilience     | `HttpRetryClassifier`: which statuses retry, and `Retry-After` | [Resilience](../../docs/guide/25-resilience.md)                |
 | Static files            | `Bun.file` behind a mount, with a cache policy              | [Deployment](../../docs/guide/20-deployment.md)                   |
 | Compression             | zstd and gzip on Bun's own compressors                      | [Deployment](../../docs/guide/20-deployment.md)                   |
-| RPC                     | protobuf over Connect and gRPC-Web, as middleware           | [RPC](../../docs/guide/26-rpc.md)                                 |
+| RPC                     | protobuf over Connect and gRPC-Web, as middleware           | [RPC](../../docs/guide/27-rpc.md)                                 |
 
 ## Subpaths
 

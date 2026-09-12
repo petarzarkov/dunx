@@ -13,7 +13,6 @@ import { HttpFactory, type HttpApp } from '../server/factory.js';
 import { ConnectMiddleware } from './middleware.js';
 import { ConnectModule } from './module.js';
 import { connectService, ConnectOptions } from './options.js';
-import { ServerRef } from '../server/server-ref.js';
 import { ConnectRegistry } from './registry.js';
 import {
   CapturingRpc,
@@ -215,7 +214,21 @@ describe('ConnectRegistry', () => {
           new ConnectOptions({ services: [registration, registration] }),
           [new GreetRpc(), new GreetRpc()],
         ),
-    ).toThrow(/Two RPCs are mounted at \/greet\.v1\.GreetService\/Say/);
+    ).toThrow(/RPC collision: \/greet\.v1\.GreetService\/Say is declared by/);
+  });
+
+  it('defaults streamTimeout to 0 and refuses a negative one', () => {
+    const registration = connectService(GreetService, GreetRpc);
+    expect(new ConnectOptions({ services: [registration] }).streamTimeout).toBe(
+      0,
+    );
+    expect(
+      new ConnectOptions({ services: [registration], streamTimeout: 30 })
+        .streamTimeout,
+    ).toBe(30);
+    expect(
+      () => new ConnectOptions({ services: [registration], streamTimeout: -1 }),
+    ).toThrow(/non-negative/);
   });
 
   it('marks a streaming RPC, which is what clears the idle timeout', () => {
@@ -244,7 +257,7 @@ describe('ConnectRegistry', () => {
 
 describe('ConnectMiddleware', () => {
   const middleware = (registry = registryFor()): ConnectMiddleware =>
-    new ConnectMiddleware(registry, new ServerRef());
+    new ConnectMiddleware(registry);
 
   const passthrough = async (): Promise<Response> =>
     new Response('next', { status: 418 });
@@ -420,7 +433,7 @@ describe('ConnectModule', () => {
   });
 
   /**
-   * Without `ServerRef.keepAlive` this call loses its second message and the
+   * Without the deadline being cleared this call loses its second message and the
    * client reads `ECONNRESET`.
    *
    * The gap is 16s, and the number matters. `Bun.serve` severs an idle response

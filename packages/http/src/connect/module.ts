@@ -14,7 +14,6 @@ import {
   type ConnectServiceRegistration,
 } from './options.js';
 import { ConnectRegistry } from './registry.js';
-import { ServerRef } from '../server/server-ref.js';
 
 /** Everything `forRoot` takes except the services, which `forRootAsync` needs
  * synchronously, and `imports`, which `AsyncModuleConfig` already carries. */
@@ -48,9 +47,9 @@ const build = (
         inject: [ConnectOptions, ...implementations],
       }),
       provide(ConnectMiddleware, {
-        useFactory: (registry: ConnectRegistry, server: ServerRef) =>
-          new ConnectMiddleware(registry, server),
-        inject: [ConnectRegistry, ServerRef] as const,
+        useFactory: (registry: ConnectRegistry) =>
+          new ConnectMiddleware(registry),
+        inject: [ConnectRegistry] as const,
       }),
     ],
   };
@@ -58,7 +57,7 @@ const build = (
 
 /**
  * Serves protobuf services over Connect and gRPC-Web on the port `Bun.serve`
- * already has. See `docs/guide/26-rpc.md`.
+ * already has. See `docs/guide/27-rpc.md`.
  *
  * ```ts
  * ConnectModule.forRoot({

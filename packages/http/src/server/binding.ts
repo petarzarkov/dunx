@@ -1,14 +1,14 @@
 import type { Server } from 'bun';
 import type { SocketData } from '../ws/socket.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
-import type { RouteHandler } from './middleware.js';
+import type { ServedHandler } from './middleware.js';
 import { withUpgradeRoutes, type BunRoutes } from './routes.js';
 
 /** What `listen()` computes and hands the binding, once the table is final. */
 export interface BindingPlan {
   readonly port: number;
   readonly routes: BunRoutes;
-  readonly fetch: RouteHandler;
+  readonly fetch: ServedHandler;
   readonly websocket: WebSocketRuntime | undefined;
 }
 

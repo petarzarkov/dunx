@@ -21,6 +21,7 @@ export {
   PUBLIC,
   Roles,
   ROLES,
+  REQUEST_SERVER,
   STREAMS,
   UNMATCHED,
   UseGuards,
@@ -47,7 +48,6 @@ export type {
 // metadata and the gateway marker. Both were `@dunx/mcp`'s until `@dunx/dashboard`
 // became a second consumer.
 export { ClientAddress } from './server/client-address.js';
-export { ServerRef, type RequestDeadlines } from './server/server-ref.js';
 export type { RouteContext } from './server/context.js';
 export type { CorsOptions, CorsOrigin } from './server/cors.js';
 export {

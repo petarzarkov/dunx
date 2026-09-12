@@ -49,6 +49,18 @@ export interface ConnectOptionsInit extends ConnectRouterSettings {
   readonly connect?: boolean;
   /** gRPC-Web, which browsers and `connect-go` speak. @default true */
   readonly grpcWeb?: boolean;
+  /**
+   * Seconds a **streaming** RPC may idle before `Bun.serve` severs it. `0` lifts
+   * the deadline for the whole call, which is the default because a gap between
+   * messages is the protocol rather than a symptom.
+   *
+   * Worth setting on a public mount: `ThrottleGuard` returns early on every
+   * unmatched path and an RPC is unmatched, so nothing else here bounds how long
+   * or how many streams one caller holds open.
+   *
+   * @default 0
+   */
+  readonly streamTimeout?: number;
 }
 
 /** A class rather than an interface, so it is a runtime value the transform can
@@ -58,6 +70,7 @@ export class ConnectOptions {
   readonly prefix: string;
   readonly connect: boolean;
   readonly grpcWeb: boolean;
+  readonly streamTimeout: number;
   readonly router: ConnectRouterSettings;
 
   constructor(init: ConnectOptionsInit) {
@@ -67,6 +80,7 @@ export class ConnectOptions {
       prefix,
       connect,
       grpcWeb,
+      streamTimeout,
       imports: _imports,
       ...router
     } = init;
@@ -77,6 +91,12 @@ export class ConnectOptions {
     this.prefix = mounted === '/' ? '' : mounted;
     this.connect = connect ?? true;
     this.grpcWeb = grpcWeb ?? true;
+    this.streamTimeout = streamTimeout ?? 0;
+    if (!Number.isFinite(this.streamTimeout) || this.streamTimeout < 0) {
+      throw new Error(
+        `ConnectModule streamTimeout must be a non-negative number of seconds, got ${String(streamTimeout)}.`,
+      );
+    }
     this.router = router;
 
     if (!this.connect && !this.grpcWeb) {

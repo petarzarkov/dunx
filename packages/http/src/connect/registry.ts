@@ -5,6 +5,7 @@ import {
 } from '@connectrpc/connect';
 import { createFetchHandler } from '@connectrpc/connect/protocol';
 import type { DescService } from '@bufbuild/protobuf';
+import { PathClaims } from '../route/claims.js';
 import { ConnectOptions } from './options.js';
 
 /** What `createFetchHandler` returns: the `Bun.serve` signature exactly. */
@@ -41,10 +42,13 @@ export interface ConnectRoute {
  */
 export class ConnectRegistry {
   readonly #routes = new Map<string, ConnectRoute>();
+  /** Seconds a streaming call may idle; `0` lifts the deadline. */
+  readonly streamTimeout: number;
   readonly #methods: ConnectMethodInfo[] = [];
   readonly #stopping = new AbortController();
 
   constructor(options: ConnectOptions, implementations: readonly object[]) {
+    this.streamTimeout = options.streamTimeout;
     const router: ConnectRouter = createConnectRouter({
       ...options.router,
       connect: options.connect,
@@ -68,19 +72,17 @@ export class ConnectRegistry {
       );
     });
 
+    // The same policy routes get, from the same class: a second claim on one
+    // path is a boot error naming both, never a silent overwrite.
+    const claims = new PathClaims(
+      'RPC',
+      'Register each service once, or give one its own prefix.',
+    );
+
     for (const handler of router.handlers) {
       const path = `${options.prefix}${handler.requestPath}`;
       const rpc = `${handler.service.typeName}.${handler.method.name}`;
-      // The same contract as `assertNoCollisions` for routes: two services
-      // reaching one path is a boot error naming both, never a silent overwrite
-      // that serves whichever registered last.
-      const taken = this.#methods.find((method) => method.path === path);
-      if (taken !== undefined) {
-        throw new Error(
-          `Two RPCs are mounted at ${path}: ${taken.service}.${taken.method} ` +
-            `and ${rpc}. Register each service once, or give one its own prefix.`,
-        );
-      }
+      claims.claim(path, rpc);
       this.#routes.set(path, {
         handle: createFetchHandler(handler),
         streaming: handler.method.methodKind !== 'unary',

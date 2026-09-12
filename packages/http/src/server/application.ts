@@ -33,7 +33,6 @@ import {
   withTrailingSlashAliases,
 } from './routes.js';
 import { ServerBinding } from './binding.js';
-import { ServerRef } from './server-ref.js';
 import { defaultSettings, type AppSettings } from './settings.js';
 import type { HttpOptions } from './options.js';
 
@@ -244,7 +243,6 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
 
     const bound = this.#binding.bind({ port, routes, fetch, websocket: ws });
 
-    this.#app.get(ServerRef).attach(bound.main);
     attachAddressSource(this.#app.get(ClientAddress), {
       server: bound.main,
       trustProxy: this.#settings['trust proxy'],

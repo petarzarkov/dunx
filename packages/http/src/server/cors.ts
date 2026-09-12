@@ -1,4 +1,4 @@
-import type { RouteHandler } from './middleware.js';
+import type { RouteHandler, ServedHandler } from './middleware.js';
 import { HttpStatusCode } from './status.js';
 
 export type CorsOrigin =
@@ -76,9 +76,10 @@ const applyCors = (
 /** Adds the response-side CORS headers. One extra closure per route, at boot. */
 export const withCors = (
   options: CorsOptions,
-  handler: RouteHandler,
-): RouteHandler => {
-  return async (req) => applyCors(options, req, await handler(req));
+  handler: ServedHandler,
+): ServedHandler => {
+  return async (req, server) =>
+    applyCors(options, req, await handler(req, server));
 };
 
 /**

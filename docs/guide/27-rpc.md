@@ -135,6 +135,15 @@ early on every unmatched path so a burst of 404s cannot spend a caller's budget,
 and an RPC path is in no route table. Rate limiting RPC traffic means a
 middleware of your own registered ahead of `ConnectMiddleware`, or a proxy.
 
+That matters most for a **streaming** RPC, which also has Bun's idle deadline
+lifted so a gap between messages does not sever it. Nothing in dunx then bounds
+how long, or how many, streams one caller holds open. `streamTimeout` seconds
+puts the deadline back for streaming calls:
+
+```ts
+ConnectModule.forRoot({ services: [...], streamTimeout: 300 });
+```
+
 RPC paths are in no route table, so they reach the unmatched-path fallback, where
 the middleware claims the ones it serves and lets everything else through to the
 usual 404.

@@ -1,3 +1,4 @@
+import type { Server } from 'bun';
 // The same technique as marker.ts: a decorator sets a symbol property on the
 // function or the class it receives and returns it. Nothing accumulates at class
 // definition time, so there is no ordering dependence and no cross-file leak.
@@ -74,6 +75,13 @@ export const UNMATCHED: MetaKey<boolean> = metaKey('unmatched');
 /** This route idles by design, so `buildRoutes` clears Bun's idle deadline for
  * it with the server it is handed. `@Sse` sets it; a raw stream can too. */
 export const STREAMS: MetaKey<boolean> = metaKey('streams');
+/**
+ * The server that received the request, on the unmatched path only. A matched
+ * route's context is built once at boot and shared, so it carries none; those
+ * clear their deadline through {@link STREAMS} instead.
+ */
+export const REQUEST_SERVER: MetaKey<Server<unknown>> =
+  metaKey('request-server');
 
 export const Roles = (...roles: readonly string[]) => meta(ROLES, roles);
 export const Public = () => meta(PUBLIC, true);

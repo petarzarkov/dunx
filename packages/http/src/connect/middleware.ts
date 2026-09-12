@@ -1,8 +1,7 @@
 import type { BunRequest } from 'bun';
-import { UNMATCHED } from '../route/metadata.js';
+import { REQUEST_SERVER, UNMATCHED } from '../route/metadata.js';
 import type { RouteContext } from '../server/context.js';
 import type { Middleware, Next } from '../server/middleware.js';
-import { ServerRef } from '../server/server-ref.js';
 import { HttpStatusCode } from '../server/status.js';
 import { ConnectRegistry } from './registry.js';
 
@@ -40,15 +39,13 @@ const grpcUnsupported = (): Response =>
  *
  * `ThrottleGuard` is the one that does **not** cover an RPC: it returns early on
  * every unmatched path so a burst of 404s cannot spend a caller's budget, and an
- * RPC is unmatched. See docs/guide/26-rpc.md.
+ * RPC is unmatched. See docs/guide/27-rpc.md.
  */
 export class ConnectMiddleware implements Middleware {
   readonly #registry: ConnectRegistry;
-  readonly #server: ServerRef;
 
-  constructor(registry: ConnectRegistry, server: ServerRef) {
+  constructor(registry: ConnectRegistry) {
     this.#registry = registry;
-    this.#server = server;
   }
 
   handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
@@ -62,9 +59,12 @@ export class ConnectMiddleware implements Middleware {
       return Promise.resolve(grpcUnsupported());
     }
 
-    // A streaming RPC may pause between messages longer than `idleTimeout`
-    // allows, and Bun would sever it mid-stream. See ServerRef.keepAlive.
-    if (route.streaming) this.#server.keepAlive(req);
+    // A streaming RPC may pause between messages for longer than `idleTimeout`
+    // allows, and Bun severs it mid-stream. The unmatched context carries the
+    // server that took this call, so the deadline is cleared on the right one.
+    if (route.streaming) {
+      ctx.get(REQUEST_SERVER)?.timeout(req, this.#registry.streamTimeout);
+    }
     return route.handle(req);
   }
 }
