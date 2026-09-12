@@ -1,0 +1,110 @@
+name: fast code review
+
+# Replaces `dunxonu review` and `dunxonu`, which were two workflows around
+# anthropics/claude-code-action plus `scripts/post-review.ts` to format what it
+# produced. The action below does the reviewing and the posting, so the review
+# no longer needs an OAuth token, a checkout, or a script to parse an execution
+# file.
+#
+# What it buys: the review runs on free tiers and deranks through every key of
+# every provider before it gives up, rather than depending on one subscription.
+# The anchoring, the approve/comment decision, the scope narrowing and the
+# carried-findings note moved into the action, where they are tested.
+#
+# One job handles both triggers. Which flow runs is decided by the webhook
+# payload: a `pull_request` event reviews the diff, a review comment gets a
+# reply in its thread.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review_comment:
+    types: [created]
+
+# A push supersedes the review of the commit before it, so a rapid series of
+# pushes costs one review rather than one per push.
+concurrency:
+  group: fast-code-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+# Nothing at the workflow level, so a job that forgets its own block gets none
+# rather than the repository default.
+permissions: {}
+
+jobs:
+  review:
+    name: Review the diff
+    runs-on: ubuntu-latest
+    # The loop guard, and it is load bearing: dunxonu posts with a real user's
+    # token, so its own reviews and replies raise these same events. A comment
+    # posted with GITHUB_TOKEN would not.
+    if: >-
+      github.event.sender.login != 'dunxonu' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # No actions/checkout. The action reads the diff through the API and never
+      # touches the working tree, so there is no workflow token left behind in
+      # .git/config for a prompt injection in an attacker-controlled pull
+      # request to read out. That exposure is why the old review workflow had to
+      # pass `persist-credentials: false`.
+      #
+      # Pinned to the tag's commit rather than to `v1`, which is a moving tag:
+      # this job hands the action four secrets, and retargeting `v1` would run
+      # unreviewed code with them.
+      - uses: petarzarkov/fast-code-review@52aeedae7e97154c785005c93b7a172fad1f0c68 # v1.0.0
+        with:
+          github_token: ${{ secrets.DUNXONU_TOKEN }}
+
+          # Best first. Every key of a route is spent before the next route is
+          # reached, so the free tiers are exhausted at the top of the list
+          # rather than spread thinly across all of it.
+          routes: |
+            openrouter/deepseek/deepseek-chat-v3.1:free
+            openrouter/qwen/qwen3-coder:free
+            openrouter/z-ai/glm-4.5-air:free
+            groq/llama-3.3-70b-versatile
+            groq/qwen/qwen3-32b
+            google/gemini-2.5-flash
+            google/gemini-2.5-flash-lite
+            cerebras/llama-3.3-70b
+
+          exclude: '*.md,*.lock,bun.lock,coverage/**,dist/**,docs/**,**/templates/**,**/__snapshots__/**,*.snap,*.svg,*.png,*.ico'
+
+          # CLAUDE.md is 61k and cannot go in a prompt. This is the part of it a
+          # reviewer working from a diff cannot infer but can still check.
+          instructions: |
+            This repository has hard rules that a linter or a test enforces. Flag
+            a diff that breaks one, and cite the rule:
+
+            - No `enum` or `const enum`. An enum is the one TypeScript construct
+              that cannot be erased. The replacement is a frozen object plus an
+              indexed-access union.
+            - No identifier prefixed with `Dunx`. The brand belongs in the
+              package name. Use `App`: AppFactory, AppError, AppModule.
+            - No `any`.
+            - No source file over 500 lines, tests included.
+            - No em dash or en dash anywhere, including comments and prose. A
+              spaced hyphen, a comma or a colon replaces one.
+            - No `npx`, `npm`, `yarn` or `pnpm`. Use `bun` or `bunx`.
+            - No section-divider comments. A file that needs sections should be
+              split into separate files.
+            - Dependency versions are exact, never ranged.
+
+            `packages/*/src/index.ts` is the published API surface. Flag a
+            breaking change to an export there.
+
+            Do not flag missing tests in `examples/` or `internal/`.
+            Do not flag comment wording, prose style, or documentation voice.
+        env:
+          # One secret per provider holding a comma-separated list, so adding a
+          # key later is editing one secret rather than touching this file.
+          # A provider with no secret set is skipped with a warning, not an
+          # error, so the list above can name more than is configured.
+          OPENROUTER_API_KEYS: ${{ secrets.OPENROUTER_API_KEYS }}
+          GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
+          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
