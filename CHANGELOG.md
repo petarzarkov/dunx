@@ -4,6 +4,77 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.6.0 - 2026-09-12
+
+Config files, ResiliencePolicy, a cache subpath, and queue metrics
+
+`@dunx/core` reads configuration from YAML, TOML and JSON files alongside the env
+source it already had, and gains `ResiliencePolicy`: timeout, retry, backoff,
+jitter and fallback around a single operation.
+
+`@dunx/infra` gains a `./cache` subpath with memory, redis and tiered stores, and
+reports queue and Redis metrics behind a metrics flag.
+
+### Features
+
+- **core**: ResiliencePolicy - timeout, retry, backoff, jitter, fallback ([`300e7ac`](https://github.com/petarzarkov/dunx/commit/300e7ac38c2a1b45dda2b4b33c5c0ef9af83b1c7))
+- **infra**: queue and Redis metrics, behind a metrics flag ([`9779424`](https://github.com/petarzarkov/dunx/commit/9779424dcdb1d49e5021b9cc5a4822c1067eedfe))
+- **infra**: add a cache subpath with memory, redis and tiered stores ([`fa7498b`](https://github.com/petarzarkov/dunx/commit/fa7498b59ae39703fa83379d00dcb07f72327617))
+- **core**: read config from YAML, TOML and JSON files ([`f0a441a`](https://github.com/petarzarkov/dunx/commit/f0a441a6c4e30717daf7122a198fee904fe3453d))
+- **bench**: retake the run on Node 24.21.0, the current LTS ([`9dd8e9d`](https://github.com/petarzarkov/dunx/commit/9dd8e9d5f8bb607150c94ffd20cd3ca104a8af2b))
+- **docs**: memory and CPU columns on the benchmark page ([`34ebaf2`](https://github.com/petarzarkov/dunx/commit/34ebaf243524315cd009487155df640b3a0686d4))
+- **bench**: the measured run, with the io scenario and resource columns ([`a570b71`](https://github.com/petarzarkov/dunx/commit/a570b7175f99c832b494f7bc9a83b59ae5537c5d))
+- **bench**: an io scenario across all 20 subjects, plus memory and CPU ([`c1d9f3d`](https://github.com/petarzarkov/dunx/commit/c1d9f3dda19534019f38d4ad0ffabaa16d661cc0))
+
+### Fixes
+
+- **ci**: pull MinIO from quay.io, pinned ([`ff3b457`](https://github.com/petarzarkov/dunx/commit/ff3b457b8629e637b9378285322c825eb3763934))
+- **core**: scope the retry catch to the operation alone ([`f18268a`](https://github.com/petarzarkov/dunx/commit/f18268a2291b93d8f61cfedf6eccd3bdd3c83757))
+- **example**: build the resilience suite's config through configModule ([`1ba1f3c`](https://github.com/petarzarkov/dunx/commit/1ba1f3cdafa6ba03711d13ad4b03a49a0b8a4502))
+- **infra**: give a WorkerFactory dispatcher the container's QueueMetrics ([`8fb5555`](https://github.com/petarzarkov/dunx/commit/8fb555563a9689ab234d61a0df98f9278e202df8))
+- **infra**: reject non-finite cache bounds, let a mutation beat a loader ([`846f80a`](https://github.com/petarzarkov/dunx/commit/846f80a684677bba489f585db90671477a35b3cf))
+- **core**: strip **proto** inside array elements too ([`86e2b1e`](https://github.com/petarzarkov/dunx/commit/86e2b1e9152bb9ea2ec4ef1d8e4fc25da394ac62))
+- **core**: thread the attempt signal, and share the delay ceiling ([`b9cc5a3`](https://github.com/petarzarkov/dunx/commit/b9cc5a3465ba0e15c318d73b45a601a1e02700b8))
+- **infra**: cap the Redis metric series, from one declaration ([`d66e12f`](https://github.com/petarzarkov/dunx/commit/d66e12fd78da849b10de038d82d92204a3d0a569))
+- **core**: skip an empty config file in every format ([`37d05af`](https://github.com/petarzarkov/dunx/commit/37d05af34125e75c79091b5ab79f007b6dccc403))
+- **core**: merge a TOML date instead of collapsing it to {} ([`7219a77`](https://github.com/petarzarkov/dunx/commit/7219a77bb86216cf43ba566c03bfa986bcfd611b))
+- **core**: close six findings from the config files review ([`4036da4`](https://github.com/petarzarkov/dunx/commit/4036da472c92e61dd06c6554c5f63445e75239bc))
+- **infra**: gate the containment check on a backslash as well ([`e02cb21`](https://github.com/petarzarkov/dunx/commit/e02cb2190424b57d7721eff471d37697c3b4e0b9))
+- **infra**: settle glob containment with checkWithin, and check what a scan produced ([`38e82e2`](https://github.com/petarzarkov/dunx/commit/38e82e2762b09fc550d9072179a658158757e040))
+- **infra**: contain a list glob inside the storage root ([`6033e10`](https://github.com/petarzarkov/dunx/commit/6033e10190c85c5cb73e85b2444ae7726575b029))
+- **dashboard**: apply commands:false to bull-board's adapters, not its uiConfig ([`e1b4eeb`](https://github.com/petarzarkov/dunx/commit/e1b4eeb9937d9c29b803f1aaaa9a695b57a6eb1f))
+- **review**: widen the scope when a compare result may be truncated ([`0cf4264`](https://github.com/petarzarkov/dunx/commit/0cf42640f7903e227b9d2d4dd8c5667ecbf1798c))
+- **review**: scope a re-review to what changed, so a pull request can converge ([`077c44f`](https://github.com/petarzarkov/dunx/commit/077c44f1896ac7b208d1451d439aee0d99a3571b))
+- **bench**: third review round, and stop the 500-rejection bug being writable ([`f6e7ac5`](https://github.com/petarzarkov/dunx/commit/f6e7ac5b84a8c3b4f0619b8d234548305156e76f))
+- **bench**: second review round, including one edit that silently did not apply ([`37bf430`](https://github.com/petarzarkov/dunx/commit/37bf4301d9091c9715c1145845a7a64aa0dd8a9e))
+- **bench**: judge a row's failures as a rate, not a count ([`204f05a`](https://github.com/petarzarkov/dunx/commit/204f05a837187ab5d9bdfc33b66f527189b922a2))
+- **bench**: address review, and one wrong claim the review found ([`c3e413c`](https://github.com/petarzarkov/dunx/commit/c3e413cb7037550402f177d8304f9cfff11b8e51))
+
+### Performance
+
+- **infra**: charge the per-entry containment check only to a pattern that expands ([`77f6b8f`](https://github.com/petarzarkov/dunx/commit/77f6b8f0fd386008df17a81dba4f3f55f290c423))
+
+### Refactors
+
+- **bench**: one row shape for the io contract ([`85e4f36`](https://github.com/petarzarkov/dunx/commit/85e4f36e79ba96fd096cac4ddc23dfbb46dac39a))
+
+### Documentation
+
+- **transform**: drop the field record the transform never wrote ([`844d20f`](https://github.com/petarzarkov/dunx/commit/844d20f50c78e459c2d6bf9fe2257b6584680a21))
+- commit the re-measured OpenTelemetry note, and re-probe it on 1.4.2 ([`fd174ef`](https://github.com/petarzarkov/dunx/commit/fd174efaf972233a9bcbad17dc7c98c7f3a35900))
+- correct the swagger-ui-dist peer claim, record Bun.YAML ([`21507eb`](https://github.com/petarzarkov/dunx/commit/21507eb290ea3a1475f9cef4ec8eda9e55bf08f5))
+- correct the swagger-ui-dist peer claim, record Bun.YAML ([`5fa8e29`](https://github.com/petarzarkov/dunx/commit/5fa8e297304a461a148911f20ad3add3ded7985b))
+- **bun-apis**: record what Bun.Glob.scan does with a pattern that leaves cwd ([`f2c122e`](https://github.com/petarzarkov/dunx/commit/f2c122edc3f2c37f41e85f544bc3c0dc44166414))
+- **guide**: scope the io conclusion, and say what memory is measured ([`416746e`](https://github.com/petarzarkov/dunx/commit/416746e727e62fb499eadf14614d66dd09a7e45b))
+- fix a broken sentence, a stale claim, and two the io row contradicted ([`69e9f06`](https://github.com/petarzarkov/dunx/commit/69e9f0687738397fdcda726e4a55ae9b57e8d7af))
+- refresh the guide's figures and say which milestone each table measures ([`8689cb3`](https://github.com/petarzarkov/dunx/commit/8689cb3de66304cf871f1dd1dec76d3638cc886c))
+- **architecture**: split the boot cost by column, and measure oxc-parser alone ([`238e883`](https://github.com/petarzarkov/dunx/commit/238e883c111091036312b37d10b7013dc97929ce))
+- **architecture**: attribute the boot cost, which was never split ([`f6d8ea6`](https://github.com/petarzarkov/dunx/commit/f6d8ea6969910bd2add50fabd52e5fd8c017fd8b))
+
+### Other changes
+
+- **mcp**: regenerate the corpus after the config review fixes ([`2b9eabc`](https://github.com/petarzarkov/dunx/commit/2b9eabcfacf1841a9dae3d3eb54664109d3b0265))
+
 ## 3.5.1 - 2026-09-08
 
 Queue teardown, and a starter an agent can use
