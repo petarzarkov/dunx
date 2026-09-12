@@ -1,6 +1,7 @@
 /**
  * One server-sent event. Every field is optional: `retry` alone changes the
- * reconnection delay, `event` alone fires a named event with no payload.
+ * reconnection delay, and `event` or `id` alone carries an empty `data:` so it
+ * dispatches, which a frame with no data field at all does not.
  */
 export interface SseEvent {
   /** A string as it is, anything else through `JSON.stringify`. Each line of it
@@ -32,6 +33,11 @@ export const frameEvent = (event: SseEvent): string => {
     const data =
       typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
     for (const line of lines(data ?? '')) fields.push(`data: ${line}`);
+  } else if (event.event !== undefined || event.id !== undefined) {
+    // No `data` field does not dispatch: the spec leaves the buffer empty and
+    // returns, so a named event would be silence. A `retry`-only frame carries
+    // none, being a setting rather than an event.
+    fields.push('data: ');
   }
   return `${fields.join('\n')}\n\n`;
 };
