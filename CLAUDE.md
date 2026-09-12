@@ -710,16 +710,16 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 
 **`packages/*`** - the framework, imported by an app:
 
-| Package           | Contains                                                                                                                                                                                              |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@dunx/core`      | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                                                                                                     |
-| `@dunx/transform` | Load-time constructor-dependency transform (only native dep)                                                                                                                                          |
-| `@dunx/http`      | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation; an outbound `HttpClient` behind `./client`, and **Connect/gRPC-Web** behind `./connect`                         |
-| `@dunx/infra`     | Subpaths `/db` `/redis` `/cache` `/queue` `/schedule` `/files` `/images` `/logger` `/pagination`                                                                                                      |
+| Package           | Contains                                                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@dunx/core`      | DI container, modules, lifecycle, config, the `Logger`/`RequestContext` contracts                                                                                                                      |
+| `@dunx/transform` | Load-time constructor-dependency transform (only native dep)                                                                                                                                           |
+| `@dunx/http`      | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation; an outbound `HttpClient` behind `./client`, and **Connect/gRPC-Web** behind `./connect`                          |
+| `@dunx/infra`     | Subpaths `/db` `/redis` `/cache` `/queue` `/schedule` `/files` `/images` `/logger` `/pagination`                                                                                                       |
 | `@dunx/openapi`   | OpenAPI 3.1 from the routes' own zod schemas, with **Swagger UI** behind `./swagger` or **Scalar** behind `./scalar` mounted over it. zod, `swagger-ui-dist` and `@scalar/api-reference` are all peers |
-| `@dunx/auth`      | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                                                                                                        |
-| `@dunx/testing`   | `createTestApp` / `createTestServer` - overrides replaced in place, real server on port 0                                                                                                             |
-| `@dunx/dashboard` | An opt-in ops page - routes, provider graph, gateways, Redis, config, runtime, with **bull-board** mounted for the queues. One middleware; `internal/dashboard-ui`'s React page inlined behind `./ui` |
+| `@dunx/auth`      | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                                                                                                         |
+| `@dunx/testing`   | `createTestApp` / `createTestServer` - overrides replaced in place, real server on port 0                                                                                                              |
+| `@dunx/dashboard` | An opt-in ops page - routes, provider graph, gateways, Redis, config, runtime, with **bull-board** mounted for the queues. One middleware; `internal/dashboard-ui`'s React page inlined behind `./ui`  |
 
 **`tools/*`** - published too, but run rather than imported:
 

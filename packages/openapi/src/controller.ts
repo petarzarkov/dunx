@@ -18,16 +18,14 @@ export interface DocPaths {
 }
 
 /**
- * The controller is built per `forRoot`/`forRootAsync` call because its paths are
- * configuration, and the routes are then discovered, guarded, CORS-wrapped and
- * middleware-wrapped exactly like any other controller's. Nothing is mounted behind
- * the app's back.
+ * Built per `forRoot`/`forRootAsync` call, its paths being configuration, and the
+ * routes then discovered, guarded, CORS-wrapped and middleware-wrapped like any
+ * other controller's. Nothing is mounted behind the app's back.
  *
- * The paths are read through a closure rather than captured, because a decorator's
- * arguments are evaluated when the class definition is and `forRootAsync`'s are not
- * known until a provider has run. `@Get` takes a `RoutePath` thunk for exactly
- * this: route discovery happens after every provider has settled, so by the time
- * anything reads a path, the factory that produced it has returned.
+ * The paths are read through a closure: a decorator's arguments evaluate with the
+ * class definition, and `forRootAsync`'s are not known until a provider has run.
+ * `@Get` takes a `RoutePath` thunk for that, discovery happening after every
+ * provider has settled.
  */
 const documentController = (paths: DocPaths) => {
   @Controller()
@@ -53,12 +51,10 @@ const documentController = (paths: DocPaths) => {
 };
 
 /**
- * The document's routes, plus the page and its assets when a renderer is
- * configured. Two classes rather than one with dead routes: a `/docs` in the
- * table that answers 404 is worse than no `/docs`.
- *
- * Both are named `OpenApiController`, so the operation ids and the tag the
- * document gives its own routes do not move with the renderer.
+ * The document's routes, plus the page and its assets when a renderer is set. Two
+ * classes rather than one with dead routes, a `/docs` answering 404 being worse
+ * than none. Both are named `OpenApiController`, so operation ids and the tag do
+ * not move with the renderer.
  */
 export const buildController = (
   paths: DocPaths,

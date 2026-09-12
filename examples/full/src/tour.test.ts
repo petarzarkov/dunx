@@ -143,17 +143,13 @@ it('documents every route the one app serves', () => {
 
 /**
  * **A real name collision, kept because it is instructive.** This app declares
- * `.meta({ id: 'User' })` for its own users table, and `betterAuthDocument`
- * contributes better-auth's `User` under the same name. Two different schemas, one
- * `components/schemas` key.
+ * `.meta({ id: 'User' })` for its users table and `betterAuthDocument` contributes
+ * better-auth's `User`: two schemas, one `components/schemas` key.
  *
- * dunx neither merges them nor renames one: `SchemaStore.add` keeps the **generated**
- * schema - the app's own - and warns, because renaming would silently repoint a
- * `$ref` a caller had already read. That precedence is the thing worth pinning: an
- * app's own document wins over a contributor's.
- *
- * The fix on a consumer's side is to name one of them differently. This example does
- * not, so the warning stays and this test is what stops it becoming background noise.
+ * `SchemaStore.add` keeps the **generated** one and warns, rather than merging or
+ * renaming, which would silently repoint a `$ref` a caller had already read. The
+ * fix on a consumer's side is to rename one. This example does not, so the warning
+ * stays and this test is what stops it becoming background noise.
  */
 it('keeps the app schema when a contributor claims the same name', () => {
   // Quote-free fragments on purpose: the warning reaches the log line through two
@@ -188,10 +184,7 @@ it('serves a Swagger UI shell whose assets resolve on this origin', () => {
   );
 });
 
-/**
- * The other renderer dunx ships, over the same document. Both self-host: the
- * page links what the install holds, and nothing resolves to another origin.
- */
+/** The other renderer, over the same document, self-hosted the same way. */
 it('serves a Scalar page whose one asset resolves on this origin', () => {
   expect(tour.text).toMatch(
     /GET \/api\/reference -> 200 text\/html; charset=utf-8, \d+ bytes of Scalar shell/,

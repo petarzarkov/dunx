@@ -22,7 +22,7 @@ class UsersModule {}
 class CountingRenderer extends DocsRenderer {
   calls = 0;
 
-  constructor(private readonly fail = false) {
+  constructor(private readonly fail: false | 'async' | 'sync' = false) {
     super();
   }
 
@@ -31,8 +31,10 @@ class CountingRenderer extends DocsRenderer {
     _options: PageOptions,
   ): Promise<string> {
     this.calls += 1;
+    // Before any await, the way a missing optional peer fails.
+    if (this.fail === 'sync') throw new Error('render failed');
     await Promise.resolve();
-    if (this.fail) throw new Error('render failed');
+    if (this.fail === 'async') throw new Error('render failed');
     return `<html>${this.calls}</html>`;
   }
 
@@ -76,14 +78,26 @@ describe('OpenApiExplorer.page', () => {
     expect(renderer.calls).toBe(2);
   });
 
-  it('does not cache a failed render', async () => {
-    const renderer = new CountingRenderer(true);
+  it('does not cache a render that fails after an await', async () => {
+    const renderer = new CountingRenderer('async');
     const explorer = await explorerWith(renderer);
 
     await expect(explorer.page('')).rejects.toThrow('render failed');
     await expect(explorer.page('')).rejects.toThrow('render failed');
 
     // A cached rejection would leave the route broken for the process's life.
+    expect(renderer.calls).toBe(2);
+  });
+
+  it('does not cache a render that throws before any await', async () => {
+    const renderer = new CountingRenderer('sync');
+    const explorer = await explorerWith(renderer);
+
+    await expect(explorer.page('')).rejects.toThrow('render failed');
+    await expect(explorer.page('')).rejects.toThrow('render failed');
+
+    // Evicting from inside the render ran before `page()` cached, so the
+    // rejection stayed. The second attempt proves the entry is gone.
     expect(renderer.calls).toBe(2);
   });
 });

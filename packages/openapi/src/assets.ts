@@ -27,11 +27,8 @@ const notFound = (): Response => new Response('Not found', { status: 404 });
 
 /**
  * A renderer's static files, resolved from the consumer's own install on first
- * use and cached per package.
- *
- * Both renderers dunx ships are optional peers, so an app that mounts neither
- * resolves neither, and one that mounts a page it never opens resolves nothing
- * until the first request for it.
+ * use and cached per package. Both renderers are optional peers, so an app that
+ * mounts none resolves none, and one that never opens its page resolves nothing.
  */
 export class PackageAssets {
   static readonly #cache = new Map<string, Promise<PackageAssets>>();
@@ -79,10 +76,9 @@ export class PackageAssets {
   }
 
   /**
-   * The promise is cached rather than its value: a cold page load asks for the
-   * shell and every asset at once, and storing only the result had each of them
-   * miss and redo the resolve. A rejection is evicted, so a peer installed after
-   * the first request resolves rather than replaying the failure.
+   * The promise, not its value: a cold page load asks for the shell and every
+   * asset at once, and storing the result had each miss and redo the resolve. A
+   * rejection evicts, so a peer installed later resolves rather than replaying.
    */
   static resolve(pkg: AssetPackage): Promise<PackageAssets> {
     const cached = PackageAssets.#cache.get(pkg.name);

@@ -5,12 +5,9 @@ import { renderScalarPage } from './html.js';
 import type { ScalarOptions } from './options.js';
 
 /**
- * The files served out of `@scalar/api-reference`.
- *
- * The standalone build, not the ESM one: the ESM entry is smaller but lazy-loads
- * ~180 chunks, which one asset route cannot serve. `standalone.js.map` is here
- * because the bundle's last line points at it, so without it every consumer with
- * devtools open logs a 404.
+ * The files served out of `@scalar/api-reference`. The standalone build, not the
+ * ESM one: that is smaller but lazy-loads ~180 chunks, which one asset route
+ * cannot serve. The `.map` is here because the bundle's last line points at it.
  */
 export const SCALAR_ASSETS: AssetPackage = Object.freeze({
   name: '@scalar/api-reference',
@@ -25,17 +22,11 @@ export const SCALAR_ASSETS: AssetPackage = Object.freeze({
  * Scalar, served from the consumer's own `@scalar/api-reference`.
  *
  * ```ts
- * OpenApiModule.forRoot({
- *   title: 'Payments',
- *   version: '1.4.0',
- *   root: AppModule,
- *   renderer: new ScalarRenderer({ theme: 'purple' }),
- * });
+ * OpenApiModule.forRoot({ root: AppModule, renderer: new ScalarRenderer() });
  * ```
  *
- * 3.7 MiB of assets, 1.05 MiB gzipped, against Swagger UI's 447 KiB. The install
- * is 276 MB across 279 packages, which is why it is an optional peer and why the
- * subpath exists at all.
+ * 1.05 MiB gzipped against Swagger UI's 447 KiB, and 276 MB across 279 packages
+ * installed, which is why it is an optional peer behind its own subpath.
  */
 export class ScalarRenderer extends DocsRenderer {
   readonly #options: ScalarOptions;

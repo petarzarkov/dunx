@@ -48,11 +48,21 @@ export class ReferenceMiddleware implements Middleware {
   }
 
   async #html(): Promise<string> {
-    this.#page ??= this.#renderer.page(this.explorer.document('/api'), {
+    const cached = this.#page;
+    if (cached !== undefined) return cached;
+
+    // The promise, so two concurrent first requests render once, and evicted on
+    // rejection, so a renderer whose peer is missing does not leave the route
+    // answering the same failure for the life of the process.
+    const rendering = this.#renderer.page(this.explorer.document('/api'), {
       jsonHref: '/api/openapi.json',
       warnings: this.explorer.warnings,
       mountedAt: REFERENCE_PATH,
     });
-    return this.#page;
+    this.#page = rendering;
+    void rendering.catch(() => {
+      if (this.#page === rendering) this.#page = undefined;
+    });
+    return rendering;
   }
 }

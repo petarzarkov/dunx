@@ -20,17 +20,9 @@ export interface OpenApiInfo extends DocumentInfo {
 }
 
 /**
- * The documentation UI, if there is one. Absent means the module serves the
- * document and nothing else: no page route, no asset route.
- *
- * It sits outside `forRootAsync`'s factory for the same reason `root` does - the
- * controller declares its routes before a container exists to run one - so it is
- * a constructed renderer rather than a name to resolve:
- *
- * ```ts
- * import { SwaggerRenderer } from '@dunx/openapi/swagger';
- * import { ScalarRenderer } from '@dunx/openapi/scalar';
- * ```
+ * The documentation UI, if there is one. Absent serves the document alone. It
+ * sits outside `forRootAsync`'s factory for the reason `root` does, so it is a
+ * constructed `SwaggerRenderer` or `ScalarRenderer` rather than a name.
  */
 interface RendererOption {
   readonly renderer?: DocsRenderer;
@@ -45,10 +37,9 @@ export interface OpenApiOptions extends OpenApiInfo, RendererOption {
 }
 
 /**
- * `forRootAsync`'s argument: the root, plus the factory that produces everything
- * else. `root` stays here rather than coming out of the factory because it is a
- * module reference - the graph has to exist before the container that would run
- * the factory does.
+ * `forRootAsync`'s argument: the root, plus the factory for everything else.
+ * `root` stays here because it is a module reference, and the graph has to exist
+ * before the container that would run the factory.
  */
 export interface OpenApiAsyncOptions<D extends Deps>
   extends AsyncModuleConfig<OpenApiInfo, D>, RendererOption {

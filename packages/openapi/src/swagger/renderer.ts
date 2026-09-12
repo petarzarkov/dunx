@@ -6,10 +6,8 @@ import type { SwaggerUiOptions } from './options.js';
 
 /**
  * The files served out of `swagger-ui-dist`, which holds four other builds and
- * 4 MB of sourcemaps in the same directory.
- *
- * `swagger-ui.css.map` is here because the stylesheet points at it, and without
- * it every consumer with devtools open logs a 404.
+ * 4 MB of sourcemaps beside them. The `.css.map` is here because the stylesheet
+ * points at it, and without it devtools logs a 404.
  */
 export const SWAGGER_ASSETS: AssetPackage = Object.freeze({
   name: 'swagger-ui-dist',
@@ -25,12 +23,7 @@ export const SWAGGER_ASSETS: AssetPackage = Object.freeze({
  * Swagger UI, served from the consumer's own `swagger-ui-dist`.
  *
  * ```ts
- * OpenApiModule.forRoot({
- *   title: 'Payments',
- *   version: '1.4.0',
- *   root: AppModule,
- *   renderer: new SwaggerRenderer({ docExpansion: 'list' }),
- * });
+ * OpenApiModule.forRoot({ root: AppModule, renderer: new SwaggerRenderer() });
  * ```
  *
  * 1.7 MiB of assets, 447 KiB gzipped. The install is 12 MB across 2 packages.

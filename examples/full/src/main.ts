@@ -38,11 +38,9 @@ export const createApp = async (): Promise<HttpApp> => {
       imports: [AuthDocsModule],
       inject: [AuthDocs] as const,
       /**
-       * Which documentation UI, and all of its configuration. It sits beside
-       * `root` rather than in the factory: the controller declares its routes
-       * before a container exists to run one. `ScalarRenderer` from
-       * `@dunx/openapi/scalar` is the other one dunx ships - `/api/reference`
-       * serves it beside this page.
+       * Which documentation UI, and its configuration. Beside `root` rather
+       * than in the factory: the controller declares its routes before a
+       * container exists. `/api/reference` serves the other one dunx ships.
        */
       renderer: new SwaggerRenderer({
         title: 'dunx full example - API',
@@ -54,10 +52,9 @@ export const createApp = async (): Promise<HttpApp> => {
         operationsSorter: 'alpha',
         tagsSorter: 'alpha',
         syntaxHighlight: { theme: 'nord' },
-        // `requestInterceptor` takes the source of an expression, not a
-        // function: the page is rendered server-side, so a closure cannot
-        // travel. Async because swagger-ui awaits it - opening `/api/docs`
-        // directly ran no sign-in, so every guarded route answered 401.
+        // The source of an expression, not a function: the page renders server
+        // side, so a closure cannot travel. Async because swagger-ui awaits it;
+        // without it `/api/docs` ran no sign-in and every route answered 401.
         requestInterceptor: `(() => {
           let ready;
           const ensure = () => (ready ??= (async () => {

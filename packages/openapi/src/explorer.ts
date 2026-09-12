@@ -66,24 +66,22 @@ export class OpenApiExplorer {
     // assets at once, and a value written after the await renders them all.
     const rendering = this.#render(prefix);
     this.#pages.set(prefix, rendering);
+    // Eviction after the `set`, not inside `#render`: a synchronous throw runs
+    // `#render`'s body before `page()` caches, so a `catch` in there deleted
+    // nothing and the rejection stayed. The identity check keeps a retry's entry.
+    void rendering.catch(() => {
+      if (this.#pages.get(prefix) === rendering) this.#pages.delete(prefix);
+    });
     return rendering;
   }
 
-  /**
-   * Async so a missing renderer rejects rather than throwing out of `page()`,
-   * and so a failure evicts itself rather than breaking the route for good.
-   */
+  /** Async so a missing renderer rejects rather than throwing out of `page()`. */
   async #render(prefix: string): Promise<string> {
-    try {
-      return await this.#ui().page(this.document(prefix), {
-        jsonHref: joinPath(prefix, this.#jsonPath),
-        warnings: this.warnings,
-        mountedAt: joinPath(prefix, this.#uiPath),
-      });
-    } catch (error) {
-      this.#pages.delete(prefix);
-      throw error;
-    }
+    return this.#ui().page(this.document(prefix), {
+      jsonHref: joinPath(prefix, this.#jsonPath),
+      warnings: this.warnings,
+      mountedAt: joinPath(prefix, this.#uiPath),
+    });
   }
 
   /** One file the page linked, straight off disk. Any other name is a 404. */
