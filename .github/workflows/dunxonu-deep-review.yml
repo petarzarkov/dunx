@@ -1,0 +1,247 @@
+name: dunxonu deep review
+
+# The second reviewer, and the one you have to ask for.
+#
+# `fast-code-review` reviews every push on free tiers: seconds, no subscription,
+# and good enough that it has caught real bugs on this repository. This one runs
+# Claude over a checkout with git and gh in its hands, at `/code-review high`,
+# and costs a subscription call every time. So it runs when somebody types
+# `@dunxonudeepreview` and never otherwise.
+#
+# The trigger is deliberately not `@dunxonu`: that is the automatic reviewer's
+# own mention phrase, and it answers questions. `fast-code-review` requires a
+# non-word character after its phrase, so `@dunxonudeepreview` does not wake it,
+# and the two cannot both fire on one comment. Verified in both directions
+# before this file was written.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+# By comment rather than by pull request: two people asking for a deep review of
+# different things should get two, and a second request is never a supersede of
+# the first the way a second push is.
+concurrency:
+  group: dunxonu-deep-review-${{ github.event.comment.id }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  review:
+    name: Deep review on request
+    runs-on: ubuntu-latest
+    # Three conditions, and all three matter. The phrase is the point of the
+    # workflow. `issue.pull_request` turns away the same comment on an actual
+    # issue, where there is no diff to review and the API call would 404. And
+    # the sender check keeps dunxonu from triggering itself, since it posts with
+    # a real user's token and its own comments raise this event.
+    # `contains` is a cheap pre-filter only; the exact match happens in the first
+    # step, because workflow expressions have no word boundary and
+    # `@dunxonudeepreviewer` contains this string.
+    #
+    # The author check is the one that matters. This job hands an agent a
+    # `gh api` wildcard and a token holding `pull-requests: write`, and the pull
+    # request it reads is attacker-controlled text, so a prompt injection in a
+    # diff plus a trigger word from any passer-by is enough to act with that
+    # token. It also bills a subscription call per run. Both reasons say the
+    # same thing: only people who already have write access may ask.
+    if: >-
+      contains(github.event.comment.body, '@dunxonudeepreview') &&
+      (github.event.issue.pull_request != null || github.event.pull_request != null) &&
+      github.event.sender.login != 'dunxonu' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    timeout-minutes: 30
+    # Read only. `permissions:` governs the automatic GITHUB_TOKEN, which is what
+    # the agent below is handed; DUNXONU_TOKEN is a personal access token with
+    # its own scopes, so the submit step can still post while the agent cannot.
+    permissions:
+      contents: read
+      pull-requests: read
+      # The action reads its own run to produce `execution_file`.
+      actions: read
+      id-token: write
+    steps:
+      # Resolved before the checkout, not after it.
+      #
+      # `actions/checkout` with `refs/pull/N/head` resolves that ref at the
+      # instant it runs, and asking the API for the head afterwards can return a
+      # commit pushed in between. The workspace would then hold one tree while
+      # the review was posted against another, and post-review.ts would not
+      # catch it: its freshness check compares the head to the sha it was given,
+      # and the newer sha is what it was given. So the sha is pinned first and
+      # the checkout is told exactly which commit to take.
+      # The word boundary the `if:` above cannot express. `@dunxonudeepreviewer`
+      # and `@dunxonudeepreview-old` both contain the trigger and neither is a
+      # request for a thirty minute, subscription billed run.
+      - name: Check the trigger is exactly ours
+        id: gate
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          if printf '%s' "$BODY" | grep -qiE '@dunxonudeepreview([^A-Za-z0-9_-]|$)'; then
+            echo 'ok=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ok=false' >> "$GITHUB_OUTPUT"
+            echo 'The trigger appears only inside a longer word. Nothing to do.'
+          fi
+
+      - name: Resolve the head commit
+        id: head
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          sha=$(gh api "repos/${{ github.repository }}/pulls/$NUMBER" --jq .head.sha)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+          echo "reviewing $sha"
+
+      # Tell whoever asked that it started, on the comment they typed it in.
+      #
+      # A deep review takes minutes and the alternative is somebody typing the
+      # trigger again because nothing happened, which is also why the reaction
+      # goes on their comment rather than on the pull request: a reaction on the
+      # top post is not where they are looking. The two comment kinds live under
+      # different paths, and only the event name says which one this is.
+      - name: Acknowledge
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          if [ "${{ github.event_name }}" = 'pull_request_review_comment' ]; then
+            path="pulls/comments/$COMMENT_ID"
+          else
+            path="issues/comments/$COMMENT_ID"
+          fi
+          gh api --method POST \
+            "repos/${{ github.repository }}/$path/reactions" \
+            -f content=eyes >/dev/null || true
+
+      # Full history, not depth 1. Three of the tools below are `git log`,
+      # `git blame` and `git show`, and a single-commit checkout gives them
+      # nothing: a review at depth 1 reported reading `main...HEAD`, a range that
+      # does not exist locally.
+      #
+      # `persist-credentials: false` because the reviewer reads files and the
+      # pull request it reads is attacker-controlled text. checkout@v4 leaves the
+      # workflow token in `.git/config` inside the workspace, so a prompt
+      # injection that got the agent to print that file would disclose a token
+      # holding `pull-requests: write`. Nothing here needs credentials after the
+      # fetch.
+      # Pinned to a commit: `v4` is mutable, and a retargeted tag would run
+      # unreviewed code in a job that goes on to touch a token.
+      #
+      # Everything this brings into the workspace is attacker-controlled. It is
+      # here for the agent to read and for nothing else to execute.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ steps.head.outputs.sha }}
+
+      # Pinned to a commit. A tag is mutable and this step is handed two secrets,
+      # so retargeting `v1` would run unreviewed code with them.
+      - id: review
+        if: steps.gate.outputs.ok == 'true'
+        uses: anthropics/claude-code-action@b7912aeeb535234e3e9385ff49e8237f689b5f14 # v1
+        env:
+          # A background task in a headless run never reports back, because the
+          # run ends when the main agent stops. `-p` already runs this in the
+          # foreground; this turns the rest of it off.
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The workflow's own token, which this job has granted read only,
+          # rather than DUNXONU_TOKEN.
+          #
+          # The agent is allowed `Bash(gh api:*)`, which is any method against
+          # any endpoint, and it reads a pull request whose text anybody can
+          # write. An appended instruction saying "do not post anything" is a
+          # request, not an authorization boundary, so the boundary is the token:
+          # with this one it can read the things it needs and write nothing at
+          # all. Posting happens in the trusted step at the bottom.
+          github_token: ${{ github.token }}
+          # `high` rather than `medium`. Somebody asked for this one by name, and
+          # broader coverage at the cost of a longer run is the whole reason to
+          # ask. `medium` is what the automatic reviewer already approximates.
+          #
+          # `track_progress` stays absent: it delivers the run through the
+          # action's own tracking comment, whose body always opens with a
+          # hardcoded "Claude finished @<user>'s task in <duration>" and a job
+          # link, and nothing configures that away.
+          #
+          # `--comment` stays absent too: it posts each finding through the
+          # inline-comment tool, which put six separate top-level comments on
+          # one pull request seconds apart.
+          prompt: /code-review high ${{ github.repository }}/pull/${{ steps.head.outputs.number }}
+          # --allowedTools REPLACES the skill's own list rather than adding to
+          # it, so everything it reaches for has to be named. Read, Grep and Glob
+          # need no entry. The text commands are here because a measured run
+          # without them reached for `cat -n`, `grep -nE` and `awk` eight times
+          # and was refused each time, which left it verifying findings by
+          # inference.
+          #
+          # `bun test` is deliberately still absent: it executes the code under
+          # review and this job carries an OAuth token. Add `Bash(bun test:*)` to
+          # trade that for a reviewer that can run the suite it reasons about.
+          claude_args: |
+            --append-system-prompt "Do not post anything yourself: no gh pr review, no gh pr comment, no inline comments. Something else reads your final message and posts it as a pull request review, so open with no preamble naming the job, the run, the duration or yourself. Report your findings as the typed list you normally would. If you write prose instead, end the message with a line reading exactly VERDICT: APPROVE when you found nothing worth changing, or exactly VERDICT: COMMENT when you did. Never use an em dash or an en dash anywhere in your output."
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh api:*),Bash(git log:*),Bash(git blame:*),Bash(git show:*),Bash(git diff:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(git ls-files:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(rg:*),Bash(sed:*),Bash(awk:*),Bash(ls:*),Bash(find:*)"
+
+      # One review per request, findings on the lines they are about and the body
+      # a count, because the whole review in the body put a screen of prose in
+      # the conversation.
+      #
+      # The script is taken from the default branch, not from the pull request,
+      # and only now that the agent has stopped.
+      #
+      # Both halves matter. The workspace holds pull request content, so a
+      # contributor could simply edit `scripts/post-review.ts` and have it run
+      # with DUNXONU_TOKEN in `GH_TOKEN`: no prompt injection required, just a
+      # commit. And fetching the trusted copy earlier would not help, because
+      # the agent's tool list includes `sed` and `awk`, either of which writes a
+      # file in place. So the trusted copy does not exist while the agent runs.
+      - name: Fetch the submission script from the default branch
+        if: steps.gate.outputs.ok == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .trusted
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      # One review per request, findings on the lines they are about and the
+      # body a count, because the whole review in the body put a screen of prose
+      # in the conversation.
+      #
+      # An empty review is a hard failure rather than a green check. A review
+      # gate that can pass without reviewing is worse than no gate, and this one
+      # was explicitly requested, so silence is the wrong answer.
+      - name: Submit the review
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+        run: |
+          set -euo pipefail
+          # A missing trusted copy is a bootstrap, not a mystery. The script is
+          # taken from the default branch on purpose, so a pull request that
+          # adds or moves it cannot post a review until it merges. Saying that
+          # plainly beats "Module not found" from Bun.
+          if [ ! -f .trusted/scripts/post-review.ts ]; then
+            echo "::error::The default branch has no scripts/post-review.ts. This job runs the copy from there deliberately, never the one in the pull request, so it cannot post until that file is on the default branch."
+            exit 1
+          fi
+          # Bun is on PATH because the action put it there.
+          bun .trusted/scripts/post-review.ts \
+            "$EXECUTION_FILE" \
+            "${{ github.repository }}" \
+            "${{ steps.head.outputs.number }}" \
+            "${{ steps.head.outputs.sha }}"
