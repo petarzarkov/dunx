@@ -293,9 +293,25 @@ if (import.meta.main) {
     process.exit(0);
   }
 
-  const files = JSON.parse(
-    await gh(['api', '--paginate', `repos/${repo}/pulls/${number}/files`]),
-  ) as { filename: string; patch?: string }[];
+  /**
+   * `--slurp`, and then flattened.
+   *
+   * `gh api --paginate` alone prints one JSON document per page, so a pull
+   * request past the endpoint's 30-file default came back as `[...][...]` and
+   * `JSON.parse` threw: the run failed without posting a review, and only on
+   * the larger pull requests most worth reviewing. `--slurp` wraps the pages in
+   * an outer array, which is a different shape rather than the one wanted, so
+   * the pages are flattened back into the flat list the rest of this expects.
+   */
+  const pages = JSON.parse(
+    await gh([
+      'api',
+      '--paginate',
+      '--slurp',
+      `repos/${repo}/pulls/${number}/files`,
+    ]),
+  ) as unknown[];
+  const files = pages.flat() as { filename: string; patch?: string }[];
 
   const review = buildReview(result, commentableLines(files));
   if (review.body === '' && review.comments.length === 0) {
