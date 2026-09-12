@@ -402,3 +402,39 @@ $('g-write').addEventListener('click', async () => {
       post('viewer'),
     )) + (await callReport('as admin', '/api/reports', post('admin')));
 });
+
+$('explorers-go').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const out = $('explorers-out');
+  button.disabled = true;
+  out.textContent = 'fetching...';
+  try {
+    const pages = [
+      ['swagger-ui', '/api/docs'],
+      ['scalar', '/api/reference'],
+    ];
+    const lines = [];
+    for (const [name, path] of pages) {
+      const res = await fetch(path);
+      const html = await res.text();
+      // Anything the page would pull from another host. Both renderers are
+      // served out of the install, so the honest answer here is zero.
+      const offOrigin = [
+        ...html.matchAll(/(?:src|href)="(https?:)?\/\/[^"]+/g),
+      ];
+      lines.push(
+        `${name.padEnd(10)} ${path.padEnd(16)} ${res.status} ` +
+          `${(html.length / 1024).toFixed(0)} KiB, ${offOrigin.length} off-origin`,
+      );
+    }
+    const doc = await fetch('/api/openapi.json');
+    const spec = await doc.json();
+    lines.push(
+      '',
+      `both render ${Object.keys(spec.paths).length} paths from one document`,
+    );
+    out.textContent = lines.join('\n');
+  } finally {
+    button.disabled = false;
+  }
+});

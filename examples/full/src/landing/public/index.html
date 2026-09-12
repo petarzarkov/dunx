@@ -65,6 +65,9 @@
           <a href="/api/docs"
             >API explorer <small>swagger-ui, /api/docs</small></a
           >
+          <a href="/api/reference"
+            >API reference <small>scalar, /api/reference</small></a
+          >
           <a href="/api/dashboard"
             >Dashboard <small>routes, providers, config</small></a
           >
@@ -254,6 +257,24 @@
             <button id="audit">Try an admin-only route</button>
           </div>
           <pre id="auth-out"></pre>
+        </section>
+
+        <section>
+          <h2>Two API explorers, one document</h2>
+          <p>
+            <code>@dunx/openapi</code> generates the document; a renderer serves
+            a page over it. Swagger UI is at
+            <a href="/api/docs">/api/docs</a> and Scalar at
+            <a href="/api/reference">/api/reference</a>, both reading the same
+            <a href="/api/openapi.json">openapi.json</a>. Each ships behind its
+            own subpath and its own optional peer, so an app installs the one it
+            mounts. Both self-host: the check below reports what each page
+            weighs and whether anything on it resolves off this origin.
+          </p>
+          <div class="row">
+            <button id="explorers-go">Fetch both pages</button>
+          </div>
+          <pre id="explorers-out"></pre>
         </section>
 
         <section>
