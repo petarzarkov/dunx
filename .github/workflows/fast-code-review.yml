@@ -79,7 +79,7 @@ jobs:
       # Pinned to the tag's commit rather than to `v1`, which is a moving tag:
       # this job hands the action four secrets, and retargeting `v1` would run
       # unreviewed code with them.
-      - uses: petarzarkov/fast-code-review@de86a3567965dd9771db479a9f2d4d4c02b2442c # v1.2.1
+      - uses: petarzarkov/fast-code-review@078ab6fdda422b250f73148e3cb4eff98eed97db # v1.2.2
         with:
           github_token: ${{ secrets.DUNXONU_TOKEN }}
 
