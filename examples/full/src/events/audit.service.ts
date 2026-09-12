@@ -8,12 +8,7 @@ export interface AuditRow {
 
 /**
  * An `async` handler. `emit` collects the promise it returns, so the row below is
- * written before `await bus.emit(...)` hands control back to the publisher - no
- * `waitUntil`, and no sleep in the caller.
- *
- * The class is a plain provider. `@OnEvent` marks the method, and `EventRegistry`
- * finds it by walking the prototype chains of the classes the modules already
- * declare.
+ * written before `await bus.emit(...)` hands control back to the publisher.
  */
 export class Audit {
   readonly rows: AuditRow[] = [];

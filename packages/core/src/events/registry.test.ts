@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { AppFactory } from '../di/app.js';
+import type { OnInit } from '../di/lifecycle.js';
 import { Module, type DynamicModule } from '../di/module.js';
 import { provide } from '../di/provider.js';
 import { Logger } from '../logger/logger.js';
@@ -128,6 +129,59 @@ describe('EventRegistry discovery', () => {
     expect(app.get(Feed).hits).toEqual(['base:order-3', 'shipped']);
     expect(app.get(EventRegistry).subscribersOf(Placed)).toHaveLength(1);
     expect(app.get(EventRegistry).subscribersOf(Shipped)).toHaveLength(1);
+    await app.shutdown();
+  });
+
+  /**
+   * `EventBusModule` last in `imports`, so its providers are constructed after
+   * `Orders` and its `onInit` would run after `Orders.onInit()` too. Wiring happens
+   * in `onBeforeInit`, a pass of its own before the first `onInit`, so the event
+   * still lands. Moving it back to `onInit` makes this deliver to nobody.
+   */
+  it('reaches a subscriber from an onInit that runs before EventBusModule', async () => {
+    class Boot implements OnInit {
+      readonly bus: EventBus;
+      handled = -1;
+
+      constructor(bus: EventBus) {
+        this.bus = bus;
+      }
+
+      async onInit(): Promise<void> {
+        this.handled = (await this.bus.emit(new Placed('at-boot'))).handled;
+      }
+    }
+
+    class Audit {
+      readonly seen: string[] = [];
+
+      @OnEvent(Placed)
+      record(event: Placed): void {
+        this.seen.push(event.id);
+      }
+    }
+
+    @Module({
+      providers: [
+        provide(Boot, {
+          useFactory: (bus: EventBus) => new Boot(bus),
+          inject: [EventBus] as const,
+        }),
+        Audit,
+      ],
+      exports: [Boot, Audit],
+    })
+    class OrdersModule {}
+
+    // OrdersModule first: the import order that used to decide whether the event
+    // arrived.
+    @Module({ imports: [quiet(), OrdersModule, EventBusModule] })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+
+    expect(app.get(Audit).seen).toEqual(['at-boot']);
+    expect(app.get(Boot).handled).toBe(1);
     await app.shutdown();
   });
 

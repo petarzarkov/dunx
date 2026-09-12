@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { EventBus, EventRegistry } from '@dunx/core';
+import { EventBus, EventBusModule, EventRegistry } from '@dunx/core';
 import { createTestServer, testClient, type TestServer } from '@dunx/testing';
 import { Audit } from './events/audit.service.js';
 import { EventsModule } from './events/events.module.js';
 import { Notifications, REVIEW_LIMIT } from './events/notifications.service.js';
 import { OrderPlaced } from './events/orders.events.js';
+import { Startup } from './events/startup.service.js';
 
 /**
  * The EventBus routes, on their own server so `service.test.ts` stays under the
@@ -28,7 +29,10 @@ const place = async (total: number): Promise<Dispatched> =>
   ).body;
 
 beforeAll(async () => {
-  server = await createTestServer({ modules: [EventsModule] });
+  // EventsModule first, so its providers are built before EventRegistry is.
+  server = await createTestServer({
+    modules: [EventsModule, EventBusModule],
+  });
   client = testClient(server.url);
 });
 
@@ -45,9 +49,17 @@ it('subscribes every @OnEvent method in the graph at boot', async () => {
     'Audit.record',
     'Notifications.notify',
     'Notifications.flagForReview',
+    'Notifications.ready',
     'Notifications.countSettled',
     'Notifications.logFirstSettlement',
   ]);
+});
+
+it('delivers an event emitted from an onInit that ran first', async () => {
+  // Startup emits AppReady from its own onInit, and EventBusModule is imported
+  // after the module it lives in. Wiring happens in onBeforeInit, so it lands.
+  expect(server.app.get(Startup).reached).toBe(1);
+  expect(server.app.get(Notifications).readyCount).toBe(1);
 });
 
 it('finishes every subscriber before emit resolves', async () => {

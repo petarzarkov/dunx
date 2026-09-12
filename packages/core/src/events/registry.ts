@@ -1,7 +1,7 @@
 import { AppRef } from '../di/app.js';
 import { discoverMarked } from '../di/marked.js';
 import { collectModules, ROOT_MODULE, type ModuleRef } from '../di/module.js';
-import type { OnInit } from '../di/lifecycle.js';
+import type { OnBeforeInit } from '../di/lifecycle.js';
 import type { Ctor } from '../di/token.js';
 import { Logger } from '../logger/logger.js';
 import { EventBus } from './bus.js';
@@ -15,12 +15,16 @@ import type { EventSubscription } from './subscription.js';
  *
  * `AppRef` rather than constructor injection for the handlers: which classes
  * declare one is not knowable when this is built, so the tokens cannot be named in
- * an `inject` list. It is read in `onInit`, the only point at which that is legal.
+ * an `inject` list. It is read in `onBeforeInit`, the earliest point at which that
+ * is legal.
  *
- * Handlers are wired during `onInit`, so an event emitted from a constructor
- * reaches nobody. Emit from `onInit` or later.
+ * `onBeforeInit` rather than `onInit`: `onInit` is one unordered pass, so wiring
+ * there reached a publisher's own `onInit` only when the app happened to import
+ * `EventBusModule` first. Every subscription is in place before the first `onInit`
+ * runs, whatever the import order. A constructor still runs before any of this, so
+ * an event emitted from one reaches nobody.
  */
-export class EventRegistry implements OnInit {
+export class EventRegistry implements OnBeforeInit {
   readonly #ref: AppRef;
   readonly #root: ModuleRef;
   readonly #bus: EventBus;
@@ -34,11 +38,11 @@ export class EventRegistry implements OnInit {
     this.#logger = logger;
   }
 
-  onInit(): void {
+  onBeforeInit(): void {
     const app = this.#ref.current;
     const found = discoverMarked<EventHandlerMeta, EventHandler<AppEvent>>(
       collectModules(this.#root),
-      (token, from) => app.get(token, from),
+      app,
       eventHandlerMetaOf,
     );
 

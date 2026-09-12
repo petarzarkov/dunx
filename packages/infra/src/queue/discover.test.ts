@@ -67,7 +67,7 @@ class Plain {
 const jobsOf = async (root: ModuleRef): Promise<readonly DiscoveredJob[]> => {
   const app = await AppFactory.create(root);
   try {
-    return discoverJobs(collectModules(root), (target) => app.get(target));
+    return discoverJobs(collectModules(root), app);
   } finally {
     await app.shutdown();
   }
@@ -187,6 +187,41 @@ describe('discoverJobs across modules', () => {
       'emails/welcome',
       'reports/nightly',
     ]);
+  });
+
+  /**
+   * Two modules bind the same handler class and neither exports it, so a bare
+   * `app.get(token)` is ambiguous and throws. Discovery resolves each candidate as
+   * its declaring module would, and a call site that drops the module is what this
+   * catches: it fails rather than finding two handlers or none.
+   */
+  it('resolves a handler from the module that declares it', async () => {
+    @Module({ providers: [Emails] })
+    class Left {}
+
+    @Module({ providers: [Emails] })
+    class Right {}
+
+    @Module({ imports: [Left, Right] })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    try {
+      expect(() => app.get(Emails)).toThrow('cannot say which you mean');
+
+      const found = discoverJobs(collectModules(Root), app);
+      // One scan per class, so the second module's copy is not a duplicate.
+      expect(found.map((job) => job.name).sort()).toEqual([
+        'digest',
+        'welcome',
+      ]);
+
+      found.find((job) => job.name === 'welcome')?.handler({} as never);
+      expect(app.get(Emails, Left).seen).toEqual(['welcome']);
+      expect(app.get(Emails, Right).seen).toEqual([]);
+    } finally {
+      await app.shutdown();
+    }
   });
 
   it('finds a handler on a class bound through useClass', async () => {

@@ -60,7 +60,7 @@ export class ScheduleRunner implements OnInit, OnShutdown {
     const app = this.#ref.current;
     const found = discoverMarked<ScheduleMeta, () => unknown>(
       collectModules(this.#root),
-      (token, from) => app.get(token, from),
+      app,
       scheduleMetaOf,
     );
 

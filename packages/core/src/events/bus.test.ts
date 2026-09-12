@@ -273,17 +273,34 @@ describe('EventSubscription', () => {
     expect(subscription.active).toBe(false);
   });
 
-  it('delivers a `once` subscription exactly once', async () => {
+  it('delivers a `once` subscription exactly once, and stops reporting active', async () => {
     const { bus: eventBus } = bus();
     let calls = 0;
-    eventBus.once(Placed, () => {
+    const subscription = eventBus.once(Placed, () => {
       calls += 1;
     });
 
+    expect(subscription.active).toBe(true);
     await eventBus.emit(new Placed('a'));
     await eventBus.emit(new Placed('b'));
 
     expect(calls).toBe(1);
+    expect(subscription.handled).toBe(1);
+    // `EventTarget`'s own `once` removes the listener and leaves the controller
+    // alone, so this used to report a spent subscription as live forever.
+    expect(subscription.active).toBe(false);
+  });
+
+  it('marks a throwing `once` subscription inactive too', async () => {
+    const { bus: eventBus } = bus();
+    const subscription = eventBus.once(Placed, () => {
+      throw new Error('boom');
+    });
+
+    await eventBus.emit(new Placed('a'));
+
+    expect(subscription.failed).toBe(1);
+    expect(subscription.active).toBe(false);
   });
 
   it('takes a caller signal alongside its own controller', async () => {

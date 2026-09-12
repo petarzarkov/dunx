@@ -1,5 +1,5 @@
 import { Auth } from '@dunx/auth';
-import { Module } from '@dunx/core';
+import { EventBusModule, Module } from '@dunx/core';
 import {
   ConsoleTransport,
   FileTransport,
@@ -120,6 +120,9 @@ const fileAndConsole = (
     // UpstreamModule - so it is built once they exist rather than pulling each
     // of them forward.
     LandingModule,
+    // Last on purpose: `EventsModule` above emits from an `onInit`, and its
+    // subscribers are wired in `onBeforeInit` whatever the import order.
+    EventBusModule,
   ],
   providers: [Tour],
   // `OpenApiModule` wraps this module, so its factory resolves from here.

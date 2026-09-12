@@ -77,8 +77,9 @@ happens to hit the broken route.
 | 1     | `buildScopes` walks the import graph                              |
 | 2     | overrides replace matching bindings in every scope that holds one |
 | 3     | every provider is constructed, dependencies first                 |
-| 4     | `onInit()` on each instance, in construction order                |
-| 5     | shadowing and ambiguous-import warnings are logged                |
+| 4     | `onBeforeInit()` on each instance, in construction order          |
+| 5     | `onInit()` on each instance, in construction order                |
+| 6     | shadowing and ambiguous-import warnings are logged                |
 
 ### Async factories
 
@@ -118,6 +119,30 @@ export class SearchIndex implements OnInit {
 
 Runs after every provider is constructed, so a dependency is fully built by the
 time yours starts. A throwing `onInit` rejects `create()`.
+
+`onInit` is one unordered pass: which provider's runs first follows construction
+order, which follows module import order. A provider that another provider's
+`onInit` depends on having wired belongs in `OnBeforeInit`.
+
+## `OnBeforeInit`
+
+```ts
+import type { OnBeforeInit } from '@dunx/core';
+
+export class Handlers implements OnBeforeInit {
+  onBeforeInit() {
+    this.subscribe();
+  }
+}
+```
+
+Every `onBeforeInit` in the app runs before the first `onInit`, so import order
+stops deciding whether a later `onInit` sees the wiring. `EventRegistry` uses it
+to subscribe every `@OnEvent` - see [Events](./26-events.md).
+
+For wiring only. Two implementers in one app are still ordered by construction
+order, and opening a socket, arming a timer or starting a worker belongs in
+`onInit`.
 
 ## `OnShutdown`
 

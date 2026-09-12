@@ -500,6 +500,12 @@ it('publishes an event and waits out every subscriber', () => {
   // Five @OnEvent methods, none of them named by the publisher's module.
   expect(tour.text).toContain('OrderPlaced   <- Audit.record');
   expect(tour.text).toContain('OrderSettled  <- Notifications.countSettled');
+  // EventsModule is imported before EventBusModule, so wiring cannot be waiting
+  // for `onInit` - the boot emit would reach nobody if it were.
+  expect(tour.text).toContain(
+    'emit(AppReady) from onInit reached 1 subscriber(s), with EventBusModule ' +
+      'imported last',
+  );
   expect(tour.text).toContain('emit(OrderPlaced) -> 3 handled, 0 failed');
   // The async handler's row and the sync handler's waitUntil work both landed
   // before `await emit(...)` returned, and a handler published in turn.

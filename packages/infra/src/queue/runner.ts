@@ -2,11 +2,11 @@ import {
   AppRef,
   collectModules,
   Logger,
-  type InjectionToken,
   type ModuleRef,
   type OnInit,
   type OnShutdown,
   type ResolvedModule,
+  type ScopedResolver,
 } from '@dunx/core';
 import { JobDispatcher } from './dispatcher.js';
 import { selectJobs, type DiscoveredJob } from './discover.js';
@@ -76,7 +76,7 @@ export class QueueRunner implements OnInit, OnShutdown {
 
     const app = this.#ref.current;
     const modules = collectModules(this.#root);
-    const jobs = this.#select(modules, (token) => app.get(token));
+    const jobs = this.#select(modules, app);
     if (jobs === undefined) return;
     const dispatcher = new JobDispatcher(
       jobs,
@@ -122,10 +122,10 @@ export class QueueRunner implements OnInit, OnShutdown {
    */
   #select(
     modules: readonly ResolvedModule[],
-    resolve: (token: InjectionToken<unknown>) => unknown,
+    container: ScopedResolver,
   ): readonly DiscoveredJob[] | undefined {
     try {
-      return selectJobs(modules, resolve, undefined);
+      return selectJobs(modules, container, undefined);
     } catch (error) {
       const softenable =
         this.#options.consume === 'if-any' &&

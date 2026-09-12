@@ -96,6 +96,13 @@ export class EventBus {
     this.#target.addEventListener(
       type,
       (raw: Event) => {
+        // `once` also aborts the controller, so `active` reports what the
+        // listener table holds. `EventTarget`'s own `once` removes the listener
+        // and leaves the controller untouched, which had a spent subscription
+        // reporting `active: true` forever. Aborted before the handler runs, so a
+        // throwing one lands there too; the listener is already executing, so
+        // removal does not affect this delivery.
+        if (options.once === true) controller.abort();
         this.#deliver(
           subscription,
           handler as EventHandler<AppEvent>,

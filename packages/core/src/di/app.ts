@@ -4,6 +4,7 @@ import { Logger } from '../logger/logger.js';
 import { AppError } from './errors.js';
 import { Injector } from './injector.js';
 import {
+  hasOnBeforeInit,
   hasOnBeforeShutdown,
   hasOnInit,
   hasOnShutdown,
@@ -312,6 +313,12 @@ export class AppFactory {
     // Before `onInit`, so `AppRef` is usable there.
     const app = new Application(injector, graph.warnings);
     injector.find(AppRef).attach(app);
+
+    // Its own pass, so discovery-by-marker wiring is in place before the first
+    // `onInit` rather than at whatever point the app's import order put it.
+    for (const instance of injector.instances) {
+      if (hasOnBeforeInit(instance)) await instance.onBeforeInit();
+    }
 
     for (const instance of injector.instances) {
       if (hasOnInit(instance)) await instance.onInit();

@@ -4,10 +4,9 @@ import {
   markedMethodsOn,
   type Ctor,
   type DiscoveredMethod,
-  type InjectionToken,
   type MarkedMethod,
-  type ModuleRef,
   type ResolvedModule,
+  type ScopedResolver,
 } from '@dunx/core';
 import type { Job } from 'bullmq';
 import { QueueError, QueueErrorCode } from './errors.js';
@@ -94,11 +93,11 @@ export const assertNoDuplicateJobs = (
  */
 export const discoverJobs = (
   modules: readonly ResolvedModule[],
-  resolve: (token: InjectionToken<unknown>, from: ModuleRef) => unknown,
+  container: ScopedResolver,
 ): readonly DiscoveredJob[] => {
   const discovered = discoverMarked<JobMeta, JobHandlerFn>(
     modules,
-    resolve,
+    container,
     jobMetaOf,
   ).map(asJob);
 
@@ -122,10 +121,10 @@ export const describeJob = (job: {
  */
 export const selectJobs = (
   modules: readonly ResolvedModule[],
-  resolve: (token: InjectionToken<unknown>, from: ModuleRef) => unknown,
+  container: ScopedResolver,
   wanted: readonly string[] | undefined,
 ): readonly DiscoveredJob[] => {
-  const discovered = discoverJobs(modules, resolve);
+  const discovered = discoverJobs(modules, container);
   const jobs = wanted
     ? discovered.filter((job) => wanted.includes(job.queue))
     : discovered;

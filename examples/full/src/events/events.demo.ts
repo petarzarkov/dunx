@@ -3,6 +3,7 @@ import { Audit } from './audit.service.js';
 import { Notifications, REVIEW_LIMIT } from './notifications.service.js';
 import { OrderPlaced } from './orders.events.js';
 import { Orders } from './orders.service.js';
+import { Startup } from './startup.service.js';
 
 /**
  * What one `emit` does: who it reaches, what it waits for, and what a failing
@@ -16,12 +17,20 @@ export class EventsDemo {
     private readonly orders: Orders,
     private readonly audit: Audit,
     private readonly notifications: Notifications,
+    private readonly startup: Startup,
   ) {}
 
   async demonstrate(): Promise<void> {
     for (const entry of this.registry.list()) {
       this.logger.info(`${entry.event.padEnd(13)} <- ${entry.subscriber}`);
     }
+
+    // EventsModule is imported before EventBusModule, so EventRegistry is built
+    // after everything here. Wiring runs in its own pass before the first onInit.
+    this.logger.info(
+      `emit(AppReady) from onInit reached ${this.startup.reached} subscriber(s), ` +
+        'with EventBusModule imported last',
+    );
 
     const ok = await this.orders.place(120);
     this.logger.info(

@@ -1,12 +1,8 @@
 import { AppEvent } from '@dunx/core';
 
 /**
- * The events this feature publishes. A class per event, so a handler's parameter
- * type is the payload contract and a renamed field is a compile error at every
- * subscriber.
- *
- * `super()` takes no arguments: `AppEvent` reads the dispatch name off
- * `new.target`, so a subclass never states a string anywhere.
+ * A class per event, so a handler's parameter type is the payload contract.
+ * `super()` takes no arguments: the dispatch name comes off `new.target`.
  */
 export class OrderPlaced extends AppEvent {
   constructor(
@@ -17,9 +13,11 @@ export class OrderPlaced extends AppEvent {
   }
 }
 
-/** Published once the audit row exists, so the two are visibly ordered. */
 export class OrderSettled extends AppEvent {
   constructor(readonly id: string) {
     super();
   }
 }
+
+/** Published from a provider's `onInit`. */
+export class AppReady extends AppEvent {}

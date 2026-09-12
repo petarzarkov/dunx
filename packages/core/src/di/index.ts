@@ -32,6 +32,7 @@ export {
   markedMethodsOn,
   type DiscoveredMethod,
   type MarkedMethod,
+  type ScopedResolver,
 } from './marked.js';
 // `teardownError` and `teardownFailures` are exported because every application
 // class runs its own teardown phase - @dunx/http stops a server between two of
@@ -40,6 +41,7 @@ export {
 export {
   teardownError,
   teardownFailures,
+  type OnBeforeInit,
   type OnBeforeShutdown,
   type OnInit,
   type OnShutdown,

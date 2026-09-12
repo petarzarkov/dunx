@@ -1,3 +1,4 @@
+import type { App } from './app.js';
 import {
   readControllers,
   type ModuleRef,
@@ -5,6 +6,18 @@ import {
   type ResolvedModule,
 } from './module.js';
 import type { Ctor, HandlerMethod, InjectionToken } from './token.js';
+
+/**
+ * What discovery needs from the container: resolve a token as a named module
+ * sees it.
+ *
+ * The container itself rather than a `(token) => unknown` callback. A callback is
+ * free to ignore the module it is handed - every `@dunx/infra/queue` call site did,
+ * so the scoped resolution this signature promised was not happening - and a
+ * one-argument lambda is assignable to a two-argument function type, so nothing
+ * caught it. Passing `app` leaves nothing to get wrong.
+ */
+export type ScopedResolver = Pick<App, 'get'>;
 
 /**
  * A method a decorator marked, found by walking a prototype chain.
@@ -133,17 +146,17 @@ export const markedMethodsOn = <M, H extends HandlerMethod = HandlerMethod>(
  * Every marked method the module graph declares, each resolved from the scope
  * that owns it.
  *
- * `resolve` is handed the module the candidate was declared in, so a provider two
- * modules bind differently gives each module's own instance rather than whichever
- * one `app.get()` picks. A class is scanned once, on the first module that
- * declares it.
+ * Each candidate is resolved as the module that declared it would, so a provider
+ * two modules bind differently gives each module's own instance rather than
+ * whichever one a bare `app.get()` picks. A class is scanned once, on the first
+ * module that declares it.
  *
  * `@dunx/infra`'s job and schedule discovery and `@dunx/core`'s `EventRegistry`
  * had written this walk identically; only the marker differs.
  */
 export const discoverMarked = <M, H extends HandlerMethod = HandlerMethod>(
   modules: readonly ResolvedModule[],
-  resolve: (token: InjectionToken<unknown>, from: ModuleRef) => unknown,
+  container: ScopedResolver,
   metaOf: (value: unknown) => M | undefined,
 ): readonly DiscoveredMethod<M, H>[] => {
   const found: DiscoveredMethod<M, H>[] = [];
@@ -160,7 +173,7 @@ export const discoverMarked = <M, H extends HandlerMethod = HandlerMethod>(
     }
     scanned.add(ctor);
     found.push(
-      ...markedMethodsOn<M, H>(resolve(token, from) as object, metaOf),
+      ...markedMethodsOn<M, H>(container.get(token, from) as object, metaOf),
     );
   };
 

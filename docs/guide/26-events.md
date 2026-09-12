@@ -117,8 +117,8 @@ Removal is `addEventListener(..., { signal })`. `unsubscribe()` is idempotent.
 
 ## What is wired
 
-`EventRegistry` subscribes every `@OnEvent` in the graph during `onInit`, then
-lists what it created.
+`EventRegistry` subscribes every `@OnEvent` in the graph during `onBeforeInit`,
+then lists what it created.
 
 ```ts
 registry.list(); // every discovered subscription, in discovery order
@@ -135,8 +135,12 @@ factory provider is not scanned: put handlers on a class provider.
 
 ## Limits
 
-Handlers are wired during `onInit`. An event emitted from a constructor reaches
-nobody.
+Subscriptions are in place before the first `onInit` in the app, whatever order
+the modules were imported in. Emit from `onInit` onwards, from a route, from a
+job, from anywhere the app is running.
+
+A **constructor** runs before any of that, so an event emitted from one reaches
+nobody and `dispatch.handled` is `0`.
 
 The bus is in process and single node. Nothing here survives a restart or
 crosses a replica.
