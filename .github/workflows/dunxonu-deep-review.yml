@@ -50,16 +50,46 @@ jobs:
       id-token: write
       actions: read
     steps:
-      # Tell whoever asked that it started. A deep review takes minutes, and the
-      # alternative is a person typing the trigger twice because nothing
-      # happened.
-      - name: Acknowledge
+      # Resolved before the checkout, not after it.
+      #
+      # `actions/checkout` with `refs/pull/N/head` resolves that ref at the
+      # instant it runs, and asking the API for the head afterwards can return a
+      # commit pushed in between. The workspace would then hold one tree while
+      # the review was posted against another, and post-review.ts would not
+      # catch it: its freshness check compares the head to the sha it was given,
+      # and the newer sha is what it was given. So the sha is pinned first and
+      # the checkout is told exactly which commit to take.
+      - name: Resolve the head commit
+        id: head
         env:
           GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
           NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
         run: |
+          set -euo pipefail
+          sha=$(gh api "repos/${{ github.repository }}/pulls/$NUMBER" --jq .head.sha)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+          echo "reviewing $sha"
+
+      # Tell whoever asked that it started, on the comment they typed it in.
+      #
+      # A deep review takes minutes and the alternative is somebody typing the
+      # trigger again because nothing happened, which is also why the reaction
+      # goes on their comment rather than on the pull request: a reaction on the
+      # top post is not where they are looking. The two comment kinds live under
+      # different paths, and only the event name says which one this is.
+      - name: Acknowledge
+        env:
+          GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          if [ "${{ github.event_name }}" = 'pull_request_review_comment' ]; then
+            path="pulls/comments/$COMMENT_ID"
+          else
+            path="issues/comments/$COMMENT_ID"
+          fi
           gh api --method POST \
-            "repos/${{ github.repository }}/issues/$NUMBER/reactions" \
+            "repos/${{ github.repository }}/$path/reactions" \
             -f content=eyes >/dev/null || true
 
       # Full history, not depth 1. Three of the tools below are `git log`,
@@ -77,17 +107,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: refs/pull/${{ github.event.issue.number || github.event.pull_request.number }}/head
-
-      - name: Resolve the head commit
-        id: head
-        env:
-          GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
-          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
-        run: |
-          sha=$(gh api "repos/${{ github.repository }}/pulls/$NUMBER" --jq .head.sha)
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+          ref: ${{ steps.head.outputs.sha }}
 
       # Pinned to a commit. A tag is mutable and this step is handed two secrets,
       # so retargeting `v1` would run unreviewed code with them.
