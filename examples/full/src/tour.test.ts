@@ -5,13 +5,10 @@ const APP_DIR = new URL('..', import.meta.url).pathname;
 
 /**
  * The tour is the end-to-end check: it boots the same app `bun start` serves,
- * narrates every package and exits 0. Assertions read the structured entries
- * rather than raw stdout - `NODE_ENV=production` selects the plain JSON
- * formatter, so there is no ANSI to strip and a message containing a comma is
- * not broken up by the colouriser.
- *
- * Both streams are collected: `ConsoleTransport` sends warn and above to stderr
- * so a log shipper can separate them, and the degraded-cache line is a warning.
+ * narrates every package and exits 0. Assertions read the structured entries,
+ * `NODE_ENV=production` selecting the plain JSON formatter so there is no ANSI
+ * to strip. Both streams are collected: `ConsoleTransport` sends warn and above
+ * to stderr, and the degraded-cache line is a warning.
  */
 const runTour = async (env: Record<string, string> = {}) => {
   const proc = Bun.spawn(['bun', 'src/tour.ts'], {
