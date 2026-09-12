@@ -496,6 +496,32 @@ it('arms three schedules and triggers two off their cadence', () => {
   );
 });
 
+it('publishes an event and waits out every subscriber', () => {
+  // Five @OnEvent methods, none of them named by the publisher's module.
+  expect(tour.text).toContain('OrderPlaced   <- Audit.record');
+  expect(tour.text).toContain('OrderSettled  <- Notifications.countSettled');
+  expect(tour.text).toContain('emit(OrderPlaced) -> 3 handled, 0 failed');
+  // The async handler's row and the sync handler's waitUntil work both landed
+  // before `await emit(...)` returned, and a handler published in turn.
+  expect(tour.text).toContain(
+    'after await: 1 audit row(s), 1 notification(s), 1 OrderSettled seen',
+  );
+});
+
+it('contains a throwing subscriber and keeps the rest running', () => {
+  expect(tour.text).toContain(
+    'Notifications.flagForReview threw, and the dispatch carried it: ' +
+      'Error: order-2 is over the 1000 review limit',
+  );
+  expect(tour.text).toContain(
+    'the other subscribers still ran -> 2 handled, 2 audit rows in total',
+  );
+  expect(tour.text).toContain('on() saw 1, then unsubscribe() -> active=false');
+  expect(tour.text).toContain(
+    '@OnEvent({ once: true }) fired 1 time(s) across 4 settlements',
+  );
+});
+
 it('serves HTTP and WebSocket from one Bun.serve', () => {
   expect(tour.text).toContain('gateway paths: ["/chat","/telemetry"]');
   expect(tour.text).toContain('two clients connected: welcome / welcome');

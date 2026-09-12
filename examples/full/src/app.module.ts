@@ -19,6 +19,7 @@ import { OpsModule } from './dashboard/dashboard.module.js';
 import { StatsModule } from './stats/stats.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { DocsModule } from './docs/docs.module.js';
+import { EventsModule } from './events/events.module.js';
 import { GuardsModule } from './guards/guards.module.js';
 import { AssetsModule } from './assets/assets.module.js';
 import { LandingModule } from './landing/landing.module.js';
@@ -109,6 +110,7 @@ const fileAndConsole = (
     AccountsModule,
     ProbesModule,
     WiringModule,
+    EventsModule,
     DocsModule,
     // After JobsModule and CacheModule, which bind what it reads and probes.
     OpsModule,

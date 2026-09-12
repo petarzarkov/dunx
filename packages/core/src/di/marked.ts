@@ -1,5 +1,10 @@
-import type { ProviderEntry } from './module.js';
-import type { Ctor, InjectionToken } from './token.js';
+import {
+  readControllers,
+  type ModuleRef,
+  type ProviderEntry,
+  type ResolvedModule,
+} from './module.js';
+import type { Ctor, HandlerMethod, InjectionToken } from './token.js';
 
 /**
  * A method a decorator marked, found by walking a prototype chain.
@@ -84,3 +89,90 @@ export const inertInstance = (ctor: Ctor<unknown>): object =>
   Object.create(
     (ctor as unknown as { readonly prototype: object }).prototype,
   ) as object;
+
+/**
+ * A marked method read off a constructed provider, bound to it.
+ *
+ * `H` is the signature the marker's own decorator enforces at the declaration
+ * site, so a caller states it once here rather than casting every `handler`.
+ */
+export interface DiscoveredMethod<M, H extends HandlerMethod = HandlerMethod> {
+  /** The declaring class's name, for error messages and boot logs. */
+  readonly provider: string;
+  readonly method: string;
+  readonly meta: M;
+  /** Already bound to its instance. */
+  readonly handler: H;
+}
+
+/**
+ * Every marked method on an instance's prototype chain, bound to that instance.
+ * Most-derived wins on a repeated name; dispatch still lands on an override,
+ * since the member is read off the instance rather than off the prototype the
+ * marker was found on.
+ */
+export const markedMethodsOn = <M, H extends HandlerMethod = HandlerMethod>(
+  instance: object,
+  metaOf: (value: unknown) => M | undefined,
+): readonly DiscoveredMethod<M, H>[] => {
+  const provider = instance.constructor.name;
+  const members = instance as Record<string, HandlerMethod>;
+
+  return markedMethods(
+    Object.getPrototypeOf(instance) as object | null,
+    metaOf,
+  ).map(({ name, meta }) => ({
+    provider,
+    method: name,
+    meta,
+    handler: members[name]!.bind(instance) as H,
+  }));
+};
+
+/**
+ * Every marked method the module graph declares, each resolved from the scope
+ * that owns it.
+ *
+ * `resolve` is handed the module the candidate was declared in, so a provider two
+ * modules bind differently gives each module's own instance rather than whichever
+ * one `app.get()` picks. A class is scanned once, on the first module that
+ * declares it.
+ *
+ * `@dunx/infra`'s job and schedule discovery and `@dunx/core`'s `EventRegistry`
+ * had written this walk identically; only the marker differs.
+ */
+export const discoverMarked = <M, H extends HandlerMethod = HandlerMethod>(
+  modules: readonly ResolvedModule[],
+  resolve: (token: InjectionToken<unknown>, from: ModuleRef) => unknown,
+  metaOf: (value: unknown) => M | undefined,
+): readonly DiscoveredMethod<M, H>[] => {
+  const found: DiscoveredMethod<M, H>[] = [];
+  const scanned = new Set<Ctor<unknown>>();
+
+  const scan = (
+    token: InjectionToken<unknown>,
+    ctor: Ctor<unknown>,
+    from: ModuleRef,
+  ): void => {
+    if (scanned.has(ctor)) return;
+    if (markedMethods(ctor.prototype as object | null, metaOf).length === 0) {
+      return;
+    }
+    scanned.add(ctor);
+    found.push(
+      ...markedMethodsOn<M, H>(resolve(token, from) as object, metaOf),
+    );
+  };
+
+  for (const module of modules) {
+    for (const entry of module.options.providers ?? []) {
+      const candidate = classOf(entry);
+      if (candidate) scan(candidate.token, candidate.ctor, module.ref);
+    }
+    for (const controller of readControllers(module)) {
+      scan(controller, controller, module.ref);
+    }
+  }
+
+  return found;
+};

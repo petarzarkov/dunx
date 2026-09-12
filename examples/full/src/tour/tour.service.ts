@@ -12,6 +12,7 @@ import { DashboardDemo } from '../dashboard/dashboard.demo.js';
 import { StatsDemo } from '../stats/stats.demo.js';
 import { Ledger } from '../database/ledger.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
+import { EventsDemo } from '../events/events.demo.js';
 import { AssetsDemo } from '../assets/assets.demo.js';
 import { GuardsDemo } from '../guards/guards.demo.js';
 import { HealthDemo } from '../health/health.demo.js';
@@ -55,6 +56,7 @@ export class Tour {
     private readonly auth: AuthDemo,
     private readonly docs: DocsDemo,
     private readonly wiring: WiringDemo,
+    private readonly events: EventsDemo,
     private readonly dashboard: DashboardDemo,
     private readonly stats: StatsDemo,
   ) {}
@@ -124,6 +126,9 @@ export class Tour {
 
     this.group('@dunx/infra/schedule - @Cron, @Interval and @OnceOnBoot');
     await this.schedule.demonstrate();
+
+    this.group('@dunx/core - EventBus, @OnEvent and one dispatch');
+    await this.events.demonstrate();
 
     this.group('@dunx/auth - better-auth mounted, SessionGuard, AuthContext');
     await this.auth.demonstrate(url);

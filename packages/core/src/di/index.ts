@@ -26,8 +26,11 @@ export { inject } from './inject.js';
 // stop landing in one of them.
 export {
   classOf,
+  discoverMarked,
   inertInstance,
   markedMethods,
+  markedMethodsOn,
+  type DiscoveredMethod,
   type MarkedMethod,
 } from './marked.js';
 // `teardownError` and `teardownFailures` are exported because every application
