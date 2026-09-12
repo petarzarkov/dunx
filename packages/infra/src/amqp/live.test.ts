@@ -11,11 +11,15 @@ import { AmqpConnection } from './connection.js';
 import { AmqpHandler } from './decorators.js';
 import { AmqpModule } from './module.js';
 import type { AmqpMessage } from './message.js';
-import { defaultAmqpUrl } from './options.js';
+import { AmqpOptions, defaultAmqpUrl } from './options.js';
 import { AmqpPublisher } from './publisher.js';
 import { AmqpRunner } from './runner.js';
 
 const url = defaultAmqpUrl();
+/** Whether a broker was named rather than defaulted to. */
+const configured =
+  process.env['RABBITMQ_URL'] !== undefined ||
+  process.env['AMQP_URL'] !== undefined;
 
 /**
  * The same shape the queue and redis suites use: CI has no broker for the `unit`
@@ -37,8 +41,23 @@ const reachable = async (): Promise<boolean> => {
 };
 
 const live = await reachable();
+/**
+ * **A named broker that does not answer is a failure, not a skip.** The coverage
+ * job declares a RabbitMQ service so these run, and a silent skip there would
+ * leave the gate measuring a smaller denominator than the machine that set it -
+ * the failure the `services:` comment in ci.yml describes for valkey and
+ * postgres. Only the implicit local default is allowed to skip.
+ */
+if (!live && configured) {
+  throw new Error(
+    `A broker was configured but ${new AmqpOptions({ url }).redactedUrl} did ` +
+      'not answer. Unset $RABBITMQ_URL and $AMQP_URL to run without one.',
+  );
+}
 if (!live) {
-  console.log(`[dunx] amqp integration tests skipped - ${url} unreachable`);
+  console.log(
+    `[dunx] amqp integration tests skipped - ${new AmqpOptions({ url }).redactedUrl} unreachable`,
+  );
 }
 
 // A fresh namespace per run, so a leftover message can never make a test pass.

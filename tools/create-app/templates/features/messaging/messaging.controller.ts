@@ -54,6 +54,25 @@ export class MessagingController {
     return { id: body.id, exchange: ORDERS_EXCHANGE, routingKey };
   }
 
+  /**
+   * Publishes whatever it is given, so the suite can show a malformed body being
+   * dropped rather than redelivered forever. Not a shape any real producer sends.
+   */
+  @Post('/raw', { body: z.record(z.string(), z.unknown()) })
+  async raw({
+    body,
+  }: Input<{ body: z.ZodType<Record<string, unknown>> }>): Promise<{
+    published: boolean;
+  }> {
+    await this.degrades(() =>
+      this.publisher.publish(
+        { exchange: ORDERS_EXCHANGE, routingKey: PLACED_KEY },
+        body,
+      ),
+    );
+    return { published: true };
+  }
+
   /** What the consumers in this same container received, newest last. */
   @Get('/orders')
   handled(): { connected: boolean; handled: readonly Handled[] } {

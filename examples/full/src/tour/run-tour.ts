@@ -1,4 +1,8 @@
-const APP_DIR = new URL('../..', import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+
+// `fileURLToPath`, not `.pathname`: a checkout path with a space keeps its `%20`
+// there, and `Bun.spawn` takes `cwd` as a literal path.
+const APP_DIR = fileURLToPath(new URL('../..', import.meta.url));
 
 export interface TourRun {
   readonly code: number;

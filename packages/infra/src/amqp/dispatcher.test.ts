@@ -215,6 +215,15 @@ describe('the trace a delivery runs in', () => {
     expect(seen?.parentSpanId).toBeUndefined();
   });
 
+  /** `tracestate` belongs to the `traceparent` it arrived with: keeping it would
+   * attach one trace's vendor state to another's ids. */
+  it('drops tracestate with the traceparent it arrived with', async () => {
+    const seen = await traceOf({
+      headers: { traceparent: 'nonsense', tracestate: 'vendor=1' },
+    });
+    expect(seen?.traceState).toBeUndefined();
+  });
+
   it('names the queue and the handler, which is what a log pipeline groups on', async () => {
     const seen = await traceOf({});
     expect(seen?.flow).toBe('amqp');

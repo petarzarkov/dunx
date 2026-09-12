@@ -1,5 +1,7 @@
 import { Logger, RequestContext } from '@dunx/core';
 import { AmqpHandler, type AmqpMessage } from '@dunx/infra/amqp';
+import { ConsumerStatus } from 'rabbitmq-client';
+import { z } from 'zod';
 
 /** The exchange this app owns, and the two queues bound to it. */
 export const ORDERS_EXCHANGE = 'dunx-full.orders';
@@ -9,10 +11,17 @@ export const SHIPPED_QUEUE = 'dunx-full.orders.shipped';
 export const PLACED_KEY = 'order.placed';
 export const SHIPPED_KEY = 'order.shipped';
 
-export interface OrderPlaced {
-  readonly id: string;
-  readonly total: number;
-}
+/**
+ * `AmqpMessage<T>` is a compile-time shape. Nothing validates what the broker
+ * actually delivered, and a body from an older producer - or from anything else
+ * that can reach the exchange - arrives as whatever it is.
+ */
+const OrderPlaced = z.object({
+  id: z.string().min(1),
+  total: z.number(),
+});
+
+export type OrderPlaced = z.infer<typeof OrderPlaced>;
 
 export interface Handled {
   readonly id: string;
@@ -48,11 +57,17 @@ export class OrdersMessages {
     exchange: ORDERS_EXCHANGE,
     routingKey: PLACED_KEY,
   })
-  async onPlaced(message: AmqpMessage<OrderPlaced>): Promise<void> {
-    this.record(PLACED_QUEUE, message.body.id);
-    this.logger.info(
-      `order ${message.body.id} placed for ${message.body.total}`,
-    );
+  async onPlaced(
+    message: AmqpMessage<unknown>,
+  ): Promise<ConsumerStatus | void> {
+    const order = this.parse(message.body);
+    // A body that can never parse is dropped rather than thrown: this queue
+    // takes the default `requeue: true`, so throwing would redeliver it forever.
+    // A throw is still the right answer for a failure that might succeed later.
+    if (order === undefined) return ConsumerStatus.DROP;
+
+    this.record(PLACED_QUEUE, order.id);
+    this.logger.info(`order ${order.id} placed for ${order.total}`);
   }
 
   /**
@@ -66,9 +81,24 @@ export class OrdersMessages {
     routingKey: SHIPPED_KEY,
     consumer: { concurrency: 2, requeue: false },
   })
-  async onShipped(message: AmqpMessage<OrderPlaced>): Promise<void> {
-    this.record(SHIPPED_QUEUE, message.body.id);
-    this.logger.info(`order ${message.body.id} shipped`);
+  async onShipped(
+    message: AmqpMessage<unknown>,
+  ): Promise<ConsumerStatus | void> {
+    const order = this.parse(message.body);
+    if (order === undefined) return ConsumerStatus.DROP;
+
+    this.record(SHIPPED_QUEUE, order.id);
+    this.logger.info(`order ${order.id} shipped`);
+  }
+
+  /** The body, or nothing when it is not an order. */
+  private parse(body: unknown): OrderPlaced | undefined {
+    const parsed = OrderPlaced.safeParse(body);
+    if (parsed.success) return parsed.data;
+    this.logger.warn(
+      `dropping a delivery that is not an order: ${parsed.error.message}`,
+    );
+    return undefined;
   }
 
   private record(queue: string, id: string): void {

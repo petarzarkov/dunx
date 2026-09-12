@@ -9,9 +9,12 @@ Where Bun ships the primitive, the primitive is what runs: `Bun.SQL`,
 `Bun.Image`, `Bun.cron`. No `pg`, no `better-sqlite3`, no `ioredis`, no
 `@aws-sdk`, no `glob`, no `sharp`.
 
-Four areas integrate a mature library rather than hand-rolling one. `drizzle-orm`,
-`bullmq` and `rabbitmq-client` are **optional peer dependencies**, so an app using
-only `/files` installs none of them. The first two drive a Bun API underneath;
+Four areas integrate a mature library rather than hand-rolling one: `/db` over
+`drizzle-orm`, `/queue` over `bullmq`, `/amqp` over `rabbitmq-client` and
+`/logger` over `@arkv/logger`.
+
+The first three are **optional peer dependencies**, so an app using only `/files`
+installs none of them. `@arkv/logger` is first-party and a plain dependency. The first two drive a Bun API underneath;
 `rabbitmq-client` speaks a wire protocol Bun ships no client for, over `node:net`,
 which Bun implements natively.
 

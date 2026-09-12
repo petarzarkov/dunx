@@ -51,9 +51,17 @@ const bindings = (): readonly Registration[] => [
       root: ModuleRef,
       options: AmqpOptions,
       logger: Logger,
+      connection: AmqpConnection,
       _publisher: AmqpPublisher,
-    ) => new AmqpRunner(ref, root, options, logger),
-    inject: [AppRef, ROOT_MODULE, AmqpOptions, Logger, AmqpPublisher] as const,
+    ) => new AmqpRunner(ref, root, options, logger, connection),
+    inject: [
+      AppRef,
+      ROOT_MODULE,
+      AmqpOptions,
+      Logger,
+      AmqpConnection,
+      AmqpPublisher,
+    ] as const,
   }),
 ];
 

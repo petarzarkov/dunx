@@ -13,6 +13,7 @@ import {
   type DiscoveredSubscription,
 } from './discover.js';
 import { AmqpError, AmqpErrorCode } from './errors.js';
+import { AmqpConnection } from './connection.js';
 import { AmqpOptions } from './options.js';
 import { AmqpSubscriber } from './subscriber.js';
 
@@ -30,6 +31,7 @@ export class AmqpRunner implements OnInit, OnShutdown {
   readonly #root: ModuleRef;
   readonly #options: AmqpOptions;
   readonly #logger: Logger;
+  readonly #connection: AmqpConnection;
   #subscriber: AmqpSubscriber | undefined;
 
   constructor(
@@ -37,11 +39,13 @@ export class AmqpRunner implements OnInit, OnShutdown {
     root: ModuleRef,
     options: AmqpOptions,
     logger: Logger,
+    connection: AmqpConnection,
   ) {
     this.#ref = ref;
     this.#root = root;
     this.#options = options;
     this.#logger = logger;
+    this.#connection = connection;
   }
 
   /** The subscriber, once started. Absent until `onInit` has run. */
@@ -60,7 +64,15 @@ export class AmqpRunner implements OnInit, OnShutdown {
     if (subscriptions === undefined) return;
 
     this.#subscriber = new AmqpSubscriber(app, subscriptions);
-    await this.#subscriber.start();
+    try {
+      await this.#subscriber.start();
+    } catch (error) {
+      // `AppFactory.create` does not tear down what it built when an `onInit`
+      // throws, so the caller never gets an `App` to shut down. The socket this
+      // opened would keep its retry timers alive and the process would not exit.
+      await this.#connection.onShutdown();
+      throw error;
+    }
   }
 
   /**

@@ -97,14 +97,17 @@ export class AmqpDispatcher {
       event: found.queue,
       context: `${found.provider}.${found.method}`,
       spanId: mintSpanId(),
+      // `tracestate` belongs to the `traceparent` it arrived with, so a
+      // malformed header drops both: keeping the vendor state would attach one
+      // trace's to another's ids.
       ...(inbound === undefined
         ? { traceId: mintTraceId(), traceFlags: DEFAULT_TRACE_FLAGS }
         : {
             traceId: inbound.traceId,
             parentSpanId: inbound.spanId,
             traceFlags: inbound.flags,
+            ...(typeof state === 'string' ? { traceState: state } : {}),
           }),
-      ...(typeof state === 'string' ? { traceState: state } : {}),
     };
   }
 

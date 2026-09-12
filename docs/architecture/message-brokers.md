@@ -81,7 +81,7 @@ have sent.
 channel, so against a broker that has gone away it waits `acquireTimeout` with
 nothing in flight to drain:
 
-```
+```text
 $ bun close.probe.ts          # amqp://127.0.0.1:1, nothing listening
 [20004ms] consumer.close() resolved after 19701ms
 [20004ms] connection.close() resolved after 0ms
@@ -118,7 +118,7 @@ exit 0 at 67 ms.
 
 `PushConsumer` does not work on either:
 
-```
+```text
 $ node push.probe.mjs                    $ bun push.probe.ts
 [36ms]    push consumer started          [41ms]    push consumer started
 [49ms]    produced 1                     [56ms]    produced 1

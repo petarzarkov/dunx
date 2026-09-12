@@ -131,6 +131,25 @@ it('continues the publisher trace in the handler', async () => {
   expect(seen.handled.find((entry) => entry.id === id)?.traceId).toBe(traceId);
 });
 
+/**
+ * `requeue: true` on the placed queue would redeliver a body that can never parse
+ * forever, so a malformed one is dropped rather than thrown.
+ */
+it('drops a delivery that is not an order', async () => {
+  if (!brokerUp) return;
+  const before = (await inbox()).handled.length;
+
+  const response = await fetch(api('messaging/raw'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ nonsense: true }),
+  });
+  expect(response.status).toBe(201);
+
+  await Bun.sleep(1_000);
+  expect((await inbox()).handled).toHaveLength(before);
+});
+
 it('answers 503 with no broker rather than hanging', async () => {
   if (brokerUp) return;
   const { status } = await place('degraded');

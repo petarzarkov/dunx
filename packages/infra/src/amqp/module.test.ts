@@ -141,13 +141,15 @@ describe('consume', () => {
     })
     class Root {}
 
-    const booted = await AppFactory.create(Root);
-    expect(booted.get(AmqpRunner).subscriber?.queues).toEqual(['orders']);
+    // Assigned before the first assertion: a failure here would otherwise leave
+    // `afterEach` with nothing to shut down, and the subscriber retrying.
+    app = await AppFactory.create(Root);
+    expect(app.get(AmqpRunner).subscriber?.queues).toEqual(['orders']);
 
     // Reverse construction order: the runner is built after the connection, so
     // it drains first and the socket closes under nothing.
-    await booted.shutdown();
-    expect(booted.get(AmqpConnection).opened).toBe(false);
+    await app.shutdown();
+    expect(app.get(AmqpConnection).opened).toBe(false);
   });
 
   /** A migration whose broker wiring lands before its first `@AmqpHandler`. */
