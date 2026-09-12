@@ -12,6 +12,7 @@ export class EventSubscription {
   /** `Audit.record` for a discovered handler, the function's name otherwise. */
   readonly subscriber: string;
   readonly #controller: AbortController;
+  readonly #signal: AbortSignal;
   #handled = 0;
   #failed = 0;
   #lastError: unknown;
@@ -21,11 +22,13 @@ export class EventSubscription {
     type: string,
     subscriber: string,
     controller: AbortController,
+    signal: AbortSignal,
   ) {
     this.event = event;
     this.type = type;
     this.subscriber = subscriber;
     this.#controller = controller;
+    this.#signal = signal;
   }
 
   /** Deliveries that returned, or whose returned promise resolved. */
@@ -43,7 +46,11 @@ export class EventSubscription {
   }
 
   get active(): boolean {
-    return !this.#controller.signal.aborted;
+    // The effective signal, not the controller's: `on` combines the caller's
+    // `options.signal` with it, so a caller aborting their own ends the listener
+    // while the controller stays untouched. Reading the controller reported a
+    // dereferenced subscription as live.
+    return !this.#signal.aborted;
   }
 
   /** Removes the listener. Idempotent, and a later `emit` skips it. */

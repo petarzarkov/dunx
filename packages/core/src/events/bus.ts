@@ -82,26 +82,26 @@ export class EventBus {
   ): EventSubscription {
     const controller = new AbortController();
     const type = eventName(event);
+    const signal =
+      options.signal === undefined
+        ? controller.signal
+        : AbortSignal.any([controller.signal, options.signal]);
     const subscription = new EventSubscription(
       event.name,
       type,
       options.as ?? (handler.name === '' ? 'anonymous' : handler.name),
       controller,
+      signal,
     );
-    const signal =
-      options.signal === undefined
-        ? controller.signal
-        : AbortSignal.any([controller.signal, options.signal]);
 
     this.#target.addEventListener(
       type,
       (raw: Event) => {
-        // `once` also aborts the controller, so `active` reports what the
-        // listener table holds. `EventTarget`'s own `once` removes the listener
-        // and leaves the controller untouched, which had a spent subscription
-        // reporting `active: true` forever. Aborted before the handler runs, so a
-        // throwing one lands there too; the listener is already executing, so
-        // removal does not affect this delivery.
+        // Aborting is the whole removal, rather than `EventTarget`'s own `once`
+        // alongside it: two mechanisms for one job, and its own leaves the
+        // controller untouched so a spent subscription reported `active: true`.
+        // Aborted before the handler runs, so a throwing one lands there too;
+        // the listener is already executing, so this delivery still completes.
         if (options.once === true) controller.abort();
         this.#deliver(
           subscription,
@@ -109,7 +109,7 @@ export class EventBus {
           raw as AppEvent,
         );
       },
-      { signal, once: options.once === true },
+      { signal },
     );
 
     return subscription;
@@ -133,13 +133,17 @@ export class EventBus {
     const collected = dispatching();
     const previous = this.#current;
     this.#current = collected;
+    // Where this dispatch's `waitUntil` work starts. `pending` lives on the event
+    // instance, so re-emitting one would otherwise re-read every promise an
+    // earlier dispatch settled and report its failures a second time.
+    const from = event.pending.length;
     try {
       this.#target.dispatchEvent(event);
     } finally {
       this.#current = previous;
     }
 
-    await this.#settle(event, collected);
+    await this.#settle(event, collected, from);
 
     for (const { subscriber, error } of collected.failures) {
       this.#logger.error(`${subscriber} failed handling ${label}`, error);
@@ -152,9 +156,13 @@ export class EventBus {
    * `waitUntil`, looping while either list is still growing - a handler may await
    * one thing and then register another.
    */
-  async #settle(event: AppEvent, collected: Dispatching): Promise<void> {
+  async #settle(
+    event: AppEvent,
+    collected: Dispatching,
+    from = 0,
+  ): Promise<void> {
     let handlers = 0;
-    let waited = 0;
+    let waited = from;
 
     for (;;) {
       const round: Promise<unknown>[] = [];
@@ -189,14 +197,20 @@ export class EventBus {
       return;
     }
 
-    if (!(returned instanceof Promise)) {
+    // Thenable, not `instanceof Promise`: that misses a promise from another
+    // realm and any promise-like a library returns, and treating one as a
+    // synchronous return resolves `emit` before the handler has finished, which
+    // is the exact footgun auto-collecting the return value exists to remove.
+    if (
+      typeof (returned as PromiseLike<unknown> | undefined)?.then !== 'function'
+    ) {
       subscription.settle();
       collected.handled += 1;
       return;
     }
 
     collected.work.push(
-      returned.then(
+      Promise.resolve(returned).then(
         () => {
           subscription.settle();
           collected.handled += 1;

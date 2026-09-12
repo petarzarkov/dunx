@@ -320,8 +320,63 @@ describe('EventSubscription', () => {
     await eventBus.emit(new Placed('b'));
 
     expect(calls).toBe(1);
-    // The subscription's own controller never aborted; the listener is gone all
-    // the same, which is what `AbortSignal.any` buys.
-    expect(subscription.active).toBe(true);
+    // The subscription's own controller never aborted, but the listener is gone,
+    // so `active` has to read the combined signal rather than the controller.
+    expect(subscription.active).toBe(false);
+  });
+});
+
+describe('awaiting a handler', () => {
+  it('waits for a thenable, not only a native promise', async () => {
+    const { bus: eventBus } = bus();
+    let finished = false;
+
+    eventBus.on(Placed, () => ({
+      // A promise-like, which a library may hand back and which an
+      // `instanceof Promise` check treats as a synchronous return. Deliberately
+      // thenable: that is the shape under test.
+      // eslint-disable-next-line unicorn/no-thenable
+      then(resolve: (value: unknown) => void) {
+        queueMicrotask(() => {
+          finished = true;
+          resolve(undefined);
+        });
+      },
+    }));
+
+    const dispatch = await eventBus.emit(new Placed('a'));
+
+    expect(finished).toBe(true);
+    expect(dispatch.handled).toBe(1);
+  });
+
+  it('counts a rejected thenable as a failure', async () => {
+    const { bus: eventBus } = bus();
+    eventBus.on(Placed, () => Promise.reject(new Error('nope')), {
+      as: 'rejects',
+    });
+
+    const dispatch = await eventBus.emit(new Placed('a'));
+
+    expect(dispatch.failures).toHaveLength(1);
+    expect(dispatch.ok).toBe(false);
+  });
+});
+
+describe('re-emitting one event instance', () => {
+  it('does not replay an earlier dispatch waitUntil work', async () => {
+    const { bus: eventBus } = bus();
+    eventBus.on(Placed, (event) => {
+      event.waitUntil(Promise.reject(new Error('first only')));
+    });
+
+    const event = new Placed('a');
+    const first = await eventBus.emit(event);
+    const second = await eventBus.emit(event);
+
+    // `pending` lives on the instance, so an unscoped settle re-read the first
+    // dispatch's rejection and reported it again.
+    expect(first.failures).toHaveLength(1);
+    expect(second.failures).toHaveLength(1);
   });
 });

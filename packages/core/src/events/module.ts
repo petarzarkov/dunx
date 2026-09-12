@@ -1,3 +1,5 @@
+import { AppRef } from '../di/app.js';
+import type { ModuleRef } from '../di/module.js';
 import { Module } from '../di/module.js';
 import { provide } from '../di/provider.js';
 import { Logger } from '../logger/logger.js';
@@ -29,10 +31,14 @@ import { EventRegistry, EVENT_REGISTRY_DEPS } from './registry.js';
     }),
     // Bound so the container constructs it, which is what gets `onInit` called.
     provide(EventRegistry, {
-      useFactory: (...deps: readonly unknown[]) =>
-        new EventRegistry(
-          ...(deps as ConstructorParameters<typeof EventRegistry>),
-        ),
+      // Typed rather than spread through a cast, like `EventBus` above: a change
+      // to the constructor is a compile error here instead of a runtime surprise.
+      useFactory: (
+        ref: AppRef,
+        root: ModuleRef,
+        bus: EventBus,
+        logger: Logger,
+      ) => new EventRegistry(ref, root, bus, logger),
       inject: EVENT_REGISTRY_DEPS,
     }),
   ],

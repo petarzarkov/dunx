@@ -91,13 +91,20 @@ it('carries a throwing subscriber without failing the others', async () => {
 
 it('counts deliveries on the subscription EventRegistry listed', async () => {
   const registry = server.app.get(EventRegistry);
-  const [flagged] = registry
-    .subscribersOf(OrderPlaced)
-    .filter((entry) => entry.subscriber === 'Notifications.flagForReview');
+  const flagged = () =>
+    registry
+      .subscribersOf(OrderPlaced)
+      .find((entry) => entry.subscriber === 'Notifications.flagForReview');
 
-  expect(flagged?.failed).toBe(1);
-  expect(flagged?.handled).toBeGreaterThan(0);
-  expect(String(flagged?.lastError)).toContain('review limit');
+  // Its own orders and its own baseline, so the file can run one test alone.
+  const handledBefore = flagged()?.handled ?? 0;
+  const failedBefore = flagged()?.failed ?? 0;
+  await place(12);
+  await place(REVIEW_LIMIT + 1);
+
+  expect(flagged()?.handled).toBe(handledBefore + 1);
+  expect(flagged()?.failed).toBe(failedBefore + 1);
+  expect(String(flagged()?.lastError)).toContain('review limit');
 });
 
 it('takes an imperative subscription and drops it on unsubscribe', async () => {
