@@ -60,8 +60,8 @@ const handleApi = async (
           : await redisReport(deps.options.redis, deps.options.probeTimeoutMs),
       );
     case 'stats': {
-      // Both sources are optional and independent: an app may time requests and
-      // not queries, or the other way round. `configured: false` is what the
+      // Each source is optional and independent: an app may time requests and
+      // not queries, or the cache and neither. `configured: false` is what the
       // page reads to decide whether to draw the panel at all.
       const report: StatsReport = {
         http:
@@ -72,6 +72,10 @@ const handleApi = async (
           deps.options.dbStats === undefined
             ? { configured: false }
             : { ...deps.options.dbStats.snapshot(), configured: true },
+        cache:
+          deps.options.cacheStats === undefined
+            ? { configured: false }
+            : { ...deps.options.cacheStats.snapshot(), configured: true },
       };
       return json(report);
     }

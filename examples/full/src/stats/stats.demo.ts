@@ -1,5 +1,6 @@
 import { EventLoopLag, Logger } from '@dunx/core';
 import { RequestMetrics } from '@dunx/http';
+import { CacheMetrics } from '@dunx/infra/cache';
 import { QueryMetrics } from '@dunx/infra/db';
 import { QueueMetrics } from '@dunx/infra/queue';
 import { RedisMetrics } from '@dunx/infra/redis';
@@ -10,6 +11,7 @@ export class StatsDemo {
     private readonly logger: Logger,
     private readonly requests: RequestMetrics,
     private readonly queries: QueryMetrics,
+    private readonly cache: CacheMetrics,
     private readonly commands: RedisMetrics,
     private readonly jobs: QueueMetrics,
     private readonly lag: EventLoopLag,
@@ -63,6 +65,22 @@ export class StatsDemo {
           `${operation.errors} failed, p99 ${ms(operation.duration.p99)}`,
       );
     }
+
+    const cache = this.cache.snapshot();
+    this.logger.info(
+      `cache: ${cache.hits} hits, ${cache.misses} misses, ` +
+        `hit rate ${(cache.hitRate * 100).toFixed(1)}% over ${cache.total} operations`,
+    );
+    for (const operation of cache.operations) {
+      this.logger.info(
+        `${operation.operation}: ${operation.count} calls, ` +
+          `${operation.errors} failed, p99 ${ms(operation.duration.p99)}`,
+      );
+    }
+    this.logger.info(
+      'recorded at the CacheStore seam, so a tiered L2 hit promoted into L1 is ' +
+        'one get and one hit - and the key is never kept',
+    );
 
     const redis = this.commands.snapshot();
     this.logger.info(

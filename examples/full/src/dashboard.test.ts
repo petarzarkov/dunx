@@ -84,16 +84,33 @@ it('redacts every config value outside the reveal list', async () => {
   expect(text).toContain('dunx-full');
 });
 
-it('reports http and db statistics, both configured', async () => {
+it('reports http, db and cache statistics, all three configured', async () => {
   const { status, body } = await client.json<{
     http: { configured: boolean };
     db: { configured: boolean };
+    cache: { configured: boolean; hits: number; misses: number };
   }>(`${MOUNT}/api/stats`);
 
   expect(status).toBe(200);
-  // `metrics: true` on `HttpFactory.create` and on `DbModule` is what fills these.
+  // `metrics: true` on `HttpFactory.create`, on `DbModule` and on the cache layer
+  // is what fills these.
   expect(body.http.configured).toBe(true);
   expect(body.db.configured).toBe(true);
+  expect(body.cache.configured).toBe(true);
+});
+
+it('counts the cache read a route made', async () => {
+  // `/api/catalog/:symbol` is `Cache.wrap`, and the miss and the write behind it
+  // are the store's - so this asserts the seam, not just the shape.
+  await client.request('api/catalog/acme');
+  await client.request('api/catalog/acme');
+  const { body } = await client.json<{
+    cache: { hits: number; misses: number; hitRate: number };
+  }>(`${MOUNT}/api/stats`);
+
+  expect(body.cache.misses).toBeGreaterThan(0);
+  expect(body.cache.hits).toBeGreaterThan(0);
+  expect(body.cache.hitRate).toBeGreaterThan(0);
 });
 
 it('reports the runtime', async () => {

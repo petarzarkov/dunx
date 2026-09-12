@@ -8,6 +8,8 @@ import type {
 } from '../../../packages/dashboard/src/api/types';
 
 export type {
+  CacheOperationStats,
+  CacheStatsReport,
   ConfigEntry,
   GatewayNode,
   Meta,

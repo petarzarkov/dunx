@@ -30,7 +30,7 @@ The guide is canonical for every row; this table is the index.
 | ------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------- |
 | `@dunx/infra/db`         | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds, query timings | [Database](../../docs/guide/14-database.md)                 |
 | `@dunx/infra/redis`      | `Bun.RedisClient`, named connections, pub/sub                     | [Database](../../docs/guide/14-database.md)                 |
-| `@dunx/infra/cache`      | `Cache` over a memory, Redis or two-tier `CacheStore`             | [Caching](../../docs/guide/19-caching.md)                   |
+| `@dunx/infra/cache`      | `Cache` over a memory, Redis or two-tier `CacheStore`, `CacheMetrics` | [Caching](../../docs/guide/19-caching.md)                   |
 | `@dunx/infra/queue`      | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker    | [Queues](../../docs/guide/15-queues.md)                     |
 | `@dunx/infra/schedule`   | `Bun.cron` and timers: `@Cron`, `@Interval`, `@OnceOnBoot`        | [Scheduling](../../docs/guide/16-scheduling.md)             |
 | `@dunx/infra/files`      | One `Storage` contract over `Bun.file` and `Bun.S3Client`         | [Files and images](../../docs/guide/18-files-and-images.md) |
@@ -79,13 +79,16 @@ static import, so exporting them would make `drizzle-orm` and `ioredis` hard
 requirements of `import '@dunx/infra'`. Reach them at their subpaths.
 
 **Timing is off unless asked for.** `{ metrics: true }` is the last argument to
-`DbModule`, `RedisModule` and `QueueModule`, binding a `QueryMetrics`,
-`RedisMetrics` or `QueueMetrics`.
+`DbModule`, `CacheModule`, `RedisModule` and `QueueModule`, binding a
+`QueryMetrics`, `CacheMetrics`, `RedisMetrics` or `QueueMetrics`.
 
 `/db` wraps the driver dunx constructs, since drizzle's `logger` option cannot
-supply a duration. `/redis` times the one seam every command goes through.
-`/queue` times `publish()` plus the handlers this container ran, which excludes a
-forked `background` one. See [Metrics](../../docs/guide/23-metrics.md).
+supply a duration. `/cache` wraps the configured `CacheStore`, so hits and misses
+cover a directly injected store and count one read per coalesced `wrap`.
+
+`/redis` times the one seam every command goes through. `/queue` times `publish()`
+plus the handlers this container ran, which excludes a forked `background` one.
+See [Metrics](../../docs/guide/23-metrics.md).
 
 ## Verified against
 

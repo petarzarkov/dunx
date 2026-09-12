@@ -5,9 +5,9 @@ import { JobsModule } from '../jobs/jobs.module.js';
 import { StatsDemo } from './stats.demo.js';
 
 /**
- * `RequestMetrics` is global; the other three are bound by the module that owns
- * what they measure, so all three are imported. `EventLoopLag` is a provider so
- * its `onInit` enables it at boot rather than at read time.
+ * `RequestMetrics` is global; the other four are bound by the module that owns
+ * what they measure, so all three modules are imported. `EventLoopLag` is a
+ * provider so its `onInit` enables it at boot rather than at read time.
  */
 @Module({
   imports: [DatabaseModule, CacheModule, JobsModule],

@@ -1,5 +1,6 @@
 import { Logger, Module } from '@dunx/core';
 import {
+  CacheMetrics,
   CacheModule as CacheLayer,
   MemoryCacheStore,
   RedisCacheStore,
@@ -80,40 +81,46 @@ const appRedis = RedisModule.forRootAsync(
      * boot: `RedisCacheStore` writes on every miss, so an unreachable L2 would
      * turn each of them into a 500 rather than a slow read.
      */
-    CacheLayer.forRootAsync({
-      imports: [appRedis],
-      useFactory: async (redis: RedisConnection, logger: Logger) => {
-        const l1 = new MemoryCacheStore({ max: 500 });
-        const shared = {
-          ttl: 30_000,
-          // One prefix per deployment, not per process: a shared L2 that no
-          // replica or restart can read is not shared. The example's own suites
-          // set DUNX_CACHE_PREFIX so concurrent runs do not collide on one
-          // valkey; an app that sets nothing gets a stable prefix.
-          prefix: `${process.env['DUNX_CACHE_PREFIX'] ?? 'app'}:cache`,
-        };
-        try {
-          await redis.ping();
-          return {
-            ...shared,
-            store: new TieredCacheStore(l1, new RedisCacheStore(redis), {
-              promoteTtl: 5_000,
-            }),
+    CacheLayer.forRootAsync(
+      {
+        imports: [appRedis],
+        useFactory: async (redis: RedisConnection, logger: Logger) => {
+          const l1 = new MemoryCacheStore({ max: 500 });
+          const shared = {
+            ttl: 30_000,
+            // One prefix per deployment, not per process: a shared L2 that no
+            // replica or restart can read is not shared. The example's own suites
+            // set DUNX_CACHE_PREFIX so concurrent runs do not collide on one
+            // valkey; an app that sets nothing gets a stable prefix.
+            prefix: `${process.env['DUNX_CACHE_PREFIX'] ?? 'app'}:cache`,
           };
-        } catch (error) {
-          logger.warn(
-            `cache running on memory alone: ${(error as Error).message}`,
-          );
-          return { ...shared, store: l1 };
-        }
+          try {
+            await redis.ping();
+            return {
+              ...shared,
+              store: new TieredCacheStore(l1, new RedisCacheStore(redis), {
+                promoteTtl: 5_000,
+              }),
+            };
+          } catch (error) {
+            logger.warn(
+              `cache running on memory alone: ${(error as Error).message}`,
+            );
+            return { ...shared, store: l1 };
+          }
+        },
+        inject: [RedisConnection, Logger] as const,
       },
-      inject: [RedisConnection, Logger] as const,
-    }),
+      // Wraps the configured store, so hits, misses and timings are readable as
+      // `CacheMetrics`. Settings come last here too.
+      { metrics: true },
+    ),
   ],
   controllers: [CacheController, CatalogController],
   providers: [Sessions, Catalog, CatalogDemo],
   // Re-exported so the chat gateway fans out through the same connection.
   exports: [
+    CacheMetrics,
     RedisConnection,
     RedisMetrics,
     SessionsRedis,

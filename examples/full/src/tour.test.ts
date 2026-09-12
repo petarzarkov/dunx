@@ -411,8 +411,10 @@ it('samples event-loop lag from boot rather than from the first read', () => {
   );
 });
 
-it('serves the stats panel over the ops page', () => {
-  expect(tour.text).toContain('stats -> http configured, db configured');
+it('serves the stats panel over the ops page, cache half included', () => {
+  expect(tour.text).toContain('db configured, cache configured');
+  expect(tour.text).toMatch(/cache: \d+ hits, \d+ misses, hit rate [\d.]+%/);
+  expect(tour.text).toMatch(/get: \d+ calls, \d+ failed, p99 [\d.]+ms/);
 });
 
 it('lights the same indicators on the ops page, each once', () => {

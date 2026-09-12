@@ -1,5 +1,6 @@
 import { AppError } from '@dunx/core';
 import { MemoryCacheStore } from './memory.js';
+import { MeteredCacheStore, type CacheMetrics } from './metrics.js';
 import type { CacheStore } from './store.js';
 
 export interface CacheOptionsInit {
@@ -20,7 +21,12 @@ export class CacheOptions {
   readonly prefix: string | undefined;
   readonly store: CacheStore;
 
-  constructor(init: CacheOptionsInit = {}) {
+  /**
+   * `metrics` wraps whatever store this resolves to, the default one included, so
+   * `store` is the metered one everywhere it is read from. `CacheModule` passes
+   * it when `metrics: true`; nothing else needs to.
+   */
+  constructor(init: CacheOptionsInit = {}, metrics?: CacheMetrics) {
     const ttl = init.ttl ?? 60_000;
     if (!Number.isFinite(ttl) || ttl <= 0) {
       throw new AppError(
@@ -29,7 +35,9 @@ export class CacheOptions {
     }
     this.ttl = ttl;
     this.prefix = init.prefix;
-    this.store = init.store ?? new MemoryCacheStore();
+    const store = init.store ?? new MemoryCacheStore();
+    this.store =
+      metrics === undefined ? store : new MeteredCacheStore(store, metrics);
   }
 
   /** The key as the store sees it. */

@@ -110,6 +110,25 @@ L1 in front of it.
 those dependencies come from. The dynamic module is its own scope, so importing
 `RedisModule` alongside does not reach the factory.
 
+## Hit rate
+
+`CacheModule.forRoot(init, { metrics: true })` binds a `CacheMetrics` and wraps
+the configured store in a `MeteredCacheStore` reporting into it:
+
+```ts
+export class Ops {
+  constructor(private readonly cache: CacheMetrics) {}
+
+  hitRate(): number {
+    return this.cache.snapshot().hitRate;
+  }
+}
+```
+
+Hits, misses, per-operation counts and timings, and nothing that holds a key.
+[Metrics](./23-metrics.md) has the payload and what the seam does and does not
+see.
+
 ## A cache that is not running
 
 `RedisCacheStore` throws what the connection throws. A route that should degrade

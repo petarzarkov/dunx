@@ -1,13 +1,13 @@
 # Metrics
 
-Counts and timings for requests, database queries, Redis commands and queue jobs,
-as JSON. There is no Prometheus endpoint and no metrics dependency. dunx supplies
-the numbers Bun can measure; exposition belongs to whatever already scrapes your
-service.
+Counts and timings for requests, database queries, cache reads, Redis commands
+and queue jobs, as JSON. There is no Prometheus endpoint and no metrics
+dependency. dunx supplies the numbers Bun can measure; exposition belongs to
+whatever already scrapes your service.
 
 ## Turning it on
 
-Four flags, independent of each other:
+Five flags, independent of each other:
 
 ```ts
 const app = await HttpFactory.create(AppModule, { metrics: true });
@@ -15,11 +15,12 @@ const app = await HttpFactory.create(AppModule, { metrics: true });
 
 ```ts
 DbModule.forRoot(new SqliteOptions({ schema, filename }), { metrics: true });
+CacheModule.forRoot({ ttl: 30_000 }, { metrics: true });
 RedisModule.forRoot({ url }, undefined, { metrics: true });
 QueueModule.forRoot({ url }, { metrics: true });
 ```
 
-All four default to `false`. With `metrics: false` no driver is wrapped and no
+All five default to `false`. With `metrics: false` no driver is wrapped and no
 histogram is allocated.
 
 The settings object is always the last parameter, which on `RedisModule` puts it
@@ -139,6 +140,73 @@ drizzle parameterises, so a query it built carries no values anyway. The redacti
 is for the `sql` template escape hatch and hand-written statements. Redaction runs
 before truncation, so a long literal cannot survive by being cut off mid-string.
 
+## Reading the cache
+
+`CacheMetrics` is exported by `CacheModule` when `metrics: true`:
+
+```json
+{
+  "operations": [
+    {
+      "operation": "get",
+      "count": 18421,
+      "errors": 2,
+      "duration": { "count": 18421, "min": 900, "p99": 72000 }
+    },
+    {
+      "operation": "set",
+      "count": 4210,
+      "errors": 0,
+      "duration": { "count": 4210, "p99": 140000 }
+    }
+  ],
+  "hits": 17632,
+  "misses": 787,
+  "hitRate": 0.9572,
+  "total": 22734,
+  "errors": 2,
+  "since": "2026-09-02T09:14:22.881Z"
+}
+```
+
+Three operations - `get`, `set`, `del` - always in that order, and only the ones
+that have run. `hitRate` is `hits / (hits + misses)`, and `0` before the first
+read.
+
+A `get` that threw is in `errors` and in neither term of the rate. An unreachable
+L2 would otherwise read as a cache that is missing, which is a different thing to
+go and fix.
+
+### The seam is the store, not `Cache`
+
+`CacheModule` wraps the configured `CacheStore` in a `MeteredCacheStore`, so a
+store injected directly is counted too, and so `wrap` records the one read that
+reached the store rather than one per coalesced caller. Five concurrent
+`wrap('k', load)` calls are one miss and one write.
+
+Wrapping a `TieredCacheStore` counts the logical operation: an L2 hit promoted
+into L1 is one `get` and one hit, and the promotion write is not a `set`. To see
+that split, wrap a tier with a `CacheMetrics` of its own:
+
+```ts
+const l1Stats = new CacheMetrics();
+const store = new TieredCacheStore(
+  new MeteredCacheStore(new MemoryCacheStore(), l1Stats),
+  new RedisCacheStore(redis),
+);
+```
+
+An expired entry is a miss: it is what the read answered.
+
+### The key is never kept
+
+There is no `slowest` field, for the reason `RedisMetrics` has none. A cache key
+is application data, and the snapshot is served over the dashboard's stats
+endpoint.
+
+There is no caller-chosen label either, so the series count is three and nothing
+here is capped.
+
 ## Reading Redis commands
 
 `RedisMetrics` is exported by `RedisModule` when `metrics: true`:
@@ -255,20 +323,28 @@ Only `publish()` is counted. `queue(name)` hands back bullmq's own `Queue`, and
 
 ## On the dashboard
 
-Pass either source to `DashboardModule` and the Stats panel renders it:
+Pass any of the three sources to `DashboardModule` and the Stats panel renders
+what it was given:
 
 ```ts
 DashboardModule.forRootAsync({
-  imports: [DatabaseModule],
-  useFactory: (stats: RequestMetrics, dbStats: QueryMetrics) => ({
+  imports: [DatabaseModule, CacheModule],
+  useFactory: (
+    stats: RequestMetrics,
+    dbStats: QueryMetrics,
+    cacheStats: CacheMetrics,
+  ) => ({
     path: '/api/_dunx',
     authorize,
     stats,
     dbStats,
+    cacheStats,
   }),
-  inject: [RequestMetrics, QueryMetrics] as const,
+  inject: [RequestMetrics, QueryMetrics, CacheMetrics] as const,
 });
 ```
+
+A source left out shows as a panel saying so rather than an empty table.
 
 The JSON sibling is `GET {path}/api/stats`, behind the same `authorize` as every
 other panel. An unauthenticated endpoint listing every route and its error rate is
@@ -373,6 +449,6 @@ is `["mark", "measure", "resource"]` under Bun, and a `gc` observer never fires.
 
 ## Resetting
 
-`reset()` on any of the four classes drops every series and moves `since` forward.
+`reset()` on any of the five classes drops every series and moves `since` forward.
 Nothing calls it for you. A cumulative histogram is what `rate()` in a scraper wants, and
 resetting on scrape would break the consumer most likely to be reading.
