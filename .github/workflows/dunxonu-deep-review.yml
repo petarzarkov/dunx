@@ -231,6 +231,14 @@ jobs:
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
         run: |
           set -euo pipefail
+          # A missing trusted copy is a bootstrap, not a mystery. The script is
+          # taken from the default branch on purpose, so a pull request that
+          # adds or moves it cannot post a review until it merges. Saying that
+          # plainly beats "Module not found" from Bun.
+          if [ ! -f .trusted/scripts/post-review.ts ]; then
+            echo "::error::The default branch has no scripts/post-review.ts. This job runs the copy from there deliberately, never the one in the pull request, so it cannot post until that file is on the default branch."
+            exit 1
+          fi
           # Bun is on PATH because the action put it there.
           bun .trusted/scripts/post-review.ts \
             "$EXECUTION_FILE" \
