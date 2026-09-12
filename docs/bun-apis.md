@@ -147,7 +147,7 @@ warn: Bun.serve() timed out a request after 10 seconds. Pass `idleTimeout` to co
 ```
 
 An event stream is the case that breaks on: idling is what it is for. Four things
-were probed before `RequestTimeout` was built on them:
+were probed before anything was built on them:
 
 | Question                                                    | Answer on 1.4.2                                        |
 | ----------------------------------------------------------- | ------------------------------------------------------ |
@@ -156,9 +156,11 @@ were probed before `RequestTimeout` was built on them:
 | Does a `BunRequest` carry a handle to its server?           | no - no own or prototype property names one            |
 | `server.timeout(req, n)` for a foreign request              | silent no-op, and the owning server's call still takes |
 
-The last two are why `RequestTimeout` keeps a set of the bound servers and walks
-it rather than threading the server through the request path: every call but the
-owner's does nothing, and nothing has to be recorded per request.
+The second answer is the one that decided the design. A registry of bound
+servers was written first, on the third and fourth rows, and thrown away: Bun
+hands the owning server to the route table entry, so a route that declares it
+idles clears its own deadline with the right server and no registry. The third
+row still matters, because it rules out reading the server back off a request.
 
 Reaping runs on Bun's own sweep rather than a per-request timer: with
 `idleTimeout: 1` the socket closed **4.0 s** after the last byte, which is what the

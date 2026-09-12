@@ -2,7 +2,7 @@ import { AppError, type Ctor, type ModuleRef } from '@dunx/core';
 import type { BunRequest } from 'bun';
 import type { DiscoveredRoute } from '../route/discover.js';
 import { defaultStatusFor, type HttpMethod } from '../route/marker.js';
-import { PUBLIC, UNMATCHED, type MetaKey } from '../route/metadata.js';
+import { PUBLIC, STREAMS, UNMATCHED, type MetaKey } from '../route/metadata.js';
 import type { RouteInput } from '../route/schema.js';
 import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
@@ -303,7 +303,8 @@ export const buildRoutes = (
       ),
       ...(route.guards ?? []).map((guard) => guardOf(guard, route.module)),
     ];
-    const chained = compose(chain, buildContext(route), async (req) =>
+    const context = buildContext(route);
+    const chained = compose(chain, context, async (req) =>
       toResponse(await route.handler(await read(req)), status),
     );
     const guarded: RouteHandler = async (req) => {
@@ -318,12 +319,22 @@ export const buildRoutes = (
       }
     };
 
+    // Bun hands the route table entry the server that received the request, so a
+    // route that idles by design clears its own deadline with the right one. No
+    // registry, and nothing is paid by a route that does not declare it.
+    const served = cors
+      ? withCors(cors, guarded)
+      : directOr(guarded, route, read, status, onError, chain.length === 0);
     const byMethod = (routes[route.path] ??= {});
     // Outside the error mapper, so a mapped 500 still carries the CORS headers the
     // browser needs in order to show it.
-    byMethod[route.method] = cors
-      ? withCors(cors, guarded)
-      : directOr(guarded, route, read, status, onError, chain.length === 0);
+    byMethod[route.method] =
+      context.get(STREAMS) === true
+        ? (req, server) => {
+            server?.timeout(req, 0);
+            return served(req, server);
+          }
+        : served;
   }
 
   if (cors) {

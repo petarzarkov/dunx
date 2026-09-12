@@ -2,7 +2,6 @@ import type { Server } from 'bun';
 import type { SocketData } from '../ws/socket.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import type { RouteHandler } from './middleware.js';
-import { trackServer } from './request-timeout.js';
 import { withUpgradeRoutes, type BunRoutes } from './routes.js';
 
 /** What `listen()` computes and hands the binding, once the table is final. */
@@ -64,8 +63,6 @@ export class ServerBinding {
   readonly #protocols: BindingProtocols;
   #main: Server<SocketData> | undefined;
   #gateways: Server<SocketData> | undefined;
-  /** What `trackServer` handed back, called when the servers stop. */
-  #forget: readonly (() => void)[] = [];
 
   constructor(protocols: BindingProtocols) {
     this.#protocols = protocols;
@@ -117,10 +114,6 @@ export class ServerBinding {
 
     const main = this.#main;
     const gateways = this.#gateways;
-    // `RequestTimeout` needs the live servers: a request carries no handle to one.
-    this.#forget = [main, gateways]
-      .filter((server) => server !== undefined)
-      .map((server) => trackServer(server));
     return {
       main,
       sockets: gateways ?? main,
@@ -150,8 +143,6 @@ export class ServerBinding {
     const gateways = this.#gateways;
     this.#main = undefined;
     this.#gateways = undefined;
-    for (const forget of this.#forget) forget();
-    this.#forget = [];
     await Promise.all([
       main?.stop(gateways === undefined && force),
       gateways?.stop(force),

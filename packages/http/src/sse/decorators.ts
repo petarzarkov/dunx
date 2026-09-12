@@ -1,7 +1,6 @@
-import type { BunRequest } from 'bun';
 import { markRoute, type RoutePath } from '../route/marker.js';
+import { meta, STREAMS } from '../route/metadata.js';
 import type { Input, RouteInput, RouteSchemas } from '../route/schema.js';
-import { RequestTimeout } from '../server/request-timeout.js';
 import type { SseEvent } from './event.js';
 import { SseStream } from './stream.js';
 
@@ -31,18 +30,13 @@ type SseHandler = (
 const LAST_EVENT_ID = 'last-event-id';
 
 /**
- * The idle timeout is cleared for every stream, because idling is what an event
- * stream is for. No teardown beyond that: a client that goes away cancels the
+ * No teardown beyond the stream's own: a client that goes away cancels the
  * response body, which is what the stream clears its heartbeat from - measured on
  * Bun 1.4.2, the request aborted before a slow handler returned its `Response`
- * included.
+ * included. The idle deadline is cleared by `buildRoutes`, which has the server.
  */
-const respond = (result: SseResult, req: BunRequest): Response => {
-  RequestTimeout.clear(req);
-  return (
-    result instanceof SseStream ? result : SseStream.from(result)
-  ).toResponse();
-};
+const respond = (result: SseResult): Response =>
+  (result instanceof SseStream ? result : SseStream.from(result)).toResponse();
 
 /**
  * A `GET` route answering `text/event-stream`, from a handler that returns an
@@ -78,11 +72,14 @@ export const Sse =
         lastEventId: input.req.headers.get(LAST_EVENT_ID) ?? undefined,
       });
       return result instanceof Promise
-        ? result.then((settled) => respond(settled, input.req))
-        : respond(result, input.req);
+        ? result.then((settled) => respond(settled))
+        : respond(result);
     }
 
     markRoute(served, { method: 'GET', path, options });
+    // Idling is what an event stream is for, so the route declares it and
+    // `buildRoutes` clears Bun's deadline using the server it is handed.
+    meta(STREAMS, true)(served);
     // The class gets this wrapper, which answers a `Response` where the handler
     // answered a stream. A method decorator's return type has to be assignable to
     // the method it replaces, so the cast is the only way to say so.

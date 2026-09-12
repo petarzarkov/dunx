@@ -444,10 +444,10 @@ counting idle seconds sees bytes; `0` sends none. A disconnect cancels the
 response body, which closes the stream and clears that timer.
 
 `Bun.serve` severs a request that goes 10 seconds without traffic, a response
-already streaming included. `@Sse` clears that for every stream it answers with,
-so an idle feed stays up. A handler streaming from a plain `@Get` calls
-`RequestTimeout.clear(req)` itself, and `idleTimeout` on `HttpFactory.create`
-moves the limit for the whole server.
+already streaming included. `@Sse` marks its route so that limit is
+cleared for every stream it answers with, so an idle feed stays up. A handler
+streaming from a plain `@Get` declares the same thing with `meta(STREAMS, true)`,
+and `idleTimeout` on `HttpFactory.create` moves the limit for the whole server.
 
 `Compression` never encodes `text/event-stream`, and `no-transform` says the same
 thing to any proxy in front: gzip holds every frame until the stream ends, so an

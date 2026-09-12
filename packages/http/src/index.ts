@@ -21,6 +21,7 @@ export {
   PUBLIC,
   Roles,
   ROLES,
+  STREAMS,
   UNMATCHED,
   UseGuards,
   type MetaKey,
@@ -131,7 +132,6 @@ export {
 // `Bun.serve` severs a request idle for 10 seconds, a response already streaming
 // included, so anything long-lived has to say so. `@Sse` calls this for every
 // stream it answers with; `idleTimeout` moves the limit for the whole server.
-export { RequestTimeout } from './server/request-timeout.js';
 export type { SseEvent } from './sse/event.js';
 export { SseStream, type SseStreamOptions } from './sse/stream.js';
 // A fixed-window rate limit. Here rather than in `@dunx/infra` because it is a

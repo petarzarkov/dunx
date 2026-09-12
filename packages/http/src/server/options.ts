@@ -160,8 +160,8 @@ export interface HttpOptions extends AppOptions {
   /**
    * Seconds a request may go without traffic before `Bun.serve` severs it. `0`
    * removes the limit for every request, which is what a slowloris counts on; a
-   * response meant to idle clears its own with `RequestTimeout.clear(req)`, which
-   * is what `@Sse` does.
+   * a route that idles by design declares `meta(STREAMS, true)` and has its own
+   * cleared, which is what `@Sse` sets.
    *
    * @default 10, which is Bun's
    */
