@@ -31,8 +31,7 @@ import { EventRegistry, EVENT_REGISTRY_DEPS } from './registry.js';
     }),
     // Bound so the container constructs it, which is what gets `onInit` called.
     provide(EventRegistry, {
-      // Typed rather than spread through a cast, like `EventBus` above: a change
-      // to the constructor is a compile error here instead of a runtime surprise.
+      // Typed rather than cast, so a constructor change is a compile error.
       useFactory: (
         ref: AppRef,
         root: ModuleRef,

@@ -47,9 +47,7 @@ export class EventSubscription {
 
   get active(): boolean {
     // The effective signal, not the controller's: `on` combines the caller's
-    // `options.signal` with it, so a caller aborting their own ends the listener
-    // while the controller stays untouched. Reading the controller reported a
-    // dereferenced subscription as live.
+    // `options.signal` in, and aborting that ends the listener on its own.
     return !this.#signal.aborted;
   }
 

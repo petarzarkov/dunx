@@ -97,11 +97,10 @@ export class EventBus {
     this.#target.addEventListener(
       type,
       (raw: Event) => {
-        // Aborting is the whole removal, rather than `EventTarget`'s own `once`
-        // alongside it: two mechanisms for one job, and its own leaves the
-        // controller untouched so a spent subscription reported `active: true`.
-        // Aborted before the handler runs, so a throwing one lands there too;
-        // the listener is already executing, so this delivery still completes.
+        // Aborting is the whole removal: `EventTarget`'s own `once` leaves the
+        // controller untouched, so a spent subscription read `active: true`.
+        // Before the handler, so a throwing one lands here too; the listener is
+        // already executing, so this delivery still completes.
         if (options.once === true) controller.abort();
         this.#deliver(
           subscription,
@@ -133,9 +132,8 @@ export class EventBus {
     const collected = dispatching();
     const previous = this.#current;
     this.#current = collected;
-    // Where this dispatch's `waitUntil` work starts. `pending` lives on the event
-    // instance, so re-emitting one would otherwise re-read every promise an
-    // earlier dispatch settled and report its failures a second time.
+    // Where this dispatch's `waitUntil` work starts: `pending` lives on the
+    // instance, so re-emitting one re-read an earlier dispatch's rejections.
     const from = event.pending.length;
     try {
       this.#target.dispatchEvent(event);
@@ -193,9 +191,8 @@ export class EventBus {
     let thenable: boolean;
     try {
       returned = handler(event);
-      // Inside the same guard as the call: reading `then` runs a getter, and one
-      // that throws is the handler's failure like any other rather than an error
-      // escaping the dispatch.
+      // Inside the guard: reading `then` runs a getter, and one that throws is
+      // the handler's failure rather than an error escaping the dispatch.
       thenable =
         typeof (returned as PromiseLike<unknown> | undefined)?.then ===
         'function';
@@ -204,10 +201,8 @@ export class EventBus {
       return;
     }
 
-    // Thenable, not `instanceof Promise`: that misses a promise from another
-    // realm and any promise-like a library returns, and treating one as a
-    // synchronous return resolves `emit` before the handler has finished, which
-    // is the exact footgun auto-collecting the return value exists to remove.
+    // Thenable rather than `instanceof Promise`, which misses a cross-realm
+    // promise and any promise-like, resolving `emit` before the handler is done.
     if (!thenable) {
       subscription.settle();
       collected.handled += 1;

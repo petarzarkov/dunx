@@ -15,10 +15,8 @@ export interface EventFailure {
  */
 export class EventDispatch {
   /**
-   * The event class's name, for reading. A display label rather than an
-   * identity: a build that mangles class names can collapse two of them onto
-   * one string. Routing never uses it - `EventBus` keys on the registry behind
-   * `eventName`, which issues a distinct id per constructor.
+   * The event class's name, as a label. A minifying build can collapse two onto
+   * one string; routing keys on `eventName`'s registry instead.
    */
   readonly event: string;
   /** Subscribers that ran to completion. */
