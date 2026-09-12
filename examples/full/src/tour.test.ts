@@ -716,3 +716,31 @@ it('narrates the queue, which spans two processes', () => {
     expect(tour.text).toContain('ran in this process, so its handler duration');
   }
 });
+
+/**
+ * Both halves of an event stream in one step: `@Sse` writes one,
+ * `HttpService.streamSse` reads it back, and `app.use(Compression)` sits in front
+ * of both.
+ */
+it('serves an event stream and reads its own back', () => {
+  expect(tour.text).toContain('@Sse -> streamSse read 3 events: ticks 1, 2, 3');
+  // The id of the last event seen, sent back the way an EventSource does.
+  expect(tour.text).toContain('Last-Event-ID: 3 -> resumed at tick 4');
+});
+
+it('leaves the event stream unencoded, and frames it per event', () => {
+  expect(tour.text).toContain(
+    'content-type: text/event-stream, content-encoding: identity',
+  );
+  // The comment Bun wants before it will flush the headers.
+  expect(tour.text).toContain('opens with ":", a comment line');
+  expect(tour.text).toContain('event: tick / id: 1 / data: {"tick":1}');
+});
+
+it('pushes into a stream the handler kept, and drops it on disconnect', () => {
+  expect(tour.text).toContain(
+    'SseStream, 1 subscriber, pushed: event: notice / data: ' +
+      '{"message":"deploy finished"}',
+  );
+  expect(tour.text).toContain('the client left -> 0 subscribers');
+});

@@ -177,6 +177,9 @@ There is no `@Options` and no `@Head`. `HttpMethod` is
 `'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'`, and `OPTIONS` is reserved for the
 CORS preflight handler.
 
+`@Sse` mounts a `GET` as well, for a response that stays open. See
+[Server-sent events](#server-sent-events).
+
 ## Path parameters
 
 Bun's own syntax, because Bun does the matching. Without a `params` schema they
@@ -392,6 +395,58 @@ enum, so `HttpStatusCode.CREATED` is both a value and a narrow type, and erases.
 
 A thrown `HttpError` still goes through the error mapper, so `status` only sets
 the _success_ status.
+
+## Server-sent events
+
+`@Sse(path)` mounts a `GET` answering `text/event-stream`. The handler returns an
+`AsyncIterable<SseEvent>`:
+
+```ts
+import { Controller, Sse, type SseEvent, type SseInput } from '@dunx/http';
+import type { RouteSchemas } from '@dunx/http';
+
+@Controller('jobs')
+export class JobsController {
+  @Sse('/progress')
+  async *progress(input: SseInput<RouteSchemas>): AsyncGenerator<SseEvent> {
+    for (let step = 0; step <= 100; step += 25) {
+      yield { data: { step }, id: String(step) };
+      await Bun.sleep(250);
+    }
+  }
+}
+```
+
+The response carries `content-type: text/event-stream`, `cache-control: no-cache`
+and `connection: keep-alive`. `data` is serialised with `JSON.stringify` unless it
+is already a string, and a payload spanning several lines becomes one `data:` line
+each; `event`, `id` and `retry` precede it.
+
+`input.lastEventId` is the `Last-Event-ID` header a reconnecting client sends,
+holding the `id` of the last event it saw. `input.req.signal` aborts when it goes
+away.
+
+A handler may return an `SseStream` instead, for a feed driven by something other
+than a loop:
+
+```ts
+@Sse('/alerts')
+alerts(): SseStream {
+  const stream = new SseStream({ heartbeatMs: 30_000 });
+  this.alerts.on((alert) => stream.send({ data: alert, event: 'alert' }));
+  return stream;
+}
+```
+
+A comment line goes out every `heartbeatMs`, 15,000 by default, so a proxy
+counting idle seconds sees bytes; `0` sends none. A disconnect cancels the
+response body, which closes the stream and clears that timer.
+
+`Compression` never encodes `text/event-stream`: gzip holds every frame until the
+stream ends, so an encoded event stream arrives all at once or not at all.
+
+The outbound half reads one. `HttpService.sse()` in `@dunx/http/client` yields the
+`data` payloads of a stream this or any other server sends.
 
 ## Errors
 
