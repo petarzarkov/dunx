@@ -31,11 +31,18 @@ export class SseStream {
   #timer: ReturnType<typeof setInterval> | undefined;
   #lastEventId: string | undefined;
   #closed = false;
+  readonly #gone = new AbortController();
+  #drained: (() => void) | undefined;
 
   constructor(options: SseStreamOptions = {}) {
     this.#body = new ReadableStream<Uint8Array>({
       start: (controller) => {
         this.#controller = controller;
+      },
+      // Resolved when the consumer asks for more, which `from` waits on.
+      pull: () => {
+        this.#drained?.();
+        this.#drained = undefined;
       },
       // A disconnect: not tearing down leaks a heartbeat timer per lost client.
       cancel: () => {
@@ -74,6 +81,7 @@ export class SseStream {
           // `finally` releases what it holds.
           if (stream.#closed) break;
           stream.send(event);
+          await stream.#backpressure();
         }
         stream.close();
       } catch (error) {
@@ -81,6 +89,12 @@ export class SseStream {
       }
     })();
     return stream;
+  }
+
+  /** Aborts when the client goes away, for a handler that waits between events
+   * to race: `for await` only sees a disconnect between yields. */
+  get signal(): AbortSignal {
+    return this.#gone.signal;
   }
 
   /** The `id` of the last event sent, or `undefined` if none carried one. */
@@ -113,9 +127,14 @@ export class SseStream {
    * `headers` merge under the three this sets. No status: an event stream is a
    * 200 or it is not one. */
   toResponse(headers: Readonly<Record<string, string>> = {}): Response {
-    return new Response(this.#body, {
-      headers: { ...headers, ...SSE_HEADERS },
-    });
+    // Through `Headers`, not a spread: a name is case-insensitive, so
+    // `Content-Type` and `content-type` are two keys and one field. The spread
+    // left both, and the response carried `text/plain, text/event-stream`.
+    const merged = new Headers(headers);
+    for (const [name, value] of Object.entries(SSE_HEADERS)) {
+      merged.set(name, value);
+    }
+    return new Response(this.#body, { headers: merged });
   }
 
   #write(text: string): void {
@@ -130,8 +149,23 @@ export class SseStream {
   }
 
   /** Closed first, so a heartbeat firing in the same turn enqueues nothing. */
+  /** Resolves once the consumer asks for more: a producer faster than its
+   * client would otherwise enqueue into a queue nothing drains. */
+  #backpressure(): Promise<void> {
+    const wanted = this.#controller?.desiredSize;
+    if (this.#closed || wanted === undefined || wanted === null || wanted > 0) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.#drained = resolve;
+    });
+  }
+
   #stop(): void {
     this.#closed = true;
+    this.#gone.abort();
+    this.#drained?.();
+    this.#drained = undefined;
     if (this.#timer !== undefined) clearInterval(this.#timer);
     this.#timer = undefined;
   }
