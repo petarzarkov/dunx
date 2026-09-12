@@ -337,10 +337,12 @@ describe('awaiting a handler', () => {
       // thenable: that is the shape under test.
       // eslint-disable-next-line unicorn/no-thenable
       then(resolve: (value: unknown) => void) {
-        queueMicrotask(() => {
+        // A timer, not a microtask: a microtask can drain before `emit` checks,
+        // so it would pass even if nothing awaited this.
+        setTimeout(() => {
           finished = true;
           resolve(undefined);
-        });
+        }, 10);
       },
     }));
 
@@ -348,6 +350,25 @@ describe('awaiting a handler', () => {
 
     expect(finished).toBe(true);
     expect(dispatch.handled).toBe(1);
+  });
+
+  it('counts a throwing then getter as a failure, not an escape', async () => {
+    const { bus: eventBus } = bus();
+    eventBus.on(
+      Placed,
+      () => ({
+        // eslint-disable-next-line unicorn/no-thenable
+        get then(): never {
+          throw new Error('hostile getter');
+        },
+      }),
+      { as: 'hostile' },
+    );
+
+    const dispatch = await eventBus.emit(new Placed('a'));
+
+    expect(dispatch.failures).toHaveLength(1);
+    expect(String(dispatch.failures[0]?.error)).toContain('hostile getter');
   });
 
   it('counts a rejected thenable as a failure', async () => {

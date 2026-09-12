@@ -14,7 +14,12 @@ export interface EventFailure {
  * `throwIfFailed()` is the opt-in for a caller that does want them.
  */
 export class EventDispatch {
-  /** The event class's name. */
+  /**
+   * The event class's name, for reading. A display label rather than an
+   * identity: a build that mangles class names can collapse two of them onto
+   * one string. Routing never uses it - `EventBus` keys on the registry behind
+   * `eventName`, which issues a distinct id per constructor.
+   */
   readonly event: string;
   /** Subscribers that ran to completion. */
   readonly handled: number;

@@ -190,8 +190,15 @@ export class EventBus {
   ): void {
     const collected = this.#current;
     let returned: unknown;
+    let thenable: boolean;
     try {
       returned = handler(event);
+      // Inside the same guard as the call: reading `then` runs a getter, and one
+      // that throws is the handler's failure like any other rather than an error
+      // escaping the dispatch.
+      thenable =
+        typeof (returned as PromiseLike<unknown> | undefined)?.then ===
+        'function';
     } catch (error) {
       this.#failed(subscription, collected, error);
       return;
@@ -201,9 +208,7 @@ export class EventBus {
     // realm and any promise-like a library returns, and treating one as a
     // synchronous return resolves `emit` before the handler has finished, which
     // is the exact footgun auto-collecting the return value exists to remove.
-    if (
-      typeof (returned as PromiseLike<unknown> | undefined)?.then !== 'function'
-    ) {
+    if (!thenable) {
       subscription.settle();
       collected.handled += 1;
       return;
