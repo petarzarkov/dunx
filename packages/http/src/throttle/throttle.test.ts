@@ -372,6 +372,35 @@ describe('ThrottleGuard, against a counter that is down', () => {
     await expect(call()).rejects.toThrow(/Rate limit exceeded/);
   });
 
+  it('gives each claimed path its own budget, not one for the mount', async () => {
+    const claimed = new ClaimedRoutes();
+    claimed.attach(['/svc/A', '/svc/B']);
+    const guard = new ThrottleGuard(
+      new ThrottleOptions({
+        limit: 1,
+        windowSeconds: 60,
+        prefix: 'app',
+        subject: () => 'unit',
+      }),
+      new MemoryThrottleStore(),
+      new ClientAddress(),
+      new Counting(),
+      claimed,
+    );
+    const call = (path: string) =>
+      guard.handle(
+        new Request(`http://x${path}`) as never,
+        { ...contextOf({ unmatched: true }), path } as never,
+        () => Promise.resolve(new Response('rpc')),
+      );
+
+    expect((await call('/svc/A')).status).toBe(200);
+    // A second method on the same mount, which shared A's budget when the key
+    // was built from the handler name every unmatched path reports.
+    expect((await call('/svc/B')).status).toBe(200);
+    await expect(call('/svc/A')).rejects.toThrow(/Rate limit exceeded/);
+  });
+
   it('skips an unmatched path before it ever reaches the store', async () => {
     const logger = new Counting();
     const guard = new ThrottleGuard(

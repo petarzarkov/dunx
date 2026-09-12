@@ -1,3 +1,4 @@
+import { embedJson } from '@dunx/http/internal';
 import { SHELL_KEYS } from '../shell.js';
 
 /**
@@ -194,7 +195,9 @@ export const renderUiOptions = (
       parts.push(`${JSON.stringify(key)}:${value}`);
       continue;
     }
-    parts.push(`${JSON.stringify(key)}:${JSON.stringify(value)}`);
+    // `embedJson`, not `JSON.stringify`: this lands in an inline `<script>`,
+    // which a value carrying `</script>` would close. Scalar embeds the same way.
+    parts.push(`${embedJson(key)}:${embedJson(value)}`);
   }
 
   // `presets` is the one default that has to be source: it names a property of the

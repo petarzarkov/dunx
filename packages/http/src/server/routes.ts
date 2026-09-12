@@ -222,7 +222,23 @@ export const buildFallback = (
     throw new HttpError(HttpStatusCode.NOT_FOUND, 'NOT_FOUND');
   };
 
+  // A claimed path is served here rather than from the route table, so its
+  // preflight is built here too. `buildRoutes` does the same for a real route.
+  const claimedPreflight = new Map<string, RouteHandler>();
+  if (cors) {
+    for (const entry of middleware) {
+      if (!hasClaimedPaths(entry)) continue;
+      const answer = preflight(cors, entry.claimedMethods());
+      for (const path of entry.claimedPaths())
+        claimedPreflight.set(path, answer);
+    }
+  }
+
   const run: ServedHandler = async (req, server) => {
+    if (req.method === 'OPTIONS') {
+      const answer = claimedPreflight.get(new URL(req.url).pathname);
+      if (answer !== undefined) return answer(req);
+    }
     try {
       return await compose(
         middleware,
