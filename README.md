@@ -33,21 +33,23 @@ bunx @dunx/create-app my-api
 Elysia and Hono hand you a router, and everything above it is yours to choose
 and keep in step. This is the other trade: one dependency, one release train.
 
-| You need           | dunx gives you                                                         |
-| ------------------ | ---------------------------------------------------------------------- |
-| Structure          | Controllers, scoped modules, constructor DI, lifecycle hooks           |
-| Requests           | `Bun.serve` routing, middleware, guards, CORS, compression, throttling |
-| Validation         | Standard Schema, so zod, Valibot or ArkType all drop in                |
-| API documentation  | OpenAPI 3.1 from the schemas the routes already validate, Swagger UI   |
-| Realtime           | WebSocket gateways on the same port, with a Redis relay for many nodes |
-| Data               | drizzle over `bun:sqlite` and `Bun.SQL`, transactions, seeds, paging   |
-| Background work    | bullmq over `Bun.RedisClient`, sandboxed processors, `@Cron`           |
-| Storage and images | One `Storage` contract over `Bun.file` and `Bun.S3Client`, `Bun.Image` |
-| Auth               | better-auth mounted, a session guard, `Bun.password` hashing           |
-| Calling out        | An HTTP client with retry, backoff and trace propagation               |
-| Operating it       | Health checks, structured logging, an ops dashboard, bull-board        |
-| Testing            | The real container with bindings replaced, a real server on port 0     |
-| Tooling            | A scaffolder, and an MCP server so an agent can read your app          |
+| You need           | dunx gives you                                                               |
+| ------------------ | ---------------------------------------------------------------------------- |
+| Structure          | Controllers, scoped modules, constructor DI, lifecycle hooks                 |
+| Requests           | `Bun.serve` routing, middleware, guards, CORS, compression, throttling       |
+| Validation         | Standard Schema, so zod, Valibot or ArkType all drop in                      |
+| API documentation  | OpenAPI 3.1 from the routes' own schemas, behind Swagger UI or Scalar        |
+| Realtime           | WebSocket gateways and server-sent events, with a Redis relay for many nodes |
+| Service to service | Connect and gRPC-Web, through the middleware chain the app has               |
+| Decoupling         | An in-process event bus: publish a class, subscribe with `@OnEvent`          |
+| Data               | drizzle over `bun:sqlite` and `Bun.SQL`, transactions, seeds, paging         |
+| Background work    | bullmq over `Bun.RedisClient`, sandboxed processors, `@Cron`                 |
+| Storage and images | One `Storage` contract over `Bun.file` and `Bun.S3Client`, `Bun.Image`       |
+| Auth               | better-auth mounted, a session guard, `Bun.password` hashing                 |
+| Calling out        | An HTTP client with retry, backoff and trace propagation                     |
+| Operating it       | Health checks, structured logging, an ops dashboard, bull-board              |
+| Testing            | The real container with bindings replaced, a real server on port 0           |
+| Tooling            | A scaffolder, and an MCP server so an agent can read your app                |
 
 Every one of those is a Bun primitive or a best-in-class library wired to one,
 never a reimplementation. Each is opt-in: `@dunx/core` has zero dependencies,
@@ -140,8 +142,8 @@ specifier is a compile error rather than a runtime surprise.
   that drives twelve capabilities from a browser, including a transaction
   rolling back, the outbound client retrying a 503, and the process's own
   request, query and event-loop timings
-- **[The guide](https://dunx.win)** - twenty-one pages,
-  introduction through agent tooling
+- **[The guide](https://dunx.win)** - twenty-seven pages,
+  introduction through RPC
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and
   what does not
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - what was measured, what was

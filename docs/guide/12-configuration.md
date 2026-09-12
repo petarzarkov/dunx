@@ -292,12 +292,13 @@ read off config, so `as` comes up almost immediately.
 `ConfigService` stays bound to the same instance when `as` is used, so either name
 injects. That matters for library code, which only knows the base contract.
 
-## No loader, and no dotenv
+## No env loader, and no dotenv
 
 Bun loads `.env` and `.env.local` itself, before your code runs. There is
-therefore no file loading in `ConfigModule`, no `envFilePath`, and no `dotenv`
-dependency. `source` defaults to `Bun.env`, which already carries whatever those
-files set.
+therefore no `envFilePath` and no `dotenv` dependency. `source` defaults to
+`Bun.env`, which already carries whatever those files set. `files` above is a
+separate thing: it reads YAML, TOML and JSON through `Bun.YAML` and `Bun.TOML`,
+which is structure an env file cannot carry.
 
 The precedence and file list are Bun's, documented by Bun, and dunx does not
 re-implement or override them.

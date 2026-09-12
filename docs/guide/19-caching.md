@@ -98,7 +98,7 @@ reader that mutates what it got back changes what the next reader gets.
 
 ## What two nodes see
 
-Both tiers are local. `del` on one node clears that node's L1 and the shared L2;
+L1 is local and L2 is shared. `del` on one node clears that node's L1 and the shared L2;
 every other node keeps serving its own L1 copy until the entry expires. With
 `TieredCacheStore` that window is `promoteTtl`. Set it to the staleness a route
 can tolerate, or give a route that can tolerate none a `RedisCacheStore` with no

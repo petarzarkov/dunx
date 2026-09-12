@@ -539,7 +539,7 @@ Modules: `bun:sqlite` (exports `Database`, `Statement`, `SQLiteError`, `constant
 
 ### `Bun.YAML` parses config, and a duplicate key takes the last silently
 
-`Bun.YAML` is absent from the API table above and from Bun's docs. On 1.4.2 it is
+`Bun.YAML` is absent from the API table above, and was undocumented when probed. On 1.4.2 it is
 `{ parse, stringify }`, and `bun:yaml` resolves as a builtin carrying the `yaml`
 package's surface: `Document`, `Composer`, `parseDocument`, `parseAllDocuments`,
 `visit`. `Bun.TOML` is the same pair, and its `stringify` is undocumented too.

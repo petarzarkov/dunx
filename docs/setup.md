@@ -244,21 +244,30 @@ argument. Bun loads `.env` and `.env.local` on its own, so there is no loader an
 | DI, modules, lifecycle, config   | `@dunx/core`                                              |
 | Routes, middleware, guards, CORS | `@dunx/http`                                              |
 | Websockets                       | `@dunx/http` - `@Gateway`, `@OnMessage`                   |
+| Server-sent events               | `@dunx/http` - `@Sse`, `SseStream`                        |
+| RPC between services             | `@dunx/http/connect` - Connect and gRPC-Web               |
+| In-process domain events         | `@dunx/core` - `EventBus`, `@OnEvent`                     |
+| Timeout, retry, backoff          | `@dunx/core` - `ResiliencePolicy`                         |
 | Outbound HTTP with retries       | `@dunx/http/client`                                       |
 | Database and migrations          | `@dunx/infra/db` - drizzle over `bun:sqlite` or `Bun.SQL` |
 | Redis or Valkey                  | `@dunx/infra/redis` - `Bun.RedisClient`                   |
 | Queues and workers               | `@dunx/infra/queue` - bullmq                              |
+| Caching                          | `@dunx/infra/cache` - memory, Redis or tiered             |
 | Cron and intervals               | `@dunx/infra/schedule`                                    |
 | Uploads, downloads, images       | `@dunx/infra/files`, `@dunx/infra/images`                 |
 | Structured logging               | `@dunx/infra/logger`                                      |
-| OpenAPI 3.1 and Swagger UI       | `@dunx/openapi`                                           |
+| OpenAPI 3.1 and a docs page      | `@dunx/openapi`, plus `./swagger` or `./scalar`           |
 | Sessions and sign-in             | `@dunx/auth` - better-auth                                |
 | Tests                            | `@dunx/testing`                                           |
 | An ops page                      | `@dunx/dashboard`                                         |
 
 Validation is Standard Schema, so zod, Valibot and ArkType all work with no adapter.
-drizzle, better-auth, bullmq and zod are peer dependencies: install the ones the
-features you use need.
+
+Peer dependencies, installed only for the features you use: `zod`, `drizzle-orm`,
+`better-auth`, `bullmq`, and one renderer for the docs page (`swagger-ui-dist` or
+`@scalar/api-reference`). An RPC mount also needs `@connectrpc/connect` and
+`@bufbuild/protobuf`. A docs page serves nothing until its renderer is installed
+and passed to `OpenApiModule`.
 
 ## Reading an app you did not write
 

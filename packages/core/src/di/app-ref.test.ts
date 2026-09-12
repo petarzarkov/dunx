@@ -35,7 +35,7 @@ describe('AppRef', () => {
     );
   });
 
-  it('names onInit as the place to read it instead', async () => {
+  it('names the hooks that can read it instead', async () => {
     @Module({
       providers: [
         provide(LABEL, {
@@ -46,7 +46,9 @@ describe('AppRef', () => {
     })
     class Root {}
 
-    expect(AppFactory.create(Root)).rejects.toThrow(/Read it in onInit\(\)/);
+    expect(AppFactory.create(Root)).rejects.toThrow(
+      /Read it in onBeforeInit\(\) or onInit\(\)/,
+    );
   });
 
   it('hands back the app from onInit, which is what it is for', async () => {
