@@ -21,11 +21,18 @@ on:
   pull_request_review_comment:
     types: [created]
 
+# Keyed by event as well as by pull request, because the two flows must not
+# cancel each other. Sharing one group meant a comment arriving mid-review
+# cancelled the review, which is the pair of workflows this replaces having had
+# two groups for a reason.
+#
 # A push supersedes the review of the commit before it, so a rapid series of
-# pushes costs one review rather than one per push.
+# pushes costs one review rather than one per push. A reply does not supersede
+# anything: two people commenting is two questions, and cancelling the first
+# would drop an answer.
 concurrency:
-  group: fast-code-review-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: true
+  group: fast-code-review-${{ github.event.pull_request.number }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Nothing at the workflow level, so a job that forgets its own block gets none
 # rather than the repository default.
@@ -62,12 +69,22 @@ jobs:
           # Best first. Every key of a route is spent before the next route is
           # reached, so the free tiers are exhausted at the top of the list
           # rather than spread thinly across all of it.
+          #
+          # The OpenRouter entries are the `:free` ids its /models endpoint
+          # actually served on the day this was written, not the ones a model
+          # will guess: every id in the first version of this file returned 404,
+          # and the review only landed because the list was long enough to reach
+          # Gemini. Free tiers are renamed and retired often, so a 404 here is
+          # expected eventually and the run log names each one.
           routes: |
-            openrouter/deepseek/deepseek-chat-v3.1:free
-            openrouter/qwen/qwen3-coder:free
-            openrouter/z-ai/glm-4.5-air:free
-            groq/llama-3.3-70b-versatile
-            groq/qwen/qwen3-32b
+            openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+            openrouter/nvidia/nemotron-3-super-120b-a12b:free
+            openrouter/cohere/north-mini-code:free
+            openrouter/poolside/laguna-s-2.1:free
+            openrouter/google/gemma-4-31b-it:free
+            groq/openai/gpt-oss-120b
+            groq/openai/gpt-oss-20b
+            groq/moonshotai/kimi-k2-instruct
             google/gemini-2.5-flash
             google/gemini-2.5-flash-lite
             cerebras/llama-3.3-70b
