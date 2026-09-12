@@ -4,6 +4,71 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.7.0 - 2026-09-12
+
+An event bus, server-sent events, Connect RPC and pluggable OpenAPI renderers
+
+`@dunx/core` gains an `EventBus` over `EventTarget`: publish a class, subscribe with
+`@OnEvent`, and `await emit()` settles every handler's own promise. Subscriptions are
+wired in a new `onBeforeInit` phase, so they are in place before the first `onInit`
+whatever the module import order.
+
+`@dunx/http` gains server-sent events behind `@Sse` and `SseStream`, and serves
+Connect and gRPC-Web behind a new `@dunx/http/connect` subpath, on the port
+`Bun.serve` already has and through the middleware chain the app already has. Both
+clear Bun's idle deadline for a response that idles by design, and an RPC path is
+rate limited like a route rather than skipped as an unmatched one. `Compression` no
+longer buffers an endless stream.
+
+`@dunx/openapi` takes a `renderer`. **This is a breaking change** shipping in a minor
+by choice: `swagger-ui-dist` is now an optional peer rather than a dependency, the
+UI lives behind `@dunx/openapi/swagger` and `@dunx/openapi/scalar`, and the
+`ui` option and fifteen Swagger-specific root exports are gone. An app upgrading
+adds the peer it wants and passes a renderer; one that passes none serves
+`openapi.json` and no page. Scalar is the second renderer, and `examples/full`
+serves both, Swagger UI at `/api/docs` and Scalar at `/api/reference`.
+
+### Breaking changes
+
+- **openapi**: split the documentation UI into optional subpaths ([`94eb230`](https://github.com/petarzarkov/dunx/commit/94eb2305998a595c6f25cf75b107d949a8ca5751))
+
+### Features
+
+- **http**: serve Connect and gRPC-Web behind @dunx/http/connect ([`048997a`](https://github.com/petarzarkov/dunx/commit/048997a2385f452099dae480ae48125458a58e9f))
+- **http**: @Sse and SseStream, server-sent events over Bun's own streams ([`254aacb`](https://github.com/petarzarkov/dunx/commit/254aacb231f2457ec9e62000d17303e2f74e558e))
+- **core**: an application EventBus over EventTarget ([`93ac211`](https://github.com/petarzarkov/dunx/commit/93ac211f05e3b73eb9e2d9a271cfff770eab462a))
+
+### Fixes
+
+- **openapi**: evict a synchronous render failure, and rebase onto main ([`09f87c6`](https://github.com/petarzarkov/dunx/commit/09f87c694c3ee9e96c863e39d324fa6ccc5f1b99))
+- **openapi**: cache the render promise, not the rendered page ([`0b9695d`](https://github.com/petarzarkov/dunx/commit/0b9695de75d3655b8bb3f7d10dea4fcdd365ee3f))
+- **http**: rate limit a claimed path, and stop a route shadowing an RPC ([`696779e`](https://github.com/petarzarkov/dunx/commit/696779ea93829ac041418f83522fdf49c3a04606))
+- **http**: keep a streaming RPC alive past Bun's idle timeout ([`520cc59`](https://github.com/petarzarkov/dunx/commit/520cc590679993d9ff30e759ade33f01c490c740))
+- **http**: hold an event stream open past Bun's idle timeout ([`a8b2766`](https://github.com/petarzarkov/dunx/commit/a8b27666df89fecda265958164040384f06d988b))
+- **http**: stop Compression buffering an endless event stream ([`87adfca`](https://github.com/petarzarkov/dunx/commit/87adfca6997d3349e279701b85ecf50364e0be82))
+- **core**: guard the thenable probe, and say what EventDispatch.event is ([`710afc4`](https://github.com/petarzarkov/dunx/commit/710afc461c1457832747ba645d54e1f1c90badbb))
+- **core**: close the second review round on the event bus ([`c936b64`](https://github.com/petarzarkov/dunx/commit/c936b646c04008102ea5a9764604ab6fdb8175a1))
+- **core**: wire event handlers before the first onInit, from the review ([`e5813e4`](https://github.com/petarzarkov/dunx/commit/e5813e407ff86c81c32306ca7fa6685565cd7560))
+
+### Refactors
+
+- **http**: drop ServerRef, and close the rest of the review ([`a6d45ad`](https://github.com/petarzarkov/dunx/commit/a6d45addf2143b4462b75acdce4b32b0e9af6e02))
+- **http**: clear the idle deadline from the route table, not a registry ([`d197d9c`](https://github.com/petarzarkov/dunx/commit/d197d9c8d53c6ebef86c5441c86992fc1954da33))
+
+### Documentation
+
+- **openapi**: trim the explorer comments back under the density budget ([`e7330c5`](https://github.com/petarzarkov/dunx/commit/e7330c5ae86e046d27e3eae058285bd7627c5a22))
+- **bun-apis**: idleTimeout severs on a 4 second timer, not on the body read ([`40adc30`](https://github.com/petarzarkov/dunx/commit/40adc30e590303e3770249cb11e05fdd9e1fe93c))
+- **http**: trim the SSE comments under the group density budget ([`a7f4ae0`](https://github.com/petarzarkov/dunx/commit/a7f4ae003bf27c183bbce822c42531681b1a7cec))
+- **core**: trim the event bus comments back under the density budget ([`b4fd40f`](https://github.com/petarzarkov/dunx/commit/b4fd40f1f295fbbb46f2ba4cd4b690cb5cc713f2))
+- **bun-apis**: the cache override is also the workaround for the stale model ([`1cd2cc6`](https://github.com/petarzarkov/dunx/commit/1cd2cc6b92c136ee47477b0fe02f25c284970850))
+- **bun-apis**: record the content-keyed transpiler cache, and what it did not do ([`a0ba4c5`](https://github.com/petarzarkov/dunx/commit/a0ba4c5833e53d45e83222665aa341d4477eaccf))
+
+### Other changes
+
+- **mcp**: regenerate the corpus after the rebase onto main ([`fe2e313`](https://github.com/petarzarkov/dunx/commit/fe2e3133549f3e7ecc8a88f1e3e84d6ae7c6ff5f))
+- **example**: give the tour's boot hook a budget it can hold ([`d905683`](https://github.com/petarzarkov/dunx/commit/d905683807bc8a001d79d6cd1fda2e95a462d310))
+
 ## 3.6.0 - 2026-09-12
 
 Config files, ResiliencePolicy, a cache subpath, and queue metrics
