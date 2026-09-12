@@ -133,6 +133,40 @@ A 64x48 CMYK JPEG through `resize(32, 24).webp()`:
 `metadata()` reported `64x48 jpeg` on both, which is the header-only read recorded
 below rather than a decode.
 
+### The transpiler cache is content-keyed across paths, and a docs failure it did not cause
+
+Three concurrent worktrees under `.claude/worktrees/` each had `internal/docs`
+tests load a **sibling worktree's** `generated/index.json`. The fingerprint was
+exact: one failing run's model was 72,727 bytes, byte for byte a sibling's file,
+carrying a guide absent from the tree under test. Touching
+`internal/docs/src/data.ts` by one byte cleared it every time.
+
+The obvious explanation writes itself and is wrong. `data.ts` pulls its model in
+with `?raw`, and the cache under `~/.bun/install/cache/@t@` is keyed by source
+content rather than by path, so: identical `data.ts` in two worktrees, one cached
+artifact, the wrong JSON inlined. Measured, and only the first half survives. Two
+directories holding a byte-identical 101,889 byte `data.ts`, each importing its
+own `./gen.json?raw`:
+
+| Step               | Piles in `@t@` | Reports |
+| ------------------ | -------------: | ------- |
+| after running `a/` |  1254 (**+1**) | `AAA`   |
+| after running `b/` |  1254 (**+0**) | `BBB`   |
+
+`b` wrote no new entry, so it did hit `a`'s: the key is content, not path. It
+still read its own JSON, so the shared artifact does not carry the `?raw`
+payload. And at 4,664 bytes the real `data.ts` is under the size that writes a
+pile at all, so it was never the file being served from cache.
+
+So the symptom is real and the mechanism is not known. What is established: it
+needs concurrent checkouts, a CI run has one, and a one-byte edit to the
+importing module clears it.
+
+`BUN_RUNTIME_TRANSPILER_CACHE_PATH=0` does disable the cache - a run that writes
+a pile writes none with it set. `BUN_RUNTIME_TRANSPILER_CACHE_DIR` is not a
+variable Bun reads, which is why setting it looked like the cache ignoring the
+override.
+
 ## Re-probed on Bun 1.4.1 (rev 4661e494f)
 
 Run against 1.4.0 rev `34cbb9a40` side by side, on the same machine, rather than
