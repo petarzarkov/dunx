@@ -1,10 +1,12 @@
 import { Logger } from '@dunx/core';
-import { HttpService } from '@dunx/http/client';
+import { HttpService, type SseMessage } from '@dunx/http/client';
 import { NotificationFeed } from './notification.feed.js';
 
 /** The `tick` number out of one `data:` payload. */
-const tickOf = (data: string): number =>
-  (JSON.parse(data) as { tick: number }).tick;
+const tickOf = (message: SseMessage | undefined): number =>
+  message === undefined
+    ? 0
+    : (JSON.parse(message.data) as { tick: number }).tick;
 
 export class SseDemo {
   constructor(
@@ -16,35 +18,41 @@ export class SseDemo {
   async demonstrate(url: string): Promise<void> {
     const first = await this.read(url, 3);
     this.logger.info(
-      `@Sse -> streamSse read ${first.length} events: ` +
+      `@Sse -> streamSseEvents read ${first.length} events: ` +
         `ticks ${first.map(tickOf).join(', ')}`,
+    );
+    // The envelope, not just the payload: `streamSse` yields the `data` alone.
+    const last = first.at(-1);
+    this.logger.info(
+      `the last one arrived whole: event=${last?.event} id=${last?.id} ` +
+        `data=${last?.data}`,
     );
 
     // The id of the last event seen, sent back the way an EventSource does.
-    const resumed = await this.read(url, 2, String(tickOf(first.at(-1) ?? '')));
+    const resumed = await this.read(url, 2, last?.id);
     this.logger.info(
-      `Last-Event-ID: 3 -> resumed at tick ${tickOf(resumed[0] ?? '')}`,
+      `Last-Event-ID: ${last?.id} -> resumed at tick ${tickOf(resumed[0])}`,
     );
 
     await this.framing(url);
     await this.pushed(url);
   }
 
-  /** Every `data:` payload of `/api/events/ticks`, to the end of the stream. */
+  /** Every event of `/api/events/ticks`, to the end of the stream. */
   private async read(
     url: string,
     count: number,
     lastEventId?: string,
-  ): Promise<readonly string[]> {
-    const seen: string[] = [];
-    for await (const data of this.http.streamSse({
+  ): Promise<readonly SseMessage[]> {
+    const seen: SseMessage[] = [];
+    for await (const message of this.http.streamSseEvents({
       method: 'GET',
       url: new URL(`api/events/ticks?count=${count}`, url),
       ...(lastEventId === undefined
         ? {}
         : { headers: { 'last-event-id': lastEventId } }),
     })) {
-      seen.push(data);
+      seen.push(message);
     }
     return seen;
   }

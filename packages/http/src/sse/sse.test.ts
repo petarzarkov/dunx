@@ -68,8 +68,10 @@ describe('SseStream', () => {
   it('sets the three headers an event stream is read by', () => {
     const res = new SseStream({ heartbeatMs: 0 }).toResponse();
     expect(res.headers.get('content-type')).toBe('text/event-stream');
-    expect(res.headers.get('cache-control')).toBe('no-cache');
     expect(res.headers.get('connection')).toBe('keep-alive');
+    // `no-transform` is what tells any compressor, this one or a proxy's, to
+    // leave the bytes alone. Gzip holds every frame until the stream ends.
+    expect(res.headers.get('cache-control')).toBe('no-cache, no-transform');
   });
 
   it('merges extra headers under its own, which win', () => {

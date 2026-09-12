@@ -730,7 +730,13 @@ it('narrates the queue, which spans two processes', () => {
  * of both.
  */
 it('serves an event stream and reads its own back', () => {
-  expect(tour.text).toContain('@Sse -> streamSse read 3 events: ticks 1, 2, 3');
+  expect(tour.text).toContain(
+    '@Sse -> streamSseEvents read 3 events: ticks 1, 2, 3',
+  );
+  // The envelope, not just the payload: `streamSse` yields the data alone.
+  expect(tour.text).toContain(
+    'the last one arrived whole: event=tick id=3 data={"tick":3}',
+  );
   // The id of the last event seen, sent back the way an EventSource does.
   expect(tour.text).toContain('Last-Event-ID: 3 -> resumed at tick 4');
 });

@@ -417,10 +417,11 @@ export class JobsController {
 }
 ```
 
-The response carries `content-type: text/event-stream`, `cache-control: no-cache`
-and `connection: keep-alive`. `data` is serialised with `JSON.stringify` unless it
-is already a string, and a payload spanning several lines becomes one `data:` line
-each; `event`, `id` and `retry` precede it.
+The response carries `content-type: text/event-stream`,
+`cache-control: no-cache, no-transform` and `connection: keep-alive`. `data` is
+serialised with `JSON.stringify` unless it is already a string, and a payload
+spanning several lines becomes one `data:` line each; `event`, `id` and `retry`
+precede it.
 
 `input.lastEventId` is the `Last-Event-ID` header a reconnecting client sends,
 holding the `id` of the last event it saw. `input.req.signal` aborts when it goes
@@ -442,11 +443,19 @@ A comment line goes out every `heartbeatMs`, 15,000 by default, so a proxy
 counting idle seconds sees bytes; `0` sends none. A disconnect cancels the
 response body, which closes the stream and clears that timer.
 
-`Compression` never encodes `text/event-stream`: gzip holds every frame until the
-stream ends, so an encoded event stream arrives all at once or not at all.
+`Bun.serve` severs a request that goes 10 seconds without traffic, a response
+already streaming included. `@Sse` clears that for every stream it answers with,
+so an idle feed stays up. A handler streaming from a plain `@Get` calls
+`RequestTimeout.clear(req)` itself, and `idleTimeout` on `HttpFactory.create`
+moves the limit for the whole server.
 
-The outbound half reads one. `HttpService.sse()` in `@dunx/http/client` yields the
-`data` payloads of a stream this or any other server sends.
+`Compression` never encodes `text/event-stream`, and `no-transform` says the same
+thing to any proxy in front: gzip holds every frame until the stream ends, so an
+encoded event stream arrives all at once or not at all.
+
+The outbound half reads one. `HttpService.streamSse()` in `@dunx/http/client`
+yields the `data` payload of each event, and `streamSseEvents()` yields the whole
+message, `event`, `id` and `retry` included.
 
 ## Errors
 

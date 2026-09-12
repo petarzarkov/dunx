@@ -13,7 +13,7 @@ import { UrlHelper, type ParamsType } from '@arkv/shared';
 import type { HttpMethod } from '../route/marker.js';
 import { FetchError, FetchTransportError } from './errors.js';
 import { isJsonBody, readBody, safeStringify } from './json.js';
-import { ConnectDeadline, sseData } from './sse.js';
+import { ConnectDeadline, sseMessages, type SseMessage } from './sse.js';
 import { HttpClientOptions } from './options.js';
 import { HttpRetryClassifier, type HttpRetryOptions } from './retry.js';
 
@@ -71,6 +71,10 @@ type BaseOptions<TRequest, TResponse> = Omit<
   'method' | 'url' | 'payload'
 >;
 
+/** What both SSE readers take: no retry, and only the verbs a stream uses. */
+type SseConfig<TRequest> = Omit<RequestConfig<TRequest>, 'method' | 'retry'> & {
+  readonly method?: 'GET' | 'POST';
+};
 /**
  * What `send` reads. Narrower than `RequestConfig` on purpose: `HttpRetryOptions<T>`
  * is invariant in `T` - its `onSuccess` takes a `T` and its callbacks return one - so
@@ -248,23 +252,27 @@ export class HttpService extends UrlHelper {
     });
   }
 
+  /** Each `data:` payload of an event stream, `[DONE]` consumed rather than
+   * yielded. {@link streamSseEvents} keeps the envelope too. */
+  async *streamSse<TRequest = unknown>(
+    config: SseConfig<TRequest>,
+  ): AsyncGenerator<string> {
+    for await (const message of this.streamSseEvents(config))
+      yield message.data;
+  }
+
   /**
-   * Yields each `data:` payload of a Server-Sent-Events response, consuming the
-   * terminating `[DONE]` sentinel rather than yielding it.
+   * The same response, each event whole: the joined `data` plus whatever `event`,
+   * `id` and `retry` it carried. `id` is what a reconnect sends as `Last-Event-ID`.
    *
    * **No retry**, deliberately: a partially consumed stream cannot be replayed, so
    * retrying would re-deliver events the caller has already seen. The timeout
-   * covers the connect only - it is dropped once headers arrive, or a long-lived
-   * stream would be cut off mid-flight.
-   *
-   * Hand-rolled rather than delegated: Bun exposes no `EventSource` global and no
-   * SSE parser, which was measured rather than assumed.
+   * covers the connect only - dropped once headers arrive, or a long-lived stream
+   * would be cut off mid-flight.
    */
-  async *streamSse<TRequest = unknown>(
-    config: Omit<RequestConfig<TRequest>, 'method' | 'retry'> & {
-      readonly method?: 'GET' | 'POST';
-    },
-  ): AsyncGenerator<string> {
+  async *streamSseEvents<TRequest = unknown>(
+    config: SseConfig<TRequest>,
+  ): AsyncGenerator<SseMessage> {
     const url = this.urlFor(config);
     const method = config.method ?? 'POST';
     const startedAt = Date.now();
@@ -281,9 +289,7 @@ export class HttpService extends UrlHelper {
     try {
       const policy = this.policyFor(
         { ...config, timeoutMs: 0 },
-        {
-          maxRetries: 0,
-        },
+        { maxRetries: 0 },
       );
       response = await policy.run((signal) =>
         this.send(
@@ -309,7 +315,7 @@ export class HttpService extends UrlHelper {
     }
 
     try {
-      yield* sseData(response.body);
+      yield* sseMessages(response.body);
     } finally {
       this.logger.debug(`SSE ${method} ${url.href} closed`, {
         elapsedMs: Date.now() - startedAt,

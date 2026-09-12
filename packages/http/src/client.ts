@@ -25,3 +25,5 @@ export {
   type RequestConfig,
   type RequestMethod,
 } from './client/service.js';
+/** What `streamSseEvents` yields: one dispatched event, envelope included. */
+export type { SseMessage } from './client/sse.js';

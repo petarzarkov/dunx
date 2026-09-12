@@ -1,5 +1,7 @@
+import type { BunRequest } from 'bun';
 import { markRoute, type RoutePath } from '../route/marker.js';
 import type { Input, RouteInput, RouteSchemas } from '../route/schema.js';
+import { RequestTimeout } from '../server/request-timeout.js';
 import type { SseEvent } from './event.js';
 import { SseStream } from './stream.js';
 
@@ -28,11 +30,19 @@ type SseHandler = (
 
 const LAST_EVENT_ID = 'last-event-id';
 
-// No teardown here: a client that goes away cancels the response body, which is
-// what the stream clears its heartbeat from. Measured on Bun 1.4.2, including the
-// request aborted before a slow handler has returned the `Response` at all.
-const respond = (result: SseResult): Response =>
-  (result instanceof SseStream ? result : SseStream.from(result)).toResponse();
+/**
+ * The idle timeout is cleared for every stream, because idling is what an event
+ * stream is for. No teardown beyond that: a client that goes away cancels the
+ * response body, which is what the stream clears its heartbeat from - measured on
+ * Bun 1.4.2, the request aborted before a slow handler returned its `Response`
+ * included.
+ */
+const respond = (result: SseResult, req: BunRequest): Response => {
+  RequestTimeout.clear(req);
+  return (
+    result instanceof SseStream ? result : SseStream.from(result)
+  ).toResponse();
+};
 
 /**
  * A `GET` route answering `text/event-stream`, from a handler that returns an
@@ -67,7 +77,9 @@ export const Sse =
         ...input,
         lastEventId: input.req.headers.get(LAST_EVENT_ID) ?? undefined,
       });
-      return result instanceof Promise ? result.then(respond) : respond(result);
+      return result instanceof Promise
+        ? result.then((settled) => respond(settled, input.req))
+        : respond(result, input.req);
     }
 
     markRoute(served, { method: 'GET', path, options });

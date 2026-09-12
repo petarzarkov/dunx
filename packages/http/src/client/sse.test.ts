@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { ConnectDeadline, sseData } from './sse.js';
+import {
+  ConnectDeadline,
+  sseData,
+  sseMessages,
+  type SseMessage,
+} from './sse.js';
 
 const streamOf = (...chunks: string[]): ReadableStream<Uint8Array> =>
   new ReadableStream({
@@ -33,6 +38,67 @@ describe('sseData', () => {
     expect(
       await collect(streamOf('data: a\n\ndata: [DONE]\n\ndata: b\n\n')),
     ).toEqual(['a']);
+  });
+});
+
+const messages = async (
+  body: ReadableStream<Uint8Array>,
+): Promise<SseMessage[]> => {
+  const out: SseMessage[] = [];
+  for await (const message of sseMessages(body)) out.push(message);
+  return out;
+};
+
+describe('sseMessages', () => {
+  it('carries the envelope, not just the payload', async () => {
+    expect(
+      await messages(
+        streamOf('event: tick\nid: 7\nretry: 2500\ndata: {"n":1}\n\n'),
+      ),
+    ).toEqual([{ data: '{"n":1}', event: 'tick', id: '7', retry: 2500 }]);
+  });
+
+  it('joins a multi-line payload into one event', async () => {
+    expect(await messages(streamOf('data: one\ndata: two\n\n'))).toEqual([
+      { data: 'one\ntwo' },
+    ]);
+  });
+
+  it('dispatches nothing for a comment, which is what a heartbeat is', async () => {
+    expect(
+      await messages(streamOf(':\n\n: keep-alive\n\ndata: a\n\n')),
+    ).toEqual([{ data: 'a' }]);
+  });
+
+  it('strips one leading space and keeps the rest', async () => {
+    expect(await messages(streamOf('data:  padded\n\n'))).toEqual([
+      { data: ' padded' },
+    ]);
+  });
+
+  it('reads CRLF and a bare CR as line endings', async () => {
+    expect(await messages(streamOf('data: a\r\n\r\ndata: b\r\r'))).toEqual([
+      { data: 'a' },
+      { data: 'b' },
+    ]);
+  });
+
+  it('ignores a retry that is not an integer', async () => {
+    expect(await messages(streamOf('retry: soon\ndata: a\n\n'))).toEqual([
+      { data: 'a' },
+    ]);
+  });
+
+  it('drops an event the body ended in the middle of', async () => {
+    expect(await messages(streamOf('data: whole\n\ndata: partial\n'))).toEqual([
+      { data: 'whole' },
+    ]);
+  });
+
+  it('clears the event name between dispatches', async () => {
+    expect(
+      await messages(streamOf('event: named\ndata: a\n\ndata: b\n\n')),
+    ).toEqual([{ data: 'a', event: 'named' }, { data: 'b' }]);
   });
 });
 

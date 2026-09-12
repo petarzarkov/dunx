@@ -159,6 +159,12 @@ export abstract class HttpOptionsProvider {
   get gatewayPort(): number | undefined {
     return undefined;
   }
+
+  /** Seconds a request may idle before Bun severs it. See
+   * {@link HttpOptions.idleTimeout}. */
+  get idleTimeout(): number | undefined {
+    return undefined;
+  }
 }
 
 /**
@@ -207,6 +213,7 @@ export function resolveHttpOptions(
     http2: settings.http2,
     http1: settings.http1,
     gatewayPort: settings.gatewayPort,
+    idleTimeout: settings.idleTimeout,
   };
   // `exactOptionalPropertyTypes` separates an absent key from one set to
   // `undefined`, and only the first should defer to the provider: passing

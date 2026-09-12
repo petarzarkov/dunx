@@ -1,35 +1,99 @@
 /**
- * The `data:` payloads of a server-sent-events body, in order, ending when the
- * stream does or when a line reads `[DONE]`.
- *
- * Async iteration rather than `getReader()`: it acquires the reader and releases
- * it on completion, on a `break` in the consumer, and on the `[DONE]` return,
- * which is the case the manual form needed a `releaseLock()` in a `finally` for.
- *
- * Hand-rolled because Bun exposes no `EventSource` global and no SSE parser,
- * which was measured rather than assumed.
+ * One dispatched server-sent event, as it arrived. Not `SseEvent`, which is the
+ * write side: there `data` is any value, here it is the text off the wire.
  */
-export async function* sseData(
+export interface SseMessage {
+  /** The `data:` lines of one event, joined with `\n` as the spec requires. */
+  readonly data: string;
+  /** The `event:` name, absent for the default `message`. */
+  readonly event?: string;
+  readonly id?: string;
+  /** The reconnection delay the server asked for, in milliseconds. */
+  readonly retry?: number;
+}
+
+/** A line ends at `\r\n`, `\n` or a bare `\r`. */
+const LINE = /\r\n|\r|\n/;
+
+/** `field: value`, with one optional leading space stripped from the value. */
+const split = (line: string): readonly [string, string] => {
+  const colon = line.indexOf(':');
+  if (colon === -1) return [line, ''];
+  const value = line.slice(colon + 1);
+  return [line.slice(0, colon), value.startsWith(' ') ? value.slice(1) : value];
+};
+
+/**
+ * Every event of a server-sent-events body, in order, ending when the stream does
+ * or when one reads `[DONE]`. An event still being read when the body ends is
+ * dropped, which is what the spec says to do with an incomplete one.
+ *
+ * Async iteration rather than `getReader()`: it releases the reader on completion,
+ * on a `break` in the consumer, and on the `[DONE]` return, which the manual form
+ * needed a `releaseLock()` in a `finally` for. Hand-rolled because Bun exposes no
+ * `EventSource` global and no SSE parser, which was measured rather than assumed.
+ */
+export async function* sseMessages(
   body: ReadableStream<Uint8Array>,
-): AsyncGenerator<string> {
+): AsyncGenerator<SseMessage> {
   const decoder = new TextDecoder();
   let buffer = '';
+  let data: string[] = [];
+  let event: string | undefined;
+  let id: string | undefined;
+  let retry: number | undefined;
 
   for await (const chunk of body) {
     buffer += decoder.decode(chunk, { stream: true });
 
-    let newline = buffer.indexOf('\n');
-    while (newline !== -1) {
-      const line = buffer.slice(0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      newline = buffer.indexOf('\n');
+    let end = LINE.exec(buffer);
+    while (end !== null) {
+      const line = buffer.slice(0, end.index);
+      buffer = buffer.slice(end.index + end[0].length);
+      end = LINE.exec(buffer);
 
-      if (!line.startsWith('data:')) continue;
-      const data = line.slice(5).trim();
-      if (data === '[DONE]') return;
-      yield data;
+      // The blank line dispatches. An event with no data is not one: the spec
+      // resets the buffers and moves on, which is what a heartbeat relies on.
+      if (line === '') {
+        const payload = data.join('\n');
+        data = [];
+        if (payload === '') {
+          event = undefined;
+          continue;
+        }
+        if (payload === '[DONE]') return;
+        yield {
+          data: payload,
+          ...(event === undefined ? {} : { event }),
+          ...(id === undefined ? {} : { id }),
+          ...(retry === undefined ? {} : { retry }),
+        };
+        event = undefined;
+        continue;
+      }
+
+      // A comment, which is what a heartbeat is.
+      if (line.startsWith(':')) continue;
+
+      const [field, value] = split(line);
+      if (field === 'data') data.push(value);
+      else if (field === 'event') event = value;
+      // The spec ignores an id containing NUL, and a non-integer retry.
+      else if (field === 'id' && !value.includes('\0')) id = value;
+      else if (field === 'retry' && /^\d+$/.test(value)) retry = Number(value);
     }
   }
+}
+
+/**
+ * The `data:` payloads alone, for a caller that wants the text and not the
+ * envelope. One string per event rather than per line, so a multi-line payload
+ * arrives as it was sent.
+ */
+export async function* sseData(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<string> {
+  for await (const message of sseMessages(body)) yield message.data;
 }
 
 /**

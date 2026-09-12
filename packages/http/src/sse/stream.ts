@@ -12,32 +12,29 @@ export interface SseStreamOptions {
 
 const DEFAULT_HEARTBEAT_MS = 15_000;
 
+/** Stateless, so one serves every connection rather than one per open stream. */
+const encoder = new TextEncoder();
+
+/**
+ * `no-transform` is what tells `Compression`, and any proxy in front, to leave the
+ * bytes alone: gzip emits its header and then nothing until the stream ends.
+ */
 const SSE_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   'content-type': 'text/event-stream',
-  'cache-control': 'no-cache',
+  'cache-control': 'no-cache, no-transform',
   connection: 'keep-alive',
 });
 
 /**
- * A server-sent-events response, held open.
- *
- * `ReadableStream` in a `Response` is what Bun serves it with: headers flush on
- * return and each chunk reaches the client as it is enqueued.
- *
- * ```ts
- * const stream = new SseStream();
- * stream.send({ data: { progress: 0 }, id: '1' });
- * return stream.toResponse();
- * ```
- *
- * Every stream opens with one comment line, so the headers reach the client
- * before the first event does.
+ * A server-sent-events response, held open. `ReadableStream` in a `Response` is
+ * what Bun serves it with: headers flush on return and each chunk reaches the
+ * client as it is enqueued, and every stream opens with one comment line so those
+ * headers go out before the first event does.
  *
  * `@Sse` builds one for a handler that returns an `AsyncIterable` and takes one a
  * handler builds itself. Outside a route it is a `Response` a `@Get` can return.
  */
 export class SseStream {
-  readonly #encoder = new TextEncoder();
   readonly #body: ReadableStream<Uint8Array>;
   #controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   #timer: ReturnType<typeof setInterval> | undefined;
@@ -59,8 +56,7 @@ export class SseStream {
 
     // Bun holds the response headers until the body's first chunk - measured on
     // 1.4.2, a stream with nothing enqueued left `fetch` pending indefinitely. One
-    // comment line opens the connection, which is what a client waits for before
-    // `onopen`; every client ignores it.
+    // comment line opens the connection, and every client ignores it.
     this.comment();
 
     const heartbeatMs = options.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
@@ -138,7 +134,7 @@ export class SseStream {
 
   #write(text: string): void {
     if (this.#closed) return;
-    this.#controller?.enqueue(this.#encoder.encode(text));
+    this.#controller?.enqueue(encoder.encode(text));
   }
 
   #fail(error: unknown): void {

@@ -108,6 +108,7 @@ const BARREL = [
   'RelayOptions',
   'RequestLoggingMiddleware',
   'RequestLoggingOptions',
+  'RequestTimeout',
   'ResponseMap',
   'Returns',
   'Roles',
@@ -190,6 +191,7 @@ const CLIENT = [
   'RequestConfig',
   'RequestMethod',
   'RetryOptions',
+  'SseMessage',
   'httpClient',
 ].sort();
 

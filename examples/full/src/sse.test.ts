@@ -29,7 +29,7 @@ it('answers text/event-stream and frames every field', async () => {
 
   expect(response.status).toBe(200);
   expect(response.headers.get('content-type')).toBe('text/event-stream');
-  expect(response.headers.get('cache-control')).toBe('no-cache');
+  expect(response.headers.get('cache-control')).toBe('no-cache, no-transform');
   expect(await response.text()).toBe(
     `${OPEN}event: tick\nid: 1\ndata: {"tick":1}\n\n` +
       'event: tick\nid: 2\ndata: {"tick":2}\n\n',
