@@ -38,10 +38,21 @@ jobs:
     # issue, where there is no diff to review and the API call would 404. And
     # the sender check keeps dunxonu from triggering itself, since it posts with
     # a real user's token and its own comments raise this event.
+    # `contains` is a cheap pre-filter only; the exact match happens in the first
+    # step, because workflow expressions have no word boundary and
+    # `@dunxonudeepreviewer` contains this string.
+    #
+    # The author check is the one that matters. This job hands an agent a
+    # `gh api` wildcard and a token holding `pull-requests: write`, and the pull
+    # request it reads is attacker-controlled text, so a prompt injection in a
+    # diff plus a trigger word from any passer-by is enough to act with that
+    # token. It also bills a subscription call per run. Both reasons say the
+    # same thing: only people who already have write access may ask.
     if: >-
       contains(github.event.comment.body, '@dunxonudeepreview') &&
       (github.event.issue.pull_request != null || github.event.pull_request != null) &&
-      github.event.sender.login != 'dunxonu'
+      github.event.sender.login != 'dunxonu' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     timeout-minutes: 30
     permissions:
       contents: read
@@ -59,8 +70,24 @@ jobs:
       # catch it: its freshness check compares the head to the sha it was given,
       # and the newer sha is what it was given. So the sha is pinned first and
       # the checkout is told exactly which commit to take.
+      # The word boundary the `if:` above cannot express. `@dunxonudeepreviewer`
+      # and `@dunxonudeepreview-old` both contain the trigger and neither is a
+      # request for a thirty minute, subscription billed run.
+      - name: Check the trigger is exactly ours
+        id: gate
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          if printf '%s' "$BODY" | grep -qiE '@dunxonudeepreview([^A-Za-z0-9_-]|$)'; then
+            echo 'ok=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ok=false' >> "$GITHUB_OUTPUT"
+            echo 'The trigger appears only inside a longer word. Nothing to do.'
+          fi
+
       - name: Resolve the head commit
         id: head
+        if: steps.gate.outputs.ok == 'true'
         env:
           GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
           NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
@@ -79,6 +106,7 @@ jobs:
       # top post is not where they are looking. The two comment kinds live under
       # different paths, and only the event name says which one this is.
       - name: Acknowledge
+        if: steps.gate.outputs.ok == 'true'
         env:
           GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
           COMMENT_ID: ${{ github.event.comment.id }}
@@ -104,6 +132,7 @@ jobs:
       # holding `pull-requests: write`. Nothing here needs credentials after the
       # fetch.
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.ok == 'true'
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -112,6 +141,7 @@ jobs:
       # Pinned to a commit. A tag is mutable and this step is handed two secrets,
       # so retargeting `v1` would run unreviewed code with them.
       - id: review
+        if: steps.gate.outputs.ok == 'true'
         uses: anthropics/claude-code-action@b7912aeeb535234e3e9385ff49e8237f689b5f14 # v1
         env:
           # A background task in a headless run never reports back, because the
@@ -152,16 +182,17 @@ jobs:
       # a count, because the whole review in the body put a screen of prose in
       # the conversation.
       #
-      # `--whole-diff` is what makes this different from the automatic reviewer.
-      # The narrowing in post-review.ts asks what this account last reviewed, and
-      # dunxonu now reviews every push, so without the flag a deep review would
-      # scope itself to whatever changed since that automatic run: usually
-      # nothing. The one review somebody asked for would look at the least.
+      # Always the whole diff. post-review.ts used to narrow to what changed
+      # since this account's last review, which is now meaningless: dunxonu
+      # reviews every push automatically, so a requested deep review would have
+      # scoped itself to nothing. That narrowing is gone rather than flagged
+      # off, since nothing could reach it.
       #
       # An empty review is a hard failure rather than a green check. A review
       # gate that can pass without reviewing is worse than no gate, and this one
       # was explicitly requested, so silence is the wrong answer.
       - name: Submit the review
+        if: steps.gate.outputs.ok == 'true'
         env:
           GH_TOKEN: ${{ secrets.DUNXONU_TOKEN }}
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
@@ -172,5 +203,4 @@ jobs:
             "$EXECUTION_FILE" \
             "${{ github.repository }}" \
             "${{ steps.head.outputs.number }}" \
-            "${{ steps.head.outputs.sha }}" \
-            --whole-diff
+            "${{ steps.head.outputs.sha }}"

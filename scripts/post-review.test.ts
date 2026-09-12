@@ -2,9 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildReview,
   commentableLines,
-  COMPARE_FILE_CAP,
   type Commentable,
-  scopeFromCompare,
 } from './post-review.js';
 
 const finding = (over: Record<string, unknown> = {}) => ({
@@ -195,59 +193,20 @@ describe('reading the diff', () => {
  * Scoping later reviews to what actually changed is what lets a pull request
  * converge.
  */
-describe('scoping a review to what changed since the last one', () => {
+describe('a review of the whole diff', () => {
   const both = diff({ 'a.ts': [10], 'b.ts': [3] });
 
-  it('reports everything when there is no previous review', () => {
+  it('reports every finding it was given', () => {
     const review = buildReview(
       listed(finding(), finding({ file: 'b.ts', line: 3 })),
       both,
-      null,
     );
     expect(review.comments).toHaveLength(2);
     expect(review.event).toBe('COMMENT');
   });
 
-  it('drops findings in files untouched since the last review', () => {
-    const review = buildReview(
-      listed(finding(), finding({ file: 'b.ts', line: 3 })),
-      both,
-      new Set(['b.ts']),
-    );
-    expect(review.comments).toHaveLength(1);
-    expect(review.comments[0]?.path).toBe('b.ts');
-  });
-
-  it('says how many it carried rather than hiding them', () => {
-    const review = buildReview(
-      listed(finding(), finding({ file: 'b.ts', line: 3 })),
-      both,
-      new Set(['b.ts']),
-    );
-    expect(review.body).toContain('1 further finding');
-    expect(review.body).toContain('untouched since the last review');
-  });
-
-  it('approves when everything left in scope is clean', () => {
-    // The convergence case: the author fixed what was raised and pushed. The
-    // only findings left are about code this push did not touch, so there is
-    // nothing new to say and the review should say so.
-    const review = buildReview(
-      listed(finding({ file: 'untouched.ts' })),
-      diff({ 'b.ts': [3] }),
-      new Set(['b.ts']),
-    );
-    expect(review.event).toBe('APPROVE');
-    expect(review.comments).toHaveLength(0);
-    expect(review.body).toContain('1 further finding');
-  });
-
-  it('still approves a genuinely clean review with nothing carried', () => {
-    const review = buildReview(
-      listed(),
-      diff({ 'b.ts': [3] }),
-      new Set(['b.ts']),
-    );
+  it('approves a genuinely clean review', () => {
+    const review = buildReview(listed(), diff({ 'b.ts': [3] }));
     expect(review.event).toBe('APPROVE');
     expect(review.body).toBe(
       'Reviewed the diff and found nothing worth changing.',
@@ -258,35 +217,40 @@ describe('scoping a review to what changed since the last one', () => {
     const review = buildReview(
       listed(finding({ file: undefined, line: undefined })),
       diff({ 'b.ts': [3] }),
-      new Set(['b.ts']),
     );
     expect(review.event).toBe('COMMENT');
     expect(review.body).toContain('Actionable comment');
   });
 });
 
-/*
- * The compare endpoint caps its file list at 300 and does not page past it, so a
- * bigger change comes back silently short. Narrowing the scope to a truncated
- * list would suppress genuinely new findings and could then approve - the exact
- * failure the scoping exists to prevent, which is why this widens instead.
- */
-describe('scope from a compare result', () => {
-  it('scopes to the files it was given', () => {
-    expect(scopeFromCompare(['a.ts', 'b.ts'])).toEqual(
-      new Set(['a.ts', 'b.ts']),
-    );
+describe('a block with one malformed entry', () => {
+  const commentable: Commentable = new Map([['a.ts', new Set([1, 2])]]);
+
+  it('keeps the entries that parsed instead of discarding the block', () => {
+    // One truncated entry used to throw away every finding beside it, and the
+    // raw JSON went into the review body as prose.
+    const result = [
+      '```json',
+      JSON.stringify([
+        { file: 'a.ts', line: 1, summary: 'real one' },
+        { file: 'a.ts', line: 2 },
+      ]),
+      '```',
+    ].join('\n');
+
+    const review = buildReview(result, commentable);
+    expect(review.comments).toHaveLength(1);
+    expect(review.comments[0]?.body).toContain('real one');
   });
 
-  it('scopes to nothing changed, which is still a scope', () => {
-    expect(scopeFromCompare([])).toEqual(new Set());
+  it('still refuses an array that is not findings at all', () => {
+    const review = buildReview('```json\n[1, 2, 3]\n```', commentable);
+    // No findings array recognised, so it is prose and cannot approve.
+    expect(review.event).toBe('COMMENT');
+    expect(review.comments).toHaveLength(0);
   });
 
-  it('widens to the whole diff when the list may be truncated', () => {
-    const many = Array.from({ length: COMPARE_FILE_CAP }, (_, i) => `f${i}.ts`);
-    expect(scopeFromCompare(many)).toBeNull();
-    expect(
-      scopeFromCompare(many.slice(0, COMPARE_FILE_CAP - 1)),
-    ).not.toBeNull();
+  it('still reads an empty array as a clean review', () => {
+    expect(buildReview('[]', commentable).event).toBe('APPROVE');
   });
 });
