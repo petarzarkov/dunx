@@ -5,6 +5,14 @@ import type { RouteContext } from '../server/context.js';
 import { StaticOptions } from './options.js';
 
 /**
+ * One year, and `immutable`, which is only honest for a name that changes with
+ * the bytes: a content-addressed file, or a URL carrying the installed version.
+ * `@dunx/openapi` serves a renderer's assets under the second rule and takes this
+ * through `@dunx/http/internal`, so the two cannot drift.
+ */
+export const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+/**
  * Static files, on `Bun.file`. A `Bun.file` handed to a `Response` already
  * streams, sets `content-type`, answers a `Range` request and uses `sendfile(2)`,
  * so this file is a path check and a cache policy.
@@ -68,7 +76,7 @@ export class StaticFiles implements Middleware {
   #cacheControl(pathname: string): string {
     const { immutable, maxAge } = this.#options;
     return immutable(pathname)
-      ? 'public, max-age=31536000, immutable'
+      ? IMMUTABLE_CACHE_CONTROL
       : `public, max-age=${maxAge}`;
   }
 

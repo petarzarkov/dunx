@@ -27,5 +27,6 @@ export {
   type RouteNode,
 } from './inspect.js';
 export { buildContext } from './server/context.js';
+export { IMMUTABLE_CACHE_CONTROL } from './static/files.js';
 export { embedJson } from './server/html.js';
 export { isGateway } from './ws/marker.js';

@@ -220,9 +220,10 @@ export const FEATURES: readonly Feature[] = [
       'OpenAPI 3.1 from the routes own schemas, plus the Swagger UI page.',
     requires: [],
     module: { klass: 'DocsModule', from: './docs/docs.module.js' },
-    // No `swagger-ui-dist` here: it is a hard dependency of `@dunx/openapi`, so
-    // it arrives transitively and a scaffolded app never names it.
-    dependencies: ['@dunx/openapi', 'zod'],
+    // `swagger-ui-dist` is an optional peer of `@dunx/openapi`, one per renderer
+    // subpath, so the app that picks one installs it. Scalar is the other:
+    // `@scalar/api-reference` plus `ScalarRenderer` from `@dunx/openapi/scalar`.
+    dependencies: ['@dunx/openapi', 'swagger-ui-dist', 'zod'],
     config: [],
   },
   {

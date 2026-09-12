@@ -3,7 +3,9 @@ import { AppFactory, Module } from '@dunx/core';
 import { Controller, Get } from '@dunx/http';
 import { describeRoutes } from './discover.js';
 import { generateDocument } from './generate.js';
-import { OpenApiExplorer, OpenApiModule } from './module.js';
+import { OpenApiExplorer } from './explorer.js';
+import { OpenApiModule } from './module.js';
+import { SwaggerRenderer } from './swagger/index.js';
 
 @Controller('users')
 class UsersController {
@@ -86,6 +88,7 @@ test('a contributor can inject through forRootAsync', async () => {
   const app = await AppFactory.create(
     OpenApiModule.forRootAsync({
       root: AppModule,
+      renderer: new SwaggerRenderer(),
       useFactory: (auth: Auth) => ({
         title: 'T',
         version: '1',

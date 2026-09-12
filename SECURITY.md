@@ -61,12 +61,13 @@ benchmark harness, the dashboard bundle sources), `examples/`, `docs/` and
 
 Dependency reports split by who chose the version:
 
-- **dunx chose it.** `swagger-ui-dist` in `@dunx/openapi`, and the `@arkv/*`
-  packages, are direct dependencies pinned by dunx. A vulnerable pin is dunx's to
-  bump, so report it here.
-- **You chose it.** zod, drizzle-orm, better-auth, bullmq and ioredis are peer
-  dependencies your own install resolves. A flaw in one of those belongs upstream;
-  a flaw in how dunx calls it belongs here.
+- **dunx chose it.** The `@arkv/*` packages and `oxc-parser` are direct
+  dependencies pinned by dunx. A vulnerable pin is dunx's to bump, so report it
+  here.
+- **You chose it.** zod, drizzle-orm, better-auth, bullmq, ioredis,
+  `swagger-ui-dist` and `@scalar/api-reference` are peer dependencies your own
+  install resolves. A flaw in one of those belongs upstream; a flaw in how dunx
+  calls it belongs here.
 
 Configuration is not a vulnerability, but a control that fails to hold is:
 

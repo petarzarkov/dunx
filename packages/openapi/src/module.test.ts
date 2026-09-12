@@ -10,10 +10,13 @@ import {
 } from '@dunx/http';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { z } from 'zod';
+import { OpenApiExplorer } from './explorer.js';
 import { ApiDoc } from './metadata.js';
-import { OpenApiExplorer, OpenApiModule } from './module.js';
+import { OpenApiModule } from './module.js';
 import { mountPrefix, withPrefix } from './mount.js';
 import { danglingRefs } from './refs.js';
+import { ScalarRenderer } from './scalar/index.js';
+import { SwaggerRenderer } from './swagger/index.js';
 import type { OpenApiDocument } from './types.js';
 
 const CreateThing = z
@@ -53,6 +56,7 @@ const start = (prefix?: string): Promise<TestServer> =>
       version: '0.3.0',
       description: 'Documented by the app that serves it.',
       root: ThingsModule,
+      renderer: new SwaggerRenderer(),
     }),
     prefix,
   });
@@ -227,6 +231,7 @@ describe('forRootAsync', () => {
     createTestServer({
       modules: OpenApiModule.forRootAsync({
         root: ConfiguredModule,
+        renderer: new SwaggerRenderer(),
         useFactory: (config: DocsConfig) => ({
           title: config.title,
           version: config.version,
@@ -298,6 +303,113 @@ describe('forRootAsync', () => {
       expect((await server.request('openapi.json')).status).toBe(404);
       expect((await server.request('reference')).status).toBe(200);
       expect(server.app.get(OpenApiExplorer).warnings).toEqual([]);
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+/**
+ * The renderer is the whole of the documentation UI, and it is optional. Without
+ * one the module serves the document and stops: no page route, no asset route,
+ * and no `swagger-ui-dist` or `@scalar/api-reference` resolved.
+ */
+/**
+ * The same module with the other renderer dunx ships. What this asserts over a
+ * real server is that `renderer` is the whole of the difference: the document,
+ * the paths and the mount prefix are unchanged, and the page and its asset come
+ * out of `@scalar/api-reference` instead.
+ */
+describe('with the scalar renderer', () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await createTestServer({
+      modules: OpenApiModule.forRoot({
+        title: 'Served API',
+        version: '0.3.0',
+        root: ThingsModule,
+        path: '/reference',
+        renderer: new ScalarRenderer({ theme: 'purple' }),
+      }),
+      prefix: 'api',
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it('serves a Scalar page whose asset resolves under the prefix', async () => {
+    const response = await server.request('api/reference');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+
+    const page = await response.text();
+    expect(page).toContain('Scalar.createApiReference');
+    expect(page).toContain('"theme":"purple"');
+    // The document travels in the page, so Scalar boots without a fetch.
+    expect(page).toContain('ThingsController_list');
+    expect(page).toContain('href="/api/openapi.json"');
+    expect(page).toContain('/api/reference/standalone.js?v=');
+
+    const asset = await server.request('api/reference/standalone.js');
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get('content-type')).toContain('text/javascript');
+    expect(asset.headers.get('cache-control')).toContain('immutable');
+    expect(Number(asset.headers.get('content-length'))).toBeGreaterThan(500);
+
+    expect(
+      (await server.request('api/reference/standalone.esm.js')).status,
+    ).toBe(404);
+  });
+
+  it('keeps the assets out of the document, and the page in it', async () => {
+    const { body: document } =
+      await server.json<OpenApiDocument>('api/openapi.json');
+    expect(Object.keys(document.paths).sort()).toEqual([
+      '/api/openapi.json',
+      '/api/reference',
+      '/api/things',
+    ]);
+  });
+});
+
+describe('with no renderer', () => {
+  const startBare = (): Promise<TestServer> =>
+    createTestServer({
+      modules: OpenApiModule.forRoot({
+        title: 'Document only',
+        version: '1.0.0',
+        root: ThingsModule,
+      }),
+    });
+
+  it('serves the document and routes no page', async () => {
+    const server = await startBare();
+    try {
+      const { status, body: document } =
+        await server.json<OpenApiDocument>('openapi.json');
+      expect(status).toBe(200);
+      expect(Object.keys(document.paths).sort()).toEqual([
+        '/openapi.json',
+        '/things',
+      ]);
+      expect((await server.request('docs')).status).toBe(404);
+      expect((await server.request('docs/swagger-ui.css')).status).toBe(404);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('names the two subpaths when the page is asked for anyway', async () => {
+    const server = await startBare();
+    try {
+      const explorer = server.app.get(OpenApiExplorer);
+      await expect(explorer.page()).rejects.toThrow(/@dunx\/openapi\/swagger/);
+      await expect(explorer.asset('swagger-ui.css')).rejects.toThrow(
+        /@dunx\/openapi\/scalar/,
+      );
     } finally {
       await server.close();
     }

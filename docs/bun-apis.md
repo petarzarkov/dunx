@@ -87,6 +87,27 @@ The last row was not on the release notes' list; it turned up by writing
 example file whose header warns about exactly that. `Gauge` from `@dunx/core` is
 the way around it and is what `ChatGateway` already uses.
 
+### `Bun.resolveSync` reaches `<package>/package.json` past an `exports` map
+
+Node refuses a subpath an `exports` map does not list. Bun refuses the same, with
+one exception that `@dunx/openapi`'s renderers depend on:
+
+```ts
+Bun.resolveSync('@scalar/api-reference/package.json', dir); // resolves
+Bun.resolveSync('@scalar/api-reference/dist/browser/standalone.js', dir);
+// Cannot find package '@scalar/api-reference' imported from ...
+```
+
+`@scalar/api-reference` 1.68.0 lists nine subpaths and `./package.json` is not one
+of them. `PackageAssets` resolves the manifest, reads `version` off it for the
+cache-busting query, and joins the asset path onto its directory - so the one
+specifier it hands Bun is the one that works whether or not the package has an
+`exports` map. `swagger-ui-dist` has none at all and resolves either way.
+
+Probed on 1.4.2 rev `744846f84`. If this ever tightens to match Node, the fallback
+is `Bun.resolveSync('<package>', dir)`, which resolves the `.` entry, and walking
+up from its directory.
+
 ### A nested `AsyncLocalStorage.run()` held the enclosing store
 
 `AsyncRequestContext.runWithContext` reads the enclosing store and calls

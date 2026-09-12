@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { DOCUMENT_ELEMENT_ID, renderShell } from './html.js';
-import { contentTypeOf, isSwaggerAsset, SwaggerAssets } from './swagger.js';
-import type { OpenApiDocument } from './index.js';
+import { PackageAssets } from '../assets.js';
+import { DOCUMENT_ELEMENT_ID } from '../shell.js';
+import type { OpenApiDocument } from '../types.js';
+import { renderSwaggerPage } from './html.js';
+import { SWAGGER_ASSETS } from './renderer.js';
 
 const document: OpenApiDocument = {
   openapi: '3.1.0',
@@ -85,8 +87,8 @@ const options = {
   mountedAt: '/api/docs',
 };
 
-const assets = await SwaggerAssets.resolve();
-const page = renderShell(document, options, assets);
+const assets = await PackageAssets.resolve(SWAGGER_ASSETS);
+const page = renderSwaggerPage(document, options, assets);
 
 /** The `<script type="application/json">` Swagger UI is handed. */
 const embedded = (): OpenApiDocument => {
@@ -189,7 +191,7 @@ describe('the docs page', () => {
     // `spec`, never `url`: a fetched document costs a round trip and breaks if
     // the JSON route is guarded differently from the page. Assigned *after* the
     // options object so no caller-supplied key can displace it.
-    expect(page).toContain('options.spec=JSON.parse(');
+    expect(page).toContain('options.spec=spec;');
     expect(page).not.toMatch(/"url":/);
   });
 
@@ -208,7 +210,7 @@ describe('the docs page', () => {
   });
 });
 
-describe('SwaggerAssets', () => {
+describe('the swagger-ui-dist assets', () => {
   it('resolves the installed swagger-ui-dist and every allow-listed file', async () => {
     for (const name of [
       'swagger-ui-bundle.js',
@@ -216,9 +218,9 @@ describe('SwaggerAssets', () => {
       'swagger-ui.css.map',
       'favicon-32x32.png',
     ] as const) {
-      expect(isSwaggerAsset(name)).toBe(true);
+      expect(Object.hasOwn(SWAGGER_ASSETS.files, name)).toBe(true);
       expect(await Bun.file(assets.pathOf(name)).exists()).toBe(true);
-      expect(contentTypeOf(name).length).toBeGreaterThan(0);
+      expect(assets.files[name]?.length).toBeGreaterThan(0);
     }
   });
 
@@ -226,7 +228,7 @@ describe('SwaggerAssets', () => {
    * The allow-list is what makes one wildcard route safe. `swagger-ui-dist` also
    * holds four other builds and 4 MB of sourcemaps in the same directory.
    */
-  it('refuses anything not on the allow-list', () => {
+  it('refuses anything not on the allow-list', async () => {
     for (const name of [
       'swagger-ui-es-bundle.js',
       'swagger-ui-bundle.js.map',
@@ -234,7 +236,10 @@ describe('SwaggerAssets', () => {
       '../../../etc/passwd',
       '',
     ]) {
-      expect(isSwaggerAsset(name)).toBe(false);
+      expect(Object.hasOwn(SWAGGER_ASSETS.files, name)).toBe(false);
+      expect((await PackageAssets.serve(SWAGGER_ASSETS, name)).status).toBe(
+        404,
+      );
     }
   });
 
@@ -246,14 +251,18 @@ describe('SwaggerAssets', () => {
   it('serves the css map, because the css asks for it', async () => {
     const css = await Bun.file(assets.pathOf('swagger-ui.css')).text();
     expect(css).toContain('sourceMappingURL=swagger-ui.css.map');
-    expect(isSwaggerAsset('swagger-ui.css.map')).toBe(true);
+    expect(Object.hasOwn(SWAGGER_ASSETS.files, 'swagger-ui.css.map')).toBe(
+      true,
+    );
 
     const js = await Bun.file(assets.pathOf('swagger-ui-bundle.js')).text();
     expect(js).not.toContain('sourceMappingURL');
-    expect(isSwaggerAsset('swagger-ui-bundle.js.map')).toBe(false);
+    expect(
+      Object.hasOwn(SWAGGER_ASSETS.files, 'swagger-ui-bundle.js.map'),
+    ).toBe(false);
   });
 
   it('is resolved once and cached', async () => {
-    expect(await SwaggerAssets.resolve()).toBe(assets);
+    expect(await PackageAssets.resolve(SWAGGER_ASSETS)).toBe(assets);
   });
 });

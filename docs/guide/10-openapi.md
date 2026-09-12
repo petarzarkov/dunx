@@ -1,7 +1,8 @@
 # OpenAPI
 
 `@dunx/openapi` builds an OpenAPI 3.1 document out of the schemas the routes
-already validate against, and serves a self-contained explorer page for it.
+already validate against, and serves it. A documentation UI over it is opt-in:
+Swagger UI behind `@dunx/openapi/swagger`, Scalar behind `@dunx/openapi/scalar`.
 
 The point is that there is **one** description of a request in the codebase. The
 zod schema on `@Post('/', createUser)` is the object the request path calls
@@ -12,6 +13,7 @@ what the server enforces.
 ```ts
 import { HttpFactory } from '@dunx/http';
 import { OpenApiModule } from '@dunx/openapi';
+import { SwaggerRenderer } from '@dunx/openapi/swagger';
 
 const app = await HttpFactory.create(
   OpenApiModule.forRoot({
@@ -20,6 +22,7 @@ const app = await HttpFactory.create(
     description:
       'Generated from the same zod schemas the routes validate against.',
     root: AppModule,
+    renderer: new SwaggerRenderer(),
   }),
 );
 ```
@@ -40,6 +43,7 @@ otherwise would be the first lie in the file.
 | `description` | none            | `info.description`                         |
 | `servers`     | none            | `servers[]`                                |
 | `root`        | required        | The module graph to document and to import |
+| `renderer`    | none            | The documentation UI. None serves no page  |
 | `path`        | `/docs`         | Where the HTML page is mounted             |
 | `jsonPath`    | `/openapi.json` | Where the document is mounted              |
 
@@ -59,10 +63,11 @@ OpenApiModule.forRootAsync({
 });
 ```
 
-`root` stays outside the factory because it is a module reference: the graph must
-exist before the container that would run the factory does.
+`root` and `renderer` stay outside the factory. The graph must exist before the
+container that would run the factory does, and the controller declares its routes
+in the same breath.
 
-The mount paths escape that. The controller declares its two routes with **path
+The mount paths escape that. The controller declares its routes with **path
 thunks**, and route discovery runs after every provider has settled, so the
 factory that produced a path has returned before anything reads it. `RoutePath`
 in `@dunx/http` is the type.
@@ -379,60 +384,115 @@ an empty request body in the explorer.
 
 ## The page
 
-`GET /docs` is one self-contained HTML document: a boot `<style>`, the model in a
-`<script type="application/json">`, and the explorer bundle in a second
-`<script>`. **Nothing is fetched.** No CDN, no `src=`, no `<link>`, no webfont, no
-external image.
+The document is served with or without a page. A page is a `renderer`, and there
+is no default: with none, `/openapi.json` is the only route the module adds.
 
-That guarantee ruled out `swagger-ui-dist` (11.7 MB unpacked, and a CDN in
-practice) and `@scalar/api-reference` (11 MB). It is asserted by the package's own
-tests, which boot the real bundle and check that it issues zero fetches.
+| Renderer          | Subpath                 | Optional peer           | Install              | Assets, gzipped |
+| ----------------- | ----------------------- | ----------------------- | -------------------- | --------------- |
+| `SwaggerRenderer` | `@dunx/openapi/swagger` | `swagger-ui-dist`       | 12 MB, 2 packages    | 447 KiB         |
+| `ScalarRenderer`  | `@dunx/openapi/scalar`  | `@scalar/api-reference` | 276 MB, 279 packages | 1.05 MiB        |
 
-The explorer is a React and Mantine frontend, bundled at build time and inlined
-into the page as a string. Importing `@dunx/openapi` does not load it; see
-[What the page costs](#what-the-page-costs).
+```ts
+import { OpenApiModule } from '@dunx/openapi';
+import { SwaggerRenderer } from '@dunx/openapi/swagger';
 
-What the page does that a static rendering cannot:
+OpenApiModule.forRoot({
+  title: 'Payments',
+  version: '1.4.0',
+  root: AppModule,
+  // Or: new ScalarRenderer({ theme: 'purple' }) from '@dunx/openapi/scalar'
+  renderer: new SwaggerRenderer({ docExpansion: 'list' }),
+});
+```
 
-- **Sends requests.** Every operation is executable, the usual reason people
-  reach for swagger-ui.
-- **Credentials once.** An **Authorize** dialog reads
-  `components.securitySchemes` and offers a field per scheme, applied to every
-  operation that declares it and kept in the tab's `sessionStorage`.
-- **Path parameters are substituted.** Every `{name}` in the template gets an
-  input whether or not the document declares it, so a request can never go out
-  with a literal `{id}` in it.
-- **The body arrives pre-filled** from the schema, with refs resolved and
-  `minimum` and `format` honoured.
+Install the one you mount: `bun add swagger-ui-dist` or
+`bun add @scalar/api-reference`. Without it the page route throws, with a message
+naming the package and the command; `/openapi.json` is unaffected.
 
-Two Bun APIs do work a dependency usually would: `Bun.escapeHTML` escapes the
-shell, and `Bun.markdown.html` renders every description **on the server**, with
-`noHtmlBlocks`, `noHtmlSpans` and `tagFilter` on, so raw HTML in a schema
-description is escaped rather than trusted and no markdown parser lands in the
-bundle. Request samples are pre-computed server side too.
+`renderer` sits beside `root` rather than inside `forRootAsync`'s factory, because
+the controller declares its routes before there is a container to run a factory.
 
-`OpenApiExplorer` caches by mount prefix, because `setGlobalPrefix()` is applied
-after the container is built. The request path only serialises a string that
-already exists.
+Each constructor takes that library's own configuration, plus the `title` and
+`favicon` dunx owns. `SwaggerUiOptions` is every Swagger UI parameter; the seven
+that are functions take the source of an expression (`RawJs`) instead, since a
+server-rendered page cannot carry a closure. `ScalarOptions` is Scalar's
+configuration without its function-valued keys.
 
-The page needs JavaScript, which the hand-written page it replaced did not. A
-`<noscript>` block links the raw document.
+### What the page fetches
 
-### What the page costs
+The document travels in the page, in a `<script type="application/json">` the boot
+script parses. Nothing fetches `/openapi.json`, so the page works where that route
+is guarded differently.
 
-The explorer is a React bundle: **437 KiB raw, 123 KiB gzipped**, of which React
-is 188 KiB. The served page is about 458 KiB, or ~125 KiB gzipped.
+The renderer's files are fetched, same-origin, as siblings of the page:
 
-**Importing `@dunx/openapi` does not load it.** `renderPage` lives behind the
-`@dunx/openapi/ui` subpath and `OpenApiExplorer.page()` reaches it with
-`await import()` on the first request for the page, caching the rendered string
-per mount prefix. A service that never serves `/docs` pays 19.8 KB and ~5.7 ms of
-import, against 479.6 KB and ~10.9 ms when the bundle was inlined.
+| Renderer   | Files                                                                               |
+| ---------- | ----------------------------------------------------------------------------------- |
+| Swagger UI | `swagger-ui-bundle.js`, `swagger-ui.css`, `swagger-ui.css.map`, `favicon-32x32.png` |
+| Scalar     | `standalone.js`, `standalone.js.map`                                                |
 
-To avoid it entirely, do not mount the page. `OpenApiModule` still serves
-`/openapi.json`, and pointing your own swagger-ui or Scalar at it is one route.
-`buildModel` and `renderShell` are exported so a page of your own can reuse the
-pre-rendered prose, the samples and the fields.
+**No CDN.** Every `src` and `href` the page emits is relative, which both
+renderers' tests assert against the rendered markup. Scalar's default web fonts
+are `fonts.scalar.com`, so `withDefaultFonts` defaults to `false`; set it to `true`
+to take them.
+
+A name off that list answers 404 rather than reading from disk. One wildcard route
+serves the files, and both packages hold other builds and megabytes of sourcemaps
+in the same directory. The two `.map` files are served because the assets that
+reference them would otherwise log a 404 in a browser with devtools open.
+
+Assets carry `cache-control: public, max-age=31536000, immutable` and the installed
+version in the query, so an upgrade busts the cache with no path change.
+
+The page needs JavaScript. A `<noscript>` block links the raw document.
+
+`OpenApiExplorer` caches the rendered page per mount prefix, since
+`setGlobalPrefix()` is applied after the container is built. The renderer resolves
+its files on the first request for the page, so an app serving only the document
+never looks them up.
+
+### A renderer of your own
+
+`DocsRenderer` is two methods. `renderShell` is the markup both renderers produce,
+and `PackageAssets` serves a package's files out of the consumer's install, gated
+on the allow-list that makes the wildcard route safe:
+
+```ts
+import {
+  DocsRenderer,
+  PackageAssets,
+  readDocument,
+  renderShell,
+  type AssetPackage,
+  type OpenApiDocument,
+  type PageOptions,
+} from '@dunx/openapi';
+
+const ASSETS: AssetPackage = {
+  name: 'my-explorer',
+  directory: 'dist',
+  files: { 'explorer.js': 'text/javascript; charset=utf-8' },
+};
+
+export class MyRenderer extends DocsRenderer {
+  async page(doc: OpenApiDocument, options: PageOptions): Promise<string> {
+    const assets = await PackageAssets.resolve(ASSETS);
+    return renderShell(doc, {
+      mountId: 'explorer',
+      jsonHref: options.jsonHref,
+      scripts: [assets.href(options.mountedAt, 'explorer.js')],
+      // `readDocument` declares the embedded document as a variable.
+      boot: `${readDocument('spec')}Explorer.mount('#explorer', spec);`,
+    });
+  }
+
+  asset(name: string): Promise<Response> {
+    // Checks the allow-list before it resolves the package, so a junk name off
+    // the wildcard route is a 404 and costs nothing.
+    return PackageAssets.serve(ASSETS, name);
+  }
+}
+```
 
 ## Sharp edges
 

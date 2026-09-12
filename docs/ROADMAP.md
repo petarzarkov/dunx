@@ -26,8 +26,9 @@ other.
 Five of those are a library wired in rather than dunx code - never invent what a
 mature library already solves. `drizzle-orm` is an optional `peerDependency` and
 drives `bun:sqlite`/`Bun.SQL` through its own Bun adapters; `bullmq` is one too and
-reaches Redis through `createBunRedisClient`; `swagger-ui-dist` is the `/docs` page
-and is optional too; `better-auth` is a required peer of `@dunx/auth`; `@arkv/logger`
+reaches Redis through `createBunRedisClient`; `swagger-ui-dist` and
+`@scalar/api-reference` are the two `/docs` pages, one optional peer per renderer
+subpath; `better-auth` is a required peer of `@dunx/auth`; `@arkv/logger`
 is a `dependency` and satisfies core's `Logger` contract structurally, with no
 adapter class in between - and since 0.12 it brings the HTTP, syslog and sampling
 transports, `textFormat`/`logfmtFormat`, `setLevel` and `stats()`, all of which
@@ -614,8 +615,9 @@ when the handler's return type already checks the answer for free. Nothing in
 
 The rendering half of that is no longer dunx's. `internal/openapi-ui` rendered
 responses through a `SchemaView` shared with the request body, and it is deleted:
-`@dunx/openapi` mounts **`swagger-ui-dist`**, which renders both. The response
-schemas above are what the document carries, and Swagger UI decides how they look.
+`@dunx/openapi` mounts a library, **Swagger UI** or **Scalar**, which renders both.
+The response schemas above are what the document carries, and the renderer decides
+how they look.
 See [architecture/tooling.md](./architecture/tooling.md), "The API explorer: built,
 measured, then replaced by Swagger UI", for what that cost - 3.7x the gzipped bytes -
 and why it was still right.

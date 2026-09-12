@@ -53,16 +53,17 @@ The rule for those:
   feature is opt-in), **never `dependencies`**. The consumer installs and owns the
   version; dunx does not bundle it.
 
-  **One carve-out, and the test is whether the consumer has a version opinion.**
-  `swagger-ui-dist` is a `dependency` of `@dunx/openapi`. Every other integration is
-  a library the consumer _writes code against_ - zod schemas, drizzle tables,
-  better-auth config - so the version is theirs to hold. Nobody imports
-  `swagger-ui-dist`, calls it, or types against it: it is two files dunx serves, and
-  a peer would mean `bun add swagger-ui-dist` for a decision the consumer does not
-  actually have. `@nestjs/swagger` ships it as a pinned dependency for the same
-  reason. The cost, stated: 12 MB in every install of `@dunx/openapi`, including one
-  that only wants `openapi.json`. If a second asset bundle ever wants this, weigh it
-  against that sentence rather than citing this line.
+  **There is no carve-out, and the test is whether the consumer has a version
+  opinion.** `swagger-ui-dist` was a `dependency` of `@dunx/openapi` on the
+  reasoning that nobody imports it, calls it or types against it, so nobody had a
+  version to hold - `@nestjs/swagger` pins it as a dependency for the same reason.
+  That held while there was exactly one renderer. There are now two,
+  `@dunx/openapi/swagger` and `@dunx/openapi/scalar`, and picking one is a line the
+  consumer writes in their own code, which is a version opinion by definition. Both
+  libraries are **optional peers, one per subpath**, so `swagger-ui-dist`'s 12 MB no
+  longer lands in an install that only wants `openapi.json` and
+  `@scalar/api-reference`'s 276 MB across 279 packages lands only on someone who
+  imports that subpath. The reasoning in full is on issue #85.
 
   `swagger-ui` (not `-dist`) was measured and rejected: **177 MB across 149 packages
   against 12 MB across 2**, delivering byte-identical `swagger-ui-bundle.js` and
@@ -275,11 +276,19 @@ from `DashboardMiddleware`'s first page request, so importing the package does n
 load it. `html.ts` takes the script to inline as an argument (`renderShell`) and
 **must not import `ui-bundle.ts`**, or the split silently reverts.
 
-**`@dunx/openapi` used to work the same way and no longer does.** It mounts
-`swagger-ui-dist`: a shell plus two asset routes serving the consumer's own install,
-and no `./ui` subpath. It cost 3.7x the gzipped bytes knowingly, and the reasoning is
-in [architecture/tooling.md](./docs/architecture/tooling.md). **Do not re-add a
-hand-built API explorer.**
+**`@dunx/openapi` used to work the same way and no longer does.** It mounts a
+library: a shell plus one asset route per file, serving the consumer's own install.
+Swagger UI cost 3.7x the gzipped bytes of the hand-built explorer knowingly, and the
+reasoning is in [architecture/tooling.md](./docs/architecture/tooling.md). **Do not
+re-add a hand-built API explorer.**
+
+Its subpaths are `./swagger` and `./scalar`, one renderer each, and they are a
+**dependency** split rather than a byte split: the page itself is a few KB either
+way, and what the subpath decides is which optional peer the consumer installs.
+`OpenApiModule` takes a `renderer`, and with none it serves `openapi.json` and
+routes no page at all. A third renderer is `DocsRenderer` plus `PackageAssets`, both
+exported from the root - do not add one to the repo without a reason the two do not
+cover.
 
 ### Rule 3 - a package's surface is classes
 
@@ -707,7 +716,7 @@ pin, `workspace:` rewriting, first-publish-must-be-manual: `/release`.
 | `@dunx/transform` | Load-time constructor-dependency transform (only native dep)                                                                                                                                          |
 | `@dunx/http`      | Bun.serve adapter, controllers, **websocket gateways**, middleware, CORS, validation; an outbound `HttpClient` behind `./client`, and **Connect/gRPC-Web** behind `./connect`                         |
 | `@dunx/infra`     | Subpaths `/db` `/redis` `/cache` `/queue` `/schedule` `/files` `/images` `/logger` `/pagination`                                                                                                      |
-| `@dunx/openapi`   | OpenAPI 3.1 from the routes' own zod schemas, with **swagger-ui-dist** mounted over it (zod is a `peerDependency`; swagger-ui-dist is a `dependency`)                                                 |
+| `@dunx/openapi`   | OpenAPI 3.1 from the routes' own zod schemas, with **Swagger UI** behind `./swagger` or **Scalar** behind `./scalar` mounted over it. zod, `swagger-ui-dist` and `@scalar/api-reference` are all peers |
 | `@dunx/auth`      | **better-auth** mounted, `SessionGuard`, `AuthContext`, `Bun.password` hashing                                                                                                                        |
 | `@dunx/testing`   | `createTestApp` / `createTestServer` - overrides replaced in place, real server on port 0                                                                                                             |
 | `@dunx/dashboard` | An opt-in ops page - routes, provider graph, gateways, Redis, config, runtime, with **bull-board** mounted for the queues. One middleware; `internal/dashboard-ui`'s React page inlined behind `./ui` |

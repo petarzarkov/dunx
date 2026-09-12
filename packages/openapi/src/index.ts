@@ -29,38 +29,25 @@ export {
   type DocumentInfo,
   type GeneratedDocument,
 } from './generate.js';
-// The page shell, which is a Swagger UI boot script and nothing else. `renderShell`
-// is exported so a page of your own can reuse the document embedding and the asset
-// hrefs; `SwaggerAssets` is what resolves the consumer's `swagger-ui-dist`.
+// The page, whichever renderer produces it. `renderShell` is the markup they have
+// in common and `PackageAssets` resolves the files it links out of the consumer's
+// own install, so a renderer of your own is those two plus a `DocsRenderer`.
+// dunx ships `@dunx/openapi/swagger` and `@dunx/openapi/scalar`, each behind its
+// own optional peer dependency.
 export {
   DOCUMENT_ELEMENT_ID,
-  MOUNT_ELEMENT_ID,
+  readDocument,
   renderShell,
-  type PageOptions,
-} from './html.js';
+  type ShellParts,
+} from './shell.js';
+export { DocsRenderer, type PageOptions } from './renderer.js';
 export {
   ASSET_CACHE_CONTROL,
-  contentTypeOf,
-  isSwaggerAsset,
-  SwaggerAssets,
-  type SwaggerAsset,
-} from './swagger.js';
-// Every Swagger UI parameter, typed. `RawJs` is the seam for the seven that are
-// functions and therefore cannot cross from a server-rendered page as values.
+  PackageAssets,
+  type AssetPackage,
+} from './assets.js';
+export { OpenApiExplorer } from './explorer.js';
 export {
-  DEFAULT_UI_OPTIONS,
-  renderUiOptions,
-  SYNTAX_THEMES,
-  type DocExpansion,
-  type ModelRendering,
-  type RawJs,
-  type SubmitMethod,
-  type SwaggerUiOptions,
-  type SyntaxHighlightOptions,
-  type SyntaxTheme,
-} from './ui-options.js';
-export {
-  OpenApiExplorer,
   OpenApiModule,
   type OpenApiAsyncOptions,
   type OpenApiInfo,
@@ -96,8 +83,8 @@ export {
   type JsonSchema,
   type MediaTypeObject,
   type OpenApiDocument,
-  type OperationKey,
   type OperationObject,
+  type OperationKey,
   type ParameterLocation,
   type ParameterObject,
   type PathItemObject,

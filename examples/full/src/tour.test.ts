@@ -188,6 +188,19 @@ it('serves a Swagger UI shell whose assets resolve on this origin', () => {
   );
 });
 
+/**
+ * The other renderer dunx ships, over the same document. Both self-host: the
+ * page links what the install holds, and nothing resolves to another origin.
+ */
+it('serves a Scalar page whose one asset resolves on this origin', () => {
+  expect(tour.text).toMatch(
+    /GET \/api\/reference -> 200 text\/html; charset=utf-8, \d+ bytes of Scalar shell/,
+  );
+  expect(tour.text).toMatch(/requests 1 asset\(s\), 0 off-origin/);
+  expect(tour.text).toContain('/api/reference/standalone.js -> 200');
+  expect(tour.text).toContain('/api/reference/package.json -> 404');
+});
+
 it('documents security from the same metadata the guards read', () => {
   expect(tour.text).toContain(
     '@Roles("editor") PATCH /api/reports/{id} -> security [{"bearer":[]}], roles ["editor"]',
