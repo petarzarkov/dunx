@@ -585,6 +585,38 @@ it('delivers a binary frame as the configured binaryType', () => {
   );
 });
 
+it('serves protobuf over Connect and gRPC-Web on the port the routes use', () => {
+  // The greeted count comes off the injected Greetings provider, so a passing
+  // line here means the RPC was constructed by the container.
+  expect(tour.text).toContain(
+    'connect unary -> Hello connect (greeted 1 so far)',
+  );
+  expect(tour.text).toContain(
+    'connect server stream -> tick 3, tick 2, tick 1',
+  );
+  expect(tour.text).toContain(
+    'grpc-web unary -> Hello grpc-web on the same port',
+  );
+  // The Connect protocol is a plain POST, so no generated client is required.
+  expect(tour.text).toContain('plain JSON POST -> 200 {"text":"Hello curl"');
+});
+
+it('maps a thrown ConnectError to a status and refuses native gRPC', () => {
+  expect(tour.text).toContain(
+    'a thrown ConnectError arrives as a status -> ConnectError: [invalid_argument] name is required',
+  );
+  // gRPC puts grpc-status in an HTTP trailer and Bun.serve sends none, so the
+  // refusal is explicit rather than a reply the client would misread.
+  expect(tour.text).toContain(
+    'native gRPC content-type -> 415 unimplemented (Connect and gRPC-Web only)',
+  );
+});
+
+it('logs an RPC through the same request logger as a route', () => {
+  // The reason this is middleware and not a second server on a second port.
+  expect(tour.text).toContain('POST /greet.v1.GreetService/Say 200');
+});
+
 it('fans a publish out to a second node exactly once, or says it is skipping', () => {
   // Exactly one delivery per client is the assertion that matters: Redis echoes a
   // publish back to the node that made it, and fanning that out again would

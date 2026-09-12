@@ -8,6 +8,7 @@ import {
   ThrottleGuard,
   type HttpApp,
 } from '@dunx/http';
+import { ConnectMiddleware } from '@dunx/http/connect';
 import { OpenApiModule } from '@dunx/openapi';
 import { AppModule } from './app.module.js';
 import { AuthDocs, AuthDocsModule } from './auth-docs.js';
@@ -115,6 +116,10 @@ export const createApp = async (): Promise<HttpApp> => {
   app.use(RequestTrailMiddleware);
   // After anything that establishes the caller, since that decides the subject.
   app.use(ThrottleGuard);
+  // Last, so an RPC is counted by the throttle above and logged by the request
+  // logger outermost - the whole point of serving Connect as middleware rather
+  // than on a second port.
+  app.use(ConnectMiddleware);
   return app;
 };
 

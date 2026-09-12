@@ -12,25 +12,53 @@ HTTP/2 and can send no trailers**, so a gRPC server on Bun runs on `node:http2`,
 own port, outside `Bun.serve({ routes })` and therefore outside every middleware, guard,
 input reader and request log dunx has.
 
-### gRPC: do not build
+### Connect and gRPC-Web: built, behind `@dunx/http/connect`
 
-No `@dunx/grpc`, and no gRPC transport inside `@dunx/http`.
+Both halves of the trigger below fired, so the answer changed. Issue #94 asked for gRPC
+with a `.proto` workflow, and `Bun.serve` gained HTTP/2: `HttpOptions.http2` serves h2c on
+the same port as HTTP/1.1 through the same routes and the same `fetch` fallback
+(`packages/http/src/server/options.ts`, asserted in `server/protocols.test.ts`).
 
-- **Owning package and subpath: none.** If the trigger below fires, the answer is a
-  documented recipe plus roughly 80 lines of mount code in `@dunx/http` behind `./connect`,
-  mounting `@connectrpc/connect` into the existing route table. Not a package, and not
-  `@grpc/grpc-js` wrapped in decorators.
-- **Why.** Rule 1's second half. `@grpc/grpc-js` and `@connectrpc/connect` both solve service
-  hosting completely; what dunx would add is DI resolution plus a decorator over
-  `addService`, the `@dunx/queue-dashboard` shape. A consumer also has to adopt a protobuf
-  toolchain, and protobuf replaces the zod and Standard Schema contract the rest of dunx is
-  built on, so the parts of `@dunx/http` a gRPC package would reuse are the ones it cannot.
-- **Trigger that changes the answer.** Both halves, not either: an external issue naming
-  gRPC with a real `.proto` workflow behind it, **and** `Bun.serve` gaining HTTP/2
-  (oven-sh/bun#14672, open). With #14672 shipped, Connect's `createFetchHandler` output
-  becomes an ordinary `Bun.serve` route, middleware and request logging apply unchanged,
-  and native gRPC clients reach it. Until then a gRPC server on Bun is a second server on a
-  second port, which a consumer stands up in 20 lines without dunx.
+What shipped is what this section said to ship: a mount in `@dunx/http` behind `./connect`,
+not a package and not `@grpc/grpc-js` wrapped in decorators. `ConnectModule.forRoot`,
+`ConnectRegistry`, `ConnectMiddleware` and `connectService`; `@connectrpc/connect` and
+`@bufbuild/protobuf` as optional peers; no `.proto` loader and no codec.
+
+One detail differs from the sentence above: it mounts as **middleware**, not into the route
+table. RPC paths are in no route table, so they reach the `fetch` fallback, where
+`ctx.get(UNMATCHED)` is true and `ctx.path` is already parsed. Middleware, request logging,
+CORS and the throttle apply either way, and the fallback needs no new extension point.
+
+### Native gRPC: still do not build
+
+- **Owning package and subpath: none.** Connect and gRPC-Web carry their status in the
+  response body; gRPC carries `grpc-status` in an HTTP trailer. Re-probed on Bun 1.4.2:
+  `'trailers' in response` is false, the `Response` prototype has no trailer surface, and a
+  route setting a `trailer: grpc-status` header sends no trailer frame - a `node:http2`
+  client read `trailers: null`. So a gRPC handler inside `Bun.serve` answers with a status
+  no client ever sees. `createConnectRouter({ grpc: false })` is therefore hard-coded, and a
+  request with `content-type: application/grpc` gets a 415 that says why.
+- **Why not a second server.** `@grpc/grpc-js` on `node:http2` works, on its own port,
+  outside every middleware, guard, input reader and request log dunx has. That is a
+  consumer's 20 lines, not a framework feature.
+- **Trigger that changes the answer.** `Bun.serve` gaining a trailer API. Nothing else.
+
+### What the integration measured
+
+- `createFetchHandler` is reached through `@connectrpc/connect/protocol`, a subpath in the
+  package's own `exports` map, and the one function taken from it. The official
+  `@connectrpc/connect-node` adapter imports the same subpath, which is what makes it the
+  supported extension point for an adapter rather than a reach into internals.
+  `ConnectRouterOptions`, `ServiceImpl`, `Interceptor`, `ConnectError` and
+  `createConnectRouter` all come from the package root.
+- **A class instance works as a `ServiceImpl`**, private fields and all: connect looks
+  methods up with `in` and calls them on the object, so `this` survives. That is what lets
+  an implementation be an ordinary injected provider with no adapter.
+- **`shutdownSignal` aborts the per-call `context.signal` and does not close the response
+  stream.** Measured on `@connectrpc/connect` 2.2.0: a server-streaming call with one
+  message read, signal `aborted: false` before the abort and `true` after, and the response
+  body then never closes - draining it hangs. So `ConnectRegistry.onShutdown` gives a
+  long-running implementation its cue, and the socket closing is what ends the stream.
 
 ### JSON-RPC: build later
 

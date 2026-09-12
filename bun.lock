@@ -37,9 +37,12 @@
       "name": "@dunx/example-full",
       "version": "0.0.0",
       "dependencies": {
+        "@bufbuild/protobuf": "2.15.0",
         "@bull-board/api": "8.6.0",
         "@bull-board/bun": "8.6.0",
         "@bull-board/ui": "8.6.0",
+        "@connectrpc/connect": "2.2.0",
+        "@connectrpc/connect-web": "2.2.0",
         "@dunx/auth": "workspace:*",
         "@dunx/core": "workspace:*",
         "@dunx/dashboard": "workspace:*",
@@ -225,16 +228,23 @@
         "@arkv/shared": "0.8.0",
       },
       "devDependencies": {
+        "@bufbuild/protobuf": "2.15.0",
+        "@connectrpc/connect": "2.2.0",
+        "@connectrpc/connect-web": "2.2.0",
         "@dunx/core": "workspace:*",
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/core": "2.11.0",
         "@opentelemetry/sdk-trace-node": "2.11.0",
       },
       "peerDependencies": {
+        "@bufbuild/protobuf": "^2.15.0",
+        "@connectrpc/connect": "^2.2.0",
         "@dunx/core": "workspace:*",
         "@types/bun": ">=1.4.1",
       },
       "optionalPeers": [
+        "@bufbuild/protobuf",
+        "@connectrpc/connect",
         "@types/bun",
       ],
     },
@@ -393,11 +403,17 @@
 
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
 
+    "@bufbuild/protobuf": ["@bufbuild/protobuf@2.15.0", "", {}, "sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA=="],
+
     "@bull-board/api": ["@bull-board/api@8.6.0", "", { "dependencies": { "redis-info": "^3.1.0" }, "peerDependencies": { "@bull-board/ui": "8.6.0", "bull": "^4.16.5", "bullmq": "^5.79.2 || ^6.0.0" }, "optionalPeers": ["bull", "bullmq"] }, "sha512-tJLkYszUJhvDzTexLT+6/OEUYCWrR5QBKXk+SNlNsxHw8WClSRFEirXMrKwrei3LlMVxPV5lvbBOC7LNNymibQ=="],
 
     "@bull-board/bun": ["@bull-board/bun@8.6.0", "", { "dependencies": { "@bull-board/api": "8.6.0", "@bull-board/ui": "8.6.0", "ejs": "^6.0.1" }, "peerDependencies": { "bun-types": "*" } }, "sha512-JemjBu0+lrnjpRX7Wy8AUeJje5DPgjIxNViIHpentef9i13iozzJoTzrsL3XTHSSLnEgUnWoa11ivyBDdobzmQ=="],
 
     "@bull-board/ui": ["@bull-board/ui@8.6.0", "", { "dependencies": { "@bull-board/api": "8.6.0" } }, "sha512-Qb/HYNU2JhRYKoyeJhXgeu1ZL4VK5RANmLC/cpzbtZPz5b9b260d0J0Af0L0zGdP6ORYg2XpPQKwrIy7n96AwQ=="],
+
+    "@connectrpc/connect": ["@connectrpc/connect@2.2.0", "", { "peerDependencies": { "@bufbuild/protobuf": "^2.7.0" } }, "sha512-M63OQ1ZFcPUm85CuewJ9G9CMV8LjzGR9935xOnXNQGSazAbwMb3x2W7vXBYM1zqrP7XFD8uxp/dUAhirclgwnQ=="],
+
+    "@connectrpc/connect-web": ["@connectrpc/connect-web@2.2.0", "", { "peerDependencies": { "@bufbuild/protobuf": "^2.7.0", "@connectrpc/connect": "2.2.0" } }, "sha512-uuBUcBTYfb/r1o98LzCCZk1H90yx0vmZ5m21dpw/q4EUwsKwkCDGI8H0aEdjcZld+Q2jJ5A5ADvPqfb6lzQ/sg=="],
 
     "@dunx/auth": ["@dunx/auth@workspace:packages/auth"],
 
