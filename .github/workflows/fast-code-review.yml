@@ -133,6 +133,10 @@ jobs:
 
             Do not flag missing tests in `examples/` or `internal/`.
             Do not flag comment wording, prose style, or documentation voice.
+
+            The em dash rule binds your own writing too, not just the diff you
+            are reading. Never put an em dash or an en dash in a review comment
+            or a reply: use a spaced hyphen, a comma, or a colon.
         env:
           # One secret per provider holding a comma-separated list, so adding a
           # key later is editing one secret rather than touching this file.
