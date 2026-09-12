@@ -56,9 +56,10 @@ export class ResiliencePolicy {
     // counted loop would end on a line no test can reach.
     for (let attempt = 0; ; attempt += 1) {
       onAttempt?.(attempt + 1, attempt > 0);
-      let result: T;
       try {
-        result = await op(this.#signal());
+        const result = await op(this.#signal());
+        onSuccess?.(result, attempt + 1);
+        return result;
       } catch (error) {
         const verdict = this.#decide(error, attempt);
         const willRetry = verdict.retry && attempt < maxRetries;
@@ -74,8 +75,6 @@ export class ResiliencePolicy {
         // fallback cannot be typed per call.
         return (await fallback(error)) as T;
       }
-      onSuccess?.(result, attempt + 1);
-      return result;
     }
   }
 
