@@ -158,11 +158,17 @@ before truncation, so a long literal cannot survive by being cut off mid-string.
       "count": 4210,
       "errors": 0,
       "duration": { "count": 4210, "p99": 140000 }
+    },
+    {
+      "operation": "del",
+      "count": 103,
+      "errors": 0,
+      "duration": { "count": 103, "p99": 96000 }
     }
   ],
   "hits": 17632,
   "misses": 787,
-  "hitRate": 0.9572,
+  "hitRate": 0.9573,
   "total": 22734,
   "errors": 2,
   "since": "2026-09-02T09:14:22.881Z"
