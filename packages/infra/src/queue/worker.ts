@@ -424,7 +424,7 @@ export class WorkerFactory {
 
     let jobs: readonly DiscoveredJob[];
     try {
-      jobs = selectJobs(modules, (token) => app.get(token), options.queues);
+      jobs = selectJobs(modules, app, options.queues);
     } catch (error) {
       await app.shutdown();
       throw error;
@@ -467,7 +467,7 @@ export class WorkerFactory {
     const modules = collectModules(root);
     assertQueueModule(modules);
 
-    const jobs = selectJobs(modules, (token) => app.get(token), options.queues);
+    const jobs = selectJobs(modules, app, options.queues);
     const dispatcher = new JobDispatcher(
       jobs,
       app.get(QueueOptions).jobTimeoutMs,

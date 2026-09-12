@@ -113,7 +113,7 @@ export class JobProcessor {
     // wiring rather than diverging until a job arrives with no handler.
     const jobs = selectJobs(
       collectModules(this.#root),
-      (token) => app.get(token),
+      app,
       this.#options.queues,
     );
     const dispatcher = new JobDispatcher(

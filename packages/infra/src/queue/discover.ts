@@ -1,11 +1,12 @@
 import {
-  classOf,
+  discoverMarked,
   markedMethods,
-  readControllers,
+  markedMethodsOn,
   type Ctor,
-  type InjectionToken,
+  type DiscoveredMethod,
   type MarkedMethod,
   type ResolvedModule,
+  type ScopedResolver,
 } from '@dunx/core';
 import type { Job } from 'bullmq';
 import { QueueError, QueueErrorCode } from './errors.js';
@@ -26,28 +27,25 @@ const eachJobHandler = (
   start: object | null,
 ): readonly MarkedMethod<JobMeta>[] => markedMethods(start, jobMetaOf);
 
+const asJob = ({
+  meta,
+  ...found
+}: DiscoveredMethod<JobMeta, JobHandlerFn>): DiscoveredJob => ({
+  // Spread, not a field list. `DiscoveredJob extends JobMeta`, so picking
+  // `queue` and `name` by hand silently dropped `background` the moment the
+  // marker grew it - and a queue that asked for a child quietly ran inline.
+  ...meta,
+  ...found,
+});
+
 /**
  * Walks the prototype chain of a constructed provider and collects every marked
  * method. Most-derived wins on a repeated name; an undecorated override does not
  * shadow its decorated base, and dispatch still lands on the override because the
  * handler is bound off the instance.
  */
-export const discoverJobsOn = (instance: object): readonly DiscoveredJob[] => {
-  const klass = instance.constructor;
-  const members = instance as Record<string, JobHandlerFn>;
-
-  return eachJobHandler(Object.getPrototypeOf(instance) as object | null).map(
-    // Spread, not a field list. `DiscoveredJob extends JobMeta`, so picking
-    // `queue` and `name` by hand silently dropped `background` the moment the
-    // marker grew it - and a queue that asked for a child quietly ran inline.
-    ({ name: method, meta }) => ({
-      ...meta,
-      provider: klass.name,
-      method,
-      handler: members[method]!.bind(instance),
-    }),
-  );
-};
+export const discoverJobsOn = (instance: object): readonly DiscoveredJob[] =>
+  markedMethodsOn<JobMeta, JobHandlerFn>(instance, jobMetaOf).map(asJob);
 
 /** Whether a class declares a handler, without constructing it. */
 export const declaresJobHandler = (ctor: Ctor<unknown>): boolean =>
@@ -95,26 +93,13 @@ export const assertNoDuplicateJobs = (
  */
 export const discoverJobs = (
   modules: readonly ResolvedModule[],
-  resolve: (token: InjectionToken<unknown>) => unknown,
+  container: ScopedResolver,
 ): readonly DiscoveredJob[] => {
-  const discovered: DiscoveredJob[] = [];
-  const scanned = new Set<Ctor<unknown>>();
-
-  const scan = (token: InjectionToken<unknown>, ctor: Ctor<unknown>): void => {
-    if (scanned.has(ctor) || !declaresJobHandler(ctor)) return;
-    scanned.add(ctor);
-    discovered.push(...discoverJobsOn(resolve(token) as object));
-  };
-
-  for (const module of modules) {
-    for (const entry of module.options.providers ?? []) {
-      const candidate = classOf(entry);
-      if (candidate) scan(candidate.token, candidate.ctor);
-    }
-    for (const controller of readControllers(module)) {
-      scan(controller, controller);
-    }
-  }
+  const discovered = discoverMarked<JobMeta, JobHandlerFn>(
+    modules,
+    container,
+    jobMetaOf,
+  ).map(asJob);
 
   return assertNoDuplicateJobs(discovered);
 };
@@ -136,10 +121,10 @@ export const describeJob = (job: {
  */
 export const selectJobs = (
   modules: readonly ResolvedModule[],
-  resolve: (token: InjectionToken<unknown>) => unknown,
+  container: ScopedResolver,
   wanted: readonly string[] | undefined,
 ): readonly DiscoveredJob[] => {
-  const discovered = discoverJobs(modules, resolve);
+  const discovered = discoverJobs(modules, container);
   const jobs = wanted
     ? discovered.filter((job) => wanted.includes(job.queue))
     : discovered;

@@ -3,7 +3,7 @@ import { ConsoleLogger } from '../logger/console.js';
 import { Logger } from '../logger/logger.js';
 import { AppFactory } from './app.js';
 import { inject } from './inject.js';
-import type { OnInit, OnShutdown } from './lifecycle.js';
+import type { OnBeforeInit, OnInit, OnShutdown } from './lifecycle.js';
 import {
   collectModules,
   Module,
@@ -374,6 +374,38 @@ describe('lifecycle', () => {
       'users.shutdown',
       'database.shutdown',
     ]);
+  });
+
+  /**
+   * `Wiring` is constructed last, so its `onInit` would run last too. Every
+   * `onBeforeInit` is a pass of its own before the first `onInit`, which is what
+   * lets a provider wire something the earlier `onInit`s read.
+   */
+  it('runs every onBeforeInit before the first onInit', async () => {
+    const order: string[] = [];
+
+    class Early implements OnInit {
+      onInit(): void {
+        order.push('early.init');
+      }
+    }
+
+    class Wiring implements OnBeforeInit, OnInit {
+      onBeforeInit(): void {
+        order.push('wiring.before');
+      }
+      onInit(): void {
+        order.push('wiring.init');
+      }
+    }
+
+    @Module({ providers: [Early, Wiring] })
+    class AppModule {}
+
+    const app = await AppFactory.create(AppModule);
+
+    expect(order).toEqual(['wiring.before', 'early.init', 'wiring.init']);
+    await app.shutdown();
   });
 
   it('shuts down when a hooked signal fires, and hooks only once', async () => {

@@ -1,3 +1,23 @@
+/**
+ * Runs once every provider exists and before **any** `onInit`, in construction
+ * order.
+ *
+ * For wiring the later phases depend on. `onInit` is one unordered pass, so a
+ * class that discovers handlers there is only reached before its publishers if
+ * the app happened to import its module first - which made
+ * `@Module({ imports: [OrdersModule, EventBusModule] })` deliver an event emitted
+ * from `Orders.onInit()` to nobody, silently. `EventRegistry` subscribes here
+ * instead, and import order stops mattering.
+ *
+ * Two implementers in one app are still ordered by construction order, so this is
+ * for wiring that nothing else in the same phase reads. Do not open a socket, arm
+ * a timer or start a worker here - that is `onInit`, which is why `QueueRunner`
+ * and `ScheduleRunner` stay there.
+ */
+export interface OnBeforeInit {
+  onBeforeInit(): void | Promise<void>;
+}
+
 export interface OnInit {
   onInit(): void | Promise<void>;
 }
@@ -26,6 +46,9 @@ const hasMethod = (value: unknown, name: string): boolean =>
   (typeof value === 'object' || typeof value === 'function') &&
   value !== null &&
   typeof (value as Record<string, unknown>)[name] === 'function';
+
+export const hasOnBeforeInit = (value: unknown): value is OnBeforeInit =>
+  hasMethod(value, 'onBeforeInit');
 
 export const hasOnInit = (value: unknown): value is OnInit =>
   hasMethod(value, 'onInit');

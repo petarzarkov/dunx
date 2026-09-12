@@ -54,6 +54,7 @@ preload = ["@dunx/transform/preload"]
 | Lifecycle     | `onInit`, `onBeforeShutdown`, `onShutdown`, signal handlers  | [Lifecycle](../../docs/guide/07-lifecycle.md)          |
 | Configuration | `ConfigModule.forRoot({ validate })`, one validation function | [Configuration](../../docs/guide/12-configuration.md)  |
 | Logging       | The `Logger` contract and `ConsoleLogger`                    | [Logging](../../docs/guide/13-logging.md)              |
+| Events        | `EventBus`, `AppEvent`, `@OnEvent`, `EventRegistry`          | [Events](../../docs/guide/26-events.md)                |
 | Stats         | `Durations`, `Counter`, `Gauge`, `RuntimeStats`, `EventLoopLag` | [Metrics](../../docs/guide/23-metrics.md)           |
 | Resilience    | `ResiliencePolicy`, timeout, retry, backoff, jitter, fallback | [Resilience](../../docs/guide/25-resilience.md)       |
 

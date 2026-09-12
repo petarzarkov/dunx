@@ -1,5 +1,5 @@
 import { Auth } from '@dunx/auth';
-import { Module } from '@dunx/core';
+import { EventBusModule, Module } from '@dunx/core';
 import {
   ConsoleTransport,
   FileTransport,
@@ -19,6 +19,7 @@ import { OpsModule } from './dashboard/dashboard.module.js';
 import { StatsModule } from './stats/stats.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { DocsModule } from './docs/docs.module.js';
+import { EventsModule } from './events/events.module.js';
 import { GuardsModule } from './guards/guards.module.js';
 import { AssetsModule } from './assets/assets.module.js';
 import { LandingModule } from './landing/landing.module.js';
@@ -109,6 +110,7 @@ const fileAndConsole = (
     AccountsModule,
     ProbesModule,
     WiringModule,
+    EventsModule,
     DocsModule,
     // After JobsModule and CacheModule, which bind what it reads and probes.
     OpsModule,
@@ -118,6 +120,9 @@ const fileAndConsole = (
     // UpstreamModule - so it is built once they exist rather than pulling each
     // of them forward.
     LandingModule,
+    // Last on purpose: `EventsModule` above emits from an `onInit`, and its
+    // subscribers are wired in `onBeforeInit` whatever the import order.
+    EventBusModule,
   ],
   providers: [Tour],
   // `OpenApiModule` wraps this module, so its factory resolves from here.

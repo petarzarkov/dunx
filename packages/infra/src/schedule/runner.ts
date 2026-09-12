@@ -1,13 +1,9 @@
 import {
   AppRef,
-  classOf,
   collectModules,
+  discoverMarked,
   Logger,
-  markedMethods,
-  readControllers,
   ROOT_MODULE,
-  type Ctor,
-  type InjectionToken,
   type ModuleRef,
   type OnInit,
   type OnShutdown,
@@ -19,31 +15,6 @@ import { ScheduleRegistry } from './registry.js';
 /** How long shutdown waits for a run that is already going. */
 const DRAIN_TIMEOUT_MS = 5_000;
 const DRAIN_POLL_MS = 25;
-
-interface Found {
-  readonly provider: string;
-  readonly method: string;
-  readonly meta: ScheduleMeta;
-  readonly handler: () => unknown;
-}
-
-const schedulesOn = (instance: object): readonly Found[] => {
-  const provider = instance.constructor.name;
-  const members = instance as Record<string, () => unknown>;
-
-  return markedMethods(
-    Object.getPrototypeOf(instance) as object | null,
-    scheduleMetaOf,
-  ).map(({ name, meta }) => ({
-    provider,
-    method: name,
-    meta,
-    handler: members[name]!.bind(instance),
-  }));
-};
-
-const declaresSchedule = (ctor: Ctor<unknown>): boolean =>
-  markedMethods(ctor.prototype as object | null, scheduleMetaOf).length > 0;
 
 /**
  * Finds every `@Cron`, `@Interval` and `@OnceOnBoot` in the graph and arms it.
@@ -87,27 +58,11 @@ export class ScheduleRunner implements OnInit, OnShutdown {
     }
 
     const app = this.#ref.current;
-    const scanned = new Set<Ctor<unknown>>();
-    const found: Found[] = [];
-
-    const scan = (
-      token: InjectionToken<unknown>,
-      ctor: Ctor<unknown>,
-    ): void => {
-      if (scanned.has(ctor) || !declaresSchedule(ctor)) return;
-      scanned.add(ctor);
-      found.push(...schedulesOn(app.get(token) as object));
-    };
-
-    for (const module of collectModules(this.#root)) {
-      for (const entry of module.options.providers ?? []) {
-        const candidate = classOf(entry);
-        if (candidate) scan(candidate.token, candidate.ctor);
-      }
-      for (const controller of readControllers(module)) {
-        scan(controller, controller);
-      }
-    }
+    const found = discoverMarked<ScheduleMeta, () => unknown>(
+      collectModules(this.#root),
+      app,
+      scheduleMetaOf,
+    );
 
     if (found.length === 0) return;
 
