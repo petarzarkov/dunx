@@ -237,14 +237,12 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     // A middleware serving fixed paths off the fallback cannot share one with a
     // route, which Bun matches first.
     assertNoShadowedClaims(prefixed, middleware);
-    // So `ThrottleGuard` can tell a claimed path from a real 404.
-    this.#app
-      .get(ClaimedRoutes)
-      .attach(
-        middleware.flatMap((entry) =>
-          hasClaimedPaths(entry) ? [...entry.claimedPaths()] : [],
-        ),
-      );
+    // So `ThrottleGuard` and the metrics can tell a claim from a real 404.
+    const claimed = middleware.flatMap((entry) =>
+      hasClaimedPaths(entry) ? [...entry.claimedPaths()] : [],
+    );
+    this.#app.get(ClaimedRoutes).attach(claimed);
+    this.#app.get(RequestMetrics).claim(claimed);
 
     // Bun's own 404 never reaches the middleware chain. This runs only after Bun
     // has matched nothing, so Bun is still the router.

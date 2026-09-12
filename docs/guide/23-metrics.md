@@ -78,6 +78,11 @@ step and the series count is bounded by the handler count.
 Every path that matched nothing collapses into a single `(unmatched)` series per
 method. A 404's log line still names the concrete path it missed.
 
+A path a middleware **claims** is the exception: it matched no route, but
+something serves it, so it gets a series of its own under its path. That is what
+gives each RPC behind `@dunx/http/connect` its own row rather than filing every
+call with real misses. The claimed set is fixed at boot, so this stays bounded.
+
 An `ignore`d or `ignorePrefix`ed path **is** counted. That option is about log
 volume, and a health check polled every second is the clearest case of something
 worth a metric and not worth an entry.

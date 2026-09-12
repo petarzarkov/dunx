@@ -11,6 +11,7 @@ import { UNMATCHED, type MetaKey } from '../route/metadata.js';
 import type { RouteContext } from '../server/context.js';
 import { Controller, Get } from '../route/decorators.js';
 import { HttpFactory, type HttpApp } from '../server/factory.js';
+import { RequestMetrics } from '../server/metrics.js';
 import { ConnectMiddleware } from './middleware.js';
 import { ConnectModule } from './module.js';
 import { connectService, ConnectOptions } from './options.js';
@@ -367,6 +368,40 @@ describe('ConnectModule', () => {
     app.use(ConnectMiddleware);
     return app.listen(0);
   };
+
+  it('gives each RPC its own metrics series, not the miss bucket', async () => {
+    @Module({
+      imports: [
+        ConnectModule.forRoot({
+          services: [connectService(GreetService, GreetRpc)],
+        }),
+      ],
+    })
+    class MetricsModule {}
+
+    // `metrics: true` is what hands the logging middleware the collector; the
+    // observe call is a branch the default configuration never takes.
+    app = await HttpFactory.create(MetricsModule as never, {
+      bootLogging: false,
+      metrics: true,
+    });
+    app.use(ConnectMiddleware);
+    const url = await app.listen(0);
+    const client = createClient(
+      GreetService,
+      createConnectTransport({ baseUrl: url }),
+    );
+    await client.say({ name: 'pi' });
+
+    const report = app?.get(RequestMetrics).snapshot();
+    const rpc = report?.routes.find((route) => route.route === SAY);
+
+    // Filed under `(unmatched)` an RPC is indistinguishable from a real 404,
+    // and from every other method on the mount.
+    expect(rpc).toBeDefined();
+    expect(rpc?.count).toBe(1);
+    expect(report?.routes.some((r) => r.route === '(unmatched)')).toBe(false);
+  });
 
   it('answers a CORS preflight on an RPC path', async () => {
     @Module({

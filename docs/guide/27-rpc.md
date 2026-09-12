@@ -179,7 +179,7 @@ curl -X POST -H 'content-type: application/json' \
 | `.proto` loading and codegen         | Yours, through `buf`                      |
 | Request logging, CORS, guards        | Apply, as they do to a route              |
 | `ThrottleGuard`                      | Applies: an RPC path is a claimed path    |
-| Per-route metrics                    | Bucketed as `(unmatched)`, not per RPC    |
+| Per-route metrics                    | One series per RPC, under its own path    |
 
 `ConnectRegistry` lists what is mounted, which is what a health page or a test
 reads:
