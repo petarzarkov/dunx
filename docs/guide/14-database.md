@@ -689,6 +689,24 @@ fit - it `await`s the query builder rather than calling `.all()`, because drizzl
 builders are thenable on the synchronous `bun:sqlite` driver as well as the
 asynchronous `Bun.SQL` one.
 
+### Paginating something that is not a table
+
+`paginate` imports drizzle, which is an optional peer, so
+`@dunx/infra/pagination` does not resolve without it. The cursor codec, the
+options parser and the envelope need no database and sit at a second subpath:
+
+```ts
+import {
+  encodeCursor,
+  decodeCursor,
+  pageOf,
+  parsePageOptions,
+} from '@dunx/infra/pagination/cursor';
+```
+
+A Redis scan, an S3 listing or an upstream API then hands back the same opaque
+cursor and the same envelope shape as a table does.
+
 ### What it does not do
 
 - **No zod schema is shipped.** `parsePageOptions` is a hand-written validator, since
