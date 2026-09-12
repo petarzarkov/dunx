@@ -79,10 +79,16 @@ jobs:
       # Pinned to the tag's commit rather than to `v1`, which is a moving tag:
       # this job hands the action four secrets, and retargeting `v1` would run
       # unreviewed code with them.
-      - uses: petarzarkov/fast-code-review@c2bc36fab217519ec368f700683a7c633d6f69ea # v1.3.0
+      - uses: petarzarkov/fast-code-review@ac2587f9409eef7df15080e57a22d55e3b2ac3ea # v1.3.1
         with:
           github_token: ${{ secrets.DUNXONU_TOKEN }}
 
+          # Every id below was sent a real chat completion with these keys,
+          # not merely looked up: appearing in /models proves the name exists
+          # and not that inference works with it. Cerebras appeared in the
+          # listing and answered 402 to an actual request, so its two routes
+          # are gone rather than sitting here looking like transient bad luck.
+          #
           # Every id below came from each provider's own /models endpoint,
           # asked with these keys. Three rounds of guessing produced three
           # rounds of 404s - the whole first list, then `gemini-2.5-pro`, then
@@ -108,8 +114,6 @@ jobs:
             groq/openai/gpt-oss-120b
             groq/qwen/qwen3.8-27b
             groq/openai/gpt-oss-20b
-            cerebras/gpt-oss-120b
-            cerebras/qwen-3.8-27b
             openrouter/nvidia/nemotron-3-super-120b-a12b:free
             openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
 
@@ -170,4 +174,3 @@ jobs:
           OPENROUTER_API_KEYS: ${{ secrets.OPENROUTER_API_KEYS }}
           GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
           GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
-          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
