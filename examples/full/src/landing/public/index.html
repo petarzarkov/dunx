@@ -265,6 +265,80 @@
         </section>
 
         <section>
+          <h2>Application events</h2>
+          <p>
+            <code>EventBus</code> over <code>EventTarget</code>: one publisher,
+            and <code>@OnEvent</code> subscribers that live in another module.
+            The response is the dispatch itself, so a subscriber that throws is
+            reported rather than swallowed - and the request still succeeds,
+            which the second button shows by going over the review limit.
+          </p>
+          <div class="row">
+            <button id="bus-ok">Place an order</button>
+            <button id="bus-fail">Over the review limit</button>
+            <button id="bus-list">Who is subscribed</button>
+          </div>
+          <pre id="bus-out"></pre>
+        </section>
+
+        <section>
+          <h2>Server-sent events</h2>
+          <p>
+            <code>@Sse</code> over Bun's own <code>ReadableStream</code>. The
+            handler is an async generator and every <code>yield</code> is a
+            frame, read here by the browser's own <code>EventSource</code>. Each
+            frame carries an id, so a reconnect resumes rather than restarting.
+          </p>
+          <div class="row">
+            <button id="sse-go">Open a stream</button>
+          </div>
+          <pre id="sse-out"></pre>
+        </section>
+
+        <section>
+          <h2>RPC on the same port</h2>
+          <p>
+            <code>@dunx/http/connect</code> serves Connect and gRPC-Web as
+            middleware rather than on a second port, so an RPC gets this app's
+            CORS, rate limit and request log. A unary Connect call is a POST
+            with a JSON body, which is all this button sends - there is no RPC
+            client on this page.
+          </p>
+          <div class="row">
+            <button id="rpc-go">POST /greet.v1.GreetService/Say</button>
+          </div>
+          <pre id="rpc-out"></pre>
+        </section>
+
+        <section>
+          <h2>Cache tiers</h2>
+          <p>
+            <code>@dunx/infra/cache</code> with memory in front of Redis. The
+            counter below is the loader's rather than the cache's, so a second
+            read of the same key moving it by zero is the cache working.
+            <code>DELETE</code> evicts both tiers.
+          </p>
+          <div class="row">
+            <button id="cache-go">Read twice, evict, read again</button>
+          </div>
+          <pre id="cache-out"></pre>
+        </section>
+
+        <section>
+          <h2>Keyset pagination</h2>
+          <p>
+            <code>@dunx/infra/pagination</code> over a list that is not a
+            database table. Each page carries a cursor rather than an offset, so
+            a row inserted between two requests cannot shift the next page. The
+            subpath under <code>/pagination/cursor</code> needs no drizzle.
+          </p>
+          <div class="row">
+            <button id="page-go">Walk the pages</button>
+          </div>
+          <pre id="page-out"></pre>
+        </section>
+
+        <section>
           <h2>Session</h2>
           <p>
             better-auth mounted by <code>@dunx/auth</code>, with the anonymous
