@@ -215,7 +215,9 @@ describe('a subscriber whose broker is unreachable', () => {
  * without waiting on a socket.
  */
 class FakeConsumer extends EventEmitter {
-  readonly queue = 'orders';
+  /** What `rabbitmq-client` fills in at setup. A consumer that never reached the
+   * broker reports `''`, which is exactly the case the drain warning covers. */
+  queue = 'orders';
   closed = 0;
   neverCloses = false;
 
@@ -326,6 +328,26 @@ describe('a subscriber over a connection that misbehaves', () => {
 
     expect(lines.find((line) => line.level === 'warn')?.message).toContain(
       'did not drain within 50 ms',
+    );
+  });
+
+  /**
+   * The case that motivated naming the queue from the subscription rather than
+   * from the consumer: with no broker reachable the consumer never set up, so
+   * `Consumer.queue` is still `''` and the warning named nothing at all.
+   */
+  it('names the queue even when the consumer never reached the broker', async () => {
+    const { subscriber, consumer, lines } = await boot();
+    const started = subscriber.start();
+    consumer.emit('ready');
+    await started;
+
+    consumer.queue = '';
+    consumer.neverCloses = true;
+    await subscriber.stop();
+
+    expect(lines.find((line) => line.level === 'warn')?.message).toContain(
+      'an AMQP consumer on orders did not drain',
     );
   });
 });

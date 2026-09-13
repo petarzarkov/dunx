@@ -138,6 +138,135 @@ $('job-go').addEventListener('click', async (event) => {
   }
 });
 
+/**
+ * Message broker: publish, then read back what the consumers in this same
+ * process received.
+ */
+
+/** Appends, where `append` prepends. Oldest first like the transactions panel,
+ * because a delivery line means nothing without the publish line above it. */
+const trail = (el, line) => {
+  el.textContent = `${el.textContent}${line}\n`.slice(-4000);
+};
+
+const DELIVERY_TRIES = 10;
+const DELIVERY_MS = 400;
+/**
+ * The app answers 503 once `publishTimeoutMs` is up, which the example sets to
+ * 2 s. This is the backstop for the request itself going nowhere, and `connected`
+ * below is read first so the usual case reports immediately rather than after
+ * that wait.
+ */
+const PUBLISH_MS = 8_000;
+
+/** Whether the consuming side is attached, which is also whether publishing is
+ * worth attempting. */
+const brokerReady = async (out) => {
+  const res = await fetch('/api/messaging/orders');
+  if (!res.ok) {
+    trail(out, `GET /api/messaging/orders -> ${res.status}`);
+    return false;
+  }
+  const { connected } = await res.json();
+  if (!connected) trail(out, 'no broker reachable - nothing is consuming');
+  return connected;
+};
+
+/**
+ * Waits for **this** publish rather than for a count. `handled` keeps the last
+ * hundred deliveries the process has seen, so a count crosses the moment anyone
+ * else on the page publishes anything.
+ */
+const awaitDelivery = async (id, out) => {
+  for (let i = 0; i < DELIVERY_TRIES; i++) {
+    await new Promise((done) => setTimeout(done, DELIVERY_MS));
+    const res = await fetch('/api/messaging/orders');
+    if (!res.ok) {
+      trail(out, `   GET /api/messaging/orders -> ${res.status}`);
+      return;
+    }
+    const { connected, handled } = await res.json();
+    const mine = handled.filter((entry) => entry.id === id);
+    for (const entry of mine) {
+      trail(out, `<- ${entry.queue} traceId=${entry.traceId ?? '(none)'}`);
+    }
+    if (mine.length > 0) return;
+    // A broker that went away mid-poll, rather than a delivery still in flight.
+    if (!connected) {
+      trail(out, '   no broker reachable - nothing consumed this');
+      return;
+    }
+  }
+  trail(out, `   nothing arrived in ${(DELIVERY_TRIES * DELIVERY_MS) / 1000}s`);
+};
+
+/**
+ * One publish for all three buttons: refuse early with no broker, bound the
+ * request, and hand the parsed body back for the caller to narrate. Returns
+ * nothing when there was no answer worth narrating.
+ */
+const publish = async (button, path, payload) => {
+  const out = $('mq-out');
+  button.disabled = true;
+  try {
+    if (!(await brokerReady(out))) return undefined;
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(PUBLISH_MS),
+    });
+    const body = await res.json();
+    if (res.ok) return body;
+    trail(out, `POST ${path} -> ${res.status} ${body.error}`);
+    return undefined;
+  } catch (error) {
+    // A timeout here is the broker going away between the readiness read and
+    // this publish, which is the case `connected` above cannot rule out.
+    trail(
+      out,
+      error.name === 'TimeoutError'
+        ? `POST ${path} did not answer in ${PUBLISH_MS / 1000}s`
+        : `POST ${path} failed: ${String(error)}`,
+    );
+    return undefined;
+  } finally {
+    button.disabled = false;
+  }
+};
+
+const publishOrder = async (event, shipped) => {
+  const out = $('mq-out');
+  // Short and per click, so two visitors publishing at once still each read
+  // back their own delivery.
+  const id = `web-${Math.random().toString(36).slice(2, 8)}`;
+  const body = await publish(event.currentTarget, '/api/messaging/orders', {
+    id,
+    total: 42,
+    shipped,
+  });
+  if (body === undefined) return;
+  trail(out, `-> ${body.routingKey} on ${body.exchange} as ${id}`);
+  await awaitDelivery(id, out);
+};
+$('mq-place').addEventListener('click', (event) => publishOrder(event, false));
+$('mq-ship').addEventListener('click', (event) => publishOrder(event, true));
+
+/**
+ * The same exchange with a body that is not an order. The handler returns DROP
+ * rather than throwing, so the broker discards it instead of redelivering it
+ * forever - which is what a throw on a `requeue: true` queue would cause.
+ */
+$('mq-bad').addEventListener('click', async (event) => {
+  const out = $('mq-out');
+  const sent = await publish(event.currentTarget, '/api/messaging/raw', {
+    not: 'an order',
+  });
+  if (sent === undefined) return;
+  trail(out, '-> order.placed carrying {"not":"an order"}');
+  trail(out, '   dropped by the handler, so it is never redelivered');
+});
+
 /** Validation, both directions. */
 const postUser = async (body, label) => {
   const out = $('bad-out');

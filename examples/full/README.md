@@ -67,6 +67,7 @@ that check, because a service never exits.
 | `/api/upstream`   | `@dunx/http/client` - the outbound half, with retry and a 404           |
 | `/assets/*`       | `StaticFiles` - two cache policies and a traversal refusal              |
 | `/api/jobs`       | `@dunx/infra/queue` - bullmq; published and consumed by this process       |
+| `/api/messaging`  | `@dunx/infra/amqp` - a RabbitMQ topic exchange, two queues, one trace      |
 | `/api/auth/*`     | `@dunx/auth` - better-auth mounted, with `Bun.password` hashing          |
 | `/api/wiring`     | `@dunx/core` - `token()`, `inject()` and the three `provide()` shapes    |
 | `/api/demo/*`     | what the landing page renders - vitals, a source excerpt, a retry        |
