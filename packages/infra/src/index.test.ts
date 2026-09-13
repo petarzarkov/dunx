@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import * as amqp from './amqp/index.js';
 import * as cache from './cache/index.js';
 import * as db from './db/index.js';
 import * as files from './files/index.js';
@@ -38,15 +39,17 @@ describe('@dunx/infra root barrel', () => {
   });
 
   /**
-   * The two exceptions, and the reason they are exceptions: each reaches an
-   * optional peer through a static import, so one symbol from either here would
-   * make that peer a hard requirement of `import '@dunx/infra'` for every
-   * consumer. bullmq's entry point imports `ioredis`; `/db` imports `drizzle-orm`.
-   * If either ever stops being true, this is the test that says so.
+   * The three exceptions, and the reason they are exceptions: each reaches an
+   * optional peer through a static import, so one symbol from any of them here
+   * would make that peer a hard requirement of `import '@dunx/infra'` for every
+   * consumer. bullmq's entry point imports `ioredis`; `/db` imports `drizzle-orm`;
+   * `/amqp` imports `rabbitmq-client`. If one ever stops being true, this is the
+   * test that says so.
    */
   it.each([
     ['queue', queue, 'bullmq'],
     ['db', db, 'drizzle-orm'],
+    ['amqp', amqp, 'rabbitmq-client'],
   ])('keeps /%s out, so the root needs no %s', (_area, area) => {
     expect(names.filter((name) => name in area)).toEqual([]);
   });

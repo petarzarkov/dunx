@@ -19,6 +19,7 @@ import { AssetsDemo } from '../assets/assets.demo.js';
 import { GuardsDemo } from '../guards/guards.demo.js';
 import { HealthDemo } from '../health/health.demo.js';
 import { JobsDemo } from '../jobs/jobs.demo.js';
+import { MessagingDemo } from '../messaging/messaging.demo.js';
 import { HttpDemo } from '../http/http.demo.js';
 import { Thumbnails } from '../pictures/thumbnails.service.js';
 import { ScheduleDemo } from '../schedule/schedule.demo.js';
@@ -55,6 +56,7 @@ export class Tour {
     private readonly sse: SseDemo,
     private readonly throttle: ThrottleDemo,
     private readonly jobs: JobsDemo,
+    private readonly messaging: MessagingDemo,
     private readonly schedule: ScheduleDemo,
     private readonly assets: AssetsDemo,
     private readonly upstream: UpstreamDemo,
@@ -137,6 +139,9 @@ export class Tour {
       '@dunx/infra/queue - bullmq over Bun.RedisClient, the handler forked',
     );
     await this.jobs.demonstrate();
+
+    this.group('@dunx/infra/amqp - RabbitMQ, a topic exchange and two queues');
+    await this.messaging.demonstrate();
 
     this.group('@dunx/infra/schedule - @Cron, @Interval and @OnceOnBoot');
     await this.schedule.demonstrate();

@@ -1,10 +1,12 @@
 /**
- * Every area in full, except `/db`, `/queue` and `/pagination`. If an area is here
- * at all, all of it is.
+ * Every area in full, except `/amqp`, `/db`, `/pagination` and `/queue`. If an
+ * area is here at all, all of it is.
  *
- * `/db` and `/queue` each reach an optional peer through a static import, so
- * re-exporting either would make `drizzle-orm` or `ioredis` a hard requirement of
- * `import '@dunx/infra'`. `/pagination` is absent through drift.
+ * All four reach an optional peer through a static import, so re-exporting any of
+ * them would make `rabbitmq-client`, `drizzle-orm` or `ioredis` a hard requirement
+ * of `import '@dunx/infra'`. `/pagination` used to be described here as absent
+ * through drift: `paginate` imports drizzle at module scope, which is what
+ * `/pagination/cursor` exists to sidestep.
  *
  * The subpaths are the better import: they evaluate only what that area needs.
  */

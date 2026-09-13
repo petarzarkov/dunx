@@ -1,8 +1,33 @@
 # Message brokers: Kafka and RabbitMQ
 
-Research only. Nothing in the repo was modified. Every number was measured on Bun 1.3.14 (revision
+Research first, then built: the RabbitMQ half of this note is now `@dunx/infra/amqp`, and the status
+section below records what changed. Every number in the survey was measured on Bun 1.3.14 (revision
 `0d9b296af33f2b851fcbf4df3e9ec89751734ba4`) against real brokers in throwaway Docker containers (`rabbitmq:4-alpine`,
 `redpanda:latest`), both removed afterwards. Probe sources in `../probes/`.
+
+## Status: RabbitMQ built, 2026-09-12
+
+**Trigger 1 fired.** [Issue #105](https://github.com/petarzarkov/dunx/issues/105) is from
+someone who is not the owner, asking for RabbitMQ and RocketMQ behind the queue API.
+`@dunx/infra/amqp` ships over `rabbitmq-client` 5.0.8, which is what this note picked.
+
+Re-measured on Bun 1.4.2 before building, rather than trusting the 1.3.14 numbers below:
+connection established in 8 ms, consumer ready in 18 ms, three confirmed publishes, JSON
+bodies and headers round tripped, and `Consumer.close()` drained three one-second handlers
+in 701 ms before resolving. Exit 0 at 1025 ms.
+
+Two things this note did not have, both now in `docs/architecture/message-brokers.md`:
+`Consumer.close()` takes **19.7 s** against an unreachable broker, because it waits
+`acquireTimeout` to close its channel with nothing in flight, so the drain is bounded and
+the connection is destroyed afterwards. And the decision not to build a `driver` option on
+`QueueModule` is argued there against bullmq rather than against Kafka.
+
+**RocketMQ was measured and not built.** `rocketmq-client-nodejs` 1.0.8's `PushConsumer`
+delivers nothing and leaves the process alive on **Node 20.20.2 as well as Bun 1.4.2**, so
+it is the library rather than the runtime; `Producer` and `SimpleConsumer` both work on
+both. Numbers and triggers are in `docs/architecture/message-brokers.md`, "RocketMQ".
+
+Kafka is unchanged: no trigger, no user. The verdict below stands for it.
 
 ## Verdict
 

@@ -17,3 +17,15 @@ export {
   type LogEntry,
   type SerializedError,
 } from './types.js';
+export {
+  DEFAULT_TRACE_FLAGS,
+  formatTraceparent,
+  isSampled,
+  mintSpanId,
+  mintTraceId,
+  parseTraceparent,
+  TRACEPARENT_HEADER,
+  TRACESTATE_HEADER,
+  traceparentOf,
+  type TraceIds,
+} from './traceparent.js';

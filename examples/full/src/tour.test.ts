@@ -1,36 +1,14 @@
 import { existsSync } from 'node:fs';
 import { beforeAll, expect, it } from 'bun:test';
+import { runTour } from './tour/run-tour.js';
 
 const APP_DIR = new URL('..', import.meta.url).pathname;
 
 /**
  * The tour is the end-to-end check: it boots the same app `bun start` serves,
- * narrates every package and exits 0. Assertions read the structured entries,
- * `NODE_ENV=production` selecting the plain JSON formatter so there is no ANSI
- * to strip. Both streams are collected: `ConsoleTransport` sends warn and above
- * to stderr, and the degraded-cache line is a warning.
+ * narrates every package and exits 0. Assertions read the structured entries the
+ * `runTour` harness parses rather than raw stdout.
  */
-const runTour = async (env: Record<string, string> = {}) => {
-  const proc = Bun.spawn(['bun', 'src/tour.ts'], {
-    cwd: APP_DIR,
-    env: { ...process.env, NODE_ENV: 'production', ...env },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-
-  const [out, err] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  const code = await proc.exited;
-  const messages = `${out}\n${err}`
-    .split('\n')
-    .filter((line) => line.startsWith('{'))
-    .map((line) => String((JSON.parse(line) as { message: unknown }).message));
-
-  return { code, messages, text: messages.join('\n') };
-};
-
 const tour = { text: '', messages: [] as string[], code: -1 };
 
 /**
@@ -380,6 +358,24 @@ it('times every redis command at the one seam, and keeps no key', () => {
   expect(tour.text).toMatch(
     /[A-Z]+: \d+ calls, p99 .+ - the key is never kept/,
   );
+});
+
+/**
+ * The alternation the other degradable steps use would let a broker regression
+ * pass: `ci examples` configures one, so a skip there means something broke. Both
+ * variables, because `defaultAmqpUrl` falls back to `$AMQP_URL`. The queues are
+ * matched without their sequence, since each has a consumer on its own channel.
+ */
+it('routes through a topic exchange carrying its trace', () => {
+  const { RABBITMQ_URL, AMQP_URL } = process.env;
+  if (RABBITMQ_URL === undefined && AMQP_URL === undefined) {
+    expect(tour.text).toContain('skipping the message broker section');
+    return;
+  }
+  expect(tour.text).toContain('2 of 2 delivered to');
+  expect(tour.text).toContain('dunx-full.orders.placed');
+  expect(tour.text).toContain('dunx-full.orders.shipped');
+  expect(tour.text).toMatch(/the handlers ran under traceId [0-9a-f]{32}/);
 });
 
 it('reports the publish side, and only handlers this process ran', () => {

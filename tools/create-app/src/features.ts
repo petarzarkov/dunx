@@ -122,6 +122,17 @@ export const CONFIG_GROUPS: Readonly<Record<string, ConfigGroup>> =
       map: 'redis: { url: value.REDIS_URL },',
       env: [{ name: 'REDIS_URL', value: 'redis://localhost:6379' }],
     },
+    amqp: {
+      schema: [
+        '/** Absent is fine: the messaging routes answer 503 instead of failing boot. */',
+        'RABBITMQ_URL: z.string().optional(),',
+      ],
+      field: 'readonly amqp: { readonly url: string | undefined };',
+      map: 'amqp: { url: value.RABBITMQ_URL },',
+      env: [
+        { name: 'RABBITMQ_URL', value: 'amqp://guest:guest@localhost:5672' },
+      ],
+    },
     images: {
       schema: [
         'IMAGE_QUALITY: z.coerce.number().int().min(1).max(100).default(82),',
@@ -327,6 +338,20 @@ export const FEATURES: readonly Feature[] = [
     dependencies: ['@dunx/infra', 'bullmq', 'ioredis', 'zod'],
     config: ['redis'],
     service: 'Redis or Valkey',
+  },
+  {
+    name: 'messaging',
+    source: 'messaging',
+    summary:
+      'RabbitMQ over rabbitmq-client: @AmqpHandler, a topic exchange, traces that cross the broker.',
+    requires: [],
+    module: {
+      klass: 'MessagingModule',
+      from: './messaging/messaging.module.js',
+    },
+    dependencies: ['@dunx/infra', 'rabbitmq-client', 'zod'],
+    config: ['amqp'],
+    service: 'RabbitMQ',
   },
   {
     name: 'health',

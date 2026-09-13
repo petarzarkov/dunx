@@ -65,6 +65,7 @@ jobs:
     env:
       REDIS_URL: redis://localhost:6379
       DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
+      RABBITMQ_URL: amqp://guest:guest@localhost:5672
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -125,6 +126,10 @@ jobs:
     # adding its service here, or the floor measures less than it looks like.
     env:
       DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
+      # Named rather than left to the default, so `@dunx/infra/amqp`'s live suite
+      # fails when the service does not answer instead of skipping and leaving
+      # the gate a smaller denominator than the machine that set the floor.
+      RABBITMQ_URL: amqp://guest:guest@localhost:5672
       DUNX_S3_TEST_BUCKET: dunx-test
       DUNX_S3_TEST_ENDPOINT: http://localhost:9000
       # Read by `Bun.S3Client` for any client that sets none. `S3_ENDPOINT` is
@@ -156,6 +161,17 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      # `@dunx/infra/amqp`'s live suite skips without this, the same way the others
+      # do, so its four end-to-end assertions would measure nothing here.
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
 
     steps:
       - uses: actions/checkout@v4

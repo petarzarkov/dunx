@@ -1,5 +1,17 @@
-export const TRACEPARENT_HEADER = 'traceparent';
-export const TRACESTATE_HEADER = 'tracestate';
+import {
+  DEFAULT_TRACE_FLAGS,
+  formatTraceparent,
+  isSampled,
+  mintSpanId,
+  mintTraceId,
+  parseTraceparent,
+  TRACEPARENT_HEADER,
+  TRACESTATE_HEADER,
+  type TraceIds,
+} from '@dunx/core';
+
+export { TRACEPARENT_HEADER, TRACESTATE_HEADER };
+
 /**
  * The span that answered, sent back so a caller can record which of the callee's
  * spans its own span points at. Same four fields as `traceparent`, and the
@@ -13,27 +25,14 @@ export const TRACESTATE_HEADER = 'tracestate';
  */
 export const TRACERESPONSE_HEADER = 'traceresponse';
 
-const HEX_32 = /^[0-9a-f]{32}$/;
-const HEX_16 = /^[0-9a-f]{16}$/;
-const HEX_2 = /^[0-9a-f]{2}$/;
-const ZERO_TRACE = '0'.repeat(32);
-const ZERO_SPAN = '0'.repeat(16);
-
-/** The sampled bit, which is the only flag the standard currently defines. */
-const SAMPLED = 0x01;
-
-/** What a request that started its own trace sends on, and what `sampled` reads. */
-const DEFAULT_FLAGS = '01';
-
-export interface Trace {
-  /** 32 hex digits, shared by every span in the trace. */
-  readonly traceId: string;
-  /** 16 hex digits identifying this server's work on this request. */
-  readonly spanId: string;
+/**
+ * This server's view of a trace: the {@link TraceIds} on the wire plus the
+ * caller's span and any vendor `tracestate`, neither of which a `traceparent`
+ * carries on its own.
+ */
+export interface Trace extends TraceIds {
   /** The caller's span, when one arrived in `traceparent`. */
   readonly parentSpanId?: string;
-  /** Two hex digits. Bit 0 is `sampled`. */
-  readonly flags: string;
   /** `tracestate` verbatim, when one arrived. Vendor data this server does not read. */
   readonly state?: string;
 }
@@ -59,13 +58,6 @@ const TRACE: unique symbol = Symbol.for('dunx.http.trace');
  * by not recording.
  */
 const EXPOSE: unique symbol = Symbol.for('dunx.http.trace.expose');
-
-/**
- * `n` random bytes as hex. `Uint8Array.prototype.toHex` is 49.2 ns for a trace id
- * and a span id together, against 260.5 ns for a `crypto.randomUUID()` pair.
- */
-const mint = (bytes: number): string =>
-  crypto.getRandomValues(new Uint8Array(bytes)).toHex();
 
 /**
  * W3C Trace Context, propagated across services.
@@ -99,14 +91,18 @@ export class TraceContext {
    * unchanged: the scope, the log lines, the metrics exemplar.
    */
   static adopt(req: Request, expose = true): Trace {
-    const inbound = TraceContext.#parse(req.headers.get(TRACEPARENT_HEADER));
+    const inbound = parseTraceparent(req.headers.get(TRACEPARENT_HEADER));
     const state = req.headers.get(TRACESTATE_HEADER);
     const trace: Trace =
       inbound === undefined
-        ? { traceId: mint(16), spanId: mint(8), flags: DEFAULT_FLAGS }
+        ? {
+            traceId: mintTraceId(),
+            spanId: mintSpanId(),
+            flags: DEFAULT_TRACE_FLAGS,
+          }
         : {
             traceId: inbound.traceId,
-            spanId: mint(8),
+            spanId: mintSpanId(),
             parentSpanId: inbound.spanId,
             flags: inbound.flags,
             ...(state === null ? {} : { state }),
@@ -125,8 +121,8 @@ export class TraceContext {
    * The `traceparent` to send upstream. This server's span becomes the callee's
    * parent, so the two link without inventing a span nothing logged.
    */
-  static header(trace: Pick<Trace, 'traceId' | 'spanId' | 'flags'>): string {
-    return `00-${trace.traceId}-${trace.spanId}-${trace.flags}`;
+  static header(trace: TraceIds): string {
+    return formatTraceparent(trace);
   }
 
   /**
@@ -148,30 +144,6 @@ export class TraceContext {
   }
 
   static sampled(trace: Pick<Trace, 'flags'>): boolean {
-    return (Number.parseInt(trace.flags, 16) & SAMPLED) === SAMPLED;
-  }
-
-  static #parse(
-    header: string | null,
-  ): { traceId: string; spanId: string; flags: string } | undefined {
-    if (header === null) return undefined;
-    const parts = header.split('-');
-    if (parts.length < 4) return undefined;
-
-    const [version, traceId, spanId, flags] = parts as [
-      string,
-      string,
-      string,
-      string,
-    ];
-    // `ff` is reserved as invalid; a version this code does not know keeps the
-    // four fields it does know.
-    if (!HEX_2.test(version) || version === 'ff') return undefined;
-    if (version === '00' && parts.length !== 4) return undefined;
-    if (!HEX_32.test(traceId) || traceId === ZERO_TRACE) return undefined;
-    if (!HEX_16.test(spanId) || spanId === ZERO_SPAN) return undefined;
-    if (!HEX_2.test(flags)) return undefined;
-
-    return { traceId, spanId, flags };
+    return isSampled(trace);
   }
 }

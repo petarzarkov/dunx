@@ -15,7 +15,7 @@ other.
 | `@dunx/core`       | DI container, modules, lifecycle, config and files, an event bus, `ResiliencePolicy` - zero deps                             |
 | `@dunx/transform`  | Load-time transform: constructor parameter types                                                                             |
 | `@dunx/http`       | Routes, websocket gateways, server-sent events, middleware, guards, CORS, validation, health probes, `./client`, `./connect` |
-| `@dunx/infra`      | `/db` (drizzle) `/redis` `/cache` `/queue` `/schedule` `/files` `/images` `/logger` `/pagination`                            |
+| `@dunx/infra`      | `/db` (drizzle) `/redis` `/cache` `/queue` `/amqp` `/schedule` `/files` `/images` `/logger` `/pagination`                    |
 | `@dunx/openapi`    | OpenAPI 3.1 from route zod schemas, behind `./swagger` or `./scalar`                                                         |
 | `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0                                                                     |
 | `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing                                                                  |

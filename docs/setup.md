@@ -252,6 +252,7 @@ argument. Bun loads `.env` and `.env.local` on its own, so there is no loader an
 | Database and migrations          | `@dunx/infra/db` - drizzle over `bun:sqlite` or `Bun.SQL` |
 | Redis or Valkey                  | `@dunx/infra/redis` - `Bun.RedisClient`                   |
 | Queues and workers               | `@dunx/infra/queue` - bullmq                              |
+| RabbitMQ messages                | `@dunx/infra/amqp` - rabbitmq-client                      |
 | Caching                          | `@dunx/infra/cache` - memory, Redis or tiered             |
 | Cron and intervals               | `@dunx/infra/schedule`                                    |
 | Uploads, downloads, images       | `@dunx/infra/files`, `@dunx/infra/images`                 |
@@ -264,10 +265,10 @@ argument. Bun loads `.env` and `.env.local` on its own, so there is no loader an
 Validation is Standard Schema, so zod, Valibot and ArkType all work with no adapter.
 
 Peer dependencies, installed only for the features you use: `zod`, `drizzle-orm`,
-`better-auth`, `bullmq`, and one renderer for the docs page (`swagger-ui-dist` or
-`@scalar/api-reference`). An RPC mount also needs `@connectrpc/connect` and
-`@bufbuild/protobuf`. A docs page serves nothing until its renderer is installed
-and passed to `OpenApiModule`.
+`better-auth`, `bullmq`, `rabbitmq-client`, and one renderer for the docs page
+(`swagger-ui-dist` or `@scalar/api-reference`). An RPC mount also needs
+`@connectrpc/connect` and `@bufbuild/protobuf`. A docs page serves nothing until
+its renderer is installed and passed to `OpenApiModule`.
 
 ## Reading an app you did not write
 

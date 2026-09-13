@@ -11,6 +11,7 @@ import {
   type ResolvedModule,
 } from '@dunx/core';
 import { Worker, type Job } from 'bullmq';
+import { ErrorThrottle } from '../error-throttle.js';
 import { QueueConnection } from './connection.js';
 import { declares, JobDispatcher, metricsIn } from './dispatcher.js';
 import { describeJob, selectJobs, type DiscoveredJob } from './discover.js';
@@ -89,27 +90,6 @@ export const closeWithin = async (
 
 /** How often one queue's worker may report a connection error. */
 const ERROR_LOG_INTERVAL_MS = 30_000;
-
-/**
- * Answers whether this error is the one to report, at most once per interval.
- *
- * Time rather than a `ready` gate: bullmq emits `Worker`'s `ready` once, from the
- * initial `waitUntilReady` chain (`worker.js:125`), and the connection's recurring
- * ready reaches the backend rather than the worker. A gate cleared on that event
- * would latch after the first outage and silence every one after it.
- */
-export const errorThrottle = (
-  intervalMs: number,
-  now: () => number = Date.now,
-): (() => boolean) => {
-  let last = Number.NEGATIVE_INFINITY;
-  return () => {
-    const at = now();
-    if (at - last < intervalMs) return false;
-    last = at;
-    return true;
-  };
-};
 
 /** What a worker process holds. `create` discovers and validates; `start` opens
  * the connections, so a wiring mistake fails before anything consumes. */
@@ -304,9 +284,10 @@ export class QueueConsumer {
     // connection closes, so against an absent broker this fires in a hot loop:
     // measured at 21.9M lines in two minutes, which is enough I/O to stop a
     // process making progress at all. A later outage still gets reported.
-    const report = errorThrottle(ERROR_LOG_INTERVAL_MS);
+    const report = new ErrorThrottle(ERROR_LOG_INTERVAL_MS);
     worker.on('error', (error) => {
-      if (report()) this.#logger.error(`Worker error on ${queue}`, error);
+      if (report.allows())
+        this.#logger.error(`Worker error on ${queue}`, error);
     });
     return worker;
   }

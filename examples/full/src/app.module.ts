@@ -27,6 +27,7 @@ import { ProbesModule } from './health/health.module.js';
 import { ReferenceModule } from './reference/reference.module.js';
 import { HttpModule } from './http/http.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
+import { MessagingModule } from './messaging/messaging.module.js';
 import { NotesModule } from './notes/notes.module.js';
 import { RpcModule } from './rpc/rpc.module.js';
 import { MaintenanceModule } from './schedule/schedule.module.js';
@@ -104,6 +105,7 @@ const fileAndConsole = (
     ProtocolsModule,
     RpcModule,
     JobsModule,
+    MessagingModule,
     // After CacheModule, which binds the connection its counter writes to.
     LimitsModule,
     MaintenanceModule,

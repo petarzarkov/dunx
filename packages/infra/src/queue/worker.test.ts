@@ -19,7 +19,6 @@ import { QueueModule, type QueueModuleSettings } from './module.js';
 import { JobPublisher } from './publisher.js';
 import {
   closeWithin,
-  errorThrottle,
   QueueConsumer,
   WorkerFactory,
   type WorkerApp,
@@ -581,23 +580,3 @@ describe('closeWithin', () => {
  * Throttled rather than gated on recovery: bullmq emits `Worker`'s `ready` once,
  * so a flag cleared on that event would silence every outage after the first.
  */
-describe('errorThrottle', () => {
-  it('reports one of a flood', () => {
-    const report = errorThrottle(30_000, () => 0);
-    const reported = Array.from({ length: 10_000 }, () => report()).filter(
-      Boolean,
-    );
-    expect(reported).toHaveLength(1);
-  });
-
-  it('reports a second outage once the interval has passed', () => {
-    let at = 0;
-    const report = errorThrottle(30_000, () => at);
-    expect(report()).toBe(true);
-    expect(report()).toBe(false);
-    // Recovered, ran for a while, then failed again.
-    at = 30_000;
-    expect(report()).toBe(true);
-    expect(report()).toBe(false);
-  });
-});
