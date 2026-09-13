@@ -53,6 +53,27 @@ describe('plan', () => {
     expect(plan(['send'])).toContain('Unknown command "send"');
   });
 
+  // The hand-rolled split collected a flag's value as a positional, so this
+  // served ./4000 instead of ./emails.
+  it('keeps a flag value out of the directory', () => {
+    expect(parsed('preview', '--port', '4000').dir).toBe(resolve('emails'));
+    expect(parsed('preview', '--port', '4000').port).toBe(4000);
+    expect(parsed('export', '--out', '/tmp/x').dir).toBe(resolve('emails'));
+  });
+
+  it('takes the directory whichever side of the flags it is on', () => {
+    expect(parsed('preview', '--port', '4000', 'src/mail').dir).toBe(
+      resolve('src/mail'),
+    );
+    expect(parsed('preview', 'src/mail', '--port', '4000').dir).toBe(
+      resolve('src/mail'),
+    );
+  });
+
+  it('names an unknown flag rather than ignoring it', () => {
+    expect(plan(['preview', '--prot', '4000'])).toContain('--prot');
+  });
+
   it('refuses a port that is not one', () => {
     expect(plan(['preview', '--port', 'abc'])).toContain('--port');
     expect(plan(['preview', '--port', '70000'])).toContain('--port');

@@ -19,16 +19,27 @@ import { Notices } from './notices.service.js';
  * Each vendor sits on its own subpath, so importing `@dunx/infra/email` alone
  * needs neither `resend` nor `nodemailer`. This app imports all three because it
  * demonstrates all three; a real app imports the one it sends with.
+ *
+ * A provider named without its credential degrades to the log transport and says
+ * so, rather than failing boot. Constructing it eagerly meant `EMAIL_TRANSPORT=
+ * resend` with no key killed the app even under `dryRun`, which is the opposite
+ * of what the flag promises.
  */
 const transportFor = (
   email: AppConfig['email'],
   logger: Logger,
 ): EmailTransport => {
-  if (email.transport === 'resend') {
-    return new ResendTransport({ apiKey: email.resendKey ?? '' });
+  if (email.transport === 'resend' && email.resendKey !== undefined) {
+    return new ResendTransport({ apiKey: email.resendKey });
   }
-  if (email.transport === 'smtp') {
-    return new SmtpTransport({ url: email.smtpUrl ?? '' });
+  if (email.transport === 'smtp' && email.smtpUrl !== undefined) {
+    return new SmtpTransport({ url: email.smtpUrl });
+  }
+  if (email.transport !== 'log') {
+    logger.warn(
+      `EMAIL_TRANSPORT=${email.transport} needs its credential, and none is ` +
+        `set. Sending through the log transport instead.`,
+    );
   }
   return new LogTransport(logger);
 };

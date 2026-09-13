@@ -7,7 +7,7 @@ import {
   loadTemplate,
   type TemplateEntry,
 } from './templates.js';
-import { escapeHtml, page } from './preview-page.js';
+import { page } from './preview-page.js';
 
 export interface PreviewOptions {
   /** Directory holding the template modules. */
@@ -108,4 +108,4 @@ const html = (body: string, status = 200): Response =>
   });
 
 const failure = (detail: string): string =>
-  `<pre style="color:#b91c1c;padding:16px;white-space:pre-wrap">${escapeHtml(detail)}</pre>`;
+  `<pre style="color:#b91c1c;padding:16px;white-space:pre-wrap">${Bun.escapeHTML(detail)}</pre>`;

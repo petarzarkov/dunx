@@ -6,6 +6,7 @@ import {
   type EmailResult,
   type OutboundEmail,
 } from '../message.js';
+import { toPayload, withContentType } from '../payload.js';
 import { EmailTransport } from '../transport.js';
 
 /**
@@ -67,35 +68,15 @@ export class ResendTransport extends EmailTransport {
   }
 }
 
-/**
- * Resend rejects a key whose value is `undefined` as a type error rather than
- * ignoring it, so each optional field is added only when there is one.
- */
-const payload = (message: OutboundEmail): Record<string, unknown> => {
-  const body: Record<string, unknown> = {
-    from: formatAddress(message.from),
-    to: message.to.map(formatAddress),
-    subject: message.subject,
-  };
-  if (message.cc.length > 0) body['cc'] = message.cc.map(formatAddress);
-  if (message.bcc.length > 0) body['bcc'] = message.bcc.map(formatAddress);
-  if (message.replyTo !== undefined) {
-    body['replyTo'] = formatAddress(message.replyTo);
-  }
-  if (message.html !== undefined) body['html'] = message.html;
-  if (message.text !== undefined) body['text'] = message.text;
-  if (Object.keys(message.headers).length > 0) {
-    body['headers'] = message.headers;
-  }
-  if (message.attachments.length > 0) {
-    body['attachments'] = message.attachments.map((a) => ({
-      filename: a.filename,
-      content:
-        typeof a.content === 'string'
-          ? a.content
-          : Buffer.from(a.content).toString('base64'),
-      ...(a.contentType === undefined ? {} : { contentType: a.contentType }),
-    }));
-  }
-  return body;
-};
+/** A list stays a list here, and bytes travel as base64. */
+const payload = (message: OutboundEmail): Record<string, unknown> =>
+  toPayload(message, {
+    recipients: (list) => list.map(formatAddress),
+    attachment: (file) =>
+      withContentType(
+        file,
+        typeof file.content === 'string'
+          ? file.content
+          : Buffer.from(file.content).toString('base64'),
+      ),
+  });

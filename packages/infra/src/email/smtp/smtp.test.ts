@@ -25,6 +25,14 @@ describe('SmtpTransport', () => {
     expect(() => new SmtpTransport({})).toThrow(EmailSendError);
   });
 
+  // A caller reading the url off configuration writes `url: smtpUrl ?? ''`, and
+  // an empty one used to reach nodemailer and fail with its error, not this one.
+  it('treats an empty url as no url', () => {
+    expect(() => new SmtpTransport({ url: '' })).toThrow(
+      /needs a url, a transport config or a mailer/,
+    );
+  });
+
   it('builds a transporter from a url', () => {
     expect(new SmtpTransport({ url: 'smtp://localhost:2525' }).name).toBe(
       'smtp',

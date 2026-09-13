@@ -5,6 +5,7 @@ import {
   type EmailResult,
   type OutboundEmail,
 } from '../message.js';
+import { toPayload, withContentType } from '../payload.js';
 import { EmailTransport } from '../transport.js';
 
 /**
@@ -46,7 +47,12 @@ export class SmtpTransport extends EmailTransport {
       this.#mailer = init.mailer;
       return;
     }
-    const config = init.transport ?? init.url;
+    // `''` counts as missing, not as a url. A caller reading the url off
+    // configuration writes `url: config.smtpUrl ?? ''`, and nodemailer answers
+    // an empty one with an error of its own rather than this one.
+    const config =
+      init.transport ??
+      (init.url === undefined || init.url === '' ? undefined : init.url);
     if (config === undefined) {
       throw new EmailSendError(
         'smtp',
@@ -78,31 +84,9 @@ export class SmtpTransport extends EmailTransport {
   }
 }
 
-const payload = (message: OutboundEmail): Record<string, unknown> => {
-  const body: Record<string, unknown> = {
-    from: formatAddress(message.from),
-    to: message.to.map(formatAddress).join(', '),
-    subject: message.subject,
-  };
-  if (message.cc.length > 0)
-    body['cc'] = message.cc.map(formatAddress).join(', ');
-  if (message.bcc.length > 0) {
-    body['bcc'] = message.bcc.map(formatAddress).join(', ');
-  }
-  if (message.replyTo !== undefined) {
-    body['replyTo'] = formatAddress(message.replyTo);
-  }
-  if (message.html !== undefined) body['html'] = message.html;
-  if (message.text !== undefined) body['text'] = message.text;
-  if (Object.keys(message.headers).length > 0) {
-    body['headers'] = message.headers;
-  }
-  if (message.attachments.length > 0) {
-    body['attachments'] = message.attachments.map((a) => ({
-      filename: a.filename,
-      content: a.content,
-      ...(a.contentType === undefined ? {} : { contentType: a.contentType }),
-    }));
-  }
-  return body;
-};
+/** nodemailer takes one comma-separated header line per recipient field. */
+const payload = (message: OutboundEmail): Record<string, unknown> =>
+  toPayload(message, {
+    recipients: (list) => list.map(formatAddress).join(', '),
+    attachment: (file) => withContentType(file, file.content),
+  });

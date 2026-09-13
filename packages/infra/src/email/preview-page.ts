@@ -17,26 +17,20 @@ label{font-size:13px;color:#475569;cursor:pointer}`;
 const SCRIPT = `const f=document.getElementById('frame'),live=document.getElementById('live');
 setInterval(()=>{try{if(live.checked)f.contentWindow.location.reload()}catch{}},1500);`;
 
-export const escapeHtml = (value: string): string =>
-  value.replace(
-    /[&<>"]/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c,
-  );
-
 /** The one page the preview server serves: a list, a frame and a reload box. */
 export const page = (names: readonly string[], selected?: string): string => {
   const current = selected ?? names[0] ?? '';
   const links = names
     .map((name) => {
       const active = name === current ? ' class="active"' : '';
-      return `<a href="/?tpl=${encodeURIComponent(name)}"${active}>${escapeHtml(name)}</a>`;
+      return `<a href="/?tpl=${encodeURIComponent(name)}"${active}>${Bun.escapeHTML(name)}</a>`;
     })
     .join('');
   const query = `tpl=${encodeURIComponent(current)}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>Email preview</title><style>${STYLE}</style></head><body>
 <nav><h1>Templates</h1>${links || '<em style="color:#64748b">no templates</em>'}</nav>
-<main><header><strong>${escapeHtml(current)}</strong>
+<main><header><strong>${Bun.escapeHTML(current)}</strong>
 <label><input type="checkbox" id="live" checked> live reload</label>
 <a href="/text?${query}" target="_blank" rel="noreferrer">plain text</a></header>
 <iframe id="frame" src="/preview?${query}"></iframe></main>

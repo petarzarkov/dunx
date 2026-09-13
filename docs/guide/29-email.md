@@ -196,6 +196,21 @@ page uses:
 import { EmailPreview } from '@dunx/infra/email';
 ```
 
+## Writing a transport
+
+Subclass `EmailTransport` and map `OutboundEmail` onto the provider. `toPayload`
+is the walk both shipped transports take, so a field added to `OutboundEmail`
+reaches every provider at once rather than one at a time:
+
+```ts
+import { toPayload, withContentType } from '@dunx/infra/email';
+
+const body = toPayload(message, {
+  recipients: (list) => list.map(formatAddress),
+  attachment: (file) => withContentType(file, file.content),
+});
+```
+
 ## Testing
 
 `MemoryTransport` keeps what it was given instead of sending it. It is an
@@ -217,6 +232,23 @@ expect(transport.to('ada@example.com')).toHaveLength(1);
 
 `EmailService.resolve` applies the defaults and returns the message without
 sending it, for a test that cares about the addressing rather than the body.
+
+## Addresses
+
+A recipient is either a bare address, `Name <address>` as one string, or
+`{ address, name }`. All three go through `toAddress`, which splits the second
+form and refuses anything that cannot be put in a header: a newline, a comma, a
+semicolon, a stray angle bracket, or an address with no `@`.
+
+```ts
+toAddress('Ops <ops@example.com>'); // { address: 'ops@example.com', name: 'Ops' }
+toAddress('a@example.com,evil@attacker.com'); // throws InvalidAddressError
+```
+
+Refused rather than escaped, because there is no rendering of two addresses
+inside one recipient that means what the caller wrote. SMTP joins a recipient
+list into one comma-separated header, so a comma that survived would become a
+second `RCPT` the caller never asked for.
 
 ## Errors
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
+import { parseArgs } from 'node:util';
 import type { Server } from 'bun';
 import { EmailPreview } from './preview.js';
 import { TemplateRenderer } from './renderer.js';
@@ -29,6 +30,11 @@ const DEFAULT_RENDERER = '@dunx/infra/email/react';
 /**
  * Argv to a plan, or a message to print. Separate from running it so the parsing
  * is testable without a port and without the React peers installed.
+ *
+ * `parseArgs` rather than a hand-rolled split, which is what `@dunx/create-app`
+ * already does. Filtering argv for tokens that do not start with `--` reads as
+ * the same thing and is not: it collects every flag's **value** as a positional,
+ * so `dunx-email preview --port 4000` served `./4000`.
  */
 export const plan = (argv: readonly string[]): Plan | string => {
   const [command = 'preview'] = argv;
@@ -36,22 +42,31 @@ export const plan = (argv: readonly string[]): Plan | string => {
   if (command !== 'preview' && command !== 'export') {
     return `Unknown command "${command}".\n\n${USAGE}`;
   }
-  const rest = argv.slice(1);
-  const positional = rest.filter((a) => !a.startsWith('--'));
-  const flag = (name: string): string | undefined => {
-    const at = rest.indexOf(`--${name}`);
-    return at === -1 ? undefined : rest[at + 1];
-  };
-  const port = Number(flag('port') ?? 3035);
+  let values: Partial<Record<'port' | 'out' | 'renderer', string>>;
+  let positionals: string[];
+  try {
+    ({ values, positionals } = parseArgs({
+      args: argv.slice(1),
+      allowPositionals: true,
+      options: {
+        port: { type: 'string' },
+        out: { type: 'string' },
+        renderer: { type: 'string' },
+      },
+    }));
+  } catch (error) {
+    return `${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`;
+  }
+  const port = Number(values.port ?? 3035);
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
-    return `--port must be a port number, got "${String(flag('port'))}".`;
+    return `--port must be a port number, got "${String(values.port)}".`;
   }
   return {
     command,
-    dir: resolve(positional[0] ?? 'emails'),
-    out: resolve(flag('out') ?? 'out'),
+    dir: resolve(positionals[0] ?? 'emails'),
+    out: resolve(values.out ?? 'out'),
     port,
-    renderer: flag('renderer') ?? DEFAULT_RENDERER,
+    renderer: values.renderer ?? DEFAULT_RENDERER,
   };
 };
 

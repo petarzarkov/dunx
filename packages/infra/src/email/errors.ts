@@ -50,3 +50,20 @@ export class MissingRecipientError extends EmailError {
     super('This message names no recipient on "to", "cc" or "bcc".');
   }
 }
+
+/**
+ * A mailbox that cannot be put in a header safely.
+ *
+ * Refused rather than escaped, because there is no escaping that makes a second
+ * address inside one recipient mean what the caller wrote.
+ */
+export class InvalidAddressError extends EmailError {
+  override readonly status = 400;
+
+  constructor(
+    readonly value: string,
+    reason: string,
+  ) {
+    super(`Refusing the address ${JSON.stringify(value)}: ${reason}.`);
+  }
+}

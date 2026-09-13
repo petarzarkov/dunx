@@ -35,7 +35,12 @@ it('sends the welcome template through the bound transport', async () => {
   expect(result.transport).toBe('memory');
   expect(transport.sent).toHaveLength(1);
   expect(transport.last?.subject).toBe('Welcome to dunx-full, Ada');
-  expect(transport.last?.from.address).toBe('dunx-full <no-reply@dunx.win>');
+  // EMAIL_FROM is one `Name <addr>` string, which `toAddress` splits rather
+  // than carrying whole into the address slot.
+  expect(transport.last?.from).toEqual({
+    address: 'no-reply@dunx.win',
+    name: 'dunx-full',
+  });
   // React puts a comment between two adjacent text nodes, so the assertion is
   // on the end of the heading rather than on the whole phrase.
   expect(transport.last?.html).toContain('Ada</h1>');
@@ -64,6 +69,9 @@ it('applies the module sender without a send', () => {
     .get(EmailService)
     .resolve({ to: 'ada@example.com', subject: 'Hi' });
 
-  expect(outbound.from.address).toBe('dunx-full <no-reply@dunx.win>');
+  expect(outbound.from).toEqual({
+    address: 'no-reply@dunx.win',
+    name: 'dunx-full',
+  });
   expect(outbound.to).toEqual([{ address: 'ada@example.com' }]);
 });

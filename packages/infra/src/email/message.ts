@@ -1,6 +1,8 @@
+import { InvalidAddressError } from './errors.js';
+
 /**
- * A mailbox. The string form is the address alone; the object form carries the
- * display name a provider renders beside it.
+ * A mailbox. The string form is either the address alone or `Name <address>`;
+ * the object form carries the display name a provider renders beside it.
  */
 export interface EmailAddress {
   readonly address: string;
@@ -58,8 +60,62 @@ export interface EmailResult {
   readonly transport: string;
 }
 
-export const toAddress = (recipient: EmailRecipient): EmailAddress =>
-  typeof recipient === 'string' ? { address: recipient } : recipient;
+/**
+ * `Name <addr>` as one string, which is how a sender is usually configured and
+ * what a bare `{ address }` would otherwise carry whole into the address slot.
+ */
+const MAILBOX = /^\s*(.*?)\s*<([^<>]*)>\s*$/;
+
+/**
+ * What may never reach a header. A newline starts one, a comma or a semicolon
+ * starts a second recipient once SMTP joins the list, and angle brackets close
+ * the mailbox early. None of these can be escaped into meaning what was written.
+ */
+const UNSAFE_ADDRESS = /[\r\n\0,;<>]/;
+const UNSAFE_NAME = /[\r\n\0]/;
+
+const checked = (address: string, name: string | undefined): EmailAddress => {
+  if (address === '') throw new InvalidAddressError(address, 'it is empty');
+  if (UNSAFE_ADDRESS.test(address)) {
+    throw new InvalidAddressError(
+      address,
+      'it carries a newline, a comma, a semicolon or an angle bracket',
+    );
+  }
+  if (!address.includes('@')) {
+    throw new InvalidAddressError(address, 'it has no "@"');
+  }
+  if (name !== undefined && UNSAFE_NAME.test(name)) {
+    throw new InvalidAddressError(
+      address,
+      'its display name carries a newline',
+    );
+  }
+  return name === undefined ? { address } : { address, name };
+};
+
+/** Strips the quoting {@link formatAddress} adds, so a round trip is stable. */
+const unquote = (name: string): string | undefined => {
+  const bare = /^"(.*)"$/.exec(name)?.[1] ?? name;
+  const unescaped = bare.replace(/\\(["\\])/g, '$1');
+  return unescaped === '' ? undefined : unescaped;
+};
+
+/**
+ * Normalises a recipient and refuses one that cannot be put in a header.
+ *
+ * Validation lives here rather than at each call site because this is the one
+ * function every recipient on every field goes through.
+ */
+export const toAddress = (recipient: EmailRecipient): EmailAddress => {
+  if (typeof recipient !== 'string') {
+    return checked(recipient.address, recipient.name);
+  }
+  const match = MAILBOX.exec(recipient);
+  return match === null
+    ? checked(recipient, undefined)
+    : checked(match[2] ?? '', unquote(match[1] ?? ''));
+};
 
 export const toAddressList = (
   recipients: EmailRecipient | readonly EmailRecipient[] | undefined,
