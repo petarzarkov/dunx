@@ -1,0 +1,241 @@
+name: Preview the site
+
+# The documentation site on a pull request, at a per-branch preview URL, and
+# only when somebody types `@previewdeploy` in a comment on it.
+#
+# It ran on every pull request push until it did not. Six jobs already have to
+# pass before a merge and this was a seventh, building the site and spending a
+# Cloudflare Pages deployment on branches nobody was going to open the preview
+# of. A preview is worth having when a reviewer wants to look at the site, which
+# is a thing somebody can ask for.
+#
+# `fast-code-review` requires a non-word character after its own phrase and
+# `@dunxonudeepreview` is unrelated, so no other workflow wakes on this one.
+
+on:
+  issue_comment:
+    types: [created]
+
+# By pull request rather than by comment. Two requests on the same pull request
+# deploy the same branch alias, so the later one supersedes the earlier, which
+# is the opposite of the deep reviewer next door: two people asking for a review
+# of different things want two reviews.
+concurrency:
+  group: preview-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  preview:
+    name: Preview on request
+    runs-on: ubuntu-latest
+    # `issue.pull_request` turns away the same comment on an actual issue, where
+    # there is no branch to deploy. The author check is what keeps a passer-by
+    # from spending a Cloudflare deployment and reaching a job that holds the
+    # deploy token. `contains` is a cheap pre-filter only; the exact match is in
+    # the first step, because workflow expressions have no word boundary.
+    if: >-
+      contains(github.event.comment.body, '@previewdeploy') &&
+      github.event.issue.pull_request != null &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    permissions:
+      contents: read
+      # Reading `coverage-model` off the CI run that produced it, which is a
+      # different workflow run and needs this even though the artifact is ours.
+      actions: read
+      deployments: write
+      # The preview comment, as github-actions[bot]. `issues.createComment`
+      # against a pull request number is governed by this and not by
+      # `issues: write`, which pull requests 130 to 133 proved by posting the
+      # same comment with exactly these permissions.
+      pull-requests: write
+      # The eyes reaction, which is a different endpoint: reactions live under
+      # `issues/comments/{id}` and are not covered by the line above. The step
+      # is `|| true`, so the cost of being wrong here is a missing reaction
+      # rather than a failed deploy.
+      issues: write
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      # The word boundary the `if:` above cannot express. `@previewdeployment`
+      # contains the trigger and is not a request for one.
+      - name: Check the trigger is exactly ours
+        id: gate
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          if printf '%s' "$BODY" | grep -qiE '@previewdeploy([^A-Za-z0-9_-]|$)'; then
+            echo 'ok=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ok=false' >> "$GITHUB_OUTPUT"
+            echo 'The trigger appears only inside a longer word. Nothing to do.'
+          fi
+
+      # An `issue_comment` run carries the default branch and no head, so
+      # everything below has to be told which commit it is about. A fork gets no
+      # secrets and would fail at the deploy step rather than here, so it is
+      # turned away with a reason instead.
+      - name: Resolve the pull request head
+        id: head
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # `gh api --jq` rather than a pipe into jq: gh carries its own, so this
+          # does not depend on the runner image shipping the binary.
+          row=$(gh api "repos/$REPO/pulls/$NUMBER" \
+            --jq '[.head.repo.full_name, .head.sha, .head.ref] | @tsv')
+          IFS=$'\t' read -r fork sha ref <<< "$row"
+          if [ "$fork" != "$REPO" ]; then
+            echo "::error::Pull request $NUMBER comes from $fork. A fork gets no access to the Cloudflare token, so there is no preview to deploy."
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "previewing $ref at $sha"
+
+      # Whoever asked typed into a comment and is looking at that comment, so
+      # that is where the acknowledgement goes. A deploy takes a couple of
+      # minutes and the alternative is them typing the trigger again.
+      - name: Acknowledge
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          gh api --method POST \
+            "repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
+            -f content=eyes >/dev/null || true
+
+      # Taken from the CI run for this exact commit, not regenerated. The gate
+      # that writes it needs the valkey, postgres, rabbitmq and MinIO services
+      # the `coverage` job declares, and without them 49 tests skip and the
+      # model is wrong. One place declares the services, one job runs the gate.
+      #
+      # Without the model the site renders an empty coverage page, which a
+      # reviewer reads as a regression, so a missing one stops the run and says
+      # what to do about it rather than deploying something misleading.
+      - name: Find the CI run holding the coverage model
+        id: model
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ steps.head.outputs.sha }}
+        run: |
+          set -euo pipefail
+          ids=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=20" \
+            --jq '.workflow_runs | sort_by(.run_started_at) | reverse | .[].id')
+          for id in $ids; do
+            if gh api "repos/$REPO/actions/runs/$id/artifacts" \
+              --jq '.artifacts[] | select(.name == "coverage-model" and .expired == false) | .id' \
+              | grep -q .; then
+              echo "run_id=$id" >> "$GITHUB_OUTPUT"
+              echo "coverage model from run $id"
+              exit 0
+            fi
+          done
+          echo "::error::No CI run for $SHA has uploaded coverage-model yet. Wait for the Coverage job to finish, push again if it failed, and ask a second time."
+          exit 1
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          ref: ${{ steps.head.outputs.sha }}
+
+      - uses: ./.github/actions/setup
+        if: steps.gate.outputs.ok == 'true'
+
+      - name: Build
+        if: steps.gate.outputs.ok == 'true'
+        run: bun run ci build
+
+      # After the build, whose docs `generate` leaves a real model alone and
+      # writes an empty one when it finds none, and before `docs:build`, which
+      # is what copies `public/badges` into the deployed site.
+      - name: Download the coverage model and badges
+        if: steps.gate.outputs.ok == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-model
+          path: internal/docs
+          run-id: ${{ steps.model.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Build the documentation site
+        if: steps.gate.outputs.ok == 'true'
+        run: bun run docs:build
+
+      # Actions are pinned to a commit when they are third-party or hold
+      # something worth stealing - this one takes the Cloudflare deploy token. A
+      # moving tag is a moving tag holding a credential.
+      #
+      # wrangler is pinned here rather than installed as a devDependency: only
+      # this job and the production deploy in ci.yml deploy, and a root
+      # dependency would download wrangler in every other job too.
+      - name: Deploy the preview to Cloudflare Pages
+        id: deploy
+        if: steps.gate.outputs.ok == 'true'
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.128.0'
+          command: >-
+            pages deploy internal/docs/dist
+            --project-name=dunx
+            --branch=${{ steps.head.outputs.ref }}
+
+      # One comment per pull request, rewritten in place rather than appended: a
+      # fresh comment on every request buries the conversation under a stack of
+      # near-identical links. The marker is how the next run finds the comment
+      # it left last time.
+      - name: Comment the preview URL
+        if: steps.gate.outputs.ok == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          # The alias follows the branch and survives the next push, so it is the
+          # one worth clicking twice; the deployment URL is immutable and pins the
+          # exact build, so it is the one worth citing.
+          ALIAS_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
+          SHA: ${{ steps.head.outputs.sha }}
+        with:
+          script: |
+            const MARKER = '<!-- cloudflare-preview -->';
+            const { ALIAS_URL, DEPLOY_URL, SHA } = process.env;
+
+            const body = [
+              MARKER,
+              '### Documentation preview',
+              '',
+              `**${ALIAS_URL || DEPLOY_URL}**`,
+              '',
+              `\`${SHA.slice(0, 7)}\` · [this exact build](${DEPLOY_URL})`,
+            ].join('\n');
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { ...context.repo, issue_number: context.issue.number },
+            );
+            const mine = comments.find(
+              (c) => c.user.type === 'Bot' && c.body.startsWith(MARKER),
+            );
+
+            await (mine
+              ? github.rest.issues.updateComment({
+                  ...context.repo,
+                  comment_id: mine.id,
+                  body,
+                })
+              : github.rest.issues.createComment({
+                  ...context.repo,
+                  issue_number: context.issue.number,
+                  body,
+                }));

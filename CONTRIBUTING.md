@@ -465,6 +465,20 @@ reverted, and that reversal holds.
    `bun run typecheck` and `bun run test:cov`.
 4. Write conventional commits.
 5. Open the PR and fill in the template: what changed, why, and any numbers.
+6. Wait for CI to go green, then comment `@coderabbitai review` to ask for a
+   review. Automatic review is off, so a PR nobody asks about gets none.
+7. If the change touched anything the documentation site renders, comment
+   `@previewdeploy` and read the preview it replies with.
+
+Both comment triggers are deliberate rather than automatic, and the reason is
+the same in each case: review and preview both cost something, and a pull
+request whose author has not finished is not ready for either. Ask when the
+checks are green and you would want someone to look.
+
+The site renders more than `internal/docs/`: the guides and architecture pages
+under `docs/`, every published package's README, and the generated API model.
+A change to any of those shows up in the preview, which is what makes it worth
+asking for.
 
 Small and focused beats large and comprehensive. If a change turns out to need a
 design decision, open an issue first and point at the ARCHITECTURE.md section it

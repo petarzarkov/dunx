@@ -13,8 +13,15 @@ It was on GitHub Pages at `petarzarkov.github.io/dunx` until the domain was boug
 The build is unchanged: `wrangler pages deploy internal/docs/dist` replaced the
 Pages artifact upload in the same `release` job, so the coverage model that job
 downloads still reaches `docs:build` before the deploy. What moved with it is the
-base path, from `/dunx/` to `/`, and the router - see below. A pull request gets a
-per-branch preview URL, which GitHub Pages had no equivalent of.
+base path, from `/dunx/` to `/`, and the router - see below.
+
+A pull request can get a per-branch preview URL, which GitHub Pages had no
+equivalent of. Comment `@previewdeploy` on it and
+`.github/workflows/preview.yml` builds the site and deploys it under the branch
+name, taking the coverage model from that commit's CI run rather than
+regenerating it. It ran on every pull request push until a preview nobody
+opened became the usual case: a site build and a Cloudflare deployment per
+push, for a URL worth having only when somebody wants to look at the site.
 
 The old origin still answers, from a one-shot deployment: a fixed redirect plus
 `setup.md` and `llms.txt`, because every `@dunx/create-app` published before the
