@@ -5,7 +5,8 @@ import {
   type AsyncModuleConfig,
   type ModuleRef,
 } from '@dunx/core';
-import { buildController, type DocPaths } from './controller.js';
+import type { Authorize } from '@dunx/http';
+import { buildController, type DocMount } from './controller.js';
 import { describeRoutes } from './discover.js';
 import { OpenApiExplorer } from './explorer.js';
 import { generateDocument, type DocumentInfo } from './generate.js';
@@ -17,6 +18,13 @@ export interface OpenApiInfo extends DocumentInfo {
   readonly path?: string;
   /** Where the document is mounted. Default `/openapi.json`. */
   readonly jsonPath?: string;
+  /**
+   * Who may see the explorer: the document, the page and the page's own assets,
+   * one decision covering all three. `@dunx/dashboard` takes the same
+   * {@link Authorize}. No default and no boot warning either, unlike the
+   * dashboard: a public API's document is published to be read.
+   */
+  readonly authorize?: Authorize;
 }
 
 /**
@@ -46,14 +54,16 @@ export interface OpenApiAsyncOptions<D extends Deps>
   readonly root: ModuleRef;
 }
 
-const DEFAULT_PATHS: Readonly<DocPaths> = Object.freeze({
+const DEFAULT_MOUNT: Readonly<DocMount> = Object.freeze({
   json: '/openapi.json',
   ui: '/docs',
+  authorize: undefined,
 });
 
-const pathsFrom = (info: OpenApiInfo): DocPaths => ({
-  json: info.jsonPath ?? DEFAULT_PATHS.json,
-  ui: info.path ?? DEFAULT_PATHS.ui,
+const mountFrom = (info: OpenApiInfo): DocMount => ({
+  json: info.jsonPath ?? DEFAULT_MOUNT.json,
+  ui: info.path ?? DEFAULT_MOUNT.ui,
+  authorize: info.authorize,
 });
 
 export class OpenApiModule {
@@ -68,7 +78,7 @@ export class OpenApiModule {
    * is settled before the first constructor runs and `warnings` is readable at boot.
    */
   static forRoot(options: OpenApiOptions): DynamicModule {
-    const paths = pathsFrom(options);
+    const mount = mountFrom(options);
 
     const configured: DynamicModule = {
       module: OpenApiModule,
@@ -77,7 +87,7 @@ export class OpenApiModule {
       // itself. This module wraps the app's root rather than being imported by it,
       // so the export is what makes `app.get(OpenApiExplorer)` resolve.
       exports: [OpenApiExplorer],
-      controllers: [buildController(paths, options.renderer)],
+      controllers: [buildController(mount, options.renderer)],
       providers: [
         provide(OpenApiExplorer, {
           // `configured` includes the controller above, so the document describes the
@@ -86,8 +96,8 @@ export class OpenApiModule {
           useFactory: async () =>
             new OpenApiExplorer(
               await generateDocument(describeRoutes(configured), options),
-              paths.json,
-              paths.ui,
+              mount.json,
+              mount.ui,
               options.renderer,
             ),
         }),
@@ -113,14 +123,15 @@ export class OpenApiModule {
    * });
    * ```
    *
-   * The mount paths come out of the factory too. The controller's routes are
-   * declared with path thunks and discovery runs after every provider has
-   * settled, so both the document and the served table read the filled values.
+   * The mount paths come out of the factory too, and so does `authorize`, which
+   * is the only way to close over an `Auth` the container owns. The controller's
+   * routes are declared with path thunks and discovery runs after every provider
+   * has settled, so both the document and the served table read filled values.
    */
   static forRootAsync<const D extends Deps>(
     options: OpenApiAsyncOptions<D>,
   ): DynamicModule {
-    const paths: DocPaths = { ...DEFAULT_PATHS };
+    const mount: DocMount = { ...DEFAULT_MOUNT };
 
     const configured: DynamicModule = {
       module: OpenApiModule,
@@ -132,16 +143,16 @@ export class OpenApiModule {
       // itself. This module wraps the app's root rather than being imported by it,
       // so the export is what makes `app.get(OpenApiExplorer)` resolve.
       exports: [OpenApiExplorer],
-      controllers: [buildController(paths, options.renderer)],
+      controllers: [buildController(mount, options.renderer)],
       providers: [
         provide(OpenApiExplorer, {
           useFactory: async (...deps) => {
             const info = await options.useFactory(...deps);
-            Object.assign(paths, pathsFrom(info));
+            Object.assign(mount, mountFrom(info));
             return new OpenApiExplorer(
               await generateDocument(describeRoutes(configured), info),
-              paths.json,
-              paths.ui,
+              mount.json,
+              mount.ui,
               options.renderer,
             );
           },

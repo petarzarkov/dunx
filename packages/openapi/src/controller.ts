@@ -2,8 +2,10 @@ import { inject, type Ctor } from '@dunx/core';
 import {
   ApiHidden,
   Controller,
+  gate,
   Get,
   Public,
+  type Authorize,
   type Input,
   type RouteSchemas,
 } from '@dunx/http';
@@ -12,9 +14,10 @@ import { OpenApiExplorer } from './explorer.js';
 import { mountPrefix } from './mount.js';
 import type { DocsRenderer } from './renderer.js';
 
-export interface DocPaths {
+export interface DocMount {
   json: string;
   ui: string;
+  authorize: Authorize | undefined;
 }
 
 /**
@@ -22,12 +25,15 @@ export interface DocPaths {
  * routes then discovered, guarded, CORS-wrapped and middleware-wrapped like any
  * other controller's. Nothing is mounted behind the app's back.
  *
- * The paths are read through a closure: a decorator's arguments evaluate with the
+ * The mount is read through a closure: a decorator's arguments evaluate with the
  * class definition, and `forRootAsync`'s are not known until a provider has run.
  * `@Get` takes a `RoutePath` thunk for that, discovery happening after every
  * provider has settled.
+ *
+ * Every route is `@Public()`, so no session guard answers ahead of `authorize`:
+ * a 401 from one would confirm the mount exists.
  */
-const documentController = (paths: DocPaths) => {
+const documentController = (mount: DocMount) => {
   @Controller()
   class OpenApiController {
     // inject() in a field initializer, not a constructor parameter: this package
@@ -35,15 +41,24 @@ const documentController = (paths: DocPaths) => {
     protected readonly explorer = inject(OpenApiExplorer);
 
     @Public()
-    @Get(() => paths.json)
-    document(input: Input<RouteSchemas>): Response {
-      return new Response(this.explorer.json(this.prefix(input, paths.json)), {
+    @Get(() => mount.json)
+    async document(input: Input<RouteSchemas>): Promise<Response> {
+      const refused = await this.refuse(input);
+      if (refused !== undefined) return refused;
+
+      return new Response(this.explorer.json(this.prefix(input, mount.json)), {
         headers: { 'content-type': 'application/json; charset=utf-8' },
       });
     }
 
     protected prefix(input: Input<RouteSchemas>, declared: string): string {
       return mountPrefix(new URL(input.req.url).pathname, declared);
+    }
+
+    protected refuse(
+      input: Input<RouteSchemas>,
+    ): Promise<Response | undefined> {
+      return gate(mount.authorize, input.req);
     }
   }
 
@@ -57,18 +72,21 @@ const documentController = (paths: DocPaths) => {
  * not move with the renderer.
  */
 export const buildController = (
-  paths: DocPaths,
+  mount: DocMount,
   renderer: DocsRenderer | undefined,
 ): Ctor<object> => {
-  const base = documentController(paths);
+  const base = documentController(mount);
   if (renderer === undefined) return base;
 
   @Controller()
   class OpenApiController extends base {
     @Public()
-    @Get(() => paths.ui)
+    @Get(() => mount.ui)
     async page(input: Input<RouteSchemas>): Promise<Response> {
-      const html = await this.explorer.page(this.prefix(input, paths.ui));
+      const refused = await this.refuse(input);
+      if (refused !== undefined) return refused;
+
+      const html = await this.explorer.page(this.prefix(input, mount.ui));
       return new Response(html, {
         headers: { 'content-type': 'text/html; charset=utf-8' },
       });
@@ -81,13 +99,18 @@ export const buildController = (
      * directory routes cannot set `cache-control` and answer any method
      * (docs/bun-apis.md).
      *
+     * Gated with the page: a page whose script is a refusal renders blank.
+     *
      * `@ApiHidden` because a stylesheet in an OpenAPI document is noise, while
      * `/docs` and `/openapi.json` are endpoints someone calls.
      */
     @ApiHidden()
     @Public()
-    @Get(() => joinPath(paths.ui, '/*'))
-    asset(input: Input<RouteSchemas>): Promise<Response> {
+    @Get(() => joinPath(mount.ui, '/*'))
+    async asset(input: Input<RouteSchemas>): Promise<Response> {
+      const refused = await this.refuse(input);
+      if (refused !== undefined) return refused;
+
       const { pathname } = new URL(input.req.url);
       return this.explorer.asset(pathname.slice(pathname.lastIndexOf('/') + 1));
     }

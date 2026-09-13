@@ -1,5 +1,6 @@
 import type { BunRequest } from 'bun';
 import {
+  gate,
   type Middleware,
   type Next,
   type RouteContext,
@@ -7,6 +8,7 @@ import {
 } from '@dunx/http';
 import { OpenApiExplorer } from '@dunx/openapi';
 import { ScalarRenderer } from '@dunx/openapi/scalar';
+import { DocsGate } from '../docs-gate.js';
 
 /** Where this page and its one asset answer. `/api/docs` is Swagger UI's. */
 export const REFERENCE_PATH = '/api/reference';
@@ -19,6 +21,9 @@ export const REFERENCE_PATH = '/api/reference';
  *
  * `/api` is the global prefix `main.ts` sets, so the document is asked for under
  * that prefix and the asset hrefs hang off this mount.
+ *
+ * `OpenApiModule`'s `authorize` covers what the module mounts, so this page takes
+ * the same `DocsGate` through `@dunx/http`'s `gate()`: one policy, two explorers.
  */
 export class ReferenceMiddleware implements Middleware {
   readonly #renderer = new ScalarRenderer({
@@ -27,7 +32,10 @@ export class ReferenceMiddleware implements Middleware {
   });
   #page: Promise<string> | undefined;
 
-  constructor(private readonly explorer: OpenApiExplorer) {}
+  constructor(
+    private readonly explorer: OpenApiExplorer,
+    private readonly docs: DocsGate,
+  ) {}
 
   async handle(
     req: BunRequest,
@@ -37,12 +45,23 @@ export class ReferenceMiddleware implements Middleware {
     if (ctx.get(UNMATCHED) !== true || req.method !== 'GET') return next();
 
     const { pathname } = new URL(req.url);
+    if (
+      pathname !== REFERENCE_PATH &&
+      !pathname.startsWith(`${REFERENCE_PATH}/`)
+    ) {
+      return next();
+    }
+
+    const refused = this.docs.enabled
+      ? await gate((request) => this.docs.admits(request), req)
+      : undefined;
+    if (refused !== undefined) return refused;
+
     if (pathname === REFERENCE_PATH) {
       return new Response(await this.#html(), {
         headers: { 'content-type': 'text/html; charset=utf-8' },
       });
     }
-    if (!pathname.startsWith(`${REFERENCE_PATH}/`)) return next();
 
     return this.#renderer.asset(pathname.slice(REFERENCE_PATH.length + 1));
   }

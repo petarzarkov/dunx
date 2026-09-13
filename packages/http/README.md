@@ -95,6 +95,10 @@ from, and it may change in any release.
   otherwise silently keep one.
 - Handlers may return a `Response`, any JSON-serialisable value, or `undefined`
   for a 204.
+- `Authorize` and `gate()` are the contract an ops surface gates itself with:
+  raw request in, 404 on refusal, and a returned `Response` sent as written for a
+  browser that needs a sign-in page. `@dunx/dashboard` and `@dunx/openapi` both
+  take one, so an app writes the policy once and hands it to both.
 - Schemas, parsers and the status resolve at boot into the same closure the
   middleware chain folds into. A request reads no metadata and does no lookup.
 - Every request adopts W3C Trace Context, so `traceId`, `spanId`, `parentSpanId`

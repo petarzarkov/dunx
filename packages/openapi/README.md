@@ -73,6 +73,10 @@ at runtime, so there is no second annotation for the document to disagree with.
 A response schema is documentation only: the verb decorators hold the handler's
 return type to it at compile time instead of validating every response.
 
+Who may read any of it is `authorize`, the same `Authorize` `@dunx/dashboard`
+takes. It covers the document, the page and the page's assets together, refuses
+with 404, and sends a `Response` as written when a browser needs somewhere to go.
+
 ## Notes
 
 - `.meta({ id })` on a zod schema is what hoists it into `components/schemas`.

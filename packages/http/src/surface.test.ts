@@ -22,6 +22,8 @@ const supported = (text: string): readonly string[] => {
 const BARREL = [
   'ApiHidden',
   'AppSettings',
+  'Authorize',
+  'AuthorizeDecision',
   'ClientAddress',
   'Compression',
   'CompressionEncoding',
@@ -173,6 +175,7 @@ const BARREL = [
   'ValidationIssue',
   'defaultErrorMapper',
   'errorMapper',
+  'gate',
   'mergeMeta',
   'meta',
   'metaKey',
