@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { rejection } from '../../rejection.fixture.js';
 import { DbConnection } from '../connection.js';
 import { DbModule } from '../module.js';
 import { runSeeds } from '../seed.js';
@@ -32,16 +33,6 @@ type Schema = typeof schema;
 
 const records = (ctor: object, deps: () => readonly unknown[]): void => {
   Object.defineProperty(ctor, Symbol.for('dunx.deps'), { value: deps });
-};
-
-const rejection = async (promise: Promise<unknown>): Promise<Error> => {
-  const error = await promise.then(
-    () => undefined,
-    (reason: unknown) => reason,
-  );
-  if (!(error instanceof Error))
-    throw new Error('expected the promise to reject with an Error');
-  return error;
 };
 
 let connection: SyncSqliteConnection<Schema>;

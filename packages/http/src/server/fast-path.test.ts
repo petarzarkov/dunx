@@ -7,8 +7,10 @@ import type {
   StandardSchemaV1,
 } from '../route/schema.js';
 import type { RouteContext } from './context.js';
+import { named } from './schema.fixture.js';
 import { HttpError } from './errors.js';
-import { HttpFactory, type HttpApp } from './factory.js';
+import { HttpFactory } from './factory.js';
+import { serving } from './serving.fixture.js';
 import type { Middleware, Next } from './middleware.js';
 import { buildRoutes } from './routes.js';
 import { HttpStatusCode } from './status.js';
@@ -25,22 +27,6 @@ import { HttpStatusCode } from './status.js';
  * `fast-path-validation.test.ts`. The optimisation is only worth having if nothing
  * about it is visible to a caller.
  */
-/** A Standard Schema by hand - @dunx/http depends on no validator. */
-const named: StandardSchemaV1<unknown, { name: string }> = {
-  '~standard': {
-    version: 1,
-    vendor: 'test',
-    validate: (value): StandardSchemaResult<{ name: string }> => {
-      const name =
-        typeof value === 'object' && value !== null
-          ? (value as Record<string, unknown>)['name']
-          : undefined;
-      return typeof name === 'string'
-        ? { value: { name } }
-        : { issues: [{ message: 'name must be a string', path: ['name'] }] };
-    },
-  },
-};
 
 /** `id` must be numeric. Synchronous, so a params-only route awaits nothing. */
 const numericId: StandardSchemaV1<unknown, { id: number }> = {
@@ -155,21 +141,14 @@ class FastController {
 @Module({ controllers: [FastController] })
 class FastModule {}
 
-const withApp = async (
+const withApp = (
   run: (url: string) => Promise<void>,
   options: Parameters<typeof HttpFactory.create>[1] = {},
-): Promise<void> => {
-  const app: HttpApp = await HttpFactory.create(FastModule, {
-    requestLogging: false,
-    ...options,
-  });
-  const url = await app.listen(0);
-  try {
-    await run(url);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> =>
+  serving(
+    () => HttpFactory.create(FastModule, { requestLogging: false, ...options }),
+    (_app, url) => run(url),
+  );
 
 /** Both dispatch branches, so every assertion below runs twice. */
 const branches: readonly [string, Parameters<typeof HttpFactory.create>[1]][] =

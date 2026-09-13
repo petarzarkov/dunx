@@ -1,6 +1,8 @@
+import { expect } from 'bun:test';
 import { Module } from '@dunx/core';
 import { HttpFactory, type HttpApp } from '../server/factory.js';
 import { Gateway, OnOpen } from './decorators.js';
+import { PubSub } from './pubsub.js';
 import type { PubSubRelay } from './relay.js';
 import type { Socket } from './socket.js';
 
@@ -117,4 +119,54 @@ export const released = async (
   const code = await proc.exited;
   clearTimeout(timer);
   return code;
+};
+
+/**
+ * The assertion both real-relay suites make: one publish reaches every subscriber
+ * on both nodes exactly once, in either direction.
+ *
+ * Parameterised rather than copied, because what differs between Redis and
+ * Postgres is only how a relay is constructed, how a channel may be spelled and
+ * what the payload says. The "exactly once" half is the whole point: a relay that
+ * echoes a publish back to its own node delivers twice, and only a second
+ * `expect` after a settle window catches it.
+ */
+export const deliversOncePerSubscriber = async (
+  relay: () => PubSubRelay,
+  channel: string,
+  payload: string,
+): Promise<void> => {
+  const { apps, urls } = await twoNodes(relay(), relay(), channel);
+  const [first, second] = apps;
+  const [urlA, urlB] = urls;
+  if (!first || !second || !urlA || !urlB)
+    throw new Error('two nodes expected');
+
+  try {
+    const [ada, grace] = await Promise.all([open(urlA), open(urlB)]);
+    if (!ada || !grace) throw new Error('clients expected');
+
+    first.get(PubSub).publishEvent(TOPIC, 'said', payload);
+    const expected = JSON.stringify({ event: 'said', data: payload });
+
+    await until(() => grace.frames.length > 0);
+    await Bun.sleep(250);
+    expect(ada.frames).toEqual([expected]);
+    expect(grace.frames).toEqual([expected]);
+
+    // And the other direction, on the same channel.
+    ada.frames.length = 0;
+    grace.frames.length = 0;
+    second.get(PubSub).publishEvent(TOPIC, 'said', 'and back');
+    const back = JSON.stringify({ event: 'said', data: 'and back' });
+    await until(() => ada.frames.length > 0);
+    await Bun.sleep(250);
+    expect(ada.frames).toEqual([back]);
+    expect(grace.frames).toEqual([back]);
+
+    ada.close();
+    grace.close();
+  } finally {
+    await stop(apps);
+  }
 };

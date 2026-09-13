@@ -14,6 +14,7 @@
  * ```
  */
 import { parseArgs } from 'node:util';
+import { int, micros, signed } from './format.js';
 import { selectGenerator, type LoadGeneratorChoice } from './loadgen/index.js';
 import { readMachine } from './machine.js';
 import { resultsDir } from './paths.js';
@@ -386,11 +387,11 @@ const live = await driveUnits(
 const results = live.map(collect);
 const baseline = results[0]?.rps.median ?? 0;
 for (const result of results) {
-  const micros = 1_000_000 / result.rps.median;
+  const cost = micros(result.rps.median);
   note(
-    `${result.id.padEnd(18)} ${Math.round(result.rps.median).toLocaleString('en-US').padStart(9)} req/s` +
-      `  ${micros.toFixed(2)} µs` +
-      `  +${(micros - 1_000_000 / baseline).toFixed(2)} µs vs off` +
+    `${result.id.padEnd(18)} ${int(result.rps.median).padStart(9)} req/s` +
+      `  ${cost.toFixed(2)} µs` +
+      `  ${signed(cost - micros(baseline), 2, ' µs')} vs off` +
       `  sd ${Math.round(result.rps.stddev).toString().padStart(5)}` +
       (result.bad > 0 ? `  BAD ${result.bad}` : ''),
   );

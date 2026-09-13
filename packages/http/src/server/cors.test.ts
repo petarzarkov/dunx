@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { Module } from '@dunx/core';
 import { Controller, Get, Post } from '../route/decorators.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import { serving } from './serving.fixture.js';
 import type { Middleware } from './middleware.js';
 
 @Controller('users')
@@ -20,19 +21,18 @@ class UsersController {
 @Module({ controllers: [UsersController] })
 class AppModule {}
 
-const withApp = async (
+const withApp = (
   configure: (app: HttpApp) => void,
   run: (url: string) => Promise<void>,
-): Promise<void> => {
-  const app = await HttpFactory.create(AppModule);
-  configure(app);
-  const url = await app.listen(0);
-  try {
-    await run(url);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> =>
+  serving(
+    async () => {
+      const app = await HttpFactory.create(AppModule);
+      configure(app);
+      return app;
+    },
+    (_app, url) => run(url),
+  );
 
 const allowOrigin = (response: Response): string | null =>
   response.headers.get('access-control-allow-origin');

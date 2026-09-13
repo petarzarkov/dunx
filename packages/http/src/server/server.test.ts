@@ -7,6 +7,7 @@ import type { Input, RouteSchemas } from '../route/schema.js';
 import type { RouteContext } from './context.js';
 import { defaultErrorMapper, HttpError } from './errors.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import { serving } from './serving.fixture.js';
 import type { Middleware, Next } from './middleware.js';
 import { buildRoutes } from './routes.js';
 
@@ -198,17 +199,10 @@ class UsersModule {}
 @Module({ imports: [UsersModule] })
 class AppModule {}
 
-const withApp = async (
+const withApp = (
   run: (app: HttpApp, url: string) => Promise<void>,
-): Promise<void> => {
-  const app = await HttpFactory.create(AppModule, { requestLogging: false });
-  const url = await app.listen(0);
-  try {
-    await run(app, url);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> =>
+  serving(() => HttpFactory.create(AppModule, { requestLogging: false }), run);
 
 describe('HttpFactory', () => {
   it('serves discovered routes off a real Bun server', async () => {

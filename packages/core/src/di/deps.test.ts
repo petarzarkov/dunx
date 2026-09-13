@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { rejectionMessage } from '../rejection.fixture.js';
 import { AppFactory } from './app.js';
 import type { DepEntry } from './deps.js';
 import { CircularDependencyError, AppError } from './errors.js';
@@ -17,16 +18,6 @@ const withDeps = (
   deps: () => readonly DepEntry[],
 ): void => {
   Object.defineProperty(ctor, Symbol.for('dunx.deps'), { value: deps });
-};
-
-const rejectionMessage = async (promise: Promise<unknown>): Promise<string> => {
-  const error = await promise.then(
-    () => undefined,
-    (reason: unknown) => reason,
-  );
-  if (!(error instanceof Error))
-    throw new Error('expected the promise to reject with an Error');
-  return error.message;
 };
 
 describe('constructor injection', () => {

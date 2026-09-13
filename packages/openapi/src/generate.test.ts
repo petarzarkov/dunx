@@ -14,14 +14,10 @@ import {
 } from '@dunx/http';
 import { z } from 'zod';
 import { describeRoutes } from './discover.js';
+import { info, operationOf } from './document.fixture.js';
 import { generateDocument } from './generate.js';
 import { ApiDoc } from './metadata.js';
 import { danglingRefs } from './refs.js';
-import type {
-  OpenApiDocument,
-  OperationKey,
-  OperationObject,
-} from './types.js';
 
 const Tag = z
   .object({ label: z.string().min(1) })
@@ -106,24 +102,6 @@ class ReportsModule {}
 
 @Module({ imports: [UsersModule, ReportsModule] })
 class RootModule {}
-
-const info = { title: 'Test API', version: '2.1.0' } as const;
-
-const operationOf = (
-  document: OpenApiDocument,
-  path: string,
-  method: OperationKey,
-): OperationObject => {
-  const item = document.paths[path];
-  if (item === undefined) {
-    throw new Error(
-      `no path ${path}; document has ${Object.keys(document.paths).join(', ')}`,
-    );
-  }
-  const operation = item[method];
-  if (operation === undefined) throw new Error(`no ${method} on ${path}`);
-  return operation;
-};
 
 const generated = await generateDocument(describeRoutes(RootModule), info);
 const { document } = generated;

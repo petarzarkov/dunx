@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { Logger, Module, type LogLevel } from '@dunx/core';
 import { Controller, Get } from '../route/decorators.js';
+import { consoleLines } from '../console.fixture.js';
 import { errorMapper, HttpError, ValidationError } from './errors.js';
 import { HttpFactory } from './factory.js';
 
@@ -42,23 +43,8 @@ class BoomController {
 @Module({ controllers: [BoomController] })
 class BoomModule {}
 
-/** Every line either stream received, unparsed. */
-const rawLines = async (run: () => Promise<void>): Promise<string[]> => {
-  const lines: string[] = [];
-  const { log, error } = console;
-  const record = (...args: unknown[]): void => {
-    lines.push(...args.map(String).join(' ').split('\n'));
-  };
-  console.log = record;
-  console.error = record;
-  try {
-    await run();
-  } finally {
-    console.log = log;
-    console.error = error;
-  }
-  return lines.filter((line) => line.trim() !== '');
-};
+const rawLines = async (run: () => Promise<void>): Promise<string[]> =>
+  (await consoleLines(run)).filter((line) => line.trim() !== '');
 
 const request = new Request('http://localhost/boom');
 

@@ -7,6 +7,7 @@ import type { Input, RouteSchemas } from '../route/schema.js';
 import { ClientAddress } from './client-address.js';
 import type { RouteContext } from './context.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import { serving } from './serving.fixture.js';
 import type { Middleware, Next } from './middleware.js';
 import { buildRoutes } from './routes.js';
 
@@ -60,19 +61,15 @@ class UsersController {
 @Module({ controllers: [UsersController], providers: [Trail] })
 class AppModule {}
 
-const withApp = async (
+const withApp = (
   configure: (app: HttpApp) => void,
   run: (app: HttpApp, url: string) => Promise<void>,
-): Promise<void> => {
-  const app = await HttpFactory.create(AppModule);
-  configure(app);
-  const url = await app.listen(0);
-  try {
-    await run(app, url);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> =>
+  serving(async () => {
+    const app = await HttpFactory.create(AppModule);
+    configure(app);
+    return app;
+  }, run);
 
 const messageOf = (run: () => unknown): string => {
   try {

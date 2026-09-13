@@ -11,6 +11,9 @@ export const int = (value: number): string =>
 
 export const dec = (value: number, places = 3): string => value.toFixed(places);
 
+/** Throughput is the measurement; microseconds per request is what adds up. */
+export const micros = (rps: number): number => 1_000_000 / rps;
+
 /** A delta, with a real minus sign rather than a hyphen. */
 export const signed = (value: number, places = 2, unit = ''): string =>
   `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(places)}${unit}`;

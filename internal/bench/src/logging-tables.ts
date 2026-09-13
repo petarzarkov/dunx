@@ -3,16 +3,11 @@
  * `results/logging.json`. Called by `src/readme-tables.ts`; returns `null` when no
  * logging run has been recorded, so a checkout without one still builds.
  */
+import { int, micros, signed as signedBy } from './format.js';
 import { resultsDir } from './paths.js';
 import type { LoggingReport, LoggingUnit } from './types.js';
 
-const int = (value: number): string =>
-  Math.round(value).toLocaleString('en-US');
-
-const micros = (rps: number): number => 1_000_000 / rps;
-
-const signed = (value: number): string =>
-  `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(2)} µs`;
+const signed = (value: number): string => signedBy(value, 2, ' µs');
 
 /** The rows that decompose the shipped path, in order. The rest are asides. */
 const LADDER = [

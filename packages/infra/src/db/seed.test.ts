@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { rejection } from '../rejection.fixture.js';
 import { DatabaseError } from './errors.js';
 import { runSeeds } from './seed.js';
 import type { SqliteConnection } from './sqlite/connection.js';
@@ -14,16 +15,6 @@ const marks = sqliteTable('marks', { label: text('label').notNull() });
 
 const schema = { marks };
 type Schema = typeof schema;
-
-const rejection = async (promise: Promise<unknown>): Promise<Error> => {
-  const error = await promise.then(
-    () => undefined,
-    (reason: unknown) => reason,
-  );
-  if (!(error instanceof Error))
-    throw new Error('expected the promise to reject with an Error');
-  return error;
-};
 
 let connection: SqliteConnection<Schema>;
 let db: BunSQLiteDatabase<Schema>;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { rejectionMessage } from '../rejection.fixture.js';
 import { ConsoleLogger } from '../logger/console.js';
 import { Logger } from '../logger/logger.js';
 import { AppFactory } from './app.js';
@@ -15,16 +16,6 @@ import { provide } from './provider.js';
 import { token } from './token.js';
 
 const EventsToken = token<string[]>('Events');
-
-const rejectionMessage = async (promise: Promise<unknown>): Promise<string> => {
-  const error = await promise.then(
-    () => undefined,
-    (reason: unknown) => reason,
-  );
-  if (!(error instanceof Error))
-    throw new Error('expected the promise to reject with an Error');
-  return error.message;
-};
 
 const names = (modules: readonly ResolvedModule[]): string[] =>
   modules.map((module) => module.name);

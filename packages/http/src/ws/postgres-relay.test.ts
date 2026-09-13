@@ -4,10 +4,11 @@ import { PostgresRelay } from './postgres-relay.js';
 import { PubSub } from './pubsub.js';
 import {
   AppModule,
+  TOPIC,
+  deliversOncePerSubscriber,
   open,
   released,
   stop,
-  TOPIC,
   twoNodes,
   until,
 } from './relay.fixture.js';
@@ -99,44 +100,11 @@ describe.skipIf(!HAS_POSTGRES)('two nodes over real Postgres', () => {
   it('delivers a publish exactly once per subscriber across both nodes', async () => {
     // A channel per run, so a leftover listener or a concurrent run cannot
     // deliver into this test. Underscores: a channel is a Postgres identifier.
-    const channel = `dunx_test_${Bun.randomUUIDv7().replaceAll('-', '')}`;
-    const { apps, urls } = await twoNodes(
-      new PostgresRelay({ url }),
-      new PostgresRelay({ url }),
-      channel,
+    await deliversOncePerSubscriber(
+      () => new PostgresRelay({ url }),
+      `dunx_test_${Bun.randomUUIDv7().replaceAll('-', '')}`,
+      'over postgres',
     );
-    const [first, second] = apps;
-    const [urlA, urlB] = urls;
-    if (!first || !second || !urlA || !urlB)
-      throw new Error('two nodes expected');
-
-    try {
-      const [ada, grace] = await Promise.all([open(urlA), open(urlB)]);
-      if (!ada || !grace) throw new Error('clients expected');
-
-      first.get(PubSub).publishEvent(TOPIC, 'said', 'over postgres');
-      const expected = JSON.stringify({ event: 'said', data: 'over postgres' });
-
-      await until(() => grace.frames.length > 0);
-      await Bun.sleep(250);
-      expect(ada.frames).toEqual([expected]);
-      expect(grace.frames).toEqual([expected]);
-
-      // And the other direction, on the same channel.
-      ada.frames.length = 0;
-      grace.frames.length = 0;
-      second.get(PubSub).publishEvent(TOPIC, 'said', 'and back');
-      const back = JSON.stringify({ event: 'said', data: 'and back' });
-      await until(() => ada.frames.length > 0);
-      await Bun.sleep(250);
-      expect(ada.frames).toEqual([back]);
-      expect(grace.frames).toEqual([back]);
-
-      ada.close();
-      grace.close();
-    } finally {
-      await stop(apps);
-    }
   });
 
   it('refuses a frame past the NOTIFY ceiling', async () => {
