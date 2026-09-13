@@ -11,6 +11,7 @@ import { MessagingModule } from '../messaging/messaging.module.js';
 import { StorageModule } from '../storage/storage.module.js';
 import { Workspace } from '../storage/workspace.js';
 import { HealthDemo } from './health.demo.js';
+import { CacheL2 } from '../cache/cache-l2.js';
 import { AppIndicators, BrokerIndicator } from './indicators.js';
 
 /**
@@ -33,12 +34,14 @@ import { AppIndicators, BrokerIndicator } from './indicators.js';
         ledger: Ledger,
         storage: Storage,
         workspace: Workspace,
+        cache: CacheL2,
       ) =>
         new AppIndicators({
           db,
           redis,
           ledger,
           storage,
+          cache: cache.store,
           uploadRoot: await workspace.create(),
         }),
       inject: [
@@ -47,6 +50,7 @@ import { AppIndicators, BrokerIndicator } from './indicators.js';
         Ledger,
         Storage,
         Workspace,
+        CacheL2,
       ] as const,
     }),
   ],

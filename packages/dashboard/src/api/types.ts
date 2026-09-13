@@ -79,6 +79,9 @@ export interface ProbeReport {
   readonly name: string;
   readonly state: ProbeState;
   readonly detail?: string;
+  /** Whatever the probe reported as values rather than prose. Carried so a
+   * caller reading this JSON gets what `/health/ready` would have given it. */
+  readonly data?: Readonly<Record<string, unknown>>;
   /** How long the probe took, so a slow dependency is visible before it fails. */
   readonly ms: number;
 }

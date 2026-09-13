@@ -19,7 +19,8 @@ export abstract class RoundTripIndicator extends HealthIndicator {
   async check(): Promise<ProbeResult> {
     const started = performance.now();
     await this.probe.ping();
-    return { state: 'up', detail: `${ms(started)} ms` };
+    const roundTripMs = ms(started);
+    return { state: 'up', detail: `${roundTripMs} ms`, data: { roundTripMs } };
   }
 }
 
@@ -82,7 +83,8 @@ export class StorageIndicator extends HealthIndicator {
   async check(): Promise<ProbeResult> {
     const started = performance.now();
     await this.storage.exists(this.options.key);
-    return { state: 'up', detail: `${ms(started)} ms` };
+    const roundTripMs = ms(started);
+    return { state: 'up', detail: `${roundTripMs} ms`, data: { roundTripMs } };
   }
 }
 
@@ -121,9 +123,12 @@ export class MemoryIndicator extends HealthIndicator {
   check(): ProbeResult {
     const { rss } = process.memoryUsage();
     const detail = `${mib(rss)} of ${mib(this.options.maxRssBytes)}`;
+    // The bytes the sentence was rendered from, so a scrape does not have to
+    // parse "143 MiB of 2048 MiB" back into the two numbers behind it.
+    const data = { rssBytes: rss, maxRssBytes: this.options.maxRssBytes };
     return rss > this.options.maxRssBytes
-      ? { state: 'down', detail }
-      : { state: 'up', detail };
+      ? { state: 'down', detail, data }
+      : { state: 'up', detail, data };
   }
 }
 
@@ -170,8 +175,9 @@ export class DiskIndicator extends HealthIndicator {
 
     const used = (total - free) / total;
     const detail = `${Math.round(used * 100)}% of ${mib(total)} used`;
+    const data = { totalBytes: total, freeBytes: free, usedFraction: used };
     return used > this.options.maxUsedFraction
-      ? { state: 'down', detail }
-      : { state: 'up', detail };
+      ? { state: 'down', detail, data }
+      : { state: 'up', detail, data };
   }
 }

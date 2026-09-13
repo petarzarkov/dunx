@@ -1,4 +1,5 @@
 export { Cache } from './cache.js';
+export { DegradingCacheStore, type DegradingCacheInit } from './degrading.js';
 export { MemoryCacheStore, type MemoryCacheInit } from './memory.js';
 export {
   CacheMetrics,

@@ -4,6 +4,7 @@ import {
   MeteredCacheStore,
   TieredCacheStore,
 } from '@dunx/infra/cache';
+import { CacheL2 } from './cache-l2.js';
 
 /**
  * One read, a second that never reaches the loader, ten at once that share a
@@ -13,6 +14,7 @@ export class CatalogDemo {
   constructor(
     private readonly logger: Logger,
     private readonly options: CacheOptions,
+    private readonly l2: CacheL2,
   ) {}
 
   async demonstrate(url: string): Promise<void> {
@@ -25,10 +27,14 @@ export class CatalogDemo {
     const tiers =
       configured instanceof TieredCacheStore
         ? 'L1 memory in front of L2 redis'
-        : 'L1 memory only, redis unreachable at boot';
+        : 'L1 memory only';
     this.logger.info(
       `store -> ${tiers}${metered ? ', metered' : ''}, ` +
         `default ttl ${this.options.ttl}ms`,
+    );
+    // Asked rather than remembered: `degraded` is only what the last call set.
+    this.logger.info(
+      `L2 probe -> ${(await this.l2.store.probe()) ? 'answering' : 'unreachable, reads degrade to misses'}`,
     );
 
     const before = await this.loads(url);

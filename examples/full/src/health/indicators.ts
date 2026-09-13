@@ -10,6 +10,7 @@ import {
   StorageIndicator,
   type ProbeResult,
 } from '@dunx/http';
+import type { DegradingCacheStore } from '@dunx/infra/cache';
 import type { DbConnection } from '@dunx/infra/db';
 import type { Storage } from '@dunx/infra/files';
 import type { RedisConnection } from '@dunx/infra/redis';
@@ -26,12 +27,43 @@ export class LedgerIndicator extends HealthIndicator {
 
   check(): ProbeResult {
     const rows = this.ledger.rows();
+    const balance = this.ledger.balance();
+    // The line is for whoever opens the page, `data` for whatever scrapes it.
     return rows > 0
       ? {
           state: 'up',
-          detail: `${rows} rows, balance ${this.ledger.balance()}`,
+          detail: `${rows} rows, balance ${balance}`,
+          data: { rows, balance },
         }
       : { state: 'down', detail: 'no rows - the seeds did not run' };
+  }
+}
+
+/**
+ * Whether the shared cache tier is answering, asked rather than remembered:
+ * `degraded` is a flag the last operation set, so a process that has not touched
+ * the cache reports it healthy. Not critical, since the tier degrades to misses.
+ */
+export class CacheStoreIndicator extends HealthIndicator {
+  readonly name = 'cache';
+  override readonly critical = false;
+
+  constructor(private readonly store: DegradingCacheStore) {
+    super();
+  }
+
+  async check(): Promise<ProbeResult> {
+    const started = performance.now();
+    const reachable = await this.store.probe();
+    const roundTripMs = Math.round(performance.now() - started);
+
+    return reachable
+      ? { state: 'up', detail: `${roundTripMs} ms`, data: { roundTripMs } }
+      : {
+          state: 'down',
+          detail: 'unreachable - reads are answering as misses',
+          data: { roundTripMs, degraded: true },
+        };
   }
 }
 
@@ -52,6 +84,8 @@ export class BrokerIndicator extends AmqpIndicator {
 export interface AppIndicatorsInit {
   readonly db: DbConnection;
   readonly redis: RedisConnection;
+  /** The degrading L2, so the cache is probed rather than assumed. */
+  readonly cache: DegradingCacheStore;
   readonly ledger: Ledger;
   readonly storage: Storage;
   /** Where uploads land, so a full disk here is a real failure. */
@@ -74,6 +108,7 @@ export class AppIndicators {
       new DatabaseIndicator(init.db),
       new LedgerIndicator(init.ledger),
       new CacheIndicator(init.redis),
+      new CacheStoreIndicator(init.cache),
       new StorageIndicator(init.storage),
       new DiskIndicator(
         new DiskOptions({ path: init.uploadRoot, maxUsedFraction: 0.95 }),

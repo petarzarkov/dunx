@@ -78,6 +78,9 @@ it('answers readiness, and only the optional services may be down', async () => 
     'database',
     'ledger',
     'redis',
+    // `probe()` on the degrading L2, so this is the cache tier answering rather
+    // than the connection underneath it.
+    'cache',
     'storage',
     'disk',
     'amqp', // appended by `ProbesModule`, where `AmqpConnection` is reachable
@@ -85,7 +88,7 @@ it('answers readiness, and only the optional services may be down', async () => 
   // Redis and RabbitMQ are the areas that can be absent without stopping this
   // app, so they are the only checks allowed to be anything but `up`. Both are
   // critical:false, which is why readiness above is still 200 without them.
-  const optional = ['redis', 'amqp', 'disk'];
+  const optional = ['redis', 'cache', 'amqp', 'disk'];
   for (const check of body.checks) {
     if (optional.includes(check.name)) continue;
     expect(check.state).toBe('up');

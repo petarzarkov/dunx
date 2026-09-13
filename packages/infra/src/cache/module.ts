@@ -5,6 +5,7 @@ import {
   type DynamicModule,
 } from '@dunx/core';
 import { Cache } from './cache.js';
+import type { DegradingCacheInit } from './degrading.js';
 import { CacheMetrics } from './metrics.js';
 import { CacheOptions, type CacheOptionsInit } from './options.js';
 import { CacheStore } from './store.js';
@@ -16,7 +17,23 @@ export interface CacheModuleSettings {
    * reads and a histogram record, and the store is wrapped once at boot.
    */
   readonly metrics?: boolean;
+  /**
+   * Answer misses rather than throwing while the backend is unreachable, through
+   * {@link DegradingCacheStore}. Off by default: a cache an app treats as a store
+   * rather than an accelerator wants the throw.
+   *
+   * Only a connection error degrades; a serialisation bug still throws. The one
+   * line per outage goes to core's `ConsoleLogger` - pass a
+   * `DegradingCacheStore` as `store` to send it somewhere else.
+   */
+  readonly degrade?: boolean;
 }
+
+/** `exactOptionalPropertyTypes`: absent is what `CacheOptions` reads as off. */
+const degrading = (
+  settings: CacheModuleSettings,
+): DegradingCacheInit | undefined =>
+  settings.degrade === true ? {} : undefined;
 
 /**
  * Both factories bind these two the same way. `CacheStore` is bound rather than
@@ -60,7 +77,9 @@ export class CacheModule {
         ...(metrics === undefined ? [] : [CacheMetrics]),
       ],
       providers: [
-        provide(CacheOptions, { useValue: new CacheOptions(init, metrics) }),
+        provide(CacheOptions, {
+          useValue: new CacheOptions(init, metrics, degrading(settings)),
+        }),
         ...(metrics === undefined
           ? []
           : [provide(CacheMetrics, { useValue: metrics })]),
@@ -102,7 +121,11 @@ export class CacheModule {
       providers: [
         provide(CacheOptions, {
           useFactory: async (...deps) =>
-            new CacheOptions(await config.useFactory(...deps), metrics),
+            new CacheOptions(
+              await config.useFactory(...deps),
+              metrics,
+              degrading(settings),
+            ),
           inject: config.inject ?? ([] as unknown as D),
         }),
         ...(metrics === undefined

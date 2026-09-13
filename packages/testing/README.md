@@ -54,6 +54,10 @@ The [Testing guide](../../docs/guide/11-testing.md) is canonical.
   never constructed: its `useFactory` never runs and its `onInit` never fires.
   That makes overriding a database safe.
 - Request logging and boot logging are off unless asked for.
+- `HealthModule`'s shutdown drain is off: `ReadinessOptions` is overridden to
+  `drainDelayMs: 0`, because a suite has no load balancer to notice a failing
+  probe and would pay the app's production value once per file. It goes in ahead
+  of yours, so passing your own restores it.
 - An `HttpOptions` field not passed stays absent. Nothing is inherited from
   production. `middleware` and `onError` change what the application does, so
   pass the same object `main.ts` passes.
