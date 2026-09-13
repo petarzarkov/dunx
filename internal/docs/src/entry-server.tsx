@@ -1,6 +1,7 @@
 import { MantineProvider } from '@mantine/core';
 import { theme } from '@dunx/ui';
 import { renderToString } from 'react-dom/server';
+import { OG_HEIGHT, OG_WIDTH } from '../../../scripts/og-card';
 import { jsonLdFor, type Entity } from '../scripts/json-ld';
 import {
   clamp,
@@ -107,8 +108,8 @@ const headFor = (
       meta('property', 'og:description', description),
       meta('property', 'og:url', url),
       meta('property', 'og:image', OG_IMAGE),
-      meta('property', 'og:image:width', '1200'),
-      meta('property', 'og:image:height', '630'),
+      meta('property', 'og:image:width', String(OG_WIDTH)),
+      meta('property', 'og:image:height', String(OG_HEIGHT)),
       meta('name', 'twitter:card', 'summary_large_image'),
       meta('name', 'twitter:title', page.title),
       meta('name', 'twitter:description', description),
