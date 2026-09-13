@@ -189,6 +189,9 @@ export {
   SocketLoggingMiddleware,
   type SocketLoggingOptions,
 } from './ws/logging.js';
+// A middleware that watches and changes nothing, with the sync-throw and the
+// rejection handled once. Extending it is the supported way to write one.
+export { SocketObserver } from './ws/observer.js';
 export { PubSub } from './ws/pubsub.js';
 // Multi-node fan-out. `PubSubRelay` is two methods, so `@dunx/infra`'s
 // RedisConnection satisfies it structurally; both relays shipped here are a Bun
@@ -204,6 +207,12 @@ export {
   RelayConnectionOptions,
   WsRelayModule,
 } from './ws/relay-module.js';
+// The publish half alone, for a worker or a job child that has no server for a
+// `PubSub` to exist in. `WsRelayModule` binds it.
+export {
+  RelayPublisher,
+  type RelayPublisherInit,
+} from './ws/relay-publisher.js';
 export {
   DEFAULT_RELAY_CHANNEL,
   WsRelay,

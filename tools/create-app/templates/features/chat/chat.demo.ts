@@ -1,5 +1,5 @@
 import { Logger, Module } from '@dunx/core';
-import { HttpFactory, PubSub, type HttpApp } from '@dunx/http';
+import { HttpFactory, PubSub, RelayPublisher, type HttpApp } from '@dunx/http';
 import { isConnectionError, RedisConnection } from '@dunx/infra/redis';
 import { RELAY_CHANNEL } from '../config.js';
 import { connect, type Client } from './ws-client.js';
@@ -19,6 +19,8 @@ export class ChatDemo {
     private readonly pubsub: PubSub,
     private readonly logger: Logger,
     private readonly redis: RedisConnection,
+    // The publish half alone. A worker or a job child holds this and no server.
+    private readonly frames: RelayPublisher,
   ) {}
 
   async demonstrate(app: HttpApp, url: string): Promise<void> {
@@ -99,6 +101,20 @@ export class ChatDemo {
       logger.info(
         `deliveries of "${said}": A ${delivered(onA)}, B ${delivered(onB)} ` +
           '(one each - the echo was dropped, not fanned out again)',
+      );
+
+      // The third publisher has no server at all, which is every queue worker and
+      // every forked job child: no `Bun.serve` for a `PubSub` to fan out through,
+      // so the only thing it can do is put the frame on the channel. Both nodes
+      // deliver it, because neither one published it.
+      this.frames.publishEvent(Lobby.TOPIC, 'said', 'from a worker');
+      await Bun.sleep(200);
+      const fromWorker = (client: Client): number =>
+        client.received.filter((frame) => frame.includes('from a worker'))
+          .length;
+      logger.info(
+        `a RelayPublisher on …${this.frames.origin.slice(-6)} reached A ${fromWorker(onA)}, ` +
+          `B ${fromWorker(onB)} - no server on either side of it`,
       );
 
       onA.close();

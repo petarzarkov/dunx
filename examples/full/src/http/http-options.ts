@@ -1,11 +1,14 @@
+import type { Ctor } from '@dunx/core';
 import {
   HttpOptionsProvider,
   WsRelay,
   type CorsOptions,
   type PubSubRelay,
   type RequestLoggingOptions,
+  type SocketMiddleware,
 } from '@dunx/http';
 import { AppConfigService, RELAY_CHANNEL } from '../config.js';
+import { SocketTrailObserver } from './socket-trail.js';
 
 /**
  * The HTTP settings that come from validated config, answered from the container
@@ -57,6 +60,15 @@ export class AppHttpOptions extends HttpOptionsProvider {
   }
 
   override readonly relayChannel = RELAY_CHANNEL;
+
+  /**
+   * The socket half of `middleware`, resolved from the container like the HTTP
+   * half. One entry, and it is the observer: dunx logs the frame itself, so what
+   * is left is the app's own side effect.
+   */
+  override readonly socketMiddleware: readonly Ctor<SocketMiddleware>[] = [
+    SocketTrailObserver,
+  ];
 
   override get requestLogging(): RequestLoggingOptions {
     const log = this.config.get('log');

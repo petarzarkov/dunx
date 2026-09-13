@@ -2,15 +2,17 @@ import { Module, provide } from '@dunx/core';
 import {
   CompressionModule,
   HttpOptionsProvider,
+  RelayPublisher,
   WsRelayModule,
 } from '@dunx/http';
-import { AppConfigService } from '../config.js';
+import { AppConfigService, RELAY_CHANNEL } from '../config.js';
 import { AppHttpOptions } from './http-options.js';
 import { CompressionDemo } from './compression.demo.js';
 import { TraceController } from './trace.controller.js';
 import { TraceDemo } from './trace.demo.js';
 import { HttpDemo } from './http.demo.js';
 import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
+import { SocketTrail, SocketTrailObserver } from './socket-trail.js';
 
 // `use()` resolves middleware from the container, and every class self-binds - so
 // declaring them here is for the reader, not for the resolver.
@@ -34,16 +36,22 @@ import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
      * `forPostgresAsync` here runs the same fan-out over Postgres, with a
      * factory returning `{ url }` for the database instead of these.
      */
-    WsRelayModule.forRootAsync({
-      useFactory: (config: AppConfigService) => {
-        const { url } = config.get('redis');
-        return {
-          ...(url === undefined ? {} : { url }),
-          connectionTimeout: 500,
-        };
+    WsRelayModule.forRootAsync(
+      {
+        useFactory: (config: AppConfigService) => {
+          const { url } = config.get('redis');
+          return {
+            ...(url === undefined ? {} : { url }),
+            connectionTimeout: 500,
+          };
+        },
+        inject: [AppConfigService] as const,
       },
-      inject: [AppConfigService] as const,
-    }),
+      // The second argument is the publisher's, not the connection's: it binds
+      // `RelayPublisher` on the channel the servers listen on, so a process with no
+      // server of its own can still put a frame on it.
+      { channel: RELAY_CHANNEL },
+    ),
   ],
   controllers: [TraceController],
   providers: [
@@ -52,14 +60,21 @@ import { RequestTrail, RequestTrailMiddleware } from './request-trail.js';
     provide(HttpOptionsProvider, { useClass: AppHttpOptions }),
     RequestTrail,
     RequestTrailMiddleware,
+    SocketTrail,
+    SocketTrailObserver,
     HttpDemo,
     CompressionDemo,
     TraceDemo,
   ],
   exports: [
     HttpOptionsProvider,
+    // Re-exported: `WsRelayModule` is its own scope, so a consumer importing it a
+    // second time would build a second relay rather than reach this one.
+    RelayPublisher,
     RequestTrail,
     RequestTrailMiddleware,
+    SocketTrail,
+    SocketTrailObserver,
     HttpDemo,
     CompressionDemo,
     TraceDemo,
