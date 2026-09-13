@@ -4,6 +4,74 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.8.2 - 2026-09-13
+
+Two seams a consumer reached into /internal for, and a storage error naming the bundler
+
+`@dunx/http` gains `RelayPublisher` and `SocketObserver`, which are the supported
+shapes of two things an app could previously only do by importing from
+`@dunx/http/internal` - a subpath 3.3.0 narrowed to what the framework's own
+packages use, with no stability promise on it either way.
+
+`RelayPublisher` is the publish half of `PubSub` for a process with no server. A
+queue worker or a forked job child has no `Bun.serve` for the local fan-out, so
+putting a frame on the relay meant encoding the wire format by hand against a
+format this package owns. `WsRelayModule` binds it, on a channel its new second
+argument names, so it is a constructor parameter rather than an import. It never
+throws: a job handler that failed on a frame would be retried and repeat its side
+effects.
+
+`SocketObserver` is a `SocketMiddleware` base for one that only wants the
+outcome. A gateway handler may return a value or a promise, so such a middleware
+has to catch a throw, hook a rejection and rethrow both, and getting it wrong
+swallows a failure silently. `settled` takes a discriminated `SocketOutcome`
+rather than an `error` that is `undefined` on success, because a handler may
+`throw undefined`; an observer that throws cannot change the outcome it watched.
+
+`@dunx/infra` stops reporting the name its bundler emitted. `StorageError` set
+`this.name` from `new.target.name`, and the bundler renames a class whose name
+collides in a shared chunk, so 3.8.1 shipped `FileNotFoundError` as
+`FileNotFoundError2`. Each subpath is its own bundle, so `instanceof` is false
+across one and `error.name` is what a call site matches - a consumer failing a
+job unrecoverably on that name retried it six times instead. Every class writes
+its own name as a literal now, and `StorageError`'s constructor is unchanged.
+
+### Features
+
+- **http**: RelayPublisher and SocketObserver, the two seams an app reached into /internal for ([`279669d`](https://github.com/petarzarkov/dunx/commit/279669d26ebe05c91d40e2e007b8028d9de455b3))
+- **example**: panels for the five capabilities the demo had no button for ([`ef2b1f4`](https://github.com/petarzarkov/dunx/commit/ef2b1f4768cffd475c57194c48a522976721a85c))
+- **docs**: three cards for the surface the six were written before ([`4600065`](https://github.com/petarzarkov/dunx/commit/460006561bf17a424b12358a350c84c0ab0f0098))
+
+### Fixes
+
+- **http**: the review findings, four of them real defects ([`3ba050d`](https://github.com/petarzarkov/dunx/commit/3ba050db547faf214d028a21d413645c80f9ff25))
+- **infra**: a storage error reported the name the bundler emitted, not its own ([`dac2e84`](https://github.com/petarzarkov/dunx/commit/dac2e8438234192db5a5da60afecb7a93c96a277))
+- **docs**: say what the transform's placement actually depends on, and scope a test ([`f95118a`](https://github.com/petarzarkov/dunx/commit/f95118aa89839288125d193edf7226b620c4cff1))
+- **docs**: count the packages and the examples rather than spelling them out ([`887d020`](https://github.com/petarzarkov/dunx/commit/887d020f0330c86cd8e37f7781b4ed546618b34e))
+
+### Refactors
+
+- **scripts**: one repo root and one manifest type, not twelve and five ([`8a1b1c6`](https://github.com/petarzarkov/dunx/commit/8a1b1c65d19b49fcdad1ad0a074c35f2918a632e))
+- **ui**: delete the symbols the API explorer took with it ([`04c0cdd`](https://github.com/petarzarkov/dunx/commit/04c0cddefd8103e7d30b569f56b0b1f296799684))
+
+### Documentation
+
+- delete the records of delivered work, and correct what went stale ([`64c3e3d`](https://github.com/petarzarkov/dunx/commit/64c3e3dba2ef098c616adb02e2464070708896fd))
+- cut CLAUDE.md to an index, and keep the reasoning where it costs nothing ([`77d96c1`](https://github.com/petarzarkov/dunx/commit/77d96c120571d84a62cef9b005a7235cddec5aab))
+- rows for what the table skipped, and how to ship one file ([`a7a15c9`](https://github.com/petarzarkov/dunx/commit/a7a15c9f462a4f7d397a8cb8e146553728b86304))
+- **example**: correct what mem_limit does on the demo host ([`1db93ba`](https://github.com/petarzarkov/dunx/commit/1db93bad255b6528e8874b68049ebf6748a0a1a7))
+
+### Other changes
+
+- move every action to its current major ([`6639372`](https://github.com/petarzarkov/dunx/commit/6639372a9f95522c17b67b7d4b311ea9347a7d05))
+- one declaration for the scaffolding eleven suites had each written ([`d74aa37`](https://github.com/petarzarkov/dunx/commit/d74aa375520ddd7ca8b94307b3afc1f17c1bf523))
+- ask for the review and the preview, and grant the reaction its endpoint ([`939f9db`](https://github.com/petarzarkov/dunx/commit/939f9dbf18ac4c352a8f090973d9ddd69c6456b5))
+- deploy the site preview when asked for it, not on every push ([`b5271c5`](https://github.com/petarzarkov/dunx/commit/b5271c51b64b5444693111b593ea83287e16250f))
+- rm kofi from funding ([`388cc6a`](https://github.com/petarzarkov/dunx/commit/388cc6af907e60f71921085cef64a93338aca7e3))
+- use OG sizes in entry server ([`898041a`](https://github.com/petarzarkov/dunx/commit/898041aa3d9a299e2f58c62ce242fc5a8e0e2605))
+- gate Rules 1 and 4 rather than asking a reader to adjudicate them ([`93075ab`](https://github.com/petarzarkov/dunx/commit/93075ab7a75973f5bd52faef4844d6b92131e1a7))
+- drop the lint and typecheck hook that ran after every edit ([`695cbc8`](https://github.com/petarzarkov/dunx/commit/695cbc88dd85303d989efd9ab7367f97333479af))
+
 ## 3.8.1 - 2026-09-13
 
 Default the AMQP credentials and bound a publish
