@@ -2,12 +2,16 @@
 # the rate limiter's shared store and the websocket relay, Postgres for the
 # relay's LISTEN/NOTIFY backend, and RabbitMQ for the message broker routes.
 #
-# Images come from **public.ecr.aws** rather than Docker Hub, which rate limits
-# anonymous pulls by IP. A CI runner shares its IP with every other runner on the
-# host, so a Hub pull is a coin toss that fails as a red build with nothing wrong
-# in the change. ECR throttles anonymous pulls too and it is not a free pass -
-# three rapid pulls while writing this hit `toomanyrequests` - but its budget is
-# far larger and it is not shared with every anonymous puller on the internet.
+# Every image is a variable, defaulting to the Docker Hub name. `services.ts`
+# overrides all three with one registry's spelling and pulls, falling to the next
+# registry when that one answers `toomanyrequests`: every registry rate limits
+# anonymous pulls by IP, and a CI runner shares its IP with every other runner on
+# the host, so any single registry is a coin toss that fails as a red build with
+# nothing wrong in the change. Measured 2026-09-13, Docker Hub and mirror.gcr.io
+# served all three and public.ecr.aws was throttling two of them.
+#
+# The registry list is in `services.ts` and nowhere else, so a fourth provider is
+# one entry there. `docker compose up` by hand uses the defaults below.
 #
 # MinIO publishes to neither ECR nor a mirror, which is why S3 is absent here: the
 # example's storage is `LocalStorageOptions` on a temp dir, and the one suite that
@@ -22,7 +26,7 @@ name: dunx-example-full
 
 services:
   valkey:
-    image: public.ecr.aws/valkey/valkey:8-alpine
+    image: ${DUNX_VALKEY_IMAGE:-valkey/valkey:8-alpine}
     ports:
       - '6379:6379'
     healthcheck:
@@ -33,7 +37,7 @@ services:
       start_period: 2s
 
   postgres:
-    image: public.ecr.aws/docker/library/postgres:17-alpine
+    image: ${DUNX_POSTGRES_IMAGE:-postgres:17-alpine}
     environment:
       POSTGRES_USER: dunx
       POSTGRES_PASSWORD: dunx
@@ -48,7 +52,7 @@ services:
       start_period: 2s
 
   rabbitmq:
-    image: public.ecr.aws/docker/library/rabbitmq:4-alpine
+    image: ${DUNX_RABBITMQ_IMAGE:-rabbitmq:4-alpine}
     ports:
       - '5672:5672'
     healthcheck:
