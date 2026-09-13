@@ -191,7 +191,7 @@ export {
 } from './ws/logging.js';
 // A middleware that watches and changes nothing, with the sync-throw and the
 // rejection handled once. Extending it is the supported way to write one.
-export { SocketObserver } from './ws/observer.js';
+export { SocketObserver, type SocketOutcome } from './ws/observer.js';
 export { PubSub } from './ws/pubsub.js';
 // Multi-node fan-out. `PubSubRelay` is two methods, so `@dunx/infra`'s
 // RedisConnection satisfies it structurally; both relays shipped here are a Bun

@@ -9,9 +9,14 @@ import {
 
 /** What a publisher needs beyond the relay itself. */
 export interface RelayPublisherInit {
-  /** The broker channel. Must match the `relayChannel` the servers listen on. */
+  /**
+   * The broker channel, which **must** be the one the servers listen on
+   * (`HttpOptionsProvider.relayChannel`). A mismatch is silent - the broker
+   * accepts the publish and delivers it to nobody - so read both from one
+   * constant rather than writing the name twice.
+   */
   readonly channel?: string;
-  /** Reports a publish the broker refused. Defaults to a `console.error`. */
+  /** Reports a publish the broker refused. Defaults to a `console.warn`. */
   readonly onError?: RelayOptions['onError'];
 }
 
@@ -38,8 +43,7 @@ export interface RelayPublisherInit {
 export class RelayPublisher {
   /**
    * Identifies this process on the wire. A server drops a frame carrying its own
-   * origin and no server has this one, so every node fans this out - including
-   * one that happens to run a worker too.
+   * origin and no server has this one, so every node fans this out.
    */
   readonly #origin = `worker:${Bun.randomUUIDv7()}`;
   readonly #channel: string;
@@ -81,11 +85,23 @@ export class RelayPublisher {
       );
       if (result instanceof Promise) {
         void result.catch((error: unknown) => {
-          this.#onError(error, 'publish');
+          this.#report(error);
         });
       }
     } catch (error) {
+      this.#report(error);
+    }
+  }
+
+  /** `onError` is the caller's code, so it can throw. Not out of here. */
+  #report(error: unknown): void {
+    try {
       this.#onError(error, 'publish');
+    } catch (failure) {
+      console.error(
+        '[dunx/http] a RelayPublisher onError handler threw:',
+        failure,
+      );
     }
   }
 }

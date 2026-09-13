@@ -132,6 +132,7 @@ const BARREL = [
   'SocketNext',
   'SocketObserver',
   'SocketOptions',
+  'SocketOutcome',
   'Sse',
   'SseEvent',
   'SseInput',

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import { decodeRelay, WsRelay } from './relay.js';
 import { RelayPublisher } from './relay-publisher.js';
 
@@ -89,6 +89,33 @@ describe('RelayPublisher', () => {
 
     await Bun.sleep(1);
     expect((seen[0] as Error).message).toBe('refused');
+  });
+
+  it('contains an onError that throws, so publish still never throws', async () => {
+    const relay = new Recording();
+    relay.answerWith(new Error('no broker'));
+    const reported = spyOn(console, 'error').mockImplementation(
+      () => undefined,
+    );
+
+    try {
+      const publisher = new RelayPublisher(relay, {
+        onError: () => {
+          throw new Error('reporter');
+        },
+      });
+      expect(() => publisher.publishEvent('lobby', 'tick')).not.toThrow();
+
+      // And on the rejected path, where it would otherwise leave the catch
+      // handler's own promise rejected with nothing watching it.
+      relay.answerWith(Promise.reject(new Error('refused')));
+      publisher.publishEvent('lobby', 'tick');
+      await Bun.sleep(1);
+
+      expect(reported).toHaveBeenCalledTimes(2);
+    } finally {
+      reported.mockRestore();
+    }
   });
 
   it('publishes a raw frame too, base64 for anything not a string', () => {

@@ -215,8 +215,9 @@ file contents.
 
 - When a bug is reported, write a failing test first, then fix it
 - Update `examples/full` in the same change as the capability (Rule 4)
-- After opening a pull request, ask both reviewers for one: a comment reading
-  `@coderabbitai review`, and a second comment reading `@dunxonudeepreview`.
-  Two comments, not one - each workflow matches its own phrase, and neither
-  runs on a push
 - **Finish with `bun run ci`**
+- Then, once it is green and the pull request is open, ask both reviewers for
+  one: a comment reading `@coderabbitai review`, and a second reading
+  `@dunxonudeepreview`. Two comments, not one - each workflow matches its own
+  phrase, and neither runs on a push. After CI, because a review of a red branch
+  spends its budget on what the gates already said

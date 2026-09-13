@@ -1,10 +1,9 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import type { SocketContext, SocketFrame, SocketNext } from './middleware.js';
-import { SocketObserver } from './observer.js';
+import { SocketObserver, type SocketOutcome } from './observer.js';
 
 interface Settled {
-  readonly error: unknown;
-  readonly value: unknown;
+  readonly outcome: SocketOutcome;
   readonly event: string | undefined;
   readonly data: unknown;
 }
@@ -14,12 +13,11 @@ class Recorder extends SocketObserver {
   readonly seen: Settled[] = [];
 
   protected override settled(
-    error: unknown,
-    value: unknown,
+    outcome: SocketOutcome,
     frame: SocketFrame,
     ctx: SocketContext,
   ): void {
-    this.seen.push({ error, value, event: ctx.event, data: frame.data });
+    this.seen.push({ outcome, event: ctx.event, data: frame.data });
   }
 }
 
@@ -40,7 +38,7 @@ describe('SocketObserver', () => {
     const recorder = new Recorder();
     expect(run(recorder, () => 'pong')).toBe('pong');
     expect(recorder.seen).toEqual([
-      { error: undefined, value: 'pong', event: 'echo', data: 'hi' },
+      { outcome: { ok: true, value: 'pong' }, event: 'echo', data: 'hi' },
     ]);
   });
 
@@ -52,8 +50,7 @@ describe('SocketObserver', () => {
       run(recorder, () => Promise.reject(boom)) as Promise<unknown>,
     ).rejects.toThrow('boom');
 
-    expect(recorder.seen[0]?.error).toBe(boom);
-    expect(recorder.seen[0]?.value).toBeUndefined();
+    expect(recorder.seen[0]?.outcome).toEqual({ ok: false, error: boom });
   });
 
   it('reports a resolution and passes the value through', async () => {
@@ -63,12 +60,7 @@ describe('SocketObserver', () => {
     ) as Promise<unknown>);
 
     expect(result).toBe(42);
-    expect(recorder.seen[0]).toEqual({
-      error: undefined,
-      value: 42,
-      event: 'echo',
-      data: 'hi',
-    });
+    expect(recorder.seen[0]?.outcome).toEqual({ ok: true, value: 42 });
   });
 
   it('reports a synchronous throw and still throws', () => {
@@ -81,7 +73,57 @@ describe('SocketObserver', () => {
       }),
     ).toThrow('sync');
 
-    expect(recorder.seen[0]?.error).toBe(boom);
+    expect(recorder.seen[0]?.outcome).toEqual({ ok: false, error: boom });
+  });
+
+  /** Why the outcome is a union: the error alone cannot separate these two. */
+  it('separates a handler that threw undefined from one that returned it', () => {
+    const returned = new Recorder();
+    run(returned, () => undefined);
+    expect(returned.seen[0]?.outcome).toEqual({ ok: true, value: undefined });
+
+    const threw = new Recorder();
+    expect(() =>
+      run(threw, () => {
+        throw undefined;
+      }),
+    ).toThrow();
+    expect(threw.seen[0]?.outcome).toEqual({ ok: false, error: undefined });
+  });
+
+  it('separates a rejection with undefined from a resolution with it', async () => {
+    const rejected = new Recorder();
+    await expect(
+      run(rejected, () => Promise.reject(undefined)) as Promise<unknown>,
+    ).rejects.toBeUndefined();
+
+    expect(rejected.seen[0]?.outcome).toEqual({ ok: false, error: undefined });
+  });
+
+  /** An observer cannot turn a success into a failure, nor replace an error. */
+  it('contains a settled that throws, on both channels', async () => {
+    class Broken extends SocketObserver {
+      protected override settled(): void {
+        throw new Error('observer');
+      }
+    }
+
+    const reported = spyOn(console, 'error').mockImplementation(
+      () => undefined,
+    );
+    try {
+      expect(run(new Broken(), () => 'pong')).toBe('pong');
+
+      await expect(
+        run(new Broken(), () =>
+          Promise.reject(new Error('handler')),
+        ) as Promise<unknown>,
+      ).rejects.toThrow('handler');
+
+      expect(reported).toHaveBeenCalledTimes(2);
+    } finally {
+      reported.mockRestore();
+    }
   });
 
   it('defaults reportsErrors to false, so a subclass has to claim it', () => {

@@ -94,34 +94,37 @@ export const composeSocket = (
  * Calls `next()` and reports how it went, on whichever channel it went out on,
  * leaving the result untouched.
  *
- * `error` is `undefined` on success. A synchronous throw and a rejection both
- * reach `done` and are then rethrown, so a middleware that only observes cannot
- * accidentally swallow a failure.
+ * A synchronous throw and a rejection both reach `done` and are then rethrown, so
+ * a middleware that only observes cannot accidentally swallow a failure.
+ *
+ * `ok` says which happened, and it is not `error === undefined`: a handler may
+ * `throw undefined` or reject with it, and that reads as a success that returned
+ * nothing to anything comparing the value.
  */
 export const observe = (
   next: SocketNext,
-  done: (error: unknown, value: unknown) => void,
+  done: (error: unknown, value: unknown, ok: boolean) => void,
 ): unknown => {
   let result: unknown;
   try {
     result = next();
   } catch (error) {
-    done(error, undefined);
+    done(error, undefined, false);
     throw error;
   }
 
   if (result instanceof Promise) {
     return result.then(
       (value: unknown) => {
-        done(undefined, value);
+        done(undefined, value, true);
         return value;
       },
       (error: unknown) => {
-        done(error, undefined);
+        done(error, undefined, false);
         throw error;
       },
     );
   }
-  done(undefined, result);
+  done(undefined, result, true);
   return result;
 };
