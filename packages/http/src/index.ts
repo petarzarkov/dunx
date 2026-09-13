@@ -235,19 +235,25 @@ export {
   HealthIndicator,
   PingProbe,
   QueryProbe,
+  StorageProbe,
   type ProbeResult,
   type ProbeState,
 } from './health/contracts.js';
 export { HealthController } from './health/controller.js';
 export {
+  AmqpIndicator,
   DatabaseIndicator,
   DiskIndicator,
   DiskOptions,
   MemoryIndicator,
   MemoryOptions,
   RedisIndicator,
+  RoundTripIndicator,
+  StorageIndicator,
+  StorageProbeOptions,
   type DiskOptionsInit,
   type MemoryOptionsInit,
+  type StorageProbeOptionsInit,
 } from './health/indicators.js';
 export { HealthModule } from './health/module.js';
 export { HEALTH_REPORT_SCHEMA } from './health/report-schema.js';

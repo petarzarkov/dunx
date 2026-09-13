@@ -11,6 +11,9 @@ import {
 import { closeWithin } from '../close-within.js';
 import { AmqpOptions } from './options.js';
 
+const reasonFor = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 /**
  * The one connection this app holds, and the only place `rabbitmq-client` is
  * constructed. One TCP connection carries a channel per consumer and one for the
@@ -25,6 +28,7 @@ export class AmqpConnection implements OnShutdown {
   readonly #logger: Logger;
   #connection: Connection | undefined;
   #closed = false;
+  #lastError: unknown;
 
   constructor(options: AmqpOptions, logger: Logger) {
     this.#options = options;
@@ -39,6 +43,29 @@ export class AmqpConnection implements OnShutdown {
   /** Whether the broker is reachable right now. False before the first use. */
   get ready(): boolean {
     return this.#connection?.ready === true;
+  }
+
+  /**
+   * Whether the broker is reachable, for `AmqpIndicator` in `@dunx/http`. Ready
+   * costs no io; a socket that failed and has not come back throws that failure
+   * rather than spending `readyTimeoutMs` repeating it; still connecting is the
+   * one case worth waiting for. Auto-close is off, since the library otherwise
+   * calls `close()` when that wait runs out.
+   */
+  async ping(): Promise<void> {
+    const connection = this.connection();
+    if (connection.ready) return;
+
+    const failure = this.#lastError;
+    if (failure !== undefined) {
+      throw new AmqpError(
+        AmqpErrorCode.UNREACHABLE,
+        `the AMQP broker is unreachable: ${reasonFor(failure)}`,
+        failure,
+      );
+    }
+
+    await connection.onConnect(this.#options.readyTimeoutMs, true);
   }
 
   /**
@@ -70,9 +97,11 @@ export class AmqpConnection implements OnShutdown {
     // unreachable broker would take the process down on its first retry instead
     // of reconnecting quietly behind this line.
     created.on('error', (error: unknown) => {
+      this.#lastError = error;
       this.#logger.warn('the AMQP connection reported an error', error);
     });
     created.on('connection', () => {
+      this.#lastError = undefined;
       this.#logger.debug(`AMQP connected to ${this.#options.redactedUrl}`);
     });
     // The broker is out of memory or disk and has stopped reading from the

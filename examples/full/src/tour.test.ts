@@ -303,9 +303,9 @@ it('probes liveness and readiness, and takes the pod out by hand', () => {
   expect(tour.text).toMatch(
     /GET \/api\/health\/live -> 200 up, \d+ ms up, memory=up/,
   );
-  // Readiness is the four checks `IndicatorsModule` declares, in order.
+  // Readiness is six checks, in order. Redis and the broker may be anything.
   expect(tour.text).toMatch(
-    /GET \/api\/health\/ready -> 200 up, \d+ ms up, database=up ledger=up redis=\w+ disk=up/,
+    /GET \/api\/health\/ready -> 200 up, \d+ ms up, database=up ledger=up redis=\w+ storage=up disk=up amqp=\w+/,
   );
   // hold() fails readiness while liveness keeps passing - a pod that is being
   // migrated does not need killing.
@@ -414,10 +414,12 @@ it('serves the stats panel over the ops page, cache half included', () => {
 
 it('lights the same indicators on the ops page, each once', () => {
   // `IndicatorsModule` declares them and both readers take that list, so the
-  // dashboard names every check `/api/health/ready` runs. `redis` appears once:
+  // dashboard names every check `AppIndicators` declares. `redis` appears once:
   // `DashboardOptions.redis` already contributes it, which is why
-  // `AppIndicators.dashboardProbes` drops `CacheIndicator`.
-  expect(tour.text).toMatch(/probes: redis=\w+ database=up ledger=up disk=up/);
+  // `dashboardProbes` drops `CacheIndicator`. `amqp` is `ProbesModule`'s alone.
+  expect(tour.text).toMatch(
+    /probes: redis=\w+ database=up ledger=up storage=up disk=up/,
+  );
 });
 
 it('documents the probes under one Health tag', () => {

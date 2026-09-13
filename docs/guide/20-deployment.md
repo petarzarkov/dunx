@@ -237,14 +237,16 @@ injected dependency survived the compile.
 ```ts
 HealthModule.forRootAsync({
   useFactory: (db: DbConnection, redis: RedisConnection) => ({
-    readiness: [
-      new DatabaseIndicator(db),
-      new RedisIndicator(redis, { critical: false }),
-    ],
+    readiness: [new DatabaseIndicator(db), new CacheIndicator(redis)],
     drainDelayMs: 15_000,
   }),
   inject: [DbConnection, RedisConnection],
 });
+
+// `critical` is a member, so flipping it is a subclass rather than an argument.
+class CacheIndicator extends RedisIndicator {
+  override readonly critical = false;
+}
 ```
 
 Do not hand-roll a controller for this. The part worth having is the drain, and a

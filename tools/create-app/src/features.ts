@@ -359,10 +359,11 @@ export const FEATURES: readonly Feature[] = [
     summary:
       "`HealthModule`'s liveness and readiness probes, wired to this app's own indicators.",
     // Each one supplies an indicator: `cache` the Redis connection, `database` the
-    // connection and the `Ledger` the custom check queries, `files` the `Workspace`
-    // whose directory the disk check measures. Selecting health without them used
-    // to typecheck and fail at boot.
-    requires: ['cache', 'database', 'files'],
+    // connection and the `Ledger` the custom check queries, `files` the `Storage`
+    // the store check asks and the `Workspace` whose directory the disk check
+    // measures, `messaging` the `AmqpConnection` behind the broker check.
+    // Selecting health without them used to typecheck and fail at boot.
+    requires: ['cache', 'database', 'files', 'messaging'],
     module: { klass: 'ProbesModule', from: './health/health.module.js' },
     dependencies: ['@dunx/infra'],
     config: ['appName'],

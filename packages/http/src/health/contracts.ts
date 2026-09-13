@@ -58,3 +58,10 @@ export abstract class PingProbe {
 export abstract class QueryProbe {
   abstract ping(): Promise<void>;
 }
+
+/** Enough of an object store to answer "can I reach it", which `Storage` from
+ * `@dunx/infra/files` is on either backend. `exists` and not a read or a write:
+ * one `HEAD` against S3, one `stat` locally, and nothing left behind. */
+export abstract class StorageProbe {
+  abstract exists(key: string): Promise<boolean>;
+}

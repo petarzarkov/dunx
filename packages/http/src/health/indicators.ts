@@ -4,36 +4,84 @@ import {
   type PingProbe,
   type ProbeResult,
   type QueryProbe,
+  type StorageProbe,
 } from './contracts.js';
 
 const ms = (started: number): number => Math.round(performance.now() - started);
 
-/** Redis is up if it answers `PING`. */
-export class RedisIndicator extends HealthIndicator {
-  readonly name = 'redis';
-
-  constructor(private readonly redis: PingProbe) {
+/** Up on a completed round trip, down with the thrown message, detail the
+ * latency. Subclass it with a `name` for anything else answering a `ping()`. */
+export abstract class RoundTripIndicator extends HealthIndicator {
+  constructor(private readonly probe: QueryProbe) {
     super();
   }
 
   async check(): Promise<ProbeResult> {
     const started = performance.now();
-    await this.redis.ping();
+    await this.probe.ping();
     return { state: 'up', detail: `${ms(started)} ms` };
   }
 }
 
-/** The database is up if a round trip completes. */
-export class DatabaseIndicator extends HealthIndicator {
-  readonly name = 'database';
+/** Redis is up if it answers `PING`. */
+export class RedisIndicator extends RoundTripIndicator {
+  readonly name = 'redis';
 
-  constructor(private readonly db: QueryProbe) {
+  constructor(redis: PingProbe) {
+    super({
+      ping: async (): Promise<void> => {
+        await redis.ping();
+      },
+    });
+  }
+}
+
+/** The database is up if a round trip completes. */
+export class DatabaseIndicator extends RoundTripIndicator {
+  readonly name = 'database';
+}
+
+/**
+ * The AMQP broker, up while the connection is established and unblocked, and
+ * satisfied by `AmqpConnection` from `@dunx/infra/amqp`. The first probe on an
+ * unopened connection waits `readyTimeoutMs`, whose 5 s default outruns
+ * `timeoutMs` at 2 s and so reports `unknown`; the rest never wait.
+ */
+export class AmqpIndicator extends RoundTripIndicator {
+  readonly name = 'amqp';
+}
+
+export interface StorageProbeOptionsInit {
+  readonly key?: string;
+}
+
+export class StorageProbeOptions {
+  readonly key: string;
+
+  constructor(init: StorageProbeOptionsInit = {}) {
+    this.key = init.key ?? '.dunx-health';
+  }
+}
+
+/**
+ * The configured object store, which is what `DiskIndicator` stops measuring the
+ * moment an app moves to `S3Storage`. Whether the key exists is no part of the
+ * signal and the answer is discarded: a store that replies is up, one that throws
+ * is down with the message expired credentials and a missing bucket arrive as.
+ */
+export class StorageIndicator extends HealthIndicator {
+  readonly name = 'storage';
+
+  constructor(
+    private readonly storage: StorageProbe,
+    private readonly options: StorageProbeOptions = new StorageProbeOptions(),
+  ) {
     super();
   }
 
   async check(): Promise<ProbeResult> {
     const started = performance.now();
-    await this.db.ping();
+    await this.storage.exists(this.options.key);
     return { state: 'up', detail: `${ms(started)} ms` };
   }
 }

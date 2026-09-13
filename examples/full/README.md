@@ -232,19 +232,22 @@ A clean checkout boots with none of them set.
 ## Degrading rather than failing
 
 `bun start` works with nothing installed. The database is `:memory:` and storage is
-a temp directory, so both are always live. Redis is the one area that can be down,
-and when it is, `/api/cache/*` answers **503 with the connection error's own
-message** while `/api/health/ready` still answers `200 up`. A cache that is not
-running is not a reason for the service to refuse to start, or to be pulled out of
-rotation.
+a temp directory, so both are always live.
 
-That is `critical: false` on one indicator, not a special case:
+Redis and RabbitMQ are the two areas that can be down. When they are,
+`/api/cache/*` and `/api/messaging/*` answer **503 with the connection error's own
+message** while `/api/health/ready` still answers `200 up`. A cache or a broker
+that is missing is no reason for the service to refuse to start, or to be pulled
+out of rotation.
+
+That is `critical: false` on two indicators:
 [src/health/indicators.ts](./src/health/indicators.ts) subclasses `RedisIndicator`
-to flip it. `database` and `ledger` stay critical, so a broken database does shed
-traffic.
+and `AmqpIndicator` to flip it. `database`, `ledger` and `storage` stay critical,
+so a broken database does shed traffic.
 
 ```bash
-REDIS_URL=redis://127.0.0.1:1 bun run tour   # still exits 0
+REDIS_URL=redis://127.0.0.1:1 bun run tour     # still exits 0
+RABBITMQ_URL=amqp://127.0.0.1:1 bun run tour   # so does this
 ```
 
 ## Scheduled work

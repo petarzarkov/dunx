@@ -1,4 +1,5 @@
 import {
+  AmqpIndicator,
   DatabaseIndicator,
   DiskIndicator,
   DiskOptions,
@@ -6,9 +7,11 @@ import {
   MemoryIndicator,
   MemoryOptions,
   RedisIndicator,
+  StorageIndicator,
   type ProbeResult,
 } from '@dunx/http';
 import type { DbConnection } from '@dunx/infra/db';
+import type { Storage } from '@dunx/infra/files';
 import type { RedisConnection } from '@dunx/infra/redis';
 import { Ledger } from '../database/ledger.service.js';
 
@@ -40,10 +43,17 @@ export class CacheIndicator extends RedisIndicator {
   override readonly critical = false;
 }
 
+/** The same flip: a demo that 503s without RabbitMQ is a demo nobody can run.
+ * `ProbesModule` holds it, since `AmqpConnection` comes from a consuming module. */
+export class BrokerIndicator extends AmqpIndicator {
+  override readonly critical = false;
+}
+
 export interface AppIndicatorsInit {
   readonly db: DbConnection;
   readonly redis: RedisConnection;
   readonly ledger: Ledger;
+  readonly storage: Storage;
   /** Where uploads land, so a full disk here is a real failure. */
   readonly uploadRoot: string;
 }
@@ -64,6 +74,7 @@ export class AppIndicators {
       new DatabaseIndicator(init.db),
       new LedgerIndicator(init.ledger),
       new CacheIndicator(init.redis),
+      new StorageIndicator(init.storage),
       new DiskIndicator(
         new DiskOptions({ path: init.uploadRoot, maxUsedFraction: 0.95 }),
       ),

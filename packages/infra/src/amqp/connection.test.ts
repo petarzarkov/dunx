@@ -106,6 +106,66 @@ describe('opening', () => {
   });
 });
 
+describe('probing', () => {
+  it('opens the connection, so a probe over an unused socket still reports', async () => {
+    const { connection: amqp } = connection({ readyTimeoutMs: 100 });
+
+    const pinged = amqp.ping();
+    expect(amqp.opened).toBe(true);
+
+    await expect(pinged).rejects.toThrow(/failed to connect/i);
+    await amqp.onShutdown();
+  });
+
+  it('leaves the connection retrying after a ping that timed out', async () => {
+    const { connection: amqp } = connection({ readyTimeoutMs: 100 });
+    const live = amqp.connection() as unknown as { close: () => Promise<void> };
+    const realClose = live.close.bind(live);
+    let closed = 0;
+    live.close = (): Promise<void> => {
+      closed++;
+      return realClose();
+    };
+
+    await expect(amqp.ping()).rejects.toThrow();
+    // `onConnect`'s second argument is `disableAutoClose`, so `true` is what
+    // stops the library closing a connection the app is still publishing on.
+    expect(closed).toBe(0);
+    expect(amqp.opened).toBe(true);
+
+    await amqp.onShutdown();
+  });
+
+  it('answers at once once the socket has said why, without waiting', async () => {
+    const { connection: amqp } = connection({ readyTimeoutMs: 5_000 });
+    amqp.connection().emit('error', new Error('ECONNREFUSED'));
+
+    const started = Bun.nanoseconds();
+    await expect(amqp.ping()).rejects.toThrow(/unreachable: ECONNREFUSED/);
+    expect((Bun.nanoseconds() - started) / 1e6).toBeLessThan(100);
+
+    await amqp.onShutdown();
+  });
+
+  it('goes back to waiting once the connection comes back', async () => {
+    const { connection: amqp } = connection({ readyTimeoutMs: 60 });
+    const raw = amqp.connection();
+    raw.emit('error', new Error('ECONNREFUSED'));
+    raw.emit('connection');
+
+    await expect(amqp.ping()).rejects.toThrow(/failed to connect/i);
+
+    await amqp.onShutdown();
+  });
+
+  it('is down rather than silent once the container has torn it down', async () => {
+    const { connection: amqp } = connection({ readyTimeoutMs: 100 });
+    await amqp.onShutdown();
+
+    await expect(amqp.ping()).rejects.toThrow(/closed by container shutdown/);
+  });
+});
+
 describe('shutting down', () => {
   it('does nothing when nothing was opened', async () => {
     const { connection: amqp } = connection();

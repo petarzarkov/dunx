@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { HealthIndicator, type ProbeResult } from './contracts.js';
 import {
+  AmqpIndicator,
+  DatabaseIndicator,
   DiskIndicator,
   DiskOptions,
   MemoryIndicator,
   MemoryOptions,
   RedisIndicator,
+  StorageIndicator,
+  StorageProbeOptions,
 } from './indicators.js';
 import { Readiness, ReadinessOptions } from './readiness.js';
 import { HEALTH_REPORT_SCHEMA } from './report-schema.js';
@@ -210,6 +214,80 @@ describe('the shipped indicators', () => {
 
     expect(result.state).toBe('up');
     expect(result.detail).toMatch(/^\d+ ms$/);
+  });
+
+  test('the database reports the round trip it measured', async () => {
+    const result = await new DatabaseIndicator({
+      ping: async () => undefined,
+    }).check();
+
+    expect(result.state).toBe('up');
+    expect(result.detail).toMatch(/^\d+ ms$/);
+  });
+
+  test('amqp is up when the broker answers', async () => {
+    const indicatorUnder = new AmqpIndicator({ ping: async () => undefined });
+
+    expect(indicatorUnder.name).toBe('amqp');
+    expect(indicatorUnder.critical).toBe(true);
+    expect((await indicatorUnder.check()).state).toBe('up');
+  });
+
+  test('an unreachable broker is down, carrying what it threw', async () => {
+    const report = await registry([
+      new AmqpIndicator({
+        ping: async () => {
+          throw new Error('RabbitMQ failed to connect in time');
+        },
+      }),
+    ]).readiness();
+
+    expect(report.checks[0]?.state).toBe('down');
+    expect(report.checks[0]?.detail).toBe('RabbitMQ failed to connect in time');
+    expect(report.status).toBe('down');
+  });
+
+  test('storage asks for a key, and does not mind that it is absent', async () => {
+    const asked: string[] = [];
+    const result = await new StorageIndicator({
+      exists: async (key: string) => {
+        asked.push(key);
+        return false;
+      },
+    }).check();
+
+    expect(asked).toEqual(['.dunx-health']);
+    expect(result.state).toBe('up');
+    expect(result.detail).toMatch(/^\d+ ms$/);
+  });
+
+  test('storage takes the key to ask for', async () => {
+    const asked: string[] = [];
+    await new StorageIndicator(
+      {
+        exists: async (key: string) => {
+          asked.push(key);
+          return true;
+        },
+      },
+      new StorageProbeOptions({ key: 'ops/probe' }),
+    ).check();
+
+    expect(asked).toEqual(['ops/probe']);
+  });
+
+  test('a store that throws is down, which is what bad credentials are', async () => {
+    const report = await registry([
+      new StorageIndicator({
+        exists: async () => {
+          throw new Error('AccessDenied');
+        },
+      }),
+    ]).readiness();
+
+    expect(report.checks[0]?.name).toBe('storage');
+    expect(report.checks[0]?.detail).toBe('AccessDenied');
+    expect(report.status).toBe('down');
   });
 
   test('memory compares rss against a ceiling, and is not critical', () => {
