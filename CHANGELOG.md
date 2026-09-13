@@ -4,6 +4,53 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.9.0 - 2026-09-13
+
+An email area with a transport seam, a renderer and a preview server
+
+`@dunx/infra/email` is one `EmailTransport` contract, the four things every app
+otherwise rewrites around it, and a preview server over `Bun.serve`. The provider
+stays an optional peer on a subpath of its own, the way drizzle and bullmq
+already do, so importing `@dunx/infra/email` needs neither `resend` nor
+`nodemailer` nor `react`. `LogTransport` is the default, which is what lets an
+app boot and a queue deliver a job on a machine with no credentials at all.
+
+`EmailModule.forRoot` binds `EmailOptions`, `EmailTransport`, `TemplateRenderer`
+and `EmailService`. The service owns the default sender, the per-second pacing a
+provider cap needs, the retry policy around one send, and the rendering call.
+`dryRun` routes to the log transport and leaves the configured one bound, so one
+variable is the whole difference between an environment that delivers and one
+that does not. Retries are off unless asked for: a provider that accepted a
+message and then lost the response cannot be told apart from one that never saw
+it, and the cost of guessing wrong is a second email in a real inbox.
+
+`bunx dunx-email preview` lists the templates in a directory and renders one,
+through the same `render` the runtime calls, so the preview cannot drift from
+what arrives in an inbox. The `react-email` CLI serves that page by installing
+Next.js, esbuild and socket.io; this is `Bun.serve`, `Bun.Glob` and `import()`,
+and an edit shows up on the next request rather than the next restart.
+
+Every recipient, the subject and every header are refused if they carry a newline
+or anything else that would start a header nobody wrote. `EmailTransport` also
+declares an optional `verify()`, filled by SMTP with nodemailer's own greeting
+and AUTH check, so a health probe has something to ask of the third thing most
+likely to be down in a deployment.
+
+### Features
+
+- **infra**: an email area with a transport seam, a renderer and a preview server ([`8716e15`](https://github.com/petarzarkov/dunx/commit/8716e1554a1cebc5ba769dff9f068d0e0198a5a1))
+
+### Fixes
+
+- **infra**: retries turned on by tuning a delay, and a verify seam while it is free ([`07f11fc`](https://github.com/petarzarkov/dunx/commit/07f11fc7679345316cf6d9df83c3d5db46af986a))
+- **infra**: the CodeRabbit findings, seven of ten ([`12ea4c0`](https://github.com/petarzarkov/dunx/commit/12ea4c00f1b49c058bd09f8e92b7fdc46617df64))
+- **infra**: what running dunx-email against real templates turned up ([`6b7289c`](https://github.com/petarzarkov/dunx/commit/6b7289c1920e87a9fccb252c76ee7e0d21abae01))
+- **infra**: the deep review findings, five of them real defects ([`594bf6e`](https://github.com/petarzarkov/dunx/commit/594bf6ea803ffcca2fb3155d15316c5893424c54))
+
+### Other changes
+
+- **infra**: hold the /email peers to their own subpaths ([`ad14fc2`](https://github.com/petarzarkov/dunx/commit/ad14fc2bfead3a19cb5dfdb43dc51f29fff87076))
+
 ## 3.8.3 - 2026-09-13
 
 Authorize on the explorer, broker and storage probes, and an ambient type that emitted a name
