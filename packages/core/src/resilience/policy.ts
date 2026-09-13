@@ -26,6 +26,12 @@ export class ResiliencePolicy {
    * the caller's through `AbortSignal.any`, rather than a `setTimeout` and a
    * `clearTimeout` in a `finally`. Both are Web standards Bun implements, and the
    * timer is the runtime's to cancel.
+   *
+   * That is the primitive where the operation takes the signal, and it is why
+   * this awaits `op(signal)` rather than racing it. A bound on an operation that
+   * takes none - a broker client's `close()`, which is what `@dunx/infra` bounds
+   * during teardown - can only be a race, since a signal would abort nothing and
+   * the call would never settle.
    */
   async run<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
     return this.#attempts(op);

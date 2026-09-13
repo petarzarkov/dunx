@@ -316,6 +316,9 @@ injected into the handler records `container:shutdown` in its `onShutdown`, and 
 test requires the sequence `slow:started`, `slow:finished`, `container:shutdown`,
 plus zero open sockets afterwards.
 
+Two of those closes are bounded, and share one helper with `@dunx/infra/amqp`'s
+three: see [Message brokers](./message-brokers.md), "Bounding a close".
+
 ### A forked child's colour, which is the parent's question
 
 bullmq forks a sandboxed processor with `stdio: 'pipe'` and pipes the child's

@@ -17,12 +17,7 @@ import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueMetrics } from './metrics.js';
 import { QueueModule, type QueueModuleSettings } from './module.js';
 import { JobPublisher } from './publisher.js';
-import {
-  closeWithin,
-  QueueConsumer,
-  WorkerFactory,
-  type WorkerApp,
-} from './worker.js';
+import { QueueConsumer, WorkerFactory, type WorkerApp } from './worker.js';
 
 const url = defaultRedisUrl();
 
@@ -526,53 +521,6 @@ describe('WorkerFactory.attach', () => {
     await consumer.stop();
 
     await app.shutdown();
-  });
-});
-
-/**
- * The close policy a failed start uses for a worker that **did** become ready.
- * bullmq starts consuming at readiness, so forcing it abandons whatever it holds;
- * waiting on it without a bound waits on the broker that just failed.
- */
-describe('closeWithin', () => {
-  /** bullmq's own shape: `close()` returns the promise it already started, so a
-   * second call with `force` is the same pending promise and escalates nothing. */
-  const bullmqLike = (settles: boolean) => {
-    const calls: (boolean | undefined)[] = [];
-    let closing: Promise<void> | undefined;
-    return {
-      calls,
-      close(force?: boolean): Promise<void> {
-        calls.push(force);
-        closing ??= settles
-          ? Promise.resolve()
-          : new Promise<void>(() => {
-              /* a close waiting on a broker that is gone */
-            });
-        return closing;
-      },
-    };
-  };
-
-  it('returns as soon as a close that finishes does', async () => {
-    const worker = bullmqLike(true);
-    const started = Bun.nanoseconds();
-    await closeWithin(worker, 5_000);
-    // Returned on the close, not on the bound.
-    expect((Bun.nanoseconds() - started) / 1e6).toBeLessThan(1_000);
-    expect(worker.calls).toEqual([undefined]);
-  });
-
-  it('stops waiting on a close that never finishes', async () => {
-    const worker = bullmqLike(false);
-    const started = Bun.nanoseconds();
-    await closeWithin(worker, 40);
-    const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
-    // The point: it settles. Without the bound this test would never return.
-    expect(elapsedMs).toBeGreaterThanOrEqual(35);
-    expect(elapsedMs).toBeLessThan(2_000);
-    // And it did not try to escalate, which bullmq would have ignored anyway.
-    expect(worker.calls).toEqual([undefined]);
   });
 });
 

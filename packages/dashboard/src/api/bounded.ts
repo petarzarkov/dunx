@@ -6,6 +6,13 @@
  *
  * The fallback is a value rather than a rejection: an unreachable queue still gets
  * a row saying so.
+ *
+ * Not shared with `@dunx/infra`'s `closeWithin`, which bounds the same way. That
+ * one bounds a close during teardown and answers whether the bound expired; this
+ * bounds a read during a request and answers with a value a panel can render, so
+ * neither is the other with an argument added. Sharing the four lines under them
+ * would mean either `@dunx/dashboard` depending on `@dunx/infra`, which it does
+ * not and must not, or a timeout primitive on `@dunx/core`'s public surface.
  */
 export const bounded = async <T>(
   work: () => Promise<T>,

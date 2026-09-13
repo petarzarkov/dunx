@@ -1,5 +1,6 @@
 import { Logger, type OnShutdown } from '@dunx/core';
 import { QueueEvents } from 'bullmq';
+import { closeWithin } from '../close-within.js';
 import { QueueConnection } from './connection.js';
 import { QueueOptions } from './options.js';
 
@@ -105,28 +106,15 @@ export class JobEvents implements OnShutdown {
   /** Bounded, and never rejecting: one stream that will not close must not stop
    * the rest of shutdown, which is what closes the socket under it. */
   async #close(name: string, events: QueueEvents): Promise<void> {
-    const timedOut = Symbol('timed out');
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const outcome = await Promise.race([
-        events.close(),
-        new Promise<symbol>((resolve) => {
-          timer = setTimeout(() => resolve(timedOut), CLOSE_TIMEOUT_MS);
-        }),
-      ]);
-      if (outcome === timedOut) {
+      const timedOut = await closeWithin(events, CLOSE_TIMEOUT_MS);
+      if (timedOut) {
         this.#logger.warn(
           `the "${name}" queue events did not close within ${CLOSE_TIMEOUT_MS} ms`,
         );
       }
     } catch (error) {
       this.#logger.warn(`the "${name}" queue events failed to close`, error);
-    } finally {
-      // The loser of the race stays pending. A `Bun.sleep` here held the loop
-      // open for the whole window whenever `close()` won, so a clean shutdown
-      // took 2.37s against 0.36s - the delay this exists to prevent, caused by
-      // the code preventing it.
-      clearTimeout(timer);
     }
   }
 }
