@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, join } from 'node:path';
 import { semver } from 'bun';
 import {
   bumpTypeFrom,
@@ -23,11 +23,10 @@ import {
 } from './changelog.js';
 import { createGitHubRelease, pushTag } from './github-release.js';
 import { isVersionPublished, publishPackage } from './publish.js';
-import { PUBLISHED_DIRS } from './workspace-ranges.js';
+import { PUBLISHED_DIRS, ROOT } from './workspace-ranges.js';
 
 const isDryRun = process.env['DRY_RUN'] === 'true';
 
-const ROOT_DIR = resolve(import.meta.dir, '..');
 /**
  * Every directory that can hold a **published** workspace.
  *
@@ -41,7 +40,7 @@ const ROOT_DIR = resolve(import.meta.dir, '..');
  */
 
 /** What `publish.ts` resolves a `workspace:` range against. */
-const WORKSPACE_ROOTS = PUBLISHED_DIRS.map((dir) => join(ROOT_DIR, dir));
+const WORKSPACE_ROOTS = PUBLISHED_DIRS.map((dir) => join(ROOT, dir));
 
 const REPO = process.env['GITHUB_REPOSITORY'] ?? 'petarzarkov/dunx';
 const REPO_URL = `https://github.com/${REPO}`;
@@ -63,7 +62,7 @@ const findPublishablePackages = (): {
   }[] = [];
 
   for (const parent of PUBLISHED_DIRS) {
-    const parentDir = join(ROOT_DIR, parent);
+    const parentDir = join(ROOT, parent);
     if (!existsSync(parentDir)) continue;
     for (const entry of readdirSync(parentDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
@@ -162,7 +161,7 @@ const writeChangelog = (
   version: string,
   commits: readonly CommitRecord[],
 ): string => {
-  const path = join(ROOT_DIR, CHANGELOG_PATH);
+  const path = join(ROOT, CHANGELOG_PATH);
   const existing = existsSync(path) ? readFileSync(path, 'utf-8') : '';
 
   if (parseChangelog(existing).some((release) => release.version === version)) {

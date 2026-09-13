@@ -1,5 +1,5 @@
 import { Glob } from 'bun';
-import { PUBLISHED_DIRS } from './workspace-ranges.js';
+import { PUBLISHED_DIRS, ROOT } from './workspace-ranges.js';
 
 export interface PublishedWorkspace {
   readonly name: string;
@@ -7,8 +7,6 @@ export interface PublishedWorkspace {
   readonly dir: string;
   readonly json: Record<string, unknown>;
 }
-
-const repoRoot = (): string => new URL('..', import.meta.url).pathname;
 
 /**
  * Every manifest under `packages/` and `tools/` that is not `private: true`.
@@ -19,10 +17,9 @@ const repoRoot = (): string => new URL('..', import.meta.url).pathname;
  * being checked for one.
  */
 export const publishedWorkspaces = async (): Promise<PublishedWorkspace[]> => {
-  const root = repoRoot();
   const found: PublishedWorkspace[] = [];
   for (const parent of PUBLISHED_DIRS) {
-    const base = `${root}${parent}`;
+    const base = `${ROOT}${parent}`;
     for await (const rel of new Glob('*/package.json').scan({ cwd: base })) {
       const json = (await Bun.file(`${base}/${rel}`).json()) as Record<
         string,

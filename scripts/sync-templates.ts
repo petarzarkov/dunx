@@ -13,8 +13,8 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FEATURES } from '../tools/create-app/src/features.js';
+import { ROOT } from './workspace-ranges.js';
 
-const ROOT = new URL('..', import.meta.url).pathname;
 const TEMPLATES = join(ROOT, 'tools/create-app/templates');
 
 const copyDir = async (from: string, to: string): Promise<number> => {

@@ -7,9 +7,9 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, relative } from 'node:path';
 import type { CoverageModel } from '../internal/docs/scripts/extract/model.js';
-import { PUBLISHED_DIRS } from './workspace-ranges.js';
+import { PUBLISHED_DIRS, ROOT } from './workspace-ranges.js';
 
 /**
  * Turns the root `bun test --coverage` lcov into the model the documentation
@@ -21,9 +21,8 @@ import { PUBLISHED_DIRS } from './workspace-ranges.js';
  * verbatim into the deployed site.
  */
 
-const ROOT_DIR = resolve(import.meta.dir, '..');
 /** Every parent that holds a published workspace, so a tool gets a badge too. */
-const COVERAGE_DIR = join(ROOT_DIR, 'coverage');
+const COVERAGE_DIR = join(ROOT, 'coverage');
 /**
  * The floor every published workspace clears, on lines **and** on functions.
  * `badge()` already paints at or above this green, so the gate and the badge
@@ -31,7 +30,7 @@ const COVERAGE_DIR = join(ROOT_DIR, 'coverage');
  */
 const MIN_COVERAGE = 90;
 const LCOV_PATH = join(COVERAGE_DIR, 'lcov.info');
-const DOCS_DIR = join(ROOT_DIR, 'internal', 'docs');
+const DOCS_DIR = join(ROOT, 'internal', 'docs');
 const MODEL_DIR = join(DOCS_DIR, 'src', 'generated');
 const BADGE_DIR = join(DOCS_DIR, 'public', 'badges');
 
@@ -182,7 +181,7 @@ const groupByPackage = (files: FileCoverage[]): PackageCoverage[] => {
 
 const findUntestedPackages = (covered: Set<string>): string[] =>
   PUBLISHED_DIRS.flatMap((parent) => {
-    const parentDir = join(ROOT_DIR, parent);
+    const parentDir = join(ROOT, parent);
     return readdirSync(parentDir, { withFileTypes: true })
       .filter(
         (entry) =>
@@ -304,10 +303,10 @@ for (const name of untested) {
 }
 
 console.log(
-  `Coverage model: ${format(totalLines)}% lines across ${packages.length} packages (${files.length} files) -> ${relative(ROOT_DIR, MODEL_DIR)}/coverage.json`,
+  `Coverage model: ${format(totalLines)}% lines across ${packages.length} packages (${files.length} files) -> ${relative(ROOT, MODEL_DIR)}/coverage.json`,
 );
 console.log(
-  `Badges: coverage.svg + ${packages.length + untested.length} per-package -> ${relative(ROOT_DIR, BADGE_DIR)}/`,
+  `Badges: coverage.svg + ${packages.length + untested.length} per-package -> ${relative(ROOT, BADGE_DIR)}/`,
 );
 if (untested.length) {
   console.log(`No tests in: ${untested.join(', ')}`);
@@ -391,7 +390,7 @@ if (failing.length > 0) {
       const shown = onLines
         ? `${format(pct(file.linesHit, file.linesFound))}%  ${file.linesHit}/${file.linesFound} lines`
         : `${format(pct(file.funcsHit, file.funcsFound))}%  ${file.funcsHit}/${file.funcsFound} functions`;
-      console.error(`    ${shown}  ${relative(ROOT_DIR, file.path)}`);
+      console.error(`    ${shown}  ${relative(ROOT, file.path)}`);
     }
   }
   process.exit(1);

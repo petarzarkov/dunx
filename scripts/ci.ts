@@ -13,6 +13,7 @@
  * green run is one line per step rather than the request logs of 900 tests.
  */
 import { relative } from 'node:path';
+import { ROOT } from './workspace-ranges.js';
 
 interface Step {
   readonly name: string;
@@ -40,8 +41,6 @@ interface Phase {
   readonly onRequest?: boolean;
   readonly steps: readonly Step[];
 }
-
-const root = new URL('..', import.meta.url).pathname;
 
 /**
  * `build` first because everything else needs `dist/`: type-aware lint resolves
@@ -240,7 +239,7 @@ const runStep = async (phase: Phase, step: Step): Promise<Result> => {
   console.log(`▶ ${label}`);
 
   const proc = Bun.spawn([...step.run], {
-    cwd: root,
+    cwd: ROOT,
     stdout: 'pipe',
     stderr: 'pipe',
   });
@@ -377,7 +376,7 @@ if (import.meta.main) {
   const rest = others.filter((phase) => phase.onRequest !== true);
 
   console.log(
-    `${relative(process.cwd(), root) || '.'}: ${rest.length + 1} phases, ${[first, ...rest].flatMap((phase) => phase.steps).length} steps`,
+    `${relative(process.cwd(), ROOT) || '.'}: ${rest.length + 1} phases, ${[first, ...rest].flatMap((phase) => phase.steps).length} steps`,
   );
 
   results.push(...(await runPhase(first)));

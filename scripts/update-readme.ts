@@ -17,10 +17,13 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BLURB, CAPABILITIES, lead, SHOWCASE } from './positioning.js';
-import { PUBLISHED_DIRS } from './workspace-ranges.js';
+import {
+  PUBLISHED_DIRS,
+  ROOT,
+  type WorkspaceManifest,
+} from './workspace-ranges.js';
 import { SITE_URL } from './site.js';
 
-const ROOT = join(import.meta.dir, '..');
 /**
  * Where a **published** workspace can live: `packages/` for the framework,
  * `tools/` for the CLIs. `internal/` is deliberately absent - it is the private
@@ -29,18 +32,11 @@ const ROOT = join(import.meta.dir, '..');
 const README_PATH = join(ROOT, 'README.md');
 const CONTRIBUTING_PATH = join(ROOT, 'CONTRIBUTING.md');
 
-interface PackageJson {
-  name: string;
-  version: string;
-  description?: string;
-  private?: boolean;
-}
-
-function readPkg(parent: string, folder: string): PackageJson | null {
+function readPkg(parent: string, folder: string): WorkspaceManifest | null {
   const pkgPath = join(ROOT, parent, folder, 'package.json');
   if (!existsSync(pkgPath)) return null;
   try {
-    return JSON.parse(readFileSync(pkgPath, 'utf8')) as PackageJson;
+    return JSON.parse(readFileSync(pkgPath, 'utf8')) as WorkspaceManifest;
   } catch {
     return null;
   }
@@ -49,7 +45,7 @@ function readPkg(parent: string, folder: string): PackageJson | null {
 interface PackageEntry {
   parent: string;
   folder: string;
-  pkg: PackageJson;
+  pkg: WorkspaceManifest;
 }
 
 function discoverPackages(): PackageEntry[] {
@@ -108,7 +104,7 @@ interface TreeNode {
 }
 
 function buildProjectStructure(entries: PackageEntry[]): string {
-  const describe = (pkg: PackageJson): string =>
+  const describe = (pkg: WorkspaceManifest): string =>
     // Split on '. ' to avoid breaking "Day.js"
     pkg.description ? (pkg.description.split('. ')[0] ?? pkg.name) : pkg.name;
 
@@ -129,7 +125,7 @@ function buildProjectStructure(entries: PackageEntry[]): string {
     [
       '├── ',
       'internal/',
-      'Private workspaces, never published - docs site, benchmarks, API explorer, shared UI',
+      'Private workspaces, never published - docs site, benchmarks, shared UI',
     ],
     ['├── ', 'examples/', 'Private apps that consume the packages'],
     ['├── ', 'docs/', 'Architecture and design docs'],
