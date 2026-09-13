@@ -78,11 +78,14 @@ export const collectTypeOnlyNames = (
 };
 
 /**
- * Every name this file binds: imported, or declared at the top level. Anything a
- * constructor annotation names that is **not** in here is ambient - a global.
+ * Every name this file binds **at runtime**: imported, or declared at the top
+ * level. Anything else a constructor annotation names is ambient.
  *
- * Top level and imports only, which is where a token can come from. A name bound
- * inside a function cannot be in scope at a class's constructor signature.
+ * Two ways a name looks bound and is not, each of which would suppress
+ * `entryFor`'s guard and bring the `ReferenceError` back: a `declare`, which
+ * promises a runtime value this file does not create, and a binding nested in a
+ * function, which is not in scope at a constructor signature. Top-level
+ * statements only, for the second - a `walk` would collect it.
  */
 export const boundNames = (program: Node): ReadonlySet<string> => {
   const names = new Set<string>();
@@ -92,21 +95,29 @@ export const boundNames = (program: Node): ReadonlySet<string> => {
     if (name !== undefined) names.add(name);
   };
 
-  walk(program, (node) => {
-    if (isImportDeclaration(node)) {
-      for (const specifier of node.specifiers) {
+  for (const statement of (program as { body?: readonly Node[] }).body ?? []) {
+    if (isImportDeclaration(statement)) {
+      for (const specifier of statement.specifiers) {
         bind((specifier as ImportSpecifier).local);
       }
-      return;
+      continue;
     }
-    // A declarator's id may be a pattern, which binds nothing a token can name.
-    if (node.type === 'VariableDeclarator') bind((node as { id?: Node }).id);
-  });
 
-  const body = (program as { body?: readonly Node[] }).body ?? [];
-  for (const statement of body) {
     const declaration =
       (statement as { declaration?: Node | null }).declaration ?? statement;
+    if ((declaration as { declare?: boolean }).declare === true) continue;
+
+    if (declaration.type === 'VariableDeclaration') {
+      // An id that is a pattern binds nothing a token could name, and `nameOf`
+      // answers `undefined` for one.
+      for (const declarator of (
+        declaration as { declarations?: readonly Node[] }
+      ).declarations ?? []) {
+        bind((declarator as { id?: Node }).id);
+      }
+      continue;
+    }
+
     if (
       isClassDeclaration(declaration) ||
       declaration.type === 'FunctionDeclaration' ||

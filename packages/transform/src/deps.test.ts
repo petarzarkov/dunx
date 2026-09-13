@@ -384,6 +384,75 @@ export class Service {
     expect(entriesFor(source, 'Service')).toBe('Repo');
   });
 
+  /**
+   * `boundNames` decides whether a name is guarded, so anything it claims is
+   * bound and is not becomes the `ReferenceError` this whole fix is about. These
+   * three are the ways a name can look bound and not be.
+   */
+  it('ignores a binding that is nested inside a function', () => {
+    const source = `export class Service {
+  constructor(private readonly repo: Repo) {}
+}
+function helper(): void {
+  const Repo = 123;
+  void Repo;
+}`;
+    expect(entriesFor(source, 'Service')).toStartWith(
+      "typeof Repo === 'undefined'",
+    );
+  });
+
+  it('ignores an ambient declare, which has no runtime binding', () => {
+    const source = `declare class Ambient {}
+export class Service {
+  constructor(private readonly it: Ambient) {}
+}`;
+    expect(entriesFor(source, 'Service')).toStartWith(
+      "typeof Ambient === 'undefined'",
+    );
+  });
+
+  it('ignores a declared const and a declared function too', () => {
+    const constant = `declare const Settings: unknown;
+export class A {
+  constructor(private readonly s: Settings) {}
+}`;
+    expect(entriesFor(constant, 'A')).toStartWith(
+      "typeof Settings === 'undefined'",
+    );
+
+    const fn = `declare function Make(): void;
+export class B {
+  constructor(private readonly m: Make) {}
+}`;
+    expect(entriesFor(fn, 'B')).toStartWith("typeof Make === 'undefined'");
+  });
+
+  /**
+   * `typeof Bun` passing says nothing about `Bun.Server`, and an absent member is
+   * `undefined` - which `isUnresolved` rejects, so the container would take it as
+   * a token and skip the boot error naming the parameter.
+   */
+  it('refuses a qualified name whose member does not exist', () => {
+    const source = `export class Handler {
+  constructor(private readonly init: Ns.Missing) {}
+}`;
+    const entry = entriesFor(source, 'Handler');
+    const Ns = { Present: class {} };
+    // eslint-disable-next-line no-eval
+    const resolved = eval(`(() => ${entry})()`) as { unresolved?: string };
+    expect(resolved.unresolved).toBe('private readonly init: Ns.Missing');
+
+    const present = entriesFor(
+      `export class Handler {
+  constructor(private readonly init: Ns.Present) {}
+}`,
+      'Handler',
+    );
+    // eslint-disable-next-line no-eval
+    expect(eval(`(() => ${present})()`)).toBe(Ns.Present);
+  });
+
   it('leaves a class declared later in the same file alone', () => {
     const source = `export class Service {
   constructor(private readonly later: Later) {}

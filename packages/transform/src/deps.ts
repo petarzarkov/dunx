@@ -97,18 +97,21 @@ const entryFor = (
     if (root === undefined || bound.has(root)) return named;
 
     /**
-     * An ambient name: not imported, not declared here. This transform reads
-     * syntax and has no type checker, so `ErrorOptions` and `URL` are the same
-     * to it - a lib interface that erases, and a lib class that is a usable
-     * token. Emitting either verbatim made the first a `ReferenceError` out of
-     * the thunk, which is neither the injection nor the boot error naming the
-     * parameter.
+     * An ambient name. With no type checker `ErrorOptions` and `URL` read the
+     * same - a lib interface that erases, a lib class that is a usable token -
+     * and emitting either verbatim made the first a `ReferenceError`.
      *
-     * `typeof` is what settles it, at resolution time rather than here, and it
-     * is guarded on the **leftmost** name because it only protects a bare
-     * identifier - `typeof ns.Thing` still throws when `ns` is undeclared.
+     * `typeof` settles it at resolution time, on the **leftmost** name because
+     * it only protects a bare identifier. A qualified name needs the second
+     * half too: an absent member is `undefined`, which `isUnresolved` rejects,
+     * so the container would take it as a token rather than raise.
      */
-    return `typeof ${root} === 'undefined' ? ${unresolved} : ${named}`;
+    const missing =
+      named === root
+        ? `typeof ${root} === 'undefined'`
+        : `typeof ${root} === 'undefined' || ${named} === undefined`;
+
+    return `${missing} ? ${unresolved} : ${named}`;
   }
 
   // The annotation reads the same whether the name was imported with
