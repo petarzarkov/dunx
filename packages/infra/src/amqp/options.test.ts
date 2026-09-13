@@ -79,6 +79,42 @@ describe('the broker url', () => {
   });
 
   /**
+   * Only this one of the five timeouts is checked. It is the one this version
+   * adds, so nothing can already be passing a value the check would now reject.
+   */
+  describe('publishTimeoutMs', () => {
+    it('defaults to ten seconds', () => {
+      expect(new AmqpOptions().publishTimeoutMs).toBe(10_000);
+      expect(new AmqpOptions({ publishTimeoutMs: 250 }).publishTimeoutMs).toBe(
+        250,
+      );
+    });
+
+    /** Each of these reaches `withTimeout` as a timer that has already expired,
+     * so every publish would fail naming a bound nobody set. */
+    it('refuses zero, a negative, and anything not finite', () => {
+      for (const publishTimeoutMs of [
+        0,
+        -1,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+      ]) {
+        expect(() => new AmqpOptions({ publishTimeoutMs })).toThrow(AmqpError);
+      }
+    });
+
+    it('names the value it refused', () => {
+      try {
+        new AmqpOptions({ publishTimeoutMs: -5 });
+        expect.unreachable();
+      } catch (error) {
+        expect((error as AmqpError).code).toBe(AmqpErrorCode.INVALID_STATE);
+        expect((error as AmqpError).message).toContain('-5');
+      }
+    });
+  });
+
+  /**
    * Checked up front rather than at connect time. `rabbitmq-client` retries a
    * failed connection forever, so a typo would otherwise surface as a publish
    * that never settles.

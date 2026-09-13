@@ -199,7 +199,20 @@ export class AmqpOptions {
     this.drainTimeoutMs = init.drainTimeoutMs ?? 10_000;
     this.closeTimeoutMs = init.closeTimeoutMs ?? 5_000;
     this.handlerTimeoutMs = init.handlerTimeoutMs;
-    this.publishTimeoutMs = init.publishTimeoutMs ?? 10_000;
+    // Checked the way `CacheOptions` checks its ttl, and only here: zero or less
+    // reaches `withTimeout` as a timer that has already expired, so every publish
+    // would fail as a timeout and name a bound the caller never meant. The four
+    // above are published API with no guard, and adding one now would throw for a
+    // value they have always accepted - a separate decision from this one.
+    const publishTimeoutMs = init.publishTimeoutMs ?? 10_000;
+    if (!Number.isFinite(publishTimeoutMs) || publishTimeoutMs <= 0) {
+      throw new AmqpError(
+        AmqpErrorCode.INVALID_STATE,
+        'AMQP publishTimeoutMs must be a positive number of milliseconds, got ' +
+          `${String(publishTimeoutMs)}.`,
+      );
+    }
+    this.publishTimeoutMs = publishTimeoutMs;
     this.consume = init.consume ?? false;
   }
 
