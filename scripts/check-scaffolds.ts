@@ -19,8 +19,8 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { featureNames } from '../tools/create-app/src/features.js';
 import { scaffold } from '../tools/create-app/src/scaffold.js';
+import { ROOT } from './workspace-ranges.js';
 
-const ROOT = new URL('..', import.meta.url).pathname;
 const HOST = join(ROOT, 'examples/full');
 
 /**

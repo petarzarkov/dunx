@@ -73,8 +73,8 @@ without saying so.
 There are four, and they are **not one per package** - they are a ladder of
 questions an evaluator asks in order (`minimal` → `databases` / `testing` →
 `full`). Per-package examples were tried and reverted; that reversal holds. Before
-adding a fifth, read docs/ROADMAP.md, Phase 1, which records which candidates
-were rejected and why:
+adding a fifth, read docs/ROADMAP.md, "The example ladder", which records which
+candidates were rejected and why:
 
 - `examples/full` is the _integration_ example. It grows through the phases and is
   the only place the packages are shown composing. Do not fork it per phase, and do

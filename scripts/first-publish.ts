@@ -27,6 +27,8 @@ import {
   assertNoWorkspaceRanges,
   readWorkspaceVersions,
   resolveWorkspaceDeps,
+  ROOT,
+  type WorkspaceManifest,
 } from './workspace-ranges.js';
 import { semver } from 'bun';
 
@@ -68,13 +70,9 @@ const ORDER = [
   'tools/mcp',
 ];
 
-const root = new URL('..', import.meta.url).pathname;
-
 const VERSION =
   process.env['DUNX_VERSION'] ??
-  sharedVersion(join(root, 'packages'), join(root, 'tools'));
-
-type Manifest = { name: string; version: string } & Record<string, unknown>;
+  sharedVersion(join(ROOT, 'packages'), join(ROOT, 'tools'));
 
 /**
  * The packument at `registry.npmjs.org/<name>` 404s for minutes after a brand-new
@@ -94,9 +92,9 @@ const alreadyPublished = async (
 let publishedThisRun = 0;
 
 for (const dir of ORDER) {
-  const path = join(root, dir, 'package.json');
+  const path = join(ROOT, dir, 'package.json');
   const original = readFileSync(path, 'utf-8');
-  const pkg = JSON.parse(original) as Manifest;
+  const pkg = JSON.parse(original) as WorkspaceManifest;
 
   if (!DRY && (await alreadyPublished(pkg.name, VERSION))) {
     console.log(`skipped ${pkg.name}@${VERSION} - already on npm`);
@@ -124,7 +122,7 @@ for (const dir of ORDER) {
       [
         'sh',
         '-c',
-        `cd ${join(root, dir)} && ${NPM} publish --access public ${flags}`,
+        `cd ${join(ROOT, dir)} && ${NPM} publish --access public ${flags}`,
       ],
       { stdout: 'inherit', stderr: 'inherit', stdin: 'inherit' },
     );
@@ -143,7 +141,7 @@ for (const dir of ORDER) {
     throw error;
   } finally {
     // Restore the source manifest, keeping the new version.
-    const restored = JSON.parse(original) as Manifest;
+    const restored = JSON.parse(original) as WorkspaceManifest;
     restored.version = VERSION;
     writeFileSync(path, `${JSON.stringify(restored, null, 2)}\n`);
   }

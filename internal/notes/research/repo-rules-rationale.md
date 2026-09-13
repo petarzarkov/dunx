@@ -250,10 +250,10 @@ second and mean to come back.
   the data.** `providersOf` and `modulesOf` went from `@dunx/mcp` to `@dunx/core`,
   `routesOf` and `gatewaysOf` to `@dunx/http`, the moment `@dunx/dashboard` was a
   second consumer - and `@dunx/mcp` re-exports them so nothing broke.
-- **Never declare a union another package already declares.** `methodColor` and
-  `jobStateColor` take a plain `string` on purpose: the canonical lists are
-  `HttpMethod` in `@dunx/http` and `OperationKey` in `@dunx/openapi`, and a third
-  in `@dunx/ui` would exist only to be converted to and from those two.
+- **Never declare a union another package already declares.** `methodColor` takes a
+  plain `string` on purpose: the canonical lists are `HttpMethod` in `@dunx/http`
+  and `OperationKey` in `@dunx/openapi`, and a third in `@dunx/ui` would exist only
+  to be converted to and from those two.
   `internal/openapi-ui` had its own `METHODS` array duplicating `OPERATION_ORDER`
   before it was deleted; `OPERATION_ORDER` in `@dunx/openapi` is still the canonical
   list.
@@ -873,7 +873,8 @@ Package names are `@dunx/example-<dir>`, so `bun run --filter '@dunx/example-*'`
 addresses them all - which is how CI keeps them alive. **Every example must be in
 CI**; that is the whole test for whether another one earns its place. Per-package
 examples were tried and reverted and that reversal still holds - see
-docs/ROADMAP.md, Phase 1, which also records which candidates were rejected.
+docs/ROADMAP.md, "The example ladder", which also records which candidates were
+rejected.
 
 A part needing an absent service (Redis, Postgres, MySQL, S3) prints that it is
 skipping and the app still exits 0.

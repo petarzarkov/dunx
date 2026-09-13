@@ -642,6 +642,22 @@ Real but missing from `bun-types`: `psubscribe`, `punsubscribe`, `pubsub`, `scri
 `select`, `connected`, `bufferedAmount`, `onclose`, `onconnect`. Of these `pubsub`,
 `script` and `select` work and are reachable through `send()`.
 
+#### `send(EVAL, ...)` runs Lua atomically, and a Lua table returns as a JS array
+
+The one that decides any compare-and-set design, since Bun exposes no `WATCH`. One
+script returns `[allowed, retryAfterMs, remaining, resetMs]` in a single round trip, so
+`@dunx/http`'s throttle store is correct under concurrency without a transaction:
+200 parallel `EVAL`s produced 200 unique counter values.
+
+`SCRIPT LOAD` through `send('SCRIPT', ['LOAD', src])` returns a sha, and `EVALSHA`
+after a `SCRIPT FLUSH` rejects with a generic `code` carrying `NOSCRIPT` in the
+message, so a reload path has to match on the message.
+
+`MULTI`/`EXEC` also work through `send()` and are the wrong tool here: auto-pipelining
+shares one socket, so transactions from concurrent callers interleave. Costs,
+pipelined: `EVAL` full source 19.0 us, `EVALSHA` fixed window 11.2 us, GCRA 9.9 us, a
+bare `INCR` floor 2.5 us.
+
 ### `req.json()` is the cost of a validated request, and there is no native alternative
 
 Measured on `internal/bench`'s validation harness (`bun run validation`), four raw
@@ -707,6 +723,13 @@ cast around the missing declaration and said "delete this file when bun-types de
 the option". It is deleted; the call sites use `Bun.cron` and `Bun.cron.parse`
 directly. `supportsTz()` stays, because the probe is what tells a 1.3 runtime from a
 1.4 one without reading `Bun.version`.
+
+**An over-large timer is clamped exactly as Node clamps it.** `setTimeout(fn, 2**31)`,
+`2**31 + 1`, `1e15` and `-1` each emit `TimeoutOverflowWarning` or
+`TimeoutNegativeWarning`, are set to **1 ms**, and fired **17 ms** after arming. So an
+`@Interval` above 2147483647 ms is a silent hot loop rather than a long wait, which is
+why `@dunx/infra/schedule` rejects one at boot and points at `@Cron`. `Timer` objects
+carry `ref`, `unref` and `hasRef`.
 
 ### `Bun.serve` directory routes - `{ dir }`, new in 1.4
 

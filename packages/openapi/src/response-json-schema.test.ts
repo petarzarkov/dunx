@@ -2,25 +2,9 @@ import { describe, expect, it } from 'bun:test';
 import { Module } from '@dunx/core';
 import { Controller, Get } from '@dunx/http';
 import { describeRoutes } from './discover.js';
+import { info, operationOf } from './document.fixture.js';
 import { generateDocument } from './generate.js';
 import { danglingRefs } from './refs.js';
-import type {
-  OpenApiDocument,
-  OperationKey,
-  OperationObject,
-} from './types.js';
-
-const info = { title: 'Test API', version: '2.1.0' } as const;
-
-const operationOf = (
-  document: OpenApiDocument,
-  path: string,
-  method: OperationKey,
-): OperationObject => {
-  const operation = document.paths[path]?.[method];
-  if (operation === undefined) throw new Error(`no ${method} on ${path}`);
-  return operation;
-};
 
 /**
  * A JSON Schema needs no conversion, so `response` takes one directly. This is what

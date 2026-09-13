@@ -14,6 +14,7 @@ import {
 import type { RouteContext } from './context.js';
 import { HttpError } from './errors.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import { serving } from './serving.fixture.js';
 import type { Middleware, Next } from './middleware.js';
 import { buildRoutes } from './routes.js';
 import { HttpStatusCode } from './status.js';
@@ -135,18 +136,14 @@ class OrderController {
 @Module({ controllers: [ReportsController, OrderController] })
 class AppModule {}
 
-const withApp = async (
+const withApp = (
   run: (url: string, app: HttpApp) => Promise<void>,
   middleware: readonly Ctor<Middleware>[] = [AuthGuard],
-): Promise<void> => {
-  const app = await HttpFactory.create(AppModule, { middleware });
-  const url = await app.listen(0);
-  try {
-    await run(url, app);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> =>
+  serving(
+    () => HttpFactory.create(AppModule, { middleware }),
+    (app, url) => run(url, app),
+  );
 
 const call = (
   url: string,

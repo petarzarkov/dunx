@@ -3,33 +3,9 @@ import { Controller, Get, Post } from '../route/decorators.js';
 import type { Input, RouteSchemas } from '../route/schema.js';
 import { HttpError } from './errors.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import { serving } from './serving.fixture.js';
 
-/**
- * Captures both streams: warn and above go to stderr by design. One `console.log`
- * may carry several entries - `ConsoleLogger` batches everything at `info` and
- * below into one write per event-loop turn - so each call is split back apart.
- * `withApp` shuts the app down inside `run`, and that flushes what is pending.
- */
-export const captured = async (
-  run: () => Promise<void>,
-): Promise<Record<string, unknown>[]> => {
-  const lines: string[] = [];
-  const { log, error } = console;
-  const record = (...args: unknown[]): void => {
-    lines.push(...args.map(String).join(' ').split('\n'));
-  };
-  console.log = record;
-  console.error = record;
-  try {
-    await run();
-  } finally {
-    console.log = log;
-    console.error = error;
-  }
-  return lines
-    .filter((line) => line.startsWith('{'))
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-};
+export { consoleEntries as captured } from '../console.fixture.js';
 
 /**
  * A Standard Schema by hand, the way `input.test.ts` does it. `@dunx/http` depends
@@ -101,15 +77,8 @@ export const handlerLogger: { current: Logger | undefined } = {
 @Module({ controllers: [ThingsController] })
 class ThingsModule {}
 
-export const withApp = async (
+export const withApp = (
   run: (app: HttpApp, url: string) => Promise<void>,
   options: Parameters<typeof HttpFactory.create>[1] = {},
-): Promise<void> => {
-  const app = await HttpFactory.create(ThingsModule, options);
-  const url = await app.listen(0);
-  try {
-    await run(app, url);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> =>
+  serving(() => HttpFactory.create(ThingsModule, options), run);

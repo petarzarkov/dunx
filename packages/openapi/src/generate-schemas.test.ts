@@ -10,37 +10,15 @@ import {
 } from '@dunx/http';
 import { z } from 'zod';
 import { describeRoutes } from './discover.js';
+import { info, operationOf } from './document.fixture.js';
 import { generateDocument } from './generate.js';
 import { danglingRefs } from './refs.js';
-import type {
-  OpenApiDocument,
-  OperationKey,
-  OperationObject,
-} from './types.js';
 
 /**
  * Schemas the generator cannot translate literally: a vendor that is not zod, a
  * cycle whose root `$ref: "#"` has to be repointed, and two schemas claiming one
  * id. Whatever comes out still has to be a document with no dangling `$ref`.
  */
-
-const info = { title: 'Test API', version: '2.1.0' } as const;
-
-const operationOf = (
-  document: OpenApiDocument,
-  path: string,
-  method: OperationKey,
-): OperationObject => {
-  const item = document.paths[path];
-  if (item === undefined) {
-    throw new Error(
-      `no path ${path}; document has ${Object.keys(document.paths).join(', ')}`,
-    );
-  }
-  const operation = item[method];
-  if (operation === undefined) throw new Error(`no ${method} on ${path}`);
-  return operation;
-};
 
 describe('a vendor that is not zod', () => {
   const foreign: StandardSchemaV1 = {

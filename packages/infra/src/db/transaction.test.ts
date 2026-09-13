@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { eq, sql } from 'drizzle-orm';
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { rejection } from '../rejection.fixture.js';
 import type { SqliteConnection } from './sqlite/connection.js';
 import { SqliteOptions } from './sqlite/options.js';
 import { transaction } from './transaction.js';
@@ -18,16 +19,6 @@ type Schema = typeof schema;
  * The repo's rejection idiom: await the promise, keep the reason. `expect().rejects`
  * is typed as non-thenable by bun:test, which makes the assertion a lint warning.
  */
-const rejection = async (promise: Promise<unknown>): Promise<Error> => {
-  const error = await promise.then(
-    () => undefined,
-    (reason: unknown) => reason,
-  );
-  if (!(error instanceof Error))
-    throw new Error('expected the promise to reject with an Error');
-  return error;
-};
-
 let connection: SqliteConnection<Schema>;
 let db: BunSQLiteDatabase<Schema>;
 

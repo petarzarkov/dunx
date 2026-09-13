@@ -15,6 +15,7 @@
  * Run directly (`bun scripts/build-all.ts`) or through `bun run build`.
  */
 import { Glob } from 'bun';
+import { ROOT } from './workspace-ranges.js';
 
 interface Workspace {
   readonly name: string;
@@ -22,14 +23,12 @@ interface Workspace {
   readonly deps: readonly string[];
 }
 
-const root = new URL('..', import.meta.url).pathname;
-
 const manifests = async (): Promise<Workspace[]> => {
   const glob = new Glob('{packages,tools,internal,examples}/*/package.json');
   const found: Workspace[] = [];
 
-  for await (const rel of glob.scan({ cwd: root })) {
-    const file = Bun.file(`${root}${rel}`);
+  for await (const rel of glob.scan({ cwd: ROOT })) {
+    const file = Bun.file(`${ROOT}${rel}`);
     const json = (await file.json()) as {
       name?: string;
       scripts?: Record<string, string>;
@@ -42,7 +41,7 @@ const manifests = async (): Promise<Workspace[]> => {
     }
     found.push({
       name: json.name,
-      dir: `${root}${rel.slice(0, -'/package.json'.length)}`,
+      dir: `${ROOT}${rel.slice(0, -'/package.json'.length)}`,
       // Every kind of edge counts. A peer or dev edge still means "this
       // package's types must exist before mine compile".
       deps: [

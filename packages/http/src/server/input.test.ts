@@ -1,35 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { Module } from '@dunx/core';
 import { Controller, Get, Post, Put } from '../route/decorators.js';
-import type {
-  Input,
-  StandardSchemaResult,
-  StandardSchemaV1,
-} from '../route/schema.js';
+import type { Input } from '../route/schema.js';
 import { HttpError } from './errors.js';
+import { Note, field, schema } from './schema.fixture.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import { serving } from './serving.fixture.js';
 import { HttpStatusCode } from './status.js';
-
-/** A Standard Schema by hand - the point being that no dependency is involved. */
-const schema = <T>(
-  validate: (
-    value: unknown,
-  ) => StandardSchemaResult<T> | Promise<StandardSchemaResult<T>>,
-): StandardSchemaV1<unknown, T> => ({
-  '~standard': { version: 1, vendor: 'test', validate },
-});
-
-const field = (value: unknown, key: string): unknown =>
-  typeof value === 'object' && value !== null
-    ? (value as Record<string, unknown>)[key]
-    : undefined;
-
-const Note = schema<{ text: string }>((value) => {
-  const text = field(value, 'text');
-  return typeof text === 'string'
-    ? { value: { text } }
-    : { issues: [{ message: 'text must be a string', path: ['text'] }] };
-});
 
 // Valibot-shaped path segments - objects with a `key`, not bare keys.
 const Segmented = schema<{ text: string }>((value) => {
@@ -155,17 +132,9 @@ class NotesController {
 @Module({ controllers: [NotesController] })
 class AppModule {}
 
-const withApp = async (
+const withApp = (
   run: (app: HttpApp, url: string) => Promise<void>,
-): Promise<void> => {
-  const app = await HttpFactory.create(AppModule);
-  const url = await app.listen(0);
-  try {
-    await run(app, url);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> => serving(() => HttpFactory.create(AppModule), run);
 
 const json = (
   url: string,

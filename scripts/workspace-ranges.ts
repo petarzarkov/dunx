@@ -1,5 +1,13 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * The repository root, with a trailing slash. `fileURLToPath` rather than
+ * `.pathname`, which leaves a space in a checkout path as `%20`. The slash is
+ * load-bearing: several callers concatenate onto it instead of calling `join`.
+ */
+export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /**
  * What a `workspace:` range becomes in a published tarball, and the assertion that
@@ -31,10 +39,25 @@ export const DEPENDENCY_FIELDS = [
  */
 export const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 
+/** An `exports` target: the bare path, or the conditions object holding one. */
+export interface ExportEntry {
+  import?: string;
+}
+
+/** A parsed `package.json`. Named fields are optional; the rest is `unknown`. */
 export interface Manifest {
   name?: string;
+  version?: string;
+  description?: string;
+  type?: string;
+  private?: boolean;
+  exports?: Record<string, string | ExportEntry>;
+  bin?: string | Record<string, string>;
   [field: string]: unknown;
 }
+
+/** A manifest read from a workspace directory, where both fields are present. */
+export type WorkspaceManifest = Manifest & { name: string; version: string };
 
 export const isWorkspaceRange = (range: string): boolean =>
   range.startsWith(WORKSPACE_PROTOCOL);
@@ -150,8 +173,8 @@ export const readWorkspaceVersions = (
       const pkgJsonPath = join(packagesDir, entry.name, 'package.json');
       if (!existsSync(pkgJsonPath)) continue;
       const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')) as Manifest;
-      if (typeof pkg.name === 'string' && typeof pkg['version'] === 'string') {
-        versions.set(pkg.name, pkg['version']);
+      if (typeof pkg.name === 'string' && typeof pkg.version === 'string') {
+        versions.set(pkg.name, pkg.version);
       }
     }
   }

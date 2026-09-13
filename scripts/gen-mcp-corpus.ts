@@ -16,12 +16,12 @@
  * describe a template that stopped working.
  */
 import { join, posix } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { FEATURES } from '../tools/create-app/src/features.js';
 import { DEV_TOOLCHAIN } from '../tools/create-app/src/generate.js';
 import { BOOT_RULES } from '../tools/create-app/src/rules.js';
 import type { BootRule as CreateAppBootRule } from '../tools/create-app/src/rules.js';
 import { summaryOf } from './guide-summary.js';
+import { ROOT } from './workspace-ranges.js';
 import type { GuideDoc } from '../tools/mcp/src/guide.js';
 import { VERSION_PLACEHOLDER } from '../tools/mcp/src/scaffold.js';
 import type {
@@ -31,9 +31,6 @@ import type {
   StarterFile,
 } from '../tools/mcp/src/scaffold.js';
 
-// `fileURLToPath` rather than `.pathname`, which leaves a space as `%20` and
-// makes every read below fail on a checkout path that has one.
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BLOB = 'https://github.com/petarzarkov/dunx/blob/main';
 /** Where a chapter's own relative links resolve from. */
 const GUIDE_DIR = 'docs/guide';

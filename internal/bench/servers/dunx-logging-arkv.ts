@@ -1,17 +1,3 @@
-import { Module } from '@dunx/core';
-import { LoggerModule } from '@dunx/infra/logger';
-import {
-  Controller,
-  Get,
-  HttpFactory,
-  type Input,
-  Post,
-  type RouteSchemas,
-} from '@dunx/http';
-import { connectBunIo, readBunIo } from './io/bun.js';
-import { type IoPayload, ioEnabled } from './io/contract.js';
-import { echo, jsonPayload, personSchema, PLAINTEXT, port } from './shared.js';
-
 /**
  * `dunx-logging`, with `@arkv/logger` bound instead of core's `ConsoleLogger`.
  *
@@ -30,55 +16,11 @@ import { echo, jsonPayload, personSchema, PLAINTEXT, port } from './shared.js';
  * `isDevelopment: false` so the entry is JSON rather than the coloured rendering,
  * matching what `dunx-logging` writes and what a container runs.
  */
-class Greeter {
-  text(): string {
-    return PLAINTEXT;
-  }
-
-  payload(): { message: string } {
-    return jsonPayload();
-  }
-}
-
-const plain = {} as const satisfies RouteSchemas;
-const declared = { status: 200 } as const satisfies RouteSchemas;
-const validate = {
-  body: personSchema,
-  status: 200,
-} as const satisfies RouteSchemas;
-
-@Controller()
-class BenchController {
-  constructor(private readonly greeter: Greeter) {}
-
-  @Get('/plaintext')
-  plaintext(): Response {
-    return new Response(this.greeter.text());
-  }
-
-  @Get('/json')
-  json(): { message: string } {
-    return this.greeter.payload();
-  }
-
-  @Get('/params/:id', plain)
-  params(input: Input<typeof plain>): { id: string | undefined } {
-    return { id: input.req.params['id'] };
-  }
-
-  @Post('/validate', validate)
-  validate(input: Input<typeof validate>): { name: string; age: number } {
-    return echo(input.body);
-  }
-
-  // A declared route rather than a conditional one: a controller's routes are read
-  // off the class at boot. `readBunIo` throws unless the harness enabled the
-  // scenario, and only the `io` scenario asks for this path.
-  @Get('/io', declared)
-  io(): Promise<IoPayload> {
-    return readBunIo();
-  }
-}
+import { Module } from '@dunx/core';
+import { HttpFactory } from '@dunx/http';
+import { LoggerModule } from '@dunx/infra/logger';
+import { BenchController, connectIo, Greeter } from './dunx-app.js';
+import { port } from './shared.js';
 
 @Module({
   imports: [LoggerModule.forRoot({ isDevelopment: false })],
@@ -87,7 +29,7 @@ class BenchController {
 })
 class AppModule {}
 
-if (ioEnabled()) await connectBunIo();
+await connectIo();
 
 const app = await HttpFactory.create(AppModule, { port: port() });
 await app.listen();

@@ -1,66 +1,15 @@
 import { describe, expect, it } from 'bun:test';
-import { Module } from '@dunx/core';
-import { HttpFactory, type HttpApp } from '../server/factory.js';
-import { Gateway, OnOpen } from './decorators.js';
+import { HttpFactory } from '../server/factory.js';
 import { PubSub } from './pubsub.js';
 import { decodeRelay, encodeRelay, type PubSubRelay } from './relay.js';
-import type { Socket } from './socket.js';
-
-const TOPIC = 'lobby';
-
-@Gateway('/live')
-class LiveGateway {
-  @OnOpen()
-  opened(socket: Socket): void {
-    socket.subscribe(TOPIC);
-    socket.send('ready');
-  }
-}
-
-@Module({ providers: [LiveGateway] })
-class AppModule {}
-
-/** A client that keeps every frame, so a *second* delivery is visible. */
-interface Client {
-  readonly frames: string[];
-  close(): void;
-}
-
-const open = async (base: string): Promise<Client> => {
-  const socket = new WebSocket(
-    new URL('/live', base).href.replace(/^http/, 'ws'),
-  );
-  const frames: string[] = [];
-  socket.addEventListener('message', (event: MessageEvent) => {
-    frames.push(String(event.data));
-  });
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error('the socket never opened')),
-      2000,
-    );
-    socket.addEventListener(
-      'open',
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
-  });
-  // 'ready' is sent from @OnOpen and would otherwise be counted as a delivery.
-  await until(() => frames.length === 1);
-  frames.length = 0;
-  return { frames, close: () => socket.close() };
-};
-
-const until = async (done: () => boolean, ms = 2000): Promise<void> => {
-  const deadline = Date.now() + ms;
-  while (!done()) {
-    if (Date.now() > deadline) throw new Error('timed out');
-    await Bun.sleep(5);
-  }
-};
+import {
+  AppModule,
+  TOPIC,
+  open,
+  stop,
+  twoNodes,
+  until,
+} from './relay.fixture.js';
 
 /**
  * An in-memory stand-in for Redis with the behaviour that matters: a publish is
@@ -87,29 +36,6 @@ class Bus {
     };
   }
 }
-
-const twoNodes = async (
-  relayA: PubSubRelay,
-  relayB: PubSubRelay,
-  channel: string,
-): Promise<{ apps: HttpApp[]; urls: string[] }> => {
-  const apps: HttpApp[] = [];
-  const urls: string[] = [];
-  for (const relay of [relayA, relayB]) {
-    const app = await HttpFactory.create(AppModule, {
-      requestLogging: false,
-      relay,
-      relayChannel: channel,
-    });
-    urls.push(await app.listen(0));
-    apps.push(app);
-  }
-  return { apps, urls };
-};
-
-const stop = async (apps: readonly HttpApp[]): Promise<void> => {
-  for (const app of apps) await app.shutdown();
-};
 
 describe('the relay frame', () => {
   it('round-trips a text payload with its origin and topic', () => {

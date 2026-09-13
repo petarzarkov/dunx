@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { rejection, rejectionMessage } from '../rejection.fixture.js';
 import { AppFactory } from './app.js';
 import { CircularDependencyError, AppError } from './errors.js';
 import { inject } from './inject.js';
@@ -7,19 +8,6 @@ import { provide } from './provider.js';
 import { token } from './token.js';
 
 const DsnToken = token<string>('Dsn');
-
-const rejection = (promise: Promise<unknown>): Promise<unknown> =>
-  promise.then(
-    () => undefined,
-    (reason: unknown) => reason,
-  );
-
-const rejectionMessage = async (promise: Promise<unknown>): Promise<string> => {
-  const error = await rejection(promise);
-  if (!(error instanceof Error))
-    throw new Error('expected the promise to reject with an Error');
-  return error.message;
-};
 
 class Config {
   readonly url = 'db://one';

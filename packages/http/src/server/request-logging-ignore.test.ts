@@ -2,6 +2,8 @@ import { describe, expect, it } from 'bun:test';
 import { Module } from '@dunx/core';
 import { Controller, Get } from '../route/decorators.js';
 import { HttpFactory } from './factory.js';
+import { serving } from './serving.fixture.js';
+import { captured } from './request-logging.fixture.test.js';
 
 /**
  * `ignorePrefix` in its own file: `request-logging.test.ts` is at the 500-line
@@ -18,44 +20,14 @@ class AnythingController {
 @Module({ controllers: [AnythingController] })
 class AnythingModule {}
 
-/**
- * One `console.log` may carry several entries - `ConsoleLogger` batches
- * everything at `info` and below into one write per event-loop turn - so each
- * call is split back apart. Shutdown happens inside `run`, which flushes.
- */
-const captured = async (
-  run: () => Promise<void>,
-): Promise<Record<string, unknown>[]> => {
-  const lines: string[] = [];
-  const { log, error } = console;
-  const record = (...args: unknown[]): void => {
-    lines.push(...args.map(String).join(' ').split('\n'));
-  };
-  console.log = record;
-  console.error = record;
-  try {
-    await run();
-  } finally {
-    console.log = log;
-    console.error = error;
-  }
-  return lines
-    .filter((line) => line.startsWith('{'))
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-};
-
-const withApp = async (
+const withApp = (
   run: (url: string) => Promise<void>,
   options: Parameters<typeof HttpFactory.create>[1] = {},
-): Promise<void> => {
-  const app = await HttpFactory.create(AnythingModule, options);
-  const url = await app.listen(0);
-  try {
-    await run(url);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> =>
+  serving(
+    () => HttpFactory.create(AnythingModule, options),
+    (_app, url) => run(url),
+  );
 
 describe('ignorePrefix', () => {
   /** Request entries only: `bootLogging` writes one "Serving N route(s)" line. */

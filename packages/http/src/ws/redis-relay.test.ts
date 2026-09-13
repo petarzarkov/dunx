@@ -2,15 +2,16 @@ import { describe, expect, it } from 'bun:test';
 import { PubSub } from './pubsub.js';
 import { RedisRelay } from './redis-relay.js';
 import {
-  open,
-  released,
-  stop,
+  AppModule,
   TOPIC,
+  deliversOncePerSubscriber,
+  open,
+  opened,
+  released,
+  socketFor,
+  stop,
   twoNodes,
   until,
-  AppModule,
-  socketFor,
-  opened,
 } from './relay.fixture.js';
 import { HttpFactory } from '../server/factory.js';
 
@@ -116,44 +117,11 @@ describe.skipIf(!HAS_REDIS)('two nodes over real Redis', () => {
   it('delivers a publish exactly once per subscriber across both nodes', async () => {
     // A channel per run, so a leftover subscriber or a concurrent run cannot
     // deliver into this test.
-    const channel = `dunx:test:${Bun.randomUUIDv7()}`;
-    const { apps, urls } = await twoNodes(
-      new RedisRelay({ url: RELAY_URL }),
-      new RedisRelay({ url: RELAY_URL }),
-      channel,
+    await deliversOncePerSubscriber(
+      () => new RedisRelay({ url: RELAY_URL }),
+      `dunx:test:${Bun.randomUUIDv7()}`,
+      'over redis',
     );
-    const [first, second] = apps;
-    const [urlA, urlB] = urls;
-    if (!first || !second || !urlA || !urlB)
-      throw new Error('two nodes expected');
-
-    try {
-      const [ada, grace] = await Promise.all([open(urlA), open(urlB)]);
-      if (!ada || !grace) throw new Error('clients expected');
-
-      first.get(PubSub).publishEvent(TOPIC, 'said', 'over redis');
-      const expected = JSON.stringify({ event: 'said', data: 'over redis' });
-
-      await until(() => grace.frames.length > 0);
-      await Bun.sleep(250);
-      expect(ada.frames).toEqual([expected]);
-      expect(grace.frames).toEqual([expected]);
-
-      // And the other direction, on the same channel.
-      ada.frames.length = 0;
-      grace.frames.length = 0;
-      second.get(PubSub).publishEvent(TOPIC, 'said', 'and back');
-      const back = JSON.stringify({ event: 'said', data: 'and back' });
-      await until(() => ada.frames.length > 0);
-      await Bun.sleep(250);
-      expect(ada.frames).toEqual([back]);
-      expect(grace.frames).toEqual([back]);
-
-      ada.close();
-      grace.close();
-    } finally {
-      await stop(apps);
-    }
   });
 
   it('relays a binary frame', async () => {

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 // Imported from source, not dist: this script is what builds @dunx/transform, so
 // depending on its output would not bootstrap.
 import { depsPlugin } from '../packages/transform/src/plugin.js';
+import type { Manifest } from './workspace-ranges.js';
 
 /**
  * Bun-native package build. Run from a package root: `bun ../../scripts/build-package.ts`.
@@ -16,17 +17,6 @@ import { depsPlugin } from '../packages/transform/src/plugin.js';
  */
 
 const CWD = process.cwd();
-
-interface ExportEntry {
-  import?: string;
-}
-
-interface Manifest {
-  name?: string;
-  type?: string;
-  exports?: Record<string, string | ExportEntry>;
-  bin?: string | Record<string, string>;
-}
 
 const pkg = (await Bun.file(join(CWD, 'package.json')).json()) as Manifest;
 

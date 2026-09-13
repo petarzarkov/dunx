@@ -9,6 +9,7 @@ import {
 import { Controller, Get } from '../route/decorators.js';
 import { HttpError } from './errors.js';
 import { HttpFactory, type HttpApp } from './factory.js';
+import { serving } from './serving.fixture.js';
 import {
   MetricsMiddleware,
   RequestMetrics,
@@ -173,18 +174,10 @@ const quiet = provide(Logger, {
 @Module({ controllers: [ThingsController], providers: [quiet] })
 class AppModule {}
 
-const withApp = async (
+const withApp = (
   options: Parameters<typeof HttpFactory.create>[1],
   run: (app: HttpApp, url: string) => Promise<void>,
-): Promise<void> => {
-  const app = await HttpFactory.create(AppModule, options);
-  const url = await app.listen(0);
-  try {
-    await run(app, url);
-  } finally {
-    await app.shutdown();
-  }
-};
+): Promise<void> => serving(() => HttpFactory.create(AppModule, options), run);
 
 describe('metrics against a real server', () => {
   it('records nothing at all unless metrics: true', async () => {

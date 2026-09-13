@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { Glob } from 'bun';
+import { ROOT } from './workspace-ranges.js';
 
 /**
  * Things `npm publish` silently "auto-corrects" rather than rejecting. The
@@ -23,11 +24,10 @@ import { Glob } from 'bun';
 const manifests = async (): Promise<
   { name: string; dir: string; json: Record<string, unknown> }[]
 > => {
-  const repo = new URL('..', import.meta.url).pathname;
   const found: { name: string; dir: string; json: Record<string, unknown> }[] =
     [];
   for (const parent of ['packages', 'tools']) {
-    const root = `${repo}${parent}`;
+    const root = `${ROOT}${parent}`;
     for await (const rel of new Glob('*/package.json').scan({ cwd: root })) {
       const json = (await Bun.file(`${root}/${rel}`).json()) as Record<
         string,
@@ -74,8 +74,7 @@ describe('published manifests survive npm publish unaltered', () => {
    * file shipped beside it is the one licence bug that actually misleads someone.
    */
   it('declares the licence the LICENSE file actually is', async () => {
-    const root = new URL('..', import.meta.url).pathname;
-    const licence = await Bun.file(`${root}/LICENSE`).text();
+    const licence = await Bun.file(`${ROOT}LICENSE`).text();
     expect(licence).toContain('MIT License');
 
     for (const { name, json } of await manifests()) {
@@ -84,8 +83,7 @@ describe('published manifests survive npm publish unaltered', () => {
   });
 
   it('ships an identical LICENSE beside every published package', async () => {
-    const root = new URL('..', import.meta.url).pathname;
-    const licence = await Bun.file(`${root}/LICENSE`).text();
+    const licence = await Bun.file(`${ROOT}LICENSE`).text();
 
     for (const { name, dir } of await manifests()) {
       const shipped = await Bun.file(`${dir}/LICENSE`).text();

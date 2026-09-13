@@ -1,5 +1,6 @@
 import { AppFactory, inject, Module, provide, token } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
+import { rejectionMessage } from '../rejection.fixture.js';
 import { Redis } from './client.js';
 import { RedisConnection } from './connection.js';
 import { RedisError, RedisErrorCode } from './errors.js';
@@ -9,16 +10,6 @@ import { defaultRedisUrl, RedisOptions } from './options.js';
 // Nothing here needs a server: Bun.RedisClient connects lazily, so a container
 // can be built and torn down against an address that is never dialled.
 const unreachable = 'redis://127.0.0.1:6399';
-
-const rejectionMessage = async (promise: Promise<unknown>): Promise<string> => {
-  const error = await promise.then(
-    () => undefined,
-    (reason: unknown) => reason,
-  );
-  if (!(error instanceof Error))
-    throw new Error('expected the promise to reject with an Error');
-  return error.message;
-};
 
 describe('RedisModule.forRoot', () => {
   it('binds RedisConnection and RedisOptions', async () => {

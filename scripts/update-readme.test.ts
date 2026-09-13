@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-
-const REPO = new URL('..', import.meta.url).pathname;
+import { ROOT } from './workspace-ranges.js';
 
 const run = async (
   args: readonly string[] = [],
 ): Promise<{ code: number; out: string }> => {
   const proc = Bun.spawn(['bun', 'scripts/update-readme.ts', ...args], {
-    cwd: REPO,
+    cwd: ROOT,
     stdout: 'pipe',
     stderr: 'pipe',
   });
@@ -59,7 +58,7 @@ describe('gen:readme', () => {
    * usable in CI - the whole reason the original breakage went unnoticed.
    */
   it('fails --check on a stale block, and leaves the file alone', async () => {
-    const path = `${REPO}README.md`;
+    const path = `${ROOT}README.md`;
     const original = await Bun.file(path).text();
     const marker = '| Package | Npm | Coverage | Description |';
     expect(original).toContain(marker);
@@ -81,7 +80,7 @@ describe('gen:readme', () => {
   });
 
   it('regenerates a stale block and reports which file it touched', async () => {
-    const path = `${REPO}README.md`;
+    const path = `${ROOT}README.md`;
     const original = await Bun.file(path).text();
     await Bun.write(
       path,
@@ -105,7 +104,7 @@ describe('gen:readme', () => {
    * have turned the abort into a silent pass.
    */
   it('still aborts when a section heading is genuinely absent', async () => {
-    const path = `${REPO}CONTRIBUTING.md`;
+    const path = `${ROOT}CONTRIBUTING.md`;
     const original = await Bun.file(path).text();
     await Bun.write(
       path,
@@ -125,8 +124,8 @@ describe('gen:readme', () => {
    * the repo half-regenerated. Both files are resolved before either is written.
    */
   it('writes nothing at all when the other file is unusable', async () => {
-    const readmePath = `${REPO}README.md`;
-    const contributingPath = `${REPO}CONTRIBUTING.md`;
+    const readmePath = `${ROOT}README.md`;
+    const contributingPath = `${ROOT}CONTRIBUTING.md`;
     const readme = await Bun.file(readmePath).text();
     const contributing = await Bun.file(contributingPath).text();
 
@@ -162,7 +161,7 @@ describe('gen:readme', () => {
  * message brokers landed. Spelled out in words, which is why nothing caught them.
  */
 describe('the counts the README states', () => {
-  const readme = Bun.file(`${REPO}README.md`).text();
+  const readme = Bun.file(`${ROOT}README.md`).text();
 
   /** Only as far as the numbers this file actually uses. */
   const WORDS: Readonly<Record<string, number>> = Object.freeze({
@@ -197,7 +196,7 @@ describe('the counts the README states', () => {
 
   it('counts the demo panels the live demo drives', async () => {
     const page = await Bun.file(
-      `${REPO}examples/full/src/landing/public/index.html`,
+      `${ROOT}examples/full/src/landing/public/index.html`,
     ).text();
     const panels = [...page.matchAll(/<section\b/g)].length;
 
@@ -207,7 +206,7 @@ describe('the counts the README states', () => {
   });
 
   it('counts the guide pages the site publishes', async () => {
-    const guides = [...new Bun.Glob('*.md').scanSync(`${REPO}docs/guide`)]
+    const guides = [...new Bun.Glob('*.md').scanSync(`${ROOT}docs/guide`)]
       .length;
 
     expect(await stated(/dunx\.win\)\*\* - ([a-z-]+) pages/)).toBe(guides);
@@ -217,7 +216,7 @@ describe('the counts the README states', () => {
    * guide that came after it. */
   it('names the last guide as the end of the range', async () => {
     const slugs = [
-      ...new Bun.Glob('*.md').scanSync(`${REPO}docs/guide`),
+      ...new Bun.Glob('*.md').scanSync(`${ROOT}docs/guide`),
     ].sort();
     const last = slugs.at(-1)?.replace(/^\d+-/, '').replace(/\.md$/, '');
 

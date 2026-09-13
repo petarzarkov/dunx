@@ -3,19 +3,12 @@
  * `results/validation.json`. Called by `src/readme-tables.ts`; returns `null` when
  * no validation run has been recorded, so a checkout without one still builds.
  */
+import { int, micros, signed } from './format.js';
 import { resultsDir } from './paths.js';
 import type { ValidationReport, ValidationUnit } from './types.js';
 
-const int = (value: number): string =>
-  Math.round(value).toLocaleString('en-US');
-
-/** Throughput is the measurement; microseconds per request is what adds up. */
-const micros = (rps: number): number => 1_000_000 / rps;
-
-const delta = (from: number, to: number): string => {
-  const added = micros(to) - micros(from);
-  return `${added >= 0 ? '+' : '−'}${Math.abs(added).toFixed(2)} µs`;
-};
+const delta = (from: number, to: number): string =>
+  signed(micros(to) - micros(from), 2, ' µs');
 
 const find = (
   report: ValidationReport,

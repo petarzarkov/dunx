@@ -168,7 +168,7 @@ dunx/
 ├── tools/              # Published CLIs - the scaffolder and the MCP server
 │   ├── create-app      # Scaffold a new dunx application - bunx @dunx/create-app my-api
 │   └── mcp             # A Model Context Protocol server for dunx: the written guide and scaffold catalogue with no app, plus your routes, providers and modules once you point it at one
-├── internal/           # Private workspaces, never published - docs site, benchmarks, API explorer, shared UI
+├── internal/           # Private workspaces, never published - docs site, benchmarks, shared UI
 ├── examples/           # Private apps that consume the packages
 ├── docs/               # Architecture and design docs
 ├── scripts/            # Monorepo-level scripts
@@ -453,7 +453,7 @@ root and `[test]`, a `tsconfig.json` extending the root, a `typecheck` script,
 and a `test` script with at least one test in it, because `--filter` skips
 workspaces that lack the script and does not say so.
 
-Before adding a fifth example, read the Phase 1 section of ROADMAP.md, which
+Before adding a fifth example, read "The example ladder" in ROADMAP.md, which
 records which candidates were already rejected. Per-package examples were tried and
 reverted, and that reversal holds.
 

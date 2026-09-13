@@ -1,40 +1,14 @@
 import { AppFactory, type App } from '@dunx/core';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { RedisConnection } from './connection.js';
+import { redisReachable } from '../reachable.fixture.js';
 import { isServerError, RedisError, RedisErrorCode } from './errors.js';
 import { RedisModule } from './module.js';
 import { defaultRedisUrl } from './options.js';
 
 const url = defaultRedisUrl();
 
-/**
- * CI has no Redis, so the whole suite is conditional. The probe uses its own
- * short-lived client with retries off, otherwise an unreachable host would sit in
- * the offline queue for the default ten seconds.
- *
- * `connect()` is explicit because with the offline queue disabled there is nothing
- * to hold a lazily issued command during the handshake, and even a healthy server
- * would report itself unreachable.
- */
-const reachable = async (): Promise<boolean> => {
-  const client = new Bun.RedisClient(url, {
-    connectionTimeout: 500,
-    autoReconnect: false,
-    enableOfflineQueue: false,
-    maxRetries: 0,
-  });
-  try {
-    await client.connect();
-    await client.ping();
-    return true;
-  } catch {
-    return false;
-  } finally {
-    client.close();
-  }
-};
-
-const live = await reachable();
+const live = await redisReachable(url);
 if (!live) {
   console.log(`[dunx] redis integration tests skipped - ${url} unreachable`);
 }

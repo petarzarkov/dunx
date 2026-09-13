@@ -41,15 +41,6 @@ export interface IconProps {
   readonly className?: string;
 }
 
-export const LockIcon = ({ size = 16 }: IconProps): JSX.Element =>
-  svg(
-    <>
-      <rect x="4" y="10" width="16" height="10" rx="2" />
-      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-    </>,
-    size,
-  );
-
 export const SunIcon = ({ size = 18, className }: IconProps): JSX.Element =>
   svg(
     <>
@@ -92,44 +83,6 @@ export const SearchIcon = ({ size = 16 }: IconProps): JSX.Element =>
     size,
   );
 
-export const RetryIcon = ({ size = 16 }: IconProps): JSX.Element =>
-  svg(
-    <>
-      <path d="M4 12a8 8 0 1 1 2.6 5.9" />
-      <path d="M4 6v4.5h4.5" />
-    </>,
-    size,
-  );
-
-export const TrashIcon = ({ size = 16 }: IconProps): JSX.Element =>
-  svg(
-    <>
-      <path d="M4 7h16" />
-      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-      <path d="M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12" />
-    </>,
-    size,
-  );
-
-export const ClockIcon = ({ size = 16 }: IconProps): JSX.Element =>
-  svg(
-    <>
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 7.5V12l3 2" />
-    </>,
-    size,
-  );
-
-export const PlugIcon = ({ size = 16 }: IconProps): JSX.Element =>
-  svg(
-    <>
-      <path d="M9 3v5M15 3v5" />
-      <path d="M6 8h12v3a6 6 0 0 1-12 0z" />
-      <path d="M12 17v4" />
-    </>,
-    size,
-  );
-
 export const BoxIcon = ({ size = 16 }: IconProps): JSX.Element =>
   svg(
     <>
@@ -165,15 +118,6 @@ export const DatabaseIcon = ({ size = 16 }: IconProps): JSX.Element =>
       <ellipse cx="12" cy="6" rx="7.5" ry="3" />
       <path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6" />
       <path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3" />
-    </>,
-    size,
-  );
-
-export const AlertIcon = ({ size = 16 }: IconProps): JSX.Element =>
-  svg(
-    <>
-      <path d="M12 4.5 21 19.5H3z" />
-      <path d="M12 10v4M12 17h.01" />
     </>,
     size,
   );

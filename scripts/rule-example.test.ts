@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { Glob } from 'bun';
 import { publishedWorkspaces, specifiersIn, subpathsOf } from './published.js';
+import { ROOT } from './workspace-ranges.js';
 
 /**
  * Rule 4, as a gate. A capability with no example has no test that its public
@@ -27,8 +28,7 @@ const UNREACHABLE: Readonly<Record<string, string>> = Object.freeze({
 });
 
 const reachedByExample = async (): Promise<Set<string>> => {
-  const root = new URL('..', import.meta.url).pathname;
-  const base = `${root}${EXAMPLE}`;
+  const base = `${ROOT}${EXAMPLE}`;
   const reached = new Set<string>();
 
   for await (const rel of new Glob('**/*.ts').scan({ cwd: base })) {

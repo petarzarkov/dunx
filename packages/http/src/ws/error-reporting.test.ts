@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { Module } from '@dunx/core';
 import { HttpFactory } from '../server/factory.js';
+import { consoleLines } from '../console.fixture.js';
 import { buildWebSocket } from './adapter.js';
 import { Gateway, OnMessage } from './decorators.js';
 import { discoverGateway, type DiscoveredGateway } from './discover.js';
@@ -40,23 +41,6 @@ class Reporter implements SocketMiddleware {
 @Module({ providers: [Chat, Silent] })
 class ChatModule {}
 
-const captured = async (run: () => Promise<void>): Promise<string[]> => {
-  const lines: string[] = [];
-  const { log, error } = console;
-  const record = (...args: unknown[]): void => {
-    lines.push(...args.map(String).join(' ').split('\n'));
-  };
-  console.log = record;
-  console.error = record;
-  try {
-    await run();
-  } finally {
-    console.log = log;
-    console.error = error;
-  }
-  return lines;
-};
-
 const messageOf = (line: string): unknown =>
   line.startsWith('{')
     ? (JSON.parse(line) as { message?: unknown }).message
@@ -74,7 +58,7 @@ const booted = async (
   options: Options,
   run: (url: string) => Promise<void> = async () => undefined,
 ): Promise<string[]> =>
-  captured(async () => {
+  consoleLines(async () => {
     const app = await HttpFactory.create(ChatModule, {
       bootLogging: false,
       ...options,
