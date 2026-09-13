@@ -53,7 +53,6 @@ export interface AppIndicatorsInit {
   readonly db: DbConnection;
   readonly redis: RedisConnection;
   readonly ledger: Ledger;
-  /** The configured backend, which is local here and S3 in `examples/binary`. */
   readonly storage: Storage;
   /** Where uploads land, so a full disk here is a real failure. */
   readonly uploadRoot: string;
@@ -75,7 +74,6 @@ export class AppIndicators {
       new DatabaseIndicator(init.db),
       new LedgerIndicator(init.ledger),
       new CacheIndicator(init.redis),
-      // This asks whether the store replies, `DiskIndicator` how full the volume
       new StorageIndicator(init.storage),
       new DiskIndicator(
         new DiskOptions({ path: init.uploadRoot, maxUsedFraction: 0.95 }),

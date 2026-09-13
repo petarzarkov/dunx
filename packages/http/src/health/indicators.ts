@@ -55,7 +55,6 @@ export interface StorageProbeOptionsInit {
   readonly key?: string;
 }
 
-/** Named for the probe: `@dunx/infra/files` exports a `StorageOptions` too. */
 export class StorageProbeOptions {
   readonly key: string;
 

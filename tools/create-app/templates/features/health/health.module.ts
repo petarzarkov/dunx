@@ -21,8 +21,7 @@ import { AppIndicators, BrokerIndicator } from './indicators.js';
 @Module({
   // `StorageModule` over `WorkspaceModule`: it exports `Workspace` and `Storage`.
   // No `MessagingModule`, though the broker is probed: it sets `consume: true`,
-  // and `OpsModule` takes `AppIndicators` without wanting a consumer, so
-  // `ProbesModule` imports it instead.
+  // and `OpsModule` takes `AppIndicators` without wanting a consumer.
   imports: [DatabaseModule, CacheModule, StorageModule],
   providers: [
     provide(AppIndicators, {
