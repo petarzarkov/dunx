@@ -1,0 +1,113 @@
+#!/usr/bin/env bun
+import { resolve } from 'node:path';
+import type { Server } from 'bun';
+import { EmailPreview } from './preview.js';
+import { TemplateRenderer } from './renderer.js';
+
+const USAGE = `dunx-email - preview and export email templates
+
+  dunx-email preview [dir]   serve the templates in <dir>, default ./emails
+  dunx-email export  [dir]   render every template to HTML
+
+Options
+  --port <n>        preview port, default 3035
+  --out <dir>       export target, default ./out
+  --renderer <mod>  module exporting a TemplateRenderer as its default export,
+                    default @dunx/infra/email/react
+`;
+
+export interface Plan {
+  readonly command: 'preview' | 'export';
+  readonly dir: string;
+  readonly out: string;
+  readonly port: number;
+  readonly renderer: string;
+}
+
+const DEFAULT_RENDERER = '@dunx/infra/email/react';
+
+/**
+ * Argv to a plan, or a message to print. Separate from running it so the parsing
+ * is testable without a port and without the React peers installed.
+ */
+export const plan = (argv: readonly string[]): Plan | string => {
+  const [command = 'preview'] = argv;
+  if (command === '--help' || command === '-h') return USAGE;
+  if (command !== 'preview' && command !== 'export') {
+    return `Unknown command "${command}".\n\n${USAGE}`;
+  }
+  const rest = argv.slice(1);
+  const positional = rest.filter((a) => !a.startsWith('--'));
+  const flag = (name: string): string | undefined => {
+    const at = rest.indexOf(`--${name}`);
+    return at === -1 ? undefined : rest[at + 1];
+  };
+  const port = Number(flag('port') ?? 3035);
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+    return `--port must be a port number, got "${String(flag('port'))}".`;
+  }
+  return {
+    command,
+    dir: resolve(positional[0] ?? 'emails'),
+    out: resolve(flag('out') ?? 'out'),
+    port,
+    renderer: flag('renderer') ?? DEFAULT_RENDERER,
+  };
+};
+
+/**
+ * The renderer named by `--renderer`, as its default export.
+ *
+ * Loaded rather than imported, so the base subpath stays free of React: an app
+ * previewing MJML points this at its own module and never installs
+ * `@react-email/components`.
+ */
+export const loadRenderer = async (
+  specifier: string,
+): Promise<TemplateRenderer> => {
+  const module = (await import(specifier)) as { default?: unknown };
+  const loaded = module.default;
+  if (!(loaded instanceof TemplateRenderer)) {
+    throw new Error(
+      `${specifier} must default-export a TemplateRenderer instance.`,
+    );
+  }
+  return loaded;
+};
+
+export interface Started {
+  readonly code: number;
+  /** Present for `preview`, so a caller that is not the shell can stop it. */
+  readonly server?: Server<never>;
+}
+
+export const main = async (argv: readonly string[]): Promise<Started> => {
+  const parsed = plan(argv);
+  if (typeof parsed === 'string') {
+    if (parsed === USAGE) {
+      console.log(parsed);
+      return { code: 0 };
+    }
+    console.error(parsed);
+    return { code: 1 };
+  }
+  const preview = new EmailPreview({
+    dir: parsed.dir,
+    renderer: await loadRenderer(parsed.renderer),
+    port: parsed.port,
+  });
+  if (parsed.command === 'export') {
+    for (const file of await preview.export(parsed.out)) console.log(file);
+    return { code: 0 };
+  }
+  const server = preview.serve();
+  console.log(`Email preview on ${server.url.href}`);
+  return { code: 0, server };
+};
+
+// Only a failure exits. `preview` must not: `Bun.serve` is what holds the loop
+// open, and `export` ends on its own once the writes drain.
+if (import.meta.main) {
+  const { code } = await main(Bun.argv.slice(2));
+  if (code !== 0) process.exit(code);
+}

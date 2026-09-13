@@ -14,6 +14,7 @@ import { StatsDemo } from '../stats/stats.demo.js';
 import { Ledger } from '../database/ledger.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
 import { EventsDemo } from '../events/events.demo.js';
+import { MailDemo } from '../email/email.demo.js';
 import { ReferenceDemo } from '../reference/reference.demo.js';
 import { AssetsDemo } from '../assets/assets.demo.js';
 import { GuardsDemo } from '../guards/guards.demo.js';
@@ -41,6 +42,7 @@ export class Tour {
     private readonly ledger: Ledger,
     private readonly uploads: Uploads,
     private readonly thumbnails: Thumbnails,
+    private readonly mail: MailDemo,
     private readonly sessions: Sessions,
     private readonly catalog: CatalogDemo,
     private readonly users: UsersDemo,
@@ -81,6 +83,9 @@ export class Tour {
 
     this.group('@dunx/infra/images - Bun.Image');
     await this.thumbnails.demonstrate();
+
+    this.group('@dunx/infra/email - a transport seam and React Email');
+    await this.mail.demonstrate();
 
     this.group('@dunx/infra/redis - Bun.RedisClient');
     await this.sessions.demonstrate();

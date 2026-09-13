@@ -35,6 +35,7 @@ import { LimitsModule } from './throttle/throttle.module.js';
 import { SseModule } from './sse/sse.module.js';
 import { UpstreamModule } from './upstream/upstream.module.js';
 import { PicturesModule } from './pictures/pictures.module.js';
+import { MailModule } from './email/email.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { Tour } from './tour/tour.service.js';
 import { UsersModule } from './users/users.module.js';
@@ -97,6 +98,7 @@ const fileAndConsole = (
     DatabaseModule,
     StorageModule,
     PicturesModule,
+    MailModule,
     CacheModule,
     HttpModule,
     UsersModule,

@@ -65,6 +65,20 @@ const envSchema = z.object({
   SCHEDULE_TZ: z.string().default('UTC'),
   /** Per-call budget for the outbound client. */
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(1).default(5000),
+  /** Which `EmailTransport` gets bound. `log` needs no credentials. */
+  EMAIL_TRANSPORT: z.enum(['log', 'resend', 'smtp']).default('log'),
+  EMAIL_FROM: z.string().default('dunx-full <no-reply@dunx.win>'),
+  /** Required by `EMAIL_TRANSPORT=resend`, ignored otherwise. */
+  EMAIL_RESEND_KEY: z.string().optional(),
+  /** Required by `EMAIL_TRANSPORT=smtp`, for example `smtp://localhost:1025`. */
+  EMAIL_SMTP_URL: z.string().optional(),
+  /** Resend's own cap on the free tier. `0` sends unpaced. */
+  EMAIL_MAX_PER_SECOND: z.coerce.number().min(0).default(2),
+  /**
+   * Send nowhere and log instead. On by default, so `bun start` and the tour
+   * deliver nothing to a real inbox whatever else is configured.
+   */
+  EMAIL_DRY_RUN: z.stringbool().default(true),
   /**
    * Guards the ops page when set. Absent by default so `bun start` is
    * explorable and `@dunx/dashboard` still warns that it is unguarded.
@@ -119,6 +133,14 @@ export interface AppConfig {
   readonly throttle: { readonly limit: number; readonly windowSeconds: number };
   readonly schedule: { readonly tz: string };
   readonly upstream: { readonly timeoutMs: number };
+  readonly email: {
+    readonly transport: 'log' | 'resend' | 'smtp';
+    readonly from: string;
+    readonly resendKey: string | undefined;
+    readonly smtpUrl: string | undefined;
+    readonly maxPerSecond: number;
+    readonly dryRun: boolean;
+  };
   readonly publicUrl: string;
 }
 
@@ -184,6 +206,14 @@ export const validate = (env: ConfigValues): AppConfig => {
     },
     schedule: { tz: value.SCHEDULE_TZ },
     upstream: { timeoutMs: value.UPSTREAM_TIMEOUT_MS },
+    email: {
+      transport: value.EMAIL_TRANSPORT,
+      from: value.EMAIL_FROM,
+      resendKey: value.EMAIL_RESEND_KEY,
+      smtpUrl: value.EMAIL_SMTP_URL,
+      maxPerSecond: value.EMAIL_MAX_PER_SECOND,
+      dryRun: value.EMAIL_DRY_RUN,
+    },
     publicUrl: value.PUBLIC_URL ?? `http://localhost:${value.PORT}`,
   };
 };

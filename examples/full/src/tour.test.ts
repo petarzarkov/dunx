@@ -295,7 +295,10 @@ it('exits 0 with no redis at all', async () => {
   expect(run.text).toContain(
     'non-critical and down: redis - readiness is still up',
   );
-});
+  // 20 s for the same reason the `beforeAll` above takes it: a second whole app
+  // in a process of its own, 2.6 s alone and much more beside the rest of the
+  // suite. The 5 s default failed the moment the tour grew another section.
+}, 20_000);
 
 it('probes liveness and readiness, and takes the pod out by hand', () => {
   // Liveness is a memory ceiling and nothing else: it answers "restart me",

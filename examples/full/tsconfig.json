@@ -1,5 +1,11 @@
 {
   "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    /* React Email templates are .tsx. Resolution stays nodenext, so their
+       relative imports keep the mandatory .js extension like every other file
+       here - only the element factory changes. */
+    "jsx": "react-jsx"
+  },
   "include": ["src", "scripts", "services.ts"],
   "exclude": ["node_modules"]
 }

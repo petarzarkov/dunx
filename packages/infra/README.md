@@ -2,16 +2,16 @@
 
 Infrastructure for [dunx](https://github.com/petarzarkov/dunx): databases,
 Redis/Valkey, caching, queues, message brokers, file storage, images, scheduling,
-pagination and logging. Ten areas, one package.
+email, pagination and logging. Eleven areas, one package.
 
 Where Bun ships the primitive, the primitive is what runs: `Bun.SQL`,
 `bun:sqlite`, `Bun.RedisClient`, `Bun.file`, `Bun.Glob`, `Bun.S3Client`,
 `Bun.Image`, `Bun.cron`. No `pg`, no `better-sqlite3`, no `ioredis`, no
 `@aws-sdk`, no `glob`, no `sharp`.
 
-Four areas integrate a mature library rather than hand-rolling one: `/db` over
-`drizzle-orm`, `/queue` over `bullmq`, `/amqp` over `rabbitmq-client` and
-`/logger` over `@arkv/logger`.
+Five areas integrate a mature library rather than hand-rolling one: `/db` over
+`drizzle-orm`, `/queue` over `bullmq`, `/amqp` over `rabbitmq-client`, `/logger`
+over `@arkv/logger`, and `/email` over whichever provider a subpath names.
 
 The first three are **optional peer dependencies**, so an app using only `/files`
 installs none of them. `@arkv/logger` is first-party and a plain dependency. The first two drive a Bun API underneath;
@@ -26,6 +26,9 @@ bun add @dunx/infra @dunx/core
 bun add drizzle-orm     # /db
 bun add bullmq          # /queue
 bun add rabbitmq-client # /amqp
+bun add resend          # /email/resend
+bun add nodemailer      # /email/smtp
+bun add react @react-email/components # /email/react
 ```
 
 ## The subpaths
@@ -41,6 +44,10 @@ The guide is canonical for every row; this table is the index.
 | `@dunx/infra/amqp`       | **rabbitmq-client**: `@AmqpHandler`, publisher, drained consumers | [Message brokers](../../docs/guide/28-message-brokers.md)   |
 | `@dunx/infra/schedule`   | `Bun.cron` and timers: `@Cron`, `@Interval`, `@OnceOnBoot`        | [Scheduling](../../docs/guide/16-scheduling.md)             |
 | `@dunx/infra/files`      | One `Storage` contract over `Bun.file` and `Bun.S3Client`         | [Files and images](../../docs/guide/18-files-and-images.md) |
+| `@dunx/infra/email`      | One `EmailTransport` contract, dry run, pacing, a renderer seam, and `bunx dunx-email preview` | [Email](../../docs/guide/29-email.md) |
+| `@dunx/infra/email/resend` | **resend**                                                      | [Email](../../docs/guide/29-email.md)                       |
+| `@dunx/infra/email/smtp` | **nodemailer**                                                    | [Email](../../docs/guide/29-email.md)                       |
+| `@dunx/infra/email/react` | **React Email**, as one `TemplateRenderer` among others          | [Email](../../docs/guide/29-email.md)                       |
 | `@dunx/infra/images`     | An immutable pipeline over `Bun.Image`                            | [Files and images](../../docs/guide/18-files-and-images.md) |
 | `@dunx/infra/logger`     | **`@arkv/logger`** bound to core's `Logger` contract              | [Logging](../../docs/guide/13-logging.md)                   |
 | `@dunx/infra/pagination` | Keyset pagination: cursor codec, options parser, drizzle query    | [Database](../../docs/guide/14-database.md)                 |
@@ -86,6 +93,11 @@ through a static import, so exporting them would make `drizzle-orm`, `ioredis` a
 `rabbitmq-client` hard requirements of `import '@dunx/infra'`. Reach them at their
 subpaths.
 
+`/email` splits along the same line one level down. The base subpath reaches no
+peer, so it is in the barrel; the three vendor subpaths under it each reach one
+and are not. Importing `@dunx/infra/email` therefore needs neither `resend` nor
+`nodemailer` nor `react`.
+
 **Timing is off unless asked for.** `{ metrics: true }` is the last argument to
 `DbModule`, `CacheModule`, `RedisModule` and `QueueModule`, binding a
 `QueryMetrics`, `CacheMetrics`, `RedisMetrics` or `QueueMetrics`.
@@ -100,7 +112,8 @@ See [Metrics](../../docs/guide/23-metrics.md).
 
 ## Verified against
 
-Bun 1.4.2, drizzle-orm 0.45.2, bullmq 6.0.5 and rabbitmq-client 5.0.8. Bun's
+Bun 1.4.2, drizzle-orm 0.45.2, bullmq 6.0.5, rabbitmq-client 5.0.8, resend 6.28.0,
+nodemailer 10.0.9 and @react-email/components 1.0.12. Bun's
 documentation is incomplete
 across every area here, so the behaviour was measured rather than read. The
 evidence is in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) and
