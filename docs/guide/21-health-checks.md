@@ -165,6 +165,12 @@ load balancer notices a failing probe on its own schedule: at a 2-second interva
 and a 3-failure threshold, traffic can arrive for 6 seconds after the pod has
 decided to go. Set it to a few intervals.
 
+It is a real wait, so it is paid by anything that shuts the app down - a suite
+closing one app per file included, where at five seconds it exceeds Bun's default
+hook timeout and fails as an unnamed hook naming no line. `@dunx/testing` zeroes
+it: `createTestApp` and `createTestServer` override `ReadinessOptions` before
+your own overrides, so a suite that is testing the drain passes its own and wins.
+
 Liveness keeps passing throughout. A pod that is shutting down does not need
 restarting, and `down` there invites a SIGKILL mid-drain.
 
@@ -218,6 +224,28 @@ export class SearchIndicator extends HealthIndicator {
 
 Throwing is how a check reports `down`. The registry never lets one throw into a
 response.
+
+### Numbers a scrape can read
+
+`detail` is one line for whoever opens the page. A check that knows real numbers
+should also put them in `data`, which reaches the report as it gave them:
+
+```ts
+return {
+  state: 'up',
+  detail: `${waiting} waiting, ${failed} failed`,
+  data: { waiting, active, failed },
+};
+```
+
+Without it, `500f` meaning five hundred failed jobs is actionable only by a human
+who parses a format nothing promises to keep. The shipped indicators carry both:
+`memory` reports `rssBytes` and `maxRssBytes` beside its `143 MiB of 2048 MiB`,
+`disk` reports `totalBytes`, `freeBytes` and `usedFraction`, and the round trips
+report `roundTripMs`.
+
+It is serialised as it stands, so keep it to JSON. `HEALTH_REPORT_SCHEMA`
+documents it as an open object.
 
 Anything that already answers a `ping()` needs less. `RoundTripIndicator` holds
 the body the shipped round trips share, so a subclass is a name:

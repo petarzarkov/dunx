@@ -51,6 +51,12 @@ export const HEALTH_REPORT_SCHEMA: JsonSchema = Object.freeze({
             type: 'string',
             description: 'A latency, a version, or a failure message.',
           },
+          data: {
+            type: 'object',
+            description:
+              'The same facts as values, for a scrape rather than a reader.',
+            additionalProperties: true,
+          },
         },
         required: ['name', 'state', 'critical', 'ms'],
       },

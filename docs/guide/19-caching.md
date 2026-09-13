@@ -131,19 +131,57 @@ see.
 
 ## A cache that is not running
 
-`RedisCacheStore` throws what the connection throws. A route that should degrade
-rather than fail catches it:
+`RedisCacheStore` throws what the connection throws, so every route behind it
+answers 500 while the server is gone. A cached value can be computed again, so
+most apps want that outage to cost latency instead.
+
+`DegradingCacheStore` is that, wrapping any store:
 
 ```ts
-import { isConnectionError } from '@dunx/infra/redis';
+import { DegradingCacheStore, RedisCacheStore } from '@dunx/infra/cache';
 
-try {
-  return await this.cache.wrap(key, load);
-} catch (error) {
-  if (!isConnectionError(error)) throw error;
-  return load();
+new DegradingCacheStore(new RedisCacheStore(redis), { logger });
+```
+
+A read answers `undefined`, which `wrap` already treats as a miss and loads
+through. A write is dropped rather than queued: a deferred write hands back a
+cache that reports a value it never stored. `CacheModule.forRoot(init, {
+degrade: true })` wraps the configured store instead of constructing one.
+
+Two things it does not do. **Only a connection error degrades** - a serialisation
+failure or a bad command is your bug and still throws, or the cache quietly stops
+working and nothing says so. And it **warns once per outage** rather than once
+per operation, because an unreachable cache is touched by every cached route.
+
+The default predicate is `isConnectionError`, which matches Bun's Redis code and
+nothing else. A store on another backend passes its own `degradable`, or nothing
+degrades and every failure still throws.
+
+`degraded` is whatever the last operation set, so a process that has not used the
+cache yet reports it healthy. `probe()` does one real read down the same path.
+Ask it from a health check:
+
+```ts
+export class CacheStoreIndicator extends HealthIndicator {
+  readonly name = 'cache';
+  override readonly critical = false;
+
+  constructor(private readonly store: DegradingCacheStore) {
+    super();
+  }
+
+  async check(): Promise<ProbeResult> {
+    return (await this.store.probe())
+      ? { state: 'up' }
+      : {
+          state: 'down',
+          detail: 'unreachable - reads are answering as misses',
+        };
+  }
 }
 ```
 
-Deciding at boot is the other option: `examples/full` pings the connection once
-and configures `TieredCacheStore` or a bare `MemoryCacheStore` from the answer.
+**Wrap the L2, not the tier.** `TieredCacheStore.set` awaits L2 before L1, so a
+throwing L2 blocks the L1 write that would have served the next read; wrapping
+from outside swallows the error and loses the promotion with it.
+`examples/full` does it this way.

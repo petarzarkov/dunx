@@ -258,7 +258,7 @@ it('reaches redis, or says it is skipping it', () => {
 
 it('serves a cached read and dedupes the concurrent ones', () => {
   expect(tour.text).toMatch(
-    /store -> (L1 memory in front of L2 redis|L1 memory only, redis unreachable at boot), metered, default ttl 30000ms/,
+    /store -> L1 memory in front of a degrading L2 redis, metered, default ttl 30000ms/,
   );
   expect(tour.text).toContain(
     '10 concurrent reads of an uncached key -> 1 load (single flight, per process)',
@@ -292,8 +292,9 @@ it('exits 0 with no redis at all', async () => {
   // reported and does not shed traffic. This is that override, observed.
   expect(run.text).toMatch(/redis=down/);
   expect(run.text).toMatch(/GET \/api\/health\/ready -> 200 up/);
+  // `redis` is the connection, `cache` the degrading L2 answering `probe()`.
   expect(run.text).toContain(
-    'non-critical and down: redis - readiness is still up',
+    'non-critical and down: redis, cache - readiness is still up',
   );
   // 20 s for the `beforeAll` reason above: a second whole app, in its own process.
 }, 20_000);
@@ -304,9 +305,9 @@ it('probes liveness and readiness, and takes the pod out by hand', () => {
   expect(tour.text).toMatch(
     /GET \/api\/health\/live -> 200 up, \d+ ms up, memory=up/,
   );
-  // Readiness is six checks, in order. Redis and the broker may be anything.
+  // Readiness is seven checks, in order. Redis, cache and broker may be any.
   expect(tour.text).toMatch(
-    /GET \/api\/health\/ready -> 200 up, \d+ ms up, database=up ledger=up redis=\w+ storage=up disk=up amqp=\w+/,
+    /GET \/api\/health\/ready -> 200 up, \d+ ms up, database=up ledger=up redis=\w+ cache=\w+ storage=up disk=up amqp=\w+/,
   );
   // hold() fails readiness while liveness keeps passing - a pod that is being
   // migrated does not need killing.
@@ -414,12 +415,11 @@ it('serves the stats panel over the ops page, cache half included', () => {
 });
 
 it('lights the same indicators on the ops page, each once', () => {
-  // `IndicatorsModule` declares them and both readers take that list, so the
-  // dashboard names every check `AppIndicators` declares. `redis` appears once:
-  // `DashboardOptions.redis` already contributes it, which is why
-  // `dashboardProbes` drops `CacheIndicator`. `amqp` is `ProbesModule`'s alone.
+  // `IndicatorsModule` declares them and both readers take that list. `redis`
+  // appears once: `DashboardOptions.redis` already contributes it, so
+  // `dashboardProbes` drops `CacheIndicator`; `cache` is the tier, so it stays.
   expect(tour.text).toMatch(
-    /probes: redis=\w+ database=up ledger=up storage=up disk=up/,
+    /probes: redis=\w+ database=up ledger=up cache=\w+ storage=up disk=up/,
   );
 });
 

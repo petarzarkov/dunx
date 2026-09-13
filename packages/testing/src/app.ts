@@ -1,11 +1,13 @@
 import {
   AppFactory,
+  provide,
   type App,
   type AppOptions,
   type DynamicModule,
   type ModuleRef,
   type Registration,
 } from '@dunx/core';
+import { ReadinessOptions } from '@dunx/http';
 
 /**
  * The synthetic root. A named class rather than an object literal for the same
@@ -38,10 +40,23 @@ export const testRoot = (
   imports: isList(modules) ? modules : [modules],
 });
 
-/** `exactOptionalPropertyTypes` separates an absent key from an undefined one. */
+/**
+ * `HealthModule`'s shutdown drain, zeroed: a suite has no load balancer to notice
+ * a failing probe, and at the five seconds a deployment wants it exceeds Bun's
+ * default hook timeout once per file.
+ *
+ * First in the list, so a suite testing the drain passes its own and wins. Safe
+ * with no `HealthModule` in the graph: an override for a class nobody bound is
+ * registered lazily and never built.
+ */
+const NO_DRAIN = provide(ReadinessOptions, {
+  useValue: new ReadinessOptions({ drainDelayMs: 0 }),
+});
+
+/** The caller's overrides, behind the harness's own. */
 export const appOptions = (
   overrides: readonly Registration[] | undefined,
-): AppOptions => (overrides ? { overrides } : {});
+): AppOptions => ({ overrides: [NO_DRAIN, ...(overrides ?? [])] });
 
 /**
  * The container the app under test would have, with the bindings named in
@@ -57,6 +72,10 @@ export const appOptions = (
  * Replacement, not addition: the discarded provider is never instantiated, so an
  * async `useFactory` that would open the real database never runs. An override
  * naming a token nobody binds throws instead of passing silently.
+ *
+ * One binding is replaced without being asked for: `ReadinessOptions`, so
+ * `HealthModule`'s shutdown drain does not run per teardown. Pass your own to
+ * restore it.
  */
 export const createTestApp = (options: TestAppOptions): Promise<App> =>
   AppFactory.create(testRoot(options.modules), appOptions(options.overrides));

@@ -1,9 +1,8 @@
-import { Logger, Module } from '@dunx/core';
+import { Module } from '@dunx/core';
 import {
   CacheMetrics,
   CacheModule as CacheLayer,
   MemoryCacheStore,
-  RedisCacheStore,
   TieredCacheStore,
 } from '@dunx/infra/cache';
 import {
@@ -14,6 +13,8 @@ import {
 } from '@dunx/infra/redis';
 import { AppConfigService } from '../config.js';
 import { CacheController } from './cache.controller.js';
+import { appRedis } from './app-redis.js';
+import { CacheL2, CacheL2Module } from './cache-l2.js';
 import { CatalogController } from './catalog.controller.js';
 import { CatalogDemo } from './catalog.demo.js';
 import { Catalog } from './catalog.service.js';
@@ -27,38 +28,11 @@ const sessionsUrl = (url: string | undefined): string => {
   return parsed.href;
 };
 
-/**
- * Hoisted rather than written inline, because the cache layer below names this
- * same object in its own `imports`. A dynamic module is its own scope keyed on
- * the reference, so calling `forRootAsync` twice would open two connections.
- *
- * No url, so Bun resolves $VALKEY_URL, $REDIS_URL, then localhost, lazily.
- * `maxRetries: 0` because on Bun 1.3.14 a failed connect with retries keeps a
- * timer alive past `close()`.
- */
-const appRedis = RedisModule.forRootAsync(
-  {
-    useFactory: (config: AppConfigService) => {
-      // `exactOptionalPropertyTypes` will not let `string | undefined` reach
-      // a `url?: string`, even where `undefined` is ruled out.
-      const { url } = config.get('redis');
-      return {
-        ...(url === undefined ? {} : { url }),
-        connectionTimeout: 500,
-        maxRetries: 0,
-      };
-    },
-    inject: [AppConfigService] as const,
-  },
-  // No subclass: the default connection. Settings come last, as on `DbModule`.
-  undefined,
-  // Times every command, readable as `RedisMetrics`. Off by default.
-  { metrics: true },
-);
-
 @Module({
   imports: [
     appRedis,
+    // In this scope too: exporting `CacheL2` needs it visible from here.
+    CacheL2Module,
     /**
      * A subclass rather than a name, so `SessionsRedis` is an ordinary
      * constructor parameter, and it does not claim `RedisConnection`. Database 1:
@@ -77,39 +51,27 @@ const appRedis = RedisModule.forRootAsync(
       SessionsRedis,
     ),
     /**
-     * Two tiers when the broker answers, one when it does not. The probe is at
-     * boot: `RedisCacheStore` writes on every miss, so an unreachable L2 would
-     * turn each of them into a 500 rather than a slow read.
+     * Two tiers, always. `CacheL2` is the degrading half, so a cold read costs
+     * the loader rather than a 500 - which a boot-time `redis.ping()` choosing
+     * one tier or two could not do, having only ever looked once.
      */
     CacheLayer.forRootAsync(
       {
-        imports: [appRedis],
-        useFactory: async (redis: RedisConnection, logger: Logger) => {
-          const l1 = new MemoryCacheStore({ max: 500 });
-          const shared = {
-            ttl: 30_000,
-            // One prefix per deployment, not per process: a shared L2 that no
-            // replica or restart can read is not shared. The example's own suites
-            // set DUNX_CACHE_PREFIX so concurrent runs do not collide on one
-            // valkey; an app that sets nothing gets a stable prefix.
-            prefix: `${process.env['DUNX_CACHE_PREFIX'] ?? 'app'}:cache`,
-          };
-          try {
-            await redis.ping();
-            return {
-              ...shared,
-              store: new TieredCacheStore(l1, new RedisCacheStore(redis), {
-                promoteTtl: 5_000,
-              }),
-            };
-          } catch (error) {
-            logger.warn(
-              `cache running on memory alone: ${(error as Error).message}`,
-            );
-            return { ...shared, store: l1 };
-          }
-        },
-        inject: [RedisConnection, Logger] as const,
+        imports: [CacheL2Module],
+        useFactory: (l2: CacheL2) => ({
+          ttl: 30_000,
+          // One prefix per deployment, not per process: a shared L2 that no
+          // replica or restart can read is not shared. The example's own suites
+          // set DUNX_CACHE_PREFIX so concurrent runs do not collide on one
+          // valkey; an app that sets nothing gets a stable prefix.
+          prefix: `${process.env['DUNX_CACHE_PREFIX'] ?? 'app'}:cache`,
+          store: new TieredCacheStore(
+            new MemoryCacheStore({ max: 500 }),
+            l2.store,
+            { promoteTtl: 5_000 },
+          ),
+        }),
+        inject: [CacheL2] as const,
       },
       // Wraps the configured store, so hits, misses and timings are readable as
       // `CacheMetrics`. Settings come last here too.
@@ -120,6 +82,7 @@ const appRedis = RedisModule.forRootAsync(
   providers: [Sessions, Catalog, CatalogDemo],
   // Re-exported so the chat gateway fans out through the same connection.
   exports: [
+    CacheL2,
     CacheMetrics,
     RedisConnection,
     RedisMetrics,

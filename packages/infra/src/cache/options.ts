@@ -1,4 +1,5 @@
 import { AppError } from '@dunx/core';
+import { DegradingCacheStore, type DegradingCacheInit } from './degrading.js';
 import { MemoryCacheStore } from './memory.js';
 import { MeteredCacheStore, type CacheMetrics } from './metrics.js';
 import type { CacheStore } from './store.js';
@@ -25,8 +26,16 @@ export class CacheOptions {
    * `metrics` wraps whatever store this resolves to, the default one included, so
    * `store` is the metered one everywhere it is read from. `CacheModule` passes
    * it when `metrics: true`; nothing else needs to.
+   *
+   * `degrade` wraps that in turn, so it sits **outside** the meter: a swallowed
+   * failure is still recorded as an error, and the hit rate is not inflated by
+   * outages it hid.
    */
-  constructor(init: CacheOptionsInit = {}, metrics?: CacheMetrics) {
+  constructor(
+    init: CacheOptionsInit = {},
+    metrics?: CacheMetrics,
+    degrade?: DegradingCacheInit,
+  ) {
     const ttl = init.ttl ?? 60_000;
     if (!Number.isFinite(ttl) || ttl <= 0) {
       throw new AppError(
@@ -36,8 +45,13 @@ export class CacheOptions {
     this.ttl = ttl;
     this.prefix = init.prefix;
     const store = init.store ?? new MemoryCacheStore();
-    this.store =
+    const metered =
       metrics === undefined ? store : new MeteredCacheStore(store, metrics);
+    // `probeStore` from under the meter: a health check is not cache traffic.
+    this.store =
+      degrade === undefined
+        ? metered
+        : new DegradingCacheStore(metered, { probeStore: store, ...degrade });
   }
 
   /** The key as the store sees it. */

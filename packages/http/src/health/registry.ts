@@ -8,6 +8,8 @@ export interface HealthCheckReport {
   /** How long the check took, rounded to a millisecond. */
   readonly ms: number;
   readonly detail?: string;
+  /** The check's own structured facts, carried through as it gave them. */
+  readonly data?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -139,6 +141,7 @@ export class HealthRegistry {
           critical: indicator.critical,
           ms: Math.round(performance.now() - started),
           ...(result.detail === undefined ? {} : { detail: result.detail }),
+          ...(result.data === undefined ? {} : { data: result.data }),
         };
       }),
     );

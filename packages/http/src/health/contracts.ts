@@ -12,6 +12,17 @@ export interface ProbeResult {
   readonly state: ProbeState;
   /** One line for the operator: a latency, a version, a failure message. */
   readonly detail?: string;
+  /**
+   * The same facts as values, for what reads the report but not prose - an alert
+   * rule, a panel, a scrape. `500f` meaning five hundred failed jobs is
+   * otherwise actionable only by a human. Serialised as it stands, so keep it
+   * JSON.
+   *
+   * ```ts
+   * return { state: 'up', detail: `${failed} failed`, data: { failed } };
+   * ```
+   */
+  readonly data?: Readonly<Record<string, unknown>>;
 }
 
 /**

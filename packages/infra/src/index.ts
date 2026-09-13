@@ -23,6 +23,8 @@ export {
   type CacheRedis,
   type CacheStatsReport,
   CacheStore,
+  type DegradingCacheInit,
+  DegradingCacheStore,
   type MemoryCacheInit,
   MemoryCacheStore,
   MeteredCacheStore,

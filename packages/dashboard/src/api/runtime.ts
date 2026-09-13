@@ -36,6 +36,7 @@ export const runProbe = async (
     name: probe.name,
     state: result.state,
     ...(result.detail === undefined ? {} : { detail: result.detail }),
+    ...(result.data === undefined ? {} : { data: result.data }),
     ms: Math.round(performance.now() - started),
   };
 };
@@ -54,9 +55,11 @@ export const redisProbe = (
   check: async (): Promise<ProbeResult> => {
     const started = performance.now();
     await redis.ping();
+    const roundTripMs = Math.round(performance.now() - started);
     return {
       state: 'up',
-      detail: `PING ${Math.round(performance.now() - started)}ms`,
+      detail: `PING ${roundTripMs}ms`,
+      data: { roundTripMs },
     };
   },
 });
