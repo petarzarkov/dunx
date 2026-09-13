@@ -4,6 +4,58 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.8.3 - 2026-09-13
+
+Authorize on the explorer, broker and storage probes, and an ambient type that emitted a name
+
+`OpenApiModule` takes an `authorize` callback. `DashboardModule` already had one,
+so the two ops surfaces a dunx app exposes disagreed about who may see them, and
+an app gating the second wrote a middleware restating the module's mount paths by
+hand. `Authorize` lives in `@dunx/http` now, the lowest common owner, and covers
+the document, the page and the page's assets from one decision. There is no
+default and no boot warning on the openapi side: a public API's document is
+published to be read.
+
+`HealthModule` probes RabbitMQ and whatever `Storage` an app configured, which
+were the two things most likely to be down in a deployment and the two nothing
+asked about. `AmqpIndicator` takes an `AmqpConnection`, which grows a `ping()`;
+`StorageIndicator` takes a `Storage` and one `exists()`. `RoundTripIndicator` is
+the shared body all three share, exported, so a custom probe with a `ping()` is a
+name rather than a fourth copy.
+
+`@dunx/transform` no longer emits a name with no runtime binding. A constructor
+parameter typed by a name the file neither imports nor declares is ambient, and
+with no type checker `ErrorOptions` and `URL` read the same - a lib interface
+that erases and a lib class that is a usable token. The first produced a thunk
+that threw `ReferenceError`, which is neither the injection nor the boot error
+naming the parameter. It is guarded with `typeof` at resolution time, and a
+qualified name is checked past its root as well, since an absent member is
+`undefined` and `isUnresolved` rejects that.
+
+Also: `gate()` admitted anything that was not exactly `true` or `false`.
+
+**A patch rather than the minor the range derives, stated outright rather than
+computed.** Two of these are additive API, which semver calls a minor; the
+version is set by hand and this note is where that is on the record. Nothing is
+removed or changed, so an app on `^3.8.2` takes it either way.
+
+### Features
+
+- **http**: probe the broker and the object store, from one round-trip base ([`761b002`](https://github.com/petarzarkov/dunx/commit/761b002b94b3ea184e830ef44fd184df2a7d6a4a))
+- **openapi**: authorize on OpenApiModule, so the explorer gates like the dashboard ([`263ea18`](https://github.com/petarzarkov/dunx/commit/263ea18e9c0965e64fa5a83937e5e6ca5ca2f84e))
+
+### Fixes
+
+- **transform**: three ways boundNames claimed a name the runtime does not bind ([`e9f04ad`](https://github.com/petarzarkov/dunx/commit/e9f04adc193045944ac851914a893b772f71db68))
+- **transform**: an ambient type annotation emitted a name with no runtime binding ([`13febd7`](https://github.com/petarzarkov/dunx/commit/13febd71aa7f91200ccf71c52d129b5375cab4a6))
+- **http**: gate() admitted anything that was not exactly true or false ([`504be56`](https://github.com/petarzarkov/dunx/commit/504be56f63b491bf26ba36162330d67eaf85dd63))
+
+### Other changes
+
+- regenerate the corpus and trim comments back under budget ([`4bd4600`](https://github.com/petarzarkov/dunx/commit/4bd460025e2d181bab39207d8559b4bcc1c66912))
+- **infra**: prove the ping leaves the connection open, rather than assert around it ([`6825ab4`](https://github.com/petarzarkov/dunx/commit/6825ab4f9481b4be48f1bec91acf07507b315a6e))
+- **example**: a polling test could never spend its own poll window ([`57222d7`](https://github.com/petarzarkov/dunx/commit/57222d72f43869b911db3a6cfb1644b9b0ebc94c))
+
 ## 3.8.2 - 2026-09-13
 
 Two seams a consumer reached into /internal for, and a storage error naming the bundler
