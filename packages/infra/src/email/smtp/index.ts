@@ -13,6 +13,8 @@ import { EmailTransport } from '../transport.js';
  * so a test can hand over a stub without a server listening.
  */
 export interface SmtpMailer {
+  /** nodemailer's own: opens the connection and runs the greeting and AUTH. */
+  verify?(): Promise<unknown>;
   sendMail(payload: Record<string, unknown>): Promise<{
     messageId?: string;
     accepted?: readonly (string | { address: string })[];
@@ -62,6 +64,17 @@ export class SmtpTransport extends EmailTransport {
     this.#mailer = createTransport(
       config as Parameters<typeof createTransport>[0],
     ) as unknown as SmtpMailer;
+  }
+
+  /** nodemailer's `verify`, with its failure named like every other one here. */
+  override async verify(): Promise<void> {
+    if (this.#mailer.verify === undefined) return;
+    try {
+      await this.#mailer.verify();
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      throw new EmailSendError('smtp', detail, { cause });
+    }
   }
 
   async send(message: OutboundEmail): Promise<EmailResult> {

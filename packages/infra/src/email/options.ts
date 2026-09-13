@@ -71,9 +71,14 @@ export class EmailOptions {
     this.dryRun = init.dryRun ?? false;
     this.maxPerSecond = maxPerSecond;
     this.renderer = init.renderer;
+    // `retry` is merged a level down, not spread over. Spreading `resilience`
+    // whole replaced the entire `retry` object, so naming any key in it -
+    // `retryDelayMs` alone, say - dropped `maxRetries: 0` and fell back to
+    // core's default of 3. Tuning a delay silently turned retries on, which is
+    // the second email in a real inbox this default exists to prevent.
     this.resilience = new ResilienceOptions({
-      retry: { maxRetries: 0 },
       ...init.resilience,
+      retry: { maxRetries: 0, ...init.resilience?.retry },
     });
   }
 }

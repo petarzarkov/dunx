@@ -41,7 +41,26 @@ export const discoverTemplates = async (
     if ((error as { code?: string }).code !== 'ENOENT') throw error;
     throw new EmailError(`No templates directory at ${dir}.`, { cause: error });
   }
-  return entries.sort((a, b) => a.name.localeCompare(b.name));
+  const sorted = entries.sort((a, b) => a.name.localeCompare(b.name));
+  assertDistinct(sorted);
+  return sorted;
+};
+
+/**
+ * The extension is what a name drops, so `welcome.ts` beside `welcome.tsx` is
+ * two files claiming one name. Refused rather than resolved by order: the
+ * preview would render whichever came first and the export would write both to
+ * `welcome.html`, last one winning, with nothing said either time.
+ */
+const assertDistinct = (entries: readonly TemplateEntry[]): void => {
+  for (const [at, entry] of entries.entries()) {
+    const next = entries[at + 1];
+    if (next?.name !== entry.name) continue;
+    throw new EmailError(
+      `Two templates are both named "${entry.name}": ${entry.path} and ` +
+        `${next.path}. Rename one, or move it out of the templates directory.`,
+    );
+  }
 };
 
 /**

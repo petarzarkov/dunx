@@ -20,4 +20,20 @@ export abstract class EmailTransport {
    * present. A transport maps that onto its provider and nothing else.
    */
   abstract send(message: OutboundEmail): Promise<EmailResult>;
+
+  /**
+   * Checks that the transport could send, without sending. Resolves when it can
+   * and throws when it cannot.
+   *
+   * **Optional, and it has to be declared now.** Adding an abstract method to a
+   * published abstract class breaks every transport written against it, so the
+   * slot exists from the first release even though only some backends can fill
+   * it. SMTP can: nodemailer opens the connection and runs the greeting and
+   * AUTH. Resend has no cheap call that is not a send, so it leaves this
+   * undefined rather than charging for a probe.
+   *
+   * A caller that cannot find it has been told nothing, which is `unknown` to a
+   * health probe rather than `down`.
+   */
+  verify?(): Promise<void>;
 }

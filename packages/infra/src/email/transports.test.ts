@@ -5,6 +5,7 @@ import { LogTransport } from './log.js';
 import { MemoryTransport } from './memory.js';
 import { outbound } from './outbound.fixture.js';
 import { UnconfiguredRenderer } from './renderer.js';
+import type { EmailTransport } from './transport.js';
 
 describe('LogTransport', () => {
   it('writes instead of sending, and accepts every recipient', async () => {
@@ -57,6 +58,26 @@ describe('MemoryTransport', () => {
 
     expect(transport.sent).toHaveLength(0);
     expect(transport.last).toBeUndefined();
+  });
+});
+
+describe('verify', () => {
+  // The slot has to exist from the first release: adding an abstract method to
+  // a published abstract class breaks every transport written against it.
+  it('resolves for the transports with nothing to reach', async () => {
+    await expect(
+      new LogTransport(new Quiet()).verify(),
+    ).resolves.toBeUndefined();
+    await expect(new MemoryTransport().verify()).resolves.toBeUndefined();
+  });
+
+  it('is absent on a transport that cannot probe cheaply', async () => {
+    const { ResendTransport } = await import('./resend/index.js');
+    const transport: EmailTransport = new ResendTransport({
+      apiKey: 're_test',
+    });
+
+    expect(typeof transport.verify).toBe('undefined');
   });
 });
 

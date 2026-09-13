@@ -46,6 +46,11 @@ export class MemoryTransport extends EmailTransport {
     this.#sent.length = 0;
   }
 
+  /** Nothing to reach, so a suite's readiness probe answers up. */
+  override verify(): Promise<void> {
+    return Promise.resolve();
+  }
+
   send(message: OutboundEmail): Promise<EmailResult> {
     this.#sent.push(message);
     this.#nextId += 1;

@@ -55,6 +55,17 @@ describe('loadTemplate', () => {
     expect(await loadTemplate(file)).toEqual({ body: 'W' });
   });
 
+  // `find()` used to show the first and `export()` wrote both to one file, last
+  // one winning, with nothing said either time.
+  it('refuses two files claiming one name', async () => {
+    await dir.template('welcome.ts', 'W');
+    await dir.template('welcome.tsx', 'W');
+
+    await expect(discoverTemplates(dir.path)).rejects.toThrow(
+      /Two templates are both named "welcome"/,
+    );
+  });
+
   it('names the directory rather than reporting a bare ENOENT', async () => {
     await expect(discoverTemplates('/nowhere/at/all')).rejects.toThrow(
       'No templates directory at /nowhere/at/all.',

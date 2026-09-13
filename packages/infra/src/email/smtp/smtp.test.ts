@@ -137,6 +137,31 @@ describe('SmtpTransport', () => {
     ).rejects.toThrow(EmailSendError);
   });
 
+  it('verifies through nodemailer, and names its failure', async () => {
+    const ok: SmtpMailer = {
+      verify: () => Promise.resolve(true),
+      sendMail: () => Promise.resolve({}),
+    };
+    const bad: SmtpMailer = {
+      verify: () => Promise.reject(new Error('535 auth failed')),
+      sendMail: () => Promise.resolve({}),
+    };
+
+    await expect(
+      new SmtpTransport({ mailer: ok }).verify(),
+    ).resolves.toBeUndefined();
+    await expect(new SmtpTransport({ mailer: bad }).verify()).rejects.toThrow(
+      /smtp refused the message: 535 auth failed/,
+    );
+  });
+
+  // A stub, or a nodemailer build without it, has told the caller nothing.
+  it('resolves when the mailer has no verify of its own', async () => {
+    await expect(
+      new SmtpTransport({ mailer: mailer() }).verify(),
+    ).resolves.toBeUndefined();
+  });
+
   it('wraps a rejected sendMail promise', async () => {
     const stub: SmtpMailer = {
       sendMail: () => Promise.reject(new Error('ECONNREFUSED')),

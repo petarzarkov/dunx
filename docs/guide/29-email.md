@@ -59,8 +59,15 @@ would have sent.
 export abstract class EmailTransport {
   abstract readonly name: string;
   abstract send(message: OutboundEmail): Promise<EmailResult>;
+  verify?(): Promise<void>;
 }
 ```
+
+`verify` checks that the transport could send, without sending. It is optional
+because only some backends can do it cheaply: nodemailer opens the connection
+and runs the greeting and AUTH, while Resend has no call that is not a send, so
+`SmtpTransport` has one and `ResendTransport` does not. A caller that finds none
+has been told nothing, which is `unknown` to a health probe rather than `down`.
 
 An abstract class rather than an interface, because a dunx constructor parameter
 names a runtime value. `OutboundEmail` is the message after the module's
@@ -105,6 +112,10 @@ EmailModule.forRoot({ maxPerSecond: 2 });
 Only the starts are serialised, not the sends, so several messages are in flight
 at once while their starts stay `1000 / maxPerSecond` apart. The default is `0`,
 which paces nothing.
+
+The pacing is per process, the way `ScheduleModule`'s timers are: two replicas
+each pace themselves and together send at twice the cap. A limit that has to
+hold across a fleet belongs in front of the provider.
 
 **Retries are off unless you ask for them.** A provider that accepted a message
 and then lost the response cannot be told apart from one that never saw it, and
@@ -207,6 +218,9 @@ export default new ReactEmailRenderer();
 Discovery takes every `.ts`, `.tsx`, `.js`, `.jsx` and `.mjs` module under the
 directory and skips suites, `index` files, and names starting with `_` or `.`.
 Anything else in there is rendered, so shared styles belong one directory up.
+
+A name is the path without its extension, so `welcome.ts` beside `welcome.tsx`
+is two files claiming one name and is refused rather than resolved by order.
 
 The same class is available in-process, for a route serving a preview page:
 

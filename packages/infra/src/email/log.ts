@@ -26,6 +26,11 @@ export class LogTransport extends EmailTransport {
     super();
   }
 
+  /** Nothing to reach, so nothing can be unreachable. */
+  override verify(): Promise<void> {
+    return Promise.resolve();
+  }
+
   send(message: OutboundEmail): Promise<EmailResult> {
     const accepted = everyRecipient(message);
     this.logger.info('email not sent, the log transport is in use', {

@@ -1,3 +1,4 @@
+import type { ResilienceOptionsInit } from '@dunx/core';
 import { describe, expect, it } from 'bun:test';
 import { Quiet } from '../quiet.fixture.js';
 import {
@@ -190,6 +191,42 @@ describe('EmailService.send', () => {
     ).rejects.toThrow(EmailSendError);
     expect(transport.attempts).toBe(1);
   });
+
+  /**
+   * The table that caught the bug. `resilience` used to be spread whole over
+   * `{ retry: { maxRetries: 0 } }`, so naming any key inside `retry` replaced
+   * the object and took the zero with it: tuning only a delay turned retries on
+   * and put a second email in a real inbox. Only an explicit `maxRetries` may
+   * raise it.
+   */
+  const RESILIENCE: readonly [string, ResilienceOptionsInit, number][] = [
+    ['nothing configured', {}, 1],
+    ['a timeout only', { timeoutMs: 5_000 }, 1],
+    ['a retry delay only', { retry: { retryDelayMs: 1 } }, 1],
+    [
+      'a backoff only',
+      { retry: { backoff: { power: 2 }, retryDelayMs: 1 } },
+      1,
+    ],
+    [
+      'an explicit maxRetries',
+      { retry: { maxRetries: 2, retryDelayMs: 1 } },
+      3,
+    ],
+  ];
+
+  it.each(RESILIENCE)(
+    'attempts %s times for %s',
+    async (_label, resilience, attempts) => {
+      const transport = new Flaky(Number.POSITIVE_INFINITY);
+
+      await build({ resilience }, transport)
+        .send({ to: 'a@example.com', subject: 'Hi' })
+        .catch(() => undefined);
+
+      expect(transport.attempts).toBe(attempts);
+    },
+  );
 
   it('retries when the caller asks for it', async () => {
     const transport = new Flaky(2);

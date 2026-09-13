@@ -2,15 +2,15 @@
  * Spaces the *starts* of outbound sends so a provider's per-second cap is not
  * hit.
  *
- * Not a retry and not a circuit breaker: `ResiliencePolicy` in `@dunx/core` is
- * both of those and deliberately has no rate limiter, and `ThrottleModule` in
- * `@dunx/http` is inbound admission control. This is the third thing, and it is
- * small enough to own: one serialised promise chain and a clock.
+ * Not a retry and not a circuit breaker: `ResiliencePolicy` has no rate limiter
+ * and `ThrottleModule` is inbound admission control. This is the third thing.
  *
- * Only the gate is serialised, not the send, so N messages can be in flight at
- * once while their starts stay `1000 / maxPerSecond` apart. That is what a
- * per-second cap actually constrains, and serialising the sends as well would
- * make the slowest provider response the rate.
+ * Only the gate is serialised, not the send, so N messages are in flight at once
+ * while their starts stay `1000 / maxPerSecond` apart. Serialising the sends too
+ * would make the slowest provider response the rate.
+ *
+ * **Per process, like `ScheduleModule`'s timers.** Two replicas each pace
+ * themselves and together send at twice the cap.
  */
 export class SendPacer {
   readonly #minIntervalMs: number;
