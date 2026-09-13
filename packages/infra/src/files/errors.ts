@@ -1,11 +1,17 @@
 /**
- * Base for everything this package throws. `new.target.name` rather than a
- * hardcoded string, so every subclass reports its own name without repeating it.
+ * Base for everything this package throws.
+ *
+ * Every class here writes its own `name` as a literal. It used to be
+ * `new.target.name`, which reads the *emitted* class name, and the bundler renames
+ * one whose name collides in a shared chunk: 3.8.1 shipped `FileNotFoundError` as
+ * `FileNotFoundError2`. `instanceof` is false across two subpaths of this package,
+ * so `error.name` is what a call site matches on. Only a test against the built
+ * package catches it; that one is in `examples/full`.
  */
 export class StorageError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = new.target.name;
+    this.name = 'StorageError';
   }
 }
 
@@ -20,6 +26,7 @@ export class FileNotFoundError extends StorageError {
     options?: ErrorOptions,
   ) {
     super(`No such file or object: "${key}".`, options);
+    this.name = 'FileNotFoundError';
   }
 }
 
@@ -32,6 +39,7 @@ export class PathTraversalError extends StorageError {
       `Refusing "${key}": it escapes the storage root` +
         (root === undefined ? '.' : ` "${root}".`),
     );
+    this.name = 'PathTraversalError';
   }
 }
 
@@ -45,5 +53,6 @@ export class UnsupportedOperationError extends StorageError {
       `${backend} does not support ${operation}().` +
         (hint === undefined ? '' : ` ${hint}`),
     );
+    this.name = 'UnsupportedOperationError';
   }
 }
