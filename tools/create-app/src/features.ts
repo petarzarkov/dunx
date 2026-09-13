@@ -302,10 +302,10 @@ export const FEATURES: readonly Feature[] = [
     name: 'websockets',
     source: 'chat',
     summary: 'A @Gateway with @OnMessage events, PubSub and a Redis relay.',
-    // `cache` joined this list for the same reason `files` joined health's: the gateway
-    // injects `RedisConnection` for cross-process fan-out, and a module now has to
-    // import the one that provides it. The summary already said "and a Redis relay".
-    requires: ['cache'],
+    // `cache` for the `RedisConnection` the gateway injects, and `http` for
+    // `WsRelayModule`, which binds the `RelayPublisher` the relay demo uses -
+    // importing either a second time here would open a second connection.
+    requires: ['cache', 'http'],
     module: { klass: 'ChatModule', from: './chat/chat.module.js' },
     dependencies: ['@dunx/infra'],
     config: [],

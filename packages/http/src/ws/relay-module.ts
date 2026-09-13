@@ -9,6 +9,7 @@ import {
 } from '@dunx/core';
 import { PostgresRelay, type PostgresRelayOptions } from './postgres-relay.js';
 import { RedisRelay, type RedisRelayOptions } from './redis-relay.js';
+import { RelayPublisher, type RelayPublisherInit } from './relay-publisher.js';
 import { WsRelay } from './relay.js';
 
 /**
@@ -77,9 +78,23 @@ class RelayLifecycle implements OnShutdown {
   }
 }
 
+/**
+ * Bound beside the relay so a process with no server can publish without knowing
+ * the wire format. `init` is the module's, not `HttpOptions`': the two processes
+ * agree on a channel by being configured from the same place, and a default here
+ * that silently differed from the servers' would fan out to nobody.
+ */
+const publisherBinding = (init: RelayPublisherInit): Registration =>
+  provide(RelayPublisher, {
+    useFactory: (relay: WsRelay) => new RelayPublisher(relay, init),
+    inject: [WsRelay] as const,
+  });
+
 const redisBindings = (
   options: FactoryProvider<RelayConnectionOptions, Deps>,
+  publisher: RelayPublisherInit,
 ): readonly Registration[] => [
+  publisherBinding(publisher),
   provide(RelayConnectionOptions, options),
   provide(RedisRelay, {
     useFactory: (settings: RelayConnectionOptions) =>
@@ -98,7 +113,9 @@ const redisBindings = (
 
 const postgresBindings = (
   options: FactoryProvider<PostgresRelayConnectionOptions, Deps>,
+  publisher: RelayPublisherInit,
 ): readonly Registration[] => [
+  publisherBinding(publisher),
   provide(PostgresRelayConnectionOptions, options),
   provide(PostgresRelay, {
     useFactory: (settings: PostgresRelayConnectionOptions) =>
@@ -139,14 +156,20 @@ const postgresBindings = (
  */
 export class WsRelayModule {
   /** Redis or Valkey, over `Bun.RedisClient`. */
-  static forRoot(init: RedisRelayOptions = {}): DynamicModule {
+  static forRoot(
+    init: RedisRelayOptions = {},
+    publisher: RelayPublisherInit = {},
+  ): DynamicModule {
     return {
       module: WsRelayModule,
-      exports: [WsRelay, RedisRelay, RelayConnectionOptions],
-      providers: redisBindings({
-        useFactory: () => new RelayConnectionOptions(init),
-        inject: [] as const,
-      }),
+      exports: [WsRelay, RedisRelay, RelayConnectionOptions, RelayPublisher],
+      providers: redisBindings(
+        {
+          useFactory: () => new RelayConnectionOptions(init),
+          inject: [] as const,
+        },
+        publisher,
+      ),
     };
   }
 
@@ -157,6 +180,7 @@ export class WsRelayModule {
    */
   static forRootAsync<const D extends Deps>(
     config: AsyncModuleConfig<RedisRelayOptions, D>,
+    publisher: RelayPublisherInit = {},
   ): DynamicModule {
     const useFactory = async (
       ...deps: readonly unknown[]
@@ -166,11 +190,14 @@ export class WsRelayModule {
     return {
       module: WsRelayModule,
       ...(config.imports === undefined ? {} : { imports: config.imports }),
-      exports: [WsRelay, RedisRelay, RelayConnectionOptions],
-      providers: redisBindings({
-        useFactory,
-        inject: config.inject ?? ([] as const),
-      } as FactoryProvider<RelayConnectionOptions, Deps>),
+      exports: [WsRelay, RedisRelay, RelayConnectionOptions, RelayPublisher],
+      providers: redisBindings(
+        {
+          useFactory,
+          inject: config.inject ?? ([] as const),
+        } as FactoryProvider<RelayConnectionOptions, Deps>,
+        publisher,
+      ),
     };
   }
 
@@ -179,20 +206,32 @@ export class WsRelayModule {
    * database and would rather not run a broker. A frame over about 7.9 KB is
    * refused; see {@link PostgresRelay}.
    */
-  static forPostgres(init: PostgresRelayOptions = {}): DynamicModule {
+  static forPostgres(
+    init: PostgresRelayOptions = {},
+    publisher: RelayPublisherInit = {},
+  ): DynamicModule {
     return {
       module: WsRelayModule,
-      exports: [WsRelay, PostgresRelay, PostgresRelayConnectionOptions],
-      providers: postgresBindings({
-        useFactory: () => new PostgresRelayConnectionOptions(init),
-        inject: [] as const,
-      }),
+      exports: [
+        WsRelay,
+        PostgresRelay,
+        PostgresRelayConnectionOptions,
+        RelayPublisher,
+      ],
+      providers: postgresBindings(
+        {
+          useFactory: () => new PostgresRelayConnectionOptions(init),
+          inject: [] as const,
+        },
+        publisher,
+      ),
     };
   }
 
   /** `forPostgres` with the settings behind a factory. */
   static forPostgresAsync<const D extends Deps>(
     config: AsyncModuleConfig<PostgresRelayOptions, D>,
+    publisher: RelayPublisherInit = {},
   ): DynamicModule {
     const useFactory = async (
       ...deps: readonly unknown[]
@@ -204,11 +243,19 @@ export class WsRelayModule {
     return {
       module: WsRelayModule,
       ...(config.imports === undefined ? {} : { imports: config.imports }),
-      exports: [WsRelay, PostgresRelay, PostgresRelayConnectionOptions],
-      providers: postgresBindings({
-        useFactory,
-        inject: config.inject ?? ([] as const),
-      } as FactoryProvider<PostgresRelayConnectionOptions, Deps>),
+      exports: [
+        WsRelay,
+        PostgresRelay,
+        PostgresRelayConnectionOptions,
+        RelayPublisher,
+      ],
+      providers: postgresBindings(
+        {
+          useFactory,
+          inject: config.inject ?? ([] as const),
+        } as FactoryProvider<PostgresRelayConnectionOptions, Deps>,
+        publisher,
+      ),
     };
   }
 }
