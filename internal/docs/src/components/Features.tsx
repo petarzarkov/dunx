@@ -31,6 +31,9 @@ const PATHS = Object.freeze({
   layers: 'M12 3 3 8l9 5 9-5-9-5ZM3 14l9 5 9-5',
   spec: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6',
   flask: 'M10 3v6L5 19a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-10V3M9 3h6',
+  relay: 'M5 7v10M19 7v10M9 12h6M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+  stream: 'M3 8c4 0 4 3 8 3s5-3 9-3M3 16c4 0 4 3 8 3s5-3 9-3',
+  shield: 'M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6zM9 12l2 2 4-4',
 });
 
 const Icon = ({ d }: { d: string }): React.JSX.Element => (
@@ -81,7 +84,11 @@ export const Features = (): React.JSX.Element => {
             What is actually different
           </Title>
           <Text c="dimmed" maw={640}>
-            Each claim links to the page that measures it.
+            {/* This said each claim links to the page that measures it, and
+                there has never been a link in this section. Where a card carries
+                a number it is read from the benchmark model rather than typed. */}
+            Decisions rather than a feature list. Where one of these carries a
+            number, the number is measured.
           </Text>
         </Stack>
 
@@ -140,6 +147,33 @@ export const Features = (): React.JSX.Element => {
             <code>createTestApp</code> replaces providers in place;{' '}
             <code>createTestServer</code> boots a real <code>Bun.serve</code> on
             port 0. The routing under test is Bun&apos;s own.
+          </Feature>
+
+          <Feature icon={PATHS.relay} title="Work that leaves the request">
+            RabbitMQ behind <code>@dunx/infra/amqp</code>, bullmq over{' '}
+            <code>Bun.RedisClient</code> behind <code>/queue</code>, and an
+            in-process <code>EventBus</code> over <code>EventTarget</code>. A
+            handler is a method with <code>@AmqpHandler</code> and nothing else:
+            no registry, no broker token. The publishing request&apos;s trace id
+            is stamped into the message headers and read back by the consumer,
+            so a flow that crossed the broker joins in one log query.
+          </Feature>
+
+          <Feature icon={PATHS.stream} title="Four shapes of connection">
+            Routes, websocket gateways, <code>@Sse</code> over Bun&apos;s own{' '}
+            <code>ReadableStream</code>, and Connect with gRPC-Web behind{' '}
+            <code>@dunx/http/connect</code> - all on one <code>Bun.serve</code>,
+            through the same middleware, CORS and rate limiting. A gateway
+            broadcasting across replicas takes <code>WsRelayModule</code> over
+            Redis or Postgres <code>LISTEN/NOTIFY</code>.
+          </Feature>
+
+          <Feature icon={PATHS.shield} title="Failure handling in the core">
+            <code>ResiliencePolicy</code> is timeout, retry, backoff, jitter and
+            fallback with no dependency behind it, usable around anything rather
+            than only an outbound call. Caching is memory, Redis or the two
+            tiered, and request, query, queue, Redis and cache metrics each sit
+            behind their own flag, off until asked for.
           </Feature>
         </SimpleGrid>
 
