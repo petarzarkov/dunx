@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import * as amqp from './amqp/index.js';
 import * as cache from './cache/index.js';
 import * as db from './db/index.js';
+import * as email from './email/index.js';
 import * as files from './files/index.js';
 import * as images from './images/index.js';
 import * as root from './index.js';
@@ -50,8 +51,74 @@ describe('@dunx/infra root barrel', () => {
     ['queue', queue, 'bullmq'],
     ['db', db, 'drizzle-orm'],
     ['amqp', amqp, 'rabbitmq-client'],
+    ['email', email, 'resend'],
   ])('keeps /%s out, so the root needs no %s', (_area, area) => {
     expect(names.filter((name) => name in area)).toEqual([]);
+  });
+});
+
+/**
+ * `/email` is the one area whose peers sit a level below it: the base subpath
+ * reaches none, and each vendor subpath reaches exactly one. The README says a
+ * consumer can import `@dunx/infra/email` with none of the four installed, and
+ * these are what keep that true rather than merely written down.
+ */
+describe('the /email vendor peers stay in their own subpaths', () => {
+  const VENDORS = ['resend', 'nodemailer', 'react', '@react-email/render'];
+
+  const sources = async (): Promise<Map<string, string>> => {
+    const found = new Map<string, string>();
+    const glob = new Bun.Glob('**/*.ts');
+    for await (const file of glob.scan({ cwd: `${import.meta.dir}/email` })) {
+      if (/\.(test|fixture)\.ts$/.test(file)) continue;
+      found.set(
+        file,
+        await Bun.file(`${import.meta.dir}/email/${file}`).text(),
+      );
+    }
+    return found;
+  };
+
+  it.each([
+    ['resend', 'resend/index.ts'],
+    ['nodemailer', 'smtp/index.ts'],
+    ['react', 'react/index.ts'],
+    ['@react-email/render', 'react/index.ts'],
+  ])('imports %s only from %s', async (vendor, owner) => {
+    const importing = [...(await sources())]
+      .filter(([, text]) => text.includes(`from '${vendor}'`))
+      .map(([file]) => file);
+
+    expect(importing).toEqual([owner]);
+  });
+
+  /** The base subpath, and everything it pulls in, reaches none of them. */
+  it('leaves the base subpath free of all four', async () => {
+    const base = [...(await sources())].filter(([file]) => !file.includes('/'));
+
+    for (const [file, text] of base) {
+      for (const vendor of VENDORS) {
+        expect(`${file}: ${String(text.includes(`from '${vendor}'`))}`).toBe(
+          `${file}: false`,
+        );
+      }
+    }
+  });
+
+  it('marks every one of them optional', async () => {
+    const manifest = (await Bun.file(
+      `${import.meta.dir}/../package.json`,
+    ).json()) as Record<string, unknown>;
+    const meta = manifest['peerDependenciesMeta'] as Record<
+      string,
+      { optional?: boolean }
+    >;
+
+    for (const vendor of VENDORS) {
+      expect(`${vendor}: ${String(meta[vendor]?.optional)}`).toBe(
+        `${vendor}: true`,
+      );
+    }
   });
 });
 

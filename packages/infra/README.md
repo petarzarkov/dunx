@@ -87,16 +87,23 @@ It is an abstract class where dunx owns the contract (`Storage`, `DbConnection`,
 `redisConnection(name)`, `redisMetrics(name)` and `LoggerSettings`, name things no
 class can.
 
-**If an area is in the root barrel at all, all of it is.** `/db`, `/queue` and
-`/amqp` are the three the barrel does not re-export: each reaches an optional peer
-through a static import, so exporting them would make `drizzle-orm`, `ioredis` and
-`rabbitmq-client` hard requirements of `import '@dunx/infra'`. Reach them at their
-subpaths.
+**If an area is in the root barrel at all, all of it is.** `/db`, `/queue`,
+`/amqp` and `/email` are the four the barrel does not re-export: each reaches an
+optional peer through a static import, so exporting them would make
+`drizzle-orm`, `ioredis`, `rabbitmq-client` or `resend` hard requirements of
+`import '@dunx/infra'`. Reach them at their subpaths.
 
-`/email` splits along the same line one level down. The base subpath reaches no
-peer, so it is in the barrel; the three vendor subpaths under it each reach one
-and are not. Importing `@dunx/infra/email` therefore needs neither `resend` nor
-`nodemailer` nor `react`.
+Within `/email` the split goes one level further. Each vendor import sits in the
+subpath that needs it and nowhere else: `resend` in `/email/resend`, `nodemailer`
+in `/email/smtp`, `react` and `@react-email/render` in `/email/react`.
+
+So `@dunx/infra/email` resolves with none of the four installed, which is what
+the log and memory transports are for. The `dunx-email` bin names no renderer
+either, loading one through `import()`.
+
+`packages/infra/src/index.test.ts` asserts all of it: which file may import each
+vendor, that the base subpath imports none, and that every one of the four is
+marked optional.
 
 **Timing is off unless asked for.** `{ metrics: true }` is the last argument to
 `DbModule`, `CacheModule`, `RedisModule` and `QueueModule`, binding a
