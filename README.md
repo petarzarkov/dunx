@@ -139,11 +139,11 @@ specifier is a compile error rather than a runtime surprise.
 
 - **[The live demo](https://demo.dunx.win)** - `examples/full` running on a
   Raspberry Pi 5: the API explorer, the ops dashboard, bull-board, and a page
-  that drives twelve capabilities from a browser, including a transaction
-  rolling back, the outbound client retrying a 503, and the process's own
-  request, query and event-loop timings
-- **[The guide](https://dunx.win)** - twenty-seven pages,
-  introduction through RPC
+  that drives fourteen capabilities from a browser, including a transaction
+  rolling back, the outbound client retrying a 503, an order crossing a RabbitMQ
+  topic exchange, and the process's own request, query and event-loop timings
+- **[The guide](https://dunx.win)** - twenty-eight pages,
+  introduction through message brokers
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and
   what does not
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - what was measured, what was

@@ -151,3 +151,75 @@ describe('gen:readme', () => {
     }
   });
 });
+
+/**
+ * The counts the README states in prose, checked against what it is counting.
+ *
+ * These three sit in the hand-written "Documentation" section rather than in a
+ * generated block, so `--check` above never looked at them: at the time this was
+ * written the file claimed twelve demo panels against fourteen, twenty-seven
+ * guides against twenty-eight, and a guide set ending at RPC two releases after
+ * message brokers landed. Spelled out in words, which is why nothing caught them.
+ */
+describe('the counts the README states', () => {
+  const readme = Bun.file(`${REPO}README.md`).text();
+
+  /** Only as far as the numbers this file actually uses. */
+  const WORDS: Readonly<Record<string, number>> = Object.freeze({
+    twelve: 12,
+    thirteen: 13,
+    fourteen: 14,
+    fifteen: 15,
+    sixteen: 16,
+    'twenty-six': 26,
+    'twenty-seven': 27,
+    'twenty-eight': 28,
+    'twenty-nine': 29,
+    thirty: 30,
+    'thirty-one': 31,
+  });
+
+  const stated = async (pattern: RegExp): Promise<number> => {
+    const found = pattern.exec(await readme)?.[1];
+    if (found === undefined) {
+      throw new Error(`README no longer matches ${String(pattern)}`);
+    }
+    const value = WORDS[found];
+    if (value === undefined) {
+      throw new Error(`Add "${found}" to WORDS in this test`);
+    }
+    return value;
+  };
+
+  it('counts the demo panels the live demo drives', async () => {
+    const page = await Bun.file(
+      `${REPO}examples/full/src/landing/public/index.html`,
+    ).text();
+    const panels = [...page.matchAll(/<section\b/g)].length;
+
+    expect(await stated(/drives ([a-z-]+) capabilities from a browser/)).toBe(
+      panels,
+    );
+  });
+
+  it('counts the guide pages the site publishes', async () => {
+    const guides = [...new Bun.Glob('*.md').scanSync(`${REPO}docs/guide`)]
+      .length;
+
+    expect(await stated(/dunx\.win\)\*\* - ([a-z-]+) pages/)).toBe(guides);
+  });
+
+  /** The range the guide covers, so "introduction through RPC" cannot outlive the
+   * guide that came after it. */
+  it('names the last guide as the end of the range', async () => {
+    const slugs = [
+      ...new Bun.Glob('*.md').scanSync(`${REPO}docs/guide`),
+    ].sort();
+    const last = slugs.at(-1)?.replace(/^\d+-/, '').replace(/\.md$/, '');
+
+    expect(last).toBeDefined();
+    expect(await readme).toContain(
+      `introduction through ${(last as string).replace(/-/g, ' ')}`,
+    );
+  });
+});

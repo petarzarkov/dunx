@@ -63,6 +63,15 @@ const EXAMPLES: readonly Example[] = [
     runId: 'run-start',
     tags: ['everything'],
   },
+  {
+    dir: 'binary',
+    title: 'binary',
+    blurb:
+      'How you ship one. A small CLI - the same container, config and lifecycle a server uses, with no HTTP surface - compiled by Bun.build into a single executable that runs on a host with nothing installed. The transform runs at build time, since a compiled binary has no load-time plugin.',
+    run: 'bun run build',
+    runId: 'run-build',
+    tags: ['bun build --compile'],
+  },
 ];
 
 export const Examples = (): React.JSX.Element => (
@@ -73,9 +82,11 @@ export const Examples = (): React.JSX.Element => (
           Examples
         </Title>
         <Text c="dimmed" maw={640}>
-          Four runnable apps in the repository, in the order worth reading them.
-          Every one of them is booted by CI, which is the only reason to trust
-          that they still work.
+          {/* Counted rather than spelled out, for the reason the package count
+              on this page is: `binary` shipped and this line still said four. */}
+          {EXAMPLES.length} runnable apps in the repository, in the order worth
+          reading them. Every one of them is booted by CI, which is the only
+          reason to trust that they still work.
         </Text>
       </Stack>
 
