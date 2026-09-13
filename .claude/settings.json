@@ -1,17 +1,4 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun run lint && bun run typecheck"
-          }
-        ]
-      }
-    ]
-  },
   "enabledPlugins": {
     "github@claude-plugins-official": true,
     "feature-dev@claude-plugins-official": true,

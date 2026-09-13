@@ -154,7 +154,7 @@ constructor reader needs it).
 **Documentation debt.** `packages/infra/README.md`'s `## db` section was rewritten
 against the drizzle API, and its `## logger` section added. `ARCHITECTURE.md` gained
 the hardcoded-`PgDialect` and drizzle-`transaction()` measurements and the database
-design section. Manifest descriptions, `CLAUDE.md`'s package table and the root
+design section. Manifest descriptions and the root
 README now name the `Logger` contract and `/logger`.
 
 **Queues on bullmq.** Built: `QueueModule.forRoot`/`forRootAsync`, `@JobHandler`
