@@ -4,6 +4,97 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.8.0 - 2026-09-13
+
+RabbitMQ behind @dunx/infra/amqp, cache metrics, and a pagination subpath without drizzle
+
+`@dunx/infra` gains `/amqp`: RabbitMQ over `rabbitmq-client`, an optional peer.
+`@AmqpHandler({ queue, exchange, routingKey })` marks a method and discovery walks
+the prototype chains of the classes the modules already declare, so there is no
+class decorator and no registry. `AmqpPublisher` stamps the scope's `traceparent`
+and `tracestate` into the message headers and `AmqpDispatcher` continues that trace
+with a span of its own, so a trace crosses the broker. Every close is bounded, and
+`AmqpConnection.onShutdown` destroys the socket afterwards either way, so a SIGTERM
+against an absent broker exits.
+
+`@dunx/infra/cache` gains metrics: hits, misses, errors and a latency histogram per
+operation, with a Cache half added to the dashboard Stats panel. A tiered promote no
+longer puts a deleted value back, single-flight counts the reads in flight rather
+than whether one is, and `MeteredCacheStore` lets a caller reach the store it wraps.
+
+`@dunx/infra/pagination/cursor` is the half of pagination that needs no database, for
+an app paginating something that is not a drizzle table. `paginate` imports drizzle
+at module scope, so the root barrel does not resolve without the optional peer.
+
+`@dunx/core` gains `parseTraceparent` and `formatTraceparent`, moved down from
+`@dunx/http` next to the `RequestFields` they fill.
+
+`@dunx/http` serves three server-sent-events frames the spec dispatches and dunx did
+not, bounds an SSE producer and hands it a disconnect signal, and merges response
+headers by name. Each RPC now gets its own metrics series rather than sharing one.
+Preflight and rate limiting apply per claimed path, and Swagger options are escaped.
+
+`@dunx/infra` also consolidates five hand-rolled bounded closes into one helper, and
+records why a close is bounded by a race where `ResiliencePolicy` uses an
+`AbortSignal`: a signal where the operation takes one, a race where it does not.
+
+### Features
+
+- **example**: exercise @dunx/infra/amqp end to end, and document it ([`7738286`](https://github.com/petarzarkov/dunx/commit/7738286e1804784e096d4325a10f95cc3bbc8fd9))
+- **infra**: RabbitMQ over rabbitmq-client, behind @dunx/infra/amqp ([`a8c2bd7`](https://github.com/petarzarkov/dunx/commit/a8c2bd7d189e21b289b55534b0020f1206b70780))
+- **core**: move the traceparent format and parse down from @dunx/http ([`c432d47`](https://github.com/petarzarkov/dunx/commit/c432d47b6f38e5a435bcccbf4304b5cef728ac2a))
+- **infra**: add cache metrics, and a Cache half to the Stats panel ([`14e0921`](https://github.com/petarzarkov/dunx/commit/14e0921403e44c465db51b98d387ee87cd7b13c5))
+- **infra**: a pagination subpath that needs no drizzle ([`9dd6b05`](https://github.com/petarzarkov/dunx/commit/9dd6b050aad6180f460842d685bb6ca16d67d039))
+- **example**: a landing panel for the two API explorers ([`fe10754`](https://github.com/petarzarkov/dunx/commit/fe10754b8c35d31a07e9a1bc3920bc4273317c0c))
+
+### Fixes
+
+- **infra**: assert the timer clear, and correct what an unsignalled close does ([`f6a2c99`](https://github.com/petarzarkov/dunx/commit/f6a2c99d7cbdc1651d765620b97d064e99ac5c97))
+- **infra**: close the full-review round on the AMQP subpath ([`dced44c`](https://github.com/petarzarkov/dunx/commit/dced44c37371be0298b790a041cb4697ed4c2a6d))
+- **infra**: close the second review round on the AMQP subpath ([`058e2fd`](https://github.com/petarzarkov/dunx/commit/058e2fd01b10bf089054c53b95cc242d31668217))
+- **infra**: close the review round on the AMQP subpath ([`b2ecbe4`](https://github.com/petarzarkov/dunx/commit/b2ecbe40c25957a5728f4c3f1861c7cef3104b61))
+- **infra**: let a caller reach the store MeteredCacheStore wraps ([`75f293b`](https://github.com/petarzarkov/dunx/commit/75f293b3aec0a55c8aa1bdf83af94b887933aaf4))
+- **http**: give each RPC its own metrics series ([`6ce2125`](https://github.com/petarzarkov/dunx/commit/6ce2125a87b0d51e838c41704b10b3d4e9499417))
+- close the tail of the post-release audit ([`4f91917`](https://github.com/petarzarkov/dunx/commit/4f919175c68a23f8d4bfcef6ab06a15fa2c392f8))
+- **http**: bound an SSE producer, give it a disconnect signal, and merge headers by name ([`ea5ff86`](https://github.com/petarzarkov/dunx/commit/ea5ff86ff8c73386813b372c44e862acefd8c508))
+- **infra**: count the reads in flight, not whether one is ([`f39b084`](https://github.com/petarzarkov/dunx/commit/f39b0848dd797f75684cbfd96a262dd01331c6b7))
+- **infra**: stop a tiered promote putting a deleted value back ([`532e88b`](https://github.com/petarzarkov/dunx/commit/532e88b2c949b6dce80a10651af645b98a48b345))
+- **http**: three server-sent-events frames the spec dispatches and dunx did not ([`65a01f5`](https://github.com/petarzarkov/dunx/commit/65a01f579e0d040bffaf1b8bf86e5d354c2fd4dc))
+- **http**: preflight and rate limit a claimed path per path, and escape swagger options ([`f008636`](https://github.com/petarzarkov/dunx/commit/f00863682cf2122fc611d3113aee2626916e1b9a))
+
+### Refactors
+
+- **infra**: one bounded close for the five that had written it ([`45964b5`](https://github.com/petarzarkov/dunx/commit/45964b563801b0f06455dfe7b80241e00565f52f))
+
+### Documentation
+
+- **guide**: make the cache sample payload add up ([`bf1557e`](https://github.com/petarzarkov/dunx/commit/bf1557ee0759a67b8bbad6b9cfe2a372cb8b170d))
+- record the transpiler-cache trap, and why the retry binding is outer ([`6d59642`](https://github.com/petarzarkov/dunx/commit/6d59642086831a801a1f90d57fc6ccd5903d978e))
+- reconcile the docs with what 3.7.0 actually ships ([`85daa16`](https://github.com/petarzarkov/dunx/commit/85daa167210b0ef2f734184c875c82516ccb983b))
+
+### Other changes
+
+- **example**: narrate the rpc metrics series in the tour ([`cabd99f`](https://github.com/petarzarkov/dunx/commit/cabd99f3bf619eb3e9eef6b4bc2c3da496f38a1e))
+- say why the trusted script is missing rather than failing on Module not found ([`8bdb7e2`](https://github.com/petarzarkov/dunx/commit/8bdb7e227ff4d0d81d0451e332d9eabcb888a349))
+- stop the deep review trusting the pull request it is reviewing ([`ffdb0a6`](https://github.com/petarzarkov/dunx/commit/ffdb0a6d551f41a3ad227855f8945073899e0d7c))
+- drop dunxonu as a code owner ([`023a6d1`](https://github.com/petarzarkov/dunx/commit/023a6d11aa43d3076477abe855f8447b9ce8693e))
+- page the file list correctly, which it never did ([`b00b0e5`](https://github.com/petarzarkov/dunx/commit/b00b0e5946793e5fbc1ad0f6b1e3294c9bb584f2))
+- act on the four findings from the deep review of itself ([`9bfbe31`](https://github.com/petarzarkov/dunx/commit/9bfbe31da8c12c195ef362593fcd8bd50b45f502))
+- fix the two things the deep review found in itself ([`0b335d6`](https://github.com/petarzarkov/dunx/commit/0b335d66b415873bc373a1c2e8b06d0ce3dbe7e3))
+- bring back the Claude review, on request only ([`1b1dad6`](https://github.com/petarzarkov/dunx/commit/1b1dad66604395b06dc4fdd973a0484f6b5f20fe))
+- drop the Cerebras routes, which answer 402 ([`721d8cf`](https://github.com/petarzarkov/dunx/commit/721d8cfda72bf1a41ae1010c006e374cfef4d58b))
+- take v1.3.0, which reviews the code rather than the patch ([`3546444`](https://github.com/petarzarkov/dunx/commit/354644455056d75ee1ca81f7e7a1e2c121c0a8f1))
+- take v1.2.3, so the em dash ban binds dunxonu's own replies ([`22a8cb8`](https://github.com/petarzarkov/dunx/commit/22a8cb8bb98a3c5bdac88f8d6ccbb333b1610239))
+- take v1.2.2, which shows a thread mention the question ([`a371ced`](https://github.com/petarzarkov/dunx/commit/a371ced63be2122c969b68402eefeee5d9fec8b0))
+- use the model ids the providers actually serve ([`65ce9b9`](https://github.com/petarzarkov/dunx/commit/65ce9b9a89ed255ce6b134c724a0f0b203c6841d))
+- drop the dead Pro route, and take the mention prompt fix ([`026afa1`](https://github.com/petarzarkov/dunx/commit/026afa13b27a7630735750c5bf412e0d71056344))
+- give mentions and replies a slower, more careful model list ([`a23cac7`](https://github.com/petarzarkov/dunx/commit/a23cac718a2d4b36ad7a99eb1c440d5156d5a9df))
+- drop post-review.ts, and order the routes by latency ([`d42f3d1`](https://github.com/petarzarkov/dunx/commit/d42f3d1a3596b1956c42fbc88a9e2fc2723fdd78))
+- tell the reviewer the em dash rule binds its own prose too ([`4207bfb`](https://github.com/petarzarkov/dunx/commit/4207bfb60a2808f83e44adde6ae5cc725ca3ab26))
+- answer mentions too, so nothing the old workflows did is dropped ([`293443e`](https://github.com/petarzarkov/dunx/commit/293443e24fd40f4196dd0d97b5aab004e93a27ec))
+- split the concurrency group by event, and use model ids that exist ([`4c63e3a`](https://github.com/petarzarkov/dunx/commit/4c63e3a4f50f4ab5a083f9889db0a1ec7b82bc50))
+- review pull requests with fast-code-review ([`e22842f`](https://github.com/petarzarkov/dunx/commit/e22842fb8bd8a0b5ec4aa35aba2a6775398d4383))
+
 ## 3.7.0 - 2026-09-12
 
 An event bus, server-sent events, Connect RPC and pluggable OpenAPI renderers

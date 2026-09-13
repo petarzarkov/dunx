@@ -1,6 +1,6 @@
 {
   "name": "@dunx/mcp",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "A Model Context Protocol server for dunx: the written guide and scaffold catalogue with no app, plus your routes, providers and modules once you point it at one",
   "keywords": [
     "agent",
