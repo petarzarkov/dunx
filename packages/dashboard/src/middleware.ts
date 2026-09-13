@@ -1,6 +1,11 @@
 import type { RoutePrefix } from '@dunx/http/internal';
 import { Logger, type ModuleRef } from '@dunx/core';
-import type { Middleware, Next, RouteContext } from '@dunx/http';
+import {
+  gate,
+  type Middleware,
+  type Next,
+  type RouteContext,
+} from '@dunx/http';
 import type { BunRequest } from 'bun';
 import { buildBoard, type Board } from './board.js';
 import { DashboardOptions } from './options.js';
@@ -65,15 +70,9 @@ export class DashboardMiddleware implements Middleware {
       return next();
     }
 
-    // 404, never 403. A dashboard that announces itself to an unauthenticated
-    // caller has told them where to keep knocking - so a rejected request is
-    // indistinguishable from a mount that is not there.
-    if (this.#options.authorize && !(await this.#options.authorize(req))) {
-      return Response.json(
-        { error: 'NOT_FOUND', status: 404 },
-        { status: 404 },
-      );
-    }
+    // 404, never 403, unless the gate returned a response of its own.
+    const refused = await gate(this.#options.authorize, req);
+    if (refused !== undefined) return refused;
 
     const rest = pathname.slice(this.#options.path.length);
     return handleDashboard(this.#deps, req, rest);

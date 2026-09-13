@@ -297,6 +297,68 @@ documented on all of them, **even where no guard reads it**. The document
 describes what the metadata declares; which guard enforces it is a separate
 decision, and one no generator can see. If that gap matters, install the guard.
 
+## Who may read the document
+
+`authorize` decides whether a request sees the explorer at all: the document, the
+page, and the page's own assets, one decision covering all three. It is the same
+`Authorize` `@dunx/dashboard` takes, so one function gates both ops surfaces.
+
+```ts
+OpenApiModule.forRoot({
+  title: 'Payments',
+  version: '1.4.0',
+  root: AppModule,
+  renderer: new SwaggerRenderer(),
+  authorize: (req) =>
+    req.headers.get('x-docs-token') === process.env.DOCS_TOKEN,
+});
+```
+
+There is no default and no boot warning for leaving it out, unlike the dashboard.
+A public API's document is published to be read. The option exists for the other
+case: a service whose document is its whole route table, admin operations and
+their `x-required-roles` included.
+
+Three things follow from where it runs.
+
+**It receives the raw `BunRequest`.** The explorer's routes are `@Public()`, so no
+guard has established the caller and nothing upstream has written a context. Ask
+the auth library:
+
+```ts
+authorize: async (req) =>
+  (await auth.api.getSession({ headers: req.headers })) !== null,
+```
+
+That closes over an `Auth` the container owns, so it comes out of
+`forRootAsync`'s factory rather than sitting beside `root`.
+
+**A refusal answers 404.** A 403 tells a prober where to keep knocking, so a
+gated mount is indistinguishable from one that is not there: the body is the one
+an unmatched path already answers.
+
+**A returned `Response` is sent as written.** A browser arrives with a cookie and
+no way to attach a bearer token, so a 404 leaves a person nowhere to go:
+
+```ts
+authorize: async (req) => {
+  if (await signedIn(req)) return true;
+  return req.headers.get('accept')?.includes('text/html') === true
+    ? new Response(null, { status: 302, headers: { location: '/sign-in' } })
+    : false;
+},
+```
+
+Gate on something the page's asset requests carry too, which means a cookie
+rather than a query parameter. A page whose stylesheet was refused renders blank
+rather than gated.
+
+A second renderer mounted by hand is a middleware of your own, and it is gated by
+being handed the same function. `gate(authorize, req)` from `@dunx/http` is what
+`OpenApiModule` and `DashboardMiddleware` both call, and it returns the response
+to send or `undefined` to carry on. `examples/full/src/docs-gate.ts` is one class
+doing that for Swagger UI at `/api/docs` and Scalar at `/api/reference`.
+
 ## Naming a schema with `.meta({ id })`
 
 zod emits nested definitions under `$defs`. OpenAPI calls that slot

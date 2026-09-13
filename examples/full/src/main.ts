@@ -14,6 +14,7 @@ import { SwaggerRenderer } from '@dunx/openapi/swagger';
 import { AppModule } from './app.module.js';
 import { AuthDocs, AuthDocsModule } from './auth-docs.js';
 import { AppConfigService } from './config.js';
+import { DocsGate, DocsGateModule } from './docs-gate.js';
 import { LandingMiddleware } from './landing/landing.middleware.js';
 import { ReferenceMiddleware } from './reference/reference.middleware.js';
 import { SelfOrigin } from './landing/self-origin.js';
@@ -33,10 +34,10 @@ export const createApp = async (): Promise<HttpApp> => {
     // owns and the graph cannot supply synchronously.
     OpenApiModule.forRootAsync({
       root: AppModule,
-      // Its own scope, so the module exporting `AuthDocs` goes in *these*
-      // imports; importing it into the root does not reach the factory.
-      imports: [AuthDocsModule],
-      inject: [AuthDocs] as const,
+      // Its own scope, so the modules exporting `AuthDocs` and `DocsGate` go in
+      // *these* imports; importing them into the root does not reach the factory.
+      imports: [AuthDocsModule, DocsGateModule],
+      inject: [AuthDocs, DocsGate] as const,
       /**
        * Which documentation UI, and its configuration. Beside `root` rather
        * than in the factory: the controller declares its routes before a
@@ -74,7 +75,7 @@ export const createApp = async (): Promise<HttpApp> => {
           };
         })()`,
       }),
-      useFactory: (authDocs: AuthDocs) => ({
+      useFactory: (authDocs: AuthDocs, docs: DocsGate) => ({
         title: 'dunx full example',
         version: '0.1.0',
         description:
@@ -82,6 +83,12 @@ export const createApp = async (): Promise<HttpApp> => {
           'the routes validate against.\n\n[Back to the demo](/)',
         // A provider, asked for its fragment when the document is generated.
         contribute: [authDocs],
+        // Out of the factory because it closes over an `Auth` the container
+        // owns, and spread because `exactOptionalPropertyTypes` separates absent
+        // from explicitly undefined. `ReferenceMiddleware` gets the same gate.
+        ...(docs.enabled
+          ? { authorize: (req: Bun.BunRequest) => docs.admits(req) }
+          : {}),
       }),
     }),
     {

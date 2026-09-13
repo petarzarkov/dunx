@@ -3,10 +3,11 @@ export { DashboardMiddleware } from './middleware.js';
 export {
   DashboardOptions,
   normalizeMount,
-  type Authorize,
   type DashboardOptionsInit,
   type Reveal,
 } from './options.js';
+// `@dunx/http` owns it; the one an app writes here is what `OpenApiModule` takes.
+export type { Authorize, AuthorizeDecision } from '@dunx/http';
 // The structural restatements. Exported because an app wiring `queues` or `redis`
 // may want to name the shape it is satisfying, and because anything else that can
 // satisfy one - a fake in a test, a second queue library - needs the contract.

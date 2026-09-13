@@ -42,6 +42,12 @@ export type {
   StandardSchemaResult,
   StandardSchemaV1,
 } from './route/schema.js';
+// How an ops surface decides who may see it. Neither package that takes one owns it.
+export {
+  gate,
+  type Authorize,
+  type AuthorizeDecision,
+} from './server/authorize.js';
 // The route and gateway readers. `@dunx/core` owns the container half of the same
 // traversal (`providersOf`, `modulesOf`); this is the half that needs route
 // metadata and the gateway marker. Both were `@dunx/mcp`'s until `@dunx/dashboard`

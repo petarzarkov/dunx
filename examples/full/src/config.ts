@@ -72,6 +72,8 @@ const envSchema = z.object({
   DASHBOARD_TOKEN: z.string().min(1).optional(),
   /** bull-board's `readOnlyMode`, inverted. The public demo sets it false. */
   DASHBOARD_COMMANDS: z.stringbool().default(true),
+  /** Puts both explorers behind a session. False so the demo stays readable. */
+  DOCS_GUARDED: z.stringbool().default(false),
   /** better-auth signs session cookies with this. 32 characters is its own minimum. */
   AUTH_SECRET: z
     .string()
@@ -113,6 +115,7 @@ export interface AppConfig {
     readonly token: string | undefined;
     readonly commands: boolean;
   };
+  readonly docs: { readonly guarded: boolean };
   readonly throttle: { readonly limit: number; readonly windowSeconds: number };
   readonly schedule: { readonly tz: string };
   readonly upstream: { readonly timeoutMs: number };
@@ -174,6 +177,7 @@ export const validate = (env: ConfigValues): AppConfig => {
       token: value.DASHBOARD_TOKEN,
       commands: value.DASHBOARD_COMMANDS,
     },
+    docs: { guarded: value.DOCS_GUARDED },
     throttle: {
       limit: value.THROTTLE_LIMIT,
       windowSeconds: value.THROTTLE_WINDOW_SECONDS,

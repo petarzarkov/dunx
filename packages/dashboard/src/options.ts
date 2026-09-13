@@ -1,4 +1,4 @@
-import type { BunRequest } from 'bun';
+import type { Authorize } from '@dunx/http';
 import type {
   CacheStatsSource,
   ConfigValues,
@@ -8,16 +8,6 @@ import type {
   RedisProbe,
   StatsSource,
 } from './contracts.js';
-
-/**
- * Decides whether a request may see the dashboard at all. It receives the raw
- * `Request`: the middleware must be registered ahead of any session guard, so
- * there is nothing upstream to have written a context and this has to ask the
- * auth library itself.
- *
- * A rejected request gets 404, not 403.
- */
-export type Authorize = (req: BunRequest) => boolean | Promise<boolean>;
 
 /**
  * Whether a config value may be shown. The default reveals nothing: a deny-list

@@ -53,6 +53,8 @@ export {
   type OpenApiInfo,
   type OpenApiOptions,
 } from './module.js';
+// `authorize`'s type, owned by `@dunx/http` and taken by `@dunx/dashboard` too.
+export type { Authorize, AuthorizeDecision } from '@dunx/http';
 export { mountPrefix, withPrefix } from './mount.js';
 export {
   bearerScheme,

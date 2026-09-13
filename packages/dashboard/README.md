@@ -67,6 +67,9 @@ way to read this on a box with no browser. The queues page is bull-board's.
 - **A rejected request gets 404, not 403.** Register the middleware **ahead of
   any session guard**: a guard running first answers 401 and tells a prober the
   mount exists. `authorize` takes the raw `Request` so it can be self-sufficient.
+  Return a `Response` instead of `false` to answer a browser with a sign-in page
+  or a redirect. The type is `@dunx/http`'s, and `@dunx/openapi` takes the same
+  one, so a single function gates the dashboard and the API explorer alike.
 - **Config values are redacted by default.** `reveal` is an opt-in allow-list; a
   deny-list of the usual suspects leaks the first key nobody thought of.
 
