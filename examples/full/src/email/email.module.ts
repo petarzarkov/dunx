@@ -13,6 +13,10 @@ import { MailController } from './mail.controller.js';
 import { Notices } from './notices.service.js';
 import renderer from './render.js';
 
+/** `EMAIL_RESEND_KEY=` parses as `''`, which is set and useless. */
+const set = (value: string | undefined): value is string =>
+  value !== undefined && value.trim() !== '';
+
 /**
  * One `EmailTransport` per configured provider, chosen once at boot. Each vendor
  * sits on its own subpath; this app imports all three because it demonstrates
@@ -25,10 +29,10 @@ const transportFor = (
   email: AppConfig['email'],
   logger: Logger,
 ): EmailTransport => {
-  if (email.transport === 'resend' && email.resendKey !== undefined) {
+  if (email.transport === 'resend' && set(email.resendKey)) {
     return new ResendTransport({ apiKey: email.resendKey });
   }
-  if (email.transport === 'smtp' && email.smtpUrl !== undefined) {
+  if (email.transport === 'smtp' && set(email.smtpUrl)) {
     return new SmtpTransport({ url: email.smtpUrl });
   }
   if (email.transport !== 'log') {

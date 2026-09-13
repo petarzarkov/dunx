@@ -56,27 +56,39 @@ export class ResendTransport extends EmailTransport {
   }
 
   async send(message: OutboundEmail): Promise<EmailResult> {
-    const { data, error } = await this.#client.emails.send(payload(message));
+    // A refusal comes back as `error`, but a socket that never answered comes
+    // back as a rejection. Both are this transport failing, so both leave it as
+    // the same error rather than one of them as a `resend` internal.
+    let answer;
+    try {
+      answer = await this.#client.emails.send(payload(message));
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      throw new EmailSendError('resend', detail, { cause });
+    }
+    const { data, error } = answer;
     if (error !== null) {
       throw new EmailSendError('resend', `${error.name}: ${error.message}`);
     }
     return {
       id: data?.id,
       accepted: everyRecipient(message),
+      rejected: [],
       transport: this.name,
     };
   }
 }
 
-/** A list stays a list here, and bytes travel as base64. */
+/**
+ * A list stays a list here, and every attachment travels as base64.
+ *
+ * A string is encoded too, rather than assumed to be base64 already: the SDK
+ * copies `content` into the request and `JSON.stringify`s it, so a plain
+ * `'hello'` arrives as an attachment of the four bytes that decode from it.
+ */
 const payload = (message: OutboundEmail): Record<string, unknown> =>
   toPayload(message, {
     recipients: (list) => list.map(formatAddress),
     attachment: (file) =>
-      withContentType(
-        file,
-        typeof file.content === 'string'
-          ? file.content
-          : Buffer.from(file.content).toString('base64'),
-      ),
+      withContentType(file, Buffer.from(file.content).toString('base64')),
   });

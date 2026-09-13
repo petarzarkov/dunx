@@ -103,23 +103,47 @@ describe('SmtpTransport', () => {
     expect(result).toEqual({
       id: '<2@example.com>',
       accepted: ['a@example.com', 'b@example.com'],
+      rejected: [],
       transport: 'smtp',
     });
   });
 
-  it('copes with a server that reports neither field', async () => {
-    const result = await new SmtpTransport({ mailer: mailer({}) }).send(
-      outbound(),
-    );
+  // A partial delivery is not a failure to retry: the message is already in the
+  // accepted inboxes, and sending again puts a second copy there.
+  it('reports a partial delivery rather than throwing', async () => {
+    const stub = mailer({
+      messageId: '<3@example.com>',
+      accepted: ['a@example.com'],
+      rejected: ['gone@example.com'],
+    });
 
-    expect(result).toEqual({ id: undefined, accepted: [], transport: 'smtp' });
+    const result = await new SmtpTransport({ mailer: stub }).send(outbound());
+
+    expect(result.accepted).toEqual(['a@example.com']);
+    expect(result.rejected).toEqual(['gone@example.com']);
   });
 
-  it('throws when the server rejected a recipient', async () => {
+  it('throws only when every recipient was rejected', async () => {
     const stub = mailer({ accepted: [], rejected: ['a@example.com'] });
 
     await expect(
       new SmtpTransport({ mailer: stub }).send(outbound()),
-    ).rejects.toThrow(/1 recipient\(s\) rejected/);
+    ).rejects.toThrow(/every recipient was rejected/);
+  });
+
+  it('treats a server that reports neither field as a total failure', async () => {
+    await expect(
+      new SmtpTransport({ mailer: mailer({}) }).send(outbound()),
+    ).rejects.toThrow(EmailSendError);
+  });
+
+  it('wraps a rejected sendMail promise', async () => {
+    const stub: SmtpMailer = {
+      sendMail: () => Promise.reject(new Error('ECONNREFUSED')),
+    };
+
+    await expect(
+      new SmtpTransport({ mailer: stub }).send(outbound()),
+    ).rejects.toThrow(/smtp refused the message: ECONNREFUSED/);
   });
 });

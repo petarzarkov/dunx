@@ -52,6 +52,21 @@ export class MissingRecipientError extends EmailError {
 }
 
 /**
+ * A newline in a field that becomes a header.
+ *
+ * The subject is a header, and so is every entry in `headers`. A CR or LF in
+ * either ends it and starts one the caller never wrote, which is how a `Bcc`
+ * gets added to somebody else's message.
+ */
+export class InvalidHeaderError extends EmailError {
+  override readonly status = 400;
+
+  constructor(readonly field: string) {
+    super(`Refusing ${field}: it carries a newline, which ends a header.`);
+  }
+}
+
+/**
  * A mailbox that cannot be put in a header safely.
  *
  * Refused rather than escaped, because there is no escaping that makes a second

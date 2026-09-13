@@ -182,6 +182,15 @@ describe('EmailPreview.serve', () => {
     await server.stop(true);
   });
 
+  // `Bun.serve` binds 0.0.0.0 when told nothing, and these routes are
+  // unauthenticated and answer a broken template with a stack trace.
+  it('binds loopback rather than every interface', async () => {
+    const server = preview().serve();
+
+    expect(server.hostname).toBe('127.0.0.1');
+    await server.stop(true);
+  });
+
   it('takes a hostname when it is given one', async () => {
     const server = new EmailPreview({
       dir: dir.path,

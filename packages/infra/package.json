@@ -147,7 +147,7 @@
   },
   "devDependencies": {
     "@dunx/core": "workspace:*",
-    "@react-email/components": "1.0.12",
+    "@react-email/render": "2.1.0",
     "@types/react": "19.2.18",
     "bullmq": "6.3.4",
     "drizzle-orm": "0.45.2",
@@ -159,7 +159,7 @@
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",
-    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.0.0",
     "@types/bun": ">=1.4.1",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",
@@ -170,7 +170,7 @@
     "resend": "^6.0.0"
   },
   "peerDependenciesMeta": {
-    "@react-email/components": {
+    "@react-email/render": {
       "optional": true
     },
     "@types/bun": {

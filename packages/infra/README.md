@@ -28,7 +28,7 @@ bun add bullmq          # /queue
 bun add rabbitmq-client # /amqp
 bun add resend          # /email/resend
 bun add nodemailer      # /email/smtp
-bun add react @react-email/components # /email/react
+bun add react @react-email/render # /email/react
 ```
 
 ## The subpaths
@@ -113,7 +113,7 @@ See [Metrics](../../docs/guide/23-metrics.md).
 ## Verified against
 
 Bun 1.4.2, drizzle-orm 0.45.2, bullmq 6.0.5, rabbitmq-client 5.0.8, resend 6.28.0,
-nodemailer 10.0.9 and @react-email/components 1.0.12. Bun's
+nodemailer 10.0.9 and @react-email/render 2.1.0. Bun's
 documentation is incomplete
 across every area here, so the behaviour was measured rather than read. The
 evidence is in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) and

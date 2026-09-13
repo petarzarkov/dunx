@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { Quiet } from '../quiet.fixture.js';
 import {
   EmailSendError,
+  InvalidHeaderError,
   MissingRecipientError,
   MissingSenderError,
 } from './errors.js';
@@ -49,6 +50,7 @@ class Flaky extends EmailTransport {
     return Promise.resolve({
       id: 'ok',
       accepted: message.to.map((a) => a.address),
+      rejected: [],
       transport: this.name,
     });
   }
@@ -120,6 +122,42 @@ describe('EmailService.resolve', () => {
     expect(() =>
       service.resolve({ to: 'a@example.com', subject: 'Hi' }),
     ).toThrow(MissingSenderError);
+  });
+
+  // The subject is a header too, and so is every entry in `headers`. Validating
+  // the addresses and stopping there left the commonest injection open: a name
+  // interpolated into a subject.
+  it('refuses a newline in the subject', () => {
+    expect(() =>
+      build().resolve({
+        to: 'a@example.com',
+        subject: 'Welcome\r\nBcc: evil@attacker.com',
+      }),
+    ).toThrow(InvalidHeaderError);
+  });
+
+  it('refuses a newline in a header name or value', () => {
+    expect(() =>
+      build().resolve({
+        to: 'a@example.com',
+        subject: 'Hi',
+        headers: { 'X-Entity': 'invoice\nBcc: evil@attacker.com' },
+      }),
+    ).toThrow(InvalidHeaderError);
+    expect(() =>
+      build().resolve({
+        to: 'a@example.com',
+        subject: 'Hi',
+        headers: { 'X\r\nBcc': 'invoice' },
+      }),
+    ).toThrow(InvalidHeaderError);
+  });
+
+  it('carries a 400 and names the field', () => {
+    const error = new InvalidHeaderError('the subject');
+
+    expect(error.status).toBe(400);
+    expect(error.message).toContain('the subject');
   });
 
   it('refuses a message with no recipient on any field', () => {

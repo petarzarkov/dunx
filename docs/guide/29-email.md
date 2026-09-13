@@ -126,6 +126,11 @@ firing straight back into the cap that rejected it.
 text one. React Email is the shipped implementation and not the only possible
 one: a tagged-template or MJML renderer satisfies the same two methods.
 
+The peer is `@react-email/render`, the package holding `render`. Components for
+authoring a template are the app's own choice; React Email has folded them into
+`react-email`, the CLI this subpath exists to avoid, so `@dunx/infra` depends on
+neither.
+
 ```tsx
 // emails/welcome.tsx
 import { Body, Container, Heading, Html } from '@react-email/components';
@@ -170,11 +175,15 @@ bunx dunx-email preview ./emails     # http://localhost:3035
 bunx dunx-email export ./emails --out ./out
 ```
 
-The `react-email` CLI serves the same page by pulling `@react-email/ui` and
-Next.js, around 430 MB of `node_modules`, and renders through the same `render`
-call. So this is `Bun.serve`, `Bun.Glob` and `import()`: no CLI framework, no
-bundler, no dev server. An edit shows up on the next request because the module
-is imported again behind a cache-busting query.
+The `react-email` CLI serves the same page by pulling in Next.js, esbuild,
+chokidar and socket.io, and renders through the same `render` call. So this is
+`Bun.serve`, `Bun.Glob` and `import()`: no CLI framework, no bundler, no dev
+server. An edit shows up on the next request because the module is imported
+again behind a cache-busting query.
+
+It binds `127.0.0.1`. The routes are unauthenticated and one of them answers a
+broken template with a stack trace, so reaching it from another machine is
+opt-in through `hostname`.
 
 | Flag               | Default                   |
 | ------------------ | ------------------------- |
@@ -199,8 +208,7 @@ Discovery takes every `.ts`, `.tsx`, `.js`, `.jsx` and `.mjs` module under the
 directory and skips suites, `index` files, and names starting with `_` or `.`.
 Anything else in there is rendered, so shared styles belong one directory up.
 
-The same class is available in-process, which is what a route serving a preview
-page uses:
+The same class is available in-process, for a route serving a preview page:
 
 ```ts
 import { EmailPreview } from '@dunx/infra/email';
@@ -259,6 +267,10 @@ Refused rather than escaped, because there is no rendering of two addresses
 inside one recipient that means what the caller wrote. SMTP joins a recipient
 list into one comma-separated header, so a comma that survived would become a
 second `RCPT` the caller never asked for.
+
+The subject is a header too, and so is every entry in `headers`. Both go through
+the same newline check, so a name interpolated into a subject cannot add a
+`Bcc`.
 
 ## Errors
 

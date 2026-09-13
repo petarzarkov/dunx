@@ -38,6 +38,11 @@ export class LogTransport extends EmailTransport {
       html: message.html,
       text: message.text,
     });
-    return Promise.resolve({ id: undefined, accepted, transport: this.name });
+    return Promise.resolve({
+      id: undefined,
+      accepted,
+      rejected: [],
+      transport: this.name,
+    });
   }
 }

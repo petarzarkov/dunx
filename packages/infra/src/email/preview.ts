@@ -15,6 +15,7 @@ export interface PreviewOptions {
   readonly renderer: TemplateRenderer;
   /** `0` picks a free port, which is what the tests use. @default 3035 */
   readonly port?: number;
+  /** `'0.0.0.0'` to reach it from another machine. @default '127.0.0.1' */
   readonly hostname?: string;
 }
 
@@ -68,9 +69,10 @@ export class EmailPreview {
   serve(): Server<never> {
     return Bun.serve({
       port: this.options.port ?? 3035,
-      ...(this.options.hostname === undefined
-        ? {}
-        : { hostname: this.options.hostname }),
+      // Loopback, not `Bun.serve`'s own `0.0.0.0` default. These routes are
+      // unauthenticated and one of them answers a broken template with a stack
+      // trace, which is a development tool's business and nobody else's.
+      hostname: this.options.hostname ?? '127.0.0.1',
       routes: {
         '/': async (req: Request) => {
           const names = (await this.templates()).map((t) => t.name);

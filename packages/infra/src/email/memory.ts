@@ -52,6 +52,7 @@ export class MemoryTransport extends EmailTransport {
     return Promise.resolve({
       id: `memory-${this.#nextId}`,
       accepted: everyRecipient(message),
+      rejected: [],
       transport: this.name,
     });
   }

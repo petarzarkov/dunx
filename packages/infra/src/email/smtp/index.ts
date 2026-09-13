@@ -16,7 +16,7 @@ export interface SmtpMailer {
   sendMail(payload: Record<string, unknown>): Promise<{
     messageId?: string;
     accepted?: readonly (string | { address: string })[];
-    rejected?: readonly unknown[];
+    rejected?: readonly (string | { address: string })[];
   }>;
 }
 
@@ -65,24 +65,33 @@ export class SmtpTransport extends EmailTransport {
   }
 
   async send(message: OutboundEmail): Promise<EmailResult> {
-    const info = await this.#mailer.sendMail(payload(message));
-    if (info.rejected !== undefined && info.rejected.length > 0) {
+    let info;
+    try {
+      info = await this.#mailer.sendMail(payload(message));
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      throw new EmailSendError('smtp', detail, { cause });
+    }
+    // nodemailer reports what the server accepted, which is the honest answer
+    // and can be shorter than what was asked for.
+    const accepted = (info.accepted ?? []).map(address);
+    const rejected = (info.rejected ?? []).map(address);
+    // **Only a total failure throws.** An SMTP server may take some recipients
+    // and refuse others, and the message is then already in the accepted
+    // inboxes: throwing there invites a retry that delivers a second copy.
+    if (accepted.length === 0) {
       throw new EmailSendError(
         'smtp',
-        `${String(info.rejected.length)} recipient(s) rejected`,
+        `every recipient was rejected (${rejected.length || 'none accepted'})`,
       );
     }
-    return {
-      id: info.messageId,
-      // nodemailer reports what the server accepted, which is the honest answer
-      // and can be shorter than what was asked for.
-      accepted: (info.accepted ?? []).map((a) =>
-        typeof a === 'string' ? a : a.address,
-      ),
-      transport: this.name,
-    };
+    return { id: info.messageId, accepted, rejected, transport: this.name };
   }
 }
+
+/** nodemailer reports a recipient either as a string or as an object. */
+const address = (a: string | { address: string }): string =>
+  typeof a === 'string' ? a : a.address;
 
 /** nodemailer takes one comma-separated header line per recipient field. */
 const payload = (message: OutboundEmail): Record<string, unknown> =>

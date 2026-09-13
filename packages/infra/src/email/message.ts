@@ -1,4 +1,4 @@
-import { InvalidAddressError } from './errors.js';
+import { InvalidAddressError, InvalidHeaderError } from './errors.js';
 
 /**
  * A mailbox. The string form is either the address alone or `Name <address>`;
@@ -56,6 +56,14 @@ export interface EmailResult {
   readonly id: string | undefined;
   /** Addresses the transport accepted: `to` plus `cc` plus `bcc`. */
   readonly accepted: readonly string[];
+  /**
+   * Addresses the provider refused while accepting the rest.
+   *
+   * A partial delivery is not a failure to be retried: the message is already in
+   * the accepted inboxes, and sending again puts a second copy there. It is
+   * reported rather than thrown so a caller can act on the difference.
+   */
+  readonly rejected: readonly string[];
   /** Which transport handled it. `'log'` means nothing left the process. */
   readonly transport: string;
 }
@@ -73,6 +81,15 @@ const MAILBOX = /^\s*(.*?)\s*<([^<>]*)>\s*$/;
  */
 const UNSAFE_ADDRESS = /[\r\n\0,;<>]/;
 const UNSAFE_NAME = /[\r\n\0]/;
+
+/**
+ * Refuses a newline in anything that becomes a header. The subject is one, and
+ * so is every entry in `headers`: both reach a provider verbatim, and a CR or
+ * LF in either starts a header the caller never wrote.
+ */
+export const assertHeaderSafe = (field: string, value: string): void => {
+  if (UNSAFE_NAME.test(value)) throw new InvalidHeaderError(field);
+};
 
 const checked = (address: string, name: string | undefined): EmailAddress => {
   if (address === '') throw new InvalidAddressError(address, 'it is empty');

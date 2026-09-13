@@ -41,6 +41,7 @@ describe('ResendTransport', () => {
     expect(result).toEqual({
       id: 're_1',
       accepted: ['a@example.com'],
+      rejected: [],
       transport: 'resend',
     });
     expect(stub.payloads[0]).toEqual({
@@ -79,7 +80,7 @@ describe('ResendTransport', () => {
       text: 'Hi',
       headers: { 'X-Entity': 'invoice' },
       attachments: [
-        { filename: 'a.txt', content: 'hello', contentType: 'text/plain' },
+        { filename: 'a.txt', content: 'aGVsbG8=', contentType: 'text/plain' },
         { filename: 'b.bin', content: 'AQID' },
       ],
     });
@@ -94,6 +95,17 @@ describe('ResendTransport', () => {
     await expect(
       new ResendTransport({ client: stub }).send(outbound()),
     ).rejects.toThrow(/rate_limit_exceeded: Too many requests/);
+  });
+
+  // A socket that never answered is this transport failing, like a refusal.
+  it('wraps a rejected client promise', async () => {
+    const stub: ResendClient = {
+      emails: { send: () => Promise.reject(new Error('ECONNRESET')) },
+    };
+
+    await expect(
+      new ResendTransport({ client: stub }).send(outbound()),
+    ).rejects.toThrow(/resend refused the message: ECONNRESET/);
   });
 
   it('has no id when the provider returns none', async () => {

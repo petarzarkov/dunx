@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import type { Server } from 'bun';
 import { EmailPreview } from './preview.js';
@@ -80,10 +81,15 @@ export const plan = (argv: readonly string[]): Plan | string => {
 export const loadRenderer = async (
   specifier: string,
 ): Promise<TemplateRenderer> => {
-  // A relative specifier is relative to where the shell is, not to this file.
-  // Left to `import()` it resolves inside `node_modules/@dunx/infra/dist/`,
-  // where a consumer's own renderer has never been.
-  const from = specifier.startsWith('.') ? resolve(specifier) : specifier;
+  // A path is relative to where the shell is, not to this file. Left to
+  // `import()` it resolves inside `node_modules/@dunx/infra/dist/`, where a
+  // consumer's own renderer has never been. As a file URL rather than a path,
+  // so a Windows drive letter is not read as a protocol. A bare specifier is
+  // left alone, since that is a package and not a path.
+  const from =
+    specifier.startsWith('.') || isAbsolute(specifier)
+      ? pathToFileURL(resolve(specifier)).href
+      : specifier;
   const module = (await import(from)) as { default?: unknown };
   const loaded = module.default;
   if (!(loaded instanceof TemplateRenderer)) {

@@ -1,6 +1,7 @@
 import { Logger, ResiliencePolicy } from '@dunx/core';
 import { MissingRecipientError, MissingSenderError } from './errors.js';
 import {
+  assertHeaderSafe,
   everyRecipient,
   toAddress,
   toAddressList,
@@ -83,6 +84,13 @@ export class EmailService {
     const from = message.from ?? this.options.from;
     if (from === undefined) throw new MissingSenderError();
     const replyTo = message.replyTo ?? this.options.replyTo;
+    // The subject and every header reach a provider verbatim, so both go
+    // through the same newline check the addresses do.
+    assertHeaderSafe('the subject', message.subject);
+    for (const [name, value] of Object.entries(message.headers ?? {})) {
+      assertHeaderSafe(`the header ${name}`, name);
+      assertHeaderSafe(`the header ${name}`, value);
+    }
     const outbound: OutboundEmail = {
       from: toAddress(from),
       to: toAddressList(message.to),
