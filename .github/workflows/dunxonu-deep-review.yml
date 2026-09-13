@@ -129,17 +129,19 @@ jobs:
       # does not exist locally.
       #
       # `persist-credentials: false` because the reviewer reads files and the
-      # pull request it reads is attacker-controlled text. checkout@v4 leaves the
-      # workflow token in `.git/config` inside the workspace, so a prompt
-      # injection that got the agent to print that file would disclose a token
-      # holding `pull-requests: write`. Nothing here needs credentials after the
-      # fetch.
-      # Pinned to a commit: `v4` is mutable, and a retargeted tag would run
+      # pull request it reads is attacker-controlled text. Since v6 checkout
+      # writes the token to a config file in `RUNNER_TEMP` and reaches it from
+      # `.git/config` through an `includeIf`, so it is no longer inside the
+      # workspace, but the agent has a shell and `RUNNER_TEMP` is as readable as
+      # anything else. A prompt injection that got it to print that file would
+      # disclose a token holding `pull-requests: write`. Nothing here needs
+      # credentials after the fetch.
+      # Pinned to a commit: `v7` is mutable, and a retargeted tag would run
       # unreviewed code in a job that goes on to touch a token.
       #
       # Everything this brings into the workspace is attacker-controlled. It is
       # here for the agent to read and for nothing else to execute.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.ok == 'true'
         with:
           fetch-depth: 0
@@ -150,7 +152,7 @@ jobs:
       # so retargeting `v1` would run unreviewed code with them.
       - id: review
         if: steps.gate.outputs.ok == 'true'
-        uses: anthropics/claude-code-action@b7912aeeb535234e3e9385ff49e8237f689b5f14 # v1
+        uses: anthropics/claude-code-action@a73a99cefc6aea0126f858804cd22a7a44e11924 # v1
         env:
           # A background task in a headless run never reports back, because the
           # run ends when the main agent stops. `-p` already runs this in the
@@ -210,7 +212,7 @@ jobs:
       # file in place. So the trusted copy does not exist while the agent runs.
       - name: Fetch the submission script from the default branch
         if: steps.gate.outputs.ok == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: .trusted
