@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import { closeWithin } from './close-within.js';
 
 /**
@@ -54,11 +54,27 @@ describe('closeWithin', () => {
     ).rejects.toThrow('boom');
   });
 
-  /** Without this a resource that closed at once held the loop open for the rest
-   * of the bound, and a clean shutdown took 2.37 s against 0.36 s. */
+  /**
+   * Without this a resource that closed at once held the loop open for the rest
+   * of the bound, and a clean shutdown took 2.37 s against 0.36 s.
+   *
+   * Asserted against the handle rather than the clock. The timer is unref'd, so a
+   * run that never cleared it would still return at the close and still finish
+   * inside any elapsed-time bound - which is what the first version of this test
+   * measured, and it passed with the `clearTimeout` deleted.
+   */
   it('clears the timer for a close that finished in time', async () => {
-    const started = Bun.nanoseconds();
-    await closeWithin(bullmqLike(true), 30_000);
-    expect((Bun.nanoseconds() - started) / 1e6).toBeLessThan(500);
+    const arm = spyOn(globalThis, 'setTimeout');
+    const disarm = spyOn(globalThis, 'clearTimeout');
+    try {
+      expect(await closeWithin(bullmqLike(true), 30_000)).toBe(false);
+      expect(arm).toHaveBeenCalledTimes(1);
+      expect(disarm).toHaveBeenCalledTimes(1);
+      // The one it cleared is the one it armed, not some other pending timer.
+      expect(arm.mock.results[0]?.value).toBe(disarm.mock.calls[0]?.[0]);
+    } finally {
+      arm.mockRestore();
+      disarm.mockRestore();
+    }
   });
 });

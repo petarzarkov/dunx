@@ -30,8 +30,8 @@ export class ResiliencePolicy {
    * That is the primitive where the operation takes the signal, and it is why
    * this awaits `op(signal)` rather than racing it. A bound on an operation that
    * takes none - a broker client's `close()`, which is what `@dunx/infra` bounds
-   * during teardown - can only be a race, since a signal would abort nothing and
-   * the call would never settle.
+   * during teardown - can only be a race: an unsignalled close runs to its own
+   * end, which is seconds past the bound for some and never for others.
    */
   async run<T>(op: (signal: AbortSignal) => Promise<T>): Promise<T> {
     return this.#attempts(op);

@@ -129,7 +129,14 @@ None of the five closes takes a signal. bullmq's `Worker.close(force?)` and
 `QueueEvents.close()` take no argument that cancels, and neither do
 rabbitmq-client's `Consumer`, `Publisher` and `Connection` closes. So there is
 nothing to hand a signal to, and a bound that has to settle against a library that
-will not cooperate can only be a race. The rule both halves follow: **a signal
+will not cooperate can only be a race.
+
+An unsignalled close still runs to its own end, and the two ends are both
+measured. `Consumer.close()` settles 19.7 s after the broker went away, in the
+probe above. `QueueEvents.close()` against an unreachable broker neither resolves
+nor rejects on bullmq 6.3.4: the blocking read reconnects on a growing backoff
+past `autoReconnect: false`, which is what `JobEvents` records. A bound that
+stops waiting is the only one that covers both. The rule both halves follow: **a signal
 where the operation takes one, a race where it does not.**
 
 What a signal would change is the handler timeout - `jobTimeoutMs` and
