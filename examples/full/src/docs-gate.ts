@@ -25,9 +25,11 @@ export class DocsGate {
     const session = await this.auth.api.getSession({ headers: req.headers });
     if (session !== null) return true;
 
-    // `false` is a 404 and a dead end for a person; a navigation goes to /.
+    // `false` is a 404 and a dead end for a person, so a navigation lands on the
+    // landing page's session button, which issues one when `AUTH_GUEST_ONLY` is
+    // set. Guard the docs without that and there is no sign-in to land on.
     return req.headers.get('accept')?.includes('text/html') === true
-      ? new Response(null, { status: 302, headers: { location: '/' } })
+      ? new Response(null, { status: 302, headers: { location: '/#who' } })
       : false;
   }
 }

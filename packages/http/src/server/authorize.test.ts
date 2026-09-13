@@ -29,6 +29,18 @@ describe('gate', () => {
     expect(await refused?.text()).toBe('sign in');
   });
 
+  /**
+   * The types forbid it, so this is about the consumer who compiled without
+   * them: an `authorize` whose last branch falls off the end resolves to
+   * `undefined`, and a gate that read that as consent would serve the page.
+   */
+  it('refuses anything that is not true and not a Response', async () => {
+    for (const decision of [undefined, null, 0, '', 'yes', {}]) {
+      const refused = await gate(() => decision as unknown as boolean, req());
+      expect(refused?.status).toBe(404);
+    }
+  });
+
   it('awaits a gate that has to ask an auth library', async () => {
     const authorize: Authorize = async (request) =>
       request.headers.get('x-token') === 'ok';
