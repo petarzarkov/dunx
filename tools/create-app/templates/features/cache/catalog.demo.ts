@@ -39,8 +39,13 @@ export class CatalogDemo {
         `(loads ${before} -> ${await this.loads(url)})`,
     );
 
+    // Unique per run, because "uncached" has to be true for the count below to
+    // mean anything: L2 is Redis, so a fixed symbol is still cached from the
+    // previous tour against the same server and ten reads then load zero times.
+    // `max(12)` on the route's param, so the suffix is short.
+    const fresh = `bun-${Bun.randomUUIDv7().slice(-6)}`;
     const at = await this.loads(url);
-    await Promise.all(Array.from({ length: 10 }, () => this.quote(url, 'bun')));
+    await Promise.all(Array.from({ length: 10 }, () => this.quote(url, fresh)));
     this.logger.info(
       `10 concurrent reads of an uncached key -> ${(await this.loads(url)) - at} ` +
         'load (single flight, per process)',
