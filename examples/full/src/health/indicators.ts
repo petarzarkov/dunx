@@ -41,8 +41,7 @@ export class LedgerIndicator extends HealthIndicator {
 
 /**
  * Whether the shared cache tier is answering, asked rather than remembered:
- * `degraded` is a flag the last operation set, so a process that has not touched
- * the cache reports it healthy. Not critical, since the tier degrades to misses.
+ * `degraded` is only what the last call set. Not critical - it degrades.
  */
 export class CacheStoreIndicator extends HealthIndicator {
   readonly name = 'cache';

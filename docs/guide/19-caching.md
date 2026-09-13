@@ -153,6 +153,10 @@ failure or a bad command is your bug and still throws, or the cache quietly stop
 working and nothing says so. And it **warns once per outage** rather than once
 per operation, because an unreachable cache is touched by every cached route.
 
+The default predicate is `isConnectionError`, which matches Bun's Redis code and
+nothing else. A store on another backend passes its own `degradable`, or nothing
+degrades and every failure still throws.
+
 `degraded` is whatever the last operation set, so a process that has not used the
 cache yet reports it healthy. `probe()` does one real read down the same path.
 Ask it from a health check:

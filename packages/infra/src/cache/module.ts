@@ -22,9 +22,10 @@ export interface CacheModuleSettings {
    * {@link DegradingCacheStore}. Off by default: a cache an app treats as a store
    * rather than an accelerator wants the throw.
    *
-   * Only a connection error degrades; a serialisation bug still throws. The one
-   * line per outage goes to core's `ConsoleLogger` - pass a
-   * `DegradingCacheStore` as `store` to send it somewhere else.
+   * Only Bun's Redis connection error degrades, since this builds the wrapper
+   * with its default predicate: another backend needs `store: new
+   * DegradingCacheStore(inner, { degradable })`, which is also where a `logger`
+   * other than core's `ConsoleLogger` goes.
    */
   readonly degrade?: boolean;
 }

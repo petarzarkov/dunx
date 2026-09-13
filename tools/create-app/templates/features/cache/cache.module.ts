@@ -52,8 +52,8 @@ const sessionsUrl = (url: string | undefined): string => {
     ),
     /**
      * Two tiers, always. `CacheL2` is the degrading half, so a cold read costs
-     * the loader rather than a 500. It replaced a boot-time `redis.ping()` that
-     * chose one tier or two and could not see a valkey lost after boot.
+     * the loader rather than a 500 - which a boot-time `redis.ping()` choosing
+     * one tier or two could not do, having only ever looked once.
      */
     CacheLayer.forRootAsync(
       {

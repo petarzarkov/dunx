@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
+import { AppFactory } from '@dunx/core';
 import { Cache } from './cache.js';
+import { CacheModule } from './module.js';
 import { DegradingCacheStore } from './degrading.js';
 import { MemoryCacheStore } from './memory.js';
 import { CacheOptions } from './options.js';
@@ -110,9 +112,9 @@ describe('a failure that is the app’s own', () => {
   it('still throws, so a serialisation bug is not swallowed', async () => {
     const { store } = degrading(new BadValueStore());
 
-    expect(store.get('k')).rejects.toThrow('circular structure');
-    expect(store.set('k', 'v', 1)).rejects.toThrow('circular structure');
-    expect(store.del('k')).rejects.toThrow('circular structure');
+    await expect(store.get('k')).rejects.toThrow('circular structure');
+    await expect(store.set('k', 'v', 1)).rejects.toThrow('circular structure');
+    await expect(store.del('k')).rejects.toThrow('circular structure');
   });
 
   it('leaves the store reporting healthy, because nothing was wrong with it', async () => {
@@ -149,7 +151,7 @@ describe('probe', () => {
   it('throws rather than lying when the failure is not a connection', async () => {
     const { store } = degrading(new BadValueStore());
 
-    expect(store.probe()).rejects.toThrow('circular structure');
+    await expect(store.probe()).rejects.toThrow('circular structure');
   });
 });
 
@@ -198,6 +200,33 @@ describe('CacheModule settings', () => {
     expect(new CacheOptions({}).store).toBeInstanceOf(MemoryCacheStore);
   });
 
+  /** Through the module rather than `CacheOptions`, so the `degrade` flag's own
+   * plumbing is covered: the flag reaching the third argument is the part a
+   * refactor can invert while every other test stays green. */
+  it('reaches the container as a degrading store', async () => {
+    const app = await AppFactory.create(
+      CacheModule.forRoot({ store: new FlakyStore() }, { degrade: true }),
+    );
+
+    const store = app.get(CacheStore);
+    expect(store).toBeInstanceOf(DegradingCacheStore);
+    // Live, not merely wrapped: the backend is down and the read is a miss.
+    expect(await store.get('k')).toBeUndefined();
+    await app.shutdown();
+  });
+
+  it('is off unless the flag says so', async () => {
+    const app = await AppFactory.create(
+      CacheModule.forRoot({ store: new FlakyStore() }),
+    );
+
+    expect(app.get(CacheStore)).not.toBeInstanceOf(DegradingCacheStore);
+    await expect(app.get(CacheStore).get('k')).rejects.toThrow(
+      'Connection has failed',
+    );
+    await app.shutdown();
+  });
+
   /**
    * Outside the meter, so a swallowed failure is still counted as an error and
    * the hit rate is not inflated by the outage it hid.
@@ -212,5 +241,26 @@ describe('CacheModule settings', () => {
     expect((outer as DegradingCacheStore).inner).toBeInstanceOf(
       MeteredCacheStore,
     );
+  });
+
+  /** A probe is synthetic traffic on a health check's cadence, so counting it
+   * would walk the hit rate down for as long as the process is up. */
+  it('keeps probes out of the metrics', async () => {
+    const { CacheMetrics } = await import('./metrics.js');
+    const metrics = new CacheMetrics();
+    const inner = new FlakyStore();
+    inner.up = true;
+    const store = new CacheOptions({ store: inner }, metrics, {})
+      .store as DegradingCacheStore;
+
+    await store.get('counted');
+    const counted = metrics.snapshot();
+    for (let i = 0; i < 5; i += 1) await store.probe();
+    const after = metrics.snapshot();
+
+    expect(after.misses).toBe(counted.misses);
+    expect(after.total).toBe(counted.total);
+    // And the probe still reached the backend, five times.
+    expect(inner.reads).toBe(6);
   });
 });

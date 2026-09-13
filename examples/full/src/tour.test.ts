@@ -258,7 +258,7 @@ it('reaches redis, or says it is skipping it', () => {
 
 it('serves a cached read and dedupes the concurrent ones', () => {
   expect(tour.text).toMatch(
-    /store -> (L1 memory in front of L2 redis|L1 memory only, redis unreachable at boot), metered, default ttl 30000ms/,
+    /store -> L1 memory in front of a degrading L2 redis, metered, default ttl 30000ms/,
   );
   expect(tour.text).toContain(
     '10 concurrent reads of an uncached key -> 1 load (single flight, per process)',

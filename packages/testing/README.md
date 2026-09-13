@@ -49,7 +49,10 @@ The [Testing guide](../../docs/guide/11-testing.md) is canonical.
 
 - An override replaces the binding in **every scope that holds it**, so a test
   stubbing `Logger` need not know how many modules bind it. Naming a token
-  nobody binds is an error rather than a silent no-op.
+  nobody binds is an error rather than a silent no-op - unless it is a class,
+  which self-binds, so an override for one is registered lazily and costs a
+  graph that never asks for it nothing. The harness relies on that to apply the
+  `ReadinessOptions` override below without knowing your graph.
 - The replacement happens before anything resolves, so the discarded provider is
   never constructed: its `useFactory` never runs and its `onInit` never fires.
   That makes overriding a database safe.

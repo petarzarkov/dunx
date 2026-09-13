@@ -5,20 +5,20 @@ import { CacheStore } from './store.js';
 export interface DegradingCacheInit {
   /** Where the one line per outage goes. Defaults to core's `ConsoleLogger`. */
   readonly logger?: Logger;
-  /**
-   * Which failures may be swallowed, `isConnectionError` by default. Narrow: a
-   * serialisation failure is the app's bug and has to keep throwing, or the
-   * cache quietly stops working and nothing says so.
-   */
+  /** Which failures may be swallowed. `isConnectionError` by default, matching
+   * Bun's Redis code alone - **another backend passes its own** or nothing
+   * degrades. A serialisation failure is the app's bug and still throws. */
   readonly degradable?: (error: unknown) => boolean;
   /** The key {@link DegradingCacheStore.probe} reads. Its value is never used. */
   readonly probeKey?: string;
+  /** What `probe()` reads, when the wrapped store would count it: through a
+   * `MeteredCacheStore` that is a miss per health check. */
+  readonly probeStore?: CacheStore;
 }
 
 /**
  * A cache tier that answers misses instead of throwing while its backend is
- * unreachable. A cached value can be computed again, so an unreachable Redis can
- * cost latency alone; without this every route behind the cache 500s.
+ * unreachable, so a cached route costs latency rather than a 500.
  *
  * Opt in through `CacheModule.forRoot(init, { degrade: true })`, or by hand to
  * wrap one tier of a `TieredCacheStore`, which keeps L1 authoritative:
@@ -36,6 +36,7 @@ export class DegradingCacheStore extends CacheStore {
   readonly #logger: Logger;
   readonly #degradable: (error: unknown) => boolean;
   readonly #probeKey: string;
+  readonly #probeStore: CacheStore;
   #down = false;
 
   constructor(
@@ -46,6 +47,7 @@ export class DegradingCacheStore extends CacheStore {
     this.#logger = init.logger ?? new ConsoleLogger();
     this.#degradable = init.degradable ?? isConnectionError;
     this.#probeKey = init.probeKey ?? '__dunx_cache_probe__';
+    this.#probeStore = init.probeStore ?? inner;
   }
 
   /**
@@ -60,7 +62,7 @@ export class DegradingCacheStore extends CacheStore {
   /** One real read down the same path. A miss is a reachable backend. */
   async probe(): Promise<boolean> {
     try {
-      await this.inner.get(this.#probeKey);
+      await this.#probeStore.get(this.#probeKey);
       this.#recovered();
       return true;
     } catch (error) {

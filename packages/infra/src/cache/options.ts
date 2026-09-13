@@ -47,10 +47,11 @@ export class CacheOptions {
     const store = init.store ?? new MemoryCacheStore();
     const metered =
       metrics === undefined ? store : new MeteredCacheStore(store, metrics);
+    // `probeStore` from under the meter: a health check is not cache traffic.
     this.store =
       degrade === undefined
         ? metered
-        : new DegradingCacheStore(metered, degrade);
+        : new DegradingCacheStore(metered, { probeStore: store, ...degrade });
   }
 
   /** The key as the store sees it. */
