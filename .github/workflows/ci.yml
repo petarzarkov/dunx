@@ -26,7 +26,7 @@ jobs:
     name: Lint, format, types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
 
       - name: Build
@@ -42,7 +42,7 @@ jobs:
     # `coverage` runs the same files with every service attached. Declaring them
     # twice is what broke the release job: it ran the gate with none.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
 
       - name: Build
@@ -67,7 +67,7 @@ jobs:
       DUNX_DB_TEST_URL: postgres://dunx:dunx@localhost:5432/dunx
       RABBITMQ_URL: amqp://guest:guest@localhost:5672
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
 
       - name: Build
@@ -96,7 +96,7 @@ jobs:
     name: Site in a browser
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
 
       - name: Build
@@ -174,7 +174,7 @@ jobs:
           --health-retries 12
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
 
       # MinIO cannot be a `services:` container: it needs `server /data` as its
@@ -215,7 +215,7 @@ jobs:
 
       - name: Upload lcov
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-lcov
           path: coverage/lcov.info
@@ -228,7 +228,7 @@ jobs:
       # copy of the service containers the gate needs, which is exactly what broke
       # the first release run on main.
       - name: Upload the coverage model and badges
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-model
           path: |
@@ -241,7 +241,7 @@ jobs:
     name: Documentation site
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
 
       - name: Build
@@ -282,7 +282,7 @@ jobs:
       # means none arrives. With GITHUB_TOKEN here the release push was evaluated
       # as github-actions[bot], which cannot be a ruleset bypass actor, and was
       # rejected with GH013 after the packages were already on npm.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
@@ -344,7 +344,7 @@ jobs:
     steps:
       # `main` rather than the commit that triggered the run, which is what picks
       # up the release commit the job before this one may just have pushed.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
 
@@ -363,7 +363,7 @@ jobs:
       # none and leaves a real one alone, and before `docs:build`, which is what
       # copies `public/badges` into the deployed site.
       - name: Download the coverage model and badges
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: coverage-model
           path: internal/docs
@@ -388,7 +388,7 @@ jobs:
       # makes them rot quietly.
       - name: Deploy the documentation site to Cloudflare Pages
         id: deploy
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

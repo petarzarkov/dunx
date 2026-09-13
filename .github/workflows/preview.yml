@@ -144,7 +144,7 @@ jobs:
           echo "::error::No CI run for $SHA has uploaded coverage-model yet. Wait for the Coverage job to finish, push again if it failed, and ask a second time."
           exit 1
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.ok == 'true'
         with:
           ref: ${{ steps.head.outputs.sha }}
@@ -161,7 +161,7 @@ jobs:
       # is what copies `public/badges` into the deployed site.
       - name: Download the coverage model and badges
         if: steps.gate.outputs.ok == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: coverage-model
           path: internal/docs
@@ -182,7 +182,7 @@ jobs:
       - name: Deploy the preview to Cloudflare Pages
         id: deploy
         if: steps.gate.outputs.ok == 'true'
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
