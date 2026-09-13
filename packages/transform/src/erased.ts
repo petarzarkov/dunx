@@ -77,6 +77,49 @@ export const collectTypeOnlyNames = (
   return names;
 };
 
+/**
+ * Every name this file binds: imported, or declared at the top level. Anything a
+ * constructor annotation names that is **not** in here is ambient - a global.
+ *
+ * Top level and imports only, which is where a token can come from. A name bound
+ * inside a function cannot be in scope at a class's constructor signature.
+ */
+export const boundNames = (program: Node): ReadonlySet<string> => {
+  const names = new Set<string>();
+
+  const bind = (node: Node | undefined | null): void => {
+    const name = nameOf(node);
+    if (name !== undefined) names.add(name);
+  };
+
+  walk(program, (node) => {
+    if (isImportDeclaration(node)) {
+      for (const specifier of node.specifiers) {
+        bind((specifier as ImportSpecifier).local);
+      }
+      return;
+    }
+    // A declarator's id may be a pattern, which binds nothing a token can name.
+    if (node.type === 'VariableDeclarator') bind((node as { id?: Node }).id);
+  });
+
+  const body = (program as { body?: readonly Node[] }).body ?? [];
+  for (const statement of body) {
+    const declaration =
+      (statement as { declaration?: Node | null }).declaration ?? statement;
+    if (
+      isClassDeclaration(declaration) ||
+      declaration.type === 'FunctionDeclaration' ||
+      declaration.type === 'TSEnumDeclaration' ||
+      declaration.type === 'TSModuleDeclaration'
+    ) {
+      bind((declaration as { id?: Node }).id);
+    }
+  }
+
+  return names;
+};
+
 /** A class's own type parameters are erased, so `T` is never a usable token. */
 const collectTypeParameters = (klass: ClassNode): ReadonlySet<string> => {
   const names = new Set<string>();

@@ -338,6 +338,61 @@ export class Service {
   });
 });
 
+/**
+ * A name the file neither imports nor declares is ambient - a global. The
+ * transform reads syntax and has no type checker, so it cannot tell `ErrorOptions`
+ * (a lib interface, erased) from `URL` (a lib class, a usable token). Emitting it
+ * verbatim made the thunk throw `ReferenceError` for the first kind, which is
+ * neither the injection nor the boot error naming the parameter.
+ */
+describe('an ambient name the file does not bind', () => {
+  it('falls back to unresolved for a lib type that erases', () => {
+    const source = `export class Failure {
+  constructor(readonly options?: ErrorOptions) {}
+}`;
+    expect(entriesFor(source, 'Failure')).toBe(
+      'typeof ErrorOptions === \'undefined\' ? { unresolved: "readonly options?: ErrorOptions" } : ErrorOptions',
+    );
+  });
+
+  it('still injects a global that is a real runtime value', () => {
+    const source = `export class Fetcher {
+  constructor(private readonly at: URL) {}
+}`;
+    // Guarded the same way, and `URL` exists, so the token is `URL`.
+    const entry = entriesFor(source, 'Fetcher');
+    expect(entry).toContain('typeof URL');
+    expect(entry).toEndWith(': URL');
+    // eslint-disable-next-line no-eval
+    expect(eval(`(() => ${entry})()`)).toBe(URL);
+  });
+
+  it('guards on the leftmost name of a qualified ambient type', () => {
+    const source = `export class Handler {
+  constructor(private readonly init: Bun.Server) {}
+}`;
+    expect(entriesFor(source, 'Handler')).toStartWith(
+      "typeof Bun === 'undefined'",
+    );
+  });
+
+  it('leaves a name the file imports alone', () => {
+    const source = `import { Repo } from './repo.js';
+export class Service {
+  constructor(private readonly repo: Repo) {}
+}`;
+    expect(entriesFor(source, 'Service')).toBe('Repo');
+  });
+
+  it('leaves a class declared later in the same file alone', () => {
+    const source = `export class Service {
+  constructor(private readonly later: Later) {}
+}
+export class Later {}`;
+    expect(entriesFor(source, 'Service')).toBe('Later');
+  });
+});
+
 describe('line numbers', () => {
   it('adds no lines, so a stack trace still points at the original', () => {
     const source = `import { D } from './d.js';

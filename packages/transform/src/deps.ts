@@ -15,6 +15,7 @@ import {
 import { applyEdits, type Edit } from './edits.js';
 import {
   collectTypeOnlyNames,
+  boundNames,
   erasedNames,
   type ErasureCause,
 } from './erased.js';
@@ -78,6 +79,7 @@ const entryFor = (
   source: string,
   param: Node,
   erased: ReadonlyMap<string, ErasureCause>,
+  bound: ReadonlySet<string>,
 ): string => {
   const text = JSON.stringify(slice(source, param));
   const optional = hasDefault(param) ? ', optional: true' : '';
@@ -90,7 +92,24 @@ const entryFor = (
   const cause = root === undefined ? undefined : erased.get(root);
   // `ns.Thing` is a member access on a value the file imported, so it resolves
   // as written; only its leftmost name has to survive erasure.
-  if (cause === undefined) return slice(source, annotation.typeName);
+  if (cause === undefined) {
+    const named = slice(source, annotation.typeName);
+    if (root === undefined || bound.has(root)) return named;
+
+    /**
+     * An ambient name: not imported, not declared here. This transform reads
+     * syntax and has no type checker, so `ErrorOptions` and `URL` are the same
+     * to it - a lib interface that erases, and a lib class that is a usable
+     * token. Emitting either verbatim made the first a `ReferenceError` out of
+     * the thunk, which is neither the injection nor the boot error naming the
+     * parameter.
+     *
+     * `typeof` is what settles it, at resolution time rather than here, and it
+     * is guarded on the **leftmost** name because it only protects a bare
+     * identifier - `typeof ns.Thing` still throws when `ns` is undeclared.
+     */
+    return `typeof ${root} === 'undefined' ? ${unresolved} : ${named}`;
+  }
 
   // The annotation reads the same whether the name was imported with
   // `import type` or declared as an interface, so the one case with a one-line
@@ -126,6 +145,7 @@ export const transform = (
 
   const program = parsed.program;
   const typeOnly = collectTypeOnlyNames(program);
+  const bound = boundNames(program);
   const edits: Edit[] = [];
   const annotated: string[] = [];
 
@@ -139,7 +159,9 @@ export const transform = (
     const params = constructorParams(node);
 
     if (params.length > 0) {
-      const entries = params.map((param) => entryFor(source, param, erased));
+      const entries = params.map((param) =>
+        entryFor(source, param, erased, bound),
+      );
       annotated.push(name);
       edits.push({
         start: node.end,
