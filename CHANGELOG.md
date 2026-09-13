@@ -4,6 +4,49 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.9.1 - 2026-09-13
+
+A degrading cache store, structured probe data, and no drain under test
+
+Three gaps a `dunx-template` migration hit, in the two areas it touched.
+
+`DegradingCacheStore` in `@dunx/infra/cache` wraps any store and answers misses
+while the backend is unreachable, so a cached route costs latency instead of a 500. Only a connection error degrades, and only Bun's Redis one by default: a
+serialisation failure is the app's bug and still throws, and a store on another
+backend passes its own `degradable` or nothing degrades. It warns once per
+outage rather than once per operation, and clears on the first success so the
+next outage says so too. `probe()` does one real read, because `degraded` starts
+optimistic and a fresh process would otherwise report a cache it has never
+touched as healthy. `CacheModule.forRoot(init, { degrade: true })` is the coarse
+opt-in; wrapping the L2 by hand is better for a tier, since
+`TieredCacheStore.set` awaits L2 before L1 and wrapping from outside loses the
+L1 promotion with it. The wrapper sits outside `MeteredCacheStore`, so a
+swallowed failure is still counted as an error and the hit rate stays honest,
+and a health probe reads from under the meter so it is not counted at all.
+
+`ProbeResult.data` carries a check's facts as values beside the one line
+`detail` already gave an operator, for what reads the report but not prose. The
+shipped indicators had real numbers and rendered them into sentences: `memory`
+now reports `rssBytes` and `maxRssBytes`, `disk` reports `totalBytes`,
+`freeBytes` and `usedFraction`, and the round trips report `roundTripMs`. It
+reaches `HEALTH_REPORT_SCHEMA` and the dashboard's own `ProbeReport` too.
+
+`@dunx/testing` zeroes `HealthModule`'s shutdown drain. `Readiness` holds
+shutdown for `drainDelayMs` so a load balancer notices the failing probe, and a
+suite has neither a load balancer nor one app: at the five seconds a deployment
+wants it exceeded Bun's default hook timeout once per file, as an unnamed hook
+naming no line. `Readiness` itself is unchanged, so the drain means in
+production exactly what it meant before. The override goes in ahead of the
+caller's, so a suite testing the drain passes its own and wins.
+
+### Features
+
+- **http,infra,testing**: the three things the dunx-template migration hit ([`92b17a8`](https://github.com/petarzarkov/dunx/commit/92b17a8af47133c71e1d6172b6cafa1918116ad4))
+
+### Fixes
+
+- **infra**: the review findings, five of six ([`7c2bfde`](https://github.com/petarzarkov/dunx/commit/7c2bfde9e75d128ddcd91c59c6497dca80586a35))
+
 ## 3.9.0 - 2026-09-13
 
 An email area with a transport seam, a renderer and a preview server
