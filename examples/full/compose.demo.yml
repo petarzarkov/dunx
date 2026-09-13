@@ -75,8 +75,24 @@ services:
     restart: unless-stopped
     # No `ports` and no volume, for the reasons the Redis above has none: only
     # the app talks to it, and nothing published here is worth keeping.
-    # RabbitMQ 4 reads the cgroup limit rather than the host's memory, so its
-    # high watermark follows this number instead of the Pi's 8 GB.
+    #
+    # **`mem_limit` does nothing on the Pi this deploys to, and neither does the
+    # one on the two services beside it.** That kernel has no cgroup memory
+    # controller, so `docker compose up` prints "Your kernel does not support
+    # memory limit capabilities or the cgroup is not mounted. Limitation
+    # discarded" and `docker inspect` reports `memlimit=0` for all three.
+    # RabbitMQ then sizes itself off the host rather than off this number:
+    # measured on the deployed container, `Memory high watermark ... computed to:
+    # 5.0728 gb` of the Pi's 7.9 GB.
+    #
+    # Left in place because it is correct on a host that has the controller, and
+    # because the fix is that controller rather than a second setting here:
+    # `cgroup_enable=memory cgroup_memory=1` in the Pi's `cmdline.txt` makes this
+    # line work for all three at once. Setting RabbitMQ's own watermark instead
+    # is not the workaround it looks like - `RABBITMQ_VM_MEMORY_HIGH_WATERMARK`
+    # is deprecated in RabbitMQ 4 and the container exits on it.
+    #
+    # Idle, the broker holds about 104 MB, so this is a ceiling nobody is near.
     mem_limit: 512m
     healthcheck:
       test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
