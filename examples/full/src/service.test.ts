@@ -69,7 +69,7 @@ it('answers liveness on a memory ceiling alone', async () => {
   expect(body.checks[0]?.critical).toBe(false);
 });
 
-it('answers readiness, and only redis may be down', async () => {
+it('answers readiness, and only the optional services may be down', async () => {
   const { status, body } = await json<Report>('health/ready');
 
   expect(status).toBe(200);
@@ -78,17 +78,23 @@ it('answers readiness, and only redis may be down', async () => {
     'database',
     'ledger',
     'redis',
+    'storage',
     'disk',
+    'amqp', // appended by `ProbesModule`, where `AmqpConnection` is reachable
   ]);
-  // Redis is the only area that can be absent without stopping this app, so it
-  // is the only critical:false check that is allowed to be anything but `up`.
+  // Redis and RabbitMQ are the areas that can be absent without stopping this
+  // app, so they are the only checks allowed to be anything but `up`. Both are
+  // critical:false, which is why readiness above is still 200 without them.
+  const optional = ['redis', 'amqp', 'disk'];
   for (const check of body.checks) {
-    if (check.name === 'redis' || check.name === 'disk') continue;
+    if (optional.includes(check.name)) continue;
     expect(check.state).toBe('up');
   }
-  expect(body.checks.find((check) => check.name === 'redis')?.critical).toBe(
-    false,
-  );
+  for (const name of ['redis', 'amqp']) {
+    expect(body.checks.find((check) => check.name === name)?.critical).toBe(
+      false,
+    );
+  }
 });
 
 it('holds the pod out of rotation without failing liveness', async () => {

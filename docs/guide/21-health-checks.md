@@ -4,6 +4,7 @@
 
 ```ts
 import {
+  AmqpIndicator,
   DatabaseIndicator,
   HealthModule,
   MemoryIndicator,
@@ -14,8 +15,16 @@ import {
 @Module({
   imports: [
     HealthModule.forRootAsync({
-      useFactory: (db: DbConnection, redis: RedisConnection) => ({
-        readiness: [new DatabaseIndicator(db), new RedisIndicator(redis)],
+      useFactory: (
+        db: DbConnection,
+        redis: RedisConnection,
+        amqp: AmqpConnection,
+      ) => ({
+        readiness: [
+          new DatabaseIndicator(db),
+          new RedisIndicator(redis),
+          new AmqpIndicator(amqp),
+        ],
         liveness: [
           new MemoryIndicator(
             new MemoryOptions({ maxRssBytes: 512 * 1024 ** 2 }),
@@ -23,7 +32,7 @@ import {
         ],
         drainDelayMs: 15_000,
       }),
-      inject: [DbConnection, RedisConnection],
+      inject: [DbConnection, RedisConnection, AmqpConnection],
     }),
   ],
 })
@@ -80,6 +89,67 @@ make it emptier, since no other pod's disk is either.
 A memory ceiling belongs on `liveness`, where the orchestrator restarts the
 process rather than routing around it.
 
+## What ships
+
+| Indicator           | Takes                                   | Up when                                   |
+| ------------------- | --------------------------------------- | ----------------------------------------- |
+| `RedisIndicator`    | `PingProbe`, which `RedisConnection` is | `PING` answers                            |
+| `DatabaseIndicator` | `QueryProbe`, which `DbConnection` is   | a round trip completes                    |
+| `AmqpIndicator`     | `QueryProbe`, which `AmqpConnection` is | the broker connection is up and unblocked |
+| `StorageIndicator`  | `StorageProbe`, which `Storage` is      | the store answers                         |
+| `MemoryIndicator`   | `MemoryOptions`                         | rss is under the ceiling                  |
+| `DiskIndicator`     | `DiskOptions`                           | the filesystem is under the used fraction |
+
+Each probe is a narrow abstract class holding the one or two members the check
+calls, so the connection classes in `@dunx/infra` satisfy them as written and a
+stub in a test is an object literal.
+
+### RabbitMQ
+
+`AmqpIndicator` takes `AmqpConnection` from `@dunx/infra/amqp`.
+
+```ts
+HealthModule.forRootAsync({
+  useFactory: (amqp: AmqpConnection) => ({
+    readiness: [new AmqpIndicator(amqp)],
+  }),
+  inject: [AmqpConnection],
+});
+```
+
+The connection opens on first use, so a process that neither publishes nor
+consumes holds no socket until something asks for one. Registering this indicator
+asks: the first probe opens the connection and waits up to `readyTimeoutMs` for
+it to come up.
+
+Every probe after that answers from what the socket has already reported.
+Established and unblocked is `up` with the latency. A socket that has failed and
+not recovered is `down` carrying its own message, such as
+`connect ECONNREFUSED 127.0.0.1:5672`, without waiting the window out again.
+
+A blocked connection counts as down. RabbitMQ blocks a publisher when the broker
+is out of memory or disk, and a process whose publishes are piling up in its own
+heap should stop being sent work.
+
+### Object storage
+
+`StorageIndicator` takes `Storage` from `@dunx/infra/files`, so it measures
+whichever backend an app configured.
+
+```ts
+new StorageIndicator(storage);
+new StorageIndicator(storage, new StorageProbeOptions({ key: 'ops/probe' }));
+```
+
+It asks whether one key exists: a `HEAD` against S3, a `stat` on a local root.
+Nothing has to be at that key. A store that answers is `up`, and a store that
+throws is `down` with its message, which covers expired credentials and a bucket
+that is gone.
+
+`DiskIndicator` answers a different question. It measures how full a local
+filesystem is, and an app on `S3Storage` has an idle local disk whatever the
+bucket is doing. Run both when uploads land on a volume.
+
 ## Draining
 
 Readiness starts failing **before** the port closes.
@@ -130,22 +200,42 @@ members.
 ```ts
 import { HealthIndicator, type ProbeResult } from '@dunx/http';
 
-export class BrokerIndicator extends HealthIndicator {
-  readonly name = 'broker';
+export class SearchIndicator extends HealthIndicator {
+  readonly name = 'search';
+
+  constructor(private readonly index: SearchIndex) {
+    super();
+  }
 
   async check(): Promise<ProbeResult> {
-    const started = performance.now();
-    await this.broker.ping();
-    return {
-      state: 'up',
-      detail: `${Math.round(performance.now() - started)} ms`,
-    };
+    const documents = await this.index.count();
+    return documents > 0
+      ? { state: 'up', detail: `${documents} documents` }
+      : { state: 'down', detail: 'the index is empty' };
   }
 }
 ```
 
 Throwing is how a check reports `down`. The registry never lets one throw into a
 response.
+
+Anything that already answers a `ping()` needs less. `RoundTripIndicator` holds
+the body the shipped round trips share, so a subclass is a name:
+
+```ts
+export class VectorStoreIndicator extends RoundTripIndicator {
+  readonly name = 'vectors';
+}
+```
+
+`critical` is a member rather than an argument, so an indicator that should
+report without shedding traffic is also a subclass:
+
+```ts
+export class CacheIndicator extends RedisIndicator {
+  override readonly critical = false;
+}
+```
 
 `DatabaseIndicator` needs a connection with `ping()`, which `DbConnection` from
 `@dunx/infra/db` has. A custom connection must implement `ping()` too: the base

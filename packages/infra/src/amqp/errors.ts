@@ -11,6 +11,8 @@ export const AmqpErrorCode = Object.freeze({
   /** A publish outran `publishTimeoutMs`, so the broker never confirmed it. */
   PUBLISH_TIMED_OUT: 'ERR_AMQP_PUBLISH_TIMED_OUT',
   INVALID_STATE: 'ERR_AMQP_INVALID_STATE',
+  /** `ping()` found the connection down, carrying the socket's own reason. */
+  UNREACHABLE: 'ERR_AMQP_UNREACHABLE',
   INVALID_URL: 'ERR_AMQP_INVALID_URL',
 } as const);
 

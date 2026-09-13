@@ -160,13 +160,15 @@ describe('resolveFeatures', () => {
   });
 
   test('resolves transitively', () => {
-    // health requires cache, database and files; jobs requires images. `files` joined
-    // health's list when module scoping made the dependency explicit - its controller
-    // injects `Storage`, so the module has to import the one that provides it.
+    // health requires cache, database, files and messaging; jobs requires images.
+    // `files` joined health's list when module scoping made the dependency
+    // explicit - its controller injects `Storage`, so the module has to import the
+    // one that provides it. `messaging` joined it the day the broker got a probe.
     expect(resolveFeatures(['health']).map((f) => f.name)).toEqual([
       'database',
       'cache',
       'files',
+      'messaging',
       'health',
     ]);
     expect(resolveFeatures(['jobs']).map((f) => f.name)).toEqual([
