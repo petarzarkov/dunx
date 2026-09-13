@@ -4,6 +4,41 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.8.1 - 2026-09-13
+
+Default the AMQP credentials and bound a publish
+
+An AMQP url naming a host but no user authenticated as user '' with a blank
+password, which RabbitMQ refuses: `rabbitmq-client` reads both out of a url
+string with no fallback of its own, so omitting the variable worked where
+naming a host did not. The spec's defaults are filled in now.
+
+A publish to an unreachable broker settled in neither direction, because the
+library retries the reconnect rather than failing, so a route publishing inside
+a request held that request open. `publishTimeoutMs` bounds the wait.
+
+The drain warning read its queue name off a consumer the broker had never set
+up, so the one case it fires in printed no name at all.
+
+### Features
+
+- **example**: a message broker panel on the demo landing page ([`d04beb7`](https://github.com/petarzarkov/dunx/commit/d04beb750a667beaf1b165d22ea7a24611abadf0))
+
+### Fixes
+
+- **infra**: refuse a publishTimeoutMs that is not a positive number ([`5887415`](https://github.com/petarzarkov/dunx/commit/5887415de6d1826af63724422154dd681e61a112))
+- **example**: assert the broker tour from the tour, and uncache the cache demo ([`4098626`](https://github.com/petarzarkov/dunx/commit/4098626596614d262c9a51f1ebf8205d42faff61))
+- **infra**: fill in the AMQP credentials a url omits, and bound a publish ([`31b42b0`](https://github.com/petarzarkov/dunx/commit/31b42b0f0827d418ced94ce2594a39f2032f1ecb))
+- **example**: pull the service images from the first registry that answers ([`4224abb`](https://github.com/petarzarkov/dunx/commit/4224abb713222afcb9c6c9e7a77409dad0d54049))
+
+### Refactors
+
+- move the registry fallback into scripts, where a second caller reaches it ([`4b5af28`](https://github.com/petarzarkov/dunx/commit/4b5af281c82de4068148922bd23cbd357cfbb6fc))
+
+### Documentation
+
+- **example**: say which registry the demo compose actually reaches ([`ff90b08`](https://github.com/petarzarkov/dunx/commit/ff90b083b29ef3d12ba57c17c33dd78c03cab7b5))
+
 ## 3.8.0 - 2026-09-13
 
 RabbitMQ behind @dunx/infra/amqp, cache metrics, and a pagination subpath without drizzle
