@@ -45,8 +45,16 @@ jobs:
       # different workflow run and needs this even though the artifact is ours.
       actions: read
       deployments: write
-      # The reaction and the preview comment, both as github-actions[bot].
+      # The preview comment, as github-actions[bot]. `issues.createComment`
+      # against a pull request number is governed by this and not by
+      # `issues: write`, which pull requests 130 to 133 proved by posting the
+      # same comment with exactly these permissions.
       pull-requests: write
+      # The eyes reaction, which is a different endpoint: reactions live under
+      # `issues/comments/{id}` and are not covered by the line above. The step
+      # is `|| true`, so the cost of being wrong here is a missing reaction
+      # rather than a failed deploy.
+      issues: write
     environment:
       name: preview
       url: ${{ steps.deploy.outputs.deployment-url }}
