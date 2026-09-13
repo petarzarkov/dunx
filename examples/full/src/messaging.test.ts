@@ -42,6 +42,9 @@ const place = async (
   return { status: response.status, body: (await response.json()) as Placed };
 };
 
+/** Longer than `settle`'s own deadline, so the assertion is what fails. */
+const POLLING = 15_000;
+
 const inbox = async (): Promise<Inbox> =>
   (await (await fetch(api('messaging/orders'))).json()) as Inbox;
 
@@ -56,6 +59,11 @@ const inbox = async (): Promise<Inbox> =>
  *
  * 10 s rather than 5: a GitHub runner is 2 to 3 times slower than a laptop and
  * this file runs beside the rest of the suite. A real failure still fails.
+ *
+ * Every test that calls this declares {@link POLLING}, which is longer. On bun's
+ * default 5 s the poll window could never be spent: the runner killed the test
+ * first, so a slow broker reported a timeout rather than the assertion saying
+ * what had and had not been delivered.
  */
 const settle = async (id: string, count: number): Promise<Inbox> => {
   const deadline = Date.now() + 10_000;
@@ -90,53 +98,69 @@ afterAll(async () => {
   await app.shutdown();
 }, 30_000);
 
-it('routes one publish to the queue its key binds', async () => {
-  if (!brokerUp) return;
-  const id = `only-placed-${Bun.randomUUIDv7().slice(0, 8)}`;
-  const { status, body } = await place(id);
+it(
+  'routes one publish to the queue its key binds',
+  async () => {
+    if (!brokerUp) return;
+    const id = `only-placed-${Bun.randomUUIDv7().slice(0, 8)}`;
+    const { status, body } = await place(id);
 
-  expect(status).toBe(201);
-  expect(body.routingKey).toBe('order.placed');
+    expect(status).toBe(201);
+    expect(body.routingKey).toBe('order.placed');
 
-  const seen = await settle(id, 1);
-  const mine = seen.handled.filter((entry) => entry.id === id);
-  expect(mine.map((entry) => entry.queue)).toEqual(['dunx-full.orders.placed']);
-});
+    const seen = await settle(id, 1);
+    const mine = seen.handled.filter((entry) => entry.id === id);
+    expect(mine.map((entry) => entry.queue)).toEqual([
+      'dunx-full.orders.placed',
+    ]);
+  },
+  POLLING,
+);
 
-it('binds a second queue to the same exchange', async () => {
-  if (!brokerUp) return;
-  const id = `shipped-${Bun.randomUUIDv7().slice(0, 8)}`;
-  await place(id, true);
+it(
+  'binds a second queue to the same exchange',
+  async () => {
+    if (!brokerUp) return;
+    const id = `shipped-${Bun.randomUUIDv7().slice(0, 8)}`;
+    await place(id, true);
 
-  const seen = await settle(id, 1);
-  expect(seen.connected).toBe(true);
-  expect(
-    seen.handled.filter((entry) => entry.id === id).map((e) => e.queue),
-  ).toEqual(['dunx-full.orders.shipped']);
-});
+    const seen = await settle(id, 1);
+    expect(seen.connected).toBe(true);
+    expect(
+      seen.handled.filter((entry) => entry.id === id).map((e) => e.queue),
+    ).toEqual(['dunx-full.orders.shipped']);
+  },
+  POLLING,
+);
 
 /**
  * The reason `AmqpPublisher.publish` exists rather than `publisher().send()`. The
  * handler runs in the trace the publishing request was in, so a flow that crossed
  * the broker joins in one log query.
  */
-it('continues the publisher trace in the handler', async () => {
-  if (!brokerUp) return;
-  const id = `traced-${Bun.randomUUIDv7().slice(0, 8)}`;
-  const traceId = `${'f'.repeat(31)}1`;
+it(
+  'continues the publisher trace in the handler',
+  async () => {
+    if (!brokerUp) return;
+    const id = `traced-${Bun.randomUUIDv7().slice(0, 8)}`;
+    const traceId = `${'f'.repeat(31)}1`;
 
-  await fetch(api('messaging/orders'), {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      traceparent: `00-${traceId}-${'a'.repeat(16)}-01`,
-    },
-    body: JSON.stringify({ id, total: 1, shipped: false }),
-  });
+    await fetch(api('messaging/orders'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        traceparent: `00-${traceId}-${'a'.repeat(16)}-01`,
+      },
+      body: JSON.stringify({ id, total: 1, shipped: false }),
+    });
 
-  const seen = await settle(id, 1);
-  expect(seen.handled.find((entry) => entry.id === id)?.traceId).toBe(traceId);
-});
+    const seen = await settle(id, 1);
+    expect(seen.handled.find((entry) => entry.id === id)?.traceId).toBe(
+      traceId,
+    );
+  },
+  POLLING,
+);
 
 /**
  * `requeue: true` on the placed queue would redeliver a body that can never parse

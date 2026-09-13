@@ -77,6 +77,60 @@ export const collectTypeOnlyNames = (
   return names;
 };
 
+/**
+ * Every name this file binds **at runtime**: imported, or declared at the top
+ * level. Anything else a constructor annotation names is ambient.
+ *
+ * Two ways a name looks bound and is not, each of which would suppress
+ * `entryFor`'s guard and bring the `ReferenceError` back: a `declare`, which
+ * promises a runtime value this file does not create, and a binding nested in a
+ * function, which is not in scope at a constructor signature. Top-level
+ * statements only, for the second - a `walk` would collect it.
+ */
+export const boundNames = (program: Node): ReadonlySet<string> => {
+  const names = new Set<string>();
+
+  const bind = (node: Node | undefined | null): void => {
+    const name = nameOf(node);
+    if (name !== undefined) names.add(name);
+  };
+
+  for (const statement of (program as { body?: readonly Node[] }).body ?? []) {
+    if (isImportDeclaration(statement)) {
+      for (const specifier of statement.specifiers) {
+        bind((specifier as ImportSpecifier).local);
+      }
+      continue;
+    }
+
+    const declaration =
+      (statement as { declaration?: Node | null }).declaration ?? statement;
+    if ((declaration as { declare?: boolean }).declare === true) continue;
+
+    if (declaration.type === 'VariableDeclaration') {
+      // An id that is a pattern binds nothing a token could name, and `nameOf`
+      // answers `undefined` for one.
+      for (const declarator of (
+        declaration as { declarations?: readonly Node[] }
+      ).declarations ?? []) {
+        bind((declarator as { id?: Node }).id);
+      }
+      continue;
+    }
+
+    if (
+      isClassDeclaration(declaration) ||
+      declaration.type === 'FunctionDeclaration' ||
+      declaration.type === 'TSEnumDeclaration' ||
+      declaration.type === 'TSModuleDeclaration'
+    ) {
+      bind((declaration as { id?: Node }).id);
+    }
+  }
+
+  return names;
+};
+
 /** A class's own type parameters are erased, so `T` is never a usable token. */
 const collectTypeParameters = (klass: ClassNode): ReadonlySet<string> => {
   const names = new Set<string>();
