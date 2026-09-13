@@ -61,8 +61,14 @@ services:
       - demo
 
   dunx-demo-rabbitmq:
-    # public.ecr.aws for the reason the Redis above names it, and this tag
-    # publishes linux/arm64 for the Pi this runs on.
+    # The registry the Redis above uses, so this file names one registry rather
+    # than two, and a tag that publishes linux/arm64 for the Pi.
+    #
+    # `deploy-demo.sh` runs `docker compose` directly, so the fallback in
+    # `scripts/registries.ts` does not reach here: whichever registry these two
+    # lines name is the only one tried. That list now puts docker.io ahead of
+    # public.ecr.aws, measured during an ECR outage, so both lines are worth
+    # revisiting together rather than one of them here.
     image: public.ecr.aws/docker/library/rabbitmq:4-alpine
     container_name: dunx-demo-rabbitmq
     logging: *logging
