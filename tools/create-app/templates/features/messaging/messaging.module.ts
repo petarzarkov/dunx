@@ -30,6 +30,10 @@ import { ORDERS_EXCHANGE, OrdersMessages } from './orders.messages.js';
           // Short, so `bun run tour` against an absent broker says so and moves
           // on instead of holding boot for five seconds.
           readyTimeoutMs: 1_500,
+          // Well under the package's 10 s default, because a request is waiting
+          // on this one: the landing page's broker panel wants the 503 while the
+          // visitor is still looking at it.
+          publishTimeoutMs: 2_000,
           drainTimeoutMs: 2_000,
           handlerTimeoutMs: 10_000,
         };

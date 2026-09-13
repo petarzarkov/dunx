@@ -1,6 +1,6 @@
-# The deployed shape of demo.dunx.win: this example, its own broker, and nothing
-# else. `compose.yml` beside it is the local development pair; this one is the
-# public demo.
+# The deployed shape of demo.dunx.win: this example, its own two brokers, and
+# nothing else. `compose.yml` beside it is the local development set; this one is
+# the public demo.
 #
 #   docker compose -f examples/full/compose.demo.yml up -d --build
 #
@@ -14,12 +14,21 @@
 # question, and an isolated broker costs about 12 MB. Nothing here can reach the
 # other one: `REDIS_URL` names this service explicitly.
 #
+# ## Why a RabbitMQ beside it
+#
+# The landing page's message broker panel publishes to a topic exchange and reads
+# back what the consumers in this same container received. Without a broker that
+# panel answers 503, which demonstrates the degradation rather than the feature.
+# It holds nothing that outlives a restart: the exchange and both queues are
+# declared at boot and on every reconnect.
+#
 # ## Why no published port
 #
 # The only caller is cloudflared, which resolves `dunx-demo` by name over the
 # shared `app-network`. Publishing a host port would also expose the dashboard on
 # the LAN, and there is no reason for it to be reachable except through the
-# tunnel.
+# tunnel. Neither broker is on `app-network` at all, so only this app reaches
+# them - which is what makes RabbitMQ's default `guest` user acceptable here.
 name: dunx-demo
 
 x-logging:
@@ -51,6 +60,29 @@ services:
     networks:
       - demo
 
+  dunx-demo-rabbitmq:
+    # public.ecr.aws for the reason the Redis above names it, and this tag
+    # publishes linux/arm64 for the Pi this runs on.
+    image: public.ecr.aws/docker/library/rabbitmq:4-alpine
+    container_name: dunx-demo-rabbitmq
+    logging: *logging
+    restart: unless-stopped
+    # No `ports` and no volume, for the reasons the Redis above has none: only
+    # the app talks to it, and nothing published here is worth keeping.
+    # RabbitMQ 4 reads the cgroup limit rather than the host's memory, so its
+    # high watermark follows this number instead of the Pi's 8 GB.
+    mem_limit: 512m
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      # The Erlang VM takes appreciably longer to boot on a Pi than on a laptop,
+      # and `depends_on` below holds the app until this passes.
+      retries: 12
+      start_period: 30s
+    networks:
+      - demo
+
   dunx-demo:
     container_name: dunx-demo
     logging: *logging
@@ -62,6 +94,10 @@ services:
     environment:
       # This service name, not the other app's broker.
       REDIS_URL: redis://dunx-demo-redis:6379
+      # Absent, the messaging routes answer 503 and the panel reports that.
+      # Spelled out rather than left to the guest default, so giving the broker a
+      # user of its own is one line here rather than a silent auth failure.
+      RABBITMQ_URL: amqp://guest:guest@dunx-demo-rabbitmq:5672
       # better-auth refuses to mint sessions without one. Supply it in a `.env`
       # beside this file, or in the environment that runs compose.
       AUTH_SECRET: ${DEMO_AUTH_SECRET:?set DEMO_AUTH_SECRET, at least 32 characters}
@@ -85,6 +121,8 @@ services:
     stop_grace_period: 20s
     depends_on:
       dunx-demo-redis:
+        condition: service_healthy
+      dunx-demo-rabbitmq:
         condition: service_healthy
     networks:
       - demo

@@ -246,6 +246,25 @@
         </section>
 
         <section>
+          <h2>Message broker</h2>
+          <p>
+            <code>@dunx/infra/amqp</code> over RabbitMQ.
+            <code>POST /api/messaging/orders</code> publishes to a topic
+            exchange and the broker routes the key to its own queue, both
+            consumed by this same container. The line that comes back is read
+            from <code>GET /api/messaging/orders</code>, and the
+            <code>traceId</code> on it is the one this request carried: a trace
+            that crossed the broker.
+          </p>
+          <div class="row">
+            <button id="mq-place">Place an order</button>
+            <button id="mq-ship">Ship one</button>
+            <button id="mq-bad">Publish a malformed body</button>
+          </div>
+          <pre id="mq-out"></pre>
+        </section>
+
+        <section>
           <h2>Session</h2>
           <p>
             better-auth mounted by <code>@dunx/auth</code>, with the anonymous

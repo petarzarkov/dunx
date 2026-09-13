@@ -79,9 +79,16 @@ beforeAll(async () => {
   brokerUp = (await place('probe')).status === 201;
 });
 
+/**
+ * Past bun's 5 s default, because the teardown this file reaches with nothing
+ * running is the slow one: each consumer drain waits `drainTimeoutMs`, the
+ * connection close waits its own bound, and the queue and cache are shutting down
+ * against a Redis that is not answering either. All of that is bounded, and the
+ * sum is simply more than 5 s.
+ */
 afterAll(async () => {
   await app.shutdown();
-});
+}, 30_000);
 
 it('routes one publish to the queue its key binds', async () => {
   if (!brokerUp) return;
@@ -155,6 +162,43 @@ it('answers 503 with no broker rather than hanging', async () => {
   const { status } = await place('degraded');
   expect(status).toBe(503);
   expect((await inbox()).connected).toBe(false);
+});
+
+/**
+ * The landing page is where a visitor reaches these routes, and it is the half a
+ * rename can miss: `landing.js` holds the paths as strings, so nothing else fails
+ * when one moves. Asserted against the OpenAPI document rather than a literal, so
+ * the page and the controller cannot drift apart quietly.
+ *
+ * No broker needed - this is the wiring, not the delivery.
+ */
+it('wires the landing page panel to the routes that exist', async () => {
+  const page = await (await fetch(new URL('/', base))).text();
+  expect(page).toContain('<h2>Message broker</h2>');
+  for (const id of ['mq-place', 'mq-ship', 'mq-bad', 'mq-out']) {
+    expect(page).toContain(`id="${id}"`);
+  }
+
+  const byName = (left: string, right: string): number =>
+    left.localeCompare(right);
+
+  const script = await (await fetch(new URL('/landing.js', base))).text();
+  const used = [
+    ...new Set(
+      [...script.matchAll(/'(\/api\/messaging\/[^']*)'/g)].flatMap(
+        (match) => match[1] ?? [],
+      ),
+    ),
+  ].sort(byName);
+
+  const document = (await (await fetch(api('openapi.json'))).json()) as {
+    paths: Record<string, unknown>;
+  };
+  const mounted = Object.keys(document.paths)
+    .filter((path) => path.startsWith('/api/messaging/'))
+    .sort(byName);
+
+  expect(used).toEqual(mounted);
 });
 
 /**
