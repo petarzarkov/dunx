@@ -15,7 +15,7 @@ other.
 | `@dunx/core`       | DI container, modules, lifecycle, config and files, an event bus, `ResiliencePolicy` - zero deps                             |
 | `@dunx/transform`  | Load-time transform: constructor parameter types                                                                             |
 | `@dunx/http`       | Routes, websocket gateways, server-sent events, middleware, guards, CORS, validation, health probes, `./client`, `./connect` |
-| `@dunx/infra`      | `/db` (drizzle) `/redis` `/cache` `/queue` `/amqp` `/schedule` `/files` `/images` `/logger` `/pagination`                    |
+| `@dunx/infra`      | `/db` (drizzle) `/redis` `/cache` `/queue` `/amqp` `/schedule` `/files` `/images` `/email` `/logger` `/pagination`           |
 | `@dunx/openapi`    | OpenAPI 3.1 from route zod schemas, behind `./swagger` or `./scalar`                                                         |
 | `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0                                                                     |
 | `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing                                                                  |
@@ -194,6 +194,28 @@ capability rather than the vendor, so `@dunx/infra/db` is drizzle without being 
 `@dunx/drizzle` and `@dunx/infra/queue` is bullmq without being called `@dunx/bullmq`.
 Renaming auth alone would have made it the one vendor-named package in the set.
 [architecture/authentication.md](./architecture/authentication.md), "And it stays `@dunx/auth`".
+
+**Email is `@dunx/infra/email`, not a package and not an app concern.** Issue 139
+argued that MAPPING.md was right about the **vendor** and wrong about the
+**shape**: what is app-specific is the API key and the copy, not the queueing,
+the dry-run default, the renderer seam or the preview server. Built as one area
+of `@dunx/infra` rather than an eleventh workspace, since the freeze above is
+about new packages and this needed none.
+
+Four subpaths, split on peers the way `@dunx/openapi` splits its renderers: the
+base reaches none and is in the root barrel, `/email/resend`, `/email/smtp` and
+`/email/react` each reach one and are not. `MemoryTransport` ships in `/email`
+rather than `@dunx/testing`, whose peers are core and http: putting a transport
+there would have made `@dunx/infra` a peer of the test harness for one class.
+
+Three things were decided against the obvious default. **Retries are off** by
+default, because a provider that accepted a message and lost the response cannot
+be told from one that never saw it and the cost of guessing is a second email in
+a real inbox; `maxPerSecond` is the answer to a 429 instead. **`dryRun` routes to
+`LogTransport`** rather than being a second mechanism, so there is one definition
+of sending nowhere. And the preview server is a `bin` on `@dunx/infra`
+(`bunx dunx-email preview`), the way `dunx-openapi` already is, rather than a
+`tools/` workspace.
 
 **Versioning stays lockstep until core 1.0.0.** There is no pre-1.0 range policy that
 works - a caret cannot span a `0.x` minor, and `>=` promises across majors dunx cannot

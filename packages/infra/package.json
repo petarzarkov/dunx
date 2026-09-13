@@ -14,24 +14,31 @@
     "drizzle",
     "drizzle-orm",
     "dunx",
+    "email",
     "files",
     "glob",
     "image",
     "jobs",
     "logger",
+    "mail",
     "messaging",
+    "nodemailer",
     "postgres",
     "pubsub",
     "queue",
     "rabbitmq",
+    "react-email",
     "redis",
+    "resend",
     "resize",
     "s3",
     "schedule",
     "scheduler",
+    "smtp",
     "sql",
     "sqlite",
     "storage",
+    "templates",
     "thumbnail",
     "valkey",
     "webp"
@@ -47,6 +54,9 @@
     "type": "git",
     "url": "git+https://github.com/petarzarkov/dunx.git",
     "directory": "packages/infra"
+  },
+  "bin": {
+    "dunx-email": "dist/email/cli.js"
   },
   "files": [
     "LICENSE",
@@ -72,6 +82,22 @@
     "./cache": {
       "types": "./dist/cache/index.d.ts",
       "import": "./dist/cache/index.js"
+    },
+    "./email": {
+      "types": "./dist/email/index.d.ts",
+      "import": "./dist/email/index.js"
+    },
+    "./email/react": {
+      "types": "./dist/email/react/index.d.ts",
+      "import": "./dist/email/react/index.js"
+    },
+    "./email/resend": {
+      "types": "./dist/email/resend/index.d.ts",
+      "import": "./dist/email/resend/index.js"
+    },
+    "./email/smtp": {
+      "types": "./dist/email/smtp/index.d.ts",
+      "import": "./dist/email/smtp/index.js"
     },
     "./files": {
       "types": "./dist/files/index.d.ts",
@@ -121,20 +147,32 @@
   },
   "devDependencies": {
     "@dunx/core": "workspace:*",
+    "@react-email/render": "2.1.0",
+    "@types/react": "19.2.18",
     "bullmq": "6.3.4",
     "drizzle-orm": "0.45.2",
     "ioredis": "6.0.0",
-    "rabbitmq-client": "5.0.8"
+    "nodemailer": "10.0.9",
+    "rabbitmq-client": "5.0.8",
+    "react": "19.2.8",
+    "resend": "6.28.0"
   },
   "peerDependencies": {
     "@dunx/core": "workspace:*",
+    "@react-email/render": "^2.0.0",
     "@types/bun": ">=1.4.1",
     "bullmq": "^6.0.5",
     "drizzle-orm": "^0.45.2",
     "ioredis": ">=5.0.0",
-    "rabbitmq-client": "^5.0.8"
+    "nodemailer": "^10.0.0",
+    "rabbitmq-client": "^5.0.8",
+    "react": ">=18.0.0",
+    "resend": "^6.0.0"
   },
   "peerDependenciesMeta": {
+    "@react-email/render": {
+      "optional": true
+    },
     "@types/bun": {
       "optional": true
     },
@@ -147,7 +185,16 @@
     "ioredis": {
       "optional": true
     },
+    "nodemailer": {
+      "optional": true
+    },
     "rabbitmq-client": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "resend": {
       "optional": true
     }
   },
