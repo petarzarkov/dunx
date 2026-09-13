@@ -570,3 +570,165 @@ $('explorers-go').addEventListener('click', async (event) => {
     button.disabled = false;
   }
 });
+
+/**
+ * The event bus. `handled` and `failures` are the dispatch the publisher got
+ * back, so a subscriber that threw is visible here rather than only in the log.
+ */
+const placeThrough = async (button, total, label) => {
+  const out = $('bus-out');
+  button.disabled = true;
+  try {
+    const res = await fetch('/api/events/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ total }),
+    });
+    const body = await res.json();
+    trail(out, `${label} -> ${res.status} ${body.event}`);
+    trail(out, `   ${body.handled} subscriber(s) handled it`);
+    for (const failure of body.failures ?? []) {
+      trail(out, `   ${failure.subscriber} threw: ${failure.error}`);
+    }
+    if ((body.failures ?? []).length > 0) {
+      trail(out, `   the request is still ${res.status}, not a 500`);
+    }
+  } finally {
+    button.disabled = false;
+  }
+};
+$('bus-ok').addEventListener('click', (event) =>
+  placeThrough(event.currentTarget, 42, 'POST /api/events/orders total 42'),
+);
+$('bus-fail').addEventListener('click', (event) =>
+  placeThrough(event.currentTarget, 100_000, 'the same call, total 100000'),
+);
+$('bus-list').addEventListener('click', async () => {
+  const out = $('bus-out');
+  const res = await fetch('/api/events/subscriptions');
+  const rows = await res.json();
+  out.textContent = rows
+    .map(
+      (row) =>
+        `${row.event.padEnd(12)} ${row.subscriber.padEnd(30)} ` +
+        `handled ${row.handled}, failed ${row.failed}`,
+    )
+    .join('\n');
+});
+
+/**
+ * Server-sent events, read with the browser's own `EventSource`.
+ *
+ * Closed once the generator's last frame arrives: the handler ends the stream
+ * after `count` ticks, and `EventSource` treats any end as a disconnect and
+ * reconnects. Left open it would count forever.
+ */
+const SSE_COUNT = 5;
+$('sse-go').addEventListener('click', (event) => {
+  const button = event.currentTarget;
+  const out = $('sse-out');
+  button.disabled = true;
+  out.textContent = '';
+  const source = new EventSource(`/api/events/ticks?count=${SSE_COUNT}`);
+  const done = () => {
+    source.close();
+    button.disabled = false;
+  };
+  trail(out, `EventSource /api/events/ticks?count=${SSE_COUNT}`);
+  source.addEventListener('tick', (frame) => {
+    trail(out, `<- id=${frame.lastEventId} ${frame.data}`);
+    if (Number(frame.lastEventId) >= SSE_COUNT) {
+      trail(out, 'stream ended, closed before it could reconnect');
+      done();
+    }
+  });
+  source.onerror = () => {
+    trail(out, 'stream error');
+    done();
+  };
+});
+
+/** Connect, called as what it is on the wire: a POST carrying JSON. */
+$('rpc-go').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const out = $('rpc-out');
+  button.disabled = true;
+  try {
+    const path = '/greet.v1.GreetService/Say';
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'visitor' }),
+    });
+    const body = await res.json();
+    out.textContent =
+      `POST ${path} -> ${res.status}\n` +
+      `${JSON.stringify(body, null, 2)}\n\n` +
+      'greeted is a counter on an injected provider, so the RPC went through ' +
+      'the same container the routes use.';
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/**
+ * Cache tiers. The symbol is fresh per click for the reason the tour's own
+ * single-flight step is: L2 is Redis, so a fixed key is still cached from the
+ * last visitor and "loads" would move by zero on the first read too.
+ */
+$('cache-go').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const out = $('cache-out');
+  const symbol = `web${Math.random().toString(36).slice(2, 8)}`;
+  const loads = async () => (await (await fetch('/api/catalog')).json()).loads;
+  const read = async () => (await fetch(`/api/catalog/${symbol}`)).json();
+  button.disabled = true;
+  out.textContent = '';
+  try {
+    const before = await loads();
+    const first = await read();
+    const afterFirst = await loads();
+    trail(out, `GET /api/catalog/${symbol} -> ${first.price}`);
+    trail(out, `   loads ${before} -> ${afterFirst}, a miss that loaded`);
+
+    await read();
+    trail(out, 'the same read again');
+    trail(out, `   loads ${afterFirst} -> ${await loads()}, served from cache`);
+
+    const evicted = await fetch(`/api/catalog/${symbol}`, { method: 'DELETE' });
+    trail(out, `DELETE -> ${JSON.stringify(await evicted.json())}`);
+    const atEvict = await loads();
+    await read();
+    trail(out, `   loads ${atEvict} -> ${await loads()}, loading again`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/** Keyset pagination: follow the cursor rather than count offsets. */
+$('page-go').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const out = $('page-out');
+  button.disabled = true;
+  out.textContent = '';
+  try {
+    let cursor;
+    // Bounded rather than `while (hasNextPage)`: a cursor that stopped advancing
+    // would spin this forever against a page nobody is watching.
+    for (let page = 1; page <= 10; page++) {
+      const query = cursor === undefined ? '' : `&cursor=${cursor}`;
+      const res = await fetch(`/api/notes/page?take=1${query}`);
+      const body = await res.json();
+      const rows = body.data.map((row) => row.text).join(', ');
+      trail(out, `page ${page} -> ${rows || '(empty)'}`);
+      if (!body.meta.hasNextPage) {
+        trail(out, `   hasNextPage false after ${page} page(s)`);
+        return;
+      }
+      cursor = encodeURIComponent(body.meta.nextCursor);
+      trail(out, `   nextCursor ${body.meta.nextCursor}`);
+    }
+  } finally {
+    button.disabled = false;
+  }
+});

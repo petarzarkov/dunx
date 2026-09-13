@@ -187,6 +187,49 @@ happens on load. It is not a devDependency. If you bundle ahead of time with
 `Bun.build` and the plugin, it becomes build-time only and can be dropped from
 the image.
 
+## Single executable
+
+`Bun.build` with `compile` writes the runtime and the app into one file, which
+runs on a host with nothing installed.
+
+```ts
+import { depsPlugin } from '@dunx/transform';
+
+const compiled = await Bun.build({
+  entrypoints: ['src/main.ts'],
+  target: 'bun',
+  compile: { outfile: 'dist/pulse' },
+  plugins: [depsPlugin],
+  minify: true,
+  sourcemap: 'none',
+});
+```
+
+`plugins` and `compile` in the same call is the part to keep. Constructor
+injection has no runtime annotation, so the transform writes each class's
+dependencies as a statement after it.
+
+Under `bun run` the preload does that on load. A compiled binary has no
+load-time plugin, so the record is baked in at build time instead. Drop
+`plugins` and every class with constructor parameters fails at boot with the
+preload message.
+
+Two consequences:
+
+- `@dunx/transform` is build-time only for the binary, but it is not
+  automatically a devDependency. `examples/binary` keeps it a dependency because
+  the same package still runs under `bun run` and `bun test`, and those load the
+  preload. Move it only if the binary is the one thing you ship.
+- `bunfig.toml` is not read by the binary. Anything the preload line was doing
+  has to happen in the build instead.
+
+`sourcemap: 'none'` because debug symbols add tens of megabytes to a file nobody
+reads a stack trace off.
+
+[`examples/binary`](https://github.com/petarzarkov/dunx/tree/main/examples/binary)
+is a CLI built this way, and its test compiles the binary and asserts that an
+injected dependency survived the compile.
+
 ## Health checks
 
 `HealthModule` from `@dunx/http` serves `/api/health/live` and `/api/health/ready`.

@@ -59,6 +59,11 @@ export const CAPABILITIES: readonly Capability[] = [
       '`Bun.serve` routing, middleware, guards, CORS, compression, throttling',
   },
   {
+    need: 'Configuration',
+    gives:
+      'One validate function over `Bun.env`, YAML, TOML or JSON, typed end to end',
+  },
+  {
     need: 'Validation',
     gives: 'Standard Schema, so zod, Valibot or ArkType all drop in',
   },
@@ -70,7 +75,7 @@ export const CAPABILITIES: readonly Capability[] = [
   {
     need: 'Realtime',
     gives:
-      'WebSocket gateways and server-sent events, with a Redis relay for many nodes',
+      'WebSocket gateways and `@Sse`, with a Redis or Postgres relay for many nodes',
   },
   {
     need: 'Service to service',
@@ -87,8 +92,17 @@ export const CAPABILITIES: readonly Capability[] = [
       'drizzle over `bun:sqlite` and `Bun.SQL`, transactions, seeds, paging',
   },
   {
+    need: 'Caching',
+    gives: 'Memory, Redis or the two tiered, with single flight on a miss',
+  },
+  {
     need: 'Background work',
     gives: 'bullmq over `Bun.RedisClient`, sandboxed processors, `@Cron`',
+  },
+  {
+    need: 'Messaging',
+    gives:
+      'RabbitMQ topic exchanges, one handler per queue, the trace carried across',
   },
   {
     need: 'Storage and images',
@@ -104,8 +118,14 @@ export const CAPABILITIES: readonly Capability[] = [
     gives: 'An HTTP client with retry, backoff and trace propagation',
   },
   {
+    need: 'Failing well',
+    gives:
+      '`ResiliencePolicy` around anything: timeout, retry, backoff, jitter, fallback',
+  },
+  {
     need: 'Operating it',
-    gives: 'Health checks, structured logging, an ops dashboard, bull-board',
+    gives:
+      'Health checks, structured logging, request and driver metrics, a dashboard',
   },
   {
     need: 'Testing',

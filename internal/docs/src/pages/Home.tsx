@@ -221,8 +221,10 @@ const Packages = (): React.JSX.Element => (
           The packages
         </Title>
         <Text c="dimmed" maw={640}>
-          Seven, and only <code>@dunx/core</code> plus <code>@dunx/http</code>{' '}
-          are needed to serve a request.
+          {/* Counted, not spelled out: this said "Seven" through three releases
+              that took it to ten. */}
+          {site.packages.length}, and only <code>@dunx/core</code> plus{' '}
+          <code>@dunx/http</code> are needed to serve a request.
         </Text>
       </Stack>
 
@@ -254,10 +256,16 @@ const Packages = (): React.JSX.Element => (
               </Text>
               <Group gap={4} mt="auto" justify="space-between">
                 {/* `.` is every package's root export and says nothing; only
-                    the extra subpaths are worth a badge. */}
+                    the extra subpaths are worth a badge. `./internal` is worse
+                    than nothing - it is what the framework calls on itself and
+                    carries no stability promise, so a badge beside `./client`
+                    reads as an invitation to import it. */}
                 <Group gap={4}>
                   {pkg.subpaths
-                    .filter((subpath) => subpath !== '.')
+                    .filter(
+                      (subpath) =>
+                        subpath !== '.' && !subpath.endsWith('/internal'),
+                    )
                     .map((subpath) => (
                       <Badge
                         key={subpath}

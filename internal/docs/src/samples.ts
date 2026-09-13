@@ -314,6 +314,13 @@ export const SNIPPETS: readonly Sample[] = [
     code: 'bun run start',
   },
   { id: 'run-test', label: 'bash', file: 'bash', blurb: '', code: 'bun test' },
+  {
+    id: 'run-build',
+    label: 'bash',
+    file: 'bash',
+    blurb: '',
+    code: 'bun run build',
+  },
 ];
 
 /**
