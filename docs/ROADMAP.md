@@ -293,15 +293,15 @@ carrying both. The hang itself is still open and is upstream's; see the roadmap 
 delivered rather than marking it done, so the folder only ever holds open work.
 Feedback goes in as a new file rather than into conversation.
 
-| Item                                                                                          | Shape                                                                            |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | Filed as bullmq#4656 and open there. Nothing left here but the re-measure.       |
-| [bun-1.4-adoption](../internal/notes/roadmap/bun-1.4-adoption.md)                             | A1-A5 all settled. A3 filed upstream; the rest adopted or measured and declined. |
-| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Fan-out shipped in 3.1.2, the cache as `@dunx/infra/cache`. The queue is held.   |
+| Item                                                                                          | Shape                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | Filed as bullmq#4656 and open there. Nothing left here but the re-measure.                                                                                                                             |
+| `Bun.serve` `{ dir }` routes                                                                  | Cannot replace `StaticFiles`: no `cache-control`, every method served. Filed as [bun#40892](https://github.com/oven-sh/bun/issues/40892) and [bun#40893](https://github.com/oven-sh/bun/issues/40893). |
+| [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Fan-out shipped in 3.1.2, the cache as `@dunx/infra/cache`. The queue is held.                                                                                                                         |
 
 Delivered and moved out of this folder rather than left here marked done:
 
-- **cross-language benchmark subjects** - the 16-subject run and how to read it are
+- **cross-language benchmark subjects** - the 20-subject run and how to read it are
   in [architecture/benchmarks.md](./architecture/benchmarks.md).
 - **the MCP server** - shipped as `@dunx/mcp`; the reasoning is in
   [architecture/mcp.md](./architecture/mcp.md).
@@ -321,7 +321,7 @@ Delivered and moved out of this folder rather than left here marked done:
   [architecture/dependency-injection.md](./architecture/dependency-injection.md), and
   what module middleware turned out to be for is in
   [architecture/http.md](./architecture/http.md).
-- **the dashboard** - shipped as `@dunx/dashboard`: one middleware over six panels,
+- **the dashboard** - shipped as `@dunx/dashboard`: one middleware over seven panels,
   with **bull-board mounted** for the queues rather than a queue table of dunx's own.
 - **adopting from nestjs-template** - keyset pagination landed as
   `@dunx/infra/pagination` and the queue page became bull-board behind the dashboard's
@@ -369,115 +369,41 @@ its test.
 
 ## `internal/` - private workspaces, never published
 
-### `internal/docs` - the documentation site - **built**
+Both are built, and each is described by its own README rather than here:
+[`internal/docs`](../internal/docs/README.md) is the site at dunx.win, and
+[`internal/bench`](../internal/bench/README.md) is the harness behind
+[architecture/benchmarks.md](./architecture/benchmarks.md). What belongs on a roadmap
+is what is still open in them.
 
-React + Mantine bundled by **Vite**, static output, deployed to **Cloudflare Pages** at
-dunx.win. Coverage is a page inside it. Design and the parser decision:
-[architecture/tooling.md](./architecture/tooling.md), "Documentation site"; the extractor's own
-limits: `internal/docs/README.md`.
+`internal/docs`: the OpenAPI document `@dunx/openapi` produces, as a page here, and
+per-package code splitting.
 
-Nothing on the site is hand-written prose. The landing page is the root README,
-the guides are `docs/*.md` through `Bun.markdown.html`, each package page is its
-README plus an **API reference extracted from the doc comments** by
-`oxc-parser`, and the coverage page reads the model `gen:cov` emits.
-
-The three displacement consequences are handled:
-
-- `scripts/coverage-report.ts` no longer writes standalone HTML. It writes
-  `internal/docs/src/generated/coverage.json` and the badges into
-  `internal/docs/public/badges/`.
-- `ci.yml`'s Pages job uploads `./internal/docs/dist`, and a `Build the
-documentation site` step runs after `test:cov` so the artifact has the
-  coverage data the earlier `bun run build` could not have had.
-- The README badges point at `/badges/coverage-<pkg>.svg` and link to
-  `/#/coverage`; `scripts/update-readme.ts` generates them.
-
-Still open: the OpenAPI document `@dunx/openapi` produces as a page here, and
-per-package code splitting. Syntax highlighting shipped - shiki, pre-highlighted by
-the generator, so the browser downloads no highlighter.
-
-### `internal/bench` - the benchmark harness - **built**
-
-Seventeen subjects across four identical workloads, plus cold-start: raw `Bun.serve`,
-`@dunx/http` with and without request logging, Elysia, Hono on both Bun and Node,
-NestJS on both Express and Fastify, raw `node:http`, Fastify, Express, and five
-cross-language ceilings (Go `net/http`, Gin, Rust Axum, Spring Boot, Django), plus
-**FastAPI** on uvicorn - the closest thing in the suite to what dunx is for, since
-both validate from a schema. A subject whose toolchain is absent skips; the published
-`results/latest.json` has all seventeen.
-Methodology, machine and every deliberate handicap are in
-[`internal/bench/README.md`](../internal/bench/README.md); the measured findings are in
-[architecture/benchmarks.md](./architecture/benchmarks.md), "Benchmark harness".
-
-It publishes the losses. On Bun 1.4 dunx costs 0.7% to 7.0% against raw `Bun.serve`
-depending on the scenario, and boots in roughly twice its time, 39.6 ms against
-18.6 ms. Those numbers are in the README table, not a footnote, and a ratio is read as
-plus or minus one point - the harness's measured reproducibility across two full
-runs.
-
-Open follow-ups, none blocking:
+`internal/bench`:
 
 - Pin the generator and the subject to disjoint CPU sets. Not needed on 32 cores;
   needed on a smaller machine.
-- ~~The Gin/Axum ratio.~~ **Closed**, with the measurements in [architecture/benchmarks.md](./architecture/benchmarks.md), "What the Go rows actually measure". Do not reopen it as a Gin question.
 - Open-loop latency via oha's `-q` plus `--latency-correction`, which would remove
   the coordinated-omission caveat the closed-loop numbers currently carry.
+- ~~The Gin/Axum ratio.~~ **Closed**, with the measurements in
+  [architecture/benchmarks.md](./architecture/benchmarks.md), "What the Go rows
+  actually measure". Do not reopen it as a Gin question.
 - ~~The `params` gap against Elysia.~~ **Withdrawn: the numbers were wrong.** They
   matched no committed run - the 2026-08-03 baseline already had dunx at 96.8% on
-  `params`, and on Bun 1.4 it is 99.9% against Elysia's 98.2%. Elysia's ahead-of-time
-  handler compilation against dunx's generic per-request input reader is still a real
-  difference in approach, and the harness has never shown it costing anything. Reopen
-  it with a measurement, not with these figures.
-  `internal/docs` reading `results/latest.json` is done - `scripts/extract/bench.ts`
-  does it, and a missing run is a generator error rather than a stale table.
+  `params`, and on Bun 1.4 it is 99.9% against Elysia's 98.2%. Elysia's
+  ahead-of-time handler compilation against dunx's generic per-request input reader
+  is still a real difference in approach, and the harness has never shown it costing
+  anything. Reopen it with a measurement, not with these figures.
 
-## The phase plan
+## The example ladder
 
-**All five phases are delivered.** Every package they name is in the Built table
-above and every exit criterion below is met and asserted by a test. The section is
-kept as the record of what each phase had to prove, and for the decisions taken
-inside it - Phase 1 is where the example ladder was settled and per-package
-examples rejected.
+**All five phases of the original build plan are delivered.** Every package they
+named is in the Built table above, every exit criterion they set is met and asserted
+by a test, and the criteria themselves now live in the suites rather than here. What
+survives the plan is the decision taken inside Phase 1, because it is the one a
+contributor still has to obey: there is a ladder of examples, and it is not one per
+package.
 
-Exit criteria are written as individually checkable statements on purpose.
-`/whats-next` reads this section to place the work and to fill in `HANDOFF.md`'s
-next steps, so a criterion that cannot be verified against the tree by inspection
-is a criterion that gets reported wrong. Keep them mechanical.
-
-The phases below are written from the framework's point of view.
-[MIGRATION-FROM-NEST.md](./MIGRATION-FROM-NEST.md) is the same roadmap seen from
-a migrating NestJS application, and it argues for two reorderings: route metadata
-moves into Phase 2, and OpenAPI ahead of Phase 4. Read it before planning a phase.
-
-### Phase 1 - DI proven end to end
-
-Ship `@dunx/core` and a single `examples/full` app that boots a fully
-dependency-injected application graph **with no HTTP at all**.
-
-Keeping HTTP out is the point. If the example can only be evaluated by curling
-it, ergonomic problems in the container hide behind routing. A no-HTTP example
-forces `inject()`, tokens, async factories, and shutdown ordering to stand on
-their own.
-
-Exit criteria:
-
-- `inject()` resolves classes and tokens, with inference and no manual generics
-- `provide()` covers `useClass`, `useValue`, and async `useFactory`
-- `@Module()` composes across at least two feature modules
-- A circular dependency throws a readable error naming the full cycle
-- `onInit` / `onShutdown` run in dependency order; `SIGTERM` closes cleanly
-- Resolving a provider twice returns the same instance
-- The example runs via `bun start`, exits 0, and CI asserts that
-
-`examples/full` is one app that grows through the phases, not a new example per
-phase. It was `examples/playground` until the examples were restructured; the rename
-is cosmetic, but what sits beside it now is not.
-
-Where a part needs a service CI does not have (Redis, Postgres, S3), it reports that
-it is skipping and the app still exits 0 - otherwise CI teaches everyone to ignore
-it.
-
-#### Per-package examples were reverted; a ladder of four replaced them
+### Per-package examples were reverted; a ladder of four replaced them
 
 The original decision - recorded here as "seven apps meant seven bootstraps to keep
 alive and nowhere that showed the packages composing" - **stands, and was not
@@ -517,7 +443,7 @@ one earns its place, and it is why several plausible candidates were rejected:
   schemas its routes validate against; a second app would only have fewer routes in
   it.
 
-#### `examples/databases` is one app with four configurations, not four apps
+### `examples/databases` is one app with four configurations, not four apps
 
 Four containers run in sequence inside one process. Module scoping would now let
 four backends coexist in one container, each binding `DbConnection` in its own
@@ -542,104 +468,6 @@ two `Bun.SQL` bugs it works around, and the transaction gap are all in
 Promoting it into `@dunx/infra/db` as a `MysqlOptions<TSchema>` is a reasonable next
 step and deliberately not taken here: the example is the place to prove it works
 before it becomes a supported surface with a schema type parameter to maintain.
-
-### Phase 2 - HTTP
-
-`@dunx/http`, the `Bun.serve` adapter, the middleware chain, the error mapper,
-and route-collision detection. `examples/full` grows a controller; its Phase 1
-assertions keep passing unchanged.
-
-Also `@dunx/transform`, the load-time transform that makes constructor injection
-work. It landed here rather than in Phase 1 because the need only became clear
-once real application code was being written against `inject()`.
-
-Exit criteria:
-
-- A class with constructor parameters resolves without any annotation
-- A parameter whose type is erased fails at boot naming that parameter
-- A subclass with no constructor of its own inherits its base's dependencies
-- `inject()` still works, and both mechanisms work in one class
-- `examples/full` uses constructor injection throughout and `bun start` exits 0
-
-### Phase 3 - Validation
-
-Standard Schema wiring and typed route input. Gated on the inference spike
-below.
-
-### Phase 4 - Testing & scaffolder
-
-`@dunx/testing` (`createTestApp({ modules, overrides })`, real server on port 0)
-and `@dunx/create-app`.
-
-### Phase 5 - OpenAPI - **built**
-
-`@dunx/openapi` generates an OpenAPI 3.1 document from the zod schemas already on the
-route decorators, and a renderer behind `./swagger` or `./scalar` serves a page over it. Security requirements come from the
-guards' own `@Public()` / `@Roles()` metadata. Zod is a `peerDependency`; the per-vendor
-adapter this section anticipated is a vendor check around `z.toJSONSchema`.
-
-#### Four corrections from porting `dunx-template`
-
-The port produced a document that was internally incoherent, and the fixes each
-turned on where a piece of information lives rather than on the generator's logic.
-
-**A method-level `@ApiDoc` used to replace the class-level one wholesale**, because a
-route's resolved `meta` is a `MetaRecord` and a handler's value overrides the class's
-in it. That is right for `@Roles` and `@Public`, which are single values, and wrong for
-a value made of independent fields - class `tags` plus a per-method `summary` is the
-most common annotation pattern there is, and it was unreachable. The merge cannot be
-recovered from an already-collapsed record, so `DiscoveredRoute` now carries
-`classMeta` next to `meta` and `apiDocFor` composes the two per field. The alternative
-considered and rejected was a per-key merge function on `MetaKey`: it needs a
-symbol-to-merger registry that `mergeMeta` can reach, and with two copies of
-`@dunx/http` in a tree the lookup misses and the old behaviour comes back silently.
-Mutating each method's record from the class decorator was rejected too - it
-accumulates at class-definition time, which is exactly the cross-file leak the marker
-design avoids, and a subclass would rewrite its base's functions.
-
-**`doc.tags` used to be derived from class names** while the operations carried
-`@ApiDoc` tags, so the document declared tags nothing used and used tags it never
-declared. It is now read back off the built operations, which makes the two agree by
-construction rather than by two derivations happening to match.
-
-**`RouteSchemas` gained `response`**, keyed by status code and taking the same
-Standard Schema values the request side takes, so a named response schema hoists into
-`components/schemas` exactly as a body does. Two decisions inside it: it is converted
-with `io: 'output'` rather than `'input'`, because it describes what comes back (a
-defaulted field is always present, `additionalProperties: false` is an output-side
-claim) - the cost is that a schema used both ways converts twice and one
-`.meta({ id })` cannot name both views if they differ. And it is **never validated**:
-a per-response validation pass paid for a documentation feature is the wrong trade
-when the handler's return type already checks the answer for free. Nothing in
-`@dunx/http`'s request path reads the key.
-
-The rendering half of that is no longer dunx's. `internal/openapi-ui` rendered
-responses through a `SchemaView` shared with the request body, and it is deleted:
-`@dunx/openapi` mounts a library, **Swagger UI** or **Scalar**, which renders both.
-The response schemas above are what the document carries, and the renderer decides
-how they look.
-See [architecture/tooling.md](./architecture/tooling.md), "The API explorer: built,
-measured, then replaced by Swagger UI", for what that cost - 3.7x the gzipped bytes -
-and why it was still right.
-
-**`OpenApiModule.forRootAsync`** exists for the reason every other configurable
-module has the pair. Its interesting half was the mount paths: a decorator's
-arguments are evaluated when the class definition is, long before a container could
-run the factory. So `RouteMeta.path` became `RoutePath` - `string | (() => string)`,
-resolved by `discoverRoutes`, which runs after every provider has settled. The
-alternatives were worse: exporting `markRoute` so the factory could re-mark its own
-prototype is a mutation escape hatch with no other caller, and pushing the controller
-into the module's `controllers` array from inside the factory is too late, since
-controllers are registered as providers while the container is being built.
-
-## Spikes to resolve
-
-Run through `/spike`: measure on real Bun, record the result in
-[architecture/constraints.md](./architecture/constraints.md), then delete the item from here. A spike that changes the
-public API shape belongs before the code it gates.
-
-None open. Route input inference was the last one; its result is recorded in
-[architecture/constraints.md](./architecture/constraints.md).
 
 ## Rejected - do not reopen without reading why
 

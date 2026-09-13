@@ -74,6 +74,8 @@ relative ranking on one machine.
   becomes a `roadmap/` file, and what survives delivery lands in `architecture/`.
   [research/README.md](../internal/notes/research/README.md) holds the verdict
   table.
+- **Why the mark looks the way it does**, which cut to use where, and the five
+  concepts that were drawn and rejected, is [logo/README.md](./logo/README.md).
 - **The rules a change has to satisfy** are in `CLAUDE.md` at the repo root. This
   file records decisions; that one constrains them.
 - **How to contribute** is [CONTRIBUTING.md](../CONTRIBUTING.md).

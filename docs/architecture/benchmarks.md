@@ -144,7 +144,7 @@ unaffected, since it was never interleaved.
 ## The cross-language subjects, and how to read them
 
 Gin, raw `net/http`, Axum, Spring Boot and Django are in the suite, and
-`results/latest.json` is a full 16-subject run with every toolchain present.
+`results/latest.json` is a full 20-subject run with every toolchain present.
 Plaintext and validate are median req/s, deviations under 3% except where noted,
 **zero errors on every subject in every scenario**:
 

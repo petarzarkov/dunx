@@ -10,8 +10,8 @@ bun run test
 bun run typecheck
 ```
 
-This is a **real React + Mantine application** - the same one `internal/docs` and
-`internal/openapi-ui` are, sharing `@dunx/ui`'s theme and components. The backend
+This is a **real React + Mantine application** - the same one `internal/docs` is,
+sharing `@dunx/ui`'s theme and components. The backend
 package contains no React at all, and cannot. It is published as plain ESM plus
 `.d.ts`, and a consumer must not need React or a bundler installed to serve an
 HTML page.

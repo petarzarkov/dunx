@@ -31,38 +31,24 @@ the script that built it were deleted once it was deployed and verified, so thos
 documents are frozen at the release that moved the domain; `git log -- scripts/pages-redirect.ts`
 is where they come back from if the deployment is ever lost.
 
-`scripts/seo.ts` writes a real HTML file per route after `vite build`, from the
-same generated model the nav is built from. It exists for two reasons rather than
-one: a client-routed bundle gave all 96 routes the same title and description, and
-the `/* /index.html 200` fallback that made deep links work also answered every
-miss with a 200 and a page, which is an unbounded supply of soft 404s for a crawler
-and a renamed document that fails silently. Files for known routes let that rule go,
-so `404.html` can answer the rest with a real status.
+The `dunx:pages` plugin in `internal/docs/vite.config.ts` writes a real HTML file per
+route at the end of the build, from the same generated model the nav is built from. It
+exists for two reasons rather than one: a client-routed bundle gave every route the
+same title and description, and the `/* /index.html 200` fallback that made deep links
+work also answered every miss with a 200 and a page, which is an unbounded supply of
+soft 404s for a crawler and a renamed document that fails silently. Files for known
+routes let that rule go, so `404.html` can answer the rest with a real status.
 
 The deploy is its own job rather than the tail of the release job. A failed
 `bun run version` used to take the documentation down with it, and a docs change and
 a publish are not the same event.
 
 **The bundler was `Bun.build` and was moved back to Vite, by measuring rather than
-by preference.** The original swap traded ~25% more gzipped JS for a 41 ms build
-against Vite 5's 1.7 s. Vite 8 ships Rolldown, which removed the speed argument.
-The size argument had also grown, as Mantine and `@mantine/charts`/recharts
-entered the graph. Same site, same content, both bundlers, gzip -9:
-
-| Bundler           | JS raw    | JS gzip      | CSS raw  | CSS gzip | Build   |
-| ----------------- | --------- | ------------ | -------- | -------- | ------- |
-| `Bun.build`       | 1829.6 KB | **506.5 KB** | 312.4 KB | 35.0 KB  | ~0.15 s |
-| Vite 8 (Rolldown) | 1558.1 KB | **426.8 KB** | 212.5 KB | 31.2 KB  | ~0.30 s |
-
-83.5 KB less over the wire, for 150 ms nobody waits on - a docs site is built in
-CI and read over a network. What the move costs, and what has to move with it if
-it is ever reversed:
-
-- Text imports are Vite's `?raw`, not `with { type: 'text' }`. `src/env.d.ts`
-  declares `*?raw` locally rather than pulling `vite/client` in, which would mean
-  overriding the root tsconfig's `types`. `happydom.ts` registers a `Bun.plugin`
-  teaching the test runner the same suffix - the runner is still `bun test`.
-- `public/` copying and the `dist/` clean are Vite's; `scripts/build.ts` is gone.
+by preference.** Vite 8 ships Rolldown, which removed Bun.build's speed argument, and
+Mantine plus `@mantine/charts`/recharts had grown its size one the other way. The
+measurement, and the two things that have to move with it if it is ever reversed, are
+in [`internal/docs/README.md`](../../internal/docs/README.md), "Vite, and why it is
+not `Bun.build`" - the workspace that owns the build owns the numbers.
 
 **Every `@mantine/*` is on one major, and it is 8.** `@mantine/charts` had
 drifted to 9.5.0 against core 8.3.18, which its own `peerDependencies` forbids:
@@ -254,46 +240,26 @@ job.
 ## The API explorer: built, measured, then replaced by Swagger UI
 
 **`internal/openapi-ui` is deleted and `@dunx/openapi` mounts `swagger-ui-dist`.**
-This section is the record of the round trip, because most of what it measured is
-still true and one of its findings governs every package's build.
+Building an alternative to a mature tool is the failure mode `@dunx/queue-dashboard`
+demonstrated once already, and Swagger UI is the reference implementation for reading
+an OpenAPI document. Rule 1's second half, arrived at the long way.
 
-The page began as hand-written HTML inside a backend package: a `<style>` block,
-`<details>` for folding, and ~90 lines of inlined DOM code with no auth handling and
-schemas printed as `JSON.stringify(…, null, 2)`. Growing that was the wrong
-direction, so it became a Vite + React + Mantine workspace whose built bundle the
-package inlined.
+The honest cost, rather than a footnote to it: `swagger-ui-dist` 5.32.14 is 1.7 MiB
+raw and 443 KiB gzipped against the explorer's 434 KiB and 121 KiB, so the replacement
+is **3.7x larger gzipped**. Two things follow, and both are in the code:
 
-That worked, and it was still the wrong answer. Swagger UI is the reference
-implementation for reading an OpenAPI document, and building an alternative to a
-mature tool is the failure mode `@dunx/queue-dashboard` demonstrated once already.
-Rule 1's second half, arrived at the long way.
-
-### What the explorer cost, and what swagger costs instead
-
-| Build                           | Raw         | gzip        |
-| ------------------------------- | ----------- | ----------- |
-| react + react-dom, nothing else | 188 KiB     | 60 KiB      |
-| + Mantine, `styles.css` barrel  | 517 KiB     | 128 KiB     |
-| + Mantine, per-component CSS    | 381 KiB     | 110 KiB     |
-| the explorer as shipped         | 434 KiB     | 121 KiB     |
-| **`swagger-ui-dist` 5.32.14**   | **1.7 MiB** | **443 KiB** |
-
-So the replacement is **3.7x larger gzipped**, and that is the honest cost of the
-decision rather than a footnote to it. Two things follow, and both are in the code:
-
-- **It is not inlined.** 1.7 MiB in every page response would resend it on every
-  load. The two files are served as routes with `cache-control: immutable` and the
-  installed version in the query, so a browser fetches them once.
-- **It is resolved on the first request for the page**, not at boot, so an app
-  serving only `/openapi.json` never looks it up and a missing package surfaces as
-  that route failing instead of as everyone's boot error. It was a `dependency`
-  when this was written and is now an optional peer - see "The renderer moved
-  behind a subpath" below.
+- **It is not inlined.** 1.7 MiB in every page response would resend it on every load.
+  The two files are served as routes with `cache-control: immutable` and the installed
+  version in the query, so a browser fetches them once.
+- **It is resolved on the first request for the page**, not at boot, so an app serving
+  only `/openapi.json` never looks it up and a missing package surfaces as that route
+  failing instead of as everyone's boot error. It was a `dependency` when this was
+  written and is now an optional peer - see "The renderer moved behind a subpath".
 
 Two measurements from the explorer era still shape things as they are:
 **per-component Mantine CSS** beat the `styles.css` barrel 381 KiB to 517 KiB, and
-dropping `Tooltip` and `ScrollArea` for `title=` and `overflow: auto` took 490 KiB
-to 434 KiB, because `Tooltip` drags in floating-ui. Both applied to
+dropping `Tooltip` and `ScrollArea` for `title=` and `overflow: auto` took 490 KiB to
+434 KiB, because `Tooltip` drags in floating-ui. Both applied to
 `internal/dashboard-ui`, which still exists and still follows them.
 
 ### `splitting: true`, which outlived the thing that needed it
@@ -391,14 +357,13 @@ Three things this is not:
   both produce, and `PackageAssets` is the resolver both use. A third renderer is
   those two plus `DocsRenderer`, which is what makes blessing neither possible.
 
-### Vite in `internal/dashboard-ui`, `bun build` in `internal/docs`
+### Vite in both, for different reasons
 
-The docs site measured Vite at 1.7 s against `bun build ./index.html` at 41 ms
-and took Bun's ~25 % larger output, which was right for a site. Both numbers have
-since been re-measured. The speed gap narrowed but Bun.build remains faster,
-while the bundle-size result reversed - see "Documentation site" above. The
-dashboard bundle is inlined into a page a backend serves, so Rollup's
-tree-shaking wins there, and the ~1.5 s is paid once per package build.
+The docs site's bundler decision is in "Documentation site" above: Vite 8 ships
+Rolldown, which removed Bun.build's speed argument and reversed its size one.
+`internal/dashboard-ui` never had the question, because its bundle is inlined into a
+page a backend serves: Rollup's tree-shaking is what that page is paying for, and the
+~1.5 s is paid once per package build.
 
 ## Why `openapi.config.ts` stays
 

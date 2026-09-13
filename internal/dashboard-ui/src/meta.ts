@@ -3,8 +3,7 @@ import type { Meta } from '../../../packages/dashboard/src/api/types';
 /**
  * Types come from `packages/dashboard/src` by relative import, so the wire format
  * has one declaration and this bundle cannot drift from the handler that fills it.
- * Same arrangement `internal/openapi-ui` has with `@dunx/openapi`, and it means
- * there is no build-order dependency between the two workspaces.
+ * It means there is no build-order dependency between the two workspaces.
  */
 export type { Meta };
 

@@ -15,7 +15,7 @@ const GENERATED = new URL('./generated/guides/', import.meta.url).pathname;
 const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
   // Private workspaces. A reader cannot open these, and a page that cites one is
   // explaining the repository rather than the framework.
-  ['private workspace', /internal\/(?:bench|docs|ui|openapi-ui|dashboard-ui)/g],
+  ['private workspace', /internal\/(?:bench|docs|ui|dashboard-ui)/g],
   // Planning records, and this repository's own agent instructions. A published
   // page may name the `AGENTS.md` and `CLAUDE.md` that `bunx @dunx/create-app`
   // writes into a reader's app: those are the reader's files, and the name is the
