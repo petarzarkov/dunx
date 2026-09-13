@@ -216,8 +216,10 @@ preload message.
 
 Two consequences:
 
-- `@dunx/transform` moves to a devDependency here, where under `bun run` it is a
-  runtime one.
+- `@dunx/transform` is build-time only for the binary, but it is not
+  automatically a devDependency. `examples/binary` keeps it a dependency because
+  the same package still runs under `bun run` and `bun test`, and those load the
+  preload. Move it only if the binary is the one thing you ship.
 - `bunfig.toml` is not read by the binary. Anything the preload line was doing
   has to happen in the build instead.
 

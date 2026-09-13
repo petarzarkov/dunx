@@ -222,7 +222,14 @@ describe('the counts the README states', () => {
     const last = slugs.at(-1)?.replace(/^\d+-/, '').replace(/\.md$/, '');
 
     expect(last).toBeDefined();
-    expect(await readme).toContain(
+    // Scoped to the guide entry rather than the whole file: the phrase appearing
+    // anywhere in the README would have satisfied a bare `toContain`, including
+    // in a sentence about something else.
+    const entry = /dunx\.win\)\*\* - [a-z-]+ pages,\s*\n?\s*([^\n]+)/.exec(
+      await readme,
+    )?.[1];
+
+    expect(entry).toBe(
       `introduction through ${(last as string).replace(/-/g, ' ')}`,
     );
   });
