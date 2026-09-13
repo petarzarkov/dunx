@@ -119,8 +119,18 @@ describe('probing', () => {
 
   it('leaves the connection retrying after a ping that timed out', async () => {
     const { connection: amqp } = connection({ readyTimeoutMs: 100 });
+    const live = amqp.connection() as unknown as { close: () => Promise<void> };
+    const realClose = live.close.bind(live);
+    let closed = 0;
+    live.close = (): Promise<void> => {
+      closed++;
+      return realClose();
+    };
 
     await expect(amqp.ping()).rejects.toThrow();
+    // `onConnect`'s second argument is `disableAutoClose`, so `true` is what
+    // stops the library closing a connection the app is still publishing on.
+    expect(closed).toBe(0);
     expect(amqp.opened).toBe(true);
 
     await amqp.onShutdown();
