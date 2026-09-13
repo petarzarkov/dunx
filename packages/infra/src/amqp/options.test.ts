@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { AmqpError, AmqpErrorCode } from './errors.js';
 import { describeMessage } from './message.js';
-import { AmqpOptions, assertAmqpUrl, defaultAmqpUrl } from './options.js';
+import {
+  AmqpOptions,
+  assertAmqpUrl,
+  defaultAmqpUrl,
+  withDefaultCredentials,
+} from './options.js';
 
 describe('the broker url', () => {
   it('reads $RABBITMQ_URL before $AMQP_URL', () => {
@@ -29,6 +34,48 @@ describe('the broker url', () => {
       'amqp://localhost:5672',
     );
     expect(assertAmqpUrl('amqps://broker:5671')).toBe('amqps://broker:5671');
+  });
+
+  /**
+   * `rabbitmq-client` reads the credentials out of a url string unconditionally,
+   * with no fallback of its own: `amqp://host` authenticates as user '' with a
+   * blank password, which RabbitMQ refuses outright. Naming a host is not
+   * supposed to be a different case from naming none, so the AMQP URI spec's
+   * defaults are filled in here.
+   */
+  describe('credentials', () => {
+    it('fills in the spec default when the url names none', () => {
+      expect(withDefaultCredentials('amqp://localhost:5672')).toBe(
+        'amqp://guest:guest@localhost:5672',
+      );
+      expect(withDefaultCredentials('amqps://broker:5671/prod')).toBe(
+        'amqps://guest:guest@broker:5671/prod',
+      );
+    });
+
+    it('leaves a url that names them alone, byte for byte', () => {
+      for (const url of [
+        'amqp://app:hunter2@broker:5672',
+        // A username with no password is a deliberate choice, not an omission:
+        // filling in `guest` as the password of some other user would be worse
+        // than the blank one the caller asked for.
+        'amqp://app@broker:5672',
+        'amqp://app:p%40ss@broker:5672/vhost',
+      ]) {
+        expect(withDefaultCredentials(url)).toBe(url);
+      }
+    });
+
+    it('is what AmqpOptions stores, so the connection never sees a blank user', () => {
+      expect(new AmqpOptions({ url: 'amqp://localhost:5672' }).url).toBe(
+        'amqp://guest:guest@localhost:5672',
+      );
+    });
+
+    it('keeps the filled-in password out of the redacted url', () => {
+      const options = new AmqpOptions({ url: 'amqp://localhost:5672' });
+      expect(options.redactedUrl).not.toContain('guest:guest');
+    });
   });
 
   /**

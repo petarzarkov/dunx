@@ -56,7 +56,9 @@ describe('what the module binds', () => {
   it('binds the publish side and nothing that consumes', async () => {
     app = await AppFactory.create(AmqpModule.forRoot(options));
 
-    expect(app.get(AmqpOptions).url).toBe(unreachable);
+    // The host as given, with the credentials a url that names none is missing:
+    // `rabbitmq-client` would otherwise authenticate as the blank user.
+    expect(app.get(AmqpOptions).url).toBe('amqp://guest:guest@127.0.0.1:1');
     expect(app.get(AmqpConnection)).toBeInstanceOf(AmqpConnection);
     expect(app.get(AmqpPublisher)).toBeInstanceOf(AmqpPublisher);
     expect(app.get(AmqpRunner).subscriber).toBeUndefined();

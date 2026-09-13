@@ -8,6 +8,8 @@ export const AmqpErrorCode = Object.freeze({
   NO_HANDLERS: 'ERR_AMQP_NO_HANDLERS',
   /** A handler outran `handlerTimeoutMs`. */
   TIMED_OUT: 'ERR_AMQP_TIMED_OUT',
+  /** A publish outran `publishTimeoutMs`, so the broker never confirmed it. */
+  PUBLISH_TIMED_OUT: 'ERR_AMQP_PUBLISH_TIMED_OUT',
   INVALID_STATE: 'ERR_AMQP_INVALID_STATE',
   INVALID_URL: 'ERR_AMQP_INVALID_URL',
 } as const);

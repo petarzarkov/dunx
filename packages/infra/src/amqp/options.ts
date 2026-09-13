@@ -50,6 +50,28 @@ export const assertAmqpUrl = (url: string): string => {
   return url;
 };
 
+/**
+ * The AMQP URI spec's defaults for an absent user and password, filled in.
+ *
+ * `rabbitmq-client` reads both out of a url string unconditionally and has no
+ * fallback on that path, so `amqp://broker:5672` authenticates as user `''` with
+ * a blank password and RabbitMQ refuses it outright. Naming a host is not
+ * supposed to be a different case from naming none, which is what
+ * {@link defaultAmqpUrl} already spells out.
+ *
+ * Spliced rather than rebuilt through `URL`, so a url that names credentials
+ * comes back byte for byte and `toString()` does not move anything else about it.
+ */
+export const withDefaultCredentials = (url: string): string => {
+  const parsed = new URL(url);
+  // A username with no password is a choice rather than an omission: supplying
+  // `guest` as some other user's password would be worse than the blank one.
+  if (parsed.username !== '' || parsed.password !== '') return url;
+
+  const mark = url.indexOf('://') + 3;
+  return `${url.slice(0, mark)}guest:guest@${url.slice(mark)}`;
+};
+
 /** What `AmqpConnection` sets itself, so it is not yours to pass. */
 export type ConnectionPassthrough = Omit<
   ConnectionOptions,
@@ -115,6 +137,17 @@ export interface AmqpOptionsInit {
    */
   readonly handlerTimeoutMs?: number;
   /**
+   * Reject a publish whose confirm has not arrived within this. `Publisher.send`
+   * waits for a channel, and against an unreachable broker `rabbitmq-client`
+   * retries the reconnect rather than failing, so the promise settles in neither
+   * direction. A route publishing inside a request then holds that request open
+   * until the client gives up, where what it wants is an error it can answer 503
+   * with. Lower it where a caller is waiting on the publish.
+   *
+   * @default 10000
+   */
+  readonly publishTimeoutMs?: number;
+  /**
    * Open consumers in **this** process, rather than only binding the publish side.
    * Off by default: `AmqpModule` is imported by anything that publishes, and a
    * web process that started consuming to send a message would be a surprise.
@@ -140,10 +173,13 @@ export class AmqpOptions {
   readonly drainTimeoutMs: number;
   readonly closeTimeoutMs: number;
   readonly handlerTimeoutMs: number | undefined;
+  readonly publishTimeoutMs: number;
   readonly consume: boolean | 'if-any';
 
   constructor(init: AmqpOptionsInit = {}) {
-    this.url = assertAmqpUrl(init.url ?? defaultAmqpUrl());
+    this.url = withDefaultCredentials(
+      assertAmqpUrl(init.url ?? defaultAmqpUrl()),
+    );
     this.connectionName = init.connectionName ?? 'dunx';
     this.connection = init.connection ?? {};
     const given = init.consumer ?? {};
@@ -163,6 +199,7 @@ export class AmqpOptions {
     this.drainTimeoutMs = init.drainTimeoutMs ?? 10_000;
     this.closeTimeoutMs = init.closeTimeoutMs ?? 5_000;
     this.handlerTimeoutMs = init.handlerTimeoutMs;
+    this.publishTimeoutMs = init.publishTimeoutMs ?? 10_000;
     this.consume = init.consume ?? false;
   }
 

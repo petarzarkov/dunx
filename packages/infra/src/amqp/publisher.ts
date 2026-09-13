@@ -8,7 +8,9 @@ import {
 } from '@dunx/core';
 import type { Envelope, Publisher } from 'rabbitmq-client';
 import { closeWithin } from '../close-within.js';
+import { withTimeout } from '../with-timeout.js';
 import { AmqpConnection } from './connection.js';
+import { AmqpError, AmqpErrorCode } from './errors.js';
 import { AmqpOptions } from './options.js';
 
 /**
@@ -74,16 +76,36 @@ export class AmqpPublisher implements OnShutdown {
    *
    * `confirm` is on by default, so this resolves when the broker has accepted the
    * message rather than when the frame was written.
+   *
+   * **Bounded by `publishTimeoutMs`, and the bound is on the wait rather than on
+   * the send.** `rabbitmq-client` retries an unreachable broker instead of
+   * failing, so without it this settles in neither direction and a route
+   * publishing inside a request hangs that request. A send that outran the bound
+   * is still in flight, so a caller that retries can put the message on the
+   * broker twice - the same trade `handlerTimeoutMs` documents.
    */
   async publish<T>(envelope: string | Envelope, body: T): Promise<void> {
     const addressed: Envelope =
       typeof envelope === 'string' ? { routingKey: envelope } : envelope;
     const stamped = this.#traced(addressed);
+    const { publishTimeoutMs } = this.#options;
 
-    await this.publisher().send(stamped, body);
-    this.#logger.debug(
-      `Published AMQP message to ${stamped.exchange ?? ''}[${stamped.routingKey ?? ''}]`,
+    await withTimeout(
+      () => this.publisher().send(stamped, body),
+      publishTimeoutMs,
+      () =>
+        new AmqpError(
+          AmqpErrorCode.PUBLISH_TIMED_OUT,
+          `The publish to ${this.#addressOf(stamped)} did not confirm within ` +
+            `${publishTimeoutMs} ms. Broker ${this.#options.redactedUrl}.`,
+        ),
     );
+    this.#logger.debug(`Published AMQP message to ${this.#addressOf(stamped)}`);
+  }
+
+  /** `exchange[routingKey]`, the form the warnings above already use. */
+  #addressOf(envelope: Envelope): string {
+    return `${envelope.exchange ?? ''}[${envelope.routingKey ?? ''}]`;
   }
 
   /**

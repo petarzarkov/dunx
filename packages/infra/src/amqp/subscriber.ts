@@ -80,7 +80,12 @@ export class AmqpSubscriber {
   readonly #options: AmqpOptions;
   readonly #logger: Logger;
   readonly #dispatcher: AmqpDispatcher;
-  readonly #consumers: Consumer[] = [];
+  /**
+   * Paired with the queue each was opened for, rather than bare. `Consumer.queue`
+   * is filled in by the broker at setup, so one that never connected reports `''`
+   * and the drain warning named nothing - which is the case the warning is for.
+   */
+  readonly #consumers: { consumer: Consumer; queue: string }[] = [];
   #started = false;
   #stopping: Promise<void> | undefined;
 
@@ -167,14 +172,20 @@ export class AmqpSubscriber {
   async stop(): Promise<void> {
     this.#stopping ??= (async () => {
       const open = this.#consumers.splice(0);
-      await Promise.all(open.map((consumer) => this.#drain(consumer)));
+      await Promise.all(open.map((entry) => this.#drain(entry)));
     })();
     return this.#stopping;
   }
 
   /** Bounded, and never rejecting: one consumer that will not close must not stop
    * the rest of teardown, which is what closes the socket under it. */
-  async #drain(consumer: Consumer): Promise<void> {
+  async #drain({
+    consumer,
+    queue,
+  }: {
+    consumer: Consumer;
+    queue: string;
+  }): Promise<void> {
     try {
       const timedOut = await closeWithin(
         consumer,
@@ -182,7 +193,7 @@ export class AmqpSubscriber {
       );
       if (timedOut) {
         this.#logger.warn(
-          `an AMQP consumer on ${consumer.queue} did not drain within ` +
+          `an AMQP consumer on ${queue} did not drain within ` +
             `${this.#options.drainTimeoutMs} ms`,
         );
       }
@@ -204,7 +215,7 @@ export class AmqpSubscriber {
     const consumer = this.#connection.createConsumer(props, (message) =>
       this.#dispatcher.dispatch(found, settings, message),
     );
-    this.#consumers.push(consumer);
+    this.#consumers.push({ consumer, queue: found.queue });
 
     // Throttled, not deduplicated: a later outage still gets reported, and a
     // broker that is down emits on every retry.
