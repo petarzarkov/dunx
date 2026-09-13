@@ -8,6 +8,7 @@ import {
   type Publisher,
   type PublisherProps,
 } from 'rabbitmq-client';
+import { closeWithin } from '../close-within.js';
 import { AmqpOptions } from './options.js';
 
 /**
@@ -110,19 +111,12 @@ export class AmqpConnection implements OnShutdown {
     if (connection === undefined) return;
     this.#connection = undefined;
 
-    const timedOut = Symbol('timed out');
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const outcome = await Promise.race([
-        connection.close(),
-        new Promise<symbol>((resolve) => {
-          timer = setTimeout(
-            () => resolve(timedOut),
-            this.#options.closeTimeoutMs,
-          );
-        }),
-      ]);
-      if (outcome === timedOut) {
+      const timedOut = await closeWithin(
+        connection,
+        this.#options.closeTimeoutMs,
+      );
+      if (timedOut) {
         this.#logger.warn(
           'the AMQP connection did not close within ' +
             `${this.#options.closeTimeoutMs} ms`,
@@ -131,9 +125,8 @@ export class AmqpConnection implements OnShutdown {
     } catch (error) {
       this.#logger.warn('the AMQP connection failed to close', error);
     } finally {
-      // The loser of the race stays pending: a `Bun.sleep` here would hold the
-      // loop open for the whole window on every clean shutdown.
-      clearTimeout(timer);
+      // A socket still open is what keeps the process from exiting, so this runs
+      // whether the close finished, timed out or threw.
       connection.unsafeDestroy();
     }
   }

@@ -7,6 +7,7 @@ import {
   type OnShutdown,
 } from '@dunx/core';
 import type { Envelope, Publisher } from 'rabbitmq-client';
+import { closeWithin } from '../close-within.js';
 import { AmqpConnection } from './connection.js';
 import { AmqpOptions } from './options.js';
 
@@ -130,19 +131,12 @@ export class AmqpPublisher implements OnShutdown {
     if (publisher === undefined) return;
     this.#publisher = undefined;
 
-    const timedOut = Symbol('timed out');
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const outcome = await Promise.race([
-        publisher.close(),
-        new Promise<symbol>((resolve) => {
-          timer = setTimeout(
-            () => resolve(timedOut),
-            this.#options.closeTimeoutMs,
-          );
-        }),
-      ]);
-      if (outcome === timedOut) {
+      const timedOut = await closeWithin(
+        publisher,
+        this.#options.closeTimeoutMs,
+      );
+      if (timedOut) {
         this.#logger.warn(
           'the AMQP publisher did not close within ' +
             `${this.#options.closeTimeoutMs} ms`,
@@ -150,10 +144,6 @@ export class AmqpPublisher implements OnShutdown {
       }
     } catch (error) {
       this.#logger.warn('the AMQP publisher failed to close', error);
-    } finally {
-      // The loser of the race stays pending; without this a channel that closed
-      // at once would hold the loop open for the rest of the window.
-      clearTimeout(timer);
     }
   }
 }

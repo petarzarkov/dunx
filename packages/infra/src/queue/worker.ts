@@ -11,6 +11,7 @@ import {
   type ResolvedModule,
 } from '@dunx/core';
 import { Worker, type Job } from 'bullmq';
+import { closeWithin } from '../close-within.js';
 import { ErrorThrottle } from '../error-throttle.js';
 import { QueueConnection } from './connection.js';
 import { declares, JobDispatcher, metricsIn } from './dispatcher.js';
@@ -44,49 +45,19 @@ export const childColourEnv = (
   return { ...env, FORCE_COLOR: '1' };
 };
 
-/** The half of a bullmq `Worker` {@link closeWithin} needs. */
-interface Closable {
-  close(force?: boolean): Promise<void>;
-}
-
 /**
  * How long a worker that reached readiness gets to finish what it is holding
  * before `start()` stops waiting for it. Workers drain concurrently, so this
  * bounds the whole teardown rather than each one.
+ *
+ * `closeWithin` stops waiting rather than forcing, which is the only decision
+ * available: bullmq's `close()` returns the promise a first call started, so a
+ * later `close(true)` is the same pending promise and escalates nothing. Which is
+ * why the choice is made per worker before either is called - a worker that never
+ * became ready is force-closed outright, and only one that may be holding a job is
+ * drained through here.
  */
 const DRAIN_ON_FAILED_START_MS = 5_000;
-
-/**
- * A graceful close, waited on for at most `ms`.
- *
- * **The close cannot be escalated**, so this stops waiting rather than forcing.
- * bullmq 6.0.5's `Worker.close` returns the `closing` promise it already started
- * (`worker.js:736`), so a later `close(true)` is the same pending promise and
- * forces nothing. A first call decides which kind of close a worker gets, and
- * that is the only decision available.
- *
- * Which is why the choice is made per worker before either is called: a worker
- * that never became ready is force-closed outright, and only one that may be
- * holding a job is drained through here.
- *
- * The timer is unref'd, so a worker that closes in time cannot leave it holding
- * the process open.
- */
-export const closeWithin = async (
-  worker: Closable,
-  ms: number,
-): Promise<void> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const gaveUp = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, ms);
-    timer.unref?.();
-  });
-  try {
-    await Promise.race([worker.close(), gaveUp]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-};
 
 /** How often one queue's worker may report a connection error. */
 const ERROR_LOG_INTERVAL_MS = 30_000;

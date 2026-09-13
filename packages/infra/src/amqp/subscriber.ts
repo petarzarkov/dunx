@@ -1,5 +1,6 @@
 import { Logger, RequestContext, type App } from '@dunx/core';
 import type { Consumer, ConsumerProps } from 'rabbitmq-client';
+import { closeWithin } from '../close-within.js';
 import { ErrorThrottle } from '../error-throttle.js';
 import { AmqpConnection } from './connection.js';
 import { AmqpDispatcher, type DispatchSettings } from './dispatcher.js';
@@ -174,19 +175,12 @@ export class AmqpSubscriber {
   /** Bounded, and never rejecting: one consumer that will not close must not stop
    * the rest of teardown, which is what closes the socket under it. */
   async #drain(consumer: Consumer): Promise<void> {
-    const timedOut = Symbol('timed out');
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const outcome = await Promise.race([
-        consumer.close(),
-        new Promise<symbol>((resolve) => {
-          timer = setTimeout(
-            () => resolve(timedOut),
-            this.#options.drainTimeoutMs,
-          );
-        }),
-      ]);
-      if (outcome === timedOut) {
+      const timedOut = await closeWithin(
+        consumer,
+        this.#options.drainTimeoutMs,
+      );
+      if (timedOut) {
         this.#logger.warn(
           `an AMQP consumer on ${consumer.queue} did not drain within ` +
             `${this.#options.drainTimeoutMs} ms`,
@@ -194,10 +188,6 @@ export class AmqpSubscriber {
       }
     } catch (error) {
       this.#logger.warn('an AMQP consumer failed to close', error);
-    } finally {
-      // The loser of the race stays pending: a consumer that closed at once would
-      // otherwise hold the loop open for the whole window.
-      clearTimeout(timer);
     }
   }
 

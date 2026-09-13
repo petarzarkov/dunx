@@ -94,6 +94,59 @@ exits. Compare `internal/notes/roadmap/queue-shutdown-sigterm.md`, where the
 equivalent Redis path does not exit at all: every AMQP shutdown path measured here
 released the event loop.
 
+## Bounding a close
+
+Five sites bound one: the three above, `JobEvents` closing a `QueueEvents`
+stream, and `QueueConsumer` draining a worker that reached readiness before a
+later queue failed to. All five call `closeWithin` in `packages/infra/src`, which
+answers whether the bound expired and leaves the warning to the caller.
+
+They were five hand-written copies of the same race until issue #127. Two fixes
+had reached one copy each and neither had been carried across: `unref` on the
+timer, and the `clearTimeout` that stops a resource which closed at once from
+holding the loop open for the rest of the window. That second one had cost a clean
+shutdown 2.37 s against 0.36 s where it was missing.
+
+`@dunx/dashboard`'s `bounded` is a sixth of the same shape and stays where it is.
+It bounds a read during a request and answers with a value a panel renders, where
+these bound a close during teardown and answer with a verdict. Sharing the four
+lines under them means either `@dunx/dashboard` depending on `@dunx/infra`, which
+it does not, or a timeout primitive on `@dunx/core`'s public surface.
+
+### Why a race and not a signal
+
+`ResiliencePolicy` bounds its own operation with `AbortSignal.timeout` combined
+with the caller's through `AbortSignal.any`, and says so. Every close here does
+the opposite, and the two hold together rather than contradicting.
+
+A signal bounds an operation that reads it. `ResiliencePolicy` awaits
+`op(signal)` rather than racing it, so an `op` that ignores its signal runs to
+completion and the bound does nothing - documented in
+[the resilience guide](../guide/25-resilience.md). That is a cost worth paying for
+work the caller wrote.
+
+None of the five closes takes a signal. bullmq's `Worker.close(force?)` and
+`QueueEvents.close()` take no argument that cancels, and neither do
+rabbitmq-client's `Consumer`, `Publisher` and `Connection` closes. So there is
+nothing to hand a signal to, and a bound that has to settle against a library that
+will not cooperate can only be a race.
+
+An unsignalled close still runs to its own end, and the two ends are both
+measured. `Consumer.close()` settles 19.7 s after the broker went away, in the
+probe above. `QueueEvents.close()` against an unreachable broker neither resolves
+nor rejects on bullmq 6.3.4: the blocking read reconnects on a growing backoff
+past `autoReconnect: false`, which is what `JobEvents` records. A bound that
+stops waiting is the only one that covers both. The rule both halves follow: **a signal
+where the operation takes one, a race where it does not.**
+
+What a signal would change is the handler timeout - `jobTimeoutMs` and
+`handlerTimeoutMs`, where the work is the consumer's own method and could read
+one. Today it is not cancelled, only stopped being waited for, so a handler that
+outran its bound can act twice on one unit of work. Both
+[guide 15](../guide/15-queues.md) and [guide 28](../guide/28-message-brokers.md)
+say so. Changing that is cooperative cancellation through the handler signature,
+not a change to how the bound is measured.
+
 **Traces cross the broker.** `AmqpPublisher.publish` stamps the scope's
 `traceparent` and `tracestate` into the message headers and `AmqpDispatcher`
 continues that trace with a span of its own. Nothing in `@dunx/infra/queue` does
