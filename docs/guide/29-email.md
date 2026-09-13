@@ -183,7 +183,17 @@ is imported again behind a cache-busting query.
 | `--renderer <mod>` | `@dunx/infra/email/react` |
 
 `--renderer` names a module whose default export is a `TemplateRenderer`, which
-is how an app previewing MJML never installs `@react-email/components`.
+is how an app previewing MJML never installs `@react-email/components`. A
+relative path is relative to where the shell is. Point it at the same instance
+the module is configured with and the preview cannot drift from what a send
+produces:
+
+```ts
+// src/email/render.ts
+import { ReactEmailRenderer } from '@dunx/infra/email/react';
+
+export default new ReactEmailRenderer();
+```
 
 Discovery takes every `.ts`, `.tsx`, `.js`, `.jsx` and `.mjs` module under the
 directory and skips suites, `index` files, and names starting with `_` or `.`.

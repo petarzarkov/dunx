@@ -55,6 +55,12 @@ describe('loadTemplate', () => {
     expect(await loadTemplate(file)).toEqual({ body: 'W' });
   });
 
+  it('names the directory rather than reporting a bare ENOENT', async () => {
+    await expect(discoverTemplates('/nowhere/at/all')).rejects.toThrow(
+      'No templates directory at /nowhere/at/all.',
+    );
+  });
+
   it('says which file has no default export', async () => {
     const file = await dir.write('empty.ts', 'export const a = 1;\n');
 

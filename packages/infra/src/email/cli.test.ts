@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
-import { resolve } from 'node:path';
+import { relative as relativePath, resolve } from 'node:path';
 import { loadRenderer, main, plan, type Plan } from './cli.js';
 import { BodyRenderer, TemplateDir } from './templates.fixture.js';
 
@@ -85,6 +85,14 @@ describe('loadRenderer', () => {
     expect(await loadRenderer(RENDERER)).toBeInstanceOf(BodyRenderer);
   });
 
+  // A consumer writes `--renderer ./my-renderer.ts` meaning their cwd, and
+  // `import()` alone would look inside node_modules/@dunx/infra/dist.
+  it('resolves a relative specifier against the cwd', async () => {
+    const relative = `./${relativePath(process.cwd(), RENDERER)}`;
+
+    expect(await loadRenderer(relative)).toBeInstanceOf(BodyRenderer);
+  });
+
   it('refuses a module that exports something else', async () => {
     const dir = await TemplateDir.create();
     const file = await dir.write('nope.ts', 'export default 1;\n');
@@ -146,6 +154,36 @@ describe('main', () => {
     expect(await Bun.file(`${out.path}/welcome.html`).text()).toBe('<p>W!</p>');
     await dir.remove();
     await out.remove();
+  });
+
+  // Found by running the built CLI: a directory that does not exist used to
+  // print a bare ENOENT stack and a renderer that does not resolve threw.
+  it('answers a missing directory with the message, not a stack', async () => {
+    const { code, server } = await main([
+      'export',
+      '/nowhere/at/all',
+      '--renderer',
+      RENDERER,
+    ]);
+
+    expect(code).toBe(1);
+    expect(server).toBeUndefined();
+    expect(errored.join('')).toContain('No templates directory at');
+  });
+
+  it('answers a renderer that does not resolve the same way', async () => {
+    const dir = await TemplateDir.create();
+
+    const { code } = await main([
+      'export',
+      dir.path,
+      '--renderer',
+      './nope.ts',
+    ]);
+
+    expect(code).toBe(1);
+    expect(errored.join('')).toContain('nope.ts');
+    await dir.remove();
   });
 
   it('serves the preview and says where', async () => {

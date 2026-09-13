@@ -80,12 +80,14 @@ export const plan = (argv: readonly string[]): Plan | string => {
 export const loadRenderer = async (
   specifier: string,
 ): Promise<TemplateRenderer> => {
-  const module = (await import(specifier)) as { default?: unknown };
+  // A relative specifier is relative to where the shell is, not to this file.
+  // Left to `import()` it resolves inside `node_modules/@dunx/infra/dist/`,
+  // where a consumer's own renderer has never been.
+  const from = specifier.startsWith('.') ? resolve(specifier) : specifier;
+  const module = (await import(from)) as { default?: unknown };
   const loaded = module.default;
   if (!(loaded instanceof TemplateRenderer)) {
-    throw new Error(
-      `${specifier} must default-export a TemplateRenderer instance.`,
-    );
+    throw new Error(`${from} must default-export a TemplateRenderer instance.`);
   }
   return loaded;
 };
@@ -106,18 +108,26 @@ export const main = async (argv: readonly string[]): Promise<Started> => {
     console.error(parsed);
     return { code: 1 };
   }
-  const preview = new EmailPreview({
-    dir: parsed.dir,
-    renderer: await loadRenderer(parsed.renderer),
-    port: parsed.port,
-  });
-  if (parsed.command === 'export') {
-    for (const file of await preview.export(parsed.out)) console.log(file);
-    return { code: 0 };
+  // A shell gets the message, not a stack: the two things that go wrong here are
+  // a directory that does not exist and a renderer that does not resolve, and
+  // both are one line to fix once they are stated.
+  try {
+    const preview = new EmailPreview({
+      dir: parsed.dir,
+      renderer: await loadRenderer(parsed.renderer),
+      port: parsed.port,
+    });
+    if (parsed.command === 'export') {
+      for (const file of await preview.export(parsed.out)) console.log(file);
+      return { code: 0 };
+    }
+    const server = preview.serve();
+    console.log(`Email preview on ${server.url.href}`);
+    return { code: 0, server };
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return { code: 1 };
   }
-  const server = preview.serve();
-  console.log(`Email preview on ${server.url.href}`);
-  return { code: 0, server };
 };
 
 // Only a failure exits. `preview` must not: `Bun.serve` is what holds the loop

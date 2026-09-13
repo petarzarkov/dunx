@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { EmailError } from './errors.js';
 
 export interface TemplateEntry {
   /** Path relative to the directory, without its extension. Stable in a URL. */
@@ -25,13 +26,20 @@ export const discoverTemplates = async (
   dir: string,
 ): Promise<readonly TemplateEntry[]> => {
   const entries: TemplateEntry[] = [];
-  for await (const relative of new Bun.Glob(RENDERABLE).scan({ cwd: dir })) {
-    const posix = relative.replaceAll('\\', '/');
-    if (skipped(posix)) continue;
-    entries.push({
-      name: posix.replace(/\.[cm]?[jt]sx?$/, ''),
-      path: join(dir, relative),
-    });
+  try {
+    for await (const relative of new Bun.Glob(RENDERABLE).scan({ cwd: dir })) {
+      const posix = relative.replaceAll('\\', '/');
+      if (skipped(posix)) continue;
+      entries.push({
+        name: posix.replace(/\.[cm]?[jt]sx?$/, ''),
+        path: join(dir, relative),
+      });
+    }
+  } catch (error) {
+    // `scan` reports a missing cwd as a bare ENOENT on the first iteration, and
+    // the directory is the one thing a caller of `dunx-email` gets wrong.
+    if ((error as { code?: string }).code !== 'ENOENT') throw error;
+    throw new EmailError(`No templates directory at ${dir}.`, { cause: error });
   }
   return entries.sort((a, b) => a.name.localeCompare(b.name));
 };

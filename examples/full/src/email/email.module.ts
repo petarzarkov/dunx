@@ -5,25 +5,21 @@ import {
   LogTransport,
   type EmailTransport,
 } from '@dunx/infra/email';
-import { ReactEmailRenderer } from '@dunx/infra/email/react';
 import { ResendTransport } from '@dunx/infra/email/resend';
 import { SmtpTransport } from '@dunx/infra/email/smtp';
 import { AppConfigService, type AppConfig } from '../config.js';
 import { MailDemo } from './email.demo.js';
 import { MailController } from './mail.controller.js';
 import { Notices } from './notices.service.js';
+import renderer from './render.js';
 
 /**
- * One `EmailTransport` per configured provider, chosen once at boot.
+ * One `EmailTransport` per configured provider, chosen once at boot. Each vendor
+ * sits on its own subpath; this app imports all three because it demonstrates
+ * all three, and a real app imports the one it sends with.
  *
- * Each vendor sits on its own subpath, so importing `@dunx/infra/email` alone
- * needs neither `resend` nor `nodemailer`. This app imports all three because it
- * demonstrates all three; a real app imports the one it sends with.
- *
- * A provider named without its credential degrades to the log transport and says
- * so, rather than failing boot. Constructing it eagerly meant `EMAIL_TRANSPORT=
- * resend` with no key killed the app even under `dryRun`, which is the opposite
- * of what the flag promises.
+ * A provider named without its credential degrades to the log transport rather
+ * than failing boot, which `dryRun` would otherwise promise and not deliver.
  */
 const transportFor = (
   email: AppConfig['email'],
@@ -59,7 +55,9 @@ const transportFor = (
           from: email.from,
           maxPerSecond: email.maxPerSecond,
           dryRun: email.dryRun,
-          renderer: new ReactEmailRenderer(),
+          // The same instance `dunx-email --renderer ./src/email/render.ts`
+          // loads, so the preview cannot drift from what a send produces.
+          renderer,
         };
       },
       inject: [AppConfigService, Logger] as const,
