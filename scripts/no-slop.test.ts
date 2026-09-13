@@ -3,7 +3,8 @@ import { $ } from 'bun';
 import { existsSync } from 'node:fs';
 
 /**
- * Enforces the documentation voice rules in CLAUDE.md, the way
+ * Enforces the documentation voice rules recorded in
+ * `internal/notes/research/repo-rules-rationale.md`, the way
  * `no-em-dash.test.ts` enforces the dash rule: as a test over every tracked
  * Markdown file rather than as advice a reviewer has to remember.
  *
