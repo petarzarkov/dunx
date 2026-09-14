@@ -4,6 +4,52 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.9.2 - 2026-09-14
+
+A .ts or .js configuration file, and the explorer out of its own document
+
+`ConfigModule.forRoot({ files })` in `@dunx/core` took YAML, TOML and JSON. It
+now also takes `.ts` and `.js`, imported rather than parsed, which Bun does
+natively so it costs no dependency. The file is read from its default export:
+one file, one configuration value, with nothing to guess about which export was
+meant. A default export that is missing, `undefined` or `null` fails boot naming
+the file, where an absent file is still skipped, because a file that exists and
+resolves to nothing is a mistake and an absent overlay is a choice.
+
+What this buys is the layering rather than type safety on its own. dunx has no
+framework-wide config type, so a bare object literal in a `.ts` file is checked
+against nothing and `satisfies AppConfig` is what makes tsc say anything. The
+gain is that a code-shaped file takes its turn in the same ordered deep merge as
+the yaml, under the environment, instead of being spread in by hand, and can
+read `Bun.env` and import while it is there. `import()` caches per resolved path,
+so vary a test's environment with `source`, which is spread over the files and
+wins. `examples/full` uses it as its last layer.
+
+**`@dunx/openapi` no longer documents its own mount.** `/docs` and
+`/openapi.json` were discovered like any controller's routes and landed in
+`paths`, so a generated client arrived with a `getDocs()` and a
+`getOpenapiJson()` describing nothing the schemas cover. The page, the document
+and the page's assets are all `@ApiHidden()` now. This changes the generated
+document, so a committed `openapi.json` will show those two paths removed on the
+next regeneration. Nothing about who may reach the routes changed: they stay
+`@Public()` and `authorize` still gates them.
+
+Closes #150. Closes #152.
+
+### Features
+
+- **core**: a .ts or .js config file, read from its default export ([`bb524ee`](https://github.com/petarzarkov/dunx/commit/bb524ee7b577d4b6fef3424433a38c93fbc740f1))
+
+### Fixes
+
+- **core**: trim the loader's comments back under the density cap ([`2bad084`](https://github.com/petarzarkov/dunx/commit/2bad084abe4e0cf2544b1a98abf03091bf4d314e))
+- **core**: the review findings on the .ts config loader ([`47f3384`](https://github.com/petarzarkov/dunx/commit/47f33844804843603e61d8c2946433f18ea232cb))
+- **openapi**: keep the explorer's own mount out of the document ([`9475411`](https://github.com/petarzarkov/dunx/commit/94754119390999fe5518fa515c364327ec580b61))
+
+### Refactors
+
+- **openapi**: one class-level @ApiHidden over three method-level ones ([`66fe39f`](https://github.com/petarzarkov/dunx/commit/66fe39fd246c140a7dbae6cbf55bbdbc9bdfb0d5))
+
 ## 3.9.1 - 2026-09-13
 
 A degrading cache store, structured probe data, and no drain under test
