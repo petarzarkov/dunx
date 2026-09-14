@@ -33,18 +33,18 @@ export interface DocMount {
  * Every route is `@Public()`, so no session guard answers ahead of `authorize`:
  * a 401 from one would confirm the mount exists.
  *
- * Every route is also `@ApiHidden()`. They are real routes, but the document
- * describes the API, and a generated client should not come with a
- * `getOpenapiJson()` returning nothing the schemas cover (#152).
+ * `@ApiHidden()` sits on the class, so it covers the subclass below and whatever
+ * either grows later. The document describes the API; the mount serving it is not
+ * part of that (#152).
  */
 const documentController = (mount: DocMount) => {
+  @ApiHidden()
   @Controller()
   class OpenApiController {
     // inject() in a field initializer, not a constructor parameter: this package
     // works with or without the @dunx/transform preload.
     protected readonly explorer = inject(OpenApiExplorer);
 
-    @ApiHidden()
     @Public()
     @Get(() => mount.json)
     async document(input: Input<RouteSchemas>): Promise<Response> {
@@ -85,7 +85,6 @@ export const buildController = (
 
   @Controller()
   class OpenApiController extends base {
-    @ApiHidden()
     @Public()
     @Get(() => mount.ui)
     async page(input: Input<RouteSchemas>): Promise<Response> {
@@ -107,7 +106,6 @@ export const buildController = (
      *
      * Gated with the page: a page whose script is a refusal renders blank.
      */
-    @ApiHidden()
     @Public()
     @Get(() => joinPath(mount.ui, '/*'))
     async asset(input: Input<RouteSchemas>): Promise<Response> {
