@@ -1,7 +1,10 @@
 import { expect, test } from 'bun:test';
-import { Module } from '@dunx/core';
+import { AppFactory, Module } from '@dunx/core';
 import { ApiHidden, Controller, Get, HealthModule } from '@dunx/http';
 import { describeRoutes } from './discover.js';
+import { OpenApiExplorer } from './explorer.js';
+import { OpenApiModule } from './module.js';
+import { SwaggerRenderer } from './swagger/index.js';
 
 @Controller('users')
 class UsersController {
@@ -68,4 +71,28 @@ test('routes: false mounts no controller either way', () => {
   class Root {}
 
   expect(describeRoutes(Root)).toEqual([]);
+});
+
+/**
+ * The explorer's own mount, which is discovered like any controller and then
+ * dropped. A generated client had a `getOpenapiJson()` and a `getDocs()` on it,
+ * neither describing anything the schemas cover (#152).
+ */
+test('the explorer documents the app, not itself', async () => {
+  @Module({ controllers: [UsersController] })
+  class Root {}
+
+  const app = await AppFactory.create(
+    OpenApiModule.forRoot({
+      title: 'T',
+      version: '1',
+      root: Root,
+      renderer: new SwaggerRenderer(),
+    }),
+  );
+
+  expect(Object.keys(app.get(OpenApiExplorer).document().paths)).toEqual([
+    '/users',
+  ]);
+  await app.shutdown();
 });

@@ -101,16 +101,12 @@ describe('authorize on OpenApiModule', () => {
     expect((await server.request('docs', allowed)).status).toBe(200);
   });
 
-  it('still documents the routes it is gating', async () => {
+  it('documents the app it is gating, not the gate', async () => {
     const { body } = await server.json<{ paths: Record<string, unknown> }>(
       'openapi.json',
       allowed,
     );
-    expect(Object.keys(body.paths).sort()).toEqual([
-      '/docs',
-      '/openapi.json',
-      '/things',
-    ]);
+    expect(Object.keys(body.paths).sort()).toEqual(['/things']);
   });
 });
 

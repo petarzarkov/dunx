@@ -90,9 +90,9 @@ export class OpenApiModule {
       controllers: [buildController(mount, options.renderer)],
       providers: [
         provide(OpenApiExplorer, {
-          // `configured` includes the controller above, so the document describes the
-          // documentation routes too. They are routes; pretending otherwise would be
-          // the first lie in the file.
+          // `configured` includes the controller above, so discovery reaches the
+          // documentation routes. They are `@ApiHidden()`, so they are reached
+          // and then dropped rather than never declared.
           useFactory: async () =>
             new OpenApiExplorer(
               await generateDocument(describeRoutes(configured), options),

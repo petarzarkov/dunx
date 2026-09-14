@@ -103,8 +103,7 @@ test('a contributor can inject through forRootAsync', async () => {
     }),
   );
 
-  // The documentation routes are in there too, deliberately - they are routes.
   const paths = Object.keys(app.get(OpenApiExplorer).document().paths).sort();
-  expect(paths).toEqual(['/docs', '/openapi.json', '/sign-in', '/users']);
+  expect(paths).toEqual(['/sign-in', '/users']);
   await app.shutdown();
 });

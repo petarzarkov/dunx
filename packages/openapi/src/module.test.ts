@@ -8,6 +8,7 @@ import {
   type Input,
   type RouteSchemas,
 } from '@dunx/http';
+import { routesOf } from '@dunx/http/internal';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { z } from 'zod';
 import { OpenApiExplorer } from './explorer.js';
@@ -92,11 +93,7 @@ describe('a real server serving its own document', () => {
 
     // The global prefix is applied after the container is built, so it is derived
     // from the document route's own URL.
-    expect(Object.keys(document.paths).sort()).toEqual([
-      '/api/docs',
-      '/api/openapi.json',
-      '/api/things',
-    ]);
+    expect(Object.keys(document.paths).sort()).toEqual(['/api/things']);
     expect(document.paths['/api/things']?.post?.operationId).toBe(
       'ThingsController_create',
     );
@@ -176,11 +173,7 @@ describe('a real server serving its own document', () => {
     const { body: document } =
       await plain.json<OpenApiDocument>('openapi.json');
 
-    expect(Object.keys(document.paths).sort()).toEqual([
-      '/docs',
-      '/openapi.json',
-      '/things',
-    ]);
+    expect(Object.keys(document.paths).sort()).toEqual(['/things']);
   });
 
   it('exposes the document and its warnings from the container', () => {
@@ -195,13 +188,33 @@ describe('a real server serving its own document', () => {
     ).toBeDefined();
   });
 
-  it('documents its own routes as public, so a global guard is not implied', async () => {
+  it('carries the app route own security into the document', async () => {
     const { body: document } =
       await prefixed.json<OpenApiDocument>('api/openapi.json');
-    expect(document.paths['/api/openapi.json']?.get?.security).toEqual([]);
     expect(document.paths['/api/things']?.post?.security).toEqual([
       { bearer: [] },
     ]);
+  });
+
+  /**
+   * Its own routes are `@Public()`, so no session guard answers ahead of
+   * `authorize` - a 401 from one would confirm the mount exists. The document no
+   * longer carries them (#152), so the route table is where that is read.
+   */
+  it('mounts its own routes public and undocumented', () => {
+    const mount = routesOf(
+      OpenApiModule.forRoot({
+        title: 'Served API',
+        version: '0.3.0',
+        root: ThingsModule,
+        renderer: new SwaggerRenderer(),
+      }),
+    ).filter((route) => route.controller === 'OpenApiController');
+    expect(mount.length).toBeGreaterThan(0);
+    for (const route of mount) {
+      expect(route.public).toBe(true);
+      expect(route.hidden).toBe(true);
+    }
   });
 });
 
@@ -293,13 +306,9 @@ describe('forRootAsync', () => {
 
       expect(document.info.title).toBe('Configured API');
       expect(document.info.version).toBe('9.9.9');
-      // The configured paths are the paths the document describes: they are
-      // routes, discovered like any other.
-      expect(Object.keys(document.paths).sort()).toEqual([
-        '/reference',
-        '/reference.json',
-        '/things',
-      ]);
+      // The configured mount moves the routes, and they stay out of the
+      // document wherever they land.
+      expect(Object.keys(document.paths).sort()).toEqual(['/things']);
       expect((await server.request('openapi.json')).status).toBe(404);
       expect((await server.request('reference')).status).toBe(200);
       expect(server.app.get(OpenApiExplorer).warnings).toEqual([]);
@@ -364,14 +373,10 @@ describe('with the scalar renderer', () => {
     ).toBe(404);
   });
 
-  it('keeps the assets out of the document, and the page in it', async () => {
+  it('keeps its own mount out of the document, assets included', async () => {
     const { body: document } =
       await server.json<OpenApiDocument>('api/openapi.json');
-    expect(Object.keys(document.paths).sort()).toEqual([
-      '/api/openapi.json',
-      '/api/reference',
-      '/api/things',
-    ]);
+    expect(Object.keys(document.paths).sort()).toEqual(['/api/things']);
   });
 });
 
@@ -391,10 +396,7 @@ describe('with no renderer', () => {
       const { status, body: document } =
         await server.json<OpenApiDocument>('openapi.json');
       expect(status).toBe(200);
-      expect(Object.keys(document.paths).sort()).toEqual([
-        '/openapi.json',
-        '/things',
-      ]);
+      expect(Object.keys(document.paths).sort()).toEqual(['/things']);
       expect((await server.request('docs')).status).toBe(404);
       expect((await server.request('docs/swagger-ui.css')).status).toBe(404);
     } finally {
