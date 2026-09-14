@@ -252,7 +252,7 @@ class CacheIndicator extends RedisIndicator {
 Do not hand-roll a controller for this. The part worth having is the drain, and a
 plain controller cannot express it. Two settings decide whether a rollout drops
 requests; the full mechanics, including how to write your own indicator, are in
-[Health checks](./21-health-checks.md).
+[Health checks](./22-health-checks.md).
 
 **`critical`** separates readiness from liveness. A `critical: false` indicator
 reports `degraded` without failing the probe, so an absent Redis degrades a route

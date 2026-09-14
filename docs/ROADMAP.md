@@ -177,7 +177,7 @@ rewritten to match; the full measurement is in
 to _pin ioredis 5_ rested on three claims and re-measurement broke all three: ioredis
 6.0.0 still ships `built/utils`, both of bullmq's builds import it, and the CJS build
 is the one Bun actually runs. No pin. The advice is withdrawn from
-`docs/guide/15-queues.md` and `bun-apis.md`, where it had been published to users.
+`docs/guide/19-queues.md` and `bun-apis.md`, where it had been published to users.
 The companion finding - `/queue` cannot be imported without ioredis while the manifest
 calls it optional - is not a contradiction once stated properly: `ioredis` is optional
 in exactly the sense `bullmq` is, needed if and only if `/queue` is, and there is no
@@ -331,7 +331,7 @@ Delivered and moved out of this folder rather than left here marked done:
   provider. `HttpOptionsProvider` and the argument-wins ordering are in
   [architecture/http.md](./architecture/http.md); the named-instance subclasses,
   the config schema and the document contributors are in
-  [Upgrading](./guide/24-upgrading.md). Three items were withdrawn rather than
+  [Upgrading](./guide/25-upgrading.md). Three items were withdrawn rather than
   built: the imperative `app.*` methods stay
   ([architecture/http.md](./architecture/http.md)), a decorated module that also
   configures itself keeps its override
@@ -376,7 +376,7 @@ deleted from the template: **keyset pagination** is `@dunx/infra/pagination`, an
 `OpenApiModule.forRootAsync` closed the half of the options-before-container problem
 that `OpenApiModule` owned, and `HttpOptionsProvider` closed the other:
 a subclass resolved from the container, so the template no longer validates its
-config twice. See [Upgrading](./guide/24-upgrading.md) for what each imperative
+config twice. See [Upgrading](./guide/25-upgrading.md) for what each imperative
 call maps to, and
 [architecture/http.md](./architecture/http.md) for why the argument still wins.
 

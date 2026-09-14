@@ -129,7 +129,7 @@ queue. The subpath is the only way in.
 
 ### Not pinning ioredis 5, because the reason to had three false premises
 
-An earlier note here and in `docs/guide/15-queues.md` told readers to **pin ioredis
+An earlier note here and in `docs/guide/19-queues.md` told readers to **pin ioredis
 5**, on the grounds that bullmq's CJS build imports `ioredis/built/utils`, that
 ioredis 6 removed it, and that only the ESM build was safe. Re-measured on bullmq
 6.0.5 + ioredis 5.8.2 and 6.0.0 + Bun 1.3.14, **all three are wrong**:

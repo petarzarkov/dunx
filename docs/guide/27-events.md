@@ -147,6 +147,6 @@ crosses a replica.
 
 | Need                                     | Use                                              |
 | ---------------------------------------- | ------------------------------------------------ |
-| Survives a restart, retries, runs later  | `@JobHandler` - [Queues](./15-queues.md)         |
+| Survives a restart, retries, runs later  | `@JobHandler` - [Queues](./19-queues.md)         |
 | A websocket message every node must send | `PubSubRelay` - [WebSockets](./09-websockets.md) |
 | Decoupling two services in one process   | `EventBus`                                       |

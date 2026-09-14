@@ -395,7 +395,7 @@ DbModule.forRootAsync(SyncDatabase, {
 ```
 
 See [Logging](./13-logging.md), [Database](./14-database.md),
-[Queues](./15-queues.md), [Authentication](./17-authentication.md) and
+[Queues](./19-queues.md), [Authentication](./17-authentication.md) and
 [Files and images](./18-files-and-images.md) for the rest, and
 [Providers](./03-providers.md) for how a factory provider resolves in general.
 
@@ -431,4 +431,4 @@ Override a field with a field and a getter with a getter - TypeScript rejects th
 other pairing (`TS2611`, `TS2610`). To derive a field from config, declare
 `override trustProxy: boolean` and assign it in the constructor.
 
-See [Upgrading](./24-upgrading.md) for what each imperative call maps to.
+See [Upgrading](./25-upgrading.md) for what each imperative call maps to.

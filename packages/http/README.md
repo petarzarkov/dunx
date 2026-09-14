@@ -65,13 +65,13 @@ The guide is canonical for every row; this table is the index.
 | Server-sent events      | `@Sse`, `SseStream`, framing, heartbeats, `Last-Event-ID`   | [Controllers](../../docs/guide/05-controllers.md)                 |
 | Request logging         | One structured entry per request, on by default             | [Logging](../../docs/guide/13-logging.md)                         |
 | Trace context           | W3C `traceparent` adopted and propagated, on by default     | [Logging](../../docs/guide/13-logging.md)                         |
-| Metrics                 | Per-route counts and timings, off by default                | [Metrics](../../docs/guide/23-metrics.md)                         |
-| Health and draining     | `/health/live`, `/health/ready`, readiness during a rollout | [Health checks](../../docs/guide/21-health-checks.md)             |
+| Metrics                 | Per-route counts and timings, off by default                | [Metrics](../../docs/guide/24-metrics.md)                         |
+| Health and draining     | `/health/live`, `/health/ready`, readiness during a rollout | [Health checks](../../docs/guide/22-health-checks.md)             |
 | Throttling              | `@Throttle`, `@SkipThrottle`, memory and Redis counters     | [Middleware and guards](../../docs/guide/08-middleware-and-guards.md) |
-| Outbound resilience     | `HttpRetryClassifier`: which statuses retry, and `Retry-After` | [Resilience](../../docs/guide/25-resilience.md)                |
-| Static files            | `Bun.file` behind a mount, with a cache policy              | [Deployment](../../docs/guide/20-deployment.md)                   |
-| Compression             | zstd and gzip on Bun's own compressors                      | [Deployment](../../docs/guide/20-deployment.md)                   |
-| RPC                     | protobuf over Connect and gRPC-Web, as middleware           | [RPC](../../docs/guide/27-rpc.md)                                 |
+| Outbound resilience     | `HttpRetryClassifier`: which statuses retry, and `Retry-After` | [Resilience](../../docs/guide/26-resilience.md)                |
+| Static files            | `Bun.file` behind a mount, with a cache policy              | [Deployment](../../docs/guide/21-deployment.md)                   |
+| Compression             | zstd and gzip on Bun's own compressors                      | [Deployment](../../docs/guide/21-deployment.md)                   |
+| RPC                     | protobuf over Connect and gRPC-Web, as middleware           | [RPC](../../docs/guide/28-rpc.md)                                 |
 
 ## Subpaths
 

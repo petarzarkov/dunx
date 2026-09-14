@@ -122,7 +122,7 @@ the opposite, and the two hold together rather than contradicting.
 A signal bounds an operation that reads it. `ResiliencePolicy` awaits
 `op(signal)` rather than racing it, so an `op` that ignores its signal runs to
 completion and the bound does nothing - documented in
-[the resilience guide](../guide/25-resilience.md). That is a cost worth paying for
+[the resilience guide](../guide/26-resilience.md). That is a cost worth paying for
 work the caller wrote.
 
 None of the five closes takes a signal. bullmq's `Worker.close(force?)` and
@@ -143,7 +143,7 @@ What a signal would change is the handler timeout - `jobTimeoutMs` and
 `handlerTimeoutMs`, where the work is the consumer's own method and could read
 one. Today it is not cancelled, only stopped being waited for, so a handler that
 outran its bound can act twice on one unit of work. Both
-[guide 15](../guide/15-queues.md) and [guide 28](../guide/28-message-brokers.md)
+[guide 19](../guide/19-queues.md) and [guide 20](../guide/20-message-brokers.md)
 say so. Changing that is cooperative cancellation through the handler signature,
 not a change to how the bound is measured.
 

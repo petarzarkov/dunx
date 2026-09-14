@@ -204,15 +204,15 @@ TC39 standard decorators have no parameter position.
 | `nestjs-zod` / `ValidationPipe`        | [Standard Schema on route decorators](./guide/06-validation.md)                                       | done         |
 | `@nestjs/testing` (`overrideProvider`) | [`createTestApp({ modules, overrides })`](./guide/11-testing.md)                                      | done         |
 | `@nestjs/swagger`                      | [`@dunx/openapi`](./guide/10-openapi.md)                                                              | done         |
-| `@nestjs/bullmq`                       | [`@dunx/infra/queue`](./guide/15-queues.md)                                                           | done         |
+| `@nestjs/bullmq`                       | [`@dunx/infra/queue`](./guide/19-queues.md)                                                           | done         |
 | `@thallesp/nestjs-better-auth`         | [`@dunx/auth`](./guide/17-authentication.md)                                                          | done         |
 | `@nestjs/websockets` + socket.io       | [gateways on `Bun.serve`](./guide/09-websockets.md)                                                   | done         |
 | `@nestjs/serve-static`                 | `StaticFiles` in `@dunx/http`                                                                         | done         |
 | `@bull-board/*`                        | bull-board mounted by `@dunx/dashboard`                                                               | done         |
-| `@nestjs/cache-manager`                | [`@dunx/infra/cache`](./guide/19-caching.md); no `@Cacheable`                                         | partial      |
+| `@nestjs/cache-manager`                | [`@dunx/infra/cache`](./guide/15-caching.md); no `@Cacheable`                                         | partial      |
 | `@nestjs/schedule` (`@Cron`)           | [`@dunx/infra/schedule`](./guide/16-scheduling.md)                                                    | done         |
 | `@nestjs/throttler`                    | `ThrottleModule`, `ThrottleGuard`, `@Throttle`, `@SkipThrottle`, `RedisThrottleStore` in `@dunx/http` | done         |
-| `@nestjs/terminus`                     | [`HealthModule` in `@dunx/http`](./guide/21-health-checks.md)                                         | done         |
+| `@nestjs/terminus`                     | [`HealthModule` in `@dunx/http`](./guide/22-health-checks.md)                                         | done         |
 | `@nestjs/platform-express` (`app.use`) | -                                                                                                     | out of scope |
 
 ## The reference application

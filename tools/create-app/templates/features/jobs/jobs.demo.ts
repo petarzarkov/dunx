@@ -44,7 +44,7 @@ export class JobsDemo {
     );
 
     // Rejects on a failed job and on the ttl, both outcomes rather than
-    // defects. docs/guide/15-queues.md, "Waiting for a job to finish".
+    // defects. docs/guide/19-queues.md, "Waiting for a job to finish".
     let result: RenderResult;
     try {
       result = (await published.waitUntilFinished(

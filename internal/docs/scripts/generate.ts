@@ -146,12 +146,15 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
       'logging',
       'database',
       'caching',
-      'queues',
       'scheduling',
       'authentication',
       'files-and-images',
     ],
   ],
+  // Its own heading rather than two entries under Infrastructure: the two pages
+  // are alternatives to each other, and a reader arriving on one has to be able
+  // to see the other without knowing the word "broker".
+  ['Queues', ['queues', 'message-brokers']],
   [
     'Going live',
     [
@@ -165,7 +168,7 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
   ],
   // A section is a contiguous run of the numeric prefixes, so a page joins the
   // section its neighbours are in or starts one of its own.
-  ['Messaging', ['events', 'rpc', 'message-brokers']],
+  ['Messaging', ['events', 'rpc']],
 ];
 
 const sectionOf = (slug: string): string => {
