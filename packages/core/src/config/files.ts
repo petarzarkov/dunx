@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { isPlainObject } from '../plain-object.js';
 import { ConfigError } from './service.js';
 
@@ -56,13 +57,13 @@ const parserFor = (path: string): ((text: string) => unknown) => {
 };
 
 /** Imported rather than parsed, which Bun does natively. */
-const isModule = (path: string): boolean =>
-  /\.(?:ts|js|mts|mjs|cts|cjs)$/i.test(path);
+const isModule = (path: string): boolean => /\.(?:ts|js)$/i.test(path);
 
 /**
- * A `.ts` or `.js` file's **default export**: one file, one configuration value,
- * nothing to guess about which export was meant. Unlike every other format this
- * one **runs**, so it can read `Bun.env` and import (#150).
+ * A `.ts` or `.js` file's **default export**: one file, one configuration value.
+ * Unlike every other format this one **runs**, so it can read `Bun.env` (#150).
+ * `import()` caches per resolved path, so a second boot in one process sees the
+ * first boot's values; vary a test's environment with `source`, which wins.
  */
 const importModule = async (
   path: string,
@@ -70,7 +71,10 @@ const importModule = async (
 ): Promise<unknown> => {
   let module: { default?: unknown };
   try {
-    module = (await import(absolute)) as { default?: unknown };
+    // A file URL: the specifier grammar `import()` takes.
+    module = (await import(pathToFileURL(absolute).href)) as {
+      default?: unknown;
+    };
   } catch (cause) {
     throw new ConfigError(
       `Config file "${path}" did not load: ${
@@ -79,11 +83,11 @@ const importModule = async (
     );
   }
 
-  // Not skipped the way an empty `.yml` is: no default export is almost always
-  // `export const config = {...}` with the keyword missing.
-  if (!('default' in module)) {
+  // A file that exists and resolves to nothing is a mistake, where an absent
+  // overlay is a choice.
+  if (module.default === null || module.default === undefined) {
     throw new ConfigError(
-      `Config file "${path}" has no default export. A .ts or .js config file is read from \`export default\`.`,
+      `Config file "${path}" must export a configuration object as its default. A .ts or .js config file is read from \`export default\`.`,
     );
   }
 

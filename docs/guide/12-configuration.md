@@ -105,16 +105,16 @@ seed:
 
 These are **imported**, not parsed, and read from the **default export**. One
 file, one configuration value, so there is nothing to guess about which export
-was meant. A file with no default export fails boot naming the file, rather than
-being skipped: it is almost always `export const config = ...` with the keyword
-missing.
+was meant. A file whose default export is missing, `undefined` or `null` fails
+boot naming the file, rather than being skipped: a file that exists and resolves
+to nothing is a mistake, where an absent overlay is a choice.
 
 Unlike the other formats this one runs, so it can compose values, read `Bun.env`
 and import other modules:
 
 ```ts
 // application.config.ts
-import type { ConfigFile } from './src/config.ts';
+import type { ConfigFile } from './src/config.js';
 
 const appName = 'dunx-full';
 
@@ -131,6 +131,11 @@ literal here is checked against nothing and a wrong key is caught at boot by the
 schema like any other. Naming your own type is what makes `tsc` say it first.
 
 `examples/full` uses this as its last layer, over `application.yml`.
+
+`import()` caches per resolved path, so booting twice in one process reads the
+file once. That is invisible to an app, which boots once; in a test that varies
+the environment per boot, pass `source` rather than mutating `Bun.env`, since
+`source` is spread over the file values and wins.
 
 ### The environment still wins
 

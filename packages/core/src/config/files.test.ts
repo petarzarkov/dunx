@@ -355,8 +355,37 @@ describe('a .ts or .js config file', () => {
     );
 
     await expect(load(path)).rejects.toThrow(
-      /"named\.config\.ts" has no default export/,
+      /"named\.config\.ts" must export a configuration object/,
     );
+  });
+
+  // `'default' in module` is true for this, so it was skipped like an absent
+  // file: a third state neither documented state covers (#156).
+  it('fails on an explicit undefined or null default, rather than skipping', async () => {
+    const undef = await write('undef.config.ts', 'export default undefined;\n');
+    const nul = await write('null.config.ts', 'export default null;\n');
+
+    await expect(load(undef)).rejects.toThrow(
+      /"undef\.config\.ts" must export a configuration object/,
+    );
+    await expect(load(nul)).rejects.toThrow(
+      /"null\.config\.ts" must export a configuration object/,
+    );
+  });
+
+  it('is not confused by a # in the path', async () => {
+    const path = await write(
+      'has#hash.config.ts',
+      'export default { ok: 1 };\n',
+    );
+
+    expect(await load(path)).toEqual({ ok: 1 });
+  });
+
+  it('leaves .mjs and .cjs to the parser, which names them', async () => {
+    const path = await write('mod.config.mjs', 'export default { ok: 1 };\n');
+
+    await expect(load(path)).rejects.toThrow(/has no parser/);
   });
 
   it('names the file when it throws on import', async () => {
