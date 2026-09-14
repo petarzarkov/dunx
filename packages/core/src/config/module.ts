@@ -83,7 +83,8 @@ export type ConfigModuleOptions<
 export interface ConfigFilesOption {
   /**
    * Configuration files, read in order and deep-merged under the environment.
-   * `.yml`, `.yaml`, `.toml` and `.json`; a missing one is skipped. See
+   * `.yml`, `.yaml`, `.toml`, `.json`, `.ts` and `.js`; a missing one is skipped.
+   * A `.ts` or `.js` file is imported and read from its default export. See
    * {@link ConfigFiles}.
    *
    * **The environment still wins, by exact key name.** There is no convention

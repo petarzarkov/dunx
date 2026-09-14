@@ -302,3 +302,117 @@ describe('ConfigModule with files', () => {
     await expect(AppFactory.create(Root)).rejects.toThrow(/did not parse/);
   });
 });
+
+describe('a .ts or .js config file', () => {
+  it('is read from its default export, with its types intact', async () => {
+    const path = await write(
+      'typed.config.ts',
+      'export default { server: { port: 3000, ssl: false }, tags: ["a"] };\n',
+    );
+
+    expect(await load(path)).toEqual({
+      server: { port: 3000, ssl: false },
+      tags: ['a'],
+    });
+  });
+
+  it('runs, so it can read the environment and import', async () => {
+    const path = await write(
+      'env.config.ts',
+      'import { join } from "node:path";\n' +
+        'export default { name: Bun.env.DUNX_TEST_NAME, joined: join("a", "b") };\n',
+    );
+
+    Bun.env['DUNX_TEST_NAME'] = 'from-env';
+    try {
+      expect(await load(path)).toEqual({ name: 'from-env', joined: 'a/b' });
+    } finally {
+      delete Bun.env['DUNX_TEST_NAME'];
+    }
+  });
+
+  it('takes its turn in the same ordering as the text formats', async () => {
+    const base = await write('layer.yml', 'server:\n  port: 1\n  host: yaml\n');
+    const overlay = await write(
+      'layer.config.js',
+      'export default { server: { port: 2 } };\n',
+    );
+
+    // Deep-merged like any other overlay: `host` survives, `port` is replaced.
+    expect(await load(base, overlay)).toEqual({
+      server: { port: 2, host: 'yaml' },
+    });
+  });
+
+  it('is skipped when absent, like every other format', async () => {
+    expect(await load('nowhere.config.ts')).toEqual({});
+  });
+
+  it('names the file when it has no default export', async () => {
+    const path = await write(
+      'named.config.ts',
+      'export const config = { server: { port: 3000 } };\n',
+    );
+
+    await expect(load(path)).rejects.toThrow(
+      /"named\.config\.ts" must export a configuration object/,
+    );
+  });
+
+  // `'default' in module` is true for this, so it was skipped like an absent
+  // file: a third state neither documented state covers (#156).
+  it('fails on an explicit undefined or null default, rather than skipping', async () => {
+    const undef = await write('undef.config.ts', 'export default undefined;\n');
+    const nul = await write('null.config.ts', 'export default null;\n');
+
+    await expect(load(undef)).rejects.toThrow(
+      /"undef\.config\.ts" must export a configuration object/,
+    );
+    await expect(load(nul)).rejects.toThrow(
+      /"null\.config\.ts" must export a configuration object/,
+    );
+  });
+
+  it('is not confused by a # in the path', async () => {
+    const path = await write(
+      'has#hash.config.ts',
+      'export default { ok: 1 };\n',
+    );
+
+    expect(await load(path)).toEqual({ ok: 1 });
+  });
+
+  it('leaves .mjs and .cjs to the parser, which names them', async () => {
+    const path = await write('mod.config.mjs', 'export default { ok: 1 };\n');
+
+    await expect(load(path)).rejects.toThrow(/has no parser/);
+  });
+
+  it('names the file when it throws on import', async () => {
+    const path = await write(
+      'throws.config.ts',
+      'throw new Error("bad config");\nexport default {};\n',
+    );
+
+    await expect(load(path)).rejects.toThrow(
+      /"throws\.config\.ts" did not load: bad config/,
+    );
+  });
+
+  it('rejects a default export that is not an object', async () => {
+    const path = await write('scalar.config.ts', 'export default 42;\n');
+
+    await expect(load(path)).rejects.toThrow(/must hold an object/);
+  });
+
+  it('strips __proto__ the way a parsed file has it stripped', async () => {
+    const path = await write(
+      'proto.config.ts',
+      'export default JSON.parse(\'{"__proto__":{"isAdmin":true},"ok":1}\');\n',
+    );
+
+    const values = await load(path);
+    expect(values).toEqual({ ok: 1 });
+    expect(({} as { isAdmin?: unknown }).isAdmin).toBeUndefined();
+  });
+});

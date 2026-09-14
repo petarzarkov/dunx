@@ -6,6 +6,6 @@
        here - only the element factory changes. */
     "jsx": "react-jsx"
   },
-  "include": ["src", "scripts", "services.ts"],
+  "include": ["src", "scripts", "services.ts", "application.config.ts"],
   "exclude": ["node_modules"]
 }

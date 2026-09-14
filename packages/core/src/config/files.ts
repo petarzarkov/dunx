@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { isPlainObject } from '../plain-object.js';
 import { ConfigError } from './service.js';
 
@@ -51,8 +52,44 @@ const parserFor = (path: string): ((text: string) => unknown) => {
   if (lower.endsWith('.json')) return (text) => JSON.parse(text) as unknown;
 
   throw new ConfigError(
-    `Config file "${path}" has no parser. Use .yml, .yaml, .toml or .json.`,
+    `Config file "${path}" has no parser. Use .ts, .js, .yml, .yaml, .toml or .json.`,
   );
+};
+
+const isModule = (path: string): boolean => /\.(?:ts|js)$/i.test(path);
+
+/**
+ * A `.ts` or `.js` file's **default export**: one file, one configuration value.
+ * Unlike every other format this one **runs**, so it can read `Bun.env` (#150).
+ * `import()` caches per resolved path, so a second boot in one process sees the
+ * first boot's values; vary a test's environment with `source`, which wins.
+ */
+const importModule = async (
+  path: string,
+  absolute: string,
+): Promise<unknown> => {
+  let module: { default?: unknown };
+  try {
+    // A file URL: the specifier grammar `import()` takes.
+    module = (await import(pathToFileURL(absolute).href)) as {
+      default?: unknown;
+    };
+  } catch (cause) {
+    throw new ConfigError(
+      `Config file "${path}" did not load: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+    );
+  }
+
+  // A file that exists and resolves to nothing is a mistake; an absent one is not.
+  if (module.default === null || module.default === undefined) {
+    throw new ConfigError(
+      `Config file "${path}" must export a configuration object as its default. A .ts or .js config file is read from \`export default\`.`,
+    );
+  }
+
+  return module.default;
 };
 
 /**
@@ -67,7 +104,8 @@ const parserFor = (path: string): ((text: string) => unknown) => {
  *
  * Files are read in order and deep-merged, so a per-environment overlay overrides
  * only the keys it names. **A file that does not exist is skipped**, which is what
- * makes that overlay optional without the app testing for it first.
+ * makes that overlay optional without the app testing for it first. `.ts` and
+ * `.js` are read from their default export rather than parsed.
  *
  * There is no discovery: a file dunx was not given is a file dunx does not read.
  */
@@ -89,25 +127,9 @@ export class ConfigFiles {
       const file = Bun.file(absolute);
       if (!(await file.exists())) continue;
 
-      // Resolved before the try, so "no parser" is not rewrapped as "did not
-      // parse", which named the file twice and contradicted itself.
-      const parse = parserFor(path);
-      const text = await file.text();
-      // Empty means the same as absent, and only YAML agreed on its own:
-      // `Bun.TOML.parse('')` answers `{}` but `JSON.parse('')` throws, so an
-      // empty `.json` failed boot where an empty `.yml` was skipped.
-      if (text.trim() === '') continue;
-      let parsed: unknown;
-      try {
-        parsed = parse(text);
-      } catch (cause) {
-        // The parser names the line but not the file: it was handed a string.
-        throw new ConfigError(
-          `Config file "${path}" did not parse: ${
-            cause instanceof Error ? cause.message : String(cause)
-          }`,
-        );
-      }
+      const parsed = isModule(path)
+        ? await importModule(path, absolute)
+        : await this.#parse(path, file);
 
       // An empty file, or one holding only comments, parses to null.
       if (parsed === null || parsed === undefined) continue;
@@ -124,5 +146,27 @@ export class ConfigFiles {
     }
 
     return values;
+  }
+
+  async #parse(path: string, file: Bun.BunFile): Promise<unknown> {
+    // Resolved before the try, so "no parser" is not rewrapped as "did not
+    // parse", which named the file twice and contradicted itself.
+    const parse = parserFor(path);
+    const text = await file.text();
+    // Empty means the same as absent, and only YAML agreed on its own:
+    // `Bun.TOML.parse('')` answers `{}` but `JSON.parse('')` throws, so an
+    // empty `.json` failed boot where an empty `.yml` was skipped.
+    if (text.trim() === '') return undefined;
+
+    try {
+      return parse(text);
+    } catch (cause) {
+      // The parser names the line but not the file: it was handed a string.
+      throw new ConfigError(
+        `Config file "${path}" did not parse: ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+      );
+    }
   }
 }
