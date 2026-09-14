@@ -94,7 +94,7 @@ and logged at `warn` with the name and how long that run has been going.
 `Overlap.CONCURRENT` starts the new run anyway.
 
 An overrun that must not be dropped is a job, which is `@JobHandler` and
-[queues](./15-queues.md). There is no queue mode here.
+[queues](./19-queues.md). There is no queue mode here.
 
 A throwing handler is reported and never rethrown, so one bad run does not disarm the
 schedule. Its message lands on the entry's `lastError`.
@@ -139,7 +139,7 @@ Schedules are in-process. Two replicas both run every schedule, because nothing 
 coordinates.
 
 A schedule that must fire once across a fleet is a job. bullmq's `upsertJobScheduler`
-through [`@dunx/infra/queue`](./15-queues.md) is that, and dunx does not wrap it.
+through [`@dunx/infra/queue`](./19-queues.md) is that, and dunx does not wrap it.
 
 ## Options
 

@@ -391,10 +391,10 @@ describe('the tools that need no app', () => {
     expect(miss['chapters']).toContain('01-introduction');
 
     // Every chapter is numbered uniquely, so a full number is one chapter.
-    const numbered = (await call('dunx_guide', { topic: '22' }))['chapter'] as {
+    const numbered = (await call('dunx_guide', { topic: '23' }))['chapter'] as {
       slug: string;
     };
-    expect(numbered.slug).toBe('22-agent-tooling');
+    expect(numbered.slug).toBe('23-agent-tooling');
 
     // A partial number is not, and the answer names them rather than picking one.
     const ambiguous = await call('dunx_guide', { topic: '2' });

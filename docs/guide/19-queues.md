@@ -1,4 +1,4 @@
-# Queues
+# bullmq over Redis
 
 **bullmq is the queue.** What `@dunx/infra/queue` contributes is the four things
 bullmq has no opinion about: where a handler lives, how it is found, how it is
@@ -13,6 +13,26 @@ bun add bullmq ioredis
 Both are **optional peer dependencies**, so an app using only `@dunx/infra/files`
 installs neither. `ioredis` is there for bullmq's sake rather than dunx's: see
 [the ioredis boundary](#the-ioredis-boundary) below.
+
+## Choosing a backend
+
+dunx ships two queue backends and neither replaces the other. This page is one;
+the other is [RabbitMQ over AMQP](./20-message-brokers.md). The test is who owns
+the failure.
+
+| Ask                                                        | Reach for                                     |
+| ---------------------------------------------------------- | --------------------------------------------- |
+| Retry with backoff, a rate limit, a cron, a job dashboard  | `@dunx/infra/queue`, this page                |
+| A payload another deployable consumes, broker-side routing | [`@dunx/infra/amqp`](./20-message-brokers.md) |
+
+A unit of work this process created for itself to do later is a job. A message
+whose consumers this process does not know about is a message. An app can hold
+both, and `examples/full` does.
+
+There is no `driver: 'rabbitmq'` switch on `QueueModule`. bullmq's `attempts`,
+`backoff` and `delay` have no AMQP equivalent, so a shared option object would
+accept settings one backend silently ignores. The measurements are in
+[architecture/message-brokers.md](https://github.com/petarzarkov/dunx/blob/main/docs/architecture/message-brokers.md).
 
 ## Read this before you deploy it
 
@@ -150,6 +170,27 @@ module is configured rather than on first connect.
 `removeOnComplete` and the rest are bullmq's own options, documented by bullmq.
 Restating them here would only produce a staler copy.
 
+### Counting jobs
+
+`forRoot` and `forRootAsync` both take a **second argument**, `QueueModuleSettings`.
+It has one field:
+
+```ts
+QueueModule.forRoot({ url }, { metrics: true });
+```
+
+That binds and exports `QueueMetrics`, which counts enqueues and handler runs and
+times both. Inject it and call `snapshot()` for a `QueueStatsReport`: per
+`(queue, name)` totals for `published`, `handled`, `failed`, `timedOut` and
+`publishErrors`, with a `HistogramSnapshot` for each duration. `reset()` clears
+them.
+
+Only the publish side is always this container's. A handler reaches the counters
+where the dispatcher is built here, meaning `consume: true` in this process; a
+`background: true` job and a `WorkerFactory` process each run in a container of
+their own with their own `QueueMetrics`. [Metrics](./24-metrics.md) covers reading
+the report and the cap on the series.
+
 ### Why `connection` is bounded by default
 
 Both halves of `{ connectionTimeout: 5000, maxRetries: 0 }` were measured rather
@@ -191,10 +232,11 @@ client.
 
 ## Publishing and consuming are separate decisions
 
-`QueueModule.forRoot()` exports three tokens: `QueueOptions`, `QueueConnection` and
-`JobPublisher`. That is the **publish** side, which is all a web process needs. It
-also binds a fourth provider it does not export, `QueueRunner` - the piece that
-opens workers when you ask it to.
+`QueueModule.forRoot()` exports four tokens: `QueueOptions`, `QueueConnection`,
+`JobPublisher` and `JobEvents`, plus `QueueMetrics` when `metrics: true`. Those
+are the **publish** side, which is all a web process needs. It also binds a
+provider it does not export, `QueueRunner` - the piece that opens workers when you
+ask it to.
 
 **By default it consumes nothing.** `consume` is `false`, so a web process that
 publishes never starts a worker by accident. There are three ways to consume, and
@@ -271,6 +313,18 @@ export default new JobProcessor(JobsProcessorModule).handle;
 
 `handle` is an arrow property rather than a method, because bullmq calls the export
 bare. The child builds its container on the first job and reuses it.
+
+`JobProcessor` takes a second argument, `JobProcessorOptions`:
+
+| Option       | Default | Does                                                                     |
+| ------------ | ------- | ------------------------------------------------------------------------ |
+| `queues`     | none    | Consume only these, matching the parent's filter                         |
+| `trace`      | `true`  | Write start, success and failure to `job.log()`, which bull-board shows  |
+| `onShutdown` | none    | `(app) => ...`, run before the child's container tears down on `SIGTERM` |
+
+`trace` writes to the job's own log in Redis rather than to stdout, so the lines
+survive the container being recycled and stay attached to the job an operator is
+looking at. Each costs one Redis write, capped by bullmq's `keepLogs`.
 
 ### Publishing
 
@@ -612,10 +666,72 @@ Two things to know about the stream:
   that will not close within two seconds is logged and abandoned rather than
   waited on, because `close()` against an unreachable broker never settles.
 
+## Errors
+
+Everything this subpath throws is a `QueueError`, an `AppError` carrying a `code`.
+Both the class and the `QueueErrorCode` table are exported, so a catch can branch
+on the code without matching a message:
+
+```ts
+import { HttpError } from '@dunx/http';
+import { QueueError, QueueErrorCode } from '@dunx/infra/queue';
+
+try {
+  await this.jobs.publish('emails', 'welcome', { to });
+} catch (error) {
+  if (
+    error instanceof QueueError &&
+    error.code === QueueErrorCode.INVALID_STATE
+  ) {
+    throw new HttpError(503, 'the queue is unavailable');
+  }
+  throw error;
+}
+```
+
+| Code                          | Raised when                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `ERR_QUEUE_DUPLICATE_HANDLER` | Two handlers claim one `(queue, name)`. Boot                                |
+| `ERR_QUEUE_NO_HANDLERS`       | A worker found nothing to consume, or a named queue nothing claims. Boot    |
+| `ERR_QUEUE_UNKNOWN_JOB`       | A job arrived no handler claims. bullmq retries it under its own `attempts` |
+| `ERR_QUEUE_TIMED_OUT`         | A handler outran `jobTimeoutMs`                                             |
+| `ERR_QUEUE_INVALID_URL`       | The url is not a Redis or Valkey url. Configuration time                    |
+| `ERR_QUEUE_INVALID_STATE`     | Published after teardown, no `QueueModule` in the graph, or `start()` twice |
+
+## Everything `@dunx/infra/queue` exports
+
+The tokens above are what an app injects. The rest is what a test or a dashboard
+of your own reaches for, and it is listed here so nothing is reachable only by
+reading the source.
+
+| Export                                                       | Kind           | For                                                                 |
+| ------------------------------------------------------------ | -------------- | ------------------------------------------------------------------- |
+| `QueueModule`, `QueueModuleSettings`                         | module         | `forRoot`, `forRootAsync`, and the `metrics` flag                   |
+| `QueueOptions`, `QueueOptionsInit`                           | token, type    | Resolved settings; `redactedUrl` for a log line                     |
+| `WorkerPassthrough`                                          | type           | What `worker` accepts: bullmq's own, less `connection` and `prefix` |
+| `QueueConnection`                                            | token          | The `Bun.RedisClient` subclass bullmq is handed                     |
+| `JobPublisher`                                               | token          | `publish()`, `queue(name)`, `opened`                                |
+| `JobEvents`                                                  | token          | `events(name)` for `waitUntilFinished`, `opened`                    |
+| `JobHandler`                                                 | decorator      | Marks a method                                                      |
+| `JobMeta`                                                    | type           | What the decorator records: `queue`, `name`, `background`           |
+| `QueueRunner`                                                | provider       | Opens workers for `consume`. Bound, never exported                  |
+| `WorkerFactory`, `WorkerApp`, `WorkerAppOptions`             | factory, types | A worker process, or `attach` to one already built                  |
+| `QueueConsumer`                                              | class          | The consuming half `create` and `attach` both return                |
+| `JobProcessor`, `JobProcessorOptions`                        | class, type    | The child half of a `background` handler                            |
+| `JobDispatcher`                                              | class          | Runs one job: the timeout, the logging, the metrics                 |
+| `discoverJobs`, `discoverJobsOn`, `selectJobs`               | functions      | The prototype scan, for a test that asserts on wiring               |
+| `DiscoveredJob`, `JobHandlerFn`                              | types          | What discovery returns                                              |
+| `describeJob`                                                | function       | `<id> <queue>[<name>]`, the identity every job log line carries     |
+| `QueueMetrics`, `JobStats`, `QueueStatsReport`, `JobOutcome` | token, types   | Counters, under `metrics: true`                                     |
+| `QueueError`, `QueueErrorCode`                               | class, codes   | The table above                                                     |
+
 ## Related
 
+- [RabbitMQ over AMQP](./20-message-brokers.md), the other backend, for a message
+  whose consumers this process does not know about
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
 - [Logging](./13-logging.md), which the worker uses for job completion and failure
+- [Metrics](./24-metrics.md) for reading `QueueMetrics`
 - `examples/full`, whose `src/jobs/` is the worked example this page is drawn from.
   It sets `consume: true` and ships a `jobs.processor.ts`, so it spawns no worker
   process of its own

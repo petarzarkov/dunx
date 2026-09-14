@@ -126,7 +126,7 @@ export class Ops {
 ```
 
 Hits, misses, per-operation counts and timings, and nothing that holds a key.
-[Metrics](./23-metrics.md) has the payload and what the seam does and does not
+[Metrics](./24-metrics.md) has the payload and what the seam does and does not
 see.
 
 ## A cache that is not running

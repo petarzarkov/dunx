@@ -138,7 +138,7 @@ export class Handlers implements OnBeforeInit {
 
 Every `onBeforeInit` in the app runs before the first `onInit`, so import order
 stops deciding whether a later `onInit` sees the wiring. `EventRegistry` uses it
-to subscribe every `@OnEvent` - see [Events](./26-events.md).
+to subscribe every `@OnEvent` - see [Events](./27-events.md).
 
 For wiring only. Two implementers in one app are still ordered by construction
 order, and opening a socket, arming a timer or starting a worker belongs in

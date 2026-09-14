@@ -57,7 +57,7 @@ const build = (
 
 /**
  * Serves protobuf services over Connect and gRPC-Web on the port `Bun.serve`
- * already has. See `docs/guide/27-rpc.md`.
+ * already has. See `docs/guide/28-rpc.md`.
  *
  * ```ts
  * ConnectModule.forRoot({

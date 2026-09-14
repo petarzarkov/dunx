@@ -471,6 +471,6 @@ were not reachable in probing.
 ## Related
 
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
-- [Queues](./15-queues.md), since image work is the archetypal job to move off the
+- [Queues](./19-queues.md), since image work is the archetypal job to move off the
   request path
 - `packages/infra/README.md` for the rest of `@dunx/infra`

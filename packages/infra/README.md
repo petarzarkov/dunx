@@ -39,9 +39,9 @@ The guide is canonical for every row; this table is the index.
 | ------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------- |
 | `@dunx/infra/db`         | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds, query timings | [Database](../../docs/guide/14-database.md)                 |
 | `@dunx/infra/redis`      | `Bun.RedisClient`, named connections, pub/sub                     | [Database](../../docs/guide/14-database.md)                 |
-| `@dunx/infra/cache`      | `Cache` over a memory, Redis or two-tier `CacheStore`, `CacheMetrics` | [Caching](../../docs/guide/19-caching.md)                   |
-| `@dunx/infra/queue`      | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker    | [Queues](../../docs/guide/15-queues.md)                     |
-| `@dunx/infra/amqp`       | **rabbitmq-client**: `@AmqpHandler`, publisher, drained consumers | [Message brokers](../../docs/guide/28-message-brokers.md)   |
+| `@dunx/infra/cache`      | `Cache` over a memory, Redis or two-tier `CacheStore`, `CacheMetrics` | [Caching](../../docs/guide/15-caching.md)                   |
+| `@dunx/infra/queue`      | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker    | [Queues](../../docs/guide/19-queues.md)                     |
+| `@dunx/infra/amqp`       | **rabbitmq-client**: `@AmqpHandler`, publisher, drained consumers | [Message brokers](../../docs/guide/20-message-brokers.md)   |
 | `@dunx/infra/schedule`   | `Bun.cron` and timers: `@Cron`, `@Interval`, `@OnceOnBoot`        | [Scheduling](../../docs/guide/16-scheduling.md)             |
 | `@dunx/infra/files`      | One `Storage` contract over `Bun.file` and `Bun.S3Client`         | [Files and images](../../docs/guide/18-files-and-images.md) |
 | `@dunx/infra/email`      | One `EmailTransport` contract, dry run, pacing, a renderer seam, and `bunx dunx-email preview` | [Email](../../docs/guide/29-email.md) |
@@ -115,7 +115,7 @@ cover a directly injected store and count one read per coalesced `wrap`.
 
 `/redis` times the one seam every command goes through. `/queue` times `publish()`
 plus the handlers this container ran, which excludes a forked `background` one.
-See [Metrics](../../docs/guide/23-metrics.md).
+See [Metrics](../../docs/guide/24-metrics.md).
 
 ## Verified against
 
