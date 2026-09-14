@@ -56,7 +56,6 @@ const parserFor = (path: string): ((text: string) => unknown) => {
   );
 };
 
-/** Imported rather than parsed, which Bun does natively. */
 const isModule = (path: string): boolean => /\.(?:ts|js)$/i.test(path);
 
 /**
@@ -83,8 +82,7 @@ const importModule = async (
     );
   }
 
-  // A file that exists and resolves to nothing is a mistake, where an absent
-  // overlay is a choice.
+  // A file that exists and resolves to nothing is a mistake; an absent one is not.
   if (module.default === null || module.default === undefined) {
     throw new ConfigError(
       `Config file "${path}" must export a configuration object as its default. A .ts or .js config file is read from \`export default\`.`,
@@ -106,10 +104,8 @@ const importModule = async (
  *
  * Files are read in order and deep-merged, so a per-environment overlay overrides
  * only the keys it names. **A file that does not exist is skipped**, which is what
- * makes that overlay optional without the app testing for it first.
- *
- * `.ts` and `.js` are read from their default export rather than parsed, so a
- * config file can annotate itself against the app's own types.
+ * makes that overlay optional without the app testing for it first. `.ts` and
+ * `.js` are read from their default export rather than parsed.
  *
  * There is no discovery: a file dunx was not given is a file dunx does not read.
  */
@@ -152,7 +148,6 @@ export class ConfigFiles {
     return values;
   }
 
-  /** The text formats: read whole, then parsed by extension. */
   async #parse(path: string, file: Bun.BunFile): Promise<unknown> {
     // Resolved before the try, so "no parser" is not rewrapped as "did not
     // parse", which named the file twice and contradicted itself.
