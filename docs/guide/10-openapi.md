@@ -32,9 +32,12 @@ The page it produces is at
 example's own schemas.
 
 `forRoot` **wraps** the root it documents and returns it, so `HttpFactory.create`
-is still handed one module ref and the root is named once. That is also why the
-document describes the documentation routes: they are routes, and pretending
-otherwise would be the first lie in the file.
+is still handed one module ref and the root is named once.
+
+Its own routes - the page, the document and the page's assets - are `@ApiHidden()`.
+They are real routes, discovered like any controller's, but the document describes
+the API rather than the thing serving it, so a generated client does not arrive
+with a `getOpenapiJson()` on it.
 
 | Option        | Default         | Meaning                                    |
 | ------------- | --------------- | ------------------------------------------ |
