@@ -143,7 +143,7 @@ What a signal would change is the handler timeout - `jobTimeoutMs` and
 `handlerTimeoutMs`, where the work is the consumer's own method and could read
 one. Today it is not cancelled, only stopped being waited for, so a handler that
 outran its bound can act twice on one unit of work. Both
-[guide 15](../guide/19-queues.md) and [guide 28](../guide/20-message-brokers.md)
+[guide 19](../guide/19-queues.md) and [guide 20](../guide/20-message-brokers.md)
 say so. Changing that is cooperative cancellation through the handler signature,
 not a change to how the bound is measured.
 

@@ -297,13 +297,17 @@ AmqpModule.forRoot({ url, handlerTimeoutMs: 30_000 });
 ```
 
 Rejects a handler that runs longer than this, so a delivery hung on an external
-call is nacked and redelivered instead of holding a prefetch slot until the
-connection drops. AMQP has no handler timeout of its own: an acknowledgement
-either arrives or does not.
+call stops holding a prefetch slot until the connection drops. AMQP has no
+handler timeout of its own: an acknowledgement either arrives or does not.
+
+The rejection takes the path a throw takes. A timed-out delivery is requeued
+where `consumer.requeue` is on (the default) and dropped to the dead-letter
+exchange where it is off, so a timeout is redelivered only under the same setting
+a failure is.
 
 **The handler is not cancelled, only stopped being waited for.** A timed-out call
-carries on in the background while the delivery is redelivered, so a handler with
-side effects can run twice over one message. `@dunx/infra/queue`'s `jobTimeoutMs`
+carries on in the background after the delivery has been settled, so a handler
+with side effects can run twice over one requeued message. `@dunx/infra/queue`'s `jobTimeoutMs`
 behaves the same way. Make the handler idempotent, or give it a deadline of its
 own that it can act on.
 
