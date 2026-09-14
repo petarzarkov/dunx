@@ -9,7 +9,7 @@ import {
 import { join } from 'node:path';
 import { z } from 'zod';
 
-/** Merged in order before validating. The overlay is absent, so it is skipped. */
+/** Merged in order; the absent overlay is skipped and the `.ts` layer wins. */
 export const configFiles = [
   join(import.meta.dir, '..', 'application.yml'),
   join(
@@ -17,7 +17,14 @@ export const configFiles = [
     '..',
     `application-${Bun.env.NODE_ENV ?? 'development'}.yml`,
   ),
+  join(import.meta.dir, '..', 'application.config.ts'),
 ];
+
+/** What `application.config.ts` supplies. The environment still overrides it. */
+export interface ConfigFile {
+  readonly appName: string;
+  readonly EMAIL_FROM: string;
+}
 
 /**
  * One validation function is the whole `ConfigModule` contract. zod here because
@@ -67,7 +74,7 @@ const envSchema = z.object({
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(1).default(5000),
   /** Which `EmailTransport` gets bound. `log` needs no credentials. */
   EMAIL_TRANSPORT: z.enum(['log', 'resend', 'smtp']).default('log'),
-  EMAIL_FROM: z.string().default('dunx-full <no-reply@dunx.win>'),
+  EMAIL_FROM: z.string().min(1),
   /** Required by `EMAIL_TRANSPORT=resend`, ignored otherwise. */
   EMAIL_RESEND_KEY: z.string().optional(),
   /** Required by `EMAIL_TRANSPORT=smtp`, for example `smtp://localhost:1025`. */
@@ -98,6 +105,8 @@ const envSchema = z.object({
   AUTH_SESSION_DAYS: z.coerce.number().int().min(1).default(7),
   /** From `application.yml`. No default, so a missing file fails boot here. */
   seed: z.object({ users: z.array(z.string()).min(1) }),
+  /** From `application.config.ts`, which composes `EMAIL_FROM` out of it. */
+  appName: z.string().min(1),
 });
 
 /** The broker channel the websocket relay carries every topic on. */
@@ -174,7 +183,7 @@ export const validate = (env: ConfigValues): AppConfig => {
   const value = parsed.data;
 
   return {
-    appName: 'dunx-full',
+    appName: value.appName,
     port: value.PORT,
     corsOrigin: value.CORS_ORIGIN,
     trustProxy: value.TRUST_PROXY,

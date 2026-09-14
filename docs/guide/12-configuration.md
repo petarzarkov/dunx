@@ -55,7 +55,8 @@ That is the whole contract, plus `files`. There is no `envFilePath` and no
 
 ## Configuration files
 
-`files` reads YAML, TOML and JSON and merges them under the environment:
+`files` reads YAML, TOML, JSON and TypeScript, and merges them under the
+environment:
 
 ```ts
 ConfigModule.forRoot({
@@ -66,7 +67,8 @@ ConfigModule.forRoot({
 ```
 
 `.yml` and `.yaml` go through `Bun.YAML`, `.toml` through `Bun.TOML`, `.json`
-through `JSON.parse`. All three are native, so this costs no dependency.
+through `JSON.parse`, and `.ts` and `.js` are imported. All of them are native,
+so this costs no dependency.
 
 **A relative path resolves against `process.cwd()`, and a missing file is
 skipped.** Those two together mean an app started from another directory boots
@@ -98,6 +100,37 @@ seed:
 ```
 
 `ConfigService.get` reads that back with a dotted path: `config.get('seed.users')`.
+
+### A `.ts` or `.js` file
+
+These are **imported**, not parsed, and read from the **default export**. One
+file, one configuration value, so there is nothing to guess about which export
+was meant. A file with no default export fails boot naming the file, rather than
+being skipped: it is almost always `export const config = ...` with the keyword
+missing.
+
+Unlike the other formats this one runs, so it can compose values, read `Bun.env`
+and import other modules:
+
+```ts
+// application.config.ts
+import type { ConfigFile } from './src/config.ts';
+
+const appName = 'dunx-full';
+
+export default {
+  appName,
+  EMAIL_FROM: `${appName} <no-reply@dunx.win>`,
+} satisfies ConfigFile;
+```
+
+`satisfies` is the part worth copying, and the part that is easy to expect for
+free. **dunx has no framework-wide config type.** The shape of your
+configuration is whatever your `validate` or `schema` produces, so a bare object
+literal here is checked against nothing and a wrong key is caught at boot by the
+schema like any other. Naming your own type is what makes `tsc` say it first.
+
+`examples/full` uses this as its last layer, over `application.yml`.
 
 ### The environment still wins
 
