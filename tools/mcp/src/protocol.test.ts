@@ -526,6 +526,121 @@ describe('arguments the tool did not declare', () => {
     const result = await call('open', { whatever: 1 });
     expect(result['isError']).toBeUndefined();
   });
+
+  /**
+   * JSON Schema separates `integer` from `number` and JSON does not. `schema()`
+   * builds neither today, but `inputSchema` is a free-form record, and comparing
+   * `typeof` against the declared name alone refused every valid call to a tool
+   * that declared one.
+   */
+  describe('a declared integer', () => {
+    const WITH_INTEGER: readonly ToolDefinition[] = [
+      {
+        name: 'page',
+        description: 'Takes a whole number.',
+        inputSchema: {
+          type: 'object',
+          properties: { limit: { type: 'integer' } },
+          additionalProperties: false,
+        },
+        run: (args) => ({ limit: args['limit'] }),
+      },
+    ];
+
+    const ask = async (args: Record<string, unknown>) => {
+      const line = await handle(
+        {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'page', arguments: args },
+        },
+        WITH_INTEGER,
+        INFO,
+      );
+      return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
+        .result;
+    };
+
+    it('accepts a whole number', async () => {
+      expect((await ask({ limit: 25 }))['isError']).toBeUndefined();
+    });
+
+    it('refuses a fractional one, and says which type it wanted', async () => {
+      const result = await ask({ limit: 2.5 });
+      expect(result['isError']).toBe(true);
+      expect(
+        (result['content'] as { text: string }[])[0]?.text ?? '',
+      ).toContain('integer');
+    });
+
+    it('refuses a string', async () => {
+      expect((await ask({ limit: '25' }))['isError']).toBe(true);
+    });
+  });
+});
+
+/**
+ * `arguments` is whatever the client put on the wire. A number, a boolean and an
+ * array all survive `?? {}`, and `run` would then read keys off a value its
+ * `Record<string, unknown>` contract says it never receives: every key is
+ * `undefined`, so the call quietly becomes the no-argument one. That is the miss
+ * the schema check exists to stop, arriving one level higher up.
+ */
+describe('arguments that are not an object at all', () => {
+  const TOOL: readonly ToolDefinition[] = [
+    {
+      name: 'echo',
+      description: 'Takes one optional string.',
+      inputSchema: {
+        type: 'object',
+        properties: { value: { type: 'string' } },
+        additionalProperties: false,
+      },
+      run: (args) => ({ value: args['value'] ?? null }),
+    },
+  ];
+
+  const send = async (args: unknown): Promise<Record<string, unknown>> => {
+    const line = await handle(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'echo', arguments: args } as Record<string, unknown>,
+      },
+      TOOL,
+      INFO,
+    );
+    return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
+      .result;
+  };
+
+  for (const [label, value] of [
+    ['a number', 7],
+    ['a boolean', true],
+    ['an array', ['value']],
+    ['a string', 'value'],
+  ] as const) {
+    it(`refuses ${label}`, async () => {
+      const result = await send(value);
+      expect(result['isError']).toBe(true);
+      expect(
+        (result['content'] as { text: string }[])[0]?.text ?? '',
+      ).toContain('must be an object');
+    });
+  }
+
+  /** Absent and null both mean the tool was called with nothing, which is allowed. */
+  for (const [label, value] of [
+    ['omitted', undefined],
+    ['null', null],
+  ] as const) {
+    it(`treats ${label} arguments as none`, async () => {
+      const result = await send(value);
+      expect(result['isError']).toBeUndefined();
+    });
+  }
 });
 
 /**

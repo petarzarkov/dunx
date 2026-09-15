@@ -2,7 +2,7 @@
 
 **Build it as a sixth bench family. The anchor is no framework at all, not NestJS.
 Pilot 30 trials before committing to a sweep, because the sweep that can see a
-20 point difference costs about $1,200.**
+20 point difference runs about $890 on Sonnet 5 and $2,200 on Opus 5.**
 
 dunx has ten published workspaces, ~45k lines and no confirmed external user.
 [docs/ROADMAP.md](../../../docs/ROADMAP.md), "Priority: the core three", names that as the
@@ -135,6 +135,19 @@ error legibility, and it is a different quantity from the pass rate. An agent th
 hits `erased-type` and fixes it is evidence that the boot error works. An agent that
 hits it and thrashes is a defect report with a file and a line attached.
 
+`firstFailure` records one class per trial, the first thing that went wrong, so the
+denominator is **the trials whose `firstFailure` is that class**, not all trials in
+the cell. A trial that never failed is in no class and in no denominator. This makes
+each rate a small sample inside an already small cell: at ten trials a class holding
+three of them carries a ±35 point interval, so the pilot's taxonomy ranks failure
+modes and does not measure their recovery rates.
+
+Most classes do not apply to most stacks. `missing-preload` and `erased-type` cannot
+occur outside `dunx`, and no stack can produce every class. A stack and class pair
+with an empty denominator reports **`N/A`**, never `0%`: zero recoveries out of zero
+trials is not a bad score, and a table that prints it as one would rank the `none`
+anchor worst at exactly the failures it is incapable of having.
+
 The pass rate is a number for a blog post. The taxonomy is a roadmap, and it keeps
 paying out after the marketing question is settled. If `missing-preload` turns out to
 be a third of dunx failures, the fix is in `@dunx/core`'s error path, not in the docs.
@@ -149,14 +162,20 @@ reportable rate.
 
 So the harness needs a `tally` beside `spread`, about fifteen lines, returning
 attempts, passes, rate and a Wilson interval. The interval is not decoration. At the
-worst case of a true rate near 50%, the 95% half width on a single rate is:
+worst case of a true rate near 50%, the 95% half width is **Wilson** for one rate
+and **Newcombe**, which composes the two Wilson intervals, for a difference:
 
-| Trials per cell | Half width on one rate | Half width on a difference of two |
-| --------------- | ---------------------- | --------------------------------- |
-| 10              | ±31 points             | ±44 points                        |
-| 20              | ±22 points             | ±31 points                        |
-| 50              | ±14 points             | ±20 points                        |
-| 100             | ±10 points             | ±14 points                        |
+| Trials per cell | Wilson, one rate | Newcombe, a difference of two |
+| --------------- | ---------------- | ----------------------------- |
+| 10              | ±26 points       | ±37 points                    |
+| 20              | ±20 points       | ±28 points                    |
+| 50              | ±13 points       | ±19 points                    |
+| 100             | ±10 points       | ±14 points                    |
+
+Naming the method matters because the obvious alternative disagrees. The normal
+approximation reports ±31 at ten trials where Wilson reports ±26, and it is the one
+that is wrong: it is known to misbehave exactly here, at small `n` and at rates near
+the ends, which is where every early result in this harness will sit.
 
 Reading that honestly: **ten trials per cell cannot distinguish anything.** Seeing a
 20 point difference with any confidence takes about 100 trials per cell. That single
@@ -182,25 +201,30 @@ record needs. Probed on this machine against Opus 5:
 ```
 
 Two things follow. **Every trial pays about 36k cache creation tokens before it does
-any work**, which is the system prompt and the tool definitions, and on Opus at a one
-hour TTL that alone is $0.36. And the accounting is per model as well as per trial,
-so a trial's cost is recorded rather than estimated.
+any work**, which is the system prompt and the tool definitions. And the accounting is
+per model as well as per trial, so a trial's cost is recorded rather than estimated.
+
+That $0.3635 is not the number to budget from. It was measured inside an interactive
+session, which holds a **one hour** cache TTL and bills writes at 2x. A headless trial
+takes the default **five minute** TTL at 1.25x, where the same 36k tokens cost $0.23 on
+Opus. Everything below is on that basis: five minute TTL, writes at 1.25x, reads at a
+tenth, and the boot tokens counted inside the trial's cache writes rather than added
+again on top.
 
 Published rates: Opus 5 is $5 and $25 per million in and out, Sonnet 5 is $2 and $10,
-Haiku 4.5 is $1 and $5. Cache reads bill at a tenth, cache writes at 1.25x on the five
-minute TTL. Modelling a `wired` trial at roughly 30 turns, 1.2M cache reads, 80k cache
-writes and 30k output:
+Haiku 4.5 is $1 and $5. Modelling a `wired` trial at roughly 30 turns, 1.2M cache
+reads, 80k cache writes and 30k output:
 
 | Model    | Per trial | Pilot, 30 trials | Sweep, 1,200 trials |
 | -------- | --------- | ---------------- | ------------------- |
-| Opus 5   | ~$2.10    | ~$65             | ~$2,500             |
-| Sonnet 5 | ~$0.85    | ~$25             | ~$1,000             |
+| Opus 5   | ~$1.85    | ~$56             | ~$2,200             |
+| Sonnet 5 | ~$0.74    | ~$22             | ~$890               |
 
 Those per-trial figures are estimates with wide error bars and the pilot exists partly
 to replace them with measurements. **Which model to sweep on is your call and it is a
-real one**: Sonnet is roughly a third the price, Opus is the model most people asking
+real one**: Sonnet is about 40% of the price, Opus is the model most people asking
 "can an agent write this" actually have pointed at their repository. Running the pilot
-on both and reporting the pair is defensible and costs about $90.
+on both and reporting the pair is defensible and costs about $78.
 
 ## Cross sweep comparisons are invalid
 
@@ -255,7 +279,7 @@ unverified and the pilot should settle it before the sweep depends on it.
 ## The pilot, and the gate
 
 One task (`wired`), three stacks (`none`, `dunx` at `tooling`, `nest` at `docs`), ten
-trials each. Thirty trials, about $65 on Opus or $25 on Sonnet, and its job is not to
+trials each. Thirty trials, about $56 on Opus or $22 on Sonnet, and its job is not to
 answer the question. Ten trials per cell cannot, per the table above.
 
 Its job is to answer four cheaper questions: does the harness run unattended, does the

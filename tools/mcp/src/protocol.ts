@@ -82,6 +82,16 @@ const typeName = (value: unknown): string =>
   Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
 
 /**
+ * JSON Schema separates `integer` from `number` and JSON does not. `schema()`
+ * builds neither today, but `inputSchema` is free-form, and a tool declaring
+ * `integer` would otherwise have every valid call refused.
+ */
+const satisfies = (declared: string, value: unknown): boolean =>
+  declared === 'integer'
+    ? typeof value === 'number' && Number.isInteger(value)
+    : typeName(value) === declared;
+
+/**
  * The complaint a call earns by ignoring the schema its tool published, or
  * `undefined` when it kept to it.
  *
@@ -116,19 +126,16 @@ const misuse = (
 
   for (const key of declared) {
     const value = args[key];
-    // `null` is absent, not a type error. Every filter here is optional and JSON
-    // has no `undefined`, so a client that serialises an omitted field sends
-    // `null` and means "no filter" - which is what leaving it out already means.
-    // A key the tool never declared is the opposite case: the caller meant
-    // something by it, so it is still refused above.
+    // `null` is absent, not a type error: JSON has no `undefined`, so a client
+    // serialising an omitted optional filter sends `null` and means "no filter".
+    // An undeclared key is the opposite case and is still refused above.
     if (value === undefined || value === null) continue;
     const declaredType = isRecord(properties[key])
       ? properties[key]['type']
       : undefined;
     if (typeof declaredType !== 'string') continue;
-    const given = typeName(value);
-    if (given !== declaredType) {
-      return `Argument \`${key}\` must be a ${declaredType}, received ${given}.`;
+    if (!satisfies(declaredType, value)) {
+      return `Argument \`${key}\` must be a ${declaredType}, received ${typeName(value)}.`;
     }
   }
 
@@ -285,10 +292,22 @@ export const handle = async (
     }
 
     try {
-      const args = (call.params?.['arguments'] ?? {}) as Record<
-        string,
-        unknown
-      >;
+      // A number, a boolean or an array survives `?? {}` and reaches `run` as
+      // something its `Record<string, unknown>` contract never receives, where
+      // every key reads `undefined`: the silent miss `misuse` exists to stop.
+      const sent = call.params?.['arguments'];
+      if (sent !== undefined && sent !== null && !isRecord(sent)) {
+        return reply(call.id, {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Tool arguments must be an object, received ${typeName(sent)}.`,
+            },
+          ],
+        });
+      }
+      const args = (sent ?? {}) as Record<string, unknown>;
       const complaint = misuse(tool.inputSchema, args);
       if (complaint !== undefined) {
         return reply(call.id, {
