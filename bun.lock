@@ -353,9 +353,11 @@
       },
       "peerDependencies": {
         "@types/bun": ">=1.4.1",
+        "typescript": ">=5.0.0",
       },
       "optionalPeers": [
         "@types/bun",
+        "typescript",
       ],
     },
     "tools/create-app": {

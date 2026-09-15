@@ -40,10 +40,6 @@ export const DEPENDENCY_FIELDS = [
 export const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 
 /** An `exports` target: the bare path, or the conditions object holding one. */
-export interface ExportEntry {
-  import?: string;
-}
-
 /** A parsed `package.json`. Named fields are optional; the rest is `unknown`. */
 export interface Manifest {
   name?: string;
@@ -51,7 +47,6 @@ export interface Manifest {
   description?: string;
   type?: string;
   private?: boolean;
-  exports?: Record<string, string | ExportEntry>;
   bin?: string | Record<string, string>;
   [field: string]: unknown;
 }

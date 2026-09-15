@@ -1,6 +1,7 @@
 import { ConsoleLogger } from '../logger/console.js';
 import { AsyncRequestContext, RequestContext } from '../logger/context.js';
 import { Logger } from '../logger/logger.js';
+import { assertOneCore } from './copies.js';
 import { AppError } from './errors.js';
 import { Injector } from './injector.js';
 import {
@@ -232,6 +233,10 @@ export class AppFactory {
    * provider, and runs `onInit` in dependency order. The returned app is live.
    */
   static async create(root: ModuleRef, options: AppOptions = {}): Promise<App> {
+    // Before the graph, because every token in it is a class and a second copy
+    // of core makes class identity meaningless.
+    assertOneCore();
+
     const graph = buildScopes(root);
     const overrides = new Map<InjectionToken<unknown>, Registration>(
       (options.overrides ?? []).map((entry) => [entry.token, entry]),

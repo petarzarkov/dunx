@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { parseSync } from 'oxc-parser';
+import {
+  importTarget,
+  type ExportEntry,
+} from '../../../../packages/transform/src/build.js';
 import type { Comment, Program } from './ast';
 import type { DocSymbol, PackageDoc } from './model';
 import { collectSymbols } from './symbols';
@@ -13,7 +17,7 @@ import {
 export interface Manifest {
   readonly name: string;
   readonly description?: string;
-  readonly exports?: Record<string, string | { import?: string }>;
+  readonly exports?: ExportEntry;
 }
 
 interface ParsedModule {
@@ -91,8 +95,18 @@ export const extractPackage = (options: ExtractOptions): PackageDoc => {
   const subpaths: string[] = [];
   const exposure = new Map<string, Set<string>>();
 
-  for (const [subpath, target] of Object.entries(manifest.exports ?? {})) {
-    const distPath = typeof target === 'string' ? target : target.import;
+  // Only the subpath map documents anything: the one-line `"exports": "./x.js"`
+  // spelling names no subpath to put in the nav.
+  const exported = manifest.exports;
+  const bySubpath: Readonly<Record<string, ExportEntry>> =
+    typeof exported === 'object' &&
+    exported !== null &&
+    !Array.isArray(exported)
+      ? (exported as Readonly<Record<string, ExportEntry>>)
+      : {};
+
+  for (const [subpath, target] of Object.entries(bySubpath)) {
+    const distPath = importTarget(target);
     if (!distPath) continue;
     const entry = entryFile(packageDir, distPath);
     if (!entry || !parsed.has(entry)) continue;

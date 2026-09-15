@@ -100,29 +100,36 @@ independent versions. Lockstep stays for that reason.
 **Peers are a second guarantee rather than a replacement for lockstep.** A peer cannot be
 duplicated by the installer; lockstep keeps the version `version.ts` writes into
 that peer range coherent across the set. Independent versions on top of peers is
-the remaining prize, and the range policy it needs is the one thing a caret cannot
-supply pre-1.0.
+the remaining prize, and the range policy it needs was the one thing a caret
+could not supply pre-1.0.
 
 The cost of lockstep is that an untouched package still takes a version. For a
-pre-1.0 framework whose packages move together anyway that is a feature: one number
-answers "which versions work together", the question a consumer of six
-packages actually has.
+set whose packages move together anyway that is a feature: one number answers
+"which versions work together", the question a consumer of six packages actually
+has.
 
-**Decided: lockstep stays until `@dunx/core` reaches 1.0.0.** That release is
-the one trigger that reopens it. Independent versions were held open pending a
-range policy, and there is no pre-1.0 range that works. A caret cannot span a
-`0.x` minor, so `@dunx/http@0.3.0` naming `@dunx/core@^0.2.0` while
-`@dunx/infra@0.4.0` names `^0.3.0` is an unsatisfiable peer set - a hard
-install failure now that these are peers, rather than the silent duplication
-`dependencies` used to produce.
+**Decided: lockstep stays.** The trigger this section used to name was
+`@dunx/core` reaching 1.0.0, on the argument that no pre-1.0 range could work: a
+caret cannot span a `0.x` minor, so `@dunx/http@0.3.0` naming `@dunx/core@^0.2.0`
+while `@dunx/infra@0.4.0` names `^0.3.0` was an unsatisfiable peer set. `>=x.y.z`
+installed cleanly but promised compatibility across every future major.
 
-`>=x.y.z` installs cleanly, but it promises compatibility across every future
-major. That is a promise a pre-1.0 framework cannot keep, and a break would be
-discovered as a runtime token mismatch rather than an install error. Waiting is
-not a deferral for want of an answer: post-1.0 a caret spans the whole major,
-the policy writes itself, and no work done now would survive the change anyway.
+That trigger has passed. A caret now spans the whole major, so the range policy
+independent versions were waiting for exists, and the blocker in the paragraph
+above is spent. What keeps lockstep is the rest of the case: one number answers
+"which versions work together", and the caret `resolveWorkspaceRange` writes can
+never be stale while every package in a release names the same version.
 
-Until then the thing to avoid is treating lockstep as an accident. It is load-bearing,
+Reopening it now needs someone who wants independent versions and will carry the
+duplicate-copy risk, rather than a version number. `AppFactory.create` counts
+loaded copies of core and refuses to boot on more than one, so that risk is at
+least loud.
+
+A third party publishing against these packages declares
+`"@dunx/core": "^3.9.0"` as a `peerDependency`; see
+[the publishing guide](../guide/30-publishing-a-package.md).
+
+The thing to avoid is treating lockstep as an accident. It is load-bearing,
 and `resolveWorkspaceRange` writing `^<version>` is only sound _because_ every package
 in a release names the same number.
 
@@ -220,12 +227,12 @@ The source form stayed `workspace:*` everywhere. `scripts/manifests.test.ts`
 asserts that, and it is what keeps a concrete version from being left behind by
 an aborted publish.
 
-While dunx is pre-1.0 this is a partial fix rather than a complete one: `^0.4.0` is
-`>=0.4.0 <0.5.0`, and `version.ts` only republishes packages whose own `src`
-changed. A core-only **minor** bump therefore leaves a published
-`@dunx/testing` pointing at the previous minor, and the nested copy returns. Until
-core reaches `1.x`, a minor bump of `@dunx/core` or `@dunx/http` wants
-`@dunx/testing` republished with it.
+This was a partial fix while dunx was pre-1.0, because `^0.4.0` is
+`>=0.4.0 <0.5.0` and `version.ts` only republishes packages whose own `src`
+changed: a core-only **minor** bump left a published `@dunx/testing` pointing at
+the previous minor, and the nested copy returned. At `3.x` a caret spans the
+major, so a minor bump no longer strands anything. A **major** bump still wants
+the whole set republished, which lockstep does anyway.
 
 - **A published package's tests cannot import a workspace package that is not one
   of its runtime dependencies.** The first draft converted

@@ -24,4 +24,6 @@ coveragePathIgnorePatterns = [
   # Seeder files the db suites write into the system temp directory.
   "**/dunx-seeds-*/**",
   "**/dunx-sync-seed-*/**",
+  # Throwaway packages `buildPackage`'s suite builds, for the same reason.
+  "**/dunx-build-*/**",
 ]
