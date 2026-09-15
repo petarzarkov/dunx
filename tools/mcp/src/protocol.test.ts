@@ -40,6 +40,36 @@ const ask = async (
   return JSON.parse(line ?? '{}') as Record<string, unknown>;
 };
 
+/**
+ * One `tools/call` and the `result` it answered with, shared because four suites
+ * were each rebuilding this envelope. `arguments` is omitted when `args` is.
+ */
+const callTool = async (
+  tools: readonly ToolDefinition[],
+  name: string,
+  args?: unknown,
+): Promise<Record<string, unknown>> => {
+  const line = await handle(
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name,
+        ...(args === undefined ? {} : { arguments: args }),
+      },
+    },
+    tools,
+    INFO,
+  );
+  return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
+    .result;
+};
+
+/** The first text block of a tool result, which is where every message lands. */
+const textOf = (result: Record<string, unknown>): string =>
+  (result['content'] as { text: string }[])[0]?.text ?? '';
+
 describe('the protocol subset', () => {
   it('answers initialize with a version and only the capabilities it serves', async () => {
     const result = (await ask('initialize'))['result'] as Record<
@@ -434,5 +464,287 @@ describe('resources', () => {
     expect((await askFor('resources/templates/list'))['result']).toEqual({
       resourceTemplates: [],
     });
+  });
+});
+
+/**
+ * The server declares `additionalProperties: false` on every tool `schema()`
+ * builds, and used to read the keys it recognised and drop the rest. So a caller
+ * that guessed a name got an answer to a question it had not asked: the fourteen
+ * descriptions naming a "chapter" make `{ chapter: '06-validation' }` the obvious
+ * call, `dunx_guide`'s parameter is `topic`, and the unrecognised key fell through
+ * to the no-argument branch and returned the whole 17 KB index.
+ *
+ * That is the silent `undefined` `@dunx/transform` refuses to ship for an erased
+ * constructor parameter, living in the server that documents the rule.
+ */
+describe('arguments the tool did not declare', () => {
+  const STRICT: readonly ToolDefinition[] = [
+    {
+      name: 'chapter',
+      description: 'Takes one optional string.',
+      inputSchema: {
+        type: 'object',
+        properties: { topic: { type: 'string' }, full: { type: 'boolean' } },
+        additionalProperties: false,
+      },
+      run: (args) => ({ topic: args['topic'] ?? null }),
+    },
+    {
+      name: 'open',
+      description: 'Declares no properties and no ban on extras.',
+      inputSchema: { type: 'object', properties: {} },
+      run: () => ({ ok: true }),
+    },
+  ];
+
+  const call = (
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> => callTool(STRICT, name, args);
+
+  it('refuses a key it never declared, and names the ones it did', async () => {
+    const result = await call('chapter', { chapter: '06-validation' });
+    expect(result['isError']).toBe(true);
+    expect(textOf(result)).toContain('chapter');
+    expect(textOf(result)).toContain('topic');
+    expect(textOf(result)).toContain('full');
+  });
+
+  it('refuses a declared key carrying the wrong type', async () => {
+    const result = await call('chapter', { topic: 42 });
+    expect(result['isError']).toBe(true);
+    expect(textOf(result)).toContain('topic');
+    expect(textOf(result)).toContain('string');
+  });
+
+  it('still answers a call that uses the declared keys', async () => {
+    const result = await call('chapter', { topic: '06-validation' });
+    expect(result['isError']).toBeUndefined();
+    expect(textOf(result)).toContain('06-validation');
+  });
+
+  /**
+   * JSON has no `undefined`, so a client serialising an omitted optional filter
+   * sends `null` and means "no filter". `Args.text` already read that as absent;
+   * refusing it here would have failed calls that worked before this check.
+   */
+  it('reads an explicit null as the absent filter it means', async () => {
+    const result = await call('chapter', { topic: null });
+    expect(result['isError']).toBeUndefined();
+    expect(textOf(result)).toContain('null');
+  });
+
+  /**
+   * Absent to `run` as well, not merely read as absent. `args['topic'] ?? null`
+   * cannot tell the two apart, so this asks the tool which keys it was handed.
+   */
+  it('hands run a record with the null key gone, not present and null', async () => {
+    const keysSeen: string[][] = [];
+    const line = await handle(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'keys', arguments: { topic: null } },
+      },
+      [
+        {
+          name: 'keys',
+          description: 'Reports the argument keys it was handed.',
+          inputSchema: {
+            type: 'object',
+            properties: { topic: { type: 'string' } },
+            additionalProperties: false,
+          },
+          run: (args) => {
+            keysSeen.push(Object.keys(args));
+            return { keys: Object.keys(args) };
+          },
+        },
+      ],
+      INFO,
+    );
+
+    expect(line).toBeTruthy();
+    expect(keysSeen[0]).toEqual([]);
+  });
+
+  /** The ban is the schema's to declare, so a tool that does not ban stays open. */
+  it('leaves a tool that declared no ban permissive', async () => {
+    const result = await call('open', { whatever: 1 });
+    expect(result['isError']).toBeUndefined();
+  });
+
+  /**
+   * JSON Schema separates `integer` from `number` and JSON does not. `schema()`
+   * builds neither today, but `inputSchema` is a free-form record, and comparing
+   * `typeof` against the declared name alone refused every valid call to a tool
+   * that declared one.
+   */
+  describe('a declared integer', () => {
+    const WITH_INTEGER: readonly ToolDefinition[] = [
+      {
+        name: 'page',
+        description: 'Takes a whole number.',
+        inputSchema: {
+          type: 'object',
+          properties: { limit: { type: 'integer' } },
+          additionalProperties: false,
+        },
+        run: (args) => ({ limit: args['limit'] }),
+      },
+    ];
+
+    const askPage = (
+      args: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> => callTool(WITH_INTEGER, 'page', args);
+
+    it('accepts a whole number', async () => {
+      expect((await askPage({ limit: 25 }))['isError']).toBeUndefined();
+    });
+
+    /** The whole message: `toContain('integer')` passed "must be a integer". */
+    it('refuses a fractional one, and says which type it wanted', async () => {
+      const result = await askPage({ limit: 2.5 });
+      expect(result['isError']).toBe(true);
+      expect(textOf(result)).toBe(
+        'Argument `limit` must be of type integer, received number.',
+      );
+    });
+
+    it('refuses a string', async () => {
+      const result = await askPage({ limit: '25' });
+      expect(result['isError']).toBe(true);
+      expect(textOf(result)).toBe(
+        'Argument `limit` must be of type integer, received string.',
+      );
+    });
+  });
+});
+
+/**
+ * `undefined` cannot cross the wire, since `JSON.parse` never produces one. It
+ * can arrive from an embedder: `handle` and `ToolDefinition` are both exported
+ * from `index.ts` so a third party can serve its own tools in process.
+ */
+describe('a declared key carrying undefined', () => {
+  it('reaches run absent, the same as null does', async () => {
+    const seen: string[][] = [];
+    await callTool(
+      [
+        {
+          name: 'keys',
+          description: 'Reports the argument keys it was handed.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              topic: { type: 'string' },
+              full: { type: 'boolean' },
+            },
+            additionalProperties: false,
+          },
+          run: (args) => {
+            seen.push(Object.keys(args));
+            return { keys: Object.keys(args) };
+          },
+        },
+      ],
+      'keys',
+      { topic: undefined, full: null },
+    );
+
+    expect(seen[0]).toEqual([]);
+  });
+});
+
+/**
+ * `arguments` is whatever the client put on the wire. A number, a boolean and an
+ * array all survive `?? {}`, and `run` would then read keys off a value its
+ * `Record<string, unknown>` contract says it never receives: every key is
+ * `undefined`, so the call quietly becomes the no-argument one. That is the miss
+ * the schema check exists to stop, arriving one level higher up.
+ */
+describe('arguments that are not an object at all', () => {
+  const TOOL: readonly ToolDefinition[] = [
+    {
+      name: 'echo',
+      description: 'Takes one optional string.',
+      inputSchema: {
+        type: 'object',
+        properties: { value: { type: 'string' } },
+        additionalProperties: false,
+      },
+      run: (args) => ({ value: args['value'] ?? null }),
+    },
+  ];
+
+  const send = (args: unknown): Promise<Record<string, unknown>> =>
+    callTool(TOOL, 'echo', args);
+
+  for (const [label, value] of [
+    ['a number', 7],
+    ['a boolean', true],
+    ['an array', ['value']],
+    ['a string', 'value'],
+  ] as const) {
+    it(`refuses ${label}`, async () => {
+      const result = await send(value);
+      expect(result['isError']).toBe(true);
+      expect(
+        (result['content'] as { text: string }[])[0]?.text ?? '',
+      ).toContain('must be an object');
+    });
+  }
+
+  /** Absent and null both mean the tool was called with nothing, which is allowed. */
+  for (const [label, value] of [
+    ['omitted', undefined],
+    ['null', null],
+  ] as const) {
+    it(`treats ${label} arguments as none`, async () => {
+      const result = await send(value);
+      expect(result['isError']).toBeUndefined();
+    });
+  }
+});
+
+/**
+ * `structuredContent` arrived in 2025-06-18, the version this server speaks. Every
+ * tool here already returns an object and then serialises it, so a client was made
+ * to parse a string back into the object the server had in hand. The text block
+ * stays beside it: the spec keeps it for backwards compatibility, and a client that
+ * only renders text is still the common case.
+ */
+describe('structured tool results', () => {
+  const resultOf = (
+    tools: readonly ToolDefinition[],
+    name: string,
+    args: Record<string, unknown> = {},
+  ): Promise<Record<string, unknown>> => callTool(tools, name, args);
+
+  it('returns the object alongside the text, not instead of it', async () => {
+    const result = await resultOf(TOOLS, 'echo', { value: 'hi' });
+    expect(result['structuredContent']).toEqual({ echoed: 'hi' });
+    expect(result['content']).toEqual([
+      { type: 'text', text: JSON.stringify({ echoed: 'hi' }, null, 2) },
+    ]);
+  });
+
+  /** A tool answering with something other than an object has nothing to put there. */
+  it('omits it when the tool did not return an object', async () => {
+    const result = await resultOf(
+      [
+        {
+          name: 'scalar',
+          description: 'Answers with a string.',
+          inputSchema: { type: 'object', properties: {} },
+          run: () => 'just text',
+        },
+      ],
+      'scalar',
+    );
+    expect(result['structuredContent']).toBeUndefined();
+    expect(result['content']).toEqual([{ type: 'text', text: '"just text"' }]);
   });
 });

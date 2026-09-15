@@ -166,6 +166,49 @@ does it properly, so `dunx_openapi` is where it lives. That split keeps the othe
 eight tools working in an app with no OpenAPI setup at all. `@dunx/openapi` is an
 optional peer, loaded only when `dunx_openapi` is called.
 
+## A wrong argument is an error, not a different answer
+
+Every tool that takes arguments declares `additionalProperties: false`, and the
+server holds callers to it. A key the tool never declared, or a declared key
+carrying the wrong type, comes back as a tool error naming what was sent and what
+the tool accepts:
+
+```
+Unknown argument: chapter. This tool takes topic, search. Call it again with one of those.
+```
+
+`dunx_guide` takes `topic`, and this chapter calls the thing it returns a chapter,
+so `{ chapter: '06-validation' }` is the call an agent reaches for.
+
+Read and discarded, that key left the tool with no arguments at all, which is the
+branch that returns the index: seventeen kilobytes answering a question nobody
+asked, with nothing to say it had happened. That is the silent `undefined`
+[`@dunx/transform`](./03-providers.md) refuses to ship for an erased constructor
+parameter.
+
+A tool that declares no arguments stays permissive, because a stray key cannot
+change an answer that never depended on one.
+
+## Results are structured, which is what makes them cheap
+
+Every tool answers with an object, and the server sends it twice: serialised into
+a text block for a client that renders text, and as `structuredContent` for one
+that reads the structured channel MCP added in `2025-06-18`. A client that
+understands the second is not made to parse a string back into the object the
+server already had.
+
+It is also the cheaper wire. Measured through Claude Code against
+`examples/full`, one `dunx_gateways` call reaching the model:
+
+| Result                       | Bytes the model reads |
+| ---------------------------- | --------------------- |
+| `structuredContent` and text | 598                   |
+| Text alone                   | 1,354                 |
+
+The text block is indented so a person can read it, and indentation is what the
+model pays for. Given both, the client takes the structured one and serialises it
+flat.
+
 ## Resources
 
 The guide chapters are served as MCP resources as well, at `dunx://guide/<slug>`,
