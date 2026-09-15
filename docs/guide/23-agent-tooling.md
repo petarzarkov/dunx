@@ -178,12 +178,13 @@ Unknown argument: chapter. This tool takes topic, search. Call it again with one
 ```
 
 `dunx_guide` takes `topic`, and this chapter calls the thing it returns a chapter,
-so `{ chapter: '06-validation' }` is the call an agent reaches for. Read and
-discarded, that key left the tool with no arguments at all, which is the branch
-that returns the index: seventeen kilobytes answering a question nobody asked, with
-nothing to say it had happened. It is the silent `undefined` that
+so `{ chapter: '06-validation' }` is the call an agent reaches for.
+
+Read and discarded, that key left the tool with no arguments at all, which is the
+branch that returns the index: seventeen kilobytes answering a question nobody
+asked, with nothing to say it had happened. That is the silent `undefined`
 [`@dunx/transform`](./03-providers.md) refuses to ship for an erased constructor
-parameter, and it has no more business here.
+parameter.
 
 A tool that declares no arguments stays permissive, because a stray key cannot
 change an answer that never depended on one.
