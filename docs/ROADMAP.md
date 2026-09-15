@@ -320,6 +320,7 @@ Feedback goes in as a new file rather than into conversation.
 | [queue-shutdown-sigterm](../internal/notes/roadmap/queue-shutdown-sigterm.md)                 | Filed as bullmq#4656 and open there. Nothing left here but the re-measure.                                                                                                                             |
 | `Bun.serve` `{ dir }` routes                                                                  | Cannot replace `StaticFiles`: no `cache-control`, every method served. Filed as [bun#40892](https://github.com/oven-sh/bun/issues/40892) and [bun#40893](https://github.com/oven-sh/bun/issues/40893). |
 | [database-backed-infrastructure](../internal/notes/roadmap/database-backed-infrastructure.md) | Fan-out shipped in 3.1.2, the cache as `@dunx/infra/cache`. The queue is held.                                                                                                                         |
+| [agent-authorability-bench](../internal/notes/roadmap/agent-authorability-bench.md)           | A sixth bench family: how often an agent authors a working app, against a no-framework anchor. Pilot first.                                                                                            |
 
 Delivered and moved out of this folder rather than left here marked done:
 
