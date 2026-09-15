@@ -183,10 +183,41 @@ table is the most important thing in this file, because it is what separates a
 benchmark from a screenshot of one lucky run, and it is the arithmetic that a
 published agent comparison usually skips.
 
-Two ways to buy resolution back. Pair by task rather than pooling, since task
-difficulty is the dominant nuisance variable and a per-task difference has much lower
-variance than a pooled one. And choose tasks that discriminate, because an effect of
-40 points needs a quarter of the trials that an effect of 20 points does.
+### A cell, and what 1,200 trials actually buys
+
+**A cell is one task against one stack-condition**, because that is the unit a
+`firstFailure` class and a per-task pairing both need. Four tasks against all six
+rows above is therefore 24 cells, and 1,200 trials spread over 24 cells is **50 each,
+not 100**. The table says that measures a difference to ±19 points, which does not
+support the 20 point claim the pilot's gate is set against.
+
+So the sweep is scoped rather than the budget doubled. The **headline sweep** is
+three stack-conditions, `none` at `cold`, `dunx` at `tooling` and `nest` at `docs`:
+4 x 3 x 100 = 1,200 trials at 100 a cell, which is where the $890 and $2,200 come
+from. The remaining three rows are a **second, smaller sweep** at 25 a cell, 300
+trials, and its job is the `docs` to `tooling` delta rather than a headline: a
+question about what `@dunx/mcp` is worth, answered to ±27 points, which is honest
+about being a direction and not a measurement.
+
+Running all six rows at 100 a cell is the alternative, and it is 2,400 trials at
+roughly $1,780 on Sonnet and $4,400 on Opus.
+
+### Paired or not, and why the pilot decides
+
+Pair by task. Task difficulty is the dominant nuisance variable, and a stack that
+loses four points on every one of four tasks is a clearer result than an unpaired
+comparison that mixes the tasks together.
+
+But then the Newcombe column above is the **wrong** interval for the headline, since
+it is the unpaired estimator. The matched comparison is McNemar over the per-task
+pairs, and it is narrower by an amount set by how correlated task difficulty is
+across stacks. That correlation is not knowable in advance, so treat the Newcombe
+column as the **conservative bound** and the sweep's real resolution as a pilot
+output. If the pilot reports the correlation, the sweep can be sized on the paired
+estimator instead and may need fewer trials than the table demands.
+
+The other way to buy resolution is to choose tasks that discriminate, because an
+effect of 40 points needs a quarter of the trials that an effect of 20 points does.
 
 ## Cost, measured rather than assumed
 

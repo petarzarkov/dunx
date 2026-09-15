@@ -521,6 +521,41 @@ describe('arguments the tool did not declare', () => {
     expect(textOf(result)).toContain('null');
   });
 
+  /**
+   * Absent to `run` as well, not merely read as absent. `args['topic'] ?? null`
+   * cannot tell the two apart, so this asks the tool which keys it was handed.
+   */
+  it('hands run a record with the null key gone, not present and null', async () => {
+    const keysSeen: string[][] = [];
+    const line = await handle(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'keys', arguments: { topic: null } },
+      },
+      [
+        {
+          name: 'keys',
+          description: 'Reports the argument keys it was handed.',
+          inputSchema: {
+            type: 'object',
+            properties: { topic: { type: 'string' } },
+            additionalProperties: false,
+          },
+          run: (args) => {
+            keysSeen.push(Object.keys(args));
+            return { keys: Object.keys(args) };
+          },
+        },
+      ],
+      INFO,
+    );
+
+    expect(line).toBeTruthy();
+    expect(keysSeen[0]).toEqual([]);
+  });
+
   /** The ban is the schema's to declare, so a tool that does not ban stays open. */
   it('leaves a tool that declared no ban permissive', async () => {
     const result = await call('open', { whatever: 1 });

@@ -315,7 +315,13 @@ export const handle = async (
           content: [{ type: 'text', text: complaint }],
         });
       }
-      const output = await tool.run(args);
+      // `misuse` reads `null` as absent, so `run` is handed a record where it is
+      // absent. Leaving the key on relied on every `run` repeating that reading.
+      const output = await tool.run(
+        Object.fromEntries(
+          Object.entries(args).filter(([, value]) => value !== null),
+        ),
+      );
       // Text content holding JSON, which is what a client can both show and parse,
       // beside the object itself for a client that reads `structuredContent`.
       return reply(call.id, {
