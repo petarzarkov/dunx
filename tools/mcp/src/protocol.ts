@@ -63,6 +63,13 @@ const fail = (
   `${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`;
 
 /**
+ * A failure the call reached a tool to find, not a transport fault: the model
+ * should see it, where a JSON-RPC error reads as a broken server.
+ */
+const toolError = (id: JsonRpcRequest['id'], text: string): string =>
+  reply(id, { isError: true, content: [{ type: 'text', text }] });
+
+/**
  * RFC 3986 separates the fragment before dereferencing: `#section` names a place
  * inside a resource rather than a different resource. The guide's chapter links
  * carry one, so an exact-match-only lookup answered `Unknown resource` for six of
@@ -95,16 +102,12 @@ const satisfies = (declared: string, value: unknown): boolean =>
  * The complaint a call earns by ignoring the schema its tool published, or
  * `undefined` when it kept to it.
  *
- * Every tool read its own arguments and dropped what it did not recognise, which
- * made a misspelled key indistinguishable from an absent one. `dunx_guide`'s
- * parameter is `topic` and fourteen of this server's descriptions call the thing a
- * chapter, so `{ chapter: '06-validation' }` reached the no-argument branch and
- * answered with the whole index. The caller had no way to tell it had been ignored.
- *
- * Only a schema that bans extras gets them rejected. A tool declaring no properties
- * cannot be misdirected by a stray key - its answer is the same either way - so
- * `NO_ARGS` stays open on purpose and failing those calls would only cost an
- * adopting agent its first one.
+ * Every tool read its own arguments and dropped what it did not recognise, so a
+ * misspelled key was indistinguishable from an absent one: `dunx_guide` takes
+ * `topic`, and `{ chapter: '06-validation' }` reached the no-argument branch and
+ * answered with the whole index. Only a schema banning extras gets them refused,
+ * so `NO_ARGS` stays open: a tool declaring no properties cannot be misdirected by
+ * a stray key. See `docs/guide/23-agent-tooling.md`.
  */
 const misuse = (
   inputSchema: Record<string, unknown>,
@@ -135,7 +138,8 @@ const misuse = (
       : undefined;
     if (typeof declaredType !== 'string') continue;
     if (!satisfies(declaredType, value)) {
-      return `Argument \`${key}\` must be a ${declaredType}, received ${typeName(value)}.`;
+      // "of type integer", because "a integer" is what an article would give.
+      return `Argument \`${key}\` must be of type ${declaredType}, received ${typeName(value)}.`;
     }
   }
 
@@ -297,29 +301,21 @@ export const handle = async (
       // every key reads `undefined`: the silent miss `misuse` exists to stop.
       const sent = call.params?.['arguments'];
       if (sent !== undefined && sent !== null && !isRecord(sent)) {
-        return reply(call.id, {
-          isError: true,
-          content: [
-            {
-              type: 'text',
-              text: `Tool arguments must be an object, received ${typeName(sent)}.`,
-            },
-          ],
-        });
+        return toolError(
+          call.id,
+          `Tool arguments must be an object, received ${typeName(sent)}.`,
+        );
       }
       const args = (sent ?? {}) as Record<string, unknown>;
       const complaint = misuse(tool.inputSchema, args);
-      if (complaint !== undefined) {
-        return reply(call.id, {
-          isError: true,
-          content: [{ type: 'text', text: complaint }],
-        });
-      }
-      // `misuse` reads `null` as absent, so `run` is handed a record where it is
-      // absent. Leaving the key on relied on every `run` repeating that reading.
+      if (complaint !== undefined) return toolError(call.id, complaint);
+      // `misuse` reads both as absent, so `run` is handed a record without them.
+      // `undefined` reaches here only from an embedder calling `handle` directly.
       const output = await tool.run(
         Object.fromEntries(
-          Object.entries(args).filter(([, value]) => value !== null),
+          Object.entries(args).filter(
+            ([, value]) => value !== null && value !== undefined,
+          ),
         ),
       );
       // Text content holding JSON, which is what a client can both show and parse,
@@ -329,13 +325,7 @@ export const handle = async (
         ...(isRecord(output) ? { structuredContent: output } : {}),
       });
     } catch (error) {
-      // Reported as a tool result rather than an RPC error: the call reached the
-      // tool and the tool failed, which is something the model should see and can
-      // act on, not a transport fault.
-      return reply(call.id, {
-        isError: true,
-        content: [{ type: 'text', text: String(error) }],
-      });
+      return toolError(call.id, String(error));
     }
   }
 

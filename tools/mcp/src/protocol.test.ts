@@ -40,6 +40,36 @@ const ask = async (
   return JSON.parse(line ?? '{}') as Record<string, unknown>;
 };
 
+/**
+ * One `tools/call` and the `result` it answered with, shared because four suites
+ * were each rebuilding this envelope. `arguments` is omitted when `args` is.
+ */
+const callTool = async (
+  tools: readonly ToolDefinition[],
+  name: string,
+  args?: unknown,
+): Promise<Record<string, unknown>> => {
+  const line = await handle(
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name,
+        ...(args === undefined ? {} : { arguments: args }),
+      },
+    },
+    tools,
+    INFO,
+  );
+  return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
+    .result;
+};
+
+/** The first text block of a tool result, which is where every message lands. */
+const textOf = (result: Record<string, unknown>): string =>
+  (result['content'] as { text: string }[])[0]?.text ?? '';
+
 describe('the protocol subset', () => {
   it('answers initialize with a version and only the capabilities it serves', async () => {
     const result = (await ask('initialize'))['result'] as Record<
@@ -468,26 +498,10 @@ describe('arguments the tool did not declare', () => {
     },
   ];
 
-  const call = async (
+  const call = (
     name: string,
     args: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> => {
-    const line = await handle(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name, arguments: args },
-      },
-      STRICT,
-      INFO,
-    );
-    return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
-      .result;
-  };
-
-  const textOf = (result: Record<string, unknown>): string =>
-    (result['content'] as { text: string }[])[0]?.text ?? '';
+  ): Promise<Record<string, unknown>> => callTool(STRICT, name, args);
 
   it('refuses a key it never declared, and names the ones it did', async () => {
     const result = await call('chapter', { chapter: '06-validation' });
@@ -582,36 +596,65 @@ describe('arguments the tool did not declare', () => {
       },
     ];
 
-    const ask = async (args: Record<string, unknown>) => {
-      const line = await handle(
-        {
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'tools/call',
-          params: { name: 'page', arguments: args },
-        },
-        WITH_INTEGER,
-        INFO,
-      );
-      return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
-        .result;
-    };
+    const askPage = (
+      args: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> => callTool(WITH_INTEGER, 'page', args);
 
     it('accepts a whole number', async () => {
-      expect((await ask({ limit: 25 }))['isError']).toBeUndefined();
+      expect((await askPage({ limit: 25 }))['isError']).toBeUndefined();
     });
 
+    /** The whole message: `toContain('integer')` passed "must be a integer". */
     it('refuses a fractional one, and says which type it wanted', async () => {
-      const result = await ask({ limit: 2.5 });
+      const result = await askPage({ limit: 2.5 });
       expect(result['isError']).toBe(true);
-      expect(
-        (result['content'] as { text: string }[])[0]?.text ?? '',
-      ).toContain('integer');
+      expect(textOf(result)).toBe(
+        'Argument `limit` must be of type integer, received number.',
+      );
     });
 
     it('refuses a string', async () => {
-      expect((await ask({ limit: '25' }))['isError']).toBe(true);
+      const result = await askPage({ limit: '25' });
+      expect(result['isError']).toBe(true);
+      expect(textOf(result)).toBe(
+        'Argument `limit` must be of type integer, received string.',
+      );
     });
+  });
+});
+
+/**
+ * `undefined` cannot cross the wire, since `JSON.parse` never produces one. It
+ * can arrive from an embedder: `handle` and `ToolDefinition` are both exported
+ * from `index.ts` so a third party can serve its own tools in process.
+ */
+describe('a declared key carrying undefined', () => {
+  it('reaches run absent, the same as null does', async () => {
+    const seen: string[][] = [];
+    await callTool(
+      [
+        {
+          name: 'keys',
+          description: 'Reports the argument keys it was handed.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              topic: { type: 'string' },
+              full: { type: 'boolean' },
+            },
+            additionalProperties: false,
+          },
+          run: (args) => {
+            seen.push(Object.keys(args));
+            return { keys: Object.keys(args) };
+          },
+        },
+      ],
+      'keys',
+      { topic: undefined, full: null },
+    );
+
+    expect(seen[0]).toEqual([]);
   });
 });
 
@@ -636,20 +679,8 @@ describe('arguments that are not an object at all', () => {
     },
   ];
 
-  const send = async (args: unknown): Promise<Record<string, unknown>> => {
-    const line = await handle(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'echo', arguments: args } as Record<string, unknown>,
-      },
-      TOOL,
-      INFO,
-    );
-    return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
-      .result;
-  };
+  const send = (args: unknown): Promise<Record<string, unknown>> =>
+    callTool(TOOL, 'echo', args);
 
   for (const [label, value] of [
     ['a number', 7],
@@ -686,24 +717,11 @@ describe('arguments that are not an object at all', () => {
  * only renders text is still the common case.
  */
 describe('structured tool results', () => {
-  const resultOf = async (
+  const resultOf = (
     tools: readonly ToolDefinition[],
     name: string,
     args: Record<string, unknown> = {},
-  ): Promise<Record<string, unknown>> => {
-    const line = await handle(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name, arguments: args },
-      },
-      tools,
-      INFO,
-    );
-    return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
-      .result;
-  };
+  ): Promise<Record<string, unknown>> => callTool(tools, name, args);
 
   it('returns the object alongside the text, not instead of it', async () => {
     const result = await resultOf(TOOLS, 'echo', { value: 'hi' });
