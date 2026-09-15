@@ -21,6 +21,14 @@ const read = async (path: string): Promise<string> => {
 };
 
 /**
+ * Set when the plugin registers, so the container can tell a missing preload
+ * apart from a file the plugin never saw - what a class from an installed
+ * package looks like once `node_modules` is skipped. A `Symbol.for` string
+ * rather than a shared constant: `@dunx/core` cannot depend on this package.
+ */
+const ACTIVE = Symbol.for('dunx.transform.active');
+
+/**
  * Rewrites TypeScript as it is loaded so the container can read constructor
  * dependencies. Usable in three places, all the same object:
  *
@@ -34,6 +42,8 @@ const read = async (path: string): Promise<string> => {
 export const depsPlugin: BunPlugin = {
   name: 'dunx-deps',
   setup(build) {
+    (globalThis as unknown as Record<symbol, boolean>)[ACTIVE] = true;
+
     // A runtime plugin's onLoad must always return a result - there is no
     // "decline and fall through", so untransformed files are handed back as-is.
     build.onLoad({ filter: /\.tsx?$/ }, async ({ path }) => {
