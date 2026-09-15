@@ -436,3 +436,136 @@ describe('resources', () => {
     });
   });
 });
+
+/**
+ * The server declares `additionalProperties: false` on every tool `schema()`
+ * builds, and used to read the keys it recognised and drop the rest. So a caller
+ * that guessed a name got an answer to a question it had not asked: the fourteen
+ * descriptions naming a "chapter" make `{ chapter: '06-validation' }` the obvious
+ * call, `dunx_guide`'s parameter is `topic`, and the unrecognised key fell through
+ * to the no-argument branch and returned the whole 17 KB index.
+ *
+ * That is the silent `undefined` `@dunx/transform` refuses to ship for an erased
+ * constructor parameter, living in the server that documents the rule.
+ */
+describe('arguments the tool did not declare', () => {
+  const STRICT: readonly ToolDefinition[] = [
+    {
+      name: 'chapter',
+      description: 'Takes one optional string.',
+      inputSchema: {
+        type: 'object',
+        properties: { topic: { type: 'string' }, full: { type: 'boolean' } },
+        additionalProperties: false,
+      },
+      run: (args) => ({ topic: args['topic'] ?? null }),
+    },
+    {
+      name: 'open',
+      description: 'Declares no properties and no ban on extras.',
+      inputSchema: { type: 'object', properties: {} },
+      run: () => ({ ok: true }),
+    },
+  ];
+
+  const call = async (
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> => {
+    const line = await handle(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name, arguments: args },
+      },
+      STRICT,
+      INFO,
+    );
+    return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
+      .result;
+  };
+
+  const textOf = (result: Record<string, unknown>): string =>
+    (result['content'] as { text: string }[])[0]?.text ?? '';
+
+  it('refuses a key it never declared, and names the ones it did', async () => {
+    const result = await call('chapter', { chapter: '06-validation' });
+    expect(result['isError']).toBe(true);
+    expect(textOf(result)).toContain('chapter');
+    expect(textOf(result)).toContain('topic');
+    expect(textOf(result)).toContain('full');
+  });
+
+  it('refuses a declared key carrying the wrong type', async () => {
+    const result = await call('chapter', { topic: 42 });
+    expect(result['isError']).toBe(true);
+    expect(textOf(result)).toContain('topic');
+    expect(textOf(result)).toContain('string');
+  });
+
+  it('still answers a call that uses the declared keys', async () => {
+    const result = await call('chapter', { topic: '06-validation' });
+    expect(result['isError']).toBeUndefined();
+    expect(textOf(result)).toContain('06-validation');
+  });
+
+  /** The ban is the schema's to declare, so a tool that does not ban stays open. */
+  it('leaves a tool that declared no ban permissive', async () => {
+    const result = await call('open', { whatever: 1 });
+    expect(result['isError']).toBeUndefined();
+  });
+});
+
+/**
+ * `structuredContent` arrived in 2025-06-18, the version this server speaks. Every
+ * tool here already returns an object and then serialises it, so a client was made
+ * to parse a string back into the object the server had in hand. The text block
+ * stays beside it: the spec keeps it for backwards compatibility, and a client that
+ * only renders text is still the common case.
+ */
+describe('structured tool results', () => {
+  const resultOf = async (
+    tools: readonly ToolDefinition[],
+    name: string,
+    args: Record<string, unknown> = {},
+  ): Promise<Record<string, unknown>> => {
+    const line = await handle(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name, arguments: args },
+      },
+      tools,
+      INFO,
+    );
+    return (JSON.parse(line ?? '{}') as { result: Record<string, unknown> })
+      .result;
+  };
+
+  it('returns the object alongside the text, not instead of it', async () => {
+    const result = await resultOf(TOOLS, 'echo', { value: 'hi' });
+    expect(result['structuredContent']).toEqual({ echoed: 'hi' });
+    expect(result['content']).toEqual([
+      { type: 'text', text: JSON.stringify({ echoed: 'hi' }, null, 2) },
+    ]);
+  });
+
+  /** A tool answering with something other than an object has nothing to put there. */
+  it('omits it when the tool did not return an object', async () => {
+    const result = await resultOf(
+      [
+        {
+          name: 'scalar',
+          description: 'Answers with a string.',
+          inputSchema: { type: 'object', properties: {} },
+          run: () => 'just text',
+        },
+      ],
+      'scalar',
+    );
+    expect(result['structuredContent']).toBeUndefined();
+    expect(result['content']).toEqual([{ type: 'text', text: '"just text"' }]);
+  });
+});
