@@ -510,6 +510,17 @@ describe('arguments the tool did not declare', () => {
     expect(textOf(result)).toContain('06-validation');
   });
 
+  /**
+   * JSON has no `undefined`, so a client serialising an omitted optional filter
+   * sends `null` and means "no filter". `Args.text` already read that as absent;
+   * refusing it here would have failed calls that worked before this check.
+   */
+  it('reads an explicit null as the absent filter it means', async () => {
+    const result = await call('chapter', { topic: null });
+    expect(result['isError']).toBeUndefined();
+    expect(textOf(result)).toContain('null');
+  });
+
   /** The ban is the schema's to declare, so a tool that does not ban stays open. */
   it('leaves a tool that declared no ban permissive', async () => {
     const result = await call('open', { whatever: 1 });

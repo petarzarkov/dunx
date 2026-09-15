@@ -116,7 +116,12 @@ const misuse = (
 
   for (const key of declared) {
     const value = args[key];
-    if (value === undefined) continue;
+    // `null` is absent, not a type error. Every filter here is optional and JSON
+    // has no `undefined`, so a client that serialises an omitted field sends
+    // `null` and means "no filter" - which is what leaving it out already means.
+    // A key the tool never declared is the opposite case: the caller meant
+    // something by it, so it is still refused above.
+    if (value === undefined || value === null) continue;
     const declaredType = isRecord(properties[key])
       ? properties[key]['type']
       : undefined;
