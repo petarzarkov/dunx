@@ -40,16 +40,41 @@ export interface PackageBuildResult {
 
 const unprefixed = (distPath: string): string => distPath.replace(/^\.\//, '');
 
+/** A `types` condition, which `tsc` emits rather than an entrypoint. */
+const isDeclaration = (target: string): boolean => /\.d\.[cm]?ts$/.test(target);
+
 /**
  * Every file an `exports` tree names, at any depth. Both targets of a package
  * declaring two conditions are built: picking one leaves the other pointing at
- * a file nobody emitted. A `.d.ts` leaf is a `types` condition, which `tsc`
- * emits rather than an entrypoint.
+ * a file nobody emitted.
  */
 export const exportTargets = (entry: ExportEntry): readonly string[] => {
-  if (typeof entry === 'string') return entry.endsWith('.d.ts') ? [] : [entry];
+  if (typeof entry === 'string') return isDeclaration(entry) ? [] : [entry];
   if (entry === null || typeof entry !== 'object') return [];
   return Object.values(entry).flatMap(exportTargets);
+};
+
+/**
+ * The one file an `import` of this entry resolves to, for a reader asking what
+ * a consumer loads. `exportTargets` answers what a build has to emit.
+ */
+export const importTarget = (entry: ExportEntry): string | undefined => {
+  if (typeof entry === 'string')
+    return isDeclaration(entry) ? undefined : entry;
+  if (entry === null || typeof entry !== 'object') return undefined;
+
+  const candidates = Array.isArray(entry)
+    ? entry
+    : ['import', 'default', 'bun', 'node'].map(
+        (condition) => (entry as Record<string, ExportEntry>)[condition],
+      );
+
+  for (const candidate of candidates) {
+    if (candidate === undefined) continue;
+    const found = importTarget(candidate);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 };
 
 /** `./dist/foo/index.js` -> `src/foo/index.ts`, verifying the source exists. */

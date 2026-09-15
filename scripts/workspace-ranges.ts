@@ -1,8 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-// One declaration of an `exports` entry, shared with the build that reads it.
-import type { ExportEntry } from '../packages/transform/src/build.js';
 
 /**
  * The repository root, with a trailing slash. `fileURLToPath` rather than
@@ -49,7 +47,6 @@ export interface Manifest {
   description?: string;
   type?: string;
   private?: boolean;
-  exports?: Record<string, ExportEntry>;
   bin?: string | Record<string, string>;
   [field: string]: unknown;
 }

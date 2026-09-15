@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { mkdir, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildPackage } from './build.js';
+import { buildPackage, importTarget } from './build.js';
 
 const roots: string[] = [];
 
@@ -169,6 +169,27 @@ describe('buildPackage', () => {
     expect(built.entrypoints).toEqual(['src/index.ts']);
   });
 
+  it('skips a declaration under any of its three extensions', async () => {
+    const root = await scaffold({
+      manifest: {
+        name: 'acme-decl',
+        type: 'module',
+        exports: {
+          '.': {
+            types: './dist/index.d.ts',
+            'types@<5': './dist/index.d.mts',
+            legacy: './dist/index.d.cts',
+            import: './dist/index.js',
+          },
+        },
+      },
+      files: { 'src/index.ts': SOURCE },
+    });
+    const built = await buildPackage({ cwd: root, declarations: false });
+
+    expect(built.entrypoints).toEqual(['src/index.ts']);
+  });
+
   it('refuses a package that is not ESM', async () => {
     const root = await scaffold({
       manifest: { name: 'acme-cjs', exports: { '.': './dist/index.js' } },
@@ -231,6 +252,23 @@ describe('buildPackage', () => {
     await expect(
       buildPackage({ cwd: root, declarations: false }),
     ).rejects.toThrow();
+  });
+
+  it('resolves what a consumer loads, by condition rather than key order', () => {
+    expect(importTarget({ bun: './b.js', import: './i.js' })).toBe('./i.js');
+    expect(importTarget({ node: './n.js', default: './d.js' })).toBe('./d.js');
+    expect(
+      importTarget({ import: { types: './t.d.ts', default: './d.js' } }),
+    ).toBe('./d.js');
+    expect(importTarget(['./a.js', './b.js'])).toBe('./a.js');
+    expect(importTarget([null, './b.js'])).toBe('./b.js');
+    expect(importTarget('./dist/index.js')).toBe('./dist/index.js');
+  });
+
+  it('resolves nothing for a blocked subpath or a types-only entry', () => {
+    expect(importTarget(null)).toBeUndefined();
+    expect(importTarget({ types: './index.d.ts' })).toBeUndefined();
+    expect(importTarget({})).toBeUndefined();
   });
 
   it('surfaces a tsc failure', async () => {
