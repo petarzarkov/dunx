@@ -34,6 +34,24 @@ import { depsPlugin } from '@dunx/transform';
 await Bun.build({ entrypoints: ['src/main.ts'], plugins: [depsPlugin] });
 ```
 
+## Publishing a package
+
+The preload skips `node_modules`, so a package on npm has to carry its own
+records or nothing can inject its classes. `@dunx/transform/build` does that
+build, reading entrypoints from your `exports` and `bin`:
+
+```ts
+// build.ts
+import { buildPackage } from '@dunx/transform/build';
+
+await buildPackage();
+```
+
+It assumes sources under `src/`, output to `dist/`, and one `tsconfig.json` at
+the package root. Declarations come from `typescript`, an optional peer, because
+Bun emits none. The full walkthrough is in
+[the publishing guide](https://dunx.win/guide/publishing-a-package).
+
 ## What it does
 
 It parses each file with `oxc-parser` and reads every class declaration's
