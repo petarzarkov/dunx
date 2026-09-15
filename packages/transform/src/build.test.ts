@@ -122,6 +122,53 @@ describe('buildPackage', () => {
     expect(built.entrypoints).toContain('src/cli.ts');
   });
 
+  // A published build reads whatever shape the author wrote.
+  it('reads every shape an exports field can take', async () => {
+    const root = await scaffold({
+      manifest: {
+        name: 'acme-shapes',
+        type: 'module',
+        exports: {
+          '.': { types: './dist/index.d.ts', import: './dist/index.js' },
+          './sugar': './dist/sugar.js',
+          './nested': {
+            import: { types: './dist/n.d.ts', default: './dist/n.js' },
+          },
+          './fallback': ['./dist/fb.js'],
+          './blocked': null,
+        },
+      },
+      files: {
+        'src/index.ts': SOURCE,
+        'src/sugar.ts': 'export const s = 1;\n',
+        'src/n.ts': 'export const n = 1;\n',
+        'src/fb.ts': 'export const f = 1;\n',
+      },
+    });
+    const built = await buildPackage({ cwd: root, declarations: false });
+
+    expect([...built.entrypoints].sort()).toEqual([
+      'src/fb.ts',
+      'src/index.ts',
+      'src/n.ts',
+      'src/sugar.ts',
+    ]);
+  });
+
+  it('reads a bare string exports field', async () => {
+    const root = await scaffold({
+      manifest: {
+        name: 'acme-bare',
+        type: 'module',
+        exports: './dist/index.js',
+      },
+      files: { 'src/index.ts': SOURCE },
+    });
+    const built = await buildPackage({ cwd: root, declarations: false });
+
+    expect(built.entrypoints).toEqual(['src/index.ts']);
+  });
+
   it('refuses a package that is not ESM', async () => {
     const root = await scaffold({
       manifest: { name: 'acme-cjs', exports: { '.': './dist/index.js' } },

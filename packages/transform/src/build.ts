@@ -2,11 +2,21 @@ import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { depsPlugin } from './plugin.js';
 
+/**
+ * A subpath's target: a path, a condition map, an array of fallbacks, or `null`
+ * to block it. `exports` is itself one, for the single-entry spelling.
+ */
+type ExportEntry =
+  | string
+  | null
+  | readonly ExportEntry[]
+  | { readonly [condition: string]: ExportEntry };
+
 /** The manifest fields a build reads. */
 interface PackageManifest {
   readonly name?: string;
   readonly type?: string;
-  readonly exports?: Readonly<Record<string, string | { import?: string }>>;
+  readonly exports?: ExportEntry;
   readonly bin?: string | Readonly<Record<string, string>>;
 }
 
@@ -29,6 +39,18 @@ export interface PackageBuildResult {
 }
 
 const unprefixed = (distPath: string): string => distPath.replace(/^\.\//, '');
+
+/**
+ * Every file an `exports` tree names, at any depth. Both targets of a package
+ * declaring two conditions are built: picking one leaves the other pointing at
+ * a file nobody emitted. A `.d.ts` leaf is a `types` condition, which `tsc`
+ * emits rather than an entrypoint.
+ */
+const targetsOf = (entry: ExportEntry): readonly string[] => {
+  if (typeof entry === 'string') return entry.endsWith('.d.ts') ? [] : [entry];
+  if (entry === null || typeof entry !== 'object') return [];
+  return Object.values(entry).flatMap(targetsOf);
+};
 
 /** `./dist/foo/index.js` -> `src/foo/index.ts`, verifying the source exists. */
 const toSource = async (cwd: string, distPath: string): Promise<string> => {
@@ -53,10 +75,8 @@ const toSource = async (cwd: string, distPath: string): Promise<string> => {
  *
  * Entrypoints are derived from `exports` and `bin` rather than configured, so a
  * new public subpath cannot be added to the manifest without also being built.
- *
- * The layout is assumed rather than configurable: sources under `src/`, output
- * to `dist/`, one `tsconfig.json` at the package root. Declarations come from
- * `typescript`, an optional peer, since Bun emits none.
+ * The layout is assumed: `src/` in, `dist/` out, one root `tsconfig.json`, and
+ * `typescript` as an optional peer for the declarations Bun does not emit.
  */
 export const buildPackage = async (
   options: PackageBuildOptions = {},
@@ -77,12 +97,9 @@ export const buildPackage = async (
   const binOutputs = new Set<string>();
   const exported = new Set<string>();
 
-  for (const entry of Object.values(pkg.exports ?? {})) {
-    const target = typeof entry === 'string' ? entry : entry.import;
-    if (target) {
-      entrypoints.add(await toSource(cwd, target));
-      exported.add(unprefixed(target));
-    }
+  for (const target of targetsOf(pkg.exports ?? {})) {
+    entrypoints.add(await toSource(cwd, target));
+    exported.add(unprefixed(target));
   }
 
   const binPaths =
@@ -106,8 +123,7 @@ export const buildPackage = async (
   const result = await Bun.build({
     entrypoints: [...entrypoints].map((rel) => join(cwd, rel)),
     plugins: [depsPlugin],
-    // Bun throws on a failed build by default, one error at a time. Every log at
-    // once is more use to whoever has to fix them.
+    // Bun throws one error at a time by default; every log at once is more use.
     throw: false,
     outdir: join(cwd, 'dist'),
     root: join(cwd, 'src'),
