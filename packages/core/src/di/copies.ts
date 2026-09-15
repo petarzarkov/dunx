@@ -7,17 +7,17 @@ import { AppError } from './errors.js';
  */
 const COPIES = Symbol.for('dunx.core.copies');
 
-const registry = ((): Set<object> => {
+const registry = ((): Set<string> => {
   const globals = globalThis as unknown as Record<symbol, unknown>;
   const existing = globals[COPIES];
-  if (existing instanceof Set) return existing as Set<object>;
-  const created = new Set<object>();
+  if (existing instanceof Set) return existing as Set<string>;
+  const created = new Set<string>();
   globals[COPIES] = created;
   return created;
 })();
 
-// Evaluation happens once per copy, so counting these counts copies.
-registry.add({});
+// The URL, not a per-evaluation object: `bun --hot` reruns this, an install moves it.
+registry.add(import.meta.url);
 
 export const loadedCoreCopies = (): number => registry.size;
 

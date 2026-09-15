@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// One declaration of an `exports` entry, shared with the build that reads it.
+import type { ExportEntry } from '../packages/transform/src/build.js';
 
 /**
  * The repository root, with a trailing slash. `fileURLToPath` rather than
@@ -40,10 +42,6 @@ export const DEPENDENCY_FIELDS = [
 export const PUBLISHED_DIRS = ['packages', 'tools'] as const;
 
 /** An `exports` target: the bare path, or the conditions object holding one. */
-export interface ExportEntry {
-  import?: string;
-}
-
 /** A parsed `package.json`. Named fields are optional; the rest is `unknown`. */
 export interface Manifest {
   name?: string;
@@ -51,7 +49,7 @@ export interface Manifest {
   description?: string;
   type?: string;
   private?: boolean;
-  exports?: Record<string, string | ExportEntry>;
+  exports?: Record<string, ExportEntry>;
   bin?: string | Record<string, string>;
   [field: string]: unknown;
 }

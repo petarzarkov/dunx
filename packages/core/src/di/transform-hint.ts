@@ -58,12 +58,14 @@ export const missingTransformMessage = (
 
   if (registered) {
     return (
-      `${head} The plugin is registered, so the preload is not the problem - it ` +
-      `never saw the file ${name} is in. It skips node_modules, so if ${name} ` +
-      'comes from an installed package, that package has to record its ' +
-      'dependencies in its own build:\n\n' +
-      BUILD +
-      `\nThat is a fix for whoever publishes ${name}, not for this app.\n`
+      `${head} The plugin is registered, so the preload is not the problem. ` +
+      `Two things it does not reach. If ${name} is a class expression, declare ` +
+      'it instead: the name in `const X = class X {}` is bound inside the class ' +
+      `body, so nothing can be appended after it. If ${name} comes from an ` +
+      'installed package, node_modules is skipped and that package records its ' +
+      'dependencies in its own build, which is a fix for whoever publishes ' +
+      'it:\n\n' +
+      BUILD
     );
   }
 

@@ -6,7 +6,7 @@ import { depsPlugin } from './plugin.js';
  * A subpath's target: a path, a condition map, an array of fallbacks, or `null`
  * to block it. `exports` is itself one, for the single-entry spelling.
  */
-type ExportEntry =
+export type ExportEntry =
   | string
   | null
   | readonly ExportEntry[]
@@ -46,10 +46,10 @@ const unprefixed = (distPath: string): string => distPath.replace(/^\.\//, '');
  * a file nobody emitted. A `.d.ts` leaf is a `types` condition, which `tsc`
  * emits rather than an entrypoint.
  */
-const targetsOf = (entry: ExportEntry): readonly string[] => {
+export const exportTargets = (entry: ExportEntry): readonly string[] => {
   if (typeof entry === 'string') return entry.endsWith('.d.ts') ? [] : [entry];
   if (entry === null || typeof entry !== 'object') return [];
-  return Object.values(entry).flatMap(targetsOf);
+  return Object.values(entry).flatMap(exportTargets);
 };
 
 /** `./dist/foo/index.js` -> `src/foo/index.ts`, verifying the source exists. */
@@ -97,7 +97,7 @@ export const buildPackage = async (
   const binOutputs = new Set<string>();
   const exported = new Set<string>();
 
-  for (const target of targetsOf(pkg.exports ?? {})) {
+  for (const target of exportTargets(pkg.exports ?? {})) {
     entrypoints.add(await toSource(cwd, target));
     exported.add(unprefixed(target));
   }

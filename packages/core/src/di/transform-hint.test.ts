@@ -13,13 +13,14 @@ describe('the missing-transform diagnostic', () => {
     expect(message).not.toContain('Bun.build');
   });
 
-  // The app author has the preload and cannot fix this one: the class is in a
-  // package whose own build skipped the plugin.
+  // Two causes reach this branch and only one of them is the app author's, so
+  // the message has to name both.
   it('blames the installed package when the plugin is registered', () => {
     const message = missingTransformMessage('Svc', 1, '/app/src/main.ts', true);
     expect(message).toContain('node_modules');
     expect(message).toContain('depsPlugin');
-    expect(message).toContain('whoever publishes Svc');
+    expect(message).toContain('whoever publishes');
+    expect(message).toContain('class expression');
     expect(message).not.toContain('preload = ');
   });
 

@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { parseSync } from 'oxc-parser';
+import {
+  exportTargets,
+  type ExportEntry,
+} from '../../../../packages/transform/src/build.js';
 import type { Comment, Program } from './ast';
 import type { DocSymbol, PackageDoc } from './model';
 import { collectSymbols } from './symbols';
@@ -13,7 +17,7 @@ import {
 export interface Manifest {
   readonly name: string;
   readonly description?: string;
-  readonly exports?: Record<string, string | { import?: string }>;
+  readonly exports?: Record<string, ExportEntry>;
 }
 
 interface ParsedModule {
@@ -92,7 +96,7 @@ export const extractPackage = (options: ExtractOptions): PackageDoc => {
   const exposure = new Map<string, Set<string>>();
 
   for (const [subpath, target] of Object.entries(manifest.exports ?? {})) {
-    const distPath = typeof target === 'string' ? target : target.import;
+    const distPath = exportTargets(target)[0];
     if (!distPath) continue;
     const entry = entryFile(packageDir, distPath);
     if (!entry || !parsed.has(entry)) continue;
