@@ -25,6 +25,8 @@ const UNREACHABLE: Readonly<Record<string, string>> = Object.freeze({
     'a barrel over the subpaths, which its own header calls the better import',
   '@dunx/transform':
     'the plugin authoring API; the consumer line is the /preload subpath',
+  '@dunx/transform/build':
+    'a package build, which an app never runs; scripts/build-package.ts is the consumer and every workspace here goes through it',
 });
 
 const reachedByExample = async (): Promise<Set<string>> => {

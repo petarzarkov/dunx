@@ -1,6 +1,6 @@
 {
   "name": "@dunx/transform",
-  "version": "3.9.2",
+  "version": "3.9.3",
   "description": "Load-time transform that records constructor dependencies for the dunx container",
   "keywords": [
     "bun",
@@ -34,6 +34,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./build": {
+      "types": "./dist/build.d.ts",
+      "import": "./dist/build.js"
+    },
     "./preload": {
       "types": "./dist/preload.d.ts",
       "import": "./dist/preload.js"
@@ -52,10 +56,14 @@
     "oxc-parser": "0.142.0"
   },
   "peerDependencies": {
-    "@types/bun": ">=1.4.1"
+    "@types/bun": ">=1.4.1",
+    "typescript": ">=5.0.0"
   },
   "peerDependenciesMeta": {
     "@types/bun": {
+      "optional": true
+    },
+    "typescript": {
       "optional": true
     }
   },

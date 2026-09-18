@@ -4,6 +4,46 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.9.3 - 2026-09-15
+
+A published package build, two copies of core caught at boot, and stricter MCP arguments
+
+`@dunx/transform/build` publishes the build a dunx package needs, so an outside
+author records constructor dependencies the way this repo does rather than
+shipping classes nobody can inject. The guide for that is at
+https://dunx.win/guide/publishing-a-package.
+
+`AppFactory.create` refuses to boot on a second copy of `@dunx/core`, which
+until now injected a contract with none of its methods and failed later in
+whichever package asked for it. The missing-transform message names the three
+things that actually cause it instead of blaming the preload.
+
+`@dunx/mcp` rejects an argument the tool never declared, reads an explicit null
+as the absent filter it means, and answers with structuredContent.
+
+### Features
+
+- **transform**: publish the package build, and a guide for publishing one ([`9175c38`](https://github.com/petarzarkov/dunx/commit/9175c3898e4e376d33f337ed8733910b63575567))
+
+### Fixes
+
+- **transform,docs**: resolve an exports entry by condition, not by key order ([`13b22e0`](https://github.com/petarzarkov/dunx/commit/13b22e0e927b4dcf0a5669be4c0f6ccb4b8ac25c))
+- **mcp**: one error message shape, and absent means absent for undefined too ([`1ab20e8`](https://github.com/petarzarkov/dunx/commit/1ab20e88837ff0d3cd9041f4cd557ac30fd31b89))
+- **core,transform**: the three review findings ([`b98731b`](https://github.com/petarzarkov/dunx/commit/b98731b157e10a3e1d0d8fa7607b6c5b001ad047))
+- **transform**: read every shape an exports field can take ([`90736ed`](https://github.com/petarzarkov/dunx/commit/90736ed3060e2fa85c16154c8770a40d9a269264))
+- **mcp**: hand run a record with the null key gone, and size the sweep honestly ([`37b9ab5`](https://github.com/petarzarkov/dunx/commit/37b9ab5060d97d6cce8a47fe9493348050262bd5))
+- **mcp**: an integer argument, and arguments that are not an object ([`c54addf`](https://github.com/petarzarkov/dunx/commit/c54addf89b1c8da2412354ae147b66e8d12eef88))
+- **mcp**: read an explicit null as the absent filter it means ([`6087611`](https://github.com/petarzarkov/dunx/commit/6087611d912b8c3575bce3fdf0e6a6b94a9d6094))
+- **mcp**: regenerate the bundled corpus the guide edit invalidated ([`7c15c02`](https://github.com/petarzarkov/dunx/commit/7c15c02ec23293c0dc7fa919247f0e040958e199))
+- **core,transform**: name the installed package, and fail on two copies of core ([`570e39d`](https://github.com/petarzarkov/dunx/commit/570e39d08f6bad113ca9f045a3c8513fd38dd7fd))
+- **mcp**: reject an argument the tool never declared, and answer with structuredContent ([`5460a8d`](https://github.com/petarzarkov/dunx/commit/5460a8dd342625933884ad9d8b0fe67b990fc668))
+
+### Documentation
+
+- **notes**: spec a bench family for whether an agent can author a dunx app ([`a5aadcd`](https://github.com/petarzarkov/dunx/commit/a5aadcdbcd2a2a187f749ec8ea77ced1faa322e1))
+- **guide**: the guide numbers in the prose, and what a timed-out delivery does ([`c0e2fc1`](https://github.com/petarzarkov/dunx/commit/c0e2fc12ce73fccaac3b6c5777c20e9fbb927756))
+- **guide**: a Queues section holding bullmq and RabbitMQ, each fully documented ([`afd0aed`](https://github.com/petarzarkov/dunx/commit/afd0aedd999225cd4f3b263fdb54b81bde8f9c95))
+
 ## 3.9.2 - 2026-09-14
 
 A .ts or .js configuration file, and the explorer out of its own document

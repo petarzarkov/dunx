@@ -146,8 +146,8 @@ specifier is a compile error rather than a runtime surprise.
   that drives nineteen capabilities from a browser, including a transaction
   rolling back, the outbound client retrying a 503, an order crossing a RabbitMQ
   topic exchange, and the process's own request, query and event-loop timings
-- **[The guide](https://dunx.win)** - twenty-nine pages,
-  introduction through email
+- **[The guide](https://dunx.win)** - thirty pages,
+  introduction through publishing a package
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and
   what does not
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - what was measured, what was

@@ -63,6 +63,13 @@ const fail = (
   `${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`;
 
 /**
+ * A failure the call reached a tool to find, not a transport fault: the model
+ * should see it, where a JSON-RPC error reads as a broken server.
+ */
+const toolError = (id: JsonRpcRequest['id'], text: string): string =>
+  reply(id, { isError: true, content: [{ type: 'text', text }] });
+
+/**
  * RFC 3986 separates the fragment before dereferencing: `#section` names a place
  * inside a resource rather than a different resource. The guide's chapter links
  * carry one, so an exact-match-only lookup answered `Unknown resource` for six of
@@ -73,6 +80,71 @@ const withoutFragment = (uri: string): string => uri.split('#')[0] ?? uri;
 /** An id is echoed back only if it is one JSON-RPC allows; otherwise `null`. */
 const readableId = (value: unknown): JsonRpcRequest['id'] =>
   typeof value === 'string' || typeof value === 'number' ? value : null;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** JSON Schema's name for a value, over the few types these tools declare. */
+const typeName = (value: unknown): string =>
+  Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
+
+/**
+ * JSON Schema separates `integer` from `number` and JSON does not. `schema()`
+ * builds neither today, but `inputSchema` is free-form, and a tool declaring
+ * `integer` would otherwise have every valid call refused.
+ */
+const satisfies = (declared: string, value: unknown): boolean =>
+  declared === 'integer'
+    ? typeof value === 'number' && Number.isInteger(value)
+    : typeName(value) === declared;
+
+/**
+ * The complaint a call earns by ignoring the schema its tool published, or
+ * `undefined` when it kept to it.
+ *
+ * Every tool read its own arguments and dropped what it did not recognise, so a
+ * misspelled key was indistinguishable from an absent one: `dunx_guide` takes
+ * `topic`, and `{ chapter: '06-validation' }` reached the no-argument branch and
+ * answered with the whole index. Only a schema banning extras gets them refused,
+ * so `NO_ARGS` stays open: a tool declaring no properties cannot be misdirected by
+ * a stray key. See `docs/guide/23-agent-tooling.md`.
+ */
+const misuse = (
+  inputSchema: Record<string, unknown>,
+  args: Record<string, unknown>,
+): string | undefined => {
+  const properties = isRecord(inputSchema['properties'])
+    ? inputSchema['properties']
+    : {};
+  const declared = Object.keys(properties);
+
+  if (inputSchema['additionalProperties'] === false) {
+    const strays = Object.keys(args).filter((key) => !declared.includes(key));
+    if (strays.length > 0) {
+      return declared.length === 0
+        ? `This tool takes no arguments, and was given ${strays.join(', ')}. Call it again with {}.`
+        : `Unknown argument${strays.length > 1 ? 's' : ''}: ${strays.join(', ')}. This tool takes ${declared.join(', ')}. Call it again with one of those.`;
+    }
+  }
+
+  for (const key of declared) {
+    const value = args[key];
+    // `null` is absent, not a type error: JSON has no `undefined`, so a client
+    // serialising an omitted optional filter sends `null` and means "no filter".
+    // An undeclared key is the opposite case and is still refused above.
+    if (value === undefined || value === null) continue;
+    const declaredType = isRecord(properties[key])
+      ? properties[key]['type']
+      : undefined;
+    if (typeof declaredType !== 'string') continue;
+    if (!satisfies(declaredType, value)) {
+      // "of type integer", because "a integer" is what an article would give.
+      return `Argument \`${key}\` must be of type ${declaredType}, received ${typeName(value)}.`;
+    }
+  }
+
+  return undefined;
+};
 
 /**
  * The answer to something that is not a request, or `null` when it is one worth
@@ -224,23 +296,36 @@ export const handle = async (
     }
 
     try {
-      const args = (call.params?.['arguments'] ?? {}) as Record<
-        string,
-        unknown
-      >;
-      const output = await tool.run(args);
-      // Text content holding JSON, which is what a client can both show and parse.
+      // A number, a boolean or an array survives `?? {}` and reaches `run` as
+      // something its `Record<string, unknown>` contract never receives, where
+      // every key reads `undefined`: the silent miss `misuse` exists to stop.
+      const sent = call.params?.['arguments'];
+      if (sent !== undefined && sent !== null && !isRecord(sent)) {
+        return toolError(
+          call.id,
+          `Tool arguments must be an object, received ${typeName(sent)}.`,
+        );
+      }
+      const args = (sent ?? {}) as Record<string, unknown>;
+      const complaint = misuse(tool.inputSchema, args);
+      if (complaint !== undefined) return toolError(call.id, complaint);
+      // `misuse` reads both as absent, so `run` is handed a record without them.
+      // `undefined` reaches here only from an embedder calling `handle` directly.
+      const output = await tool.run(
+        Object.fromEntries(
+          Object.entries(args).filter(
+            ([, value]) => value !== null && value !== undefined,
+          ),
+        ),
+      );
+      // Text content holding JSON, which is what a client can both show and parse,
+      // beside the object itself for a client that reads `structuredContent`.
       return reply(call.id, {
         content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
+        ...(isRecord(output) ? { structuredContent: output } : {}),
       });
     } catch (error) {
-      // Reported as a tool result rather than an RPC error: the call reached the
-      // tool and the tool failed, which is something the model should see and can
-      // act on, not a transport fault.
-      return reply(call.id, {
-        isError: true,
-        content: [{ type: 'text', text: String(error) }],
-      });
+      return toolError(call.id, String(error));
     }
   }
 
