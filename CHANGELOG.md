@@ -4,6 +4,41 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.9.4 - 2026-09-18
+
+Named data sources, and one opened per tenant at runtime
+
+`DbModule.forRoot(options, { name })` registers a second data source under
+`dbOptions(name)`, `dbConnection(name)`, `dbHandle(name)` and `dbMetrics(name)`,
+the shape `redisConnection(name)` and `httpClient(name)` already use. The handle
+token is generic, so a repository's annotation keeps drizzle's schema inference.
+
+`DbModule.forDataSources({ create }, As)` binds a `DataSources` pool for keys
+only known at runtime, such as a database per tenant. It opens on first use,
+bounds how many are live with LRU eviction, closes idle ones on a sweep, retries
+a failed open rather than caching it, and closes everything on shutdown.
+`use(key, work)` leases a data source so eviction cannot close it mid-query, and
+resolution takes the key as an argument, so two tenants in flight cannot read
+each other's rows.
+
+`namedToken` in `@dunx/core` replaces the per-name token memoisation that redis,
+the http client and the db module had each written.
+
+Closes #160 and #161.
+
+### Features
+
+- **infra/db**: named data sources, and a pool keyed at runtime ([`4cc9dc2`](https://github.com/petarzarkov/dunx/commit/4cc9dc2299f54b9450f266307f469542a80a679b))
+
+### Fixes
+
+- **infra/db**: make pool admission atomic, and the review findings ([`a9933ca`](https://github.com/petarzarkov/dunx/commit/a9933ca57e3e72c041e9e263d61164d03463af2b))
+- **docs**: the indexing defects Search Console reported ([`0d1ab76`](https://github.com/petarzarkov/dunx/commit/0d1ab76393c6fbfcc8b6ad11a87f6993f43d45d2))
+
+### Other changes
+
+- **queue**: wait on the job, not on the handler's own recorder ([`696c902`](https://github.com/petarzarkov/dunx/commit/696c9025c7f267372e6bc34843d03451132bc34e))
+
 ## 3.9.3 - 2026-09-15
 
 A published package build, two copies of core caught at boot, and stricter MCP arguments
