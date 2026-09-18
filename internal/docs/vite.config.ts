@@ -98,12 +98,15 @@ const pageFiles = (): Plugin => ({
         this.emitFile({ type: 'asset', fileName: fileFor(page.path), source });
     }
 
-    const lastmod = new Date().toISOString().slice(0, 10);
     const urls = pages
-      .map(
-        (page) =>
-          `  <url>\n    <loc>${SITE_ORIGIN}${page.path}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`,
-      )
+      .map((page) => {
+        const loc = `    <loc>${SITE_ORIGIN}${page.path}</loc>`;
+        const lastmod =
+          page.lastmod === undefined
+            ? ''
+            : `\n    <lastmod>${page.lastmod}</lastmod>`;
+        return `  <url>\n${loc}${lastmod}\n  </url>`;
+      })
       .join('\n');
 
     this.emitFile({
@@ -111,10 +114,17 @@ const pageFiles = (): Plugin => ({
       fileName: 'sitemap.xml',
       source: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
     });
+    // A preview deployment serves all 117 pages again under a *.pages.dev host.
+    // The absolute canonicals point back at dunx.win, so a crawler files each
+    // one as a duplicate rather than ignoring it. `DOCS_NOINDEX` is what the
+    // preview workflow sets so it is never crawled in the first place.
     this.emitFile({
       type: 'asset',
       fileName: 'robots.txt',
-      source: `User-agent: *\nAllow: /\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`,
+      source:
+        process.env['DOCS_NOINDEX'] === undefined
+          ? `User-agent: *\nAllow: /\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`
+          : 'User-agent: *\nDisallow: /\n',
     });
   },
 });

@@ -116,6 +116,7 @@ export {
 // its description. Restating it gets `[object Object]` for the second case.
 export {
   describeToken,
+  namedToken,
   token,
   type AbstractCtor,
   type Ctor,

@@ -98,6 +98,161 @@ options, which is too late to register a provider under it.
 See [Configuration](./12-configuration.md) for why the parameter is
 `AppConfigService` rather than `ConfigService<AppConfig>`.
 
+## Several data sources
+
+One application may hold more than one database: a reporting replica beside the
+primary, an audit database, or a database per tenant. `DbModule` covers the two
+cases separately, because they are different problems.
+
+| Registration                     | When the set of databases is known |
+| -------------------------------- | ---------------------------------- |
+| `forRoot(options, { name })`     | At configuration time              |
+| `forDataSources({ create }, As)` | Only at runtime, from a key        |
+
+### Named data sources
+
+A default registration binds `DbOptions`, `DbConnection` and drizzle's own class.
+A second registration cannot bind those again, so a name moves all of them onto
+per-name tokens:
+
+```ts
+@Module({
+  imports: [
+    DbModule.forRoot(new SqlOptions({ schema, url: primaryUrl })),
+    DbModule.forRoot(new SqlOptions({ schema, url: reportingUrl }), {
+      name: 'reporting',
+    }),
+  ],
+})
+export class DataModule {}
+```
+
+Four token factories address a named registration. Each memoises on its
+description, so the module and the consumer hold the same token for one name:
+
+| Factory              | Resolves to                              |
+| -------------------- | ---------------------------------------- |
+| `dbHandle(name)`     | The drizzle handle a repository reads    |
+| `dbConnection(name)` | The lifecycle and the raw driver         |
+| `dbOptions(name)`    | The resolved configuration               |
+| `dbMetrics(name)`    | Its `QueryMetrics`, when `metrics` is on |
+
+A `Token` is no constructor type, so it cannot be a constructor parameter.
+Declare it once with the handle type and reach it with `inject()`:
+
+```ts
+export const reportingDb = dbHandle<BunSQLDatabase<typeof schema>>('reporting');
+
+export class Reports {
+  readonly db = inject(reportingDb);
+
+  totals() {
+    return this.db.select().from(rollups).all();
+  }
+}
+```
+
+The type argument on `dbHandle` is what carries drizzle's inference to the query.
+A registry object returning a union across schemas would lose it, so the static
+case has no `dataSources.get('reporting')`.
+
+`forRootAsync` takes the same `name`. Its first argument then fixes what
+`dbHandle(name)` resolves to rather than being the binding itself:
+
+```ts
+DbModule.forRootAsync(
+  BunSQLDatabase<typeof schema>,
+  {
+    useFactory: (config: AppConfigService) =>
+      new SqlOptions({ schema, url: config.get('reporting').url }),
+    inject: [AppConfigService],
+  },
+  { name: 'reporting', metrics: true },
+);
+```
+
+### Data sources resolved at runtime
+
+A database per tenant cannot be registered ahead of time: the keys are not known
+when the module is configured, and a binding per tenant would not scale anyway.
+`forDataSources` binds a pool that opens a data source the first time a key asks
+for one and reuses it after.
+
+`as` is a subclass. The subclass carries the handle type to the injection site:
+`DataSources` is generic and a token holds no type argument.
+
+```ts
+export class TenantSources extends DataSources<BunSQLDatabase<typeof schema>> {}
+
+DbModule.forDataSources(
+  {
+    create: (tenant) => new SqlOptions({ schema, url: urlFor(tenant) }),
+    max: 32,
+    idleMs: 300_000,
+  },
+  TenantSources,
+);
+```
+
+The key is an argument at every call. The pool holds no current data source, so
+two requests in flight for two tenants cannot read each other's rows:
+
+```ts
+export class Tickets {
+  constructor(private readonly sources: TenantSources) {}
+
+  async list(tenant: string) {
+    return this.sources.use(tenant, (db) => db.select().from(tickets).all());
+  }
+}
+```
+
+If the tenant comes from the request rather than from a path parameter, read it
+from `RequestContext` at the call site. That keeps resolution inside the
+`AsyncLocalStorage` scope the request already runs in.
+
+#### What the pool holds, and when it lets go
+
+| Method            | Does                                                      |
+| ----------------- | --------------------------------------------------------- |
+| `use(key, work)`  | Runs `work` with the handle, holding the data source open |
+| `get(key)`        | The drizzle handle, with no lease                         |
+| `connection(key)` | The `DbConnection`, for a ping or the raw driver          |
+| `evict(key)`      | Closes one and forgets it, borrowed or otherwise          |
+| `prune()`         | Closes every unborrowed data source past `idleMs`         |
+| `keys()`, `size`  | What is live now                                          |
+
+`max` bounds how many data sources are live at once, so an unbounded key space
+cannot exhaust the database's connection limit. Reaching it
+closes the least recently used data source that nothing is borrowing. If every
+one is borrowed, the resolution fails with a `DatabaseError` naming the bound
+instead of opening one more connection.
+
+`use` is the shape to prefer. Eviction skips a borrowed data source, so a long
+query cannot have its connection closed underneath it. `get` has no such
+protection, and a handle kept across an await may outlive its data source.
+
+`idleMs` closes a data source nobody has asked for. The sweep runs every
+`sweepMs`, which defaults to `idleMs`, so a data source lives for at most the two
+added together after its last use. `idleMs: 0` keeps every one until shutdown.
+
+Eviction frees the slot at once and closes behind it, so admission never waits on
+another tenant's close, and `closeTimeoutMs` bounds the wait on an open as well
+as on the close. `close()` still waits for every one of those before it resolves.
+
+A `create` that throws is not cached. The entry is dropped, so the next
+resolution calls `create` again rather than serving the failure forever.
+
+Set `{ metrics: true }` and every data source the pool opens is timed into one
+shared `QueryMetrics`, bound under `dbMetrics(name)`, where `name` defaults to
+the class name. Two pools whose classes share a name need one each. A set of
+histograms per tenant would grow without a bound; the pool's does not.
+
+The pool is constructed before anything that injects it, so dunx's reverse
+construction order drains every consumer first and then closes every live data
+source. `forDataSourcesAsync` is the same with the init behind a factory that may
+await and inject.
+
 ## Two backends, and they are not interchangeable
 
 | Options class       | Driver                         | Handle              | Dialect  |

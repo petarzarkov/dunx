@@ -97,10 +97,19 @@ const headFor = (
   const meta = (key: string, value: string, content: string): string =>
     `    <meta ${key}="${value}" content="${attr(content)}" />`;
 
+  /**
+   * `404.html` is a real asset, so `/404` answers 200 and Google indexes it. A
+   * self-canonical would confirm it as a page; `noindex` and no canonical is
+   * what keeps an empty not-found body out of the index.
+   */
+  const indexable = page !== NOT_FOUND;
+
   return {
     title: page.title,
     head: [
-      `    <link rel="canonical" href="${attr(url)}" />`,
+      ...(indexable
+        ? [`    <link rel="canonical" href="${attr(url)}" />`]
+        : [meta('name', 'robots', 'noindex, follow')]),
       meta('name', 'description', description),
       meta('property', 'og:type', page.kind),
       meta('property', 'og:site_name', 'dunx'),

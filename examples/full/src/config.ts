@@ -53,6 +53,24 @@ const envSchema = z.object({
   /** `:memory:` needs no server and leaves nothing behind, so restarts are clean. */
   DATABASE_FILE: z.string().default(':memory:'),
   /**
+   * `{tenant}` is replaced with the key `TenantSources` was asked for. Required
+   * for a path: without it every tenant resolves to one file and they silently
+   * share a `tickets` table. `:memory:` needs none - each open is its own
+   * database already.
+   */
+  TENANT_DATABASE_FILE: z
+    .string()
+    .default(':memory:')
+    .refine((file) => file === ':memory:' || file.includes('{tenant}'), {
+      error:
+        'TENANT_DATABASE_FILE needs a {tenant} placeholder, or must be ' +
+        ':memory:, so each tenant gets a database of its own.',
+    }),
+  TENANT_REPORTING_FILE: z.string().default(':memory:'),
+  /** Live tenant databases held at once, past which the idlest one closes. */
+  TENANT_MAX: z.coerce.number().int().min(1).max(1024).default(4),
+  TENANT_IDLE_MS: z.coerce.number().int().min(0).default(60_000),
+  /**
    * Whether `x-forwarded-for` is believed. **Off unless a trusted proxy is in
    * front**: with nothing stripping the header, any caller picks its own address,
    * which fakes the throttle subject and the address in every log line.
@@ -126,6 +144,12 @@ export interface AppConfig {
     readonly responseBody: boolean;
   };
   readonly database: { readonly file: string };
+  readonly tenants: {
+    readonly file: string;
+    readonly reportingFile: string;
+    readonly max: number;
+    readonly idleMs: number;
+  };
   readonly redis: { readonly url: string | undefined };
   readonly amqp: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
@@ -196,6 +220,12 @@ export const validate = (env: ConfigValues): AppConfig => {
       responseBody: value.LOG_RESPONSE_BODY,
     },
     database: { file: value.DATABASE_FILE },
+    tenants: {
+      file: value.TENANT_DATABASE_FILE,
+      reportingFile: value.TENANT_REPORTING_FILE,
+      max: value.TENANT_MAX,
+      idleMs: value.TENANT_IDLE_MS,
+    },
     redis: { url: value.REDIS_URL },
     amqp: { url: value.RABBITMQ_URL },
     images: { quality: value.IMAGE_QUALITY },

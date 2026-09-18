@@ -12,6 +12,7 @@ import { TraceDemo } from '../http/trace.demo.js';
 import { DashboardDemo } from '../dashboard/dashboard.demo.js';
 import { StatsDemo } from '../stats/stats.demo.js';
 import { Ledger } from '../database/ledger.service.js';
+import { Tenants } from '../tenants/tenants.service.js';
 import { DocsDemo } from '../docs/docs.demo.js';
 import { EventsDemo } from '../events/events.demo.js';
 import { MailDemo } from '../email/email.demo.js';
@@ -40,6 +41,7 @@ export class Tour {
   constructor(
     private readonly logger: Logger,
     private readonly ledger: Ledger,
+    private readonly tenants: Tenants,
     private readonly uploads: Uploads,
     private readonly thumbnails: Thumbnails,
     private readonly mail: MailDemo,
@@ -77,6 +79,9 @@ export class Tour {
 
     this.group('@dunx/infra/db - drizzle over bun:sqlite');
     await this.ledger.demonstrate();
+
+    this.group('@dunx/infra/db - a named data source, and one per tenant');
+    await this.tenants.demonstrate();
 
     this.group('@dunx/infra/files - LocalStorage under an OS temp dir');
     await this.uploads.demonstrate();

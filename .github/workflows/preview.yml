@@ -168,8 +168,14 @@ jobs:
           run-id: ${{ steps.model.outputs.run_id }}
           github-token: ${{ github.token }}
 
+      # `DOCS_NOINDEX` writes a `Disallow: /` robots.txt into this build only.
+      # A preview serves every page again under *.pages.dev, and the canonicals
+      # are absolute, so without it a crawler files all of them as duplicates of
+      # dunx.win.
       - name: Build the documentation site
         if: steps.gate.outputs.ok == 'true'
+        env:
+          DOCS_NOINDEX: '1'
         run: bun run docs:build
 
       # Actions are pinned to a commit when they are third-party or hold

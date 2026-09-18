@@ -98,4 +98,68 @@ describe.skipIf(!built)('the built pages', () => {
       `Sitemap: ${SITE_ORIGIN}/sitemap.xml`,
     );
   });
+
+  test('leave the not-found page out of the index', () => {
+    const page = read('/404');
+    expect(page).toContain('name="robots" content="noindex, follow"');
+    expect(page).not.toContain('rel="canonical"');
+  });
+
+  /**
+   * Every site-internal link in the emitted HTML, against the files that were
+   * emitted. `links.test.tsx` walks rendered markdown only, so the two dead
+   * links this caught - `/guide/architecture` and `/api/compiler` - were both
+   * written in JSX on the landing page and reported by Search Console rather
+   * than by the suite.
+   */
+  test('link only to pages that were emitted', async () => {
+    const missing: string[] = [];
+
+    for await (const file of new Bun.Glob('**/*.html').scan({ cwd: dist })) {
+      const html = readFileSync(join(dist, file), 'utf8');
+      for (const match of html.matchAll(/href="(\/[^"#?]*)(?:[#?][^"]*)?"/g)) {
+        const path = match[1] ?? '';
+        if (path === '' || path === '/') continue;
+        // An asset is served at the path as written; a page is `fileFor`'s
+        // `.html` sibling. A release route such as `/releases/3.3.2` looks like
+        // an asset and is not one, so the asset spelling only wins if it exists.
+        const asset = path.replace(/^\//, '');
+        const found =
+          existsSync(join(dist, asset)) ||
+          existsSync(join(dist, fileFor(path)));
+        if (!found) missing.push(`${file} -> ${path}`);
+      }
+    }
+
+    expect([...new Set(missing)]).toEqual([]);
+  });
+
+  /** `/releases/v3.3.1` is a 301 to the canonical spelling; publishing one
+   * spends a crawl on the hop. */
+  test('link to no path that only redirects', async () => {
+    const hops: string[] = [];
+
+    for await (const file of new Bun.Glob('**/*.html').scan({ cwd: dist })) {
+      const html = readFileSync(join(dist, file), 'utf8');
+      if (/href="\/releases\/v[0-9]/.test(html)) hops.push(file);
+    }
+
+    expect(hops).toEqual([]);
+  });
+
+  test('give a sitemap entry a real date or none at all', () => {
+    const sitemap = readFileSync(join(dist, 'sitemap.xml'), 'utf8');
+    const dates = new Set(
+      [...sitemap.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)].map(
+        (match) => match[1] ?? '',
+      ),
+    );
+
+    // Release notes are fixed once cut, so each carries its own date. Nothing
+    // else claims one, which is what the build date used to do for all of them.
+    expect(dates.size).toBeGreaterThan(1);
+    expect(sitemap).not.toContain(
+      `<loc>${SITE_ORIGIN}/guide/controllers</loc>\n    <lastmod>`,
+    );
+  });
 });

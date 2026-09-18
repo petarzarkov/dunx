@@ -24,6 +24,12 @@ export interface PageMeta {
   readonly description: string;
   /** `article` for a document, `website` for a landing or index page. */
   readonly kind: 'article' | 'website';
+  /**
+   * `YYYY-MM-DD`, for the sitemap, and only where a real one exists. The build
+   * date used to stand in for every page, which told a crawler that all of them
+   * changed on every deploy and made the field worth nothing.
+   */
+  readonly lastmod?: string;
 }
 
 export interface ReleaseEntry {
@@ -140,6 +146,8 @@ export const pagesOf = (
     title: `dunx ${release.version} | Releases`,
     description: `What shipped in dunx ${release.version}, released ${release.date}.`,
     kind: 'article' as const,
+    // The one page set with a date of its own: a release note is fixed once cut.
+    lastmod: release.date,
   })),
 ];
 
