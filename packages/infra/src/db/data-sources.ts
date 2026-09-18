@@ -1,32 +1,29 @@
 import type { Logger, OnShutdown } from '@dunx/core';
-import { closeWithin } from '../close-within.js';
+import { closeWithin, within } from '../close-within.js';
 import type { DbConnection, DbOptions } from './connection.js';
 import { DatabaseError } from './errors.js';
 import { instrumented, type QueryMetrics } from './metrics.js';
 
 export interface DataSourcesInit<TDb> {
   /**
-   * The options a data source opens with, from its key. Called once per key that
-   * is not already live; a rejection is not cached, so the next call retries.
+   * The options a data source opens with, from its key. A rejection is not
+   * cached, so the next call retries.
    */
   readonly create: (key: string) => DbOptions<TDb> | Promise<DbOptions<TDb>>;
   /**
    * Live data sources held at once. Reaching it evicts the least recently used
-   * one that nothing is borrowing. `0` removes the bound, which is what exhausts
-   * the database's own connection limit when the key space is unbounded.
+   * one that nothing is borrowing. `0` removes the bound, and an unbounded key
+   * space then exhausts the database's own connection limit.
    */
   readonly max?: number;
-  /**
-   * Close a data source this long after its last use. `0` keeps every one until
-   * shutdown.
-   */
+  /** Close a data source this long after its last use. `0` keeps every one. */
   readonly idleMs?: number;
   /**
-   * How often the idle sweep runs, so a data source lives for at most `idleMs`
-   * plus this after its last use. Defaults to `idleMs`.
+   * How often the idle sweep runs, so a data source lives at most `idleMs` plus
+   * this after its last use. Defaults to `idleMs`.
    */
   readonly sweepMs?: number;
-  /** How long a close is waited on before it is logged and abandoned. */
+  /** Bounds both the wait on an open and the close itself. */
   readonly closeTimeoutMs?: number;
 }
 
@@ -38,9 +35,9 @@ interface Entry<TDb> {
 }
 
 /**
- * Recency is the map's own insertion order, refreshed by deleting and re-setting
- * the key. `lastUsed` cannot serve: `Date.now()` has millisecond resolution, so
- * two data sources touched in one tick compare equal and the wrong one goes.
+ * Recency is the map's insertion order, refreshed by re-setting the key.
+ * `Date.now()` has millisecond resolution, so two data sources touched in one
+ * tick compare equal and the wrong one goes.
  */
 const touch = <TDb>(
   entries: Map<string, Entry<TDb>>,
@@ -58,8 +55,8 @@ const DEFAULT_CLOSE_TIMEOUT_MS = 5_000;
 
 /**
  * Data sources keyed at runtime - a database per tenant - each opened on first
- * use and reused after it. A class, so it is the injection token; subclass it and
- * hand the subclass to `DbModule.forDataSources` to keep the drizzle handle type.
+ * use and reused after it. Subclass it and hand the subclass to
+ * `DbModule.forDataSources` to keep the drizzle handle type.
  *
  * Resolution takes the key as an argument and holds no current data source, so
  * two requests for two tenants cannot read each other's database.
@@ -73,6 +70,8 @@ export class DataSources<TDb = unknown> implements OnShutdown {
   readonly #closeTimeoutMs: number;
   readonly #logger: Logger | undefined;
   readonly #metrics: QueryMetrics | undefined;
+  /** Closes started by eviction, which `close()` still has to wait for. */
+  readonly #closing = new Set<Promise<void>>();
   #sweep: ReturnType<typeof setInterval> | undefined;
   #closed = false;
 
@@ -95,7 +94,6 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     return this.#entries.size;
   }
 
-  /** Whether `close()` has run. */
   get closed(): boolean {
     return this.#closed;
   }
@@ -108,9 +106,9 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     return this.#entries.has(key);
   }
 
-  /** The connection behind `key`, for a ping, a pragma or the raw driver. */
+  /** The connection behind `key`, for a ping or the raw driver. */
   async connection(key: string): Promise<DbConnection<TDb>> {
-    const entry = await this.#entry(key);
+    const entry = this.#entry(key);
     const connection = await entry.opening;
     touch(this.#entries, key, entry);
     return connection;
@@ -121,13 +119,9 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     return (await this.connection(key)).db;
   }
 
-  /**
-   * `get`, with the data source held open for the duration of `work`. Eviction
-   * skips a borrowed data source, so this is what stops a long query from having
-   * its connection closed underneath it.
-   */
+  /** `get`, holding the data source open for `work`: eviction skips a borrowed one. */
   async use<T>(key: string, work: (db: TDb) => T | Promise<T>): Promise<T> {
-    const entry = await this.#entry(key);
+    const entry = this.#entry(key);
     entry.leases += 1;
     try {
       return await work((await entry.opening).db);
@@ -138,8 +132,8 @@ export class DataSources<TDb = unknown> implements OnShutdown {
   }
 
   /**
-   * Closes `key` and forgets it, whether or not anything is borrowing it - a
-   * deprovisioned tenant is gone regardless. Resolves `false` if it was not live.
+   * Closes `key` and forgets it, borrowed or not - a deprovisioned tenant is gone
+   * regardless. Resolves `false` if it was not live.
    */
   async evict(key: string): Promise<boolean> {
     const entry = this.#entries.get(key);
@@ -149,7 +143,7 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     return true;
   }
 
-  /** Evicts every unborrowed data source idle for longer than `idleMs`. */
+  /** Evicts every unborrowed data source idle longer than `idleMs`. */
   async prune(): Promise<number> {
     if (this.#idleMs <= 0) return 0;
     const cutoff = Date.now() - this.#idleMs;
@@ -172,14 +166,18 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     }
     const live = [...this.#entries];
     this.#entries.clear();
-    await Promise.all(live.map(([key, entry]) => this.#shut(key, entry)));
+    await Promise.all([
+      ...live.map(([key, entry]) => this.#shut(key, entry)),
+      ...this.#closing,
+    ]);
   }
 
   async onShutdown(): Promise<void> {
     await this.close();
   }
 
-  async #entry(key: string): Promise<Entry<TDb>> {
+  /** Synchronous end to end, so admission cannot interleave with a second one. */
+  #entry(key: string): Entry<TDb> {
     if (this.#closed) {
       throw new DatabaseError(
         `These data sources are closed, so "${key}" cannot be opened.`,
@@ -188,10 +186,7 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     const live = this.#entries.get(key);
     if (live !== undefined) return touch(this.#entries, key, live);
 
-    await this.#makeRoom(key);
-    // Another caller may have opened this key while the eviction above awaited.
-    const raced = this.#entries.get(key);
-    if (raced !== undefined) return touch(this.#entries, key, raced);
+    this.#makeRoom(key);
 
     const entry: Entry<TDb> = {
       opening: this.#open(key),
@@ -199,8 +194,8 @@ export class DataSources<TDb = unknown> implements OnShutdown {
       leases: 0,
     };
     this.#entries.set(key, entry);
-    // Registered after the `set`, so a `create` that throws synchronously still
-    // drops its entry rather than leaving the failure cached forever.
+    // After the `set`, so a `create` that throws synchronously still drops its
+    // entry rather than caching the failure forever.
     void entry.opening.catch(() => {
       if (this.#entries.get(key) === entry) this.#entries.delete(key);
     });
@@ -225,7 +220,7 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     return opened;
   }
 
-  async #makeRoom(key: string): Promise<void> {
+  #makeRoom(key: string): void {
     if (this.#max <= 0) return;
     while (this.#entries.size >= this.#max) {
       const victim = this.#idlest();
@@ -236,8 +231,22 @@ export class DataSources<TDb = unknown> implements OnShutdown {
         );
       }
       this.#logger?.debug(`evicting data source "${victim}" to make room`);
-      await this.evict(victim);
+      this.#drop(victim);
     }
+  }
+
+  /**
+   * Frees the slot now, closing in the background, tracked so `close()` waits.
+   * Waiting here would put a yield back into admission.
+   */
+  #drop(key: string): void {
+    const entry = this.#entries.get(key);
+    if (entry === undefined) return;
+    this.#entries.delete(key);
+    const closing = this.#shut(key, entry).finally(() => {
+      this.#closing.delete(closing);
+    });
+    this.#closing.add(closing);
   }
 
   /** The first unborrowed key, which is the least recently used one. */
@@ -253,13 +262,25 @@ export class DataSources<TDb = unknown> implements OnShutdown {
       return;
     }
     this.#sweep = setInterval(() => void this.prune(), this.#sweepMs);
-    // A bound on how long a data source may sit idle is no reason to keep the
-    // process alive.
+    // An idle bound is no reason to keep the process alive.
     this.#sweep.unref?.();
   }
 
   async #shut(key: string, entry: Entry<TDb>): Promise<void> {
-    const connection = await entry.opening.catch(() => undefined);
+    // Bounded like the close: a connect with no timeout of its own would
+    // otherwise block evict, prune and shutdown indefinitely.
+    const settled = entry.opening.then(
+      (connection) => ({ connection }),
+      () => ({ connection: undefined }),
+    );
+    const opened = await within(settled, this.#closeTimeoutMs);
+    if (opened === undefined) {
+      // Still opening, so close it when it surfaces rather than orphan it.
+      void settled.then(({ connection }) => connection?.close());
+      return;
+    }
+    const { connection } = opened;
+    // The open failed, so there is nothing to close.
     if (connection === undefined) return;
     try {
       if (await closeWithin(connection, this.#closeTimeoutMs)) {

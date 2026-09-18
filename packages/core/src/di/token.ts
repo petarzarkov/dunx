@@ -29,6 +29,25 @@ export type InjectionToken<T> = AbstractCtor<T> | Token<T>;
 
 export const token = <T>(description: string): Token<T> => ({ description });
 
+const named = new Map<string, Token<unknown>>();
+
+/**
+ * `token()`, memoised on its description, for the per-name tokens a module binds
+ * and a consumer reaches separately. `token()` returns a fresh object per call,
+ * so without this the module and the consumer would hold different tokens for
+ * one name and the lookup would miss.
+ *
+ * The description carries the family as well as the name - `RedisConnection(x)`,
+ * `DbHandle(x)` - so two families never collide on one name.
+ */
+export const namedToken = <T>(description: string): Token<T> => {
+  const existing = named.get(description);
+  if (existing !== undefined) return existing as Token<T>;
+  const created = token<T>(description);
+  named.set(description, created);
+  return created as Token<T>;
+};
+
 export const isCtor = <T>(value: InjectionToken<T>): value is Ctor<T> =>
   typeof value === 'function';
 

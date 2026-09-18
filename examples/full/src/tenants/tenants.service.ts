@@ -1,7 +1,14 @@
 import { inject, Logger, type OnInit } from '@dunx/core';
 import { transactionSync } from '@dunx/infra/db';
 import { count, eq, sql } from 'drizzle-orm';
-import { reportingDb, TenantSources, type TenantDb } from './sources.js';
+import {
+  reportingConnection,
+  reportingDb,
+  reportingMetrics,
+  reportingOptions,
+  TenantSources,
+  type TenantDb,
+} from './sources.js';
 import { rollups, tickets, type Rollup, type Ticket } from './schema.js';
 
 const CREATE_TICKETS = sql`CREATE TABLE IF NOT EXISTS tickets (
@@ -21,8 +28,11 @@ const CREATE_ROLLUPS = sql`CREATE TABLE IF NOT EXISTS rollups (
  * read each other's rows.
  */
 export class Tenants implements OnInit {
-  /** `reportingDb` is a `Token`, so a field initialiser rather than a parameter. */
+  /** A `Token` is no constructor type, so these are field initialisers. */
   private readonly reporting = inject(reportingDb);
+  private readonly connection = inject(reportingConnection);
+  private readonly options = inject(reportingOptions);
+  private readonly metrics = inject(reportingMetrics);
 
   constructor(
     private readonly sources: TenantSources,
@@ -81,6 +91,24 @@ export class Tenants implements OnInit {
     return { keys: this.sources.keys(), size: this.sources.size };
   }
 
+  /**
+   * The other two named tokens: the options the reporting data source was opened
+   * from, and the queries it has run.
+   */
+  reportingStats(): { backend: string; dialect: string; queries: number } {
+    return {
+      backend: this.options.backend,
+      dialect: this.options.dialect,
+      queries: this.metrics.snapshot().total,
+    };
+  }
+
+  /** A round trip against the reporting data source, for a health check. */
+  async ping(): Promise<boolean> {
+    await this.connection.ping();
+    return true;
+  }
+
   /** A deprovisioned tenant, closed and forgotten rather than left to idle out. */
   async release(tenant: string): Promise<boolean> {
     const evicted = await this.sources.evict(tenant);
@@ -109,6 +137,14 @@ export class Tenants implements OnInit {
     this.logger.info(
       `dbHandle('reporting') holds ${this.reported().length} rollup(s); ` +
         `acme's own database holds ${acme.select().from(tickets).all().length}`,
+    );
+
+    const stats = this.reportingStats();
+    await this.connection.ping();
+    this.logger.info(
+      `dbOptions('reporting') -> ${stats.backend}/${stats.dialect}, ` +
+        `dbMetrics('reporting') -> ${stats.queries} queries, ` +
+        "dbConnection('reporting') pinged",
     );
 
     await this.release('globex');

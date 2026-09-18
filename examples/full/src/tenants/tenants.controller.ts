@@ -36,6 +36,23 @@ export class TenantsController {
     return { rollups: this.tenants.reported() };
   }
 
+  /**
+   * The named reporting data source through its other three tokens:
+   * `dbOptions`, `dbMetrics` and `dbConnection`.
+   */
+  @Get('/reporting')
+  async reporting(): Promise<{
+    backend: string;
+    dialect: string;
+    queries: number;
+    reachable: boolean;
+  }> {
+    return {
+      ...this.tenants.reportingStats(),
+      reachable: await this.tenants.ping(),
+    };
+  }
+
   @Get('/:tenant/tickets', oneTenant)
   async list({
     params,

@@ -116,14 +116,19 @@ A second registration cannot bind those again, so a name moves all of them onto
 per-name tokens:
 
 ```ts
-(DbModule.forRoot(new SqlOptions({ schema, url: primaryUrl })),
-  DbModule.forRoot(new SqlOptions({ schema, url: reportingUrl }), {
-    name: 'reporting',
-  }));
+@Module({
+  imports: [
+    DbModule.forRoot(new SqlOptions({ schema, url: primaryUrl })),
+    DbModule.forRoot(new SqlOptions({ schema, url: reportingUrl }), {
+      name: 'reporting',
+    }),
+  ],
+})
+export class DataModule {}
 ```
 
-Four token factories address a named registration, memoised so the module and the
-consumer hold the same token for one name:
+Four token factories address a named registration. Each memoises on its
+description, so the module and the consumer hold the same token for one name:
 
 | Factory              | Resolves to                              |
 | -------------------- | ---------------------------------------- |
@@ -231,11 +236,16 @@ protection, and a handle kept across an await may outlive its data source.
 `sweepMs`, which defaults to `idleMs`, so a data source lives for at most the two
 added together after its last use. `idleMs: 0` keeps every one until shutdown.
 
+Eviction frees the slot at once and closes behind it, so admission never waits on
+another tenant's close, and `closeTimeoutMs` bounds the wait on an open as well
+as on the close. `close()` still waits for every one of those before it resolves.
+
 A `create` that throws is not cached. The entry is dropped, so the next
 resolution calls `create` again rather than serving the failure forever.
 
 Set `{ metrics: true }` and every data source the pool opens is timed into one
-shared `QueryMetrics`, bound under `dbMetrics('<class name>')`. One set of
+shared `QueryMetrics`, bound under `dbMetrics(name)`, where `name` defaults to
+the class name. Two pools whose classes share a name need one each. A set of
 histograms per tenant would grow without a bound; the pool's does not.
 
 The pool is constructed before anything that injects it, so dunx's reverse

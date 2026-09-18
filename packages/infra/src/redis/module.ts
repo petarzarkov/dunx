@@ -1,4 +1,5 @@
 import {
+  namedToken,
   provide,
   token,
   type Ctor,
@@ -14,13 +15,9 @@ import { RedisConnection } from './connection.js';
 import { RedisMetrics } from './metrics.js';
 import { RedisOptions, type RedisOptionsInit } from './options.js';
 
-const tokens = new Map<string, Token<RedisConnection>>();
-const metricsTokens = new Map<string, Token<RedisMetrics>>();
-
 /**
- * The token a named connection is bound to. Memoised, since `token()` returns a
- * fresh object per call and the module and consumer would otherwise hold
- * different tokens for one name.
+ * The token a named connection is bound to. `namedToken` memoises it, so the
+ * module and the consumer hold the same one for a given name.
  *
  * A `Token` is not a constructor type, so reach it with `inject()`:
  *
@@ -30,13 +27,8 @@ const metricsTokens = new Map<string, Token<RedisMetrics>>();
  * }
  * ```
  */
-export const redisConnection = (name: string): Token<RedisConnection> => {
-  const existing = tokens.get(name);
-  if (existing) return existing;
-  const created = token<RedisConnection>(`RedisConnection(${name})`);
-  tokens.set(name, created);
-  return created;
-};
+export const redisConnection = (name: string): Token<RedisConnection> =>
+  namedToken(`RedisConnection(${name})`);
 
 /**
  * `useFactory` rather than `useClass: Redis`. Either would work - declaring
@@ -67,8 +59,8 @@ export interface RedisModuleSettings {
 }
 
 /**
- * The token a named connection's {@link RedisMetrics} is bound to, memoised the
- * way {@link redisConnection} is. The default connection binds the class itself;
+ * The token a named connection's {@link RedisMetrics} is bound to. The default
+ * connection binds the class itself;
  * a named one cannot, or two registrations would bind `RedisMetrics` twice and the
  * importer would silently see one of them.
  *
@@ -78,13 +70,8 @@ export interface RedisModuleSettings {
  * }
  * ```
  */
-export const redisMetrics = (name: string): Token<RedisMetrics> => {
-  const existing = metricsTokens.get(name);
-  if (existing) return existing;
-  const created = token<RedisMetrics>(`RedisMetrics(${name})`);
-  metricsTokens.set(name, created);
-  return created;
-};
+export const redisMetrics = (name: string): Token<RedisMetrics> =>
+  namedToken(`RedisMetrics(${name})`);
 
 /** What `Redis` and any subclass of it is constructed with. */
 type RedisCtor = new (

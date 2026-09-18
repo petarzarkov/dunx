@@ -120,12 +120,14 @@ describe.skipIf(!built)('the built pages', () => {
       for (const match of html.matchAll(/href="(\/[^"#?]*)(?:[#?][^"]*)?"/g)) {
         const path = match[1] ?? '';
         if (path === '' || path === '/') continue;
-        // A path with an extension is an asset and is served as written; one
-        // without is a page, which `fileFor` spells with `.html`.
-        const target = /\.[a-z0-9]+$/i.test(path)
-          ? path.replace(/^\//, '')
-          : fileFor(path);
-        if (!existsSync(join(dist, target))) missing.push(`${file} -> ${path}`);
+        // An asset is served at the path as written; a page is `fileFor`'s
+        // `.html` sibling. A release route such as `/releases/3.3.2` looks like
+        // an asset and is not one, so the asset spelling only wins if it exists.
+        const asset = path.replace(/^\//, '');
+        const found =
+          existsSync(join(dist, asset)) ||
+          existsSync(join(dist, fileFor(path)));
+        if (!found) missing.push(`${file} -> ${path}`);
       }
     }
 

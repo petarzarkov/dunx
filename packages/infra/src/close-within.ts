@@ -20,15 +20,30 @@ export interface Closable {
 export const closeWithin = async (
   closable: Closable,
   timeoutMs: number,
-): Promise<boolean> => {
+): Promise<boolean> =>
+  (await within(
+    closable.close().then(() => false),
+    timeoutMs,
+  )) ?? true;
+
+/**
+ * `work`, waited on for at most `timeoutMs`, resolving `undefined` when the
+ * bound expired first. The loser of the race stays pending, so the timer is
+ * cleared in a `finally`, and it is unref'd because a bound on how long to wait
+ * is no reason to stay alive.
+ */
+export const within = async <T>(
+  work: Promise<T>,
+  timeoutMs: number,
+): Promise<T | undefined> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<true>((resolve) => {
-    timer = setTimeout(() => resolve(true), timeoutMs);
+  const expired = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), timeoutMs);
     timer.unref?.();
   });
 
   try {
-    return await Promise.race([closable.close().then(() => false), expired]);
+    return await Promise.race([work, expired]);
   } finally {
     clearTimeout(timer);
   }

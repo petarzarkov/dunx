@@ -152,6 +152,9 @@ describe('the bound on live data sources', () => {
     const sources = pool({ max: 1 });
     const evicted = await sources.connection('a');
     await sources.get('b');
+    // Eviction frees the slot at once and closes behind it, so admission never
+    // waits on another tenant's close.
+    await Bun.sleep(5);
 
     expect(evicted).toBeInstanceOf(SqliteConnection);
     if (!(evicted instanceof SqliteConnection)) throw new Error('narrowing');
@@ -192,6 +195,28 @@ describe('the bound on live data sources', () => {
 
     await sources.get('b');
     expect(sources.keys()).toEqual(['b']);
+    await sources.close();
+  });
+
+  /**
+   * Admission has to be atomic. Both reviewers on #162 found the same window:
+   * `#makeRoom` awaited between reading `size` and inserting, so a second
+   * caller admitted itself into the slot the first had just cleared.
+   */
+  it('never holds more than max when two keys race for the last slot', async () => {
+    const sources = pool({
+      max: 1,
+      create: async () => {
+        await Bun.sleep(5);
+        return new SyncSqliteOptions({ schema });
+      },
+    });
+
+    const both = Promise.all([sources.get('a'), sources.get('b')]);
+    await Bun.sleep(1);
+    expect(sources.size).toBeLessThanOrEqual(1);
+    await both;
+    expect(sources.size).toBeLessThanOrEqual(1);
     await sources.close();
   });
 
@@ -285,6 +310,28 @@ describe('close', () => {
     await sources.close();
     await sources.close();
     expect(sources.size).toBe(0);
+  });
+
+  it('waits for an open that was already in flight when it ran', async () => {
+    const created: string[] = [];
+    const sources = pool({
+      max: 1,
+      create: async (key) => {
+        await Bun.sleep(10);
+        created.push(key);
+        return new SyncSqliteOptions({ schema });
+      },
+    });
+    await sources.get('a');
+    // Needs the slot, so it goes through eviction - which is where admission
+    // used to yield and land the insert after close() had taken its snapshot.
+    const late = sources.get('b').catch(() => undefined);
+
+    await sources.close();
+    expect(created).toEqual(['a', 'b']);
+    await late;
+    expect(sources.size).toBe(0);
+    expect(sources.closed).toBe(true);
   });
 
   it('refuses to open anything afterwards', async () => {
@@ -484,8 +531,39 @@ describe('DbModule.forDataSourcesAsync', () => {
   });
 });
 
+/** Two classes that really do share a runtime name, which one scope cannot. */
+const poolClass = (): typeof Tenants => {
+  class Tenants extends DataSources<Handle> {}
+  return Tenants;
+};
+
 describe('two pools', () => {
   class Reporting extends DataSources<Handle> {}
+
+  it('stay apart when their classes share a name', async () => {
+    const First = poolClass();
+    const Second = poolClass();
+    expect(First.name).toBe(Second.name);
+
+    @Module({
+      imports: [
+        DbModule.forDataSources({ create: perKey() }, First, {
+          metrics: true,
+          name: 'first',
+        }),
+        DbModule.forDataSources({ create: perKey() }, Second, {
+          metrics: true,
+          name: 'second',
+        }),
+      ],
+    })
+    class Root {}
+
+    const app = await AppFactory.create(Root);
+    expect(app.get(First)).not.toBe(app.get(Second));
+    expect(app.get(dbMetrics('first'))).not.toBe(app.get(dbMetrics('second')));
+    await app.shutdown();
+  });
 
   it('do not collide on the init or the metrics token', async () => {
     @Module({

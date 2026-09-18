@@ -1,5 +1,6 @@
 import {
   Logger,
+  namedToken,
   provide,
   RequestContext,
   token,
@@ -14,14 +15,11 @@ import {
 import { HttpClientOptions, type HttpClientOptionsInit } from './options.js';
 import { HttpService } from './service.js';
 
-const tokens = new Map<string, Token<HttpService>>();
-
 /**
  * The token a named client is bound to.
  *
- * Memoised, because `token()` returns a fresh object every call - without this the
- * module and the consumer would hold different tokens for `'stripe'` and the lookup
- * would miss. Same name in, same token out.
+ * `namedToken` memoises it, so the module and the consumer hold the same one for
+ * `'stripe'` rather than two objects that never match.
  *
  * A `Token` is not a constructor type, so a client registered under one cannot be a
  * constructor parameter. Reach it with `inject()` in a field initialiser:
@@ -35,13 +33,8 @@ const tokens = new Map<string, Token<HttpService>>();
  * Passing `as` a subclass instead gives an ordinary constructor parameter, and is
  * the shape to prefer for new code.
  */
-export const httpClient = (name: string): Token<HttpService> => {
-  const existing = tokens.get(name);
-  if (existing) return existing;
-  const created = token<HttpService>(`HttpService(${name})`);
-  tokens.set(name, created);
-  return created;
-};
+export const httpClient = (name: string): Token<HttpService> =>
+  namedToken(`HttpService(${name})`);
 
 /**
  * How a client is addressed: a name, which binds a `Token`, or a subclass of

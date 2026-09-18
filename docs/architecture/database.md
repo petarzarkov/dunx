@@ -224,6 +224,12 @@ key. `Date.now()` cannot serve: it has millisecond resolution, so two data
 sources touched within one tick compare equal and the wrong one goes. The first
 version used timestamps and evicted the data source it had just touched.
 
+Admission is synchronous end to end. It used to await the eviction it had asked
+for, and a second caller admitted itself into the same slot in that window: the
+pool then held more than `max`, or evicted the entry the first caller had just
+inserted. Eviction now frees the slot at once and closes behind it, tracked so
+`close()` still waits for it.
+
 What happens to a query already running on an evicted data source was the open
 question. The answer is a lease: `use(key, work)` counts itself while `work` runs
 and eviction skips anything counted. When every live data source is borrowed and

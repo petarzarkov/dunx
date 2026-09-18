@@ -52,8 +52,20 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('https://example.com'),
   /** `:memory:` needs no server and leaves nothing behind, so restarts are clean. */
   DATABASE_FILE: z.string().default(':memory:'),
-  /** `{tenant}` is replaced with the key `TenantSources` was asked for. */
-  TENANT_DATABASE_FILE: z.string().default(':memory:'),
+  /**
+   * `{tenant}` is replaced with the key `TenantSources` was asked for. Required
+   * for a path: without it every tenant resolves to one file and they silently
+   * share a `tickets` table. `:memory:` needs none - each open is its own
+   * database already.
+   */
+  TENANT_DATABASE_FILE: z
+    .string()
+    .default(':memory:')
+    .refine((file) => file === ':memory:' || file.includes('{tenant}'), {
+      error:
+        'TENANT_DATABASE_FILE needs a {tenant} placeholder, or must be ' +
+        ':memory:, so each tenant gets a database of its own.',
+    }),
   TENANT_REPORTING_FILE: z.string().default(':memory:'),
   /** Live tenant databases held at once, past which the idlest one closes. */
   TENANT_MAX: z.coerce.number().int().min(1).max(1024).default(4),
