@@ -173,6 +173,78 @@ is an embedded database versus one over a network, and an app gets it from
 is single-digit percent, plus a request path with no promise in it at all, which is
 worth having and is not worth overselling.
 
+## More than one data source
+
+Two requests came in together: several databases known at configuration time, and
+a database per tenant resolved at runtime. They are separate registrations
+because they are separate problems. The first is a token change; the second owns
+connection pools and has to close them.
+
+### A name, rather than a registry object
+
+The proposal was `DbModule.forRoot([{ name, options }, ...])` with
+`dataSources.get('report')` to read one back. `RedisModule` and `HttpModule` had
+already answered the same question with `redisConnection(name)` and
+`httpClient(name)`, and the db module was the only infra module that never got
+it. `{ name }` on the settings argument is that same shape.
+
+The registry form also loses drizzle's inference. `get()` has to return a union
+across every registered schema, and the static case exists to keep a repository's
+annotation carrying its own schema types. A per-name token keeps them: the type
+argument lives on `dbHandle<BunSQLDatabase<typeof schema>>('reporting')`, so the
+query that follows is typed against that schema and no other.
+
+A named registration claims none of `DbOptions`, `DbConnection`, drizzle's class
+or `QueryMetrics`. A scope reports a duplicate when it binds one of those twice,
+so two named registrations on one backend would otherwise collide and the
+importer would silently see one of them.
+
+### The pool is a class a repository injects
+
+The alternative was a request-scoped provider already resolved to the current
+tenant's handle. That needs a request scope in the container, and dunx's
+container has one lifetime per binding. It also puts the resolution behind
+whatever populated the scope, which is what a mutable `currentDataSource` does in
+a less obvious spelling.
+
+`DataSources` takes the key as an argument instead. Nothing ambient decides which
+database a query runs against, so two requests in flight for two tenants cannot
+read each other's rows. An application that reads the tenant from the request
+reads it from `RequestContext` at the call site, inside the `AsyncLocalStorage`
+scope the request already runs in.
+
+### Eviction, and the query that was already running
+
+`max` exists because the failure mode it prevents is a production one: an
+unbounded key space opens a connection pool per key until the database refuses
+connections. Reaching the bound closes the least recently used data source.
+
+Recency is the map's own insertion order, refreshed by deleting and re-setting the
+key. `Date.now()` cannot serve: it has millisecond resolution, so two data
+sources touched within one tick compare equal and the wrong one goes. The first
+version used timestamps and evicted the data source it had just touched.
+
+What happens to a query already running on an evicted data source was the open
+question. The answer is a lease: `use(key, work)` counts itself while `work` runs
+and eviction skips anything counted. When every live data source is borrowed and
+the bound is reached, resolution fails with a `DatabaseError` naming the bound
+rather than opening one more connection or closing something in use. `get` keeps
+the unleased form, for a caller that wants the handle and nothing else.
+
+`evict(key)` closes regardless of leases. A deprovisioned tenant is gone whether
+or not something is mid-query against it, and the caller asked.
+
+### One QueryMetrics for the pool
+
+Whether metrics are per data source or shared was the other open question. They
+are shared. The set of keys is unbounded by construction, and a histogram set per
+tenant grows with it; the pool's does not. A snapshot then reports the pool's
+query mix rather than any one tenant's, which is the trade the bound buys.
+
+A failed `create` is dropped rather than cached, so the next resolution retries.
+Caching it would turn one transient handshake failure into a permanently broken
+tenant.
+
 ## Constraint errors carry their own status
 
 A unique violation reaching `@dunx/http` used to answer 500. It is a conflict the

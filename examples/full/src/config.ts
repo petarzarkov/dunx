@@ -52,6 +52,12 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('https://example.com'),
   /** `:memory:` needs no server and leaves nothing behind, so restarts are clean. */
   DATABASE_FILE: z.string().default(':memory:'),
+  /** `{tenant}` is replaced with the key `TenantSources` was asked for. */
+  TENANT_DATABASE_FILE: z.string().default(':memory:'),
+  TENANT_REPORTING_FILE: z.string().default(':memory:'),
+  /** Live tenant databases held at once, past which the idlest one closes. */
+  TENANT_MAX: z.coerce.number().int().min(1).max(1024).default(4),
+  TENANT_IDLE_MS: z.coerce.number().int().min(0).default(60_000),
   /**
    * Whether `x-forwarded-for` is believed. **Off unless a trusted proxy is in
    * front**: with nothing stripping the header, any caller picks its own address,
@@ -126,6 +132,12 @@ export interface AppConfig {
     readonly responseBody: boolean;
   };
   readonly database: { readonly file: string };
+  readonly tenants: {
+    readonly file: string;
+    readonly reportingFile: string;
+    readonly max: number;
+    readonly idleMs: number;
+  };
   readonly redis: { readonly url: string | undefined };
   readonly amqp: { readonly url: string | undefined };
   readonly images: { readonly quality: number };
@@ -196,6 +208,12 @@ export const validate = (env: ConfigValues): AppConfig => {
       responseBody: value.LOG_RESPONSE_BODY,
     },
     database: { file: value.DATABASE_FILE },
+    tenants: {
+      file: value.TENANT_DATABASE_FILE,
+      reportingFile: value.TENANT_REPORTING_FILE,
+      max: value.TENANT_MAX,
+      idleMs: value.TENANT_IDLE_MS,
+    },
     redis: { url: value.REDIS_URL },
     amqp: { url: value.RABBITMQ_URL },
     images: { quality: value.IMAGE_QUALITY },

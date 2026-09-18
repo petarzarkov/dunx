@@ -12,7 +12,12 @@ export {
   DatabaseError,
   toDatabaseError,
 } from './errors.js';
-export { DbModule, type DbModuleSettings } from './module.js';
+export { DataSources, type DataSourcesInit } from './data-sources.js';
+export {
+  DbModule,
+  type DataSourcesSettings,
+  type DbModuleSettings,
+} from './module.js';
 export {
   QueryMetrics,
   QueryOperation,
@@ -40,6 +45,7 @@ export {
   SyncSqliteOptions,
   type SqliteInit,
 } from './sqlite/options.js';
+export { dbConnection, dbHandle, dbMetrics, dbOptions } from './tokens.js';
 export {
   transaction,
   transactionSync,

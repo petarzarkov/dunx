@@ -18,6 +18,7 @@ import { AppConfigService, configModule } from './config.js';
 import { OpsModule } from './dashboard/dashboard.module.js';
 import { StatsModule } from './stats/stats.module.js';
 import { DatabaseModule } from './database/database.module.js';
+import { TenantsModule } from './tenants/tenants.module.js';
 import { DocsModule } from './docs/docs.module.js';
 import { EventsModule } from './events/events.module.js';
 import { GuardsModule } from './guards/guards.module.js';
@@ -96,6 +97,9 @@ const fileAndConsole = (
       { captureGlobalErrors: true },
     ),
     DatabaseModule,
+    // After DatabaseModule, which holds the default data source; this one adds a
+    // named second and a pool keyed per tenant.
+    TenantsModule,
     StorageModule,
     PicturesModule,
     MailModule,

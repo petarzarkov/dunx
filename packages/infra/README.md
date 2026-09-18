@@ -37,7 +37,7 @@ The guide is canonical for every row; this table is the index.
 
 | Subpath                  | What it is                                                       | Guide                                                       |
 | ------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------- |
-| `@dunx/infra/db`         | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds, query timings | [Database](../../docs/guide/14-database.md)                 |
+| `@dunx/infra/db`         | **drizzle** over `bun:sqlite` and `Bun.SQL`, transactions, seeds, named and per-tenant data sources, query timings | [Database](../../docs/guide/14-database.md)                 |
 | `@dunx/infra/redis`      | `Bun.RedisClient`, named connections, pub/sub                     | [Database](../../docs/guide/14-database.md)                 |
 | `@dunx/infra/cache`      | `Cache` over a memory, Redis or two-tier `CacheStore`, `CacheMetrics` | [Caching](../../docs/guide/15-caching.md)                   |
 | `@dunx/infra/queue`      | **bullmq** over `Bun.RedisClient`: handlers, publisher, worker    | [Queues](../../docs/guide/19-queues.md)                     |

@@ -1,4 +1,5 @@
 import { Durations, type HistogramSnapshot } from '@dunx/core';
+import type { DbConnection } from './connection.js';
 
 export const QueryOperation = Object.freeze({
   SELECT: 'select',
@@ -278,3 +279,23 @@ const SQLITE_METHODS = ['run', 'all', 'get', 'values'] as const;
 
 /** Marks a client so a second `instrument` call does not stack a second timer. */
 const INSTRUMENTED: unique symbol = Symbol.for('dunx.infra.db.instrumented');
+
+/**
+ * Instruments after `open()` rather than before `drizzle()`. `instrument` mutates
+ * the client in place and drizzle looks `prepare`/`unsafe` up on it per query, so
+ * a handle built earlier still goes through the timer - which keeps this out of
+ * both connection constructors and both option classes.
+ */
+export const instrumented = async <TDb>(
+  opening: Promise<DbConnection<TDb>>,
+  metrics: QueryMetrics,
+): Promise<DbConnection<TDb>> => {
+  const opened = await opening;
+  // A `Bun.SQL` client is a **function** - it is callable as a tagged template -
+  // so an `=== 'object'` guard skipped the whole Postgres backend.
+  const raw: unknown = opened.raw;
+  if ((typeof raw === 'object' && raw !== null) || typeof raw === 'function') {
+    metrics.instrument(raw as object);
+  }
+  return opened;
+};
