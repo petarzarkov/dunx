@@ -278,13 +278,18 @@ describe.if(live)('a worker against a live server', () => {
 
   it('consumes a published job and stores what the handler returned', async () => {
     const job = await publisher.publish(EMAILS, 'welcome', { to: 'ada' });
+    const queue = publisher.queue(EMAILS);
 
+    // Waits on the job rather than on the recorder: the handler sets that before
+    // it returns, and bullmq writes `returnvalue` and moves the job to completed
+    // only after it has. Waiting on the event read the job back mid-flight.
     await until(
-      () => recorder.events.includes('welcome:ada'),
-      'the welcome handler',
+      async () => (await queue.getJob(job.id!))?.finishedOn !== undefined,
+      'the welcome job to finish',
     );
 
-    const stored = await publisher.queue(EMAILS).getJob(job.id!);
+    expect(recorder.events).toContain('welcome:ada');
+    const stored = await queue.getJob(job.id!);
     expect(stored?.returnvalue).toEqual({ sent: 'ada' });
     expect(await stored?.getState()).toBe('completed');
   });
