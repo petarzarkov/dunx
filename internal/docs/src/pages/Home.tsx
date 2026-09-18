@@ -203,7 +203,7 @@ const GetStarted = (): React.JSX.Element => (
         </Button>
         <Button
           component="a"
-          href={href(RouteKind.Guide, 'architecture')}
+          href={href(RouteKind.Guide, 'architecture-dependency-injection')}
           variant="subtle"
         >
           Read the architecture

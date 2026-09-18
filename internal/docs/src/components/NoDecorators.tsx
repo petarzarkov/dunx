@@ -42,7 +42,7 @@ export const NoDecorators = (): React.JSX.Element => (
           id="cmp-preload"
         />
         <Text size="sm" c="dimmed">
-          <Anchor href={href(RouteKind.Api, 'compiler')}>
+          <Anchor href={href(RouteKind.Api, 'transform')}>
             <code>@dunx/transform</code>
           </Anchor>{' '}
           reads each class&apos;s constructor parameter types at load time and
