@@ -20,31 +20,27 @@
  */
 
 import { writeFileSync } from 'node:fs';
+import { ACCENT, BOWL, CROSS } from '../internal/ui/src/logo.js';
 
 /** The declared `og:image:width`/`height`, so a card cannot disagree with its tags. */
 export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
 
-/** The logo mark's own stops, so every card's accent is the wordmark's accent. */
-export const OG_CYAN = '#22b8cf';
-export const OG_INDIGO = '#4c6ef5';
-export const OG_VIOLET = '#7950f2';
-
 /**
- * The mark, at card scale. The geometry is `internal/ui/src/logo.ts`'s; a root
- * script cannot import a private workspace, so it is restated here once and read
- * by both generators rather than by neither.
+ * The mark, at card scale, from the geometry `internal/ui/src/logo.ts` declares.
+ * That module imports nothing, so a root script reaches it by relative path the
+ * way it reaches `positioning.ts`.
  */
 export const ogLogo = (size = 64): string =>
   `<svg viewBox="0 0 32 32" width="${size}" height="${size}" fill="none" aria-hidden="true">
   <linearGradient id="c" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="${OG_CYAN}" />
-    <stop offset=".5" stop-color="${OG_INDIGO}" />
-    <stop offset="1" stop-color="${OG_VIOLET}" />
+    <stop offset="0" stop-color="${ACCENT.from}" />
+    <stop offset=".5" stop-color="${ACCENT.via}" />
+    <stop offset="1" stop-color="${ACCENT.to}" />
   </linearGradient>
   <g stroke="url(#c)" stroke-width="4" stroke-linecap="round">
-    <path d="M5.9 5.6H15.7a10.4 10.4 0 0 1 0 20.8H5.9" />
-    <path d="m9.7 11.4 9.2 9.2m0-9.2-9.2 9.2" />
+    <path d="${BOWL}" />
+    <path d="${CROSS}" />
   </g>
 </svg>`;
 
