@@ -4,6 +4,28 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.9.5 - 2026-09-23
+
+Pick inherited controller handlers with include and exclude
+
+`@Controller(prefix, { include, exclude })` chooses which handlers a subclass
+of a generic base controller serves, by method name. The filter is read off
+the class, so OpenAPI, the dashboard and mcp, which never construct a
+controller, agree with the server. A misspelt name is a compile error, and an
+unknown key or a method that is not a route is a boot error.
+
+`@dunx/transform` records an empty dependency list for a subclass whose own
+constructor takes no parameters. Before, it inherited its base's record and
+was handed arguments it never declared.
+
+### Features
+
+- **http**: pick inherited handlers with @Controller include and exclude ([`7b06a39`](https://github.com/petarzarkov/dunx/commit/7b06a39309de34bd77121c87435eec7edcf5b052))
+
+### Fixes
+
+- reject unknown @Controller filter keys, and match the constructor by kind ([`07d63ee`](https://github.com/petarzarkov/dunx/commit/07d63ee60ec3f29e8671e9e9d7a1c285610442d3))
+
 ## 3.9.4 - 2026-09-18
 
 Named data sources, and one opened per tenant at runtime
