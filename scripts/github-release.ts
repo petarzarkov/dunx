@@ -20,6 +20,22 @@ import { releasePageUrl } from './site.js';
 export const tagFor = (version: string): string => `v${version}`;
 
 /**
+ * GitHub turns a bare `@name` in a release body into a mention: the account is
+ * listed as a contributor and notified. A code span is never a mention, so a
+ * decorator or a package scope outside one is wrapped in backticks. The split
+ * leaves code spans at the odd indices.
+ */
+const unmention = (markdown: string): string =>
+  markdown
+    .split(/(`[^`]*`)/)
+    .map((part, index) =>
+      index % 2 === 1
+        ? part
+        : part.replace(/(?<![\w`])@[A-Za-z][\w-]*(?:\/[\w.-]+)?/g, '`$&`'),
+    )
+    .join('');
+
+/**
  * A release's notes: the changelog section for that version, then a link to the
  * page. A version with no section still gets the link, because a `[force-publish]`
  * run has no commit range to describe and should not fail over it.
@@ -32,7 +48,7 @@ export const releaseBody = (
   const section = parseChangelog(changelog).find(
     (release) => release.version === version,
   );
-  const body = section?.body.trim();
+  const body = section === undefined ? '' : unmention(section.body.trim());
   return `${body ? `${body}\n\n` : ''}[Full release notes](${pageUrl})`;
 };
 
