@@ -26,4 +26,5 @@ export {
 export { buildContext } from './server/context.js';
 export { IMMUTABLE_CACHE_CONTROL } from './static/files.js';
 export { embedJson } from './server/html.js';
+export { LOGO_FAVICON } from './logo.js';
 export { isGateway } from './ws/marker.js';

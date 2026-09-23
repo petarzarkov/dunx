@@ -33,9 +33,9 @@ export interface ScalarOptions {
   /**
    * The tab icon. A URL, or `false` for none.
    *
-   * Defaults to `data:,`, which paints nothing and stops the browser asking for
-   * `/favicon.ico` against the app serving the page. Scalar ships no icon of its
-   * own, so there is no file to point at.
+   * Defaults to the dunx mark, inlined as a `data:` URI, so the browser never
+   * asks the app serving the page for `/favicon.ico`. Scalar ships no icon of its
+   * own.
    */
   readonly favicon?: string | false;
 
