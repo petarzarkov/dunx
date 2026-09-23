@@ -23,6 +23,7 @@ export interface ClassBody extends Node {
 export interface ClassNode extends Node {
   readonly id: Identifier | null;
   readonly typeParameters: Node | null;
+  readonly superClass: Node | null;
   readonly body: ClassBody;
 }
 
@@ -32,6 +33,7 @@ export interface FunctionExpression extends Node {
 
 export interface MethodDefinition extends Node {
   readonly type: 'MethodDefinition';
+  readonly kind: 'constructor' | 'method' | 'get' | 'set';
   readonly key: Node;
   readonly value: FunctionExpression;
 }

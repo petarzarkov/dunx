@@ -1,10 +1,18 @@
-import { markedMethods, type Ctor, type ModuleRef } from '@dunx/core';
+import {
+  AppError,
+  markedMethods,
+  type Ctor,
+  type MarkedMethod,
+  type ModuleRef,
+} from '@dunx/core';
 import type { Middleware } from '../server/middleware.js';
 import {
+  filterOf,
   prefixOf,
   resolvePath,
   routeMetaOf,
   type HttpMethod,
+  type RouteMeta,
 } from './marker.js';
 import { guardsOf, mergeMeta, metaOf, type MetaRecord } from './metadata.js';
 import type { RouteInput, RouteSchemas } from './schema.js';
@@ -47,6 +55,40 @@ export const joinPath = (prefix: string, path: string): string => {
   return joined.length > 1 ? joined.replace(/\/$/, '') : '/';
 };
 
+const applyFilter = (
+  klass: { readonly name: string },
+  marked: readonly MarkedMethod<RouteMeta>[],
+): readonly MarkedMethod<RouteMeta>[] => {
+  const filter = filterOf(klass);
+  if (filter === undefined) return marked;
+
+  const names = new Set(marked.map(({ name }) => name));
+  // Checked at runtime too: an untyped caller's misspelt key would otherwise
+  // leave the route it meant to hide being served.
+  for (const [list, listed] of Object.entries(filter)) {
+    if (list !== 'include' && list !== 'exclude') {
+      throw new AppError(
+        `${klass.name} passes ${list} to @Controller, which takes include and exclude.`,
+      );
+    }
+    for (const name of (listed ?? []) as readonly string[]) {
+      if (!names.has(name)) {
+        throw new AppError(
+          `${klass.name} lists ${name} in @Controller ${list}, but it is not a ` +
+            'route handler. Name a method decorated with @Get/@Post/...',
+        );
+      }
+    }
+  }
+
+  const { include, exclude } = filter;
+  return marked.filter(
+    ({ name }) =>
+      (include === undefined || include.includes(name)) &&
+      !exclude?.includes(name),
+  );
+};
+
 /**
  * Walks the prototype chain of a constructed controller and collects every marked
  * method. Most-derived wins on a repeated name; an undecorated override does not
@@ -61,9 +103,12 @@ export const discoverRoutes = (
   const classGuards = guardsOf(klass);
   const members = instance as Record<string, (input: RouteInput) => unknown>;
 
-  return markedMethods(
-    Object.getPrototypeOf(instance) as object | null,
-    routeMetaOf,
+  return applyFilter(
+    klass,
+    markedMethods(
+      Object.getPrototypeOf(instance) as object | null,
+      routeMetaOf,
+    ),
     // `marked` is the function the decorator wrote onto, not the instance member:
     // it is the only place the rest of this route's metadata can have come from.
   ).map(({ name, meta, value: marked }) => ({

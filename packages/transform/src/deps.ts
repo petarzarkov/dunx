@@ -36,11 +36,17 @@ export interface TransformResult {
 const slice = (source: string, node: Node): string =>
   source.slice(node.start, node.end);
 
-const constructorParams = (klass: ClassNode): readonly Node[] => {
-  const found = klass.body.body.find(
-    (member) =>
-      isMethodDefinition(member) && nameOf(member.key) === 'constructor',
+const constructorOf = (klass: ClassNode) =>
+  klass.body.body.find(
+    // `kind`, not the name: `static constructor()` is a method named constructor.
+    (member) => isMethodDefinition(member) && member.kind === 'constructor',
   );
+
+const declaresConstructor = (klass: ClassNode): boolean =>
+  constructorOf(klass) !== undefined;
+
+const constructorParams = (klass: ClassNode): readonly Node[] => {
+  const found = constructorOf(klass);
   return isMethodDefinition(found) ? found.value.params : [];
 };
 
@@ -161,7 +167,12 @@ export const transform = (
     const erased = erasedNames(typeOnly, node);
     const params = constructorParams(node);
 
-    if (params.length > 0) {
+    // A subclass whose own constructor takes nothing still needs a record, or
+    // it inherits its base's and is handed arguments it never declared.
+    if (
+      params.length > 0 ||
+      (node.superClass !== null && declaresConstructor(node))
+    ) {
       const entries = params.map((param) =>
         entryFor(source, param, erased, bound),
       );

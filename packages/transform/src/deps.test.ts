@@ -142,6 +142,28 @@ describe('classes left alone', () => {
     expect(transform(source, 'x.ts').changed).toBe(false);
   });
 
+  it('records an empty list for a subclass whose constructor takes none', () => {
+    // Without its own record the subclass would inherit its base's, and the
+    // container would inject the base's parameters into a constructor with none.
+    const source = `import { Store } from './store.js';
+export class Seeded extends Store {
+  constructor() { super([]); }
+}`;
+    const { code, annotated } = transform(source, 'x.ts');
+    expect(code).toContain(
+      "Object.defineProperty(Seeded, Symbol.for('dunx.deps'), { value: () => [] });",
+    );
+    expect(annotated).toEqual(['Seeded']);
+  });
+
+  it('does not take a static method named constructor for the constructor', () => {
+    const source = `import { Store } from './store.js';
+export class Seeded extends Store {
+  static constructor() { return 1; }
+}`;
+    expect(transform(source, 'x.ts').changed).toBe(false);
+  });
+
   it('skips a class expression, whose name is not in scope outside it', () => {
     const source = `import { Db } from './db.js';
 const Holder = class Inner {

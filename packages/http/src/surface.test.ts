@@ -118,6 +118,7 @@ const BARREL = [
   'Returns',
   'Roles',
   'RouteContext',
+  'RouteFilter',
   'RouteHandler',
   'RouteInput',
   'RoutePath',
