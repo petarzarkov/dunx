@@ -21,19 +21,18 @@ export const tagFor = (version: string): string => `v${version}`;
 
 /**
  * GitHub turns a bare `@name` in a release body into a mention: the account is
- * listed as a contributor and notified. A code span is never a mention, so a
- * decorator or a package scope outside one is wrapped in backticks. The split
- * leaves code spans at the odd indices.
+ * listed as a contributor and notified. Code is never a mention, so a decorator
+ * or a package scope outside it is wrapped in backticks. One pass matches what
+ * must stay as it is first - a fence, a code span of any backtick run, a link
+ * destination, a raw URL - and only a bare name is rewritten.
  */
+const UNMENTION =
+  /~~~[\s\S]*?~~~|(`+)[\s\S]*?\1(?!`)|\]\([^)]*\)|https?:\/\/[^\s)>\]]+|(?<![\w`/])@[A-Za-z0-9][\w-]*(?:\/[\w.-]+)?/g;
+
 const unmention = (markdown: string): string =>
-  markdown
-    .split(/(`[^`]*`)/)
-    .map((part, index) =>
-      index % 2 === 1
-        ? part
-        : part.replace(/(?<![\w`])@[A-Za-z][\w-]*(?:\/[\w.-]+)?/g, '`$&`'),
-    )
-    .join('');
+  markdown.replace(UNMENTION, (match) =>
+    match.startsWith('@') ? `\`${match}\`` : match,
+  );
 
 /**
  * A release's notes: the changelog section for that version, then a link to the
