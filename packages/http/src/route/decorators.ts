@@ -2,16 +2,22 @@ import {
   markController,
   markRoute,
   type HttpMethod,
+  type RouteFilter,
   type RoutePath,
 } from './marker.js';
 import type { Input, Returns, RouteSchemas } from './schema.js';
 
-type ControllerTarget = abstract new (...args: never[]) => object;
-
+/**
+ * `N` is every name `include` and `exclude` list, and the target has to have a
+ * member of each, so a misspelt handler is a compile error. Discovery checks the
+ * rest: that each one is a route and not some other method.
+ */
 export const Controller =
-  (prefix = '') =>
-  <T extends ControllerTarget>(target: T): T => {
-    markController(target, prefix);
+  <const N extends string = never>(prefix = '', filter?: RouteFilter<N>) =>
+  <T extends abstract new (...args: never[]) => Record<N, unknown>>(
+    target: T,
+  ): T => {
+    markController(target, prefix, filter);
     return target;
   };
 

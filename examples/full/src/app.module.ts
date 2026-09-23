@@ -13,6 +13,7 @@ import {
 import { AccountsModule } from './auth/auth.module.js';
 import { CacheModule } from './cache/cache.module.js';
 import { ChatModule } from './chat/chat.module.js';
+import { CrudModule } from './crud/crud.module.js';
 import { ProtocolsModule } from './protocols/protocols.module.js';
 import { AppConfigService, configModule } from './config.js';
 import { OpsModule } from './dashboard/dashboard.module.js';
@@ -107,6 +108,7 @@ const fileAndConsole = (
     HttpModule,
     UsersModule,
     NotesModule,
+    CrudModule,
     ChatModule,
     ProtocolsModule,
     RpcModule,

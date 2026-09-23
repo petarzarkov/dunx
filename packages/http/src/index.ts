@@ -6,7 +6,7 @@ export {
   Post,
   Put,
 } from './route/decorators.js';
-export type { HttpMethod, RoutePath } from './route/marker.js';
+export type { HttpMethod, RouteFilter, RoutePath } from './route/marker.js';
 // Route metadata and scoped middleware. `meta`/`metaKey` are the whole mechanism;
 // `@Roles` and `@Public` are wrappers over it, and ROLES/PUBLIC are exported so a
 // user's own guard can read what they set.

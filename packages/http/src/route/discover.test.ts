@@ -134,3 +134,77 @@ describe('discoverRoutes()', () => {
     expect(routesOf(new Bare())).toEqual(['GET /health']);
   });
 });
+
+describe('@Controller include and exclude', () => {
+  abstract class Crud {
+    @Get('/')
+    getList(): string {
+      return 'list';
+    }
+    @Get('/:id')
+    getOne(): string {
+      return 'one';
+    }
+    @Delete('/:id')
+    remove(): string {
+      return 'remove';
+    }
+  }
+
+  it('drops the handlers exclude names, inherited or not', () => {
+    @Controller('ex', { exclude: ['remove'] })
+    class Excluding extends Crud {}
+
+    expect(routesOf(new Excluding())).toEqual(['GET /ex', 'GET /ex/:id']);
+  });
+
+  it('keeps only the handlers include names, then applies exclude', () => {
+    @Controller('in', { include: ['getList', 'remove'], exclude: ['remove'] })
+    class Including extends Crud {}
+
+    expect(routesOf(new Including())).toEqual(['GET /in']);
+  });
+
+  it('reads the filter off the class, so an inert instance agrees', () => {
+    @Controller('inert', { exclude: ['getOne', 'remove'] })
+    class Inert extends Crud {}
+
+    expect(routesOf(Object.create(Inert.prototype) as object)).toEqual([
+      'GET /inert',
+    ]);
+  });
+
+  it('does not carry a base filter into a re-decorated subclass', () => {
+    @Controller('base', { exclude: ['remove'] })
+    class Filtered extends Crud {}
+    @Controller('child')
+    class Child extends Filtered {}
+
+    expect(routesOf(new Child())).toEqual([
+      'DELETE /child/:id',
+      'GET /child',
+      'GET /child/:id',
+    ]);
+  });
+
+  it('rejects a name the class does not have, at compile time', () => {
+    // @ts-expect-error `remvoe` is not a member of Crud
+    @Controller('typo', { exclude: ['remvoe'] })
+    class Typo extends Crud {}
+
+    expect(() => discoverRoutes(new Typo())).toThrow('Typo lists remvoe');
+  });
+
+  it('refuses a name that is not a route, naming it', () => {
+    @Controller('bad', { exclude: ['helper'] })
+    class Bad extends Crud {
+      helper(): string {
+        return 'not a route';
+      }
+    }
+
+    expect(() => discoverRoutes(new Bad())).toThrow(
+      'Bad lists helper in @Controller exclude, but it is not a route handler',
+    );
+  });
+});

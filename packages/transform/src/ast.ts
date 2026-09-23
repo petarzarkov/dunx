@@ -23,6 +23,7 @@ export interface ClassBody extends Node {
 export interface ClassNode extends Node {
   readonly id: Identifier | null;
   readonly typeParameters: Node | null;
+  readonly superClass: Node | null;
   readonly body: ClassBody;
 }
 

@@ -142,6 +142,43 @@ its decorated base out of existence.
 subclasses of one decorated base collide loudly at boot instead of silently
 mounting at the root.
 
+### A generic base controller
+
+Routes declared on an abstract base are served by every subclass. A subclass
+picks which of them it serves with `include` and `exclude`, by handler name.
+`include` applies first, then `exclude`:
+
+```ts
+abstract class CrudController<T extends Row> {
+  constructor(private readonly store: CrudStore<T>) {}
+
+  @Get('/')
+  getList(): readonly T[] {
+    return this.store.list();
+  }
+
+  @Delete('/:id', byId)
+  remove({ params }: Input<typeof byId>): { removed: boolean } {
+    return { removed: this.store.remove(params.id) };
+  }
+}
+
+@Controller('colors', { exclude: ['remove'] })
+class ColorsController extends CrudController<Color> {
+  constructor(store: ColorsStore) {
+    super(store);
+  }
+}
+```
+
+The filter belongs to the class, not to a constructor argument. OpenAPI, the
+dashboard and `@dunx/mcp` read routes without constructing the controller, so a
+filter passed to `super()` would never reach them.
+
+A name the class does not have is a compile error, and a method that is not a
+route is a boot error. The filter is inherited, and a subclass that re-applies
+`@Controller` replaces it. `examples/full/src/crud/` is the whole example.
+
 A class in `controllers` with no routes at all is a boot error:
 
 ```

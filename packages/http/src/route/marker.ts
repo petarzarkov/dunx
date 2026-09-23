@@ -7,6 +7,7 @@ import type { RouteSchemas } from './schema.js';
 
 const ROUTE = Symbol.for('dunx.route');
 const CONTROLLER = Symbol.for('dunx.controller');
+const FILTER = Symbol.for('dunx.controller.filter');
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -64,12 +65,36 @@ export const markRoute = (target: object, meta: RouteMeta): void => {
 export const routeMetaOf = (value: unknown): RouteMeta | undefined =>
   typeof value === 'function' ? (value as RouteMarked)[ROUTE] : undefined;
 
-export const markController = (target: object, prefix: string): void => {
+/**
+ * Which handlers a controller keeps, by method name: `include` first, then
+ * `exclude`. It is how a subclass of a generic base serves part of what it
+ * inherits.
+ */
+export interface RouteFilter<N extends string = string> {
+  readonly include?: readonly N[];
+  readonly exclude?: readonly N[];
+}
+
+interface FilterMarked {
+  readonly [FILTER]?: RouteFilter;
+}
+
+// The filter is always written, even as undefined, so re-decorating a subclass
+// replaces its base's filter along with its prefix.
+export const markController = (
+  target: object,
+  prefix: string,
+  filter?: RouteFilter,
+): void => {
   Object.defineProperty(target, CONTROLLER, {
     value: prefix,
     configurable: true,
   });
+  Object.defineProperty(target, FILTER, { value: filter, configurable: true });
 };
+
+export const filterOf = (target: object): RouteFilter | undefined =>
+  (target as FilterMarked)[FILTER];
 
 // Plain lookup, not Object.hasOwn: a subclass inherits its base's prefix, so two
 // subclasses of one decorated base collide loudly instead of silently mounting at
