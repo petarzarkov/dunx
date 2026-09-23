@@ -23,6 +23,7 @@
     "./styles.css": "./src/styles.css"
   },
   "scripts": {
+    "gen:logo": "bun ./scripts/gen-logo.ts",
     "test": "bun test --bail",
     "typecheck": "tsc --noEmit"
   },

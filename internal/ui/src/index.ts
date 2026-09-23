@@ -1,7 +1,6 @@
 export { theme } from './theme.js';
-// The mark, and the one place its geometry is declared. `@dunx/http` carries the
-// published copy of `LOGO_FAVICON` for the pages a backend serves, and
-// `logo.test.ts` holds it to this one.
+// The mark, and the one place its geometry is declared. `gen:logo` writes the
+// `LOGO_FAVICON` a backend's pages serve into `@dunx/http`.
 export { LOGO_FAVICON } from './logo.js';
 export {
   BoxIcon,
