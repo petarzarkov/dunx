@@ -4,6 +4,33 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.9.6 - 2026-09-23
+
+The Scalar explorer wears the dunx mark, not a stale Swagger icon
+
+The Scalar page defaulted its favicon to `data:,`, which is no image, so a
+browser that once showed Swagger UI at the same URL kept Swagger's cached
+icon. It now defaults to the dunx mark as an inline SVG, and `favicon` still
+takes a URL of your own or `false`.
+
+The dashboard's bull-board page reads the same icon without loading the
+400 KB page bundle to find it.
+
+### Fixes
+
+- **http**: generate the published favicon from internal/ui, typed string ([`77bbf7f`](https://github.com/petarzarkov/dunx/commit/77bbf7f3d1727553a3da6b86f8ec704a570d37ef))
+- **openapi**: give the Scalar page the dunx mark instead of data:, ([`c1df502`](https://github.com/petarzarkov/dunx/commit/c1df5023d9f02235b292f5f590392284ca6b2cab))
+- **release**: leave code spans, fences, link destinations and URLs alone ([`8913e1b`](https://github.com/petarzarkov/dunx/commit/8913e1b69a73b08de7733f3872db2647e1d2cb1c))
+- **release**: keep decorators and scopes in the notes from mentioning accounts ([`4ba1e90`](https://github.com/petarzarkov/dunx/commit/4ba1e9015be419d18e3d7873c769973dd5c56006))
+
+### Refactors
+
+- **scripts**: draw the OG card mark from internal/ui's geometry ([`68906a5`](https://github.com/petarzarkov/dunx/commit/68906a58dbc6e5a4acef97ebb9e6d03c8f29af7e))
+
+### Other changes
+
+- **examples**: read symbols no other suite warms in the cache test ([`7d5e57c`](https://github.com/petarzarkov/dunx/commit/7d5e57cc2876c64a4f19d796aa705f57c5fe8a99))
+
 ## 3.9.5 - 2026-09-23
 
 Pick inherited controller handlers with include and exclude
