@@ -23,6 +23,7 @@
     "./styles.css": "./src/styles.css"
   },
   "scripts": {
+    "gen:logo": "bun ./scripts/gen-logo.ts",
     "test": "bun test --bail",
     "typecheck": "tsc --noEmit"
   },
@@ -31,6 +32,7 @@
     "react": "19.2.8"
   },
   "devDependencies": {
+    "@dunx/http": "workspace:*",
     "@types/react": "19.2.18"
   }
 }

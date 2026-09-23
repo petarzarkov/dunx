@@ -1,6 +1,7 @@
 import { renderShell } from './html.js';
 import type { DashboardOptions } from './options.js';
-import { FAVICON, UI } from './ui-bundle.js';
+import { LOGO_FAVICON as FAVICON } from '@dunx/http/internal';
+import { UI } from './ui-bundle.js';
 
 /**
  * The page, behind its own entrypoint. `ui-bundle.ts` is the inlined Vite output,

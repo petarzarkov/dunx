@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { LOGO_FAVICON } from '@dunx/http/internal';
 import { PackageAssets } from '../assets.js';
 import { DOCUMENT_ELEMENT_ID } from '../shell.js';
 import type { OpenApiDocument } from '../types.js';
@@ -99,8 +100,13 @@ describe('the scalar page', () => {
     );
   });
 
-  it('suppresses the favicon request by default, and takes one of your own', () => {
-    expect(page()).toContain('<link rel="icon" href="data:,">');
+  // `data:,` is not an image, so a browser that once showed Swagger UI at the
+  // same URL kept its cached icon on the Scalar page (issue #166).
+  it('shows the dunx mark by default, and takes one of your own', () => {
+    expect(page()).toContain(
+      `<link rel="icon" href="${Bun.escapeHTML(LOGO_FAVICON)}">`,
+    );
+    expect(LOGO_FAVICON).toStartWith('data:image/svg+xml,');
     expect(page({ favicon: '/brand.svg' })).toContain(
       '<link rel="icon" href="/brand.svg">',
     );

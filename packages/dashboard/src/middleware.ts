@@ -1,4 +1,4 @@
-import type { RoutePrefix } from '@dunx/http/internal';
+import { LOGO_FAVICON, type RoutePrefix } from '@dunx/http/internal';
 import { Logger, type ModuleRef } from '@dunx/core';
 import {
   gate,
@@ -88,11 +88,10 @@ export class DashboardMiddleware implements Middleware {
    * lets a process exit cleanly against an absent Redis.
    */
   #buildBoard(): Promise<Board> {
-    // The favicon comes out of the same lazily-imported module as the page
-    // bundle, so bull-board wears the dunx mark without this file loading 400 KB
-    // to find out what it is.
-    this.#board ??= import('./ui.js').then(({ FAVICON }) =>
-      buildBoard(this.#options, `${this.#options.path}/queues`, FAVICON),
+    this.#board ??= buildBoard(
+      this.#options,
+      `${this.#options.path}/queues`,
+      LOGO_FAVICON,
     );
     return this.#board;
   }

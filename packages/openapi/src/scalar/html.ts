@@ -1,3 +1,4 @@
+import { LOGO_FAVICON } from '@dunx/http/internal';
 import type { PackageAssets } from '../assets.js';
 import type { PageOptions } from '../renderer.js';
 import { readDocument, renderShell } from '../shell.js';
@@ -6,12 +7,6 @@ import { renderScalarOptions, type ScalarOptions } from './options.js';
 
 /** The element Scalar mounts into. */
 export const MOUNT_ELEMENT_ID = 'scalar-api-reference';
-
-/**
- * `data:,` paints no icon and costs no request. Scalar ships no favicon, and
- * without a `<link rel="icon">` the browser asks the app for `/favicon.ico`.
- */
-const NO_FAVICON = 'data:,';
 
 /**
  * A Scalar shell: the standalone bundle, the document embedded as JSON, and one
@@ -31,7 +26,9 @@ export const renderScalarPage = (
     mountId: MOUNT_ELEMENT_ID,
     jsonHref: options.jsonHref,
     ...(scalar.title === undefined ? {} : { title: scalar.title }),
-    icon: scalar.favicon ?? NO_FAVICON,
+    // Scalar ships no icon. A real one, not `data:,`: that is no image, and a
+    // browser that once showed Swagger UI at this URL kept its cached icon.
+    icon: scalar.favicon ?? LOGO_FAVICON,
     scripts: [assets.href(options.mountedAt, 'standalone.js')],
     boot:
       '(function(){' +

@@ -19,6 +19,7 @@
     "dist",
     ".claude/worktrees",
     "packages/dashboard/src/ui-bundle.ts",
+    "packages/http/src/logo.ts",
     "tools/create-app/templates"
   ],
   "rules": {
