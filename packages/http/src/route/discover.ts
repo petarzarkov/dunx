@@ -63,8 +63,15 @@ const applyFilter = (
   if (filter === undefined) return marked;
 
   const names = new Set(marked.map(({ name }) => name));
+  // Checked at runtime too: an untyped caller's misspelt key would otherwise
+  // leave the route it meant to hide being served.
   for (const [list, listed] of Object.entries(filter)) {
-    for (const name of listed as readonly string[]) {
+    if (list !== 'include' && list !== 'exclude') {
+      throw new AppError(
+        `${klass.name} passes ${list} to @Controller, which takes include and exclude.`,
+      );
+    }
+    for (const name of (listed ?? []) as readonly string[]) {
       if (!names.has(name)) {
         throw new AppError(
           `${klass.name} lists ${name} in @Controller ${list}, but it is not a ` +

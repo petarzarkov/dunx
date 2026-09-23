@@ -33,6 +33,7 @@ export interface FunctionExpression extends Node {
 
 export interface MethodDefinition extends Node {
   readonly type: 'MethodDefinition';
+  readonly kind: 'constructor' | 'method' | 'get' | 'set';
   readonly key: Node;
   readonly value: FunctionExpression;
 }

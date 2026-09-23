@@ -156,6 +156,14 @@ export class Seeded extends Store {
     expect(annotated).toEqual(['Seeded']);
   });
 
+  it('does not take a static method named constructor for the constructor', () => {
+    const source = `import { Store } from './store.js';
+export class Seeded extends Store {
+  static constructor() { return 1; }
+}`;
+    expect(transform(source, 'x.ts').changed).toBe(false);
+  });
+
   it('skips a class expression, whose name is not in scope outside it', () => {
     const source = `import { Db } from './db.js';
 const Holder = class Inner {

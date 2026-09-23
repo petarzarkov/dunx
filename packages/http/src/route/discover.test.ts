@@ -195,6 +195,24 @@ describe('@Controller include and exclude', () => {
     expect(() => discoverRoutes(new Typo())).toThrow('Typo lists remvoe');
   });
 
+  it('refuses a key other than include and exclude', () => {
+    const exlude = { exlude: ['remove'] } as never;
+    @Controller('key', exlude)
+    class Misspelt extends Crud {}
+
+    expect(() => discoverRoutes(new Misspelt())).toThrow(
+      'Misspelt passes exlude to @Controller, which takes include and exclude',
+    );
+  });
+
+  it('treats an explicit undefined list as absent', () => {
+    const filter = { include: undefined, exclude: ['remove'] } as never;
+    @Controller('undef', filter)
+    class Undef extends Crud {}
+
+    expect(routesOf(new Undef())).toEqual(['GET /undef', 'GET /undef/:id']);
+  });
+
   it('refuses a name that is not a route, naming it', () => {
     @Controller('bad', { exclude: ['helper'] })
     class Bad extends Crud {

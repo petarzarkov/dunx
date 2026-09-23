@@ -38,8 +38,8 @@ const slice = (source: string, node: Node): string =>
 
 const constructorOf = (klass: ClassNode) =>
   klass.body.body.find(
-    (member) =>
-      isMethodDefinition(member) && nameOf(member.key) === 'constructor',
+    // `kind`, not the name: `static constructor()` is a method named constructor.
+    (member) => isMethodDefinition(member) && member.kind === 'constructor',
   );
 
 const declaresConstructor = (klass: ClassNode): boolean =>
