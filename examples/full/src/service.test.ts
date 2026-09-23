@@ -331,13 +331,18 @@ it('serves a cached read, one load per key in flight', async () => {
   const loads = async (): Promise<number> =>
     (await json<{ loads: number }>('catalog')).body.loads;
 
+  // Symbols no other file reads: every file in this process shares one L2
+  // prefix, and dashboard.test.ts warms `acme`.
+  const hot = `svc${crypto.randomUUID().slice(0, 8)}`;
+  const cold = `svc${crypto.randomUUID().slice(0, 8)}`;
+
   const before = await loads();
-  const first = await json<{ symbol: string; price: number }>('catalog/acme');
+  const first = await json<{ symbol: string; price: number }>(`catalog/${hot}`);
   expect(first.status).toBe(200);
-  expect(first.body.symbol).toBe('acme');
+  expect(first.body.symbol).toBe(hot);
 
   // A hit: the loader does not run a second time.
-  const second = await json<{ loadedAt: number }>('catalog/acme');
+  const second = await json<{ loadedAt: number }>(`catalog/${hot}`);
   expect(second.body.loadedAt).toBe(
     (first.body as unknown as { loadedAt: number }).loadedAt,
   );
@@ -345,14 +350,14 @@ it('serves a cached read, one load per key in flight', async () => {
 
   // Ten at once on a cold key share a single load.
   const at = await loads();
-  await Promise.all(Array.from({ length: 10 }, () => json('catalog/zeta')));
+  await Promise.all(Array.from({ length: 10 }, () => json(`catalog/${cold}`)));
   expect(await loads()).toBe(at + 1);
 
-  const evicted = await json<{ evicted: boolean }>('catalog/acme', {
+  const evicted = await json<{ evicted: boolean }>(`catalog/${hot}`, {
     method: 'DELETE',
   });
   expect(evicted.body.evicted).toBe(true);
-  await json('catalog/acme');
+  await json(`catalog/${hot}`);
   expect(await loads()).toBe(at + 2);
 });
 

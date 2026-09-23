@@ -62,4 +62,41 @@ describe('releaseBody', () => {
 
     expect(body).toBe(`[Full release notes](${url})`);
   });
+
+  /*
+   * GitHub resolves a bare `@name` in a release body to that account, lists it
+   * as a contributor and notifies it. v3.9.5 credited the user "controller".
+   */
+  it('leaves code, link destinations and URLs as they were', () => {
+    const line = [
+      '``a `@Get` inside``',
+      '[pkg](https://www.npmjs.com/package/@dunx/http)',
+      'https://www.npmjs.com/package/@dunx/core',
+      '@1Password',
+    ].join(' ');
+    const fence = '```ts\n@Controller()\n```';
+    const changelog = CHANGELOG.replace(
+      'move the constraint to the return type',
+      line,
+    ).replace('### Bug fixes', `${fence}\n\n### Bug fixes`);
+    const body = releaseBody(changelog, '2.0.1', url);
+
+    expect(body).toContain(
+      '``a `@Get` inside`` [pkg](https://www.npmjs.com/package/@dunx/http) ' +
+        'https://www.npmjs.com/package/@dunx/core `@1Password`',
+    );
+    expect(body).toContain(fence);
+  });
+
+  it('keeps a decorator or scope from reading as a mention', () => {
+    const changelog = CHANGELOG.replace(
+      'move the constraint to the return type',
+      'pick handlers with @Controller, see `@Get` and @dunx/http; mail a@b.io',
+    );
+    const body = releaseBody(changelog, '2.0.1', url);
+
+    expect(body).toContain(
+      'pick handlers with `@Controller`, see `@Get` and `@dunx/http`; mail a@b.io',
+    );
+  });
 });
