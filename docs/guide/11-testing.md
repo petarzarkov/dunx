@@ -1,6 +1,8 @@
 # Testing
 
-`@dunx/testing` is two functions and a logger. It builds the container your
+`@dunx/testing` is centred on two functions and a logger, `createTestApp`,
+`createTestServer` and `RecordingLogger`, with `testRoot`, `testClient` and
+`http2Client` for the cases they do not cover. It builds the container your
 application would have, with the bindings you name replaced, and it can put a
 real `Bun.serve` in front of that container too.
 
@@ -293,31 +295,43 @@ const app = await HttpFactory.create(AppModule, httpOptions(config));
 const server = await createTestServer({
   modules: [ApiModule],
   ...httpOptions(config),
+  requestLogging: false,
 });
 ```
 
-`createTestServer` overrides `port` and `requestLogging` itself, so spreading the
-whole object is safe.
+`createTestServer` always overrides `port` (to `0`). `requestLogging` and
+`bootLogging` are only **defaulted** to `false`: a value the spread carries wins,
+so the shared object above would log every request in every suite unless the
+call site sets `requestLogging: false` after the spread, as shown.
+
+The alternative to spreading is to put the settings in an `HttpOptionsProvider`
+the application's module binds (see
+[Configuration](./12-configuration.md#settings-the-http-server-owns)). The suite
+then imports that module and passes nothing.
 
 **Forgetting is loud.** If the graph declares a `Middleware` implementation that no
-`@UseGuards` attaches - the shape of a global guard - and no `middleware` was
-passed, `createTestServer` writes one line to `console.warn` naming the class.
-Pass `middleware: []` to declare the omission intentional and the warning goes
-away.
+`@UseGuards` attaches - the shape of a global guard - and neither the `middleware`
+argument nor a bound `HttpOptionsProvider` supplies any, `createTestServer` writes
+one line to `console.warn` naming the class.
+
+Bind the same `HttpOptionsProvider`
+the application binds, or pass `middleware: []` to declare the omission
+intentional, and the warning goes away.
 
 It writes to `console.warn` rather than the bound `Logger` so that a suite
 asserting on a `RecordingLogger` does not find an entry the application never
 wrote.
 
-`TestServer` is a `TestClient` plus two things:
+`TestServer` is a `TestClient` plus three things:
 
-| Member                  | Does                                                               |
-| ----------------------- | ------------------------------------------------------------------ |
-| `url`                   | The base URL, as `listen()` returned it.                           |
-| `request(path?, init?)` | The raw `Response`. For bytes, HTML, or a header assertion.        |
-| `json<T>(path?, init?)` | `{ status, headers, body }` in one await.                          |
-| `app`                   | The `HttpApp`, for `app.get(...)` on anything in the container.    |
-| `close()`               | `app.shutdown()`: stops the server, then tears the container down. |
+| Member                  | Does                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| `url`                   | The base URL, as `listen()` returned it.                                         |
+| `request(path?, init?)` | The raw `Response`. For bytes, HTML, or a header assertion.                      |
+| `json<T>(path?, init?)` | `{ status, headers, body }` in one await.                                        |
+| `app`                   | The `HttpApp`, for `app.get(...)` on anything in the container.                  |
+| `gatewayUrl`            | Where gateways answer when `gatewayPort` split them off `url`; else `undefined`. |
+| `close()`               | `app.shutdown()`: stops the server, then tears the container down.               |
 
 `json:` on the init object serialises a body and sets `content-type:
 application/json` unless the headers already carry one. It covers every verb, so
@@ -459,6 +473,11 @@ const url = await app.listen(0);
 `testClient(url)` is exported too, so the same `request`/`json` pair can be
 pointed at an app booted any other way.
 
+`http2Client(url, timeoutMs?)` is the same pair over HTTP/2 cleartext, for a
+server started with `http2: true`. Bun's `fetch` cannot call an h2c origin, so it
+goes through `node:http2` with one connection per call. It takes a string, bytes
+or `json` as the body and throws on anything else.
+
 ## `{ modules, overrides }`, and nothing more
 
 A fixture class that needs binding goes in a two-line `@Module`, exactly where
@@ -499,7 +518,8 @@ asserting against a container the production app never builds.
   a conditional spread at the call site.
 - **An omitted `HttpOptions` field is absent** rather than defaulted to whatever
   production uses. `middleware` and `onError` are the two that change what the app
-  does; share one `httpOptions(config)` between `main.ts` and the suites.
+  does; bind the application's `HttpOptionsProvider` in the graph under test, or
+  share one `httpOptions(config)` between `main.ts` and the suites.
 
 This is the last of the core guides. `examples/testing` is a working version of
 everything above, and `examples/full/src/service.test.ts` exercises the harness

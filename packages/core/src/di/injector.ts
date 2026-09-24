@@ -308,7 +308,7 @@ export class Injector {
       const remedy =
         dep.typeOnly === undefined
           ? 'Replace the type with an abstract class, or bind it with token() ' +
-            'and declare the parameter as that token.'
+            'and read it with inject(TOKEN) in a field initializer.'
           : `${dep.typeOnly} is imported with \`import type\`, which erases it. ` +
             'Make it a value import.';
 

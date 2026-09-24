@@ -28,12 +28,16 @@ import { Module } from '@dunx/core';
 import { DbConnection } from '@dunx/infra/db';
 import { admin, bearer } from 'better-auth/plugins';
 import { AppConfigService } from '../config.js';
+import { DatabaseModule } from '../database/database.module.js';
 import { ProfileController } from './profile.controller.js';
 
 @Module({
   imports: [
     AuthModule.forRootAsync(
       {
+        // `DbConnection` lives in DatabaseModule's scope, so the factory names
+        // it. `AppConfigService` needs no import: ConfigModule is global.
+        imports: [DatabaseModule],
         useFactory: (config: AppConfigService, connection: DbConnection) => ({
           secret: config.get('auth').secret,
           baseURL: `http://localhost:${config.get('port')}`,
@@ -401,6 +405,7 @@ better-auth's `database` option over a connection the app **already opened**:
 import { drizzleDatabase } from '@dunx/auth/drizzle';
 
 AuthModule.forRootAsync({
+  imports: [DatabaseModule],
   useFactory: (connection: DbConnection) => ({
     database: drizzleDatabase(connection),
   }),
@@ -432,6 +437,7 @@ import { redisStorage } from '@dunx/auth';
 import { RedisConnection } from '@dunx/infra/redis';
 
 AuthModule.forRootAsync({
+  imports: [CacheModule], // the app module that binds RedisModule.forRoot()
   useFactory: (redis: RedisConnection) => ({
     secondaryStorage: redisStorage(redis),
   }),
@@ -518,9 +524,9 @@ that reads it.
 Two things learned while building the test fixture, which apply if you create
 those tables by hand:
 
-- ``db.run(sql`...`)`` goes through `bun:sqlite`'s `prepare`, which compiles
-  **one** statement and silently drops what follows the first semicolon. Four
-  `CREATE TABLE`s in one template gives one table, with no error.
+- ``db.run(sql`...`)`` runs one statement per call; see
+  [Database](./14-database.md) for why a multi-statement template silently
+  creates only the first table.
 - better-auth rejects a cookie-bearing state change with no `Origin` header
   (`MISSING_OR_NULL_ORIGIN`), so a server-side client has to send one matching
   `trustedOrigins`. A browser does it for free.

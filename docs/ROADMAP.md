@@ -1,6 +1,6 @@
 # dunx - Roadmap
 
-What is built, what is next, and the reference implementations to work from. Read
+What is built and what is next. Read
 [ARCHITECTURE.md](./ARCHITECTURE.md) for the decisions behind the built parts and
 [../CLAUDE.md](../CLAUDE.md) for the rules that constrain the next ones.
 
@@ -62,22 +62,6 @@ So, until there is external demand:
 This is a sequencing decision, not a judgement on the frozen packages. Revisit it the
 moment the constraint changes: an external issue, a real adopter, or a dependency
 that forces a hand.
-
-## Reference implementations - do not design from scratch
-
-`~/repos/nestjs-template` is a working production app by the same
-owner. **Read the relevant part before designing any of the items below.** It is
-NestJS-shaped, so port the _approach_, not the wiring.
-
-| Concern                               | Reference                                                                                                                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Queues, job processing, job discovery | `src/infra/queue/` - `job.processor.ts`, `job.module.ts`, `decorators/job-handler.decorator.ts`, `services/job-dispatcher.service.ts`, `services/job-publisher.service.ts` |
-| Worker/child-process spawning         | `src/infra/queue/job.module.ts` - what a spawned worker actually needs                                                                                                     |
-| Redis everywhere                      | `src/infra/redis/`                                                                                                                                                         |
-| Redis as a WebSocket adapter          | `src/notifications/events/socket.adapter.ts`                                                                                                                               |
-| Drizzle schemas, migrations, seeders  | `src/infra/db/` - `schema.ts`, `migrations/`, `seeders/`, `base.repository.ts`                                                                                             |
-| Zod DTOs and validation               | `src/config/env-vars.dto.ts`, `src/core/zod/`                                                                                                                              |
-| Auth                                  | `src/auth/auth.config.ts` (Better Auth)                                                                                                                                    |
 
 ## Settled - the outcome, so the reasoning is not re-litigated
 
@@ -426,7 +410,7 @@ survives the plan is the decision taken inside Phase 1, because it is the one a
 contributor still has to obey: there is a ladder of examples, and it is not one per
 package.
 
-### Per-package examples were reverted; a ladder of four replaced them
+### Per-package examples were reverted; a ladder of five replaced them
 
 The original decision - recorded here as "seven apps meant seven bootstraps to keep
 alive and nowhere that showed the packages composing" - **stands, and was not
@@ -451,7 +435,7 @@ original objection was about, and it did not shrink to make room for the others.
 example is a bootstrap that rots the moment nobody runs it, so each is wired into
 CI the same way `full`'s `tour` is - `bun run --filter '@dunx/example-*' test` runs
 all of their suites, and `full` additionally runs its `tour`. An example that cannot
-be kept alive by CI does not get added. That is the whole test for whether a fifth
+be kept alive by CI does not get added. That is the whole test for whether a sixth
 one earns its place, and it is why several plausible candidates were rejected:
 
 - **An auth example.** It would be `full`'s `src/auth/` copied with the rest deleted:

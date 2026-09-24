@@ -29,8 +29,10 @@ never loads it.
 ## Usage
 
 ```ts
-import { AuthModule } from '@dunx/auth';
+import { AuthModule, SessionGuard } from '@dunx/auth';
 import { drizzleDatabase } from '@dunx/auth/drizzle';
+import { Module } from '@dunx/core';
+import { HttpFactory } from '@dunx/http';
 import { DbConnection } from '@dunx/infra/db';
 
 @Module({
@@ -66,7 +68,7 @@ The [Authentication guide](../../docs/guide/17-authentication.md) is canonical.
 | `betterAuthDocument`  | better-auth's own paths merged into the OpenAPI document          |
 | `bunPassword`         | `Bun.password` native bcrypt, applied by default                  |
 | `@dunx/auth/drizzle`  | better-auth over the connection the app already opened            |
-| `@dunx/auth/redis`    | `secondaryStorage` over `Bun.RedisClient`                         |
+| `redisStorage`        | `secondaryStorage` over `Bun.RedisClient`                         |
 
 ## Notes
 

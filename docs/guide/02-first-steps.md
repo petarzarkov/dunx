@@ -78,27 +78,36 @@ Ctrl+C stops without writing.
 
 The set:
 
-| Feature      | What arrives                                                     | Pulls in                     |
-| ------------ | ---------------------------------------------------------------- | ---------------------------- |
-| `notes`      | CRUD routes with zod validation. The smallest real feature       |                              |
-| `openapi`    | OpenAPI 3.1 from the routes' own schemas, plus the explorer page |                              |
-| `http`       | CORS, a request-logging middleware and error mapping             |                              |
-| `guards`     | `@Roles` and `@Public`, and a protected controller               |                              |
-| `database`   | drizzle over `bun:sqlite`, with a schema, seeds and migrations   |                              |
-| `users`      | A repository, a service and validated routes over the database   | `database`                   |
-| `auth`       | better-auth mounted, with `SessionGuard` and an audit trail      | `database`                   |
-| `cache`      | `Bun.RedisClient` behind a session store                         |                              |
-| `websockets` | A `@Gateway` with `@OnMessage`, `PubSub` and a Redis relay       | `cache`                      |
-| `images`     | `Bun.Image` resizing and format conversion behind a route        |                              |
-| `files`      | Uploads and downloads on `Bun.file`                              |                              |
-| `jobs`       | bullmq queues and a job processor, over `Bun.RedisClient`        | `images`                     |
-| `health`     | Liveness and readiness probes, and which parts are degraded      | `cache`, `database`, `files` |
+| Feature      | What arrives                                                                    | Pulls in                                  |
+| ------------ | ------------------------------------------------------------------------------- | ----------------------------------------- |
+| `notes`      | CRUD routes with zod validation. The smallest real feature                      |                                           |
+| `openapi`    | OpenAPI 3.1 from the routes' own schemas, plus the explorer page                |                                           |
+| `http`       | CORS, a middleware of your own on the response, and error mapping               |                                           |
+| `guards`     | Route guards with `@Roles` and `@Public`, and a protected controller            |                                           |
+| `database`   | drizzle over `bun:sqlite`, with a schema, seeds and migrations                  |                                           |
+| `users`      | A repository, a service and validated routes over the database                  | `database`                                |
+| `auth`       | better-auth mounted, with `SessionGuard` and an audit trail                     | `database`                                |
+| `cache`      | `Bun.RedisClient` behind a session store, and a two-tier `Cache` in front of it |                                           |
+| `websockets` | A `@Gateway` with `@OnMessage`, `PubSub` and a Redis relay                      | `cache`, `http`                           |
+| `images`     | `Bun.Image` resizing and format conversion behind a route                       |                                           |
+| `files`      | Uploads and downloads on `Bun.file`, with a workspace root                      |                                           |
+| `jobs`       | bullmq queues over `Bun.RedisClient`, background handlers forked                | `images`                                  |
+| `messaging`  | RabbitMQ with `@AmqpHandler`, a topic exchange, traces that cross the broker    |                                           |
+| `health`     | `HealthModule`'s liveness and readiness probes, wired to the app's indicators   | `cache`, `database`, `files`, `messaging` |
+| `throttle`   | A fixed-window rate limit, counted in Redis, with per-route overrides           | `cache`                                   |
+| `schedule`   | `@Cron`, `@Interval` and `@OnceOnBoot` on `Bun.cron`                            |                                           |
+| `assets`     | A static directory on `Bun.file`, with a short max-age and an immutable rule    |                                           |
+| `stats`      | Request, query, Redis command and queue timings, as JSON                        | `database`, `cache`, `jobs`               |
+| `client`     | The outbound half of `@dunx/http`: retry, backoff and a typed `FetchError`      |                                           |
 
 Requirements come along automatically. The list marks them `◈` while you choose.
 Import order is construction order, so a database is built before the feature that
-reads it and torn down after it. `cache`, `websockets` and `jobs` want a Redis or
-Valkey. Each reports itself degraded rather than failing the boot, so the app still
-starts without one.
+reads it and torn down after it.
+
+`cache`, `jobs`, `throttle` and `stats` want a Redis
+or Valkey, `websockets` wants one only for multi-node fan-out, and `messaging` wants
+RabbitMQ. Each reports itself degraded rather than failing the boot, so the app
+still starts without one.
 
 ### Where the code comes from
 
@@ -150,75 +159,18 @@ preload = ["@dunx/transform/preload"]
 preload = ["@dunx/transform/preload"]
 ```
 
-The only setup dunx asks for. Read it rather than copying it.
-
-`@dunx/transform/preload` registers a Bun plugin. On load, the plugin parses each
-`.ts` and `.tsx` file with `oxc-parser`, reads every class declaration's
-constructor parameter types, and appends one statement after the class:
-
-```ts
-export class GreetingsService {
-  constructor(private readonly logger: Logger) {}
-}
-Object.defineProperty(GreetingsService, Symbol.for('dunx.deps'), {
-  value: () => [Logger],
-});
-```
-
-The container reads that record and resolves the arguments before calling `new`.
-Files under `node_modules` are skipped: a published package was already
-transformed by its own build, and re-parsing dependencies on every load is pure
-cost.
+The only setup dunx asks for. `@dunx/transform/preload` registers a Bun plugin
+that reads each class's constructor parameter types as the file loads and records
+them on the class, so the container can resolve them before calling `new`.
 
 There are two `preload` entries because Bun's test runner reads its own. The
 top-level one covers `bun run start` and `bun src/main.ts`; the `[test]` one
 covers `bun test`. Miss the second and your app runs but your suite does not.
 
-**What breaks without it.** The container compares the recorded dependency count
-against `Function.prototype.length`, which still reports the declared parameter
-count after TypeScript's parameter properties are compiled away. Zero recorded
-dependencies plus a non-zero arity can only mean the plugin never saw the file.
-Boot fails with a clear message carrying the fix:
-
-```
-GreetingsService declares 1 constructor parameter(s) but no dependencies were
-recorded for it, so @dunx/transform did not transform GreetingsService. Register
-the plugin, then retry:
-
-  # bunfig.toml
-  preload = ["@dunx/transform/preload"]
-
-  [test]
-  preload = ["@dunx/transform/preload"]
-```
-
-There are no false positives. A constructor whose parameters all have defaults
-has `length === 0` and is genuinely callable with no arguments. A class bound
-with `useValue` is never constructed. The transform only writes a record whose
-length equals the parameter count, so a present record is never empty.
-
-`@dunx/core` does not register the plugin on import, for two reasons, both fatal.
-
-It would make DI import-order dependent. Bun's `onLoad` only affects modules
-loaded after registration, and static imports evaluate depth-first in source
-order, so `import { AppFactory } from '@dunx/core'` before your module would work
-while the reverse order silently skipped the transform. That is the
-"`reflect-metadata` must be the first import" fragility dunx exists to avoid.
-
-It would also cost `@dunx/core` its empty dependency list. Every production
-deploy would carry a Rust parser to run code already transformed at build time.
-
-Two other places accept the same plugin object if `bunfig.toml` does not suit you:
-
-```ts
-import { depsPlugin } from '@dunx/transform';
-
-// A production build.
-await Bun.build({ entrypoints: ['./src/main.ts'], plugins: [depsPlugin] });
-```
-
-and `bun --preload @dunx/transform/preload src/main.ts`, which needs no config
-file at all.
+Without the plugin, boot fails with a message quoting the snippet above. What the
+plugin writes, why `@dunx/core` does not register it on import, and the
+`Bun.build` form for a production build are in
+[Providers](./03-providers.md#how-constructor-injection-works).
 
 ### `package.json`
 
@@ -268,31 +220,18 @@ hold the socket the new ones are trying to bind.
 The scaffold already does this, and it matters when you add a package by hand
 later.
 
-dunx releases in lockstep: every package shares one version and ships together,
-even the ones a release did not touch. The packages peer-depend on each other by
-caret range, so mixing minors resolves to a graph that warns on install:
-
-```
-warn: incorrect peer dependency "@dunx/http@0.2.0"
-```
-
-That happens when a lockfile already has an entry satisfying your range. Adding
-`@dunx/auth` to an app pinned at `^0.2.0` can resolve auth to 0.2.5 and leave the
-rest at 0.2.0, and `@dunx/auth@0.2.5` peers on `@dunx/http@^0.2.5`.
-
-The warning is the good case. The bad one is **two copies of `@dunx/core` in one
-tree**, which breaks dependency injection. A token _is_ a class object, so two
-copies are two different classes. A provider bound against one is invisible to a
-resolution against the other. The error says nothing is bound, from somewhere
-unrelated to the version mismatch.
-
-So when you add a package, match the version to the ones already installed:
+dunx releases in lockstep, and the packages peer-depend on each other, so a
+mismatched `@dunx/*` version warns on install at best. At worst it installs two
+copies of `@dunx/core`, and a provider bound against one is invisible to a
+resolution against the other. When you add a package, match the version to the
+ones already installed:
 
 ```bash
 bun add @dunx/auth@$(bun pm pkg get dependencies.@dunx/core --workspaces=false | tr -d '"^')
 ```
 
-Or edit the manifest so every `@dunx/*` range reads the same, and reinstall.
+Why lockstep is a correctness requirement:
+[Packaging](../architecture/packaging.md#versioning-is-lockstep-as-a-correctness-requirement).
 
 ### `tsconfig.json`
 
@@ -391,8 +330,8 @@ which constructed instances to scan for routes.
 
 Note that a bare class in either list is shorthand for binding it to itself. There
 is no `provide(GreetingsService, { useClass: GreetingsService })` to write for the
-ordinary case. [Modules](./04-modules.md) covers `imports`, why there is no
-`exports`, and how ordering works.
+ordinary case. [Modules](./04-modules.md) covers `imports`, `exports`, and how
+ordering works.
 
 ### `src/greetings.service.ts`
 
@@ -470,12 +409,8 @@ through untouched when you need the escape hatch.
 is there. Declaring a `params` schema is what makes it typed and coerced, and
 [Controllers](./05-controllers.md) shows that.
 
-`Input<RouteSchemas>` is the annotation for a route with no options at all. You
-could also take no parameter. What you cannot do is leave the parameter
-unannotated: a standard method decorator can check a handler's input type but
-cannot contextually type an unannotated one, so an unannotated parameter is
-`TS7006`. The reasoning, and the measurement behind it, are in
-[Controllers](./05-controllers.md).
+`Input<RouteSchemas>` is the annotation for a route with no options at all; the
+parameter has to be annotated, and [Validation](./06-validation.md) explains why.
 
 ### `src/app.test.ts`
 
@@ -644,8 +579,10 @@ recursively, so `AuditService` is built before `GreetingsService` regardless of
 where it appears in the list. What order does control is teardown, and
 [Modules](./04-modules.md) covers that.
 
-Forget to list `AuditService` and it still works: every class is injectable by
-default and an unbound constructor self-binds.
+Forget to list `AuditService` and it still works here: an unbound class self-binds
+into the module that first asks for it. A second module injecting it is then a boot
+error, because the class now belongs to the first module's scope and that module
+does not export it. List it in the module that owns it.
 
 That convenience has two sharp edges. A typo in a module's `providers` list goes
 uncaught, and an abstract class that is injected but never bound gets constructed
@@ -658,9 +595,12 @@ into a useless object rather than erroring.
 `provide()`. [Modules](./04-modules.md) for composition, ordering and dynamic
 modules. [Controllers](./05-controllers.md) for routing, validation and errors.
 
-The four example applications in the repository are a ladder:
+The five example applications in the repository are a ladder:
 [`examples/minimal`](../../examples/minimal) is this app,
 [`examples/databases`](../../examples/databases) sets up SQLite, Postgres and
-MySQL, [`examples/testing`](../../examples/testing) covers overrides and guards,
-and [`examples/full`](../../examples/full) is every package in one long-running
-service.
+MySQL, and [`examples/testing`](../../examples/testing) covers overrides and
+guards.
+
+[`examples/full`](../../examples/full) is every package in one long-running
+service, and [`examples/binary`](../../examples/binary) compiles an app to a single
+executable.

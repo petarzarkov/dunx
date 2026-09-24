@@ -3,14 +3,17 @@
 A gap analysis between what a production NestJS application uses and what dunx
 provides, written from the migrating application's point of view.
 
-Status legend: **undesigned** = no decision recorded anywhere · **out of scope** =
-refused, with the reasoning below.
+Status legend: **done** = shipped, with the dunx spelling in the middle column ·
+**partial** = shipped, with the gap named in the same cell · **n/a** = not needed,
+because dunx has no equivalent problem · **undesigned** = no decision recorded
+anywhere · **out of scope** = refused, with the reasoning below.
 
 ## Read this part first: five things that fail at boot
 
 Everything else on this page is a mapping you can look up when you reach it. These
 five are what a migrating app hits in the first hour, and each one stops the process
-rather than degrading.
+rather than degrading. A sixth, import extensions, fails earlier, at compile or
+load time.
 
 **1. The `bunfig.toml` preload is not optional.**
 
@@ -44,8 +47,10 @@ An interface, a primitive, a union, a class type parameter, or a value imported 
 frames from the mistake. dunx fails at boot instead, naming the parameter and its
 position.
 
-Replace the type with an abstract class, or bind it with `token()` and declare the
-parameter as that token. Every `*Options` in the framework is a class for this reason.
+Replace the type with an abstract class, or bind it with `token()` and read it with
+`inject(TOKEN)` in a field initializer: a token is a value, so it cannot be a
+parameter type. See [Providers](./guide/03-providers.md). Every `*Options` in the
+framework is a class for this reason.
 The error tells the `import type` case apart from the others, because that one has a
 one-line fix.
 
@@ -83,7 +88,20 @@ two instances of everything in them. Take one:
 If two feature modules need the same binding, give it its own module with
 `global: true` rather than calling `forRoot()` twice.
 
-**5. Relative imports end in `.js` under `nodenext`, and nowhere else.**
+**5. A class no module lists belongs to the first scope that asks for it.**
+
+Nest refuses to inject a provider no module lists. dunx makes every class
+injectable, so an unlisted class self-binds instead, into the scope of whichever
+consumer resolves it first. A consumer in a second module is then a boot error,
+because the binding lives in a scope that does not export it.
+
+List the class in one module's `providers` and `exports`, and import that module
+wherever it is needed. A framework service is the case that bites: bind it in the
+module that owns it rather than leaving it to self-bind.
+
+### Before boot: relative imports end in `.js` under `nodenext`
+
+This one fails at compile or load time rather than at boot.
 
 Not `.ts`, not extensionless. Whether this is the largest diff of the migration or
 no diff at all depends on a setting the app already has:
@@ -259,18 +277,14 @@ Apps opt in with one line in `bunfig.toml`:
 preload = ["@dunx/transform/preload"]
 ```
 
-See architecture/dependency-injection.md, "Constructor injection without decorator metadata", for how
-it works and what it refuses to guess.
+See [Constructor injection without decorator metadata](./architecture/dependency-injection.md#constructor-injection-without-decorator-metadata)
+for how it works and what it refuses to guess.
 
-What still changes, per class:
+What still changes, per class, beyond the [Core DI](#core-di) table:
 
 | Nest                                      | dunx                                              |
 | ----------------------------------------- | ------------------------------------------------- |
-| `@Injectable()`                           | delete it - every class is injectable             |
-| `@Inject(TOKEN) private x: T`             | declare the parameter as the token's type         |
-| `@Global()`                               | `global: true` on the same options object         |
-| `exports: [...]`                          | `exports: [...]`, unchanged                       |
-| `{ provide: X, useClass: Y }`             | `provide(X, { useClass: Y })`                     |
+| `@Inject(TOKEN) private x: T`             | `readonly x = inject(TOKEN)`, a field initializer |
 | `OnModuleInit`                            | `OnInit` - on a service as well as a module       |
 | `OnModuleDestroy`                         | `OnShutdown` - likewise                           |
 | `NestFactory.create`                      | `HttpFactory.create`                              |
@@ -286,18 +300,13 @@ Custom parameter decorators have no target API. See
 
 `@Inject('SOME_STRING')` has no equivalent. A dunx token is an object identity
 from `token<T>()` rather than a name, so a string token becomes an exported
-constant that both sides import. This is the only case where the parameter type
-alone is insufficient.
+constant that both sides import, and the consumer reads it with `inject()`.
 
 ## What comes free
 
-- **`@Global()` disappears as a decorator**, becoming `global: true` on the same
-  options object the module already has. Nest needs both spellings because
-  `DynamicModule` cannot carry a decorator; dunx needs one.
 - **`reflect-metadata` and its import-order fragility disappear.**
-- **`@Injectable()` disappears.** Every class is injectable.
 - **`@Inject()` disappears** for everything a parameter type can name, which is
-  everything except a string token. Nest needs it wherever
+  everything except a `token()`. Nest needs it wherever
   `emitDecoratorMetadata` degrades a type to `Object`; dunx reads the real type
   from source, so there is nothing to work around.
 - **`forwardRef()` disappears.** Dependencies are recorded as a thunk evaluated at

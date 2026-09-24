@@ -26,22 +26,28 @@ contradicts it is a decision made without measuring.
 
 ## The integrations
 
-Seven areas are a mature library wired in rather than dunx code. This is the second
-half of the principle above: **never reimplement what Bun does, never invent what a
-mature library already solves.** None of them restates the library's own surface.
+Each area below is a mature library wired in rather than dunx code. This is the
+second half of the principle above: **never reimplement what Bun does, never
+invent what a mature library already solves.** None of them restates the
+library's own surface.
 
-| Page                                               | Library                                        |
-| -------------------------------------------------- | ---------------------------------------------- |
-| [The database layer](./architecture/database.md)   | drizzle, over Bun's own SQLite and SQL drivers |
-| [Authentication](./architecture/authentication.md) | better-auth                                    |
-| [Queues](./architecture/queues.md)                 | bullmq, over `Bun.RedisClient`                 |
-| [Logging](./architecture/logging.md)               | `@arkv/logger`, and where a fix belongs        |
+| Page                                                 | Library                                        |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| [The database layer](./architecture/database.md)     | drizzle, over Bun's own SQLite and SQL drivers |
+| [Authentication](./architecture/authentication.md)   | better-auth                                    |
+| [Queues](./architecture/queues.md)                   | bullmq, over `Bun.RedisClient`                 |
+| [Message brokers](./architecture/message-brokers.md) | rabbitmq-client, behind `@dunx/infra/amqp`     |
+| [Logging](./architecture/logging.md)                 | `@arkv/logger`, and where a fix belongs        |
 
-The fifth and sixth are **swagger-ui-dist** and **@scalar/api-reference**, one per
-`@dunx/openapi` renderer subpath, and the seventh is **@connectrpc/connect** behind
-`@dunx/http/connect`. They are written up with the tooling rather than
-here: what they replaced was a frontend of dunx's own. See
-[The tools](./architecture/tooling.md), "The API explorer".
+The rest have no page here:
+
+- **swagger-ui-dist** and **@scalar/api-reference**, one per `@dunx/openapi`
+  renderer subpath, and **@connectrpc/connect** behind `@dunx/http/connect`. They
+  are written up with the tooling, since what they replaced was a frontend of
+  dunx's own. See [The tools](./architecture/tooling.md), "The API explorer".
+- **resend**, **nodemailer** and **@react-email/render**, the optional transports
+  and renderer behind `@dunx/infra/email`. The guide's [Email](./guide/29-email.md)
+  chapter covers them.
 
 ## Shipping it
 
@@ -56,11 +62,11 @@ here: what they replaced was a frontend of dunx's own. See
 The harness exists to attribute costs, not to win. Its own README says these are a
 relative ranking on one machine.
 
-| Page                                                                   | Finding                                                                     |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [The benchmark harness](./architecture/benchmarks.md)                  | How subjects are made comparable, and what the harness refuses to do        |
-| [The cost of request validation](./architecture/cost-of-validation.md) | Reading the body costs roughly three times as much as validating it         |
-| [The cost of request logging](./architecture/cost-of-logging.md)       | Where the 4.78 us goes, and why one `write(2)` per entry is the worst of it |
+| Page                                                                   | Finding                                                              |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [The benchmark harness](./architecture/benchmarks.md)                  | How subjects are made comparable, and what the harness refuses to do |
+| [The cost of request validation](./architecture/cost-of-validation.md) | Reading the body costs roughly three times as much as validating it  |
+| [The cost of request logging](./architecture/cost-of-logging.md)       | Where the 4.78 us goes, and what batching the write trades away      |
 
 ## What is not here
 

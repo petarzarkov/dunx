@@ -30,7 +30,10 @@ and hands it the signal for its attempt:
 
 ```ts
 export class Checkout {
-  constructor(private readonly policy: ResiliencePolicy) {}
+  constructor(
+    private readonly policy: ResiliencePolicy,
+    private readonly gateway: PaymentGateway,
+  ) {}
 
   charge(order: Order): Promise<Receipt> {
     // `order.id` as the idempotency key: see the warning below.

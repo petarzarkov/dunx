@@ -36,9 +36,12 @@ handler.
 
 What a route's `body`, `query` and `params` accept is anything implementing
 [Standard Schema v1](https://standardschema.dev): an object carrying a
-`~standard` property. `@dunx/http` needs no validator dependency to enforce
-that. Its `peerDependencies` are `@dunx/core` and (optionally) `@types/bun`,
-and the list ends there.
+`~standard` property.
+
+`@dunx/http` needs no validator dependency to enforce
+that. Its required peer is `@dunx/core`; `@types/bun` is an optional peer, as
+are `@bufbuild/protobuf` and `@connectrpc/connect`, which only the
+[RPC](./28-rpc.md) surface loads. None of them is a validator.
 
 ```ts
 export interface StandardSchemaV1<In = unknown, Out = In> {
@@ -153,11 +156,10 @@ export const oneUser = { params: UserIndex } as const satisfies RouteSchemas;
 export const listUsers = { query: ListUsers } as const satisfies RouteSchemas;
 ```
 
-`as const` is load bearing. Without it `{ body: CreateNote, status: 201 }` widens
-to `RouteSchemas` and `Input<typeof opts>` degrades to a bare `{ req }`, taking
-the type check with it. `satisfies RouteSchemas` checks the object without
-widening it, so the pair is written that way rather than with a type
-annotation.
+`satisfies RouteSchemas` checks the object without widening it, so the pair is
+written that way rather than with a type annotation; see
+[the one annotation to avoid](#why-input-must-be-written-out).
+`as const` keeps `status` a literal.
 
 ### Path params
 
@@ -249,7 +251,7 @@ This is one of the two reasons the framework does not try to be clever about
 types on its own. The other is that `.default()` changes the _type_ as well as the
 value, and only the validator knows that.
 
-## `Input<typeof schema>` and why it must be written out
+## Why `Input` must be written out
 
 The annotation on the handler parameter carries the type the schema infers. It is
 not optional, and not a wart the framework could remove if it tried.
@@ -260,11 +262,12 @@ method and can _reject_ one whose type does not match, but there is no mechanism
 in the proposal for a decorator to contextually type an unannotated parameter.
 This was measured with `tsc` rather than assumed:
 
-```
-annotated correctly            -> compiles
-unannotated parameter          -> TS7006: Parameter 'input' implicitly has an 'any' type
-annotated with the wrong type  -> TS1241 + TS1270, naming the mismatched property
-```
+| Handler                       | Result                                                        |
+| ----------------------------- | ------------------------------------------------------------- |
+| annotated correctly           | compiles                                                      |
+| unannotated parameter         | `TS7006: Parameter 'input' implicitly has an 'any' type`      |
+| unannotated destructured      | `TS7031: Binding element 'body' implicitly has an 'any' type` |
+| annotated with the wrong type | `TS1241` + `TS1270`, naming the mismatched property           |
 
 The guarantee is therefore a _check_ rather than an inference. Get the annotation
 wrong and the compiler names the property that does not line up; leave it off and
@@ -299,6 +302,22 @@ whoami({ req }: Input<RouteSchemas>): { ip: string | undefined } {
   return { ip: this.address.of(req) };
 }
 ```
+
+`Input<O>` reads the options object's **declared** type, so the one thing you must
+not do is annotate that constant as `RouteSchemas`:
+
+```ts
+// Wrong. RouteSchemas.body is optional, so Input<typeof createNote> degrades to
+// bare { req } and body is a compile error at every handler.
+const createNote: RouteSchemas = { body: CreateNote };
+
+// Right. `satisfies` checks the shape without replacing the type.
+const createNote = { body: CreateNote } as const satisfies RouteSchemas;
+```
+
+Dropping `as const` alone does not lose the body type; it only widens `status` to
+`number`. Options passed inline need neither, because the decorator's own
+`const O` type parameter stops them widening on the way in.
 
 `InferOutput<S>` is exported separately for the times a service signature needs
 the same type: `InferOutput<typeof CreateUser>` is `{ name: string }`.
@@ -382,59 +401,16 @@ loudly.
 
 ## What validation costs
 
-This repo measures its own losses rather than guessing at them. Here, the loss
-sits somewhere most people would not expect.
-
-Four raw `Bun.serve` routes, each doing exactly one thing more than the one above
-it, all answering the same bytes, all against a 69 byte three-field payload:
-
-| Step                                 |   req/s | µs/req | this step adds |
-| ------------------------------------ | ------: | -----: | -------------: |
-| `GET /json`, no request body at all  | 113,881 |   8.78 |              - |
-| `POST`, body on the wire, never read | 110,537 |   9.05 |       +0.27 µs |
-| `POST` + `await req.json()`          |  82,341 |  12.14 |       +3.10 µs |
-| `POST` + `req.json()` + zod          |  76,412 |  13.09 |       +0.94 µs |
-
-**Reading the body costs about three times what validating it costs.** Putting the
-payload on the wire is near free; `req.json()` is 3.10 µs and zod is 0.94 µs. Of
-the roughly 30% throughput drop between a JSON route and a validating one, 77% is
-`req.json()` and 23% is the validator. No framework can remove the parse, and no
-choice of validator affects it.
-
-There is no throughput argument for steering anyone off zod:
-
-| Validator                   |    costs | `~standard` |
-| --------------------------- | -------: | ----------- |
-| TypeBox, `TypeCompiler` AOT | -0.01 µs | bridged     |
-| ajv, compiled JSON Schema   |  0.34 µs | bridged     |
-| ArkType                     |  0.42 µs | native      |
-| Valibot                     |  0.89 µs | native      |
-| zod                         |  0.94 µs | native      |
-
-zod, Valibot and ArkType are within noise of each other; the noise floor for that
-harness is about ±0.3 µs. Both compiled options land at or under it, which means
-TypeBox's compiled checker is indistinguishable from not validating at all on a
-payload this size. Saving 0.9 µs on a 13 µs request is 7%, against giving up zod's
-ecosystem, error messages and `z.toJSONSchema`. Pick on API and error quality.
-
-The framework's own overhead was the number worth chasing. A route with a
-declared `body` used to cross six `async` frames, exactly one of which
-(`req.json()`) ever had anything to wait for, and the reader's plumbing cost
-2.05 µs, nearly twice what zod itself cost.
-
-Rebuilding it to adopt promises rather than await them took the plumbing from
-597 ns to 146 ns with a no-op schema. A `params`-only route with a synchronous
-validator now reads and validates in 56 ns, allocating no promise.
-
-In the benchmark suite that moved the `validate` scenario from 84.0% of raw
-`Bun.serve` to over 92%, and put dunx ahead of Elysia on the one scenario where
-it used to be level.
+Reading a body costs about three times what validating it costs, and zod,
+Valibot and ArkType are within noise of each other, so pick a validator on API
+and error quality. The measurements are in
+[Cost of validation](../architecture/cost-of-validation.md).
 
 ## Sharp edges
 
-- **`as const` is not optional.** Drop it and the handler's `input` silently
-  becomes `{ req }`. `satisfies RouteSchemas` is what catches a typo in a key
-  name without re-widening the object.
+- **Never annotate the options constant as `: RouteSchemas`.** The handler's
+  `input` then becomes `{ req }`. `satisfies RouteSchemas` is what catches a typo
+  in a key name without re-widening the object.
 - **A `params` schema replaces `req.params` on the input object only.**
   `req.params` is still the raw string record.
 - **The framework validates input and never output.** A handler's return value is

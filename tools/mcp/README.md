@@ -4,6 +4,17 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server for
 [dunx](https://github.com/petarzarkov/dunx). It answers two kinds of question: how
 to write dunx, and what a particular dunx app contains.
 
+## Install
+
+Nothing to install: `bunx` fetches it. To pin the version alongside an app:
+
+```bash
+bun add -d @dunx/mcp
+```
+
+Reading an app imports it, so that mode uses the app's own `@dunx/core`,
+`@dunx/http` and, when present, `@dunx/openapi`, which are peers.
+
 ## Usage
 
 ```bash

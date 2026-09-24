@@ -11,7 +11,7 @@ behind it.
 ## Install
 
 ```bash
-bun add @dunx/core
+bun add @dunx/core @dunx/transform
 ```
 
 ## Usage
@@ -19,7 +19,7 @@ bun add @dunx/core
 Constructor injection, with no annotation of any kind:
 
 ```ts
-import { Module } from '@dunx/core';
+import { AppFactory, Module } from '@dunx/core';
 
 export class UsersService {
   constructor(private readonly repo: UsersRepository) {}
@@ -52,7 +52,7 @@ preload = ["@dunx/transform/preload"]
 | Providers     | Constructor injection, `provide()`, `token()`, `inject()`    | [Providers](../../docs/guide/03-providers.md)          |
 | Modules       | Scoping, `imports`, `exports`, `global`, `forRoot`           | [Modules](../../docs/guide/04-modules.md)              |
 | Lifecycle     | `onInit`, `onBeforeShutdown`, `onShutdown`, signal handlers  | [Lifecycle](../../docs/guide/07-lifecycle.md)          |
-| Configuration | `ConfigModule.forRoot({ validate })`, one validation function | [Configuration](../../docs/guide/12-configuration.md)  |
+| Configuration | `ConfigModule.forRoot`, a `validate` function or a `schema` | [Configuration](../../docs/guide/12-configuration.md)  |
 | Logging       | The `Logger` contract and `ConsoleLogger`                    | [Logging](../../docs/guide/13-logging.md)              |
 | Events        | `EventBus`, `AppEvent`, `@OnEvent`, `EventRegistry`          | [Events](../../docs/guide/27-events.md)                |
 | Stats         | `Durations`, `Counter`, `Gauge`, `RuntimeStats`, `EventLoopLag` | [Metrics](../../docs/guide/24-metrics.md)           |
@@ -67,7 +67,7 @@ preload = ["@dunx/transform/preload"]
   type-only import - is a **boot error naming that parameter**, not a silent
   `undefined`. A parameter with a default keeps its default instead.
 - Two contracts are always resolvable: `Logger` defaults to `ConsoleLogger`, and
-  `RequestContext` to `AsyncLocalStorage`. This lets `@dunx/http` log every
+  `RequestContext` to `AsyncRequestContext`, backed by `AsyncLocalStorage`. This lets `@dunx/http` log every
   request in an app that imported no logging module. A module binding either
   one wins.
 - `ConsoleLogger` batches `info` and below into one write per event-loop turn;

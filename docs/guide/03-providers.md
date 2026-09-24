@@ -35,8 +35,29 @@ Three consequences you can rely on:
 - **An unrecoverable type is a boot error**, not a silent `undefined`. See
   [When the type cannot be recovered](#when-the-type-cannot-be-recovered).
 
+The plugin parses each `.ts` and `.tsx` file with `oxc-parser` and appends one
+statement after every class declaration:
+
+```ts
+export class GreetingsService {
+  constructor(private readonly logger: Logger) {}
+}
+Object.defineProperty(GreetingsService, Symbol.for('dunx.deps'), {
+  value: () => [Logger],
+});
+```
+
+Files under `node_modules` are skipped: a published package was already
+transformed by its own build.
+
 A class with constructor parameters and no record means the preload never ran,
 and the container says so at boot with the snippet above.
+
+It detects this by comparing the record against `Function.prototype.length`,
+which still reports the declared parameter count after parameter properties are
+compiled away. A
+constructor whose parameters all have defaults has `length === 0` and is genuinely
+callable with no arguments, so there are no false positives.
 
 It checks the entrypoint before choosing that snippet. The plugin's filter is
 `/\.tsx?$/`, so it never sees an emitted `.js` no matter how it is preloaded. When
@@ -47,6 +68,15 @@ prints the build-time fix instead:
 import { depsPlugin } from '@dunx/transform';
 await Bun.build({ /* ... */ plugins: [depsPlugin] });
 ```
+
+That `Bun.build` form is also how a production build compiles ahead of time, and
+`bun --preload @dunx/transform/preload src/main.ts` is the form that needs no
+config file.
+
+`@dunx/core` does not register the plugin on import. Bun's `onLoad` only affects
+modules loaded after registration, so DI would depend on import order, and every
+production deploy would carry a Rust parser to run code already transformed at
+build time.
 
 How the transform rewrites the source, and why the record is a thunk:
 [Dependency injection](../architecture/dependency-injection.md).
@@ -86,8 +116,8 @@ original text, and becomes a boot error naming it:
 ```
 UsersService cannot be constructed: parameter 2 (private readonly cfg: AppConfig)
 names nothing that exists at runtime, so there is no token to resolve. Replace the
-type with an abstract class, or bind it with token() and declare the parameter as
-that token.
+type with an abstract class, or bind it with token() and read it with
+inject(TOKEN) in a field initializer.
 ```
 
 Six cases are detected this way:
@@ -252,12 +282,13 @@ uses that to bind both `ConfigService` and your subclass to one instance.
 Three ways to name a binding, in order of preference.
 
 **A concrete class.** Nothing to declare. An unbound class self-binds, so
-`constructor(private readonly repo: UsersRepository)` works whether or not
-`UsersRepository` appears in any `providers` list.
+`constructor(private readonly repo: UsersRepository)` works without
+`UsersRepository` in a `providers` list, as long as only one module injects it.
 
 **An abstract class**, for a contract whose implementation is chosen elsewhere. It
-is a runtime value, so it works as a token; it cannot be constructed, so the
-container will not self-bind it by accident. `Logger` and `RequestContext` in
+is a runtime value, so it works as a token. Bind it: `abstract` does not exist at
+runtime, so an unbound one self-binds like any class (see
+[The self-binding hole](#the-self-binding-hole)). `Logger` and `RequestContext` in
 `@dunx/core` are both this.
 
 **`token<T>(description)`**, only for what has no runtime value to name:
@@ -298,9 +329,11 @@ are all optional resolves successfully when nothing bound it, so
 `app.get(QueueOptions)` on a container with no `QueueModule` returns defaults
 rather than throwing. Any presence check for a class-shaped token has that hole.
 
-A self-bind lands in **the scope that asked for it** rather than in a global
-pool. Two modules that each inject an unlisted collaborator get one each, so an
-accidental instance stays local instead of leaking across features.
+A self-bind lands in **the scope that asked for it first** rather than in a global
+pool, and from then on the class belongs to that module. A second module injecting
+the same unlisted class is a boot error: the class is now declared by the first
+module, which does not export it. List a class shared across modules in the one
+that owns it, and export it.
 
 An unbound token that is _not_ a class fails cleanly, and the message is answered
 from the whole graph:
@@ -315,19 +348,10 @@ export it if the consumer is in a different module.
 
 Every provider is a singleton **in the module that declares it**, for the
 lifetime of the container. An importer resolving it through `exports` gets that
-same instance, so `DbConnection` exported by `DbModule` is one connection however
-many modules import it. Two modules that each _declare_ the same class get two
-instances: that is rebinding.
-
-There is no `Scope.REQUEST`, no `Scope.TRANSIENT`, and no plan to add either.
-Request-scoped DI was measured and turned down as a container's largest source of
-complexity and per-request cost.
-
-Per-request state travels as an explicit argument. Correlation data travels
-through `RequestContext`, an `AsyncLocalStorage` that never touches the
-container.
-
-Full lifetime, boot order, hooks and error propagation: [Lifecycle](./07-lifecycle.md).
+same instance. There is no request or transient scope; per-request state travels
+as an argument or through `RequestContext`.
+[Lifecycle](./07-lifecycle.md) covers the lifetime, boot order and error
+propagation.
 
 ## Eager resolution
 
@@ -359,81 +383,31 @@ aborted by that retry runs its already-evaluated field initializers again. An
 `inject()` call is fine. Incrementing a counter, pushing to a shared array or
 opening a socket in a field initializer is not.
 
-## Lifecycle
+## Lifecycle hooks
 
-Three hooks, all structural. Implement the method and the container finds it; the
-`implements` clause only makes TypeScript check the signature. `OnInit` and
-`OnShutdown` are below; `OnBeforeShutdown` runs while the server is still accepting
-and is covered in [Lifecycle](./07-lifecycle.md).
+Four hooks, all structural: `OnBeforeInit`, `OnInit`, `OnBeforeShutdown` and
+`OnShutdown`. Implement the method and the container finds it; the `implements`
+clause only makes TypeScript check the signature. Each may return a promise, and
+each is awaited.
 
-```ts
-import type { OnInit, OnShutdown } from '@dunx/core';
-
-export class Connection implements OnInit, OnShutdown {
-  #handle: Handle | undefined;
-
-  async onInit(): Promise<void> {
-    this.#handle = await open();
-  }
-
-  async onShutdown(): Promise<void> {
-    await this.#handle?.close();
-  }
-}
-```
-
-Both may return a promise, and both are awaited.
-
-Note the split of responsibilities. Anything that must exist before a constructor
-runs belongs in a `useFactory`, because factories are awaited during resolution.
-`onInit` runs after the _entire_ graph is constructed, which makes it the right
-place for work that depends on peers being ready: running migrations, seeding,
-subscribing, or logging what the app resolved to.
-
-## Ordering
-
-Construction order is dependency order, and it is recorded as construction
-_completion_ order: a value is appended to the container's list once it exists, so
-a dependency always appears before its dependent.
-
-Two things follow.
-
-`onInit` runs in that order. A provider's dependencies have already had their
-`onInit` called by the time its own runs.
-
-`onShutdown` runs in exactly reverse order. A database connection constructed
-early is torn down last, after every repository that uses it. Reversing
-construction-completion order is already a dependency-aware teardown, so
-`app.shutdown()` needs no separate pass.
-
-For an HTTP application there are three steps in front of that.
-`HttpApp.shutdown()` runs the container's `drain()`, then stops the `Bun.serve`
-server, then closes `PubSub`, then delegates to the container's teardown. Draining
-before the port closes is what lets a readiness probe fail while the server is still
-answering; requests in flight then finish against providers that are still alive.
-
-Beyond dependency order, the order tokens are _registered_ decides the rest, and
-that is a module-graph question. [Modules](./04-modules.md) covers it: imports
-register before importers, so a module listed first in `imports` is constructed
-first and torn down last.
+Anything that must exist before a constructor runs belongs in a `useFactory`,
+because factories are awaited during resolution. `onInit` runs after the _entire_
+graph is constructed, in dependency order, so it is the place for work that
+depends on peers being ready. `onShutdown` runs in reverse construction order.
+When each hook runs, and what a throwing one does: [Lifecycle](./07-lifecycle.md).
 
 ## Cycles
 
-A real dependency cycle is a boot error carrying the full path:
+A real dependency cycle is a boot error, `CircularDependencyError`, carrying the
+full path on `error.cycle`:
 
 ```
 Circular dependency: Alpha -> Beta -> Alpha
 ```
 
-thrown as `CircularDependencyError`, which carries the path as a
-`readonly string[]` on `error.cycle`. Without the in-flight tracking that produces
-it, a field-initializer
-cycle would be unbounded recursion with an unreadable stack.
-
-To be precise about what is and is not a cycle: a circular _import_ between two
-files is fine, because the dependency record is a thunk. A circular _dependency_,
-where two providers each need the other constructed first, is not, and no
-mechanism can make it one. Break it by extracting the shared piece into a third
+A circular _import_ between two files is fine, because the dependency record is a
+thunk. A circular _dependency_, where two providers each need the other
+constructed first, is not. Break it by extracting the shared piece into a third
 provider, or by having one side depend on an event rather than an object.
 
 ## Duplicate bindings

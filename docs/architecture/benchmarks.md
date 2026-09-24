@@ -95,50 +95,51 @@ per the `@arkv/rng` rule.
 
 What the harness found, in one line each:
 
-From `results/latest.json`, Bun 1.4.0, 2026-08-22, **17 subjects measured
-interleaved**. Read a ratio as plus or minus one point: two full runs of the same code
-disagreed by a median of 0.6 percentage points, which is the harness's measured
-reproducibility since interleaving landed (`internal/bench/README.md`, "Interleaving,
-and the drift it removes").
+From `results/latest.json`, Bun 1.4.2, 2026-09-09, **20 subjects measured
+interleaved**. Every figure is a share of raw `Bun.serve` in the same run, because
+the machine moves between runs. Read a ratio as plus or minus one point: two full
+runs of the same code disagreed by a median of 0.6 percentage points, which is the
+harness's measured reproducibility since interleaving landed
+(`internal/bench/README.md`, "Interleaving, and the drift it removes").
 
-- `@dunx/http` costs **0.7% / 3.5% / 6.1% / 7.0%** against raw `Bun.serve` across
+- `@dunx/http` costs **0.4% / 4.4% / 5.6% / 7.9%** against raw `Bun.serve` across
   plaintext, json, params and validate. **Under 10% on all four, and inside a point
   of the ceiling on plain dispatch.**
-- It is **level with Elysia**, not ahead of it and not behind: 99.3 against 99.1,
-  96.5 against 95.6, 93.9 against 97.2, 93.0 against 88.0. Three of those four are
+- It is **level with Elysia**, not ahead of it and not behind: 99.6 against 99.0,
+  95.6 against 94.3, 94.4 against 99.6, 92.1 against 89.3. Three of those four are
   inside three points. The earlier claim that dunx lost on all four does not
   reproduce, and neither does a claim that it wins.
-- The **`params` gap is closed, and it was never what an older bullet here said.**
-  That bullet read "85.8% vs 95.5% of baseline" and named it the clearest
-  optimisation target; neither number matches any committed run. Elysia's
-  ahead-of-time handler compilation is a real difference in approach and the harness
-  has never priced it above the noise.
-- It **boots in 39.6 ms against raw `Bun.serve`'s 18.6 ms** - the compiler's oxc
-  parse plus eager DI resolution and route discovery. Both roughly halved on Bun 1.4,
-  which cut Bun's own startup: the same pair was 54.8 ms and 28.7 ms on 1.3.14, while
-  every Node subject stayed within 1%. The trade is unchanged and is paid once at
-  boot, never per request; it is still a real cost on a short-lived process.
-- **Bun is worth ~3.3x on its own.** The same Hono app scores 124,947 req/s on
-  `Bun.serve` and 38,167 on `node:http`, a larger gap than any two frameworks on the
-  same runtime.
-- **Two rows do not add up and should not be quoted yet.** Gin sits at ~56% of
-  `bun-serve` and Axum at ~92%, flat across all four scenarios, and two
-  single-threaded compiled subjects 1.7x apart on plain dispatch is not a framework
-  result. Both are stable to within 2 points across runs, so it reproduces rather
-  than being noise. Per this page's own falsification rule, the first suspect is the
-  harness - most likely how `GOMAXPROCS(1)` handicaps the Go subjects - and not Go.
+- The **`params` gap was never what an older bullet here said.** That bullet read
+  "85.8% vs 95.5% of baseline" and named it the clearest optimisation target;
+  neither number matches any committed run. Elysia's ahead-of-time handler
+  compilation is a real difference in approach, and `params` is the one scenario
+  where it shows above a point.
+- It **boots in 46.2 ms against raw `Bun.serve`'s 24.0 ms**: the compiler's oxc
+  parse plus eager DI resolution and route discovery. The same pair was 54.8 ms and
+  28.7 ms on Bun 1.3.14. The trade is paid once at boot, never per request; it is
+  still a real cost on a short-lived process.
+- **Bun is worth ~3.0x on its own.** The same Hono app scores 123,815 req/s on
+  `Bun.serve` and 41,201 on `node:http` for plaintext, a larger gap than any two
+  frameworks on the same runtime.
+- **The Go rows are quotable, with the single-thread handicap stated.** Gin and
+  `net/http` sit at 55-58% of `bun-serve` and Axum at 94-98% on the four
+  request/response scenarios. **What the Go rows actually measure** below tested the
+  `GOMAXPROCS(1)` pin and the garbage collector and eliminated both; the gap is
+  per-request work inside `net/http`.
 
-**The measurement protocol changed with this run**, so it is not comparable with
-anything earlier here.
+**Interleaving changed the measurement protocol**, so no run before it is
+comparable with these.
 
 Subjects used to be measured one at a time to completion. That spread a run over tens
 of minutes and mapped the machine's own drift onto subject identity: `bun-serve` was
 measured first and `django` forty minutes later, with their ratio published as if the
 two numbers were simultaneous.
 
-Measured: two sequential runs of identical code disagreed by a median of 3.9%, with 15
-of 20 cells moving the same direction. Rounds are now interleaved across every
-subject, which took that to 1.2% with no directional bias. The startup column is
+Measured: two sequential runs of identical code disagreed by a median of 3.9% in raw
+req/s, with 15 of 20 cells moving the same direction. Rounds are now interleaved
+across every subject, which took that to 1.2% with no directional bias. The 0.6
+percentage points quoted above is the same comparison read as a share of
+`bun-serve`, the unit every published ratio uses. The startup column is
 unaffected, since it was never interleaved.
 
 ## The cross-language subjects, and how to read them
@@ -150,21 +151,22 @@ Plaintext and validate are median req/s, deviations under 3% except where noted,
 
 | subject           | runtime | plaintext | validate |    startup |
 | ----------------- | ------- | --------: | -------: | ---------: |
-| `@dunx/http`      | Bun     |   137,539 |   75,769 |    54.8 ms |
-| `Bun.serve` (raw) | Bun     |   136,940 |   89,047 |    28.7 ms |
-| Elysia            | Bun     |   135,907 |   74,858 |    58.1 ms |
-| **Axum**          | Rust    |   118,999 | _83,333_ | **1.5 ms** |
-| **net/http**      | Go      |    75,510 |   46,748 |     3.9 ms |
-| **Gin**           | Go      |    71,274 |   47,553 |     4.9 ms |
-| **Spring Boot**   | JVM     |    46,956 |   31,394 | 1,276.5 ms |
-| **Django**        | Python  |     4,387 |    3,882 |   134.2 ms |
+| `Bun.serve` (raw) | Bun     |   134,478 |   90,015 |    24.0 ms |
+| `@dunx/http`      | Bun     |   133,993 |   82,903 |    46.2 ms |
+| Elysia            | Bun     |   133,151 |   80,372 |    51.9 ms |
+| **Axum**          | Rust    |   126,969 | _84,320_ | **1.7 ms** |
+| **Gin**           | Go      |    76,480 |   50,459 |     5.0 ms |
+| **net/http**      | Go      |    74,976 |   49,884 |     4.0 ms |
+| **Spring Boot**   | JVM     |    52,073 |   33,944 | 1,322.5 ms |
+| **Django**        | Python  |     4,538 |    4,199 |   131.4 ms |
 
 These rows exist to be read that way.
 
-**`@dunx/http` came out 0.4% above raw `Bun.serve` on plaintext.** That is not a
-framework beating the API it calls; it is noise, at deviations of 1.6% and 1.4%. The
-harness has called "a figure at or above 100%" noise since before these
-subjects existed, and this is that rule earning its place.
+**`@dunx/http` lands at 99.6% of raw `Bun.serve` on plaintext**, and an earlier
+run put it 0.4% above. Neither is a framework beating the API it calls; both are
+noise, at deviations near 1%. The harness calls "a figure at or above 100%" noise,
+and that rule is why the earlier run was not published as a win. Axum's `validate`
+figure is italic because its deviation is 4.0%, above the 3% floor.
 
 **Every subject is one process on one thread.** For Bun and Node that is a fact
 about the runtime. For Go, tokio and Tomcat it is a decision the harness
@@ -183,10 +185,9 @@ Axum being _ahead_ of dunx on `validate` while behind on plaintext is the honest
 shape of it: pinned to one thread, Bun's HTTP core is competitive with tokio at
 trivial work and loses once there is real work per request.
 
-**Django's `validate` deviation is 15.7%**, above the 3% noise floor, so that one
-figure should not be quoted as precise. Django is on gunicorn with one worker:
-`wsgiref` measured 317 req/s with 32 dropped connections, which would have been a
-number about `wsgiref` rather than about Django.
+Django is on gunicorn with one worker: `wsgiref` measured 317 req/s with 32 dropped
+connections, which would have been a number about `wsgiref` rather than about
+Django.
 
 ### What the Go rows actually measure
 
@@ -194,8 +195,8 @@ The suite's Go subjects sit at 52-56% of `bun-serve` while Axum sits at 90-101%,
 that gap was carried in the roadmap for months as an unexplained anomaly attributed
 to Gin. Gin is not the variable, and neither of the two mechanisms tested below is.
 
-**Gin is not the variable.** `nethttp` measures the same 52-56%, and Gin is 99-104%
-of `nethttp` across all four scenarios, so the framework costs nothing detectable
+**Gin is not the variable.** `nethttp` measures 55-57% in the current run, and Gin
+is 101-102% of `nethttp` across all four scenarios, so the framework costs nothing detectable
 over the standard library. The comparison the numbers make is the Go runtime against
 tokio at one thread.
 

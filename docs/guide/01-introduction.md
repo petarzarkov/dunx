@@ -115,88 +115,20 @@ first request that hits it. This costs boot time, measured below.
 
 ## The measured position
 
-`@dunx/http` sits on `Bun.serve`. The most useful number the benchmark harness
-produces is the gap between the two: that gap is dunx's own overhead.
+`@dunx/http` sits on `Bun.serve`, so the benchmark harness reports dunx as a share
+of raw `Bun.serve` in the same run. On the 2026-09-09 run (Ryzen 9 5950X, Bun
+1.4.2, 64 connections):
 
-Run on an AMD Ryzen 9 5950X with 32 logical cores, Bun 1.4.2, Node 24.21.0, oha
-1.15.0, 64 connections, 3 s warmup, 5 measured rounds of 5 s, dated 2026-09-09:
+- **Throughput** is 92% to 99.7% of raw `Bun.serve` across plaintext, JSON,
+  path parameters, validation and one Redis plus Postgres round trip, level with
+  Elysia. On the round trip the framework is 0.3% of the request.
+- **Cold start** to the first served request is 46 ms against raw `Bun.serve`'s
+  24 ms, for the `oxc-parser` preload plus eager resolution. Paid once, at boot.
+- **Request logging is on by default** and is the largest per-request cost dunx
+  adds. [Logging](./13-logging.md) covers turning it off.
 
-| Scenario    | raw `Bun.serve` | `@dunx/http` | % of raw |          Elysia |
-| ----------- | --------------: | -----------: | -------: | --------------: |
-| `plaintext` |   134,478 req/s |      133,993 |    99.6% | 133,151 (99.0%) |
-| `json`      |   129,641 req/s |      123,999 |    95.6% | 122,220 (94.3%) |
-| `params`    |   128,172 req/s |      120,942 |    94.4% | 127,701 (99.6%) |
-| `validate`  |    90,015 req/s |       82,903 |    92.1% |  80,372 (89.3%) |
-| `io`        |    27,721 req/s |       27,646 |    99.7% | 27,741 (100.1%) |
-
-**dunx costs under 1% to 8%** against the API it dispatches through, and is level
-with Elysia. Read a ratio as plus or minus one point. Anything under three points
-is a tie: two full runs of the same code disagreed by a median of 0.6 points.
-
-`io` is the one that leaves the process: a Redis `GET` and then a Postgres
-`SELECT`. The framework is 0.3% of it. Every difference above it is smaller than
-one query, which is the honest framing for the other four rows.
-
-A figure at or above 100% would be noise: dunx dispatches through `Bun.serve` and
-cannot serve a request faster than the API it calls.
-
-Startup is the clearest loss, and it is a real one:
-
-| Subject          | cold start to first served request (median of 7) |
-| ---------------- | -----------------------------------------------: |
-| raw `Bun.serve`  |                                          24.0 ms |
-| **`@dunx/http`** |                                      **46.2 ms** |
-| Elysia           |                                          51.9 ms |
-| raw `node:http`  |                                          80.7 ms |
-| Express          |                                         110.1 ms |
-| Fastify          |                                         135.4 ms |
-| NestJS (Express) |                                         243.7 ms |
-
-dunx boots in **1.93x** raw `Bun.serve`'s time, for the `oxc-parser` preload plus
-eager DI resolution and route discovery. Read the ratio rather than the
-milliseconds: both absolute figures move with the Bun release, and have moved in
-both directions.
-
-Every figure here is **spawn to a request served**, not to `listen()` returning.
-The second milestone is roughly 20 ms earlier on both, so a number measured that
-way is not comparable with this table.
-
-That cost is paid once at boot, never per request. It is a real cost on a
-short-lived process.
-
-Two more numbers worth having before you commit to anything:
-
-**Request logging is on by default and costs throughput.** `@dunx/http` installs
-`RequestLoggingMiddleware` outermost, writing one structured entry per request.
-With it on, `plaintext` runs at 78,060 req/s against 137,539 with it off: 57.0%
-of raw `Bun.serve` against 100.4%.
-
-The cost decomposes to about 1.3 µs reading `req.headers`, 0.9 µs for the
-`AsyncLocalStorage` scope, 2.1 µs building and serialising the entry, and 0.7 µs
-reading `req.url`. Turn it off with
-`HttpFactory.create(root, { requestLogging: false })` and sample at the edge.
-
-**Parsing a body costs about three times what validating it costs.** Measured
-against raw `Bun.serve`: putting a body on the wire and never reading it adds
-0.27 µs, `await req.json()` adds 3.10 µs, and zod on top adds 0.94 µs.
-
-Every Standard Schema validator measured, including Valibot, ArkType, TypeBox and
-ajv, came in under the parse, so no throughput argument separates them. Pick on
-API, error quality and ecosystem.
-
-The harness does not measure absolute capacity, concurrency beyond one process,
-behaviour under sustained load, TLS, HTTP/2, websockets or streaming. Its only
-I/O is the `io` row's one Redis `GET` and one Postgres `SELECT`; no filesystem, no
-upstream HTTP, and nothing about a pool under contention.
-
-It does measure resident set and CPU per request, which this page does not
-reproduce. dunx boots at 51.3 MiB against raw `Bun.serve`'s 34.6, and peaks at
-71.9 against 60.5 while serving the `io` row.
-
-On that one row the framework is **0.3%** of the request. That is a result about
-this workload, not a law: a heavier query moves it further toward nothing, and an
-endpoint that touches no service at all is the `plaintext` row instead. It is
-enough to say the four rows above are the wrong thing to choose a framework on.
+Hardware, method, every scenario and what the harness does not measure:
+[the benchmark harness](../architecture/benchmarks.md).
 
 ## When not to use dunx
 

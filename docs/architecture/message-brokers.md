@@ -96,12 +96,13 @@ released the event loop.
 
 ## Bounding a close
 
-Five sites bound one: the three above, `JobEvents` closing a `QueueEvents`
-stream, and `QueueConsumer` draining a worker that reached readiness before a
-later queue failed to. All five call `closeWithin` in `packages/infra/src`, which
-answers whether the bound expired and leaves the warning to the caller.
+Every bounded close in `packages/infra/src` calls `closeWithin`, which answers
+whether the bound expired and leaves the warning to the caller. The callers are
+the three above, `JobEvents` closing a `QueueEvents` stream, `QueueConsumer`
+draining a worker that reached readiness before a later queue failed to, and
+`DataSources` closing a database connection.
 
-They were five hand-written copies of the same race until issue #127. Two fixes
+They were hand-written copies of the same race until issue #127. Two fixes
 had reached one copy each and neither had been carried across: `unref` on the
 timer, and the `clearTimeout` that stops a resource which closed at once from
 holding the loop open for the rest of the window. That second one had cost a clean

@@ -17,17 +17,18 @@ One batch, then stop:
 git status --short && git log --oneline -8
 ```
 
-Read the **Roadmap** and **Spikes to resolve** sections of
-[docs/ARCHITECTURE.md](../../../docs/ARCHITECTURE.md). That doc is the source of truth for
-what "next" means - the current phase's exit criteria _are_ the next steps.
-Never invent a roadmap position from the conversation.
+Read the **Open items** section of [docs/ROADMAP.md](../../../docs/ROADMAP.md) and
+the file under `internal/notes/roadmap/` for the item in hand, when its row links
+one. That is the source
+of truth for what "next" means. Never invent a roadmap position from the
+conversation.
 
 Add what only this session knows: what you actually changed, and what you tried
 that did not work.
 
 If the session is thin on state - resumed, compacted, or you were handed a
 HANDOFF.md rather than doing the work - do not read packages into this thread to
-fill the gaps. Delegate one `Explore` subagent per unresolved exit criterion and
+fill the gaps. Delegate one `Explore` subagent per unresolved question and
 ask each for a one-line verdict plus `file:line`. The exploration stays in their
 context window; only the verdict comes back.
 
@@ -39,7 +40,7 @@ never write "N/A" or "none".
 ```markdown
 # HANDOFF - <YYYY-MM-DD>
 
-**Roadmap:** Phase <n> - <name> · <met>/<total> exit criteria met
+**Roadmap:** <open item> - <what remains of it>
 **Branch:** <branch> @ <short sha> · <clean | n files dirty>
 
 ## Done
@@ -75,8 +76,8 @@ never write "N/A" or "none".
   the path it lives or lived in. Rejections already written down in
   docs/architecture/ belong there, not here - link, don't copy.
 - Paths as clickable relative markdown links.
-- If an exit criterion has become true, say so. If docs/ARCHITECTURE.md is stale,
-  fix that doc - do not record the drift in HANDOFF.md.
+- If an open item has been delivered, say so. If docs/ROADMAP.md is stale, fix
+  that doc - do not record the drift in HANDOFF.md.
 - No conversation summary, no restatement of the plan, no preamble.
 
 ## After writing

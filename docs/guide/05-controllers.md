@@ -86,13 +86,9 @@ already matches its own trailing slash.
 what Hono defaults to. A reverse-proxy rewrite in front of dunx does the same
 job for a caller you do not control.
 
-**CORS preflight is mounted, not inferred.** An `OPTIONS` request does reach the
-fallback. Answering preflight there would mean reconstructing which verbs the path
-declares, after Bun has already failed to match it.
-
-`enableCors()` mounts an explicit `OPTIONS` handler on every path instead, built at
-boot from the verbs that path declares. It cannot collide with one of yours: there is
-no `OPTIONS` verb decorator.
+**CORS preflight is mounted, not inferred.** `enableCors()` mounts an explicit
+`OPTIONS` handler per path; see
+[Why preflight is mounted per path](./08-middleware-and-guards.md#why-preflight-is-mounted-per-path).
 
 **A route collision is a boot error.** Bun silently lets one route win, so dunx
 rejects a duplicate method-and-path pair before it can, naming both handlers:
@@ -105,6 +101,8 @@ LegacyController.show. Bun would keep only one of them.
 The check runs twice: at `create()` on the discovered paths, and again at
 `listen()` on the final prefixed ones.
 
+### The `fetch` fallback
+
 A dunx application has exactly one `fetch` handler, and it does no routing. Bun
 answers an unmatched path itself, so without the fallback nothing in the
 middleware chain would see a 404, leaving it invisible to request logging,
@@ -113,6 +111,12 @@ metrics and tracing.
 `listen()` installs a fallback that runs the global middleware and returns
 `{"error":"NOT_FOUND","status":404}`. It runs only after Bun has decided nothing
 matched, so Bun still does every bit of the matching.
+
+A global guard runs on a miss too. By default (`notFound: 'public'`) the miss
+reports itself as `@Public()`, so a guard honouring that flag lets the 404
+through. `HttpFactory.create(root, { notFound: 'guarded' })` gives it no route
+metadata instead, so the guard refuses it and a prober cannot tell a missing path
+from a protected one.
 
 ## How routes are found
 
@@ -252,19 +256,10 @@ request.
 
 ## Declared input
 
-The second argument to a verb declares what the route accepts. Declaring a schema
-is what makes the matching `input` field exist, get parsed and get validated;
-omitting one means the framework never touches it.
-
-```ts
-export interface RouteSchemas {
-  readonly body?: StandardSchemaV1;
-  readonly query?: StandardSchemaV1;
-  readonly params?: StandardSchemaV1;
-  /** Overrides the default success status: 201 for POST, 200 otherwise. */
-  readonly status?: number;
-}
-```
+The second argument to a verb is a [`RouteSchemas`](./06-validation.md#routeschemas)
+object declaring what the route accepts. Declaring a schema is what makes the
+matching field exist, get parsed and get validated; omitting one means the
+framework never touches it.
 
 | Field    | Source                                   | Present when      |
 | -------- | ---------------------------------------- | ----------------- |
@@ -288,107 +283,14 @@ record(input: Input<typeof createNote>): Note {
 }
 ```
 
-Validation targets the **Standard Schema** spec (`~standard.validate`), restated
-in `@dunx/http`'s own types rather than depended on: the spec is an interface and
-`@standard-schema/spec` ships nothing but declarations.
+The annotation is required, and the options constant must not be annotated
+`: RouteSchemas`; [Validation](./06-validation.md#why-input-must-be-written-out)
+has the compiler errors and the reason. For a route with no options, annotate
+`Input<RouteSchemas>` or take no parameter at all.
 
-zod 4, Valibot and ArkType therefore drop straight in while `@dunx/http` keeps
-zero dependencies. Anything with a `~standard` property qualifies, including a
-hand-written object and a bridged compiled checker.
-
-A `~standard.validate` may return a promise and the reader handles that, though
-none of zod, Valibot or ArkType ever does. Measured, and it lets a `query`-only
-or `params`-only route validate without allocating a promise.
-
-### Why `Input<typeof opts>` has to be written out
-
-A TypeScript limit rather than a design choice, and the one piece of ceremony
-dunx could not remove.
-
-A standard method decorator is
-`(value: V, ctx: ClassMethodDecoratorContext) => V | void`. It can _reject_ a
-mismatched `V`, but it has no way to contextually type an unannotated parameter.
-Decorators observe; they do not type. Measured with `tsc`, because this is a
-type-level claim `bun` cannot answer:
-
-| Handler                       | Result                                                        |
-| ----------------------------- | ------------------------------------------------------------- |
-| annotated correctly           | compiles                                                      |
-| unannotated parameter         | `TS7006: Parameter 'input' implicitly has an 'any' type`      |
-| unannotated destructured      | `TS7031: Binding element 'body' implicitly has an 'any' type` |
-| annotated with the wrong type | `TS1241` + `TS1270`, naming the mismatched property           |
-
-So the annotation is required. What makes it cheap is that `Input<O>` is a
-type-level function over the options object, so every field type still comes from
-the schema and nothing is declared twice:
-
-```ts
-const createNote = { body: CreateNote, status: HttpStatusCode.CREATED } as const;
-
-@Post('/', createNote)
-create({ body }: Input<typeof createNote>): Note {
-  return this.notes.add(body.text); // body.text is string
-}
-```
-
-`Input<O>` reads the options object's **declared** type, so the one thing you must
-not do is annotate that constant as `RouteSchemas`:
-
-```ts
-// Wrong. RouteSchemas.body is optional, so Input<typeof createNote> degrades to
-// bare { req } and body is a compile error at every handler.
-const createNote: RouteSchemas = { body: CreateNote };
-
-// Right. `satisfies` checks the shape without replacing the type.
-const createNote = { body: CreateNote } as const satisfies RouteSchemas;
-```
-
-`as const satisfies RouteSchemas` is the convention throughout the codebase.
-`satisfies` catches a misspelled field at the declaration rather than as a missing
-field in the handler, and `as const` keeps `status` a literal. Options
-passed inline need neither, because the decorator's own `const O` type parameter
-stops them widening on the way in.
-
-For a route with no options, annotate `Input<RouteSchemas>` or take no parameter
-at all.
-
-### Body parsing
-
-Only when `body` is declared, and by media type:
-
-| `content-type`                      | `body` before validation                |
-| ----------------------------------- | --------------------------------------- |
-| `application/json`, `*+json`, none  | `req.json()`                            |
-| `application/x-www-form-urlencoded` | fields; a repeated key becomes an array |
-| `multipart/form-data`               | fields and `File`s, same repeat rule    |
-| `text/*`                            | `req.text()`, a string                  |
-| anything else                       | **415**, nothing read                   |
-
-A repeated key becoming an array is the same rule for query strings, so `?tag=a&tag=b`
-reaches the schema whole instead of silently losing `a`.
-
-A body the caller mangled is a **400** (`Malformed application/json body`), never
-a 500. A missing `content-type` reads as JSON, because `fetch` omits the header
-for a bodyless request and a 415 there would only hide the schema error that is
-about to be more useful.
-
-### Validation failures
-
-A rejected schema is a `ValidationError`, always a 400, and the issues survive
-into the response body, because a caller cannot fix what it cannot see. Paths are
-flattened to dots, and both zod's bare keys and Valibot's `{ key }` objects render
-the same way:
-
-```json
-{
-  "error": "Invalid body",
-  "status": 400,
-  "issues": [{ "message": "name must be a non-empty string", "path": "name" }]
-}
-```
-
-`ValidationError` carries `source`, which is `'body'`, `'query'` or `'params'`,
-and `issues`, if you want to remap it in your own error mapper.
+Any [Standard Schema](./06-validation.md#standard-schema-is-the-contract)
+validator works. How each `content-type` is parsed, and the 400 a rejected schema
+produces, are in [Validation](./06-validation.md#bodies) as well.
 
 ## Returning values
 
@@ -548,27 +450,16 @@ const app = await HttpFactory.create(AppModule, {
 });
 ```
 
-An `ErrorMapper` is `(error: unknown, req: Request) => Response`. There is one per
-application and there is no imperative equivalent, so it must be passed to
-`create()`. This is the "filters" slot: dunx has one error mapper rather than an
-exception filter hierarchy.
+`onError` takes one handler for the whole application, passed to `create()`:
+dunx has one error mapper rather than an exception filter hierarchy. A bare
+`ErrorMapper`, `(error: unknown, req: Request) => Response`, suits a mapper that
+injects nothing.
 
-`defaultErrorMapper` writes through core's `ConsoleLogger`, because a bare export
-has no container to ask. `errorMapper(logger)` is the same mapper over any `Logger`
-you hand it, and is what `create()` builds from the bound one when `onError` is
-absent. Reach for it when the wrapper above should keep the app's logger rather
-than the default:
-
-```ts
-import { errorMapper } from '@dunx/http';
-
-const mapper = errorMapper(logger); // whatever LoggerModule was configured with
-
-const app = await HttpFactory.create(AppModule, {
-  onError: (error, req) =>
-    error instanceof DomainConflict ? conflict(error) : mapper(error, req),
-});
-```
+In an app, reach for an
+[`ErrorFilter`](./08-middleware-and-guards.md#errorfilter-when-the-mapper-needs-dependencies)
+subclass instead: `onError` also takes a class, resolved from the container, so it
+can inject the app's `Logger` and config. A middleware wrapping `next()` in a `try`
+is the scoped version.
 
 CORS headers are applied _outside_ the mapper, so a mapped 500 still carries the
 headers the browser needs in order to display it.
@@ -625,89 +516,15 @@ There is one key today: `'trust proxy'`, typed `boolean | number`.
 
 ## Middleware, guards and metadata
 
-One extension point in place of five. Comparable frameworks have middleware,
-guards, interceptors, pipes and filters; dunx has a `Middleware` interface, and
-the other four fall out of it:
+dunx has one extension point, the `Middleware` interface. A guard is middleware
+that throws, an interceptor wraps `next()`, a pipe is a schema in the route
+options and a filter is the error mapper.
 
-```ts
-export interface Middleware {
-  handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response>;
-}
-```
-
-A guard is middleware that throws. An interceptor wraps `next()`. A pipe is a
-schema in the route options. A filter is the error mapper.
-
-Middleware classes come out of the container, so they inject. Chains are folded
-into a single closure per route **at boot**, so there is no per-request array
-iteration. Order is global outermost, then class-level `@UseGuards`, then
-method-level, then the handler.
-
-`ctx` names the route and carries whatever its decorators declared, resolved once
-at discovery with the handler's metadata merged over the class's. `ctx.get(key)`
-is therefore a `Map` lookup, and a method-level `@Public()` overrides a
-class-level `@Roles()`:
-
-```ts
-import {
-  HttpError,
-  HttpStatusCode,
-  PUBLIC,
-  ROLES,
-  type Middleware,
-} from '@dunx/http';
-
-export class AuthGuard implements Middleware {
-  constructor(private readonly logger: Logger) {}
-
-  handle(req: BunRequest, ctx: RouteContext, next: Next): Promise<Response> {
-    if (ctx.get(PUBLIC)) return next();
-    const role = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-    if (role === undefined) {
-      throw new HttpError(HttpStatusCode.UNAUTHORIZED, 'No credentials');
-    }
-    return next();
-  }
-}
-```
-
-```ts
-@Roles('admin')
-@UseGuards(AuthGuard)
-@Controller('reports')
-export class ReportsController {
-  @Public()
-  @Get('/health')
-  health(): { ok: true } {
-    return { ok: true };
-  }
-
-  @UseGuards(RolesGuard)
-  @Post('/', createReport)
-  create({ body }: Input<typeof createReport>): readonly string[] {
-    return this.reports.add(body.title);
-  }
-}
-```
-
-`ROLES` and `PUBLIC` are exported so your own guard can read what `@Roles` and
-`@Public` set. They are thin wrappers over the generic channel, and your own key
-needs nothing more:
-
-```ts
-import { meta, metaKey, type MetaKey } from '@dunx/http';
-
-export const RATE_LIMIT: MetaKey<number> = metaKey('rateLimit');
-export const RateLimit = (perMinute: number) => meta(RATE_LIMIT, perMinute);
-```
-
-`metaKey` mints a fresh unique symbol per call, so two libraries that both name a
-key `roles` never read each other's value.
-
-Middleware has three homes, and which one to use is decided by scope rather than by
-kind. App-wide goes to `HttpFactory.create` or `app.use()`. A feature's own goes to
-`@Module({ middleware })`, where it covers the routes that module's controllers
-declare and nothing else. One controller's or one route's goes to `@UseGuards`.
+`@UseGuards` attaches middleware to a
+controller or a route, `@Roles`, `@Public` and `meta` declare route metadata a
+guard reads through `ctx.get`, and `@Module({ middleware })` scopes middleware to
+one module's routes. All of it, with the request lifecycle, is in
+[Middleware and guards](./08-middleware-and-guards.md).
 
 ## The fast path
 
@@ -747,22 +564,17 @@ it, which is Elysia's approach. At 1.3 µs on a request whose parse alone is
 
 ## Request logging
 
-`@dunx/http` installs `RequestLoggingMiddleware` by default, outermost in the
-chain, writing **one structured entry per request** carrying the request and the
-response together. Frameworks without that property need a middleware plus an interceptor, because
-they are different classes; dunx does not, because middleware wraps `next()`.
-
-A 4xx logs at `warn` and a 5xx at `error`. Unmatched paths are logged too, through
-the `fetch` fallback described above.
-
-Turn it off with `HttpFactory.create(root, { requestLogging: false })`, or pass an
-options object to tune what it records. It costs real throughput, and
-[Introduction](./01-introduction.md) has the measured numbers and the
-decomposition.
+`@dunx/http` installs `RequestLoggingMiddleware` by default, writing one entry per
+request, unmatched paths included. Turn it off with
+`HttpFactory.create(root, { requestLogging: false })`; the options are in
+[Middleware and guards](./08-middleware-and-guards.md#request-logging).
 
 ## Next
 
-[Providers](./03-providers.md) for how a controller's constructor gets filled in.
-[Modules](./04-modules.md) for how controllers are grouped. The
-[`@dunx/http` reference](../../packages/http) covers WebSocket gateways, CORS
-options and the client-address resolver, none of which are on this page.
+[Validation](./06-validation.md) for the schemas a route declares.
+[Middleware and guards](./08-middleware-and-guards.md) for what runs around a handler.
+
+[WebSockets](./09-websockets.md) for gateways, which share the same
+`Bun.serve` call. [Providers](./03-providers.md) and [Modules](./04-modules.md)
+cover how a controller is constructed and grouped. The
+[`@dunx/http` reference](../../packages/http) covers the client-address resolver.

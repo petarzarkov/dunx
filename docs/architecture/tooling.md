@@ -163,6 +163,18 @@ rebuilds the site after `test:cov`, because the first build (inside
 
 ## `@dunx/create-app` asks with an arrow-key list, and takes no prompt library
 
+`@dunx/create-app` gets its invocations from one package name:
+
+```
+bun create @dunx/app my-app
+bunx @dunx/create-app my-app
+```
+
+It runs on Bun, not Node: the bin starts with `#!/usr/bin/env bun` and `engines`
+requires `bun >=1.4.1`. It has zero dependencies, keeps its templates as
+directories under `templates/` with token replacement, and makes no network
+request.
+
 The scaffolder used to print a numbered list and read one line of stdin. The
 comment above that read said a full-screen selector "means owning cursor movement,
 terminal restore on signal and a fallback for every terminal that does not do what

@@ -421,33 +421,13 @@ at boot, nothing having bound that token.
 
 ### How to choose, and what it is actually worth
 
-Measured through a real `Bun.serve`, interleaved round-robin, `requestLogging: false` so every route stays on the
-direct dispatch path. AMD Ryzen 9 5950X, Bun 1.3.14, oha 1.15.0, 64 connections,
-11 rounds of 5 s, medians:
+Measured through a real `Bun.serve`, synchronous mode is **about 4-6% more req/s
+and 0.2-0.3 ms off p50**, at the edge of the benchmark machine's noise floor:
+about 3 µs saved on roughly 57 µs of service time. The 5-10 ms versus 30-50 ms
+difference people expect from SQLite comes from an embedded database versus a
+networked one, and `SqliteOptions` gets it just as much as `SyncSqliteOptions`.
 
-| unit          | req/s  |    σ | p50 ms | p99 ms |
-| ------------- | ------ | ---: | ------ | ------ |
-| `read:async`  | 17,625 | 1368 | 3.473  | 7.002  |
-| `read:sync`   | 18,399 | 1411 | 3.268  | 6.729  |
-| `write:async` | 7,942  |  370 | 7.435  | 15.580 |
-| `write:sync`  | 8,283  |  410 | 7.104  | 15.140 |
-
-**Synchronous mode is about 4-6% more req/s and 0.2-0.3 ms off p50**, reproduced
-across two independent runs (read +5.7% then +4.4%; write +4.2% then +4.3%).
-
-The rest of it, plainly: σ on the read rows is about 8% of the median, so a
-single round proves nothing and the per-round ranges overlap.
-
-The effect is real, being consistent in direction across 18 rounds and both
-scenarios, but **it sits at the edge of this box's noise floor**. At roughly
-57 µs of service time per request, the saving is about 3 µs: one async frame, one
-promise from drizzle's thenable builder, one promise adoption in the dispatch
-path.
-
-And the framing that motivated the work, "one API call could be 5-10 ms instead of
-30-50 ms", is **right about SQLite and wrong about this feature**. That difference
-is an embedded database versus one over a network, and an app gets it from
-`SqliteOptions` just as much as from `SyncSqliteOptions`.
+The table and method are in [the database layer](../architecture/database.md).
 
 So:
 
@@ -705,25 +685,11 @@ ordering, updates, deletes, aggregates, `$returningId()` single and multi-row,
 inner and left joins, `placeholder()` prepared statements, and the `mysql-proxy`
 migrator.
 
-Four details the adapter has to get right, each measured:
-
-- **`.values()` is mandatory for `method === 'all'`.** drizzle's `mapResultRow`
-  indexes rows **positionally**, and `Bun.SQL`'s default object rows lose columns
-  on a join: selecting `users.id, users.name, posts.id, posts.name` returns two
-  keys rather than four, the later names overwriting the earlier ones. A manual
-  object-to-array conversion would be silently wrong.
-- **`method === 'execute'` covers SELECTs too**, whenever the query carries no
-  fields. Return the rows when the result array is non-empty, or
-  ``db.execute(sql`...`)`` silently yields nothing.
-- **`insertId` and `affectedRows` go in `rows[0]`** rather than at the top level, despite
-  `RemoteCallback`'s declared type. `mysql-proxy/session.js` reads
-  `data[0].insertId`, and Bun's own property is `lastInsertRowid`.
-- **Name the `adapter`.** In the **options-object** form on Bun 1.3.14,
-  `POSTGRES_URL`, `PGURL` or `TLS_POSTGRES_DATABASE_URL` in the environment
-  silently overrides an explicitly passed `url` and forces `adapter: 'postgres'`,
-  so a MySQL URL is dialled as Postgres and fails with a bare
-  `Connection closed`. `new Bun.SQL(urlString)` and `new Bun.SQL(new URL(url))`
-  are unaffected, and so is naming the adapter.
+The adapter has four details to get right (positional rows via `.values()`,
+SELECTs arriving as `execute`, `insertId` in `rows[0]`, and naming the
+`adapter` so a `POSTGRES_URL` in the environment cannot redirect the url). Each is
+commented where it is handled in `driver.ts`; copy the file rather than
+rewriting it.
 
 `mysql-proxy` also refuses `db.transaction()` outright, because a callback
 transport has no way to pin its statements to one connection. `Bun.SQL`'s

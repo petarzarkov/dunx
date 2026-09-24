@@ -4,8 +4,12 @@ How you ship a dunx app as one self-contained executable. A small CLI - the same
 container, config and lifecycle a server uses - compiled with `bun build --compile`
 into a single file that runs on a host with nothing installed.
 
+From the repository root:
+
 ```bash
 bun install
+bun run build          # every workspace, so the @dunx/* dist/ this links to exists
+cd examples/binary
 bun run build          # -> dist/pulse (the Bun runtime plus the app, one file)
 cd /tmp && "$OLDPWD/dist/pulse" report
 ```

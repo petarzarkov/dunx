@@ -462,7 +462,7 @@ Bun's own codes pass through unchanged. Two are added here:
 | Over `maxPixels` (raised even by `metadata`) | `Error`       | `ERR_IMAGE_TOO_MANY_PIXELS`    |
 | Rotation not a multiple of 90                | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
 | Unknown resize `filter`                      | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
-| Input is a `Response`/`ReadableStream`       | `TypeError`   | `ERR_INVALID_ARG_TYPE`         |
+| Input is a `Response`/`ReadableStream`       | none          | `ERR_IMAGE_UNREADABLE_SOURCE`  |
 | Missing path or directory                    | syscall error | `ERR_IMAGE_UNREADABLE_SOURCE`  |
 
 `ERR_IMAGE_ENCODE_FAILED` and `ERR_INVALID_STATE` are declared in Bun's types but

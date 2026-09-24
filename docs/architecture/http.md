@@ -22,11 +22,6 @@ Binding off the instance is what makes an undecorated override in a subclass
 dispatch correctly. That ordering is guaranteed: container resolution is eager
 and completes first.
 
-Field-initialized routes are part of **Route discovery** but not yet
-implemented. The thing that produces them is the `route.*` builder, which
-sidesteps the decorator inference limit. It lands with Phase 3 rather than
-as a scan with no producer.
-
 Middleware is a **class** with `handle(req, ctx, next)`, resolved from the container
 so it gets constructor injection. It has three homes, one per scope it can belong
 to: `HttpFactory.create` / `app.use()` for app-wide, `@Module({ middleware })` for
@@ -76,8 +71,13 @@ sense for one feature's routes is common, and had nowhere to live.
 ### The framework's own services are bound, not self-bound
 
 `HttpFactory` wraps the app's root in a `global: true` module that binds and
-exports `PubSub`, `ClientAddress` and `RequestLoggingMiddleware`. Two of those
-could be left to self-binding under the flat container, but not under scoping.
+exports five services and three middlewares:
+
+- `PubSub`, `ClientAddress`, `RequestMetrics`, `RoutePrefix` and `ClaimedRoutes`,
+  each of which `listen()` attaches state to once the server exists
+- `RequestLoggingMiddleware`, `MetricsMiddleware` and `SocketLoggingMiddleware`,
+  all bound whether or not the options enable them, so the decision of which run
+  is read off the resolved options instead of made before the container exists
 
 An unbound class self-binds into **whichever scope asks first**. A second
 module injecting `ClientAddress` was therefore a boot error naming the first
@@ -111,13 +111,10 @@ So stop accumulating.
 
 A method decorator sets a symbol property on the function it receives and returns
 it. Nothing is recorded anywhere else. At boot the adapter _discovers_ routes by
-inspection:
-
-1. Walk `Object.getPrototypeOf` from the controller's prototype, reading
-   `Object.getOwnPropertyDescriptors` at each level. A marked `descriptor.value`
-   is a route; most-derived wins on a repeated name.
-2. Read `Object.entries(instance)` for field-initialized `route.*` builders, which
-   carry the same marker.
+inspection: walk `Object.getPrototypeOf` from the controller's prototype, reading
+`Object.getOwnPropertyDescriptors` at each level. A marked `descriptor.value` is a
+route; most-derived wins on a repeated name. The walk is core's `markedMethods`,
+which queue and AMQP handler discovery share.
 
 Consequences, all measured:
 
@@ -134,8 +131,8 @@ Consequences, all measured:
 - **Overriding a decorated base method without re-decorating works.** The own
   undecorated member does not shadow discovery, and dispatch resolves through the
   prototype chain to the override.
-- **Decorated methods and field routes are one merged set**, so collision
-  detection covers both and a controller resolving to zero routes can throw.
+- **Every route comes from the one walk**, so collision detection sees all of
+  them and a controller resolving to zero routes can throw.
 
 No `Symbol.metadata`, no polyfill, no import-order dependence.
 

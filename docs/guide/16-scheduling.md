@@ -4,6 +4,7 @@
 `@dunx/infra/schedule` and are built on `Bun.cron` and Bun's timers.
 
 ```ts
+import { Module } from '@dunx/core';
 import {
   Cron,
   CronExpression,

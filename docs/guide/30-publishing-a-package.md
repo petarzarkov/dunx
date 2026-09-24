@@ -37,11 +37,14 @@ console.log(`${built.name}: ${built.entries} entries, ${built.ms}ms`);
   "files": ["dist"],
   "scripts": { "build": "bun build.ts" },
   "devDependencies": {
-    "@dunx/transform": "3.9.2",
+    "@dunx/transform": "<latest>",
     "typescript": "7.0.2"
   }
 }
 ```
+
+`<latest>` stands for the current release, pinned exactly. `@dunx/transform/build`
+first shipped in 3.9.3, so nothing older works here.
 
 Entrypoints are read from `exports` and `bin`, so a subpath you declare is a
 subpath you build. Declarations come from `tsc --emitDeclarationOnly`, because
@@ -67,7 +70,7 @@ grep -c 'dunx.deps' dist/index.js
 ```json
 {
   "peerDependencies": { "@dunx/core": "^3.9.0" },
-  "devDependencies": { "@dunx/core": "3.9.2" }
+  "devDependencies": { "@dunx/core": "<latest>" }
 }
 ```
 

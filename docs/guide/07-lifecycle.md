@@ -1,6 +1,6 @@
 # Lifecycle
 
-One lifetime, three hooks, eager boot. All of it is `@dunx/core` and none of it
+One lifetime, four hooks, eager boot. All of it is `@dunx/core` and none of it
 needs `@dunx/http`.
 
 ## Provider lifetime
@@ -40,10 +40,10 @@ export class OrdersService {
     private readonly logger: Logger,
   ) {}
 
-  place(order: Order) {
+  place(order: Order, tenant: string | null) {
     // traceId was set by RequestLoggingMiddleware, on the way in
     const { traceId } = this.context.getContext();
-    this.logger.info('placing', { traceId });
+    this.logger.info('placing', { traceId, tenant });
   }
 }
 ```
@@ -51,8 +51,10 @@ export class OrdersService {
 **Everything else** is a parameter:
 
 ```ts
-@Post('/orders', { body: OrderSchema })
-create(req: BunRequest, body: Order) {
+const placeOrder = { body: OrderSchema } as const satisfies RouteSchemas;
+
+@Post('/orders', placeOrder)
+create({ req, body }: Input<typeof placeOrder>) {
   return this.orders.place(body, req.headers.get('x-tenant'));
 }
 ```
@@ -247,21 +249,19 @@ CircularDependencyError: Circular dependency: UsersService -> AuditService -> Us
 | Cycle                                       | `CircularDependencyError` with the path                          |
 | Rejected `useFactory`                       | rejects `AppFactory.create()`                                    |
 | Throwing `onInit`                           | rejects `AppFactory.create()`                                    |
-| Throwing `onShutdown` via signal            | logged, exit code 1, **remaining teardown skipped**              |
+| Throwing `onShutdown`                       | logged per provider, rejects `app.shutdown()` after every hook   |
 
 Every one of these is a rejected `create()` except the last. An app that boots
 has resolved everything it declares.
 
-The last row is the one to design around. The teardown loop is unguarded, so the
-first `onShutdown` that throws aborts it.
+A throwing `onShutdown` does not stop teardown. `shutdown()` runs every hook in
+reverse order, logs each failure with the provider's name, and resolves
+`app.closed` in a `finally`. Then it rejects with the one error, or an
+`AggregateError` when several providers failed. A throwing `onBeforeShutdown` is
+collected the same way.
 
-- Every provider after it in the reverse order keeps its resources.
-- `app.closed` never resolves.
-- `ShutdownHooks` catches the rejection, logs `[dunx] shutdown failed` and arms exit
-  code 1. Its exit timer is what still ends the process.
-
-Put a `try` inside any `onShutdown` whose failure should not strand the ones behind
-it.
+Under `enableShutdownHooks`, `ShutdownHooks` catches that rejection, logs
+`[dunx] shutdown failed` and arms exit code 1.
 
 ## Overrides in tests
 

@@ -196,40 +196,24 @@ off, and both mechanisms may be used in the same class.
 
 ## Core primitives (`@dunx/core`)
 
+Usage lives in the guide: [Providers](../guide/03-providers.md) covers constructor
+injection, `inject()`, `token()` and `provide()`, and [Modules](../guide/04-modules.md)
+covers `@Module`, `exports`, `global` and `forRoot`. This section keeps the reasoning
+the guide does not.
+
 There is no `@Injectable()` - every class is injectable by default.
-
-| Primitive                                              | Purpose                                                  |
-| ------------------------------------------------------ | -------------------------------------------------------- |
-| `constructor(private readonly x: X)`                   | The default. Resolved from the parameter's type          |
-| `inject<T>(token): T`                                  | Escape hatch, in a field initializer. Always synchronous |
-| `token<T>(name)`                                       | Opaque token for interfaces, config objects, primitives  |
-| `provide(token, {useClass \| useValue \| useFactory})` | Binding, including async factories                       |
-| `@Module({imports, providers})`                        | Class decorator. Registration only - see below           |
-| `AppFactory.create(RootModule)`                        | Builds, resolves, runs `onInit`. Returns a live `App`    |
-
-`AppFactory.create()` is async and there is no separate `init()`. Resolution is
-eager, so an app that exists is an app that booted. `app.enableShutdownHooks()`
-registers `SIGTERM`/`SIGINT` handlers, and `app.closed` resolves once shutdown
-has finished, whoever triggered it.
+`AppFactory.create()` is async and there is no separate `init()`: resolution is
+eager, so an app that exists is an app that booted.
 
 ### `token()` is the escape hatch rather than the default
 
 Anything that is a **runtime value** can be its own token, so most code needs no
 `token()` call at all. In order of preference:
 
-1. **A concrete class** - `inject(Config)`. Nothing to declare; an unbound class
-   self-binds.
+1. **A concrete class.** Nothing to declare; an unbound class self-binds.
 2. **An abstract class** for a contract whose implementation is built elsewhere.
-   It is a runtime value, so it works as a token. It cannot be constructed, so
-   the container will not self-bind it by accident:
-
-   ```ts
-   export abstract class Database {
-     abstract query(sql: string): readonly string[];
-   }
-   provide(Database, { useFactory: connect, inject: [Config] });
-   ```
-
+   It is a runtime value, so it works as a token. Bind it to an implementation:
+   an unbound abstract class self-binds like any other class.
 3. **`token<T>(name)`** only for what has no runtime value to name: a primitive
    (`token<string>('Dsn')`), or a value whose type you do not own and cannot
    subclass.
@@ -237,7 +221,8 @@ Anything that is a **runtime value** can be its own token, so most code needs no
 An `interface` is erased at compile time, so `inject(SomeInterface)` cannot exist -
 that is the same erasure the `emitDecoratorMetadata` measurement above shows
 degrading to `Object`. Replacing the interface with an abstract class removes
-the token entirely, so `examples/full` uses zero `token()` calls.
+the token entirely. `examples/full` keeps its `token()` calls to
+`src/wiring/tokens.ts`, for a value type and a primitive.
 
 `token<T>()` returns a **unique object**; the name is only a label for error
 messages. Two `token<Config>('config')` calls are two distinct tokens, so nominal
@@ -249,38 +234,17 @@ class that is injected but never bound gets self-bound and constructed into a
 useless object rather than erroring. TypeScript blocks it in the `providers` array
 (a bare entry must be constructible), but not at the `inject()` call site.
 
-`@Module` is a marker rather than a container. It writes its options onto the
-class as a `Symbol.for('dunx.module')` property - the same technique as route
-discovery, no accumulator. The class is **never instantiated**.
+### `@Module` is a marker, and `provide()` is a call
 
-Reading it uses `Object.hasOwn`, so subclassing a module does not inherit its
-bindings; that throws instead. The class name is where the duplicate-binding
-error gets "bound by module X and module Y". `controllers` and `middleware`
-arrive with Phase 2, since there is nothing to put in them until there is HTTP.
+`@Module` writes its options onto the class as a `Symbol.for('dunx.module')`
+property - the same technique as route discovery, no accumulator. The class is
+**never instantiated**. Reading it uses `Object.hasOwn`, so subclassing a module
+does not inherit its bindings; that throws instead.
 
-A bare class in `providers` is shorthand for binding it to itself, so the ordinary
-case carries no function calls at all:
-
-```ts
-@Module({ providers: [UsersService, UsersRepository] })
-export class UsersModule {}
-```
-
-`provide()` is only needed where a token is genuinely being bound - an interface, a
-config object, an async factory - which is exactly where Nest needs its object form
-too. It stays a **call** rather than a `{ provide, useValue }` literal because
+`provide()` stays a **call** rather than a `{ provide, useValue }` literal because
 per-element type inference across a heterogeneous array requires one: that is
 precisely why Nest's `useValue` is untyped, and dunx's is checked against the
 token's type.
-
-```ts
-@Controller('users')
-export class UsersController {
-  private users = inject(UsersService); // a class is its own token
-  private cfg = inject(Config); // so is a config class
-  private db = inject(Database); // abstract class, bound by a factory
-}
-```
 
 ### Resolution mechanism
 
@@ -292,9 +256,9 @@ resolves against it. Field initializers run synchronously inside the
 constructor, so there is no async gap and no `AsyncLocalStorage` cost.
 Calling `inject()` outside construction throws with a clear message.
 
-Both paths go through the same `get()`, so cycle detection, duplicate-binding
-rejection, and the async-factory retry below apply identically whether a
-dependency arrived as a constructor parameter or an `inject()` call.
+Both paths go through the same `get()`, so cycle detection and the async-factory
+retry below apply identically whether a dependency arrived as a constructor
+parameter or an `inject()` call.
 
 ### Eager-only, no lazy resolution
 

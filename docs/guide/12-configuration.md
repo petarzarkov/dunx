@@ -16,7 +16,7 @@ export class AppModule {}
 
 ## A schema, or a function
 
-`forRoot` takes exactly one of the two, and the type enforces it.
+`forRoot` takes exactly one of `validate` or `schema`, and the type enforces it.
 
 ```ts
 ConfigModule.forRoot({ schema: envSchema, as: AppConfigService });
@@ -26,14 +26,13 @@ ConfigModule.forRoot({ schema: envSchema, as: AppConfigService });
 names no vendor. A failure fails boot with a `ConfigError` listing every issue and
 its path, rather than whatever shape the library throws.
 
-## One validation function in place of a schema DSL
-
-`ConfigModule.forRoot` takes one required option, in either spelling:
+## The options
 
 ```ts
 type ConfigModuleOptions<T extends object, S extends object = ConfigSource> = {
   source?: ConfigSource;
   as?: new (values: T) => ConfigService<T>;
+  files?: readonly string[]; // present: S is ConfigValues
 } & (
   | { validate: (env: S) => T | Promise<T>; schema?: undefined }
   | { schema: StandardSchemaV1<unknown, T>; validate?: undefined }
@@ -50,7 +49,7 @@ Whatever it throws is what boot fails with, so throw something whose message say
 which keys are wrong. `schema` is the same step handed to a Standard Schema
 instead, and its issues become a `ConfigError` naming each path.
 
-That is the whole contract, plus `files`. There is no `envFilePath` and no
+That is the whole contract. There is no `envFilePath` and no
 `expandVariables`.
 
 ## Configuration files
@@ -154,10 +153,6 @@ validate: (src) => schema.parse({
 ```
 
 Structure belongs in the file, secrets and per-deploy values in the environment.
-
-`validate` receives `ConfigValues` rather than `ConfigSource` once files are in
-play: a parsed `port: 3000` is already a number, where `Bun.env` only ever holds
-strings.
 
 A schema DSL can only express what its author anticipated; a function expresses
 everything. Grouping flat variables into nested objects, deriving one value from
@@ -336,7 +331,8 @@ Bun loads `.env` and `.env.local` itself, before your code runs. There is
 therefore no `envFilePath` and no `dotenv` dependency. `source` defaults to
 `Bun.env`, which already carries whatever those files set. `files` above is a
 separate thing: it reads YAML, TOML and JSON through `Bun.YAML` and `Bun.TOML`,
-which is structure an env file cannot carry.
+and imports a `.ts` or `.js` file's default export, which is structure an env
+file cannot carry.
 
 The precedence and file list are Bun's, documented by Bun, and dunx does not
 re-implement or override them.
@@ -382,9 +378,9 @@ nothing to inject.
 
 ## Where config is consumed
 
-`forRootAsync({ useFactory, inject })` on `LoggerModule`, `ImagesModule`,
-`RedisModule`, `FilesModule`, `DbModule`, `QueueModule` and `AuthModule` all exist
-so their options can come off `ConfigService`:
+Every dunx module that takes options, except `ConfigModule` itself, also has
+`forRootAsync({ useFactory, inject })`, so those options can come off
+`ConfigService`:
 
 ```ts
 DbModule.forRootAsync(SyncDatabase, {
@@ -399,7 +395,7 @@ See [Logging](./13-logging.md), [Database](./14-database.md),
 [Files and images](./18-files-and-images.md) for the rest, and
 [Providers](./03-providers.md) for how a factory provider resolves in general.
 
-## The HTTP server's own settings
+## Settings the HTTP server owns
 
 `HttpFactory.create(root, options)` builds the container, so its `options` argument
 is assembled before `ConfigService` exists. `HttpOptionsProvider` is the same

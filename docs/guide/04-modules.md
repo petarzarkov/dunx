@@ -405,12 +405,8 @@ So why does the name exist at all? Because reading options off `ConfigService` i
 the one thing a zero-argument options object cannot do, and `forRootAsync` is the
 conventional name for that.
 
-Every configured module in the framework has one:
-
-- `@dunx/infra`: `LoggerModule`, `DbModule`, `RedisModule`, `QueueModule`,
-  `ScheduleModule`, `FilesModule`, `ImagesModule`
-- `@dunx/http`: `HealthModule`, `HttpClientModule`, `StaticModule`
-- `AuthModule`, `OpenApiModule`, `DashboardModule`
+Every framework module that takes options has one alongside its `forRoot`, except
+`ConfigModule`, which is what the factories read from:
 
 ```ts
 @Module({

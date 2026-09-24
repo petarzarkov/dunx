@@ -232,47 +232,26 @@ injected dependency survived the compile.
 
 ## Health checks
 
-`HealthModule` from `@dunx/http` serves `/api/health/live` and `/api/health/ready`.
+`HealthModule` from `@dunx/http` serves `/health/live` and `/health/ready`, under
+whatever global prefix the app sets, so `app.setGlobalPrefix('api')` moves them to
+`/api/health/*`.
 
 ```ts
 HealthModule.forRootAsync({
-  useFactory: (db: DbConnection, redis: RedisConnection) => ({
-    readiness: [new DatabaseIndicator(db), new CacheIndicator(redis)],
+  useFactory: (db: DbConnection) => ({
+    readiness: [new DatabaseIndicator(db)],
     drainDelayMs: 15_000,
   }),
-  inject: [DbConnection, RedisConnection],
+  inject: [DbConnection],
 });
-
-// `critical` is a member, so flipping it is a subclass rather than an argument.
-class CacheIndicator extends RedisIndicator {
-  override readonly critical = false;
-}
 ```
 
 Do not hand-roll a controller for this. The part worth having is the drain, and a
-plain controller cannot express it. Two settings decide whether a rollout drops
-requests; the full mechanics, including how to write your own indicator, are in
-[Health checks](./22-health-checks.md).
-
-**`critical`** separates readiness from liveness. A `critical: false` indicator
-reports `degraded` without failing the probe, so an absent Redis degrades a route
-rather than restarting the process. Be sparing with `critical: true`: it should
-name only what makes the process useless, which in most services is the database
-alone. A liveness probe that checks Redis will restart a healthy process on a
-cache blip.
-
-**`drainDelayMs`** holds readiness failing before the port closes.
-`Readiness` implements `OnBeforeShutdown`, which runs while the server is still
-accepting, so the probe can answer "not ready" on an open socket for as long as
-the load balancer needs to notice. An `onShutdown` hook runs after the server has
-stopped, so a probe answering from there answers on a closed socket already.
-
-Liveness keeps passing throughout: a pod that is shutting down does not need
-killing.
-
-Set `drainDelayMs` to at least your ingress's deregistration interval. The probes
-are hidden from the OpenAPI document, so they will not appear in a generated
-client.
+plain controller cannot express it. Set `drainDelayMs` to at least your ingress's
+deregistration interval, and keep `critical: true` to what makes the process
+useless, which in most services is the database alone.
+[Health checks](./22-health-checks.md) covers both, the drain mechanics, and
+writing your own indicator.
 
 ## Logging
 
@@ -290,7 +269,11 @@ A buffered `info` line can be lost if the process dies without unwinding, under 
 buffering off:
 
 ```ts
-provide(Logger, { useValue: new ConsoleLogger(context, LogLevel.INFO, false) });
+provide(Logger, {
+  useFactory: (context: RequestContext) =>
+    new ConsoleLogger(context, 'info', false),
+  inject: [RequestContext],
+});
 ```
 
 For redaction, rotation and file transports, bind `LoggerModule` from
