@@ -9,6 +9,7 @@ import type { Job } from 'bullmq';
 import { JobDispatcher } from './dispatcher.js';
 import { describeJob, selectJobs } from './discover.js';
 import { QueueOptions } from './options.js';
+import { JobTracing } from './tracing.js';
 
 export interface JobProcessorOptions {
   /**
@@ -116,10 +117,13 @@ export class JobProcessor {
       app,
       this.#options.queues,
     );
-    // No metrics: a counter this forked child keeps, nothing reads.
+    // No metrics: a counter this forked child keeps, nothing reads. Spans are
+    // another matter, exported by whatever SDK this child registered.
     const dispatcher = new JobDispatcher(
       jobs,
       app.get(QueueOptions).jobTimeoutMs,
+      undefined,
+      JobTracing.in(app),
     );
 
     // No `pid`: `@arkv/logger` puts it on every entry itself, and a second one in

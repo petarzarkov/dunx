@@ -68,6 +68,7 @@ The guide is canonical for every row; this table is the index.
 | Server-sent events      | `@Sse`, `SseStream`, framing, heartbeats, `Last-Event-ID`   | [Controllers](../../docs/guide/05-controllers.md)                 |
 | Request logging         | One structured entry per request, on by default             | [Logging](../../docs/guide/13-logging.md)                         |
 | Trace context           | W3C `traceparent` adopted and propagated, on by default     | [Logging](../../docs/guide/13-logging.md)                         |
+| Spans                   | A SERVER span per request and a CLIENT span per call, with `OtelModule` | [Tracing](../../docs/guide/31-tracing.md)             |
 | Metrics                 | Per-route counts and timings, off by default                | [Metrics](../../docs/guide/24-metrics.md)                         |
 | Health and draining     | `/health/live`, `/health/ready`, readiness during a rollout | [Health checks](../../docs/guide/22-health-checks.md)             |
 | Throttling              | `@Throttle`, `@SkipThrottle`, memory and Redis counters     | [Middleware and guards](../../docs/guide/08-middleware-and-guards.md) |

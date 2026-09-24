@@ -11,7 +11,7 @@ import { HttpFactory } from './factory.js';
 import { captured } from './request-logging.fixture.test.js';
 import { HttpOptionsProvider } from './options-provider.js';
 import type { CorsOptions } from './cors.js';
-import type { RequestLoggingOptions } from './request-logging.js';
+import type { RequestLoggingOptions } from './request-logging-options.js';
 
 @Controller('users')
 class UsersController {

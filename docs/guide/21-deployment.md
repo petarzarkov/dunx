@@ -277,7 +277,8 @@ provide(Logger, {
 ```
 
 For redaction, rotation and file transports, bind `LoggerModule` from
-`@dunx/infra/logger`. See [Logging](./13-logging.md).
+`@dunx/infra/logger`. See [Logging](./13-logging.md). For OpenTelemetry spans,
+see [Tracing](./31-tracing.md).
 
 ## Horizontal scaling
 

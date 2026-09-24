@@ -1,6 +1,7 @@
 import { ConsoleLogger } from '../logger/console.js';
 import { AsyncRequestContext, RequestContext } from '../logger/context.js';
 import { Logger } from '../logger/logger.js';
+import { NoopTracer, Tracer } from '../tracing/tracer.js';
 import { assertOneCore } from './copies.js';
 import { AppError } from './errors.js';
 import { Injector } from './injector.js';
@@ -19,8 +20,8 @@ import { ShutdownAware, type ShutdownHookOptions } from './shutdown-hooks.js';
 import { describeToken, isCtor, type InjectionToken } from './token.js';
 
 /**
- * The two contracts core guarantees are resolvable, laid into the global scope
- * before anything else, so a module binding either one shadows it.
+ * The three contracts core guarantees are resolvable, laid into the global scope
+ * before anything else, so a module binding any one of them shadows it.
  */
 const defaults = (root: ModuleRef): readonly Registration[] => [
   provide(RequestContext, { useClass: AsyncRequestContext }),
@@ -28,6 +29,7 @@ const defaults = (root: ModuleRef): readonly Registration[] => [
     useFactory: (context: RequestContext) => new ConsoleLogger(context),
     inject: [RequestContext] as const,
   }),
+  provide(Tracer, { useClass: NoopTracer }),
   // Here because this loop is the only place a binding reaches every scope,
   // which is what a global middleware mounted by a feature module needs.
   provide(ROOT_MODULE, { useValue: root }),

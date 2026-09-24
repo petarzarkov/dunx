@@ -3,13 +3,16 @@ import {
   DEFAULT_TRACE_FLAGS,
   mintSpanId,
   mintTraceId,
-  parseTraceparent,
+  NoopTracer,
   RequestContext,
-  TRACEPARENT_HEADER,
-  TRACESTATE_HEADER,
+  Tracer,
+  type ActiveSpan,
+  type RemoteParent,
   type RequestFields,
+  type TraceIds,
 } from '@dunx/core';
 import { ConsumerStatus, type AsyncMessage } from 'rabbitmq-client';
+import { remoteParentOf } from '../trace-carrier.js';
 import { withTimeout } from '../with-timeout.js';
 import type { DiscoveredSubscription } from './discover.js';
 import { AmqpError, AmqpErrorCode } from './errors.js';
@@ -36,10 +39,13 @@ export interface DispatchSettings {
 export class AmqpDispatcher {
   readonly #logger: Logger;
   readonly #context: RequestContext | undefined;
+  /** Absent for the no-op, so an untraced delivery builds no span options. */
+  readonly #tracer: Tracer | undefined;
 
-  constructor(logger: Logger, context?: RequestContext) {
+  constructor(logger: Logger, context?: RequestContext, tracer?: Tracer) {
     this.#logger = logger;
     this.#context = context;
+    this.#tracer = tracer instanceof NoopTracer ? undefined : tracer;
   }
 
   async dispatch(
@@ -54,7 +60,7 @@ export class AmqpDispatcher {
       this.#logger.warn(`Redelivered AMQP message ${subject}`);
     }
 
-    const run = async (): Promise<ConsumerStatus> => {
+    const run = async (span?: ActiveSpan): Promise<ConsumerStatus> => {
       try {
         const status = await this.#invoke(found, settings, message);
         this.#logger.debug(`Handled AMQP message ${subject}`);
@@ -65,48 +71,74 @@ export class AmqpDispatcher {
             `${subject}, ${settings.requeue ? 'requeueing' : 'dropping'} it`,
           error,
         );
+        span?.recordError(error);
         return settings.requeue ? ConsumerStatus.REQUEUE : ConsumerStatus.DROP;
       }
     };
 
     const context = this.#context;
-    if (context === undefined) return run();
-    return context.runWithContext(this.#scope(found, message), run, {
-      // Nothing encloses a delivery - the consumer callback runs off the broker's
-      // socket, not inside a request - so there is no scope to inherit and
-      // inheriting would only risk carrying a previous one in.
-      inherit: false,
-    });
+    const tracer = this.#tracer;
+    if (context === undefined && tracer === undefined) return run();
+    const inbound = remoteParentOf(message.headers ?? {});
+    // Nothing encloses a delivery - the consumer callback runs off the broker's
+    // socket, not inside a request - so there is no scope to inherit and
+    // inheriting would only risk carrying a previous one in.
+    const scoped = (span?: ActiveSpan): Promise<ConsumerStatus> =>
+      context === undefined
+        ? run(span)
+        : context.runWithContext(
+            this.#scope(found, inbound, span?.ids()),
+            () => run(span),
+            { inherit: false },
+          );
+    if (tracer === undefined) return scoped();
+
+    return tracer.span(
+      `process ${found.queue}`,
+      {
+        kind: 'consumer',
+        attributes: {
+          'messaging.system': 'rabbitmq',
+          'messaging.operation.type': 'process',
+          'messaging.operation.name': 'process',
+          'messaging.destination.name': found.queue,
+          ...(typeof message.messageId === 'string'
+            ? { 'messaging.message.id': message.messageId }
+            : {}),
+        },
+        ...(inbound === undefined ? {} : { parent: inbound }),
+      },
+      scoped,
+    );
   }
 
   /**
-   * The trace this delivery belongs to. A `traceparent` the publisher stamped is
-   * continued with a span of this consumer's own, so the two services' log lines
-   * join; a message without one starts a trace here.
+   * The trace this delivery belongs to. The inbound trace is continued with a
+   * span of this consumer's own, so the two services' log lines join; a message
+   * without one starts a trace here. A recording `span` supplies the ids.
    */
-  #scope(found: DiscoveredSubscription, message: AsyncMessage): RequestFields {
-    const headers = (message.headers ?? {}) as Record<string, unknown>;
-    const header = headers[TRACEPARENT_HEADER];
-    const inbound = parseTraceparent(
-      typeof header === 'string' ? header : undefined,
-    );
-    const state = headers[TRACESTATE_HEADER];
-
+  #scope(
+    found: DiscoveredSubscription,
+    inbound: RemoteParent | undefined,
+    span?: TraceIds,
+  ): RequestFields {
     return {
       flow: 'amqp',
       event: found.queue,
       context: `${found.provider}.${found.method}`,
-      spanId: mintSpanId(),
-      // `tracestate` belongs to the `traceparent` it arrived with, so a
-      // malformed header drops both: keeping the vendor state would attach one
-      // trace's to another's ids.
+      spanId: span?.spanId ?? mintSpanId(),
       ...(inbound === undefined
-        ? { traceId: mintTraceId(), traceFlags: DEFAULT_TRACE_FLAGS }
+        ? {
+            traceId: span?.traceId ?? mintTraceId(),
+            traceFlags: span?.flags ?? DEFAULT_TRACE_FLAGS,
+          }
         : {
-            traceId: inbound.traceId,
+            traceId: span?.traceId ?? inbound.traceId,
             parentSpanId: inbound.spanId,
-            traceFlags: inbound.flags,
-            ...(typeof state === 'string' ? { traceState: state } : {}),
+            traceFlags: span?.flags ?? inbound.flags,
+            ...(inbound.state === undefined
+              ? {}
+              : { traceState: inbound.state }),
           }),
     };
   }

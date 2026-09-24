@@ -2,6 +2,7 @@ import {
   Logger,
   provide,
   token,
+  Tracer,
   type AbstractCtor,
   type AsyncModuleConfig,
   type Ctor,
@@ -14,7 +15,8 @@ import {
 } from '@dunx/core';
 import { DbConnection, DbOptions } from './connection.js';
 import { DataSources, type DataSourcesInit } from './data-sources.js';
-import { instrumented, QueryMetrics } from './metrics.js';
+import { instrumented } from './instrument.js';
+import { QueryMetrics } from './metrics.js';
 import { dbConnection, dbHandle, dbMetrics, dbOptions } from './tokens.js';
 
 export interface DbModuleSettings {
@@ -71,13 +73,17 @@ const connectionModule = <TDb>(
     // neither `provide` overload.
     tokens.metrics === undefined
       ? provide(tokens.connection, {
-          useFactory: (resolved: DbOptions<TDb>) => resolved.open(),
-          inject: [tokens.options] as const,
+          useFactory: (resolved: DbOptions<TDb>, tracer: Tracer) =>
+            instrumented(resolved.open(), undefined, tracer),
+          inject: [tokens.options, Tracer] as const,
         })
       : provide(tokens.connection, {
-          useFactory: (resolved: DbOptions<TDb>, metrics: QueryMetrics) =>
-            instrumented(resolved.open(), metrics),
-          inject: [tokens.options, tokens.metrics] as const,
+          useFactory: (
+            resolved: DbOptions<TDb>,
+            tracer: Tracer,
+            metrics: QueryMetrics,
+          ) => instrumented(resolved.open(), metrics, tracer),
+          inject: [tokens.options, Tracer, tokens.metrics] as const,
         }),
     provide(tokens.handle, {
       useFactory: (opened: DbConnection<TDb>) => opened.db,
@@ -162,13 +168,15 @@ const poolModule = <TDb>(
   const construct = (
     resolved: DataSourcesInit<TDb>,
     logger: Logger,
+    tracer: Tracer,
     metrics?: QueryMetrics,
   ): DataSources<TDb> =>
     new (target as new (
       init: DataSourcesInit<TDb>,
       logger?: Logger,
       metrics?: QueryMetrics,
-    ) => DataSources<TDb>)(resolved, logger, metrics);
+      tracer?: Tracer,
+    ) => DataSources<TDb>)(resolved, logger, metrics, tracer);
 
   return {
     module: DbModule,
@@ -181,17 +189,21 @@ const poolModule = <TDb>(
         : [provide(metricsToken, { useValue: new QueryMetrics() })]),
       metricsToken === undefined
         ? provide(target, {
-            useFactory: (resolved: DataSourcesInit<TDb>, logger: Logger) =>
-              construct(resolved, logger),
-            inject: [initToken, Logger] as const,
+            useFactory: (
+              resolved: DataSourcesInit<TDb>,
+              logger: Logger,
+              tracer: Tracer,
+            ) => construct(resolved, logger, tracer),
+            inject: [initToken, Logger, Tracer] as const,
           })
         : provide(target, {
             useFactory: (
               resolved: DataSourcesInit<TDb>,
               logger: Logger,
+              tracer: Tracer,
               metrics: QueryMetrics,
-            ) => construct(resolved, logger, metrics),
-            inject: [initToken, Logger, metricsToken] as const,
+            ) => construct(resolved, logger, tracer, metrics),
+            inject: [initToken, Logger, Tracer, metricsToken] as const,
           }),
     ],
   };

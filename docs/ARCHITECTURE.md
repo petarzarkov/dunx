@@ -18,11 +18,12 @@ contradicts it is a decision made without measuring.
 
 ## The framework
 
-| Page                                                           | What it settles                                                                                     |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [Dependency injection](./architecture/dependency-injection.md) | The decorator dialect, recording constructor types without metadata, and the scope each module gets |
-| [The HTTP layer](./architecture/http.md)                       | The `Bun.serve` adapter, route discovery, and multi-node websocket fan-out                          |
-| [Metrics](./architecture/metrics.md)                           | What the counters cost, where database timing comes from, and what is still not built               |
+| Page                                                                    | What it settles                                                                                     |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [Dependency injection](./architecture/dependency-injection.md)          | The decorator dialect, recording constructor types without metadata, and the scope each module gets |
+| [The HTTP layer](./architecture/http.md)                                | The `Bun.serve` adapter, route discovery, and multi-node websocket fan-out                          |
+| [Metrics](./architecture/metrics.md)                                    | What the counters cost, where database timing comes from, and what is still not built               |
+| [Tracing](./architecture/constraints.md#opentelemetry-spans-on-bun-142) | Why `@opentelemetry/api` is an optional peer behind `/otel`, and what a span costs                  |
 
 ## The integrations
 

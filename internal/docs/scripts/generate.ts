@@ -170,9 +170,10 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
   // section its neighbours are in or starts one of its own.
   ['Messaging', ['events', 'rpc', 'email']],
   // For the author of a package other people install, rather than the author of
-  // an app. `email` is spelled out above because a page with no entry lands in
-  // the last section, and that is now this one.
+  // an app. Every page is spelled out because one with no entry lands in the
+  // last section.
   ['Extending dunx', ['publishing-a-package']],
+  ['Observability', ['tracing']],
 ];
 
 const sectionOf = (slug: string): string => {

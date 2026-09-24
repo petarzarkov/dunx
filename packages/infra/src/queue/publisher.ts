@@ -4,6 +4,7 @@ import { QueueConnection } from './connection.js';
 import { describeJob } from './discover.js';
 import { QueueMetrics } from './metrics.js';
 import { QueueOptions } from './options.js';
+import type { JobTracing } from './tracing.js';
 
 /**
  * Distinct queue names past which they are more likely derived from data than
@@ -26,6 +27,7 @@ export class JobPublisher implements OnShutdown {
   readonly #options: QueueOptions;
   readonly #logger: Logger;
   readonly #metrics: QueueMetrics | undefined;
+  readonly #tracing: JobTracing | undefined;
   readonly #queues = new Map<string, Queue>();
 
   constructor(
@@ -33,11 +35,13 @@ export class JobPublisher implements OnShutdown {
     options: QueueOptions,
     logger: Logger,
     metrics?: QueueMetrics,
+    tracing?: JobTracing,
   ) {
     this.#connection = connection;
     this.#options = options;
     this.#logger = logger;
     this.#metrics = metrics;
+    this.#tracing = tracing;
   }
 
   /** The names this publisher has opened a queue for so far. */
@@ -95,7 +99,7 @@ export class JobPublisher implements OnShutdown {
    * `queue(...).add(...)`, with the enqueue recorded on the logger and, when
    * `metrics: true`, timed on `QueueMetrics`. A caller reaching for `queue(name)`
    * and calling `add`, `addBulk` or `upsertJobScheduler` on it goes round this and
-   * is counted nowhere.
+   * is counted nowhere, and opens no PRODUCER span.
    */
   async publish<T>(
     queue: string,
@@ -105,9 +109,15 @@ export class JobPublisher implements OnShutdown {
   ): Promise<Job<T>> {
     const metrics = this.#metrics;
     const started = metrics === undefined ? 0 : Bun.nanoseconds();
+    const tracing = this.#tracing;
     let job: Job;
     try {
-      job = await this.queue(queue).add(name, data, options);
+      job =
+        tracing === undefined
+          ? await this.queue(queue).add(name, data, options)
+          : await tracing.publish(queue, name, options, (traced) =>
+              this.queue(queue).add(name, data, traced),
+            );
     } catch (error) {
       metrics?.observePublish(queue, name, Bun.nanoseconds() - started, true);
       throw error;

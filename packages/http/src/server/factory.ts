@@ -6,6 +6,7 @@ import {
   provide,
   readControllers,
   RequestContext,
+  Tracer,
   type Ctor,
   type DynamicModule,
   type ModuleRef,
@@ -78,6 +79,7 @@ export class HttpFactory {
         context: RequestContext,
         settings: HttpOptionsProvider,
         metrics: RequestMetrics,
+        tracer: Tracer,
       ) =>
         new RequestLoggingMiddleware(
           logger,
@@ -89,12 +91,14 @@ export class HttpFactory {
           // Handed in only when asked for, so the observe call is a branch the
           // default configuration never takes. Same precedence again.
           (options.metrics ?? settings.metrics) ? metrics : undefined,
+          tracer,
         ),
       inject: [
         Logger,
         RequestContext,
         HttpOptionsProvider,
         RequestMetrics,
+        Tracer,
       ] as const,
     });
 

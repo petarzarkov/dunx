@@ -1,5 +1,6 @@
 import { Durations, type HistogramSnapshot } from '@dunx/core';
-import type { DbConnection } from './connection.js';
+import { instrument, QueryTimer } from './instrument.js';
+import { sanitize } from './statement.js';
 
 export const QueryOperation = Object.freeze({
   SELECT: 'select',
@@ -35,37 +36,11 @@ export interface DbStatsReport {
 const SLOWEST_TEXT_LIMIT = 200;
 
 /**
- * Postgres dollar quoting: `$$body$$` or `$tag$body$tag$`. The tag has to match,
- * hence the backreference, and the body may contain anything including quotes.
- * Replaced first, or the quote rules below would read into it.
- */
-const DOLLAR_QUOTED = /\$([A-Za-z_]\w*)?\$[\s\S]*?\$\1\$/g;
-/**
- * An `E'...'` escape string, where a backslash escapes the next character. Also
- * matched before the plain rule, which would stop at the first `'` a `\'` hid.
- */
-const ESCAPE_STRING = /[eE]'(?:[^'\\]|\\[\s\S]|'')*'/g;
-/** A single-quoted literal, `''` escapes included. */
-const STRING_LITERAL = /'(?:[^']|'')*'/g;
-/** A bare number that is not part of an identifier or a `$1` placeholder. */
-const NUMBER_LITERAL = /(?<![\w$.])\d+(?:\.\d+)?/g;
-
-/**
- * The statement's shape, with its literals replaced.
- *
  * A snapshot is served over the dashboard's stats endpoint, so anything kept here
- * is readable by whoever can reach that page. drizzle parameterises, so a query it
- * built carries no values - but `sql` template escape hatches and hand-written
- * statements do, and a `where email = 'ada@example.com'` in a metrics payload is
- * the leak. Truncation is not redaction.
+ * is readable by whoever can reach that page. Truncation is not redaction.
  */
 const redact = (sql: string): string =>
-  sql
-    .replace(DOLLAR_QUOTED, '$$?$$')
-    .replace(ESCAPE_STRING, "E'?'")
-    .replace(STRING_LITERAL, "'?'")
-    .replace(NUMBER_LITERAL, '?')
-    .slice(0, SLOWEST_TEXT_LIMIT);
+  sanitize(sql).slice(0, SLOWEST_TEXT_LIMIT);
 
 const LEADING = /^\s*(select|insert|update|delete)\b/i;
 
@@ -108,13 +83,8 @@ const series = (): Series => ({
  * callback, and drizzle 0.45.2's OpenTelemetry hook never assigns its `otel`
  * binding. Both measured.
  *
- * The two seams are public Bun API, on the objects dunx hands to `drizzle()`:
- *
- * - `bun:sqlite` prepares a statement per query, so `Database.prepare` is wrapped
- *   and the four execute methods on what it returns are timed. Synchronous, so
- *   exact.
- * - `Bun.SQL`'s `unsafe()` returns a lazy `Query` that runs when awaited, so
- *   `then` is wrapped and `finally` is not - attaching `finally` would start it.
+ * The seams are public Bun API, on the objects dunx hands to `drizzle()`, and
+ * shared with query spans: see `instrument`.
  *
  * Bound only when `metrics: true`.
  */
@@ -170,132 +140,6 @@ export class QueryMetrics {
    * reconnect from stacking timers.
    */
   instrument<T extends object>(client: T): T {
-    if (Reflect.get(client, INSTRUMENTED) === true) return client;
-    const candidate = client as unknown as Partial<Instrumentable>;
-    if (typeof candidate.prepare === 'function') {
-      this.#instrumentSqlite(client as unknown as SqliteClient);
-    } else if (typeof candidate.unsafe === 'function') {
-      this.#instrumentSql(client as unknown as SqlClient);
-    } else {
-      return client;
-    }
-    Reflect.set(client, INSTRUMENTED, true);
-    return client;
-  }
-
-  #instrumentSqlite(client: SqliteClient): void {
-    const original = client.prepare.bind(client);
-    const record = this.observe.bind(this);
-    client.prepare = (sql: string, ...rest: unknown[]): SqliteStatement => {
-      let statement: SqliteStatement;
-      // sqlite compiles here, so a syntax error or an unknown table throws out of
-      // `prepare` and never reaches a method below. Timed as well as counted: a
-      // failed compilation or schema lookup is not free, and recording a constant
-      // would skew the percentiles of an error-heavy workload.
-      const preparing = Bun.nanoseconds();
-      try {
-        statement = original(sql, ...rest);
-      } catch (error) {
-        record(sql, Bun.nanoseconds() - preparing, true);
-        throw error;
-      }
-      for (const name of SQLITE_METHODS) {
-        const method = statement[name];
-        if (typeof method !== 'function') continue;
-        statement[name] = function (this: unknown, ...args: unknown[]) {
-          const started = Bun.nanoseconds();
-          try {
-            const value = method.apply(this, args);
-            record(sql, Bun.nanoseconds() - started);
-            return value;
-          } catch (error) {
-            record(sql, Bun.nanoseconds() - started, true);
-            throw error;
-          }
-        };
-      }
-      return statement;
-    };
-  }
-
-  #instrumentSql(client: SqlClient): void {
-    const original = client.unsafe.bind(client);
-    const record = this.observe.bind(this);
-    client.unsafe = (sql: string, ...rest: unknown[]): SqlQuery => {
-      const query = original(sql, ...rest);
-      const originalThen = query.then.bind(query);
-      let timed = false;
-      // This observes the `then` Bun's own lazy `Query` already has, rather than
-      // making anything thenable, so the rule does not apply.
-      // oxlint-disable-next-line unicorn/no-thenable
-      query.then = (onOk?: Settle, onErr?: Settle): unknown => {
-        // The first `then` is what starts the query; a second one attaches to a
-        // promise already running, so only the first is a measurement.
-        const started = timed ? 0 : Bun.nanoseconds();
-        const wasFirst = !timed;
-        timed = true;
-        const stop = (failed: boolean): void => {
-          if (wasFirst) record(sql, Bun.nanoseconds() - started, failed);
-        };
-        return originalThen(
-          (value: unknown) => {
-            stop(false);
-            return onOk ? onOk(value) : value;
-          },
-          (error: unknown) => {
-            stop(true);
-            if (onErr) return onErr(error);
-            throw error;
-          },
-        );
-      };
-      return query;
-    };
+    return instrument(client, new QueryTimer(this));
   }
 }
-
-type Settle = (value: unknown) => unknown;
-
-type SqliteStatement = Record<string, unknown>;
-
-interface SqliteClient {
-  prepare: (sql: string, ...rest: unknown[]) => SqliteStatement;
-}
-
-interface SqlQuery {
-  then: (onOk?: Settle, onErr?: Settle) => unknown;
-}
-
-interface SqlClient {
-  unsafe: (sql: string, ...rest: unknown[]) => SqlQuery;
-}
-
-interface Instrumentable {
-  prepare: unknown;
-  unsafe: unknown;
-}
-
-const SQLITE_METHODS = ['run', 'all', 'get', 'values'] as const;
-
-/** Marks a client so a second `instrument` call does not stack a second timer. */
-const INSTRUMENTED: unique symbol = Symbol.for('dunx.infra.db.instrumented');
-
-/**
- * Instruments after `open()` rather than before `drizzle()`. `instrument` mutates
- * the client in place and drizzle looks `prepare`/`unsafe` up on it per query, so
- * a handle built earlier still goes through the timer - which keeps this out of
- * both connection constructors and both option classes.
- */
-export const instrumented = async <TDb>(
-  opening: Promise<DbConnection<TDb>>,
-  metrics: QueryMetrics,
-): Promise<DbConnection<TDb>> => {
-  const opened = await opening;
-  // A `Bun.SQL` client is a **function** - it is callable as a tagged template -
-  // so an `=== 'object'` guard skipped the whole Postgres backend.
-  const raw: unknown = opened.raw;
-  if ((typeof raw === 'object' && raw !== null) || typeof raw === 'function') {
-    metrics.instrument(raw as object);
-  }
-  return opened;
-};

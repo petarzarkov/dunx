@@ -3,6 +3,7 @@ import type { Job } from 'bullmq';
 import { describeJob, type DiscoveredJob } from './discover.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { JobOutcome, QueueMetrics } from './metrics.js';
+import type { JobTracing } from './tracing.js';
 import { withTimeout } from '../with-timeout.js';
 
 /**
@@ -46,14 +47,17 @@ export class JobDispatcher {
   readonly #byQueue = new Map<string, Map<string, DiscoveredJob>>();
   readonly #timeoutMs: number | undefined;
   readonly #metrics: QueueMetrics | undefined;
+  readonly #tracing: JobTracing | undefined;
 
   constructor(
     jobs: readonly DiscoveredJob[],
     timeoutMs?: number,
     metrics?: QueueMetrics,
+    tracing?: JobTracing,
   ) {
     this.#timeoutMs = timeoutMs;
     this.#metrics = metrics;
+    this.#tracing = tracing;
     for (const job of jobs) {
       let queue = this.#byQueue.get(job.queue);
       if (!queue) {
@@ -92,6 +96,12 @@ export class JobDispatcher {
       );
     }
 
+    const tracing = this.#tracing;
+    if (tracing === undefined) return this.#run(job, found);
+    return tracing.process(job, found, () => this.#run(job, found));
+  }
+
+  #run(job: Job, found: DiscoveredJob): unknown {
     const metrics = this.#metrics;
     if (metrics === undefined) return this.#invoke(job, found);
     return this.#observed(job, found, metrics);

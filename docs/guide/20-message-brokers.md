@@ -292,6 +292,9 @@ A header the caller set already is left alone, so forwarding a message passes th
 upstream trace on. A message that arrived with no `traceparent` starts a trace at
 the handler.
 
+With `OtelModule`, `publish` and each delivery open PRODUCER and CONSUMER spans
+joined through these headers. See [Tracing](./31-tracing.md#amqp).
+
 ## `handlerTimeoutMs`
 
 ```ts
@@ -451,5 +454,6 @@ here would be one more name to keep in step. Import it from `rabbitmq-client`.
 - [Health checks](./22-health-checks.md) for `AmqpIndicator`
 - [Events](./27-events.md) for in-process events, which cross no network
 - [Logging](./13-logging.md) for the `traceId` these lines carry
+- [Tracing](./31-tracing.md) for the spans around publish and delivery
 - `examples/full`, whose `src/messaging/` is the worked example this page is drawn
   from

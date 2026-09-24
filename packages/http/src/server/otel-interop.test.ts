@@ -6,13 +6,8 @@ import {
   Module,
   provide,
 } from '@dunx/core';
-import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { context, propagation, trace } from '@opentelemetry/api';
-import {
-  InMemorySpanExporter,
-  NodeTracerProvider,
-  SimpleSpanProcessor,
-} from '@opentelemetry/sdk-trace-node';
+import { exporter } from '../otel.fixture.js';
 import { HttpClientOptions } from '../client/options.js';
 import { HttpService } from '../client/service.js';
 import { Controller, Get } from '../route/decorators.js';
@@ -53,15 +48,10 @@ class TraceController {
 })
 class AppModule {}
 
-const exporter = new InMemorySpanExporter();
 let app: HttpApp;
 let base = '';
 
 beforeAll(async () => {
-  new NodeTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
-  }).register({ propagator: new W3CTraceContextPropagator() });
-
   app = await HttpFactory.create(AppModule);
   base = await app.listen(0);
 });

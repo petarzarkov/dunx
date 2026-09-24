@@ -2,7 +2,9 @@ import {
   AppRef,
   Logger,
   provide,
+  RequestContext,
   ROOT_MODULE,
+  Tracer,
   type Deps,
   type DynamicModule,
   type AsyncModuleConfig,
@@ -15,6 +17,7 @@ import { QueueMetrics } from './metrics.js';
 import { QueueOptions, type QueueOptionsInit } from './options.js';
 import { JobPublisher } from './publisher.js';
 import { QueueRunner } from './runner.js';
+import { JobTracing } from './tracing.js';
 
 /**
  * `QueueConnection` is bound as a factory over `QueueOptions`, and `JobPublisher`
@@ -91,8 +94,23 @@ const bindings = (
       connection: QueueConnection,
       options: QueueOptions,
       logger: Logger,
-    ) => new JobPublisher(connection, options, logger, metrics),
-    inject: [QueueConnection, QueueOptions, Logger] as const,
+      tracer: Tracer,
+      context: RequestContext,
+    ) =>
+      new JobPublisher(
+        connection,
+        options,
+        logger,
+        metrics,
+        JobTracing.of(tracer, context),
+      ),
+    inject: [
+      QueueConnection,
+      QueueOptions,
+      Logger,
+      Tracer,
+      RequestContext,
+    ] as const,
   }),
   // After the connection, so reverse-order teardown closes the event streams
   // before the sockets they borrowed. It opens none until something waits.

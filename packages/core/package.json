@@ -7,7 +7,8 @@
     "core",
     "dependency-injection",
     "dunx",
-    "logger"
+    "logger",
+    "opentelemetry"
   ],
   "homepage": "https://github.com/petarzarkov/dunx/tree/main/packages/core#readme",
   "license": "MIT",
@@ -33,6 +34,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./otel": {
+      "types": "./dist/otel/index.d.ts",
+      "import": "./dist/otel/index.js"
     }
   },
   "publishConfig": {
@@ -45,6 +50,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {},
+  "devDependencies": {
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/sdk-trace-node": "2.11.0"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.4.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentelemetry/api": {
+      "optional": true
+    }
+  },
   "engines": {
     "bun": ">=1.4.1"
   }

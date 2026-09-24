@@ -7,6 +7,7 @@ import {
   parseTraceparent,
   TRACEPARENT_HEADER,
   TRACESTATE_HEADER,
+  type RemoteParent,
   type TraceIds,
 } from '@dunx/core';
 
@@ -110,6 +111,33 @@ export class TraceContext {
     (req as Traced)[TRACE] = trace;
     if (expose) (req as Traced)[EXPOSE] = true;
     return trace;
+  }
+
+  /**
+   * The adopted trace with a recording span's ids in place of the ones `adopt`
+   * minted, written back so `traceresponse` and the metrics exemplar name the
+   * span that was exported. The caller's span stays the parent.
+   */
+  static join(req: Request, trace: Trace, ids: TraceIds): Trace {
+    const joined: Trace = {
+      ...trace,
+      traceId: ids.traceId,
+      spanId: ids.spanId,
+      flags: ids.flags,
+    };
+    (req as Traced)[TRACE] = joined;
+    return joined;
+  }
+
+  /** The caller's span as a span's remote parent, when one arrived. */
+  static parentOf(trace: Trace): RemoteParent | undefined {
+    if (trace.parentSpanId === undefined) return undefined;
+    return {
+      traceId: trace.traceId,
+      spanId: trace.parentSpanId,
+      flags: trace.flags,
+      ...(trace.state === undefined ? {} : { state: trace.state }),
+    };
   }
 
   /** The trace adopted for this request, if one was. */

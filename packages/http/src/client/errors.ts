@@ -66,3 +66,19 @@ export class FetchTransportError extends AppError {
     );
   }
 }
+
+/** The fields a failed call logs. */
+export const describeError = (error: unknown): Record<string, unknown> => {
+  if (error instanceof FetchError) {
+    return {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      body: error.body,
+    };
+  }
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message };
+  }
+  return { message: String(error) };
+};

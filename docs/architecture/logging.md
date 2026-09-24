@@ -127,6 +127,11 @@ The sampling decision travels as it arrived: `traceFlags` is in the scope and th
 outbound client forwards it, so a trace an upstream sampler declined is not
 re-sampled at this hop. `tracestate` is forwarded unchanged for the same reason.
 
+With `OtelModule` bound and an SDK recording, the ids in the scope are the
+exported span's rather than minted ones; the probe that settled it is under
+"OpenTelemetry spans, on Bun 1.4.2" in [Verified constraints](./constraints.md#opentelemetry-spans-on-bun-142),
+and the behaviour is in the [Tracing guide](../guide/31-tracing.md).
+
 ## `ignore` skips everything, and `correlateIgnored` buys back part of it
 
 `ignore` returns `next()` before anything else happens, which makes it free. It

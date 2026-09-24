@@ -3,6 +3,7 @@ import {
   Logger,
   provide,
   RequestContext,
+  Tracer,
   ROOT_MODULE,
   type AsyncModuleConfig,
   type Deps,
@@ -36,8 +37,15 @@ const bindings = (): readonly Registration[] => [
       options: AmqpOptions,
       logger: Logger,
       context: RequestContext,
-    ) => new AmqpPublisher(connection, options, logger, context),
-    inject: [AmqpConnection, AmqpOptions, Logger, RequestContext] as const,
+      tracer: Tracer,
+    ) => new AmqpPublisher(connection, options, logger, context, tracer),
+    inject: [
+      AmqpConnection,
+      AmqpOptions,
+      Logger,
+      RequestContext,
+      Tracer,
+    ] as const,
   }),
   /**
    * Always bound, idle unless `consume` is set - checked in `onInit`, since

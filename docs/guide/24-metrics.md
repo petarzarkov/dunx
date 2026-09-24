@@ -93,7 +93,8 @@ worth a metric and not worth an entry.
 The trace of the slowest request seen on that route. Every line that request
 wrote carries the same `traceId`, so one search finds the logs behind the p99.
 
-It is absent when `requestLogging: { trace: false }` turned tracing off.
+It is absent when `requestLogging: { trace: false }` turned tracing off. Under
+[Tracing](./31-tracing.md) with a recording SDK it is the exported span's trace.
 
 ## Reading queries
 

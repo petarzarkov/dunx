@@ -410,3 +410,77 @@ permitted here - `internal/*` is exempt from Rule 1 - and would be the fallback 
 a test needed more than the list above. `Bun.WebView` costs no dependency and no
 browser download. That makes it what a dashboard smoke test should be written
 against.
+
+## OpenTelemetry spans, on Bun 1.4.2
+
+Probed for issue #82 with `@opentelemetry/api` 1.9.1 and `@opentelemetry/sdk-trace-node`
+2.11.0. Four claims, four probes.
+
+**A static import of an absent optional peer fails the whole entry.** A package
+module importing `@opentelemetry/api` at its top, installed from a packed tarball
+with the peer missing:
+
+```
+error: Cannot find module '@opentelemetry/api' from '.../node_modules/fakepkg/static.js'
+```
+
+The same import behind its own subpath export leaves the root entry loading
+(`main ok`), and `bun build --compile` bundles the subpath when the peer is present.
+So the OTel code lives in `@dunx/core/otel`, the pattern `@dunx/infra/db` already
+follows. A probe that installs the fake package from a `file:` directory instead
+passes wrongly: the symlinked files have no `node_modules` and Bun auto-installs
+the peer.
+
+**Two copies of the API share one global in one direction only.**
+
+| Provider registered via | Span started via | Exported |
+| ----------------------- | ---------------- | -------- |
+| 1.9.0                   | 1.8.0            | yes      |
+| 1.8.0                   | 1.9.0            | no       |
+
+`setGlobalTracerProvider` returned `true` in both rows. A dunx that depended on a
+newer API than the app's SDK would drop every span without an error, so the API is
+a peer with a low floor.
+
+**dunx's request scope and the OTel context coexist.** Two `AsyncLocalStorage`
+stores side by side, dunx's `RequestContext` and the SDK's context manager, with
+the handler run inside `context.with(trace.setSpan(...))`. A user span parented to
+the server span at every checkpoint:
+
+```
+sync/await/timeout/sqlite/Bun.SQL  otelParent=4e4fb8fa38067db4 dunxSpan=4e4fb8fa38067db4
+exported server: trace=aaaaaaaa parent=bbbbbbbbbbbbbbbb remote=true
+```
+
+Log lines only join spans when dunx writes the recording span's ids into its own
+scope; minting its own span id beside the SDK's never matches. Reading ids from
+`trace.getActiveSpan()` instead was rejected: with no SDK registered it returns
+none, and logs lose `traceId` entirely.
+
+**A span is cheap until an SDK records it.** `oha -c 64`, plaintext, five
+interleaved rounds per configuration, two runs, as a share of the same run's
+baseline:
+
+| Configuration                                     | Share of baseline | Added per request |
+| ------------------------------------------------- | ----------------- | ----------------- |
+| A new global async middleware, no OTel            | 85.5%             | 1.26 us           |
+| That, plus a span with no provider                | 81.2%             | 0.45 us more      |
+| Span, SDK with `BatchSpanProcessor`, no-op export | 69.0-70.3%        | 2.0 us more       |
+| Span, SDK with an in-memory exporter              | 62.1-63.8%        | 3.2 us more       |
+
+In a tight loop with no provider, `startSpan` costs 11 ns and `startActiveSpan`
+115 ns. Two decisions follow: spans are opt-in through `OtelModule`, and the
+default `Tracer` never calls the API. The server span opens inside the existing
+request-logging middleware rather than a new one, since the middleware seam alone
+costs more than the span.
+
+**Trace context reaches a forked bullmq worker without touching `job.data`.**
+bullmq 6.3.4 stores `opts.telemetry.metadata` in Redis and hands `job.opts` to the
+`isolation: 'process'` child. Over `createBunRedisClient` against a real Redis:
+
+```
+CHILD {"data":{"to":"a@b"},"telemetry":{"metadata":"00-4c25f2...-e0d0acf3020be687-01"}}
+```
+
+AMQP already carries `traceparent` in message headers; `src/amqp/live.test.ts`
+passes against `rabbitmq:4-alpine`.

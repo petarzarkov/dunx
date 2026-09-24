@@ -87,10 +87,8 @@ export {
   TraceContext,
   type Trace,
 } from './server/trace-context.js';
-export {
-  RequestLoggingMiddleware,
-  type RequestLoggingOptions,
-} from './server/request-logging.js';
+export { RequestLoggingMiddleware } from './server/request-logging.js';
+export type { RequestLoggingOptions } from './server/request-logging-options.js';
 // Per-route counts and timings, on `node:perf_hooks`'s native histogram through
 // `@dunx/core`'s `Durations`. Off unless `metrics: true`; the observation folds
 // into the `.then` request logging already allocates. dunx serves the numbers as

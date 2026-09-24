@@ -331,6 +331,28 @@ chain would never see it, so `@dunx/http` installs one `fetch` fallback that put
 the global middleware in front of a `{"error":"NOT_FOUND","status":404}`. Bun is
 still the router.
 
+## Tracing
+
+`OtelModule` in [src/app.module.ts](./src/app.module.ts) binds `Tracer`, so every
+request opens a SERVER span and every SQLite query, Redis command, job publish and
+AMQP message opens a child of it. dunx starts spans and never decides where they
+go: [src/otel.preload.ts](./src/otel.preload.ts) registers the SDK, from
+`bunfig.toml`, so the bullmq fork registers one too.
+
+It registers nothing unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Without it every
+span is a non-recording one and the log lines carry the ids dunx mints itself,
+which is how `bun start` and the public demo run. With it, the log line's
+`traceId` and `spanId`, `traceresponse` and the exported SERVER span are one id:
+
+```bash
+docker run -d --rm -p 16686:16686 -p 4318:4318 jaegertracing/jaeger
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_SERVICE_NAME=dunx-full bun start
+```
+
+These two are read by the OpenTelemetry SDK, not by `validate`, along with any
+other `OTEL_EXPORTER_OTLP_*` setting. [src/otel.test.ts](./src/otel.test.ts) swaps
+in an in-memory exporter and follows one request through each seam.
+
 ## The soak harness
 
 `bun run soak` drives 28 weighted operations across HTTP, websocket churn, SQLite,

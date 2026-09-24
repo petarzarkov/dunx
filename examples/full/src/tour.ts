@@ -1,5 +1,6 @@
 import { Logger } from '@dunx/core';
 import { createApp } from './main.js';
+import { flushTraces } from './otel.preload.js';
 import { Tour } from './tour/tour.service.js';
 
 /** The scripted walkthrough CI runs: boot the app `bun start` serves, narrate
@@ -21,6 +22,7 @@ async function run(): Promise<void> {
 }
 
 run()
+  .finally(flushTraces)
   .then(() => {
     // Every socket dunx owns is closed by now; the exit is for the one it does
     // not. Against an unreachable broker a bullmq `Worker` never resolves

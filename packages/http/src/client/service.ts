@@ -1,21 +1,21 @@
 import {
   Logger,
+  NoopTracer,
   RequestContext,
   ResilienceOptions,
   ResiliencePolicy,
+  Tracer,
+  type ActiveSpan,
+  type TraceIds,
 } from '@dunx/core';
-import {
-  TRACEPARENT_HEADER,
-  TRACESTATE_HEADER,
-  TraceContext,
-} from '../server/trace-context.js';
 import { UrlHelper, type ParamsType } from '@arkv/shared';
 import type { HttpMethod } from '../route/marker.js';
-import { FetchError, FetchTransportError } from './errors.js';
+import { describeError, FetchError, FetchTransportError } from './errors.js';
 import { isJsonBody, readBody, safeStringify } from './json.js';
 import { ConnectDeadline, sseMessages, type SseMessage } from './sse.js';
 import { HttpClientOptions } from './options.js';
 import { HttpRetryClassifier, type HttpRetryOptions } from './retry.js';
+import { clientSpan, traceHeaders } from './trace.js';
 
 /** The client speaks two more verbs than a route can declare. */
 export type RequestMethod = HttpMethod | 'HEAD' | 'OPTIONS';
@@ -99,12 +99,17 @@ interface SendConfig {
  * Extends `UrlHelper` from `@arkv/shared` for `buildUrl` and `interpolate`.
  */
 export class HttpService extends UrlHelper {
+  /** Absent for the default `NoopTracer`, so an untraced call builds no span options. */
+  readonly #tracer: Tracer | undefined;
+
   constructor(
     private readonly options: HttpClientOptions,
     private readonly logger: Logger,
     private readonly requestContext: RequestContext,
+    tracer?: Tracer,
   ) {
     super();
+    this.#tracer = tracer instanceof NoopTracer ? undefined : tracer;
   }
 
   async request<TRequest = unknown, TResponse = unknown>(
@@ -134,10 +139,22 @@ export class HttpService extends UrlHelper {
      */
     const replayable = !(config.payload instanceof ReadableStream);
 
-    const attempt = async (signal: AbortSignal): Promise<TResponse> => {
+    const attempt = async (
+      signal: AbortSignal,
+      span?: ActiveSpan,
+    ): Promise<TResponse> => {
       attempts += 1;
-      const response = await this.send(config, url, body, serialised, signal);
+      const response = await this.send(
+        config,
+        url,
+        body,
+        serialised,
+        signal,
+        undefined,
+        span?.ids(),
+      );
       status = response.status;
+      span?.setAttribute('http.response.status_code', status);
 
       if (!response.ok) {
         throw new FetchError(
@@ -170,7 +187,15 @@ export class HttpService extends UrlHelper {
           ...(config.flow === undefined ? {} : { flow: config.flow }),
           event: config.path ?? url.pathname,
         },
-        () => policy.run(attempt),
+        () =>
+          policy.run(
+            this.#tracer === undefined
+              ? attempt
+              : (signal) =>
+                  clientSpan(this.#tracer, config.method, url, (span) =>
+                    attempt(signal, span),
+                  ),
+          ),
       );
 
       this.logger.debug(`${describe()} succeeded`, {
@@ -292,14 +317,20 @@ export class HttpService extends UrlHelper {
         { maxRetries: 0 },
       );
       response = await policy.run((signal) =>
-        this.send(
-          { ...config, method },
-          url,
-          body,
-          serialised,
-          AbortSignal.any([signal, deadline.signal]),
-          'text/event-stream',
-        ),
+        clientSpan(this.#tracer, method, url, async (span) => {
+          const opened = await this.send(
+            { ...config, method },
+            url,
+            body,
+            serialised,
+            AbortSignal.any([signal, deadline.signal]),
+            'text/event-stream',
+            span?.ids(),
+          );
+          span?.setAttribute('http.response.status_code', opened.status);
+          if (!opened.ok) span?.recordError(`HTTP ${opened.status}`);
+          return opened;
+        }),
       );
     } finally {
       deadline.clear();
@@ -419,35 +450,16 @@ export class HttpService extends UrlHelper {
     serialised: string,
     signal: AbortSignal,
     accept = 'application/json',
+    span?: TraceIds,
   ): Promise<Response> {
-    // A trace is only in the store when the inbound side adopted one, so with
-    // `requestLogging: { trace: false }` this is a property read and nothing is
-    // sent.
-    const trace = this.options.propagateTrace
-      ? this.requestContext.getContext()
-      : undefined;
-
     const headers: Record<string, string> = {
       accept,
       ...(serialised === '' ? {} : { 'content-type': 'application/json' }),
       ...this.options.headers,
-      ...(typeof trace?.traceId === 'string' && typeof trace.spanId === 'string'
-        ? {
-            [TRACEPARENT_HEADER]: TraceContext.header({
-              traceId: trace.traceId,
-              spanId: trace.spanId,
-              // The inbound decision, not a fresh one. `traceFlags` is absent only
-              // if something wrote a trace into the store by hand.
-              flags:
-                typeof trace.traceFlags === 'string' ? trace.traceFlags : '01',
-            }),
-            // Forwarded unchanged alongside it, which the standard requires of a
-            // participant: this service does not read the vendor data, and
-            // dropping it would strip whatever an upstream put there.
-            ...(typeof trace.traceState === 'string'
-              ? { [TRACESTATE_HEADER]: trace.traceState }
-              : {}),
-          }
+      // A trace is only in the store when the inbound side adopted one, so with
+      // `requestLogging: { trace: false }` nothing is sent.
+      ...(this.options.propagateTrace
+        ? traceHeaders(this.requestContext.getContext(), span)
         : {}),
       ...config.headerFactory?.({
         timestamp: Math.floor(Date.now() / 1000),
@@ -483,18 +495,3 @@ export class HttpService extends UrlHelper {
 
 const urlOf = (url?: string | URL): { url?: string | URL } =>
   url === undefined ? {} : { url };
-
-const describeError = (error: unknown): Record<string, unknown> => {
-  if (error instanceof FetchError) {
-    return {
-      name: error.name,
-      message: error.message,
-      status: error.status,
-      body: error.body,
-    };
-  }
-  if (error instanceof Error) {
-    return { name: error.name, message: error.message };
-  }
-  return { message: String(error) };
-};

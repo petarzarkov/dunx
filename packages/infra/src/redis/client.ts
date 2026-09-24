@@ -1,4 +1,10 @@
-import type { OnInit, OnShutdown } from '@dunx/core';
+import {
+  NoopTracer,
+  type OnInit,
+  type OnShutdown,
+  type SpanAttributes,
+  type Tracer,
+} from '@dunx/core';
 import {
   RedisConnection,
   type MessageListener,
@@ -12,6 +18,7 @@ import {
 import { toRedisError } from './errors.js';
 import { RedisMetrics } from './metrics.js';
 import { RedisOptions } from './options.js';
+import { serverOf } from './server.js';
 
 const toKeyLike = (value: RedisValue): RedisKey =>
   typeof value === 'number' ? String(value) : value;
@@ -49,6 +56,9 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
   readonly #client: Bun.RedisClient;
   readonly #options: RedisOptions;
   readonly #metrics: RedisMetrics | undefined;
+  /** Absent for the no-op tracer, so an untraced command opens no span. */
+  readonly #tracer: Tracer | undefined;
+  readonly #server: SpanAttributes;
   /**
    * A `Bun.RedisClient` in subscriber mode rejects every data command, so
    * subscriptions get their own socket. Opened on first `subscribe()` and never
@@ -57,10 +67,12 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
   #subscriber: Bun.RedisClient | undefined;
   readonly #listeners = new Map<string, Set<MessageListener>>();
 
-  constructor(options: RedisOptions, metrics?: RedisMetrics) {
+  constructor(options: RedisOptions, metrics?: RedisMetrics, tracer?: Tracer) {
     super();
     this.#options = options;
     this.#metrics = metrics;
+    this.#tracer = tracer instanceof NoopTracer ? undefined : tracer;
+    this.#server = this.#tracer === undefined ? {} : serverOf(options.url);
     this.#client = new Bun.RedisClient(options.url, options.toClientOptions());
   }
 
@@ -112,9 +124,23 @@ export class Redis extends RedisConnection implements OnInit, OnShutdown {
    * It is also the one timing seam: `RedisMetrics` sees every method on this class
    * and every `send()`, failures included. With no metrics bound, optional chaining
    * short-circuits before the arguments are evaluated, so neither `Bun.nanoseconds()`
-   * call runs.
+   * call runs. With a tracer bound it is the span seam too: one CLIENT span per
+   * command, named by the verb, around the timing.
    */
-  async #run<T>(command: string, call: () => Promise<T>): Promise<T> {
+  #run<T>(command: string, call: () => Promise<T>): Promise<T> {
+    const tracer = this.#tracer;
+    if (tracer === undefined) return this.#timed(command, call);
+    return tracer.span(
+      command,
+      {
+        kind: 'client',
+        attributes: { ...this.#server, 'db.operation.name': command },
+      },
+      () => this.#timed(command, call),
+    );
+  }
+
+  async #timed<T>(command: string, call: () => Promise<T>): Promise<T> {
     const metrics = this.#metrics;
     const started = metrics === undefined ? 0 : Bun.nanoseconds();
     try {
