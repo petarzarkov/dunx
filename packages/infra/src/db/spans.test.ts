@@ -175,14 +175,21 @@ describe('query spans over Bun.SQL', () => {
   it('opens one span for a query awaited twice', async () => {
     let started = 0;
     const client = {
-      unsafe: (_sql: string) => ({
-        // Stands in for Bun's lazy `Query`, which is a thenable.
-        // oxlint-disable-next-line unicorn/no-thenable
-        then(onOk: (value: unknown) => unknown) {
-          started += 1;
-          return Promise.resolve([{ id: 1 }]).then(onOk);
-        },
-      }),
+      unsafe: (_sql: string) => {
+        let running: Promise<unknown> | undefined;
+        return {
+          // Stands in for Bun's lazy `Query`: it runs on the first `then` and
+          // every later `then` shares that run.
+          // oxlint-disable-next-line unicorn/no-thenable
+          then(onOk: (value: unknown) => unknown) {
+            if (running === undefined) {
+              started += 1;
+              running = Promise.resolve([{ id: 1 }]);
+            }
+            return running.then(onOk);
+          },
+        };
+      },
     };
     instrument(
       client,

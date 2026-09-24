@@ -122,22 +122,28 @@ const instrumentSql = (client: SqlClient, observer: QueryObserver): void => {
   client.unsafe = (sql: string, ...rest: unknown[]): SqlQuery => {
     const query = original(sql, ...rest);
     const originalThen = query.then.bind(query);
-    let running: Promise<unknown> | undefined;
+    let observed = false;
     // This observes the `then` Bun's own lazy `Query` already has, rather than
     // making anything thenable, so the rule does not apply.
     // oxlint-disable-next-line unicorn/no-thenable
     query.then = (onOk?: Settle, onErr?: Settle): unknown => {
       // The first `then` is what starts the query, and `finally` is not wrapped
-      // because attaching it would start it too. A second `then` joins the run
-      // already observed rather than measuring again.
-      running ??= observer.run(
-        sql,
-        () =>
-          new Promise((resolve, reject) => {
-            originalThen(resolve, reject);
-          }),
-      );
-      return running.then(onOk, onErr);
+      // because attaching it would start it too. Every call still goes to Bun's
+      // own `then`: Bun calls it twice per `await` and drops one result, and a
+      // promise of ours in that slot surfaced a failed query as unhandled.
+      if (!observed) {
+        observed = true;
+        observer
+          .run(
+            sql,
+            () =>
+              new Promise((resolve, reject) => {
+                originalThen(resolve, reject);
+              }),
+          )
+          .catch(() => undefined);
+      }
+      return originalThen(onOk, onErr);
     };
     return query;
   };
