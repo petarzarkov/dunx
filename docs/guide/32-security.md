@@ -51,16 +51,27 @@ from validated config. An argument to `create()` still wins over it.
 there, and behind a proxy that terminates TLS the app cannot tell which scheme
 the browser used. Bun adds no `Server` or `X-Powered-By` header of its own.
 
+`includeSubDomains` makes a browser that saw the header upgrade every subdomain
+to HTTPS for a year. Serve every subdomain over HTTPS before turning it on, or
+set `strictTransportSecurity: 'max-age=31536000'` to cover this host alone.
+
 ## One route, one header
 
 A header the response already carries is kept. A route that must be framed, or
-needs a looser policy, sets its own:
+needs a looser policy, sets its own. Under a CSP, `frame-ancestors` is what the
+browser obeys, so a route that may be framed sets that too:
 
 ```ts
 @Get('/embed')
 embed(): Response {
   return new Response(html, {
-    headers: { 'x-frame-options': 'SAMEORIGIN' },
+    headers: {
+      'x-frame-options': 'SAMEORIGIN',
+      'content-security-policy': STRICT_CSP.replace(
+        "frame-ancestors 'none'",
+        "frame-ancestors 'self'",
+      ),
+    },
   });
 }
 ```
@@ -71,7 +82,8 @@ Swagger UI, Scalar, the dashboard and bull-board each send a
 `Content-Security-Policy` of their own, so a strict app policy does not blank
 them, whether or not `securityHeaders` is on. It admits same-origin scripts,
 the origin of each `<script src>` the page loads from another host, and each
-inline boot script by SHA-256 hash.
+inline boot script by SHA-256 hash. Only the page's own origin may frame it,
+even with `X-Frame-Options` turned off.
 
 Styles, images, fonts and connections stay open: three of the four inject
 styles at runtime, and an explorer calls whatever servers the document lists.

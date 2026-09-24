@@ -80,7 +80,15 @@ export const securityHeaderPairs = (
  * one header: it sets its own. Measured against the alternatives in
  * docs/architecture/constraints.md, "Security response headers".
  */
-const stamp = (pairs: HeaderPairs, response: Response): Response => {
+/**
+ * Sets each header the response does not already carry, and returns it. A header
+ * the handler set is its own override, which is how a route or a framework page
+ * keeps a policy of its own under `securityHeaders`.
+ */
+export const setAbsentHeaders = (
+  response: Response,
+  pairs: HeaderPairs,
+): Response => {
   const headers = response.headers;
   for (const [name, value] of pairs) {
     if (!headers.has(name)) headers.set(name, value);
@@ -99,8 +107,8 @@ export const withSecurityHeaders = (
   return (req, server) => {
     const response = handler(req, server);
     return response instanceof Promise
-      ? response.then((settled) => stamp(pairs, settled))
-      : stamp(pairs, response);
+      ? response.then((settled) => setAbsentHeaders(settled, pairs))
+      : setAbsentHeaders(response, pairs);
   };
 };
 

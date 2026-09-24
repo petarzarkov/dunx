@@ -120,7 +120,7 @@ describe('a real server serving its own document', () => {
     const hash = new Bun.CryptoHasher('sha256').update(boot).digest('base64');
     expect(boot).toContain('SwaggerUIBundle');
     expect(response.headers.get('content-security-policy')).toBe(
-      `script-src 'self' 'sha256-${hash}'; object-src 'none'; base-uri 'self'`,
+      `script-src 'self' 'sha256-${hash}'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'`,
     );
     expect(response.headers.get('x-frame-options')).toBe('DENY');
     // A shell, not a bundle. The old inlined page was over 400 KB.

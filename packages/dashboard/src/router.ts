@@ -1,5 +1,5 @@
 import type { ModuleRef } from '@dunx/core';
-import { inlineScriptPolicy } from '@dunx/http';
+import { inlineScriptPolicy, setAbsentHeaders } from '@dunx/http';
 import type { RoutePrefix } from '@dunx/http/internal';
 import { boardNames, matchBoard, type Board } from './board.js';
 import { redisReport } from './api/redis.js';
@@ -42,13 +42,8 @@ export interface RenderedPage {
  */
 const BOARD_POLICY = inlineScriptPolicy('');
 
-/** A response that named its own policy keeps it. */
-const withPolicy = (response: Response, policy: string): Response => {
-  if (!response.headers.has('content-security-policy')) {
-    response.headers.set('content-security-policy', policy);
-  }
-  return response;
-};
+/** A bull-board response that named its own policy keeps it. */
+const BOARD_HEADERS = [['content-security-policy', BOARD_POLICY]] as const;
 
 export interface RouterDeps {
   readonly root: ModuleRef;
@@ -156,7 +151,7 @@ export const handleDashboard = async (
         value: match.params,
         configurable: true,
       });
-      return withPolicy(await match.handler(request), BOARD_POLICY);
+      return setAbsentHeaders(await match.handler(request), BOARD_HEADERS);
     }
 
     // Nothing in its table, so it is one of bull-board's own client-side routes -
@@ -165,7 +160,7 @@ export const handleDashboard = async (
     // does for its own panels. Only for a GET: a write to a path nothing declares
     // is a real 404.
     if (method === 'GET' && board.entry) {
-      return withPolicy(await board.entry(request), BOARD_POLICY);
+      return setAbsentHeaders(await board.entry(request), BOARD_HEADERS);
     }
     return fail(404, 'no such bull-board route');
   }

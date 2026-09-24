@@ -285,7 +285,26 @@ describe('inlineScriptPolicy', () => {
       '<script>var a = 1 < 2;</script>';
     expect(inlineScriptPolicy(html)).toBe(
       `script-src 'self' ${sha('var a = 1 < 2;')} ${sha('import "/m.js";')}; ` +
-        "object-src 'none'; base-uri 'self'",
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+    );
+  });
+
+  it('hashes every script type a browser runs, and no data block', () => {
+    const runs = [
+      'text/ecmascript',
+      'application/ecmascript',
+      'text/jscript',
+      'text/livescript',
+      'importmap',
+      'speculationrules',
+    ];
+    const html =
+      runs.map((type, i) => `<script type="${type}">${i}</script>`).join('') +
+      '<script type="application/ld+json">{}</script>' +
+      '<script type="text/plain">x</script>';
+    expect(inlineScriptPolicy(html)).toBe(
+      `script-src 'self' ${runs.map((_, i) => sha(String(i))).join(' ')}; ` +
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     );
   });
 
@@ -299,13 +318,13 @@ describe('inlineScriptPolicy', () => {
     expect(inlineScriptPolicy(html)).toBe(
       "script-src 'self' https://cdn.example.com cdn.example.com " +
         'http://other.test:8080; ' +
-        "object-src 'none'; base-uri 'self'",
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     );
   });
 
   it('admits same-origin files only when a page has no inline script', () => {
     expect(inlineScriptPolicy('<p>hi</p>')).toBe(
-      "script-src 'self'; object-src 'none'; base-uri 'self'",
+      "script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     );
   });
 });

@@ -13,11 +13,14 @@ touching its code, and the new spelling for what it can replace.
 Swagger UI, Scalar and the dashboard now answer with a `Content-Security-Policy`
 whether or not `securityHeaders` is on. It admits the scripts the page itself
 loads: same-origin files, the origin of each `<script src>` on another host, and
-each inline boot script by hash. `object-src` is `'none'` and `base-uri` is
-`'self'`; styles, fonts and connections are left open.
+each inline boot script by hash.
 
-The built-in renderers are unaffected, and so is a custom `DocsRenderer` whose
-page loads its bundle from a CDN. What the policy blocks is script the page does
+`object-src` is `'none'`, `base-uri` is `'self'` and `frame-ancestors` is `'self'`,
+so a portal on another origin can no longer embed these pages in an iframe.
+Styles, fonts and connections are left open.
+
+The built-in renderers still load, and so does a custom `DocsRenderer` whose page
+loads its bundle from a CDN. What the policy blocks is script the page does
 not declare: inline event handlers such as `onclick`, `eval`, and a file a script
 adds at runtime from an origin no `<script src>` names. See
 [Security](./32-security.md).

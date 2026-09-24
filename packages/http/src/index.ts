@@ -57,7 +57,9 @@ export type { RouteContext } from './server/context.js';
 export type { CorsOptions, CorsOrigin } from './server/cors.js';
 export { inlineScriptPolicy } from './server/html.js';
 export {
+  setAbsentHeaders,
   STRICT_CSP,
+  type HeaderPairs,
   type SecurityHeadersOptions,
 } from './server/security-headers.js';
 export {

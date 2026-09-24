@@ -22,18 +22,46 @@ const sourceOf = (src: string): string | undefined => {
   return URL.parse(src)?.origin;
 };
 
-const executes = (type: string | null): boolean => {
-  const kind = (type ?? '').trim().toLowerCase();
-  return kind === '' || kind === 'module' || kind.includes('javascript');
-};
+/**
+ * The HTML standard's JavaScript MIME type essences, plus the three non-MIME
+ * types CSP governs as script. Anything else is a data block the browser never
+ * runs, so it gets no hash.
+ */
+const SCRIPT_TYPES: ReadonlySet<string> = new Set([
+  '',
+  'module',
+  'importmap',
+  'speculationrules',
+  'application/ecmascript',
+  'application/javascript',
+  'application/x-ecmascript',
+  'application/x-javascript',
+  'text/ecmascript',
+  'text/javascript',
+  'text/javascript1.0',
+  'text/javascript1.1',
+  'text/javascript1.2',
+  'text/javascript1.3',
+  'text/javascript1.4',
+  'text/javascript1.5',
+  'text/jscript',
+  'text/livescript',
+  'text/x-ecmascript',
+  'text/x-javascript',
+]);
+
+const executes = (type: string | null): boolean =>
+  SCRIPT_TYPES.has((type ?? '').split(';')[0]?.trim().toLowerCase() ?? '');
 
 /**
  * A `Content-Security-Policy` admitting exactly the inline scripts in `html`, by
  * hash, plus same-origin script files and the origin of each script file it loads
- * from elsewhere, so a renderer that pulls its bundle off a CDN keeps working. Styles, images, fonts and connections are
- * left unrestricted, which is what the API explorers, the dashboard and
- * bull-board need (docs/architecture/constraints.md, "Security response
- * headers"). A page sets it on its own response, and `securityHeaders` keeps it.
+ * from elsewhere, so a renderer that pulls its bundle off a CDN keeps working.
+ * Only the page's own origin may frame it, which holds even when an app turns
+ * `X-Frame-Options` off. Styles, images, fonts and connections are left
+ * unrestricted, which is what the API explorers, the dashboard and bull-board
+ * need (docs/architecture/constraints.md, "Security response headers"). A page
+ * sets it on its own response, and `securityHeaders` keeps it.
  *
  * Only for a page built from trusted parts. A script that user input got into
  * `html` is hashed along with the rest, so it would be admitted too. Computed
@@ -71,5 +99,6 @@ export const inlineScriptPolicy = (html: string): string => {
     `script-src ${["'self'", ...new Set(origins), ...new Set(hashes)].join(' ')}`,
     "object-src 'none'",
     "base-uri 'self'",
+    "frame-ancestors 'self'",
   ].join('; ');
 };

@@ -181,7 +181,7 @@ describe('the mount', () => {
     const hash = new Bun.CryptoHasher('sha256').update(bundle).digest('base64');
     expect(bundle.length).toBeGreaterThan(1000);
     expect(response.headers.get('content-security-policy')).toBe(
-      `script-src 'self' 'sha256-${hash}'; object-src 'none'; base-uri 'self'`,
+      `script-src 'self' 'sha256-${hash}'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'`,
     );
     // The rest of the app's headers still apply.
     expect(response.headers.get('x-frame-options')).toBe('DENY');
@@ -299,7 +299,7 @@ describe('the queues handoff', () => {
     expect(html).toContain('"favIcon":{"default":"data:image/svg+xml,');
     // Styled from Google Fonts and `style=`, so not the app's strict policy.
     expect(response.headers.get('content-security-policy')).toBe(
-      "script-src 'self'; object-src 'none'; base-uri 'self'",
+      "script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
     );
   });
 
