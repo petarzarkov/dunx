@@ -4,10 +4,7 @@ import {
   mintSpanId,
   mintTraceId,
   NoopTracer,
-  parseTraceparent,
   RequestContext,
-  TRACEPARENT_HEADER,
-  TRACESTATE_HEADER,
   Tracer,
   type ActiveSpan,
   type RemoteParent,
@@ -15,6 +12,7 @@ import {
   type TraceIds,
 } from '@dunx/core';
 import { ConsumerStatus, type AsyncMessage } from 'rabbitmq-client';
+import { remoteParentOf } from '../trace-carrier.js';
 import { withTimeout } from '../with-timeout.js';
 import type { DiscoveredSubscription } from './discover.js';
 import { AmqpError, AmqpErrorCode } from './errors.js';
@@ -79,17 +77,21 @@ export class AmqpDispatcher {
     };
 
     const context = this.#context;
-    if (context === undefined) return run();
+    const tracer = this.#tracer;
+    if (context === undefined && tracer === undefined) return run();
+    const inbound = remoteParentOf(message.headers ?? {});
     // Nothing encloses a delivery - the consumer callback runs off the broker's
     // socket, not inside a request - so there is no scope to inherit and
     // inheriting would only risk carrying a previous one in.
-    const tracer = this.#tracer;
-    const inbound = this.#inbound(message);
-    if (tracer === undefined) {
-      return context.runWithContext(this.#scope(found, inbound), run, {
-        inherit: false,
-      });
-    }
+    const scoped = (span?: ActiveSpan): Promise<ConsumerStatus> =>
+      context === undefined
+        ? run(span)
+        : context.runWithContext(
+            this.#scope(found, inbound, span?.ids()),
+            () => run(span),
+            { inherit: false },
+          );
+    if (tracer === undefined) return scoped();
 
     return tracer.span(
       `process ${found.queue}`,
@@ -106,29 +108,8 @@ export class AmqpDispatcher {
         },
         ...(inbound === undefined ? {} : { parent: inbound }),
       },
-      (span) =>
-        context.runWithContext(
-          this.#scope(found, inbound, span.ids()),
-          () => run(span),
-          { inherit: false },
-        ),
+      scoped,
     );
-  }
-
-  /**
-   * The `traceparent` the publisher stamped, with its `tracestate`. The state
-   * belongs to the header it arrived with, so a malformed header drops both:
-   * keeping the vendor state would attach one trace's to another's ids.
-   */
-  #inbound(message: AsyncMessage): RemoteParent | undefined {
-    const headers = (message.headers ?? {}) as Record<string, unknown>;
-    const header = headers[TRACEPARENT_HEADER];
-    const inbound = parseTraceparent(
-      typeof header === 'string' ? header : undefined,
-    );
-    const state = headers[TRACESTATE_HEADER];
-    if (inbound === undefined || typeof state !== 'string') return inbound;
-    return { ...inbound, state };
   }
 
   /**

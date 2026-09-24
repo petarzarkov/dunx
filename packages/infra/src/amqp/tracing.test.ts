@@ -12,7 +12,7 @@ import {
   type Tracer,
 } from '@dunx/core';
 import { OtelModule, OtelTracer } from '@dunx/core/otel';
-import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-node';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import {
@@ -95,13 +95,32 @@ describe('AmqpPublisher with a recording tracer', () => {
     const { publisher, sent, context } = publisherWith(new OtelTracer());
     const spans = await traced(() =>
       context.runWithContext(
-        { traceId: TRACE, spanId: SPAN, traceFlags: '01', traceState: 'v=1' },
+        {
+          traceId: trace.getActiveSpan()?.spanContext().traceId as string,
+          spanId: SPAN,
+          traceFlags: '01',
+          traceState: 'v=1',
+        },
         () => publisher.publish('orders', {}),
       ),
     );
 
     expect(only(spans).name).toBe('publish orders');
     expect(sent[0]?.headers?.['tracestate']).toBe('v=1');
+  });
+
+  /** The span's trace is not the scope's, so the scope's vendor state is not its. */
+  it('adds no tracestate from a scope on another trace', async () => {
+    const { publisher, sent, context } = publisherWith(new OtelTracer());
+    await traced(() =>
+      context.runWithContext(
+        { traceId: TRACE, spanId: SPAN, traceFlags: '01', traceState: 'v=1' },
+        () => publisher.publish('orders', {}),
+      ),
+    );
+
+    expect(sent[0]?.headers?.['traceparent']).toBeDefined();
+    expect(sent[0]?.headers?.['tracestate']).toBeUndefined();
   });
 
   it('leaves a caller-set traceparent alone', async () => {
@@ -232,6 +251,24 @@ describe('AmqpDispatcher with a recording tracer', () => {
     expect(status).toBe(ConsumerStatus.DROP);
     const span = only(spansOf(fields.traceId as string));
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
+  });
+});
+
+describe('AmqpDispatcher with a tracer and no RequestContext', () => {
+  it('still opens the CONSUMER span', async () => {
+    const traceId = crypto.getRandomValues(new Uint8Array(16)).toHex();
+    const found: DiscoveredSubscription = {
+      queue: 'orders',
+      provider: 'Orders',
+      method: 'onOrder',
+      handler: () => undefined,
+    };
+    await new AmqpDispatcher(quiet, undefined, new OtelTracer()).dispatch(
+      found,
+      { requeue: false, timeoutMs: undefined },
+      delivery({ traceparent: `00-${traceId}-${SPAN}-01` }),
+    );
+    expect(only(spansOf(traceId)).name).toBe('process orders');
   });
 });
 

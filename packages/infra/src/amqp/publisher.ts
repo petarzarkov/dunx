@@ -12,6 +12,7 @@ import {
 } from '@dunx/core';
 import type { Envelope, Publisher } from 'rabbitmq-client';
 import { closeWithin } from '../close-within.js';
+import { traceStateFor } from '../trace-carrier.js';
 import { withTimeout } from '../with-timeout.js';
 import { AmqpConnection } from './connection.js';
 import { AmqpError, AmqpErrorCode } from './errors.js';
@@ -150,7 +151,8 @@ export class AmqpPublisher implements OnShutdown {
    * adding this scope's `tracestate` to it would join the vendor state of one
    * trace to the ids of another.
    *
-   * `span` is a recording producer span's ids, which replace the scope's own.
+   * `span` is a recording producer span's ids, which replace the scope's own,
+   * and take the scope's `tracestate` only when the two are on one trace.
    */
   #traced(envelope: Envelope, span?: TraceIds): Envelope {
     const headers = envelope.headers ?? {};
@@ -166,15 +168,17 @@ export class AmqpPublisher implements OnShutdown {
           : traceparentOf(fields)
         : formatTraceparent(span);
     if (traceparent === undefined) return envelope;
+    const state =
+      fields === undefined || span === undefined
+        ? fields?.traceState
+        : traceStateFor(span, fields);
 
     return {
       ...envelope,
       headers: {
         ...headers,
         [TRACEPARENT_HEADER]: traceparent,
-        ...(fields?.traceState === undefined
-          ? {}
-          : { [TRACESTATE_HEADER]: fields.traceState }),
+        ...(state === undefined ? {} : { [TRACESTATE_HEADER]: state }),
       },
     };
   }

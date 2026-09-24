@@ -131,12 +131,7 @@ export class RequestLoggingMiddleware implements Middleware {
     }
 
     const started = Bun.nanoseconds();
-    const scope: ScopeFields = {
-      method: ctx.method,
-      event: path,
-      flow: 'http',
-      context: `${ctx.controller}.${ctx.handler}`,
-    };
+    const scope = this.#scope(ctx, path);
     if (!this.#trace) {
       return this.#enter(req, ctx, url, mark, path, started, next, scope);
     }

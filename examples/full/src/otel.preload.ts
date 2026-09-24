@@ -15,14 +15,25 @@ import {
  * is how `bun start` and the public demo run. The exporter reads the variable
  * itself, along with any other `OTEL_EXPORTER_OTLP_*` setting.
  */
-if (Bun.env['OTEL_EXPORTER_OTLP_ENDPOINT']) {
-  const provider = new NodeTracerProvider({
-    resource: resourceFromAttributes({
-      'service.name': Bun.env['OTEL_SERVICE_NAME'] ?? 'dunx-full',
-    }),
-    spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
-  });
+const provider = Bun.env['OTEL_EXPORTER_OTLP_ENDPOINT']
+  ? new NodeTracerProvider({
+      resource: resourceFromAttributes({
+        'service.name': Bun.env['OTEL_SERVICE_NAME'] ?? 'dunx-full',
+      }),
+      spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
+    })
+  : undefined;
+if (provider !== undefined) {
   provider.register();
-  // Flushes the last batch once the shutdown hooks have drained the app.
+  // Flushes the last batch once the shutdown hooks have drained the app and the
+  // loop empties on its own.
   process.once('beforeExit', () => provider.shutdown());
 }
+
+/**
+ * Exports the last batch. For a caller that ends the process itself, which
+ * `process.exit()` does without ever emitting `beforeExit`.
+ */
+export const flushTraces = async (): Promise<void> => {
+  await provider?.shutdown();
+};

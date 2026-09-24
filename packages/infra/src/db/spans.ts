@@ -71,9 +71,13 @@ export class QuerySpans implements QueryObserver {
     return this.tracer.span(name, options, execute);
   }
 
-  rejected(sql: string, error: unknown): void {
+  rejected(sql: string, error: unknown, durationNs: number): void {
     const { name, options } = this.#span(sql);
-    this.tracer.span(name, options, (span) => span.recordError(error));
+    this.tracer.span(
+      name,
+      { ...options, startTime: performance.now() - durationNs / 1e6 },
+      (span) => span.recordError(error),
+    );
   }
 
   #span(sql: string): { name: string; options: SpanOptions } {

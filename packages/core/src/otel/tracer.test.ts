@@ -58,6 +58,12 @@ describe('OtelTracer', () => {
     expect(finished('plain').kind).toBe(SpanKind.INTERNAL);
   });
 
+  it('starts a span at a past startTime', () => {
+    tracer.span('late', { startTime: performance.now() - 50 }, () => undefined);
+    const [seconds, nanos] = finished('late').duration;
+    expect(seconds * 1e3 + nanos / 1e6).toBeGreaterThanOrEqual(49);
+  });
+
   it('keeps a span open until its promise settles, and active across await', async () => {
     const value = await tracer.span('outer', {}, async () => {
       await Bun.sleep(1);

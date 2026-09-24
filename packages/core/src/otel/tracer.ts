@@ -73,6 +73,7 @@ export class OtelTracer extends Tracer {
     if (options.attributes !== undefined) {
       started.attributes = options.attributes;
     }
+    if (options.startTime !== undefined) started.startTime = options.startTime;
     const span = this.#tracer.startSpan(name, started, parent);
     const active = new OtelSpan(span);
     const failed = (error: unknown): never => {

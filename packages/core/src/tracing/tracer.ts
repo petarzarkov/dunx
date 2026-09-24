@@ -25,6 +25,11 @@ export interface SpanOptions {
   readonly attributes?: SpanAttributes;
   /** Replaces whatever span is active as this one's parent. */
   readonly parent?: RemoteParent;
+  /**
+   * A `performance.now()` reading, for work that finished before its span could
+   * open: a statement sqlite rejected in `prepare`. Default now.
+   */
+  readonly startTime?: number;
 }
 
 /** The span a {@link Tracer.span} callback runs inside. */

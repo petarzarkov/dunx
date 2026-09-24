@@ -1,7 +1,6 @@
 import {
   formatTraceparent,
   NoopTracer,
-  parseTraceparent,
   RequestContext,
   TRACEPARENT_HEADER,
   TRACESTATE_HEADER,
@@ -10,6 +9,7 @@ import {
   type ScopedResolver,
 } from '@dunx/core';
 import type { Job, JobsOptions } from 'bullmq';
+import { remoteParentOf, traceStateFor } from '../trace-carrier.js';
 import type { DiscoveredJob } from './discover.js';
 
 /**
@@ -27,14 +27,7 @@ const parentOf = (job: Job): RemoteParent | undefined => {
     return undefined;
   }
   if (typeof carrier !== 'object' || carrier === null) return undefined;
-  const fields = carrier as Record<string, unknown>;
-  const header = fields[TRACEPARENT_HEADER];
-  const inbound = parseTraceparent(
-    typeof header === 'string' ? header : undefined,
-  );
-  const state = fields[TRACESTATE_HEADER];
-  if (inbound === undefined || typeof state !== 'string') return inbound;
-  return { ...inbound, state };
+  return remoteParentOf(carrier as Record<string, unknown>);
 };
 
 /**
@@ -95,7 +88,9 @@ export class JobTracing {
           ids === undefined ||
           telemetry?.metadata !== undefined ||
           telemetry?.omitContext === true;
-        const state = this.#context.getContext().traceState;
+        const state = carried
+          ? undefined
+          : traceStateFor(ids, this.#context.getContext());
         const job = await add(
           carried
             ? options
@@ -105,9 +100,9 @@ export class JobTracing {
                   ...telemetry,
                   metadata: JSON.stringify({
                     [TRACEPARENT_HEADER]: formatTraceparent(ids),
-                    ...(typeof state === 'string'
-                      ? { [TRACESTATE_HEADER]: state }
-                      : {}),
+                    ...(state === undefined
+                      ? {}
+                      : { [TRACESTATE_HEADER]: state }),
                   }),
                 },
               },

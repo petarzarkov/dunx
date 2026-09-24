@@ -81,6 +81,18 @@ describe('query spans over bun:sqlite', () => {
     expect(report.operations[0]?.errors).toBe(1);
   });
 
+  it('spans a prepare rejection over the time the prepare took', async () => {
+    const spans = await traced(() =>
+      new QuerySpans(new OtelTracer(), connectionOf('sqlite', {})).rejected(
+        'select * from nope',
+        new Error('no such table: nope'),
+        50_000_000,
+      ),
+    );
+    const [seconds = 0, nanos = 0] = spans[0]?.duration ?? [];
+    expect(seconds * 1e3 + nanos / 1e6).toBeGreaterThanOrEqual(49);
+  });
+
   it('marks a statement that throws while running ERROR, and still times it', async () => {
     @Module({
       imports: [OtelModule, DbModule.forRoot(options(), { metrics: true })],

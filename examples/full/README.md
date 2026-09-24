@@ -345,7 +345,7 @@ which is how `bun start` and the public demo run. With it, the log line's
 `traceId` and `spanId`, `traceresponse` and the exported SERVER span are one id:
 
 ```bash
-docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/jaeger
+docker run -d --rm -p 16686:16686 -p 4318:4318 jaegertracing/jaeger
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_SERVICE_NAME=dunx-full bun start
 ```
 

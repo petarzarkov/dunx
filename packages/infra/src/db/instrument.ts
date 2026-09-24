@@ -134,13 +134,7 @@ const instrumentSql = (client: SqlClient, observer: QueryObserver): void => {
       if (!observed) {
         observed = true;
         observer
-          .run(
-            sql,
-            () =>
-              new Promise((resolve, reject) => {
-                originalThen(resolve, reject);
-              }),
-          )
+          .run(sql, () => new Promise(originalThen))
           .catch(() => undefined);
       }
       return originalThen(onOk, onErr);

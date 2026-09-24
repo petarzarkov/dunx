@@ -141,7 +141,8 @@ it('opens a PRODUCER span for a job the request enqueued', async () => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ width: 16, format: 'png' }),
   });
-  if (traced.response.status !== 201) return;
+  if (traced.response.status === 503) return;
+  expect(traced.response.status).toBe(201);
   const publish = inTrace(traced.traceId).find(
     (span) => span.name === 'publish thumbnails',
   );
@@ -156,7 +157,8 @@ it('carries one trace from the HTTP request through RabbitMQ to its consumer', a
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ id: `otel-${Date.now()}`, total: 3 }),
   });
-  if (traced.response.status !== 201) return;
+  if (traced.response.status === 503) return;
+  expect(traced.response.status).toBe(201);
   const server = serverSpan(traced);
   const publish = inTrace(traced.traceId).find(
     (span) => span.kind === SpanKind.PRODUCER,

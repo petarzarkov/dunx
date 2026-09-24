@@ -9,7 +9,7 @@ import {
   type RequestFields,
 } from '@dunx/core';
 import { OtelModule, OtelTracer } from '@dunx/core/otel';
-import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-node';
 import type { Job, Queue } from 'bullmq';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
@@ -117,6 +117,35 @@ describe('JobTracing', () => {
       traceFlags: '01',
       traceState: 'v=1',
     });
+  });
+
+  /** `tracestate` is carried only beside the trace it belongs to. */
+  it('carries the scope tracestate only when the scope is on the span trace', async () => {
+    const context = new AsyncRequestContext();
+    const tracing = JobTracing.of(new OtelTracer(), context) as JobTracing;
+    const carried = async (sameTrace: boolean): Promise<unknown> => {
+      let metadata: string | undefined;
+      await traced(() =>
+        context.runWithContext(
+          {
+            traceId: sameTrace
+              ? (trace.getActiveSpan()?.spanContext().traceId as string)
+              : hex(16),
+            spanId: SPAN,
+            traceState: 'v=1',
+          },
+          () =>
+            tracing.publish('emails', 'welcome', undefined, (options) => {
+              metadata = options?.telemetry?.metadata;
+              return Promise.resolve({ id: '1' } as Job);
+            }),
+        ),
+      );
+      return JSON.parse(metadata as string);
+    };
+
+    expect(await carried(true)).toMatchObject({ tracestate: 'v=1' });
+    expect(await carried(false)).not.toHaveProperty('tracestate');
   });
 
   it('starts a trace for a job carrying no metadata, or metadata it cannot read', async () => {
