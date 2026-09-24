@@ -174,6 +174,7 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
   // last section.
   ['Extending dunx', ['publishing-a-package']],
   ['Observability', ['tracing']],
+  ['Security', ['security']],
 ];
 
 const sectionOf = (slug: string): string => {

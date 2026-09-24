@@ -2,6 +2,7 @@ import { LOGO_FAVICON, type RoutePrefix } from '@dunx/http/internal';
 import { Logger, type ModuleRef } from '@dunx/core';
 import {
   gate,
+  inlineScriptPolicy,
   type Middleware,
   type Next,
   type RouteContext,
@@ -9,7 +10,11 @@ import {
 import type { BunRequest } from 'bun';
 import { buildBoard, type Board } from './board.js';
 import { DashboardOptions } from './options.js';
-import { handleDashboard, type RouterDeps } from './router.js';
+import {
+  handleDashboard,
+  type RenderedPage,
+  type RouterDeps,
+} from './router.js';
 
 /**
  * A global middleware rather than a controller: `app.use` runs in front of the
@@ -27,7 +32,7 @@ export class DashboardMiddleware implements Middleware {
   readonly #options: DashboardOptions;
   readonly #deps: RouterDeps;
   readonly #prefix: string;
-  #page: Promise<string> | undefined;
+  #page: Promise<RenderedPage> | undefined;
   #board: Promise<Board> | undefined;
 
   constructor(
@@ -100,12 +105,14 @@ export class DashboardMiddleware implements Middleware {
    * The bundle lives behind `@dunx/dashboard/ui` and is reached with a dynamic
    * import, so an app that never opens the page never parses it. The **promise** is
    * memoised rather than the string, which is what makes two concurrent first
-   * requests build one page.
+   * requests build one page. Its policy is hashed here too, once, because the
+   * bundle it admits is 400-odd KB.
    */
-  #renderPage(): Promise<string> {
-    this.#page ??= import('./ui.js').then(({ renderPage }) =>
-      renderPage(this.#options),
-    );
+  #renderPage(): Promise<RenderedPage> {
+    this.#page ??= import('./ui.js').then(({ renderPage }) => {
+      const html = renderPage(this.#options);
+      return { html, policy: inlineScriptPolicy(html) };
+    });
     return this.#page;
   }
 }

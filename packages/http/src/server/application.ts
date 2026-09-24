@@ -35,6 +35,12 @@ import {
   withTrailingSlashAliases,
 } from './routes.js';
 import { ServerBinding } from './binding.js';
+import {
+  securityHeaderPairs,
+  withSecuredRoutes,
+  withSecurityHeaders,
+  type HeaderPairs,
+} from './security-headers.js';
 import { defaultSettings, type AppSettings } from './settings.js';
 import type { HttpOptions } from './options.js';
 
@@ -85,6 +91,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
   readonly #bootLogging: boolean;
   readonly #binding: ServerBinding;
   readonly #split: boolean;
+  readonly #securityHeaders: HeaderPairs | undefined;
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -133,6 +140,11 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     });
     this.#split = options.gatewayPort !== undefined && websocket !== undefined;
     this.gatewayPaths = websocket?.paths ?? [];
+    const secure = options.securityHeaders;
+    this.#securityHeaders =
+      secure === undefined || secure === false
+        ? undefined
+        : securityHeaderPairs(secure === true ? {} : secure);
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
     });
@@ -225,9 +237,12 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       (guard, from) =>
         from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
     );
+    const pairs = this.#securityHeaders;
+    const secured = pairs ? withSecuredRoutes(pairs, built) : built;
     // Before `withUpgradeRoutes` merges the gateways in `bind`, which assigns
     // each gateway path outright, so an upgrade still wins a key an alias took.
-    const routes = this.#strict ? built : withTrailingSlashAliases(built);
+    // A gateway's upgrade is not wrapped: a 101 carries no document.
+    const routes = this.#strict ? secured : withTrailingSlashAliases(secured);
 
     const ws = this.#websocket;
     // Only when the upgrades share the routes table. Under `gatewayPort` a
@@ -246,12 +261,13 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
 
     // Bun's own 404 never reaches the middleware chain. This runs only after Bun
     // has matched nothing, so Bun is still the router.
-    const fetch = buildFallback(
+    const fallback = buildFallback(
       middleware,
       this.#onError,
       this.#cors,
       this.#notFound,
     );
+    const fetch = pairs ? withSecurityHeaders(pairs, fallback) : fallback;
 
     const bound = this.#binding.bind({ port, routes, fetch, websocket: ws });
 

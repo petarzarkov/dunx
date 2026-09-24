@@ -60,6 +60,8 @@ const start = (prefix?: string): Promise<TestServer> =>
       renderer: new SwaggerRenderer(),
     }),
     prefix,
+    // The strictest app policy, which the page must not inherit.
+    securityHeaders: { contentSecurityPolicy: true },
   });
 
 let prefixed: TestServer;
@@ -113,6 +115,14 @@ describe('a real server serving its own document', () => {
 
     const page = await response.text();
     expect(page.startsWith('<!doctype html>')).toBe(true);
+    // Its own policy, admitting the one boot script by hash and nothing inline.
+    const boot = /<script>([^<]*)<\/script><\/body>/.exec(page)?.[1] ?? '';
+    const hash = new Bun.CryptoHasher('sha256').update(boot).digest('base64');
+    expect(boot).toContain('SwaggerUIBundle');
+    expect(response.headers.get('content-security-policy')).toBe(
+      `script-src 'self' 'sha256-${hash}'; object-src 'none'; base-uri 'self'`,
+    );
+    expect(response.headers.get('x-frame-options')).toBe('DENY');
     // A shell, not a bundle. The old inlined page was over 400 KB.
     expect(page.length).toBeLessThan(50_000);
     // The document travels in the page, so Swagger UI boots without a fetch.

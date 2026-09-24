@@ -484,3 +484,88 @@ CHILD {"data":{"to":"a@b"},"telemetry":{"metadata":"00-4c25f2...-e0d0acf3020be68
 
 AMQP already carries `traceparent` in message headers; `src/amqp/live.test.ts`
 passes against `rabbitmq:4-alpine`.
+
+## Security response headers, on Bun 1.4.2
+
+Probed before `securityHeaders` was built. Four claims.
+
+**`Bun.serve` adds no security header, and no `Server` or `X-Powered-By`.** A
+static `Response` route, a handler route and a miss, read back with `fetch`:
+
+```
+/static 200 [["content-length","2"],["content-type","text/plain;charset=utf-8"],["date","..."],["etag","\"ea8842e9ea2638fa\""]]
+/handler 200 [["content-length","2"],["content-type","text/plain;charset=utf-8"],["date","..."]]
+/missing 404 [["content-length","0"],["date","..."]]
+```
+
+Every `Response` kind tried has mutable headers, so a wrapper can `set` in place
+rather than rebuild: `Response.redirect`, `Response.error`, `Response.json`, a
+`fetch()` result and a `Bun.file` body all printed `mutable`.
+
+**better-auth sets none either.** Against `examples/full`, `GET /api/auth/ok`,
+`GET /api/auth/get-session`, `POST /api/auth/sign-up/email` and a failed
+`POST /api/auth/sign-in/email` carried `content-type`, `ratelimit-*`,
+`traceresponse`, `cache-control`/`pragma` on the session route and `set-cookie`
+on sign-up. None carried `x-content-type-options`, `x-frame-options`, a CSP,
+`referrer-policy`, `strict-transport-security` or any `cross-origin-*`.
+
+**Every page dunx serves breaks under a strict CSP, and hashes fix all of
+them.** The strict policy was
+`default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`,
+added by a proxy in front of `examples/full` and read back through `Bun.WebView`
+with a `securitypolicyviolation` listener installed by
+`Page.addScriptToEvaluateOnNewDocument`:
+
+| Page                      | No CSP     | Strict CSP                                                                                               | Needs                                               |
+| ------------------------- | ---------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `/api/docs` (Swagger)     | 3249 nodes | blank, 14 nodes: `script-src-elem inline`, `style-src-elem inline`                                       | boot script hash; inline `<style>`                  |
+| `/api/reference` (Scalar) | 1810 nodes | blank, 16 nodes: `script-src-elem inline`, 5x `style-src-elem inline`, `img-src data`, `script-src eval` | boot script hash; runtime `<style>`; `data:` images |
+| `/api/dashboard`          | 268 nodes  | blank, 14 nodes: `script-src-elem inline`, `style-src-elem inline`, `img-src data`                       | bundle hash; 18 runtime `<style>` injections        |
+| `/api/dashboard/queues`   | 133 nodes  | 133 nodes, unstyled: `style-src-attr inline`, Google Fonts, `img-src data`                               | open styles and fonts                               |
+| `/api/email/preview`      | 20 nodes   | 20 nodes, preheader shown: 9x `style-src-attr inline`                                                    | inline styles                                       |
+| `/` (landing)             | 294 nodes  | 314 nodes: `img-src data`                                                                                | `data:` images                                      |
+
+No page needed `'unsafe-inline'` for scripts. Each inline boot script is fixed per
+boot, so its hash is computed once: the dashboard's 444 KB bundle is a module
+constant, and two requests for the Swagger page gave identical script text.
+Scalar's one `eval` report is zod's `Function('')` feature probe, which falls
+back; Scalar also calls `api.scalar.com`, which a `connect-src 'self'` refuses.
+The email preview CLI (`bunx dunx-email preview`) is its own `Bun.serve` and
+never sees the app's headers.
+
+Hence the design: CSP is opt-in, and each framework page sends
+`script-src 'self' 'sha256-...'; object-src 'none'; base-uri 'self'`, which the
+app's wrapper keeps because it only sets a header the response lacks. Styles,
+images, fonts and connections are left unrestricted on those pages.
+
+Re-run against the shipped code with no proxy, `examples/full` sending
+`STRICT_CSP` plus `img-src 'self' data:` app-wide:
+
+```
+/                      284 nodes  violations []
+/api/docs             3249 nodes  violations []
+/api/reference        1810 nodes  violations ["script-src eval @standalone.js:464"]
+/api/dashboard         268 nodes  violations []
+/api/dashboard/queues  133 nodes  violations []
+/api/email/preview      20 nodes  violations []
+```
+
+The one report is the zod probe above. Twenty panels on `/` clicked through,
+the chat websocket, the SSE feed and the RPC call among them, raised none.
+
+**Seven headers cost about 1.1 us a request, set in place.** `oha -c 64`,
+plaintext, five interleaved rounds per configuration, two runs, median as a
+share of the same run's baseline:
+
+| Configuration                                             | Run 1 | Run 2 | Added per request |
+| --------------------------------------------------------- | ----- | ----- | ----------------- |
+| `async` wrapper, `headers.set` x7                         | 83.8% | 85.8% | 1.25-1.44 us      |
+| Sync-aware wrapper, `headers.set` x7                      | 87.3% | 87.5% | 1.08 us           |
+| Sync-aware wrapper, `set` only where `has` is false       | 84.1% | 85.5% | 1.28-1.41 us      |
+| Rebuilt `Response` with a precomputed `Headers` merged in | 79.3% | 84.1% | 1.43-1.95 us      |
+
+The rebuilt `Response` also lost the implicit `content-type`, answering
+`application/octet-stream` for a string body. The sync-aware set-if-absent row
+shipped: `has` costs about 0.2-0.3 us over a blind `set`, and it is what lets a
+page or a route keep its own header. With `securityHeaders` off the wrapper is
+not installed.

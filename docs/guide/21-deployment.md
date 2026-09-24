@@ -155,6 +155,9 @@ Validation happens once, at boot, through the single function you gave
 it serves anything, so a bad config becomes a failed rollout rather than a
 running service returning 500s. See [Configuration](./12-configuration.md).
 
+Behind a TLS-terminating proxy, turn on `securityHeaders` for HSTS and the rest
+of the browser-facing headers; see [Security](./32-security.md).
+
 ## Container image
 
 ```dockerfile

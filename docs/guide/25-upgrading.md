@@ -6,6 +6,22 @@ newest first. The [changelog](../../CHANGELOG.md) lists every release; this page
 covers only what can change the behaviour of an app that upgrades without
 touching its code, and the new spelling for what it can replace.
 
+## 3.10.0
+
+### The explorer and dashboard pages send their own CSP
+
+Swagger UI, Scalar and the dashboard now answer with a `Content-Security-Policy`
+whether or not `securityHeaders` is on. It admits the scripts the page itself
+loads: same-origin files, the origin of each `<script src>` on another host, and
+each inline boot script by hash. `object-src` is `'none'` and `base-uri` is
+`'self'`; styles, fonts and connections are left open.
+
+The built-in renderers are unaffected, and so is a custom `DocsRenderer` whose
+page loads its bundle from a CDN. What the policy blocks is script the page does
+not declare: inline event handlers such as `onclick`, `eval`, and a file a script
+adds at runtime from an origin no `<script src>` names. See
+[Security](./32-security.md).
+
 ## 3.9.3
 
 ### Two copies of `@dunx/core` fail at boot
