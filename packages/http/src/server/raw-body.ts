@@ -14,10 +14,12 @@ import type { BunRequest } from 'bun';
  */
 const WANTED: unique symbol = Symbol.for('dunx.http.rawBody.wanted');
 const TEXT: unique symbol = Symbol.for('dunx.http.rawBody.text');
+const BYTES: unique symbol = Symbol.for('dunx.http.rawBody.bytes');
 
 interface Tagged {
   [WANTED]?: true;
   [TEXT]?: string;
+  [BYTES]?: Uint8Array;
 }
 
 export class RawBody {
@@ -49,5 +51,19 @@ export class RawBody {
   /** The buffered text, or `undefined` when nothing read one. */
   static read(req: BunRequest): string | undefined {
     return (req as Tagged)[TEXT];
+  }
+
+  /**
+   * Called by a middleware that had to read the body before the route did -
+   * `IdempotencyGuard`, to fingerprint it. The body reader parses these bytes
+   * instead of the stream they were drained from.
+   */
+  static buffer(req: BunRequest, bytes: Uint8Array): void {
+    (req as Tagged)[BYTES] = bytes;
+  }
+
+  /** The bytes a middleware drained, or `undefined` when none did. */
+  static buffered(req: BunRequest): Uint8Array | undefined {
+    return (req as Tagged)[BYTES];
   }
 }

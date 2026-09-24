@@ -569,3 +569,62 @@ The rebuilt `Response` also lost the implicit `content-type`, answering
 shipped: `has` costs about 0.2-0.3 us over a blind `set`, and it is what lets a
 page or a route keep its own header. With `securityHeaders` off the wrapper is
 not installed.
+
+## Idempotency keys, on Bun 1.4.2
+
+Probed before `@Idempotent()` was built, against valkey 8 on loopback. Three
+claims.
+
+**`SET key value NX PX ms` is an atomic claim through either client.**
+`Bun.RedisClient.set(k, v, 'NX', 'PX', '5000')` and `send('SET', [k, v, 'NX',
+'PX', '5000'])` both answer `"OK"` to the first call and `null` to the second.
+Thirty-two clients claiming one key at once, five rounds:
+
+```
+round 0: 32 concurrent claims, winners=1 nulls=31 stored=owner-0
+round 4: 32 concurrent claims, winners=1 nulls=31 stored=owner-31
+compare-and-del wrong token: 0 right token: 1
+```
+
+`RedisIdempotencyStore` sends through `send`, because `RedisConnection.set` takes
+an options object where `Bun.RedisClient.set` takes variadic strings, and
+completes or releases with one compare-and-swap `EVAL`, so a request whose lease
+expired cannot overwrite the retry that took its key.
+
+**Buffering a handler's `Response` leaves the one returned intact.** A 249-byte
+`Response.json` with a `location` header, in a loop and through `Bun.serve`:
+
+| Strategy                        | us/op | Served body intact |
+| ------------------------------- | ----- | ------------------ |
+| `Response.json` alone           | 0.62  |                    |
+| `clone()` then `clone.bytes()`  | 1.04  | yes                |
+| `bytes()` then a new `Response` | 1.16  | yes                |
+| `clone()`, `for await` its body | 11.80 |                    |
+| `clone()`, `blob()`, `bytes()`  | 1.57  |                    |
+
+The clone path keeps the original unread, so middleware outside the guard still
+sets headers on it. `blob()` over a 200 MB `Bun.file` body took 0.04 ms and
+0.8 MB of RSS and reported the size, so the cap is checked without reading the
+file. No `Response` kind tried carries `content-length` before it is sent.
+
+**An opted-in route costs 8 to 21 us a request; one without costs nothing.**
+`oha -c 64`, a JSON body schema route, five interleaved rounds per
+configuration, two runs, median as a share of the same server's undecorated
+route. "New key" varies the subject per request so every request claims;
+"replay" repeats one key.
+
+| Configuration                     | Run 1 | Run 2 | Added per request |
+| --------------------------------- | ----- | ----- | ----------------- |
+| Memory store, new key             | 44.3% | 43.3% | 16.1-16.6 us      |
+| Memory store, replay              | 61.7% | 61.0% | 7.9-8.1 us        |
+| Redis store, new key              | 36.0% | 37.3% | 20.8-21.2 us      |
+| Redis store, replay               | 42.1% | 42.7% | 16.4-16.6 us      |
+| Undecorated route, app without it | 99.1% | 96.7% | none              |
+
+The last row compares the Redis server's undecorated route with an app that
+never imports `IdempotencyModule`. The memory server's undecorated route ran
+5-8% below that app, because its heap held every key the new-key rounds stored.
+The new-key cost, built up one step at a time in a probe guard: draining the body
+and reparsing it 2.2-3 us, SHA-256 1.6-2 us, the claim 3-4 us, cloning and
+reading the response 2-3.5 us. The first build read the clone with `for await`
+and cost 31 us; `blob()` replaced it.

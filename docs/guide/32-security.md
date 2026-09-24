@@ -113,7 +113,8 @@ return new Response(html, {
 | `bunx dunx-email preview`           | A separate loopback server, not the app             |
 
 better-auth sets none of these headers itself; its routes are dunx routes, so
-they get them.
+they get them. So does a response replayed by `@Idempotent()`
+([Idempotency](./33-idempotency.md)), which is built inside the chain the wrapper covers.
 
 The cost is 1.1 to 1.4 microseconds per request with the headers on, and
 nothing with them off: the wrapper is not installed.

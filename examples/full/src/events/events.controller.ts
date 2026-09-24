@@ -1,5 +1,5 @@
 import { EventRegistry } from '@dunx/core';
-import { Controller, Get, Post, type Input } from '@dunx/http';
+import { Controller, Get, Idempotent, Post, type Input } from '@dunx/http';
 import { ApiDoc } from '@dunx/openapi';
 import { Audit, type AuditRow } from './audit.service.js';
 import { listAudit, listSubscriptions, placeOrder } from './events.schemas.js';
@@ -21,7 +21,9 @@ export class EventsController {
   /**
    * The response is the dispatch, so a caller can see that a failing subscriber
    * did not fail the request. A total over the review limit makes one throw.
+   * A retry with the same `Idempotency-Key` replays this instead of placing again.
    */
+  @Idempotent()
   @Post('/orders', placeOrder)
   async place({ body }: Input<typeof placeOrder>): Promise<{
     event: string;

@@ -181,6 +181,7 @@ describe('the counts the README states', () => {
     thirty: 30,
     'thirty-one': 31,
     'thirty-two': 32,
+    'thirty-three': 33,
   });
 
   const stated = async (pattern: RegExp): Promise<number> => {

@@ -169,6 +169,32 @@ export {
   ThrottleStore,
   type ThrottleRedis,
 } from './throttle/store.js';
+// `Idempotency-Key`, opt-in per route. `@Idempotent()` is `@UseGuards` plus
+// options, so a route without it pays nothing; the store follows the throttle's
+// shape, and `RedisIdempotencyStore` takes its client structurally.
+export { Idempotent } from './idempotency/decorators.js';
+export {
+  IDEMPOTENCY_KEY_HEADER,
+  IDEMPOTENCY_KEY_PATTERN,
+  IDEMPOTENT_REPLAYED_HEADER,
+  IdempotencyGuard,
+} from './idempotency/guard.js';
+export { IdempotencyModule } from './idempotency/module.js';
+export {
+  IDEMPOTENT,
+  IdempotencyOptions,
+  type IdempotencyOptionsInit,
+  type IdempotentRoute,
+} from './idempotency/options.js';
+export {
+  IdempotencyStore,
+  MemoryIdempotencyStore,
+  RedisIdempotencyStore,
+  type IdempotencyClaim,
+  type IdempotencyRecord,
+  type IdempotencyRedis,
+  type StoredResponse,
+} from './idempotency/store.js';
 // One name, both meanings - the value for `HttpStatusCode.NOT_FOUND`, the type for
 // annotations. Exactly what an enum gives, without the enum.
 export { HttpStatusCode, type HttpStatusName } from './server/status.js';

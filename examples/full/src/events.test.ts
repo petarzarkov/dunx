@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { EventBus, EventBusModule, EventRegistry } from '@dunx/core';
 import { createTestServer, testClient, type TestServer } from '@dunx/testing';
+import { configModule } from './config.js';
 import { Audit } from './events/audit.service.js';
 import { EventsModule } from './events/events.module.js';
 import { Notifications, REVIEW_LIMIT } from './events/notifications.service.js';
 import { OrderPlaced } from './events/orders.events.js';
 import { Startup } from './events/startup.service.js';
+import { IdempotencyKeysModule } from './idempotency/idempotency.module.js';
 
 /**
  * The EventBus routes, on their own server so `service.test.ts` stays under the
@@ -30,8 +32,14 @@ const place = async (total: number): Promise<Dispatched> =>
 
 beforeAll(async () => {
   // EventsModule first, so its providers are built before EventRegistry is.
+  // `POST /events/orders` is `@Idempotent()`, so its guard's module comes too.
   server = await createTestServer({
-    modules: [EventsModule, EventBusModule],
+    modules: [
+      configModule(),
+      EventsModule,
+      EventBusModule,
+      IdempotencyKeysModule,
+    ],
   });
   client = testClient(server.url);
 });

@@ -357,7 +357,18 @@ export const buildRoutes = (
       ...(route.moduleMiddleware ?? []).map((entry) =>
         guardOf(entry, route.module),
       ),
-      ...(route.guards ?? []).map((guard) => guardOf(guard, route.module)),
+      ...(route.guards ?? []).map((guard) => {
+        // Named by route, since a decorator that installs a guard is where the
+        // missing module was asked for and the guard alone cannot say which.
+        try {
+          return guardOf(guard, route.module);
+        } catch (error) {
+          throw new AppError(
+            `${route.controller}.${route.handlerName}(): ${(error as Error).message}`,
+            { cause: error },
+          );
+        }
+      }),
     ];
     const context = buildContext(route);
     const chained = compose(chain, context, async (req) =>

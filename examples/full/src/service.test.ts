@@ -497,6 +497,8 @@ it('documents every route it serves, with nothing unresolved', async () => {
   ]) {
     expect(document.paths[path]).toBeDefined();
   }
+  const orders = JSON.stringify(document.paths['/api/events/orders']);
+  expect(orders).toContain('"name":"Idempotency-Key"');
   // Documented by default, under one `Health` tag.
   expect(document.paths['/api/health/live']).toBeDefined();
   expect(document.paths['/api/health/ready']).toBeDefined();
