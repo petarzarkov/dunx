@@ -5,6 +5,7 @@ import {
   HealthRegistry,
   HttpFactory,
   StaticFiles,
+  STRICT_CSP,
   ThrottleGuard,
   type HttpApp,
 } from '@dunx/http';
@@ -109,6 +110,12 @@ export const createApp = async (): Promise<HttpApp> => {
       // scaffold that picked `http` without picking `stats`.
       metrics: true,
       strict: false,
+      // Every response, the 404 and mapped errors included. The landing page's
+      // favicon is a `data:` URI, hence the one addition to the strict policy.
+      // The API explorers, the dashboard and the email preview send their own.
+      securityHeaders: {
+        contentSecurityPolicy: `${STRICT_CSP}; img-src 'self' data:`,
+      },
     },
   );
 

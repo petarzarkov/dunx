@@ -53,7 +53,13 @@ export class MailController {
       appUrl: 'https://demo.dunx.win',
     });
     return new Response(rendered.html, {
-      headers: { 'content-type': 'text/html; charset=utf-8' },
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        // An email is inline styles and remote images, and never runs a script.
+        // A header set here is kept over the app's `securityHeaders` policy.
+        'content-security-policy':
+          "default-src 'none'; style-src 'unsafe-inline'; img-src * data:",
+      },
     });
   }
 }

@@ -1,6 +1,7 @@
 import type { BunRequest } from 'bun';
 import {
   gate,
+  inlineScriptPolicy,
   type Middleware,
   type Next,
   type RouteContext,
@@ -31,6 +32,7 @@ export class ReferenceMiddleware implements Middleware {
     title: 'dunx full example - Scalar',
   });
   #page: Promise<string> | undefined;
+  #policy: string | undefined;
 
   constructor(
     private readonly explorer: OpenApiExplorer,
@@ -58,8 +60,15 @@ export class ReferenceMiddleware implements Middleware {
     if (refused !== undefined) return refused;
 
     if (pathname === REFERENCE_PATH) {
-      return new Response(await this.#html(), {
-        headers: { 'content-type': 'text/html; charset=utf-8' },
+      const html = await this.#html();
+      // Its own policy rather than the app's, which blanks a page that boots
+      // from an inline script. Hashed once: the page is cached.
+      this.#policy ??= inlineScriptPolicy(html);
+      return new Response(html, {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'content-security-policy': this.#policy,
+        },
       });
     }
 

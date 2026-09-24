@@ -4,6 +4,7 @@ import {
   Controller,
   gate,
   Get,
+  inlineScriptPolicy,
   Public,
   type Authorize,
   type Input,
@@ -85,15 +86,28 @@ export const buildController = (
 
   @Controller()
   class OpenApiController extends base {
+    /** Per mount prefix, like the page it hashes. */
+    readonly #policies = new Map<string, string>();
+
     @Public()
     @Get(() => mount.ui)
     async page(input: Input<RouteSchemas>): Promise<Response> {
       const refused = await this.refuse(input);
       if (refused !== undefined) return refused;
 
-      const html = await this.explorer.page(this.prefix(input, mount.ui));
+      const prefix = this.prefix(input, mount.ui);
+      const html = await this.explorer.page(prefix);
+      let policy = this.#policies.get(prefix);
+      if (policy === undefined) {
+        policy = inlineScriptPolicy(html);
+        this.#policies.set(prefix, policy);
+      }
       return new Response(html, {
-        headers: { 'content-type': 'text/html; charset=utf-8' },
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          // Its own, so an app's `securityHeaders` policy cannot blank the page.
+          'content-security-policy': policy,
+        },
       });
     }
 

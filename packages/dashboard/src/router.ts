@@ -1,4 +1,5 @@
 import type { ModuleRef } from '@dunx/core';
+import { inlineScriptPolicy, setAbsentHeaders } from '@dunx/http';
 import type { RoutePrefix } from '@dunx/http/internal';
 import { boardNames, matchBoard, type Board } from './board.js';
 import { redisReport } from './api/redis.js';
@@ -29,6 +30,21 @@ const json = (body: unknown, status = 200): Response =>
 const fail = (status: number, error: string): Response =>
   json({ error }, status);
 
+/** The page and the policy admitting its inline bundle, built together once. */
+export interface RenderedPage {
+  readonly html: string;
+  readonly policy: string;
+}
+
+/**
+ * bull-board loads same-origin script files only, and styles itself from Google
+ * Fonts, inline `<style>` and `style=` attributes, which this leaves open.
+ */
+const BOARD_POLICY = inlineScriptPolicy('');
+
+/** A bull-board response that named its own policy keeps it. */
+const BOARD_HEADERS = [['content-security-policy', BOARD_POLICY]] as const;
+
 export interface RouterDeps {
   readonly root: ModuleRef;
   readonly options: DashboardOptions;
@@ -36,7 +52,7 @@ export interface RouterDeps {
   readonly prefix: RoutePrefix;
   readonly startedAt: number;
   /** The HTML page, built lazily so importing this package does not load it. */
-  readonly page: () => Promise<string>;
+  readonly page: () => Promise<RenderedPage>;
   /** bull-board, built lazily so an app that never opens it holds no socket. */
   readonly board: () => Promise<Board>;
 }
@@ -135,7 +151,7 @@ export const handleDashboard = async (
         value: match.params,
         configurable: true,
       });
-      return match.handler(request);
+      return setAbsentHeaders(await match.handler(request), BOARD_HEADERS);
     }
 
     // Nothing in its table, so it is one of bull-board's own client-side routes -
@@ -143,16 +159,21 @@ export const handleDashboard = async (
     // Its entry route serves those, which is the same thing the dashboard's mount
     // does for its own panels. Only for a GET: a write to a path nothing declares
     // is a real 404.
-    if (method === 'GET' && board.entry) return board.entry(request);
+    if (method === 'GET' && board.entry) {
+      return setAbsentHeaders(await board.entry(request), BOARD_HEADERS);
+    }
     return fail(404, 'no such bull-board route');
   }
 
   if (method !== 'GET') return fail(405, `${method} is not allowed here`);
 
-  return new Response(await deps.page(), {
+  const page = await deps.page();
+  return new Response(page.html, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
+      // Its own, so an app's `securityHeaders` policy cannot blank the page.
+      'content-security-policy': page.policy,
     },
   });
 };

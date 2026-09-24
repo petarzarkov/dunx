@@ -12,6 +12,7 @@ import type { CorsOptions } from './cors.js';
 import type { ErrorHandler } from './errors.js';
 import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
+import type { SecurityHeadersOptions } from './security-headers.js';
 
 /**
  * Every setting `HttpFactory.create` takes. Here rather than in
@@ -37,6 +38,13 @@ export interface HttpOptions extends AppOptions {
   readonly prefix?: string | undefined;
   /** Mounts an `OPTIONS` preflight per path, as {@link HttpApp.enableCors} does. */
   readonly cors?: CorsOptions;
+  /**
+   * Security response headers on every response dunx produces: routes, the 404,
+   * mapped errors, static files and its own pages. Off by default, since turning
+   * it on changes every response. `true` takes the defaults; an object overrides
+   * or drops (`false`) one header at a time. See docs/guide/32-security.md.
+   */
+  readonly securityHeaders?: boolean | SecurityHeadersOptions;
   /** `app.set('trust proxy', ...)` as a field. */
   readonly trustProxy?: boolean;
   /**

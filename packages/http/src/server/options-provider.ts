@@ -8,6 +8,7 @@ import type { CorsOptions } from './cors.js';
 import type { ErrorHandler } from './errors.js';
 import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
+import type { SecurityHeadersOptions } from './security-headers.js';
 
 /**
  * How an app configures its HTTP server. A subclass is resolved from the
@@ -101,6 +102,11 @@ export abstract class HttpOptionsProvider {
   /** `undefined` mounts no preflight at all. */
   get cors(): CorsOptions | undefined {
     return undefined;
+  }
+
+  /** Off by default. See {@link HttpOptions.securityHeaders}. */
+  get securityHeaders(): boolean | SecurityHeadersOptions {
+    return false;
   }
 
   /** `false` removes the middleware from the chain; an object tunes it. */
@@ -203,6 +209,7 @@ export function resolveHttpOptions(
     prefix: settings.prefix,
     port: settings.port,
     cors: settings.cors,
+    securityHeaders: settings.securityHeaders,
     requestLogging: settings.requestLogging,
     socketLogging: settings.socketLogging,
     metrics: settings.metrics,

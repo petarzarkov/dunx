@@ -10,18 +10,18 @@ other.
 
 ## Built
 
-| Package            | Contains                                                                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `@dunx/core`       | DI container, modules, lifecycle, config and files, an event bus, `ResiliencePolicy`, `Tracer` and `./otel` - zero deps      |
-| `@dunx/transform`  | Load-time transform: constructor parameter types                                                                             |
-| `@dunx/http`       | Routes, websocket gateways, server-sent events, middleware, guards, CORS, validation, health probes, `./client`, `./connect` |
-| `@dunx/infra`      | `/db` (drizzle) `/redis` `/cache` `/queue` `/amqp` `/schedule` `/files` `/images` `/email` `/logger` `/pagination`           |
-| `@dunx/openapi`    | OpenAPI 3.1 from route zod schemas, behind `./swagger` or `./scalar`                                                         |
-| `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0                                                                     |
-| `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing                                                                  |
-| `@dunx/dashboard`  | Opt-in ops page, one middleware, bull-board mounted for queues                                                               |
-| `@dunx/create-app` | `bunx @dunx/create-app my-api` - an arrow-key feature list, base template plus folders                                       |
-| `@dunx/mcp`        | MCP server that reads an app's routes, providers and modules                                                                 |
+| Package            | Contains                                                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@dunx/core`       | DI container, modules, lifecycle, config and files, an event bus, `ResiliencePolicy`, `Tracer` and `./otel` - zero deps                        |
+| `@dunx/transform`  | Load-time transform: constructor parameter types                                                                                               |
+| `@dunx/http`       | Routes, websocket gateways, server-sent events, middleware, guards, CORS, security headers, validation, health probes, `./client`, `./connect` |
+| `@dunx/infra`      | `/db` (drizzle) `/redis` `/cache` `/queue` `/amqp` `/schedule` `/files` `/images` `/email` `/logger` `/pagination`                             |
+| `@dunx/openapi`    | OpenAPI 3.1 from route zod schemas, behind `./swagger` or `./scalar`                                                                           |
+| `@dunx/testing`    | Bindings replaced in place, a real `Bun.serve` on port 0                                                                                       |
+| `@dunx/auth`       | better-auth mounted, `SessionGuard`, `Bun.password` hashing                                                                                    |
+| `@dunx/dashboard`  | Opt-in ops page, one middleware, bull-board mounted for queues                                                                                 |
+| `@dunx/create-app` | `bunx @dunx/create-app my-api` - an arrow-key feature list, base template plus folders                                                         |
+| `@dunx/mcp`        | MCP server that reads an app's routes, providers and modules                                                                                   |
 
 Seven of those are a library wired in rather than dunx code - never invent what a
 mature library already solves. `drizzle-orm` is an optional `peerDependency` and

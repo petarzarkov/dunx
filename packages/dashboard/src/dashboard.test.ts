@@ -119,6 +119,8 @@ beforeAll(async () => {
   app = await HttpFactory.create(AppModule, {
     requestLogging: false,
     bootLogging: false,
+    // The strictest app policy, which the pages below must not inherit.
+    securityHeaders: { contentSecurityPolicy: true },
   });
   // Ahead of anything else, which is the contract: a session guard registered
   // first would answer 401 before `authorize` ran and defeat the 404 below.
@@ -170,6 +172,19 @@ describe('the mount', () => {
       expect(href).toMatch(/^data:image\/svg\+xml,/);
     }
     expect(html).toContain('noindex');
+  });
+
+  it('carries a policy of its own admitting the inlined bundle by hash', async () => {
+    const response = await get('/_dunx');
+    const html = await response.text();
+    const bundle = /<script>([\s\S]*)<\/script><\/body>/.exec(html)?.[1] ?? '';
+    const hash = new Bun.CryptoHasher('sha256').update(bundle).digest('base64');
+    expect(bundle.length).toBeGreaterThan(1000);
+    expect(response.headers.get('content-security-policy')).toBe(
+      `script-src 'self' 'sha256-${hash}'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'`,
+    );
+    // The rest of the app's headers still apply.
+    expect(response.headers.get('x-frame-options')).toBe('DENY');
   });
 
   it('serves the page for a client-side route so a reload survives', async () => {
@@ -282,6 +297,10 @@ describe('the queues handoff', () => {
     // reads as having left the site.
     expect(html).toContain('<title>dunx queues</title>');
     expect(html).toContain('"favIcon":{"default":"data:image/svg+xml,');
+    // Styled from Google Fonts and `style=`, so not the app's strict policy.
+    expect(response.headers.get('content-security-policy')).toBe(
+      "script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+    );
   });
 
   it('serves bull-board’s static assets through the same mount', async () => {
@@ -301,6 +320,9 @@ describe('the queues handoff', () => {
     // this did - broke every link the board itself renders.
     const response = await get('/_dunx/queues/queue/emails?status=completed');
     expect(response.status).toBe(200);
+    expect(response.headers.get('content-security-policy')).toStartWith(
+      "script-src 'self';",
+    );
     expect(response.headers.get('content-type')).toContain('text/html');
   });
 

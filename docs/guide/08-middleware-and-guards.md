@@ -657,6 +657,10 @@ Four behaviours to expect:
 - **CORS headers are applied outside the error mapper**, so a mapped 500 still
   carries them.
 
+Security response headers (`Strict-Transport-Security`, `X-Frame-Options`, a
+`Content-Security-Policy`) are wrapped the same way, at boot rather than as a
+middleware. See [Security](./32-security.md).
+
 ### Why preflight is mounted per path
 
 With `routes` and no `fetch` handler, an `OPTIONS` against a GET-only route
