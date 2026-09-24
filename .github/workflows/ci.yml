@@ -182,16 +182,17 @@ jobs:
       # lines with nothing exercising `Bun.S3Client` at all; the round-trip against
       # a real bucket takes it to 87.8%.
       #
-      # Both images come from quay.io and carry an explicit tag. `minio/minio` and
-      # `minio/mc` were pulled from Docker Hub, which turned an untagged pull into
-      # `pull access denied ... repository does not exist` and failed this job on a
-      # commit that changed nothing here. quay.io is MinIO's own registry; the tag
-      # is pinned so the image cannot move under CI the way `latest` just did.
+      # Both images are Chainguard's builds of MinIO, pinned by digest. MinIO's own
+      # images stopped pulling: Docker Hub first, then quay.io answered
+      # `unauthorized` for every tag, pinned or `latest`. Chainguard publishes only
+      # `latest` on its free tier, so the digest is what keeps the image from
+      # moving under CI.
       - name: Start MinIO and create the bucket
         run: |
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=dunxtest -e MINIO_ROOT_PASSWORD=dunxtestsecret \
-            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+            cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1 \
+            server /data
           for _ in $(seq 1 40); do
             if curl -sf http://localhost:9000/minio/health/live >/dev/null; then
               break
@@ -201,7 +202,8 @@ jobs:
           curl -sf http://localhost:9000/minio/health/live >/dev/null
           docker run --rm --network host \
             -e MC_HOST_local=http://dunxtest:dunxtestsecret@localhost:9000 \
-            quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z mb --ignore-existing local/dunx-test
+            cgr.dev/chainguard/minio-client@sha256:b8b144ab34694ecea25aa352c4be9de4c26ee2a02701521dce02ee5593c57338 \
+            mb --ignore-existing local/dunx-test
 
       - name: Build
         run: bun run ci build
