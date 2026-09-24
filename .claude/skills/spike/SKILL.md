@@ -5,9 +5,9 @@ description: Resolve an open technical question by measuring it on real Bun inst
 
 # /spike
 
-Every entry in [docs/architecture/constraints.md](../../../docs/architecture/constraints.md)
-was measured, not reasoned about. That is why the decisions built on it hold. A
-spike keeps that property. Open questions live in the **Open items** section of
+An entry in [docs/architecture/constraints.md](../../../docs/architecture/constraints.md)
+cites the probe or type-check output it rests on, which is why the decisions built
+on it hold. A spike adds entries of that kind. Open questions live in the **Open items** section of
 [docs/ROADMAP.md](../../../docs/ROADMAP.md), one file each under
 `internal/notes/roadmap/`.
 
@@ -19,7 +19,8 @@ spike keeps that property. Open questions live in the **Open items** section of
 2. **Write a throwaway probe in the scratchpad directory**, never under
    `packages/` or `examples/`. It is not code that ships and it must not reach a
    commit, a coverage run, or a build.
-3. **Run it on real Bun** and record `bun --version` alongside the output.
+3. **Run it on real Bun** and record `bun --version` alongside the output. A
+   type-level question runs through the repo's `tsc` instead; record its version.
 4. **Delegate the probing when it is noisy or wide.** Give a subagent the claim
    and the probe location; ask back for the literal command, the literal output,
    and a one-line verdict. Iterating a decorator probe through six type errors is

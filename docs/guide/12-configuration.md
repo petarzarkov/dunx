@@ -378,8 +378,9 @@ nothing to inject.
 
 ## Where config is consumed
 
-Every dunx module that takes options also has `forRootAsync({ useFactory, inject })`,
-so those options can come off `ConfigService`:
+Every dunx module that takes options, except `ConfigModule` itself, also has
+`forRootAsync({ useFactory, inject })`, so those options can come off
+`ConfigService`:
 
 ```ts
 DbModule.forRootAsync(SyncDatabase, {

@@ -212,8 +212,8 @@ Anything that is a **runtime value** can be its own token, so most code needs no
 
 1. **A concrete class.** Nothing to declare; an unbound class self-binds.
 2. **An abstract class** for a contract whose implementation is built elsewhere.
-   It is a runtime value, so it works as a token. It cannot be constructed, so
-   the container will not self-bind it by accident.
+   It is a runtime value, so it works as a token. Bind it to an implementation:
+   an unbound abstract class self-binds like any other class.
 3. **`token<T>(name)`** only for what has no runtime value to name: a primitive
    (`token<string>('Dsn')`), or a value whose type you do not own and cannot
    subclass.

@@ -25,8 +25,9 @@ bun run --filter '@dunx/example-full' start
 ```
 
 Then open **<http://localhost:3000/api/docs>** - the Swagger UI page is generated
-from the same zod schemas the routes validate against, so every endpoint below is
-listed, typed and callable from the browser. `/api/reference` renders the same
+from the same zod schemas the routes validate against, so every HTTP endpoint
+below is listed, typed and callable from the browser. `/chat` and `/telemetry` are
+WebSocket gateways, which Swagger UI cannot call. `/api/reference` renders the same
 document with Scalar.
 
 | Where                    | What                                            |

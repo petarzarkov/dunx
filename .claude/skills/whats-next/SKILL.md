@@ -18,7 +18,8 @@ git status --short && git log --oneline -8
 ```
 
 Read the **Open items** section of [docs/ROADMAP.md](../../../docs/ROADMAP.md) and
-the file under `internal/notes/roadmap/` for the item in hand. That is the source
+the file under `internal/notes/roadmap/` for the item in hand, when its row links
+one. That is the source
 of truth for what "next" means. Never invent a roadmap position from the
 conversation.
 

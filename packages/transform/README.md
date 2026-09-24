@@ -94,10 +94,10 @@ inject(TOKEN) in a field initializer.
 ```
 
 That covers a type-only import, an inline `type` specifier, a local `interface` or
-type alias, a class type parameter, a primitive, and a union. Replace the type with
-an abstract class, or bind it with `token()`: a token is a value, not a type, so
-read it with `inject(TOKEN)` in a field initializer rather than as a constructor
-parameter. For a type-only import the error says instead to make it a value import.
+type alias, a class type parameter, a primitive, and a union. A token is a runtime
+value with no type to declare, so it is read with `inject(TOKEN)` in a field
+initializer. For a type-only import the error says instead to make it a
+value import.
 
 Class **expressions** are skipped: `const X = class Inner {}` binds `Inner` only
 inside the class body, so a statement appended after it could not reference the name.

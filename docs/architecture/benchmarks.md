@@ -135,9 +135,11 @@ of minutes and mapped the machine's own drift onto subject identity: `bun-serve`
 measured first and `django` forty minutes later, with their ratio published as if the
 two numbers were simultaneous.
 
-Measured: two sequential runs of identical code disagreed by a median of 3.9%, with 15
-of 20 cells moving the same direction. Rounds are now interleaved across every
-subject, which took that to 1.2% with no directional bias. The startup column is
+Measured: two sequential runs of identical code disagreed by a median of 3.9% in raw
+req/s, with 15 of 20 cells moving the same direction. Rounds are now interleaved
+across every subject, which took that to 1.2% with no directional bias. The 0.6
+percentage points quoted above is the same comparison read as a share of
+`bun-serve`, the unit every published ratio uses. The startup column is
 unaffected, since it was never interleaved.
 
 ## The cross-language subjects, and how to read them
@@ -193,8 +195,8 @@ The suite's Go subjects sit at 52-56% of `bun-serve` while Axum sits at 90-101%,
 that gap was carried in the roadmap for months as an unexplained anomaly attributed
 to Gin. Gin is not the variable, and neither of the two mechanisms tested below is.
 
-**Gin is not the variable.** `nethttp` measures the same 52-56%, and Gin is 99-104%
-of `nethttp` across all four scenarios, so the framework costs nothing detectable
+**Gin is not the variable.** `nethttp` measures 55-57% in the current run, and Gin
+is 101-102% of `nethttp` across all four scenarios, so the framework costs nothing detectable
 over the standard library. The comparison the numbers make is the Go runtime against
 tokio at one thread.
 

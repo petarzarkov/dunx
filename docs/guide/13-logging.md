@@ -445,27 +445,11 @@ out how a call ended.
 - An error is logged and **rethrown**, so the error mapper still owns the status
   and the response shape.
 
-An unmatched path is logged too. `Bun.serve({ routes })` answers a miss itself, so
-`listen()` installs one `fetch` fallback that puts the global middleware in front
-of a `{"error":"NOT_FOUND","status":404}`. That is not a JavaScript router: Bun
-still does all the matching, and the fallback only runs once it has matched
-nothing.
-
-**Every global middleware runs on a miss, guards included.** By default
-(`notFound: 'public'`) the miss reports itself as `@Public()`, so a guard
-honouring that flag passes it through and the client gets the conventional 404.
-
-That default leaks: if a miss answers 404 while every real path answers 401, the
-difference enumerates your surface. To close it, opt in to `'guarded'`:
-
-```ts
-await HttpFactory.create(AppModule, { notFound: 'guarded' });
-```
-
-The miss then carries no route metadata, and a guard reading none of it refuses:
-an app with a global `SessionGuard` answers an anonymous request for a
-nonexistent path with that guard's status rather than a 404. Either way it is
-logged and adopts a trace, so the fallback runs the middleware for both.
+An unmatched path is logged too. The
+[`fetch` fallback](./05-controllers.md#the-fetch-fallback) runs every global
+middleware on a miss, guards included, and it covers what `notFound: 'public'`
+and `'guarded'` decide. Under either setting the miss is logged and adopts a
+trace.
 
 A guard can decide for itself under either setting. `UNMATCHED` is set on a miss
 and no real route ever sets it:

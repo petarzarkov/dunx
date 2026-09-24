@@ -405,7 +405,8 @@ So why does the name exist at all? Because reading options off `ConfigService` i
 the one thing a zero-argument options object cannot do, and `forRootAsync` is the
 conventional name for that.
 
-Every framework module that takes options has one, alongside its `forRoot`:
+Every framework module that takes options has one alongside its `forRoot`, except
+`ConfigModule`, which is what the factories read from:
 
 ```ts
 @Module({
