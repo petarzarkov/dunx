@@ -92,6 +92,7 @@ export const THIRD_PARTY: Readonly<Record<string, string>> = Object.freeze({
   'better-auth': '1.6.25',
   bullmq: '6.3.4',
   ioredis: '6.0.0',
+  '@opentelemetry/api': '1.9.1',
 });
 
 const versionOf = (dep: string): string => THIRD_PARTY[dep] ?? 'latest';

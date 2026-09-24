@@ -1,4 +1,4 @@
-import { Logger, RequestContext, type App } from '@dunx/core';
+import { Logger, RequestContext, Tracer, type App } from '@dunx/core';
 import type { Consumer, ConsumerProps } from 'rabbitmq-client';
 import { closeWithin } from '../close-within.js';
 import { ErrorThrottle } from '../error-throttle.js';
@@ -97,6 +97,7 @@ export class AmqpSubscriber {
     this.#dispatcher = new AmqpDispatcher(
       this.#logger,
       app.get(RequestContext),
+      app.get(Tracer),
     );
   }
 

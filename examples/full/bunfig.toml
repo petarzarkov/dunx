@@ -1,7 +1,11 @@
 # The compiler plugin records each class's constructor parameter types so the
 # container can resolve them. Without this preload, constructor injection is
 # invisible to the runtime and providers are built with no arguments.
-preload = ["@dunx/transform/preload", "./src/cache-prefix.preload.ts"]
+preload = [
+  "@dunx/transform/preload",
+  "./src/cache-prefix.preload.ts",
+  "./src/otel.preload.ts",
+]
 
 [test]
 preload = ["@dunx/transform/preload", "./src/cache-prefix.preload.ts"]

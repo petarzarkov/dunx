@@ -57,6 +57,22 @@ preload = ["@dunx/transform/preload"]
 | Events        | `EventBus`, `AppEvent`, `@OnEvent`, `EventRegistry`          | [Events](../../docs/guide/27-events.md)                |
 | Stats         | `Durations`, `Counter`, `Gauge`, `RuntimeStats`, `EventLoopLag` | [Metrics](../../docs/guide/24-metrics.md)           |
 | Resilience    | `ResiliencePolicy`, timeout, retry, backoff, jitter, fallback | [Resilience](../../docs/guide/26-resilience.md)       |
+| Tracing       | The `Tracer` contract, `NoopTracer`, and `OtelModule` on `/otel` | [Tracing](../../docs/guide/31-tracing.md)          |
+
+## Subpaths
+
+| Subpath           | Contains                                                                  |
+| ----------------- | ------------------------------------------------------------------------- |
+| `@dunx/core`      | Everything above. Never imports `@opentelemetry/api`                      |
+| `@dunx/core/otel` | `OtelModule` and `OtelTracer`, on the optional peer `@opentelemetry/api` |
+
+```bash
+bun add @opentelemetry/api   # only for @dunx/core/otel, ^1.4.0
+```
+
+`@opentelemetry/api` is a peer so the app's SDK and dunx share one copy: a
+provider registered through an older copy drops spans started through a newer
+one. dunx ships no SDK and no exporter; register your own before `create`.
 
 ## Notes
 
@@ -66,10 +82,10 @@ preload = ["@dunx/transform/preload"]
 - A parameter whose type erases - an interface, a primitive, a union, a
   type-only import - is a **boot error naming that parameter**, not a silent
   `undefined`. A parameter with a default keeps its default instead.
-- Two contracts are always resolvable: `Logger` defaults to `ConsoleLogger`, and
-  `RequestContext` to `AsyncRequestContext`, backed by `AsyncLocalStorage`. This lets `@dunx/http` log every
-  request in an app that imported no logging module. A module binding either
-  one wins.
+- Three contracts are always resolvable: `Logger` defaults to `ConsoleLogger`,
+  `RequestContext` to `AsyncRequestContext`, backed by `AsyncLocalStorage`, and
+  `Tracer` to `NoopTracer`. This lets `@dunx/http` log every request in an app
+  that imported no logging module. A module binding any of them wins.
 - `ConsoleLogger` batches `info` and below into one write per event-loop turn;
   `warn` and above are never batched and flush what is queued behind them.
 - The stats primitives are `node:perf_hooks` and `process`, both platform

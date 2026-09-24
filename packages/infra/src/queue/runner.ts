@@ -13,6 +13,7 @@ import { selectJobs, type DiscoveredJob } from './discover.js';
 import { QueueMetrics } from './metrics.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueOptions } from './options.js';
+import { JobTracing } from './tracing.js';
 import { QueueConsumer } from './worker.js';
 
 /**
@@ -82,6 +83,7 @@ export class QueueRunner implements OnInit, OnShutdown {
       jobs,
       this.#options.jobTimeoutMs,
       this.#metrics,
+      JobTracing.in(app),
     );
 
     this.#consumer = new QueueConsumer(

@@ -18,6 +18,7 @@ import { declares, JobDispatcher, metricsIn } from './dispatcher.js';
 import { describeJob, selectJobs, type DiscoveredJob } from './discover.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { QueueOptions } from './options.js';
+import { JobTracing } from './tracing.js';
 
 export interface WorkerAppOptions {
   /** Consume only these queues. Defaults to every queue a handler was found for;
@@ -386,6 +387,7 @@ export class WorkerFactory {
       jobs,
       queueOptions.jobTimeoutMs,
       metricsIn(modules, app),
+      JobTracing.in(app),
     );
     const consumer = new QueueConsumer(
       app,
@@ -424,6 +426,7 @@ export class WorkerFactory {
       jobs,
       app.get(QueueOptions).jobTimeoutMs,
       metricsIn(modules, app),
+      JobTracing.in(app),
     );
     return new QueueConsumer(app, dispatcher, jobs, dispatcher.queues);
   }

@@ -7,7 +7,7 @@ import type { SocketOptions } from '../ws/socket.js';
 import type { CorsOptions } from './cors.js';
 import type { ErrorHandler } from './errors.js';
 import type { Middleware } from './middleware.js';
-import type { RequestLoggingOptions } from './request-logging.js';
+import type { RequestLoggingOptions } from './request-logging-options.js';
 
 /**
  * How an app configures its HTTP server. A subclass is resolved from the

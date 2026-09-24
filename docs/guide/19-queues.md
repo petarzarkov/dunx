@@ -330,6 +330,9 @@ bare. The child builds its container on the first job and reuses it.
 survive the container being recycled and stay attached to the job an operator is
 looking at. Each costs one Redis write, capped by bullmq's `keepLogs`.
 
+OpenTelemetry spans are separate from `trace`. A forked handler gets one when the
+processor file registers an SDK; see [Tracing](./31-tracing.md#queues).
+
 ### Publishing
 
 ```ts
@@ -737,6 +740,8 @@ reading the source.
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
 - [Logging](./13-logging.md), which the worker uses for job completion and failure
 - [Metrics](./24-metrics.md) for reading `QueueMetrics`
+- [Tracing](./31-tracing.md#queues) for spans around publish and handler, forked
+  handlers included
 - `examples/full`, whose `src/jobs/` is the worked example this page is drawn from.
   It sets `consume: true` and ships a `jobs.processor.ts`, so it spawns no worker
   process of its own

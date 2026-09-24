@@ -1,10 +1,14 @@
 import {
+  formatTraceparent,
   Logger,
+  NoopTracer,
   RequestContext,
   TRACEPARENT_HEADER,
   TRACESTATE_HEADER,
   traceparentOf,
+  Tracer,
   type OnShutdown,
+  type TraceIds,
 } from '@dunx/core';
 import type { Envelope, Publisher } from 'rabbitmq-client';
 import { closeWithin } from '../close-within.js';
@@ -26,6 +30,8 @@ export class AmqpPublisher implements OnShutdown {
   readonly #options: AmqpOptions;
   readonly #logger: Logger;
   readonly #context: RequestContext | undefined;
+  /** Absent for the no-op, so an untraced publish builds no span options. */
+  readonly #tracer: Tracer | undefined;
   #publisher: Publisher | undefined;
 
   constructor(
@@ -33,11 +39,13 @@ export class AmqpPublisher implements OnShutdown {
     options: AmqpOptions,
     logger: Logger,
     context?: RequestContext,
+    tracer?: Tracer,
   ) {
     this.#connection = connection;
     this.#options = options;
     this.#logger = logger;
     this.#context = context;
+    this.#tracer = tracer instanceof NoopTracer ? undefined : tracer;
   }
 
   /** Whether a channel has been opened at all. */
@@ -70,9 +78,9 @@ export class AmqpPublisher implements OnShutdown {
   }
 
   /**
-   * `send`, with this scope's trace stamped into the message headers. Without it
-   * the consuming service starts a trace of its own and the two halves of one
-   * flow never join; the subscriber reads the headers back.
+   * `send`, with this scope's trace stamped into the message headers, so the
+   * consuming service continues it rather than starting its own. A bound tracer
+   * wraps it in a PRODUCER span, whose ids a recording SDK stamps instead.
    *
    * `confirm` is on by default, so this resolves when the broker has accepted the
    * message rather than when the frame was written.
@@ -84,10 +92,36 @@ export class AmqpPublisher implements OnShutdown {
    * is still in flight, so a caller that retries can put the message on the
    * broker twice - the same trade `handlerTimeoutMs` documents.
    */
-  async publish<T>(envelope: string | Envelope, body: T): Promise<void> {
+  publish<T>(envelope: string | Envelope, body: T): Promise<void> {
     const addressed: Envelope =
       typeof envelope === 'string' ? { routingKey: envelope } : envelope;
-    const stamped = this.#traced(addressed);
+    const tracer = this.#tracer;
+    if (tracer === undefined) return this.#send(this.#traced(addressed), body);
+
+    // The default exchange routes by queue name, so that is the destination.
+    const destination = addressed.exchange || addressed.routingKey || '';
+    return tracer.span(
+      `publish ${destination}`,
+      {
+        kind: 'producer',
+        attributes: {
+          'messaging.system': 'rabbitmq',
+          'messaging.operation.type': 'send',
+          'messaging.operation.name': 'publish',
+          'messaging.destination.name': destination,
+          ...(addressed.exchange && addressed.routingKey
+            ? {
+                'messaging.rabbitmq.destination.routing_key':
+                  addressed.routingKey,
+              }
+            : {}),
+        },
+      },
+      (span) => this.#send(this.#traced(addressed, span.ids()), body),
+    );
+  }
+
+  async #send<T>(stamped: Envelope, body: T): Promise<void> {
     const { publishTimeoutMs } = this.#options;
 
     await withTimeout(
@@ -115,8 +149,10 @@ export class AmqpPublisher implements OnShutdown {
    * caller that set `traceparent` alone is forwarding an upstream trace, and
    * adding this scope's `tracestate` to it would join the vendor state of one
    * trace to the ids of another.
+   *
+   * `span` is a recording producer span's ids, which replace the scope's own.
    */
-  #traced(envelope: Envelope): Envelope {
+  #traced(envelope: Envelope, span?: TraceIds): Envelope {
     const headers = envelope.headers ?? {};
     if (TRACEPARENT_HEADER in headers || TRACESTATE_HEADER in headers) {
       return envelope;
@@ -124,15 +160,19 @@ export class AmqpPublisher implements OnShutdown {
 
     const fields = this.#context?.getContext();
     const traceparent =
-      fields === undefined ? undefined : traceparentOf(fields);
-    if (traceparent === undefined || fields === undefined) return envelope;
+      span === undefined
+        ? fields === undefined
+          ? undefined
+          : traceparentOf(fields)
+        : formatTraceparent(span);
+    if (traceparent === undefined) return envelope;
 
     return {
       ...envelope,
       headers: {
         ...headers,
         [TRACEPARENT_HEADER]: traceparent,
-        ...(fields.traceState === undefined
+        ...(fields?.traceState === undefined
           ? {}
           : { [TRACESTATE_HEADER]: fields.traceState }),
       },

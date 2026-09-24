@@ -1,8 +1,14 @@
-import type { Logger, OnShutdown } from '@dunx/core';
+import {
+  NoopTracer,
+  type Logger,
+  type OnShutdown,
+  type Tracer,
+} from '@dunx/core';
 import { closeWithin, within } from '../close-within.js';
 import type { DbConnection, DbOptions } from './connection.js';
 import { DatabaseError } from './errors.js';
-import { instrumented, type QueryMetrics } from './metrics.js';
+import { instrumented } from './instrument.js';
+import type { QueryMetrics } from './metrics.js';
 
 export interface DataSourcesInit<TDb> {
   /**
@@ -70,6 +76,8 @@ export class DataSources<TDb = unknown> implements OnShutdown {
   readonly #closeTimeoutMs: number;
   readonly #logger: Logger | undefined;
   readonly #metrics: QueryMetrics | undefined;
+  /** Absent for the no-op, so an untraced pool opens its drivers unwrapped. */
+  readonly #tracer: Tracer | undefined;
   /** Closes started by eviction, which `close()` still has to wait for. */
   readonly #closing = new Set<Promise<void>>();
   #sweep: ReturnType<typeof setInterval> | undefined;
@@ -79,6 +87,7 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     init: DataSourcesInit<TDb>,
     logger?: Logger,
     metrics?: QueryMetrics,
+    tracer?: Tracer,
   ) {
     this.#create = init.create;
     this.#max = init.max ?? DEFAULT_MAX;
@@ -87,6 +96,7 @@ export class DataSources<TDb = unknown> implements OnShutdown {
     this.#closeTimeoutMs = init.closeTimeoutMs ?? DEFAULT_CLOSE_TIMEOUT_MS;
     this.#logger = logger;
     this.#metrics = metrics;
+    this.#tracer = tracer instanceof NoopTracer ? undefined : tracer;
   }
 
   /** Live data sources, opening ones included. */
@@ -206,9 +216,9 @@ export class DataSources<TDb = unknown> implements OnShutdown {
   async #open(key: string): Promise<DbConnection<TDb>> {
     const options = await this.#create(key);
     const opened =
-      this.#metrics === undefined
+      this.#metrics === undefined && this.#tracer === undefined
         ? await options.open()
-        : await instrumented(options.open(), this.#metrics);
+        : await instrumented(options.open(), this.#metrics, this.#tracer);
 
     if (this.#closed) {
       await opened.close();

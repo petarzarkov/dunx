@@ -2,6 +2,7 @@ import {
   namedToken,
   provide,
   token,
+  Tracer,
   type Ctor,
   type Deps,
   type ModuleRef,
@@ -77,6 +78,7 @@ export const redisMetrics = (name: string): Token<RedisMetrics> =>
 type RedisCtor = new (
   options: RedisOptions,
   metrics?: RedisMetrics,
+  tracer?: Tracer,
 ) => RedisConnection;
 
 const connectionFrom = (
@@ -97,13 +99,17 @@ const connectionFrom = (
 ) =>
   metricsToken === undefined
     ? provide(target, {
-        useFactory: (options: RedisOptions) => new (ctor as RedisCtor)(options),
-        inject: [optionsToken] as const,
+        useFactory: (options: RedisOptions, tracer: Tracer) =>
+          new (ctor as RedisCtor)(options, undefined, tracer),
+        inject: [optionsToken, Tracer] as const,
       })
     : provide(target, {
-        useFactory: (options: RedisOptions, metrics: RedisMetrics) =>
-          new (ctor as RedisCtor)(options, metrics),
-        inject: [optionsToken, metricsToken] as const,
+        useFactory: (
+          options: RedisOptions,
+          tracer: Tracer,
+          metrics: RedisMetrics,
+        ) => new (ctor as RedisCtor)(options, metrics, tracer),
+        inject: [optionsToken, Tracer, metricsToken] as const,
       });
 
 /**

@@ -83,15 +83,16 @@ Never add code that assumes one flat namespace. Details:
 
 ## Always-bound contracts
 
-`AppFactory.create` binds two tokens **after** every module's, so a module that
-binds either one wins:
+`AppFactory.create` binds three tokens **after** every module's, so a module that
+binds one wins:
 
 | Token            | Default               | Replaced by                            |
 | ---------------- | --------------------- | -------------------------------------- |
 | `Logger`         | `ConsoleLogger`       | `LoggerModule` → `@arkv/logger`        |
 | `RequestContext` | `AsyncRequestContext` | `LoggerModule` → arkv's `ContextStore` |
+| `Tracer`         | `NoopTracer`          | `OtelModule` (`@dunx/core/otel`)       |
 
-Neither default reaches for a dependency. `ConsoleLogger` batches `info` and
+No default reaches for a dependency. `ConsoleLogger` batches `info` and
 below into one write per event-loop turn; `warn` and above are never batched.
 
 ## Configuration

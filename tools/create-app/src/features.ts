@@ -22,9 +22,8 @@ export interface Feature {
   /** Config groups this feature reads, contributed to the generated config. */
   readonly config: readonly string[];
   /**
-   * A service that has to be running for the feature to do anything. Named so the
-   * prompt can say so and the generated README can list it, rather than the app
-   * failing in a way the reader has to diagnose.
+   * A service that has to be running for the feature to do anything, named so the
+   * prompt and the generated README list it instead of the app failing obscurely.
    */
   readonly service?: string;
 }
@@ -245,9 +244,8 @@ export const FEATURES: readonly Feature[] = [
     requires: [],
     module: { klass: 'HttpModule', from: './http/http.module.js' },
     dependencies: [],
-    // `redis` because this feature wires the websocket relay, whose url comes
-    // from the same place. REDIS_URL is optional and the relay connects lazily,
-    // so an app that never opens a socket pays nothing for it.
+    // `redis` for the websocket relay's url. REDIS_URL is optional and the relay
+    // connects lazily, so an app that never opens a socket pays nothing for it.
     config: ['corsOrigin', 'redis'],
   },
   {
@@ -302,9 +300,8 @@ export const FEATURES: readonly Feature[] = [
     name: 'websockets',
     source: 'chat',
     summary: 'A @Gateway with @OnMessage events, PubSub and a Redis relay.',
-    // `cache` for the `RedisConnection` the gateway injects, and `http` for
-    // `WsRelayModule`, which binds the `RelayPublisher` the relay demo uses -
-    // importing either a second time here would open a second connection.
+    // `cache` for the gateway's `RedisConnection`, `http` for the `WsRelayModule`
+    // that binds `RelayPublisher`; importing either here opens a second connection.
     requires: ['cache', 'http'],
     module: { klass: 'ChatModule', from: './chat/chat.module.js' },
     dependencies: ['@dunx/infra'],
@@ -335,7 +332,13 @@ export const FEATURES: readonly Feature[] = [
     summary: 'bullmq queues over Bun.RedisClient, background handlers forked.',
     requires: ['images'],
     module: { klass: 'JobsModule', from: './jobs/jobs.module.js' },
-    dependencies: ['@dunx/infra', 'bullmq', 'ioredis', 'zod'],
+    dependencies: [
+      '@dunx/infra',
+      '@opentelemetry/api',
+      'bullmq',
+      'ioredis',
+      'zod',
+    ],
     config: ['redis'],
     service: 'Redis or Valkey',
   },
@@ -358,11 +361,9 @@ export const FEATURES: readonly Feature[] = [
     source: 'health',
     summary:
       "`HealthModule`'s liveness and readiness probes, wired to this app's own indicators.",
-    // Each one supplies an indicator: `cache` the Redis connection, `database` the
-    // connection and the `Ledger` the custom check queries, `files` the `Storage`
-    // the store check asks and the `Workspace` whose directory the disk check
-    // measures, `messaging` the `AmqpConnection` behind the broker check.
-    // Selecting health without them used to typecheck and fail at boot.
+    // Each supplies an indicator: `cache` the Redis connection, `database` the
+    // connection and `Ledger`, `files` the `Storage` and `Workspace`, `messaging`
+    // the `AmqpConnection`. Selecting health without them used to fail at boot.
     requires: ['cache', 'database', 'files', 'messaging'],
     module: { klass: 'ProbesModule', from: './health/health.module.js' },
     dependencies: ['@dunx/infra'],
@@ -373,9 +374,8 @@ export const FEATURES: readonly Feature[] = [
     source: 'throttle',
     summary:
       'A fixed-window rate limit, with the counter in Redis and per-route overrides.',
-    // `cache` for the `RedisConnection` the shared counter writes to. The
-    // in-process default needs nothing, but it is per replica, so the example
-    // shows the one that survives a second pod.
+    // `cache` for the counter's `RedisConnection`: the in-process default is per
+    // replica, so the example shows the one that survives a second pod.
     requires: ['cache'],
     module: { klass: 'LimitsModule', from: './throttle/throttle.module.js' },
     dependencies: ['@dunx/infra'],

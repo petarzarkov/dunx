@@ -500,8 +500,10 @@ that field is there.
 There is no exporter, no sampler and no dependency: one header parsed and two
 written. `traceId`, `spanId` and `traceFlags` are OpenTelemetry's own log data
 model fields, so a collector correlates these lines with spans emitted by anything
-speaking the standard - including an OpenTelemetry SDK running in the same Bun
-process, which Bun 1.4.0 supports.
+speaking the standard.
+
+With `OtelModule` imported and an SDK recording, these ids are the exported
+span's own. See [Tracing](./31-tracing.md).
 
 `trace: false` removes all of it, at which point a request carries no correlation
 id at all.
@@ -632,6 +634,7 @@ breakdown, the body-option figures and the rejected alternatives are in
 
 ## Related
 
+- [Tracing](./31-tracing.md) for OpenTelemetry spans that share these ids
 - [Configuration](./12-configuration.md) for `AppConfigService` and `forRootAsync`
 - [Authentication](./17-authentication.md), which writes `userId` into
   `RequestContext` so every line after sign-in is correlated

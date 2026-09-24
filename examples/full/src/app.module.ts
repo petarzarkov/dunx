@@ -1,5 +1,6 @@
 import { Auth } from '@dunx/auth';
 import { EventBusModule, Module } from '@dunx/core';
+import { OtelModule } from '@dunx/core/otel';
 import {
   ConsoleTransport,
   FileTransport,
@@ -97,6 +98,9 @@ const fileAndConsole = (
       },
       { captureGlobalErrors: true },
     ),
+    // Binds `Tracer`, so every seam below opens its spans through OpenTelemetry.
+    // Records nothing until `otel.preload.ts` registers an SDK.
+    OtelModule,
     DatabaseModule,
     // After DatabaseModule, which holds the default data source; this one adds a
     // named second and a pool keyed per tenant.

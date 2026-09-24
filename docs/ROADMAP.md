@@ -12,7 +12,7 @@ other.
 
 | Package            | Contains                                                                                                                     |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `@dunx/core`       | DI container, modules, lifecycle, config and files, an event bus, `ResiliencePolicy` - zero deps                             |
+| `@dunx/core`       | DI container, modules, lifecycle, config and files, an event bus, `ResiliencePolicy`, `Tracer` and `./otel` - zero deps      |
 | `@dunx/transform`  | Load-time transform: constructor parameter types                                                                             |
 | `@dunx/http`       | Routes, websocket gateways, server-sent events, middleware, guards, CORS, validation, health probes, `./client`, `./connect` |
 | `@dunx/infra`      | `/db` (drizzle) `/redis` `/cache` `/queue` `/amqp` `/schedule` `/files` `/images` `/email` `/logger` `/pagination`           |

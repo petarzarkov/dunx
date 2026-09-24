@@ -5,3 +5,4 @@ export * from './logger/index.js';
 export { isPlainObject } from './plain-object.js';
 export * from './resilience/index.js';
 export * from './stats/index.js';
+export * from './tracing/index.js';

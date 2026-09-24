@@ -3,6 +3,7 @@ import {
   namedToken,
   provide,
   RequestContext,
+  Tracer,
   token,
   type Deps,
   type ModuleRef,
@@ -59,13 +60,15 @@ const serviceFrom = (
       options: HttpClientOptions,
       logger: Logger,
       context: RequestContext,
+      tracer: Tracer,
     ) =>
       new (ctor as new (
         options: HttpClientOptions,
         logger: Logger,
         context: RequestContext,
-      ) => HttpService)(options, logger, context),
-    inject: [optionsToken, Logger, RequestContext] as const,
+        tracer: Tracer,
+      ) => HttpService)(options, logger, context, tracer),
+    inject: [optionsToken, Logger, RequestContext, Tracer] as const,
   });
 
 /**

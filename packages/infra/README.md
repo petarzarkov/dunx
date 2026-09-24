@@ -71,6 +71,9 @@ import * as schema from './schema.js';
 export class InfraModule {}
 ```
 
+With `OtelModule` from `@dunx/core/otel` imported, `/db`, `/redis`, `/queue`
+and `/amqp` open OpenTelemetry spans; see [Tracing](../../docs/guide/31-tracing.md).
+
 Every area also has a `forRootAsync`, which is `forRoot` with a factory in front
 of it. It exists for the one thing a zero-argument function cannot do: inject, so
 the url or the filename can come off `ConfigService`.

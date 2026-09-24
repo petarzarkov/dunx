@@ -1,6 +1,8 @@
 import {
   Logger,
+  NoopTracer,
   RequestContext,
+  Tracer,
   type RequestFields as ScopeFields,
 } from '@dunx/core';
 import type { BunRequest } from 'bun';
@@ -9,74 +11,10 @@ import { HttpError } from './errors.js';
 import type { Middleware, Next } from './middleware.js';
 import type { RequestMetrics } from './metrics.js';
 import { RawBody } from './raw-body.js';
-import { TraceContext } from './trace-context.js';
+import { serveInSpan } from './server-span.js';
+import { TraceContext, type Trace } from './trace-context.js';
 import { HttpStatusCode } from './status.js';
-
-export interface RequestLoggingOptions {
-  /** Bodies past this many characters are logged as a size. Default 2048. `0` omits them. */
-  readonly maxBodyLength?: number;
-  /**
-   * Log the request body. Default `false`, and the cost depends on whether the
-   * route declares a `body` schema: +1.9 us when it does, +28.8 us when it does
-   * not, because the logger has to `req.clone()` an unread network stream.
-   *
-   * It is the field most likely to contain a password.
-   */
-  readonly requestBody?: boolean;
-  /** Log the response body. Default `false`, +2.6 us. A response is already a
-   * materialised string by the time this clones it. */
-  readonly responseBody?: boolean;
-  /**
-   * Paths to skip entirely: no entry, no trace, no `traceresponse`, and no
-   * `AsyncLocalStorage` scope, so anything the handler logs is uncorrelated.
-   * `correlateIgnored` buys the correlation back.
-   */
-  readonly ignore?: readonly string[];
-  /**
-   * Path prefixes to skip, for a whole mount rather than one path. `ignore` is an
-   * exact-match `Set`; this is a loop, so keep the list short. Scanned only when
-   * non-empty.
-   *
-   * ```ts
-   * requestLogging: { ignorePrefix: ['/_dunx'] }
-   * ```
-   */
-  readonly ignorePrefix?: readonly string[];
-  /**
-   * Keep the trace and the async scope on an `ignore`d path. Default `false`.
-   * The path still writes no entry; it gets a `traceresponse` and everything the
-   * handler logs carries the trace. Costs ~2.2 us of the ~5.4 us the default path
-   * spends.
-   */
-  readonly correlateIgnored?: boolean;
-  /**
-   * Wrap every request in an `AsyncLocalStorage` scope. Default `true`, +0.91 us.
-   * It is what lets a service four frames down log `traceId` without being
-   * handed a request. `correlate: false` skips it; this middleware's own entry is
-   * unchanged, but every other line the request writes loses its trace.
-   */
-  readonly correlate?: boolean;
-  /**
-   * Put `traceresponse` on the response. Default `true`, and ~500 ns of the 4.7 us
-   * the path costs, which is the largest thing here that can go without losing a
-   * field from a line.
-   *
-   * `false` keeps the trace on this middleware's own lines, in the async scope and
-   * on the metrics exemplar, and withholds the header from every response
-   * including a failure's: the error mapper stamps from what `TraceContext.adopt`
-   * marked, and this stops it marking.
-   */
-  readonly traceResponse?: boolean;
-  /**
-   * Adopt W3C Trace Context, putting `traceId`, `spanId`, `parentSpanId` and
-   * `traceFlags` on every line the request writes and `traceresponse` on its
-   * response. Default `true`, at 49.2 ns to mint both ids plus one header read.
-   * `@dunx/http/client` sends the adopted trace upstream.
-   *
-   * `false` removes it, and a request then carries no correlation id at all.
-   */
-  readonly trace?: boolean;
-}
+import type { RequestLoggingOptions } from './request-logging-options.js';
 
 const parse = (text: string, limit: number): unknown => {
   if (limit === 0) return undefined;
@@ -87,6 +25,16 @@ const parse = (text: string, limit: number): unknown => {
   } catch {
     return text;
   }
+};
+
+/** Written into the scope, from the adopted trace or the span that joined it. */
+const traced = (scope: ScopeFields, trace: Trace): ScopeFields => {
+  scope.traceId = trace.traceId;
+  scope.spanId = trace.spanId;
+  scope.traceFlags = trace.flags;
+  if (trace.parentSpanId !== undefined) scope.parentSpanId = trace.parentSpanId;
+  if (trace.state !== undefined) scope.traceState = trace.state;
+  return scope;
 };
 
 const elapsedMs = (started: number): number =>
@@ -127,11 +75,19 @@ export class RequestLoggingMiddleware implements Middleware {
    */
   readonly #metrics: RequestMetrics | undefined;
 
+  /**
+   * One SERVER span wherever a trace is adopted, so `ignore` without
+   * `correlateIgnored`, `trace: false` and `requestLogging: false` open none.
+   * Absent for the default `NoopTracer`, which leaves the path as it was.
+   */
+  readonly #tracer: Tracer | undefined;
+
   constructor(
     private readonly logger: Logger,
     private readonly context: RequestContext,
     options: RequestLoggingOptions = {},
     metrics?: RequestMetrics,
+    tracer?: Tracer,
   ) {
     this.#limit = options.maxBodyLength ?? 2048;
     this.#requestBody = options.requestBody ?? false;
@@ -143,6 +99,7 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#trace = options.trace ?? true;
     this.#traceResponse = options.traceResponse ?? true;
     this.#metrics = metrics;
+    this.#tracer = tracer instanceof NoopTracer ? undefined : tracer;
   }
 
   /** Both guards check emptiness first, so configuring neither costs two reads. */
@@ -180,19 +137,50 @@ export class RequestLoggingMiddleware implements Middleware {
       flow: 'http',
       context: `${ctx.controller}.${ctx.handler}`,
     };
-    if (this.#trace) {
-      const trace = TraceContext.adopt(req, this.#traceResponse);
-      scope.traceId = trace.traceId;
-      scope.spanId = trace.spanId;
-      scope.traceFlags = trace.flags;
-      if (trace.parentSpanId !== undefined) {
-        scope.parentSpanId = trace.parentSpanId;
-      }
-      if (trace.state !== undefined) scope.traceState = trace.state;
+    if (!this.#trace) {
+      return this.#enter(req, ctx, url, mark, path, started, next, scope);
     }
+    const trace = TraceContext.adopt(req, this.#traceResponse);
+    if (this.#tracer === undefined) {
+      return this.#enter(
+        req,
+        ctx,
+        url,
+        mark,
+        path,
+        started,
+        next,
+        traced(scope, trace),
+      );
+    }
+    return serveInSpan(this.#tracer, req, ctx, path, trace, (current) =>
+      this.#enter(
+        req,
+        ctx,
+        url,
+        mark,
+        path,
+        started,
+        next,
+        traced(scope, current),
+      ),
+    );
+  }
 
-    // The same fields either way: into the store under `correlate`, else merged
-    // straight onto this entry.
+  /**
+   * The same fields either way: into the store under `correlate`, else merged
+   * straight onto this entry.
+   */
+  #enter(
+    req: BunRequest,
+    ctx: RouteContext,
+    url: string,
+    mark: number,
+    path: string,
+    started: number,
+    next: Next,
+    scope: ScopeFields,
+  ): Promise<Response> {
     return this.#correlate
       ? this.context.runWithContext(scope, () =>
           this.#begin(req, ctx, url, mark, path, started, next, undefined),
@@ -293,34 +281,46 @@ export class RequestLoggingMiddleware implements Middleware {
     path: string,
     next: Next,
   ): Promise<Response> {
-    const trace = this.#trace
-      ? TraceContext.adopt(req, this.#traceResponse)
-      : undefined;
-    // `stamp` reads the mark `adopt` left, so `traceResponse: false` needs no
-    // condition here or in the error mapper.
+    if (!this.#trace) {
+      return this.#correlate
+        ? this.context.runWithContext(this.#scope(ctx, path), () => next())
+        : next();
+    }
+    const trace = TraceContext.adopt(req, this.#traceResponse);
+    return this.#tracer === undefined
+      ? this.#stamped(req, ctx, path, trace, next)
+      : serveInSpan(this.#tracer, req, ctx, path, trace, (current) =>
+          this.#stamped(req, ctx, path, current, next),
+        );
+  }
+
+  /**
+   * `stamp` reads the mark `adopt` left, so `traceResponse: false` needs no
+   * condition here or in the error mapper.
+   */
+  #stamped(
+    req: BunRequest,
+    ctx: RouteContext,
+    path: string,
+    trace: Trace,
+    next: Next,
+  ): Promise<Response> {
     const stamp = (response: Response): Response =>
-      trace === undefined ? response : TraceContext.stamp(response, req);
+      TraceContext.stamp(response, req);
     if (!this.#correlate) return next().then(stamp);
     return this.context.runWithContext(
-      {
-        ...(trace === undefined
-          ? {}
-          : {
-              traceId: trace.traceId,
-              spanId: trace.spanId,
-              traceFlags: trace.flags,
-              ...(trace.parentSpanId === undefined
-                ? {}
-                : { parentSpanId: trace.parentSpanId }),
-              ...(trace.state === undefined ? {} : { traceState: trace.state }),
-            }),
-        method: ctx.method,
-        event: path,
-        flow: 'http',
-        context: `${ctx.controller}.${ctx.handler}`,
-      },
+      traced(this.#scope(ctx, path), trace),
       () => next().then(stamp),
     );
+  }
+
+  #scope(ctx: RouteContext, path: string): ScopeFields {
+    return {
+      method: ctx.method,
+      event: path,
+      flow: 'http',
+      context: `${ctx.controller}.${ctx.handler}`,
+    };
   }
 
   #dispatch(

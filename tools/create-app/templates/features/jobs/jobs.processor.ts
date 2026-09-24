@@ -1,5 +1,6 @@
 import { JobProcessor } from '@dunx/infra/queue';
 import { Module } from '@dunx/core';
+import { OtelModule } from '@dunx/core/otel';
 import { LoggerModule } from '@dunx/infra/logger';
 import { AppConfigService, configModule } from '../config.js';
 import { JobsModule } from './jobs.module.js';
@@ -21,6 +22,8 @@ import { JobsModule } from './jobs.module.js';
       }),
       inject: [AppConfigService] as const,
     }),
+    // A job continues the publisher's trace once this process registers an SDK.
+    OtelModule,
     JobsModule,
   ],
 })
