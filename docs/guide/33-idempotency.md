@@ -85,7 +85,8 @@ The same key on a different route is a different fingerprint, and a 422.
 The guard reads the body before the handler does. On a route with a `body`
 schema, the input reader then parses those bytes. On a route without one, the
 guard reads a clone and leaves the request to the handler, at about 20 us for
-the clone.
+the clone. Either way the whole body is held in memory to hash it, bounded by
+`Bun.serve`'s `maxRequestBodySize`, 128 MiB unless the server sets another.
 
 ## Whose key it is
 

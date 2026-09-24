@@ -382,3 +382,45 @@ describe('buildRoutes() guard resolution', () => {
     expect(instances.size).toBe(1);
   });
 });
+
+describe('a route guard that cannot be built', () => {
+  class Refused extends Error {}
+
+  /** Throws from its constructor, the way a missing binding does. */
+  class Unbuildable implements Middleware {
+    constructor() {
+      throw new Refused('cannot be built');
+    }
+    handle(
+      _req: BunRequest,
+      _ctx: RouteContext,
+      next: Next,
+    ): Promise<Response> {
+      return next();
+    }
+  }
+
+  it('names the route and keeps the error it threw', async () => {
+    @Controller('/broken')
+    class Broken {
+      @UseGuards(Unbuildable)
+      @Get('/')
+      list(): string {
+        return 'never';
+      }
+    }
+    @Module({ controllers: [Broken] })
+    class Root {}
+    const app = await HttpFactory.create(Root, {
+      requestLogging: false,
+      bootLogging: false,
+    });
+    const error = await app.listen(0).then(
+      () => undefined,
+      (thrown: unknown) => thrown,
+    );
+    expect(error).toBeInstanceOf(Refused);
+    expect((error as Error).message).toBe('Broken.list(): cannot be built');
+    await app.shutdown();
+  });
+});

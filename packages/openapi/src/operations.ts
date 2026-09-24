@@ -170,7 +170,8 @@ const parametersFor = async (
       schema: {
         type: 'string',
         minLength: 1,
-        maxLength: 255,
+        // 255 characters, plus the quotes of the Structured Field form.
+        maxLength: 257,
         pattern: IDEMPOTENCY_KEY_PATTERN,
       },
     });
@@ -178,6 +179,16 @@ const parametersFor = async (
 
   return parameters;
 };
+
+/** `defaultErrorMapper`'s body for an `HttpError` with no issues. */
+const GUARD_ERROR: JsonSchema = Object.freeze({
+  type: 'object',
+  properties: {
+    error: { type: 'string' },
+    status: { type: 'integer', const: 400 },
+  },
+  required: ['error', 'status'],
+});
 
 /** The answers `IdempotencyGuard` throws, in the app's error shape. */
 const IDEMPOTENCY_RESPONSES: Readonly<Record<string, string>> = {
@@ -223,6 +234,19 @@ const responsesFor = async (
   if (idempotentOf(route) !== undefined) {
     for (const [code, description] of Object.entries(IDEMPOTENCY_RESPONSES)) {
       responses[code] ??= { description };
+    }
+    // A validating route's 400 is either body, and the guard's has no `issues`.
+    if (validates) {
+      responses['400'] = {
+        description:
+          'A declared schema rejected the request, or the Idempotency-Key is ' +
+          'missing or malformed',
+        content: {
+          'application/json': {
+            schema: { anyOf: [refTo(VALIDATION_ERROR), GUARD_ERROR] },
+          },
+        },
+      };
     }
   }
 

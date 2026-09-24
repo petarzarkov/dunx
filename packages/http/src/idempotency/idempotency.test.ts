@@ -118,6 +118,23 @@ class Orders {
   }
 }
 
+/** Decorated twice: the handler's options win and the guard still runs once. */
+@Idempotent()
+@Controller('/wallets')
+class Wallets {
+  @Idempotent({ ttlSeconds: 60 })
+  @Post('/', note)
+  top(input: Input<typeof note>): { order: number; text: string } {
+    return { order: ran('wallets'), text: input.body.text };
+  }
+
+  @Idempotent()
+  @Post('/raw')
+  raw(): { order: number } {
+    return { order: ran('wallets-raw') };
+  }
+}
+
 @Idempotent({ required: true })
 @Controller('/carts')
 class Carts {
@@ -144,7 +161,7 @@ const boot = async (
         ...init,
       }),
     ],
-    controllers: [Orders, Carts],
+    controllers: [Orders, Carts, Wallets],
   })
   class Root {}
 
@@ -341,6 +358,18 @@ describe('@Idempotent()', () => {
     const second = await post('orders/plain', 'k-plain');
     expect(second.headers.get(IDEMPOTENT_REPLAYED_HEADER)).toBeNull();
     expect(await orderOf(second)).toBe((await orderOf(first)) + 1);
+  });
+
+  it('runs once when both the controller and the handler are marked', async () => {
+    for (const path of ['wallets', 'wallets/raw']) {
+      const first = await post(path, `k-twice-${path}`);
+      expect(first.status).toBe(201);
+      const replay = await post(path, `k-twice-${path}`);
+      expect(replay.status).toBe(201);
+      expect(replay.headers.get(IDEMPOTENT_REPLAYED_HEADER)).toBe('true');
+    }
+    expect(runs.get('wallets')).toBe(1);
+    expect(runs.get('wallets-raw')).toBe(1);
   });
 
   it('covers a controller, skipping its GETs', async () => {

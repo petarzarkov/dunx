@@ -60,12 +60,27 @@ const header = (required: boolean): ParameterObject => ({
   schema: {
     type: 'string',
     minLength: 1,
-    maxLength: 255,
+    maxLength: 257,
     pattern: IDEMPOTENCY_KEY_PATTERN,
   },
 });
 
 describe('@Idempotent() in the document', () => {
+  it('accepts a key bare or quoted, as the guard does', () => {
+    const pattern = new RegExp(IDEMPOTENCY_KEY_PATTERN);
+    for (const key of [
+      'abc',
+      '"abc"',
+      'x'.repeat(255),
+      `"${'x'.repeat(255)}"`,
+    ]) {
+      expect(pattern.test(key)).toBe(true);
+    }
+    for (const key of ['', '""', '"abc', 'a b', 'x'.repeat(256)]) {
+      expect(pattern.test(key)).toBe(false);
+    }
+  });
+
   it('adds the header, required where the route requires it', async () => {
     const { document } = await built;
     expect(operationOf(document, '/charges', 'post').parameters).toEqual([
@@ -89,11 +104,25 @@ describe('@Idempotent() in the document', () => {
     expect(refund['400']?.description).toBe(
       'The Idempotency-Key is missing or malformed',
     );
-    // The validation 400 stays, schema and all.
+    // A validating route's 400 can be either body, so it documents both.
     const create = operationOf(document, '/charges', 'post').responses;
     expect(create['400']?.description).toBe(
-      'A declared schema rejected the request',
+      'A declared schema rejected the request, or the Idempotency-Key is ' +
+        'missing or malformed',
     );
+    expect(create['400']?.content?.['application/json']?.schema).toEqual({
+      anyOf: [
+        { $ref: '#/components/schemas/ValidationError' },
+        {
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+            status: { type: 'integer', const: 400 },
+          },
+          required: ['error', 'status'],
+        },
+      ],
+    });
   });
 
   it('leaves undecorated routes and GETs alone', async () => {

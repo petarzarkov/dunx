@@ -18,25 +18,33 @@ export const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 export const IDEMPOTENT_REPLAYED_HEADER = 'idempotent-replayed';
 
 /**
- * Visible ASCII without `"` or `\`, up to Stripe's 255. The draft makes the value
- * a Structured Field String, so a quoted one is unwrapped first; a bare one is
- * what most clients send, and is accepted too.
+ * Visible ASCII without `"` or `\`, up to Stripe's 255, bare or quoted. The draft
+ * makes the value a Structured Field String, so a quoted one is unwrapped; a bare
+ * one is what most clients send. `@dunx/openapi` documents the header with it.
  */
-export const IDEMPOTENCY_KEY_PATTERN = '^[\\x21\\x23-\\x5B\\x5D-\\x7E]{1,255}$';
+const KEY_CHARS = '[\\x21\\x23-\\x5B\\x5D-\\x7E]{1,255}';
+export const IDEMPOTENCY_KEY_PATTERN = `^(?:${KEY_CHARS}|"${KEY_CHARS}")$`;
 const KEY = new RegExp(IDEMPOTENCY_KEY_PATTERN);
 
 const keyOf = (header: string): string => {
-  const quoted =
-    header.length >= 2 && header.startsWith('"') && header.endsWith('"');
-  const key = quoted ? header.slice(1, -1) : header;
-  if (!KEY.test(key)) {
+  if (!KEY.test(header)) {
     throw new HttpError(
       HttpStatusCode.BAD_REQUEST,
       'Idempotency-Key must be 1 to 255 visible ASCII characters',
     );
   }
-  return key;
+  return header.startsWith('"') ? header.slice(1, -1) : header;
 };
+
+/**
+ * Set on a request the guard has taken, so a route marked on its controller and
+ * on its handler, which lists the guard twice, runs it once.
+ */
+const TAKEN: unique symbol = Symbol('dunx.idempotency.taken');
+
+interface Taken {
+  [TAKEN]?: true;
+}
 
 /** Path and query, the part of the target a retry must repeat exactly. */
 const targetOf = (url: string): string => {
@@ -96,9 +104,15 @@ export class IdempotencyGuard implements Middleware {
     const route = ctx.get(IDEMPOTENT);
     // A controller-level `@Idempotent()` reaches its `GET`s too, which are
     // idempotent already.
-    if (route === undefined || req.method === 'GET' || req.method === 'HEAD') {
+    if (
+      route === undefined ||
+      req.method === 'GET' ||
+      req.method === 'HEAD' ||
+      (req as Taken)[TAKEN] === true
+    ) {
       return next();
     }
+    (req as Taken)[TAKEN] = true;
 
     const header = req.headers.get(IDEMPOTENCY_KEY_HEADER);
     if (header === null) {

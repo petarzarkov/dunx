@@ -360,13 +360,16 @@ export const buildRoutes = (
       ...(route.guards ?? []).map((guard) => {
         // Named by route, since a decorator that installs a guard is where the
         // missing module was asked for and the guard alone cannot say which.
+        // The error keeps its class, so a `CircularDependencyError` stays one.
         try {
           return guardOf(guard, route.module);
         } catch (error) {
-          throw new AppError(
-            `${route.controller}.${route.handlerName}(): ${(error as Error).message}`,
-            { cause: error },
-          );
+          const where = `${route.controller}.${route.handlerName}()`;
+          if (!(error instanceof Error)) {
+            throw new AppError(`${where}: ${String(error)}`, { cause: error });
+          }
+          error.message = `${where}: ${error.message}`;
+          throw error;
         }
       }),
     ];

@@ -1,7 +1,6 @@
-import { AppError } from '@dunx/core';
 import { meta, UseGuards } from '../route/metadata.js';
 import { IdempotencyGuard } from './guard.js';
-import { IDEMPOTENT, type IdempotentRoute } from './options.js';
+import { IDEMPOTENT, positive, type IdempotentRoute } from './options.js';
 
 /**
  * Opts a handler, or every non-`GET` handler of a controller, into
@@ -12,14 +11,8 @@ import { IDEMPOTENT, type IdempotentRoute } from './options.js';
  * Needs `IdempotencyModule` imported somewhere in the app.
  */
 export const Idempotent = (route: IdempotentRoute = {}) => {
-  const { ttlSeconds } = route;
-  if (
-    ttlSeconds !== undefined &&
-    (!Number.isInteger(ttlSeconds) || ttlSeconds < 1)
-  ) {
-    throw new AppError(
-      `@Idempotent() needs a ttlSeconds of at least 1; got ${ttlSeconds}.`,
-    );
+  if (route.ttlSeconds !== undefined) {
+    positive('ttlSeconds', route.ttlSeconds, '@Idempotent()');
   }
   const mark = meta(IDEMPOTENT, route);
   const guard = UseGuards(IdempotencyGuard);

@@ -199,8 +199,10 @@ interface Entry {
  * replicas behind a balancer each run a retry that lands on the other, and
  * `RedisIdempotencyStore` is the answer for more than one.
  *
- * Bounded like `MemoryThrottleStore`: expired entries are dropped on touch and
- * swept past `maxKeys`, and a full map of live entries evicts the oldest.
+ * Expired entries are dropped on touch and swept past `maxKeys`. A full map of
+ * live entries then evicts the oldest one, where `MemoryThrottleStore` clears
+ * the map: clearing here would forget every in-flight claim and stored response
+ * at once, and let each of their retries run again.
  */
 export class MemoryIdempotencyStore extends IdempotencyStore {
   readonly #entries = new Map<string, Entry>();

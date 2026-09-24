@@ -53,11 +53,14 @@ export interface IdempotencyOptionsInit {
   readonly store?: IdempotencyStore;
 }
 
-const positive = (name: string, value: number): number => {
+/** Shared with `@Idempotent()`, which names itself as `owner`. */
+export const positive = (
+  name: string,
+  value: number,
+  owner = 'IdempotencyModule',
+): number => {
   if (!Number.isInteger(value) || value < 1) {
-    throw new AppError(
-      `IdempotencyModule needs a ${name} of at least 1; got ${value}.`,
-    );
+    throw new AppError(`${owner} needs a ${name} of at least 1; got ${value}.`);
   }
   return value;
 };
