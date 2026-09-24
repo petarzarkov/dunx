@@ -4,6 +4,11 @@ A gateway is a class in `providers` with `@Gateway('/path')` on it. It is served
 by the **same `Bun.serve` call** as the HTTP routes, from the same container, with
 the same constructor injection.
 
+The one exception is `gatewayPort`. It moves the upgrades onto a second
+`Bun.serve` that always speaks HTTP/1.1, which is what makes `http2` with
+`http1: false` usable alongside a gateway, since a websocket upgrade is an
+HTTP/1.1 request. See [Deployment](./21-deployment.md#http1-false-and-gateways).
+
 ```ts
 import { Logger } from '@dunx/core';
 import {
@@ -433,7 +438,7 @@ Two things force it. A node cannot know which topics its sockets joined, because
 `socket.subscribe` goes straight into Bun. And pattern subscription is not an option:
 `Bun.RedisClient.psubscribe(pattern)` is accepted, but unlike
 `subscribe(channel, listener)` it takes no listener - passing one throws - and the
-client exposes no hook for pattern messages. Re-checked on Bun 1.3.14.
+client exposes no hook for pattern messages. Re-checked on Bun 1.4.2.
 
 The cost is stated plainly: **every node reads every relayed frame** and drops the
 ones for topics it has no local subscriber on, which is a `server.publish`

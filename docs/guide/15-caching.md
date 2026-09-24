@@ -181,6 +181,24 @@ export class CacheStoreIndicator extends HealthIndicator {
 }
 ```
 
+Build the indicator by hand rather than injecting it. No module binds
+`DegradingCacheStore` (`degrade: true` wraps the store privately), so injecting
+it cannot reach the store your routes use. Keep the instance you
+constructed on a provider of your own and hand it over in the health factory:
+
+```ts
+export class CacheL2 {
+  readonly store: DegradingCacheStore;
+
+  constructor(redis: RedisConnection, logger: Logger) {
+    this.store = new DegradingCacheStore(new RedisCacheStore(redis), { logger });
+  }
+}
+
+// in HealthModule.forRootAsync's factory, with CacheL2 injected
+readiness: [new CacheStoreIndicator(cache.store)],
+```
+
 **Wrap the L2, not the tier.** `TieredCacheStore.set` awaits L2 before L1, so a
 throwing L2 blocks the L1 write that would have served the next read; wrapping
 from outside swallows the error and loses the promotion with it.

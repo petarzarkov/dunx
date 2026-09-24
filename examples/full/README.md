@@ -14,7 +14,8 @@ lasts. That deployment is this directory's `Dockerfile` and `compose.demo.yml`.
 
 **Start smaller if this is your first look.** [`examples/minimal`](../minimal) is
 five files and two minutes; [`examples/databases`](../databases) is database setup
-on four configurations; [`examples/testing`](../testing) is the test story. This one
+on four configurations; [`examples/testing`](../testing) is the test story;
+[`examples/binary`](../binary) is one app compiled to a single executable. This one
 is the answer to "does it all actually compose?" It is the only example where
 that is visible.
 
@@ -23,13 +24,15 @@ bun install
 bun run --filter '@dunx/example-full' start
 ```
 
-Then open **<http://localhost:3000/api/docs>** - the swagger page is generated from
-the same zod schemas the routes validate against, so every endpoint below is
-listed, typed and callable from the browser.
+Then open **<http://localhost:3000/api/docs>** - the Swagger UI page is generated
+from the same zod schemas the routes validate against, so every endpoint below is
+listed, typed and callable from the browser. `/api/reference` renders the same
+document with Scalar.
 
 | Where                    | What                                            |
 | ------------------------ | ----------------------------------------------- |
 | `/api/docs`              | the API reference, self-contained, no CDN       |
+| `/api/reference`         | the same document in Scalar                     |
 | `/api/openapi.json`      | the OpenAPI 3.1 document it renders             |
 | `/assets/`               | a static directory, on `Bun.file`               |
 | `/api/health/live`       | liveness - is this process working              |
@@ -53,25 +56,38 @@ that check, because a service never exits.
 
 ## What is mounted
 
-| Routes            | Exercises                                                              |
-| ----------------- | ------------------------------------------------------------------------ |
-| `/api/users`      | `@dunx/http` - zod on params, query and body; 201 from the verb         |
-| `/api/notes`      | the global prefix, middleware, CORS                                     |
-| `/api/ledger`     | `@dunx/infra/db` - drizzle over `bun:sqlite`, seeds, transactions        |
-| `/api/files`      | `@dunx/infra/files` - `Storage`, globbing, traversal refusal, presign    |
-| `/api/images`     | `@dunx/infra/images` - `Bun.Image` resize and re-encode                  |
-| `/api/cache`      | `@dunx/infra/redis` - `Bun.RedisClient`, degrading when nothing is up    |
-| `/api/reports`    | `@Public`, `@Roles` and `@UseGuards`                                    |
-| `/api/health/*`   | `HealthModule` - liveness, readiness, and a drain before the port closes |
-| `/api/limits`     | `@Throttle`, `@SkipThrottle` and a Redis-backed counter                 |
-| `/api/upstream`   | `@dunx/http/client` - the outbound half, with retry and a 404           |
-| `/assets/*`       | `StaticFiles` - two cache policies and a traversal refusal              |
-| `/api/jobs`       | `@dunx/infra/queue` - bullmq; published and consumed by this process       |
-| `/api/messaging`  | `@dunx/infra/amqp` - a RabbitMQ topic exchange, two queues, one trace      |
-| `/api/auth/*`     | `@dunx/auth` - better-auth mounted, with `Bun.password` hashing          |
-| `/api/wiring`     | `@dunx/core` - `token()`, `inject()` and the three `provide()` shapes    |
-| `/api/demo/*`     | what the landing page renders - vitals, a source excerpt, a retry        |
-| `/chat`           | a websocket gateway on the **same** `Bun.serve` as the routes            |
+| Routes                                | Exercises                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------- |
+| `/api/users`                          | `@dunx/http` - zod on params, query and body; 201 from the verb           |
+| `/api/notes`                          | the global prefix, middleware, CORS                                       |
+| `/api/colors`                         | a generic `CrudController` base, served with `exclude: ['remove']`        |
+| `/api/ledger`                         | `@dunx/infra/db` - drizzle over `bun:sqlite`, seeds, transactions         |
+| `/api/tenants`                        | named and per-tenant data sources, one database per tenant                |
+| `/api/files`                          | `@dunx/infra/files` - `Storage`, globbing, traversal refusal, presign     |
+| `/api/images`                         | `@dunx/infra/images` - `Bun.Image` resize and re-encode                   |
+| `/api/cache`                          | `@dunx/infra/redis` - `Bun.RedisClient`, degrading when nothing is up     |
+| `/api/catalog`                        | `@dunx/infra/cache` - `Cache.wrap` read, re-read and drop                 |
+| `/api/email`                          | `@dunx/infra/email` - `EmailService`, the bound transport, a preview      |
+| `/api/events/orders` and friends      | `@dunx/core` events - `EventBus`, `@OnEvent` subscribers, `EventRegistry` |
+| `/api/events/ticks`, `/notifications` | `@Sse` - a generator per connection and a pushed stream                   |
+| `/api/reports`                        | `@Public`, `@Roles` and `@UseGuards`                                      |
+| `/api/profile`                        | `SessionGuard` at class scope, `AuthContext` read two hops away           |
+| `/api/trace`                          | `RequestContext` and the W3C trace fields request logging puts in it      |
+| `/api/health/*`                       | `HealthModule` - liveness, readiness, and a drain before the port closes  |
+| `/api/limits`                         | `@Throttle`, `@SkipThrottle` and a Redis-backed counter                   |
+| `/api/upstream`                       | `@dunx/http/client` - the outbound half, with retry and a 404             |
+| `/assets/*`                           | `StaticFiles` - two cache policies and a traversal refusal                |
+| `/api/jobs`                           | `@dunx/infra/queue` - bullmq; published and consumed by this process      |
+| `/api/messaging`                      | `@dunx/infra/amqp` - a RabbitMQ topic exchange, two queues, one trace     |
+| `/api/auth/*`                         | `@dunx/auth` - better-auth mounted, with `Bun.password` hashing           |
+| `/api/wiring`                         | `@dunx/core` - `token()`, `inject()` and the three `provide()` shapes     |
+| `/api/demo/*`                         | what the landing page renders - vitals, a source excerpt, a retry         |
+| `/api/docs`                           | `@dunx/openapi` - Swagger UI, mounted by `OpenApiModule`                  |
+| `/api/reference`                      | `@dunx/openapi/scalar` - Scalar over the same document, as a middleware   |
+| `/api/dashboard`                      | `@dunx/dashboard`, read-only, with bull-board at `/api/dashboard/queues`  |
+| `/greet.v1.GreetService/*`            | `@dunx/http/connect` - protobuf over Connect and gRPC-Web, unprefixed     |
+| `/chat`                               | a websocket gateway on the **same** `Bun.serve` as the routes             |
+| `/telemetry`                          | a second gateway, taking binary frames as `Blob`s                         |
 
 ### Things worth trying
 

@@ -135,6 +135,12 @@ frames from where the mistake was.
 **No `forwardRef`.** The dependency record is a thunk, evaluated at resolution
 rather than at class-definition time, so a circular import resolves on its own.
 
+**The container is scoped.** Every module reference is a scope holding what it
+declares, `exports` is its public surface, and an absent `exports` exports
+nothing. A module that takes no options is a decorated class rather than a
+`forRoot()`, because each `forRoot()` call returns a fresh object and so a fresh
+scope.
+
 One thing to add rather than delete: **every relative import ends in `.js`**,
 because `moduleResolution: nodenext` is what the scaffold sets. An extensionless
 specifier is a compile error rather than a runtime surprise.
@@ -249,8 +255,8 @@ to get set up, which checks CI runs, the repo's rules on native implementations 
 third-party dependencies, and the house style a review will hold you to.
 
 The short version: Bun only, no `npm`/`npx`/`yarn`/`pnpm`; `bun install` then
-`bun run build` before anything else; run `lint:check`, `format:check`, `typecheck`
-and `test:cov` before you push; conventional commits; a bug fix comes with the test
+`bun run build` before anything else; run `bun run ci`, every gate CI runs, before
+you push; conventional commits; a bug fix comes with the test
 that would have caught it; and a claim about performance comes with the numbers.
 
 ## License

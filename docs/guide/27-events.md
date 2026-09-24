@@ -27,6 +27,8 @@ export class Orders {
 }
 
 export class Audit {
+  constructor(private readonly rows: AuditRepository) {}
+
   @OnEvent(OrderPlaced)
   async record(event: OrderPlaced): Promise<void> {
     await this.rows.insert(event.id, event.total);
@@ -132,6 +134,32 @@ Discovery walks the prototype chains of the classes each module declares in
 `providers` and `controllers`, so a handler needs no second registration and an
 abstract base's marked methods are inherited by every subclass. A value or
 factory provider is not scanned: put handlers on a class provider.
+
+## Testing
+
+`createTestApp` builds the graph, subscriptions included, so a test emits
+through the real bus and reads the result off the handler's side of it:
+
+```ts
+import { expect, it } from 'bun:test';
+import { EventBusModule, EventRegistry } from '@dunx/core';
+import { createTestApp } from '@dunx/testing';
+
+it('audits a placed order', async () => {
+  const app = await createTestApp({
+    modules: [OrdersModule, AuditModule, EventBusModule],
+  });
+
+  await app.get(Orders).place(12);
+
+  const [audit] = app.get(EventRegistry).subscribersOf(OrderPlaced);
+  expect(audit?.handled).toBe(1);
+  await app.shutdown();
+});
+```
+
+`emit` resolves once every `async` handler has, so the assertion needs no wait.
+`examples/full/src/events.test.ts` runs the same checks through HTTP routes.
 
 ## Limits
 

@@ -9,6 +9,13 @@ export class UsersService {
 ```
 
 No `@Injectable`, no `@Inject`, no `reflect-metadata`, no `experimentalDecorators`.
+The [Providers guide](../../docs/guide/03-providers.md) is canonical.
+
+## Install
+
+```bash
+bun add @dunx/transform
+```
 
 ## Setup
 
@@ -50,7 +57,7 @@ await buildPackage();
 It assumes sources under `src/`, output to `dist/`, and one `tsconfig.json` at
 the package root. Declarations come from `typescript`, an optional peer, because
 Bun emits none. The full walkthrough is in
-[the publishing guide](https://dunx.win/guide/publishing-a-package).
+[the publishing guide](../../docs/guide/30-publishing-a-package.md).
 
 ## What it does
 
@@ -81,12 +88,16 @@ at boot:
 
 ```
 UsersService cannot be constructed: parameter 2 (private readonly cfg: AppConfig)
-names nothing that exists at runtime, so there is no token to resolve.
+names nothing that exists at runtime, so there is no token to resolve. Replace
+the type with an abstract class, or bind it with token() and read it with
+inject(TOKEN) in a field initializer.
 ```
 
 That covers a type-only import, an inline `type` specifier, a local `interface` or
 type alias, a class type parameter, a primitive, and a union. Replace the type with
-an abstract class, or bind it with `token()`.
+an abstract class, or bind it with `token()`: a token is a value, not a type, so
+read it with `inject(TOKEN)` in a field initializer rather than as a constructor
+parameter. For a type-only import the error says instead to make it a value import.
 
 Class **expressions** are skipped: `const X = class Inner {}` binds `Inner` only
 inside the class body, so a statement appended after it could not reference the name.

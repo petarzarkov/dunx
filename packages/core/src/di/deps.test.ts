@@ -355,5 +355,9 @@ describe('optional parameters', () => {
 
     const message = await rejectionMessage(AppFactory.create(AppModule));
     expect(message).toContain('names nothing that exists at runtime');
+    // A token is a value, so it cannot be a parameter type: the remedy has to
+    // point at inject(), not at the parameter.
+    expect(message).toContain('inject(TOKEN) in a field initializer');
+    expect(message).not.toContain('declare the parameter');
   });
 });

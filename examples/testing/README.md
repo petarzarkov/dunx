@@ -39,18 +39,22 @@ method on a returned instance is all you need.
 
 ## Overrides replace; they never append
 
-This is the whole design, and it follows from the container being flat. `@dunx/core`
-collects every module's registrations into one list and **throws on a duplicate
-token**. An override cannot be an extra module tacked on the end that wins,
-because there is no "wins". Three consequences the tests assert:
+The container is scoped: every module reference is a scope holding its own
+bindings, and one token can be bound in several of them. An override is not an
+extra module tacked on the end that wins; it replaces the binding **in every
+scope that holds it**, so a test stubbing a collaborator need not know how many
+modules bind it. Three consequences:
 
-- **The discarded provider is never constructed.** Its constructor never runs, its
-  `onInit` never fires, and overriding a database opens no connection. The test
-  binds a class whose constructor throws and then overrides it; the suite passes.
-- **An override naming a token nobody binds is an error** rather than a silent no-op - the
-  failure mode where a typo leaves you asserting against the real provider.
-- **The duplicate-binding check still runs**, so a test cannot paper over a wiring
-  bug that boot would have caught.
+- **The discarded provider is never constructed.** The replacement happens before
+  anything resolves, so its constructor never runs, its `onInit` never fires, and
+  overriding a database opens no connection. The test binds a class whose
+  constructor throws and then overrides it; the suite passes.
+- **An override naming a `token()` nobody binds is an error** rather than a silent
+  no-op - the failure mode where a typo leaves you asserting against the real
+  provider.
+- **A class token nobody lists is not rejected.** A class self-binds, so an
+  override for one is registered lazily and replaces that self-binding if
+  anything asks for it.
 
 `Logger` and `RequestContext` are overridable too, even though no module binds
 them: core offers a default for each after every module, and the substitution

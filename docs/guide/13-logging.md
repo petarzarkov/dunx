@@ -118,10 +118,10 @@ That missing list is what `@dunx/infra/logger` buys.
 
 `ConsoleLogger` **batches `info` and below into one write per event-loop turn.**
 
-A `console.log` per entry is a `write(2)` per entry. Measured, that was the
-largest single component of request logging: **1.84 µs**, more than the
-`JSON.stringify` that produced the line. Concatenating into one string and
-writing it once per event-loop turn costs **0.27 µs**.
+A `console.log` per entry is a `write(2)` per entry, and that write was the
+largest single component of request logging, more than the `JSON.stringify` that
+produced the line. One concatenated write per event-loop turn removes most of it;
+the figures are in [the cost of request logging](../architecture/cost-of-logging.md).
 
 The trade matters: **a line still sitting in the buffer is lost if the process
 dies without unwinding** - a `SIGKILL`, an OOM kill, a segfault - and a crash is
@@ -451,22 +451,21 @@ of a `{"error":"NOT_FOUND","status":404}`. That is not a JavaScript router: Bun
 still does all the matching, and the fallback only runs once it has matched
 nothing.
 
-**Every global middleware runs on a miss, guards included.** A miss matched no
-route, so it carries no route metadata, and a guard reading none of it refuses: an
-app with a global `SessionGuard` answers an anonymous request for a nonexistent
-path with that guard's status rather than a 404. There is no `@Public()` to put
-on a path that does not exist.
+**Every global middleware runs on a miss, guards included.** By default
+(`notFound: 'public'`) the miss reports itself as `@Public()`, so a guard
+honouring that flag passes it through and the client gets the conventional 404.
 
-The alternative leaks: if a miss answers 404 while every real path answers 401,
-the difference enumerates your surface. For the conventional 404:
+That default leaks: if a miss answers 404 while every real path answers 401, the
+difference enumerates your surface. To close it, opt in to `'guarded'`:
 
 ```ts
-await HttpFactory.create(AppModule, { notFound: 'public' });
+await HttpFactory.create(AppModule, { notFound: 'guarded' });
 ```
 
-The miss then reports itself as `@Public()`, so a guard honouring that flag
-passes it through. Either way it is logged and adopts a trace, so the fallback
-runs the middleware for both.
+The miss then carries no route metadata, and a guard reading none of it refuses:
+an app with a global `SessionGuard` answers an anonymous request for a
+nonexistent path with that guard's status rather than a 404. Either way it is
+logged and adopts a trace, so the fallback runs the middleware for both.
 
 A guard can decide for itself under either setting. `UNMATCHED` is set on a miss
 and no real route ever sets it:
@@ -546,8 +545,8 @@ interface RequestLoggingOptions {
 ### `traceResponse`
 
 The response header is the only part of request logging that leaves the process,
-and it is about 500 ns of the 4.7 µs the path costs, which is 11%. It is the
-largest single thing you can turn off without losing a field from a log line.
+and about a tenth of what the default path costs. It is the largest single thing
+you can turn off without losing a field from a log line.
 
 ```ts
 requestLogging: {
@@ -568,16 +567,8 @@ edge.
 **Both body options default to `false`**, and the request body is the field most
 likely to contain a password. Turn them on in development.
 
-What `requestBody` costs depends on whether the route declares a `body` schema, and
-by a factor of fifteen:
-
-| Setting                            | µs/req | vs the default |
-| ---------------------------------- | -----: | -------------: |
-| the default, both bodies off       |  17.25 |              - |
-| `requestBody: true`, schema route  |  19.12 |       +1.87 µs |
-| `responseBody: true`               |  19.80 |       +2.55 µs |
-| both bodies, schema route          |  20.03 |       +2.78 µs |
-| `requestBody: true`, **no** schema |  46.06 |      +28.81 µs |
+What `requestBody` costs depends on whether the route declares a `body` schema:
+about 2 µs per request with one, about 29 µs without.
 
 A route that declares a body schema has already had the body buffered to validate
 it, so logging it reads that text and copies nothing. A route that declares none
@@ -609,16 +600,14 @@ an inbound trace or starting one, and everything the handler logs carries it.
 
 It is off by default because it costs something: the path pays for reading the
 header, minting the ids, the `runWithContext` scope and one `Headers.set`.
-That is **~2.5 µs** of the 4.78 the full default path costs in the table below.
-It never pays for building and serialising the entry, the expensive half.
+That is about half of what the full default path costs. It never pays for
+building and serialising the entry, the expensive half.
 
 ### Turning the async scope off with `correlate: false`
 
 The `runWithContext` scope used to be the most expensive thing request logging did
-that was not the entry itself, at +0.91 µs on Bun 1.3.14. **Bun 1.4 made it too
-cheap to measure:** +0.24 µs as a step, and turning it off moves the whole default
-path from 4.78 µs to 4.48 µs. Both figures are inside the harness's ±0.5 µs
-resolution, so the honest reading is that this option now buys nothing measurable.
+that was not the entry itself. **Bun 1.4 made it too cheap to measure**, so this
+option now buys nothing measurable.
 
 ```ts
 HttpFactory.create(AppModule, { requestLogging: { correlate: false } });
@@ -648,69 +637,14 @@ first.
 | `@dunx/http`                   |        114,283 |  0.519 |          92.0% |
 | `@dunx/http` + request logging |         73,675 |  0.807 |          59.3% |
 
-Structured logging of every request costs about 40% of peak throughput. That is not
-a dunx tax; it is the cost of the work itself, and the breakdown says where it goes.
-Each row below is the same app on the same route with one more piece of the
-default path switched on. Read anything under about **±0.5 µs** as unresolvable:
+Structured logging of every request costs about 40% of peak throughput, and that
+is the work itself rather than framework overhead. About 4.8 µs per request, most
+of it in the first touch of `req.headers` and in building and serialising the
+entry. Batching the write is the largest single saving.
 
-The two trace rows were measured against a `crypto.randomUUID()` pair. Adopting a
-trace is 49.2 ns against that path's 260.5 ns, so both rows are upper bounds.
-
-| Step                                            | µs/req | this step adds |
-| ----------------------------------------------- | -----: | -------------: |
-| `requestLogging: false`                         |   7.98 |              - |
-| one middleware that only calls `next()`         |   8.58 |       +0.60 µs |
-| the pathname sliced out of `req.url`            |   9.31 |       +0.73 µs |
-| `traceparent` and `user-agent` read             |  10.28 |       +0.97 µs |
-| `TraceContext.adopt`                            |   9.98 |       -0.30 µs |
-| `runWithContext` around the handler             |  10.22 |       +0.24 µs |
-| `traceresponse` set on the response             |  10.46 |       +0.24 µs |
-| the real middleware, `Logger` discards          |  10.85 |       +0.38 µs |
-| `new Date().toISOString()`                      |  11.05 |       +0.21 µs |
-| the entry and `JSON.stringify`, string dropped  |  12.83 |       +1.77 µs |
-| **batched write instead - the shipped default** |  12.76 |       -2.40 µs |
-
-The whole default path is **+4.78 µs**, and two steps account for most of it: the
-**first touch of `req.headers`** and **building and serialising the entry**. Six of
-the eleven steps land inside the ±0.5 µs resolution, and one of them is negative -
-adopting the trace reads as -0.30 µs, which is the clearest available evidence
-that a single step at this scale is at the harness's floor. Read the total, not the
-row.
-
-The `AsyncLocalStorage` scope is one of those six now. On Bun 1.3.14 it measured
-+0.91 µs and was the third-largest item here; on 1.4 it is +0.24 µs, which the
-harness cannot separate from zero. That changes what `correlate: false` is worth -
-see below.
-
-The write, isolated:
-
-| Write                                    | µs/req |
-| ---------------------------------------- | -----: |
-| batched, `/dev/null`                     |  12.76 |
-| one `console.log` per entry, `/dev/null` |  15.16 |
-| batched, into a pipe nobody reads        |  12.98 |
-| one per entry, into a pipe nobody reads  |  17.17 |
-
-**Batching is now the largest single saving on the path**, worth 2.40 µs against a
-`console.log` per entry and 4.19 µs when the consumer is slow, against a 4.78 µs
-total. A `write(2)` per entry would cost more than everything else combined.
-
-Batching also makes a slow consumer far less able to stall the server, which is
-the last row's problem.
-
-Two micro-optimisations in `ConsoleLogger` fall out of the same measurements.
-
-`new Date().toISOString()` measured about 170 ns, and the millisecond has usually
-not moved since the last entry, so one `Date.now()` guards a memoised stamp.
-
-`logger.info('GET /json 200', fields)` is the shape every framework call takes,
-so it is built directly instead of going through the general merge path, which
-would cost two array allocations, a third object and an `Object.assign`.
-
-Nothing in `RequestLoggingMiddleware` is `async`. Reading the request or the
-response body are the only steps that can wait, both are off by default, and both
-are adopted with `.then` rather than awaited. An `async` scope callback alone cost
-**0.44 µs/request** against a synchronous one on raw `Bun.serve`.
+The step-by-step
+breakdown, the body-option figures and the rejected alternatives are in
+[the cost of request logging](../architecture/cost-of-logging.md).
 
 ## Related
 

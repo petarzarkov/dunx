@@ -1,9 +1,86 @@
 # Upgrading
 
-What changed, and the line that replaces each thing. Every item here is additive
-except the first, which changes a default.
+What changed, and the line that replaces each thing. Every `@dunx/*` package
+shares one version, so each heading below is the release a change landed in,
+newest first. The [changelog](../../CHANGELOG.md) lists every release; this page
+covers only what can change the behaviour of an app that upgrades without
+touching its code, and the new spelling for what it can replace.
 
-## An unmatched path answers 404
+## 3.9.3
+
+### Two copies of `@dunx/core` fail at boot
+
+`AppFactory.create` counts the loaded copies of `@dunx/core` and refuses to boot
+on a second one. Before, each copy had its own `Logger` and `RequestContext`, so a
+binding made against one was invisible to the other and the container injected
+an instance with none of the methods. The failure surfaced later, in whichever
+package called one.
+
+Run `bun why @dunx/core` to find the second copy. The usual cause is a package
+listing `@dunx/core` under `dependencies` rather than `peerDependencies`; see
+[Publishing a package](./30-publishing-a-package.md).
+
+### An MCP tool rejects an argument it never declared
+
+`@dunx/mcp` read the keys a tool recognised and dropped the rest, so a misspelled
+key behaved like an absent one. A key the tool never declared, or a declared key
+of the wrong type, is now a tool error naming what the tool accepts. A tool that
+declares no arguments stays permissive. An explicit `null` reads as the absent
+filter it means. See [Agent tooling](./23-agent-tooling.md).
+
+## 3.9.1
+
+### `createTestApp` zeroes the health drain
+
+`createTestApp` and `createTestServer` override `ReadinessOptions` with
+`drainDelayMs: 0`, ahead of your own overrides. A suite that asserts on the drain
+passes its own `ReadinessOptions` override and wins. See
+[Health checks](./22-health-checks.md#draining).
+
+## 3.1.1
+
+### Config takes a schema directly
+
+`validate: (env) => envSchema.parse(env)` still works. The wrapper is optional:
+
+| Before                                    | After               |
+| ----------------------------------------- | ------------------- |
+| `validate: (env) => envSchema.parse(env)` | `schema: envSchema` |
+
+One or the other, never both. A schema failure becomes a `ConfigError` naming
+every issue and its path.
+
+### An OpenAPI contribution can be a provider
+
+`contribute` took a fragment or a thunk. It now also takes anything with a
+`contribute()` method, so a contributor that needs an injected instance is a
+provider rather than a closure:
+
+```ts
+export class AuthDocs extends DocumentSource {
+  constructor(private readonly auth: Auth) {
+    super();
+  }
+
+  override async contribute(): Promise<DocumentFragment> {
+    return betterAuthDocument(this.auth, { basePath: '/api/auth' })();
+  }
+}
+
+OpenApiModule.forRootAsync({
+  root: AppModule,
+  imports: [DocsModule],
+  inject: [AuthDocs],
+  useFactory: (docs: AuthDocs) => ({ contribute: [docs] }),
+});
+```
+
+`imports` is what puts `AuthDocs` in reach: the module is its own scope, so
+importing its module into the root does not reach this factory.
+
+## 3.1.0
+
+### An unmatched path answers 404
 
 `HttpFactory.create` used to report a miss to global middleware with no route
 metadata. A global guard refused it, and a prober could not tell a 404 from a 401. That is now opt-in.
@@ -21,7 +98,7 @@ like every other refused request, sets it back:
 await HttpFactory.create(AppModule, { notFound: 'guarded' });
 ```
 
-## HTTP settings can come from validated config
+### HTTP settings can come from validated config
 
 `HttpFactory.create(root, options)` builds the container, so its `options` argument
 has to be ready before any provider exists. An app whose request logging follows its
@@ -69,7 +146,7 @@ Override a field with a field and a getter with a getter: TypeScript rejects the
 other pairing with `TS2611` and `TS2610`. To derive a field from config, declare
 `override trustProxy: boolean` and assign it in the constructor.
 
-## A named outbound client can be a class
+### A named outbound client can be a class
 
 `httpClient(name)` returns a `Token`, and a token is not a class. A named client
 could only be reached with `inject()` in a field initialiser.
@@ -88,7 +165,7 @@ HttpModule.forRootAsync({ useFactory, inject }, EmailClient);
 The string form still works. A subclass does not claim `HttpService`, so a default
 client and any number of named ones coexist.
 
-## A named Redis connection can be a class
+### A named Redis connection can be a class
 
 The same change, in `@dunx/infra/redis`. `redisConnection(name)` returns a
 `Token`, so a named connection could only be reached with `inject()` in a field.
@@ -108,7 +185,7 @@ RedisModule.forRootAsync({ useFactory, inject }, SessionsRedis);
 takes no options, so it cannot be the base a subclass extends. The string form
 still works. A subclass does not claim `RedisConnection`.
 
-## The websocket relay can be a provider
+### The websocket relay can be a provider
 
 `relay: new RedisRelay({...})` was an instance `main.ts` built and threaded into
 `HttpFactory.create`. That made it the one setting an options provider could not
@@ -122,46 +199,7 @@ answer from config.
 The container closes it at shutdown. `PubSub.close()` does not do that for an app
 that never opened a socket. Passing an instance to `create()` still works.
 
-## Config takes a schema directly
-
-`validate: (env) => envSchema.parse(env)` still works. The wrapper is now optional:
-
-| Before                                    | After               |
-| ----------------------------------------- | ------------------- |
-| `validate: (env) => envSchema.parse(env)` | `schema: envSchema` |
-
-One or the other, never both. A schema failure becomes a `ConfigError` naming
-every issue and its path.
-
-## An OpenAPI contribution can be a provider
-
-`contribute` took a fragment or a thunk. It now also takes anything with a
-`contribute()` method, so a contributor that needs an injected instance is a
-provider rather than a closure:
-
-```ts
-export class AuthDocs extends DocumentSource {
-  constructor(private readonly auth: Auth) {
-    super();
-  }
-
-  override async contribute(): Promise<DocumentFragment> {
-    return betterAuthDocument(this.auth, { basePath: '/api/auth' })();
-  }
-}
-
-OpenApiModule.forRootAsync({
-  root: AppModule,
-  imports: [DocsModule],
-  inject: [AuthDocs],
-  useFactory: (docs: AuthDocs) => ({ contribute: [docs] }),
-});
-```
-
-`imports` is what puts `AuthDocs` in reach: the module is its own scope, so
-importing its module into the root does not reach this factory.
-
-## A constraint violation answers 409
+### A constraint violation answers 409
 
 A unique violation reaching the HTTP layer used to answer 500.
 
@@ -182,7 +220,7 @@ already classify on the way out.
 The driver's own message stays on `cause` rather than in the response body, which
 would otherwise carry the table and column names.
 
-## Four more `fetch` options
+### Four more `fetch` options
 
 `HttpClientOptionsInit` passes `compress`, `protocol` and `maxRedirects` through.
 `proxy` widens to `string | URL | { url, headers }`: the object form sends

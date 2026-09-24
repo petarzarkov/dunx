@@ -193,8 +193,16 @@ server. An edit shows up on the next request because the module is imported
 again behind a cache-busting query.
 
 It binds `127.0.0.1`. The routes are unauthenticated and one of them answers a
-broken template with a stack trace, so reaching it from another machine is
-opt-in through `hostname`.
+broken template with a stack trace, so the CLI has no flag to change that.
+Reaching it from another machine means serving it yourself, through the
+`hostname` option of `EmailPreview` from `@dunx/infra/email`:
+
+```ts
+import { EmailPreview } from '@dunx/infra/email';
+import renderer from '@dunx/infra/email/react';
+
+new EmailPreview({ dir: './emails', renderer, hostname: '0.0.0.0' }).serve();
+```
 
 | Flag               | Default                   |
 | ------------------ | ------------------------- |
@@ -292,8 +300,10 @@ the same newline check, so a name interpolated into a subject cannot add a
 | ----------------------- | -------------------------------------- | -------- |
 | `MissingSenderError`    | no `from` on the message or the module | none     |
 | `MissingRecipientError` | nothing on `to`, `cc` or `bcc`         | 400      |
+| `InvalidAddressError`   | a mailbox that cannot go in a header   | 400      |
+| `InvalidHeaderError`    | a newline in the subject or a header   | 400      |
 | `EmailSendError`        | a transport refused the message        | 502      |
 
-All three extend `EmailError`, which extends `AppError`, so `@dunx/http`'s
+All five extend `EmailError`, which extends `AppError`, so `@dunx/http`'s
 default mapper turns the status into a response without either package importing
 the other.

@@ -96,8 +96,9 @@ below into one write per event-loop turn; `warn` and above are never batched.
 
 ## Configuration
 
-`ConfigModule.forRoot({ validate })` takes **one validation function**, not a
-schema DSL. Bun loads `.env` itself, so there is no loader and no `dotenv`.
+`ConfigModule.forRoot` takes either `{ validate }`, **one validation function**,
+or `{ schema }`, a Standard Schema validated directly; there is no schema DSL of
+its own. Bun loads `.env` itself, so there is no loader and no `dotenv`.
 
 Declare a subclass and hand it to `as`, which is what keeps the type through a
 factory's `inject: [...]` (parameters are contravariant, and the token carries no

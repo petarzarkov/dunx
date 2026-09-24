@@ -177,9 +177,10 @@ override.** A closure over `instance[name]` resolves through the prototype chain
 **Marking the method function and scanning the prototype chain needs no
 accumulator and no class decorator.** A method decorator may set a symbol property
 on the function it receives and return it. At boot, walking
-`Object.getOwnPropertyDescriptors` up the chain finds every marked method, and
-`Object.entries(instance)` finds field-initialized route builders in the same
-pass. Measured with **no class decorator anywhere**:
+`Object.getOwnPropertyDescriptors` up the chain finds every marked method. The
+spike also scanned `Object.entries(instance)` for field-initialized route builders
+(the `field create` row below); dunx ships only the prototype walk. Measured with
+**no class decorator anywhere**:
 
 ```
 Users:  GET /:id <- proto Users.one   GET / <- proto BaseCrud.list   POST / <- field create

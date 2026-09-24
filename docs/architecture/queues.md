@@ -13,9 +13,11 @@ found, how it is injected, and when it stops.
 
 ### The ioredis boundary, as it actually resolved
 
-CLAUDE.md's "Where the two halves collide" anticipated ioredis arriving as bullmq's
-internal engine and sanctioned it on the grounds that the ban is on _dunx_
-reimplementing a Bun primitive. The measurement changed the answer for the better:
+Rule 1 bans ioredis because `Bun.RedisClient` exists, but the ban is on _dunx_
+reimplementing a Bun primitive, not on a sanctioned integration's internal engine
+([the rationale record](../../internal/notes/research/repo-rules-rationale.md#where-the-two-halves-collide-a-librarys-own-engine)).
+So ioredis arriving inside bullmq was expected to be allowed. The measurement
+changed the answer for the better:
 
 **bullmq 6 ships `createBunRedisClient`, an `IRedisClient` adapter over
 `Bun.RedisClient`.** bullmq accepts either a connection description it builds a
@@ -270,14 +272,23 @@ marker technique exists to avoid.
 
 ### Publish and consume are different processes, so they are different objects
 
-`QueueModule.forRoot()` binds the **publish** side only - `QueueOptions`,
+`QueueModule.forRoot()` binds the **publish** side by default - `QueueOptions`,
 `QueueConnection`, `JobPublisher` - so a web process importing it opens no worker.
-`WorkerFactory.create(root)` is the consume side, and it is the same shape as
-`HttpFactory.create`: boot the container, `collectModules(root)` for the graph,
-discover by inspection, validate eagerly, and return an object wrapping `App` whose
-`shutdown()` sequences its own resource ahead of the container's.
+Consuming has two shapes:
 
-`create` discovers and validates; `start()` opens connections. That split makes a
+- **In-process:** `QueueModule.forRoot({ consume: true })` also binds `QueueRunner`,
+  which discovers handlers at `onInit` and stops the workers at `onShutdown`. That
+  runs before the connections the handlers use close, in reverse construction
+  order. `consume: 'if-any'` stands down with a warning where `true` fails boot on
+  no handlers.
+- **A separate process:** `WorkerFactory.create(root)` is the same shape as
+  `HttpFactory.create`: boot the container, `collectModules(root)` for the graph,
+  discover by inspection, validate eagerly, and return an object wrapping `App`
+  whose `shutdown()` sequences its own resource ahead of the container's.
+  `WorkerFactory.attach(app, root)` returns a consumer for an app that is already
+  booted, which the caller stops before `app.shutdown()`.
+
+`WorkerFactory.create` discovers and validates; `start()` opens connections. That split makes a
 wiring mistake - no `QueueModule`, no handlers, a misspelled name in `queues` -
 fail before anything consumes. It is also what lets `worker.jobs` be asserted in
 a test with no server running.

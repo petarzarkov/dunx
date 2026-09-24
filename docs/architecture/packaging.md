@@ -31,17 +31,7 @@ They do not constrain what builds its website or measures it.
 
 ## Scaffolder (`create-app`)
 
-`@dunx/create-app` gets all three invocations from one package name:
-
-```
-bun create @dunx/app my-app
-npm  create @dunx/app my-app
-bunx @dunx/create-app my-app
-```
-
-Zero dependencies, Node-targeted (so `npx` works for people who have not
-installed Bun yet, and can then tell them to), templates as directories with
-token replacement. No network, no degit.
+Covered in [tooling.md](./tooling.md#dunxcreate-app-asks-with-an-arrow-key-list-and-takes-no-prompt-library).
 
 ## Versioning is lockstep, as a correctness requirement
 
@@ -135,20 +125,23 @@ in a release names the same number.
 
 ## Test harness (`@dunx/testing`)
 
-The override semantics are specified under "Modules group registrations" above and
-were not redesigned. What follows is the decisions that specification did not
-cover.
+The container is scoped: every module reference is its own scope, described in
+[Modules encapsulate](./dependency-injection.md#modules-encapsulate-exports-global-and-a-scope-each).
+How an override behaves across those scopes is specified in
+[Overrides replace in every scope](./dependency-injection.md#overrides-replace-in-every-scope).
+What follows is the decisions that specification did not cover.
 
 **The substitution lives in `@dunx/core`, as `AppFactory.create(root, {
-overrides })`.** `createTestApp` cannot assemble the flat list itself: `Injector`
-and `readModule` are not exported. Exporting the container would freeze its shape
-as public API, and a testing package that duplicated the register-resolve-
+overrides })`.** `createTestApp` cannot build the scopes itself: `Injector` and
+the scope builder are not exported. Exporting the container would freeze its
+shape as public API, and a testing package that duplicated the build-resolve-
 `onInit` loop would be a second container to keep in step with the first.
 
-So core grew the seam, and `@dunx/testing` is a thin wrapper over it:
-`substitute()` is fifteen lines on the path that was already assembling the
-list, and it costs an empty `Map` lookup per registration when no overrides are
-passed.
+So core grew the seam, and `@dunx/testing` is a thin wrapper over it. After the
+scopes are built, each override replaces the token's binding in every scope that
+binds it (`own`) and every scope that sees it through an import (`visible`),
+keeping the original binding's module name for error messages. With no overrides
+passed, that is an empty `Map` lookup per binding.
 
 The seam is `readonly Registration[]` rather than a test-shaped API: it is "compose this
 graph with these bindings replaced", which is also how a deployment variant would

@@ -133,8 +133,11 @@ A guard registered before it covers every RPC. One registered after it does not.
 of 404s cannot spend a caller's budget, but an RPC path is **claimed**: something
 serves it, so it is limited like any route.
 
-A **streaming** RPC has Bun's idle deadline lifted, so a gap between messages does
-not sever it. `streamTimeout` seconds puts a bound back on how long one may idle:
+A **streaming** RPC clears its own idle deadline, so a gap between messages does
+not sever it. `Bun.serve` otherwise severs an idle response at
+`ceil(idleTimeout / 4) * 4` seconds, which is 12.0s on the default. The app-wide
+`idleTimeout` is untouched and still covers every route and every unary call.
+`streamTimeout` seconds puts a bound back on how long a stream may idle:
 
 ```ts
 ConnectModule.forRoot({ services: [...], streamTimeout: 300 });
@@ -174,7 +177,7 @@ curl -X POST -H 'content-type: application/json' \
 | ------------------------------------ | ----------------------------------------- |
 | Connect, unary and server streaming  | Served                                    |
 | gRPC-Web, unary and server streaming | Served                                    |
-| Client and bidi streaming            | Connect's, over HTTP/2 (`http2: true`)    |
+| Client and bidi streaming            | Untested; needs HTTP/2 (`http2: true`)    |
 | Native gRPC                          | Not served: `Bun.serve` sends no trailers |
 | `.proto` loading and codegen         | Yours, through `buf`                      |
 | Request logging, CORS, guards        | Apply, as they do to a route              |
@@ -193,14 +196,46 @@ app.get(ConnectRegistry).methods;
 On shutdown the registry aborts the signal every running handler holds, so a
 long-running implementation gets its cue to wrap up.
 
-A streaming RPC clears its own idle deadline, so a pause between messages does
-not sever the connection. `Bun.serve` otherwise severs an idle response at
-`ceil(idleTimeout / 4) * 4` seconds, which is 12.0s on the default. The app-wide
-`idleTimeout` is untouched and still covers every route and every unary call.
-
 Every other `createConnectRouter` option passes through: `interceptors`,
 `contextValues`, `requestGate`, `readMaxBytes`, `jsonOptions` and the rest.
 `grpc` is the one that does not, and `connect: false` or `grpcWeb: false` turns
 either protocol off.
 
-`examples/full/src/rpc` is a working version of all of this.
+Client and bidi streaming are the library's own handlers over an HTTP/2
+connection. No dunx test covers them yet, so treat them as unverified.
+
+## Testing
+
+`createTestServer` puts a real `Bun.serve` on port 0. Pass `ConnectMiddleware`
+as `middleware`, since the module binds it without registering it, and call it
+with a real client:
+
+```ts
+import { afterAll, beforeAll, expect, it } from 'bun:test';
+import { createClient } from '@connectrpc/connect';
+import { createConnectTransport } from '@connectrpc/connect-web';
+import { ConnectMiddleware } from '@dunx/http/connect';
+import { createTestServer, type TestServer } from '@dunx/testing';
+
+let server: TestServer;
+
+beforeAll(async () => {
+  server = await createTestServer({
+    modules: [RpcModule],
+    middleware: [ConnectMiddleware],
+  });
+});
+
+afterAll(() => server.close());
+
+it('answers a Connect client', async () => {
+  const client = createClient(
+    GreetService,
+    createConnectTransport({ baseUrl: server.url }),
+  );
+  expect((await client.say({ name: 'suite' })).text).toBe('Hello suite');
+});
+```
+
+`examples/full/src/rpc` is a working version of all of this, and
+`examples/full/src/rpc.test.ts` tests it over both protocols.

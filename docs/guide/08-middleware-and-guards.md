@@ -183,13 +183,9 @@ closure. A guard costs a `Map` lookup where Nest's `Reflector` costs a
 per-request reflection call, because there is no array iteration, no metadata
 lookup and no container access left on the request path.
 
-A route with **no middleware and no CORS** skips even that, taking a direct
-dispatch path that allocates no async frame unless something genuinely has to be
-awaited. On the `plaintext` scenario that took dunx from 89.5% to 97.2% of raw
-`Bun.serve`.
-
-Giving it up costs a known 0.05 µs per request for a bare `next()`-only
-middleware. Install the middleware you need.
+A route with **no middleware and no CORS** skips even that; see
+[The fast path](./05-controllers.md#the-fast-path) and
+[Benchmarks](../architecture/benchmarks.md) for what it is worth.
 
 ## `RouteContext`
 
@@ -620,13 +616,9 @@ Either way the answering span comes back as `traceresponse`, unless the path is 
 
 ### The 404 is logged too
 
-`Bun.serve({ routes })` answers an unmatched path itself, which would make every
-404 invisible to request logging, metrics and tracing. So `listen()` installs one
-`fetch` fallback that puts the global middleware in front of a
-`{"error":"NOT_FOUND","status":404}`.
-
-This is **no** JavaScript router. Bun still does all the matching, and the
-fallback runs only once Bun has decided nothing matched.
+An unmatched path reaches the `fetch` fallback described in
+[Controllers](./05-controllers.md#the-fetch-fallback), which runs the global
+middleware, request logging included.
 
 The context it gets says `(unmatched)` for the controller and `(none)` for the
 handler, which reads better in a log line than an empty string. The response says

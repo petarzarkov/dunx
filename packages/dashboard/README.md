@@ -21,7 +21,9 @@ bun add @bull-board/api @bull-board/ui @bull-board/bun
 ## Usage
 
 ```ts
+import { Module } from '@dunx/core';
 import { DashboardMiddleware, DashboardModule } from '@dunx/dashboard';
+import { HttpFactory } from '@dunx/http';
 import { JobPublisher } from '@dunx/infra/queue';
 import { RedisConnection } from '@dunx/infra/redis';
 
@@ -81,6 +83,10 @@ way to read this on a box with no browser. The queues page is bull-board's.
 - The board is built on the first request for the queues page, never at boot, so
   an app that never opens it holds no broker socket.
 - `commands: false` maps onto bull-board's own `readOnlyMode`.
+- The page's React bundle is its own subpath, `@dunx/dashboard/ui`, which
+  `DashboardMiddleware` imports on the first request for the page. An app that
+  mounts the module and never opens it does not parse the bundle, and nothing
+  imports the subpath directly.
 - `homeHref` is a link back to your app. It appears in this page's own
   navigation, and in bull-board's links menu, which is reached from the last
   control in its header. bull-board renders it there rather than in the header

@@ -32,41 +32,7 @@ both, and `examples/full` does.
 There is no `driver: 'rabbitmq'` switch on `QueueModule`. bullmq's `attempts`,
 `backoff` and `delay` have no AMQP equivalent, so a shared option object would
 accept settings one backend silently ignores. The measurements are in
-[architecture/message-brokers.md](https://github.com/petarzarkov/dunx/blob/main/docs/architecture/message-brokers.md).
-
-## Read this before you deploy it
-
-One known defect.
-
-**A process that attempted a queue operation against a Redis it could not reach
-does not exit on `SIGTERM`.** It is **two** upstream leaks, one in Bun and one in
-bullmq, and neither is reachable from userland. Bisected a layer at a time, with
-`connectionTimeout: 2000, maxRetries: 0` throughout:
-
-| server                      | `Bun.RedisClient` | bullmq's adapter | a bullmq `Queue` |
-| --------------------------- | ----------------- | ---------------- | ---------------- |
-| healthy                     | exits 0           | exits 0          | exits 0          |
-| refused (nothing listening) | exits 0           | **never exits**  | **never exits**  |
-| black-holed (SYN dropped)   | **never exits**   | **never exits**  | **never exits**  |
-
-The black-holed row is Bun's: a connect that never completes keeps a handle past
-`close()`, and no client option changes it. The refused row is bullmq's: its
-adapter runs a `setTimeout` reconnect chain and both `disconnect()` and `quit()`
-return early once the connection has dropped, which is exactly when one is
-pending.
-
-An app that imports `QueueModule` without publishing is unaffected, and so is a
-healthy deployment. What hangs is a process that served a queue route while Redis
-was unreachable.
-
-It **serves correctly throughout**, answering 503 in single-digit milliseconds,
-so this is a shutdown defect rather than an availability one, and whatever
-supervises the process will `SIGKILL` it.
-
-Earlier versions of this guide also told you to **pin ioredis 5**. That advice was
-wrong and has been withdrawn: ioredis 6 did not remove `ioredis/built/utils`, both of
-bullmq's builds import it, and Bun runs the CJS one. Any ioredis from 5.0.0 up works.
-The measurement is in architecture/queues.md, "Not pinning ioredis 5".
+[architecture/message-brokers.md](../architecture/message-brokers.md).
 
 ## A handler is a method with a decorator
 
@@ -164,6 +130,9 @@ module is configured rather than on first connect.
 | `defaultJobOptions` | none                                                        | Forwarded verbatim as every `Queue`'s `defaultJobOptions` |
 | `connection`        | `{ connectionTimeout: 5000, maxRetries: 0 }`                | Forwarded to every `Bun.RedisClient`                      |
 | `jobTimeoutMs`      | none                                                        | Not a bullmq feature. See below                           |
+| `consume`           | `false`                                                     | `true` or `'if-any'` opens workers in this process        |
+| `processor`         | none                                                        | Absolute path bullmq forks into for a `background` queue  |
+| `isolation`         | `'process'`                                                 | `'thread'` runs a `background` queue on a worker thread   |
 
 `worker` and `defaultJobOptions` are **passthroughs**. `concurrency`,
 `limiter`, `lockDuration`, `stalledInterval`, `attempts`, `backoff`,
@@ -211,7 +180,7 @@ matters more than a clean exit on a cold start against an absent Redis. They
 cannot both be had until Bun clears the timer on `close()`.
 
 Neither of these is what the bounded default _cannot_ fix - see the two leaks
-above, which survive `maxRetries: 0` entirely.
+in [Read this before you deploy it](#read-this-before-you-deploy-it), which survive `maxRetries: 0` entirely.
 
 ### The connection bullmq builds for itself is bounded too
 
@@ -230,6 +199,41 @@ url and reapplies the options, so every one of those reconstructions comes out t
 same as the first. Nothing to configure; it is how `QueueConnection` builds a
 client.
 
+## Read this before you deploy it
+
+One known defect.
+
+**A process that attempted a queue operation against a Redis it could not reach
+does not exit on `SIGTERM`.** It is **two** upstream leaks, one in Bun and one in
+bullmq, and neither is reachable from userland. Bisected a layer at a time, with
+`connectionTimeout: 2000, maxRetries: 0` throughout:
+
+| server                      | `Bun.RedisClient` | bullmq's adapter | a bullmq `Queue` |
+| --------------------------- | ----------------- | ---------------- | ---------------- |
+| healthy                     | exits 0           | exits 0          | exits 0          |
+| refused (nothing listening) | exits 0           | **never exits**  | **never exits**  |
+| black-holed (SYN dropped)   | **never exits**   | **never exits**  | **never exits**  |
+
+The black-holed row is Bun's: a connect that never completes keeps a handle past
+`close()`, and no client option changes it. The refused row is bullmq's: its
+adapter runs a `setTimeout` reconnect chain and both `disconnect()` and `quit()`
+return early once the connection has dropped, which is exactly when one is
+pending.
+
+An app that imports `QueueModule` without publishing is unaffected, and so is a
+healthy deployment. What hangs is a process that served a queue route while Redis
+was unreachable.
+
+It **serves correctly throughout**, answering 503 in single-digit milliseconds,
+so this is a shutdown defect rather than an availability one, and whatever
+supervises the process will `SIGKILL` it.
+
+Earlier versions of this guide also told you to **pin ioredis 5**. That advice was
+wrong and has been withdrawn: ioredis 6 did not remove `ioredis/built/utils`, both of
+bullmq's builds import it, and Bun runs the CJS one. Any ioredis from 5.0.0 up works.
+The measurement is in [architecture/queues.md](../architecture/queues.md),
+"Not pinning ioredis 5".
+
 ## Publishing and consuming are separate decisions
 
 `QueueModule.forRoot()` exports four tokens: `QueueOptions`, `QueueConnection`,
@@ -239,7 +243,7 @@ provider it does not export, `QueueRunner` - the piece that opens workers when y
 ask it to.
 
 **By default it consumes nothing.** `consume` is `false`, so a web process that
-publishes never starts a worker by accident. There are three ways to consume, and
+publishes never starts a worker by accident. There are four ways to consume, and
 they agree on exactly one thing: the module.
 
 | How                                          | Where the workers live                           |
@@ -561,10 +565,11 @@ connection it may block on. Sharing would only add a duplicate.
 
 ### The subpath is the only way in
 
-`@dunx/infra/queue` is **not re-exported from the package barrel**,
-unlike every other area. `src/index.ts` re-exporting it would put bullmq's static
-`ioredis` import behind `import '@dunx/infra'` for every consumer, queue or no
-queue.
+`@dunx/infra/queue` is **not re-exported from the package barrel**, and neither
+are `/amqp`, `/db` and `/pagination`, for the same reason: each reaches an
+optional peer through a static import. `src/index.ts` re-exporting this one would
+put bullmq's static `ioredis` import behind `import '@dunx/infra'` for every
+consumer, queue or no queue.
 
 ## Testing with no Redis running
 

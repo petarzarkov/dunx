@@ -11,8 +11,11 @@ dispatch in Zig.
 ## Install
 
 ```bash
-bun add @dunx/http @dunx/core
+bun add @dunx/http @dunx/core @dunx/transform
 ```
+
+Constructor injection needs `preload = ["@dunx/transform/preload"]` in
+`bunfig.toml`, at the top level and again under `[test]`.
 
 ## Usage
 

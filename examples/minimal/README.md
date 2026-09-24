@@ -22,16 +22,22 @@ curl localhost:3000/greetings/ada     # {"greeting":"hello, ada","served":1}
 | [`src/app.module.ts`](./src/app.module.ts)               | what is wired together                      |
 | [`src/main.ts`](./src/main.ts)                           | boot and listen                             |
 
-## The one line you must not skip
+## The preload you must not skip
 
 ```toml
 # bunfig.toml
 preload = ["@dunx/transform/preload"]
+
+[test]
+preload = ["@dunx/transform/preload"]
 ```
+
+Bun's test runner reads its own `preload`, so it appears twice. Miss the second
+and the app runs but the suite does not.
 
 Constructor injection needs no decorator and no `@Inject()`, because
 `@dunx/transform` reads each class's constructor parameter types at load time and
-records them for the container. That preload is how it runs.
+records them for the container. The preload is how it runs.
 
 Leave it out and boot fails with an error naming the class and telling you to add
 it - never a silent `undefined`. The same is true for a parameter whose type is
@@ -125,3 +131,4 @@ a socket in about a millisecond, so the thing under test is the thing that ships
 | [`examples/databases`](../databases) | drizzle over SQLite, Postgres and MySQL             |
 | [`examples/testing`](../testing)     | overrides, fakes, and testing a guard               |
 | [`examples/full`](../full)           | every package composing in one long-running service |
+| [`examples/binary`](../binary)       | the same container compiled to one executable       |

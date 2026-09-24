@@ -257,6 +257,7 @@ argument. Bun loads `.env` and `.env.local` on its own, so there is no loader an
 | Cron and intervals               | `@dunx/infra/schedule`                                    |
 | Uploads, downloads, images       | `@dunx/infra/files`, `@dunx/infra/images`                 |
 | Structured logging               | `@dunx/infra/logger`                                      |
+| Email, with a preview server     | `@dunx/infra/email` - Resend or SMTP, React Email         |
 | OpenAPI 3.1 and a docs page      | `@dunx/openapi`, plus `./swagger` or `./scalar`           |
 | Sessions and sign-in             | `@dunx/auth` - better-auth                                |
 | Tests                            | `@dunx/testing`                                           |
@@ -266,9 +267,12 @@ Validation is Standard Schema, so zod, Valibot and ArkType all work with no adap
 
 Peer dependencies, installed only for the features you use: `zod`, `drizzle-orm`,
 `better-auth`, `bullmq`, `rabbitmq-client`, and one renderer for the docs page
-(`swagger-ui-dist` or `@scalar/api-reference`). An RPC mount also needs
-`@connectrpc/connect` and `@bufbuild/protobuf`. A docs page serves nothing until
+(`swagger-ui-dist` or `@scalar/api-reference`). A docs page serves nothing until
 its renderer is installed and passed to `OpenApiModule`.
+
+An RPC mount also needs `@connectrpc/connect` and `@bufbuild/protobuf`. Email
+needs `resend` or `nodemailer` for the transport, and `@react-email/render` with
+`react` for React templates.
 
 ## Reading an app you did not write
 
@@ -287,4 +291,4 @@ graph and never boots the app.
 - <https://github.com/petarzarkov/dunx/blob/main/docs/MIGRATION-FROM-NEST.md> -
   coming from NestJS
 - <https://github.com/petarzarkov/dunx/tree/main/examples> - `minimal`,
-  `databases`, `testing`, `full`
+  `databases`, `testing`, `full`, `binary`

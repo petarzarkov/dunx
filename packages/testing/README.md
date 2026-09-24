@@ -44,6 +44,9 @@ The [Testing guide](../../docs/guide/11-testing.md) is canonical.
 | `createTestApp`    | The container, with overrides applied before anything resolves   |
 | `createTestServer` | The same, behind a real `Bun.serve` on port 0                    |
 | `testClient`       | The fetch-and-parse plumbing against a base url                  |
+| `http2Client`      | The same plumbing over HTTP/2, for a server started with `http2: true` |
+| `RecordingLogger`  | A `Logger` that keeps every entry, to override `Logger` with and assert on |
+| `testRoot`         | The root `createTestApp` boots, for `HttpFactory.create` called directly |
 
 ## Notes
 

@@ -1,9 +1,9 @@
 # RabbitMQ over AMQP
 
 **RabbitMQ is the broker, and `rabbitmq-client` is the client.**
-`@dunx/infra/amqp` contributes the four things neither has an opinion about:
-where a handler lives, how it is found, how it is injected, and when it stops. It
-writes no AMQP framing, no retry policy and no dead-letter helper.
+`@dunx/infra/amqp` contributes the same four things
+[`@dunx/infra/queue`](./19-queues.md) does, over this client. It writes no AMQP
+framing, no retry policy and no dead-letter helper.
 
 ```bash
 bun add rabbitmq-client
@@ -21,9 +21,12 @@ belongs here. An app can hold both, and `examples/full` does.
 [Choosing a backend](./19-queues.md#choosing-a-backend), on
 [bullmq over Redis](./19-queues.md), has the table.
 
-## A handler is a method with a decorator
+## Handlers
 
-That is the whole registration. No class decorator, no registry, no queue token.
+`@AmqpHandler` marks a method the way `@JobHandler` does in
+[bullmq over Redis](./19-queues.md#a-handler-is-a-method-with-a-decorator), and is
+found by the same prototype scan: no class decorator, no registry, no queue
+token.
 
 ```ts
 import { Logger } from '@dunx/core';
@@ -47,8 +50,7 @@ export class Orders {
 }
 ```
 
-Declare `Orders` in a module's `providers` and it is found by inspection, the
-same way a `@JobHandler`, a route or a gateway is.
+Declare `Orders` in a module's `providers`; nothing else registers it.
 
 Returning acknowledges the delivery. Throwing nacks it, with `requeue` deciding
 whether the broker puts it back or sends it to the queue's dead-letter exchange.
@@ -138,11 +140,11 @@ Neither url error quotes the url as given. An AMQP url almost always holds
 credentials, and an unparseable one cannot be redacted, since redaction parses it
 too.
 
-`forRootAsync` reads the url off `ConfigService`:
+`forRootAsync` reads the url off `ConfigService`. `ConfigModule` is global, so
+the factory needs no `imports` to reach it:
 
 ```ts
 AmqpModule.forRootAsync({
-  imports: [ConfigModule],
   useFactory: (config: AppConfigService) => ({ url: config.get('amqp').url }),
   inject: [AppConfigService],
 });
@@ -317,6 +319,8 @@ own that it can act on.
 
 ```ts
 HealthModule.forRootAsync({
+  // The app module that imports AmqpModule and exports AmqpConnection.
+  imports: [MessagingModule],
   useFactory: (amqp: AmqpConnection) => ({
     readiness: [new AmqpIndicator(amqp)],
   }),
@@ -408,7 +412,7 @@ plugin shows: the broker's view across every process attached to it, rather than
 this process's own.
 
 [Metrics](./24-metrics.md) covers what dunx counts, and
-[architecture/message-brokers.md](https://github.com/petarzarkov/dunx/blob/main/docs/architecture/message-brokers.md)
+[architecture/message-brokers.md](../architecture/message-brokers.md)
 records the comparison.
 
 ## Everything `@dunx/infra/amqp` exports
