@@ -51,6 +51,15 @@ describe('SignedCookies', () => {
     expect(signed.get(new Bun.CookieMap(), 'prefs')).toBe(undefined);
   });
 
+  it('reads a 43-character signature of multibyte characters as absent', () => {
+    const signed = new SignedCookies({ secrets: [NEW] });
+    for (const wire of [`dark.${'é'.repeat(43)}`, `dark.${'x'.repeat(42)}é`]) {
+      const cookies = new Bun.CookieMap({ prefs: wire });
+      expect(() => signed.get(cookies, 'prefs')).not.toThrow();
+      expect(signed.get(cookies, 'prefs')).toBe(undefined);
+    }
+  });
+
   it('sets the secure defaults, and lets a call override them', () => {
     const signed = new SignedCookies({ secrets: [NEW] });
     const map = new Bun.CookieMap();

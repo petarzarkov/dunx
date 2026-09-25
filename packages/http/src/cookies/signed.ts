@@ -93,7 +93,10 @@ export class SignedCookies {
     const signature = wire.slice(dot + 1);
     if (dot === -1 || signature.length !== SIGNATURE_LENGTH) return undefined;
     const value = wire.slice(0, dot);
+    // Bytes, not code units: a multibyte character passes the length check
+    // above, and `timingSafeEqual` throws on arrays of unequal length.
     const given = encoder.encode(signature);
+    if (given.length !== SIGNATURE_LENGTH) return undefined;
     for (const key of this.#keys) {
       const expected = encoder.encode(this.#sign(key, name, value));
       if (crypto.timingSafeEqual(expected, given)) return value;
