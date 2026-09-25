@@ -5,8 +5,8 @@
 #   ./examples/full/deploy-demo.sh            pull, rebuild, recreate
 #   ./examples/full/deploy-demo.sh --no-pull  rebuild what is checked out
 #
-# Reads DEMO_AUTH_SECRET from examples/full/.env.demo, which is gitignored and
-# never committed.
+# Reads DEMO_AUTH_SECRET and DEMO_COOKIE_SECRETS from examples/full/.env.demo,
+# which is gitignored and never committed.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
@@ -17,12 +17,28 @@ env_file="examples/full/.env.demo"
 if [ ! -f "$env_file" ]; then
   echo "missing $env_file. Create it with:" >&2
   echo "  echo \"DEMO_AUTH_SECRET=\$(openssl rand -hex 32)\" > $env_file" >&2
+  echo "  echo \"DEMO_COOKIE_SECRETS=\$(openssl rand -hex 32)\" >> $env_file" >&2
   exit 1
 fi
 set -a
 # shellcheck disable=SC1090
 . "$env_file"
 set +a
+
+# An .env.demo written before the cookie secret existed has only the auth one.
+# A fresh key is safe to mint here: nothing signed with an older one survives a
+# redeploy that matters, since the preference cookie is the only thing it signs.
+if [ -z "${DEMO_COOKIE_SECRETS:-}" ]; then
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "$env_file has no DEMO_COOKIE_SECRETS. Add one with:" >&2
+    echo "  echo \"DEMO_COOKIE_SECRETS=\$(openssl rand -hex 32)\" >> $env_file" >&2
+    exit 1
+  fi
+  DEMO_COOKIE_SECRETS=$(openssl rand -hex 32)
+  echo "DEMO_COOKIE_SECRETS=$DEMO_COOKIE_SECRETS" >> "$env_file"
+  export DEMO_COOKIE_SECRETS
+  echo "==> added DEMO_COOKIE_SECRETS to $env_file"
+fi
 
 if [ "${1:-}" != "--no-pull" ]; then
   echo "==> pulling"

@@ -194,6 +194,15 @@ export {
   ThrottleStore,
   type ThrottleRedis,
 } from './throttle/store.js';
+// Reading and setting a cookie is `req.cookies`, Bun's own `CookieMap`. What dunx
+// adds is the signed kind, over the app's secrets.
+export { SignedCookiesModule } from './cookies/module.js';
+export {
+  SIGNED_COOKIE_DEFAULTS,
+  SignedCookies,
+  type CookieOptions,
+  type SignedCookiesInit,
+} from './cookies/signed.js';
 // `Idempotency-Key`, opt-in per route. `@Idempotent()` is `@UseGuards` plus
 // options, so a route without it pays nothing; the store follows the throttle's
 // shape, and `RedisIdempotencyStore` takes its client structurally.

@@ -935,3 +935,125 @@ the 304 keeps `content-type` as Bun's own static 304 does.
 the representation's tag is known here only from the handler's response, after
 a `PUT` has written. `@Idempotent()` skips `GET` and `HEAD`, and `etag` touches
 nothing else, so a replayed response is never compared.
+
+## Cookies, on Bun 1.4.2
+
+Probed before `SignedCookies` was built. The attribute and prefix rules are
+draft-ietf-httpbis-rfc6265bis-22 (December 2025, with the RFC Editor): 4.1.3.1
+(`__Secure-` needs `Secure`), 4.1.3.2 (`__Host-` needs `Secure`, `Path=/` and
+no `Domain`) and 5.7 step 19 (`SameSite=None` needs `Secure`). RFC 6265 section 3
+has a user agent process `Set-Cookie` on every status but 1xx.
+
+For contrast, read from the installed sources: Hono 4.13.3's `utils/cookie.js`
+signs with `crypto.subtle.sign`, writes `value.<padded base64>` over the value
+alone and takes one secret. `cookie-signature` 1.2.2, which Express's
+`cookie-parser` and Nest's cookie guide use, writes `value.<unpadded base64>`
+over the value alone with `createHmac` and compares with `timingSafeEqual`.
+Five claims.
+
+**Bun writes `req.cookies` changes onto whatever a route returns, and only for a
+route.** `req.cookies.set('s', '1')` in a `Bun.serve` route handler, read back
+with `fetch`:
+
+```
+type CookieMap true get a = 1
+/response 200 ["s=1; Path=/; SameSite=Lax","a=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"]
+/json     200 ["s=1; Path=/; SameSite=Lax"]
+/async    200 ["s=1; Path=/; SameSite=Lax"]
+/own      200 ["own=1","s=1; Path=/; SameSite=Lax"]
+/ownsame  200 ["s=2","s=1; Path=/; SameSite=Lax"]
+/304      304 ["s=1; Path=/; SameSite=Lax"]
+/redirect 302 ["s=1; Path=/; SameSite=Lax"]
+/after    200 ["late=1; Path=/; SameSite=Lax"]      (set after the Response was built)
+fetch cookies? undefined
+```
+
+Through a dunx route returning a plain value, and over `http2: true`:
+
+```
+/c/value  200 {"seen":"1"} ["s=1; Path=/; SameSite=Lax"]
+/c/throws 500 {"error":"Internal Server Error","status":500} ["s=1; Path=/; SameSite=Lax"]
+h2 200 [ "h2=1; Path=/; SameSite=Lax" ]
+```
+
+So dunx applies nothing on a route: the error mapper, a 304, the security
+headers and versioned dispatch all build or stamp a `Response` that Bun then
+adds the cookies to. A handler that throws after `set` still sends the cookie.
+`@Idempotent()` never sees them, because they are added after its capture, so a
+replay carries none. The `fetch` fallback's request has no `cookies`, so a
+global guard reading one on an unmatched path threw a `TypeError`. Defining the
+property on that request works:
+
+```
+fallback has cookies prop false
+/miss ["fb=1; Path=/; SameSite=Lax"]
+```
+
+`withRequestCookies` does that, lazily, for the fallback alone.
+
+**`Bun.Cookie` defaults to `Path=/; SameSite=Lax` and enforces no prefix.**
+
+```
+default                 => a=b; Path=/; SameSite=Lax
+maxAge                  => a=b; Path=/; Max-Age=60; SameSite=Lax
+both                    => a=b; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=60; SameSite=Lax
+host no secure          => __Host-a=b; Path=/; SameSite=Lax
+host domain             => __Host-a=b; Domain=x.com; Path=/; Secure; SameSite=Lax
+secure-prefix no secure => __Secure-a=b; Path=/; SameSite=Lax
+none no secure          => a=b; Path=/; SameSite=None
+partitioned             => a=b; Path=/; Partitioned; SameSite=Lax
+value with ; and space  => a=b%3B%20c%3Dd%20%C3%A9; Path=/; SameSite=Lax
+bad name                THROWS Invalid cookie name: contains invalid characters
+map read encoded        => b; c
+map dup                 => 1
+```
+
+A browser drops each of the three prefix and `None` violations without a word,
+so `SignedCookies.set` throws on them. `CookieMap` percent-encodes a value on
+`set` and decodes it on `get`, so the signature's `.` and base64url need no
+escaping of their own.
+
+**Chrome keeps a `Secure` cookie set over plain `http://localhost`.** A route
+setting `sec=1; Secure; HttpOnly`, then a second navigation, through
+`Bun.WebView` on Google Chrome 154.0.8037.57:
+
+```
+localhost sent back: sec=1; host=1
+127.0.0.1 sent back: sec=1; host=1
+```
+
+So `Secure` is on by default everywhere, with no branch on the `Host` header,
+which the caller controls. A plain-HTTP deployment on another host passes
+`secure: false`.
+
+**`Bun.CryptoHasher` HMAC is 25x cheaper than Web Crypto.** Nanoseconds per
+HMAC-SHA256 of `theme=dark`, 200,000 iterations, two rounds; the three give the
+same digest:
+
+| Operation                             | ns/op         |
+| ------------------------------------- | ------------- |
+| `new Bun.CryptoHasher('sha256', key)` | 463-473       |
+| keyed hasher `.copy()`                | 227           |
+| `node:crypto` `createHmac`            | 747-761       |
+| `crypto.subtle.sign`, awaited         | 11,599-12,968 |
+| `crypto.subtle.verify`, awaited       | 10,885-11,535 |
+| `crypto.timingSafeEqual`, 32 bytes    | 18            |
+
+`crypto.timingSafeEqual` is a global in Bun and throws `Input buffers must have
+the same byte length`, so the length is checked first. The keyed hasher copied
+per signature shipped: synchronous, so `get` is not a promise. The shipped class:
+`get` 458-472 ns with the first secret, 803-822 ns with the second or a tampered
+value; `set` 657-677 ns.
+
+**The fallback map costs 0.3 us unread, 1.9 us read.** `oha -c 64`, a 404 from a
+`Bun.serve` `fetch` fallback carrying a two-cookie header, five interleaved
+rounds of 5 s, median as a share of the bare fallback's 131,728 req/s:
+
+| Fallback                                | Share | Added per request |
+| --------------------------------------- | ----- | ----------------- |
+| `withRequestCookies`, nothing reads     | 95.8% | 0.33 us           |
+| `withRequestCookies`, one `cookies.get` | 79.5% | 1.96 us           |
+
+A route pays nothing, since Bun builds its map. The 404 and claimed paths pay
+the first row, under the 1.26 us of a global async middleware, and the second
+only when something reads a cookie there.
