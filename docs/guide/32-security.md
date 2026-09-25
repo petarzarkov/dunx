@@ -148,8 +148,10 @@ are on. The check costs 0.5 to 0.9 microseconds on an unsafe request, and
 nothing on a safe one, whose route entry is not wrapped.
 
 A refusal writes a `warn` line through the bound `Logger`, at most one a
-second. The next line written carries `suppressed`, the refusals dropped since
-the last one:
+second, on a window of its own: a flood of refusals does not hide a scan of
+unmatched paths, which request logging throttles the same way
+([Logging](./13-logging.md#one-entry-per-request)). The next line written
+carries `suppressed`, the refusals dropped since the last one:
 
 ```ts
 logger.warn('CSRF refused POST /things', {

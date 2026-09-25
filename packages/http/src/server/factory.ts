@@ -80,6 +80,7 @@ export class HttpFactory {
         settings: HttpOptionsProvider,
         metrics: RequestMetrics,
         tracer: Tracer,
+        claimed: ClaimedRoutes,
       ) =>
         new RequestLoggingMiddleware(
           logger,
@@ -92,6 +93,7 @@ export class HttpFactory {
           // default configuration never takes. Same precedence again.
           (options.metrics ?? settings.metrics) ? metrics : undefined,
           tracer,
+          claimed,
         ),
       inject: [
         Logger,
@@ -99,6 +101,7 @@ export class HttpFactory {
         HttpOptionsProvider,
         RequestMetrics,
         Tracer,
+        ClaimedRoutes,
       ] as const,
     });
 
