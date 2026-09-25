@@ -51,6 +51,7 @@ const BARREL = [
   'ErrorFilter',
   'ErrorHandler',
   'ErrorMapper',
+  'EtagOptions',
   'Gateway',
   'Get',
   'HEALTH_REPORT_SCHEMA',
@@ -213,12 +214,14 @@ const BARREL = [
   'Version',
   'VersioningOptions',
   'defaultErrorMapper',
+  'entityTag',
   'errorMapper',
   'gate',
   'mergeMeta',
   'meta',
   'metaKey',
   'metaOf',
+  'noneMatch',
   'WsRelayModule',
 ].sort();
 

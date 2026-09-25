@@ -2,11 +2,13 @@ import { inject, type Ctor } from '@dunx/core';
 import {
   ApiHidden,
   Controller,
+  entityTag,
   gate,
   Get,
   HttpError,
   HttpStatusCode,
   inlineScriptPolicy,
+  noneMatch,
   Public,
   type Authorize,
   type Input,
@@ -48,17 +50,37 @@ const documentController = (mount: DocMount) => {
     // inject() in a field initializer, not a constructor parameter: this package
     // works with or without the @dunx/transform preload.
     protected readonly explorer = inject(OpenApiExplorer);
+    /** Per mount prefix and version, like the document it hashes. */
+    readonly #tags = new Map<string, string>();
 
+    /**
+     * Strong, since these are the exact bytes sent; `Compression` weakens it on
+     * an encoded response. The 304 is answered here, so it works whether or
+     * not the app turned `etag` on.
+     */
     @Public()
     @Get(() => mount.json)
     async document(input: Input<RouteSchemas>): Promise<Response> {
       const refused = await this.refuse(input);
       if (refused !== undefined) return refused;
 
-      return new Response(
-        this.explorer.json(this.prefix(input, mount.json), this.version(input)),
-        { headers: { 'content-type': 'application/json; charset=utf-8' } },
-      );
+      const prefix = this.prefix(input, mount.json);
+      const version = this.version(input);
+      const json = this.explorer.json(prefix, version);
+      const key = `${prefix}\n${version ?? ''}`;
+      let etag = this.#tags.get(key);
+      if (etag === undefined) {
+        etag = entityTag(json, false);
+        this.#tags.set(key, etag);
+      }
+      const headers = {
+        'content-type': 'application/json; charset=utf-8',
+        etag,
+      };
+      const asked = input.req.headers.get('if-none-match');
+      return asked !== null && noneMatch(asked, etag)
+        ? new Response(null, { status: HttpStatusCode.NOT_MODIFIED, headers })
+        : new Response(json, { headers });
     }
 
     /**

@@ -16,6 +16,7 @@ import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
 import { defaultErrorMapper, HttpError, type ErrorMapper } from './errors.js';
+import type { EntityTags } from './etag.js';
 import { buildInputReader, type InputReader } from './input.js';
 import { TraceContext } from './trace-context.js';
 import {
@@ -69,13 +70,25 @@ export type ServeRoutes = Record<
  * A `Response` passes through untouched - that is the escape hatch, and nothing
  * about it is worth second-guessing. Nothing at all is a 204: `Response.json(null)`
  * would be a body claiming to be no body.
+ *
+ * `tags` is set on a `GET` route under `etag`. A 200 value is then tagged, and a
+ * handler's own `Response` only has its own `ETag` compared.
  */
-const toResponse = (value: unknown, status: number): Response => {
-  if (value instanceof Response) return value;
+const toResponse = (
+  value: unknown,
+  status: number,
+  req: Request,
+  tags: EntityTags | undefined,
+): Response => {
+  if (value instanceof Response) {
+    return tags === undefined ? value : tags.honour(value, req);
+  }
   if (value === undefined || value === null) {
     return new Response(null, { status: HttpStatusCode.NO_CONTENT });
   }
-  return Response.json(value, { status });
+  return tags === undefined || status !== HttpStatusCode.OK
+    ? Response.json(value, { status })
+    : tags.json(value, req);
 };
 
 const statusFor = (route: DiscoveredRoute): number =>
@@ -287,6 +300,7 @@ const directOr = (
   status: number,
   onError: ErrorMapper,
   noMiddleware: boolean,
+  tags: EntityTags | undefined,
 ): ServedHandler => {
   if (!noMiddleware) return guarded;
 
@@ -295,7 +309,7 @@ const directOr = (
   // throw would otherwise escape as an unhandled rejection instead of a 500.
   const settle = (value: unknown, req: BunRequest): Response => {
     try {
-      return toResponse(value, status);
+      return toResponse(value, status, req, tags);
     } catch (error) {
       return onError(error, req);
     }
@@ -340,6 +354,7 @@ export const buildRoutes = (
   cors?: CorsOptions,
   resolve: GuardResolver = construct,
   selection?: VersionSelection,
+  etag?: EntityTags,
 ): BunRoutes => {
   assertNoCollisions(discovered, selection?.versioning.header !== undefined);
   const routes: BunRoutes = {};
@@ -360,6 +375,8 @@ export const buildRoutes = (
     // survives into the request path is one closure that reads no metadata.
     const read = buildInputReader(route.options);
     const status = statusFor(route);
+    // `GET` alone: Bun answers `HEAD` from the `GET` handler, so it matches.
+    const tags = route.method === 'GET' ? etag : undefined;
     /**
      * Global outermost, then the declaring module's middleware, then the controller's
      * guards, then the method's.
@@ -390,8 +407,10 @@ export const buildRoutes = (
       }),
     ];
     const context = buildContext(route);
+    // Innermost, so a 304 is what request logging records and `Compression`
+    // skips, and the tag describes the bytes before any encoding.
     const chained = compose(chain, context, async (req) =>
-      toResponse(await route.handler(await read(req)), status),
+      toResponse(await route.handler(await read(req)), status, req, tags),
     );
     const guarded: RouteHandler = async (req) => {
       try {
@@ -409,7 +428,15 @@ export const buildRoutes = (
     // own deadline: no registry, and no cost to any other route.
     const undeprecated = cors
       ? withCors(cors, guarded)
-      : directOr(guarded, route, read, status, onError, chain.length === 0);
+      : directOr(
+          guarded,
+          route,
+          read,
+          status,
+          onError,
+          chain.length === 0,
+          tags,
+        );
     const deprecation = context.get(DEPRECATED);
     const served =
       deprecation === undefined

@@ -113,6 +113,9 @@ export const createApp = async (): Promise<HttpApp> => {
       // `@Controller('swatches', { version: '1' })` serves `/api/v1/swatches`.
       // A controller that declares no version keeps its unversioned path.
       versioning: { type: 'uri' },
+      // A weak `ETag` on every value a `GET` route returns, and a 304 when the
+      // client already has it. Not on `AppHttpOptions`, which is vendored.
+      etag: true,
       // Every response, the 404 and mapped errors included. The landing page's
       // favicon is a `data:` URI, hence the one addition to the strict policy.
       // The API explorers, the dashboard and the email preview send their own.

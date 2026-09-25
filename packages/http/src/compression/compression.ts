@@ -140,6 +140,11 @@ export class Compression implements Middleware {
   /** Whether the response is a candidate at all, before the client is consulted. */
   #considers(res: Response): boolean {
     if (BODYLESS.has(res.status) || res.status === 206) return false;
+    return this.#encodable(res);
+  }
+
+  /** Whether a body with these headers would be encoded, the status aside. */
+  #encodable(res: Response): boolean {
     // Already encoded by the handler, or by something further in.
     if (res.headers.has('content-encoding')) return false;
     // RFC 9111: an intermediary must not change the payload when this is set.
@@ -155,6 +160,12 @@ export class Compression implements Middleware {
     next: Next,
   ): Promise<Response> {
     const res = await next();
+    // A 304 stands in for the 200 a cache holds, and RFC 9110 15.4.5 has it
+    // carry the `Vary` that 200 would have.
+    if (res.status === 304) {
+      if (this.#encodable(res)) varyOnEncoding(res.headers);
+      return res;
+    }
     const body = res.body;
     if (body === null || !this.#considers(res)) return res;
 
