@@ -4,10 +4,13 @@ import {
   Controller,
   gate,
   Get,
+  HttpError,
+  HttpStatusCode,
   inlineScriptPolicy,
   Public,
   type Authorize,
   type Input,
+  VERSION_NEUTRAL,
   type RouteSchemas,
 } from '@dunx/http';
 import { joinPath } from '@dunx/http/internal';
@@ -40,7 +43,7 @@ export interface DocMount {
  */
 const documentController = (mount: DocMount) => {
   @ApiHidden()
-  @Controller()
+  @Controller('', { version: VERSION_NEUTRAL })
   class OpenApiController {
     // inject() in a field initializer, not a constructor parameter: this package
     // works with or without the @dunx/transform preload.
@@ -52,9 +55,23 @@ const documentController = (mount: DocMount) => {
       const refused = await this.refuse(input);
       if (refused !== undefined) return refused;
 
-      return new Response(this.explorer.json(this.prefix(input, mount.json)), {
-        headers: { 'content-type': 'application/json; charset=utf-8' },
-      });
+      return new Response(
+        this.explorer.json(this.prefix(input, mount.json), this.version(input)),
+        { headers: { 'content-type': 'application/json; charset=utf-8' } },
+      );
+    }
+
+    /**
+     * `?version=` under header or media-type versioning, where each version is
+     * a document of its own. One the explorer has no document for is a 404.
+     */
+    protected version(input: Input<RouteSchemas>): string | undefined {
+      const asked = new URL(input.req.url).searchParams.get('version');
+      if (asked === null) return undefined;
+      if (!this.explorer.versions.includes(asked)) {
+        throw new HttpError(HttpStatusCode.NOT_FOUND, 'NOT_FOUND');
+      }
+      return asked;
     }
 
     protected prefix(input: Input<RouteSchemas>, declared: string): string {
@@ -84,9 +101,9 @@ export const buildController = (
   const base = documentController(mount);
   if (renderer === undefined) return base;
 
-  @Controller()
+  @Controller('', { version: VERSION_NEUTRAL })
   class OpenApiController extends base {
-    /** Per mount prefix, like the page it hashes. */
+    /** Per mount prefix and version, like the page it hashes. */
     readonly #policies = new Map<string, string>();
 
     @Public()
@@ -96,11 +113,13 @@ export const buildController = (
       if (refused !== undefined) return refused;
 
       const prefix = this.prefix(input, mount.ui);
-      const html = await this.explorer.page(prefix);
-      let policy = this.#policies.get(prefix);
+      const version = this.version(input);
+      const html = await this.explorer.page(prefix, version);
+      const key = `${prefix}\n${version ?? ''}`;
+      let policy = this.#policies.get(key);
       if (policy === undefined) {
         policy = inlineScriptPolicy(html);
-        this.#policies.set(prefix, policy);
+        this.#policies.set(key, policy);
       }
       return new Response(html, {
         headers: {

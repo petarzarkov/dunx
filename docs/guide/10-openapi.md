@@ -118,7 +118,10 @@ await Bun.write('openapi.json', JSON.stringify(document, null, 2));
 
 - `/users/:id` becomes `/users/{id}`. Bun matches the first form, OpenAPI templates
   the second.
-- `operationId` is `Controller_handler`, for example `UsersController_one`.
+- `operationId` is `Controller_handler`, for example `UsersController_one`. A
+  versioned route appends its version, `UsersController_one_v2`, and is listed
+  at its versioned path; `@Deprecated` marks it `deprecated`. See
+  [Versioning](./34-versioning.md).
 - The tag is the controller's name with a trailing `Controller` stripped, so
   `UsersController` documents itself as `Users`. `@ApiDoc({ tags })` overrides it.
 - The document's top-level `tags` list is read back off the **operations**, so it

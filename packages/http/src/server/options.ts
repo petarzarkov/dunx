@@ -13,6 +13,7 @@ import type { CsrfOptions } from './csrf.js';
 import type { ErrorHandler } from './errors.js';
 import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
+import type { VersioningOptions } from '../route/version.js';
 import type { SecurityHeadersOptions } from './security-headers.js';
 
 /**
@@ -37,6 +38,13 @@ export interface HttpOptions extends AppOptions {
    * "No prefix" and "absent" mean the same thing. `@dunx/testing` relies on it.
    */
   readonly prefix?: string | undefined;
+  /**
+   * A controller or handler declaring `version: '1'` is served at `/v1/...`
+   * (`'uri'`), or on its own path for `X-API-Version: 1` (`'header'`) or
+   * `Accept: ...;v=1` (`'media-type'`). Off by default, and a declared version
+   * is then a boot error. See docs/guide/34-versioning.md.
+   */
+  readonly versioning?: VersioningOptions;
   /** Mounts an `OPTIONS` preflight per path, as {@link HttpApp.enableCors} does. */
   readonly cors?: CorsOptions;
   /**

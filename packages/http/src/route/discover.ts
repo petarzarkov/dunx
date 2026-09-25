@@ -7,7 +7,7 @@ import {
 } from '@dunx/core';
 import type { Middleware } from '../server/middleware.js';
 import {
-  filterOf,
+  controllerOptionsOf,
   prefixOf,
   resolvePath,
   routeMetaOf,
@@ -16,6 +16,7 @@ import {
 } from './marker.js';
 import { guardsOf, mergeMeta, metaOf, type MetaRecord } from './metadata.js';
 import type { RouteInput, RouteSchemas } from './schema.js';
+import { RouteVersioning, VERSION, type RouteVersion } from './version.js';
 
 export interface DiscoveredRoute {
   readonly method: HttpMethod;
@@ -48,6 +49,8 @@ export interface DiscoveredRoute {
    */
   readonly module?: ModuleRef | undefined;
   readonly moduleMiddleware?: readonly Ctor<Middleware>[] | undefined;
+  /** The version this entry serves, already in `path`. Absent when unversioned. */
+  readonly version?: string | undefined;
 }
 
 export const joinPath = (prefix: string, path: string): string => {
@@ -59,16 +62,18 @@ const applyFilter = (
   klass: { readonly name: string },
   marked: readonly MarkedMethod<RouteMeta>[],
 ): readonly MarkedMethod<RouteMeta>[] => {
-  const filter = filterOf(klass);
+  const filter = controllerOptionsOf(klass);
   if (filter === undefined) return marked;
 
   const names = new Set(marked.map(({ name }) => name));
   // Checked at runtime too: an untyped caller's misspelt key would otherwise
   // leave the route it meant to hide being served.
   for (const [list, listed] of Object.entries(filter)) {
+    if (list === 'version') continue;
     if (list !== 'include' && list !== 'exclude') {
       throw new AppError(
-        `${klass.name} passes ${list} to @Controller, which takes include and exclude.`,
+        `${klass.name} passes ${list} to @Controller, which takes include, ` +
+          'exclude and version.',
       );
     }
     for (const name of (listed ?? []) as readonly string[]) {
@@ -94,12 +99,18 @@ const applyFilter = (
  * method. Most-derived wins on a repeated name; an undecorated override does not
  * shadow its decorated base, and dispatch still lands on the override because the
  * handler is bound off the instance.
+ *
+ * A versioned handler is one entry per version: its own path under URI
+ * versioning, the same path under header and media-type versioning. Without
+ * `versioning` a declared version still expands, under the default `v` prefix.
  */
 export const discoverRoutes = (
   instance: object,
+  versioning: RouteVersioning = RouteVersioning.of(),
 ): readonly DiscoveredRoute[] => {
   const klass = instance.constructor;
   const prefix = prefixOf(klass);
+  const classVersion = controllerOptionsOf(klass)?.version;
   const classGuards = guardsOf(klass);
   const members = instance as Record<string, (input: RouteInput) => unknown>;
 
@@ -111,15 +122,34 @@ export const discoverRoutes = (
     ),
     // `marked` is the function the decorator wrote onto, not the instance member:
     // it is the only place the rest of this route's metadata can have come from.
-  ).map(({ name, meta, value: marked }) => ({
-    method: meta.method,
-    path: joinPath(prefix, resolvePath(meta.path)),
-    controller: klass.name,
-    handlerName: name,
-    handler: members[name]!.bind(instance),
-    options: meta.options,
-    meta: mergeMeta(klass, marked),
-    classMeta: metaOf(klass),
-    guards: [...classGuards, ...guardsOf(marked)],
-  }));
+  ).flatMap(({ name, meta, value: marked }) => {
+    const route: DiscoveredRoute = {
+      method: meta.method,
+      path: joinPath(prefix, resolvePath(meta.path)),
+      controller: klass.name,
+      handlerName: name,
+      handler: members[name]!.bind(instance),
+      options: meta.options,
+      meta: mergeMeta(klass, marked),
+      classMeta: metaOf(klass),
+      guards: [...classGuards, ...guardsOf(marked)],
+    };
+    const declared =
+      (metaOf(marked)?.get(VERSION.id) as RouteVersion | undefined) ??
+      classVersion;
+    const versions = versioning.versionsOf(declared, `${klass.name}.${name}()`);
+    return versions.length === 0
+      ? [route]
+      : versions.map((version) => {
+          const segment = versioning.segmentOf(version);
+          return {
+            ...route,
+            path:
+              segment === undefined
+                ? route.path
+                : joinPath(segment, route.path),
+            version,
+          };
+        });
+  });
 };

@@ -111,9 +111,16 @@ const columns = (meta: Meta): readonly Column<RouteNode>[] => [
     header: 'Handler',
     hideBelow: 'md',
     render: (route) => (
-      <Text size="xs" className="dunx-mono">
-        {route.controller}.{route.handler}
-      </Text>
+      <Group gap={4}>
+        <Text size="xs" className="dunx-mono">
+          {route.controller}.{route.handler}
+        </Text>
+        {route.version === null ? null : (
+          <Badge size="xs" variant="light" color="cyan" title="Version">
+            v{route.version}
+          </Badge>
+        )}
+      </Group>
     ),
   },
   {
@@ -182,7 +189,9 @@ export const Routes = ({
       <DataTable
         columns={columns(meta)}
         rows={shown}
-        rowKey={(route) => `${route.method} ${route.path}`}
+        rowKey={(route) =>
+          `${route.method} ${route.path} ${route.version ?? ''}`
+        }
         empty={
           <EmptyState
             title={query === '' ? 'No routes' : 'No route matches that filter'}

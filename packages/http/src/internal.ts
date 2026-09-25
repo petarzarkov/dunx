@@ -14,6 +14,7 @@ export {
   type DiscoveredRoute,
 } from './route/discover.js';
 export { RoutePrefix } from './route/prefix.js';
+export { compareVersions, RouteVersioning } from './route/version.js';
 export { defaultStatusFor } from './route/marker.js';
 export {
   gatewaysOf,

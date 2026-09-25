@@ -25,6 +25,7 @@ export const renderScalarPage = (
   renderShell(document, {
     mountId: MOUNT_ELEMENT_ID,
     jsonHref: options.jsonHref,
+    ...(options.versions === undefined ? {} : { versions: options.versions }),
     ...(scalar.title === undefined ? {} : { title: scalar.title }),
     // Scalar ships no icon. A real one, not `data:,`: that is no image, and a
     // browser that once showed Swagger UI at this URL kept its cached icon.

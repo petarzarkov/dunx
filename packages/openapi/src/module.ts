@@ -1,15 +1,18 @@
 import {
   provide,
   type Deps,
+  type Resolved,
   type DynamicModule,
   type AsyncModuleConfig,
   type ModuleRef,
 } from '@dunx/core';
 import type { Authorize } from '@dunx/http';
+import { RouteVersioning } from '@dunx/http/internal';
 import { buildController, type DocMount } from './controller.js';
 import { describeRoutes } from './discover.js';
 import { OpenApiExplorer } from './explorer.js';
-import { generateDocument, type DocumentInfo } from './generate.js';
+import type { DocumentInfo } from './generate.js';
+import { generateDocuments } from './versions.js';
 import type { DocsRenderer } from './renderer.js';
 
 /** Everything about the document itself, which is everything a factory can produce. */
@@ -93,13 +96,23 @@ export class OpenApiModule {
           // `configured` includes the controller above, so discovery reaches the
           // documentation routes. They are `@ApiHidden()`, so they are reached
           // and then dropped rather than never declared.
-          useFactory: async () =>
-            new OpenApiExplorer(
-              await generateDocument(describeRoutes(configured), options),
+          // `HttpFactory` binds the versioning, so the document lists the
+          // paths the server matches.
+          useFactory: async (versioning: RouteVersioning) => {
+            const generated = await generateDocuments(
+              describeRoutes(configured, versioning),
+              options,
+              versioning,
+            );
+            return new OpenApiExplorer(
+              generated.document,
               mount.json,
               mount.ui,
               options.renderer,
-            ),
+              generated.versions,
+            );
+          },
+          inject: [RouteVersioning] as const,
         }),
       ],
     };
@@ -146,17 +159,27 @@ export class OpenApiModule {
       controllers: [buildController(mount, options.renderer)],
       providers: [
         provide(OpenApiExplorer, {
-          useFactory: async (...deps) => {
-            const info = await options.useFactory(...deps);
+          useFactory: async (...resolved: readonly unknown[]) => {
+            const [versioning, ...deps] = resolved as [
+              RouteVersioning,
+              ...Resolved<D>,
+            ];
+            const info = await options.useFactory(...(deps as Resolved<D>));
             Object.assign(mount, mountFrom(info));
+            const generated = await generateDocuments(
+              describeRoutes(configured, versioning),
+              info,
+              versioning,
+            );
             return new OpenApiExplorer(
-              await generateDocument(describeRoutes(configured), info),
+              generated.document,
               mount.json,
               mount.ui,
               options.renderer,
+              generated.versions,
             );
           },
-          inject: options.inject ?? ([] as unknown as D),
+          inject: [RouteVersioning, ...(options.inject ?? [])] as Deps,
         }),
       ],
     };

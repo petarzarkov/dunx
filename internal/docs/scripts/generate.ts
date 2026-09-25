@@ -176,6 +176,7 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
   ['Observability', ['tracing']],
   ['Security', ['security']],
   ['Idempotency', ['idempotency']],
+  ['Versioning', ['versioning']],
 ];
 
 const sectionOf = (slug: string): string => {

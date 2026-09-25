@@ -1,4 +1,5 @@
 import { embedJson } from '@dunx/http/internal';
+import type { VersionLink } from './renderer.js';
 import type { OpenApiDocument } from './types.js';
 
 /** The id every renderer reads its document from. */
@@ -27,7 +28,29 @@ export interface ShellParts {
   readonly icon?: string | false;
   /** Where the JSON document is served, so `<noscript>` can link to it. */
   readonly jsonHref: string;
+  /** A bar of plain links, one per version's page. No script, so no CSP hash. */
+  readonly versions?: readonly VersionLink[];
 }
+
+const VERSIONS_CSS = `
+.dunx-versions { display: flex; gap: .75rem; align-items: center;
+  padding: .5rem 1.5rem; border-bottom: 1px solid #0002;
+  font: 14px/1.4 ui-sans-serif, system-ui, sans-serif; }
+.dunx-versions a { color: inherit; }
+.dunx-versions a[aria-current] { font-weight: 700; text-decoration: none; }
+`;
+
+const versionBar = (versions: readonly VersionLink[]): string =>
+  '<nav class="dunx-versions" aria-label="API version">Version ' +
+  versions
+    .map(
+      (link) =>
+        `<a href="${Bun.escapeHTML(link.href)}"` +
+        `${link.current ? ' aria-current="page"' : ''}>` +
+        `${Bun.escapeHTML(link.name)}</a>`,
+    )
+    .join('') +
+  '</nav>';
 
 const baseCss = (mountId: string): string => `
 html { box-sizing: border-box; }
@@ -70,8 +93,10 @@ export const renderShell = (
       .map((href) => `<link rel="stylesheet" href="${Bun.escapeHTML(href)}">`)
       .join('') +
     (icon === false ? '' : `<link rel="icon" href="${Bun.escapeHTML(icon)}">`) +
-    `<style>${baseCss(parts.mountId)}${parts.css ?? ''}</style></head>` +
-    `<body><div id="${parts.mountId}"></div>` +
+    `<style>${baseCss(parts.mountId)}${parts.css ?? ''}` +
+    `${parts.versions === undefined ? '' : VERSIONS_CSS}</style></head>` +
+    `<body>${parts.versions === undefined ? '' : versionBar(parts.versions)}` +
+    `<div id="${parts.mountId}"></div>` +
     '<noscript><p class="no-js">This API explorer needs JavaScript. ' +
     `The document itself is at <a href="${Bun.escapeHTML(parts.jsonHref)}">` +
     `${Bun.escapeHTML(parts.jsonHref)}</a>.</p></noscript>` +

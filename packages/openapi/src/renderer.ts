@@ -1,5 +1,14 @@
 import type { OpenApiDocument } from './types.js';
 
+/** One entry of the version bar a per-version page shows. */
+export interface VersionLink {
+  readonly name: string;
+  /** The page for that version. */
+  readonly href: string;
+  /** Whether this page shows it. */
+  readonly current: boolean;
+}
+
 /** Where the page is served, which is what its hrefs depend on. */
 export interface PageOptions {
   /** Where the JSON document is served, so the page can link to it. */
@@ -8,6 +17,8 @@ export interface PageOptions {
   readonly warnings: readonly string[];
   /** Where the page is mounted, which is where its assets hang off. */
   readonly mountedAt: string;
+  /** Header or media-type versioning only: one link per version's page. */
+  readonly versions?: readonly VersionLink[];
 }
 
 /**

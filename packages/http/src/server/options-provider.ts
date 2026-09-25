@@ -9,6 +9,7 @@ import type { CsrfOptions } from './csrf.js';
 import type { ErrorHandler } from './errors.js';
 import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
+import type { VersioningOptions } from '../route/version.js';
 import type { SecurityHeadersOptions } from './security-headers.js';
 
 /**
@@ -97,6 +98,11 @@ export abstract class HttpOptionsProvider {
 
   /** `undefined` lets `listen(port)` decide, which is what a test harness needs. */
   get port(): number | undefined {
+    return undefined;
+  }
+
+  /** Off by default. See {@link HttpOptions.versioning}. */
+  get versioning(): VersioningOptions | undefined {
     return undefined;
   }
 
@@ -215,6 +221,7 @@ export function resolveHttpOptions(
     prefix: settings.prefix,
     port: settings.port,
     cors: settings.cors,
+    versioning: settings.versioning,
     securityHeaders: settings.securityHeaders,
     csrf: settings.csrf,
     requestLogging: settings.requestLogging,

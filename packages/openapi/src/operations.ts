@@ -6,7 +6,13 @@ import {
   isStandardSchema,
   passThrough,
 } from './convert.js';
-import { apiDocFor, idempotentOf, isPublic, rolesOf } from './metadata.js';
+import {
+  apiDocFor,
+  idempotentOf,
+  isDeprecated,
+  isPublic,
+  rolesOf,
+} from './metadata.js';
 import { refTo, type SchemaStore } from './refs.js';
 import type {
   JsonSchema,
@@ -72,8 +78,11 @@ const validationErrorSchema: JsonSchema = Object.freeze({
   required: ['error', 'status', 'issues'],
 });
 
+/** A handler serving two versions is two operations, so the version is in it. */
 export const operationIdOf = (route: DiscoveredRoute): string =>
-  `${route.controller}_${route.handlerName}`;
+  route.version === undefined
+    ? `${route.controller}_${route.handlerName}`
+    : `${route.controller}_${route.handlerName}_v${route.version}`;
 
 /** `UsersController` documents itself as `Users`. */
 export const tagOf = (route: DiscoveredRoute): string => {
@@ -121,12 +130,28 @@ const withRoles = (
   return description === undefined ? line : `${description}\n\n${line}`;
 };
 
+/** How a header-versioned document names the header its operations need. */
+export interface VersionHeader {
+  readonly name: string;
+  /** Versions a request without the header gets, so the header is optional. */
+  readonly defaults: readonly string[];
+}
+
 const parametersFor = async (
   route: DiscoveredRoute,
   operationId: string,
   store: SchemaStore,
+  versionHeader?: VersionHeader,
 ): Promise<readonly ParameterObject[]> => {
   const parameters: ParameterObject[] = [];
+  if (versionHeader !== undefined && route.version !== undefined) {
+    parameters.push({
+      name: versionHeader.name,
+      in: 'header',
+      required: !versionHeader.defaults.includes(route.version),
+      schema: { type: 'string', const: route.version },
+    });
+  }
   const tokens = pathParams(route.path);
   const declared = route.options?.params;
   const shape = declared
@@ -279,11 +304,17 @@ const responsesFor = async (
 export const buildOperation = async (
   route: DiscoveredRoute,
   store: SchemaStore,
+  versionHeader?: VersionHeader,
 ): Promise<OperationObject> => {
   const operationId = operationIdOf(route);
   const doc = apiDocFor(route);
   const roles = rolesOf(route.meta);
-  const parameters = await parametersFor(route, operationId, store);
+  const parameters = await parametersFor(
+    route,
+    operationId,
+    store,
+    versionHeader,
+  );
 
   const body = route.options?.body;
   const converted = body
@@ -299,7 +330,9 @@ export const buildOperation = async (
     tags: doc.tags ?? [tagOf(route)],
     ...(doc.summary !== undefined ? { summary: doc.summary } : {}),
     ...(description !== undefined ? { description } : {}),
-    ...(doc.deprecated === true ? { deprecated: true } : {}),
+    ...(doc.deprecated === true || isDeprecated(route.meta)
+      ? { deprecated: true }
+      : {}),
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(converted
       ? {

@@ -183,6 +183,9 @@ A name the class does not have is a compile error, and a method that is not a
 route is a boot error. The filter is inherited, and a subclass that re-applies
 `@Controller` replaces it. `examples/full/src/crud/` is the whole example.
 
+The same options object takes `version`, which serves the controller at
+`/v1/...` once URI versioning is on. See [Versioning](./34-versioning.md).
+
 A class in `controllers` with no routes at all is a boot error:
 
 ```
