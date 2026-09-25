@@ -150,6 +150,7 @@ describe('a real server serving its own document', () => {
       expect(asset.status).toBe(200);
       expect(asset.headers.get('cache-control')).toContain('immutable');
       expect(Number(asset.headers.get('content-length'))).toBeGreaterThan(500);
+      await asset.arrayBuffer();
     }
     // A name off the allow-list is a 404, not a read out of node_modules.
     for (const name of ['swagger-ui-es-bundle.js', 'package.json']) {
@@ -377,6 +378,9 @@ describe('with the scalar renderer', () => {
     expect(asset.headers.get('content-type')).toContain('text/javascript');
     expect(asset.headers.get('cache-control')).toContain('immutable');
     expect(Number(asset.headers.get('content-length'))).toBeGreaterThan(500);
+    // Read, or the open connection holds `server.close()` past the hook timeout
+    // under a loaded run: a graceful stop waits for it.
+    await asset.arrayBuffer();
 
     expect(
       (await server.request('api/reference/standalone.esm.js')).status,
