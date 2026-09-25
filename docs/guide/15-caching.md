@@ -236,7 +236,8 @@ with `etag` off too; `entityTag(body, weak)` computes the tag `etag` would.
   tag for the same bytes. It costs 0.03 us for 1 KB and 13.5 us for 1 MB.
 - **`HEAD` gets the tag `GET` has.** Bun answers `HEAD` from the `GET` handler.
 - **A 304 keeps the 200's headers** without its body or `content-length`. CORS,
-  `securityHeaders`, `traceresponse` and a version's `Vary` are on it.
+  `securityHeaders`, `traceresponse`, a version's `Vary` and any
+  [cookie](./35-cookies.md) the handler set are on it.
 - **Under `Compression` the tag describes the unencoded bytes**, so gzip, zstd
   and identity share one. `Compression` weakens a strong tag it encodes, skips a
   304 and adds `Vary: accept-encoding` to it.

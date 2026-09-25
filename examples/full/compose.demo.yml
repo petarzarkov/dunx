@@ -123,6 +123,8 @@ services:
       # better-auth refuses to mint sessions without one. Supply it in a `.env`
       # beside this file, or in the environment that runs compose.
       AUTH_SECRET: ${DEMO_AUTH_SECRET:?set DEMO_AUTH_SECRET, at least 32 characters}
+      # Signs the preference cookie. A key of its own, not better-auth's.
+      COOKIE_SECRETS: ${DEMO_COOKIE_SECRETS:?set DEMO_COOKIE_SECRETS, at least 32 characters}
       # better-auth matches a browser's Origin against this, so without it every
       # sign-in from the public domain is INVALID_ORIGIN.
       PUBLIC_URL: https://demo.dunx.win

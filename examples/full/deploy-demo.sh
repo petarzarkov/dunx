@@ -5,8 +5,8 @@
 #   ./examples/full/deploy-demo.sh            pull, rebuild, recreate
 #   ./examples/full/deploy-demo.sh --no-pull  rebuild what is checked out
 #
-# Reads DEMO_AUTH_SECRET from examples/full/.env.demo, which is gitignored and
-# never committed.
+# Reads DEMO_AUTH_SECRET and DEMO_COOKIE_SECRETS from examples/full/.env.demo,
+# which is gitignored and never committed.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
@@ -17,6 +17,7 @@ env_file="examples/full/.env.demo"
 if [ ! -f "$env_file" ]; then
   echo "missing $env_file. Create it with:" >&2
   echo "  echo \"DEMO_AUTH_SECRET=\$(openssl rand -hex 32)\" > $env_file" >&2
+  echo "  echo \"DEMO_COOKIE_SECRETS=\$(openssl rand -hex 32)\" >> $env_file" >&2
   exit 1
 fi
 set -a

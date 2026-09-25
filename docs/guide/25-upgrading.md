@@ -8,6 +8,14 @@ touching its code, and the new spelling for what it can replace.
 
 ## 3.10.0
 
+### `req.cookies` exists on an unmatched path
+
+On a path no route matches, `req.cookies` was `undefined`: Bun only builds it for
+a route handler, so a global guard that read a cookie there threw a `TypeError`
+before the 404. It is now a `CookieMap` there too, and a cookie a guard sets on a
+miss reaches the response. A route handler is unchanged. See
+[Cookies](./35-cookies.md).
+
 ### `Compression` stamps a 304 as its 200
 
 A 304 whose `content-type` `Compression` would encode now carries `Vary:

@@ -3,6 +3,7 @@ import type { HttpApp } from '@dunx/http';
 import { AuthDemo } from '../auth/auth.demo.js';
 import { CatalogDemo } from '../cache/catalog.demo.js';
 import { EtagDemo } from '../crud/etag.demo.js';
+import { PreferencesDemo } from '../preferences/preferences.demo.js';
 import { VersioningDemo } from '../crud/versioning.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
@@ -75,6 +76,7 @@ export class Tour {
     private readonly stats: StatsDemo,
     private readonly versioning: VersioningDemo,
     private readonly etag: EtagDemo,
+    private readonly preferences: PreferencesDemo,
   ) {}
 
   async run(app: HttpApp, url: string): Promise<void> {
@@ -116,6 +118,9 @@ export class Tour {
 
     this.group('@dunx/http - ETag on a returned value, and a 304');
     await this.etag.demonstrate(url);
+
+    this.group('@dunx/http - a signed cookie, and an edited one read as unset');
+    await this.preferences.demonstrate(url);
 
     this.group('@dunx/http - W3C Trace Context, adopted and propagated');
     await this.trace.demonstrate(url);

@@ -1,5 +1,6 @@
 import { AppError, type Ctor, type ModuleRef } from '@dunx/core';
 import type { BunRequest, Server } from 'bun';
+import { withRequestCookies } from '../cookies/fallback.js';
 import { PathClaims } from '../route/claims.js';
 import { DEPRECATED, withDeprecation } from '../route/deprecation.js';
 import type { DiscoveredRoute } from '../route/discover.js';
@@ -279,7 +280,7 @@ export const buildFallback = (
     }
   };
 
-  return cors ? withCors(cors, run) : run;
+  return withRequestCookies(cors ? withCors(cors, run) : run);
 };
 
 /**

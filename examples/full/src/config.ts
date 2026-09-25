@@ -118,6 +118,15 @@ const envSchema = z.object({
     .string()
     .min(32)
     .default('dunx-full-example-development-secret-not-for-production'),
+  /**
+   * `SignedCookies` keys, comma-separated, 32 characters each. The first signs;
+   * the rest still verify, which is how a key is rotated.
+   */
+  COOKIE_SECRETS: z
+    .string()
+    .default('dunx-full-example-cookie-secret-not-for-production')
+    .transform((list) => list.split(',').map((secret) => secret.trim()))
+    .pipe(z.array(z.string().min(32)).min(1)),
   /** No sign-up; a guest account per visitor instead. The public demo's shape. */
   AUTH_GUEST_ONLY: z.stringbool().default(false),
   AUTH_SESSION_DAYS: z.coerce.number().int().min(1).default(7),
@@ -158,6 +167,7 @@ export interface AppConfig {
     readonly guestOnly: boolean;
     readonly sessionDays: number;
   };
+  readonly cookies: { readonly secrets: readonly string[] };
   readonly dashboard: {
     readonly token: string | undefined;
     readonly commands: boolean;
@@ -234,6 +244,7 @@ export const validate = (env: ConfigValues): AppConfig => {
       guestOnly: value.AUTH_GUEST_ONLY,
       sessionDays: value.AUTH_SESSION_DAYS,
     },
+    cookies: { secrets: value.COOKIE_SECRETS },
     dashboard: {
       token: value.DASHBOARD_TOKEN,
       commands: value.DASHBOARD_COMMANDS,

@@ -39,6 +39,7 @@ import { LimitsModule } from './throttle/throttle.module.js';
 import { SseModule } from './sse/sse.module.js';
 import { UpstreamModule } from './upstream/upstream.module.js';
 import { PicturesModule } from './pictures/pictures.module.js';
+import { PreferencesModule } from './preferences/preferences.module.js';
 import { MailModule } from './email/email.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { Tour } from './tour/tour.service.js';
@@ -122,6 +123,7 @@ const fileAndConsole = (
     // After CacheModule, which binds the connection its counter writes to.
     LimitsModule,
     IdempotencyKeysModule,
+    PreferencesModule,
     MaintenanceModule,
     AssetsModule,
     UpstreamModule,

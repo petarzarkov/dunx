@@ -71,7 +71,9 @@ threw has normally rolled its transaction back, and replaying the failure
 would refuse the retry the key exists for. A 4xx the handler returns, such as
 a declined payment, is an answer and is replayed.
 
-A replay carries the stored status, body and headers, except `Set-Cookie`.
+A replay carries the stored status, body and headers, except `Set-Cookie`,
+and a cookie set through `req.cookies` is never stored
+([Cookies](./35-cookies.md)).
 Security headers, CORS and request logging sit outside the guard, so a replay
 gets them the same as a first response. A `Bun.file` body over the cap is not
 read to find that out. A `ReadableStream` body is read whole before its size

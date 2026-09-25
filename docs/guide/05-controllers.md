@@ -266,10 +266,12 @@ framework never touches it.
 
 | Field    | Source                                   | Present when      |
 | -------- | ---------------------------------------- | ----------------- |
-| `req`    | the `BunRequest`                         | always            |
+| `req`    | the `BunRequest`, with `req.cookies`     | always            |
 | `body`   | parsed by `content-type`, then validated | `body` declared   |
 | `query`  | the query string, then validated         | `query` declared  |
 | `params` | `req.params`, then validated             | `params` declared |
+
+Reading and setting a cookie is `req.cookies`; see [Cookies](./35-cookies.md).
 
 The parameter takes either shape. Destructuring is the usual one, and a handler
 that passes the request on names the whole object instead:
