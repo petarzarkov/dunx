@@ -59,7 +59,8 @@ it('answers the OpenAPI document with its own tag, weakened when encoded', async
   expect(etag).toBe(`W/${identity.headers.get('etag')}`);
 
   const again = await client.request('api/openapi.json', {
-    headers: { 'if-none-match': etag! },
+    headers: { 'accept-encoding': 'gzip', 'if-none-match': etag! },
   });
   expect(again.status).toBe(304);
+  expect(again.headers.get('etag')).toBe(etag);
 });

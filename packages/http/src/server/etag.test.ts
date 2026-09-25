@@ -103,6 +103,34 @@ class ThingsController {
     );
   }
 
+  /** A body the handler already read from, so `cancel()` rejects. */
+  @Get('locked')
+  locked(): Response {
+    const response = new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('held'));
+        },
+      }),
+      { headers: { etag: '"held"' } },
+    );
+    response.body?.getReader();
+    return response;
+  }
+
+  /** A 304 the handler answered itself, which request logging must not clone. */
+  @Get('unclonable')
+  unclonable(): Response {
+    const response = new Response(null, {
+      status: 304,
+      headers: { 'content-type': 'application/json', etag: '"u"' },
+    });
+    response.clone = () => {
+      throw new Error('cloned a 304');
+    };
+    return response;
+  }
+
   @Get('unserializable')
   unserializable(): unknown {
     return () => 1;
@@ -337,6 +365,37 @@ describe('etag: true', () => {
     });
   });
 
+  it('answers 304 over a locked body without an unhandled rejection', async () => {
+    const rejections: unknown[] = [];
+    const record = (reason: unknown): void => {
+      rejections.push(reason);
+    };
+    process.on('unhandledRejection', record);
+    try {
+      await withApp({ etag: true }, async (url) => {
+        const response = await get(url, 'things/locked', {
+          'if-none-match': '"held"',
+        });
+        expect(response.status).toBe(304);
+        await Bun.sleep(10);
+      });
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+    expect(rejections).toEqual([]);
+  });
+
+  it('logs a 304 without cloning it for its body', async () => {
+    await withApp(
+      { etag: true, requestLogging: { responseBody: true } },
+      async (url) => {
+        const response = await get(url, 'things/unclonable');
+        expect(response.status).toBe(304);
+        expect(response.headers.get('etag')).toBe('"u"');
+      },
+    );
+  });
+
   it('tags only GET routes', async () => {
     await withApp({ etag: true }, async (url) => {
       const response = await get(
@@ -500,6 +559,7 @@ describe('etag with Compression', () => {
           'if-none-match': `W/${strong}`,
         });
         expect(again.status).toBe(304);
+        expect(again.headers.get('etag')).toBe(gzip.headers.get('etag'));
       },
       'compressed',
     );

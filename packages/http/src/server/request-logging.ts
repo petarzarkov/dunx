@@ -476,6 +476,15 @@ export class RequestLoggingMiddleware implements Middleware {
 
   #responseFields(response: Response): Promise<unknown> | undefined {
     if (!this.#responseBody) return undefined;
+    // Defined to carry nothing, so there is no body to clone. A 304 keeps the
+    // 200's `content-type`, which would otherwise pass the check below.
+    const { status } = response;
+    if (
+      status === HttpStatusCode.NO_CONTENT ||
+      status === HttpStatusCode.NOT_MODIFIED
+    ) {
+      return undefined;
+    }
     if (
       !(response.headers.get('content-type') ?? '').includes('application/json')
     ) {

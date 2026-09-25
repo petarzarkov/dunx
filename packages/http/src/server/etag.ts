@@ -12,8 +12,11 @@ export interface EtagOptions {
   readonly weak?: boolean;
 }
 
-/** What `Response.json` sets, so a tagged body is typed as an untagged one is. */
-const JSON_TYPE = 'application/json;charset=utf-8';
+/**
+ * What `Response.json` sets, so a body serialized by hand is typed as one it
+ * built. `@dunx/openapi` sends its document under it.
+ */
+export const JSON_CONTENT_TYPE = 'application/json;charset=utf-8';
 
 /** Each entity-tag in a list, captured without its `W/`. */
 const ENTITY_TAG = /(?:W\/)?("[^"]*")/g;
@@ -53,7 +56,7 @@ export const noneMatch = (header: string, etag: string): boolean => {
  * direct. A `Response` the handler built is never read: no public API tells a
  * buffered body from a stream or a file without consuming it, and `blob()` on
  * a stream that never ends never resolves. Its own `ETag`, when it sets one,
- * is honoured.
+ * is honoured by {@link conditionalGet}.
  *
  * Measured in docs/architecture/constraints.md, "ETags and conditional GET".
  */
@@ -78,23 +81,29 @@ export class EntityTags {
     // Set, not passed in the init: an init record measured 0.6 us more a
     // request. `content-type` stays on the 304, as on Bun's own for a static
     // route, so `Compression` can tell it would have encoded the 200.
-    response.headers.set('content-type', JSON_TYPE);
+    response.headers.set('content-type', JSON_CONTENT_TYPE);
     response.headers.set('etag', etag);
     return response;
   }
-
-  /** A handler's own `Response`, or a 304 if it carries an `ETag` the client has. */
-  honour(response: Response, req: Request): Response {
-    if (response.status !== HttpStatusCode.OK) return response;
-    const etag = response.headers.get('etag');
-    const header = req.headers.get('if-none-match');
-    if (etag === null || header === null || !noneMatch(header, etag)) {
-      return response;
-    }
-    const headers = new Headers(response.headers);
-    // RFC 9110 8.6: a 304 may carry the length only if it is the 200's.
-    headers.delete('content-length');
-    void response.body?.cancel();
-    return new Response(null, { status: HttpStatusCode.NOT_MODIFIED, headers });
-  }
 }
+
+/**
+ * `response`, or the 304 that replaces it when it is a 200 whose `ETag` the
+ * request's `If-None-Match` names. The headers are kept but `content-length`,
+ * which RFC 9110 8.6 allows only when it is the 200's. A handler's own
+ * `Response` goes through this under `etag`, and `@dunx/openapi`'s document
+ * always does.
+ */
+export const conditionalGet = (response: Response, req: Request): Response => {
+  if (response.status !== HttpStatusCode.OK) return response;
+  const etag = response.headers.get('etag');
+  const header = req.headers.get('if-none-match');
+  if (etag === null || header === null || !noneMatch(header, etag)) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  // Rejects when the handler already locked the body with a reader.
+  void response.body?.cancel().catch(() => undefined);
+  return new Response(null, { status: HttpStatusCode.NOT_MODIFIED, headers });
+};

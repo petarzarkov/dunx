@@ -52,6 +52,7 @@ const BARREL = [
   'ErrorHandler',
   'ErrorMapper',
   'EtagOptions',
+  'JSON_CONTENT_TYPE',
   'Gateway',
   'Get',
   'HEALTH_REPORT_SCHEMA',
@@ -213,6 +214,7 @@ const BARREL = [
   'ValidationIssue',
   'Version',
   'VersioningOptions',
+  'conditionalGet',
   'defaultErrorMapper',
   'entityTag',
   'errorMapper',
@@ -221,7 +223,6 @@ const BARREL = [
   'meta',
   'metaKey',
   'metaOf',
-  'noneMatch',
   'WsRelayModule',
 ].sort();
 

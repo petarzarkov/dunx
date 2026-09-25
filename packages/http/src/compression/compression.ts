@@ -161,9 +161,17 @@ export class Compression implements Middleware {
   ): Promise<Response> {
     const res = await next();
     // A 304 stands in for the 200 a cache holds, and RFC 9110 15.4.5 has it
-    // carry the `Vary` that 200 would have.
+    // carry the `Vary` and `ETag` that 200 would have. Its size is unknown, so
+    // a 200 under `threshold` sent strong still gets a weak tag here, which a
+    // weak comparison matches either way.
     if (res.status === 304) {
-      if (this.#encodable(res)) varyOnEncoding(res.headers);
+      if (!this.#encodable(res)) return res;
+      varyOnEncoding(res.headers);
+      const encoding = negotiate(
+        req.headers.get('accept-encoding'),
+        this.#options.encodings,
+      );
+      if (encoding !== undefined) weakenETag(res.headers);
       return res;
     }
     const body = res.body;

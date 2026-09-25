@@ -1,6 +1,7 @@
 import { inject, type Ctor } from '@dunx/core';
 import {
   ApiHidden,
+  conditionalGet,
   Controller,
   entityTag,
   gate,
@@ -8,7 +9,7 @@ import {
   HttpError,
   HttpStatusCode,
   inlineScriptPolicy,
-  noneMatch,
+  JSON_CONTENT_TYPE,
   Public,
   type Authorize,
   type Input,
@@ -67,20 +68,18 @@ const documentController = (mount: DocMount) => {
       const prefix = this.prefix(input, mount.json);
       const version = this.version(input);
       const json = this.explorer.json(prefix, version);
-      const key = `${prefix}\n${version ?? ''}`;
+      const key = this.cacheKey(prefix, version);
       let etag = this.#tags.get(key);
       if (etag === undefined) {
         etag = entityTag(json, false);
         this.#tags.set(key, etag);
       }
-      const headers = {
-        'content-type': 'application/json; charset=utf-8',
-        etag,
-      };
-      const asked = input.req.headers.get('if-none-match');
-      return asked !== null && noneMatch(asked, etag)
-        ? new Response(null, { status: HttpStatusCode.NOT_MODIFIED, headers })
-        : new Response(json, { headers });
+      return conditionalGet(
+        new Response(json, {
+          headers: { 'content-type': JSON_CONTENT_TYPE, etag },
+        }),
+        input.req,
+      );
     }
 
     /**
@@ -94,6 +93,11 @@ const documentController = (mount: DocMount) => {
         throw new HttpError(HttpStatusCode.NOT_FOUND, 'NOT_FOUND');
       }
       return asked;
+    }
+
+    /** What the document's tags and the page's policies are cached under. */
+    protected cacheKey(prefix: string, version: string | undefined): string {
+      return `${prefix}\n${version ?? ''}`;
     }
 
     protected prefix(input: Input<RouteSchemas>, declared: string): string {
@@ -137,7 +141,7 @@ export const buildController = (
       const prefix = this.prefix(input, mount.ui);
       const version = this.version(input);
       const html = await this.explorer.page(prefix, version);
-      const key = `${prefix}\n${version ?? ''}`;
+      const key = this.cacheKey(prefix, version);
       let policy = this.#policies.get(key);
       if (policy === undefined) {
         policy = inlineScriptPolicy(html);

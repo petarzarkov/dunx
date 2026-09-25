@@ -16,7 +16,7 @@ import type { UpgradeHandler } from '../ws/adapter.js';
 import { buildContext, type RouteContext } from './context.js';
 import { preflight, withCors, type CorsOptions } from './cors.js';
 import { defaultErrorMapper, HttpError, type ErrorMapper } from './errors.js';
-import type { EntityTags } from './etag.js';
+import { conditionalGet, type EntityTags } from './etag.js';
 import { buildInputReader, type InputReader } from './input.js';
 import { TraceContext } from './trace-context.js';
 import {
@@ -81,7 +81,7 @@ const toResponse = (
   tags: EntityTags | undefined,
 ): Response => {
   if (value instanceof Response) {
-    return tags === undefined ? value : tags.honour(value, req);
+    return tags === undefined ? value : conditionalGet(value, req);
   }
   if (value === undefined || value === null) {
     return new Response(null, { status: HttpStatusCode.NO_CONTENT });

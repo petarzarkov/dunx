@@ -225,7 +225,9 @@ GET /api/colors  If-None-Match: W/"8e0f5c2a91d4b7e3"  304  no body
 | a `Response` without one    | untouched: a file, a stream or an `@Sse` route is never read      |
 
 `HttpOptionsProvider` has the same member as a getter, `get etag()`. Off by
-default.
+default. A handler that answers with `conditionalGet(response, req)` gets the 304
+with `etag` off too; `entityTag(body, weak)` computes the tag `etag` would.
+`@dunx/openapi`'s document does both.
 
 - **Weak by default**, `W/"..."`, as in Express. `{ etag: { weak: false } }`
   sends strong tags. `If-None-Match` compares weakly either way (RFC 9110
