@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { Auth } from '@dunx/auth';
 import type { HttpApp } from '@dunx/http';
 import { createApp } from './main.js';
 import { SelfOrigin } from './landing/self-origin.js';
@@ -42,7 +41,7 @@ beforeAll(async () => {
   const url = await app.listen(0);
   app.get(SelfOrigin).set(url);
   base = new URL(url).origin;
-  origin = (await app.get(Auth).$context).baseURL;
+  origin = base;
 
   await fetch(`${base}/api/auth/sign-up/email`, {
     method: 'POST',

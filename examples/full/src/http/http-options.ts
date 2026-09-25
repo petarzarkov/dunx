@@ -3,6 +3,7 @@ import {
   HttpOptionsProvider,
   WsRelay,
   type CorsOptions,
+  type CsrfOptions,
   type PubSubRelay,
   type RequestLoggingOptions,
   type SocketMiddleware,
@@ -51,6 +52,19 @@ export class AppHttpOptions extends HttpOptionsProvider {
       credentials: true,
       exposedHeaders: ['x-handled-by'],
       maxAge: 600,
+    };
+  }
+
+  /**
+   * A cross-site `POST` from a browser is refused with a 403. The CORS origin is
+   * trusted from the same setting, since it is the one other site allowed to
+   * call with credentials. Normalized, since `csrf` takes a bare origin and a
+   * configured `https://example.com/` would fail the boot. `*` trusts none.
+   */
+  override get csrf(): CsrfOptions {
+    const origin = URL.parse(this.config.get('corsOrigin'))?.origin;
+    return {
+      trustedOrigins: origin === undefined || origin === 'null' ? [] : [origin],
     };
   }
 

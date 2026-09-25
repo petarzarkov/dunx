@@ -451,6 +451,12 @@ middleware on a miss, guards included, and it covers what `notFound: 'public'`
 and `'guarded'` decide. Under either setting the miss is logged and adopts a
 trace.
 
+The `warn` for an unmatched path, a scanner's `/wp-admin` or `/.env`, is
+written at most once a second per app. The next line written carries
+`suppressed`, the misses dropped since the last one. A 4xx on a matched route
+or on a path a middleware claims keeps a line of its own, and metrics count
+every request either way.
+
 A guard can decide for itself under either setting. `UNMATCHED` is set on a miss
 and no real route ever sets it:
 

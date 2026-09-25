@@ -10,10 +10,28 @@ interface AddressSource {
  * How many entries at the right-hand end of `X-Forwarded-For` were written by a
  * proxy under our control. `true` is one, which is the single-proxy deployment.
  */
-const trustedHops = (setting: boolean | number): number => {
+export const trustedHops = (setting: boolean | number): number => {
   if (setting === true) return 1;
   if (setting === false) return 0;
   return Number.isFinite(setting) ? Math.max(0, Math.trunc(setting)) : 0;
+};
+
+/**
+ * The entry of a comma-separated `X-Forwarded-*` header that the outermost
+ * trusted proxy wrote, counted from the right by `hops`. Blank entries are not
+ * hops. A count longer than the header clamps to the leftmost entry. `undefined`
+ * when nothing is trusted or the header is absent or empty.
+ */
+export const forwardedEntry = (
+  header: string | null,
+  hops: number,
+): string | undefined => {
+  if (hops <= 0 || header === null) return undefined;
+  const entries = header
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return entries[Math.max(0, entries.length - hops)];
 };
 
 /**
@@ -61,19 +79,14 @@ export class ClientAddress {
       );
     }
 
-    const hops = trustedHops(source.trustProxy);
-    if (hops > 0) {
-      const entries = (req.headers.get('x-forwarded-for') ?? '')
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0);
-      // Each proxy appends the peer it saw, so the last entry is the only one a
-      // single trusted proxy wrote. Reading `[0]` returned whatever the caller
-      // sent, which a caller may invent. A count longer than the header clamps
-      // to the leftmost entry rather than reaching past it.
-      const entry = entries[Math.max(0, entries.length - hops)];
-      if (entry) return unmap(entry);
-    }
+    // Each proxy appends the peer it saw, so the last entry is the only one a
+    // single trusted proxy wrote. Reading `[0]` returned whatever the caller
+    // sent, which a caller may invent.
+    const entry = forwardedEntry(
+      req.headers.get('x-forwarded-for'),
+      trustedHops(source.trustProxy),
+    );
+    if (entry) return unmap(entry);
     return unmap(source.server.requestIP(req)?.address);
   }
 }

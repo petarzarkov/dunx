@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { Auth } from '@dunx/auth';
 import type { HttpApp } from '@dunx/http';
 import { SyncDatabase } from '@dunx/infra/db';
 import { eq } from 'drizzle-orm';
@@ -59,8 +58,9 @@ let session: { token: string; cookie: string } = { token: '', cookie: '' };
 beforeAll(async () => {
   app = await createApp();
   base = new URL(await app.listen(0)).origin;
-  // The server is on port 0, so its own origin is not what better-auth trusts.
-  origin = (await app.get(Auth).$context).baseURL;
+  // What a browser on this page sends. better-auth's `baseURL` is port 3000,
+  // which `csrf` would refuse as another host.
+  origin = base;
 
   expect((await authPost('sign-up/email', CREDENTIALS)).status).toBe(200);
   const signIn = await authPost('sign-in/email', {
@@ -210,9 +210,10 @@ it('does not enforce the origin check under bun test, which sets NODE_ENV=test',
     });
 
   // Both halves of the check, both exempt: outside test mode these are
-  // MISSING_OR_NULL_ORIGIN and INVALID_ORIGIN respectively.
+  // MISSING_OR_NULL_ORIGIN and INVALID_ORIGIN respectively. The CORS origin,
+  // because `csrf` trusts it and would refuse any other.
   expect((await signIn()).status).toBe(200);
-  expect((await signIn('http://evil.example')).status).toBe(200);
+  expect((await signIn('https://example.com')).status).toBe(200);
 });
 
 it('stops admitting the cookie after sign-out', async () => {
@@ -274,9 +275,22 @@ it('enforces the origin check outside test mode', async () => {
       code: 'MISSING_OR_NULL_ORIGIN',
     });
 
-    const untrusted = await call('sign-in/email', credentials, {
+    // `csrf` refuses a foreign origin before better-auth sees it.
+    const foreign = await call('sign-in/email', credentials, {
       cookie,
       origin: 'http://evil.example',
+    });
+    expect(foreign.status).toBe(403);
+    expect(await foreign.json()).toEqual({
+      error: 'CROSS_ORIGIN_REQUEST',
+      status: 403,
+    });
+
+    // The CORS origin passes `csrf`, which trusts it, and better-auth, which
+    // does not, refuses it on its own.
+    const untrusted = await call('sign-in/email', credentials, {
+      cookie,
+      origin: 'https://example.com',
     });
     expect(untrusted.status).toBe(403);
     expect((await untrusted.json()) as { code: string }).toMatchObject({

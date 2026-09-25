@@ -8,6 +8,17 @@ touching its code, and the new spelling for what it can replace.
 
 ## 3.10.0
 
+### An unmatched-path flood logs one line a second
+
+Request logging's `warn` for a 4xx on a path no route matched and no middleware
+claims is now written at most once a second, and the next line carries
+`suppressed`, the count dropped since the last one, so a scanner walking
+`/wp-admin` and `/.env` writes one line a second.
+
+A 4xx on a matched
+route logs exactly as before, and metrics still count every request. See
+[Logging](./13-logging.md#one-entry-per-request).
+
 ### The explorer and dashboard pages send their own CSP
 
 Swagger UI, Scalar and the dashboard now answer with a `Content-Security-Policy`

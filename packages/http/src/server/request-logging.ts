@@ -6,6 +6,8 @@ import {
   type RequestFields as ScopeFields,
 } from '@dunx/core';
 import type { BunRequest } from 'bun';
+import { UNMATCHED } from '../route/metadata.js';
+import type { ClaimedRoutes } from './claimed-routes.js';
 import type { RouteContext } from './context.js';
 import { HttpError } from './errors.js';
 import type { Middleware, Next } from './middleware.js';
@@ -14,6 +16,7 @@ import { RawBody } from './raw-body.js';
 import { serveInSpan } from './server-span.js';
 import { TraceContext, type Trace } from './trace-context.js';
 import { HttpStatusCode } from './status.js';
+import { ThrottledWarning } from './throttled-warning.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
 
 const parse = (text: string, limit: number): unknown => {
@@ -82,12 +85,22 @@ export class RequestLoggingMiddleware implements Middleware {
    */
   readonly #tracer: Tracer | undefined;
 
+  /**
+   * The warn for a 4xx on a path nothing matched or claimed: a scanner's
+   * `/wp-admin` and `/.env`. One a second per app, the next carrying the count
+   * dropped. A matched route's 4xx is not throttled.
+   */
+  readonly #unmatched: ThrottledWarning;
+  readonly #claimed: ClaimedRoutes | undefined;
+
   constructor(
     private readonly logger: Logger,
     private readonly context: RequestContext,
     options: RequestLoggingOptions = {},
     metrics?: RequestMetrics,
     tracer?: Tracer,
+    claimed?: ClaimedRoutes,
+    unmatched: ThrottledWarning = new ThrottledWarning(logger),
   ) {
     this.#limit = options.maxBodyLength ?? 2048;
     this.#requestBody = options.requestBody ?? false;
@@ -100,6 +113,8 @@ export class RequestLoggingMiddleware implements Middleware {
     this.#traceResponse = options.traceResponse ?? true;
     this.#metrics = metrics;
     this.#tracer = tracer instanceof NoopTracer ? undefined : tracer;
+    this.#claimed = claimed;
+    this.#unmatched = unmatched;
   }
 
   /** Both guards check emptiness first, so configuring neither costs two reads. */
@@ -370,10 +385,15 @@ export class RequestLoggingMiddleware implements Middleware {
     };
     this.#observe(req, ctx, status, started);
     const line = `${req.method} ${path} ${status}`;
-    if (status < HttpStatusCode.INTERNAL_SERVER_ERROR) {
-      this.logger.warn(line, entry);
-    } else {
+    if (status >= HttpStatusCode.INTERNAL_SERVER_ERROR) {
       this.logger.error(line, entry);
+    } else if (
+      ctx.get(UNMATCHED) === true &&
+      this.#claimed?.has(ctx.path) !== true
+    ) {
+      this.#unmatched.warn(line, entry);
+    } else {
+      this.logger.warn(line, entry);
     }
   }
 

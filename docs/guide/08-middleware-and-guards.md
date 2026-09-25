@@ -663,7 +663,8 @@ Four behaviours to expect:
 
 Security response headers (`Strict-Transport-Security`, `X-Frame-Options`, a
 `Content-Security-Policy`) are wrapped the same way, at boot rather than as a
-middleware. See [Security](./32-security.md).
+middleware. So is `csrf`, which refuses a cross-site write before the chain
+runs. See [Security](./32-security.md).
 
 ### Why preflight is mounted per path
 
