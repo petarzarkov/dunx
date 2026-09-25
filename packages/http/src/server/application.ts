@@ -24,13 +24,7 @@ import {
   usesMetricsMiddleware,
 } from './metrics.js';
 import type { CorsOptions } from './cors.js';
-import {
-  crossOriginCheck,
-  csrfRefuser,
-  withCsrf,
-  withCsrfRoutes,
-  type CsrfOptions,
-} from './csrf.js';
+import { csrfWrapper, withCsrfRoutes, type CsrfOptions } from './csrf.js';
 import { errorMapper, toErrorMapper, type ErrorMapper } from './errors.js';
 import { hasClaimedPaths, type Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
@@ -253,16 +247,17 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
         from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
     );
     // Built here rather than at construction: `trust proxy` may still change.
-    const check = this.#csrf
-      ? crossOriginCheck(this.#csrf, this.#settings['trust proxy'])
-      : undefined;
-    const refuse = check
-      ? csrfRefuser(this.#app.get(Logger), this.#onError)
+    const csrf = this.#csrf
+      ? csrfWrapper(
+          this.#csrf,
+          this.#settings['trust proxy'],
+          this.#app.get(Logger),
+          this.#onError,
+        )
       : undefined;
     // Inside the security headers, so a refusal carries them; outside the
     // chain, so nothing reads a body or claims a key for a request refused.
-    const checked =
-      check && refuse ? withCsrfRoutes(check, refuse, built) : built;
+    const checked = csrf ? withCsrfRoutes(csrf, built) : built;
     const pairs = this.#securityHeaders;
     const secured = pairs ? withSecuredRoutes(pairs, checked) : checked;
     // Before `withUpgradeRoutes` merges the gateways in `bind`, which assigns
@@ -293,8 +288,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       this.#cors,
       this.#notFound,
     );
-    const guarded =
-      check && refuse ? withCsrf(check, refuse, fallback) : fallback;
+    const guarded = csrf ? csrf(fallback) : fallback;
     const fetch = pairs ? withSecurityHeaders(pairs, guarded) : guarded;
 
     const bound = this.#binding.bind({ port, routes, fetch, websocket: ws });

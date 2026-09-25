@@ -147,7 +147,9 @@ and request logging never sees it. It carries the security headers when those
 are on. The check costs 0.5 to 0.9 microseconds on an unsafe request, and
 nothing on a safe one, whose route entry is not wrapped.
 
-Each refusal is one `warn` line through the bound `Logger`:
+A refusal writes a `warn` line through the bound `Logger`, at most one a
+second. The next line written carries `suppressed`, the refusals dropped since
+the last one:
 
 ```ts
 logger.warn('CSRF refused POST /things', {
@@ -157,6 +159,7 @@ logger.warn('CSRF refused POST /things', {
   origin: 'https://evil.test', // as received, or null
   reason: 'cross-origin', // or 'origin-mismatch' when Origin decided
   traceparent: '00-...', // only when the request carried one
+  suppressed: 41, // only when refusals were dropped
 });
 ```
 

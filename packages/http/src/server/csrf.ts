@@ -1,10 +1,11 @@
 import { AppError, type Logger } from '@dunx/core';
-import { trustedHops } from './client-address.js';
+import { forwardedEntry, trustedHops } from './client-address.js';
 import type { ErrorMapper } from './errors.js';
 import { HttpError } from './errors.js';
 import type { ServedHandler } from './middleware.js';
 import type { BunRoutes, RouteMethod } from './routes.js';
 import { HttpStatusCode } from './status.js';
+import { ThrottledWarning } from './throttled-warning.js';
 
 export interface CsrfOptions {
   /**
@@ -40,27 +41,19 @@ export const trustedOriginSet = (
   return new Set(origins);
 };
 
+/** `undefined` for an opaque (`null`) or unparseable `Origin`: a mismatch. */
 const hostOf = (origin: string): string | undefined => {
-  const at = origin.indexOf('://');
-  return at === -1 ? undefined : origin.slice(at + 3);
+  const host = URL.parse(origin)?.host;
+  return host === '' ? undefined : host;
 };
 
 /**
- * The host the browser addressed. Behind trusted proxies it is counted from the
- * right of `X-Forwarded-Host` by the number of hops, as `ClientAddress` counts
- * `X-Forwarded-For`: anything further left came from the caller.
+ * The host the browser addressed: behind trusted proxies, the `X-Forwarded-Host`
+ * entry `ClientAddress` would pick from `X-Forwarded-For`.
  */
-const addressedHost = (req: Request, hops: number): string | null => {
-  if (hops > 0) {
-    const entries = (req.headers.get('x-forwarded-host') ?? '')
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0);
-    const entry = entries[Math.max(0, entries.length - hops)];
-    if (entry !== undefined) return entry;
-  }
-  return req.headers.get('host');
-};
+const addressedHost = (req: Request, hops: number): string | null =>
+  forwardedEntry(req.headers.get('x-forwarded-host'), hops) ??
+  req.headers.get('host');
 
 /** Which rule refused: `Sec-Fetch-Site`, or the `Origin` fallback. */
 export type CsrfRefusal = 'cross-origin' | 'origin-mismatch';
@@ -99,17 +92,31 @@ export const crossOriginCheck = (
   };
 };
 
+/** Wraps one route-table handler with the check. */
+export type CsrfWrap = (handler: ServedHandler) => ServedHandler;
+
 /**
- * The 403 for a refused request, logged once at `warn`. The trace context is
- * not adopted until request logging runs, which a refusal never reaches, so the
- * inbound `traceparent` is copied as received.
+ * The check, the refusal and its log line as one wrapper, built once at boot.
+ * Not `async`, so a handler that answered synchronously still does. A refusal
+ * goes through the app's error mapper, so it has the shape every other error
+ * has, and is logged through a {@link ThrottledWarning}.
+ *
+ * The trace context is adopted by request logging, which a refusal never
+ * reaches, so the inbound `traceparent` is copied as received.
  */
-export const csrfRefuser =
-  (logger: Logger, onError: ErrorMapper) =>
-  (req: Request, reason: CsrfRefusal): Response => {
+export const csrfWrapper = (
+  options: CsrfOptions,
+  trustProxy: boolean | number,
+  logger: Logger,
+  onError: ErrorMapper,
+): CsrfWrap => {
+  const check = crossOriginCheck(options, trustProxy);
+  const warning = new ThrottledWarning(logger);
+
+  const refuse = (req: Request, reason: CsrfRefusal): Response => {
     const path = new URL(req.url).pathname;
     const traceparent = req.headers.get('traceparent');
-    logger.warn(`CSRF refused ${req.method} ${path}`, {
+    warning.warn(`CSRF refused ${req.method} ${path}`, {
       method: req.method,
       path,
       secFetchSite: req.headers.get('sec-fetch-site'),
@@ -123,20 +130,7 @@ export const csrfRefuser =
     );
   };
 
-type Check = (req: Request) => CsrfRefusal | undefined;
-type Refuse = (req: Request, reason: CsrfRefusal) => Response;
-
-/**
- * Wraps one handler at boot. Not `async`, so a handler that answered
- * synchronously still does. A refusal goes through the app's error mapper, so it
- * has the shape every other error has.
- */
-export const withCsrf = (
-  check: Check,
-  refuse: Refuse,
-  handler: ServedHandler,
-): ServedHandler => {
-  return (req, server) => {
+  return (handler) => (req, server) => {
     if (SAFE.has(req.method)) return handler(req, server);
     const reason = check(req);
     return reason === undefined ? handler(req, server) : refuse(req, reason);
@@ -145,8 +139,7 @@ export const withCsrf = (
 
 /** Every unsafe-method entry of the table. A `GET` entry is left as it was. */
 export const withCsrfRoutes = (
-  check: Check,
-  refuse: Refuse,
+  wrap: CsrfWrap,
   routes: BunRoutes,
 ): BunRoutes => {
   const checked: BunRoutes = {};
@@ -155,7 +148,7 @@ export const withCsrfRoutes = (
     for (const [method, handler] of Object.entries(byMethod)) {
       wrapped[method as RouteMethod] = SAFE.has(method)
         ? handler
-        : withCsrf(check, refuse, handler);
+        : wrap(handler);
     }
     checked[path] = wrapped;
   }

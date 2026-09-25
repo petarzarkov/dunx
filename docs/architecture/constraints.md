@@ -705,5 +705,9 @@ at boot like the security headers, and installed on unsafe-method entries only:
 | Neither header (a non-browser)      | 91.1% | 94.1% | 0.48-0.72 us      |
 
 Below the 1.26 us of a new global async middleware, and a `GET` pays nothing.
-A refusal is answered outside the chain, so it writes its own `warn` line
-through the bound `Logger` rather than a request-logging entry.
+A refusal is answered outside the chain and ahead of any rate limit, so it
+writes its own `warn` line through the bound `Logger`, at most one a second,
+the next carrying a `suppressed` count. One window for every refusal rather
+than one per origin: a non-browser attacker chooses its `Origin`, so a window
+per origin would let it rotate past the limit. Request logging's own `warn` for
+every 4xx is not throttled, so a flood of 404s still writes a line each.

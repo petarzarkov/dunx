@@ -68,3 +68,27 @@ it('never checks a read', async () => {
   await response.text();
   expect(response.status).toBe(200);
 });
+
+it('boots with a CORS origin written with a trailing slash, and trusts it', async () => {
+  const before = process.env['CORS_ORIGIN'];
+  process.env['CORS_ORIGIN'] = 'https://example.com/';
+  const slashed = await createApp();
+  try {
+    const url = await slashed.listen(0);
+    const response = await fetch(new URL('api/auth/sign-in/email', url), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://example.com',
+        'sec-fetch-site': 'cross-site',
+      },
+      body: JSON.stringify({ email: 'nobody@example.test', password: 'x' }),
+    });
+    await response.text();
+    expect(response.status).toBe(401);
+  } finally {
+    await slashed.shutdown();
+    if (before === undefined) delete process.env['CORS_ORIGIN'];
+    else process.env['CORS_ORIGIN'] = before;
+  }
+});

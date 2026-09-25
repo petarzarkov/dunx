@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { ConsoleLogger, Logger, Module, provide } from '@dunx/core';
 import { Controller, Delete, Get, Post } from '../route/decorators.js';
 import { crossOriginCheck, trustedOriginSet } from './csrf.js';
+import { ThrottledWarning } from './throttled-warning.js';
 import { HttpFactory } from './factory.js';
 import type { HttpOptions } from './options.js';
 import { HttpOptionsProvider } from './options-provider.js';
@@ -233,7 +234,10 @@ describe('csrf refusal log', () => {
   })
   class LoggedModule {}
 
-  it('writes one warn per refusal, and nothing for a request let through', async () => {
+  const traceparent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
+
+  it('writes nothing for a request let through, and a warn for a refusal', async () => {
+    recorder.warnings.length = 0;
     await withApp(
       { csrf: true },
       async (url) => {
@@ -241,13 +245,10 @@ describe('csrf refusal log', () => {
         await send(url, 'things', 'POST');
         expect(recorder.warnings).toEqual([]);
 
-        const traceparent =
-          '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
         await send(url, 'things?next=/admin', 'POST', {
           ...CROSS_SITE,
           traceparent,
         });
-        await send(url, 'things/1', 'DELETE', { origin: 'https://evil.test' });
         expect(recorder.warnings).toEqual([
           {
             message: 'CSRF refused POST /things',
@@ -260,6 +261,25 @@ describe('csrf refusal log', () => {
               traceparent,
             },
           },
+        ]);
+      },
+      LoggedModule,
+    );
+  });
+
+  it('names the Origin fallback as the reason, and throttles a burst', async () => {
+    recorder.warnings.length = 0;
+    await withApp(
+      { csrf: true },
+      async (url) => {
+        for (let i = 0; i < 5; i++) {
+          const refused = await send(url, 'things/1', 'DELETE', {
+            origin: 'https://evil.test',
+          });
+          expect(refused.status).toBe(403);
+        }
+        // Five refusals inside one interval: the first is written.
+        expect(recorder.warnings).toEqual([
           {
             message: 'CSRF refused DELETE /things/1',
             fields: {
@@ -274,6 +294,39 @@ describe('csrf refusal log', () => {
       },
       LoggedModule,
     );
+  });
+});
+
+describe('ThrottledWarning', () => {
+  it('writes one line per interval and carries the count it dropped', () => {
+    const recorder = new Recorder();
+    let now = 0;
+    const warning = new ThrottledWarning(recorder, 1000, () => now);
+
+    warning.warn('a', { n: 1 });
+    now = 500;
+    warning.warn('b', { n: 2 });
+    warning.warn('c', { n: 3 });
+    now = 1000;
+    warning.warn('d', { n: 4 });
+    now = 1200;
+    warning.warn('e', { n: 5 });
+    now = 5000;
+    warning.warn('f', { n: 6 });
+
+    expect(recorder.warnings).toEqual([
+      { message: 'a', fields: { n: 1 } },
+      { message: 'd', fields: { n: 4, suppressed: 2 } },
+      { message: 'f', fields: { n: 6, suppressed: 1 } },
+    ]);
+  });
+
+  it('defaults to one line a second on a monotonic clock', () => {
+    const recorder = new Recorder();
+    const warning = new ThrottledWarning(recorder);
+    warning.warn('a', {});
+    warning.warn('b', {});
+    expect(recorder.warnings).toEqual([{ message: 'a', fields: {} }]);
   });
 });
 
@@ -360,8 +413,31 @@ describe('crossOriginCheck', () => {
     expect(allows(request({ 'sec-fetch-site': 'Same-Origin' }))).toBe(false);
   });
 
-  it('refuses an Origin that is no URL at all', () => {
-    expect(allows(request({ origin: 'null', host: 'app.test' }))).toBe(false);
+  it('refuses an opaque or unparseable Origin as a mismatch', () => {
+    for (const origin of ['null', 'not a url', 'http://']) {
+      expect([origin, refusal(request({ origin, host: 'app.test' }))]).toEqual([
+        origin,
+        'origin-mismatch',
+      ]);
+    }
+  });
+
+  it('compares the host an Origin parses to, not its spelling', () => {
+    const host = 'app.test';
+    expect(allows(request({ origin: 'http://APP.test', host }))).toBe(true);
+    expect(allows(request({ origin: 'https://app.test:443', host }))).toBe(
+      true,
+    );
+  });
+
+  it('counts X-Forwarded-Host from the right by the hop count', () => {
+    const behindTwo = crossOriginCheck({}, 2);
+    const req = request({
+      origin: 'https://shop.example',
+      'x-forwarded-host': 'evil.test, shop.example, edge.internal',
+    });
+    expect(behindTwo(req)).toBeUndefined();
+    expect(refusal(req)).toBe('origin-mismatch');
   });
 
   it('compares the port as part of the host', () => {

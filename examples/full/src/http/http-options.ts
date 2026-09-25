@@ -58,11 +58,14 @@ export class AppHttpOptions extends HttpOptionsProvider {
   /**
    * A cross-site `POST` from a browser is refused with a 403. The CORS origin is
    * trusted from the same setting, since it is the one other site allowed to
-   * call with credentials. `*` names no origin, so it trusts none.
+   * call with credentials. Normalized, since `csrf` takes a bare origin and a
+   * configured `https://example.com/` would fail the boot. `*` trusts none.
    */
   override get csrf(): CsrfOptions {
-    const origin = this.config.get('corsOrigin');
-    return { trustedOrigins: origin === '*' ? [] : [origin] };
+    const origin = URL.parse(this.config.get('corsOrigin'))?.origin;
+    return {
+      trustedOrigins: origin === undefined || origin === 'null' ? [] : [origin],
+    };
   }
 
   /** Multi-node websocket fan-out, resolved rather than constructed. */

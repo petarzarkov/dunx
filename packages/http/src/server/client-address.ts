@@ -17,6 +17,24 @@ export const trustedHops = (setting: boolean | number): number => {
 };
 
 /**
+ * The entry of a comma-separated `X-Forwarded-*` header that the outermost
+ * trusted proxy wrote, counted from the right by `hops`. Blank entries are not
+ * hops. A count longer than the header clamps to the leftmost entry. `undefined`
+ * when nothing is trusted or the header is absent or empty.
+ */
+export const forwardedEntry = (
+  header: string | null,
+  hops: number,
+): string | undefined => {
+  if (hops <= 0 || header === null) return undefined;
+  const entries = header
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return entries[Math.max(0, entries.length - hops)];
+};
+
+/**
  * `::ffff:10.0.0.1` is the same address as `10.0.0.1`, written the way a
  * dual-stack listener reports an IPv4 peer. Every caller that compares this to a
  * stored address wants the plain form, and a caller that normalises at one call
@@ -61,19 +79,14 @@ export class ClientAddress {
       );
     }
 
-    const hops = trustedHops(source.trustProxy);
-    if (hops > 0) {
-      const entries = (req.headers.get('x-forwarded-for') ?? '')
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0);
-      // Each proxy appends the peer it saw, so the last entry is the only one a
-      // single trusted proxy wrote. Reading `[0]` returned whatever the caller
-      // sent, which a caller may invent. A count longer than the header clamps
-      // to the leftmost entry rather than reaching past it.
-      const entry = entries[Math.max(0, entries.length - hops)];
-      if (entry) return unmap(entry);
-    }
+    // Each proxy appends the peer it saw, so the last entry is the only one a
+    // single trusted proxy wrote. Reading `[0]` returned whatever the caller
+    // sent, which a caller may invent.
+    const entry = forwardedEntry(
+      req.headers.get('x-forwarded-for'),
+      trustedHops(source.trustProxy),
+    );
+    if (entry) return unmap(entry);
     return unmap(source.server.requestIP(req)?.address);
   }
 }
