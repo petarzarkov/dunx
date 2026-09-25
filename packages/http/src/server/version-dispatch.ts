@@ -4,6 +4,7 @@ import type { CorsOptions } from './cors.js';
 import type { ServedHandler } from './middleware.js';
 import type { BunRoutes } from './routes.js';
 import { withResponseStamp } from './security-headers.js';
+import { varyOn } from './vary.js';
 
 /** What a header or media-type table entry needs besides its handlers. */
 export interface VersionSelection {
@@ -17,17 +18,6 @@ interface Group {
   neutral?: ServedHandler;
   readonly versions: Map<string, ServedHandler>;
 }
-
-/** Appends `name` to `Vary` unless it is already listed. */
-const appendVary = (response: Response, name: string): Response => {
-  const listed = (response.headers.get('vary') ?? '')
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase());
-  if (!listed.includes(name.toLowerCase()) && !listed.includes('*')) {
-    response.headers.append('vary', name);
-  }
-  return response;
-};
 
 /**
  * One table entry for every version of a path and method. Bun has already
@@ -52,7 +42,10 @@ const select = (
       .find((handler) => handler !== undefined) ?? unknown;
 
   return withResponseStamp(
-    (response) => appendVary(response, header),
+    (response) => {
+      varyOn(response.headers, header);
+      return response;
+    },
     (req, server) => {
       const requested = versioning.requested(req);
       const handler =

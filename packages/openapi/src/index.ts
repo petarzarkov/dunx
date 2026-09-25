@@ -45,7 +45,11 @@ export {
   type PageOptions,
   type VersionLink,
 } from './renderer.js';
-export type { VersionedDocuments } from './versions.js';
+export {
+  generateDocuments,
+  type GeneratedDocuments,
+  type VersionedDocuments,
+} from './versions.js';
 export {
   ASSET_CACHE_CONTROL,
   PackageAssets,

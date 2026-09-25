@@ -1,5 +1,6 @@
 import type { RouteHandler, ServedHandler } from './middleware.js';
 import { HttpStatusCode } from './status.js';
+import { varyOn } from './vary.js';
 
 export type CorsOrigin =
   | string
@@ -60,7 +61,7 @@ const applyCors = (
   response.headers.set(ORIGIN, origin);
   // The response body varies by request origin unless every origin gets the same
   // wildcard, so a shared cache must not serve one origin's copy to another.
-  if (origin !== '*') response.headers.append('vary', 'Origin');
+  if (origin !== '*') varyOn(response.headers, 'Origin');
   if (options.credentials) {
     response.headers.set('access-control-allow-credentials', 'true');
   }

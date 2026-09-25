@@ -5,8 +5,8 @@ import { CrudModule } from './crud/crud.module.js';
 
 /*
  * The app serves URI versions (`main.ts`). The same two swatches controllers
- * under header versioning, with no change to either: one path, the version
- * read from `X-API-Version`.
+ * under header and media-type versioning, with no change to either: one path,
+ * the version read from `X-API-Version` or from `Accept`.
  */
 let server: TestServer;
 
@@ -44,4 +44,28 @@ it('answers 404 for a version nobody declared', async () => {
   });
 
   expect(res.status).toBe(404);
+});
+
+it('reads the version from an Accept parameter under media-type versioning', async () => {
+  const media = await createTestServer({
+    modules: [configModule(), CrudModule],
+    versioning: { type: 'media-type', key: 'v=' },
+  });
+  try {
+    const v1 = await media.json<string[]>('swatches', {
+      headers: { accept: 'application/json;v=1' },
+    });
+
+    expect(v1.body).toHaveLength(3);
+    expect(v1.headers.get('vary')).toBe('Accept');
+    expect(
+      (
+        await media.request('swatches', {
+          headers: { accept: 'application/json' },
+        })
+      ).status,
+    ).toBe(404);
+  } finally {
+    await media.close();
+  }
 });

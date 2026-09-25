@@ -12,6 +12,10 @@ import {
   VERSION_NEUTRAL,
   type VersioningOptions,
 } from '../route/version.js';
+import { Idempotent } from '../idempotency/decorators.js';
+import { IDEMPOTENT_REPLAYED_HEADER } from '../idempotency/guard.js';
+import { IdempotencyModule } from '../idempotency/module.js';
+import { MemoryIdempotencyStore } from '../idempotency/store.js';
 import { routesOf } from '../inspect.js';
 import type { RouteContext } from './context.js';
 import { HttpFactory, type HttpApp, type HttpOptions } from './factory.js';
@@ -135,6 +139,16 @@ describe('header versioning', () => {
     );
   });
 
+  test('an empty header names no version, so it gets defaultVersion', async () => {
+    const base = await serve({
+      versioning: { ...header, defaultVersion: '2' },
+    });
+
+    expect(
+      await (await get(`${base}/items/1`, { 'x-api-version': '' })).text(),
+    ).toBe('"v2"');
+  });
+
   test('a neutral route answers whatever the header says', async () => {
     const base = await serve({ versioning: header });
 
@@ -242,6 +256,58 @@ describe('header versioning', () => {
   });
 });
 
+test('@Idempotent on one version replays that version only', async () => {
+  let runs = 0;
+  @Controller('charges', { version: '1' })
+  class ChargesV1 {
+    @Post('')
+    create(): { run: number } {
+      return { run: ++runs };
+    }
+  }
+  @Controller('charges', { version: '2' })
+  class ChargesV2 {
+    @Idempotent()
+    @Post('')
+    create(): { run: number } {
+      return { run: ++runs };
+    }
+  }
+  @Module({
+    imports: [
+      IdempotencyModule.forRoot({
+        prefix: 'versioned',
+        subject: () => undefined,
+        store: new MemoryIdempotencyStore(),
+      }),
+    ],
+    controllers: [ChargesV1, ChargesV2],
+  })
+  class Charged {}
+
+  app = await HttpFactory.create(Charged, {
+    requestLogging: false,
+    bootLogging: false,
+    versioning: header,
+  });
+  const base = (await app.listen(0)).replace(/\/$/, '');
+  const post = (version: string) =>
+    fetch(`${base}/charges`, {
+      method: 'POST',
+      headers: { 'x-api-version': version, 'idempotency-key': 'k-1' },
+    });
+
+  const first = await post('2');
+  const replay = await post('2');
+  expect(await replay.json()).toEqual(await first.json());
+  expect(replay.headers.get(IDEMPOTENT_REPLAYED_HEADER)).toBe('true');
+
+  const v1 = await post('1');
+  const again = await post('1');
+  expect(v1.headers.get(IDEMPOTENT_REPLAYED_HEADER)).toBeNull();
+  expect(await again.json()).toEqual({ run: 3 });
+});
+
 describe('media-type versioning', () => {
   const media: VersioningOptions = { type: 'media-type', key: 'v=' };
 
@@ -259,6 +325,19 @@ describe('media-type versioning', () => {
       (await get(`${base}/items/1`, { accept: 'application/json' })).status,
     ).toBe(404);
     expect((await get(`${base}/items/1`)).status).toBe(404);
+  });
+
+  test('the parameter name is case-insensitive, and an empty value names none', async () => {
+    const base = await serve({ versioning: { ...media, defaultVersion: '1' } });
+
+    const upper = await get(`${base}/items/1`, {
+      accept: 'application/json; V=2',
+    });
+    expect(await upper.text()).toBe('"v2"');
+    const empty = await get(`${base}/items/1`, {
+      accept: 'application/json;v=',
+    });
+    expect(await empty.text()).toBe('"v1"');
   });
 });
 

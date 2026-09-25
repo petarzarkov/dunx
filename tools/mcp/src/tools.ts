@@ -5,7 +5,12 @@ import {
   type ModuleRef,
   type ProviderNode,
 } from '@dunx/core';
-import { gatewaysOf, isGateway, routesOf } from '@dunx/http/internal';
+import {
+  gatewaysOf,
+  isGateway,
+  RouteVersioning,
+  routesOf,
+} from '@dunx/http/internal';
 import { Args, NO_ARGS, schema, str } from './args.js';
 import { documentOf } from './openapi.js';
 import type { ToolDefinition } from './protocol.js';
@@ -33,14 +38,17 @@ const modulesOf = (root: ModuleRef): readonly ModuleNode[] =>
  * knows nothing still gets a useful first answer. {@link Args} is where that rule
  * lives, shared with the tools that need no app.
  */
-export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
+export const toolsFor = (
+  root: ModuleRef,
+  versioning: RouteVersioning = RouteVersioning.of(),
+): readonly ToolDefinition[] => [
   {
     name: 'dunx_overview',
     description:
       'Counts of modules, controllers, routes, providers and gateways, plus every constructor dependency whose type was erased. The cheapest first call: it says how big the app is and whether it would boot, without returning the graph itself.',
     inputSchema: NO_ARGS,
     run: () => {
-      const routes = routesOf(root);
+      const routes = routesOf(root, versioning);
       const providers = providersOf(root);
       const unresolved = providers.flatMap((provider) =>
         provider.dependencies
@@ -88,7 +96,7 @@ export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
     run: (raw) => {
       const args = new Args(raw);
       return {
-        routes: routesOf(root).filter(
+        routes: routesOf(root, versioning).filter(
           (route) =>
             args.eq(route.method, 'method') &&
             args.like(route.path, 'path') &&
@@ -178,12 +186,16 @@ export const toolsFor = (root: ModuleRef): readonly ToolDefinition[] => [
     }),
     run: (raw) => {
       const args = new Args(raw);
-      return documentOf(root, {
-        title:
-          args.text('title') ??
-          (typeof root === 'function' ? root.name : root.module.name),
-        version: args.text('version') ?? '0.0.0',
-      });
+      return documentOf(
+        root,
+        {
+          title:
+            args.text('title') ??
+            (typeof root === 'function' ? root.name : root.module.name),
+          version: args.text('version') ?? '0.0.0',
+        },
+        versioning,
+      );
     },
   },
 ];

@@ -74,7 +74,11 @@ const assertNamed = (value: unknown, what: string): void => {
   }
 };
 
-/** The first `;`-parameter of any media range in `Accept` starting with `key`. */
+/**
+ * The first `;`-parameter of any media range in `Accept` starting with `key`,
+ * which is lower-cased: a parameter name is case-insensitive (RFC 9110 section
+ * 5.6.6), its value is not.
+ */
 const mediaTypeVersion = (
   accept: string | null,
   key: string,
@@ -84,11 +88,16 @@ const mediaTypeVersion = (
     const params = range.split(';');
     for (let at = 1; at < params.length; at++) {
       const param = params[at]!.trim();
-      if (param.startsWith(key)) return param.slice(key.length);
+      if (param.slice(0, key.length).toLowerCase() === key) {
+        return param.slice(key.length);
+      }
     }
   }
   return undefined;
 };
+
+/** RFC 9110 section 5.6.2's `token`, which a field name is. */
+const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
 /** Numeric where both are, so `10` sorts after `9`; code-unit order otherwise. */
 export const compareVersions = (left: string, right: string): number => {
@@ -105,6 +114,8 @@ export const compareVersions = (left: string, right: string): number => {
  */
 export class RouteVersioning {
   #options: VersioningOptions | undefined;
+  /** The media-type `key`, lower-cased once. */
+  #key = '';
 
   /**
    * `undefined` is versioning off. A static factory rather than a constructor
@@ -120,7 +131,13 @@ export class RouteVersioning {
           'versioning.prefix',
         );
       } else if (type === 'header') {
-        assertNamed((options as HeaderVersioning).header, 'versioning.header');
+        const name = (options as HeaderVersioning).header;
+        assertNamed(name, 'versioning.header');
+        if (!TOKEN.test(name)) {
+          throw new AppError(
+            `versioning.header "${name}" is not a valid header name.`,
+          );
+        }
       } else if (type === 'media-type') {
         assertNamed((options as MediaTypeVersioning).key, 'versioning.key');
       } else {
@@ -129,11 +146,23 @@ export class RouteVersioning {
             "'header' or 'media-type'.",
         );
       }
-      for (const version of listOf(options.defaultVersion ?? [])) {
+      const defaults: unknown = options.defaultVersion ?? [];
+      const listed: readonly unknown[] = Array.isArray(defaults)
+        ? defaults
+        : [defaults];
+      for (const version of listed) {
+        if (typeof version !== 'string' || version === '') {
+          throw new AppError(
+            'versioning.defaultVersion must be non-empty strings.',
+          );
+        }
         assertSegment(version, 'versioning.defaultVersion');
       }
     }
     versioning.#options = options;
+    if (options?.type === 'media-type') {
+      versioning.#key = options.key.toLowerCase();
+    }
     return versioning;
   }
 
@@ -164,11 +193,14 @@ export class RouteVersioning {
   /** The version a request names, for header and media-type versioning. */
   requested(req: Request): string | undefined {
     const options = this.#options;
+    // An empty value names no version, the same as an absent one.
     if (options?.type === 'header') {
-      return req.headers.get(options.header) ?? undefined;
+      return req.headers.get(options.header) || undefined;
     }
     if (options?.type === 'media-type') {
-      return mediaTypeVersion(req.headers.get('accept'), options.key);
+      return (
+        mediaTypeVersion(req.headers.get('accept'), this.#key) || undefined
+      );
     }
     return undefined;
   }

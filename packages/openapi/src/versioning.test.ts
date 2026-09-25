@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { Module } from '@dunx/core';
-import { Controller, Deprecated, Get, Version } from '@dunx/http';
+import {
+  Controller,
+  Deprecated,
+  Get,
+  Version,
+  VERSION_NEUTRAL,
+} from '@dunx/http';
 import { RouteVersioning } from '@dunx/http/internal';
 import { createTestServer, type TestServer } from '@dunx/testing';
 import { describeRoutes } from './discover.js';
@@ -184,6 +190,47 @@ describe('one document per version under header versioning', () => {
     expect(
       versions?.documents.get('3')?.document.paths['/users']?.get?.parameters,
     ).toBeUndefined();
+  });
+
+  it('a version replaces the neutral route on its path, which the others keep', async () => {
+    @Controller('things')
+    class NeutralThings {
+      @Version(VERSION_NEUTRAL)
+      @Get('')
+      list(): string {
+        return 'neutral';
+      }
+    }
+    @Controller('things', { version: '1' })
+    class ThingsV1 {
+      @Get('')
+      list(): string {
+        return 'v1';
+      }
+    }
+    @Controller('things', { version: '2' })
+    class ThingsV2 {
+      @Get(':id')
+      one(): string {
+        return 'v2';
+      }
+    }
+    @Module({ controllers: [ThingsV1, NeutralThings, ThingsV2] })
+    class Shared {}
+    const versioning = RouteVersioning.of({ type: 'header', header: 'X-V' });
+
+    const { versions } = await generateDocuments(
+      describeRoutes(Shared, versioning),
+      info,
+      versioning,
+    );
+
+    expect(
+      versions?.documents.get('1')?.document.paths['/things']?.get?.operationId,
+    ).toBe('ThingsV1_list_v1');
+    expect(
+      versions?.documents.get('2')?.document.paths['/things']?.get?.operationId,
+    ).toBe('NeutralThings_list');
   });
 
   it('keeps one document under URI versioning', async () => {

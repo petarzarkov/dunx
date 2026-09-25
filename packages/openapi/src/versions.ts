@@ -49,8 +49,17 @@ export const generateDocuments = async (
       : undefined;
   const documents = new Map<string, GeneratedDocument>();
   for (const version of versions) {
-    const own = routes.filter(
-      (route) => route.version === undefined || route.version === version,
+    // A neutral route answers a version only where that version has no handler
+    // of its own on the path and method, as the dispatch does.
+    const claimed = new Set(
+      routes
+        .filter((route) => route.version === version)
+        .map((route) => `${route.method} ${route.path}`),
+    );
+    const own = routes.filter((route) =>
+      route.version === undefined
+        ? !claimed.has(`${route.method} ${route.path}`)
+        : route.version === version,
     );
     documents.set(version, await generateDocument(own, info, header));
   }

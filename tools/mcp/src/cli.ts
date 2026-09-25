@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 import { findRootModule } from '@dunx/core';
+import type { VersioningOptions } from '@dunx/http';
+import { RouteVersioning } from '@dunx/http/internal';
 import { adoptionResources, adoptionTools } from './adopt.js';
 import { ownVersion } from './own-version.js';
 import { serve, type ToolDefinition } from './protocol.js';
@@ -74,6 +76,23 @@ const load = async (path: string): Promise<Exported | undefined> => {
 };
 
 /**
+ * The app's versioning, from the `openapi` export `bunx dunx-openapi` reads,
+ * since this server never boots the app to learn its `HttpOptions`. Absent is
+ * URI versioning under the default `v`, which is what an unconfigured reader
+ * reports.
+ */
+const versioningOf = async (loaded: Exported): Promise<RouteVersioning> => {
+  const entry = loaded['openapi'];
+  const resolved: unknown =
+    typeof entry === 'function' ? await (entry as () => unknown)() : entry;
+  const versioning =
+    typeof resolved === 'object' && resolved !== null
+      ? (resolved as { versioning?: VersioningOptions }).versioning
+      : undefined;
+  return RouteVersioning.of(versioning);
+};
+
+/**
  * The tools this invocation serves, or the exit code to fail with. Separated from
  * {@link main} because everything after it blocks on stdin, so this is the half a
  * test can call in process.
@@ -134,7 +153,7 @@ export const assemble = async (
     );
     return 1;
   }
-  return [...adoption, ...toolsFor(found.root)];
+  return [...adoption, ...toolsFor(found.root, await versioningOf(loaded))];
 };
 
 export const main = async (argv: readonly string[]): Promise<number> => {

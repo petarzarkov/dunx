@@ -88,13 +88,18 @@ const statusFor = (route: DiscoveredRoute): number =>
  */
 export const assertNoCollisions = (
   discovered: readonly DiscoveredRoute[],
+  sharedPaths = false,
 ): void => {
   const claims = new PathClaims('Route', 'Bun would keep only one of them.');
 
   for (const route of discovered) {
-    // A header or media-type version shares its path with the others.
+    // Only a header or media-type version shares its path with the others. A
+    // URI version is in the path already, and keying on it again would let
+    // `/v1/users` from two controllers pass.
     const version =
-      route.version === undefined ? '' : ` (version ${route.version})`;
+      sharedPaths && route.version !== undefined
+        ? ` (version ${route.version})`
+        : '';
     claims.claim(
       `${route.method} ${route.path}${version}`,
       `${route.controller}.${route.handlerName}`,
@@ -336,7 +341,7 @@ export const buildRoutes = (
   resolve: GuardResolver = construct,
   selection?: VersionSelection,
 ): BunRoutes => {
-  assertNoCollisions(discovered);
+  assertNoCollisions(discovered, selection?.versioning.header !== undefined);
   const routes: BunRoutes = {};
   const entries: (readonly [DiscoveredRoute, ServedHandler])[] = [];
   // One instance per guard class for the whole table - what the container returns,

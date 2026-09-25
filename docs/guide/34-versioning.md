@@ -99,7 +99,10 @@ path. Nest answers the same way: a version that matches no handler calls
   version that answered. Only a deprecated version's responses carry
   `Deprecation`.
 - `Accept` is split on `,` and `;`, and the first parameter starting with `key`
-  wins, in any media range.
+  wins, in any media range. The parameter name is matched case-insensitively.
+- An empty header or parameter value names no version.
+- `header` must be a valid header name, and a `defaultVersion` entry a
+  non-empty string, or `HttpFactory.create` throws.
 
 ## Deprecation
 
@@ -165,6 +168,9 @@ export const openapi = {
   apiVersion: '1', // absent writes the one /openapi.json serves
 };
 ```
+
+`bunx @dunx/mcp` reads `versioning` from the same export, so its route list and
+document match what the app serves.
 
 ## Coming from NestJS
 

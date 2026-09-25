@@ -249,7 +249,7 @@ export class HttpFactory {
     }
     // Eagerly, so a wiring error still surfaces from create() rather than waiting
     // for listen(). A uniform global prefix cannot introduce a new one.
-    assertNoCollisions(discovered);
+    assertNoCollisions(discovered, routeVersioning.header !== undefined);
 
     const gateways = discoverGateways(modules, (token) => app.get(token));
     // Handler collisions and two gateways on one path are boot errors too, and the

@@ -290,6 +290,41 @@ describe('RouteVersioning', () => {
     ).toThrow('versioning.key is required');
   });
 
+  test('refuses a header that is not a header name, and an empty or non-string default', () => {
+    expect(() =>
+      RouteVersioning.of({ type: 'header', header: 'X-API Version' }),
+    ).toThrow('versioning.header "X-API Version" is not a valid header name.');
+    expect(() =>
+      RouteVersioning.of({ type: 'uri', defaultVersion: '' }),
+    ).toThrow('versioning.defaultVersion must be non-empty strings.');
+    expect(() =>
+      RouteVersioning.of({ type: 'uri', defaultVersion: 1 as never }),
+    ).toThrow('versioning.defaultVersion must be non-empty strings.');
+  });
+
+  test('a URI version colliding with a literal path is a boot error', async () => {
+    @Controller('users', { version: '1' })
+    class Versioned {
+      @Get('')
+      list(): string {
+        return 'versioned';
+      }
+    }
+    @Controller('v1/users')
+    class Literal {
+      @Get('')
+      list(): string {
+        return 'literal';
+      }
+    }
+    @Module({ controllers: [Versioned, Literal] })
+    class Colliding {}
+
+    expect(serve({ versioning: uri }, Colliding)).rejects.toThrow(
+      'Route collision: GET /v1/users is declared by Versioned.list and by Literal.list',
+    );
+  });
+
   test('refuses a slash in the prefix or a default version', () => {
     expect(() => RouteVersioning.of({ type: 'uri', prefix: 'v/' })).toThrow(
       'versioning.prefix "v/" contains a /',
