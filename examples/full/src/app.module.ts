@@ -29,6 +29,7 @@ import { LandingModule } from './landing/landing.module.js';
 import { ProbesModule } from './health/health.module.js';
 import { ReferenceModule } from './reference/reference.module.js';
 import { HttpModule } from './http/http.module.js';
+import { IdempotencyKeysModule } from './idempotency/idempotency.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { MessagingModule } from './messaging/messaging.module.js';
 import { NotesModule } from './notes/notes.module.js';
@@ -120,6 +121,7 @@ const fileAndConsole = (
     MessagingModule,
     // After CacheModule, which binds the connection its counter writes to.
     LimitsModule,
+    IdempotencyKeysModule,
     MaintenanceModule,
     AssetsModule,
     UpstreamModule,

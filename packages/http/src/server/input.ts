@@ -40,7 +40,9 @@ interface InputDraft {
  * frame and a microtask tick per schema for a validator that never returns one.
  */
 type Fill = (draft: InputDraft) => InputDraft | Promise<InputDraft>;
-type BodyParser = (req: BunRequest) => Promise<unknown>;
+/** A request, or a `Response` over bytes a middleware already drained from it. */
+type BodySource = Pick<Request, 'json' | 'text' | 'formData'>;
+type BodyParser = (req: BodySource) => Promise<unknown>;
 
 /** What `URLSearchParams` and `FormData` both offer, and all {@link grouped} needs. */
 interface Enumerable {
@@ -163,13 +165,18 @@ const bodyFill =
     // has asked for the text, the body goes through `text()` instead so it can be
     // recorded on the way past - which costs +0.38 us and saves the ~20 us
     // `Request.clone()` it replaces. See `raw-body.ts`.
+    const buffered = RawBody.buffered(draft.req);
+    const source: BodySource =
+      buffered === undefined
+        ? draft.req
+        : new Response(buffered, { headers: draft.req.headers });
     const read =
       parse === asJson && RawBody.wanted(draft.req)
-        ? draft.req.text().then((text) => {
+        ? source.text().then((text) => {
             RawBody.record(draft.req, text);
             return JSON.parse(text) as unknown;
           })
-        : parse(draft.req);
+        : parse(source);
 
     return read.then(
       (value) => fillWith(draft, 'body', schema, value),

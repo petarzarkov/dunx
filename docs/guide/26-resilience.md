@@ -7,7 +7,9 @@ that returns a promise: an outbound call, a driver query, a broker publish.
 There is no circuit breaker, no bulkhead and no rate limiter here. The last one
 already exists in the other direction: `ThrottleModule` in `@dunx/http` is
 inbound admission control, keyed by caller and backed by a shared store. Retrying
-work this process owns is bullmq's, through `@dunx/infra/queue`.
+work this process owns is bullmq's, through `@dunx/infra/queue`. Making an
+inbound retry safe to accept is `@Idempotent()`, in
+[Idempotency](./33-idempotency.md).
 
 ## Binding a policy
 

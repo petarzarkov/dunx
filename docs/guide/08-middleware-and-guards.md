@@ -308,6 +308,10 @@ A `@UseGuards` class is resolved from **the scope of the module that declares th
 controller**, so it can inject that module's private providers. One instance is
 shared by every route that declares it.
 
+A decorator can install its own guard: `@Idempotent()` is `@UseGuards(IdempotencyGuard)`
+plus route metadata, so only the routes that carry it pay for it. See
+[Idempotency](./33-idempotency.md).
+
 ### Metadata alone decides nothing
 
 `GET /reports` above carries `@Roles('admin')` inherited from the class, and it is

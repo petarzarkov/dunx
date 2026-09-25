@@ -1,8 +1,10 @@
 import {
+  IDEMPOTENT,
   meta,
   metaKey,
   PUBLIC,
   ROLES,
+  type IdempotentRoute,
   type MetaKey,
   type MetaRecord,
 } from '@dunx/http';
@@ -84,3 +86,15 @@ export const rolesOf = (
 
 export const isPublic = (record: MetaRecord | undefined): boolean =>
   record?.get(PUBLIC.id) === true;
+
+/**
+ * What `@Idempotent()` declared, on the methods its guard acts on. A controller-level
+ * one reaches a `GET`, which the guard passes through, so the document skips it too.
+ */
+export const idempotentOf = (
+  route: DiscoveredRoute,
+): IdempotentRoute | undefined => {
+  if (route.method === 'GET') return undefined;
+  const value = route.meta?.get(IDEMPOTENT.id);
+  return isRecord(value) ? value : undefined;
+};

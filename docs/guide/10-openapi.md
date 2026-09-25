@@ -88,7 +88,9 @@ is actually served. From each route it reads:
 - `options.status` - the success status, following the same rule `buildRoutes`
   applies: an explicit status, else 201 for POST, else 200.
 - `options.response` - the Standard Schema per status code the route answers with.
-- `meta` and `classMeta` - whatever `@Public`, `@Roles` and `@ApiDoc` wrote.
+- `meta` and `classMeta` - whatever `@Public`, `@Roles`, `@ApiDoc` and
+  `@Idempotent` wrote. `@Idempotent` adds the `Idempotency-Key` header and its
+  400, 409 and 422 ([Idempotency](./33-idempotency.md#openapi)).
 - the path and the method, from the verb decorator.
 
 A document can be written to a file from a script with no container and no
