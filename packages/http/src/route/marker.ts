@@ -4,10 +4,11 @@
 // See docs/architecture/http.md, "Route discovery".
 import { HttpStatusCode } from '../server/status.js';
 import type { RouteSchemas } from './schema.js';
+import type { RouteVersion } from './version.js';
 
 const ROUTE = Symbol.for('dunx.route');
 const CONTROLLER = Symbol.for('dunx.controller');
-const FILTER = Symbol.for('dunx.controller.filter');
+const OPTIONS = Symbol.for('dunx.controller.filter');
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -75,26 +76,38 @@ export interface RouteFilter<N extends string = string> {
   readonly exclude?: readonly N[];
 }
 
-interface FilterMarked {
-  readonly [FILTER]?: RouteFilter;
+/** `@Controller`'s second argument: the route filter, and the version. */
+export interface ControllerOptions<
+  N extends string = string,
+> extends RouteFilter<N> {
+  /** Every handler's version unless it declares its own with `@Version`. */
+  readonly version?: RouteVersion;
 }
 
-// The filter is always written, even as undefined, so re-decorating a subclass
-// replaces its base's filter along with its prefix.
+interface OptionsMarked {
+  readonly [OPTIONS]?: ControllerOptions;
+}
+
+// The options are always written, even as undefined, so re-decorating a
+// subclass replaces its base's filter and version along with its prefix.
 export const markController = (
   target: object,
   prefix: string,
-  filter?: RouteFilter,
+  options?: ControllerOptions,
 ): void => {
   Object.defineProperty(target, CONTROLLER, {
     value: prefix,
     configurable: true,
   });
-  Object.defineProperty(target, FILTER, { value: filter, configurable: true });
+  Object.defineProperty(target, OPTIONS, {
+    value: options,
+    configurable: true,
+  });
 };
 
-export const filterOf = (target: object): RouteFilter | undefined =>
-  (target as FilterMarked)[FILTER];
+export const controllerOptionsOf = (
+  target: object,
+): ControllerOptions | undefined => (target as OptionsMarked)[OPTIONS];
 
 // Plain lookup, not Object.hasOwn: a subclass inherits its base's prefix, so two
 // subclasses of one decorated base collide loudly instead of silently mounting at

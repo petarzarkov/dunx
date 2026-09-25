@@ -1,6 +1,7 @@
 import { inject } from '@dunx/core';
 import { Controller, Get } from '../route/decorators.js';
 import { ApiHidden, Public } from '../route/metadata.js';
+import { VERSION_NEUTRAL } from '../route/version.js';
 import { SkipThrottle } from '../throttle/decorators.js';
 import { HEALTH_REPORT_SCHEMA } from './report-schema.js';
 import { HealthRegistry, type HealthReport } from './registry.js';
@@ -32,7 +33,7 @@ const answer = (report: HealthReport): Response =>
  * `HealthModule.forRoot({ documented: false })` mounts
  * {@link HiddenHealthController} instead.
  */
-@Controller('health')
+@Controller('health', { version: VERSION_NEUTRAL })
 export class HealthController {
   /**
    * `inject()` in a field initializer rather than a constructor parameter, because

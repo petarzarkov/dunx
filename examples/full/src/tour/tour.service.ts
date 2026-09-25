@@ -2,6 +2,7 @@ import { Logger } from '@dunx/core';
 import type { HttpApp } from '@dunx/http';
 import { AuthDemo } from '../auth/auth.demo.js';
 import { CatalogDemo } from '../cache/catalog.demo.js';
+import { VersioningDemo } from '../crud/versioning.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
 import { PostgresRelayDemo } from '../chat/postgres-relay.demo.js';
@@ -71,6 +72,7 @@ export class Tour {
     private readonly events: EventsDemo,
     private readonly dashboard: DashboardDemo,
     private readonly stats: StatsDemo,
+    private readonly versioning: VersioningDemo,
   ) {}
 
   async run(app: HttpApp, url: string): Promise<void> {
@@ -103,6 +105,9 @@ export class Tour {
 
     this.group('@dunx/http - app-level configuration');
     await this.http.demonstrate(app, url);
+
+    this.group('@dunx/http - URI versioning, and a deprecated version');
+    await this.versioning.demonstrate(url);
 
     this.group("@dunx/http - Compression, on Bun's own zstd and gzip");
     await this.compression.demonstrate(url);

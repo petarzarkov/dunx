@@ -10,6 +10,7 @@ import {
 } from '@dunx/core';
 import { discoverRoutes, type DiscoveredRoute } from './route/discover.js';
 import { HIDDEN, PUBLIC, ROLES } from './route/metadata.js';
+import type { RouteVersioning } from './route/version.js';
 import type { RouteSchemas, StandardSchemaV1 } from './route/schema.js';
 import { discoverGateway } from './ws/discover.js';
 import { isGateway } from './ws/marker.js';
@@ -41,6 +42,8 @@ export interface RouteNode {
   readonly guards: readonly string[];
   /** `@ApiHidden()`, so a caller can tell "not documented" from "not there". */
   readonly hidden: boolean;
+  /** The version this entry serves, or null when it is unversioned. */
+  readonly version: string | null;
   /**
    * Which inputs the route validates, and by which Standard Schema vendor. The
    * schemas themselves are not here: turning one into JSON Schema is zod-specific
@@ -89,16 +92,21 @@ const nodeFor = (route: DiscoveredRoute, module: string): RouteNode => ({
   roles: rolesIn(route),
   guards: (route.guards ?? []).map((guard) => guard.name),
   hidden: route.meta?.get(HIDDEN.id) === true,
+  version: route.version ?? null,
   validates: validatesIn(route.options),
   status: route.options?.status ?? null,
   responses: Object.keys(route.options?.response ?? {}).map(Number),
 });
 
-export const routesOf = (root: ModuleRef): readonly RouteNode[] =>
+/** `versioning` is the app's; omitted, a declared version expands under `v`. */
+export const routesOf = (
+  root: ModuleRef,
+  versioning?: RouteVersioning,
+): readonly RouteNode[] =>
   collectModules(root).flatMap((module) =>
     readControllers(module).flatMap((controller) => {
-      return discoverRoutes(inertInstance(controller)).map((route) =>
-        nodeFor(route, module.name),
+      return discoverRoutes(inertInstance(controller), versioning).map(
+        (route) => nodeFor(route, module.name),
       );
     }),
   );

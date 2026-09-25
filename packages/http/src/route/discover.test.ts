@@ -195,13 +195,13 @@ describe('@Controller include and exclude', () => {
     expect(() => discoverRoutes(new Typo())).toThrow('Typo lists remvoe');
   });
 
-  it('refuses a key other than include and exclude', () => {
+  it('refuses a key other than include, exclude and version', () => {
     const exlude = { exlude: ['remove'] } as never;
     @Controller('key', exlude)
     class Misspelt extends Crud {}
 
     expect(() => discoverRoutes(new Misspelt())).toThrow(
-      'Misspelt passes exlude to @Controller, which takes include and exclude',
+      'Misspelt passes exlude to @Controller, which takes include, exclude and version',
     );
   });
 

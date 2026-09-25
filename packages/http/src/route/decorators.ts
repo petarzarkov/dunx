@@ -1,23 +1,28 @@
 import {
   markController,
   markRoute,
+  type ControllerOptions,
   type HttpMethod,
-  type RouteFilter,
   type RoutePath,
 } from './marker.js';
 import type { Input, Returns, RouteSchemas } from './schema.js';
 
 /**
+ * `options.version` versions every handler; see `VersioningOptions`.
+ *
  * `N` is every name `include` and `exclude` list, and the target has to have a
  * member of each, so a misspelt handler is a compile error. Discovery checks the
  * rest: that each one is a route and not some other method.
  */
 export const Controller =
-  <const N extends string = never>(prefix = '', filter?: RouteFilter<N>) =>
+  <const N extends string = never>(
+    prefix = '',
+    options?: ControllerOptions<N>,
+  ) =>
   <T extends abstract new (...args: never[]) => Record<N, unknown>>(
     target: T,
   ): T => {
-    markController(target, prefix, filter);
+    markController(target, prefix, options);
     return target;
   };
 

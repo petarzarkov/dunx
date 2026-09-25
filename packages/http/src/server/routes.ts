@@ -1,6 +1,7 @@
 import { AppError, type Ctor, type ModuleRef } from '@dunx/core';
 import type { BunRequest, Server } from 'bun';
 import { PathClaims } from '../route/claims.js';
+import { DEPRECATED, withDeprecation } from '../route/deprecation.js';
 import type { DiscoveredRoute } from '../route/discover.js';
 import { defaultStatusFor, type HttpMethod } from '../route/marker.js';
 import {
@@ -25,6 +26,11 @@ import {
   type ServedHandler,
 } from './middleware.js';
 import { HttpStatusCode } from './status.js';
+import {
+  corsForVersions,
+  mountHandlers,
+  type VersionSelection,
+} from './version-dispatch.js';
 
 /** How a `@UseGuards` class becomes an instance. `listen()` passes `app.get`. */
 /**
@@ -82,12 +88,20 @@ const statusFor = (route: DiscoveredRoute): number =>
  */
 export const assertNoCollisions = (
   discovered: readonly DiscoveredRoute[],
+  sharedPaths = false,
 ): void => {
   const claims = new PathClaims('Route', 'Bun would keep only one of them.');
 
   for (const route of discovered) {
+    // Only a header or media-type version shares its path with the others. A
+    // URI version is in the path already, and keying on it again would let
+    // `/v1/users` from two controllers pass.
+    const version =
+      sharedPaths && route.version !== undefined
+        ? ` (version ${route.version})`
+        : '';
     claims.claim(
-      `${route.method} ${route.path}`,
+      `${route.method} ${route.path}${version}`,
       `${route.controller}.${route.handlerName}`,
     );
   }
@@ -325,9 +339,11 @@ export const buildRoutes = (
   onError: ErrorMapper = defaultErrorMapper,
   cors?: CorsOptions,
   resolve: GuardResolver = construct,
+  selection?: VersionSelection,
 ): BunRoutes => {
-  assertNoCollisions(discovered);
+  assertNoCollisions(discovered, selection?.versioning.header !== undefined);
   const routes: BunRoutes = {};
+  const entries: (readonly [DiscoveredRoute, ServedHandler])[] = [];
   // One instance per guard class for the whole table - what the container returns,
   // and what the default resolver has to match to be interchangeable with it.
   const instances = new Map<Ctor<Middleware>, Middleware>();
@@ -391,24 +407,32 @@ export const buildRoutes = (
 
     // Bun hands the table entry its own server, so an idling route clears its
     // own deadline: no registry, and no cost to any other route.
-    const served = cors
+    const undeprecated = cors
       ? withCors(cors, guarded)
       : directOr(guarded, route, read, status, onError, chain.length === 0);
-    const byMethod = (routes[route.path] ??= {});
+    const deprecation = context.get(DEPRECATED);
+    const served =
+      deprecation === undefined
+        ? undeprecated
+        : withDeprecation(deprecation, undeprecated);
     // Outside the error mapper, so a mapped 500 still carries the CORS headers the
     // browser needs in order to show it.
-    byMethod[route.method] =
+    entries.push([
+      route,
       context.get(STREAMS) === true
         ? (req, server) => {
             server?.timeout(req, 0);
             return served(req, server);
           }
-        : served;
+        : served,
+    ]);
   }
+  mountHandlers(entries, routes, selection);
 
   if (cors) {
+    const allowing = corsForVersions(cors, selection?.versioning);
     for (const byMethod of Object.values(routes)) {
-      byMethod.OPTIONS = preflight(cors, Object.keys(byMethod));
+      byMethod.OPTIONS = preflight(allowing, Object.keys(byMethod));
     }
   }
 

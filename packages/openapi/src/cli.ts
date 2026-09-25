@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 import { findRootModule, type ModuleRef } from '@dunx/core';
+import type { VersioningOptions } from '@dunx/http';
+import { RouteVersioning } from '@dunx/http/internal';
 import { describeRoutes } from './discover.js';
-import { generateDocument, type DocumentInfo } from './generate.js';
+import type { DocumentInfo } from './generate.js';
+import { generateDocuments } from './versions.js';
 
 /**
  * Writes the OpenAPI document to a file, with no container, no server and no
@@ -21,6 +24,13 @@ interface OpenApiEntry extends Omit<DocumentInfo, 'title' | 'version'> {
   readonly root: ModuleRef;
   readonly title?: string;
   readonly version?: string;
+  /** The app's `HttpOptions.versioning`, when it sets a prefix or a default. */
+  readonly versioning?: VersioningOptions;
+  /**
+   * Under header or media-type versioning, which version's document to write.
+   * Absent writes the one `/openapi.json` serves without `?version=`.
+   */
+  readonly apiVersion?: string;
 }
 
 interface Exported extends Record<string, unknown> {
@@ -130,11 +140,28 @@ export const run = async (argv: readonly string[]): Promise<number> => {
   }
 
   const fallback = await packageInfo();
-  const { root, ...rest } = resolved.entry;
-  const { document, warnings } = await generateDocument(describeRoutes(root), {
-    ...fallback,
-    ...rest,
-  });
+  const { root, versioning, apiVersion, ...rest } = resolved.entry;
+  const versions = RouteVersioning.of(versioning);
+  const generated = await generateDocuments(
+    describeRoutes(root, versions),
+    { ...fallback, ...rest },
+    versions,
+  );
+  const chosen =
+    apiVersion === undefined
+      ? generated.document
+      : generated.versions?.documents.get(apiVersion);
+  if (chosen === undefined) {
+    const known = [...(generated.versions?.documents.keys() ?? [])];
+    console.error(
+      `apiVersion ${apiVersion} has no document. ` +
+        (known.length === 0
+          ? 'Only header and media-type versioning write one per version.'
+          : `The versions are ${known.join(', ')}.`),
+    );
+    return 1;
+  }
+  const { document, warnings } = chosen;
 
   for (const warning of warnings) console.error(`warning: ${warning}`);
 

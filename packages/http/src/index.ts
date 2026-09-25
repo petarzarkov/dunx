@@ -6,7 +6,25 @@ export {
   Post,
   Put,
 } from './route/decorators.js';
-export type { HttpMethod, RouteFilter, RoutePath } from './route/marker.js';
+export type {
+  ControllerOptions,
+  HttpMethod,
+  RouteFilter,
+  RoutePath,
+} from './route/marker.js';
+// URI versioning and deprecation. DEPRECATED is exported for the reason ROLES is.
+export {
+  Version,
+  VERSION_NEUTRAL,
+  type RouteVersion,
+  type VersioningOptions,
+} from './route/version.js';
+export {
+  DEPRECATED,
+  Deprecated,
+  type Deprecation,
+  type DeprecationOptions,
+} from './route/deprecation.js';
 // Route metadata and scoped middleware. `meta`/`metaKey` are the whole mechanism;
 // `@Roles` and `@Public` are wrappers over it, and ROLES/PUBLIC are exported so a
 // user's own guard can read what they set.

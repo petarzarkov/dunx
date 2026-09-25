@@ -4,6 +4,7 @@ import {
   isGateway,
   routesOf,
   type RoutePrefix,
+  type RouteVersioning,
 } from '@dunx/http/internal';
 import type { DashboardOptions } from '../options.js';
 import type { ConfigEntry, Meta, Snapshot } from './types.js';
@@ -60,6 +61,7 @@ export const snapshotOf = (
   root: ModuleRef,
   options: DashboardOptions,
   prefix: RoutePrefix,
+  versioning?: RouteVersioning,
 ): Snapshot => ({
   meta: metaOf(options),
   /**
@@ -67,7 +69,7 @@ export const snapshotOf = (
    * prefix is applied at `listen()`. Without this the panel reported `/notes` for
    * a route served at `/api/notes`, so an operator copying a path got a 404.
    */
-  routes: routesOf(root).map((route) => ({
+  routes: routesOf(root, versioning).map((route) => ({
     ...route,
     path: prefix.apply(route.path),
   })),

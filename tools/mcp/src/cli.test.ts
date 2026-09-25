@@ -298,3 +298,25 @@ describe('the server over stdio', () => {
     expect(JSON.parse(content[0]?.text ?? '{}')).toMatchObject({ routes: 3 });
   }, 20_000);
 });
+
+describe('an app versioned by header', () => {
+  it('reads versioning from the openapi export, for routes and the document', async () => {
+    const tools = await assemble([`${import.meta.dir}/versioned.fixture.ts`]);
+    if (typeof tools === 'number') throw new Error('assemble refused to start');
+    const run = (name: string) =>
+      tools.find((tool) => tool.name === name)!.run({});
+
+    const { routes } = (await run('dunx_routes')) as {
+      routes: { path: string; version: string | null }[];
+    };
+    const document = (await run('dunx_openapi')) as {
+      paths: Record<string, unknown>;
+    };
+
+    expect(routes.map((route) => [route.path, route.version])).toEqual([
+      ['/items', '1'],
+      ['/items', '2'],
+    ]);
+    expect(Object.keys(document.paths)).toEqual(['/items']);
+  });
+});

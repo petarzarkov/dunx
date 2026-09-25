@@ -31,6 +31,7 @@ export const renderSwaggerPage = (
     mountId: MOUNT_ELEMENT_ID,
     css: SWAGGER_CSS,
     jsonHref: options.jsonHref,
+    ...(options.versions === undefined ? {} : { versions: options.versions }),
     ...(ui.title === undefined ? {} : { title: ui.title }),
     // Swagger UI's own mark, from the same install. Without a favicon of some
     // kind a browser asks for `/favicon.ico` and every consumer logs a 404

@@ -716,3 +716,89 @@ Request logging throttles its `warn` for an unmatched, unclaimed path the same
 way, on a second `ThrottledWarning`: one shared window would let a flood of
 either signal hide the other, and one `suppressed` count would add two
 unrelated things. A 4xx on a matched route is not throttled.
+
+## API versioning, on Bun 1.4.2
+
+Probed before `versioning` was built. The model is NestJS's
+([docs.nestjs.com/techniques/versioning](https://docs.nestjs.com/techniques/versioning)):
+`@Controller({ version })`, `@Version()`, `VERSION_NEUTRAL`, `defaultVersion`,
+and four types, URI, header, media type and custom. Three claims.
+
+**A URI version is a route key, matched by Bun with nothing read per request.**
+`/v1/users/:id` and `/v2/users/:id` as two keys of one `routes` table, with a
+counting `fetch`:
+
+```
+route keys: [ "/v1/users/:id", "/v2/users/:id", "/health" ]
+GET /v1/users/7 200 {"v":1,"id":"7"}
+GET /v2/users/7 200 {"v":2,"id":"7"}
+GET /v3/users/7 404 miss
+POST /v1/users/7 404 miss
+GET /health 200 ok
+fallback hits: 2
+```
+
+The two misses are the unknown version and the method miss, which is Bun's
+behaviour for any path. Discovery expands a versioned handler into one entry per
+version, so the global prefix, the collision check, CORS, `csrf`,
+`securityHeaders` and the trailing-slash aliases see ordinary routes. The table
+`examples/full` serves, from its boot entry:
+
+```
+GET /api/colors
+GET /api/v1/swatches
+GET /api/v2/swatches
+GET /api/health/live
+GET /api/openapi.json
+GET /api/auth/*
+```
+
+**Header and media-type selection costs 0.6 to 0.75 us a request.** Bun still
+matches the path; the handler registered for it reads one header and picks from
+a `Map` of per-version handlers, answering 404 for an unknown version.
+`x-api-version: 2`, and `accept: application/json;v=2` scanned for `v=`.
+`oha -c 64`, five interleaved rounds of 4 s per configuration, two runs, median
+as a share of the same run's URI route:
+
+| Configuration                 | Run 1 | Run 2 | Added per request |
+| ----------------------------- | ----- | ----- | ----------------- |
+| URI, `/v2/users/:id`          | 100%  | 100%  | none              |
+| Header, `/h/users/:id`        | 92.1% | 91.4% | 0.68-0.75 us      |
+| Media type, `Accept: ...;v=2` | 92.2% | 92.8% | 0.61-0.67 us      |
+
+Below the 1.26 us of a global async middleware. Choosing among handlers Bun has
+already matched for one path and method is dispatch rather than path routing,
+the same as `AuthHandler` forwarding to better-auth.
+
+Both shipped. Discovery gives each version its own entry on the shared path, and
+`buildRoutes` folds a path and method's versions into one table entry over a
+`Map` built at boot, which also appends `Vary`. OpenAPI 3.1 allows one operation
+per path and method, so two header versions of `/users/{id}` cannot share a
+document: under these two types `@dunx/openapi` generates one per version,
+served at `?version=`. A fixed CORS `allowedHeaders` list gains the header.
+
+**Deprecation headers are fixed per route and are stamped like the security
+headers.** RFC 9745 section 2.1 makes `Deprecation` a Structured Field Date
+(`@` and Unix seconds), and section 4 says a `Sunset` "MUST NOT be earlier"
+than it. RFC 8594 section 3 makes `Sunset` an HTTP-date. Computed once and
+applied with `setAbsentHeaders`:
+
+```
+pairs at boot: [ "deprecation", "@1782863999" ], [ "sunset", "Fri, 01 Jan 2027 00:00:00 GMT" ], [ "link", "<https://example.test/deprecations/v1>; rel=\"deprecation\"; type=\"text/html\"" ]
+invalid date: NaN | date-only parses as UTC: 2027-01-01T00:00:00.000Z
+/v1/users/1 200 {"deprecation":"@1782863999","sunset":"Fri, 01 Jan 2027 00:00:00 GMT","link":"<https://example.test/deprecations/v1>; rel=\"deprecation\"; type=\"text/html\""}
+/v1/own-link 200 {"deprecation":"@1782863999","sunset":"Fri, 01 Jan 2027 00:00:00 GMT","link":"</next>; rel=\"next\""}
+/v2/users/1 200 {"deprecation":null,"sunset":null,"link":null}
+```
+
+Set-if-absent dropped the `rel="deprecation"` link from a response carrying its
+own `Link`. `headers.append` keeps both:
+
+```
+link: </next>; rel="next", <https://example.test/d>; rel="deprecation"; type="text/html"
+```
+
+So the two dates are set only where absent and the `Link` is appended. RFC 9745
+gives `Deprecation` no value but a date, so `since` is required rather than
+defaulting to boot time, which would change on every restart. A route without
+`@Deprecated` is not wrapped.

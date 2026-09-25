@@ -15,6 +15,7 @@ import { discoverRoutes, type DiscoveredRoute } from '../route/discover.js';
 import { ClaimedRoutes } from './claimed-routes.js';
 import { ClientAddress } from './client-address.js';
 import { RoutePrefix } from '../route/prefix.js';
+import { RouteVersioning } from '../route/version.js';
 import { MetricsMiddleware, RequestMetrics } from './metrics.js';
 import { buildWebSocket } from '../ws/adapter.js';
 import { discoverGateways } from '../ws/discover.js';
@@ -143,6 +144,13 @@ export class HttpFactory {
     // `RoutePrefix` is here for that reason too, and it is the one a second
     // instance fails quietly rather than loudly: an unattached one reads as "no
     // prefix", which is a plausible answer and a wrong one.
+    // A factory for the reason `logging` is one: `@dunx/openapi` reads it while
+    // the container builds, before the merged options below exist.
+    const versioning = provide(RouteVersioning, {
+      useFactory: (settings: HttpOptionsProvider) =>
+        RouteVersioning.of(options.versioning ?? settings.versioning),
+      inject: [HttpOptionsProvider] as const,
+    });
     const services = [
       PubSub,
       ClientAddress,
@@ -158,7 +166,13 @@ export class HttpFactory {
      * `HttpApplication`'s to read off the resolved options. Binding one that is
      * never used costs a constructor call at boot.
      */
-    const providers = [...services, logging, metricsMiddleware, socketLogging];
+    const providers = [
+      ...services,
+      logging,
+      metricsMiddleware,
+      socketLogging,
+      versioning,
+    ];
     const scope: DynamicModule = {
       module: HttpModule,
       global: true,
@@ -190,6 +204,7 @@ export class HttpFactory {
     );
     const modules = collectModules(scope);
 
+    const routeVersioning = app.get(RouteVersioning);
     const discovered: DiscoveredRoute[] = [];
     for (const module of modules) {
       // The module's own middleware, applied to the routes its controllers declare
@@ -199,6 +214,7 @@ export class HttpFactory {
       for (const controller of readControllers(module)) {
         const routes = discoverRoutes(
           app.get(controller, module.ref) as object,
+          routeVersioning,
         );
         if (routes.length === 0) {
           throw new AppError(
@@ -220,9 +236,20 @@ export class HttpFactory {
         );
       }
     }
+    const versioned = routeVersioning.enabled
+      ? undefined
+      : discovered.find((route) => route.version !== undefined);
+    if (versioned !== undefined) {
+      await app.shutdown().catch(() => undefined);
+      throw new AppError(
+        `${versioned.controller}.${versioned.handlerName}() declares version ` +
+          `${versioned.version}, but versioning is off. Set ` +
+          "HttpOptions.versioning: { type: 'uri' }.",
+      );
+    }
     // Eagerly, so a wiring error still surfaces from create() rather than waiting
     // for listen(). A uniform global prefix cannot introduce a new one.
-    assertNoCollisions(discovered);
+    assertNoCollisions(discovered, routeVersioning.header !== undefined);
 
     const gateways = discoverGateways(modules, (token) => app.get(token));
     // Handler collisions and two gateways on one path are boot errors too, and the

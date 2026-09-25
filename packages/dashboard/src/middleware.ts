@@ -1,4 +1,8 @@
-import { LOGO_FAVICON, type RoutePrefix } from '@dunx/http/internal';
+import {
+  LOGO_FAVICON,
+  type RoutePrefix,
+  type RouteVersioning,
+} from '@dunx/http/internal';
 import { Logger, type ModuleRef } from '@dunx/core';
 import {
   gate,
@@ -40,6 +44,7 @@ export class DashboardMiddleware implements Middleware {
     root: ModuleRef,
     logger: Logger,
     prefix: RoutePrefix,
+    versioning: RouteVersioning,
   ) {
     this.#options = options;
     // With the trailing slash, so `/_dunxious` cannot match a `/_dunx` mount. The
@@ -49,6 +54,7 @@ export class DashboardMiddleware implements Middleware {
       root,
       options,
       prefix,
+      versioning,
       startedAt: performance.now(),
       page: () => this.#renderPage(),
       board: () => this.#buildBoard(),

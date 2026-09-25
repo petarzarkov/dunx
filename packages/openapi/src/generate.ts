@@ -6,6 +6,7 @@ import {
   buildOperation,
   pathTemplate,
   SECURITY_SCHEME,
+  type VersionHeader,
 } from './operations.js';
 import {
   danglingRefs,
@@ -173,6 +174,7 @@ const tagsOf = (
 export const generateDocument = async (
   routes: readonly DiscoveredRoute[],
   info: DocumentInfo,
+  versionHeader?: VersionHeader,
 ): Promise<GeneratedDocument> => {
   const store = new SchemaStore();
   const paths: Record<string, PathItemObject> = {};
@@ -181,7 +183,7 @@ export const generateDocument = async (
   for (const route of ordered(routes)) {
     const template = pathTemplate(route.path);
     const item = (paths[template] ??= {});
-    const operation = await buildOperation(route, store);
+    const operation = await buildOperation(route, store, versionHeader);
     item[METHOD_KEYS[route.method]] = operation;
     operations.push(operation);
   }

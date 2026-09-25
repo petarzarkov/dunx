@@ -110,6 +110,9 @@ export const createApp = async (): Promise<HttpApp> => {
       // scaffold that picked `http` without picking `stats`.
       metrics: true,
       strict: false,
+      // `@Controller('swatches', { version: '1' })` serves `/api/v1/swatches`.
+      // A controller that declares no version keeps its unversioned path.
+      versioning: { type: 'uri' },
       // Every response, the 404 and mapped errors included. The landing page's
       // favicon is a `data:` URI, hence the one addition to the strict policy.
       // The API explorers, the dashboard and the email preview send their own.

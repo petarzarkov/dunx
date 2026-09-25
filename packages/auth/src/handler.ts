@@ -8,6 +8,7 @@ import {
   Post,
   Public,
   Put,
+  VERSION_NEUTRAL,
   type Input,
   type RouteSchemas,
 } from '@dunx/http';
@@ -90,5 +91,7 @@ export class AuthHandler {
  */
 export const mountHandler = (mountAt: string): Ctor<AuthHandler> =>
   ApiHidden()(
-    Controller(mountAt)(class MountedAuthHandler extends AuthHandler {}),
+    Controller(mountAt, { version: VERSION_NEUTRAL })(
+      class MountedAuthHandler extends AuthHandler {},
+    ),
   );

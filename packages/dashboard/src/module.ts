@@ -9,7 +9,7 @@ import {
   type ModuleRef,
   type Registration,
 } from '@dunx/core';
-import { RoutePrefix } from '@dunx/http/internal';
+import { RoutePrefix, RouteVersioning } from '@dunx/http/internal';
 import { DashboardMiddleware } from './middleware.js';
 import { DashboardOptions, type DashboardOptionsInit } from './options.js';
 
@@ -32,10 +32,17 @@ const middleware = (): Registration =>
       root: ModuleRef,
       logger: Logger,
       prefix: RoutePrefix,
-    ) => new DashboardMiddleware(options, root, logger, prefix),
+      versioning: RouteVersioning,
+    ) => new DashboardMiddleware(options, root, logger, prefix, versioning),
     // `RoutePrefix` is bound by `HttpFactory`'s global wrapper, so this resolves
     // the instance `listen()` attached to rather than a fresh one reading ''.
-    inject: [DashboardOptions, ROOT_MODULE, Logger, RoutePrefix] as const,
+    inject: [
+      DashboardOptions,
+      ROOT_MODULE,
+      Logger,
+      RoutePrefix,
+      RouteVersioning,
+    ] as const,
   });
 
 /**

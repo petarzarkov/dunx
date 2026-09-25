@@ -167,3 +167,60 @@ test('refuses an entry that exports no module, rather than writing an empty one'
 test('reports usage when given no entry', async () => {
   expect(await run([])).toBe(1);
 });
+
+/* The app's `versioning` lives in `HttpOptions`, which a CLI never sees. */
+test('honours versioning from an `openapi` export', async () => {
+  const dir = workspace();
+  const entry = await write(
+    dir,
+    'config.ts',
+    `${ENTRY}
+export const openapi = {
+  root: AppModule,
+  versioning: { type: 'uri', defaultVersion: '2' },
+};
+`,
+  );
+  const out = join(dir, 'doc.json');
+
+  expect(await run([entry, '--out', out])).toBe(0);
+  expect(Object.keys((await Bun.file(out).json()).paths)).toEqual([
+    '/v2/users',
+  ]);
+});
+
+/* A header-versioned app has a document per version, so the export picks one. */
+test('writes the apiVersion document under header versioning', async () => {
+  const dir = workspace();
+  const entry = await write(
+    dir,
+    'config.ts',
+    `${ENTRY.replace("@Controller('users')", "@Controller('users', { version: ['1', '2'] })")}
+export const openapi = {
+  root: AppModule,
+  versioning: { type: 'header', header: 'X-API-Version' },
+  apiVersion: '1',
+};
+`,
+  );
+  const out = join(dir, 'doc.json');
+
+  expect(await run([entry, '--out', out])).toBe(0);
+  const document = await Bun.file(out).json();
+  expect(document.paths['/users'].get.operationId).toBe(
+    'UsersController_list_v1',
+  );
+});
+
+test('refuses an apiVersion with no document', async () => {
+  const dir = workspace();
+  const entry = await write(
+    dir,
+    'config.ts',
+    `${ENTRY}
+export const openapi = { root: AppModule, apiVersion: '4' };
+`,
+  );
+
+  expect(await run([entry, '--out', join(dir, 'doc.json')])).toBe(1);
+});

@@ -1,4 +1,5 @@
 import {
+  DEPRECATED,
   IDEMPOTENT,
   meta,
   metaKey,
@@ -86,6 +87,10 @@ export const rolesOf = (
 
 export const isPublic = (record: MetaRecord | undefined): boolean =>
   record?.get(PUBLIC.id) === true;
+
+/** `@Deprecated` on the handler or its controller. */
+export const isDeprecated = (record: MetaRecord | undefined): boolean =>
+  record?.get(DEPRECATED.id) !== undefined;
 
 /**
  * What `@Idempotent()` declared, on the methods its guard acts on. A controller-level

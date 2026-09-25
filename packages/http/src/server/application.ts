@@ -14,6 +14,7 @@ import {
 import type { DiscoveredRoute } from '../route/discover.js';
 import { ClaimedRoutes } from './claimed-routes.js';
 import { RoutePrefix } from '../route/prefix.js';
+import { RouteVersioning } from '../route/version.js';
 import type { WebSocketRuntime } from '../ws/adapter.js';
 import { PubSub } from '../ws/pubsub.js';
 import type { PubSubRelay, RelayOptions, RelayPhase } from '../ws/relay.js';
@@ -246,6 +247,15 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     const prefix = this.#app.get(RoutePrefix);
     prefix.attach(this.#globalPrefix);
     const prefixed = this.#prefixed(prefix);
+    // Bun's own 404 never reaches the middleware chain. This runs only after Bun
+    // has matched nothing, so Bun is still the router. Built first because a
+    // header-versioned entry answers an unknown version with it.
+    const fallback = buildFallback(
+      middleware,
+      this.#onError,
+      this.#cors,
+      this.#notFound,
+    );
     const built = buildRoutes(
       prefixed,
       middleware,
@@ -254,6 +264,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       // A module's own middleware resolves from that module, carried by `from`.
       (guard, from) =>
         from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
+      { versioning: this.#app.get(RouteVersioning), miss: fallback },
     );
     // Built here rather than at construction: `trust proxy` may still change.
     const csrf = this.#csrf
@@ -289,14 +300,6 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     this.#app.get(ClaimedRoutes).attach(claimed);
     this.#app.get(RequestMetrics).claim(claimed);
 
-    // Bun's own 404 never reaches the middleware chain. This runs only after Bun
-    // has matched nothing, so Bun is still the router.
-    const fallback = buildFallback(
-      middleware,
-      this.#onError,
-      this.#cors,
-      this.#notFound,
-    );
     const guarded = csrf ? csrf(fallback) : fallback;
     const fetch = pairs ? withSecurityHeaders(pairs, guarded) : guarded;
 

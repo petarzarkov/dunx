@@ -97,20 +97,26 @@ export const setAbsentHeaders = (
 };
 
 /**
- * Wraps one table entry at boot. Not `async`: a handler that answered
- * synchronously still does, so the direct path keeps its measured advantage.
+ * Runs `stamp` on every response `handler` gives. Not `async`: a handler that
+ * answered synchronously still does, so the direct path keeps its measured
+ * advantage.
  */
+export const withResponseStamp =
+  (
+    stamp: (response: Response) => Response,
+    handler: ServedHandler,
+  ): ServedHandler =>
+  (req, server) => {
+    const response = handler(req, server);
+    return response instanceof Promise ? response.then(stamp) : stamp(response);
+  };
+
+/** Wraps one table entry at boot. */
 export const withSecurityHeaders = (
   pairs: HeaderPairs,
   handler: ServedHandler,
-): ServedHandler => {
-  return (req, server) => {
-    const response = handler(req, server);
-    return response instanceof Promise
-      ? response.then((settled) => setAbsentHeaders(settled, pairs))
-      : setAbsentHeaders(response, pairs);
-  };
-};
+): ServedHandler =>
+  withResponseStamp((response) => setAbsentHeaders(response, pairs), handler);
 
 /**
  * Every entry of the route table, `OPTIONS` preflights included. Fresh per-method

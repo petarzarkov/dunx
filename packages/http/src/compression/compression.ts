@@ -3,6 +3,7 @@ import type { RouteContext } from '../server/context.js';
 import type { Middleware, Next } from '../server/middleware.js';
 import { negotiate } from './negotiate.js';
 import { CompressionEncoding, CompressionOptions } from './options.js';
+import { varyOn } from '../server/vary.js';
 
 /**
  * Exactly what `Response.body` is, so a stream this file builds pipes into a
@@ -98,18 +99,8 @@ const weakenETag = (headers: Headers): void => {
  * encoded. A shared cache that stored the gzip body without it would go on to
  * serve those bytes to a client that never asked for gzip.
  */
-const varyOnEncoding = (headers: Headers): void => {
-  const existing = headers.get('vary');
-  if (existing === null) {
-    headers.set('vary', 'accept-encoding');
-    return;
-  }
-  if (existing.trim() === '*') return;
-  const listed = existing
-    .split(',')
-    .some((field) => field.trim().toLowerCase() === 'accept-encoding');
-  if (!listed) headers.set('vary', `${existing}, accept-encoding`);
-};
+const varyOnEncoding = (headers: Headers): void =>
+  varyOn(headers, 'accept-encoding');
 
 const encodeSync = (
   encoding: CompressionEncoding,

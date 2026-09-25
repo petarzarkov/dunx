@@ -40,7 +40,16 @@ export {
   renderShell,
   type ShellParts,
 } from './shell.js';
-export { DocsRenderer, type PageOptions } from './renderer.js';
+export {
+  DocsRenderer,
+  type PageOptions,
+  type VersionLink,
+} from './renderer.js';
+export {
+  generateDocuments,
+  type GeneratedDocuments,
+  type VersionedDocuments,
+} from './versions.js';
 export {
   ASSET_CACHE_CONTROL,
   PackageAssets,
