@@ -7,6 +7,7 @@ import type { SocketOptions } from '../ws/socket.js';
 import type { CorsOptions } from './cors.js';
 import type { CsrfOptions } from './csrf.js';
 import type { ErrorHandler } from './errors.js';
+import type { EtagOptions } from './etag.js';
 import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
 import type { VersioningOptions } from '../route/version.js';
@@ -121,6 +122,11 @@ export abstract class HttpOptionsProvider {
     return false;
   }
 
+  /** Off by default. See {@link HttpOptions.etag}. */
+  get etag(): boolean | EtagOptions {
+    return false;
+  }
+
   /** `false` removes the middleware from the chain; an object tunes it. */
   get requestLogging(): boolean | RequestLoggingOptions {
     return true;
@@ -224,6 +230,7 @@ export function resolveHttpOptions(
     versioning: settings.versioning,
     securityHeaders: settings.securityHeaders,
     csrf: settings.csrf,
+    etag: settings.etag,
     requestLogging: settings.requestLogging,
     socketLogging: settings.socketLogging,
     metrics: settings.metrics,

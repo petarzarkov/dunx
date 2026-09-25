@@ -50,6 +50,9 @@ with a `getOpenapiJson()` on it.
 | `path`        | `/docs`         | Where the HTML page is mounted             |
 | `jsonPath`    | `/openapi.json` | Where the document is mounted              |
 
+The document carries a strong `ETag`, hashed once per prefix and version, and
+answers a matching `If-None-Match` with a 304 whether or not the app sets `etag`.
+
 `forRootAsync({ root, useFactory, inject })` is the same module with everything but
 `root` produced by a factory, which is how any of the above comes off validated
 config:

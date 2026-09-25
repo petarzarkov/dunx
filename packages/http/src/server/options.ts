@@ -11,6 +11,7 @@ import type { SocketOptions } from '../ws/socket.js';
 import type { CorsOptions } from './cors.js';
 import type { CsrfOptions } from './csrf.js';
 import type { ErrorHandler } from './errors.js';
+import type { EtagOptions } from './etag.js';
 import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
 import type { VersioningOptions } from '../route/version.js';
@@ -61,6 +62,13 @@ export interface HttpOptions extends AppOptions {
    * trusts. See docs/guide/32-security.md.
    */
   readonly csrf?: boolean | CsrfOptions;
+  /**
+   * `ETag` on every value a `GET` route returns, and a 304 when `If-None-Match`
+   * names it. A `Response` the handler built keeps its own `ETag`, and is
+   * answered 304 against that. Off by default. `true` sends weak tags; an
+   * object can make them strong. See docs/guide/15-caching.md.
+   */
+  readonly etag?: boolean | EtagOptions;
   /** `app.set('trust proxy', ...)` as a field. */
   readonly trustProxy?: boolean;
   /**

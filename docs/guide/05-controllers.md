@@ -309,6 +309,9 @@ second-guessed.
 
 `undefined` and `null` become 204 rather than `Response.json(null)`.
 
+With `etag: true` a returned value gets an `ETag` and a 304 on revalidation; see
+[ETags and conditional GET](./15-caching.md#etags-and-conditional-get).
+
 A handler may be synchronous or return a promise. Both work, and the synchronous
 case is genuinely faster; see [The fast path](#the-fast-path).
 

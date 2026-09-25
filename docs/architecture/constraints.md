@@ -802,3 +802,136 @@ So the two dates are set only where absent and the `Link` is appended. RFC 9745
 gives `Deprecation` no value but a date, so `since` is required rather than
 defaulting to boot time, which would change on every restart. A route without
 `@Deprecated` is not wrapped.
+
+## ETags and conditional GET, on Bun 1.4.2
+
+Probed before `etag` was built. The rules are RFC 9110: 8.8.3 (`ETag`, and weak
+against strong comparison in 8.8.3.2), 13.1.1 (`If-Match`), 13.1.2
+(`If-None-Match`, always weak comparison), 13.2.2 (evaluation order), 15.4.5
+(304 carries the `ETag`, `Vary` and cache headers the 200 would have) and
+15.5.13 (412).
+
+For contrast, read from the installed sources: Express 5.2.1
+sets `this.set('etag', 'weak')` in `lib/application.js`, over `etag` 1.8.1's
+SHA-1 of the body. Hono 4.13.3's `middleware/etag` is strong by default
+(`options?.weak ?? false`), hashes `res.clone().body` with SHA-1 for every
+`GET`/`HEAD`, splits `If-None-Match` on `/,\s*/`, and keeps only
+`RETAINED_304_HEADERS` (`cache-control`, `content-location`, `date`, `etag`,
+`expires`, `vary`) on its 304. Five claims.
+
+**Bun tags a static route and answers its 304; it does neither for a handler.**
+A static `Response` route, a handler setting its own `ETag`, and a `Bun.file`
+body, read back with `fetch`:
+
+```
+GET /static                                  200 etag "fc6d24b916145cf9"
+GET /static  if-none-match "fc6d24b916145cf9" 304 [content-type, etag]
+GET /tagged  if-none-match "abc"             200 [content-length 5, etag "abc"] "hello"
+GET /file                                    200 [content-length 8, content-type]   (no etag, no last-modified)
+GET /304     handler 304 with content-length 4   304 [content-length 4, ...] ""
+Bun.hash.xxHash64("ok") = fc6d24b916145cf9
+```
+
+Bun's static tag is xxHash64 of the body. A handler-supplied `content-length`
+survives onto a 304, so a 304 built from a 200 has to drop it (RFC 9110 8.6).
+`StaticFiles` and a handler's `Bun.file` get no validator from Bun, so there was
+no existing ETag logic to share.
+
+**xxHash3 is the cheapest stable hasher.** Microseconds per call on JSON bytes:
+
+| Hasher              | 1 KB | 16 KB | 256 KB | 1 MB    |
+| ------------------- | ---- | ----- | ------ | ------- |
+| `Bun.hash` (wyhash) | 0.07 | 0.53  | 9.64   | 32.52   |
+| `xxHash64`          | 0.11 | 0.86  | 13.48  | 54.37   |
+| `xxHash3`           | 0.03 | 0.23  | 3.41   | 13.49   |
+| `xxHash32`          | 0.12 | 1.71  | 27.13  | 107.89  |
+| `CryptoHasher` md5  | 1.46 | 16.14 | 251.13 | 1009.67 |
+| `CryptoHasher` sha1 | 0.71 | 6.53  | 99.58  | 398.11  |
+| `sha256`            | 0.74 | 6.97  | 106.20 | 424.36  |
+
+Every `Bun.hash` variant defaults to seed 0: two processes printed the same
+`c5e3762ffc8453c6` for `xxHash3('{"a":1}')`. A string is hashed as its UTF-8
+bytes, so a serialized value and the bytes sent tag alike, and a JSC string held
+as UTF-16 hashes as the Latin-1 one does:
+
+```
+abc str 78af5f94892f3950 bytes 78af5f94892f3950 utf16-backed slice 78af5f94892f3950
+JSON with ā: str e076b655709d7f5e utf8 e076b655709d7f5e served bytes e076b655709d7f5e
+```
+
+xxHash3 shipped, as a 64-bit published algorithm rather than wyhash, whose
+version is Zig's to change. No size cap: against the `JSON.stringify` it follows
+it is 2.5% at 16 KB, 3.4% at 1 MB (30.8 us of 917.8 us) and 2.2% at 8 MB.
+
+**A handler's `Response` cannot be read safely, so only values are hashed.**
+Nothing public tells a buffered body from a stream: `Response.prototype` has no
+such member, `body` is a `ReadableStream` either way, and only `Bun.inspect`
+prints `Blob (5 bytes)` against `ReadableStream`. `blob()` on a stream that never
+ends was still pending after 100 ms. A file is recognisable after `clone().blob()`
+(1.00 us, not read) by its `name`, but so is an in-memory `File`. Reading a
+525-byte JSON body:
+
+| Strategy                                      | us/op |
+| --------------------------------------------- | ----- |
+| `Response.json(v)` alone                      | 0.59  |
+| `JSON.stringify` + xxHash3 + `new Response`   | 1.07  |
+| `Response.json` + `clone().bytes()` + xxHash3 | 1.21  |
+| `Response.json` + `bytes()` + rebuild         | 1.46  |
+| `Response.json` + `clone().blob()` + `bytes`  | 1.51  |
+
+A rebuilt `new Response(bytes, { headers })` over a string body was served as
+`application/octet-stream`. So `etag` hashes the JSON dunx serializes, before a
+`Response` exists and synchronously, and a handler's own `Response` only has its
+own `ETag` compared. That makes streams, SSE and files a non-case rather than a
+detection, and `no-store` too: only a handler's `Response` can carry it.
+
+**A tagged 200 costs 1.4 to 1.7 us.** `oha -c 64`, a 525-byte JSON `GET`, five
+interleaved rounds of 4 s, two runs, median as a share of the same run's route.
+Construction first, in a probe with no `If-None-Match` read (three rounds):
+
+| Construction                                    | Share | Added per request |
+| ----------------------------------------------- | ----- | ----------------- |
+| `new Response(text, { headers: { ...2 } })`     | 76.2% | 2.62 us           |
+| `Response.json` + `headers.set` of a fixed tag  | 93.7% | 0.56 us           |
+| `Response.json(v, { headers: { etag } })`       | 87.2% | 1.23 us           |
+| `new Response(text)` + `headers.set` x2         | 93.2% | 0.62 us           |
+| `TextEncoder` bytes + `headers.set` x2          | 91.6% | 0.78 us           |
+| `Response.json` + a second stringify for a hash | 88.8% | 1.07 us           |
+
+A headers record in the init costs about 0.6 us over `set`. The last row but two
+shipped. Against the shipped code, `etag` off against on in one process:
+
+| Configuration                         | Run 1 | Run 2 | Added per request |
+| ------------------------------------- | ----- | ----- | ----------------- |
+| Value, 200                            | 83.2% | 86.0% | 1.41-1.71 us      |
+| Value, 304                            | 84.1% | 82.3% | 1.60-1.87 us      |
+| Handler `Response` with an `ETag`     | 93.7% | 96.5% | 0.35-0.64 us      |
+| Handler `Response` with an `ETag`,304 | 81.9% | 78.8% | 2.10-2.54 us      |
+
+The shipped path reads `If-None-Match` on top of the 0.62 us construction. It
+is above the 1.26 us of a global async middleware and opt-in, and a route
+without `etag` pays one `undefined` check.
+
+**Chrome sends back the weakened tag, so the tag goes on before `Compression`.**
+Chrome through `Bun.WebView`, fetching a JSON route twice with `cache:
+'no-cache'` behind `Compression`, the handler tagging the unencoded bytes with a
+strong `"..."`:
+
+```
+chrome saw  [[200,"W/\"bc46fb8b9cafd913\"",5581],[200,"W/\"bc46fb8b9cafd913\"",5581]]
+server saw  [ "inm=null ae=gzip, deflate, br, zstd", "inm=W/\"bc46fb8b9cafd913\" ae=gzip, deflate, br, zstd" ]
+wire: status 200 content-encoding gzip etag W/"bc46fb8b9cafd913" vary accept-encoding
+revalidate with W/ tag: 304 vary on 304: null
+```
+
+The second request was a 304 that Chrome served from its cache as 200. So the
+tag is computed innermost, over the identity bytes, and every coding shares it;
+`Compression` weakens a strong one and a weak comparison still matches. The 304
+lost `Vary`, since `Compression` skipped any bodyless status, so it now adds
+`Vary: accept-encoding` to a 304 whose `content-type` it would have encoded, and
+the 304 keeps `content-type` as Bun's own static 304 does.
+
+`If-Match` is left out. RFC 9110 13.2.2 evaluates it before the method runs, and
+the representation's tag is known here only from the handler's response, after
+a `PUT` has written. `@Idempotent()` skips `GET` and `HEAD`, and `etag` touches
+nothing else, so a replayed response is never compared.

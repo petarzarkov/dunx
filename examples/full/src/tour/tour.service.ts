@@ -2,6 +2,7 @@ import { Logger } from '@dunx/core';
 import type { HttpApp } from '@dunx/http';
 import { AuthDemo } from '../auth/auth.demo.js';
 import { CatalogDemo } from '../cache/catalog.demo.js';
+import { EtagDemo } from '../crud/etag.demo.js';
 import { VersioningDemo } from '../crud/versioning.demo.js';
 import { Sessions } from '../cache/sessions.service.js';
 import { ChatDemo } from '../chat/chat.demo.js';
@@ -73,6 +74,7 @@ export class Tour {
     private readonly dashboard: DashboardDemo,
     private readonly stats: StatsDemo,
     private readonly versioning: VersioningDemo,
+    private readonly etag: EtagDemo,
   ) {}
 
   async run(app: HttpApp, url: string): Promise<void> {
@@ -111,6 +113,9 @@ export class Tour {
 
     this.group("@dunx/http - Compression, on Bun's own zstd and gzip");
     await this.compression.demonstrate(url);
+
+    this.group('@dunx/http - ETag on a returned value, and a 304');
+    await this.etag.demonstrate(url);
 
     this.group('@dunx/http - W3C Trace Context, adopted and propagated');
     await this.trace.demonstrate(url);

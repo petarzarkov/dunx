@@ -1,12 +1,15 @@
 import { inject, type Ctor } from '@dunx/core';
 import {
   ApiHidden,
+  conditionalGet,
   Controller,
+  entityTag,
   gate,
   Get,
   HttpError,
   HttpStatusCode,
   inlineScriptPolicy,
+  JSON_CONTENT_TYPE,
   Public,
   type Authorize,
   type Input,
@@ -48,16 +51,34 @@ const documentController = (mount: DocMount) => {
     // inject() in a field initializer, not a constructor parameter: this package
     // works with or without the @dunx/transform preload.
     protected readonly explorer = inject(OpenApiExplorer);
+    /** Per mount prefix and version, like the document it hashes. */
+    readonly #tags = new Map<string, string>();
 
+    /**
+     * Strong, since these are the exact bytes sent; `Compression` weakens it on
+     * an encoded response. The 304 is answered here, so it works whether or
+     * not the app turned `etag` on.
+     */
     @Public()
     @Get(() => mount.json)
     async document(input: Input<RouteSchemas>): Promise<Response> {
       const refused = await this.refuse(input);
       if (refused !== undefined) return refused;
 
-      return new Response(
-        this.explorer.json(this.prefix(input, mount.json), this.version(input)),
-        { headers: { 'content-type': 'application/json; charset=utf-8' } },
+      const prefix = this.prefix(input, mount.json);
+      const version = this.version(input);
+      const json = this.explorer.json(prefix, version);
+      const key = this.cacheKey(prefix, version);
+      let etag = this.#tags.get(key);
+      if (etag === undefined) {
+        etag = entityTag(json, false);
+        this.#tags.set(key, etag);
+      }
+      return conditionalGet(
+        new Response(json, {
+          headers: { 'content-type': JSON_CONTENT_TYPE, etag },
+        }),
+        input.req,
       );
     }
 
@@ -72,6 +93,11 @@ const documentController = (mount: DocMount) => {
         throw new HttpError(HttpStatusCode.NOT_FOUND, 'NOT_FOUND');
       }
       return asked;
+    }
+
+    /** What the document's tags and the page's policies are cached under. */
+    protected cacheKey(prefix: string, version: string | undefined): string {
+      return `${prefix}\n${version ?? ''}`;
     }
 
     protected prefix(input: Input<RouteSchemas>, declared: string): string {
@@ -115,7 +141,7 @@ export const buildController = (
       const prefix = this.prefix(input, mount.ui);
       const version = this.version(input);
       const html = await this.explorer.page(prefix, version);
-      const key = `${prefix}\n${version ?? ''}`;
+      const key = this.cacheKey(prefix, version);
       let policy = this.#policies.get(key);
       if (policy === undefined) {
         policy = inlineScriptPolicy(html);

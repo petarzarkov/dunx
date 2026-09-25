@@ -203,14 +203,32 @@ describe('Compression', () => {
     expect(res.headers.get('content-encoding')).toBeNull();
   });
 
-  it('leaves a 304 alone', async () => {
-    const notModified = new Response(null, {
-      status: 304,
-      headers: { 'content-type': 'application/json' },
-    });
-    const res = await run(request('gzip, zstd'), notModified);
+  it('encodes no 304, and gives it the Vary and ETag its 200 had', async () => {
+    const notModified = (): Response =>
+      new Response(null, {
+        status: 304,
+        headers: { 'content-type': 'application/json', etag: '"abc"' },
+      });
+    const res = await run(request('gzip, zstd'), notModified());
     expect(res.status).toBe(304);
     expect(res.headers.get('content-encoding')).toBeNull();
+    expect(res.headers.get('vary')).toBe('accept-encoding');
+    expect(res.headers.get('etag')).toBe('W/"abc"');
+
+    // Nothing negotiated, so the 200 kept its strong tag and so does this.
+    const plain = await run(request('identity'), notModified());
+    expect(plain.headers.get('vary')).toBe('accept-encoding');
+    expect(plain.headers.get('etag')).toBe('"abc"');
+  });
+
+  it('leaves a 304 alone when its 200 would not have been encoded', async () => {
+    const image = new Response(null, {
+      status: 304,
+      headers: { 'content-type': 'image/png', etag: '"abc"' },
+    });
+    const res = await run(request('gzip'), image);
+    expect(res.headers.get('vary')).toBeNull();
+    expect(res.headers.get('etag')).toBe('"abc"');
   });
 
   it('weakens a strong etag, because the bytes are no longer those bytes', async () => {

@@ -203,3 +203,48 @@ readiness: [new CacheStoreIndicator(cache.store)],
 throwing L2 blocks the L1 write that would have served the next read; wrapping
 from outside swallows the error and loses the promotion with it.
 `examples/full` does it this way.
+
+## ETags and conditional GET
+
+`etag` tags what a `GET` route returns, and answers `If-None-Match` with a 304:
+
+```ts
+const app = await HttpFactory.create(AppModule, { etag: true });
+```
+
+```
+GET /api/colors                                  200  ETag: W/"8e0f5c2a91d4b7e3"
+GET /api/colors  If-None-Match: W/"8e0f5c2a91d4b7e3"  304  no body
+```
+
+| Handler returns             | With `etag` on                                                    |
+| --------------------------- | ----------------------------------------------------------------- |
+| a value, at status 200      | `ETag` of the JSON bytes, and a 304 when `If-None-Match` names it |
+| a value, at another status  | untouched                                                         |
+| a `Response` with an `ETag` | its tag kept, and a 304 when `If-None-Match` names it             |
+| a `Response` without one    | untouched: a file, a stream or an `@Sse` route is never read      |
+
+`HttpOptionsProvider` has the same member as a getter, `get etag()`. Off by
+default. A handler that answers with `conditionalGet(response, req)` gets the 304
+with `etag` off too; `entityTag(body, weak)` computes the tag `etag` would.
+`@dunx/openapi`'s document does both.
+
+- **Weak by default**, `W/"..."`, as in Express. `{ etag: { weak: false } }`
+  sends strong tags. `If-None-Match` compares weakly either way (RFC 9110
+  13.1.2), so `W/"a"` matches `"a"`, and `*` matches any 200.
+- **The tag is xxHash3 of the body, seed 0**, so every replica sends the same
+  tag for the same bytes. It costs 0.03 us for 1 KB and 13.5 us for 1 MB.
+- **`HEAD` gets the tag `GET` has.** Bun answers `HEAD` from the `GET` handler.
+- **A 304 keeps the 200's headers** without its body or `content-length`. CORS,
+  `securityHeaders`, `traceresponse` and a version's `Vary` are on it.
+- **Under `Compression` the tag describes the unencoded bytes**, so gzip, zstd
+  and identity share one. `Compression` weakens a strong tag it encodes, skips a
+  304 and adds `Vary: accept-encoding` to it.
+- **`If-Match` is not evaluated.** A precondition on a `PUT` has to be checked
+  before the write, and the tag is known only from the response after it. Read
+  the header in the handler and throw `HttpError(HttpStatusCode.PRECONDITION_FAILED)`.
+  `If-Modified-Since` is ignored too, since no `Last-Modified` is sent.
+
+A 304 still runs the handler: the tag is computed from its result. A route whose
+value is expensive to build caches the value with `Cache` above, and `etag`
+saves the transfer.

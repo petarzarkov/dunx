@@ -8,6 +8,13 @@ touching its code, and the new spelling for what it can replace.
 
 ## 3.10.0
 
+### `Compression` stamps a 304 as its 200
+
+A 304 whose `content-type` `Compression` would encode now carries `Vary:
+accept-encoding`, and its `ETag` is weakened when the request negotiates an
+encoding, matching the 200 (RFC 9110 15.4.5). This reaches a 304 an app builds
+itself, with or without `etag`. A 304 with any other type is untouched.
+
 ### An unmatched-path flood logs one line a second
 
 Request logging's `warn` for a 4xx on a path no route matched and no middleware

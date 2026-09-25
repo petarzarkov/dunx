@@ -32,6 +32,7 @@ import {
   type CsrfOptions,
 } from './csrf.js';
 import { errorMapper, toErrorMapper, type ErrorMapper } from './errors.js';
+import { EntityTags } from './etag.js';
 import { hasClaimedPaths, type Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
 import {
@@ -100,6 +101,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
   readonly #split: boolean;
   readonly #securityHeaders: HeaderPairs | undefined;
   readonly #csrf: CsrfOptions | undefined;
+  readonly #etag: EntityTags | undefined;
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -164,6 +166,11 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     // construction rather than `listen()`. The check itself waits for listen:
     // `trust proxy` may still change.
     if (this.#csrf) trustedOriginSet(this.#csrf.trustedOrigins);
+    const etag = options.etag;
+    this.#etag =
+      etag === undefined || etag === false
+        ? undefined
+        : new EntityTags(etag === true ? {} : etag);
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
     });
@@ -265,6 +272,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       (guard, from) =>
         from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
       { versioning: this.#app.get(RouteVersioning), miss: fallback },
+      this.#etag,
     );
     // Built here rather than at construction: `trust proxy` may still change.
     const csrf = this.#csrf
