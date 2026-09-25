@@ -396,6 +396,16 @@ describe('trusted origins', () => {
     }
   });
 
+  it('fails HttpFactory.create, not listen(), on a malformed entry', async () => {
+    const entry = 'https://partner.test/';
+    await expect(
+      HttpFactory.create(AppModule, {
+        bootLogging: false,
+        csrf: { trustedOrigins: [entry] },
+      }),
+    ).rejects.toThrow(entry);
+  });
+
   it('keeps a bare origin as written', () => {
     expect([
       ...trustedOriginSet(['https://partner.test', 'http://localhost:5173']),

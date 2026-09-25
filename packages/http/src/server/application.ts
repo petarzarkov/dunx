@@ -24,7 +24,12 @@ import {
   usesMetricsMiddleware,
 } from './metrics.js';
 import type { CorsOptions } from './cors.js';
-import { csrfWrapper, withCsrfRoutes, type CsrfOptions } from './csrf.js';
+import {
+  csrfWrapper,
+  trustedOriginSet,
+  withCsrfRoutes,
+  type CsrfOptions,
+} from './csrf.js';
 import { errorMapper, toErrorMapper, type ErrorMapper } from './errors.js';
 import { hasClaimedPaths, type Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
@@ -154,6 +159,10 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
         : csrf === true
           ? {}
           : csrf;
+    // Validated now, like `securityHeaders`, so a malformed entry fails the
+    // construction rather than `listen()`. The check itself waits for listen:
+    // `trust proxy` may still change.
+    if (this.#csrf) trustedOriginSet(this.#csrf.trustedOrigins);
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
     });
