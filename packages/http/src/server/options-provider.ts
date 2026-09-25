@@ -5,6 +5,7 @@ import type { SocketMiddleware } from '../ws/middleware.js';
 import type { PubSubRelay, RelayOptions } from '../ws/relay.js';
 import type { SocketOptions } from '../ws/socket.js';
 import type { CorsOptions } from './cors.js';
+import type { CsrfOptions } from './csrf.js';
 import type { ErrorHandler } from './errors.js';
 import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
@@ -109,6 +110,11 @@ export abstract class HttpOptionsProvider {
     return false;
   }
 
+  /** Off by default. See {@link HttpOptions.csrf}. */
+  get csrf(): boolean | CsrfOptions {
+    return false;
+  }
+
   /** `false` removes the middleware from the chain; an object tunes it. */
   get requestLogging(): boolean | RequestLoggingOptions {
     return true;
@@ -210,6 +216,7 @@ export function resolveHttpOptions(
     port: settings.port,
     cors: settings.cors,
     securityHeaders: settings.securityHeaders,
+    csrf: settings.csrf,
     requestLogging: settings.requestLogging,
     socketLogging: settings.socketLogging,
     metrics: settings.metrics,

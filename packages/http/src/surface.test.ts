@@ -33,6 +33,7 @@ const BARREL = [
   'Controller',
   'CorsOptions',
   'CorsOrigin',
+  'CsrfOptions',
   'DEFAULT_RELAY_CHANNEL',
   'AmqpIndicator',
   'DatabaseIndicator',

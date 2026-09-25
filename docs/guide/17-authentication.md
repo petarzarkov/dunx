@@ -536,4 +536,5 @@ those tables by hand:
 - [Database](./14-database.md) for the connection `drizzleDatabase` reuses
 - [Logging](./13-logging.md) for the `RequestContext` that carries `userId`
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
+- [Security](./32-security.md#cross-site-requests) for `csrf`, which checks the auth routes ahead of better-auth's own origin check
 - `packages/auth/README.md` for the full API surface

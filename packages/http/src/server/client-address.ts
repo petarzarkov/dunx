@@ -10,7 +10,7 @@ interface AddressSource {
  * How many entries at the right-hand end of `X-Forwarded-For` were written by a
  * proxy under our control. `true` is one, which is the single-proxy deployment.
  */
-const trustedHops = (setting: boolean | number): number => {
+export const trustedHops = (setting: boolean | number): number => {
   if (setting === true) return 1;
   if (setting === false) return 0;
   return Number.isFinite(setting) ? Math.max(0, Math.trunc(setting)) : 0;

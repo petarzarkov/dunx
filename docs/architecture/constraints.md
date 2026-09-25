@@ -628,3 +628,82 @@ The new-key cost, built up one step at a time in a probe guard: draining the bod
 and reparsing it 2.2-3 us, SHA-256 1.6-2 us, the claim 3-4 us, cloning and
 reading the response 2-3.5 us. The first build read the clone with `for await`
 and cost 31 us; `blob()` replaced it.
+
+## CSRF protection, on Bun 1.4.2
+
+Probed before `csrf` was built. The design is Go 1.25's
+`net/http.CrossOriginProtection` (`src/net/http/csrf.go` at `go1.25.0`, and
+Filippo Valsorda's "Cross-Site Request Forgery", 13 Aug 2025): safe methods
+pass, `Sec-Fetch-Site` decides when present, `Origin` against `Host` when not,
+and a request with neither is not from a browser. Hono 4.13.9's `csrf` checks
+only form content types (`application/x-www-form-urlencoded`,
+`multipart/form-data`, `text/plain`), so a cross-site `fetch` with a JSON body
+the browser sends through CORS is not refused there. Four claims.
+
+**better-auth already refuses a cross-site write to its own routes.**
+better-auth 1.6.25 with `baseURL` set, served as `AuthHandler` serves it (the
+`Response` of `auth.handler(req)`, untouched), a session cookie on every call:
+
+```
+no Origin, no Sec-Fetch-Site (curl)                 sign-in 403 MISSING_OR_NULL_ORIGIN | sign-out 403 MISSING_OR_NULL_ORIGIN
+Origin evil.test + Sec-Fetch-Site cross-site        sign-in 403 INVALID_ORIGIN         | sign-out 403 INVALID_ORIGIN
+Origin evil.test only                               sign-in 403 INVALID_ORIGIN         | sign-out 403 INVALID_ORIGIN
+Sec-Fetch-Site cross-site only, no Origin           sign-in 403 MISSING_OR_NULL_ORIGIN | sign-out 403 MISSING_OR_NULL_ORIGIN
+same-origin                                         sign-in 200                        | sign-out 200
+```
+
+It is stricter than Go's rule: a cookie with no `Origin` is refused. So `csrf`
+covers the auth routes rather than skipping them, since everything it refuses
+there better-auth would refuse too, and skipping them needs a per-route opt-out
+nothing else wants. The one conflict is an origin trusted by one and not the
+other, which the guide states. Under `NODE_ENV=test` better-auth skips its
+check (see authentication.md), so `examples/full`'s in-process suites see only
+dunx's.
+
+**Bun passes the headers through as sent, and builds `req.url` from `Host`.**
+A raw HTTP/1.1 request over `Bun.connect` to a `routes` handler:
+
+```
+> Host: app.internal:8080 / Origin: https://Shop.Example / Sec-Fetch-Site: Cross-Site
+> X-Forwarded-Host: shop.example, evil.test / X-Forwarded-Proto: https
+{"url":"http://app.internal:8080/x","host":"app.internal:8080","origin":"https://Shop.Example",
+ "sfs":"Cross-Site","xfh":"shop.example, evil.test","xfp":"https"}
+> (no Host)
+HTTP/1.1 400 Bad Request
+```
+
+Case survives, so the comparison is exact, as Go's is: an unknown
+`Sec-Fetch-Site` value is refused. `X-Forwarded-Host` never reaches `req.url`.
+Behind a proxy that rewrites `Host`, the `Origin` fallback compares against
+`X-Forwarded-Host` only when `trust proxy` is set, counted from the right by the
+same hop count `ClientAddress` uses for `X-Forwarded-For`. A modern browser
+behind a TLS proxy sends `Sec-Fetch-Site` and never reaches the fallback.
+
+**Chrome's values are the ones the rule expects.** Chrome 154.0.8037.57
+through `Bun.WebView`, a target on `127.0.0.1`, a form on `localhost` posting
+to it, and a page on another `127.0.0.1` port calling it:
+
+```
+navigate to target (typed)         GET  sfs=none mode=navigate origin=null
+same-origin fetch POST             POST sfs=same-origin mode=cors origin=http://127.0.0.1:40913
+cross-site form POST               POST sfs=cross-site mode=navigate origin=http://localhost:39015
+same-site (other port) fetch POST  POST sfs=same-site mode=cors origin=http://127.0.0.1:41485
+```
+
+`same-site` is a different origin on the same registrable domain, and is
+refused as Go refuses it.
+
+**The check costs 0.5 to 0.9 us on an unsafe request.** `oha -c 64`, a `POST`
+route answering `ok`, five interleaved rounds per configuration, two runs,
+median as a share of the same run's unwrapped route. The wrapper is sync, built
+at boot like the security headers, and installed on unsafe-method entries only:
+
+| Configuration                       | Run 1 | Run 2 | Added per request |
+| ----------------------------------- | ----- | ----- | ----------------- |
+| `Sec-Fetch-Site: same-origin`       | 91.2% | 91.6% | 0.70-0.71 us      |
+| `Origin` fallback, host equals Host | 91.7% | 89.6% | 0.67-0.88 us      |
+| Neither header (a non-browser)      | 91.1% | 94.1% | 0.48-0.72 us      |
+
+Below the 1.26 us of a new global async middleware, and a `GET` pays nothing.
+A refusal is answered outside the chain, so it writes its own `warn` line
+through the bound `Logger` rather than a request-logging entry.

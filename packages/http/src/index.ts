@@ -55,6 +55,7 @@ export {
 export { ClientAddress } from './server/client-address.js';
 export type { RouteContext } from './server/context.js';
 export type { CorsOptions, CorsOrigin } from './server/cors.js';
+export type { CsrfOptions } from './server/csrf.js';
 export { inlineScriptPolicy } from './server/html.js';
 export {
   setAbsentHeaders,

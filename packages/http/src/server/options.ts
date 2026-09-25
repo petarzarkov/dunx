@@ -9,6 +9,7 @@ import type { SocketMiddleware } from '../ws/middleware.js';
 import type { PubSubRelay, RelayOptions } from '../ws/relay.js';
 import type { SocketOptions } from '../ws/socket.js';
 import type { CorsOptions } from './cors.js';
+import type { CsrfOptions } from './csrf.js';
 import type { ErrorHandler } from './errors.js';
 import type { Middleware } from './middleware.js';
 import type { RequestLoggingOptions } from './request-logging-options.js';
@@ -45,6 +46,13 @@ export interface HttpOptions extends AppOptions {
    * or drops (`false`) one header at a time. See docs/guide/32-security.md.
    */
   readonly securityHeaders?: boolean | SecurityHeadersOptions;
+  /**
+   * Refuses a cross-site `POST`, `PUT`, `PATCH` or `DELETE` with a 403, judged by
+   * `Sec-Fetch-Site` and `Origin` as Go's `CrossOriginProtection` does. No token.
+   * Off by default. `true` trusts no other origin; an object lists the ones it
+   * trusts. See docs/guide/32-security.md.
+   */
+  readonly csrf?: boolean | CsrfOptions;
   /** `app.set('trust proxy', ...)` as a field. */
   readonly trustProxy?: boolean;
   /**

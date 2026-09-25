@@ -24,6 +24,13 @@ import {
   usesMetricsMiddleware,
 } from './metrics.js';
 import type { CorsOptions } from './cors.js';
+import {
+  crossOriginCheck,
+  csrfRefuser,
+  withCsrf,
+  withCsrfRoutes,
+  type CsrfOptions,
+} from './csrf.js';
 import { errorMapper, toErrorMapper, type ErrorMapper } from './errors.js';
 import { hasClaimedPaths, type Middleware } from './middleware.js';
 import { RequestLoggingMiddleware } from './request-logging.js';
@@ -92,6 +99,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
   readonly #binding: ServerBinding;
   readonly #split: boolean;
   readonly #securityHeaders: HeaderPairs | undefined;
+  readonly #csrf: CsrfOptions | undefined;
   #globalPrefix = '';
   #cors: CorsOptions | undefined;
   #started = false;
@@ -145,6 +153,13 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       secure === undefined || secure === false
         ? undefined
         : securityHeaderPairs(secure === true ? {} : secure);
+    const csrf = options.csrf;
+    this.#csrf =
+      csrf === undefined || csrf === false
+        ? undefined
+        : csrf === true
+          ? {}
+          : csrf;
     this.closed = new Promise<void>((resolve) => {
       this.#resolveClosed = resolve;
     });
@@ -237,8 +252,19 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       (guard, from) =>
         from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
     );
+    // Built here rather than at construction: `trust proxy` may still change.
+    const check = this.#csrf
+      ? crossOriginCheck(this.#csrf, this.#settings['trust proxy'])
+      : undefined;
+    const refuse = check
+      ? csrfRefuser(this.#app.get(Logger), this.#onError)
+      : undefined;
+    // Inside the security headers, so a refusal carries them; outside the
+    // chain, so nothing reads a body or claims a key for a request refused.
+    const checked =
+      check && refuse ? withCsrfRoutes(check, refuse, built) : built;
     const pairs = this.#securityHeaders;
-    const secured = pairs ? withSecuredRoutes(pairs, built) : built;
+    const secured = pairs ? withSecuredRoutes(pairs, checked) : checked;
     // Before `withUpgradeRoutes` merges the gateways in `bind`, which assigns
     // each gateway path outright, so an upgrade still wins a key an alias took.
     // A gateway's upgrade is not wrapped: a 101 carries no document.
@@ -267,7 +293,9 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       this.#cors,
       this.#notFound,
     );
-    const fetch = pairs ? withSecurityHeaders(pairs, fallback) : fallback;
+    const guarded =
+      check && refuse ? withCsrf(check, refuse, fallback) : fallback;
+    const fetch = pairs ? withSecurityHeaders(pairs, guarded) : guarded;
 
     const bound = this.#binding.bind({ port, routes, fetch, websocket: ws });
 

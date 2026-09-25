@@ -105,6 +105,77 @@ return new Response(html, {
 });
 ```
 
+## Cross-site requests
+
+Set `csrf` and a browser's cross-site `POST`, `PUT`, `PATCH` or `DELETE` is
+refused with a 403. There is no token: the check reads the `Sec-Fetch-Site` and
+`Origin` headers the browser sets, the design of Go 1.25's
+`net/http.CrossOriginProtection`.
+
+```ts
+const app = await HttpFactory.create(AppModule, {
+  csrf: { trustedOrigins: ['https://admin.example.com'] },
+});
+```
+
+`csrf: true` trusts no other origin. It is off by default, and
+`HttpOptionsProvider` has the same field as a getter.
+
+| Request                                                | Outcome |
+| ------------------------------------------------------ | ------- |
+| `GET`, `HEAD`, `OPTIONS`                               | passes  |
+| `Sec-Fetch-Site: same-origin` or `none`                | passes  |
+| `Sec-Fetch-Site: same-site` or `cross-site`            | 403     |
+| No `Sec-Fetch-Site`, `Origin` host equals `Host`       | passes  |
+| No `Sec-Fetch-Site`, `Origin` names another host       | 403     |
+| Neither header: `curl`, a server, a webhook sender     | passes  |
+| Cross-site, but `Origin` is listed in `trustedOrigins` | passes  |
+
+`same-site` is refused: a sibling subdomain is another origin, and may be
+someone else's. A trusted origin is written `scheme://host[:port]`; anything
+else is a boot error.
+
+The refusal goes through the app's error mapper, so it has the shape every
+other error has:
+
+```json
+{ "error": "CROSS_ORIGIN_REQUEST", "status": 403 }
+```
+
+It is checked before the middleware chain, so no body is read, no guard runs,
+and request logging never sees it. It carries the security headers when those
+are on. The check costs 0.5 to 0.9 microseconds on an unsafe request, and
+nothing on a safe one, whose route entry is not wrapped.
+
+Each refusal is one `warn` line through the bound `Logger`:
+
+```ts
+logger.warn('CSRF refused POST /things', {
+  method: 'POST',
+  path: '/things', // no query string
+  secFetchSite: 'cross-site', // as received, or null
+  origin: 'https://evil.test', // as received, or null
+  reason: 'cross-origin', // or 'origin-mismatch' when Origin decided
+  traceparent: '00-...', // only when the request carried one
+});
+```
+
+| Interaction        | Behaviour                                                                                                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CORS               | A preflight is `OPTIONS` and passes. The request after it is still refused unless its origin is in `trustedOrigins`: CORS decides who may read a response, `csrf` who may send one |
+| `trustProxy`       | The `Origin` fallback compares against `X-Forwarded-Host`, counted from the right as `ClientAddress` counts `X-Forwarded-For`. Otherwise `Host`                                    |
+| Bearer tokens      | Still checked. A server-side client sends neither header and passes; a page on another site calling with a token needs its origin trusted                                          |
+| better-auth        | Its routes are dunx routes and are checked. better-auth runs its own origin check behind this one, which refuses a cookie-bearing request with no `Origin` as well                 |
+| Websocket upgrades | A `GET`, so not checked. A gateway that serves cookies checks `Origin` in its own upgrade                                                                                          |
+
+An origin better-auth trusts through its own `trustedOrigins` has to be listed
+in both, or `csrf` refuses it first.
+
+A browser sends `Sec-Fetch-Site` only to HTTPS and `localhost`. Over plain HTTP
+the `Origin` fallback decides, and it compares hosts, not schemes: serve over
+HTTPS with `Strict-Transport-Security` to close the `http://` to `https://`
+case.
+
 ## What is not covered
 
 | Response                            | Why                                                 |

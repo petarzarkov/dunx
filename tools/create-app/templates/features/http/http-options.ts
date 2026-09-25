@@ -3,6 +3,7 @@ import {
   HttpOptionsProvider,
   WsRelay,
   type CorsOptions,
+  type CsrfOptions,
   type PubSubRelay,
   type RequestLoggingOptions,
   type SocketMiddleware,
@@ -52,6 +53,16 @@ export class AppHttpOptions extends HttpOptionsProvider {
       exposedHeaders: ['x-handled-by'],
       maxAge: 600,
     };
+  }
+
+  /**
+   * A cross-site `POST` from a browser is refused with a 403. The CORS origin is
+   * trusted from the same setting, since it is the one other site allowed to
+   * call with credentials. `*` names no origin, so it trusts none.
+   */
+  override get csrf(): CsrfOptions {
+    const origin = this.config.get('corsOrigin');
+    return { trustedOrigins: origin === '*' ? [] : [origin] };
   }
 
   /** Multi-node websocket fan-out, resolved rather than constructed. */
