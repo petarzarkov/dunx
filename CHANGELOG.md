@@ -4,6 +4,60 @@ Every release, newest first. Written by `bun run version` from the commits in th
 release range. Every @dunx package shares one version and ships together, so a
 release covers all of them.
 
+## 3.10.0 - 2026-09-25
+
+Tracing, security headers, CSRF, idempotency, versioning, ETags and cookies
+
+OpenTelemetry spans come through an always-bound Tracer that is a no-op until
+an app imports OtelModule from @dunx/core/otel: the HTTP server and client,
+database queries, Redis commands, bullmq jobs and AMQP messages, with log
+lines joined to the recording span and trace context carried into forked
+workers.
+
+The HTTP layer gains opt-in securityHeaders, token-free CSRF protection from
+Fetch Metadata, Idempotency-Key support over a memory or Redis store, API
+versioning by URI, header or media type with Deprecation and Sunset headers,
+ETags with conditional GET, and signed cookies with key rotation. Each is
+wired at boot, so an app that leaves it off pays nothing.
+
+Upgrading covers what changes without opting in: the explorer and dashboard
+pages send their own CSP, an unmatched-path flood logs one line a second, a
+304 carries the Vary its 200 had, and req.cookies exists on an unmatched path.
+
+### Features
+
+- **http**: signed cookies, and req.cookies on an unmatched path ([`dfa2507`](https://github.com/petarzarkov/dunx/commit/dfa2507f3774b667016ea45998e4abe723938dfc))
+- **http**: ETags and conditional GET, opt-in, on serialized values ([`99acb98`](https://github.com/petarzarkov/dunx/commit/99acb985829a2cdd48ab586b2e11256618f4bb78))
+- **http**: API versioning by URI, header or media type, with deprecation ([`b6c698d`](https://github.com/petarzarkov/dunx/commit/b6c698d59029b7fb1721c35bec2a67df97bf5f9c))
+- **http**: throttle request logging's warn for unmatched paths ([`13f3727`](https://github.com/petarzarkov/dunx/commit/13f37272c0f8f4936ec5bd7a45868bd436d6a252))
+- **http**: CSRF protection by Fetch Metadata, opt-in, applied at boot ([`d7db586`](https://github.com/petarzarkov/dunx/commit/d7db586b5b302fc39aca2bc580fe5335f6971a1b))
+- **http**: Idempotency-Key support, opt-in per route ([`65e13aa`](https://github.com/petarzarkov/dunx/commit/65e13aaab5ba85c6c1e3d46d873f18ac004bd4c6))
+- **http**: security response headers, opt-in, applied at boot ([`02ba74f`](https://github.com/petarzarkov/dunx/commit/02ba74f7032d2a90bc78168bdda9583edb5b7d8f))
+- **core**: OpenTelemetry spans behind an always-bound Tracer ([`21f6a74`](https://github.com/petarzarkov/dunx/commit/21f6a74cc7c01a47d8a5523230ac91688cb3f346))
+
+### Fixes
+
+- **http**: address review on signed cookies ([`74bfc95`](https://github.com/petarzarkov/dunx/commit/74bfc959cb356c183b2b17683af4682789fa28df))
+- **http**: address review on ETags ([`d833b9c`](https://github.com/petarzarkov/dunx/commit/d833b9c41ece88c76518e6e947692d37f6bf6293))
+- **http**: address review on API versioning ([`a19b6c9`](https://github.com/petarzarkov/dunx/commit/a19b6c9f412a769e1ba51acb5da92d1127f217fd))
+- **http**: validate csrf.trustedOrigins at construction ([`e2eb86e`](https://github.com/petarzarkov/dunx/commit/e2eb86e47c097e3b8f06bf3d85508f411a784564))
+- **http**: address review on CSRF protection ([`593356e`](https://github.com/petarzarkov/dunx/commit/593356e41421ee6568d1364b8bfcad88d09f2024))
+- **http**: address review on idempotency keys ([`2b1a4b7`](https://github.com/petarzarkov/dunx/commit/2b1a4b72f10b2f17bf6fe677653c31e60e7e9376))
+- **http**: address review on security headers ([`293c7a3`](https://github.com/petarzarkov/dunx/commit/293c7a3368b3ddd76095e41ba1392b11c9203c7c))
+- **infra**: address review on the OpenTelemetry spans ([`f0ec454`](https://github.com/petarzarkov/dunx/commit/f0ec45466e9c9de1fec39902c3624504872788a2))
+- **infra/db**: a failed Bun.SQL query no longer surfaces as unhandled ([`627b254`](https://github.com/petarzarkov/dunx/commit/627b2548356786fb1f6a6d65528a920718b24874))
+
+### Documentation
+
+- **bun-apis**: a Bun.SQL query's then runs twice per await ([`17343c0`](https://github.com/petarzarkov/dunx/commit/17343c08b91bf559a8e78ba35aba4707f4a2ae86))
+- address review comments on the docs review pass ([`18c6107`](https://github.com/petarzarkov/dunx/commit/18c61078981e2c3cdada3835c1bc2ebfd933da3c))
+- correct samples and stale claims found in a full docs review ([`b0ffdf6`](https://github.com/petarzarkov/dunx/commit/b0ffdf6d85a4ab6cbfe818033f2b30f759dac3ad))
+
+### Other changes
+
+- **openapi**: read the asset bodies so close() cannot wait on them ([`cc5788e`](https://github.com/petarzarkov/dunx/commit/cc5788e253606396e8a6250267f5311bb0be9682))
+- pull MinIO from Chainguard, pinned by digest ([`e9a84ec`](https://github.com/petarzarkov/dunx/commit/e9a84eca9dc32818dd1b0a9c82f8cc3aff4020bd))
+
 ## 3.9.6 - 2026-09-23
 
 The Scalar explorer wears the dunx mark, not a stale Swagger icon

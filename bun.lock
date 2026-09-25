@@ -183,7 +183,7 @@
     },
     "packages/auth": {
       "name": "@dunx/auth",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
@@ -204,7 +204,7 @@
     },
     "packages/core": {
       "name": "@dunx/core",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "devDependencies": {
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/sdk-trace-node": "2.11.0",
@@ -218,7 +218,7 @@
     },
     "packages/dashboard": {
       "name": "@dunx/dashboard",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "devDependencies": {
         "@bull-board/api": "8.6.0",
         "@bull-board/bun": "8.6.0",
@@ -244,7 +244,7 @@
     },
     "packages/http": {
       "name": "@dunx/http",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "dependencies": {
         "@arkv/shared": "0.8.0",
       },
@@ -271,7 +271,7 @@
     },
     "packages/infra": {
       "name": "@dunx/infra",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "bin": {
         "dunx-email": "dist/email/cli.js",
       },
@@ -319,7 +319,7 @@
     },
     "packages/openapi": {
       "name": "@dunx/openapi",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "bin": {
         "dunx-openapi": "dist/cli.js",
       },
@@ -348,7 +348,7 @@
     },
     "packages/testing": {
       "name": "@dunx/testing",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "devDependencies": {
         "@dunx/core": "workspace:*",
         "@dunx/http": "workspace:*",
@@ -364,7 +364,7 @@
     },
     "packages/transform": {
       "name": "@dunx/transform",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "dependencies": {
         "oxc-parser": "0.142.0",
       },
@@ -379,7 +379,7 @@
     },
     "tools/create-app": {
       "name": "@dunx/create-app",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "bin": {
         "create-dunx-app": "dist/cli.js",
       },
@@ -392,7 +392,7 @@
     },
     "tools/mcp": {
       "name": "@dunx/mcp",
-      "version": "3.9.6",
+      "version": "3.10.0",
       "bin": {
         "dunx-mcp": "dist/cli.js",
       },
