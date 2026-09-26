@@ -1,4 +1,4 @@
-import { AppError } from '@dunx/core';
+import { AppError, assertUrl } from '@dunx/core';
 /**
  * What `PubSub` needs from something that carries a message to the other nodes:
  * publish, and subscribe. Nothing else, so anything that already talks to a
@@ -38,31 +38,19 @@ export const assertRelayUrl = (
   url: string,
   protocols: readonly string[],
   example: string,
-): string => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new AppError(
-      `${JSON.stringify(url)} is not a valid URL for the websocket relay. ` +
-        `Expected something like ${example}.`,
-    );
-  }
-  if (!protocols.includes(parsed.protocol)) {
-    throw new AppError(
-      `Unsupported protocol ${JSON.stringify(parsed.protocol)} in ` +
-        `${JSON.stringify(url)}. Expected one of ${protocols.join(', ')}.`,
-    );
-  }
-  return url;
-};
-
-/** The URL with any password removed, for logs and error messages. */
-export const redactUrl = (url: string): string => {
-  const parsed = new URL(url);
-  if (parsed.password) parsed.password = '***';
-  return parsed.toString();
-};
+): string =>
+  assertUrl(
+    url,
+    protocols,
+    (problem) =>
+      new AppError(
+        problem.kind === 'invalid'
+          ? 'The websocket relay url is not a valid URL. Expected something ' +
+              `like ${example}.`
+          : `Unsupported protocol ${JSON.stringify(problem.protocol)} in ` +
+              `${problem.redacted}. Expected one of ${protocols.join(', ')}.`,
+      ),
+  );
 
 /** Which relay call failed, so one message can say what degraded. */
 export type RelayPhase = 'publish' | 'subscribe' | 'close';

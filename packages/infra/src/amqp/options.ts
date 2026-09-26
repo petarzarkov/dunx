@@ -3,7 +3,7 @@ import type {
   ConsumerProps,
   PublisherProps,
 } from 'rabbitmq-client';
-import { redactUrl } from '../redis/options.js';
+import { assertUrl, redactUrl } from '@dunx/core';
 import { AmqpError, AmqpErrorCode } from './errors.js';
 
 /** The two schemes AMQP 0-9-1 defines. `amqps:` is the same protocol over TLS. */
@@ -21,34 +21,22 @@ export const defaultAmqpUrl = (): string =>
  * Checked here rather than at connect time: `rabbitmq-client` retries a failed
  * connection forever, so a typo in the scheme would surface as a publish that
  * never settles.
- *
- * **Neither message carries the url as given.** An AMQP url almost always holds
- * credentials, a boot error is written by whatever logger is bound, and an
- * unparseable one cannot be redacted at all, since `redactUrl` parses it too.
  */
-export const assertAmqpUrl = (url: string): string => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new AmqpError(
-      AmqpErrorCode.INVALID_URL,
-      'The AMQP url is not a valid URL. Expected something like ' +
-        'amqp://guest:guest@localhost:5672. Check $RABBITMQ_URL, $AMQP_URL, or ' +
-        'the `url` passed to AmqpModule.',
-    );
-  }
-
-  if (!(AMQP_PROTOCOLS as readonly string[]).includes(parsed.protocol)) {
-    throw new AmqpError(
-      AmqpErrorCode.INVALID_URL,
-      `Unsupported protocol ${JSON.stringify(parsed.protocol)} in ` +
-        `${redactUrl(url)}. Expected one of ${AMQP_PROTOCOLS.join(', ')}.`,
-    );
-  }
-
-  return url;
-};
+export const assertAmqpUrl = (url: string): string =>
+  assertUrl(
+    url,
+    AMQP_PROTOCOLS,
+    (problem) =>
+      new AmqpError(
+        AmqpErrorCode.INVALID_URL,
+        problem.kind === 'invalid'
+          ? 'The AMQP url is not a valid URL. Expected something like ' +
+              'amqp://guest:guest@localhost:5672. Check $RABBITMQ_URL, $AMQP_URL, ' +
+              'or the `url` passed to AmqpModule.'
+          : `Unsupported protocol ${JSON.stringify(problem.protocol)} in ` +
+              `${problem.redacted}. Expected one of ${AMQP_PROTOCOLS.join(', ')}.`,
+      ),
+  );
 
 /**
  * The AMQP URI spec's defaults for an absent user and password, filled in.

@@ -1,4 +1,5 @@
-import { assertRelayUrl, redactUrl, WsRelay } from './relay.js';
+import { redactUrl } from '@dunx/core';
+import { assertRelayUrl, WsRelay } from './relay.js';
 
 /** The schemes `Bun.SQL` accepts for its Postgres adapter. */
 const PROTOCOLS: readonly string[] = ['postgres:', 'postgresql:'];
