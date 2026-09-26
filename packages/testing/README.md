@@ -1,9 +1,9 @@
 # @dunx/testing
 
-The container an app already has, with named bindings **replaced in place**, plus
-a real `Bun.serve` on port 0. Bun binds a socket in about a millisecond, so the
-thing under test is the thing that ships. There is no mocking framework, no fake
-request object, and no in-memory transport.
+Test a dunx app against its real container and a real `Bun.serve`. Replace the
+bindings you want to fake, and everything else runs as it does in production.
+Starting a server on port 0 takes about a millisecond, so there is no mock
+request object and no in-memory transport.
 
 ## Install
 
@@ -37,36 +37,34 @@ await server.close();
 
 ## What is here
 
-The [Testing guide](../../docs/guide/11-testing.md) is canonical.
+The [Testing guide](../../docs/guide/11-testing.md) covers each of these in full.
 
-| Export             | What it does                                                    |
-| ------------------ | ---------------------------------------------------------------- |
-| `createTestApp`    | The container, with overrides applied before anything resolves   |
-| `createTestServer` | The same, behind a real `Bun.serve` on port 0                    |
-| `testClient`       | The fetch-and-parse plumbing against a base url                  |
-| `http2Client`      | The same plumbing over HTTP/2, for a server started with `http2: true` |
-| `RecordingLogger`  | A `Logger` that keeps every entry, to override `Logger` with and assert on |
-| `testRoot`         | The root `createTestApp` boots, for `HttpFactory.create` called directly |
+| Export                           | What it does                                                          |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `createTestApp`                  | Boots the container, with your overrides applied first                |
+| `createTestServer`, `TestServer` | The same, behind a real `Bun.serve` on port 0                         |
+| `testClient`, `TestClient`       | `fetch` against a base URL, plus a JSON helper                        |
+| `http2Client`, `Http2Client`     | The same over HTTP/2, for a server started with `http2: true`         |
+| `RecordingLogger`                | A `Logger` that keeps every entry, so a test can assert on what it logged |
+| `testRoot`                       | The root module `createTestApp` boots, for calling `HttpFactory.create` yourself |
 
 ## Notes
 
-- An override replaces the binding in **every scope that holds it**, so a test
-  stubbing `Logger` need not know how many modules bind it. Naming a token
-  nobody binds is an error rather than a silent no-op - unless it is a class,
-  which self-binds, so an override for one is registered lazily and costs a
-  graph that never asks for it nothing. The harness relies on that to apply the
-  `ReadinessOptions` override below without knowing your graph.
-- The replacement happens before anything resolves, so the discarded provider is
-  never constructed: its `useFactory` never runs and its `onInit` never fires.
-  That makes overriding a database safe.
-- Request logging and boot logging are off unless asked for.
-- `HealthModule`'s shutdown drain is off: `ReadinessOptions` is overridden to
-  `drainDelayMs: 0`, because a suite has no load balancer to notice a failing
-  probe and would pay the app's production value once per file. It goes in ahead
-  of yours, so passing your own restores it.
-- An `HttpOptions` field not passed stays absent. Nothing is inherited from
-  production. `middleware` and `onError` change what the application does, so
-  pass the same object `main.ts` passes.
+- An override replaces a binding in every module that binds it, so a test that
+  fakes `Logger` does not need to know how many modules bind one. Overriding a
+  token that nothing binds is an error. Overriding a class that nothing asks for
+  is allowed and does nothing.
+- Overrides are applied before anything is created, so the provider you replaced
+  never runs: its `useFactory` is not called and its `onInit` does not fire. You
+  can override a database without it connecting.
+- Request logging and boot logging are off unless you turn them on.
+- The health module's shutdown drain is set to `drainDelayMs: 0`, since a test
+  has no load balancer waiting on it. An override of `ReadinessOptions` you pass
+  yourself takes precedence.
+- `HttpOptions` you do not pass are left unset; nothing is copied from
+  production. Pass the same `middleware` and `onError` that `main.ts` passes, or
+  the test server will not behave like your app. `createTestServer` warns when it
+  finds guards in the graph that no middleware list attaches.
 
 ## License
 

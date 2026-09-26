@@ -1,19 +1,17 @@
 # Migrating from NestJS
 
-A gap analysis between what a production NestJS application uses and what dunx
-provides, written from the migrating application's point of view.
+What a production NestJS app uses, and what to write instead in dunx.
 
-Status legend: **done** = shipped, with the dunx spelling in the middle column ·
-**partial** = shipped, with the gap named in the same cell · **n/a** = not needed,
-because dunx has no equivalent problem · **undesigned** = no decision recorded
-anywhere · **out of scope** = refused, with the reasoning below.
+In the tables below, **done** means dunx has it, spelled as shown. **partial**
+means it ships with a gap, named in the same cell. **n/a** means dunx does not
+have the problem, so there is nothing to port. **undesigned** means no decision
+has been made yet. **out of scope** means dunx will not add it; the reasons are at
+the end.
 
 ## Read this part first: five things that fail at boot
 
-Everything else on this page is a mapping you can look up when you reach it. These
-five are what a migrating app hits in the first hour, and each one stops the process
-rather than degrading. A sixth, import extensions, fails earlier, at compile or
-load time.
+These five mistakes are the ones you will hit in the first hour, and each one stops the app at boot. A sixth, import
+extensions, fails even earlier, when the code compiles or loads.
 
 **1. The `bunfig.toml` preload is not optional.**
 
@@ -24,40 +22,41 @@ preload = ["@dunx/transform/preload"]
 preload = ["@dunx/transform/preload"]
 ```
 
-Constructor injection needs no decorator because a load-time plugin records each
-class's parameter types instead. Without the plugin, a class with constructor
-parameters has no record. The container compares that against
-`Function.prototype.length` and fails at boot, naming the class.
+Constructor injection works without decorators because this plugin reads each
+class's parameter types when the file loads. Without it, boot fails and the error
+names the class.
 
-- **Both entries are needed.** Bun's test runner reads its own `preload`, so missing
-  the second gives you a working app and a failing suite.
-- **It is a runtime dependency.** A `--production` install, or a `.dockerignore` that
-  drops `bunfig.toml`, breaks the deploy rather than the build.
+- **You need both entries.** Bun's test runner reads its own `preload`, so without
+  the second one the app runs and the tests fail.
+- **It is needed at runtime.** A `--production` install, or a `.dockerignore` that
+  leaves out `bunfig.toml`, breaks the deploy, not the build.
 
-Deploying a **built** tree changes the answer. The plugin's filter is `/\.tsx?$/`,
-so it never sees emitted JavaScript, and no preload setting changes that. Record
-the dependencies at build time instead, with `Bun.build({ plugins: [depsPlugin] })`.
-The boot error tells you which of the two situations you are in.
+If you deploy **built JavaScript**, the preload does not help: the plugin only
+reads `.ts` and `.tsx` files. Add it to your build instead, with
+`Bun.build({ plugins: [depsPlugin] })`. The boot error says which of the two
+fixes applies.
 
 **2. A constructor parameter must name something that exists at runtime.**
 
-An interface, a primitive, a union, a class type parameter, or a value imported with
-`import type` all erase at runtime. There is no token left to resolve.
-`emitDecoratorMetadata` degrades those to `Object` and hands you `undefined` three
-frames from the mistake. dunx fails at boot instead, naming the parameter and its
+Interfaces, primitives, unions, generic type parameters and anything imported with
+`import type` disappear when TypeScript compiles, so there is nothing left to
+inject. In Nest, `emitDecoratorMetadata` turns these into `Object` and you get
+`undefined` somewhere later. dunx fails at boot and names the parameter and its
 position.
 
-Replace the type with an abstract class, or bind it with `token()` and read it with
-`inject(TOKEN)` in a field initializer: a token is a value, so it cannot be a
-parameter type. See [Providers](./guide/03-providers.md). Every `*Options` in the
-framework is a class for this reason.
-The error tells the `import type` case apart from the others, because that one has a
-one-line fix.
+Two fixes:
+
+- Change the type to an abstract class. Every `*Options` in dunx is a class for
+  this reason.
+- Or bind the value with `token()`, and read it with `inject(TOKEN)` in a field
+  initializer instead of the constructor. See [Providers](./guide/03-providers.md).
+
+When the cause is `import type`, the error says so: change it to a plain `import`.
 
 **3. A type alias is not a class, even when it aliases one.**
 
-Item 2's root cause in a disguise, and it gets its own number because the alias
-_resolves_ to a class, so it does not read like an erasure:
+This is the same problem as item 2, but harder to spot, because the alias points
+at a real class:
 
 ```ts
 type Db = SyncDatabase<AppSchema>;
@@ -67,72 +66,67 @@ class UsersRepository {
 }
 ```
 
-`type` declares no runtime value, so the transform has nothing to record and the
-parameter is reported `unresolved`. Stated positively: **a constructor annotates the
-class; everything else annotates the alias.**
+A `type` does not exist at runtime, so the plugin has nothing to record and boot
+reports the parameter as `unresolved`. **Name the class itself in a constructor.
+Use the alias everywhere else.**
 
-One migration hit this three times in three repositories before it stuck.
+One migration hit this three times, in three repositories.
 
 **4. A module is decorated or configured, never both.**
 
-A scope is keyed on the module **reference**, and `forRoot()` returns a fresh object
-on every call. So `@Module` on a class that also has a `static forRoot()` registers
-its contents twice. Two importers each calling `forRoot()` build two scopes, with
-two instances of everything in them. Take one:
+dunx tells modules apart by object identity, and `forRoot()` returns a new object
+every time you call it. So `@Module` on a class that also has `static forRoot()`
+registers everything twice, and two importers that each call `forRoot()` get two
+separate copies of every provider. Pick one form:
 
 | The module          | Spelling                                                |
 | ------------------- | ------------------------------------------------------- |
 | Has nothing to vary | `@Module({ ... })` on the class                         |
 | Takes options       | `static forRoot(opts): DynamicModule`, and no decorator |
 
-If two feature modules need the same binding, give it its own module with
-`global: true` rather than calling `forRoot()` twice.
+If two feature modules need the same binding, put it in its own module with
+`global: true` and call `forRoot()` once.
 
 **5. A class no module lists belongs to the first scope that asks for it.**
 
-Nest refuses to inject a provider no module lists. dunx makes every class
-injectable, so an unlisted class self-binds instead, into the scope of whichever
-consumer resolves it first. A consumer in a second module is then a boot error,
-because the binding lives in a scope that does not export it.
+Nest refuses to inject a provider that no module lists. dunx lets you inject any
+class, and an unlisted class is registered in the module of whoever asks for it
+first. When a second module then asks for it, boot fails, because the first module
+does not export it.
 
 List the class in one module's `providers` and `exports`, and import that module
-wherever it is needed. A framework service is the case that bites: bind it in the
-module that owns it rather than leaving it to self-bind.
+wherever you need it. This matters most for framework services: bind them in the
+module that owns them.
 
 ### Before boot: relative imports end in `.js` under `nodenext`
 
-This one fails at compile or load time rather than at boot.
-
-Not `.ts`, not extensionless. Whether this is the largest diff of the migration or
-no diff at all depends on a setting the app already has:
+This one fails when the code compiles or loads, before boot. Whether it means
+changing every import or none depends on your `moduleResolution` setting:
 
 | Your `moduleResolution` | What changes                                               |
 | ----------------------- | ---------------------------------------------------------- |
 | `nodenext`              | Every relative import gains `.js`. Large mechanical diff.  |
 | `bundler`               | Nothing. Subpath exports and `paths` aliases both resolve. |
 
-The scaffold sets `nodenext`, where the extension is a compile error rather than a
-consumer's problem. An app already on `bundler` keeps its extensionless imports and
-its `paths` aliases: one migration of a production application touched no import
-specifier at all.
+New projects from the scaffold use `nodenext`, so a missing extension is a
+compile error you fix once. An app already on `bundler` keeps its extensionless
+imports and `paths` aliases. One production migration changed no imports at all.
 
 ## One handler per job name
 
-This is not a boot failure hit in the first hour. It is a semantic difference that
-matters once queue work starts.
+This one does not stop boot, but it changes how queue code is written.
 
-A Nest dispatcher that fans one routing key out to every subscriber has no dunx
-equivalent: two handlers claiming the same `(queue, name)` is a boot error instead.
+In Nest, one job can be delivered to several subscribers. In dunx, each queue and
+job name has exactly one handler, and two handlers for the same pair fail at boot.
 
-An app doing fan-out has to decide, per channel, what a retry means there. One
-migration fired the in-app notification on the first attempt only, since a toast
-arriving after a backoff is stale. The same migration awaited and rethrew on the
-Slack notification, since that one benefits from retries.
+If you relied on fan-out, decide for each side effect what a retry should do. One
+migration sent the in-app notification on the first attempt only, because a toast
+that arrives after a retry delay is stale. It let the Slack notification throw and
+retry, because that one is still useful late.
 
-`QueueModule.forRoot({ consume: 'if-any' })` covers the other half of this: it
-stands down instead of failing when the graph has no `@JobHandler` yet, so the queue
-wiring can land several commits before the first handler exists. `consume: true`
-keeps refusing.
+`QueueModule.forRoot({ consume: 'if-any' })` starts without complaint when there is
+no `@JobHandler` yet, so you can add the queue wiring before the first handler.
+`consume: true` still fails at boot when there is none.
 
 ## Core DI
 
@@ -175,8 +169,8 @@ keeps refusing.
 
 ### Handler parameters
 
-Nest names each part of a request with its own parameter decorator. dunx passes
-one object, typed by the schema on the route decorator:
+Nest gives each part of the request its own parameter decorator. dunx passes one
+object, typed by the schema on the route decorator:
 
 ```ts
 // Nest
@@ -202,18 +196,17 @@ create({ body }: Input<typeof createUser>): Promise<User> {
 | `@Headers('x-trace') v`   | `req.headers.get('x-trace')`            |
 | `@Ip() ip: string`        | `ClientAddress`, then `address.of(req)` |
 
-Destructuring at the parameter is the usual shape; naming the whole object types
-the same. One schema constant covers what Nest splits between a DTO class,
-`ValidationPipe` and `@ApiProperty`: it validates the request, types the handler,
-and describes the route in the OpenAPI document.
+Destructure the parts you need, or take the whole object; the types are the same.
+One schema replaces Nest's DTO class, `ValidationPipe` and `@ApiProperty`: it
+validates the request, types the handler and describes the route in the OpenAPI
+document.
 
-`@Res()` has no counterpart. A handler returns a `Response` when it wants to set
-the status, headers or body directly, and a route that does so keeps its
-middleware, guards and error handling.
+There is no `@Res()`. To set the status, headers or body yourself, return a
+`Response`. The route still runs its middleware, guards and error handling.
 
-TC39 standard decorators have no parameter position.
-[Custom param decorators](#custom-param-decorators) covers the two classes of
-`createParamDecorator` usage and what each becomes.
+Standard decorators cannot be put on parameters. See
+[Custom param decorators](#custom-param-decorators) for what replaces
+`createParamDecorator`.
 
 ## Ecosystem
 
@@ -235,10 +228,10 @@ TC39 standard decorators have no parameter position.
 
 ## The reference application
 
-Numbers below were counted against [nestjs-template](https://github.com/petarzarkov/nestjs-template) (monolith:
-Drizzle, BullMQ, Redis, Better Auth, socket.io, Swagger + Scalar, an
-OpenAPI-driven admin CMS) on 2026-07-28. It is the acceptance test - "dunx is
-ready" means that app can move without redesign.
+These counts come from [nestjs-template](https://github.com/petarzarkov/nestjs-template),
+a monolith using Drizzle, BullMQ, Redis, Better Auth, socket.io, Swagger, Scalar and
+an OpenAPI-driven admin CMS, counted on 2026-07-28. dunx is ready when that app can
+move over without being redesigned.
 
 | Surface                                                | Count      |
 | ------------------------------------------------------ | ---------- |
@@ -255,8 +248,8 @@ ready" means that app can move without redesign.
 
 ## Constructor injection is native
 
-`@dunx/transform` reads constructor parameter types at load time and records them
-on the class, so the Nest shape works unchanged:
+`@dunx/transform` reads constructor parameter types when the file loads, so a
+Nest service works as it is, minus one line:
 
 ```ts
 // Nest
@@ -277,10 +270,10 @@ Apps opt in with one line in `bunfig.toml`:
 preload = ["@dunx/transform/preload"]
 ```
 
-See [Constructor injection without decorator metadata](./architecture/dependency-injection.md#constructor-injection-without-decorator-metadata)
-for how it works and what it refuses to guess.
+[Constructor injection without decorator metadata](./architecture/dependency-injection.md#constructor-injection-without-decorator-metadata)
+explains how it works and which cases it refuses to guess.
 
-What still changes, per class, beyond the [Core DI](#core-di) table:
+What else changes in each class, beyond the [Core DI](#core-di) table:
 
 | Nest                                      | dunx                                              |
 | ----------------------------------------- | ------------------------------------------------- |
@@ -298,34 +291,32 @@ Custom parameter decorators have no target API. See
 
 ### String tokens
 
-`@Inject('SOME_STRING')` has no equivalent. A dunx token is an object identity
-from `token<T>()` rather than a name, so a string token becomes an exported
-constant that both sides import, and the consumer reads it with `inject()`.
+There is no `@Inject('SOME_STRING')`. A dunx token is an object made by
+`token<T>()`, not a string. Export it as a constant, import it on both sides, and
+read it with `inject()`.
 
 ## What comes free
 
-- **`reflect-metadata` and its import-order fragility disappear.**
-- **`@Inject()` disappears** for everything a parameter type can name, which is
-  everything except a `token()`. Nest needs it wherever
-  `emitDecoratorMetadata` degrades a type to `Object`; dunx reads the real type
-  from source, so there is nothing to work around.
-- **`forwardRef()` disappears.** Dependencies are recorded as a thunk evaluated at
-  resolution time, so a circular import is not a temporal-dead-zone crash. A
-  genuine cycle is a boot error naming the full path.
-- **An erased parameter fails at boot**, reported with its own source text
-  instead of quietly resolving to the wrong thing.
-- **Provider scope disappears.** One lifetime, singleton per module scope:
+- **No `reflect-metadata`**, and no import-order bugs from it.
+- **No `@Inject()`**, except to read a `token()`. dunx reads the real parameter
+  type from source, so there is no `Object` to work around.
+- **No `forwardRef()`.** Dependencies are looked up when they are needed, so a
+  circular import does not crash. A real dependency cycle fails at boot and shows
+  the whole cycle.
+- **A parameter whose type is gone fails at boot**, quoting its source text, instead
+  of resolving to the wrong thing.
+- **No provider scopes.** There is one lifetime: one instance per module. See
   [Lifecycle](./guide/07-lifecycle.md).
-- **Boot is eager**, so a wiring error is a boot error rather than a
-  first-request 500.
-- **Guards, interceptors, pipes, and filters collapse into one `Middleware`
-  concept** - five extension points become one. See "The request lifecycle" below.
+- **Everything is created at boot**, so a wiring mistake fails at startup, not as
+  a 500 on the first request.
+- **Guards, interceptors, pipes and filters are all `Middleware`**: one extension
+  point instead of five. See "The request lifecycle" below.
 
 ## The request lifecycle
 
-Nest documents nine numbered stages over five base classes. dunx has the same
-lifecycle with one interface, because the stages were never separate mechanisms -
-they were separate registration points for the same nesting.
+Nest documents nine numbered stages and five base classes. dunx runs the same
+stages with one interface: each Nest stage is a place to register a wrapper around
+the handler, and dunx has one kind of wrapper.
 
 | Nest stage                                | dunx                                             |
 | ----------------------------------------- | ------------------------------------------------ |
@@ -338,45 +329,43 @@ they were separate registration points for the same nesting.
 | 8.1-8.3 Interceptors, post-request        | anything after `await next()`                    |
 | 9.1-9.3 Exception filters: route → global | `onError`; or `try` around `next()` at any layer |
 
-Resolved, outermost first: the error filter, request logging, global middleware,
-`app.use()` middleware, the declaring module's middleware, controller guards, method
-guards, validation, the handler - then back out through all of it.
-`@dunx/http`'s lifecycle suite asserts that list in one request.
+The order, from the outside in, is: the error filter, request logging, global
+middleware, `app.use()` middleware, the module's middleware, controller guards,
+method guards, validation, then the handler. The response goes back out through the
+same layers. `@dunx/http`'s lifecycle tests check this order in a single request.
 
-What a migrating app stops writing:
+What you no longer write:
 
 - **`configure(consumer)` and `forRoutes()`.** A module owns its controllers, so
-  `@Module({ middleware })` already names the routes. There is no path-matching
-  language and no `MiddlewareConsumer`.
-- **Separate `guards`, `interceptors` and `pipes` arrays**, and the three base
-  classes behind them. A guard is middleware that throws; an interceptor is
-  middleware that wraps `next()`.
-- **`@Catch` and per-controller filters.** A middleware with a `try` around
-  `next()` is a scoped filter, at whichever scope it was installed. Rethrowing is
-  the cascade.
-- **`ExecutionContext` and `Reflector`.** `handle(req, ctx, next)` gets `ctx`
-  already merged at boot, so reading route metadata is a `Map` lookup rather than a
-  per-request reflection call.
+  `@Module({ middleware })` already applies to the right routes. There is no
+  `MiddlewareConsumer` and no path patterns.
+- **Separate `guards`, `interceptors` and `pipes` arrays**, and their base
+  classes. A guard is middleware that throws. An interceptor is middleware that
+  wraps `next()`.
+- **`@Catch` and per-controller filters.** Put a `try` around `next()` in a
+  middleware, and it catches errors for wherever that middleware is installed.
+  Rethrow to pass an error outward.
+- **`ExecutionContext` and `Reflector`.** `handle(req, ctx, next)` receives `ctx`
+  with the route's metadata already merged at boot. Reading it is a `Map` lookup.
 
-The one thing it gains: **ordering is a list you can read**. Within a scope it is
-array order, and across scopes it is the table above, with no ancestor inheritance
-to collate across files.
+**Middleware runs in an order you can see.** Inside one scope it runs in array
+order. Across scopes it follows the table above. A module does not inherit
+middleware from the modules that import it.
 
 ## What is still missing
 
 ### Custom param decorators
 
-`createParamDecorator` has no successor and will not get one: TC39 decorators have
-no parameter decorators, so there is nowhere for it to come from. The reference app
-has 14 usages across `@CurrentUser` and `@UuidParam`, and the two halves migrate
-differently.
+`createParamDecorator` has no replacement and will not get one, because standard
+decorators cannot go on parameters. The reference app uses custom parameter
+decorators 14 times, in two kinds that migrate differently.
 
-`@UuidParam` and its relatives are **validation**, and are answered: the schema moves
-onto the route decorator, where it also coerces and documents. See
+Decorators like `@UuidParam` **validate input**. Move the schema onto the route
+decorator, where it also converts the value and documents it. See
 [Validation](./guide/06-validation.md).
 
-`@CurrentUser` and its relatives read **state a guard put there**, and the shape that
-replaced them is an injected service over `AsyncLocalStorage`. `@dunx/auth` ships one:
+Decorators like `@CurrentUser` **read something a guard stored**. Inject a
+service that reads it from the current request instead. `@dunx/auth` ships one:
 
 ```ts
 export class ProfileController {
@@ -389,54 +378,52 @@ export class ProfileController {
 }
 ```
 
-`current()` returns the caller or `undefined`; `require()` returns the caller or
-throws a 401. `SessionGuard` is what calls `run()` to establish it, and a job or a
-socket handler that resolved a session itself can call `run()` too.
+`current()` returns the signed-in user or `undefined`. `require()` returns the
+user or throws a 401. `SessionGuard` sets it for each request by calling `run()`,
+and a job or socket handler that loads a session itself can call `run()` too.
 
-The gain over a parameter decorator is that it reaches **anything the handler
-calls, however deep**. A parameter decorator reaches only the handler's own
-signature. The cost is that the caller is not in the method signature, so it does
-not appear in the handler's type. An app wanting its own `@CurrentUser` writes a
-one-method service over `AuthContext` and injects that.
+Unlike a parameter decorator, this works in **anything the handler calls, however
+deep**. The trade-off is that the user no longer appears in the handler's
+signature. For your own `@CurrentUser`, write a small service over `AuthContext`
+and inject it.
 
 ### `@Optional()`
 
-No equivalent, and no design. Every constructor parameter is required. A parameter
-whose type is erased is a boot error rather than an `undefined`. An optional
-collaborator is expressed today as a provider that binds a no-op implementation.
+There is no equivalent yet. Every constructor parameter is required, and one whose
+type is gone at runtime fails at boot. For an optional dependency today, bind a
+provider that does nothing.
 
 ## Out of scope
 
-**Express interop.** `app.use(expressMiddleware)` and mounting express-shaped
-handlers have no equivalent. Two of the things usually reached for through it do ship:
+**Express middleware.** You cannot `app.use(expressMiddleware)` or mount an
+Express app. Two things people usually use Express for are built in:
 
-- `app.set('trust proxy', n)` is the one key `AppSettings` declares. It counts hops
-  from the right-hand end of `X-Forwarded-For`.
-- bull-board is mounted by `@dunx/dashboard`, not by an express adapter.
-  `Bun.serve` is not a middleware stack, and building an express compatibility
-  layer would contradict "dunx should stay a DI + structure framework that happens
-  to serve HTTP." Applications depending on mounted express apps need those
-  replaced, not adapted.
+- `app.set('trust proxy', n)` is supported. It counts proxy hops from the right
+  of `X-Forwarded-For`.
+- `@dunx/dashboard` mounts bull-board for you.
 
-**The socket.io protocol.** Gateways are neither out of scope nor a separate
-package: `@Gateway` ships in `@dunx/http` on Bun's native WebSocket support, and
-multi-node fan-out ships as a relay.
+`Bun.serve` is not a middleware stack, and dunx will not add an Express
+compatibility layer. If your app mounts Express apps, plan to replace them.
 
-What is out of scope is **protocol compatibility**. A socket.io client cannot talk to
-a dunx gateway, so anything depending on the socket.io wire format, its
-acknowledgement semantics or `@socket.io/redis-adapter` needs replacing rather than
-adapting. See [WebSockets](./guide/09-websockets.md).
+**The socket.io protocol.** WebSocket gateways are supported: `@Gateway` is in
+`@dunx/http`, on Bun's native WebSockets, with a relay for running several nodes.
 
-Check both before planning a migration. They gate whether an app can move today.
+What is not supported is the socket.io protocol itself. A socket.io client cannot
+talk to a dunx gateway, so code that depends on socket.io's message format, its
+acknowledgements or `@socket.io/redis-adapter` has to be replaced. See
+[WebSockets](./guide/09-websockets.md).
+
+Check both of these before you plan a migration. They decide whether your app can
+move today.
 
 ## The acceptance test
 
-The parity target is a running app with a config module, an async database factory,
-CRUD controllers, an auth guard reading `@Roles`, OpenAPI, queues and a health
-endpoint. [`examples/full`](https://github.com/petarzarkov/dunx/tree/main/examples/full)
-is the version of that which CI keeps alive.
+The target is a running app with a config module, an async database factory, CRUD
+controllers, an auth guard reading `@Roles`, OpenAPI, queues and a health endpoint.
+[`examples/full`](https://github.com/petarzarkov/dunx/tree/main/examples/full) is
+that app, and CI runs it on every change.
 
-It exercises the question module scoping introduced: which cross-cutting guards
-were only ever cross-cutting because Nest offered nowhere else to put them.
-`SessionGuard` stays app-wide. A throttle on one feature's routes, or an audit
-stamp on one feature's writes, becomes a `@Module({ middleware })` line.
+In Nest, some guards are global only because there was nowhere else to put them.
+In dunx, keep `SessionGuard` global, and move a guard that serves one feature,
+such as a throttle or an audit stamp on its writes, into that feature's
+`@Module({ middleware })`.
