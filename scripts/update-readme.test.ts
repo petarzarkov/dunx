@@ -174,6 +174,7 @@ describe('the counts the README states', () => {
     eighteen: 18,
     nineteen: 19,
     twenty: 20,
+    'twenty-five': 25,
     'twenty-six': 26,
     'twenty-seven': 27,
     'twenty-eight': 28,

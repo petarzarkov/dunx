@@ -92,3 +92,16 @@ it('boots with a CORS origin written with a trailing slash, and trusts it', asyn
     else process.env['CORS_ORIGIN'] = before;
   }
 });
+
+it('reports the three callers the landing page cannot forge', async () => {
+  const response = await fetch(new URL('api/demo/csrf', base));
+  expect(await response.json()).toEqual([
+    {
+      secFetchSite: 'cross-site',
+      caller: 'a form on another site',
+      status: 403,
+    },
+    { secFetchSite: 'same-origin', caller: 'this page', status: 400 },
+    { secFetchSite: null, caller: 'curl, or a server', status: 400 },
+  ]);
+});

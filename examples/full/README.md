@@ -84,7 +84,7 @@ that check, because a service never exits.
 | `/api/messaging`                      | `@dunx/infra/amqp` - a RabbitMQ topic exchange, two queues, one trace     |
 | `/api/auth/*`                         | `@dunx/auth` - better-auth mounted, with `Bun.password` hashing           |
 | `/api/wiring`                         | `@dunx/core` - `token()`, `inject()` and the three `provide()` shapes     |
-| `/api/demo/*`                         | what the landing page renders - vitals, a source excerpt, a retry         |
+| `/api/demo/*`                         | what the landing page renders - vitals, a source excerpt, a retry, CSRF |
 | `/api/docs`                           | `@dunx/openapi` - Swagger UI, mounted by `OpenApiModule`                  |
 | `/api/reference`                      | `@dunx/openapi/scalar` - Scalar over the same document, as a middleware   |
 | `/api/dashboard`                      | `@dunx/dashboard`, read-only, with bull-board at `/api/dashboard/queues`  |
@@ -134,12 +134,16 @@ curl -s localhost:3000/api/demo/source/ledger
 
 # The outbound client retrying a 503, with the millisecond of each attempt.
 curl -s localhost:3000/api/demo/retry
+
+# The same POST as a cross-site form, this page and curl: one 403, two 400s.
+curl -s localhost:3000/api/demo/csrf
 ```
 
 ## The landing page
 
-`/` is one panel per capability, and each panel calls the routes above rather than
-describing them. It is served by `LandingMiddleware` off the unmatched path, so
+`/` is a walkthrough in six chapters, from dependency injection to queues, brokers
+and the process's own metrics. One step shows at a time, the location hash names
+it, and each step calls the routes above rather than describing them. It is served by `LandingMiddleware` off the unmatched path, so
 `/`, `/landing.css`, `/landing.js` and `/og.png` are answered and every other miss
 is still the 404 the tour narrates.
 
