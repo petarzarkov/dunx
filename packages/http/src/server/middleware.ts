@@ -47,6 +47,23 @@ export const mapRoutes = (
   return mapped;
 };
 
+/**
+ * Runs `stamp` on every response `handler` gives, with the request it answered. Not `async`: a handler that
+ * answered synchronously still does, so the direct path keeps its measured
+ * advantage.
+ */
+export const withResponseStamp =
+  (
+    stamp: (response: Response, req: BunRequest) => Response,
+    handler: ServedHandler,
+  ): ServedHandler =>
+  (req, server) => {
+    const response = handler(req, server);
+    return response instanceof Promise
+      ? response.then((settled) => stamp(settled, req))
+      : stamp(response, req);
+  };
+
 /** Folded into one closure per route at boot - no per-request array iteration. */
 export const compose = (
   middleware: readonly Middleware[],

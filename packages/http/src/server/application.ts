@@ -40,8 +40,7 @@ import {
 import { ServerBinding } from './binding.js';
 import {
   securityHeaderPairs,
-  withSecuredRoutes,
-  withSecurityHeaders,
+  SecuredResponses,
   type HeaderPairs,
 } from './security-headers.js';
 import { defaultSettings, type AppSettings } from './settings.js';
@@ -258,6 +257,8 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       this.#cors,
       this.#notFound,
     );
+    const pairs = this.#securityHeaders;
+    const secured = pairs ? new SecuredResponses(pairs) : undefined;
     const built = buildRoutes(
       prefixed,
       middleware,
@@ -267,7 +268,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       (guard, from) =>
         from === undefined ? this.#app.get(guard) : this.#app.get(guard, from),
       { versioning: this.#app.get(RouteVersioning), miss: fallback },
-      this.#etag,
+      { etag: this.#etag, secured },
     );
     // Built here rather than at construction: `trust proxy` may still change.
     const csrf = this.#csrf
@@ -281,12 +282,11 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     // Inside the security headers, so a refusal carries them; outside the
     // chain, so nothing reads a body or claims a key for a request refused.
     const checked = csrf ? csrf.routes(built) : built;
-    const pairs = this.#securityHeaders;
-    const secured = pairs ? withSecuredRoutes(pairs, checked) : checked;
+    const stamped = secured ? secured.routes(checked) : checked;
     // Before `withUpgradeRoutes` merges the gateways in `bind`, which assigns
     // each gateway path outright, so an upgrade still wins a key an alias took.
     // A gateway's upgrade is not wrapped: a 101 carries no document.
-    const routes = this.#strict ? secured : withTrailingSlashAliases(secured);
+    const routes = this.#strict ? stamped : withTrailingSlashAliases(stamped);
 
     const ws = this.#websocket;
     // Only when the upgrades share the routes table. Under `gatewayPort` a
@@ -304,7 +304,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     this.#app.get(RequestMetrics).claim(claimed);
 
     const guarded = csrf ? csrf.wrap(fallback) : fallback;
-    const fetch = pairs ? withSecurityHeaders(pairs, guarded) : guarded;
+    const fetch = secured ? secured.wrap(guarded) : guarded;
 
     const bound = this.#binding.bind({ port, routes, fetch, websocket: ws });
 

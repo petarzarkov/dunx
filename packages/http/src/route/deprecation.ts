@@ -1,8 +1,7 @@
 import { AppError } from '@dunx/core';
-import type { ServedHandler } from '../server/middleware.js';
+import { withResponseStamp, type ServedHandler } from '../server/middleware.js';
 import {
   setAbsentHeaders,
-  withResponseStamp,
   type HeaderPairs,
 } from '../server/security-headers.js';
 import { meta, metaKey, type MetaKey } from './metadata.js';

@@ -1,4 +1,4 @@
-import type { RouteHandler, ServedHandler } from './middleware.js';
+import { withResponseStamp, type ServedHandler } from './middleware.js';
 import { HttpStatusCode } from './status.js';
 import { varyOn } from './vary.js';
 
@@ -50,8 +50,15 @@ const allowedOrigin = (
   return allowed ? requested : undefined;
 };
 
+/** `exposedHeaders` as the one header value it becomes, joined at boot. */
+const exposedOf = (options: CorsOptions): string | undefined =>
+  options.exposedHeaders?.length
+    ? options.exposedHeaders.join(', ')
+    : undefined;
+
 const applyCors = (
   options: CorsOptions,
+  exposed: string | undefined,
   req: Request,
   response: Response,
 ): Response => {
@@ -65,22 +72,25 @@ const applyCors = (
   if (options.credentials) {
     response.headers.set('access-control-allow-credentials', 'true');
   }
-  if (options.exposedHeaders?.length) {
-    response.headers.set(
-      'access-control-expose-headers',
-      options.exposedHeaders.join(', '),
-    );
+  if (exposed !== undefined) {
+    response.headers.set('access-control-expose-headers', exposed);
   }
   return response;
 };
 
-/** Adds the response-side CORS headers. One extra closure per route, at boot. */
+/**
+ * Adds the response-side CORS headers. One extra closure per route, at boot, and
+ * not `async`: a handler that answered synchronously still does.
+ */
 export const withCors = (
   options: CorsOptions,
   handler: ServedHandler,
 ): ServedHandler => {
-  return async (req, server) =>
-    applyCors(options, req, await handler(req, server));
+  const exposed = exposedOf(options);
+  return withResponseStamp(
+    (response, req) => applyCors(options, exposed, req, response),
+    handler,
+  );
 };
 
 /**
@@ -91,12 +101,14 @@ export const withCors = (
 export const preflight = (
   options: CorsOptions,
   methods: readonly string[],
-): RouteHandler => {
+): ServedHandler => {
   const allowMethods = (options.methods ?? methods).join(', ');
+  const exposed = exposedOf(options);
 
-  return async (req) => {
+  return (req) => {
     const response = applyCors(
       options,
+      exposed,
       req,
       new Response(null, { status: HttpStatusCode.NO_CONTENT }),
     );
