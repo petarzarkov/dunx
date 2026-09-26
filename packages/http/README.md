@@ -1,12 +1,12 @@
 # @dunx/http
 
-`Bun.serve` adapter for [dunx](https://github.com/petarzarkov/dunx): class-based
-controllers, **WebSocket gateways**, and standard decorators. There is no
-JavaScript router - Bun's native `routes` does path params and per-method
-dispatch in Zig.
+Class-based controllers and **WebSocket gateways** for
+[dunx](https://github.com/petarzarkov/dunx), served by `Bun.serve` with standard
+decorators. There is no JavaScript router: Bun's built-in `routes` handles path
+parameters and HTTP methods natively.
 
-`Bun.serve` takes `routes` and `websocket` in one call, so both live here: one
-`listen()`, one server, one port. No `express`, no `ws`, no `socket.io`.
+HTTP and WebSockets share one `listen()`, one server and one port, without
+`express`, `ws` or `socket.io`.
 
 ## Install
 
@@ -14,8 +14,8 @@ dispatch in Zig.
 bun add @dunx/http @dunx/core @dunx/transform
 ```
 
-Constructor injection needs `preload = ["@dunx/transform/preload"]` in
-`bunfig.toml`, at the top level and again under `[test]`.
+Add `preload = ["@dunx/transform/preload"]` to `bunfig.toml` for constructor
+injection, once at the top level and once under `[test]`.
 
 ## Usage
 
@@ -57,7 +57,7 @@ await app.listen(3000);
 
 ## What is here
 
-The guide is canonical for every row; this table is the index.
+Each row links to the guide that covers it.
 
 | Area                    | What it covers                                              | Guide                                                             |
 | ----------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -86,38 +86,37 @@ The guide is canonical for every row; this table is the index.
 | `@dunx/http/connect`   | protobuf services over Connect and gRPC-Web, mounted as middleware |
 | `@dunx/http/internal`  | The framework's own plumbing. No stability promise                |
 
-`@dunx/http/internal` holds route-table construction, the middleware fold, the
-relay codec and the discovery readers - what `@dunx/dashboard`, `@dunx/mcp` and
-`@dunx/openapi` call and an app does not. It is the only place they are exported
-from, and it may change in any release.
+`@dunx/http/internal` is for dunx's own packages: `@dunx/dashboard`, `@dunx/mcp`
+and `@dunx/openapi`. Do not import it from an app, since it can change in any
+release.
 
 ## Notes
 
-- Routes are discovered at boot by walking each controller's prototype chain, so
-  an abstract base controller's `@Get` methods are inherited by every subclass.
-- A duplicate method and path throws at boot naming both handlers. Bun would
-  otherwise silently keep one.
-- Handlers may return a `Response`, any JSON-serialisable value, or `undefined`
+- Routes are found at boot, including those inherited from a base class, so a
+  subclass of an abstract controller serves its parent's `@Get` methods too.
+- Two handlers for the same method and path fail at boot, and the error names
+  both. Bun would otherwise keep one of them without saying so.
+- A handler can return a `Response`, any JSON-serialisable value, or `undefined`
   for a 204.
-- `Authorize` and `gate()` are the contract an ops surface gates itself with:
-  raw request in, 404 on refusal, and a returned `Response` sent as written for a
-  browser that needs a sign-in page. `@dunx/dashboard` and `@dunx/openapi` both
-  take one, so an app writes the policy once and hands it to both.
-- Schemas, parsers and the status resolve at boot into the same closure the
-  middleware chain folds into. A request reads no metadata and does no lookup.
-- Every request adopts W3C Trace Context, so `traceId`, `spanId`, `parentSpanId`
-  and `traceFlags` reach every line it writes and `traceresponse` goes out on the
-  response. `requestLogging: { trace: false }` removes both;
-  `{ traceResponse: false }` keeps the trace and drops the header, which is ~500
-  ns. W3C Trace Context is the only correlation id; there is no second one.
-- `metrics: true` adds per-route counts and a nanosecond histogram at +35.2 ns a
-  request, folded into the `.then` request logging already allocates.
-- `@dunx/http/connect` serves Connect and gRPC-Web, not native gRPC. gRPC carries
-  `grpc-status` in an HTTP trailer and `Bun.serve` sends no trailers, so a request
-  with `content-type: application/grpc` gets a 415 that says so.
-  `@connectrpc/connect` and `@bufbuild/protobuf` are optional peers, and the
-  `.proto` toolchain stays yours. `ThrottleGuard` covers an RPC: it skips an
-  unmatched path nobody claims, and an RPC path is claimed.
+- `Authorize` and `gate()` protect admin pages. They receive the raw request and
+  answer 404 when access is refused, or send a `Response` you return as it is,
+  such as a sign-in page. `@dunx/dashboard` and `@dunx/openapi` both accept one,
+  so you write the access rule once.
+- Schemas, parsers and status codes are worked out once at boot. Handling a
+  request does no metadata lookups.
+- Every request joins the caller's W3C trace (`traceparent`). Its log lines carry
+  `traceId`, `spanId`, `parentSpanId` and `traceFlags`, and the response carries
+  a `traceresponse` header. `requestLogging: { trace: false }` turns both off.
+  `{ traceResponse: false }` keeps the trace fields and drops only the header,
+  which saves about 500 ns a request. There is no separate correlation id.
+- `metrics: true` adds request counts and a latency histogram per route, for
+  about 35 ns a request.
+- `@dunx/http/connect` serves Connect and gRPC-Web, but not native gRPC. Native
+  gRPC sends its status in an HTTP trailer, which `Bun.serve` cannot send, so a
+  request with `content-type: application/grpc` gets a 415 explaining why.
+  `@connectrpc/connect` and `@bufbuild/protobuf` are optional peer dependencies,
+  and you keep your own `.proto` toolchain. `ThrottleGuard` applies to RPC paths
+  as well.
 
 ## License
 
