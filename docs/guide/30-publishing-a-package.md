@@ -54,10 +54,10 @@ Bun emits none, and `typescript` is a `devDependency` for that reason.
 The layout is assumed rather than configurable: sources under `src/`, output to
 `dist/`, one `tsconfig.json` at the package root.
 
-Three ways of building look like they would work and do not.
-`bun build --outdir dist` takes no plugin from the command line. `tsc` alone
-knows nothing about the transform. Shipping your `.ts` sources leaves the
-consumer's plugin skipping them along with the rest of `node_modules`.
+Three other ways of building do not work. `bun build --outdir dist` cannot load
+a plugin from the command line. `tsc` alone does not run the transform. If you
+ship `.ts` sources, the consumer's preload skips them, because it skips everything
+in `node_modules`.
 
 Read the output rather than trusting the intent:
 
@@ -79,9 +79,8 @@ dependency tree export two different `Logger` classes, and a binding registered
 against one is invisible to the other. Listing core under `dependencies` is what
 produces the second copy. A peer resolves to the application's.
 
-`AppFactory.create` counts the copies and refuses to boot on more than one, so
-the symptom is a boot error naming the cause. Copies published before that check
-existed do not register themselves and stay silent.
+`AppFactory.create` fails at boot if it finds more than one copy, and the error
+says why. Copies from releases older than that check are not detected.
 
 The caret spans the major version. Every `@dunx/*` package shares one version
 and is released together, so `^3.9.0` means 3.9.0 or later within 3.x, and a
@@ -102,17 +101,15 @@ repository:
 | `ThrottleStore`   | `@dunx/http`        | a rate-limit counter          |
 | `DocsRenderer`    | `@dunx/openapi`     | an API explorer page          |
 
-Every one of them is an abstract class rather than an interface, because a
-constructor parameter has to name something that exists at runtime for the
-transform to record it. Subclass it, bind it in your module, and the application
-injects the contract.
+Each one is an abstract class, because a constructor parameter must name a
+runtime value for injection to work. Subclass it and bind your subclass in your
+module. The application then injects the contract.
 
-`Middleware` is the exception in both respects. It is an interface, and the
-class implementing it is what gets registered: a guard throws, an interceptor
-wraps `next()`, a filter maps the error. A module's `middleware` array reaches
-that module's own controllers, and anything wider needs the application to call
-`app.use(YourMiddleware)`, so a package shipping one has to say so in its
-README.
+`Middleware` is different. It is an interface, and you register the class that
+implements it. A guard throws, an interceptor wraps `next()`, and a filter maps
+the error. A module's `middleware` array applies only to that module's own
+controllers. To apply it more widely, the application has to call
+`app.use(YourMiddleware)`, so say so in your package's README.
 
 Handler discovery is open too. `discoverMarked(collectModules(root), app,
 metaOf)` walks the resolved module graph for methods carrying a marker of your
@@ -120,12 +117,13 @@ choosing, and `@JobHandler` in `@dunx/infra/queue` is that call with a job
 marker. Mint your own key with `Symbol.for('acme.handler')` and it will not
 collide with the framework's.
 
-Two module rules matter more to a package than to an app. Bind every service
-your package owns in one of your modules: an unbound class self-binds into
-whichever scope resolves it first, and a second consumer is then a boot error.
+Two module rules matter more for a package than for an app. First, bind every
+service your package owns in one of your modules. An unlisted class is registered
+in whichever module asks for it first, and a second module that asks for it then
+fails at boot.
 
-Give a module that takes no options a plain `@Module` decorator instead of a
-`forRoot()`. `forRoot()` returns a fresh object per call, so two importers build
+Second, give a module that takes no options a plain `@Module` decorator instead
+of a `forRoot()`. `forRoot()` returns a fresh object per call, so two importers build
 two scopes.
 
 ## Test it the way it will be installed

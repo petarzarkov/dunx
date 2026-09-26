@@ -4,10 +4,10 @@ A gateway is a class in `providers` with `@Gateway('/path')` on it. It is served
 by the **same `Bun.serve` call** as the HTTP routes, from the same container, with
 the same constructor injection.
 
-The one exception is `gatewayPort`. It moves the upgrades onto a second
-`Bun.serve` that always speaks HTTP/1.1, which is what makes `http2` with
-`http1: false` usable alongside a gateway, since a websocket upgrade is an
-HTTP/1.1 request. See [Deployment](./21-deployment.md#http1-false-and-gateways).
+The exception is `gatewayPort`. It serves the upgrades from a second `Bun.serve`
+that always speaks HTTP/1.1. Set it when you use `http2` with `http1: false`,
+because a websocket upgrade is an HTTP/1.1 request. See
+[Deployment](./21-deployment.md#http1-false-and-gateways).
 
 ```ts
 import { Logger } from '@dunx/core';
@@ -157,12 +157,14 @@ await HttpFactory.create(AppModule, {
 });
 ```
 
-`backpressureLimit`, `closeOnBackpressureLimit`, `idleTimeout`,
-`maxPayloadLength`, `perMessageDeflate`, `publishToSelf` and `sendPings`, plus two
-additions. `onError` is where a throwing or rejecting handler goes; it defaults to
-`console.error` with the gateway path in the line.
+It accepts Bun's `backpressureLimit`, `closeOnBackpressureLimit`, `idleTimeout`,
+`maxPayloadLength`, `perMessageDeflate`, `publishToSelf` and `sendPings`, and two
+options of dunx's own.
 
-`binaryType` is the other, and it says what a binary frame arrives as:
+`onError` receives any error a handler throws or rejects with. The default logs it
+with `console.error`, including the gateway path.
+
+`binaryType` sets what a binary frame arrives as:
 
 ```ts
 await HttpFactory.create(AppModule, {
@@ -170,11 +172,10 @@ await HttpFactory.create(AppModule, {
 });
 ```
 
-`'nodebuffer'` (the default, a `Buffer`), `'arraybuffer'`, `'uint8array'` or
-`'blob'`. Bun takes it per socket rather than as a handler option, so dunx assigns
-it as each connection opens, before that gateway's `@OnOpen` runs. It selects what a
-**binary** frame is and never what a text frame is, so a gateway exchanging JSON is
-unaffected.
+The values are `'nodebuffer'` (the default, a `Buffer`), `'arraybuffer'`,
+`'uint8array'` and `'blob'`. dunx sets it on each socket as it opens, before the
+gateway's `@OnOpen` runs. It only affects **binary** frames. Text frames, such as
+JSON, still arrive as strings.
 
 Bun types `message` as the default's, because the runtime type is chosen at run
 time. A gateway that set this narrows the value itself:
@@ -241,14 +242,11 @@ So is a `@Gateway` with no handlers at all, and two gateways on one path.
 
 ## Pub/sub: topics live in the runtime
 
-`socket.subscribe(topic)` is Bun's own method. There is **no JavaScript map of
-topic to socket set** anywhere in dunx, because the runtime already keeps one and
-a userland copy would be slower, would need cleaning up on close, and would be a
-second source of truth.
+`socket.subscribe(topic)` is Bun's own method. Bun keeps track of which sockets
+are on which topic, and dunx keeps no copy of that in JavaScript.
 
-The consequence is that a node cannot enumerate which topics its sockets joined.
-Nothing hooks `socket.subscribe`, so nothing sees it. That constraint shapes the
-relay design below.
+So a node cannot list which topics its sockets joined. The relay below is built
+around that.
 
 ### `PubSub`
 
@@ -360,9 +358,9 @@ export class AppHttpOptions extends HttpOptionsProvider {
 }
 ```
 
-A relay of your own needs no module: extend `WsRelay`, bind it, and return it from
-that same getter. See [Configuration](./12-configuration.md) for the options
-provider.
+To write your own relay, extend `WsRelay`, bind it, and return your transport from
+the `relay` getter as above. It needs no module. See
+[Configuration](./12-configuration.md) for the options provider.
 
 ### Postgres instead of Redis
 
@@ -391,15 +389,14 @@ adds a topic and an origin id to it; `PubSub` logs one warning and fan-out stays
 local for that message. And `LISTEN`/`NOTIFY` is Postgres only, so `Bun.SQL`'s
 SQLite and MySQL adapters reject it.
 
-`RedisRelay` is built on `Bun.RedisClient`, a Bun global, so the relay itself costs
-`@dunx/http` **no new dependency**. The package's one runtime dependency is
-`@arkv/shared`, which the outbound HTTP client behind `./client` uses; nothing in the
-gateway or the relay path reaches for it. With no `url` it resolves the same chain Bun's client does,
+`RedisRelay` uses `Bun.RedisClient`, which is built into Bun, so you install
+nothing extra. With no `url`, it uses the same fallback as Bun's client:
 `$VALKEY_URL`, then `$REDIS_URL`, then `redis://localhost:6379`.
 
-A URL with an unrecognised scheme is rejected at construction. Bun accepts any
-string and fails later with an opaque `Connection closed`, which an
-absence-tolerant relay would swallow into silent single-node fan-out.
+A URL with an unknown scheme throws when the relay is created. Without this check,
+Bun would accept the URL and fail later with `Connection closed`. The relay would
+read that as "Redis is down" and send messages to this node's clients only,
+without an error.
 
 It opens **two** connections. A `Bun.RedisClient` in subscriber mode rejects every
 data command and throws synchronously doing it, so the subscription cannot share
@@ -414,10 +411,9 @@ Raise it when Redis is a hard requirement.
 
 ### Reusing a connection you already have
 
-`PubSubRelay` is two methods, so `@dunx/infra`'s `RedisConnection` satisfies it
-**structurally**, with no adapter and with `@dunx/http` depending on
-`@dunx/infra` not at all. Because it has to come out of the container, it goes
-through `relayThrough` rather than the option:
+You can pass `@dunx/infra`'s `RedisConnection` as the relay. It already has both
+methods `PubSubRelay` needs. It comes from the container, so call `relayThrough`
+after the app is created instead of setting the option:
 
 ```ts
 const app = await HttpFactory.create(AppModule);
@@ -472,20 +468,17 @@ and the inbound path drops a frame whose origin is its own:
 `Bun.randomUUIDv7` rather than a counter, because two nodes booted in the same
 millisecond must not collide.
 
-The other half of the rule is that the inbound path calls `server.publish` and
-**nothing else**. Re-relaying there would put the frame back on the channel that
-delivered it, forever.
+The inbound path only calls `server.publish`. It never relays again, which would
+send the frame back to the channel it came from, in a loop.
 
-The wire format is `{ o, t, d }`, with a `b: 1` flag when `d` is base64: a binary
-frame has to survive a text channel, because Bun's buffer-mode subscription is not
-implemented. Anything that does not decode to that shape is ignored, so another
-application's traffic on a shared channel is inert rather than fatal.
+Each relayed frame is sent as `{ o, t, d }`, plus `b: 1` when `d` is base64. Binary
+frames are base64-encoded because Bun cannot yet subscribe to a channel in buffer
+mode. A message in any other shape is ignored, so a channel can carry other
+traffic too.
 
-This is asserted rather than assumed. `@dunx/http`'s relay suite checks
-**exactly one** delivery per subscriber with relaying on, once over an in-memory
-bus and once over real Redis with two `Bun.serve` instances and a client on each.
-Both fail with two frames if the origin check is removed, which was verified by
-removing it.
+`@dunx/http`'s relay tests check that each subscriber gets **exactly one** copy
+with relaying on, over an in-memory bus and over real Redis with two `Bun.serve`
+instances. Without the origin check, both tests see two copies.
 
 ### `resubscribe`: retrying the boot subscribe
 
@@ -544,14 +537,13 @@ await this.#server?.stop(this.#websocket !== undefined);
 Those clients observe close code **1006**. There is no way around it without
 hanging, and an app that hangs on `SIGTERM` gets `SIGKILL` anyway.
 
-`PubSub.close()` runs **before** the container tears down. A relay this app owns
-holds two Redis sockets and, with `maxRetries: 0`, nothing else would ever close
-them.
+`PubSub.close()` runs **before** the container shuts down, and closes the two
+Redis sockets of a relay the app owns. Nothing else closes them.
 
-It also drops the server reference, which makes an app-owned relay safe to leave
-subscribed. `PubSubRelay` has no unsubscribe, so a frame may still arrive on a
-shared connection after this node stopped, and with no server there is nothing to
-fan it out to.
+It also drops its reference to the server. `PubSubRelay` has no unsubscribe, so
+on a shared connection a frame can still arrive after this node has stopped.
+With no server, that frame goes nowhere, so it is safe to leave the relay
+subscribed.
 
 `enableShutdownHooks()` wires `SIGTERM` and `SIGINT` to all of it.
 

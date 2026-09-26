@@ -4,11 +4,9 @@
 already validate against, and serves it. A documentation UI over it is opt-in:
 Swagger UI behind `@dunx/openapi/swagger`, Scalar behind `@dunx/openapi/scalar`.
 
-The point is that there is **one** description of a request in the codebase. The
-zod schema on `@Post('/', createUser)` is the object the request path calls
-`~standard.validate` on, and it is the same object the generator reads. Nothing is
-reconstructed from reflection, and there is no annotation that can disagree with
-what the server enforces.
+Each request is described once. The zod schema on `@Post('/', createUser)`
+validates the request, and the generator reads the same object. There are no
+separate annotations that could disagree with what the server enforces.
 
 ```ts
 import { HttpFactory } from '@dunx/http';
@@ -53,9 +51,8 @@ with a `getOpenapiJson()` on it.
 The document carries a strong `ETag`, hashed once per prefix and version, and
 answers a matching `If-None-Match` with a 304 whether or not the app sets `etag`.
 
-`forRootAsync({ root, useFactory, inject })` is the same module with everything but
-`root` produced by a factory, which is how any of the above comes off validated
-config:
+Use `forRootAsync({ root, useFactory, inject })` to read the options from
+validated config. The factory returns every option except `root`:
 
 ```ts
 OpenApiModule.forRootAsync({
@@ -69,14 +66,12 @@ OpenApiModule.forRootAsync({
 });
 ```
 
-`root` and `renderer` stay outside the factory. The graph must exist before the
-container that would run the factory does, and the controller declares its routes
-in the same breath.
+`root` and `renderer` go next to the factory, not inside it. The module graph and
+the explorer's routes are built before the container exists, so there is nothing
+yet to run the factory.
 
-The mount paths escape that. The controller declares its routes with **path
-thunks**, and route discovery runs after every provider has settled, so the
-factory that produced a path has returned before anything reads it. `RoutePath`
-in `@dunx/http` is the type.
+`path` and `jsonPath` can come from the factory. Route paths are read after every
+provider is built, so the factory has already run by then.
 
 zod is an **optional** `peerDependency`. Install it and schemas convert; do not,
 and the document still generates with warnings where the schemas would have been.
@@ -96,13 +91,9 @@ is actually served. From each route it reads:
   400, 409 and 422 ([Idempotency](./33-idempotency.md#openapi)).
 - the path and the method, from the verb decorator.
 
-A document can be written to a file from a script with no container and no
-server, because `describeRoutes` never constructs a controller.
-
-`discoverRoutes` walks an instance's prototype chain looking for marked
-methods, and `Object.create(Controller.prototype)` is that chain with nothing
-behind it: `instance.constructor` still resolves to the class, every method is
-still reachable, and no constructor, or dependency of one, has to exist:
+You can write the document to a file from a script, with no container and no
+server. `describeRoutes` reads each controller's prototype and never constructs
+it, so no dependency has to exist:
 
 ```ts
 import { describeRoutes, generateDocument } from '@dunx/openapi';
@@ -156,9 +147,7 @@ Any route that declares a `body`, `query` or `params` schema gets a documented
 }
 ```
 
-That is the framework's real error shape, from `defaultErrorMapper` and the issue
-flattening in the input reader. Documenting it beats leaving a caller to discover
-it from a failing request.
+This is the body `@dunx/http`'s default error mapper sends when validation fails.
 
 ### Response bodies
 
@@ -172,36 +161,28 @@ export const oneUser = {
 } as const satisfies RouteSchemas;
 ```
 
-One contract covers both directions: a named response schema hoists into
-`components/schemas` and the operation `$ref`s it exactly as a request body does.
-That gives `.meta({ id })` on a response-only schema its meaning, and gives the
-document what it needs for client codegen.
+A response schema with `.meta({ id })` is added to `components/schemas`, and the
+operation points to it with a `$ref`, the same as a request body. Client
+generators rely on this.
 
-Two consequences of it being the same contract rather than a second channel:
+- Response schemas are converted with **`io: 'output'`**: a field with a default
+  is always present, and objects get `additionalProperties: false`. Request
+  schemas use `io: 'input'`. A schema used both ways is converted twice, and if
+  the two results differ, one `.meta({ id })` cannot name both.
+- **Responses are never validated.** The schema only documents the response. See
+  [Validation](./06-validation.md#routeschemas).
 
-- The response side is converted with **`io: 'output'`**, because it describes what
-  comes back: a field with a default is always present there, and
-  `additionalProperties: false` is an output-side claim. The request side keeps
-  `io: 'input'`. A schema used both ways therefore converts twice, and if the two
-  views differ, one `.meta({ id })` cannot name both.
-- **It is never validated.** See
-  [Validation](./06-validation.md#routeschemas): documenting a response is not
-  enforcing it, and paying a validation pass per response for a documentation
-  feature would be the wrong trade.
-
-A status the route does not otherwise mention is documented from this key alone, so
-a `404` a handler throws is in the document without a second annotation. The
-declared success status keeps its own description and gains the `content`.
+A status listed only here is still documented, so a `404` that a handler throws
+appears in the document with no other annotation. The success status keeps its
+own description and gains the `content`.
 
 ### Names in the explorer
 
 A hoisted schema gets a `title` equal to its `components/schemas` key, unless it
 declared one of its own.
 
-An explorer labels a **nested** schema by that title. Swagger UI renders a model as
-`title || displayName || name`: a `$ref` at the root of a response supplies those
-fallbacks from the ref, but the same `$ref` inside `items` supplies neither, so
-`array<User>` read as `array<object>` before the title was there.
+Explorers use that title to label **nested** schemas. Without it, Swagger UI shows
+a list of users as `array<object>` instead of `array<User>`.
 
 Put prose in `description`. A sentence in `title` is what a reader sees instead of
 the type name, and the Schemas list becomes unbrowsable.
@@ -221,9 +202,9 @@ const Pong = Object.freeze({
 @Get('/ping', { response: { 200: Pong } })
 ```
 
-`$id` hoists it into `components/schemas` and leaves a `$ref`, the way
-`.meta({ id })` does for a zod schema, and is stripped from the definition. Without
-one it is inlined.
+With `$id`, the schema is added to `components/schemas` under that name and
+referenced with a `$ref`, like `.meta({ id })` on a zod schema. The `$id` key
+itself is removed from the definition. Without `$id`, the schema is inlined.
 
 This is the response side only. `body`, `query` and `params` are parsed, so they
 need a validator.
@@ -271,16 +252,14 @@ Class tags plus per-method summaries therefore need no repetition, and dropping
 the class `tags` from a method does not silently fall back to the class-name
 default.
 
-`@ApiDoc` is otherwise a thin wrapper over `@dunx/http`'s generic route-metadata
-channel: `metaKey` mints a unique symbol and `meta` writes it. No parallel
-registry, no second discovery pass. See
+`@ApiDoc` stores its value with `@dunx/http`'s route metadata (`metaKey` and
+`meta`), like any other route decorator. See
 [Middleware and guards](./08-middleware-and-guards.md#route-metadata).
 
-Documentation differs from that mechanism in one place. `RouteContext.get`
-resolves a key handler-first-then-class, **replacing** the class's value, which
-suits `@Roles` and breaks a value made of independent fields. Composing the two
-needs the class's own record, so a `DiscoveredRoute` carries `classMeta` next to
-the merged `meta`.
+One difference: `RouteContext.get` returns the method's value if there is one, so
+a method value **replaces** the class value. That suits `@Roles`. `@ApiDoc` merges
+field by field instead, so a `DiscoveredRoute` also carries the class's own value
+in `classMeta`, next to the merged `meta`.
 
 ## Security comes from the guards' own metadata
 
@@ -296,8 +275,8 @@ decorator to keep in sync:
 
 The description gains a line too: `Requires one of these roles: \`editor\`.`
 
-`components.securitySchemes.bearer` is added only when some route declares roles,
-and it is honest about what it means:
+`components.securitySchemes.bearer` is added only when some route declares roles.
+Its description reads:
 
 > Whatever the guards in front of these routes accept. dunx does not ship an
 > authentication scheme - this documents that a guard is there.
@@ -325,10 +304,9 @@ OpenApiModule.forRoot({
 });
 ```
 
-There is no default and no boot warning for leaving it out, unlike the dashboard.
-A public API's document is published to be read. The option exists for the other
-case: a service whose document is its whole route table, admin operations and
-their `x-required-roles` included.
+Without `authorize`, anyone can read the document, and boot does not warn about it
+(the dashboard does). Set it when the document should stay private, for example
+when it lists admin operations and their `x-required-roles`.
 
 Three things follow from where it runs.
 
@@ -344,9 +322,8 @@ authorize: async (req) =>
 That closes over an `Auth` the container owns, so it comes out of
 `forRootAsync`'s factory rather than sitting beside `root`.
 
-**A refusal answers 404.** A 403 tells a prober where to keep knocking, so a
-gated mount is indistinguishable from one that is not there: the body is the one
-an unmatched path already answers.
+**A refusal answers 404**, with the same body as an unknown path, so a caller
+cannot tell a gated explorer from a missing one.
 
 **A returned `Response` is sent as written.** A browser arrives with a cookie and
 no way to attach a bearer token, so a 404 leaves a person nowhere to go:
@@ -360,22 +337,21 @@ authorize: async (req) => {
 },
 ```
 
-Gate on something the page's asset requests carry too, which means a cookie
-rather than a query parameter. A page whose stylesheet was refused renders blank
-rather than gated.
+Check something the page's asset requests also send, such as a cookie. A query
+parameter is not sent with the stylesheet and script requests, so they are refused
+and the page renders blank.
 
-A second renderer mounted by hand is a middleware of your own, and it is gated by
-being handed the same function. `gate(authorize, req)` from `@dunx/http` is what
-`OpenApiModule` and `DashboardMiddleware` both call, and it returns the response
-to send or `undefined` to carry on. `examples/full/src/docs-gate.ts` is one class
-doing that for Swagger UI at `/api/docs` and Scalar at `/api/reference`.
+To gate a second renderer that you mount yourself, write a middleware that calls
+`gate(authorize, req)` from `@dunx/http` with the same function. `OpenApiModule`
+and `DashboardMiddleware` both use it. It returns the response to send, or
+`undefined` to continue. `examples/full/src/docs-gate.ts` does this for Swagger UI
+at `/api/docs` and Scalar at `/api/reference`.
 
 ## Naming a schema with `.meta({ id })`
 
-zod emits nested definitions under `$defs`. OpenAPI calls that slot
-`components/schemas`. Hoisting and rewriting `#/$defs/Tag` to
-`#/components/schemas/Tag` is the whole difference between the two, and
-`.meta({ id })` is the only annotation this package asks for:
+zod puts nested definitions under `$defs`. The generator moves them to
+`components/schemas` and rewrites `#/$defs/Tag` to `#/components/schemas/Tag`.
+`.meta({ id })` is the only annotation you add:
 
 ```ts
 export const Tag = z
@@ -396,13 +372,12 @@ export const CreateUser = z
 - `title` lands inline on the schema, as a human label.
 - A schema with no `id` is **inlined** where it is used, which suits a one-off
   body.
-- A **self-referential** schema is hoisted whether or not it has an `id`. zod emits
-  a cyclic ref as `#`, meaning "this schema", which is true where zod emitted it
-  and false once it is one entry among many; hoisting is what gives the ref a place
-  to point at.
+- A **self-referential** schema is always moved to `components/schemas`, with or
+  without an `id`. zod writes the cyclic ref as `#` ("this schema"), which would
+  point at the wrong place inside a larger document.
 
-Query and params schemas are expanded into `parameters` rather than referenced, so
-an `id` on one of those normally creates no component. A cyclic one still does.
+An `id` on a query or params schema usually creates no component, because those
+schemas are expanded into `parameters`. A self-referential one still does.
 
 `danglingRefs(document)` is exported and worth running on any generated document:
 a `$ref` that resolves to nothing renders as an empty box in every viewer and
@@ -411,9 +386,8 @@ adds a warning if it ever fires.
 
 ## The vendor check
 
-Standard Schema **validates**. It says nothing about describing, and there is no
-vendor-neutral way to turn a schema into JSON Schema. So conversion is per vendor,
-gated on the one piece of vendor information the interface carries:
+Standard Schema only covers validation. It has no way to turn a schema into JSON
+Schema, so the generator converts per library, based on the `vendor` field:
 
 ```ts
 const vendor = schema['~standard'].vendor;
@@ -423,18 +397,16 @@ if (vendor !== 'zod') { ... }
 zod is the vendor implemented, through
 `z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' })`:
 
-- `io: 'input'` is what a **request** looks like. A field with a default is
-  optional going in and present coming out, and `additionalProperties: false` is
-  an output-side claim.
-- `unrepresentable: 'any'` because a `Date` or a `bigint` in one schema must not
-  take the whole document down.
+- `io: 'input'` describes the **request**: a field with a default is optional,
+  and objects do not get `additionalProperties: false`.
+- `unrepresentable: 'any'` turns a `Date` or a `bigint` into an unconstrained
+  schema instead of failing the whole document.
 
 zod is imported **dynamically**, and only once a zod schema has actually turned
 up, so a consumer on Valibot never loads it and a consumer without it installed
 gets warnings rather than a module-resolution crash at import time.
 
-Anything else degrades to a permissive schema plus a warning. Claiming to have
-documented a body that was never read would be worse than saying so:
+Any other library's schema is documented as permissive, with a warning:
 
 ```
 UsersController_createBody: no JSON Schema conversion for Standard Schema vendor
@@ -450,10 +422,9 @@ const app = await HttpFactory.create(OpenApiModule.forRoot({ ... }));
 console.log(app.get(OpenApiExplorer).warnings);
 ```
 
-`OpenApiExplorer` is bound by an **async** `useFactory`, so the whole document,
-every schema conversion included, is settled before the first constructor runs.
-A degraded document is visible at boot rather than at the moment somebody notices
-an empty request body in the explorer.
+`OpenApiExplorer` is built by an **async** factory, so the whole document,
+including every schema conversion, is generated during boot. The warnings are
+there as soon as `create` returns.
 
 ## The page
 
@@ -526,9 +497,10 @@ never looks them up.
 
 ### A renderer of your own
 
-`DocsRenderer` is two methods. `renderShell` is the markup both renderers produce,
-and `PackageAssets` serves a package's files out of the consumer's install, gated
-on the allow-list that makes the wildcard route safe:
+Extend `DocsRenderer` and implement its two methods, `page` and `asset`. Two
+helpers do most of the work. `renderShell` builds the same HTML page the built-in
+renderers use. `PackageAssets` serves files from an installed package, but only
+the files you list, so the wildcard asset route cannot serve anything else:
 
 ```ts
 import {
@@ -569,8 +541,8 @@ export class MyRenderer extends DocsRenderer {
 
 ## Sharp edges
 
-- **The `root` you pass to `forRoot` is also what gets imported.** Do not import
-  it separately as well; the container's duplicate-binding check will say so.
+- **`forRoot` imports the `root` you pass it.** Do not import it again yourself;
+  boot fails with a duplicate-binding error.
 - **A non-object schema for `query` or `params` documents nothing** and produces
   a warning: a query string is a set of named parameters, and there is nothing to
   expand.

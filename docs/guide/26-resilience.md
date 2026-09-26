@@ -4,12 +4,13 @@ Timeout, retry, exponential backoff, jitter and fallback around one operation.
 `ResiliencePolicy` lives in `@dunx/core`, has no dependency, and wraps anything
 that returns a promise: an outbound call, a driver query, a broker publish.
 
-There is no circuit breaker, no bulkhead and no rate limiter here. The last one
-already exists in the other direction: `ThrottleModule` in `@dunx/http` is
-inbound admission control, keyed by caller and backed by a shared store. Retrying
-work this process owns is bullmq's, through `@dunx/infra/queue`. Making an
-inbound retry safe to accept is `@Idempotent()`, in
-[Idempotency](./33-idempotency.md).
+There is no circuit breaker, bulkhead or rate limiter. For related needs:
+
+| Need                                     | Use                                                     |
+| ---------------------------------------- | ------------------------------------------------------- |
+| Limit incoming requests per caller       | `ThrottleModule` in `@dunx/http`, with a shared store   |
+| Retry background work this process owns  | bullmq, through `@dunx/infra/queue`                     |
+| Accept a client's retried request safely | `@Idempotent()`, see [Idempotency](./33-idempotency.md) |
 
 ## Binding a policy
 
@@ -73,8 +74,8 @@ export class Checkout {
 }
 ```
 
-`resiliencePolicy(name)` returns the same token for the same name. A subclass is
-both a token and a parameter type, so prefer it for new code:
+`resiliencePolicy(name)` returns the same token for the same name. For new code,
+prefer a subclass: it works as a token and as a constructor parameter type:
 
 ```ts
 export class PaymentPolicy extends ResiliencePolicy {}
@@ -103,8 +104,8 @@ ResilienceModule.forRootAsync({
 
 ## Deciding what is worth retrying
 
-`RetryClassifier` answers that, and is an abstract class rather than an
-interface, since an interface at an injection site is a boot error. The default
+`RetryClassifier` decides. It is an abstract class so that it can be injected.
+The default
 is `TransientRetryClassifier`: everything is retried except an abort, which means
 the attempt's timeout expired or the caller's signal fired.
 
@@ -199,9 +200,9 @@ HttpModule.forRoot({
 });
 ```
 
-Bind `ResilienceModule` when the work is not a request that client makes. A
-policy wrapped around `HttpService` has to hand the attempt's signal to the
-request, or the policy's `timeoutMs` never reaches `fetch`:
+You need `ResilienceModule` only for work that does not go through `HttpService`.
+If you wrap an `HttpService` call in your own policy, pass the attempt's `signal`
+to the request. Otherwise the policy's `timeoutMs` never reaches `fetch`:
 
 ```ts
 policy.run((signal) => this.http.get(url, { signal }));

@@ -1,8 +1,7 @@
 # Middleware and guards
 
-Frameworks in this lineage tend to ship five concepts - middleware, guards, interceptors, pipes and filters -
-five base classes, five places to look when a request does something unexpected.
-dunx has one.
+Nest has five request concepts: middleware, guards, interceptors, pipes and
+filters. dunx has one, `Middleware`.
 
 ```ts
 export interface Middleware {
@@ -73,25 +72,22 @@ could not take effect.
 belongs to one feature goes on that feature's module instead - see
 [Module middleware](#module-middleware) below.
 
-Both resolve the way your root module sees them: for a middleware class, that
-means the single module that declares it. Listing a guard here does not oblige
-your root to import or re-export the feature module that provides it.
+A middleware class in either list is resolved from the module that declares it
+in its `providers`. Your root module does not need to import or re-export that
+feature module.
 
 ## `next()` is a function you call
 
-This is the design decision the rest of the page follows from.
+`handle` receives `next` and returns whatever it wants, so **one class sees both
+halves of a request**. It can time the call, catch the error, rewrite the
+response, or not call `next()` at all.
 
-Because `handle` receives `next` and returns whatever it wants, **one class sees
-both halves of a request**. It can time the call, catch the error, rewrite the
-response, or refuse to call `next()` at all.
+In Nest, code before the handler lives in middleware and code after it lives in an
+interceptor. Those are two separate objects, so matching the two halves up means
+passing a trace ID between them.
 
-Frameworks that split this across two base classes run middleware before and wrap
-an interceptor around the observable. They are separate objects with no shared
-frame, so correlating the two halves means threading a trace through and
-reassembling the pair in a log aggregator.
-
-The built-in request logger is the proof. It is one class, and it emits **one
-structured entry per request** carrying the request and the response together:
+The built-in request logger is one class, and it writes **one structured entry
+per request** with the request and the response together:
 
 ```ts
 return this.context.runWithContext(
@@ -100,10 +96,9 @@ return this.context.runWithContext(
 );
 ```
 
-Everything the handler logs in between carries `traceId`, `method`, `event` and
-`context` without being passed anything, because the whole call runs inside
-`runWithContext` on an `AsyncLocalStorage`. There is no pair to correlate, because
-there is no pair.
+The whole call runs inside `runWithContext`, which uses `AsyncLocalStorage`. So
+every line the handler logs also carries `traceId`, `method`, `event` and
+`context`, without you passing them.
 
 ## The request lifecycle
 
@@ -120,11 +115,10 @@ Outermost first, and every numbered layer except the last two is the same
 8. **validation** of `params`, `query` and `body` against the route's schemas
 9. the handler
 
-Then back out through 7, 6, 5, 4, 3, 2 - because a middleware that does work after
-`await next()` is what an interceptor would have been.
+The response then passes back out through 7, 6, 5, 4, 3 and 2. Code after
+`await next()` runs on the way out. Use it where Nest would use an interceptor.
 
-`@dunx/http`'s own test suite asserts exactly that list, in one
-request, in both directions:
+`@dunx/http`'s test suite checks this order in one request, in both directions:
 
 ```
 global:in  use:in  module:in  controller-guard:in  method-guard:in
@@ -132,9 +126,11 @@ global:in  use:in  module:in  controller-guard:in  method-guard:in
 method-guard:out  controller-guard:out  module:out  use:out  global:out  log
 ```
 
-and asserts the refusal case: a guard that throws at layer 7 never reaches
-validation or the handler, every enclosing layer still unwinds, and the filter runs
-outside all of them.
+The suite also checks what happens when a guard throws at layer 7:
+
+- validation and the handler do not run
+- every outer layer still sees the error on the way out
+- the error filter runs last
 
 ### If you are coming from Nest
 
@@ -178,10 +174,10 @@ export const compose = (
   );
 ```
 
-One `reduceRight` per route at `listen()`, after which a request is a call into a
-closure. A guard costs a `Map` lookup where Nest's `Reflector` costs a
-per-request reflection call, because there is no array iteration, no metadata
-lookup and no container access left on the request path.
+This runs once per route at `listen()`. After that, a request is a call into one
+prebuilt function: no array loop, no metadata lookup and no container access. A
+guard reading route metadata costs a `Map` lookup, where Nest's `Reflector` makes
+a reflection call per request.
 
 A route with **no middleware and no CORS** skips even that; see
 [The fast path](./05-controllers.md#the-fast-path) and
@@ -203,9 +199,9 @@ export interface RouteContext {
 }
 ```
 
-One frozen object per route, built when the table is built and closed over by the
-chain, so every request to that route sees the identical object. `get` is a `Map`
-lookup over a record already merged at discovery.
+There is one frozen `RouteContext` per route, built at boot, and every request to
+that route gets the same object. `get` is a `Map` lookup over the route's
+metadata, which was merged at boot.
 
 ### Route metadata
 
@@ -219,10 +215,9 @@ export const TENANT: MetaKey<string> = metaKey<string>('tenant');
 export const Tenant = (name: string) => meta(TENANT, name);
 ```
 
-`@Roles(...)` and `@Public()` are wrappers over exactly this, and `ROLES` and
-`PUBLIC` are exported so your own guard can read what they set. `@ApiDoc` in
-`@dunx/openapi` is a third wrapper over the same channel, so documentation needs
-no parallel registry.
+`@Roles(...)` and `@Public()` are built on these. `ROLES` and `PUBLIC` are
+exported so your own guard can read what they set. `@ApiDoc` in `@dunx/openapi`
+uses the same mechanism.
 
 A fresh `Symbol()` per `metaKey` call means two libraries that both name a key
 `roles` can never read each other's value. The symbol carries the identity.
@@ -268,10 +263,9 @@ guard is `{"error":"Requires one of: admin","status":403}`.
 executes, the input reader never reads the body, and the handler is never
 invoked.
 
-The controller _instance_ already exists. dunx resolves the container eagerly at
-`HttpFactory.create()`, so every controller is constructed once at boot and the
-handler is a bound method closed over it. A guard prevents the call; there is no
-per-request instantiation to prevent.
+The controller instance already exists. Every controller is constructed once, at
+`HttpFactory.create()`, so a guard stops the handler call but there is no
+per-request construction to skip.
 
 ### Scoping a guard
 
@@ -314,11 +308,11 @@ plus route metadata, so only the routes that carry it pay for it. See
 
 ### Metadata alone decides nothing
 
-`GET /reports` above carries `@Roles('admin')` inherited from the class, and it is
-readable through `ctx.get(ROLES)`, but no `RolesGuard` is installed on that route,
-so nothing enforces it. That is not a bug: metadata is a declaration, and which
-guard reads it is a separate decision. The common shape is one global guard plus
-`@Public()` on the routes that opt out:
+A route in `ReportsController` above with no `@UseGuards` still has
+`@Roles('admin')` from the class, and `ctx.get(ROLES)` returns it. But no
+`RolesGuard` runs on that route, so nothing enforces it. Metadata only takes
+effect when a guard reads it. The usual setup is one global guard, plus
+`@Public()` on the routes that skip it:
 
 ```ts
 const app = await HttpFactory.create(AppModule, { middleware: [AuthGuard] });
@@ -341,11 +335,10 @@ export class AuthGuard implements Middleware {
 }
 ```
 
-Note that the global guard still _runs_ on a public route. It chose to skip. That
-is what makes `@Public()` do something rather than decorate, and it is why
-`@dunx/auth`'s `SessionGuard` can be installed globally at all: better-auth's own
-sign-in endpoints are `@Public()`, and a sign-in route that needed a session could
-never be reached.
+The global guard still runs on a public route. It reads `PUBLIC` and calls
+`next()`. `@dunx/auth`'s `SessionGuard` works the same way, so it can be installed
+globally: better-auth's sign-in endpoints are `@Public()`, so they are reachable
+without a session.
 
 ## Module middleware
 
@@ -361,28 +354,23 @@ A guard that only ever made sense for one feature belongs to that feature's modu
 export class ReportsModule {}
 ```
 
-`TenantGuard` runs in front of every route `ReportsController` and
-`ExportsController` declare, and in front of nothing else. It is resolved from
-`ReportsModule`'s scope, so it injects `TenantPolicy`, which is on neither the
-`exports` line nor visible anywhere outside this module. That combination - a guard
-for these routes, built from providers only these routes can see - is the reason
-module scoping exists.
+`TenantGuard` runs in front of every route in `ReportsController` and
+`ExportsController`, and no other routes. It is resolved from `ReportsModule`, so
+it can inject `TenantPolicy`, which is not exported and is not visible outside
+this module.
 
 Module middleware differs from Nest's `configure(consumer)` in three ways:
 
-**No `forRoutes()`.** Nest needs a path-matching mini-language because
-`configure(consumer)` registers middleware against paths. A dunx module already owns
-its controllers, so the routes are already named. If a guard should cover half a
-module's routes, `@UseGuards` on the controller is the half.
+**No `forRoutes()`.** Nest matches middleware to paths. A dunx module's middleware
+applies to that module's controllers. To cover only some of a module's routes,
+put `@UseGuards` on those controllers instead.
 
 **No inheritance.** Importing `ReportsModule` does not put `TenantGuard` in front of
-the importer's routes. "Importing a module silently changed my request path" is a
-surprise worth not having, and the cost is one line in the module that actually
-wants the guard.
+the importer's routes. A module that wants the guard lists it in its own
+`middleware`.
 
-**No separate `guards` array.** A guard is middleware that throws, so a second array
-would be Nest's split reintroduced at the exact moment the rest of the design is
-removing it.
+**No separate `guards` array.** A guard is middleware that throws, so it goes in
+`middleware` too.
 
 A guard that genuinely applies everywhere stays global. `@dunx/auth`'s
 `SessionGuard` is that case, and belongs in
@@ -434,10 +422,10 @@ export const errorMapper =
   };
 ```
 
-`create()` builds it from the **bound** `Logger` when `onError` is absent, so the
-stack lands in the same stream, and in the same shape, as everything else the
-service writes. `defaultErrorMapper` is the same mapper over core's
-`ConsoleLogger`, for the case with no container to ask.
+When you pass no `onError`, `create()` builds this mapper with your app's bound
+`Logger`, so error stacks go to the same place and in the same format as your
+other logs. `defaultErrorMapper` is the same mapper using core's `ConsoleLogger`,
+for code that has no container to get a logger from.
 
 An `HttpError` is trusted: its status and its message reach the caller, because a
 `404 No user 7` is information the caller is entitled to. Anything else is
@@ -475,11 +463,10 @@ export class CursorError extends AppError {
 }
 ```
 
-An integer is not a dependency. `@dunx/infra` must not import `@dunx/http`, so it
-cannot raise an `HttpError` or ship a filter that constructs one; it can set a
-number, and the default mapper reads it. `CursorError` and `PageOptionsError` in
-`@dunx/infra/pagination` already do, so a bad cursor is a 400 in an app that wrote
-no `catch` at all.
+`@dunx/infra` does not import `@dunx/http`, so it cannot throw an `HttpError`.
+It sets `status` on its own error instead, and the default mapper uses it.
+`CursorError` and `PageOptionsError` in `@dunx/infra/pagination` do this, so a
+bad cursor returns 400 without any `catch` in your app.
 
 Two details that follow from where the number is set:
 
@@ -497,10 +484,8 @@ response.
 
 ### `ErrorFilter`, when the mapper needs dependencies
 
-A mapper is a function, so it cannot inject. The interesting ones need the app's
-config to decide how much of an error to reveal, or its `Logger` to record the
-ones that became a 500. dunx's own default proves it: `errorMapper(logger)` is
-curried, because currying was the only way to hand a function a dependency.
+A mapper is a function, so it cannot inject anything. Use a class when the
+mapper needs the app's config or its `Logger`.
 
 `onError` also takes a **class**, resolved from the container like any middleware:
 
@@ -563,31 +548,30 @@ export class ReportErrors implements Middleware {
 }
 ```
 
-Put it in `@Module({ middleware: [ReportErrors] })` and it is a module-scoped filter;
-put it in `@UseGuards(ReportErrors)` and it is a controller- or route-scoped one.
-Rethrowing hands the error on to the next layer out, and eventually to `onError` -
-which is Nest's route → controller → global cascade, expressed as the nesting it
-already was.
+To handle errors for one module, list it in
+`@Module({ middleware: [ReportErrors] })`. For one controller or one route, put
+`@UseGuards(ReportErrors)` on the class or the method. A rethrown error goes to
+the next layer out, and finally to `onError`. This replaces Nest's route,
+controller and global filters.
 
 ### Where the app-wide filter sits
 
-Inside CORS and outside everything else, request logging included. A mapped 500
-still carries the CORS headers a browser needs in order to _show_ it, which is
-exactly the case where a missing header turns a readable error into a silent network
-failure in the console.
+CORS is applied outside the filter. Everything else, including request logging,
+runs inside it. So a mapped 500 still has CORS headers, and the browser shows the
+error body instead of a generic network failure.
 
-Request logging is inside it, so a request that ends in a throw is still logged
-once. It records the error's own status - an `HttpError`'s `status`, or 500 for
-anything else - and rethrows, because the filter owns the response. A custom filter
+A request that ends in a throw is still logged once. The request logger records
+the error's status (an `HttpError`'s `status`, or 500 for anything else) and
+rethrows, so the filter builds the response. A custom filter
 that maps an unexpected error to something other than a 500 is the one case where
 the logged status and the sent status differ; throw an `HttpError` and they agree.
 
 ## Request logging
 
-`@dunx/http` installs `RequestLoggingMiddleware` outermost **by default**. It
-injects `Logger` and `RequestContext`, both `@dunx/core` contracts with a default
-binding, so it works in an app that imported no logging module at all, and picks
-up `@arkv/logger` automatically once `@dunx/infra/logger` is imported.
+`@dunx/http` installs `RequestLoggingMiddleware` **by default**, as the outermost
+middleware. It injects `Logger` and `RequestContext`, which `@dunx/core` always
+binds, so it works without any logging module. Import `@dunx/infra/logger` and it
+uses `@arkv/logger` instead.
 
 ```ts
 HttpFactory.create(AppModule, { requestLogging: false }); // remove it
@@ -668,9 +652,9 @@ runs. See [Security](./32-security.md).
 
 ### Why preflight is mounted per path
 
-With `routes` and no `fetch` handler, an `OPTIONS` against a GET-only route
-returns **404** where the specification suggests 405. Bun's native method miss
-cannot be intercepted, so a preflight cannot be inferred:
+When `Bun.serve` has `routes` and no `fetch` handler, an `OPTIONS` request to a
+GET-only route returns **404**, where the specification suggests 405. dunx cannot
+intercept Bun's built-in method miss, so it cannot answer a preflight there:
 
 ```
 OPTIONS, no fetch handler   -> 404
@@ -683,8 +667,8 @@ your routes, because `HttpMethod` has no `OPTIONS` verb: only CORS mounts one.
 
 ## Sharp edges
 
-- **Everything below `listen()` is configuration and throws afterwards.**
-  `setGlobalPrefix`, `use`, `set`, `enableCors`. The message says why.
+- **Configuration calls throw after `listen()`.** These are `setGlobalPrefix`,
+  `use`, `set` and `enableCors`. The error message says why.
 - **`app.use()` takes classes.** Passing an instance means the container never
   sees it and its dependencies are never injected.
 - **A guard that returns `next()` without awaiting is fine** and is the cheaper

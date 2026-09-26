@@ -66,10 +66,10 @@ String, as the draft writes it: `Idempotency-Key: "8e03978e-40d5-43e8-bc93-6894a
 | Body over `maxBodyBytes`                          | No     | Runs the handler |
 | `@Sse()` route, or a `text/event-stream` response | No     | Runs the handler |
 
-Stripe replays a 500. dunx releases the key instead, because a handler that
-threw has normally rolled its transaction back, and replaying the failure
-would refuse the retry the key exists for. A 4xx the handler returns, such as
-a declined payment, is an answer and is replayed.
+Stripe replays a 500. dunx releases the key instead, so the retry runs the
+handler again. A handler that threw has usually rolled back its transaction, so
+the retry is safe. A 4xx the handler returns, such as a declined payment, is
+stored and replayed.
 
 A replay carries the stored status, body and headers, except `Set-Cookie`,
 and a cookie set through `req.cookies` is never stored
@@ -107,9 +107,10 @@ An app with no auth writes `subject: () => undefined`, which puts every caller
 in one key space: a caller who learns another's key and sends the same request
 gets that caller's response. Omitting `subject` throws at boot.
 
-`AuthContext.current()` answers only once `SessionGuard` has run. A method's
-`@Idempotent()` runs after its controller's `@UseGuards(SessionGuard)` and
-after global middleware, so either placement of the session guard works.
+`SessionGuard` must run before `subject` is called, because
+`AuthContext.current()` has no user until then. You can put it in global
+middleware or in the controller's `@UseGuards(SessionGuard)`. `@Idempotent()` on
+a method runs after both.
 
 ## Options
 
@@ -134,9 +135,10 @@ overrides the module's. On a controller it covers every handler, and a
 handler's own options win. `required` exists only on the decorator, so the
 OpenAPI document, which reads route metadata, cannot disagree with the guard.
 
-The lease is what frees a key after a crash: the process that claimed it never
-completes or releases it, and a retry inside `leaseSeconds` gets 409. Set it
-longer than the slowest handler, or a slow first request and its retry both run.
+The lease frees a key after a crash. If the process that claimed a key dies, it
+never completes or releases it, and a retry within `leaseSeconds` gets a 409.
+Set the lease longer than your slowest handler, or a slow first request and its
+retry can both run.
 
 ## OpenAPI
 
@@ -163,9 +165,9 @@ A store of your own extends `IdempotencyStore` and implements `claim`, `read`,
 
 ## When the store is down
 
-The guard answers 503 and does not run the handler. `ThrottleGuard` fails open
-under the same outage. Here, running the handler without a claim is how a retry
-charges twice.
+The guard answers 503 and does not run the handler, because running it without
+a claim could charge a retry twice. `ThrottleGuard` behaves the other way and
+lets requests through when its store is down.
 
 A store that fails after the handler ran does not fail the request: the
 response is returned, a warning is logged once per process, and the key stays
@@ -173,8 +175,8 @@ claimed until its lease runs out.
 
 ## Cost
 
-A route without `@Idempotent()` has no guard in its chain. On one that has it,
-measured with `oha -c 64` against a route with a JSON body schema:
+A route without `@Idempotent()` pays nothing. For a route with it, measured with
+`oha -c 64` against a route with a JSON body schema:
 
 | Path                             | Added per request |
 | -------------------------------- | ----------------- |

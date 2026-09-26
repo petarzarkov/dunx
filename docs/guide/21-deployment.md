@@ -66,11 +66,11 @@ protocols share the socket. There is no websocket over HTTP/2.
 
 ### http1: false, and gateways
 
-`http1: false` is the pair to it and refuses HTTP/1.x with a 505. A websocket
-upgrade **is** an HTTP/1.1 request, so a port with it set can serve HTTP/2 routes
-or gateways and never both. Setting it with a gateway declared and no second port
-is a boot error naming the stranded paths, because the app would otherwise start
-healthy and never accept a socket.
+`http1: false` refuses HTTP/1.x requests with a 505. A websocket upgrade is an
+HTTP/1.1 request, so a port with `http1: false` can serve HTTP/2 routes or
+gateways, but not both. If you set it while a gateway is declared and no second
+port is configured, boot fails and the error names the gateway paths. Otherwise
+the app would start and never accept a websocket.
 
 `gatewayPort` is the way to have both. The routes keep `port` and the upgrades
 move to a second `Bun.serve` that takes no protocol overrides:
@@ -86,9 +86,9 @@ await app.listen(3000); // HTTP/2 only, the controllers
 app.gatewayUrl; // http://localhost:3001, HTTP/1.1, the gateways
 ```
 
-Both ports come out of **one container**, which is why this is an option rather
-than a second `HttpFactory.create`: a second app would build a second container,
-and the gateways would inject different singletons than the controllers.
+Both ports share **one container**, so gateways and controllers inject the same
+singletons. A second `HttpFactory.create` would build a second container with its
+own instances.
 
 `gatewayPort` works without `http1: false` too, for a deployment that wants the
 socket port behind a different firewall rule. An HTTP request to it answers 404.
@@ -112,21 +112,20 @@ the graph is torn down in **reverse construction order**, so a repository is
 disposed before the database connection it holds. `app.closed` resolves once
 that finishes, and anything implementing `OnShutdown` participates.
 
-This matters more than it looks under an orchestrator. Kubernetes sends
-`SIGTERM` and then waits `terminationGracePeriodSeconds` before `SIGKILL`; a
-process that ignores the first signal loses whatever was in flight.
+Kubernetes sends `SIGTERM`, waits `terminationGracePeriodSeconds`, then sends
+`SIGKILL`. A process that ignores `SIGTERM` loses whatever was in flight.
 
 **It then ends the process.** Draining differs from exiting: one handle that
 outlives teardown leaves a drained, idle process alive until `SIGKILL`, and that
 handle is often not yours.
 
-The real case is a Redis client. A `Bun.RedisClient` whose TCP connect never
-completed keeps a handle past `close()`, and bullmq's Bun adapter cannot cancel
-its own reconnect once the connection has dropped. An app that touched an
-unreachable broker used to drain perfectly and then hang.
+A Redis client is the common case. A `Bun.RedisClient` whose TCP connect never
+completed stays open after `close()`, and bullmq's Bun adapter cannot cancel its
+own reconnect once the connection has dropped. An app that used an unreachable
+broker used to finish draining and then hang.
 
-Both leaks are upstream and neither is reachable from userland. They are recorded
-in [queue-shutdown-sigterm.md](../../internal/notes/roadmap/queue-shutdown-sigterm.md).
+Both are upstream bugs that app code cannot work around; see
+[bullmq over Redis](./19-queues.md#read-this-before-you-deploy-it).
 
 Once the drain finishes, dunx gives the process a moment to end on its own and
 exits it if it has not. The timer is `unref()`d, so it cannot itself hold the
@@ -209,21 +208,18 @@ const compiled = await Bun.build({
 });
 ```
 
-`plugins` and `compile` in the same call is the part to keep. Constructor
-injection has no runtime annotation, so the transform writes each class's
-dependencies as a statement after it.
-
-Under `bun run` the preload does that on load. A compiled binary has no
-load-time plugin, so the record is baked in at build time instead. Drop
-`plugins` and every class with constructor parameters fails at boot with the
-preload message.
+Pass `plugins: [depsPlugin]` in the same call as `compile`. dunx needs each
+class's constructor dependencies written into the code. Under `bun run`, the
+preload does this as each file loads. A compiled binary has no preload, so the
+plugin does it at build time. Without it, every class with constructor
+parameters fails at boot with the preload message.
 
 Two consequences:
 
-- `@dunx/transform` is build-time only for the binary, but it is not
-  automatically a devDependency. `examples/binary` keeps it a dependency because
-  the same package still runs under `bun run` and `bun test`, and those load the
-  preload. Move it only if the binary is the one thing you ship.
+- The binary needs `@dunx/transform` only at build time, but that does not make
+  it a devDependency. `examples/binary` keeps it as a dependency because the same
+  package also runs under `bun run` and `bun test`, which use the preload. Move it
+  to devDependencies only if the binary is all you ship.
 - `bunfig.toml` is not read by the binary. Anything the preload line was doing
   has to happen in the build instead.
 
@@ -250,10 +246,10 @@ HealthModule.forRootAsync({
 });
 ```
 
-Do not hand-roll a controller for this. The part worth having is the drain, and a
-plain controller cannot express it. Set `drainDelayMs` to at least your ingress's
-deregistration interval, and keep `critical: true` to what makes the process
-useless, which in most services is the database alone.
+Use `HealthModule` instead of your own controller, because it handles draining
+at shutdown. Set `drainDelayMs` to at least your ingress's deregistration
+interval. Mark `critical: true` only on checks the process cannot work without,
+which in most services is just the database.
 [Health checks](./22-health-checks.md) covers both, the drain mechanics, and
 writing your own indicator.
 

@@ -84,11 +84,11 @@ the url or the filename can come off `ConfigService`.
 interface**, because an interface erases and leaves nothing for `@dunx/transform`
 to record.
 
-It is an abstract class where dunx owns the contract (`Storage`, `DbConnection`,
-`ImagesOptions`) and the library's own class where it does not
-(`BunSQLiteDatabase`, `ContextStore`). The three `token()` exports,
-`redisConnection(name)`, `redisMetrics(name)` and `LoggerSettings`, name things no
-class can.
+When dunx defines the contract, the token is an abstract class (`Storage`,
+`DbConnection`, `ImagesOptions`). Otherwise it is the library's own class
+(`BunSQLiteDatabase`, `ContextStore`). Three exports are `token()`s instead,
+because no class fits them: `redisConnection(name)`, `redisMetrics(name)` and
+`LoggerSettings`.
 
 **If an area is in the root barrel at all, all of it is.** `/db`, `/queue`,
 `/amqp` and `/email` are the four the barrel does not re-export: each reaches an
@@ -100,24 +100,26 @@ Within `/email` the split goes one level further. Each vendor import sits in the
 subpath that needs it and nowhere else: `resend` in `/email/resend`, `nodemailer`
 in `/email/smtp`, `react` and `@react-email/render` in `/email/react`.
 
-So `@dunx/infra/email` resolves with none of the four installed, which is what
-the log and memory transports are for. The `dunx-email` bin names no renderer
-either, loading one through `import()`.
+So `@dunx/infra/email` loads with none of the four installed, and you can use its
+log and memory transports. The `dunx-email` bin loads a renderer with `import()`
+only when it needs one.
 
-`packages/infra/src/index.test.ts` asserts all of it: which file may import each
-vendor, that the base subpath imports none, and that every one of the four is
-marked optional.
+`@dunx/infra`'s tests check which file may import each vendor, that the base
+subpath imports none of them, and that all four are marked optional.
 
 **Timing is off unless asked for.** `{ metrics: true }` is the last argument to
 `DbModule`, `CacheModule`, `RedisModule` and `QueueModule`, binding a
 `QueryMetrics`, `CacheMetrics`, `RedisMetrics` or `QueueMetrics`.
 
-`/db` wraps the driver dunx constructs, since drizzle's `logger` option cannot
-supply a duration. `/cache` wraps the configured `CacheStore`, so hits and misses
-cover a directly injected store and count one read per coalesced `wrap`.
+What each one measures:
 
-`/redis` times the one seam every command goes through. `/queue` times `publish()`
-plus the handlers this container ran, which excludes a forked `background` one.
+| Subpath  | Timed                                                                                                                  |
+| -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `/db`    | Every query. dunx wraps the driver it creates, since drizzle's `logger` option does not report durations               |
+| `/cache` | Hits and misses on the configured `CacheStore`, including one injected directly. A coalesced `wrap` counts as one read |
+| `/redis` | Every command                                                                                                          |
+| `/queue` | `publish()`, and handlers run in this process. A `background` handler runs in a forked process and is not timed        |
+
 See [Metrics](../../docs/guide/24-metrics.md).
 
 ## Verified against

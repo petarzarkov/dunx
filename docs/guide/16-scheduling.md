@@ -79,9 +79,9 @@ runtime rather than accepting one and getting it wrong.
 @Cron('0 9 * * *', { tz: 'America/New_York' })
 ```
 
-Detection asks the parser for two answers and compares them, so a backport or a fork
-is read correctly. `supportsTz()` is exported if you would rather fail your own boot
-on it.
+dunx checks for support by parsing one expression in two zones and comparing the
+results, so a backport or a fork is detected correctly. Call the exported
+`supportsTz()` to check it yourself.
 
 Schedules always run in UTC unless a zone is named, on every Bun version. Bun 1.4
 changed `Bun.cron`'s own default from UTC to the container's local zone; dunx passes

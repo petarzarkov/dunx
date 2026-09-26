@@ -44,10 +44,10 @@ decodes it on `get`. A header string you would otherwise build by hand is
 | Header or media-type versioning                 | The chosen version's                    |
 | An unmatched path or a claimed path             | Sent: dunx gives the fallback a map too |
 
-Bun builds `req.cookies` for a route-table request only. On the `fetch`
-fallback, which answers 404s and middleware-claimed paths, dunx defines it and
-writes the changes the same way, so a global guard can read a session cookie on
-a miss and refuse with a 401. It costs a 404 0.33 us when nothing reads it.
+`req.cookies` also works on unmatched and claimed paths. Bun only provides it
+for requests that match a route, so dunx adds it on the others and sends any
+changes back the same way. A global guard can read a session cookie on an
+unmatched path and answer 401. When nothing reads it, this adds 0.33 us to a 404.
 
 `@Idempotent()` never stores a `Set-Cookie`, and a cookie set through
 `req.cookies` never reaches its store at all: Bun adds it after the guard has

@@ -54,33 +54,28 @@ describe('createTestApp', () => {
 });
 ```
 
-`modules` takes one module ref or several. They become the `imports` of one
-synthetic root, so no fixture module has to be written by hand. What comes back is
-a plain `App`: `get`, `shutdown`, `closed`, `enableShutdownHooks`. Providers are
-resolved eagerly, and `onInit` has already run by the time the promise settles,
-exactly as in production.
+`modules` takes one module or several. dunx imports them into a root module for
+you, so you do not write a test module by hand. You get back a normal `App` with
+`get`, `shutdown`, `closed` and `enableShutdownHooks`. As in production, every
+provider is created and `onInit` has run before the promise resolves.
 
-The fake above is a class the test wrote: a subclass with an `override`, nothing
-more. It typechecks against the real thing. A hand-built object literal would
-not, and there is no mocking framework, interface, or `jest.mock` involved either.
+The fake above is a plain subclass with an `override`, so it typechecks against
+the real class. No mocking framework, interface or `jest.mock` is needed.
 
 ### Overrides replace in place
 
-`AppFactory.create` builds the scope graph it always would, then substitutes by
-token **in every scope that binds it**, before anything resolves. That reach is
-what makes the harness safe to use: a test that stubs `Logger` never has to know
-how many modules bind it.
+`AppFactory.create` builds the same module graph as in production, then replaces
+the token **in every module that binds it**, before anything resolves. A test
+that stubs `Logger` does not need to know how many modules bind it.
 
-An override is **not** an extra module appended at the end that wins. A module
-appended at the end would be its own scope, invisible to everything already
-wired, so it would win nothing.
+An override is not an extra module added at the end. Such a module would be a
+separate scope that nothing already wired can see, so it would replace nothing.
 
-Naming a scope for the override would push container topology into every suite,
-so the substitution runs across every scope instead. Where two scopes genuinely
-bind a token differently and only one is meant, resolve through the module that
-matters rather than overriding.
+You cannot aim an override at one module. If two modules bind a token
+differently and you want only one of them, resolve through that module instead
+of overriding.
 
-The consequence that matters:
+The replaced provider is never built:
 
 ```ts
 test('the discarded provider is never constructed', async () => {
@@ -109,18 +104,13 @@ test('the discarded provider is never constructed', async () => {
 });
 ```
 
-Because the replacement happens before anything resolves, the discarded
-provider's constructor never runs. Its `useFactory` never runs, and its
-`onInit` never fires. That is the guarantee a hand-rolled fixture usually
-misses: with an "append and win" model, the real database provider is still in
-the list, still gets instantiated, and still opens a connection that nothing
-under test uses.
+The replacement happens before anything resolves, so the discarded provider's
+constructor, `useFactory` and `onInit` never run. A real database provider that
+you override never opens a connection.
 
-The seam lives in `@dunx/core`, as `AppFactory.create(root, { overrides })`,
-rather than in the testing package. It is not a test-shaped API: it says
-"compose this graph with these bindings replaced", the same statement a
-deployment variant would make. `HttpOptions extends AppOptions`, so
-`HttpFactory.create` inherits it without a second mechanism.
+Overrides are part of `@dunx/core`, as `AppFactory.create(root, { overrides })`,
+so you can also use them outside tests, for example for a deployment variant.
+`HttpOptions extends AppOptions`, so `HttpFactory.create` accepts them too.
 
 ### An unmatched override is an error - unless it is a class
 
@@ -140,27 +130,24 @@ test('an override naming a token nobody binds is an error', async () => {
 });
 ```
 
-The full message, and the second clause is the important one:
+The full message:
 
 > Nothing to override for Clock: no module in the graph binds it, **and it is not a
 > class, so nothing self-binds it either**. An override replaces a binding - it
 > cannot add one, because a token nobody bound is a token nothing under test
 > resolves.
 
-A silent no-op here is the worst possible failure. It leaves a suite asserting
-against the real provider it believed it had swapped, and the suite passes. The
-check names **every** unmatched token rather than the first, so a renamed token
-does not turn into three rounds of the same error.
+Without this error, a suite would test the real provider while believing it had
+replaced it, and still pass. The error names **every** unmatched token, not just
+the first.
 
-**A class is exempt from that check, and that is a real gap in the safety net.**
-A class self-binds: it needs no declaration to be resolvable. An override for one
-replaces the binding that _would_ have happened on demand, so registering it
-eagerly would construct a stub for a collaborator the graph under test never
-reaches. `Injector.registerLazy` exists to avoid exactly that.
+**A class is not checked.** Any class can be injected without being listed, so an
+override for a class replaces the binding it would get when first asked for.
+dunx registers that override lazily, so a stub is not built for a class the test
+never uses.
 
-The cost is that a **typo'd class override is accepted in silence**: there is no
-binding for it to fail to match, and nothing under test asks for it, so it
-simply never fires. Measured:
+As a result, **an override for the wrong class is accepted silently**: nothing
+fails to match, nothing asks for it, and it never takes effect. Measured:
 
 ```
 override a declared class      -> resolves, replacement used
@@ -168,13 +155,12 @@ override a class nobody binds  -> resolves, no error
 override a token() nobody binds -> throws "Nothing to override"
 ```
 
-So the check protects `token()` bindings and cannot protect class ones. If a class
-override appears not to work, the first thing to suspect is the class itself: two
-copies of a package means two class objects, and the one you imported in the suite is
-not the one the module bound.
+Only `token()` overrides are checked. If a class override seems to do nothing,
+check that the test imports the same class the module uses. Two copies of a
+package mean two different class objects.
 
-The most common way to hit it is a token whose module you forgot to list in
-`modules`. The second most common is a second copy of `@dunx/core` in the
+The usual cause of the "Nothing to override" error is a token whose module you
+forgot to list in `modules`. The second most common is a second copy of `@dunx/core` in the
 dependency tree: a second copy is a second `Logger` class and therefore a token
 that matches nothing.
 
@@ -208,9 +194,9 @@ test('RecordingLogger keeps entries instead of writing them', async () => {
 });
 ```
 
-Overriding one default does not disturb the other: `RequestContext` is still
-core's. The unmatched-override check runs after both stages, module bindings and
-defaults, so it never fires spuriously on a token only the defaults provide.
+Overriding one default leaves the other alone: `RequestContext` is still core's.
+The unmatched-override check runs after module bindings and defaults are both in
+place, so overriding a token that only a default provides does not fail.
 
 ## `RecordingLogger`
 
@@ -224,9 +210,8 @@ what was logged and stays quiet when it does not care.
 | `clear()`   | Empties `entries`.                              |
 | `logLevel`  | `LogLevel.VERBOSE`, so nothing is filtered out. |
 
-It exists because the `Logger` contract is seven levels of three overloads each,
-and every suite that wanted a silent logger would otherwise hand-write the same
-thirty lines.
+The `Logger` contract is seven levels with three overloads each, so this saves
+writing the same thirty lines in every suite.
 
 It **interprets nothing**: no level filtering, no error promotion, no merging of
 extras. Those are the backing logger's behaviour, and asserting against a
@@ -309,10 +294,10 @@ the application's module binds (see
 [Configuration](./12-configuration.md#settings-the-http-server-owns)). The suite
 then imports that module and passes nothing.
 
-**Forgetting is loud.** If the graph declares a `Middleware` implementation that no
-`@UseGuards` attaches - the shape of a global guard - and neither the `middleware`
-argument nor a bound `HttpOptionsProvider` supplies any, `createTestServer` writes
-one line to `console.warn` naming the class.
+**You get a warning if you forget.** Suppose the graph declares a `Middleware`
+class that no `@UseGuards` attaches, which is how a global guard looks. If neither
+the `middleware` argument nor a bound `HttpOptionsProvider` supplies middleware,
+`createTestServer` writes one line to `console.warn` naming the class.
 
 Bind the same `HttpOptionsProvider`
 the application binds, or pass `middleware: []` to declare the omission
@@ -351,10 +336,9 @@ Because **the routing under test is Bun's.**
 dunx writes no JavaScript router. `Bun.serve({ routes })` does the path matching,
 the `:param` extraction, the per-method dispatch and the method-miss 404.
 
-A fake dispatcher could only exercise the parts of the request path dunx wrote,
-and would silently agree with itself about the rest. A test that passes against a
-fake and fails against Bun has taught you nothing except that the fake is
-wrong.
+A fake dispatcher would test only the parts of the request path dunx wrote, and
+would guess at the rest. A test that passes against a fake can still fail
+against Bun.
 
 The specific things only a real server proves:
 
@@ -492,10 +476,9 @@ class FixedTime {}
 const app = await createTestApp({ modules: [BillingModule, FixedTime] });
 ```
 
-That two-line module is also why the harness has no `providers` option: the
-documented shape stays `{ modules, overrides }`. A `providers` list would let it
-assemble graphs that do not exist in the application, and a suite would end up
-asserting against a container the production app never builds.
+The harness has no `providers` option; use a module like this instead. A
+`providers` list would let a suite build a container the production app never
+builds.
 
 ## Sharp edges
 

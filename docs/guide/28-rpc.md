@@ -206,9 +206,9 @@ connection. No dunx test covers them yet, so treat them as unverified.
 
 ## Testing
 
-`createTestServer` puts a real `Bun.serve` on port 0. Pass `ConnectMiddleware`
-as `middleware`, since the module binds it without registering it, and call it
-with a real client:
+`createTestServer` starts a real `Bun.serve` on port 0. The module binds
+`ConnectMiddleware` but does not register it, so pass it as `middleware`. Then
+call the server with a real client:
 
 ```ts
 import { afterAll, beforeAll, expect, it } from 'bun:test';

@@ -1,9 +1,9 @@
 # Email
 
-`@dunx/infra/email` is one `EmailTransport` contract, the four things every app
-otherwise rewrites around it, and a preview server over `Bun.serve`. The
-provider stays an optional peer on a subpath of its own, the way `drizzle-orm`
-and `bullmq` do.
+`@dunx/infra/email` gives you an `EmailTransport` contract, dry runs, rate
+limiting, templates, address checks and a preview server on `Bun.serve`. Each
+email provider is an optional peer dependency with its own subpath, like
+`drizzle-orm` and `bullmq`.
 
 ## The module
 
@@ -69,11 +69,10 @@ and runs the greeting and AUTH, while Resend has no call that is not a send, so
 `SmtpTransport` has one and `ResendTransport` does not. A caller that finds none
 has been told nothing, which is `unknown` to a health probe rather than `down`.
 
-An abstract class rather than an interface, because a dunx constructor parameter
-names a runtime value. `OutboundEmail` is the message after the module's
-defaults have been applied: `from` is filled in, every recipient is an object,
-and `to`, `cc`, `bcc`, `attachments` and `headers` are always present. A
-transport maps that onto its provider and does nothing else.
+`EmailTransport` is an abstract class so that it can be injected.
+`OutboundEmail` is the message with the module's defaults applied: `from` is
+filled in, every recipient is an object, and `to`, `cc`, `bcc`, `attachments`
+and `headers` are always present. A transport only maps it onto its provider.
 
 | Transport         | Subpath                    | Peer         |
 | ----------------- | -------------------------- | ------------ |
@@ -85,17 +84,16 @@ transport maps that onto its provider and does nothing else.
 Each vendor subpath reaches its peer through a static import, so
 `@dunx/infra/email` on its own installs none of them.
 
-There is no Bun SMTP client and SMTP is not a `fetch`: it is a stateful dialogue
-over TCP with STARTTLS, AUTH and dot-stuffing. `Bun.connect` gives the socket and
-nothing above it, so `SmtpTransport` is nodemailer rather than a hand-written
-client.
+`SmtpTransport` uses nodemailer because Bun has no SMTP client. SMTP is a
+stateful TCP conversation with STARTTLS, AUTH and dot-stuffing, and `Bun.connect`
+only provides the socket.
 
 ## Dry runs
 
-`dryRun: true` routes sends to `LogTransport` and leaves the configured one
-bound. One variable is then the whole difference between an environment that
-delivers and one that does not, and the log line carries the sender, the
-recipients and the subject, with the bodies at `debug`.
+`dryRun: true` sends every message to `LogTransport` and leaves the configured
+transport bound. One setting switches an environment between delivering and not
+delivering. The log line has the sender, the recipients and the subject, and the
+bodies are logged at `debug`.
 
 `EmailResult.transport` says which one answered, so a test can assert that
 nothing left the process.
@@ -137,10 +135,9 @@ firing straight back into the cap that rejected it.
 text one. React Email is the shipped implementation and not the only possible
 one: a tagged-template or MJML renderer satisfies the same two methods.
 
-The peer is `@react-email/render`, the package holding `render`. Components for
-authoring a template are the app's own choice; React Email has folded them into
-`react-email`, the CLI this subpath exists to avoid, so `@dunx/infra` depends on
-neither.
+The peer is `@react-email/render`, which provides `render`. Install the
+components you write templates with yourself. `@dunx/infra` depends on neither
+`@react-email/components` nor the `react-email` CLI.
 
 ```tsx
 // emails/welcome.tsx
@@ -186,11 +183,10 @@ bunx dunx-email preview ./emails     # http://localhost:3035
 bunx dunx-email export ./emails --out ./out
 ```
 
-The `react-email` CLI serves the same page by pulling in Next.js, esbuild,
-chokidar and socket.io, and renders through the same `render` call. So this is
-`Bun.serve`, `Bun.Glob` and `import()`: no CLI framework, no bundler, no dev
-server. An edit shows up on the next request because the module is imported
-again behind a cache-busting query.
+The `react-email` CLI serves the same page with Next.js, esbuild, chokidar and
+socket.io, and calls the same `render`. `dunx-email` uses only `Bun.serve`,
+`Bun.Glob` and `import()`. An edit shows up on the next request, because each
+request imports the template again with a cache-busting query.
 
 It binds `127.0.0.1`. The routes are unauthenticated and one of them answers a
 broken template with a stack trace, so the CLI has no flag to change that.
@@ -210,11 +206,10 @@ new EmailPreview({ dir: './emails', renderer, hostname: '0.0.0.0' }).serve();
 | `--out <dir>`      | `./out`                   |
 | `--renderer <mod>` | `@dunx/infra/email/react` |
 
-`--renderer` names a module whose default export is a `TemplateRenderer`, which
-is how an app previewing MJML never installs `@react-email/components`. A
-relative path is relative to where the shell is. Point it at the same instance
-the module is configured with and the preview cannot drift from what a send
-produces:
+`--renderer` names a module whose default export is a `TemplateRenderer`, so an
+app using MJML does not need `@react-email/components`. A relative path is
+resolved from the current directory. Point it at the same renderer instance the
+module uses, so the preview matches what a send produces:
 
 ```ts
 // src/email/render.ts
@@ -285,10 +280,9 @@ toAddress('Ops <ops@example.com>'); // { address: 'ops@example.com', name: 'Ops'
 toAddress('a@example.com,evil@attacker.com'); // throws InvalidAddressError
 ```
 
-Refused rather than escaped, because there is no rendering of two addresses
-inside one recipient that means what the caller wrote. SMTP joins a recipient
-list into one comma-separated header, so a comma that survived would become a
-second `RCPT` the caller never asked for.
+dunx rejects such an address instead of escaping it, since no escaped form
+means what the caller wrote. SMTP joins recipients into one comma-separated header, so a comma
+left in would add a second recipient the caller never asked for.
 
 The subject is a header too, and so is every entry in `headers`. Both go through
 the same newline check, so a name interpolated into a subject cannot add a

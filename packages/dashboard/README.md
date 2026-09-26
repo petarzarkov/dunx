@@ -77,9 +77,9 @@ way to read this on a box with no browser. The queues page is bull-board's.
 
 ## Notes
 
-- `QueueSource` and `RedisProbe` restate structurally what `JobPublisher` and
-  `RedisConnection` already are, so `queues: publisher` is the whole wiring.
-  It depends on neither `@dunx/infra` nor `bullmq`.
+- `QueueSource` and `RedisProbe` have the same shape as `JobPublisher` and
+  `RedisConnection`, so `queues: publisher` is all the wiring you need. The
+  package depends on neither `@dunx/infra` nor `bullmq`.
 - The board is built on the first request for the queues page, never at boot, so
   an app that never opens it holds no broker socket.
 - `commands: false` maps onto bull-board's own `readOnlyMode`.

@@ -136,9 +136,8 @@ A url naming neither user nor password gets `guest:guest` spliced in.
 password and RabbitMQ refuses it. A url carrying a username is left alone, blank
 password and all.
 
-Neither url error quotes the url as given. An AMQP url almost always holds
-credentials, and an unparseable one cannot be redacted, since redaction parses it
-too.
+Neither error prints the url. An AMQP url usually contains a password, and a url
+that cannot be parsed cannot have its password masked.
 
 `forRootAsync` reads the url off `ConfigService`. `ConfigModule` is global, so
 the factory needs no `imports` to reach it:
@@ -170,10 +169,10 @@ exported, and is the piece that opens consumers under `consume`.
 | `handlerTimeoutMs` | none                                                                              | Reject a handler that runs longer. See below                                            |
 | `consume`          | `false`                                                                           | `true`, or `'if-any'`. See below                                                        |
 
-`prefetchCount` is twice `concurrency` on the library's own advice. Both `qos` and
-`queueOptions` merge key by key with a handler's `consumer`, so overriding one
-field of either keeps the module-wide rest: a handler asking for
-`queueOptions: { arguments: { ... } }` still gets `durable: true`.
+`prefetchCount` is twice `concurrency`, as `rabbitmq-client` recommends. A
+handler's `consumer` merges into `qos` and `queueOptions` key by key, so
+overriding one field keeps the module-wide defaults for the rest: a handler that
+sets `queueOptions: { arguments: { ... } }` still gets `durable: true`.
 
 `connection` and `consumer` cannot name `url`, `connectionName` or `queue`. Those
 are `AmqpConnection`'s and the handler's, and the two passthrough types
@@ -240,12 +239,14 @@ AmqpModule.forRoot({
 });
 ```
 
-`amqp.publisher()` hands back the `rabbitmq-client` `Publisher` for anything this
-does not wrap, and skips the trace headers `publish` stamps.
+For anything `publish` does not cover, `amqp.publisher()` returns the underlying
+`rabbitmq-client` `Publisher`. It does not add the trace headers `publish` adds.
 `connection.connection()` does the same for `queueDeclare`, `basicGet`,
-`createRPCClient` and the rest. `amqp.opened` and `connection.opened` report
-whether a channel or a socket has been opened at all, and `connection.ready`
-whether the broker is reachable right now.
+`createRPCClient` and the rest.
+
+`amqp.opened` and `connection.opened` report whether a channel or a socket has
+ever been opened, and `connection.ready` reports whether the broker is reachable
+right now.
 
 ### A publish is bounded
 
@@ -305,10 +306,9 @@ Rejects a handler that runs longer than this, so a delivery hung on an external
 call stops holding a prefetch slot until the connection drops. AMQP has no
 handler timeout of its own: an acknowledgement either arrives or does not.
 
-The rejection takes the path a throw takes. A timed-out delivery is requeued
-where `consumer.requeue` is on (the default) and dropped to the dead-letter
-exchange where it is off, so a timeout is redelivered only under the same setting
-a failure is.
+A timeout is handled like a thrown error. With `consumer.requeue` on (the
+default) the delivery is requeued, and with it off the delivery goes to the
+dead-letter exchange.
 
 **The handler is not cancelled, only stopped being waited for.** A timed-out call
 carries on in the background after the delivery has been settled, so a handler
@@ -346,10 +346,10 @@ consumers drain, then the publisher's channel closes, then the connection closes
 three handlers sleeping a second, measured. That is what keeps a handler from
 losing its database connection halfway through.
 
-The same call waits `connection.acquireTimeout` when the broker has gone away,
-with nothing in flight to drain: 19.7 s on rabbitmq-client 5.0.8. `drainTimeoutMs`
-bounds it at 10 s and `AmqpConnection` destroys the socket afterwards either way,
-so a `SIGTERM` against an absent broker still exits.
+If the broker is gone, a `SIGTERM` still exits. Without a broker, the same call
+would wait for `connection.acquireTimeout` even with nothing to drain: 19.7 s on
+rabbitmq-client 5.0.8. `drainTimeoutMs` caps the wait at 10 s, and
+`AmqpConnection` then destroys the socket.
 
 ## Running with no broker
 
@@ -420,9 +420,8 @@ records the comparison.
 
 ## Everything `@dunx/infra/amqp` exports
 
-The three tokens above are what an app injects. The rest is what a test or a
-runtime of your own reaches for, and it is listed here so nothing is reachable
-only by reading the source.
+An app injects the three tokens above. The rest is for tests and custom
+runtimes:
 
 | Export                                                                    | Kind                   | For                                                                              |
 | ------------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------- |

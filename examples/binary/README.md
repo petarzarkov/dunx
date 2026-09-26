@@ -38,9 +38,9 @@ At `bun run` time `bunfig.toml`'s preload does that; a compiled binary has no
 load-time plugin, so the records are baked in at build time instead. `bun run test`
 compiles the binary and asserts a resolved dependency survived.
 
-On Bun 1.4.0 the marker was dropped when the plugin and `compile` ran together,
-and the workaround was to bundle first and compile the emitted JavaScript. That
-was fixed in 1.4.1, which is dunx's minimum.
+Bun 1.4.0 lost these records when the plugin and `compile` ran in one pass, so
+you had to bundle first and then compile the output. Bun 1.4.1 fixed it, and it is
+the minimum version dunx supports.
 
 ## The version comes from a JSON import
 

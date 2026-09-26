@@ -45,11 +45,10 @@ last one answers 201.
 
 Four consequences worth knowing about.
 
-**An unmatched method returns 404 where most frameworks return 405.** Bun answers a
-method miss natively only when nothing else can claim the request. dunx always
-installs the `fetch` fallback described below, so a method miss reaches it, runs the
-whole global middleware chain and comes back as the framework's 404 - the same shape
-as an unmatched path. Measured:
+**An unmatched method returns 404, where most frameworks return 405.** dunx always
+installs the `fetch` fallback described below. A request for a known path with the
+wrong method goes to that fallback, runs the global middleware and gets the same
+404 as an unknown path:
 
 ```
 GET     /thing   200   the route
@@ -82,9 +81,8 @@ already has, so the request log, the metrics series and the OpenAPI document all
 still say `/t/:id`. Every route gets one except `/` and a wildcard mount, which
 already matches its own trailing slash.
 
-`strict` defaults to `true`, which is what `Bun.serve` matches on its own and
-what Hono defaults to. A reverse-proxy rewrite in front of dunx does the same
-job for a caller you do not control.
+`strict` defaults to `true`, which matches how `Bun.serve` and Hono behave. For
+a client you do not control, a reverse-proxy rewrite in front of dunx also works.
 
 **CORS preflight is mounted, not inferred.** `enableCors()` mounts an explicit
 `OPTIONS` handler per path; see
@@ -112,11 +110,11 @@ metrics and tracing.
 `{"error":"NOT_FOUND","status":404}`. It runs only after Bun has decided nothing
 matched, so Bun still does every bit of the matching.
 
-A global guard runs on a miss too. By default (`notFound: 'public'`) the miss
-reports itself as `@Public()`, so a guard honouring that flag lets the 404
-through. `HttpFactory.create(root, { notFound: 'guarded' })` gives it no route
-metadata instead, so the guard refuses it and a prober cannot tell a missing path
-from a protected one.
+Global guards also run on a miss. With the default, `notFound: 'public'`, a miss
+counts as `@Public()`, so a guard that honours `@Public()` lets the 404 through.
+With `HttpFactory.create(root, { notFound: 'guarded' })`, the miss has no route
+metadata and the guard rejects it. A caller then cannot tell a missing path from a
+protected one.
 
 ## How routes are found
 
@@ -135,9 +133,9 @@ closing.
 **No import-order dependence and no cross-file leak.** An accumulator records
 routes as files evaluate; inspection reads what is there when it is asked.
 
-**Overriding a decorated base method works without re-decorating.** Discovery
-finds the base's marker, and dispatch lands on the override, because the handler
-is bound off the constructed instance rather than off the prototype.
+**Overriding a decorated base method works without re-decorating.** The route
+comes from the base method's decorator, and requests call the override, because
+the handler is looked up on the constructed instance.
 
 **Most-derived wins on a repeated name.** An undecorated override does not shadow
 its decorated base out of existence.
@@ -179,9 +177,9 @@ The filter belongs to the class, not to a constructor argument. OpenAPI, the
 dashboard and `@dunx/mcp` read routes without constructing the controller, so a
 filter passed to `super()` would never reach them.
 
-A name the class does not have is a compile error, and a method that is not a
-route is a boot error. The filter is inherited, and a subclass that re-applies
-`@Controller` replaces it. `examples/full/src/crud/` is the whole example.
+A method name the class does not have fails to compile. A method that is not a
+route fails at boot. Subclasses inherit the filter, and a subclass that applies
+`@Controller` again replaces it. `examples/full/src/crud/` has the full example.
 
 The same options object takes `version`, which serves the controller at
 `/v1/...` once URI versioning is on. See [Versioning](./34-versioning.md).
@@ -212,10 +210,10 @@ slashes collapse and a trailing slash is stripped, so `@Controller('users/')` pl
 The path may also be a **thunk** (`RoutePath` is `string | (() => string)`), read
 at route discovery rather than at decoration.
 
-It covers one situation: a path coming out of validated configuration is unknown
-when a decorator's arguments are evaluated, and discovery runs after every
-provider has settled. `OpenApiModule.forRootAsync` is the caller, mounting its
-page where `ConfigService` says. A thunk must answer the same path every call.
+Use a thunk when the path comes from configuration. Decorator arguments run when
+the class loads, before configuration exists. Route discovery runs later, after
+every provider is ready. `OpenApiModule.forRootAsync` uses this to mount its page
+at the path from `ConfigService`. A thunk must return the same path every time.
 
 There is no `@Options` and no `@Head`. `HttpMethod` is
 `'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'`, and `OPTIONS` is reserved for the
@@ -288,10 +286,10 @@ record(input: Input<typeof createNote>): Note {
 }
 ```
 
-The annotation is required, and the options constant must not be annotated
-`: RouteSchemas`; [Validation](./06-validation.md#why-input-must-be-written-out)
-has the compiler errors and the reason. For a route with no options, annotate
-`Input<RouteSchemas>` or take no parameter at all.
+You must write the `Input<...>` annotation. Do not annotate the options constant
+as `: RouteSchemas`. [Validation](./06-validation.md#why-input-must-be-written-out)
+shows the compiler errors and explains why. For a route with no options, annotate
+`Input<RouteSchemas>` or take no parameter.
 
 Any [Standard Schema](./06-validation.md#standard-schema-is-the-contract)
 validator works. How each `content-type` is parsed, and the 400 a rejected schema
@@ -336,9 +334,9 @@ const createNote = {
 const enqueue = { body: Job, status: HttpStatusCode.ACCEPTED } as const;
 ```
 
-`HttpStatusCode` is a frozen object plus an indexed-access union rather than an
-enum, so `HttpStatusCode.CREATED` is both a value and a narrow type, and erases.
-`HttpStatusName` gives you the names.
+`HttpStatusCode` is a frozen object with a matching union type, not an enum.
+`HttpStatusCode.CREATED` is both a value and the literal type `201`.
+`HttpStatusName` is the union of the names.
 
 A thrown `HttpError` still goes through the error mapper, so `status` only sets
 the _success_ status.
@@ -463,11 +461,11 @@ dunx has one error mapper rather than an exception filter hierarchy. A bare
 `ErrorMapper`, `(error: unknown, req: Request) => Response`, suits a mapper that
 injects nothing.
 
-In an app, reach for an
+To inject the app's `Logger` or config, pass an
 [`ErrorFilter`](./08-middleware-and-guards.md#errorfilter-when-the-mapper-needs-dependencies)
-subclass instead: `onError` also takes a class, resolved from the container, so it
-can inject the app's `Logger` and config. A middleware wrapping `next()` in a `try`
-is the scoped version.
+subclass instead. `onError` accepts a class and resolves it from the container.
+To handle errors for only some routes, write middleware that wraps `next()` in a
+`try`.
 
 CORS headers are applied _outside_ the mapper, so a mapped 500 still carries the
 headers the browser needs in order to display it.
@@ -506,10 +504,9 @@ this call could not take effect.
 
 A trade against the alternative, which is a silent no-op.
 
-`setGlobalPrefix` moves controller routes only. A WebSocket gateway path is the
-exact path it declared. The collision check re-runs on the prefixed paths, though
-a uniform prefix cannot introduce a collision the unprefixed paths lacked, so the
-early check at `create()` is already complete.
+`setGlobalPrefix` only moves controller routes. A WebSocket gateway keeps the
+exact path it declared. Duplicate routes are already reported at `create()`, and
+adding the same prefix to every route cannot create a new duplicate.
 
 `set` is typed against the `AppSettings` interface rather than being a string bag,
 so a typo is a compile error rather than a setting that silently never applies.
@@ -540,35 +537,32 @@ A route with **no middleware and no CORS** is dispatched by a handler in which
 nothing is `async`. It returns a `Response` rather than a `Promise<Response>`
 wherever it has nothing to wait for, and Bun accepts either.
 
-This is most of what closed the gap to Elysia. The general path is
+Every other route runs
 `async (req) => toResponse(await handler(await read(req)))` inside an `async`
-try/catch: four awaits across two async frames, on values that are usually not
-thenable.
+try/catch. That is four awaits across two async functions, usually on values that
+are not promises. Skipping them adds about 6 points of throughput, measured as a
+share of raw `Bun.serve`, on the `params` benchmark, and about 5 more on
+`validate`.
 
-Emitting the synchronous shape was worth about 6 points of raw `Bun.serve`
-throughput on the `params` scenario, and a further 5 on `validate` once it
-covered routes that read input.
+A route with no schemas, or with only `query` or `params` schemas, awaits nothing,
+because common Standard Schema validators are synchronous. A `body` route must
+wait for `req.json()`, and pays one promise step instead of six async functions.
+A handler or validator that returns a promise still works.
 
-A route with no declared schemas awaits nothing. Nor does one with only `query`
-or `params`, every Standard Schema validator worth using being synchronous. Even
-a `body` route, which must wait for `req.json()`, pays one promise link in place
-of six async frames. A handler or validator returning a promise still works and
-is adopted rather than awaited.
-
-**Adding middleware opts a route back into the async path**, middleware being
-`async` by contract. That includes request logging, which is on by default. A
-bare `next()`-only middleware measures 0.05 µs, and the 6 points the direct path
-wins on `params` do not reappear as a cost, since the request is already paying
-for everything else.
+**Adding middleware puts a route back on the async path**, because middleware is
+`async`. That includes request logging, which is on by default. A middleware that
+only calls `next()` costs 0.05 µs. The 6 points from the fast path do not come
+back as a cost, because such a request already pays for the rest of its
+middleware.
 
 What remains of dunx's own per-request cost is dispatch. A dunx route whose
 handler does its own parsing costs about 1.17 µs over the identical raw
 `Bun.serve` handler, and the declared-input reader adds nothing measurable on top
 of doing the same work by hand.
 
-Removing that last microsecond means generating per-route source and `eval`-ing
-it, which is Elysia's approach. At 1.3 µs on a request whose parse alone is
-2.9 µs, it is not the next thing worth doing.
+Removing that last microsecond would mean generating code per route and running
+it with `eval`, as Elysia does. dunx does not do this: the cost is 1.3 µs on a
+request whose parsing alone takes 2.9 µs.
 
 ## Request logging
 
@@ -582,7 +576,7 @@ request, unmatched paths included. Turn it off with
 [Validation](./06-validation.md) for the schemas a route declares.
 [Middleware and guards](./08-middleware-and-guards.md) for what runs around a handler.
 
-[WebSockets](./09-websockets.md) for gateways, which share the same
-`Bun.serve` call. [Providers](./03-providers.md) and [Modules](./04-modules.md)
-cover how a controller is constructed and grouped. The
-[`@dunx/http` reference](../../packages/http) covers the client-address resolver.
+[WebSockets](./09-websockets.md) covers gateways, which share the same `Bun.serve`
+server. [Providers](./03-providers.md) and [Modules](./04-modules.md) cover how
+controllers are built and grouped. The
+[`@dunx/http` reference](../../packages/http) documents the client-address resolver.

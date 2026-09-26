@@ -1,8 +1,8 @@
 # @dunx/example-databases
 
-Setting up `@dunx/infra/db` on **SQLite** (asynchronous *and* synchronous),
-**Postgres** and **MySQL**. The same three operations run against each, so the
-parts that differ are the only parts on screen.
+`@dunx/infra/db` set up on **SQLite** (asynchronous *and* synchronous),
+**Postgres** and **MySQL**. Each backend runs the same three operations, so only
+the setup changes between them.
 
 ```bash
 bun install
@@ -68,19 +68,18 @@ in an app that bound `BunSQLiteDatabase`.
 | `transaction(db, fn)`      | async or sync `fn`   | `Promise<T>` | savepoint   |
 | `transactionSync(db, fn)`  | **sync only**        | `T`          | savepoint   |
 
-`transaction()` on `bun:sqlite` issues `BEGIN`/`COMMIT`/`ROLLBACK` itself rather
-than delegating to drizzle. drizzle delegates to `bun:sqlite`'s wrapper, which
-commits as soon as the callback *returns its promise*, so every statement after
-the first `await` runs in autocommit and a later throw rolls back nothing.
+On `bun:sqlite`, `transaction()` sends `BEGIN`, `COMMIT` and `ROLLBACK` itself
+instead of using drizzle's transaction. drizzle's version uses `bun:sqlite`'s
+wrapper, which commits as soon as the callback *returns its promise*. Statements
+after the first `await` would then run outside the transaction, and a later throw
+would roll back nothing.
 
-`transactionSync()` **does** delegate, correctly: the whole failure is
-downstream of a callback that returns a promise, and this one cannot. An `async`
-callback is a compile error naming the constraint.
+`transactionSync()` uses drizzle's transaction directly. That is safe because the
+callback cannot return a promise: an `async` callback is a compile error.
 
-One wart: `transactionSync`'s return type is constrained to
-"not a promise", and that constraint's object branch is a TypeScript *weak type*.
-Returning an object or an array from the callback is rejected, even though it is
-not thenable. Return a scalar, or use the async `transaction()`.
+One limitation: the callback's return type must not be a promise, and TypeScript
+checks that with a *weak type* that also rejects objects and arrays, even though
+they are not thenable. Return a scalar, or use the async `transaction()`.
 
 ## Postgres
 
@@ -109,14 +108,14 @@ about forty lines.** [`mysql/driver.ts`](./src/mysql/driver.ts) is the whole of 
 `@dunx/infra` needed no change to accept it: `DbOptions.open()` is where a
 backend lives, so adding one is a new class rather than an edit to a dispatch table.
 
-The reasoning: drizzle 0.45.2's only Bun entrypoints are `bun-sql` (Postgres,
-it builds a `PgDialect` unconditionally) and `bun-sqlite`. Its MySQL drivers
-are `mysql2` and `mysql-proxy`. `mysql2` is a JavaScript reimplementation of a
-wire protocol Bun already speaks.
+drizzle 0.45.2 has two Bun drivers: `bun-sql`, which is Postgres only (it always
+builds a `PgDialect`), and `bun-sqlite`. Its MySQL drivers are `mysql2`, a
+JavaScript implementation of a protocol `Bun.SQL` already speaks, and
+`mysql-proxy`.
 
-`mysql-proxy` is drizzle's MySQL dialect with the transport left as a callback,
-so `Bun.SQL` supplies the transport, drizzle owns the SQL, and nothing pulls in
-`mysql2`.
+`mysql-proxy` is drizzle's MySQL dialect with the transport left to a callback.
+`Bun.SQL` sends the queries, drizzle builds the SQL, and `mysql2` is never
+installed.
 
 ```ts
 const db = drizzle(async (query, params, method) => {
@@ -128,18 +127,19 @@ const db = drizzle(async (query, params, method) => {
 }, { schema });
 ```
 
-Three details in that, all load-bearing and all found by running it:
+Three details in that callback matter:
 
-1. **`.values()` is mandatory** for `'all'`. drizzle's `mapResultRow` indexes rows
-   positionally, and `Bun.SQL`'s default object rows *lose columns on a join* -
-   selecting `users.id, users.name, posts.id, posts.name` comes back with two keys,
-   not four. A manual object-to-array conversion would be silently wrong.
+1. **`.values()` is required** for `'all'`. drizzle's `mapResultRow` reads row
+   values by position. `Bun.SQL`'s default object rows *lose columns on a join*:
+   selecting `users.id, users.name, posts.id, posts.name` returns two keys, not
+   four. Converting those objects to arrays yourself gives wrong rows and no
+   error.
 2. **`execute` has two shapes.** drizzle passes `'execute'` whenever the query
    carries no fields, which includes `db.execute(sql\`SELECT …\`)`. Without the
    `result.length > 0` branch those rows are discarded.
-3. **`insertId` goes in `rows[0]`** rather than at the top level, despite what
-   `RemoteCallback`'s type says - `session.js` reads `data[0].insertId`. Following
-   the declared signature breaks `$returningId()`. Bun's own property is
+3. **`insertId` goes in `rows[0]`**, not at the top level, even though
+   `RemoteCallback`'s type says otherwise. drizzle reads `data[0].insertId`, and
+   following the declared type breaks `$returningId()`. Bun's own property is
    `lastInsertRowid`.
 
 ```bash
@@ -175,11 +175,11 @@ server, failing with a bare "Connection closed". `PGURL` and
 Unaffected forms: `new Bun.SQL(urlString)`, `new Bun.SQL(new URL(url))`, and
 naming `adapter` explicitly. This example does the last two.
 
-**An in-flight MySQL query does not hold the event loop open.** A script with
-nothing else pending exits **silently with code 0** in the middle of a query - no
-error, no rejection, no output. A server never notices because `Bun.serve` holds a
-reference; a CLI does. [`main.ts`](./src/main.ts) holds one `setInterval` for the
-duration for this reason. Postgres and `bun:sqlite` are unaffected.
+**An in-flight MySQL query does not keep the process alive.** A script with
+nothing else pending exits **silently with code 0** in the middle of a query, with
+no error and no output. A server is not affected, because `Bun.serve` keeps the
+process alive. A CLI is, so [`main.ts`](./src/main.ts) holds one `setInterval`
+while it runs. Postgres and `bun:sqlite` are unaffected.
 
 ## Migrations
 

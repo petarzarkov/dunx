@@ -142,16 +142,17 @@ other error has:
 { "error": "CROSS_ORIGIN_REQUEST", "status": 403 }
 ```
 
-It is checked before the middleware chain, so no body is read, no guard runs,
-and request logging never sees it. It carries the security headers when those
-are on. The check costs 0.5 to 0.9 microseconds on an unsafe request, and
-nothing on a safe one, whose route entry is not wrapped.
+The check runs before any middleware. A refused request has no body read, runs
+no guard, and does not appear in request logging. The refusal still carries the
+security headers when those are on. The check costs 0.5 to 0.9 microseconds on an
+unsafe request, and nothing on a safe one.
 
-A refusal writes a `warn` line through the bound `Logger`, at most one a
-second, on a window of its own: a flood of refusals does not hide a scan of
-unmatched paths, which request logging throttles the same way
-([Logging](./13-logging.md#one-entry-per-request)). The next line written
-carries `suppressed`, the refusals dropped since the last one:
+A refusal writes a `warn` line through the bound `Logger`, at most one a second.
+Request logging limits unmatched paths the same way
+([Logging](./13-logging.md#one-entry-per-request)), but the two limits are
+separate, so a flood of refusals does not hide a scan of unmatched paths. The next
+line written carries `suppressed`, the number of refusals dropped since the last
+one:
 
 ```ts
 logger.warn('CSRF refused POST /things', {
@@ -188,9 +189,9 @@ case.
 | A gateway's upgrade, `101` or `426` | The upgrade route is not wrapped; neither is a page |
 | `bunx dunx-email preview`           | A separate loopback server, not the app             |
 
-better-auth sets none of these headers itself; its routes are dunx routes, so
-they get them. So does a response replayed by `@Idempotent()`
-([Idempotency](./33-idempotency.md)), which is built inside the chain the wrapper covers.
+better-auth's routes are dunx routes, so they get these headers, although
+better-auth sets none itself. A response replayed by `@Idempotent()`
+([Idempotency](./33-idempotency.md)) gets them too.
 
 A cookie's own attributes, `Secure`, `HttpOnly` and `SameSite`, and signing one
 are in [Cookies](./35-cookies.md).

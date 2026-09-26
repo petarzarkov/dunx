@@ -1,13 +1,11 @@
 # Authentication
 
-**better-auth is the authentication system.** `@dunx/auth` is the wiring around it
-and nothing else: no sign-in flow, no session table, no password reset, no OAuth
-dance.
+Authentication in dunx is better-auth. `@dunx/auth` connects it to the app and
+adds no sign-in flow, session table, password reset or OAuth handling of its own.
 
-That is not a close call. An auth system is years of edge cases, and a half-built
-one is a liability dressed as a feature. What `@dunx/auth` contributes is the
-module, the mount, a guard that reads `@dunx/http`'s existing metadata, the caller
-in async context, and two Bun-native adapters.
+`@dunx/auth` gives you a module, the route that serves better-auth's endpoints, a
+guard that reads `@dunx/http`'s `@Public()` and `@Roles()`, the current caller in
+async context, and two Bun-native adapters.
 
 ```bash
 bun add better-auth
@@ -72,9 +70,9 @@ AuthModule.forRoot({
 });
 ```
 
-`const O` on `forRoot`'s type parameter is load-bearing: it keeps the literal
-`plugins` tuple that `betterAuth()` infers the plugin endpoints from, and
-therefore what `Auth<typeof options>` resolves to at an injection site.
+`forRoot` keeps the exact type of your `plugins` array. better-auth uses it to
+type each plugin's endpoints, so `Auth<typeof options>` at an injection site
+includes them.
 
 ### What it binds
 
@@ -93,10 +91,10 @@ guards the whole app or one controller is the app's decision to make.
 
 ### Reaching the caller from a second module
 
-`AuthModule` exports those four tokens **to the module that imported it**, which is
-the `AccountsModule` above. A second feature module that injects `AuthContext` gets
-a boot error, and calling `forRootAsync` again there would build a second
-better-auth against a second session store.
+`AuthModule` exports those four tokens only **to the module that imports it**, here
+`AccountsModule`. If a second feature module injects `AuthContext`, boot fails. Do
+not call `forRootAsync` again there: that builds a second better-auth with a
+second session store.
 
 Pass them on instead, the way any module re-exports what it imported:
 
@@ -109,12 +107,11 @@ Pass them on instead, the way any module re-exports what it imported:
 export class AccountsModule {}
 ```
 
-Now `imports: [AccountsModule]` reaches them. Add `global: true` to that options
-object when enough modules need the caller that naming the import everywhere is the
-larger cost.
+Any module with `imports: [AccountsModule]` can now inject them. If most modules
+need the caller, add `global: true` to that options object instead of importing
+`AccountsModule` everywhere.
 
-The boot error names both fixes and the module that has the binding, so getting
-this wrong is a one-read fix rather than a hunt:
+The boot error names the module that has the binding and both fixes:
 
 ```
 Cannot resolve Auth in module "UsersModule". "AuthModule" declares it, but
@@ -142,11 +139,9 @@ export class AuthHandler {
 }
 ```
 
-`Bun.serve({ routes })` matches `<basePath>/*` **natively**, verified on Bun
-1.3.14, including that it does not match the bare `<basePath>`, which better-auth
-has no endpoint at. So Bun is still the router: there is no JavaScript dispatch
-table in front of it, and dunx does not restate, wrap or re-dispatch a single one
-of better-auth's endpoints.
+`Bun.serve({ routes })` matches `<basePath>/*` itself (checked on Bun 1.3.14). It
+does not match the bare `<basePath>`, where better-auth has no endpoint anyway.
+dunx adds no router of its own and does not wrap any of better-auth's endpoints.
 
 All five verbs are mounted because a plugin may declare any of them; better-auth's
 own endpoints are `GET` and `POST`. The `Response` is returned untouched, which is
@@ -156,10 +151,9 @@ what keeps `Set-Cookie` headers and redirects intact.
 `SessionGuard` would demand a session from the sign-in endpoint, and no session
 could ever be created.
 
-The controller `AuthModule` registers is a **subclass** created in `forRoot`,
-rather than `@Controller(...)` on `AuthHandler` itself, because the prefix is only
-known once the module is configured, and mutating the shared class from a factory
-would make two configurations fight over one prefix.
+`forRoot` registers a new **subclass** of `AuthHandler` with the configured
+prefix. `AuthHandler` itself has no `@Controller(...)`, so two configurations never
+share one prefix.
 
 ### `basePath` and `mountAt`
 
@@ -184,12 +178,11 @@ app.setGlobalPrefix('api');
 
 The common case, no prefix, uses neither.
 
-`mountAt` is a **synchronous** second argument on `forRootAsync` for the same
-reason `DbModule.forRootAsync` takes its token positionally: the mount is a route
-in Bun's table, and that table is built before any factory has run. Omitting it
-while the factory returns a non-default `basePath` is a boot error, because that
-combination could only ever have mounted the handler where better-auth is not
-looking.
+On `forRootAsync`, pass `mountAt` as the second argument. The factory cannot
+return it, because the route table is built before any factory runs.
+`DbModule.forRootAsync` takes its token the same way. If the factory returns a
+non-default `basePath` and you pass no `mountAt`, boot fails: the handler would be
+mounted at a path better-auth does not use.
 
 A wrong **explicit** `mountAt` cannot be known at boot, since the final path is
 only settled once `listen()` has applied the global prefix. So `AuthHandler`
@@ -213,20 +206,13 @@ export class Profiles {
 }
 ```
 
-The type argument is the `DbModule` trick again: the token is the erased class, so
-`Auth<typeof authOptions>` at an injection site keeps the plugin-widened `api`
-while still resolving the one binding. Written bare, `Auth` carries better-auth's
-core endpoints only.
+Write `Auth<typeof authOptions>` at an injection site to get the endpoints your
+plugins add to `api`. The type argument does not change which binding is
+injected. Plain `Auth` has better-auth's core endpoints only.
 
-Measured: assigning `betterAuth(opts)` to `Auth<typeof opts>` typechecks, and
-widening `Auth<O>` to `Auth<BetterAuthOptions>` does not, because `$context` is
-invariant through `PluginContext<O>`. So the module narrows the token variable
-rather than widening the value.
-
-`Auth`'s constructor throws when `new.target` is `Auth` itself. Every class
-self-binds in the container, so an unbound abstract token would otherwise resolve
-to an object whose every member is `undefined`, and the first symptom would be
-`auth.handler is not a function` deep inside a request.
+`new Auth()` throws. Without `AuthModule` bound, the container would otherwise
+create an empty `Auth` whose members are all `undefined`, and you would first see
+`auth.handler is not a function` in the middle of a request.
 
 ## `SessionGuard`
 
@@ -344,21 +330,16 @@ const isAdmin = this.auth.require<typeof authOptions>().user.role === 'admin';
 `AuthContext` owns its own `AsyncLocalStorage<Principal>`, separate from
 `@dunx/core`'s `RequestContext`.
 
-`AsyncLocalStorage` at all, for the same reason core's `RequestContext` uses it:
-a Node built-in Bun implements natively, and the only mechanism that gets a value
-from middleware to a service three constructor hops away without passing it.
+`AsyncLocalStorage` makes the caller available to any service the handler calls,
+without passing it as an argument. Bun implements it natively. A principal stored
+on `req` would reach only the handler, and dunx has no request-scoped providers.
 
-Both alternatives were worse. Request-scoped DI was measured and rejected, and
-hanging the principal off `req` reaches a route handler but nothing a route
-handler calls.
+It is a separate store because every field in `RequestContext` is written into
+every log line of the request. A session object there would clutter each line and
+could leak into logs.
 
-A **second** store rather than a key in `RequestContext`, because that store is
-the log record. Every field in it is serialized into every line the request
-writes, so a session object there would be noise on each entry and a redaction
-hazard in the ones that matter.
-
-What does go there is `userId`, a well-known `RequestFields` key, written by
-`run()`. So the log lines are correlated without carrying the principal. See
+`run()` does write `userId`, a standard `RequestFields` key, into
+`RequestContext`, so log lines can be matched to a user. See
 [Logging](./13-logging.md).
 
 ## `Bun.password` hashing
@@ -413,14 +394,13 @@ AuthModule.forRootAsync({
 });
 ```
 
-Nothing here connects. The point is that the app keeps **one** pool, one SQLite
-handle and one shutdown path, instead of better-auth opening a second.
+`drizzleDatabase` opens no connection. better-auth uses the app's pool or SQLite
+handle, and shuts down with it.
 
-The `provider` comes from the connection's own dialect, so swapping `bun:sqlite`
-for `Bun.SQL` needs no edit at the call site. The schema does not have to be
-passed either: `@dunx/infra/db` builds its handle with `drizzle({ client, schema })`
-and the adapter reads `db._.fullSchema`, so the better-auth tables being in the
-app's schema object is the whole requirement.
+The adapter detects the dialect from the connection, so switching from
+`bun:sqlite` to `Bun.SQL` needs no change here. It also reads the schema from the
+drizzle handle, so you do not pass one. Add the better-auth tables to the schema
+object you gave `@dunx/infra/db`.
 
 It lives on **its own subpath** because it imports
 `better-auth/adapters/drizzle`, which imports `drizzle-orm`. On the main entry
@@ -486,28 +466,13 @@ export interface RedisStore {
 }
 ```
 
-An `@dunx/infra/db` connection satisfies the first with no adapter in between, and
-a `RedisConnection` satisfies the second because its parameters are wider, which
-is the assignable direction. A bare `drizzle({ client, schema })` handle works
-too, and a test double is six methods instead of a whole surface.
+You can pass an `@dunx/infra/db` connection or a `RedisConnection` directly. Both
+already match these interfaces, and so does a bare `drizzle({ client, schema })`
+handle. A test double for `RedisStore` needs only six methods.
 
-Two reasons, and the second is the concrete one.
-
-**The web layer boundary.** `@dunx/auth` is its own package because the guard is
-`@dunx/http` middleware and reads `@dunx/http`'s `PUBLIC` and `ROLES` metadata
-keys.
-
-`@dunx/infra` must not depend on the web layer: it is what a CLI script, a seeder
-or a queue worker imports, and none of those have an HTTP server. A package that
-pulled `@dunx/http` in behind `@dunx/infra/db` would put a route table in every
-one of them. The dependency runs the other way, and `@dunx/auth` depends on
-`@dunx/infra` **not at all**.
-
-**A build-order race.** `@dunx/infra` as a `devDependency` of `@dunx/auth` is not
-an edge `bun run --filter '*'` orders on, so `tsc --emitDeclarationOnly` in
-`@dunx/auth` ran against a `packages/infra/dist` that had just been `rm -rf`'d.
-Type-only imports would not have helped, because tsc needs the `.d.ts` either
-way. Restating **removed the edge** instead of sequencing it.
+`@dunx/auth` does not depend on `@dunx/infra`. It depends on `@dunx/http`, because
+the guard is HTTP middleware. `@dunx/infra` does not depend on `@dunx/http`,
+because CLI scripts, seeders and queue workers use it without an HTTP server.
 
 ## No schema
 
@@ -537,4 +502,4 @@ those tables by hand:
 - [Logging](./13-logging.md) for the `RequestContext` that carries `userId`
 - [Configuration](./12-configuration.md) for `forRootAsync` and `AppConfigService`
 - [Security](./32-security.md#cross-site-requests) for `csrf`, which checks the auth routes ahead of better-auth's own origin check
-- `packages/auth/README.md` for the full API surface
+- The `@dunx/auth` README for the full API

@@ -56,9 +56,9 @@ the same way; the split exists so an HTTP adapter can ask which instances to sca
 The only behavioural consequence: a class in `controllers` that declares no
 routes is a boot error telling you to move it to `providers`.
 
-A `controllers` entry is a bare class. A `providers` entry is a bare class, which
-binds it to itself, or a `Registration` from `provide()` - `providers` is the only
-list whose type admits one. See [Providers](./03-providers.md) for the shapes.
+A `controllers` entry is always a class. A `providers` entry is either a class,
+registered under itself, or a `Registration` from `provide()`. Only `providers`
+accepts a `Registration`. See [Providers](./03-providers.md) for the shapes.
 
 ## How a token resolves
 
@@ -71,10 +71,10 @@ For a provider declared by module `M`, asking for a token:
    self-binds into `M`'s scope.
 5. Otherwise it is a boot error, and the message names the fix.
 
-Step 4 tests the whole graph, not what `M` can see. A class some other module
-declares but does not export to `M` is a boot error naming that module. Self-binding
-it instead would hand `M` a second instance of a provider somebody already
-configured, which is the bug the check exists to catch.
+Step 4 checks every module in the app, including ones `M` cannot see. If another
+module declares the class but does not export it to `M`, boot fails and the error
+names that module. Registering it in `M` would give `M` a second, unconfigured
+instance of a provider that already exists.
 
 **Local shadows imported.** If `M` declares a token an import also exports, `M`'s
 binding wins. This per-module rebinding is why the scope boundary exists: a
@@ -126,10 +126,9 @@ with no import needed. Its private providers stay private.
 export class ClockModule {}
 ```
 
-A **field**, with no `@Global()` decorator beside it. A `DynamicModule` would
-need the field anyway, so a decorator would be a second spelling for one idea.
-`ConfigModule.forRoot` sets it, configuration being the one thing every module
-reads.
+`global` is a field in the module options. There is no `@Global()` decorator, so a
+`DynamicModule` and a decorated module set it the same way. `ConfigModule.forRoot`
+sets it for you.
 
 Global is the weakest source: an import beats it, and a local declaration beats both.
 
@@ -144,10 +143,9 @@ and "ReportsModule" imports that module, but it does not export UsersRepository.
 UsersRepository to that module's exports, or move the provider into "ReportsModule".
 ```
 
-A dependency declared through `token()` gets one clause more, naming the class that
-asked: `Cannot resolve Dsn for DataService in module "DataModule"`. A class token
-does not, because the container re-raises the original error for those rather than
-rewriting it.
+When the missing dependency is a `token()`, the message also names the class that
+asked for it: `Cannot resolve Dsn for DataService in module "DataModule"`. A missing
+class does not get this clause. The container passes that error on unchanged.
 
 A token declared by a module you do **not** import says so instead, and names the
 `imports` line to add. A token nothing declares says that, rather than blaming the
@@ -182,8 +180,8 @@ that throws. [Middleware and guards](./08-middleware-and-guards.md) has the full
 
 ## Two modules binding one token
 
-Under scopes this is legal - it is the rebinding the boundary exists to allow - so the
-old blanket duplicate check split into one error and two warnings:
+Two modules may bind the same token. Only a duplicate inside one module fails boot,
+and two cases log a warning:
 
 | Case                                                   | What happens                        |
 | ------------------------------------------------------ | ----------------------------------- |
@@ -192,10 +190,9 @@ old blanket duplicate check split into one error and two warnings:
 | A module declaring what an import also exports to it   | legal, and **warned once** at boot  |
 | A module importing it from **two** modules that differ | legal, last import wins, and warned |
 
-The warnings are on `app.warnings` and logged at boot. They exist because "my
-override is not being used" is otherwise unexplainable; Nest is silent here and it
-costs people hours. A diamond - two imports that re-export the _same_ binding - stays
-silent, because there is only one answer.
+The warnings are logged at boot and kept on `app.warnings`. They tell you when an
+override is not the instance being used. Two imports that re-export the _same_
+binding (a diamond) produce no warning, since both give the same instance.
 
 ```
 Module "ReportsModule" declares Clock, which module "ClockModule" also exports to
@@ -233,10 +230,9 @@ dependent regardless of where either was registered, because resolution recurses
 Registration order decides the rest, which is everything not pinned by a
 dependency edge. Teardown reverses construction completion order exactly.
 
-Visiting each reference once is what makes two other shapes work. A diamond, where
-two modules both import `SharedModule`, gives one scope that both see. A cycle in
-the import graph terminates instead of recursing, and is legal - a module cycle is
-not a provider cycle, and only the second is an error.
+If two modules both import `SharedModule`, they share one `SharedModule` scope.
+A cycle in the import graph is allowed and does not loop. A cycle between
+providers is still a boot error.
 
 **Deduplication is per reference rather than per module identity.** A bare class
 is one reference however many modules import it, and the same `DynamicModule` _object_
@@ -253,9 +249,8 @@ same module are two objects, and each gets **its own scope**:
 class Root {}
 ```
 
-Two scopes, two `Options` bindings, two `Store` instances. Under the flat
-container this was a duplicate-binding error. The importer above sees `Store`
-exported from both, so it is warned that the last one wins:
+Each configuration gets its own `Options` and its own `Store` instance. `Root`
+imports `Store` from both, so boot warns that the last import wins:
 
 ```
 Module "Root" imports Store from both "StoreModule" and "StoreModule". The last
@@ -285,9 +280,9 @@ class Root {
 await AppFactory.create(Root.dyn());
 ```
 
-That matches the convention, and it is the reason the warning above fires most often:
-a `ConfigModule.forRoot()` in the decorator's `imports` and another in the static's
-is two configurations of one module. Put it in one place or the other.
+This is the most common cause of the warning above. A `ConfigModule.forRoot()` in
+the decorator's `imports` and another in the static factory's `imports` are two
+configurations of one module. Put it in one place only.
 
 ## Dynamic modules
 
@@ -358,9 +353,9 @@ The `forRootAsync` pattern exists to build a module's options from other injecte
 providers, asynchronously. It needs a distinct mechanism because a container resolves
 lazily and has to defer.
 
-**dunx has no such mechanism, and does not need one.** Resolution is eager and
-every async factory is settled before any constructor runs, so "options computed
-from another provider" is already just a provider:
+**dunx needs no special mechanism for this.** It resolves everything at boot and
+awaits every async factory before any constructor runs, so options computed from
+another provider are just another provider:
 
 ```ts
 import {
@@ -392,18 +387,16 @@ export class MailerModule {
 }
 ```
 
-Two lines differ. There is no deferred-options token, no `ASYNC_OPTIONS_TYPE`, no
-second code path in the module, and the container does not know the difference.
+Only two lines differ from `forRoot`. You need no options token, no
+`ASYNC_OPTIONS_TYPE` and no second code path.
 
-`AsyncModuleConfig` is `FactoryProvider` plus an `imports` field, and that field is
-there because of scoping: the factory is **written** at the call site but **runs** in
-the configured module's scope, so whatever it injects has to be visible from there.
-`ConfigModule` is `global: true`, so the common case needs nothing; a factory reading
-some other module's export passes `imports: [ThatModule]`.
+`AsyncModuleConfig` is a `FactoryProvider` plus an `imports` field. You write the
+factory where you import the module, but it runs inside that module. Anything it
+injects must be visible from there. `ConfigModule` is global, so a factory that only
+reads config needs no `imports`. A factory that injects another module's export
+needs `imports: [ThatModule]`.
 
-So why does the name exist at all? Because reading options off `ConfigService` is
-the one thing a zero-argument options object cannot do, and `forRootAsync` is the
-conventional name for that.
+Use `forRootAsync` when the options come from `ConfigService` or another provider.
 
 Every framework module that takes options has one alongside its `forRoot`, except
 `ConfigModule`, which is what the factories read from:
@@ -428,9 +421,8 @@ Every framework module that takes options has one alongside its `forRoot`, excep
 export class InfraModule {}
 ```
 
-The `useFactory` may be `async`. By the time any repository's constructor runs,
-the connection is open and its options applied. That guarantee is what removes the
-second mechanism.
+The `useFactory` may be `async`. The connection is open, with its options applied,
+before any repository's constructor runs.
 
 One shipped variant takes an extra first argument. Check it before writing your
 own:
@@ -447,10 +439,10 @@ DbModule.forRootAsync(SyncDatabase, {
 });
 ```
 
-The token comes first because _which_ drizzle class the database binds to only
-becomes knowable once the options factory has run, which is too late to register a
-provider under it. If your own module's token depends on its own options, you have
-the same problem and the same fix.
+The token is its own argument because a module registers its providers before any
+factory runs. By the time the options exist, it is too late to choose which drizzle
+class to bind. If your module's token depends on its options, take the token as an
+argument too.
 
 ## `ConfigModule`, end to end
 
@@ -526,22 +518,19 @@ ConfigModule.forRoot({ validate, source: { PORT: '0' } });
 export class AppConfigService extends ConfigService<AppConfig> {}
 ```
 
-Without it, `inject: [ConfigService]` resolves to
-`ConfigService<Record<string, unknown>>` and a factory annotating
-`ConfigService<AppConfig>` is rejected: parameters are contravariant and the
-token carries no type argument to recover.
+Without it, `inject: [ConfigService]` is typed as
+`ConfigService<Record<string, unknown>>`, and TypeScript rejects a factory whose
+parameter is `ConfigService<AppConfig>`. The token has no type argument, so the
+type cannot be recovered.
 
-A subclass is a distinct runtime value, so it serves as both a precise token and
-a usable constructor annotation. `ConfigService` stays bound to the same instance
-through an alias provider, so library code that knows only the base contract
-still injects.
+The subclass is a real class, so it works both as the token and as the constructor
+parameter type. `ConfigService` is bound to the same instance, so code that injects
+the base class still works.
 
-There is no `isGlobal` to pass, because `ConfigModule.forRoot` already sets
-`global: true` and exports both `ConfigService` and whatever `as` names.
-Configuration is the one thing every module reads, so making each of them import it
-would be ceremony with no boundary behind it. And there is no
-`ConfigModule.forRootAsync`, because eager resolution settles an async `validate`
-before any constructor runs.
+There is no `isGlobal` option. `ConfigModule.forRoot` always sets `global: true`
+and exports both `ConfigService` and the class named in `as`, so no module has to
+import it. There is also no `ConfigModule.forRootAsync`: an async `validate` is
+awaited before any constructor runs.
 
 ## The root module, and what wraps it
 
@@ -551,20 +540,20 @@ in order to bind `PubSub`, `ClientAddress` and, unless you turned it off,
 `RequestLoggingMiddleware`. That wrapper is why those are injectable in an
 application that imported nothing.
 
-`ClientAddress` is bound rather than left to self-bind because an unbound class
-self-binds into whichever scope asks first: `listen()` would attach the live server
-to one instance while a second module's middleware injected another, and
-`app.clientIp(req)` would throw on an instance that never got a server.
+`ClientAddress` has to be bound by the wrapper. An unlisted class is registered in
+whichever module asks for it first, so two modules could get two instances.
+`listen()` would give the live server to one of them, and `app.clientIp(req)` on
+the other would throw.
 
-The wrapper is invisible to the boundary. Global middleware, `@UseGuards` classes
-and an error filter all resolve as **your** root sees them, so listing a guard in
-`HttpFactory.create` never obliges your root to re-export it. Anything named
-there is found in the one module that declares it, and two modules declaring it
-is an error. `app.get()` resolves the same way.
+Global middleware, `@UseGuards` classes and error filters are looked up from
+**your** root, as if the wrapper were not there. A guard passed to
+`HttpFactory.create` does not need to be exported by your root. It is found in the
+module that declares it, and boot fails if two modules declare it. `app.get()` looks
+classes up the same way.
 
-The same technique is available to you. `OpenApiModule.forRoot({ root: AppModule, ... })`
-wraps the root it documents, so `create()` is still handed one module reference and
-the generated document's own routes are discovered with the rest:
+A module can wrap your root too. `OpenApiModule.forRoot({ root: AppModule, ... })`
+takes your root and returns one module to pass to `create()`. The routes that serve
+the generated document are registered along with yours:
 
 ```ts
 const app = await HttpFactory.create(

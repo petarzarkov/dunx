@@ -45,10 +45,10 @@ extra module tacked on the end that wins; it replaces the binding **in every
 scope that holds it**, so a test stubbing a collaborator need not know how many
 modules bind it. Three consequences:
 
-- **The discarded provider is never constructed.** The replacement happens before
-  anything resolves, so its constructor never runs, its `onInit` never fires, and
-  overriding a database opens no connection. The test binds a class whose
-  constructor throws and then overrides it; the suite passes.
+- **The replaced provider is never constructed.** Overrides are applied before
+  anything resolves, so its constructor and `onInit` never run, and overriding a
+  database opens no connection. The test overrides a class whose constructor
+  throws, and passes.
 - **An override naming a `token()` nobody binds is an error** rather than a silent
   no-op - the failure mode where a typo leaves you asserting against the real
   provider.
@@ -127,6 +127,6 @@ const ws = new WebSocket(`${server.url.replace('http', 'ws')}chat`);
 
 ## Databases in tests
 
-Not this package's surface. `@dunx/infra/db` binds an in-memory `bun:sqlite` with
-the same driver as production, which is a better fixture than a mock -
-[`examples/databases`](../databases) sets that up.
+`@dunx/testing` does not cover databases. Use `@dunx/infra/db` with an in-memory
+`bun:sqlite`, which runs the same driver as production.
+[`examples/databases`](../databases) shows the setup.

@@ -99,14 +99,11 @@ export interface RouteSchemas {
 }
 ```
 
-**Declaring a schema is what makes the matching field appear.** Omit `query` and
-the framework never parses a query string; omit `body` and it never reads the
-request stream. There is no "validate everything by default" mode and no global
-pipe to turn off. An undeclared source is untouched code rather than skipped
-code.
+**A field appears in the handler's input only when you declare its schema.** Omit
+`query` and the query string is never parsed. Omit `body` and the request body is
+never read. There is no global validation to turn off.
 
-`response` is the exception that proves the rule, and the one key here the request
-path never reads:
+`response` is the one key the request path never reads:
 
 ```ts
 export const oneUser = {
@@ -131,11 +128,10 @@ one({ params }: Input<typeof oneUser>): { id: number } {
 }
 ```
 
-Four things that follow. Only the success status is checked, since a 404 body
-leaves through a thrown `HttpError` that no return type describes. A `Response` is
-always allowed. A `readonly User[]` satisfies a schema inferring `User[]`, because
-mutability does not survive serialisation. And returning nothing is a 204, so it
-fails against a declared 200 body.
+Only the success status is checked, because a 404 is sent by throwing an
+`HttpError`, not by returning. A `Response` is always allowed. A `readonly User[]`
+satisfies a schema that infers `User[]`. Returning nothing sends a 204, so it fails
+against a declared 200 body.
 
 `response` does not appear in `Input<O>`: nothing about it reaches the handler.
 
@@ -187,9 +183,8 @@ repeated key becomes an array:
 ?tag=a         ->   { tag: 'a' }
 ```
 
-That is deliberate: dropping `a` silently is the behaviour a schema can never
-recover from. If a field is single-valued, say so in the schema and a repeated key
-becomes a 400 rather than a surprise.
+No value is dropped. If a field takes one value, declare it as a single value in
+the schema, and a repeated key gets a 400.
 
 The query string is sliced out of `req.url` by hand rather than through
 `new URL(req.url)`. Constructing a `URL` resolves scheme, host, port, path and
@@ -226,10 +221,9 @@ call:
 export const UserIndex = z.object({ id: z.coerce.number().int().min(1) });
 ```
 
-`z.coerce.number()` turns `"42"` into `42` before `.int().min(1)` runs, so by the
-time the handler executes `params.id` is a `number` at runtime **and** in
-the type, because `Input<>` reads the schema's _output_ type rather than its
-input:
+`z.coerce.number()` turns `"42"` into `42` before `.int().min(1)` runs. In the
+handler, `params.id` is a `number` at runtime **and** in the type, because
+`Input<>` uses the schema's _output_ type:
 
 ```ts
 @Get('/:id', oneUser)
@@ -315,9 +309,9 @@ const createNote: RouteSchemas = { body: CreateNote };
 const createNote = { body: CreateNote } as const satisfies RouteSchemas;
 ```
 
-Dropping `as const` alone does not lose the body type; it only widens `status` to
-`number`. Options passed inline need neither, because the decorator's own
-`const O` type parameter stops them widening on the way in.
+Without `as const` the body type is kept, but `status` widens to `number`.
+Options written inline in the decorator need neither, because the decorator infers
+their exact type.
 
 `InferOutput<S>` is exported separately for the times a service signature needs
 the same type: `InferOutput<typeof CreateUser>` is `{ name: string }`.
@@ -345,11 +339,11 @@ value is the one that knows why.
 
 Three properties of that shape:
 
-- **`error` names the source.** `Invalid body`, `Invalid query` or
-  `Invalid params`, so a caller can tell a bad payload from a bad page size.
-- **The issues survive into the response.** A caller cannot fix what it cannot
-  see. This is the one place the framework echoes request detail back to the
-  caller, a 400 being by definition the caller's own input.
+- **`error` names the source:** `Invalid body`, `Invalid query` or
+  `Invalid params`.
+- **The issues are included in the response.** This is the only place dunx sends
+  request details back to the caller, since they describe the caller's own
+  input.
 - **`path` is flattened to dots**, and absent when the root itself failed.
   Standard Schema lets a vendor report a path as bare keys (zod) or as
   `{ key }` objects (Valibot); both are normalised here to a single string.
@@ -367,10 +361,9 @@ Replace all of it by passing `onError` to `HttpFactory.create`; see
 
 ## Vendor-specific features sit behind a vendor check
 
-Standard Schema validates. It says nothing about describing, serialising or
-converting a schema, so there is no vendor-neutral way to turn one into JSON
-Schema. `@dunx/openapi` needs exactly that, and resolves it with the one
-piece of vendor information the interface does carry:
+Standard Schema only covers validation. It has no way to turn a schema into JSON
+Schema, which `@dunx/openapi` needs. So `@dunx/openapi` checks which library made
+the schema, the one vendor detail the interface includes:
 
 ```ts
 export const vendorOf = (schema: StandardSchemaV1): string =>

@@ -39,10 +39,10 @@ Constructor injection needs no decorator and no `@Inject()`, because
 `@dunx/transform` reads each class's constructor parameter types at load time and
 records them for the container. The preload is how it runs.
 
-Leave it out and boot fails with an error naming the class and telling you to add
-it - never a silent `undefined`. The same is true for a parameter whose type is
-erased (an interface, a primitive, a union): that is a boot error naming the
-parameter. `emitDecoratorMetadata` has this wart; dunx does not.
+Leave it out and boot fails with an error that names the class and tells you to
+add the preload. A parameter whose type is erased (an interface, a primitive, a
+union) also fails at boot, and the error names the parameter. You never get a
+silent `undefined`.
 
 ## A provider
 

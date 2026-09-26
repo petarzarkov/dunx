@@ -123,11 +123,10 @@ largest single component of request logging, more than the `JSON.stringify` that
 produced the line. One concatenated write per event-loop turn removes most of it;
 the figures are in [the cost of request logging](../architecture/cost-of-logging.md).
 
-The trade matters: **a line still sitting in the buffer is lost if the process
-dies without unwinding** - a `SIGKILL`, an OOM kill, a segfault - and a crash is
-when the log is needed most.
+The cost: **a line still in the buffer is lost if the process dies without
+unwinding**, for example on a `SIGKILL`, an OOM kill or a segfault.
 
-Three things bound it:
+Three things limit the loss:
 
 - **`warn`, `error` and `fatal` are never buffered.** They go out immediately and
   **flush everything queued ahead of them**, so the entries you go looking for
@@ -147,9 +146,8 @@ loggers' lines.
 
 ## `RequestContext` and `AsyncRequestContext`
 
-The second contract in core. It is what carries `traceId` from the middleware
-that adopted it down to a service three constructor hops away, without anything
-being passed:
+The second contract in core. It holds per-request fields such as `traceId`, so
+any service can read them without the value being passed down:
 
 ```ts
 export abstract class RequestContext {
@@ -211,15 +209,14 @@ import { LoggerModule } from '@dunx/infra/logger';
 export class AppModule {}
 ```
 
-No adapter class sits between them. `@arkv/logger`'s `Logger` already declares
-`logLevel` and all six levels with the same overloads, so it satisfies the
-contract structurally, and the binding is a `provide` with nothing in the middle.
-The same holds for context: arkv's `ContextStore` satisfies `RequestContext`
-structurally, so `LoggerModule` binds one to the other directly.
+There is no adapter class. `@arkv/logger`'s `Logger` has `logLevel` and all six
+levels with the same overloads, so it is bound to core's `Logger` directly.
+arkv's `ContextStore` matches `RequestContext` the same way, and `LoggerModule`
+binds it to that token too.
 
-That last point is load-bearing rather than tidy. Without it, `@dunx/http`'s
-request logging would write a `traceId` into core's default store while
-`@arkv/logger` read its own, and no entry would carry one.
+The context binding is required. Without it, `@dunx/http`'s request logging
+would write `traceId` into core's default store, `@arkv/logger` would read its
+own store, and no entry would carry a `traceId`.
 
 ### What it binds
 
@@ -231,10 +228,8 @@ request logging would write a `traceId` into core's default store while
 | `BackingLogger`  | The `@arkv/logger` instance, typed as the implementation |
 | `Logger`         | The same instance, typed as core's contract              |
 
-`BackingLogger` reaches the three things the contract omits: `child(bindings)`,
-`flush()` and `close()`. Core's `Logger` covers the six levels and nothing else,
-so an app wanting a child logger asks for the implementation by name instead of
-every app carrying a wider contract.
+Core's `Logger` has only the six levels. Inject `BackingLogger` when you need
+`child(bindings)`, `flush()` or `close()`.
 
 ### Reading the level off config
 
@@ -286,15 +281,14 @@ const fileAndConsole = (path: string): Transport[] => [
 ];
 ```
 
-`FileTransport` buffers, which is safe here because `LoggerModule` registers a
-lifecycle provider that drains it from `onShutdown`. That hook runs late:
-`App.shutdown` walks instances in reverse resolution order and the logger resolves
-before anything that depends on it, so services can still log while they close.
+`FileTransport` buffers. `LoggerModule` drains it in `onShutdown`, and that runs
+after the services that depend on the logger have shut down, so they can still
+log while they close.
 
-It drains with `closeAsync`, and the await matters for anything reached over a
-network. A file is written synchronously and either form finishes it; a collector
-cannot answer synchronously at all, so a plain `close()` discards whatever it was
-holding and every deploy loses its last batch.
+The drain uses `closeAsync` and awaits it. That matters for network transports:
+a plain `close()` cannot wait for a collector to answer, so it would drop the
+last batch on every deploy. A file is written synchronously, so either call
+finishes it.
 
 ### Shipping somewhere other than a file
 
@@ -311,10 +305,11 @@ new HttpTransport({
 });
 ```
 
-`encode` is the seam: Datadog wants a JSON array, Splunk HEC concatenated objects,
-Loki streams and values. `SyslogTransport` speaks RFC 5424 over UDP or TCP, and
-anything else that batches is a subclass of `BatchTransport`, which owns the
-bounded queue, the retry and the drop accounting.
+Set `encode` to match the collector's body format: a JSON array for Datadog,
+concatenated objects for Splunk HEC, streams and values for Loki.
+`SyslogTransport` sends RFC 5424 over UDP or TCP. For any other batching sink,
+subclass `BatchTransport`; it handles the bounded queue, retries and counting
+dropped entries.
 
 `SamplingTransport` wraps another transport to thin what reaches it. Warnings and
 worse are never sampled, and every discard is announced in the stream rather than
@@ -368,11 +363,9 @@ final path and every gateway with the messages it claims:
 }
 ```
 
-This is the answer to "is my route registered"; a service that logs nothing at
-boot cannot answer it from production. Nest emits a line per controller and a
-line per route to say the same thing. One structured entry carries the same
-content in the shape a collector wants, and it is what `WorkerFactory` already
-does for the consuming side, with `Consuming N job(s) on M queue(s)`.
+Use it to check whether a route is registered in production. Nest logs a line
+per controller and per route; dunx logs one structured entry. `WorkerFactory`
+logs the same kind of entry for queues: `Consuming N job(s) on M queue(s)`.
 
 It is at `listen()` rather than `create()` because `setGlobalPrefix` runs in between,
 and a table listing unprefixed paths would name routes that do not exist.
@@ -390,11 +383,8 @@ a suite that boots a server per file does not want a route table per file.
 what an import already exports to it, or imports one token from two modules that
 disagree, is legal and warned.
 
-They used to sit on `app.warnings` and be logged by nobody, on the reasoning that
-core had no logger. It has one now: `Logger` is always bound, and the reference
-app never read the property, so a shadowed binding would have been silent in the
-app most likely to hit one. The list is still public for an app that would
-rather fail boot on it.
+The same warnings are also on `app.warnings`, so an app can read them and fail
+boot if it wants to.
 
 ## Request logging
 
@@ -445,11 +435,9 @@ out how a call ended.
 - An error is logged and **rethrown**, so the error mapper still owns the status
   and the response shape.
 
-An unmatched path is logged too. The
-[`fetch` fallback](./05-controllers.md#the-fetch-fallback) runs every global
-middleware on a miss, guards included, and it covers what `notFound: 'public'`
-and `'guarded'` decide. Under either setting the miss is logged and adopts a
-trace.
+A request to an unmatched path is also logged and traced. It still runs every
+global middleware and guard, whether `notFound` is `'public'` or `'guarded'`. See
+[the `fetch` fallback](./05-controllers.md#the-fetch-fallback).
 
 The `warn` for an unmatched path, a scanner's `/wp-admin` or `/.env`, is
 written at most once a second per app. The next line written carries
@@ -495,18 +483,15 @@ An all-zero trace id, an all-zero span id, the reserved version `ff` and a non-h
 field are each rejected. A version this code does not know keeps its first four
 fields, so a future format still propagates.
 
-An inbound sampling decision is kept rather than overridden, so a trace an upstream
-sampler declined is not re-sampled here. `tracestate` is carried through verbatim
-alongside a valid `traceparent`, and dropped without one.
+The inbound sampling flag is kept as sent, so a trace an upstream sampler
+declined stays unsampled. `tracestate` is passed through unchanged when
+`traceparent` is valid, and dropped when it is not.
 
-`@dunx/http/client` sends the adopted trace upstream as `traceparent`, so one trace
-spans both services. It reads `traceFlags` out of the same store, which is why
-that field is there.
+`@dunx/http/client` sends the current trace upstream as `traceparent`, so one
+trace spans both services. It reads `traceFlags` from the same store.
 
-There is no exporter, no sampler and no dependency: one header parsed and two
-written. `traceId`, `spanId` and `traceFlags` are OpenTelemetry's own log data
-model fields, so a collector correlates these lines with spans emitted by anything
-speaking the standard.
+This needs no exporter, sampler or dependency: dunx reads one header and writes
+two.
 
 With `OtelModule` imported and an SDK recording, these ids are the exported
 span's own. See [Tracing](./31-tracing.md).
@@ -546,12 +531,11 @@ requestLogging: {
 }
 ```
 
-What you keep: the trace is still adopted, still on every line the middleware
-writes, still in the `AsyncLocalStorage` scope, and still on the metrics exemplar.
+The request still gets a trace. It is still on every line the middleware writes,
+in the `AsyncLocalStorage` scope, and on the metrics exemplar.
 
-What you lose is the outward half, a caller quoting the answering span back at
-you. That includes failures: the error mapper stamps a fresh `Response` from what
-`TraceContext.adopt` marked, and `false` stops it marking.
+Only the `traceresponse` header goes, on every response including errors, so a
+caller can no longer tell you which span answered it.
 
 Turn it off on a service nothing correlates from the outside. Leave it on at an
 edge.
@@ -587,13 +571,13 @@ HttpFactory.create(AppModule, {
 });
 ```
 
-The path still writes no entry of its own. It gets a `traceresponse`, continuing
-an inbound trace or starting one, and everything the handler logs carries it.
+The ignored path still writes no log entry. It does get a trace: an inbound
+trace is continued or a new one is started, the response carries
+`traceresponse`, and every line the handler logs includes the trace ids.
 
-It is off by default because it costs something: the path pays for reading the
-header, minting the ids, the `runWithContext` scope and one `Headers.set`.
-That is about half of what the full default path costs. It never pays for
-building and serialising the entry, the expensive half.
+It is off by default because it costs about half as much as full request logging.
+The work is reading the header, creating ids, the `runWithContext` scope and one
+`Headers.set`. The other half, building and writing the entry, is still skipped.
 
 ### Turning the async scope off with `correlate: false`
 
@@ -611,13 +595,12 @@ the store, so the line a log pipeline sees is identical and the `traceresponse`
 header still goes out. What is lost is everything _else_ the request logs: those
 lines carry no `traceId`, and `updateContext` in a handler has nothing to update.
 
-It is not the default because correlation is most of what a trace is for, and on
-Bun 1.4 there is no throughput argument on the other side either.
+It defaults to `true` because correlating the handler's own lines is most of
+what a trace is for, and on Bun 1.4 turning it off is not faster.
 
-The option stays for an app that already threads correlation through explicitly, and
-for `ignore` with `correlateIgnored`, where an ignored path gets the response header
-and no scope. Do not reach for it expecting a speedup; re-measure on your own Bun
-first.
+Use it if your app already passes correlation fields explicitly. With `ignore`
+and `correlateIgnored`, it gives an ignored path the response header and no
+scope. Do not expect a speedup; measure on your own Bun version first.
 
 ## What it costs
 

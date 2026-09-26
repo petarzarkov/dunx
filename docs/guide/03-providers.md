@@ -59,24 +59,22 @@ compiled away. A
 constructor whose parameters all have defaults has `length === 0` and is genuinely
 callable with no arguments, so there are no false positives.
 
-It checks the entrypoint before choosing that snippet. The plugin's filter is
-`/\.tsx?$/`, so it never sees an emitted `.js` no matter how it is preloaded. When
-`Bun.main` ends in `.js`, `.cjs` or `.mjs` the message says the tree is prebuilt and
-prints the build-time fix instead:
+The plugin only transforms `.ts` and `.tsx` files, so preloading it does nothing
+for compiled `.js`. When `Bun.main` ends in `.js`, `.cjs` or `.mjs`, the error says
+the code is prebuilt and shows the build-time fix instead:
 
 ```
 import { depsPlugin } from '@dunx/transform';
 await Bun.build({ /* ... */ plugins: [depsPlugin] });
 ```
 
-That `Bun.build` form is also how a production build compiles ahead of time, and
-`bun --preload @dunx/transform/preload src/main.ts` is the form that needs no
-config file.
+Use the same `Bun.build` call for a production build. To skip `bunfig.toml`, run
+`bun --preload @dunx/transform/preload src/main.ts`.
 
-`@dunx/core` does not register the plugin on import. Bun's `onLoad` only affects
-modules loaded after registration, so DI would depend on import order, and every
-production deploy would carry a Rust parser to run code already transformed at
-build time.
+Importing `@dunx/core` does not register the plugin. A Bun plugin only affects
+files loaded after it is registered, so injection would depend on import order.
+It would also ship the parser to production for code that was already
+transformed at build time.
 
 How the transform rewrites the source, and why the record is a thunk:
 [Dependency injection](../architecture/dependency-injection.md).
@@ -131,12 +129,12 @@ Six cases are detected this way:
 | a class type parameter     | `class Box<T> { constructor(x: T) {} }` erases `T` |
 | a primitive or a union     | `number`, `string`, `A \| B` are not tokens        |
 
-For comparison, `emitDecoratorMetadata` given
-`constructor(db: Db, cache: Cache, n: number)` yields `["Db", "Object", "Number"]`.
-An interface degrades to `Object` and a primitive to `Number`, indistinguishably.
-A metadata-driven container then needs `@Inject(TOKEN)` for everything that is
-not a class. The dunx transform reads the difference from source and names the
-parameter.
+dunx reads the source, so the error names the exact parameter. Containers built
+on `emitDecoratorMetadata` cannot do this. For
+`constructor(db: Db, cache: Cache, n: number)` they record
+`["Db", "Object", "Number"]`: the interface becomes `Object` and the primitive
+becomes `Number`. That is why they need `@Inject(TOKEN)` for anything that is not
+a class.
 
 The fix is one of two things. If the erased type is a contract implemented
 elsewhere, make it an `abstract class`, which is a runtime value and therefore a
@@ -197,14 +195,11 @@ constructor parameter for the value to hang off. In practice that means a
 `Token<T>`: a token is a value rather than a type, so it cannot be a parameter
 type and the transform has nothing to record.
 
-The window is narrow. Constructor arguments resolve _before_ the injector is
-made ambient, since argument resolution recurses back through `get()` and must
-not see the class being built as its own scope. A module-level current injector
-is then set around the `new Klass()` call, so an `inject()` in a field
-initializer resolves against it.
-
-Field initializers run synchronously inside the constructor, so this costs no
-async gap and no `AsyncLocalStorage`.
+`inject()` only works while the container is running `new` on your class. The
+container resolves the constructor arguments first, then sets the current
+module scope for the duration of the `new` call. An `inject()` in a field
+initializer resolves from that scope. Field initializers run synchronously
+inside the constructor, so no `AsyncLocalStorage` is involved.
 
 Calling it anywhere else throws:
 
@@ -219,9 +214,9 @@ module-level current injector is no longer its own. Declare factory dependencies
 with `inject: [...]` on the provider instead. Despite the shared name, that
 option and the `inject()` function are separate mechanisms.
 
-Both paths go through the same `get()`, so cycle detection, duplicate-binding
-rejection and the async-factory retry apply identically whether a dependency
-arrived as a constructor parameter or as an `inject()` call.
+A constructor parameter and an `inject()` call resolve the same way. Cycle
+detection, duplicate-binding errors and async factories behave the same for
+both.
 
 ## `provide()` in all its shapes
 
@@ -260,18 +255,17 @@ export class WiringModule {}
 
 Three kinds, and the list is complete.
 
-`useValue` is checked against the token's type. `provide()` stays a _call_ rather
-than a `{ provide, useValue }` object literal because per-element type inference
-across a heterogeneous array requires one. The object-literal form is untyped for
-want of it.
+`useValue` is type-checked against the token. That check needs the `provide()`
+function call: TypeScript cannot check a `{ provide, useValue }` object literal
+inside a mixed `providers` array.
 
 `useFactory` takes its dependencies from `inject`, positionally, with no generics
 written by hand. The factory's parameters are typed from the tuple. A factory may
 be `async`, and the container awaits it before any constructor that needs it runs.
 
-`useClass` binds one token to a different constructor, which is how an abstract
-contract gets an implementation and how a test override swaps one without touching
-the module.
+`useClass` binds a token to a different class. Use it to give an abstract class
+its implementation, or to swap an implementation in a test without editing the
+module.
 
 **There is no `useExisting`.** Alias one token to another with
 `provide(Alias, { useFactory: (real) => real, inject: [Real] })`. `ConfigModule`
@@ -281,15 +275,17 @@ uses that to bind both `ConfigService` and your subclass to one instance.
 
 Three ways to name a binding, in order of preference.
 
-**A concrete class.** Nothing to declare. An unbound class self-binds, so
+**A concrete class.** Nothing to declare.
 `constructor(private readonly repo: UsersRepository)` works without
 `UsersRepository` in a `providers` list, as long as only one module injects it.
+An unlisted class is registered in the module that asks for it first.
 
-**An abstract class**, for a contract whose implementation is chosen elsewhere. It
-is a runtime value, so it works as a token. Bind it: `abstract` does not exist at
-runtime, so an unbound one self-binds like any class (see
+**An abstract class**, for a contract whose implementation is chosen elsewhere.
+It exists at runtime, so it works as a token. Always bind it to an
+implementation. If you do not, the container constructs the abstract class
+itself, like any unbound class (see
 [The self-binding hole](#the-self-binding-hole)). `Logger` and `RequestContext` in
-`@dunx/core` are both this.
+`@dunx/core` are abstract classes.
 
 **`token<T>(description)`**, only for what has no runtime value to name:
 
@@ -310,19 +306,18 @@ export const FEATURE_FLAGS: Token<ReadonlySet<string>> =
 messages, so two `token<Config>('config')` calls are two distinct tokens and
 nominal collision is impossible. No prefixing convention is needed.
 
-The reason it is last on the list: a `Token<T>` cannot be written as a constructor
-parameter type, so the transform cannot see it and `inject()` becomes the only way
-to reach it. That asymmetry is why a class is better whenever a class exists.
+A `Token<T>` cannot be a constructor parameter type, so the only way to read it
+is `inject()`. Prefer a class when you can write one.
 
 ### The self-binding hole
 
 Every class is injectable by default, which is convenient and has one sharp edge
 worth publishing.
 
-`abstract` does not exist at runtime. An abstract class that is injected but never
-bound therefore gets self-bound and constructed into a useless object rather than
-erroring. TypeScript blocks it in the `providers` array, because a bare entry must
-be constructible, but not at the `inject()` call site.
+`abstract` does not exist at runtime. If you inject an abstract class and never
+bind it, the container constructs it anyway and you get an object with no
+implementation, with no error. TypeScript rejects an abstract class listed bare in
+`providers`, but it does not catch the `inject()` call.
 
 The same shape appears with options classes: a class whose constructor arguments
 are all optional resolves successfully when nothing bound it, so
@@ -359,24 +354,18 @@ propagation.
 factory before it returns, so wiring errors surface at boot rather than at first
 request. There is no separate `init()`.
 
-Two kinds of provider sit outside that. A class that self-binds because no module
-declared it, and the `Logger` / `RequestContext` defaults the container promotes into
-every scope, are built on first `get`. A provider nothing ever asks for is therefore
-never constructed, and never gets an `onInit` or an `onShutdown`.
+Two kinds of provider are built on first use instead: a class that no module
+declared, and the default `Logger` and `RequestContext`. If nothing asks for one,
+it is never constructed and never gets `onInit` or `onShutdown`.
 
 That is also what keeps `inject()` synchronous: by the time any constructor runs,
 every async provider has resolved.
 
-The mechanism leaks into one rule you have to follow, so it is worth a paragraph.
-There is no static graph to topologically sort: `inject()` calls are discovered
-only by running field initializers.
-
-Construction is therefore recursive and synchronous. An async factory reached
-from inside a constructor parks its promise, throws a private signal to unwind,
-and the async caller awaits that token and _retries_ the construction. Each retry
-resolves at least one more async binding, so it terminates in at most one pass
-per async dependency. Parking the promise before throwing keeps any factory from
-running twice.
+The container only finds `inject()` calls by running field initializers, so it
+cannot sort the graph ahead of time. When a constructor reaches an async factory
+that has not resolved yet, the container stops that construction, awaits the
+factory, and constructs the class again. Each factory runs once, and each retry
+resolves at least one more async provider.
 
 **The rule that follows: field initializers must stay pure wiring.** A constructor
 aborted by that retry runs its already-evaluated field initializers again. An
@@ -444,13 +433,13 @@ const app = await createTestApp({
 });
 ```
 
-Every scope, so a test stubbing `Logger` does not have to know how many modules bind
-it. There is no `in:` option to name one: where two scopes bind a token differently
-and only one is meant, resolve through the module that matters instead.
+A test stubbing `Logger` does not need to know how many modules bind it. You
+cannot limit an override to one module. If two modules bind a token differently
+and you want to replace only one, resolve through the module you care about.
 
-Replacement rather than addition, and the distinction matters twice over. The
-discarded provider is never instantiated, so its `useFactory` never runs and its
-`onInit` never fires. That is what makes overriding a database safe.
+The replaced provider is never instantiated: its `useFactory` never runs and its
+`onInit` never fires. Overriding a database therefore never opens a real
+connection.
 
 An override naming a **non-class** token nobody binds is an error rather than a
 silent no-op:
@@ -461,10 +450,10 @@ so nothing self-binds it either. An override replaces a binding - it cannot add 
 because a token nobody bound is a token nothing under test resolves.
 ```
 
-A **class** token nobody bound is accepted, and registered lazily. A class self-binds
-on demand anyway, so the override is replacing the binding that would otherwise have
-appeared rather than adding one. An abstract class counts as a class here: the check
-is `typeof token === 'function'`.
+An override for a **class** nobody bound is accepted. An unbound class would be
+registered on first use anyway, and the override takes the place of that
+registration. Abstract classes count as classes here (the check is
+`typeof token === 'function'`).
 
 `Logger` and `RequestContext` are substituted too, so overriding `Logger` works in
 an app that binds none. `@dunx/testing` ships a `RecordingLogger` for exactly

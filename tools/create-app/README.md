@@ -43,11 +43,11 @@ There is no flag for choosing features. The command opens a list:
 two lines under the list update as you go: one shows what your selection drags in,
 the other shows which of it needs Redis or Postgres running to do anything.
 
-After the list, one more question: whether to compile the app to a single
-standalone binary. Yes adds a `scripts/build.ts` and a `build` script, so
-`bun run build` writes one executable with `bun build --compile` that a host runs
-with nothing installed. It needs Bun >= 1.4.1, the floor the generated
-`package.json` already declares.
+After the list, you are asked whether to compile the app to one standalone binary.
+Yes adds `scripts/build.ts` and a `build` script. `bun run build` then uses
+`bun build --compile` to write one executable that runs on a host with nothing
+installed. This needs Bun >= 1.4.1, which the generated `package.json` already
+requires.
 
 Three more questions appear only when there is something to ask: a directory, when
 the command line named none; a package name, when the directory's is one npm would
@@ -78,10 +78,10 @@ mkdir my-api && cd my-api && git init
 bunx @dunx/create-app .
 ```
 
-`.git`, `.gitkeep`, `.DS_Store` and `LICENSE` do not count as contents, so a fresh
-repo or a clone of an empty GitHub repository is a valid target without a question.
-Nothing else is ignored: `.gitignore` and `README.md` both come out of the template.
-Overwriting your copy of either is what the last question asks about.
+`.git`, `.gitkeep`, `.DS_Store` and `LICENSE` are ignored when checking whether
+the directory is empty, so a new repo or a clone of an empty GitHub repository
+works without a prompt. Any other file counts. The template includes `.gitignore`
+and `README.md`, and the last question asks whether to overwrite yours.
 
 ## What a composed app looks like
 
@@ -134,11 +134,11 @@ scaffolding is by definition a set that works together.
 
 Writing versions into the template would go stale on the next release.
 
-Keep it that way when you add a package later. The packages peer-depend on each
-other by caret range, so mixing minors warns on install - and can leave two copies
-of `@dunx/core` in one tree, which breaks dependency injection outright: a token
-*is* a class object, so two copies are two different classes and a provider bound
-against one is invisible to the other.
+When you add a `@dunx/*` package later, use the same version as the others. The
+packages peer-depend on each other by caret range, so mixing minor versions warns
+on install. It can also install two copies of `@dunx/core`, which breaks
+dependency injection: a token is a class, so a provider bound with one copy's
+class cannot be found through the other copy's.
 
 **The template's `.gitignore` ships as `_gitignore`.** npm renames a published
 `.gitignore` to `.npmignore`, which would leave every scaffolded app without one.

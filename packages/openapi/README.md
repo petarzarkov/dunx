@@ -73,15 +73,16 @@ at runtime, so there is no second annotation for the document to disagree with.
 A response schema is documentation only: the verb decorators hold the handler's
 return type to it at compile time instead of validating every response.
 
-Who may read any of it is `authorize`, the same `Authorize` `@dunx/dashboard`
-takes. It covers the document, the page and the page's assets together, refuses
-with 404, and sends a `Response` as written when a browser needs somewhere to go.
+`authorize` decides who may see the document, the page and the page's assets. It
+takes the same `Authorize` as `@dunx/dashboard`. A refused request gets a 404. If
+`authorize` returns a `Response`, for example a redirect to sign in, that response
+is sent as is.
 
 ## Notes
 
-- `.meta({ id })` on a zod schema is what hoists it into `components/schemas`.
-  Without an id it is inlined at every use site. `.strict()` after `.meta()`
-  discards the metadata, so put `.meta()` last.
+- Add `.meta({ id })` to a zod schema to put it in `components/schemas`. Without
+  an id it is inlined wherever it is used. `.strict()` after `.meta()` drops the
+  metadata, so call `.meta()` last.
 - Prose belongs in `description`. An explorer labels a schema by `title`, which
   `@dunx/openapi` fills with the component name.
 - The page embeds the document rather than fetching it, and loads the renderer's

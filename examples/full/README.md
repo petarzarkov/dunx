@@ -12,12 +12,11 @@ without cloning anything: [the landing page](https://demo.dunx.win),
 The database there is in memory and reseeds on restart, so nothing you create
 lasts. That deployment is this directory's `Dockerfile` and `compose.demo.yml`.
 
-**Start smaller if this is your first look.** [`examples/minimal`](../minimal) is
-five files and two minutes; [`examples/databases`](../databases) is database setup
-on four configurations; [`examples/testing`](../testing) is the test story;
-[`examples/binary`](../binary) is one app compiled to a single executable. This one
-is the answer to "does it all actually compose?" It is the only example where
-that is visible.
+**New to dunx? Start with a smaller example.** [`examples/minimal`](../minimal) is
+five files and takes two minutes. [`examples/databases`](../databases) sets up a
+database four ways. [`examples/testing`](../testing) shows how to test an app.
+[`examples/binary`](../binary) compiles one app to a single executable. This one
+uses every package together, and is the only example that does.
 
 ```bash
 bun install
@@ -151,18 +150,19 @@ is still the 404 the tour narrates.
 renderer in `scripts/og-card.ts`, which screenshots HTML in `Bun.WebView`; it is
 committed, so no deploy needs a Chrome.
 
-`ctrl-c` shows the ordering that makes readiness worth having: `/api/health/ready`
-starts answering `503` while the port is still open, waits `drainDelayMs`, and only
-then does the socket close. `/api/health/live` keeps answering `200` throughout, so
-nothing decides to restart a pod that is already leaving.
+Press `ctrl-c` to see the shutdown order. `/api/health/ready` starts answering
+`503` while the port is still open, the app waits `drainDelayMs`, and then the
+socket closes. `/api/health/live` answers `200` the whole time, so nothing restarts
+a pod that is already shutting down.
 
 `bun run tour` also boots a **second node** for `/chat`: a second `Bun.serve`
 and a second container in the same process. It relays a publish between the
 two through Redis, asserting one delivery per client.
 
-Node A relays with `@dunx/http`'s `RedisRelay`; node B relays through the app's
-own `@dunx/infra/redis` connection, which satisfies `PubSubRelay` structurally.
-With no Redis running it says it is skipping and the app still exits 0.
+Node A relays with `@dunx/http`'s `RedisRelay`. Node B passes the app's own
+`@dunx/infra/redis` connection as its relay, which works because that connection
+has the two methods `PubSubRelay` needs. With no Redis running, the tour says it
+is skipping this step and still exits 0.
 
 ### The queue needs two processes
 
@@ -326,29 +326,34 @@ middleware wraps `next()`, so the request and its response go out together:
 One line to grep, one line to ship, and no correlating a pair by `traceId` to
 find out how a call ended. A 4xx is the same line at `warn`, a 5xx at `error`.
 
-Everything the *handler* logs in between still carries `traceId`, `method`,
-`event` and `context` without being passed anything, because `ContextStore` is an
-`AsyncLocalStorage`. An inbound `traceparent` is continued so one trace spans both
-services; otherwise a fresh trace is minted, and either way the answering span
-goes back as `traceresponse`.
+Every line the *handler* logs in between also carries `traceId`, `method`,
+`event` and `context`, without the handler passing them. `ContextStore` holds
+them in an `AsyncLocalStorage`.
 
-An unmatched path is logged too. Bun answers a miss itself, and the middleware
-chain would never see it, so `@dunx/http` installs one `fetch` fallback that puts
-the global middleware in front of a `{"error":"NOT_FOUND","status":404}`. Bun is
-still the router.
+If the request has a `traceparent` header, the app continues that trace, so one
+trace covers both services. Otherwise it starts a new one. Either way the response
+carries the span in a `traceresponse` header.
+
+A request for an unknown path is logged too. Bun still does the routing. For a
+path that matches no route, `@dunx/http` runs the global middleware and then
+answers `{"error":"NOT_FOUND","status":404}`.
 
 ## Tracing
 
-`OtelModule` in [src/app.module.ts](./src/app.module.ts) binds `Tracer`, so every
-request opens a SERVER span and every SQLite query, Redis command, job publish and
-AMQP message opens a child of it. dunx starts spans and never decides where they
-go: [src/otel.preload.ts](./src/otel.preload.ts) registers the SDK, from
-`bunfig.toml`, so the bullmq fork registers one too.
+`OtelModule` in [src/app.module.ts](./src/app.module.ts) binds `Tracer`. Every
+request opens a SERVER span, and every SQLite query, Redis command, job publish and
+AMQP message inside it opens a child span. dunx creates spans but does not export
+them.
 
-It registers nothing unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Without it every
-span is a non-recording one and the log lines carry the ids dunx mints itself,
-which is how `bun start` and the public demo run. With it, the log line's
-`traceId` and `spanId`, `traceresponse` and the exported SERVER span are one id:
+[src/otel.preload.ts](./src/otel.preload.ts) sets up the OpenTelemetry SDK. It
+is a preload in `bunfig.toml`, so the bullmq child process that runs `background`
+jobs gets it too.
+
+The preload does nothing unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Without it,
+spans are not recorded and log lines carry ids that dunx generates. `bun start`
+and the public demo run this way. With it set, the log line's `traceId` and
+`spanId`, the `traceresponse` header and the exported SERVER span all share the
+same ids:
 
 ```bash
 docker run -d --rm -p 16686:16686 -p 4318:4318 jaegertracing/jaeger
@@ -375,9 +380,9 @@ The widest clean run over all 28 operations, on the machine that wrote this:
 **3,668,137 calls in 365s at 10,051/s, 0 failures, settled heap 25.1 to 25.0 MiB
 across twelve rounds.**
 
-The leak verdict is the settled heap across rounds, not the in-flight series. An
-in-flight slope measures the allocator: RSS climbed 11 MiB/min on a run whose
-`heapUsed` was falling and whose settled RSS came back 20 MiB below its own peak.
+Leaks are judged from the settled heap at the end of each round. Memory measured
+mid-round mostly tracks the allocator: on one run RSS climbed 11 MiB/min while
+`heapUsed` was falling, and the settled RSS ended 20 MiB below its peak.
 
 Each round ends with `Bun.gc(true)` and a quiet sample, and the fit is over those.
 Under three minutes the window cannot resolve the +/-2.5 MiB of GC noise, so the

@@ -132,10 +132,10 @@ Hardware, method, every scenario and what the harness does not measure:
 
 ## When not to use dunx
 
-**You do not want dependency injection.** Elysia and Hono own Bun's web-framework
-space, they are mature, and they are faster to learn. Neither offers DI, modules
-or class-based controllers, and that gap is the whole reason dunx exists. If you
-would not use the DI, you are paying its boot cost and its concepts for nothing.
+**You do not want dependency injection.** Elysia and Hono are the main Bun web
+frameworks. They are mature and quicker to learn, but neither has DI, modules or
+class-based controllers, and dunx exists to provide those. If you would not use
+the DI, you pay its boot time and learning cost for nothing.
 
 **Boot time is the number that matters.** A short-lived process, a serverless
 function billed per invocation, or a CLI will feel the ~46 ms. dunx is built for a
@@ -151,12 +151,12 @@ compatibility layer, and `Bun.serve`, `bun:sqlite`, `Bun.RedisClient`,
 `Bun.password` and `Bun.S3Client` are load-bearing throughout. Portability was
 never a goal.
 
-**You want MySQL or MariaDB with nothing to assemble.** The database module
-ships two backends: `bun:sqlite`, and `Bun.SQL` for Postgres. `drizzle-orm/bun-sql`
-builds a Postgres dialect unconditionally, so a MySQL URL is rejected at
-construction with a message saying so. MySQL and MariaDB do run, through
-`drizzle-orm/mysql-proxy` over `Bun.SQL`, but the backend is a `DbOptions` subclass
-you write. [`examples/databases`](https://github.com/petarzarkov/dunx/tree/main/examples/databases)
+**You want MySQL or MariaDB without writing a backend.** The database module has two
+backends: `bun:sqlite`, and `Bun.SQL` for Postgres. `drizzle-orm/bun-sql` always
+uses the Postgres dialect, so a MySQL URL fails when the connection is built,
+with an error saying so. MySQL and MariaDB do work through
+`drizzle-orm/mysql-proxy` over `Bun.SQL`, but you write the backend yourself, as
+a `DbOptions` subclass. [`examples/databases`](https://github.com/petarzarkov/dunx/tree/main/examples/databases)
 ships a working one.
 
 **You want a mature ecosystem of third-party modules.** There is not one. dunx is

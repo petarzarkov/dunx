@@ -44,10 +44,10 @@ export class AppModule {}
 
 Both are `@Public()`: a probe carries no credentials.
 
-Both are documented, under a `Health` tag, with the report shape as
-`components/schemas/HealthReport` on both the 200 and the 503. `documented: false`
-mounts a variant carrying `@ApiHidden()`, which serves the same two routes and
-leaves them out of the OpenAPI document.
+Both appear in the OpenAPI document under a `Health` tag, with
+`components/schemas/HealthReport` as the body of both the 200 and the 503.
+`documented: false` serves the same two routes but leaves them out of the
+document (they carry `@ApiHidden()`).
 
 `HEALTH_REPORT_SCHEMA` is exported, so an app answering on its own paths can
 reference the same definition.
@@ -165,11 +165,11 @@ load balancer notices a failing probe on its own schedule: at a 2-second interva
 and a 3-failure threshold, traffic can arrive for 6 seconds after the pod has
 decided to go. Set it to a few intervals.
 
-It is a real wait, so it is paid by anything that shuts the app down - a suite
-closing one app per file included, where at five seconds it exceeds Bun's default
-hook timeout and fails as an unnamed hook naming no line. `@dunx/testing` zeroes
-it: `createTestApp` and `createTestServer` override `ReadinessOptions` before
-your own overrides, so a suite that is testing the drain passes its own and wins.
+`@dunx/testing` sets `drainDelayMs` to zero, because the wait happens on every
+shutdown. A five-second wait is longer than Bun's default hook timeout, and the
+test would fail with a hook error that names no line. To test the drain, pass
+your own `ReadinessOptions` override to `createTestApp` or `createTestServer`;
+it is applied after dunx's.
 
 Liveness keeps passing throughout. A pod that is shutting down does not need
 restarting, and `down` there invites a SIGKILL mid-drain.
@@ -238,8 +238,8 @@ return {
 };
 ```
 
-Without it, `500f` meaning five hundred failed jobs is actionable only by a human
-who parses a format nothing promises to keep. The shipped indicators carry both:
+`detail` text such as `500f` for five hundred failed jobs is for people, and its
+format may change, so do not parse it. The built-in indicators provide both:
 `memory` reports `rssBytes` and `maxRssBytes` beside its `143 MiB of 2048 MiB`,
 `disk` reports `totalBytes`, `freeBytes` and `usedFraction`, and the round trips
 report `roundTripMs`.
