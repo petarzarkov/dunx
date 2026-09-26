@@ -1,3 +1,4 @@
+import { isPlainObject } from '@dunx/core';
 import type { JsonSchema, OpenApiDocument } from './types.js';
 
 export const COMPONENTS_PREFIX = '#/components/schemas/';
@@ -8,9 +9,6 @@ export const DEFS_PREFIX = '#/$defs/';
 export const refTo = (name: string): JsonSchema => ({
   $ref: `${COMPONENTS_PREFIX}${name}`,
 });
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Walks any JSON value and rewrites every `$ref` through `map`. Structural, not
@@ -24,7 +22,7 @@ export const rewriteRefs = (
 ): unknown => {
   if (Array.isArray(value))
     return value.map((entry) => rewriteRefs(entry, map));
-  if (!isRecord(value)) return value;
+  if (!isPlainObject(value)) return value;
 
   const rewritten: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
@@ -44,7 +42,7 @@ export const collectRefs = (
     for (const entry of value) collectRefs(entry, into);
     return into;
   }
-  if (!isRecord(value)) return into;
+  if (!isPlainObject(value)) return into;
 
   for (const [key, entry] of Object.entries(value)) {
     if (key === '$ref' && typeof entry === 'string') into.add(entry);

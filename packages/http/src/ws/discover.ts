@@ -14,6 +14,7 @@ import {
   type HandlerKind,
   type HandlerMeta,
 } from './marker.js';
+import { joinPath } from '../route/discover.js';
 
 /**
  * A discovered handler, already bound to its instance. Every kind has a different
@@ -35,12 +36,6 @@ export interface DiscoveredGateway {
   readonly handlers: readonly DiscoveredHandler[];
 }
 
-/** `chat` and `/chat/` both become `/chat`; an empty path becomes `/`. */
-export const normalizePath = (path: string): string => {
-  const joined = `/${path}`.replace(/\/{2,}/g, '/');
-  return joined.length > 1 ? joined.replace(/\/$/, '') : '/';
-};
-
 /** Every marked method on a prototype chain, most-derived first, names deduped. */
 const eachHandler = (
   start: object | null,
@@ -58,7 +53,7 @@ export const discoverGateway = (instance: object): DiscoveredGateway => {
 
   return {
     name: klass.name,
-    path: normalizePath(gatewayPathOf(klass)),
+    path: joinPath('', gatewayPathOf(klass)),
     handlers: eachHandler(Object.getPrototypeOf(instance) as object | null).map(
       ({ name, meta }) => ({
         kind: meta.kind,

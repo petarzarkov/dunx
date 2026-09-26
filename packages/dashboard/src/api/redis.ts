@@ -1,5 +1,5 @@
+import { within } from '@dunx/core';
 import type { RedisProbe } from '../contracts.js';
-import { bounded } from './bounded.js';
 import type { RedisReport } from './types.js';
 
 /**
@@ -62,8 +62,8 @@ export const redisReport = async (
     error,
   });
 
-  return bounded(
-    async () => {
+  return within(
+    (async () => {
       try {
         await redis.ping();
         const pingMs = Math.round(performance.now() - started);
@@ -77,7 +77,7 @@ export const redisReport = async (
       } catch (error) {
         return failed(message(error));
       }
-    },
+    })(),
     timeoutMs,
     // A broker that is merely *slow* never rejects - it waits out the connection
     // timeout, 5 s by default - so the row has to be produced by the clock.

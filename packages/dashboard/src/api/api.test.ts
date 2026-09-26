@@ -3,7 +3,6 @@ import { describe, expect, it } from 'bun:test';
 import type { DashboardProbe, RedisProbe } from '../contracts.js';
 import { DashboardModule } from '../module.js';
 import { DashboardOptions } from '../options.js';
-import { bounded } from './bounded.js';
 import { parseInfo, redisReport } from './redis.js';
 import { redisProbe, runProbe, runtimeReport } from './runtime.js';
 
@@ -14,49 +13,6 @@ import { redisProbe, runProbe, runtimeReport } from './runtime.js';
  * throws, and one that is absent, which a live server cannot produce on demand.
  */
 const never = <T>(): Promise<T> => new Promise<T>(() => undefined);
-
-describe('bounded', () => {
-  it('returns the work when the work wins', async () => {
-    expect(
-      await bounded(
-        async () => 'done',
-        1000,
-        () => 'timed out',
-      ),
-    ).toBe('done');
-  });
-
-  it('returns the fallback value, not a rejection, when the clock wins', async () => {
-    expect(await bounded(never<string>, 5, () => 'timed out')).toBe(
-      'timed out',
-    );
-  });
-
-  it('lets a rejection through rather than converting it to the fallback', async () => {
-    expect(
-      bounded(
-        () => Promise.reject(new Error('broker refused')),
-        1000,
-        () => 'timed out',
-      ),
-    ).rejects.toThrow('broker refused');
-  });
-
-  /**
-   * The timer is cleared unconditionally, so a resolved race leaves no handle
-   * behind. An armed 30s timer would hold the loop open past the assertions, and
-   * this test returning at all is what proves it does not.
-   */
-  it('clears the timer when the work wins, leaving no handle armed', async () => {
-    expect(
-      await bounded(
-        async () => 1,
-        30_000,
-        () => 0,
-      ),
-    ).toBe(1);
-  });
-});
 
 describe('runProbe', () => {
   it('reports up, and carries the probe detail through', async () => {
@@ -114,7 +70,7 @@ describe('runProbe', () => {
     expect(report).toMatchObject({
       name: 'slow',
       state: 'unknown',
-      detail: 'no answer in 5ms',
+      detail: 'no answer in 5 ms',
     });
   });
 });

@@ -1,10 +1,11 @@
 import {
   NoopTracer,
+  within,
   type Logger,
   type OnShutdown,
   type Tracer,
 } from '@dunx/core';
-import { closeWithin, within } from '../close-within.js';
+import { closeWithin } from '../close-within.js';
 import type { DbConnection, DbOptions } from './connection.js';
 import { DatabaseError } from './errors.js';
 import { instrumented } from './instrument.js';
@@ -283,7 +284,7 @@ export class DataSources<TDb = unknown> implements OnShutdown {
       (connection) => ({ connection }),
       () => ({ connection: undefined }),
     );
-    const opened = await within(settled, this.#closeTimeoutMs);
+    const opened = await within(settled, this.#closeTimeoutMs, () => undefined);
     if (opened === undefined) {
       // Still opening, so close it when it surfaces rather than orphan it.
       void settled.then(({ connection }) => connection?.close());

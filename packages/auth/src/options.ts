@@ -1,3 +1,4 @@
+import { joinPath } from '@dunx/http/internal';
 import type { BetterAuthOptions } from 'better-auth';
 import { AuthError } from './errors.js';
 import { bunPassword } from './password.js';
@@ -13,9 +14,9 @@ export const DEFAULT_BASE_PATH = '/api/auth';
  * claim every path in the app.
  */
 export const normalizeBasePath = (basePath: string): string => {
-  const normalized = `/${basePath}`.replace(/\/{2,}/g, '/').replace(/\/$/, '');
+  const normalized = joinPath('', basePath);
 
-  if (normalized.length < 2) {
+  if (normalized === '/') {
     throw new AuthError(
       `"${basePath}" is not a usable basePath. The handler mounts at ` +
         '<basePath>/*, so at the root it would claim every route in the app. ' +

@@ -1,5 +1,5 @@
-import type { ServedHandler } from './middleware.js';
-import type { BunRoutes, RouteMethod } from './routes.js';
+import { mapRoutes, type ServedHandler } from './middleware.js';
+import type { BunRoutes } from './routes.js';
 
 /**
  * Each field is the header's value, or `false` to leave that header off. A field
@@ -118,21 +118,9 @@ export const withSecurityHeaders = (
 ): ServedHandler =>
   withResponseStamp((response) => setAbsentHeaders(response, pairs), handler);
 
-/**
- * Every entry of the route table, `OPTIONS` preflights included. Fresh per-method
- * objects, so the trailing-slash aliases built afterwards share the wrapped ones.
- */
+/** Every entry of the route table, `OPTIONS` preflights included. */
 export const withSecuredRoutes = (
   pairs: HeaderPairs,
   routes: BunRoutes,
-): BunRoutes => {
-  const secured: BunRoutes = {};
-  for (const [path, byMethod] of Object.entries(routes)) {
-    const wrapped: BunRoutes[string] = {};
-    for (const [method, handler] of Object.entries(byMethod)) {
-      wrapped[method as RouteMethod] = withSecurityHeaders(pairs, handler);
-    }
-    secured[path] = wrapped;
-  }
-  return secured;
-};
+): BunRoutes =>
+  mapRoutes(routes, (handler) => withSecurityHeaders(pairs, handler));

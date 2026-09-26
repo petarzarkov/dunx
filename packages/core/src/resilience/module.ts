@@ -5,27 +5,20 @@ import {
   type Deps,
   type FactoryProvider,
 } from '../di/provider.js';
-import { token, type Ctor, type Token } from '../di/token.js';
+import { namedToken, token, type Ctor, type Token } from '../di/token.js';
 import { ResilienceOptions, type ResilienceOptionsInit } from './options.js';
 import { ResiliencePolicy } from './policy.js';
 
-const tokens = new Map<string, Token<ResiliencePolicy>>();
-
 /**
- * The token a named policy is bound to. Memoised, so the module and a consumer
- * hold the same token for `'payment'`: `token()` returns a fresh object per call.
+ * The token a named policy is bound to, the same one for the module and a consumer
+ * since `namedToken` memoises it.
  *
  * A `Token` is not a constructor type, so reach one with `inject()` in a field
  * initialiser, or pass `as` a subclass for an ordinary constructor parameter.
  * The same shape as `httpClient(name)`, which documents it at length.
  */
-export const resiliencePolicy = (name: string): Token<ResiliencePolicy> => {
-  const existing = tokens.get(name);
-  if (existing) return existing;
-  const created = token<ResiliencePolicy>(`ResiliencePolicy(${name})`);
-  tokens.set(name, created);
-  return created;
-};
+export const resiliencePolicy = (name: string): Token<ResiliencePolicy> =>
+  namedToken(`ResiliencePolicy(${name})`);
 
 /**
  * How a policy is addressed: a name, which binds a `Token`, or a subclass of

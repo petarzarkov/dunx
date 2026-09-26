@@ -9,7 +9,8 @@ import {
   OnPong,
   OnUpgrade,
 } from './decorators.js';
-import { discoverGateway, normalizePath } from './discover.js';
+import { joinPath } from '../route/discover.js';
+import { discoverGateway } from './discover.js';
 
 @Gateway('base')
 abstract class BaseGateway {
@@ -50,13 +51,13 @@ const slotsOf = (instance: object): string[] =>
     )
     .sort();
 
-describe('normalizePath()', () => {
+describe("joinPath('', path) for a gateway", () => {
   it('normalizes into one leading-slash path', () => {
-    expect(normalizePath('chat')).toBe('/chat');
-    expect(normalizePath('/chat/')).toBe('/chat');
-    expect(normalizePath('')).toBe('/');
-    expect(normalizePath('/')).toBe('/');
-    expect(normalizePath('a//b//')).toBe('/a/b');
+    expect(joinPath('', 'chat')).toBe('/chat');
+    expect(joinPath('', '/chat/')).toBe('/chat');
+    expect(joinPath('', '')).toBe('/');
+    expect(joinPath('', '/')).toBe('/');
+    expect(joinPath('', 'a//b//')).toBe('/a/b');
   });
 });
 
