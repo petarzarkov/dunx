@@ -1,37 +1,15 @@
 import { RuntimeStats } from '@dunx/core';
+import { boundedProbe } from '@dunx/http/internal';
 import type { DashboardProbe, ProbeResult } from '../contracts.js';
 import type { DashboardOptions } from '../options.js';
-import { bounded } from './bounded.js';
 import type { ProbeReport, RuntimeReport } from './types.js';
-
-/**
- * `unknown` on a timeout, **not** `down`. A probe that did not answer in two
- * seconds has told us nothing about the service, and saying `down` would send
- * somebody to restart something healthy. A probe that *threw* did tell us
- * something, so that one is `down`.
- */
-const withTimeout = (probe: DashboardProbe, ms: number): Promise<ProbeResult> =>
-  bounded(
-    async () => {
-      try {
-        return await probe.check();
-      } catch (error) {
-        return {
-          state: 'down',
-          detail: error instanceof Error ? error.message : String(error),
-        } as const;
-      }
-    },
-    ms,
-    () => ({ state: 'unknown', detail: `no answer in ${ms}ms` }),
-  );
 
 export const runProbe = async (
   probe: DashboardProbe,
   timeoutMs: number,
 ): Promise<ProbeReport> => {
   const started = performance.now();
-  const result = await withTimeout(probe, timeoutMs);
+  const result = await boundedProbe(() => probe.check(), timeoutMs);
   return {
     name: probe.name,
     state: result.state,

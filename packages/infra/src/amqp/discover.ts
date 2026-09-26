@@ -1,3 +1,4 @@
+import { selectQueues } from '../select-queues.js';
 import {
   discoverMarked,
   markedMethodsOn,
@@ -89,35 +90,11 @@ export const selectSubscriptions = (
   modules: readonly ResolvedModule[],
   container: ScopedResolver,
   wanted: readonly string[] | undefined,
-): readonly DiscoveredSubscription[] => {
-  const discovered = discoverSubscriptions(modules, container);
-  const chosen = wanted
-    ? discovered.filter((found) => wanted.includes(found.queue))
-    : discovered;
-
-  if (chosen.length === 0) {
-    throw new AmqpError(
-      AmqpErrorCode.NO_HANDLERS,
-      wanted
-        ? `No handler consumes ${wanted.join(', ')}. A process with nothing to ` +
-            'do would idle forever, so this is a boot error.'
-        : 'No AMQP handlers were found. Decorate a method with @AmqpHandler and ' +
-            'declare its class in a module this root imports.',
-    );
-  }
-
-  // A typo in one name of several would otherwise start a process that quietly
-  // serves only the queues that were spelled right.
-  const missing = (wanted ?? []).filter(
-    (queue) => !chosen.some((found) => found.queue === queue),
+): readonly DiscoveredSubscription[] =>
+  selectQueues(
+    discoverSubscriptions(modules, container),
+    wanted,
+    (message) => new AmqpError(AmqpErrorCode.NO_HANDLERS, message),
+    'No AMQP handlers were found. Decorate a method with @AmqpHandler and ' +
+      'declare its class in a module this root imports.',
   );
-  if (missing.length > 0) {
-    throw new AmqpError(
-      AmqpErrorCode.NO_HANDLERS,
-      `No handler consumes ${missing.join(', ')}. Found handlers for ` +
-        `${discovered.map((found) => found.queue).join(', ')}.`,
-    );
-  }
-
-  return chosen;
-};

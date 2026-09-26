@@ -7,13 +7,13 @@ import {
   TRACESTATE_HEADER,
   traceparentOf,
   Tracer,
+  within,
   type OnShutdown,
   type TraceIds,
 } from '@dunx/core';
 import type { Envelope, Publisher } from 'rabbitmq-client';
 import { closeWithin } from '../close-within.js';
 import { traceStateFor } from '../trace-carrier.js';
-import { withTimeout } from '../with-timeout.js';
 import { AmqpConnection } from './connection.js';
 import { AmqpError, AmqpErrorCode } from './errors.js';
 import { AmqpOptions } from './options.js';
@@ -125,15 +125,16 @@ export class AmqpPublisher implements OnShutdown {
   async #send<T>(stamped: Envelope, body: T): Promise<void> {
     const { publishTimeoutMs } = this.#options;
 
-    await withTimeout(
-      () => this.publisher().send(stamped, body),
+    await within(
+      Promise.try(() => this.publisher().send(stamped, body)),
       publishTimeoutMs,
-      () =>
-        new AmqpError(
+      () => {
+        throw new AmqpError(
           AmqpErrorCode.PUBLISH_TIMED_OUT,
           `The publish to ${this.#addressOf(stamped)} did not confirm within ` +
             `${publishTimeoutMs} ms. Broker ${this.#options.redactedUrl}.`,
-        ),
+        );
+      },
     );
     this.#logger.debug(`Published AMQP message to ${this.#addressOf(stamped)}`);
   }

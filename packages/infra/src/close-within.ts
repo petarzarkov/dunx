@@ -1,3 +1,5 @@
+import { within } from '@dunx/core';
+
 /** The half of a bullmq `Worker` or `QueueEvents`, or a rabbitmq-client
  * `Consumer`, `Publisher` or `Connection`, that {@link closeWithin} needs. */
 export interface Closable {
@@ -17,34 +19,12 @@ export interface Closable {
  * the five closes takes a signal. The argument is in
  * docs/architecture/message-brokers.md, "Bounding a close".
  */
-export const closeWithin = async (
+export const closeWithin = (
   closable: Closable,
   timeoutMs: number,
 ): Promise<boolean> =>
-  (await within(
+  within(
     closable.close().then(() => false),
     timeoutMs,
-  )) ?? true;
-
-/**
- * `work`, waited on for at most `timeoutMs`, resolving `undefined` when the
- * bound expired first. The loser of the race stays pending, so the timer is
- * cleared in a `finally`, and it is unref'd because a bound on how long to wait
- * is no reason to stay alive.
- */
-export const within = async <T>(
-  work: Promise<T>,
-  timeoutMs: number,
-): Promise<T | undefined> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<undefined>((resolve) => {
-    timer = setTimeout(() => resolve(undefined), timeoutMs);
-    timer.unref?.();
-  });
-
-  try {
-    return await Promise.race([work, expired]);
-  } finally {
-    clearTimeout(timer);
-  }
-};
+    () => true,
+  );

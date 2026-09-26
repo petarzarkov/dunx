@@ -12,6 +12,7 @@
  * still would: sampling, elicitation, progress, or a transport that is not stdio -
  * each of those is a session and a lifetime rather than another request/response.
  */
+import { isPlainObject } from '@dunx/core';
 export const PROTOCOL_VERSION = '2025-06-18';
 
 export interface JsonRpcRequest {
@@ -81,9 +82,6 @@ const withoutFragment = (uri: string): string => uri.split('#')[0] ?? uri;
 const readableId = (value: unknown): JsonRpcRequest['id'] =>
   typeof value === 'string' || typeof value === 'number' ? value : null;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /** JSON Schema's name for a value, over the few types these tools declare. */
 const typeName = (value: unknown): string =>
   Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
@@ -113,7 +111,7 @@ const misuse = (
   inputSchema: Record<string, unknown>,
   args: Record<string, unknown>,
 ): string | undefined => {
-  const properties = isRecord(inputSchema['properties'])
+  const properties = isPlainObject(inputSchema['properties'])
     ? inputSchema['properties']
     : {};
   const declared = Object.keys(properties);
@@ -133,7 +131,7 @@ const misuse = (
     // serialising an omitted optional filter sends `null` and means "no filter".
     // An undeclared key is the opposite case and is still refused above.
     if (value === undefined || value === null) continue;
-    const declaredType = isRecord(properties[key])
+    const declaredType = isPlainObject(properties[key])
       ? properties[key]['type']
       : undefined;
     if (typeof declaredType !== 'string') continue;
@@ -300,7 +298,7 @@ export const handle = async (
       // something its `Record<string, unknown>` contract never receives, where
       // every key reads `undefined`: the silent miss `misuse` exists to stop.
       const sent = call.params?.['arguments'];
-      if (sent !== undefined && sent !== null && !isRecord(sent)) {
+      if (sent !== undefined && sent !== null && !isPlainObject(sent)) {
         return toolError(
           call.id,
           `Tool arguments must be an object, received ${typeName(sent)}.`,
@@ -322,7 +320,7 @@ export const handle = async (
       // beside the object itself for a client that reads `structuredContent`.
       return reply(call.id, {
         content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
-        ...(isRecord(output) ? { structuredContent: output } : {}),
+        ...(isPlainObject(output) ? { structuredContent: output } : {}),
       });
     } catch (error) {
       return toolError(call.id, String(error));

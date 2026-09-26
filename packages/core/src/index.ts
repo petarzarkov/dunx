@@ -4,6 +4,7 @@ export * from './events/index.js';
 export * from './logger/index.js';
 export { isPlainObject } from './plain-object.js';
 export { assertUrl, redactUrl, type UrlProblem } from './url.js';
+export { within } from './within.js';
 export * from './resilience/index.js';
 export * from './stats/index.js';
 export * from './tracing/index.js';

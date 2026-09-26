@@ -2,8 +2,8 @@ import { AppError, type Logger } from '@dunx/core';
 import { forwardedEntry, trustedHops } from './client-address.js';
 import type { ErrorMapper } from './errors.js';
 import { HttpError } from './errors.js';
-import type { ServedHandler } from './middleware.js';
-import type { BunRoutes, RouteMethod } from './routes.js';
+import { mapRoutes, type ServedHandler } from './middleware.js';
+import type { BunRoutes } from './routes.js';
 import { HttpStatusCode } from './status.js';
 import { ThrottledWarning } from './throttled-warning.js';
 
@@ -138,19 +138,7 @@ export const csrfWrapper = (
 };
 
 /** Every unsafe-method entry of the table. A `GET` entry is left as it was. */
-export const withCsrfRoutes = (
-  wrap: CsrfWrap,
-  routes: BunRoutes,
-): BunRoutes => {
-  const checked: BunRoutes = {};
-  for (const [path, byMethod] of Object.entries(routes)) {
-    const wrapped: BunRoutes[string] = {};
-    for (const [method, handler] of Object.entries(byMethod)) {
-      wrapped[method as RouteMethod] = SAFE.has(method)
-        ? handler
-        : wrap(handler);
-    }
-    checked[path] = wrapped;
-  }
-  return checked;
-};
+export const withCsrfRoutes = (wrap: CsrfWrap, routes: BunRoutes): BunRoutes =>
+  mapRoutes(routes, (handler, method) =>
+    SAFE.has(method) ? handler : wrap(handler),
+  );

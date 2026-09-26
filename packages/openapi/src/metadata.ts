@@ -1,3 +1,4 @@
+import { isPlainObject } from '@dunx/core';
 import {
   DEPRECATED,
   IDEMPOTENT,
@@ -30,9 +31,6 @@ export const API_DOC: MetaKey<ApiDocMeta> = metaKey<ApiDocMeta>('openapi');
 
 export const ApiDoc = (doc: ApiDocMeta) => meta(API_DOC, doc);
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
 const stringOr = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
 
@@ -47,7 +45,7 @@ const stringsOf = (value: unknown): readonly string[] | undefined =>
  */
 export const apiDocOf = (record: MetaRecord | undefined): ApiDocMeta => {
   const value = record?.get(API_DOC.id);
-  if (!isRecord(value)) return {};
+  if (!isPlainObject(value)) return {};
 
   const summary = stringOr(value['summary']);
   const description = stringOr(value['description']);
@@ -101,5 +99,5 @@ export const idempotentOf = (
 ): IdempotentRoute | undefined => {
   if (route.method === 'GET') return undefined;
   const value = route.meta?.get(IDEMPOTENT.id);
-  return isRecord(value) ? value : undefined;
+  return isPlainObject(value) ? value : undefined;
 };

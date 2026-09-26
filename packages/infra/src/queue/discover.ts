@@ -1,3 +1,4 @@
+import { selectQueues } from '../select-queues.js';
 import {
   discoverMarked,
   markedMethods,
@@ -123,35 +124,11 @@ export const selectJobs = (
   modules: readonly ResolvedModule[],
   container: ScopedResolver,
   wanted: readonly string[] | undefined,
-): readonly DiscoveredJob[] => {
-  const discovered = discoverJobs(modules, container);
-  const jobs = wanted
-    ? discovered.filter((job) => wanted.includes(job.queue))
-    : discovered;
-
-  if (jobs.length === 0) {
-    throw new QueueError(
-      QueueErrorCode.NO_HANDLERS,
-      wanted
-        ? `No handler consumes ${wanted.join(', ')}. A worker with nothing to ` +
-            'do would idle forever, so this is a boot error.'
-        : 'No job handlers were found. Decorate a method with @JobHandler and ' +
-            'declare its class in a module this root imports.',
-    );
-  }
-
-  // A typo in one name of several would otherwise start a process that quietly
-  // serves only the queues that were spelled right.
-  const missing = (wanted ?? []).filter(
-    (queue) => !jobs.some((job) => job.queue === queue),
+): readonly DiscoveredJob[] =>
+  selectQueues(
+    discoverJobs(modules, container),
+    wanted,
+    (message) => new QueueError(QueueErrorCode.NO_HANDLERS, message),
+    'No job handlers were found. Decorate a method with @JobHandler and ' +
+      'declare its class in a module this root imports.',
   );
-  if (missing.length > 0) {
-    throw new QueueError(
-      QueueErrorCode.NO_HANDLERS,
-      `No handler consumes ${missing.join(', ')}. Found handlers for ` +
-        `${[...new Set(discovered.map((job) => job.queue))].join(', ')}.`,
-    );
-  }
-
-  return jobs;
-};

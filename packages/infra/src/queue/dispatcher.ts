@@ -1,10 +1,14 @@
-import type { App, InjectionToken, ResolvedModule } from '@dunx/core';
+import {
+  within,
+  type App,
+  type InjectionToken,
+  type ResolvedModule,
+} from '@dunx/core';
 import type { Job } from 'bullmq';
 import { describeJob, type DiscoveredJob } from './discover.js';
 import { QueueError, QueueErrorCode } from './errors.js';
 import { JobOutcome, QueueMetrics } from './metrics.js';
 import type { JobTracing } from './tracing.js';
-import { withTimeout } from '../with-timeout.js';
 
 /**
  * Whether the graph binds this token, asked of the graph rather than by resolving
@@ -110,15 +114,16 @@ export class JobDispatcher {
   #invoke(job: Job, found: DiscoveredJob): unknown {
     if (this.#timeoutMs === undefined) return found.handler(job);
     const timeoutMs = this.#timeoutMs;
-    return withTimeout(
-      () => found.handler(job),
+    return within(
+      Promise.try(() => found.handler(job)),
       timeoutMs,
-      () =>
-        new QueueError(
+      () => {
+        throw new QueueError(
           QueueErrorCode.TIMED_OUT,
           `${found.provider}.${found.method}() exceeded jobTimeoutMs ` +
             `(${timeoutMs}ms) handling ${describeJob(job)}.`,
-        ),
+        );
+      },
     );
   }
 

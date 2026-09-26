@@ -1,3 +1,4 @@
+import { within } from '@dunx/core';
 import type { HealthIndicator, ProbeResult, ProbeState } from './contracts.js';
 import type { Readiness } from './readiness.js';
 
@@ -28,40 +29,29 @@ export interface HealthReport {
 }
 
 /**
- * A probe that does not answer inside its budget is `unknown`, not `down`.
+ * `check()`, bounded by `timeoutMs`. A probe that does not answer inside its
+ * budget is `unknown`, not `down`: it has told us nothing about the service, and
+ * `down` would send somebody to restart something healthy. A check that throws
+ * is `down` with its message, since it answered, badly.
  *
- * The timer is unref'd: a health check must never be the reason a process stays
- * alive, which matters because `liveness()` is also reachable from a test.
+ * Exported through `@dunx/http/internal` for `@dunx/dashboard`'s probes, which
+ * report the same `ProbeResult`.
  */
-const bounded = async (
-  indicator: HealthIndicator,
+export const boundedProbe = (
+  check: () => ProbeResult | Promise<ProbeResult>,
   timeoutMs: number,
-): Promise<ProbeResult> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<ProbeResult>((resolve) => {
-    timer = setTimeout(
-      () =>
-        resolve({ state: 'unknown', detail: `no answer in ${timeoutMs} ms` }),
-      timeoutMs,
-    );
-    (timer as unknown as { unref?: () => void }).unref?.();
-  });
-
-  try {
-    return await Promise.race([
-      // A throwing check is `down` with its message: it answered, badly.
-      Promise.resolve()
-        .then(() => indicator.check())
-        .catch((error: unknown) => ({
-          state: 'down' as const,
-          detail: error instanceof Error ? error.message : String(error),
-        })),
-      timeout,
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-};
+): Promise<ProbeResult> =>
+  within(
+    Promise.try(check).catch((error: unknown): ProbeResult => ({
+      state: 'down',
+      detail: error instanceof Error ? error.message : String(error),
+    })),
+    timeoutMs,
+    (): ProbeResult => ({
+      state: 'unknown',
+      detail: `no answer in ${timeoutMs} ms`,
+    }),
+  );
 
 const worst = (checks: readonly HealthCheckReport[]): ProbeState => {
   const critical = checks.filter((check) => check.critical);
@@ -134,7 +124,10 @@ export class HealthRegistry {
     const checks = await Promise.all(
       indicators.map(async (indicator): Promise<HealthCheckReport> => {
         const started = performance.now();
-        const result = await bounded(indicator, this.options.timeoutMs);
+        const result = await boundedProbe(
+          () => indicator.check(),
+          this.options.timeoutMs,
+        );
         return {
           name: indicator.name,
           state: result.state,

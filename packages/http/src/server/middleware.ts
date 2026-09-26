@@ -1,5 +1,6 @@
 import type { BunRequest, Server } from 'bun';
 import type { RouteContext } from './context.js';
+import type { BunRoutes, RouteMethod } from './routes.js';
 
 export type Next = () => Promise<Response>;
 
@@ -25,6 +26,26 @@ export type ServedHandler = (
    * test can call a handler with the request alone. See `STREAMS`. */
   server?: Server<unknown>,
 ) => Response | Promise<Response>;
+
+/**
+ * A copy of the route table with every handler replaced by `wrap(handler, method)`.
+ * Fresh per-method objects, so the trailing-slash aliases built afterwards share
+ * the wrapped ones.
+ */
+export const mapRoutes = (
+  routes: BunRoutes,
+  wrap: (handler: ServedHandler, method: RouteMethod) => ServedHandler,
+): BunRoutes => {
+  const mapped: BunRoutes = {};
+  for (const [path, byMethod] of Object.entries(routes)) {
+    const wrapped: BunRoutes[string] = {};
+    for (const [method, handler] of Object.entries(byMethod)) {
+      wrapped[method as RouteMethod] = wrap(handler, method as RouteMethod);
+    }
+    mapped[path] = wrapped;
+  }
+  return mapped;
+};
 
 /** Folded into one closure per route at boot - no per-request array iteration. */
 export const compose = (

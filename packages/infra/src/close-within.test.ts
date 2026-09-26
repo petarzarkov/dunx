@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from 'bun:test';
-import { closeWithin, within } from './close-within.js';
+import { closeWithin } from './close-within.js';
 
 /**
  * Shared by `@dunx/infra/queue`'s two closes and all three of
@@ -76,22 +76,5 @@ describe('closeWithin', () => {
       arm.mockRestore();
       disarm.mockRestore();
     }
-  });
-});
-
-describe('within', () => {
-  it('hands back the value when the work settles first', async () => {
-    expect(await within(Promise.resolve('done'), 1_000)).toBe('done');
-  });
-
-  it('hands back undefined when the bound expires first', async () => {
-    const slow = Bun.sleep(50).then(() => 'late');
-    expect(await within(slow, 5)).toBeUndefined();
-  });
-
-  it('rejects when the work rejects', async () => {
-    await expect(
-      within(Promise.reject(new Error('refused')), 1_000),
-    ).rejects.toThrow('refused');
   });
 });

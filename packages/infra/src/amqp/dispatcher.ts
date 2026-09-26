@@ -6,6 +6,7 @@ import {
   NoopTracer,
   RequestContext,
   Tracer,
+  within,
   type ActiveSpan,
   type RemoteParent,
   type RequestFields,
@@ -13,7 +14,6 @@ import {
 } from '@dunx/core';
 import { ConsumerStatus, type AsyncMessage } from 'rabbitmq-client';
 import { remoteParentOf } from '../trace-carrier.js';
-import { withTimeout } from '../with-timeout.js';
 import type { DiscoveredSubscription } from './discover.js';
 import { AmqpError, AmqpErrorCode } from './errors.js';
 import { describeMessage } from './message.js';
@@ -151,15 +151,16 @@ export class AmqpDispatcher {
     const delivery = message as AmqpMessage;
     const { timeoutMs } = settings;
     if (timeoutMs === undefined) return found.handler(delivery);
-    return withTimeout(
-      () => found.handler(delivery),
+    return within(
+      Promise.try(() => found.handler(delivery)),
       timeoutMs,
-      () =>
-        new AmqpError(
+      () => {
+        throw new AmqpError(
           AmqpErrorCode.TIMED_OUT,
           `${found.provider}.${found.method}() exceeded handlerTimeoutMs ` +
             `(${timeoutMs}ms) handling ${describeMessage(found.queue, delivery)}.`,
-        ),
+        );
+      },
     );
   }
 }
