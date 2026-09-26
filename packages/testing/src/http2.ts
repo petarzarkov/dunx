@@ -1,28 +1,6 @@
 import http2 from 'node:http2';
 import type { JsonInit, JsonResponse } from './client.js';
 
-/**
- * One HTTP/2 request against a cleartext origin, and the JSON round-trip beside
- * it - the same pair `testClient` gives for HTTP/1.1.
- *
- * It exists because **Bun's `fetch` cannot call an h2c origin**: both
- * `protocol: 'http2'` and `protocol: 'h2'` reject with `HTTP2Unsupported`
- * against any plain-HTTP peer, whatever that peer serves. `node:http2` opens
- * with the connection preface instead, which is the "prior knowledge" path
- * `Bun.serve({ http2: true })` answers.
- *
- * A connection per call, which is what a test wants: the assertion is about the
- * server, and a pooled session would carry state between cases.
- */
-export interface Http2Client {
-  /** The origin these requests go to. */
-  readonly url: string;
-  /** Status, headers and the raw body text. */
-  request(path?: string, init?: JsonInit): Promise<Http2Response>;
-  /** Status, headers and the parsed body, for the common assertion. */
-  json<T = unknown>(path?: string, init?: JsonInit): Promise<JsonResponse<T>>;
-}
-
 export interface Http2Response {
   readonly status: number;
   readonly headers: Headers;
@@ -124,6 +102,18 @@ const send = (
   });
 
 /**
+ * One HTTP/2 request against a cleartext origin, and the JSON round-trip beside
+ * it - the same pair `testClient` gives for HTTP/1.1.
+ *
+ * It exists because **Bun's `fetch` cannot call an h2c origin**: both
+ * `protocol: 'http2'` and `protocol: 'h2'` reject with `HTTP2Unsupported`
+ * against any plain-HTTP peer, whatever that peer serves. `node:http2` opens
+ * with the connection preface instead, which is the "prior knowledge" path
+ * `Bun.serve({ http2: true })` answers.
+ *
+ * A connection per call, which is what a test wants: the assertion is about the
+ * server, and a pooled session would carry state between cases.
+ *
  * ```ts
  * const server = await createTestServer({ modules: [AppModule], http2: true });
  * const h2 = http2Client(server.url);
@@ -131,29 +121,44 @@ const send = (
  * expect((await h2.json('/users')).status).toBe(200);
  * ```
  */
-export const http2Client = (url: string, timeoutMs = 4000): Http2Client => {
-  const origin = new URL(url).origin;
-  // `pathname` alone would drop the query, so `?limit=1` never reached the route.
-  const at = (path: string): string => {
-    const target = new URL(path, url);
-    return `${target.pathname}${target.search}`;
-  };
+export class Http2Client {
+  /** The origin these requests go to. */
+  readonly url: string;
+  readonly #base: string;
+  readonly #timeoutMs: number;
 
-  const request = (path = '/', init: JsonInit = {}): Promise<Http2Response> =>
-    send(origin, at(path), init, timeoutMs);
+  constructor(url: string, timeoutMs = 4000) {
+    this.url = new URL(url).origin;
+    this.#base = url;
+    this.#timeoutMs = timeoutMs;
+  }
 
-  return {
-    url: origin,
-    request,
-    async json<T>(path = '/', init: JsonInit = {}): Promise<JsonResponse<T>> {
-      const response = await request(path, init);
-      return {
-        status: response.status,
-        headers: response.headers,
-        body: (response.text === ''
-          ? undefined
-          : JSON.parse(response.text)) as T,
-      };
-    },
-  };
-};
+  /** Status, headers and the raw body text. */
+  request(path = '/', init: JsonInit = {}): Promise<Http2Response> {
+    // `pathname` alone would drop the query, so `?limit=1` never reached the route.
+    const target = new URL(path, this.#base);
+    return send(
+      this.url,
+      `${target.pathname}${target.search}`,
+      init,
+      this.#timeoutMs,
+    );
+  }
+
+  /** Status, headers and the parsed body, for the common assertion. */
+  async json<T = unknown>(
+    path = '/',
+    init: JsonInit = {},
+  ): Promise<JsonResponse<T>> {
+    const response = await this.request(path, init);
+    return {
+      status: response.status,
+      headers: response.headers,
+      body: (response.text === '' ? undefined : JSON.parse(response.text)) as T,
+    };
+  }
+}
+
+/** `new Http2Client(url, timeoutMs)`. */
+export const http2Client = (url: string, timeoutMs = 4000): Http2Client =>
+  new Http2Client(url, timeoutMs);

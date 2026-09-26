@@ -64,59 +64,85 @@ export type CsrfRefusal = 'cross-origin' | 'origin-mismatch';
  * host, else a client that is not a browser. Measured in
  * docs/architecture/constraints.md, "CSRF protection".
  */
-export const crossOriginCheck = (
-  options: CsrfOptions,
-  trustProxy: boolean | number,
-): ((req: Request) => CsrfRefusal | undefined) => {
-  const hops = trustedHops(trustProxy);
-  const trusted = trustedOriginSet(options.trustedOrigins);
-  const isTrusted = (origin: string | null): boolean =>
-    origin !== null && trusted.has(origin);
+export class CrossOriginCheck {
+  readonly #hops: number;
+  readonly #trusted: ReadonlySet<string>;
 
-  return (req) => {
+  constructor(options: CsrfOptions, trustProxy: boolean | number) {
+    this.#hops = trustedHops(trustProxy);
+    this.#trusted = trustedOriginSet(options.trustedOrigins);
+  }
+
+  refusal(req: Request): CsrfRefusal | undefined {
     const site = req.headers.get('sec-fetch-site');
     if (site !== null) {
       return site === 'same-origin' ||
         site === 'none' ||
-        isTrusted(req.headers.get('origin'))
+        this.#isTrusted(req.headers.get('origin'))
         ? undefined
         : 'cross-origin';
     }
     const origin = req.headers.get('origin');
     if (origin === null) return undefined;
     const host = hostOf(origin);
-    return (host !== undefined && host === addressedHost(req, hops)) ||
-      isTrusted(origin)
+    return (host !== undefined && host === addressedHost(req, this.#hops)) ||
+      this.#isTrusted(origin)
       ? undefined
       : 'origin-mismatch';
-  };
-};
+  }
 
-/** Wraps one route-table handler with the check. */
-export type CsrfWrap = (handler: ServedHandler) => ServedHandler;
+  #isTrusted(origin: string | null): boolean {
+    return origin !== null && this.#trusted.has(origin);
+  }
+}
 
 /**
- * The check, the refusal and its log line as one wrapper, built once at boot.
- * Not `async`, so a handler that answered synchronously still does. A refusal
- * goes through the app's error mapper, so it has the shape every other error
- * has, and is logged through a {@link ThrottledWarning}.
+ * The check, the refusal and its log line, built once at boot. A wrapped handler
+ * is not `async`, so one that answered synchronously still does. A refusal goes
+ * through the app's error mapper, so it has the shape every other error has, and
+ * is logged through a {@link ThrottledWarning}.
  *
  * The trace context is adopted by request logging, which a refusal never
  * reaches, so the inbound `traceparent` is copied as received.
  */
-export const csrfWrapper = (
-  options: CsrfOptions,
-  trustProxy: boolean | number,
-  logger: Logger,
-  onError: ErrorMapper,
-): CsrfWrap => {
-  const check = crossOriginCheck(options, trustProxy);
-  const warning = new ThrottledWarning(logger);
+export class CsrfProtection {
+  readonly #check: CrossOriginCheck;
+  readonly #warning: ThrottledWarning;
+  readonly #onError: ErrorMapper;
 
-  const refuse = (req: Request, reason: CsrfRefusal): Response => {
+  constructor(
+    options: CsrfOptions,
+    trustProxy: boolean | number,
+    logger: Logger,
+    onError: ErrorMapper,
+  ) {
+    this.#check = new CrossOriginCheck(options, trustProxy);
+    this.#warning = new ThrottledWarning(logger);
+    this.#onError = onError;
+  }
+
+  /** One route-table handler, with the check in front of it. */
+  wrap(handler: ServedHandler): ServedHandler {
+    return (req, server) => {
+      if (SAFE.has(req.method)) return handler(req, server);
+      const reason = this.#check.refusal(req);
+      return reason === undefined
+        ? handler(req, server)
+        : this.#refuse(req, reason);
+    };
+  }
+
+  /** Every unsafe-method entry of the table. A `GET` entry is left as it was. */
+  routes(routes: BunRoutes): BunRoutes {
+    return mapRoutes(routes, (handler, method) =>
+      SAFE.has(method) ? handler : this.wrap(handler),
+    );
+  }
+
+  #refuse(req: Request, reason: CsrfRefusal): Response {
     const path = new URL(req.url).pathname;
     const traceparent = req.headers.get('traceparent');
-    warning.warn(`CSRF refused ${req.method} ${path}`, {
+    this.#warning.warn(`CSRF refused ${req.method} ${path}`, {
       method: req.method,
       path,
       secFetchSite: req.headers.get('sec-fetch-site'),
@@ -124,21 +150,9 @@ export const csrfWrapper = (
       reason,
       ...(traceparent !== null && { traceparent }),
     });
-    return onError(
+    return this.#onError(
       new HttpError(HttpStatusCode.FORBIDDEN, 'CROSS_ORIGIN_REQUEST'),
       req,
     );
-  };
-
-  return (handler) => (req, server) => {
-    if (SAFE.has(req.method)) return handler(req, server);
-    const reason = check(req);
-    return reason === undefined ? handler(req, server) : refuse(req, reason);
-  };
-};
-
-/** Every unsafe-method entry of the table. A `GET` entry is left as it was. */
-export const withCsrfRoutes = (wrap: CsrfWrap, routes: BunRoutes): BunRoutes =>
-  mapRoutes(routes, (handler, method) =>
-    SAFE.has(method) ? handler : wrap(handler),
-  );
+  }
+}

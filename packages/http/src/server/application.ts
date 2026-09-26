@@ -25,12 +25,7 @@ import {
   usesMetricsMiddleware,
 } from './metrics.js';
 import type { CorsOptions } from './cors.js';
-import {
-  csrfWrapper,
-  trustedOriginSet,
-  withCsrfRoutes,
-  type CsrfOptions,
-} from './csrf.js';
+import { CsrfProtection, trustedOriginSet, type CsrfOptions } from './csrf.js';
 import { errorMapper, toErrorMapper, type ErrorMapper } from './errors.js';
 import { EntityTags } from './etag.js';
 import { hasClaimedPaths, type Middleware } from './middleware.js';
@@ -276,7 +271,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     );
     // Built here rather than at construction: `trust proxy` may still change.
     const csrf = this.#csrf
-      ? csrfWrapper(
+      ? new CsrfProtection(
           this.#csrf,
           this.#settings['trust proxy'],
           this.#app.get(Logger),
@@ -285,7 +280,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
       : undefined;
     // Inside the security headers, so a refusal carries them; outside the
     // chain, so nothing reads a body or claims a key for a request refused.
-    const checked = csrf ? withCsrfRoutes(csrf, built) : built;
+    const checked = csrf ? csrf.routes(built) : built;
     const pairs = this.#securityHeaders;
     const secured = pairs ? withSecuredRoutes(pairs, checked) : checked;
     // Before `withUpgradeRoutes` merges the gateways in `bind`, which assigns
@@ -308,7 +303,7 @@ export class HttpApplication extends ShutdownAware implements HttpApp {
     this.#app.get(ClaimedRoutes).attach(claimed);
     this.#app.get(RequestMetrics).claim(claimed);
 
-    const guarded = csrf ? csrf(fallback) : fallback;
+    const guarded = csrf ? csrf.wrap(fallback) : fallback;
     const fetch = pairs ? withSecurityHeaders(pairs, guarded) : guarded;
 
     const bound = this.#binding.bind({ port, routes, fetch, websocket: ws });

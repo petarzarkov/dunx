@@ -13,15 +13,6 @@ export interface JsonResponse<T> {
   readonly body: T;
 }
 
-export interface TestClient {
-  /** The server's base URL, as `listen()` returned it. */
-  readonly url: string;
-  /** The raw `Response` - for bytes, HTML, or asserting on a header. */
-  request(path?: string, init?: JsonInit): Promise<Response>;
-  /** Status, headers and parsed body in one await, which is the common assertion. */
-  json<T = unknown>(path?: string, init?: JsonInit): Promise<JsonResponse<T>>;
-}
-
 const target = (base: string, path: string): URL => new URL(path, base);
 
 const withJson = (init: JsonInit): RequestInit => {
@@ -44,12 +35,25 @@ const withJson = (init: JsonInit): RequestInit => {
  * `createTestServer` returns one of these already bound to the server it started;
  * this is here for an app booted some other way.
  */
-export const testClient = (url: string): TestClient => ({
-  url,
-  request: (path = '', init: JsonInit = {}) =>
-    fetch(target(url, path), withJson(init)),
-  json: async <T>(path = '', init: JsonInit = {}): Promise<JsonResponse<T>> => {
-    const response = await fetch(target(url, path), withJson(init));
+export class TestClient {
+  /** The server's base URL, as `listen()` returned it. */
+  readonly url: string;
+
+  constructor(url: string) {
+    this.url = url;
+  }
+
+  /** The raw `Response` - for bytes, HTML, or asserting on a header. */
+  request(path = '', init: JsonInit = {}): Promise<Response> {
+    return fetch(target(this.url, path), withJson(init));
+  }
+
+  /** Status, headers and parsed body in one await, which is the common assertion. */
+  async json<T = unknown>(
+    path = '',
+    init: JsonInit = {},
+  ): Promise<JsonResponse<T>> {
+    const response = await this.request(path, init);
     // Read as text first: a route that answered 204, HTML or a plain-text error
     // would otherwise fail with `JSON.parse`'s message and none of the context
     // needed to see why.
@@ -67,10 +71,13 @@ export const testClient = (url: string): TestClient => ({
           : `a ${response.headers.get('content-type') ?? 'typeless'} body:\n\n` +
             text.slice(0, 300);
       throw new Error(
-        `${init.method ?? 'GET'} ${target(url, path).pathname} answered ` +
+        `${init.method ?? 'GET'} ${target(this.url, path).pathname} answered ` +
           `${response.status} with ${body}\n\nThat is not JSON - use request() ` +
           'for a response that is not.',
       );
     }
-  },
-});
+  }
+}
+
+/** `new TestClient(url)`. */
+export const testClient = (url: string): TestClient => new TestClient(url);
