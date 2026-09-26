@@ -318,7 +318,6 @@ const readSession = async () => {
   }
 };
 $('who').addEventListener('click', readSession);
-readSession();
 
 $('audit').addEventListener('click', async () => {
   const res = await fetch('/api/profile/audit', {
@@ -348,10 +347,10 @@ $('trace-go').addEventListener('click', async () => {
 /**
  * Vitals, from the process rather than from a build-time claim.
  *
- * Five seconds because that is short enough to watch a counter move while
- * clicking a panel, and long enough that a page left open overnight is not
- * traffic worth counting. `/api/demo/vitals` is `@SkipThrottle()`d, so the poll
- * does not spend the visitor's rate-limit budget.
+ * Polled only while its step is open, every five seconds: short enough to watch
+ * a counter move, and no traffic at all from a tab parked on another step.
+ * `/api/demo/vitals` is `@SkipThrottle()`d, so the poll does not spend the
+ * visitor's rate-limit budget.
  */
 const VITALS_MS = 5000;
 
@@ -399,8 +398,6 @@ const readVitals = async () => {
     rows.innerHTML = '';
   }
 };
-readVitals();
-setInterval(readVitals, VITALS_MS);
 
 /** The DI panel: real source, cut at the end of the constructor. */
 const showSource = async (name) => {
@@ -428,7 +425,6 @@ const showSource = async (name) => {
 };
 $('src-ledger').addEventListener('click', () => showSource('ledger'));
 $('src-gateway').addEventListener('click', () => showSource('gateway'));
-showSource('ledger');
 
 /**
  * Transactions, and the rollback the 409 proves.
@@ -732,3 +728,373 @@ $('page-go').addEventListener('click', async (event) => {
     button.disabled = false;
   }
 });
+
+/** API versioning: the same path at two versions, and what v1 says about itself. */
+const readVersion = async (version) => {
+  const path = `/api/v${version}/swatches`;
+  const res = await fetch(path);
+  const body = await res.json();
+  const lines = [`GET ${path} -> ${res.status}`];
+  for (const name of ['deprecation', 'sunset', 'link']) {
+    lines.push(`  ${name}: ${res.headers.get(name) ?? '(not sent)'}`);
+  }
+  const shown = Array.isArray(body) ? body.slice(0, 2) : body;
+  lines.push('', JSON.stringify(shown, null, 2));
+  if (Array.isArray(body) && body.length > 2) {
+    lines.push(`... ${body.length} in all`);
+  }
+  show($('ver-out'), lines.join('\n'));
+};
+$('ver-v1').addEventListener('click', () => readVersion(1));
+$('ver-v2').addEventListener('click', () => readVersion(2));
+
+/**
+ * Conditional GET. `no-store` on every call, so the browser's own cache neither
+ * answers for the server nor turns the 304 into a 200 before the script sees it.
+ */
+$('etag-go').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const out = $('etag-out');
+  const get = (headers) => fetch('/api/colors', { headers, cache: 'no-store' });
+  button.disabled = true;
+  out.textContent = '';
+  try {
+    const first = await get({});
+    const bytes = (await first.arrayBuffer()).byteLength;
+    const tag = first.headers.get('etag');
+    trail(out, `GET /api/colors -> ${first.status}, ${bytes} bytes`);
+    trail(out, `   ETag: ${tag ?? '(not sent)'}`);
+    if (tag === null) return;
+
+    const again = await get({ 'if-none-match': tag });
+    const empty = (await again.arrayBuffer()).byteLength;
+    trail(out, `If-None-Match: ${tag}`);
+    trail(
+      out,
+      `   ${again.status}, ${empty} bytes: the copy you hold is current`,
+    );
+
+    const stale = await get({ 'if-none-match': 'W/"0000000000000000"' });
+    await stale.arrayBuffer();
+    trail(out, 'If-None-Match: a tag the server never sent');
+    trail(out, `   ${stale.status}, the full body again`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/**
+ * Signed cookies. The page never reads the cookie, because it cannot: the theme
+ * it applies is the one the server verified and sent back as JSON.
+ */
+const applyTheme = (theme) => {
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.dataset.theme = theme;
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+};
+const readPreference = async () => {
+  const res = await fetch('/api/preferences', { cache: 'no-store' });
+  if (!res.ok) return undefined;
+  const { theme } = await res.json();
+  applyTheme(theme);
+  return theme;
+};
+const writePreference = async (event, theme) => {
+  const button = event.currentTarget;
+  const out = $('pref-out');
+  button.disabled = true;
+  try {
+    const res = await fetch(
+      '/api/preferences',
+      theme === undefined
+        ? { method: 'DELETE' }
+        : {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ theme }),
+          },
+    );
+    await res.arrayBuffer();
+    const label = theme === undefined ? 'DELETE' : `PUT {"theme":"${theme}"}`;
+    const read = await readPreference();
+    show(
+      out,
+      `${label} /api/preferences -> ${res.status}\n` +
+        `GET /api/preferences -> ${JSON.stringify({ theme: read })}\n\n` +
+        `document.cookie mentions prefs: ${document.cookie.includes('prefs')}` +
+        ' (HttpOnly)',
+    );
+  } finally {
+    button.disabled = false;
+  }
+};
+$('pref-dark').addEventListener('click', (event) =>
+  writePreference(event, 'dark'),
+);
+$('pref-light').addEventListener('click', (event) =>
+  writePreference(event, 'light'),
+);
+$('pref-clear').addEventListener('click', (event) =>
+  writePreference(event, undefined),
+);
+readPreference().catch(() => undefined);
+
+/** The headers `securityHeaders` adds, read off a route that sets none itself. */
+const SECURITY_HEADERS = [
+  'content-security-policy',
+  'strict-transport-security',
+  'x-content-type-options',
+  'referrer-policy',
+  'x-frame-options',
+  'cross-origin-opener-policy',
+  'origin-agent-cluster',
+];
+$('sec-headers').addEventListener('click', async () => {
+  const res = await fetch('/api/health/live', { cache: 'no-store' });
+  await res.arrayBuffer();
+  const lines = SECURITY_HEADERS.map(
+    (name) => `${name}: ${res.headers.get(name) ?? '(not sent)'}`,
+  );
+  show(
+    $('sec-out'),
+    `GET /api/health/live -> ${res.status}\n\n${lines.join('\n')}`,
+  );
+});
+$('sec-csrf').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const res = await fetch('/api/demo/csrf');
+    const rows = await res.json();
+    if (!res.ok) {
+      show($('sec-out'), rows);
+      return;
+    }
+    // One caller per two lines rather than padded columns, which wrap into
+    // noise at phone width.
+    const lines = rows.map(
+      (row) =>
+        `${row.secFetchSite ?? 'no header'}: ${row.caller}\n` +
+        `   ${row.status} ` +
+        (row.status === 403 ? 'refused' : 'let through, then validated'),
+    );
+    show(
+      $('sec-out'),
+      `POST /api/users with an empty body\n\n${lines.join('\n')}`,
+    );
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/**
+ * Idempotency. The subscribers' `handled` total is the proof the handler ran
+ * once: a replay answers from the store and publishes nothing. Another visitor
+ * placing an order at the same moment would move it too.
+ */
+const handledTotal = async () => {
+  const rows = await (await fetch('/api/events/subscriptions')).json();
+  return rows.reduce((sum, row) => sum + row.handled, 0);
+};
+const newKey = () =>
+  crypto.randomUUID?.() ?? `k-${Math.random().toString(36).slice(2)}`;
+$('idem-go').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const out = $('idem-out');
+  const key = newKey();
+  const post = (total) =>
+    fetch('/api/events/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': key },
+      body: JSON.stringify({ total }),
+    });
+  button.disabled = true;
+  out.textContent = '';
+  try {
+    trail(out, `Idempotency-Key: ${key}`);
+    let before = await handledTotal();
+    for (const label of ['POST /api/events/orders', 'the same POST again']) {
+      const res = await post(42);
+      await res.arrayBuffer();
+      const after = await handledTotal();
+      const replayed = res.headers.get('idempotent-replayed');
+      trail(out, label);
+      trail(
+        out,
+        `   ${res.status}, replayed: ${replayed ?? 'no'}, ` +
+          `subscribers ran ${after - before} time(s)`,
+      );
+      before = after;
+    }
+    const changed = await post(43);
+    const body = await changed.json();
+    trail(out, 'the same key with a different body');
+    trail(out, `   ${changed.status} ${body.message ?? body.error ?? ''}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+/** Email: the bound transport, since a public demo must not send anything. */
+$('mail-go').addEventListener('click', async () => {
+  const res = await fetch('/api/email');
+  show(
+    $('mail-out'),
+    `GET /api/email -> ${res.status}\n${JSON.stringify(await res.json(), null, 2)}`,
+  );
+});
+
+/**
+ * The walkthrough. Every `[data-step]` is one screen, shown alone, and the
+ * location hash names it so a step can be linked to and the back button works.
+ * The contents are built from the sections, so a step added to the page is
+ * listed without a second copy of its title here.
+ */
+const steps = [...document.querySelectorAll('[data-step]')];
+const sections = steps.filter((step) => step.tagName === 'SECTION');
+const chapters = [];
+for (const section of sections) {
+  const name = section.dataset.chapter;
+  let chapter = chapters.at(-1);
+  if (chapter?.name !== name) {
+    chapter = { name, blurb: section.dataset.blurb ?? '', steps: [] };
+    chapters.push(chapter);
+  }
+  chapter.steps.push(section);
+}
+
+const DONE_KEY = 'dunx-demo-done';
+const done = new Set();
+try {
+  for (const name of JSON.parse(localStorage.getItem(DONE_KEY) ?? '[]')) {
+    done.add(name);
+  }
+} catch {
+  // Storage blocked or unparseable: progress is a convenience, not state.
+}
+const markDone = (name) => {
+  if (done.has(name)) return;
+  done.add(name);
+  try {
+    localStorage.setItem(DONE_KEY, JSON.stringify([...done]));
+  } catch {
+    // As above.
+  }
+  renderProgress();
+};
+
+const titleOf = (section) => section.querySelector('h2').textContent;
+const links = new Map();
+const toc = $('toc');
+const outline = $('outline');
+chapters.forEach((chapter, index) => {
+  const item = document.createElement('li');
+  const head = document.createElement('span');
+  head.className = 'chapter';
+  head.textContent = `${index + 1}. ${chapter.name}`;
+  const list = document.createElement('ol');
+  for (const section of chapter.steps) {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `#${section.dataset.step}`;
+    a.textContent = titleOf(section);
+    li.append(a);
+    list.append(li);
+    links.set(section.dataset.step, a);
+  }
+  item.append(head, list);
+  toc.append(item);
+
+  const line = document.createElement('li');
+  const first = document.createElement('a');
+  first.href = `#${chapter.steps[0].dataset.step}`;
+  first.textContent = chapter.name;
+  const blurb = document.createElement('span');
+  blurb.textContent = ` ${chapter.blurb} ${chapter.steps.length} steps.`;
+  line.append(first, blurb);
+  outline.append(line);
+});
+
+const renderProgress = () => {
+  for (const [name, a] of links) a.classList.toggle('done', done.has(name));
+  $('progress').textContent = `${done.size} of ${sections.length} tried`;
+};
+
+/** What a step does when it opens, and undoes when it closes. */
+let vitalsTimer;
+const ENTER = {
+  di: () => showSource('ledger'),
+  session: readSession,
+  cookies: () => readPreference().catch(() => undefined),
+  vitals: () => {
+    readVitals();
+    vitalsTimer = setInterval(readVitals, VITALS_MS);
+  },
+};
+const LEAVE = {
+  vitals: () => clearInterval(vitalsTimer),
+};
+
+const narrow = matchMedia('(max-width: 860px)');
+let current;
+const open = (name) => {
+  const index = Math.max(
+    0,
+    steps.findIndex((step) => step.dataset.step === name),
+  );
+  const step = steps[index];
+  if (step === current) return;
+  if (current !== undefined) LEAVE[current.dataset.step]?.();
+  for (const other of steps) other.hidden = other !== step;
+  current = step;
+
+  for (const [key, a] of links) {
+    if (key === step.dataset.step) a.setAttribute('aria-current', 'step');
+    else a.removeAttribute('aria-current');
+  }
+  const position = sections.indexOf(step);
+  const pager = document.querySelector('.pager');
+  pager.hidden = position === -1;
+  $('prev').disabled = position <= 0;
+  $('next').disabled = position === sections.length - 1;
+  $('position').textContent =
+    position === -1
+      ? ''
+      : `Step ${position + 1} of ${sections.length} · ${step.dataset.chapter}`;
+  document.title =
+    position === -1 ? 'dunx live demo' : `${titleOf(step)} · dunx live demo`;
+
+  if (narrow.matches) document.querySelector('.toc details').open = false;
+  window.scrollTo({ top: 0 });
+  ENTER[step.dataset.step]?.();
+};
+const go = (offset) => {
+  const next = steps[steps.indexOf(current) + offset];
+  if (next !== undefined) location.hash = next.dataset.step;
+};
+
+$('start').addEventListener('click', () => {
+  location.hash = sections[0].dataset.step;
+});
+$('prev').addEventListener('click', () => go(-1));
+$('next').addEventListener('click', () => go(1));
+addEventListener('hashchange', () => open(location.hash.slice(1)));
+addEventListener('keydown', (event) => {
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.target.closest('input, select, textarea')) return;
+  if (event.key === 'ArrowRight') go(1);
+  if (event.key === 'ArrowLeft') go(-1);
+});
+// A click on any button inside a step counts that step as tried.
+document.querySelector('main').addEventListener('click', (event) => {
+  const section = event.target.closest('section[data-step]');
+  if (section !== null && event.target.closest('button') !== null) {
+    markDone(section.dataset.step);
+  }
+});
+
+if (narrow.matches) document.querySelector('.toc details').open = false;
+renderProgress();
+open(location.hash.slice(1));

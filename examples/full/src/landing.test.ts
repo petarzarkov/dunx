@@ -50,5 +50,5 @@ it('keeps every panel the page is counted as having', async () => {
   const page = await read('index.html');
   const panels = [...page.matchAll(/<section\b/g)].length;
 
-  expect(panels).toBeGreaterThanOrEqual(19);
+  expect(panels).toBeGreaterThanOrEqual(25);
 });

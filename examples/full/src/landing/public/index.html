@@ -6,7 +6,7 @@
     <title>dunx live demo</title>
     <meta
       name="description"
-      content="examples/full from the dunx repository, running unmodified on a Raspberry Pi 5. Websockets, queues, transactions, OpenAPI and rate limits, all callable from the page."
+      content="examples/full from the dunx repository, running unmodified on a Raspberry Pi 5. A guided walkthrough from dependency injection to message brokers, every step callable from the page."
     />
     <!--
       Without these a paste of this url into Reddit, LinkedIn, Slack or X renders
@@ -19,7 +19,7 @@
     <meta property="og:title" content="dunx live demo" />
     <meta
       property="og:description"
-      content="Every part of the framework, running on a Raspberry Pi. Click a panel and it calls the same routes the tests and the OpenAPI document are generated from."
+      content="Every part of the framework, running on a Raspberry Pi. Walk through it step by step: each one calls the same routes the tests and the OpenAPI document are generated from."
     />
     <meta property="og:url" content="https://demo.dunx.win/" />
     <meta property="og:image" content="https://demo.dunx.win/og.png" />
@@ -48,79 +48,79 @@
     <link rel="stylesheet" href="/landing.css" />
   </head>
   <body>
-    <header>
-      <div class="wrap">
-        <h1>dunx <span>live demo</span></h1>
-        <p class="sub">
-          This is <code>examples/full</code> from the dunx repository, running
-          unmodified on a Raspberry Pi 5 behind a Cloudflare tunnel. Every panel
-          below calls the same routes the example's tests and OpenAPI document
-          are generated from.
-        </p>
-        <div class="strip" id="strip">
-          <span class="pill">reading status<b></b></span>
-        </div>
-        <nav>
-          <a href="https://dunx.win">Documentation <small>dunx.win</small></a>
-          <a href="/api/docs"
-            >API explorer <small>swagger-ui, /api/docs</small></a
-          >
-          <a href="/api/reference"
-            >API reference <small>scalar, /api/reference</small></a
-          >
-          <a href="/api/dashboard"
-            >Dashboard <small>routes, providers, config</small></a
-          >
-          <a href="/api/dashboard/queues"
-            >Queues <small>bull-board, read-only</small></a
-          >
-          <a href="/api/openapi.json"
-            >OpenAPI <small>generated from zod</small></a
-          >
-          <a href="https://firecracker.petarzarkov.com/"
-            >Firecracker <small>a real app on dunx</small></a
-          >
-          <a href="https://github.com/petarzarkov/dunx"
-            >Source <small>github.com/petarzarkov/dunx</small></a
-          >
-        </nav>
+    <header class="top">
+      <a class="brand" href="#welcome">dunx <span>live demo</span></a>
+      <div class="strip" id="strip">
+        <span class="pill">reading status<b></b></span>
       </div>
     </header>
 
-    <main class="wrap">
-      <div class="grid">
-        <section class="wide">
-          <h2>What this process is doing</h2>
-          <p>
-            <code>RequestMetrics</code>, <code>QueryMetrics</code> and
-            <code>EventLoopLag</code> read out of the running container at
-            <code>/api/demo/vitals</code>, refreshed every five seconds. The
-            request and socket counts are read off <code>Bun.serve</code> rather
-            than counted.
-          </p>
-          <div class="vitals" id="vitals"></div>
-          <table class="routes">
-            <thead>
-              <tr>
-                <th>busiest route</th>
-                <th>calls</th>
-                <th>p50</th>
-                <th>p99</th>
-              </tr>
-            </thead>
-            <tbody id="routes"></tbody>
-          </table>
-        </section>
+    <div class="layout">
+      <aside class="toc">
+        <details open>
+          <summary>
+            Contents <small class="progress" id="progress"></small>
+          </summary>
+          <ol class="chapters" id="toc"></ol>
+          <p class="aside-label">Elsewhere</p>
+          <ul class="links">
+            <li><a href="https://dunx.win">Documentation</a></li>
+            <li><a href="/api/docs">Swagger UI</a></li>
+            <li><a href="/api/reference">Scalar reference</a></li>
+            <li><a href="/api/dashboard">Ops dashboard</a></li>
+            <li><a href="/api/dashboard/queues">bull-board</a></li>
+            <li><a href="/api/openapi.json">openapi.json</a></li>
+            <li>
+              <a href="https://firecracker.petarzarkov.com/">Firecracker</a>
+            </li>
+            <li><a href="https://github.com/petarzarkov/dunx">Source</a></li>
+          </ul>
+        </details>
+      </aside>
 
-        <section>
+      <main>
+        <article class="step intro" data-step="welcome">
+          <h1>A walkthrough of dunx, against a live process</h1>
+          <p>
+            This is <code>examples/full</code> from the dunx repository, running
+            unmodified on a Raspberry Pi 5 behind a Cloudflare tunnel. Each step
+            below explains one capability, shows the few lines that declare it,
+            and has a button that calls the real route: the same one the
+            example's tests and OpenAPI document are generated from.
+          </p>
+          <p>
+            It starts with a single request and a single class, and ends with
+            work that leaves the request entirely: a queue, a broker and a
+            process watching itself.
+          </p>
+          <ol class="outline" id="outline"></ol>
+          <div class="row">
+            <button class="primary" id="start">Start with step 1</button>
+          </div>
+          <p class="note">
+            Use the arrow keys, or the contents, to move around. The database is
+            in-memory and reseeds on every restart, so anything created here is
+            temporary.
+          </p>
+        </article>
+
+        <section
+          data-step="di"
+          data-chapter="The basics"
+          data-blurb="One request in, one response out."
+        >
           <h2>Dependency injection</h2>
           <p>
-            No <code>@Injectable()</code>, no <code>@Inject()</code>, no
-            <code>reflect-metadata</code>. <code>@dunx/transform</code> reads
-            the constructor's parameter types at load time and the container
-            resolves them. The source below is read off disk with
-            <code>Bun.file</code> at <code>/api/demo/source/:name</code>, so it
-            is the file this process was built from.
+            A class asks for what it needs in its constructor, and that is the
+            whole declaration. No <code>@Injectable()</code>, no
+            <code>@Inject()</code>, no <code>reflect-metadata</code>:
+            <code>@dunx/transform</code> reads the parameter types at load time
+            and the container resolves them.
+          </p>
+          <p>
+            The source below is read off disk with <code>Bun.file</code> at
+            <code>/api/demo/source/:name</code>, so it is the file this process
+            was built from.
           </p>
           <div class="row">
             <button id="src-ledger">Ledger</button>
@@ -130,86 +130,91 @@
           <p class="note" id="src-path"></p>
         </section>
 
-        <section>
-          <h2>Transactions</h2>
+        <section data-step="validation" data-chapter="The basics">
+          <h2>Validation</h2>
           <p>
-            <code>/api/ledger/transfer</code> moves an amount between two rows
-            inside one drizzle transaction. Failing it mid-way answers 409, and
-            the unchanged row count in the message is the rollback.
+            One zod schema per route validates the request and types the
+            handler's input. A rejected body answers 400 with the issues zod
+            raised, before the handler runs.
           </p>
+          <pre class="code">
+export const createUser = {
+  body: CreateUser,
+  response: { 201: User },
+};
+
+@Post('/', createUser)
+create({ body }: Input&lt;typeof createUser&gt;) { ... }</pre>
           <div class="row">
-            <button id="tx-ok">Transfer 25</button>
-            <button id="tx-fail">Fail between the two writes</button>
-            <button id="tx-sync">The same, synchronously</button>
+            <button id="bad-go">Post an invalid user</button>
+            <button id="good-go">Post a valid one</button>
           </div>
-          <pre id="tx-out"></pre>
+          <pre id="bad-out"></pre>
         </section>
 
-        <section>
-          <h2>Retry and backoff</h2>
+        <section data-step="explorers" data-chapter="The basics">
+          <h2>Two API explorers, one document</h2>
           <p>
-            <code>@dunx/http/client</code> calling an upstream that answers 503
-            twice before it works. Every attempt the retry policy made comes
-            back with the millisecond it happened at, so the jittered backoff is
-            visible rather than described.
+            The same schemas generate the OpenAPI document, so nothing is
+            written twice. Swagger UI is at
+            <a href="/api/docs">/api/docs</a> and Scalar at
+            <a href="/api/reference">/api/reference</a>, both reading one
+            <a href="/api/openapi.json">openapi.json</a>. Each is its own
+            subpath and optional peer, and both self-host.
           </p>
           <div class="row">
-            <button id="retry-go">Call the flaky upstream</button>
+            <button id="explorers-go">Fetch both pages</button>
           </div>
-          <pre id="retry-out"></pre>
+          <pre id="explorers-out"></pre>
         </section>
 
-        <section>
-          <h2>Guards and roles</h2>
+        <section data-step="versioning" data-chapter="The basics">
+          <h2>API versioning</h2>
           <p>
-            One controller, three answers. <code>@Public</code> opts a route
-            out, a class-level <code>@Roles</code> covers the rest, and a
-            method-level one overrides it. Nothing here reads a session helper -
-            the guard reads route metadata.
+            Two controllers on one path, told apart by version. With
+            <code>versioning: { type: 'uri' }</code> they serve
+            <code>/api/v1/swatches</code> and <code>/api/v2/swatches</code>;
+            <code>header</code> and <code>media-type</code> are the other two
+            types. <code>@Deprecated</code> makes every v1 response say it is
+            going.
+          </p>
+          <pre class="code">
+@Deprecated({
+  since: '2026-09-01',
+  sunset: '2027-03-01',
+  link,
+})
+@Controller('swatches', { version: '1' })
+
+@Controller('swatches', { version: '2' })</pre>
+          <div class="row">
+            <button id="ver-v1">GET v1</button>
+            <button id="ver-v2">GET v2</button>
+          </div>
+          <pre id="ver-out"></pre>
+        </section>
+
+        <section data-step="etag" data-chapter="The basics">
+          <h2>Conditional GET</h2>
+          <p>
+            <code>etag: true</code> hashes every value a <code>GET</code> route
+            returns into a weak <code>ETag</code>. A client that sends it back
+            in <code>If-None-Match</code> gets a 304 with no body, and the
+            handler did not have to know.
           </p>
           <div class="row">
-            <button id="g-public">Public route</button>
-            <button id="g-read">Needs a role</button>
-            <button id="g-write">Needs admin</button>
+            <button id="etag-go">Fetch, then revalidate</button>
           </div>
-          <pre id="g-out"></pre>
+          <pre id="etag-out"></pre>
         </section>
 
-        <section>
-          <h2>Websocket gateway</h2>
-          <p>
-            <code>@Gateway('/chat')</code> on the same <code>Bun.serve</code> as
-            every route above, broadcasting over Bun's native pub/sub. Open a
-            second tab to see the other side.
-          </p>
-          <div class="row">
-            <input id="nick" value="visitor" size="10" aria-label="nickname" />
-            <button id="ws-connect">Connect</button>
-            <input id="say" placeholder="say something" aria-label="message" />
-            <button id="ws-say" disabled>Send</button>
-          </div>
-          <pre id="ws-out"></pre>
-        </section>
-
-        <section>
-          <h2>Rate limit</h2>
-          <p>
-            <code>@Throttle({ limit: 3, windowSeconds: 60 })</code> on
-            <code>/api/limits/burst</code>. The counter is in Redis when Redis
-            is up, and in memory when it is not.
-          </p>
-          <div class="row">
-            <button id="burst">Send 5 requests</button>
-          </div>
-          <pre id="burst-out"></pre>
-        </section>
-
-        <section>
+        <section data-step="image" data-chapter="The basics">
           <h2>Image pipeline</h2>
           <p>
-            <code>Bun.Image</code> at <code>/api/images/render</code>. The
-            source is generated at runtime from a 4x4 seed, so there is no image
-            file in the repository.
+            <code>Bun.Image</code> at <code>/api/images/render</code>, returned
+            as a <code>Response</code> the browser decodes. The source is
+            generated at runtime from a 4x4 seed, so there is no image file in
+            the repository.
           </p>
           <div class="row">
             <label for="img-w">width</label>
@@ -232,46 +237,230 @@
           <pre id="img-meta"></pre>
         </section>
 
-        <section>
-          <h2>Queue</h2>
+        <section
+          data-step="guards"
+          data-chapter="Who may call"
+          data-blurb="Guards, sessions, cookies and the headers that keep a browser honest."
+        >
+          <h2>Guards and roles</h2>
           <p>
-            <code>POST /api/jobs/thumbnails</code> enqueues through bullmq over
-            <code>Bun.RedisClient</code>, and the handler runs in a forked
-            process. Watch it in bull-board under Queues.
+            One controller, three answers. <code>@Public</code> opts a route
+            out, a class-level <code>@Roles</code> covers the rest, and a
+            method-level one overrides it. The guard reads route metadata, so no
+            handler calls a session helper.
           </p>
+          <pre class="code">
+@Roles('admin')
+@UseGuards(AuthGuard)
+@Controller('reports')
+
+  // anyone
+  @Public() @Get('/health')
+  // any caller with credentials
+  @Get('/')
+  // admin only
+  @UseGuards(RolesGuard) @Post('/')</pre>
           <div class="row">
-            <button id="job-go">Enqueue a thumbnail</button>
+            <button id="g-public">Public route</button>
+            <button id="g-read">Needs a role</button>
+            <button id="g-write">Needs admin</button>
           </div>
-          <pre id="job-out"></pre>
+          <pre id="g-out"></pre>
         </section>
 
-        <section>
-          <h2>Message broker</h2>
+        <section data-step="session" data-chapter="Who may call">
+          <h2>Session</h2>
           <p>
-            <code>@dunx/infra/amqp</code> over RabbitMQ.
-            <code>POST /api/messaging/orders</code> publishes to a topic
-            exchange and the broker routes the key to its own queue, both
-            consumed by this same container. The line that comes back is read
-            from <code>GET /api/messaging/orders</code>, and the
-            <code>traceId</code> on it is the one this request carried: a trace
-            that crossed the broker.
+            better-auth mounted by <code>@dunx/auth</code>, with the anonymous
+            plugin so there is no form to fill in. Opening this step signed you
+            in as a guest. The audit route wants a role a guest does not have.
           </p>
           <div class="row">
-            <button id="mq-place">Place an order</button>
-            <button id="mq-ship">Ship one</button>
-            <button id="mq-bad">Publish a malformed body</button>
+            <button id="who">Who am I</button>
+            <button id="audit">Try an admin-only route</button>
           </div>
-          <pre id="mq-out"></pre>
+          <pre id="auth-out"></pre>
         </section>
 
-        <section>
+        <section data-step="cookies" data-chapter="Who may call">
+          <h2>Signed cookies</h2>
+          <p>
+            <code>req.cookies</code> is Bun's own <code>CookieMap</code>, and
+            <code>SignedCookies</code> adds an HMAC so a value the visitor edits
+            reads back as absent. The cookie is <code>HttpOnly</code>, so this
+            page's script cannot see it; the theme below is applied from what
+            the server reads back.
+          </p>
+          <pre class="code">
+this.signed.set(req.cookies, 'prefs', theme);
+
+// undefined if the visitor edited it
+this.signed.get(req.cookies, 'prefs');</pre>
+          <div class="row">
+            <button id="pref-dark">Dark</button>
+            <button id="pref-light">Light</button>
+            <button id="pref-clear">Clear the cookie</button>
+          </div>
+          <pre id="pref-out"></pre>
+        </section>
+
+        <section data-step="throttle" data-chapter="Who may call">
+          <h2>Rate limit</h2>
+          <p>
+            <code>@Throttle({ limit: 3, windowSeconds: 60 })</code> on
+            <code>/api/limits/burst</code>. The counter is in Redis when Redis
+            is up, and in memory when it is not, and every answer carries the
+            IETF <code>RateLimit</code> headers.
+          </p>
+          <div class="row">
+            <button id="burst">Send 5 requests</button>
+          </div>
+          <pre id="burst-out"></pre>
+        </section>
+
+        <section data-step="security" data-chapter="Who may call">
+          <h2>Security headers and CSRF</h2>
+          <p>
+            <code>securityHeaders</code> puts a strict CSP, HSTS,
+            <code>nosniff</code> and friends on every response, the 404 and the
+            mapped errors included. <code>csrf</code> refuses a cross-site
+            unsafe request by the <code>Sec-Fetch-Site</code> header a browser
+            always sends, with no token to thread through forms.
+          </p>
+          <p>
+            A page cannot forge that header, so the second button asks the
+            server to post to <code>/api/users</code> as three callers.
+          </p>
+          <div class="row">
+            <button id="sec-headers">Read the response headers</button>
+            <button id="sec-csrf">Post as three callers</button>
+          </div>
+          <pre id="sec-out"></pre>
+        </section>
+
+        <section
+          data-step="tx"
+          data-chapter="Data"
+          data-blurb="Transactions, pages, caches and a retry that must not run twice."
+        >
+          <h2>Transactions</h2>
+          <p>
+            <code>/api/ledger/transfer</code> moves an amount between two rows
+            inside one drizzle transaction. Failing it between the two writes
+            answers 409, and the unchanged row count is the rollback.
+          </p>
+          <div class="row">
+            <button id="tx-ok">Transfer 25</button>
+            <button id="tx-fail">Fail between the two writes</button>
+            <button id="tx-sync">The same, synchronously</button>
+          </div>
+          <pre id="tx-out"></pre>
+        </section>
+
+        <section data-step="paging" data-chapter="Data">
+          <h2>Keyset pagination</h2>
+          <p>
+            <code>@dunx/infra/pagination</code> over a list that is not a
+            database table. Each page carries a cursor rather than an offset, so
+            a row inserted between two requests cannot shift the next page.
+          </p>
+          <div class="row">
+            <button id="page-go">Walk the pages</button>
+          </div>
+          <pre id="page-out"></pre>
+        </section>
+
+        <section data-step="cache" data-chapter="Data">
+          <h2>Cache tiers</h2>
+          <p>
+            <code>@dunx/infra/cache</code> with memory in front of Redis. The
+            counter is the loader's rather than the cache's, so a second read
+            moving it by zero is the cache working. <code>DELETE</code> evicts
+            both tiers.
+          </p>
+          <div class="row">
+            <button id="cache-go">Read twice, evict, read again</button>
+          </div>
+          <pre id="cache-out"></pre>
+        </section>
+
+        <section data-step="idempotency" data-chapter="Data">
+          <h2>Idempotency keys</h2>
+          <p>
+            A client that timed out cannot know whether its POST ran.
+            <code>@Idempotent()</code> lets it retry with the same
+            <code>Idempotency-Key</code>: the first response is stored and
+            replayed, and the handler runs once. The store is Redis when it is
+            up, so a retry on another replica finds it.
+          </p>
+          <pre class="code">
+@Idempotent()
+@Post('/orders', placeOrder)</pre>
+          <div class="row">
+            <button id="idem-go">Post twice with one key</button>
+          </div>
+          <pre id="idem-out"></pre>
+        </section>
+
+        <section
+          data-step="sse"
+          data-chapter="Real time"
+          data-blurb="Streams, sockets and RPC, all on the one Bun.serve."
+        >
+          <h2>Server-sent events</h2>
+          <p>
+            <code>@Sse</code> over Bun's own <code>ReadableStream</code>. The
+            handler is an async generator and every <code>yield</code> is a
+            frame. Each frame carries an id, so a reconnect resumes rather than
+            restarting.
+          </p>
+          <div class="row">
+            <button id="sse-go">Open a stream</button>
+          </div>
+          <pre id="sse-out"></pre>
+        </section>
+
+        <section data-step="ws" data-chapter="Real time">
+          <h2>Websocket gateway</h2>
+          <p>
+            <code>@Gateway('/chat')</code> on the same <code>Bun.serve</code> as
+            every route, broadcasting over Bun's native pub/sub. Open this step
+            in a second tab to see the other side.
+          </p>
+          <div class="row">
+            <input id="nick" value="visitor" size="10" aria-label="nickname" />
+            <button id="ws-connect">Connect</button>
+            <input id="say" placeholder="say something" aria-label="message" />
+            <button id="ws-say" disabled>Send</button>
+          </div>
+          <pre id="ws-out"></pre>
+        </section>
+
+        <section data-step="rpc" data-chapter="Real time">
+          <h2>RPC on the same port</h2>
+          <p>
+            <code>@dunx/http/connect</code> serves Connect and gRPC-Web as
+            middleware rather than on a second port, so an RPC gets this app's
+            CORS, rate limit and request log. A unary Connect call is a POST
+            with a JSON body, which is all this button sends.
+          </p>
+          <div class="row">
+            <button id="rpc-go">POST /greet.v1.GreetService/Say</button>
+          </div>
+          <pre id="rpc-out"></pre>
+        </section>
+
+        <section
+          data-step="events"
+          data-chapter="Beyond the request"
+          data-blurb="Work that happens elsewhere: another module, another process, another host."
+        >
           <h2>Application events</h2>
           <p>
             <code>EventBus</code> over <code>EventTarget</code>: one publisher,
-            and <code>@OnEvent</code> subscribers that live in another module.
-            The response is the dispatch itself, so a subscriber that throws is
-            reported rather than swallowed - and the request still succeeds,
-            which the second button shows by going over the review limit.
+            and <code>@OnEvent</code> subscribers in another module. The
+            response is the dispatch, so a subscriber that throws is reported
+            rather than swallowed, and the request still succeeds.
           </p>
           <div class="row">
             <button id="bus-ok">Place an order</button>
@@ -281,130 +470,119 @@
           <pre id="bus-out"></pre>
         </section>
 
-        <section>
-          <h2>Server-sent events</h2>
+        <section data-step="queue" data-chapter="Beyond the request">
+          <h2>Queue</h2>
           <p>
-            <code>@Sse</code> over Bun's own <code>ReadableStream</code>. The
-            handler is an async generator and every <code>yield</code> is a
-            frame, read here by the browser's own <code>EventSource</code>. Each
-            frame carries an id, so a reconnect resumes rather than restarting.
+            <code>POST /api/jobs/thumbnails</code> enqueues through bullmq over
+            <code>Bun.RedisClient</code>, and the handler runs in a forked
+            process. Watch it land in
+            <a href="/api/dashboard/queues">bull-board</a>.
           </p>
           <div class="row">
-            <button id="sse-go">Open a stream</button>
+            <button id="job-go">Enqueue a thumbnail</button>
           </div>
-          <pre id="sse-out"></pre>
+          <pre id="job-out"></pre>
         </section>
 
-        <section>
-          <h2>RPC on the same port</h2>
+        <section data-step="broker" data-chapter="Beyond the request">
+          <h2>Message broker</h2>
           <p>
-            <code>@dunx/http/connect</code> serves Connect and gRPC-Web as
-            middleware rather than on a second port, so an RPC gets this app's
-            CORS, rate limit and request log. A unary Connect call is a POST
-            with a JSON body, which is all this button sends - there is no RPC
-            client on this page.
+            <code>@dunx/infra/amqp</code> over RabbitMQ.
+            <code>POST /api/messaging/orders</code> publishes to a topic
+            exchange and the broker routes the key to its own queue, consumed by
+            this same container. The <code>traceId</code> that comes back is the
+            one this request carried: a trace that crossed the broker.
           </p>
           <div class="row">
-            <button id="rpc-go">POST /greet.v1.GreetService/Say</button>
+            <button id="mq-place">Place an order</button>
+            <button id="mq-ship">Ship one</button>
+            <button id="mq-bad">Publish a malformed body</button>
           </div>
-          <pre id="rpc-out"></pre>
+          <pre id="mq-out"></pre>
         </section>
 
-        <section>
-          <h2>Cache tiers</h2>
+        <section data-step="retry" data-chapter="Beyond the request">
+          <h2>Retry and backoff</h2>
           <p>
-            <code>@dunx/infra/cache</code> with memory in front of Redis. The
-            counter below is the loader's rather than the cache's, so a second
-            read of the same key moving it by zero is the cache working.
-            <code>DELETE</code> evicts both tiers.
+            <code>@dunx/http/client</code> calling an upstream that answers 503
+            twice before it works. Every attempt the retry policy made comes
+            back with the millisecond it happened at, so the jittered backoff is
+            visible rather than described.
           </p>
           <div class="row">
-            <button id="cache-go">Read twice, evict, read again</button>
+            <button id="retry-go">Call the flaky upstream</button>
           </div>
-          <pre id="cache-out"></pre>
+          <pre id="retry-out"></pre>
         </section>
 
-        <section>
-          <h2>Keyset pagination</h2>
+        <section data-step="email" data-chapter="Beyond the request">
+          <h2>Email templates</h2>
           <p>
-            <code>@dunx/infra/pagination</code> over a list that is not a
-            database table. Each page carries a cursor rather than an offset, so
-            a row inserted between two requests cannot shift the next page. The
-            subpath under <code>/pagination/cursor</code> needs no drizzle.
+            <code>@dunx/infra/email</code> renders a React Email template and
+            hands it to whichever <code>EmailTransport</code> is bound, so no
+            service names a vendor. This demo sends nothing, but the rendered
+            welcome email is at
+            <a href="/api/email/preview" target="_blank">/api/email/preview</a>.
           </p>
           <div class="row">
-            <button id="page-go">Walk the pages</button>
+            <button id="mail-go">Which transport is bound</button>
           </div>
-          <pre id="page-out"></pre>
+          <pre id="mail-out"></pre>
         </section>
 
-        <section>
-          <h2>Session</h2>
-          <p>
-            better-auth mounted by <code>@dunx/auth</code>, with the anonymous
-            plugin so there is no form to fill in. The audit route wants a role
-            this guest does not have.
-          </p>
-          <div class="row">
-            <button id="who">Who am I</button>
-            <button id="audit">Try an admin-only route</button>
-          </div>
-          <pre id="auth-out"></pre>
-        </section>
-
-        <section>
-          <h2>Two API explorers, one document</h2>
-          <p>
-            <code>@dunx/openapi</code> generates the document; a renderer serves
-            a page over it. Swagger UI is at
-            <a href="/api/docs">/api/docs</a> and Scalar at
-            <a href="/api/reference">/api/reference</a>, both reading the same
-            <a href="/api/openapi.json">openapi.json</a>. Each ships behind its
-            own subpath and its own optional peer, so an app installs the one it
-            mounts. Both self-host: the check below reports what each page
-            weighs and whether anything on it resolves off this origin.
-          </p>
-          <div class="row">
-            <button id="explorers-go">Fetch both pages</button>
-          </div>
-          <pre id="explorers-out"></pre>
-        </section>
-
-        <section>
-          <h2>Validation</h2>
-          <p>
-            One zod schema per route, used to validate the request and to
-            generate the OpenAPI document. A rejected body answers 400 with the
-            issues zod raised.
-          </p>
-          <div class="row">
-            <button id="bad-go">Post an invalid user</button>
-            <button id="good-go">Post a valid one</button>
-          </div>
-          <pre id="bad-out"></pre>
-        </section>
-
-        <section>
+        <section
+          data-step="trace"
+          data-chapter="Watching it run"
+          data-blurb="Traces, spans and the process's own numbers."
+        >
           <h2>Trace context</h2>
           <p>
-            A W3C <code>traceparent</code> sent to <code>/api/trace</code> is
-            adopted, so every log line that request writes carries the same
-            trace id and the response carries <code>traceresponse</code>.
+            A W3C <code>traceparent</code> is adopted, so every log line the
+            request writes carries its trace id and the response carries
+            <code>traceresponse</code>. <code>OtelModule</code> binds the
+            <code>Tracer</code>, so routes, queries, jobs and broker messages
+            open real spans once an OpenTelemetry SDK is registered.
           </p>
           <div class="row">
             <button id="trace-go">Request with a traceparent</button>
           </div>
           <pre id="trace-out"></pre>
         </section>
-      </div>
-    </main>
 
-    <footer class="wrap">
+        <section data-step="vitals" data-chapter="Watching it run">
+          <h2>What this process is doing</h2>
+          <p>
+            <code>RequestMetrics</code>, <code>QueryMetrics</code> and
+            <code>EventLoopLag</code> read out of the running container,
+            refreshed every five seconds while this step is open. Every button
+            you pressed on the way here is in the table.
+          </p>
+          <div class="vitals" id="vitals"></div>
+          <table class="routes">
+            <thead>
+              <tr>
+                <th>busiest route</th>
+                <th>calls</th>
+                <th>p50</th>
+                <th>p99</th>
+              </tr>
+            </thead>
+            <tbody id="routes"></tbody>
+          </table>
+        </section>
+
+        <nav class="pager" aria-label="walkthrough">
+          <button id="prev">Previous</button>
+          <span class="position" id="position"></span>
+          <button class="primary" id="next">Next</button>
+        </nav>
+      </main>
+    </div>
+
+    <footer>
       Built with <a href="https://github.com/petarzarkov/dunx">dunx</a>, a
       Bun-native dependency injection framework.
-      <a href="https://dunx.win">The documentation is at dunx.win</a>. The
-      database here is in-memory and reseeds on every restart, so your guest
-      account and anything created here are temporary.
+      <a href="https://dunx.win">The documentation is at dunx.win</a>.
     </footer>
 
     <script src="/landing.js"></script>

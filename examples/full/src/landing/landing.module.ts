@@ -1,4 +1,5 @@
 import { Module } from '@dunx/core';
+import { CsrfController } from './csrf.controller.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { StatsModule } from '../stats/stats.module.js';
 import { UpstreamModule } from '../upstream/upstream.module.js';
@@ -19,7 +20,7 @@ import { VitalsController } from './vitals.controller.js';
     // `HttpService`, the outbound client whose retry policy the panel shows.
     UpstreamModule,
   ],
-  controllers: [VitalsController, RetryController],
+  controllers: [VitalsController, RetryController, CsrfController],
   providers: [LandingMiddleware, SelfOrigin],
   exports: [LandingMiddleware, SelfOrigin],
 })

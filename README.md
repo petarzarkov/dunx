@@ -148,10 +148,11 @@ specifier is a compile error rather than a runtime surprise.
 ## Documentation
 
 - **[The live demo](https://demo.dunx.win)** - `examples/full` running on a
-  Raspberry Pi 5: the API explorer, the ops dashboard, bull-board, and a page
-  that drives nineteen capabilities from a browser, including a transaction
-  rolling back, the outbound client retrying a 503, an order crossing a RabbitMQ
-  topic exchange, and the process's own request, query and event-loop timings
+  Raspberry Pi 5: the API explorer, the ops dashboard, bull-board, and a
+  walkthrough that drives twenty-five capabilities from a browser, including a
+  transaction rolling back, a CSRF refusal, an idempotent retry, an order
+  crossing a RabbitMQ topic exchange, and the process's own request, query and
+  event-loop timings
 - **[The guide](https://dunx.win)** - thirty-five pages,
   introduction through cookies
 - **[Migrating from NestJS](docs/MIGRATION-FROM-NEST.md)** - what maps across and
